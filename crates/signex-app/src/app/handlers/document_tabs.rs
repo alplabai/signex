@@ -153,7 +153,7 @@ impl Signex {
     /// resolved unsaved work (Close Project / Remove / Discard All) rely on
     /// this dropping the draft.
     pub(crate) fn close_tab_now(&mut self, idx: usize) -> Task<Message> {
-        self.close_tab(idx, false)
+        self.close_tab(idx, false, false)
     }
 
     /// Close a tab the user asked to close, keeping a dirty symbol,
@@ -161,13 +161,23 @@ impl Signex {
     /// dirty schematic engine (#110). Reopening the tab restores the draft;
     /// Save All / Close Library still see it, so nothing is lost silently.
     pub(crate) fn close_tab_parking_dirty(&mut self, idx: usize) -> Task<Message> {
-        self.close_tab(idx, true)
+        self.close_tab(idx, true, false)
     }
 
-    fn close_tab(&mut self, idx: usize, park_dirty: bool) -> Task<Message> {
+    /// [`Self::close_tab_parking_dirty`] for a tab that is not the active one,
+    /// from a caller that is not the person (an agent, #1924): the active
+    /// tab's session (move pick and float, inline text edit, shape anchor,
+    /// tool, selection) is left as it was, and the person's pending
+    /// title-block draft stays pending.
+    pub(crate) fn close_background_tab_parking_dirty(&mut self, idx: usize) -> Task<Message> {
+        debug_assert_ne!(idx, self.document_state.active_tab);
+        self.close_tab(idx, true, true)
+    }
+
+    fn close_tab(&mut self, idx: usize, park_dirty: bool, keep_session: bool) -> Task<Message> {
         if let Some(tab) = self.document_state.tabs.get(idx) {
             let path = tab.path.clone();
-            if park_dirty {
+            if park_dirty && !keep_session {
                 // The user's own close: this sheet's drafts become its edit,
                 // so the sheet parks dirty like any other edit. Another
                 // sheet's drafts stay pending.
@@ -352,7 +362,9 @@ impl Signex {
         if active > 0 && (idx < active || active >= self.document_state.tabs.len()) {
             self.document_state.active_tab -= 1;
         }
-        self.sync_active_tab();
+        if !keep_session {
+            self.sync_active_tab();
+        }
         // Refresh so the open-dot drops immediately on tab close. The
         // dirty dot stays since the dirty mark is untouched.
         self.refresh_panel_ctx();

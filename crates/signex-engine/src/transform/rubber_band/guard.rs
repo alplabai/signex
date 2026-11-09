@@ -17,16 +17,18 @@
 //! carry the connection, else the net it ends up on (a co-moved wire carries
 //! it along).
 
+use std::cell::OnceCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 
 use signex_net::{
     NetBase, NetSignature, best_net_name_of, name_carrying_ports, net_signatures,
-    net_signatures_at, point_on_segment, pt_key, uf::Key,
+    net_signatures_at, pt_key, uf::Key,
 };
 use signex_types::schematic::{LabelType, SchematicSheet};
 use uuid::Uuid;
 
+use super::guard_local::LocalGuard;
 use super::{PinIdent, PinTip};
 
 /// Per old-tip routing overrides chosen by the guard.
@@ -53,7 +55,7 @@ impl Policy {
     }
 }
 
-type Projected = BTreeSet<NetSignature>;
+pub(super) type Projected = BTreeSet<NetSignature>;
 type Terminals = BTreeSet<(Uuid, String)>;
 
 /// The pre-move nets: computed once and shared, so a drag preview does not
@@ -91,12 +93,12 @@ fn derive_at(base: Option<&NetBase>, sheet: &SchematicSheet, at: &[(Key, bool)])
 }
 
 /// Pins and power ports left out of (or standing in for) a comparison.
-struct Exclusions {
-    terminals: Terminals,
-    sheet_pins: BTreeSet<Uuid>,
+pub(super) struct Exclusions {
+    pub(super) terminals: Terminals,
+    pub(super) sheet_pins: BTreeSet<Uuid>,
     /// Power ports that are not rubber-banded: they took their name-merges
     /// with them, so both sheets are compared without them.
-    power_out: HashSet<Uuid>,
+    pub(super) power_out: HashSet<Uuid>,
 }
 
 /// The plain-moved sheet seen from the moved pins.
@@ -121,7 +123,10 @@ impl PlainView {
             .iter()
             .map(|tip| nets.iter().position(|net| holds(net, tip.ident())))
             .collect();
-        let carried = keys.iter().map(|(k, _)| !something_at(sheet, *k)).collect();
+        let carried = keys
+            .iter()
+            .map(|(k, _)| !signex_net::point_is_occupied(sheet, *k))
+            .collect();
         Self {
             nets,
             at_old,
@@ -138,7 +143,7 @@ fn holds(net: &NetSignature, ident: &PinIdent) -> bool {
     }
 }
 
-fn insert_ident(net: &mut NetSignature, ident: &PinIdent) {
+pub(super) fn insert_ident(net: &mut NetSignature, ident: &PinIdent) {
     match ident {
         PinIdent::Terminal(symbol, pin) => {
             net.terminals.insert((*symbol, pin.clone()));
@@ -147,16 +152,6 @@ fn insert_ident(net: &mut NetSignature, ident: &PinIdent) {
             net.sheet_pins.insert(*uuid);
         }
     }
-}
-
-/// Whether a wire end or interior, label, dot or no-connect sits on `key`.
-fn something_at(sheet: &SchematicSheet, key: Key) -> bool {
-    sheet.wires.iter().any(|w| {
-        let (a, b) = (pt_key(&w.start), pt_key(&w.end));
-        point_on_segment(key, a, b)
-    }) || sheet.labels.iter().any(|l| pt_key(&l.position) == key)
-        || sheet.junctions.iter().any(|j| pt_key(&j.position) == key)
-        || sheet.no_connects.iter().any(|n| pt_key(&n.position) == key)
 }
 
 /// Whether wires, labels, dots and no-connects sit where they did.
@@ -193,17 +188,21 @@ pub struct Guard<'a> {
     before_sheet: &'a SchematicSheet,
     plain_sheet: &'a SchematicSheet,
     before: BeforeNets,
-    /// Constant across rounds: computed once.
-    plain_view: PlainView,
+    /// Constant across rounds: computed once, when the comparison over every
+    /// net first needs it.
+    plain_view: OnceCell<PlainView>,
     /// Pins the pre-move netlist saw; a moved pin that was on no net is the
     /// user's to place and is left out of the comparison.
-    seen_terminals: Terminals,
-    seen_sheet_pins: BTreeSet<Uuid>,
+    seen_terminals: OnceCell<Terminals>,
+    seen_sheet_pins: OnceCell<BTreeSet<Uuid>>,
     /// The plain move changed nothing but symbol and child-sheet positions.
-    only_symbols_moved: bool,
+    only_symbols_moved: OnceCell<bool>,
     /// The pre-move sheet's connectivity, to derive the moved sheets from
     /// instead of from scratch (a drag preview).
     base: Option<Arc<NetBase>>,
+    /// The comparison done on the nets the move reaches, when it can be
+    /// (`guard_local.rs`); `None` runs the comparison over every net.
+    local: Option<LocalGuard>,
 }
 
 impl<'a> Guard<'a> {
@@ -228,24 +227,53 @@ impl<'a> Guard<'a> {
         base: Option<Arc<NetBase>>,
     ) -> Self {
         let before = before.unwrap_or_else(|| before_nets(before_sheet));
-        let seen_terminals = before
-            .iter()
-            .flat_map(|net| net.terminals.iter().cloned())
-            .collect();
-        let seen_sheet_pins = before
-            .iter()
-            .flat_map(|net| net.sheet_pins.iter().copied())
-            .collect();
+        let local = (base.as_ref()).and_then(|base| LocalGuard::new(base, plain_sheet, tips));
         Self {
             before_sheet,
             plain_sheet,
             before,
-            plain_view: PlainView::of(plain_sheet, tips, base.as_deref()),
-            seen_terminals,
-            seen_sheet_pins,
-            only_symbols_moved: same_wiring(before_sheet, plain_sheet),
+            plain_view: OnceCell::new(),
+            seen_terminals: OnceCell::new(),
+            seen_sheet_pins: OnceCell::new(),
+            only_symbols_moved: OnceCell::new(),
             base,
+            local,
         }
+    }
+
+    /// This guard comparing over every net, as it does without a drag
+    /// preview's base: the reference the local comparison is held to.
+    #[cfg(test)]
+    pub(crate) fn without_local(mut self) -> Self {
+        self.local = None;
+        self
+    }
+
+    fn plain_view(&self, tips: &[PinTip]) -> &PlainView {
+        self.plain_view
+            .get_or_init(|| PlainView::of(self.plain_sheet, tips, self.base.as_deref()))
+    }
+
+    fn seen_terminals(&self) -> &Terminals {
+        self.seen_terminals.get_or_init(|| {
+            (self.before.iter())
+                .flat_map(|net| net.terminals.iter().cloned())
+                .collect()
+        })
+    }
+
+    fn seen_sheet_pins(&self) -> &BTreeSet<Uuid> {
+        self.seen_sheet_pins.get_or_init(|| {
+            (self.before.iter())
+                .flat_map(|net| net.sheet_pins.iter().copied())
+                .collect()
+        })
+    }
+
+    fn only_symbols_moved(&self) -> bool {
+        *self
+            .only_symbols_moved
+            .get_or_init(|| same_wiring(self.before_sheet, self.plain_sheet))
     }
 
     /// The nets of `sheet`.
@@ -257,25 +285,26 @@ impl<'a> Guard<'a> {
     #[must_use]
     pub fn was_connected(&self, tip: &PinTip) -> bool {
         match tip.ident() {
-            PinIdent::Terminal(symbol, pin) => {
-                self.seen_terminals.contains(&(*symbol, pin.clone()))
-            }
+            PinIdent::Terminal(symbol, pin) => match &self.local {
+                Some(local) => local.was_connected(*symbol, pin),
+                None => self.seen_terminals().contains(&(*symbol, pin.clone())),
+            },
             // A child-sheet pin always has a net of its own; it is connected
             // only if something is at its tip.
             PinIdent::SheetPin(uuid) => {
-                self.seen_sheet_pins.contains(uuid)
-                    && something_at(self.before_sheet, tip.old_key())
+                self.seen_sheet_pins().contains(uuid)
+                    && signex_net::point_is_occupied(self.before_sheet, tip.old_key())
             }
         }
     }
 
-    fn project(sigs: &[NetSignature], skip: &Exclusions) -> Projected {
+    pub(super) fn project(sigs: &[NetSignature], skip: &Exclusions) -> Projected {
         sigs.iter()
             .filter_map(|net| net.without(&skip.terminals, &skip.sheet_pins))
             .collect()
     }
 
-    fn exclusions(&self, tips: &[PinTip], policy: &Policy) -> Exclusions {
+    pub(super) fn exclusions(&self, tips: &[PinTip], policy: &Policy) -> Exclusions {
         let mut out = Exclusions {
             terminals: BTreeSet::new(),
             sheet_pins: BTreeSet::new(),
@@ -328,7 +357,7 @@ impl<'a> Guard<'a> {
     fn intent(&self, tips: &[PinTip], skip: &Exclusions) -> (Projected, Exclusions) {
         let stripped;
         let view = if skip.power_out.is_empty() {
-            &self.plain_view
+            self.plain_view(tips)
         } else {
             stripped = PlainView::of(
                 &Self::strip(self.plain_sheet, &skip.power_out),
@@ -339,53 +368,17 @@ impl<'a> Guard<'a> {
         };
         let mut nets = view.nets.clone();
         Self::clear_moved(&mut nets, tips);
-        let mut extra = Exclusions {
-            terminals: BTreeSet::new(),
-            sheet_pins: BTreeSet::new(),
-            power_out: HashSet::new(),
-        };
-        let mut lone: BTreeMap<Key, NetSignature> = BTreeMap::new();
-        for (i, tip) in tips.iter().enumerate() {
-            let skipped = match tip.ident() {
-                PinIdent::Terminal(s, p) => skip.terminals.contains(&(*s, p.clone())),
-                PinIdent::SheetPin(u) => skip.sheet_pins.contains(u),
-            };
-            if skipped || !self.was_connected(tip) {
-                // A pin that is not rubber-banded (plain, or never on a net)
-                // is expected exactly where the plain move left it, so a
-                // wire the pass stretched or added under it shows up.
-                if let Some(n) = view.home[i].filter(|_| !tip.is_power()) {
-                    insert_ident(&mut nets[n], tip.ident());
-                }
-                continue;
-            }
-            let target = if view.carried[i] {
-                // The wire that carried this pin moved with it: the plain
-                // move defines the net the pin lands on.
-                match view.home[i] {
-                    Some(n) => Some(&mut nets[n]),
-                    None => {
-                        match tip.ident() {
-                            PinIdent::Terminal(s, p) => {
-                                extra.terminals.insert((*s, p.clone()));
-                            }
-                            PinIdent::SheetPin(u) => {
-                                extra.sheet_pins.insert(*u);
-                            }
-                        }
-                        None
-                    }
-                }
-            } else {
-                match view.at_old[i] {
-                    (_, Some(n)) => Some(&mut nets[n]),
-                    (root, None) => Some(lone.entry(root).or_insert_with(empty_net)),
-                }
-            };
-            if let Some(net) = target {
-                insert_ident(net, tip.ident());
-            }
-        }
+        let (extra, lone) = place_moved_pins(
+            tips,
+            skip,
+            &mut nets,
+            &Placement {
+                home: &view.home,
+                carried: &view.carried,
+                at_old: &view.at_old,
+            },
+            |tip| self.was_connected(tip),
+        );
         let mut want: Vec<NetSignature> = nets
             .into_iter()
             .chain(lone.into_values())
@@ -517,7 +510,7 @@ impl<'a> Guard<'a> {
         let power_stays = tips
             .iter()
             .any(|t| t.is_power() && self.was_connected(t) && !policy.plain.contains(&t.old_key()));
-        if !(power_stays && self.only_symbols_moved) {
+        if !(power_stays && self.only_symbols_moved()) {
             return self.intent(tips, skip);
         }
         let sigs = if skip.power_out.is_empty() {
@@ -545,6 +538,57 @@ impl<'a> Guard<'a> {
         policy: &Policy,
         edited: &[Key],
     ) -> Option<Vec<Key>> {
+        #[cfg(test)]
+        {
+            let (equal, blamed, local_used) = self.verdict(candidate, tips, policy, edited);
+            tally::checked(local_used, equal, &blamed);
+            blamed
+        }
+        #[cfg(not(test))]
+        {
+            self.verdict(candidate, tips, policy, edited).1
+        }
+    }
+
+    /// Whether the candidate has the nets the move asks for, who is blamed
+    /// when not, and whether the comparison ran on the nets the move reaches.
+    fn verdict(
+        &self,
+        candidate: &SchematicSheet,
+        tips: &[PinTip],
+        policy: &Policy,
+        edited: &[Key],
+    ) -> (bool, Option<Vec<Key>>, bool) {
+        if let Some(local) = &self.local {
+            let skip = self.exclusions(tips, policy);
+            if let Some((equal, blamed)) = local.check(self, candidate, tips, policy, edited, &skip)
+            {
+                #[cfg(test)]
+                if self_check::enabled() {
+                    let all = self.check_all_nets(candidate, tips, policy, edited);
+                    assert_eq!(
+                        (equal, blamed.clone()),
+                        all,
+                        "the local comparison differs from the comparison over every net"
+                    );
+                }
+                return (equal, blamed, true);
+            }
+            #[cfg(test)]
+            tally::fell_back();
+        }
+        let (equal, blamed) = self.check_all_nets(candidate, tips, policy, edited);
+        (equal, blamed, false)
+    }
+
+    /// [`Self::check`] over every net of the candidate.
+    fn check_all_nets(
+        &self,
+        candidate: &SchematicSheet,
+        tips: &[PinTip],
+        policy: &Policy,
+        edited: &[Key],
+    ) -> (bool, Option<Vec<Key>>) {
         let skip = self.exclusions(tips, policy);
         let (want, extra) = self.reference(tips, &skip, policy);
         // Pins with an undefined plain connection stay out of both sides;
@@ -556,12 +600,12 @@ impl<'a> Guard<'a> {
         };
         let got = Self::project(&sigs, &extra);
         if want == got {
-            return None;
+            return (true, None);
         }
-        Self::blame(tips, policy, edited, &want, &got)
+        (false, Self::blame(tips, policy, edited, &want, &got))
     }
 
-    fn blame(
+    pub(super) fn blame(
         tips: &[PinTip],
         policy: &Policy,
         edited: &[Key],
@@ -597,7 +641,80 @@ impl<'a> Guard<'a> {
     }
 }
 
-fn empty_net() -> NetSignature {
+/// Where each moved pin sits among the plain-moved sheet's nets.
+pub(super) struct Placement<'a> {
+    /// Per tip: the net its pin is on in the plain-moved sheet.
+    pub(super) home: &'a [Option<usize>],
+    /// Per tip: nothing stays at the old tip to carry the connection.
+    pub(super) carried: &'a [bool],
+    /// Per tip: the net its old tip sits on (opaque id, index when named).
+    pub(super) at_old: &'a [(Key, Option<usize>)],
+}
+
+/// Put every moved pin back on the net the user's move asks for, in `nets`
+/// (the plain-moved nets with the moved pins taken out); returns the pins
+/// whose plain-move connection is undefined and so stay out of the comparison
+/// on both sides, and the nets that exist only at an old tip. The one place
+/// the placement rules live: the comparison over every net and the one over
+/// the nets a move reaches both call it.
+pub(super) fn place_moved_pins(
+    tips: &[PinTip],
+    skip: &Exclusions,
+    nets: &mut [NetSignature],
+    at: &Placement,
+    was_connected: impl Fn(&PinTip) -> bool,
+) -> (Exclusions, BTreeMap<Key, NetSignature>) {
+    let mut extra = Exclusions {
+        terminals: BTreeSet::new(),
+        sheet_pins: BTreeSet::new(),
+        power_out: HashSet::new(),
+    };
+    let mut lone: BTreeMap<Key, NetSignature> = BTreeMap::new();
+    for (i, tip) in tips.iter().enumerate() {
+        let skipped = match tip.ident() {
+            PinIdent::Terminal(s, p) => skip.terminals.contains(&(*s, p.clone())),
+            PinIdent::SheetPin(u) => skip.sheet_pins.contains(u),
+        };
+        if skipped || !was_connected(tip) {
+            // A pin that is not rubber-banded (plain, or never on a net)
+            // is expected exactly where the plain move left it, so a
+            // wire the pass stretched or added under it shows up.
+            if let Some(n) = at.home[i].filter(|_| !tip.is_power()) {
+                insert_ident(&mut nets[n], tip.ident());
+            }
+            continue;
+        }
+        let target = if at.carried[i] {
+            // The wire that carried this pin moved with it: the plain
+            // move defines the net the pin lands on.
+            match at.home[i] {
+                Some(n) => Some(&mut nets[n]),
+                None => {
+                    match tip.ident() {
+                        PinIdent::Terminal(s, p) => {
+                            extra.terminals.insert((*s, p.clone()));
+                        }
+                        PinIdent::SheetPin(u) => {
+                            extra.sheet_pins.insert(*u);
+                        }
+                    }
+                    None
+                }
+            }
+        } else {
+            match at.at_old[i] {
+                (_, Some(n)) => Some(&mut nets[n]),
+                (root, None) => Some(lone.entry(root).or_insert_with(empty_net)),
+            }
+        };
+        if let Some(net) = target {
+            insert_ident(net, tip.ident());
+        }
+    }
+    (extra, lone)
+}
+
+pub(super) fn empty_net() -> NetSignature {
     NetSignature {
         terminals: BTreeSet::new(),
         labels: BTreeSet::new(),
@@ -632,5 +749,70 @@ pub(crate) mod self_check {
         fn drop(&mut self) {
             ON.with(|flag| flag.set(self.0));
         }
+    }
+}
+
+/// What the tests count on this thread: the guard's checks (how many ran on
+/// the nets the move reaches, how many over every net, how many fell back to
+/// every net, how many blamed a tip, what each decided), the follows the
+/// journal rewound and the reconciles that read fewer wires than the sheet.
+#[cfg(test)]
+pub(crate) mod tally {
+    use std::cell::RefCell;
+
+    use signex_net::uf::Key;
+
+    #[derive(Debug, Default, Clone, PartialEq, Eq)]
+    pub(crate) struct Tally {
+        pub(crate) guards_built_local: usize,
+        pub(crate) local_checks: usize,
+        pub(crate) full_checks: usize,
+        pub(crate) blames: usize,
+        /// Checks of a guard built local that fell back to every net.
+        pub(crate) fallbacks: usize,
+        /// Failed follows whose journal put back at least one wire end.
+        pub(crate) rewinds: usize,
+        /// Reconciles that indexed only the wires near the touched ones.
+        pub(crate) reconciles_narrowed: usize,
+        /// Each check's answer, in order.
+        pub(crate) decisions: Vec<(bool, Option<Vec<Key>>)>,
+    }
+
+    thread_local! {
+        static TALLY: RefCell<Tally> = RefCell::new(Tally::default());
+    }
+
+    pub(crate) fn guard_built_local() {
+        TALLY.with(|t| t.borrow_mut().guards_built_local += 1);
+    }
+
+    pub(super) fn checked(local: bool, equal: bool, blamed: &Option<Vec<Key>>) {
+        TALLY.with(|t| {
+            let mut t = t.borrow_mut();
+            if local {
+                t.local_checks += 1;
+            } else {
+                t.full_checks += 1;
+            }
+            t.blames += usize::from(blamed.is_some());
+            t.decisions.push((equal, blamed.clone()));
+        });
+    }
+
+    pub(crate) fn fell_back() {
+        TALLY.with(|t| t.borrow_mut().fallbacks += 1);
+    }
+
+    pub(crate) fn rewound() {
+        TALLY.with(|t| t.borrow_mut().rewinds += 1);
+    }
+
+    pub(crate) fn reconcile_narrowed() {
+        TALLY.with(|t| t.borrow_mut().reconciles_narrowed += 1);
+    }
+
+    /// The counts so far on this thread, starting again from zero.
+    pub(crate) fn take() -> Tally {
+        TALLY.with(|t| std::mem::take(&mut *t.borrow_mut()))
     }
 }

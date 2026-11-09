@@ -50,8 +50,12 @@ use signex_widgets::{raw, text};
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{danger_btn, footer_strip, header, primary_btn, secondary_btn};
-use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_hint, dialog_message};
+use super::modal_chrome::{
+    cancel_btn, danger_btn, footer_strip, header, primary_btn, secondary_btn,
+};
+use crate::styles::{
+    DialogButtonKind, DialogIcon, dialog_body, dialog_button, dialog_hint, dialog_intro,
+};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -182,9 +186,14 @@ fn library_missing_view<'a>(
     );
 
     let body = column![
-        dialog_message(
-            "Signex couldn't find the library's .snxlib file. \
-             It may have been moved, renamed, or deleted.",
+        dialog_intro(
+            DialogIcon::Warn,
+            "The library file is missing",
+            Some(
+                "Signex couldn't find the library's .snxlib file. \
+                 It may have been moved, renamed, or deleted."
+                    .to_owned()
+            ),
             tokens,
         ),
         dialog_hint(format!("Expected: {}", path.display()), tokens),
@@ -194,7 +203,7 @@ fn library_missing_view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn(
+            cancel_btn(
                 "Cancel",
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
                 tokens,
@@ -239,10 +248,15 @@ fn git_missing_view<'a>(
     );
 
     let mut summary_lines = column![
-        dialog_message(
-            "The library's .snxlib file is intact, but its .git/ \
-             directory is missing. Past per-primitive history can't \
-             be read until the repository is restored.",
+        dialog_intro(
+            DialogIcon::Warn,
+            "The library's history is missing",
+            Some(
+                "The library's .snxlib file is intact, but its .git/ \
+                 directory is missing. Past per-primitive history can't \
+                 be read until the repository is restored."
+                    .to_owned()
+            ),
             tokens,
         ),
         dialog_hint(format!("Library: {}", path.display()), tokens),
@@ -291,7 +305,7 @@ fn git_missing_view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn(
+            cancel_btn(
                 "Cancel",
                 LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
                 tokens,
@@ -344,12 +358,14 @@ fn broken_binding_view<'a>(
     );
 
     let body = column![
-        dialog_message(
-            format!(
+        dialog_intro(
+            DialogIcon::Warn,
+            format!("The {} is missing", kind_label.to_lowercase()),
+            Some(format!(
                 "A row in '{}' references a {} that no longer exists on disk.",
                 table,
                 kind_label.to_lowercase()
-            ),
+            )),
             tokens,
         ),
         column![
@@ -364,7 +380,7 @@ fn broken_binding_view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn(
+            cancel_btn(
                 "Cancel",
                 LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
                 tokens,

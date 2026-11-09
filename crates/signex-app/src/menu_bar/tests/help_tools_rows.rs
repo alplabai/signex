@@ -218,13 +218,12 @@ fn stub_rows_are_not_live() {
     for path in [
         "Tools/Assign Footprints",
         "Tools/Library Editor",
-        "Tools/Design Rule Check",
         "Tools/Net Inspector",
         "Window/Tile Horizontally",
         "Window/Tile Vertically",
         "Window/Close All Documents",
-        "Design/Annotation/Back Annotate Schematics...",
-        "Design/Annotation/Number Schematic Sheets...",
+        "Tools/Annotation/Back Annotate Schematics...",
+        "Tools/Annotation/Number Schematic Sheets...",
     ] {
         assert!(!row_is_live(&app, path), "{path}");
     }

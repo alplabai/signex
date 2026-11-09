@@ -74,6 +74,10 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
+    /// Signex AI panel mode; view-only, kept across context rebuilds.
+    pub signal_mode: super::signal::SignalMode,
+    /// Projects panel filter text and collapsed groups; view-only.
+    pub projects_view: super::ProjectsView,
     /// Net Classes section of the General tab (#1042).
     pub net_classes: NetClassPanel,
     /// Persistent project tree — toggle state survives across renders.
@@ -95,6 +99,11 @@ pub struct PanelContext {
     /// buttons; outside of a Library Browser tab the field stays
     /// `None` and the panel falls through to its existing branches.
     pub library_row_detail: Option<LibraryRowDetail>,
+    /// Row data of the active Component editor tab; shown by the Graphite
+    /// Properties dock.
+    pub component_sheet: Option<super::ComponentSheet>,
+    /// Nets of the active PCB tab, for the PCB panel.
+    pub pcb_nets: Option<super::PcbNetsSummary>,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,
@@ -115,6 +124,9 @@ pub struct PanelContext {
     /// The footprints the selected placed symbol's library row offers, when
     /// it has alternates; empty otherwise (#1234).
     pub footprint_choices: Vec<FootprintChoiceItem>,
+    /// The FOOTPRINT card of the selected placed part; `None` when it has
+    /// no footprint or the selection is not one placed part.
+    pub footprint_card: Option<super::FootprintCardView>,
     /// Transient numeric-input buffers for the drawing properties
     /// panel — keyed on DrawingFieldId. Keeps half-typed strings
     /// ("", "-", "2.") alive between rerenders so fields can be
@@ -140,6 +152,13 @@ pub struct PanelContext {
     /// Whether the border-colour picker overlay is open for the
     /// currently-selected child sheet.
     pub child_sheet_border_picker_open: bool,
+    /// State of the wire colour picker (Tab form or selected wire).
+    pub wire_color_picker: super::WireColorPicker,
+    /// Width preset and colour of the single selected wire, if one is.
+    pub selected_wire_style: Option<(
+        signex_types::schematic::WireWidthPreset,
+        Option<signex_types::theme::Color>,
+    )>,
     /// Whether the fill-colour picker overlay is open for the
     /// currently-selected child sheet.
     pub child_sheet_fill_picker_open: bool,
@@ -193,6 +212,8 @@ pub struct PanelContext {
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,
+    /// The active board's design-rule check; `None` with no PCB in view (#2222).
+    pub pcb_drc: Option<super::DrcPanel>,
     /// Selection filter state, shared with the Active Bar.
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// User-defined custom filter presets (capped at

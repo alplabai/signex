@@ -7,7 +7,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Point, Size};
 use signex_library::primitive::footprint::FpGraphic;
 
-use crate::library::editor::footprint::layers::{FpLayer, LayerVisibility};
+use crate::library::editor::footprint::layers::{FpLayer, LayerPalette, LayerVisibility};
 use crate::library::editor::footprint::state::{CourtyardRect, EditorPad};
 
 use super::super::FootprintCanvasState;
@@ -29,22 +29,36 @@ pub(crate) struct LayerInput<'a> {
     pub selected_pads_extra: &'a [usize],
     pub selected_silk_f: Option<usize>,
     pub pad_labels: PadLabels,
+    /// Colour set of the layers.
+    pub palette: LayerPalette,
 }
 
 /// Silk-front and silk-back graphics.
 pub(crate) fn draw_silk(frame: &mut canvas::Frame, cam: &FootprintCanvasState, i: &LayerInput<'_>) {
     if i.visibility.get(FpLayer::FSilks) {
-        draw_silk_graphics(frame, cam, i.silk_f, FpLayer::FSilks, i.selected_silk_f);
+        draw_silk_graphics(
+            frame,
+            cam,
+            i.silk_f,
+            FpLayer::FSilks,
+            i.selected_silk_f,
+            i.palette,
+        );
     }
     if i.visibility.get(FpLayer::BSilks) {
-        draw_silk_graphics(frame, cam, i.silk_b, FpLayer::BSilks, None);
+        draw_silk_graphics(frame, cam, i.silk_b, FpLayer::BSilks, None, i.palette);
     }
 }
 
 /// Front fabrication graphics (previews only; the editor does not show
-/// the fab layer).
-pub(crate) fn draw_fab(frame: &mut canvas::Frame, cam: &FootprintCanvasState, fab_f: &[FpGraphic]) {
-    draw_silk_graphics(frame, cam, fab_f, FpLayer::FFab, None);
+/// the fab layer), in `palette`.
+pub(crate) fn draw_fab(
+    frame: &mut canvas::Frame,
+    cam: &FootprintCanvasState,
+    fab_f: &[FpGraphic],
+    palette: LayerPalette,
+) {
+    draw_silk_graphics(frame, cam, fab_f, FpLayer::FFab, None, palette);
 }
 
 /// Back silk and back fab, always drawn (previews only): the editor's
@@ -54,9 +68,10 @@ pub(crate) fn draw_back_layers(
     cam: &FootprintCanvasState,
     silk_b: &[FpGraphic],
     fab_b: &[FpGraphic],
+    palette: LayerPalette,
 ) {
-    draw_silk_graphics(frame, cam, fab_b, FpLayer::BFab, None);
-    draw_silk_graphics(frame, cam, silk_b, FpLayer::BSilks, None);
+    draw_silk_graphics(frame, cam, fab_b, FpLayer::BFab, None, palette);
+    draw_silk_graphics(frame, cam, silk_b, FpLayer::BSilks, None, palette);
 }
 
 /// Courtyard: the outline polygon when present, else the bbox rectangle.
@@ -68,8 +83,20 @@ pub(crate) fn draw_courtyard(
     if !i.visibility.get(FpLayer::EdgeCuts) {
         return;
     }
-    let edge_color = FpLayer::EdgeCuts.color();
-    let stroke = || Stroke::default().with_width(1.5).with_color(edge_color);
+    let edge_color = FpLayer::EdgeCuts.color_in(i.palette);
+    // Graphite draws the courtyard dashed; other themes keep it solid.
+    let dashed = i.palette.dashes_courtyard();
+    let stroke = || Stroke {
+        line_dash: if dashed {
+            canvas::LineDash {
+                segments: &[6.0, 4.0],
+                offset: 0,
+            }
+        } else {
+            canvas::LineDash::default()
+        },
+        ..Stroke::default().with_width(1.5).with_color(edge_color)
+    };
     if let Some(outline) = i.courtyard_outline {
         if outline.len() >= 3 {
             let path = Path::new(|b| {
@@ -97,7 +124,7 @@ pub(crate) fn draw_pads(frame: &mut canvas::Frame, cam: &FootprintCanvasState, i
             continue;
         }
         let is_selected = i.selected_pad == Some(idx) || i.selected_pads_extra.contains(&idx);
-        draw_pad(frame, cam, pad, is_selected);
+        draw_pad(frame, cam, pad, is_selected, i.palette);
     }
     // Numbers last so no pad body covers a neighbour's number.
     for pad in i.pads {

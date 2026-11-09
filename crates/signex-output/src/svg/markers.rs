@@ -12,6 +12,7 @@ use signex_types::schematic::{
 
 fn marker_style(rgb: (f32, f32, f32), xform: &PageTransform) -> SvgStyle {
     SvgStyle {
+        stroke_alpha: 1.0,
         stroke_rgb: Some(rgb),
         fill_rgb: None,
         stroke_width: (SCHEMATIC_NO_CONNECT_STROKE_MM * xform.mm_to_unit) as f32,

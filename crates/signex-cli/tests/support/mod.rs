@@ -40,6 +40,7 @@ pub fn fixture(root: &Path) -> Fixture {
     let (project, sheet) = (dir.join("demo.snxprj"), dir.join("main.snxsch"));
     let origin = Point::new(0.0, 0.0);
     let wire = Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: origin,
         end: Point::new(10.0, 0.0),

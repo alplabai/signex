@@ -144,13 +144,6 @@ pub struct UiState {
     pub preferences_nav: crate::preferences::PrefNav,
     pub preferences_draft_theme: ThemeId,
     pub preferences_draft_font: String,
-    /// Status / error line shown under Appearance ▸ Import/Export Theme.
-    /// The export writes a file the user picked in a save dialog, so a
-    /// failed write has to reach the user rather than leaving them
-    /// believing the theme was saved (#533). Sibling of
-    /// [`Self::preferences_keymap_status`]; empty renders nothing. Pure
-    /// feedback — never part of the dirty predicate.
-    pub preferences_theme_status: String,
     pub grid_style: GridStyle,
     pub preferences_draft_grid_style: GridStyle,
     /// Saved "Annotate undo" preference: one undo step per annotate run for
@@ -175,6 +168,11 @@ pub struct UiState {
     pub trackpad_pan: bool,
     /// Draft mirror of [`Self::trackpad_pan`] for the Preferences dialog.
     pub preferences_draft_trackpad_pan: bool,
+    /// Saved "Mouse wheel" preference: the wheel zooms (default) or scrolls
+    /// the view. Ctrl/Cmd+wheel and pinch zoom either way.
+    pub wheel_mode: crate::canvas::WheelMode,
+    /// Draft mirror of [`Self::wheel_mode`] for the Preferences dialog.
+    pub preferences_draft_wheel_mode: crate::canvas::WheelMode,
     /// The locale in force: its catalog bundle and the Language list. Shared
     /// with the menus; replaced by `Signex::set_language` (#2055).
     pub i18n: std::sync::Arc<signex_i18n::I18n>,
@@ -233,6 +231,9 @@ pub struct UiState {
     /// Which library browser opened each per-browser dialog window (edit row,
     /// delete confirm): the window reads and answers for THAT browser.
     pub library_modal_owners: std::collections::HashMap<iced::window::Id, std::path::PathBuf>,
+    /// Dialog windows opened without the OS frame: they draw the Graphite
+    /// title bar (and resize edges) themselves.
+    pub borderless_dialog_windows: std::collections::HashSet<iced::window::Id>,
     /// Logical size of the monitor holding the main window, when known.
     pub main_window_monitor_size: Option<iced::Size>,
     /// Opt-in autosave of recovery copies (#104). Off by default.
@@ -368,29 +369,20 @@ pub struct UiState {
     pub prefs_load_error: Option<String>,
     /// Result line for the Preferences prefs-file recovery action (#602).
     /// Transient per-action feedback — never part of the dirty
-    /// predicate — and cleared on every dialog open, exactly like
-    /// [`Self::preferences_theme_status`]. Empty renders nothing.
+    /// predicate — and cleared on every dialog open. Empty renders nothing.
     pub preferences_prefs_status: String,
     /// Live search query for the Keyboard Shortcuts pane. Filters the
     /// grouped shortcut table case-insensitively by label / command id /
     /// trigger. Reset to empty each time Preferences opens.
     pub preferences_keymap_search: String,
+    /// Graphite Preferences nav search; filters the nav rows. Reset on open.
+    pub preferences_nav_search: String,
     /// Chord recorder overlay. `Some` while the user is capturing a new
     /// keystroke for a binding; the keyboard subscription routes raw
     /// strokes to the recorder instead of the live keymap resolver
     /// while it is open.
     pub preferences_keymap_recorder: Option<KeymapRecorderState>,
     pub preferences_dirty: bool,
-    /// Sticky companion to [`Self::preferences_dirty`] for imperative edits
-    /// the draft comparator cannot observe — currently only Import Theme,
-    /// which swaps the live [`Self::custom_theme`] in place (there is no
-    /// draft copy to diff against). Once set, recomputing the dirty flag
-    /// from [`Self::preferences_has_unsaved_changes`] keeps it `true` until
-    /// Save or a draft reseed (open / revert) clears it, so a later
-    /// appearance-draft change can't clobber the pending import back to
-    /// "clean" and let the dialog close without a prompt.
-    pub preferences_dirty_sticky: bool,
-    pub custom_theme: Option<signex_types::theme::CustomThemeFile>,
     /// Rename-sheet modal state. Opened from the Projects-panel tree
     /// context menu; `None` when the modal is closed.
     pub rename_dialog: Option<crate::app::RenameDialogState>,
@@ -662,6 +654,7 @@ impl UiState {
             || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
             || self.preferences_draft_net_hover_enabled != self.net_hover_enabled
             || self.preferences_draft_trackpad_pan != self.trackpad_pan
+            || self.preferences_draft_wheel_mode != self.wheel_mode
             || self.preferences_draft_remember_window_geometry != self.remember_window_geometry
             || self.preferences_draft_drag_direction_select != self.drag_direction_select
             || self.preferences_draft_increment_step != self.increment_step
@@ -698,11 +691,9 @@ impl UiState {
     }
 
     /// True when closing Preferences without Save would lose work — drives
-    /// the Save/Discard footer + every dirty-close guard. The draft
-    /// comparator plus the sticky flag for imperative edits it can't see
-    /// (see [`Self::preferences_dirty_sticky`]).
+    /// the Save/Discard footer + every dirty-close guard.
     pub fn preferences_has_unsaved_changes(&self) -> bool {
-        self.preferences_dirty_sticky || self.preferences_draft_differs()
+        self.preferences_draft_differs()
     }
 }
 

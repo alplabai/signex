@@ -54,6 +54,7 @@ impl Widget<Message, Theme, Renderer> for SchematicStaticTextLayer<'_> {
             SurfaceLayers {
                 layers: vec![layer.geometry],
                 content_shift,
+                selection_shift: None,
                 background_shift: None,
             },
         );

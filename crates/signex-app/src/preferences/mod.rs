@@ -5,15 +5,12 @@
 //! Right side: settings panel for the selected category.
 
 use crate::render_config::{GridStyle, PinSelectionMode};
-use iced::widget::{Column, Space, Widget, column, container, row, scrollable};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::widget::{Space, Widget, column, container, row, scrollable};
+use iced::{Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeId;
 use signex_widgets::{button, raw, text};
 
-use crate::app::view::dialogs::{
-    MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
-};
-use crate::styles::{MODAL_CORNER_RADIUS, Spacing, TypeScale};
+use crate::styles::{Spacing, TypeScale};
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -23,8 +20,12 @@ mod appearance;
 mod component_classes;
 mod distributors;
 mod editing;
+mod graphite_fields;
+mod keycaps;
 mod keymap;
 mod profiles;
+mod shell;
+mod theme_cards;
 mod widgets;
 
 use annotation::content_annotation;
@@ -41,7 +42,7 @@ pub use profiles::{ProfileAction, ProfilesMsg};
 // section submodule keep resolving them through `use super::*`.
 pub(in crate::preferences) use widgets::{
     danger_button_style, h_sep, primary_button_style, secondary_button_style, section_title,
-    success_button_style, text_muted, text_primary, text_warning,
+    text_muted, text_primary, text_warning,
 };
 
 // ─── Navigation Items ─────────────────────────────────────────
@@ -119,12 +120,16 @@ pub enum PrefMsg {
     Noop,
     /// Navigate to a category.
     Nav(PrefNav),
+    /// The Graphite nav search text changed; only filters the nav rows.
+    NavSearchChanged(String),
     /// Close without saving (only if not dirty; app ignores if dirty).
     Close,
     /// Discard all unsaved changes and close.
     DiscardAndClose,
     /// Commit the current draft and keep the dialog open.
     Save,
+    /// Commit the current draft, then close (the Graphite footer's OK).
+    SaveAndClose,
     /// Every `prefs.json` write a Save started has finished (#1351). Save
     /// returns them as background tasks, so the file-health probe that
     /// reports a refused write has to wait for this.
@@ -150,6 +155,8 @@ pub enum PrefMsg {
     DraftNetHoverEnabled(bool),
     /// Toggle "Two-finger scroll pans". Persisted on Save.
     DraftTrackpadPan(bool),
+    /// Choose "Mouse wheel": zoom or scroll the view. Persisted on Save.
+    DraftWheelMode(crate::canvas::WheelMode),
     /// Toggle "Remember window size and position". Persisted on Save.
     DraftRememberWindowGeometry(bool),
     /// Move the "Increment step" (-100..=100, never 0). Persisted on Save.
@@ -176,20 +183,6 @@ pub enum PrefMsg {
     DraftUiScalePercent(u16),
     /// Update the symbol-editor pin-selection mode (persisted on change).
     DraftSymbolPinSelection(PinSelectionMode),
-    /// Open a file picker to import a custom theme JSON.
-    ImportTheme,
-    /// Save the current draft theme as a JSON file.
-    ExportTheme,
-    /// Outcome of the theme-export write (#533). `Ok` carries the path
-    /// actually written, `Err` the `std::io::Error` rendered for the
-    /// user. Cancelling the save dialog emits nothing — only a real
-    /// attempt reports. Without this the write result was discarded and
-    /// a failed export looked identical to a successful one.
-    ThemeExportFinished(Result<std::path::PathBuf, String>),
-    /// Loaded JSON content from an import pick dialog.
-    ThemeFileLoaded(String),
-    /// The picked theme file could not be read; the reason.
-    ThemeFileUnreadable(String),
     /// Rule Profiles pane (#1608). Its edits are written to the profile
     /// files at once, so they are not drafts and never mark the dialog dirty.
     Profiles(ProfilesMsg),
@@ -254,8 +247,9 @@ pub enum PrefMsg {
     KeymapProfileUnreadable(String),
     /// Save the active profile to a `.toml` file.
     KeymapExportProfile,
-    /// Outcome of the keymap-export write (#533) — same shape and same
-    /// reason as [`Self::ThemeExportFinished`]. Reports through
+    /// Outcome of the keymap-export write (#533). `Ok` carries the path
+    /// actually written, `Err` the IO error rendered for the user;
+    /// cancelling the save dialog emits nothing. Reports through
     /// `preferences_keymap_status`, where the serialization failure at
     /// the same call site already reported.
     KeymapExportFinished(Result<std::path::PathBuf, String>),
@@ -282,14 +276,6 @@ pub enum PrefMsg {
     /// Apply the recorded chord to the binding under edit.
     KeymapRecorderApply,
 }
-
-// ─── Dialog sizes ─────────────────────────────────────────────
-
-const DLG_W: f32 = 960.0;
-const DLG_H: f32 = 660.0;
-const NAV_W: f32 = 220.0;
-const FOOTER_H: f32 = 44.0;
-
 // ─── Public view ──────────────────────────────────────────────
 
 // ─── Render inputs ────────────────────────────────────────────
@@ -319,6 +305,7 @@ pub struct PrefsView<'a> {
     pub draft_move_keeps_wires: bool,
     pub draft_net_hover_enabled: bool,
     pub draft_trackpad_pan: bool,
+    pub draft_wheel_mode: crate::canvas::WheelMode,
     pub draft_remember_window_geometry: bool,
     pub draft_drag_direction_select: bool,
     pub draft_increment_step: i32,
@@ -335,9 +322,6 @@ pub struct PrefsView<'a> {
     pub draft_symbol_pin_selection: PinSelectionMode,
     pub draft_zoom_step_percent: u8,
     pub draft_ui_scale_percent: u16,
-    pub custom_name: Option<&'a str>,
-    /// Appearance ▸ theme import/export status line. Empty renders nothing.
-    pub theme_status: &'a str,
     pub dirty: bool,
     pub profiles: &'a crate::app::rule_profile_ui::ProfileManager,
     /// The profile new projects start from; `None` is automatic.
@@ -370,6 +354,8 @@ pub struct PrefsView<'a> {
     /// feedback shown in the same banner; empty renders nothing.
     pub prefs_status: &'a str,
     pub keymap_search: &'a str,
+    /// Graphite nav search text (filters the nav rows only).
+    pub nav_search: &'a str,
     pub keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
 }
 
@@ -380,10 +366,11 @@ pub struct PrefsView<'a> {
 /// * `draft_theme`      — theme currently selected in the dialog (not yet saved)
 /// * `saved_theme`      — the committed theme (used to detect unsaved changes)
 /// * `draft_font`       — UI font name pending save
-/// * `custom_name`      — name of the loaded custom theme (if any)
 /// * `dirty`            — whether there are unsaved changes
 pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    let panel_tokens = v.panel_tokens;
     let dialog = build_dialog(v, true);
+    let (card_w, card_h) = (shell::GRAPHITE_DLG_W, shell::GRAPHITE_DLG_H);
 
     container(
         column![
@@ -393,8 +380,8 @@ pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 // In-app overlay: keep a centred, capped card (the detached
                 // window path uses `view_body` directly and fills the window).
                 container(dialog)
-                    .width(Length::Fill.max(DLG_W))
-                    .height(Length::Fill.max(DLG_H)),
+                    .width(Length::Fill.max(card_w))
+                    .height(Length::Fill.max(card_h)),
                 Space::new().width(Length::Fill),
             ],
             Space::new().height(Length::Fill),
@@ -404,10 +391,7 @@ pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     )
     .width(Length::Fill)
     .height(Length::Fill)
-    .style(|_: &Theme| container::Style {
-        background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.65))),
-        ..container::Style::default()
-    })
+    .style(crate::app::view::dialogs::scrim_style(panel_tokens))
     .boxed()
 }
 
@@ -423,205 +407,7 @@ pub(crate) fn view_body<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
 }
 
 fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg> {
-    let PrefsView {
-        nav,
-        dirty,
-        prefs_load_error,
-        prefs_status,
-        ..
-    } = v;
-
-    // ── Header ── canonical modal chrome (28px, asymmetric padding,
-    // SVG close-X with red hover) — same shape every other modal in
-    // the app uses so the chrome stays consistent across surfaces.
-    let header = container(
-        row![
-            text(raw("Preferences"))
-                .size(MODAL_HEADER_TITLE_SIZE)
-                .style(text_primary),
-            Space::new().width(Length::Fill),
-            crate::app::view::dialogs::close_x_button(PrefMsg::Close),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .width(Length::Fill)
-    .height(MODAL_HEADER_HEIGHT)
-    .padding(MODAL_HEADER_PADDING)
-    .style(move |theme: &Theme| container::Style {
-        background: Some(Background::Color(theme.palette().background.weak.color)),
-        border: Border {
-            width: 0.0,
-            radius: iced::border::Radius::default()
-                .top_left(MODAL_CORNER_RADIUS)
-                .top_right(MODAL_CORNER_RADIUS),
-            ..Border::default()
-        },
-        ..container::Style::default()
-    });
-
-    // ── Body: nav | divider | content ──
-    let body = row![
-        build_nav(nav),
-        // Vertical divider
-        container(Space::new())
-            .width(1)
-            .height(Length::Fill)
-            .style(move |theme: &Theme| container::Style {
-                background: Some(Background::Color(theme.palette().background.strong.color)),
-                ..container::Style::default()
-            }),
-        build_content(v),
-    ]
-    .width(Length::Fill)
-    .height(Length::Fill);
-
-    // ── Footer (only when dirty) ──
-    let footer_opt = build_footer(dirty);
-
-    // ── Assemble ──
-    let h_divider = || -> Element<'a, PrefMsg> {
-        container(Space::new())
-            .width(Length::Fill)
-            .height(1)
-            .style(move |theme: &Theme| container::Style {
-                background: Some(Background::Color(theme.palette().background.strong.color)),
-                ..container::Style::default()
-            })
-            .boxed()
-    };
-
-    // The prefs-file banner sits above the nav / content split, so it is
-    // outside every `scrollable` and shows in whichever pane the user is
-    // on. `view()` and `view_body()` both funnel through here, so this one
-    // insertion covers the in-app overlay and the detached OS window.
-    let mut col_items: Vec<Element<'a, PrefMsg>> = Vec::new();
-    if with_header {
-        col_items.push(header.boxed());
-        col_items.push(h_divider());
-    }
-    if let Some(banner) = build_prefs_file_banner(prefs_load_error, prefs_status) {
-        col_items.push(banner);
-    }
-    col_items.push(body.boxed());
-    if let Some(footer) = footer_opt {
-        col_items.push(h_divider());
-        col_items.push(footer);
-    }
-
-    // Fill the container we are given: as an in-app overlay `view()` wraps us
-    // in a fixed DLG_W×DLG_H card; as the detached Preferences window content
-    // this fills the OS window so the modal grows/shrinks with a window resize
-    // instead of staying a fixed 960×660 island.
-    container(Column::with_children(col_items).spacing(0))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(theme.palette().background.base.color)),
-            border: Border {
-                width: 1.0,
-                radius: MODAL_CORNER_RADIUS.into(),
-                color: theme.palette().background.strong.color,
-                ..Border::default()
-            },
-            shadow: iced::Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.7),
-                offset: iced::Vector::new(0.0, 8.0),
-                blur_radius: 24.0,
-            },
-            ..container::Style::default()
-        })
-        .clip(true)
-        .boxed()
-}
-
-// ─── Left navigation ──────────────────────────────────────────
-
-fn build_nav<'a>(active: PrefNav) -> Element<'a, PrefMsg> {
-    let mut col = column![].spacing(0).width(NAV_W);
-
-    // Group headers + items
-    let mut last_group = "";
-    for &item in PrefNav::ALL {
-        let group = item.group();
-        if group != last_group {
-            last_group = group;
-            col = col.push(
-                container(
-                    // user-visible: migrate to the #2063 casemap
-                    // ast-grep-ignore: no-case-in-view
-                    text(raw(group.to_uppercase()))
-                        .size(TS.caption)
-                        .style(text_muted),
-                )
-                .padding(iced::Padding {
-                    top: 10.0,
-                    right: 12.0,
-                    bottom: 4.0,
-                    left: 12.0,
-                })
-                .width(Length::Fill)
-                .boxed(),
-            );
-        }
-        col = col.push(nav_item(item, active));
-    }
-
-    container(scrollable(col).width(Length::Fill))
-        .width(NAV_W)
-        .height(Length::Fill)
-        .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(theme.palette().background.weak.color)),
-            ..container::Style::default()
-        })
-        .boxed()
-}
-
-fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
-    let is_active = item == active;
-
-    button(
-        container(
-            row![
-                text(raw(item.label()))
-                    .size(TS.label)
-                    .style(move |theme: &Theme| text::Style {
-                        color: Some(if is_active {
-                            theme.palette().primary.base.text
-                        } else {
-                            theme.palette().background.base.text
-                        }),
-                        selection: None,
-                    }),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([6.0, SP.l])
-        .width(Length::Fill),
-    )
-    .padding(0)
-    .width(Length::Fill)
-    .on_press(PrefMsg::Nav(item))
-    .style(move |theme: &Theme, status: button::Status| {
-        let palette = theme.palette();
-        let bg = match (is_active, status) {
-            (true, _) => Some(Background::Color(palette.primary.base.color)),
-            (false, button::Status::Hovered) => {
-                Some(Background::Color(palette.background.strong.color))
-            }
-            _ => None,
-        };
-        button::Style {
-            background: bg,
-            border: Border::default(),
-            text_color: if is_active {
-                palette.primary.base.text
-            } else {
-                palette.background.base.text
-            },
-            ..button::Style::default()
-        }
-    })
-    .boxed()
+    shell::graphite_dialog(v, with_header)
 }
 
 // ─── Right content ────────────────────────────────────────────
@@ -687,78 +473,24 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             keymap_backup,
             keymap_search,
             keymap_recorder,
+            panel_tokens,
         ),
         PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
     };
 
-    container(scrollable(inner).width(Length::Fill))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .padding(0)
-        .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(theme.palette().background.base.color)),
-            ..container::Style::default()
-        })
-        .boxed()
-}
-
-/// Dynamic footer: Save + Close (clean) or ⚠ + Discard + Save (dirty).
-/// Footer is rendered only when dirty — the X button in the header is the
-/// canonical close action; a redundant "Close" button at the bottom is
-/// noise. Save / Discard appear when there are unsaved changes.
-fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
-    if !dirty {
-        return None;
-    }
-    let footer_row: Element<'a, PrefMsg> = row![
-        text(raw("● Unsaved changes"))
-            .size(TS.body)
-            .style(text_warning),
-        Space::new().width(Length::Fill),
-        discard_btn(),
-        Space::new().width(SP.l),
-        save_btn(),
-    ]
-    .align_y(iced::Alignment::Center)
-    .boxed();
-
-    Some(
-        container(footer_row)
+    container(
+        scrollable(inner)
             .width(Length::Fill)
-            .height(FOOTER_H)
-            // Centre the row in the strip. `container` aligns its content
-            // to the top by default, and the row's own `align_y(Center)`
-            // only centres its children against each other inside the
-            // row's own height — neither moves the row down inside a
-            // fixed-height parent, so without this the buttons sit flush
-            // against the divider above them.
-            //
-            // `align_y` and NOT `center_y`: the latter is
-            // `self.height(height).align_y(Center)`, so it would replace
-            // the fixed `FOOTER_H` above and let the strip swallow every
-            // spare pixel of the dialog.
-            .align_y(iced::alignment::Vertical::Center)
-            // 20 rather than 16 on the sides: at 16 the Save button sat
-            // almost against the card's right border, and the strip reads
-            // as cramped even though the footer's own height is fixed.
-            .padding([0, 20])
-            .style(move |theme: &Theme| {
-                let palette = theme.palette();
-                container::Style {
-                    background: Some(Background::Color(palette.background.weak.color)),
-                    border: Border {
-                        width: 1.0,
-                        color: palette.background.strong.color,
-                        radius: iced::border::Radius::default()
-                            .bottom_left(MODAL_CORNER_RADIUS)
-                            .bottom_right(MODAL_CORNER_RADIUS),
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                }
-            })
-            .boxed(),
+            .style(graphite_fields::scroll_style(panel_tokens)),
     )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .padding(0)
+    .style(move |theme: &Theme| container::Style {
+        background: Some(Background::Color(theme.palette().background.base.color)),
+        ..container::Style::default()
+    })
+    .boxed()
 }
 
 /// Dialog-wide alert strip for a `prefs.json` that could not be loaded,
@@ -869,22 +601,6 @@ fn build_prefs_file_banner<'a>(
             })
             .boxed(),
     )
-}
-
-fn save_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text(raw("Save")).size(TS.label))
-        .padding([SP.m, 20.0])
-        .on_press(PrefMsg::Save)
-        .style(success_button_style)
-        .boxed()
-}
-
-fn discard_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text(raw("Discard & Close")).size(TS.label))
-        .padding([SP.m, SP.xl])
-        .on_press(PrefMsg::DiscardAndClose)
-        .style(danger_button_style)
-        .boxed()
 }
 
 #[cfg(test)]

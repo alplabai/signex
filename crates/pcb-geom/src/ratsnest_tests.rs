@@ -1,5 +1,5 @@
 use super::*;
-use signex_types::pcb::{PadNet, PadShape, Point, Segment, Via};
+use signex_types::pcb::{Footprint, Pad, PadNet, PadShape, PadType, Point, Segment, Via, ViaType};
 use uuid::Uuid;
 
 const MM: i64 = 1_000_000;
@@ -23,6 +23,7 @@ fn pad(n: u128, x: f64, y: f64, net: u32, layer: &str) -> Pad {
             name: format!("N{net}"),
         }),
         roundrect_ratio: 0.0,
+        rotation: 0.0,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),

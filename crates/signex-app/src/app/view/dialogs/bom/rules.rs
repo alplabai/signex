@@ -7,6 +7,7 @@ use super::super::*;
 use iced::widget::{Column, Space, column, container, row};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_output::{BomIssueSeverity, BomRule};
+use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
 use super::super::widgets::section_header;
@@ -30,7 +31,7 @@ impl Signex {
         let mut rule_list: Column<Element<'_, Message>> = Column::new().spacing(0);
         for rule in BomRule::ALL {
             let on = preview.options.rule_options.is_enabled(rule);
-            rule_list = rule_list.push(rule_row(rule, on, text_c, border_c, accent_c));
+            rule_list = rule_list.push(rule_row(rule, on, text_c, border_c, accent_c, tokens));
         }
 
         let mut issues: Column<Element<'_, Message>> = Column::new().spacing(SP.xs);
@@ -59,14 +60,14 @@ impl Signex {
             issues = issues.push(
                 text(raw(format!("{heading} ({})", of_severity.len())))
                     .size(TS.body)
-                    .color(severity_color(severity, text_c))
+                    .color(severity_color(severity, text_c, tokens))
                     .boxed(),
             );
             for issue in of_severity {
                 issues = issues.push(
                     column![
                         text(raw(issue.message.clone())).size(TS.body).color(text_c),
-                        text(raw(issue.references.join(", ")))
+                        text(signex_i18n::UserText::new(issue.references.join(", ")))
                             .size(TS.caption)
                             .color(text_muted),
                     ]
@@ -96,10 +97,14 @@ pub(super) fn issue_count_label(report: &signex_output::BomValidationReport) -> 
 }
 
 /// Colour for a severity heading and the footer count.
-pub(super) fn severity_color(severity: BomIssueSeverity, neutral: Color) -> Color {
+pub(super) fn severity_color(
+    severity: BomIssueSeverity,
+    neutral: Color,
+    tokens: &ThemeTokens,
+) -> Color {
     match severity {
-        BomIssueSeverity::Error => Color::from_rgb(0.90, 0.33, 0.30),
-        BomIssueSeverity::Warning => Color::from_rgb(0.92, 0.70, 0.20),
+        BomIssueSeverity::Error => signex_widgets::theme_ext::error_color(tokens),
+        BomIssueSeverity::Warning => signex_widgets::theme_ext::warning_color(tokens),
         BomIssueSeverity::Info => neutral,
     }
 }
@@ -110,11 +115,13 @@ fn rule_row<'a>(
     text_c: Color,
     border_c: Color,
     accent_c: Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
+    let hover_c = crate::styles::tokens::hover_overlay(tokens);
     let pip_bg = if on {
         accent_c
     } else {
-        Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+        crate::styles::tokens::resolve(tokens).field
     };
     let inner = if on {
         text(raw("\u{2713}")).size(TS.caption).color(Color::WHITE)
@@ -150,9 +157,7 @@ fn rule_row<'a>(
     .width(Length::Fill)
     .style(move |_: &Theme, status: button::Status| {
         let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => {
-                Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04)))
-            }
+            button::Status::Hovered | button::Status::Pressed => Some(Background::Color(hover_c)),
             _ => None,
         };
         button::Style {

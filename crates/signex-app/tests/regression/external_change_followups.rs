@@ -13,6 +13,7 @@ use signex_app::app::{
     TabDocument,
 };
 use signex_app::diagnostics;
+use signex_engine::pcb::BoardEngine;
 use signex_types::pcb::PcbBoard;
 use tempfile::TempDir;
 
@@ -89,7 +90,7 @@ fn edit_board(app: &mut Signex, path: &Path, thickness: f64) {
         .iter_mut()
         .find(|tab| tab.path == path)
         .expect("pcb tab");
-    tab.cached_document = Some(TabDocument::Pcb(board(thickness)));
+    tab.cached_document = Some(TabDocument::Pcb(BoardEngine::new(board(thickness), 1)));
     app.document_state.mark_document_dirty(path);
 }
 

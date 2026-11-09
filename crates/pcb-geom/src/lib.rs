@@ -10,6 +10,8 @@
 //!
 //! Hit-testing reads the model, never the render output (#662).
 
+mod copper;
+mod drc;
 mod flip;
 mod index;
 mod mst;
@@ -17,11 +19,15 @@ mod ratsnest;
 mod rect;
 mod selection;
 mod shape;
+mod shape_gap;
 mod shape_overlap;
 mod transform;
 mod union_find;
 mod units;
 
+pub use copper::copper_layers;
+pub use drc::run as run_drc;
+pub use drc::{DEFAULT_CLEARANCE_MM, DrcReport, DrcRules, Violation, ViolationKind};
 pub use flip::flip_footprint;
 pub use index::{BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected};
 pub use mst::{Edge, euclidean_mst, spanning_forest};
@@ -29,6 +35,7 @@ pub use ratsnest::{RatLine, ratsnest};
 pub use rect::RectNm;
 pub use selection::{ClickMode, Selection, marquee_mode, marquee_select, pick};
 pub use shape::Shape;
-pub use transform::{Placement, Side, pad_shape, pad_world_center};
+pub use shape_gap::Separation;
+pub use transform::{Placement, Side, pad_shape, pad_world_center, pad_world_rotation_deg};
 pub use union_find::UnionFind;
 pub use units::{GeomError, MAX_ABS_NM, NM_PER_MM, PointNm, mm_to_nm, nm_to_mm};

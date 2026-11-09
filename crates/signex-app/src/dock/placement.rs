@@ -1,6 +1,6 @@
 //! Default dock placement — one home region per panel kind.
 
-use super::types::{DockArea, FloatingPanel, PanelPosition};
+use super::types::{DockArea, EditorContext, FloatingPanel, PanelPosition};
 use crate::panels::PanelKind;
 use crate::styles::TypeScale;
 use crate::styles::typography::DEFAULT_BASE_SIZE;
@@ -131,7 +131,7 @@ impl PanelPosition {
     /// results, TAB during placement surfacing Properties, re-docking
     /// a floating panel, closing a detached panel window. Before #641
     /// each of those picked its own region, so the same kind could be
-    /// docked in all three at once: Signal booted Left, the View menu
+    /// docked in all three at once: Signex AI booted Left, the View menu
     /// added a second one Bottom, and the panel list a third Right.
     ///
     /// The values match the first-run layout seeded in
@@ -143,8 +143,10 @@ impl PanelPosition {
             PanelKind::Projects
             | PanelKind::Components
             | PanelKind::Library
-            | PanelKind::Signal => PanelPosition::Left,
-            PanelKind::Erc => PanelPosition::Bottom,
+            | PanelKind::FootprintLayers
+            | PanelKind::PcbNets
+            | PanelKind::SignexAi => PanelPosition::Left,
+            PanelKind::Erc | PanelKind::SymbolPins => PanelPosition::Bottom,
             PanelKind::Navigator
             | PanelKind::Properties
             | PanelKind::Messages
@@ -164,6 +166,32 @@ impl PanelPosition {
             | PanelKind::SchLibrary
             | PanelKind::FootprintLibrary
             | PanelKind::History => PanelPosition::Right,
+        }
+    }
+}
+
+impl DockArea {
+    /// Give a fresh Graphite layout the panels an editor tab needs: the
+    /// footprint editor gets Footprint Library and Layers on the left, the
+    /// symbol editor the Pins table at the bottom. Runs once per context and
+    /// only for a layout `graphite_first_run` built; a saved layout (the
+    /// user's own arrangement) never has a seed owed, so it is never touched.
+    pub fn seed_for_editor(&mut self, context: EditorContext) {
+        match context {
+            EditorContext::Footprint if self.editor_seeds.footprint => {
+                self.editor_seeds.footprint = false;
+                self.add_panel(PanelPosition::Left, PanelKind::FootprintLayers);
+                self.show_panel_at(PanelPosition::Left, PanelKind::FootprintLibrary);
+            }
+            EditorContext::Symbol if self.editor_seeds.symbol => {
+                self.editor_seeds.symbol = false;
+                self.show_panel_at(PanelPosition::Bottom, PanelKind::SymbolPins);
+            }
+            EditorContext::Pcb if self.editor_seeds.pcb => {
+                self.editor_seeds.pcb = false;
+                self.show_panel_at(PanelPosition::Left, PanelKind::PcbNets);
+            }
+            _ => {}
         }
     }
 }
@@ -318,5 +346,33 @@ mod tests {
         assert_eq!(g.preview_depth(PanelPosition::Left), SIDE_RAIL_ZONE);
         g.right = region(false, false, 300.0);
         assert_eq!(g.preview_depth(PanelPosition::Right), 300.0);
+    }
+
+    #[test]
+    fn a_fresh_layout_seeds_each_editor_dock_once() {
+        let mut dock = crate::dock::graphite_first_run();
+        dock.seed_for_editor(EditorContext::Footprint);
+        assert!(matches!(
+            dock.locate(PanelKind::FootprintLayers),
+            Some(crate::dock::PanelSite::Docked(PanelPosition::Left, _))
+        ));
+        dock.seed_for_editor(EditorContext::Symbol);
+        assert!(matches!(
+            dock.locate(PanelKind::SymbolPins),
+            Some(crate::dock::PanelSite::Docked(PanelPosition::Bottom, _))
+        ));
+        // A panel the user closed stays closed on the next tab switch.
+        assert!(dock.close_panel(PanelKind::SymbolPins));
+        dock.seed_for_editor(EditorContext::Symbol);
+        assert!(dock.locate(PanelKind::SymbolPins).is_none());
+    }
+
+    #[test]
+    fn a_saved_layout_is_never_seeded() {
+        let mut dock = DockArea::new();
+        dock.seed_for_editor(EditorContext::Footprint);
+        dock.seed_for_editor(EditorContext::Symbol);
+        assert!(dock.locate(PanelKind::FootprintLayers).is_none());
+        assert!(dock.locate(PanelKind::SymbolPins).is_none());
     }
 }

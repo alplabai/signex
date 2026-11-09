@@ -145,6 +145,7 @@ altium	hint	-	TAB	placement_properties
 altium	hint	-	Ctrl+Shift+TAB	previous_document_tab
 altium	hint	-	-	previous_grid
 altium	hint	-	Ctrl+P	print
+altium	hint	-	-	query_pins
 altium	hint	-	-	read_document
 altium	hint	-	Ctrl+Y	redo
 altium	hint	-	END	refresh_view
@@ -286,6 +287,7 @@ altium	hint	-	-	color_net
 altium	hint	-	-	clear_all_net_colors
 altium	hint	-	-	assign_net_class
 altium	hint	-	-	place_component
+altium	hint	-	-	run_drc
 altium	hint	-	2	footprint_mode_pads
 altium	hint	-	1	footprint_mode_sketch
 altium	hint	-	3	footprint_mode_view_3d
@@ -313,6 +315,7 @@ classic	bind	Global	Ctrl+F	command:find
 classic	bind	Global	Ctrl+F5	command:zoom_to_selection_area
 classic	bind	Global	Ctrl+G	command:toggle_search_panel
 classic	bind	Global	Ctrl+HOME	command:zoom_to_all_objects
+classic	bind	Global	Ctrl+K	command:open_command_palette
 classic	bind	Global	Ctrl+L	command:place_global_label
 classic	bind	Global	Ctrl+N	command:new_document
 classic	bind	Global	Ctrl+O	command:open_document
@@ -447,6 +450,7 @@ classic	hint	-	-	placement_properties
 classic	hint	-	-	previous_document_tab
 classic	hint	-	Shift+N	previous_grid
 classic	hint	-	Ctrl+P	print
+classic	hint	-	-	query_pins
 classic	hint	-	-	read_document
 classic	hint	-	Ctrl+Y	redo
 classic	hint	-	F5	refresh_view
@@ -588,6 +592,7 @@ classic	hint	-	-	color_net
 classic	hint	-	-	clear_all_net_colors
 classic	hint	-	-	assign_net_class
 classic	hint	-	-	place_component
+classic	hint	-	-	run_drc
 classic	hint	-	2	footprint_mode_pads
 classic	hint	-	1	footprint_mode_sketch
 classic	hint	-	3	footprint_mode_view_3d

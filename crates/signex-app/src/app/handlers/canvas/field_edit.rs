@@ -110,10 +110,13 @@ impl Signex {
             SelectedKind::SymbolRefField | SelectedKind::SymbolValField | SelectedKind::Symbol => {
                 sheet.symbols.iter().find(|s| s.uuid == item.uuid).map(|s| {
                     let (text, field) = match item.kind {
-                        SelectedKind::SymbolRefField => {
-                            (self.shown_designator(s).to_owned(), s.ref_text.as_ref())
+                        SelectedKind::SymbolRefField => (
+                            self.shown_designator(s).to_owned(),
+                            s.ref_text.as_ref().map(std::borrow::Cow::Borrowed),
+                        ),
+                        SelectedKind::SymbolValField => {
+                            (s.value.clone(), sheet.drawn_value_text(s))
                         }
-                        SelectedKind::SymbolValField => (s.value.clone(), s.val_text.as_ref()),
                         _ => (s.footprint.clone(), None),
                     };
                     let at = field
@@ -129,11 +132,18 @@ impl Signex {
         };
         self.interaction_state.editing_text = Some(opened);
         // A hover card left on screen would cover the editor (#1770).
+        self.clear_canvas_hover();
+        true
+    }
+
+    /// Drop the symbol card and the net card: the pointer is no longer on
+    /// the canvas.
+    pub(crate) fn clear_canvas_hover(&mut self) {
         self.document_state.net_nav.hover.card = None;
         self.document_state.net_nav.hover.candidate = None;
         self.interaction_state.hover_symbol_uuid = None;
+        self.interaction_state.hover_started_at = None;
         self.interaction_state.hover_screen_pos = None;
-        true
     }
 
     /// The part the selection is, when it is one part (its body, its
@@ -194,11 +204,17 @@ impl Signex {
     }
 
     /// Double-click on a field: open its editor. `None` when `item` has no
-    /// text to edit.
+    /// text to edit. A power port's net name is part of the port, so a
+    /// double-click anywhere on the port edits it.
     pub(super) fn open_text_edit_on_double_click(
         &mut self,
         item: SelectedItem,
     ) -> Option<Task<Message>> {
+        let item = if item.kind == SelectedKind::Symbol && self.is_active_power_port(item) {
+            SelectedItem::new(item.uuid, SelectedKind::SymbolValField)
+        } else {
+            item
+        };
         let editable = matches!(
             item.kind,
             SelectedKind::Label
@@ -207,6 +223,17 @@ impl Signex {
                 | SelectedKind::SymbolValField
         );
         (editable && self.begin_text_edit(item)).then(Self::focus_text_edit)
+    }
+
+    /// Whether `item` is a power port on the active sheet.
+    fn is_active_power_port(&self, item: SelectedItem) -> bool {
+        self.document_state.active_engine().is_some_and(|engine| {
+            engine
+                .document()
+                .symbols
+                .iter()
+                .any(|s| s.uuid == item.uuid && s.is_power)
+        })
     }
 
     /// Commit the editor's text through the engine edit Properties uses; one

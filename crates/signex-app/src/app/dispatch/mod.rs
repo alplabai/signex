@@ -84,6 +84,7 @@ impl Signex {
             Message::Tool(msg) => self.dispatch_tool_message(msg),
             Message::Edit(msg) => self.dispatch_edit_message(msg),
             Message::File(msg) => self.dispatch_file_message(msg),
+            Message::Agent(msg) => self.dispatch_agent_message(msg),
             Message::Export(msg) => self.dispatch_export_message(msg),
             Message::PrintPreview(msg) => self.dispatch_print_preview_message(msg),
             Message::BomPreview(msg) => self.dispatch_bom_preview_message(msg),
@@ -100,6 +101,15 @@ impl Signex {
                     ContextMenuMsg::Show(..) => self.dismiss_first_run_tour(),
                     _ => Task::none(),
                 };
+                // The menu takes the cursor: a card the canvas showed must go.
+                if matches!(
+                    msg,
+                    ContextMenuMsg::Show(..)
+                        | ContextMenuMsg::ShowProjectTree(_)
+                        | ContextMenuMsg::ShowTab(_)
+                ) {
+                    self.clear_canvas_hover();
+                }
                 Task::batch([dismissal, self.dispatch_context_menu_message(msg)])
             }
             Message::Annotate(msg) => self.dispatch_annotate_message(msg),
@@ -506,6 +516,13 @@ impl Signex {
                 Some(id) => crate::chrome::start_window_resize(id, direction),
                 None => Task::none(),
             },
+            WindowMsg::DialogTitleBarPressed(id) => crate::chrome::start_window_drag(id),
+            WindowMsg::DialogEdgePressed(id, direction) => {
+                crate::chrome::start_window_resize(id, direction)
+            }
+            WindowMsg::DialogCloseClicked(id) => {
+                self.update(Message::Window(WindowMsg::WindowCloseRequested(id)))
+            }
             WindowMsg::MinimizeMainWindow => match self.ui_state.main_window_id {
                 Some(id) => iced::window::minimize(id, true),
                 None => Task::none(),

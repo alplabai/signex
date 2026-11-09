@@ -38,6 +38,40 @@ greyed row's is `Disabled`. The golden fixture still names each such row by the
 message it used to send; `COMMAND_ROW_NAMES` in `menu_bar/golden_tests.rs` maps
 the id back to that name.
 
+## Root menus {#root-menus}
+
+Ten roots, left to right, as in the Graphite mock-up: File, Edit, View,
+Project, Place, Design, Tools, Reports, Window, Help (`ROOT_TITLES`). The model
+is shared, so every theme and the native macOS bar show all ten. Project and
+Reports were added on 2026-11-07 (maintainer decision, `DECISIONS.md`); they
+are built only from existing commands and messages, after the Altium
+convention (`UX_REFERENCE_ALTIUM.md`). Moved rows keep their shortcut hint and
+enablement; no command left the app.
+
+**Project** (project-wide actions):
+
+- Electrical Rules Check (`open_erc_dialog`; F8 `run_erc` runs at once)
+- Project Options... (greyed with no project, like Close Project)
+- Close Project
+
+**Tools ▸ Annotation** (top of Tools, then a separator, as Altium's schematic
+Tools menu has it): Annotate Schematics..., Reset Schematic Designators...,
+Reset Duplicate Schematic Designators..., Annotate Schematics Quietly (Alt+A),
+Force Annotate All Schematics (Shift+Alt+A), and the planned Back Annotate
+Schematics... and Number Schematic Sheets....
+
+**Reports** (outputs of the open schematic, all greyed without one):
+
+- Bill of Materials... (the one BOM dialog; the old Design ▸ Generate BOM row
+  was a second row for the same message and is folded in)
+- Netlist (Protel .NET)...
+- ERC Report...
+
+**Design** keeps Parameter Manager... only. **File ▸ Export** keeps PDF only.
+Project tree actions with no menu message or command id (add or remove a
+document, Enable Version Control, History, Validate Project) stay in the tree's
+context menu; the menu gets no stub for them.
+
 ## Rows that name a different command {#own-action}
 
 Every row that carries a command id runs that id; no row keeps an action of its
@@ -46,9 +80,15 @@ own. Two rows point at an id other than the one their key suggests (#1991):
 - View ▸ Cycle Grid Size runs `next_grid`, which steps the snap grid (the `N`
   key in the Classic profile). `cycle_snap_grid_forward` (`G` in the Altium
   profile) still opens the footprint editor's grid picker.
-- Design ▸ Electrical Rules Check runs `open_erc_dialog`, which opens the ERC
+- Project ▸ Electrical Rules Check runs `open_erc_dialog`, which opens the ERC
   dialog to choose the rules. `run_erc` (F8) runs ERC at once. The row shows no
   key, as `open_erc_dialog` has no default binding.
+
+## Tools ▸ Design Rule Check {#tools-drc}
+
+Tools ▸ Design Rule Check runs `run_drc` (#2222) on the PCB in view and is
+greyed while no PCB is open. The command is also in the command palette and
+as the Run DRC button of the Messages panel; no keymap preset binds it.
 
 ## File ▸ Library {#file-library}
 
@@ -74,7 +114,7 @@ row always works.
 
 Close Document (the `close_active_document` command, Ctrl+F4 in the Altium
 profile, closes the active tab like the tab menu's Close and parks a dirty
-draft) is greyed when no tab is open. Close Project (the project tree's Close
+draft) is greyed when no tab is open. Project ▸ Close Project (the project tree's Close
 Project for the active project, behind its unsaved-changes gate) is greyed when
 no project is open. Save All writes every unsaved document and Component
 Preview row through the same Save All flow the close and quit prompts use
@@ -104,8 +144,9 @@ carries the tests. Only `native/macos.rs` calls `muda`. The state lives in
 points with `update`.
 
 **Build timing.** winit installs its own default NSMenu in
-`applicationDidFinishLaunching`, and iced_winit offers no way to turn that
-off. Installing from `Signex::new` would be overwritten, so the menu is
+`applicationDidFinishLaunching`. The fork's `Settings::default_menu` can turn
+that off since iced-signex-v0.15.0-alpha.5, but Signex does not use it yet.
+Installing from `Signex::new` would be overwritten, so the menu is
 installed once the main window has opened (`WindowMsg::MainWindowOpened` arms
 the state, the sync at the end of that `update` installs). `muda::Menu` panics
 off the main thread and `Task` futures do not run there, so every muda call

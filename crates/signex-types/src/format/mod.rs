@@ -50,6 +50,7 @@ mod unknown;
 mod unknown_columns;
 mod uuid_repair;
 mod version;
+mod wire_color_repair;
 
 #[cfg(test)]
 mod body_style_tests;
@@ -78,6 +79,8 @@ mod pcb_layer_tests;
 #[cfg(test)]
 mod pcb_lock_name_tests;
 #[cfg(test)]
+mod pcb_pad_shape_tests;
+#[cfg(test)]
 mod pcb_uuid_repair_tests;
 #[cfg(test)]
 mod sheet_frame_tests;
@@ -95,6 +98,8 @@ mod unknown_tests;
 mod unknown_value_type_tests;
 #[cfg(test)]
 mod version_tests;
+#[cfg(test)]
+mod wire_color_tests;
 
 // Public API re-exports — preserve the `format::…` import paths that
 // signex-app / signex-engine / signex-output rely on.
@@ -138,9 +143,12 @@ pub const SNXSCH_FORMAT_V1: &str = "snxsch/1.1";
 
 /// Current `.snxpcb` format version. 1.1: pads are keyed to their footprint
 /// by uuid (1.0 keyed by reference designator) and the stackup carries
-/// `layer_types`. 1.2: the stackup carries `layer_ids`. Builds that predate
-/// the policy refuse 1.1 outright; 1.1 builds open 1.2 files read-only.
-pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.2";
+/// `layer_types`. 1.2: the stackup carries `layer_ids`. 1.3: pads may
+/// carry a `rotation` column (their own turn), `trapezoid` and `custom` pad
+/// shapes are gone, and an unknown shape token or a roundrect ratio outside
+/// `0..=0.5` is a load error. Builds that predate the policy refuse 1.1
+/// outright; a build opens a file one minor newer than itself read-only.
+pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.3";
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -530,7 +538,7 @@ impl SnxSchematic {
                 row_to_symbol(row, extra)
             })
             .collect();
-        let wires = wire_rows.into_iter().map(row_to_wire).collect();
+        let wires = wire_rows.into_iter().map(row_to_wire).collect::<Vec<_>>();
         let junctions = junction_rows
             .into_iter()
             .map(|row| {
@@ -631,6 +639,10 @@ impl SnxSchematic {
         sheet.unknown.load_repairs.splice(0..0, body_repairs);
         let size_repairs = text_size_repair::clamp_oversize_text(&mut sheet);
         sheet.unknown.load_repairs.extend(size_repairs);
+        sheet
+            .unknown
+            .load_repairs
+            .extend(wire_color_repair::unreadable_wire_colors(&sheet));
 
         Ok(SnxSchematic {
             format: raw.format,

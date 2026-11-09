@@ -26,7 +26,7 @@ fn stock_file() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/stock-library/Stock.snxlib")
 }
 
-fn app_with_stock() -> Signex {
+pub(crate) fn app_with_stock() -> Signex {
     let mut app = app_with_empty_sheet();
     let stock = stock_file();
     app.library.stock_library_root = Some(stock.clone());
@@ -36,7 +36,7 @@ fn app_with_stock() -> Signex {
     app
 }
 
-fn key_of(app: &Signex, pn: &str) -> ComponentsPanelRowKey {
+pub(crate) fn key_of(app: &Signex, pn: &str) -> ComponentsPanelRowKey {
     let (_, row) = app
         .library
         .all_components()
@@ -53,7 +53,7 @@ fn key_of(app: &Signex, pn: &str) -> ComponentsPanelRowKey {
     }
 }
 
-fn select(app: &mut Signex, key: &ComponentsPanelRowKey) {
+pub(crate) fn select(app: &mut Signex, key: &ComponentsPanelRowKey) {
     settle(
         app,
         Message::Library(LibraryMessage::ComponentsPanelRowPressed(key.clone())),
@@ -61,7 +61,7 @@ fn select(app: &mut Signex, key: &ComponentsPanelRowKey) {
 }
 
 /// The alternate footprints of the loaded details, by name.
-fn alternates(app: &Signex) -> Vec<(PrimitiveRef, String)> {
+pub(crate) fn alternates(app: &Signex) -> Vec<(PrimitiveRef, String)> {
     let loaded = app
         .library
         .components_panel
@@ -83,7 +83,7 @@ fn pick(app: &mut Signex, reference: PrimitiveRef) {
     );
 }
 
-fn place_selected(app: &mut Signex, key: &ComponentsPanelRowKey) {
+pub(crate) fn place_selected(app: &mut Signex, key: &ComponentsPanelRowKey) {
     settle(
         app,
         Message::Library(LibraryMessage::ComponentsPanelRowRightClicked(key.clone())),
@@ -97,7 +97,7 @@ fn place_selected(app: &mut Signex, key: &ComponentsPanelRowKey) {
     click(app, PLACE_AT);
 }
 
-fn binding_key(reference: &PrimitiveRef) -> String {
+pub(crate) fn binding_key(reference: &PrimitiveRef) -> String {
     format!("{}:{}", reference.library_id, reference.uuid)
 }
 

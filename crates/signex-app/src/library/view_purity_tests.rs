@@ -41,7 +41,7 @@ fn library_views_trigger_no_adapter_call() {
     });
     calls.store(0, Ordering::SeqCst);
 
-    let tokens = theme_tokens(ThemeId::Signex);
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
     let browser = LibraryBrowserState::new(root.clone());
 
     // Several frames, as the runtime would draw them.

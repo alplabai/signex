@@ -32,8 +32,8 @@ pub(crate) enum Message {
 impl Catalog {
     fn new() -> Self {
         Self {
-            theme: ThemeId::Signex,
-            tokens: theme_tokens(ThemeId::Signex),
+            theme: ThemeId::DEFAULT,
+            tokens: theme_tokens(ThemeId::DEFAULT),
             passive_calculator: CalculatorControl::default(),
         }
     }
@@ -50,9 +50,10 @@ impl Catalog {
     }
 
     fn iced_theme(&self) -> Theme {
-        match self.theme {
-            ThemeId::SolarizedLight => Theme::Light,
-            _ => Theme::Dark,
+        if self.theme.is_light() {
+            Theme::Light
+        } else {
+            Theme::Dark
         }
     }
 

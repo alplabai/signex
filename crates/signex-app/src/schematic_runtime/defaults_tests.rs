@@ -71,7 +71,7 @@ fn canvas_widths(defaults: SchematicDefaults) -> (f32, f32, f32, f32) {
     let snap = build_renderer_snapshot(
         &sheet(),
         &transform(),
-        &canvas_colors(ThemeId::Signex),
+        &canvas_colors(ThemeId::GraphiteLight),
         bounds(),
         None,
         SceneOverrides {
@@ -162,7 +162,7 @@ fn unset_items_follow_the_project_and_explicit_ones_do_not() {
 fn a_defaults_change_rebuilds_the_cached_scene_once() {
     let mut cache = ContentSceneCache::default();
     let sheet = sheet();
-    let colors = canvas_colors(ThemeId::Signex);
+    let colors = canvas_colors(ThemeId::GraphiteLight);
     let mut build = |defaults| {
         let overrides = SceneOverrides {
             defaults,
@@ -190,7 +190,7 @@ fn a_project_line_style_dashes_the_wire_on_canvas_and_in_export() {
         build_renderer_snapshot(
             &sheet(),
             &transform(),
-            &canvas_colors(ThemeId::Signex),
+            &canvas_colors(ThemeId::GraphiteLight),
             bounds(),
             None,
             SceneOverrides {
@@ -255,7 +255,7 @@ fn an_explicit_solid_class_beats_a_dashed_project_and_none_inherits() {
         build_renderer_snapshot(
             &sheet(),
             &transform(),
-            &canvas_colors(ThemeId::Signex),
+            &canvas_colors(ThemeId::GraphiteLight),
             bounds(),
             None,
             SceneOverrides {

@@ -790,6 +790,11 @@
     "category": "file"
   },
   {
+    "id": "query_pins",
+    "group": "General",
+    "category": "file"
+  },
+  {
     "id": "read_document",
     "group": "General",
     "category": "file"
@@ -863,6 +868,11 @@
     "id": "rubber_stamp_copy",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "run_drc",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "run_erc",

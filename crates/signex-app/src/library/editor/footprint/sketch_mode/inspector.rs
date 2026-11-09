@@ -22,6 +22,7 @@ use iced::{
     widget::{Space, column, container, pick_list, row, scrollable},
 };
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{raw, text, text_input, theme_ext};
 
 use crate::app::FootprintDocument;
@@ -144,7 +145,7 @@ fn view_params<'a>(
                 let name_clone = name.clone();
                 let path = editor.path.clone();
                 let row = row![
-                    text(raw(name))
+                    text(signex_i18n::UserText::new(name))
                         .size(TS.caption)
                         .color(text_c)
                         .width(Length::Fixed(110.0)),
@@ -277,11 +278,11 @@ fn view_role<'a>(
     );
 
     let dropdown = pick_list(Some(current), RoleTag::ALL, |r: &RoleTag| r.to_string())
+        .graphite()
         .on_select(move |new_role| LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSetRole { id, role: new_role }),
         })
-        .text_size(TS.body)
         .padding([SP.s, SP.m])
         .width(Length::Fill);
 

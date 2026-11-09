@@ -7,6 +7,7 @@ fn item_anchor_is_the_position_of_a_point_item_and_the_midpoint_of_a_run() {
     let bus_id = Uuid::now_v7();
     let no_connect_id = Uuid::now_v7();
     sheet.wires.push(Wire {
+        color: None,
         uuid: wire_id,
         start: Point::new(0.0, 0.0),
         end: Point::new(10.0, 4.0),

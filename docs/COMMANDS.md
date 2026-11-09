@@ -30,10 +30,13 @@ id or an absolute path, and acts on that document alone: never the active
 one, and it changes no tab, focus, panel or selection. A person's palette or
 keybinding call has no operands and keeps the active document.
 
-`list_documents`, `document_info`, `resolve`, `find_items` and `read_document` are
-read-only queries that answer with data (`CommandOutcome::Answered`); `find` is
-still the Find dialog. Ids and where each file kind stores
-one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
+`list_documents`, `document_info`, `resolve`, `find_items`, `read_document` and
+`query_pins` are read-only queries that answer with data
+(`CommandOutcome::Answered`); `find` is still the Find dialog.
+`query_pins document=<doc> designator=<ref>` lists the pins of a part on
+one sheet: number, name, electrical type, hidden, unit, shared and the tip
+in mm.
+Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## General
 
@@ -89,7 +92,7 @@ one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `new_document` | New | file | `Ctrl+N` | `Ctrl+N` |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
-| `open_command_palette` | Open command palette | commands | `Ctrl+Shift+P` | `Ctrl+Shift+P` |
+| `open_command_palette` | Open command palette | commands | `Ctrl+Shift+P` | `Ctrl+K`, `Ctrl+Shift+P` |
 | `open_datasheet` | Open datasheet | edit | — | `D` |
 | `open_document` | Open document | file | `Ctrl+O` | `Ctrl+O` |
 | `open_grid_picker` | Open grid picker | view | — | — |
@@ -104,6 +107,7 @@ one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `previous_document_tab` | Previous open document tab | window | `Ctrl+Shift+Tab` | — |
 | `previous_grid` | Previous grid | view | — | `Shift+N` |
 | `print` | Print | file | `Ctrl+P` | `Ctrl+P` |
+| `query_pins` | Query pins | file | — | — |
 | `read_document` | Read document | file | — | — |
 | `redo` | Redo | edit | `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
@@ -255,7 +259,9 @@ one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## PCB
 
-_No commands in this group yet._
+| command id | label | category | Altium | Classic |
+| --- | --- | --- | --- | --- |
+| `run_drc` | Run the design rule check on the board | pcb | — | — |
 
 ## 3D
 

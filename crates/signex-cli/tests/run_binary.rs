@@ -296,6 +296,44 @@ fn queries_answer_with_data_and_a_document_is_named_by_id_or_by_path() {
     assert_eq!(snapshot(&root), before, "a query writes nothing");
 }
 
+/// #2199: `query_pins` answers with a part's pins and their tips, and refuses
+/// a designator the sheet does not have.
+#[test]
+fn query_pins_answers_with_the_pins_and_refuses_an_unknown_designator() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let project = fx.project.to_str().unwrap();
+    let before = snapshot(&root);
+
+    let out = run_cli(
+        &["run", project],
+        jsonl(&[
+            json!({"id": "query_pins", "args": {"document": "main.snxsch", "designator": "R1"}}),
+            json!({"id": "query_pins", "args": {"document": "main.snxsch", "designator": "C9"}}),
+        ]),
+    );
+
+    assert_eq!(
+        statuses(&out.lines),
+        ["answered", "refused"],
+        "{}\n{}",
+        out.stdout,
+        out.stderr
+    );
+    let pins = out.lines[0]["data"]["pins"].as_array().unwrap();
+    assert_eq!(pins.len(), 1);
+    assert_eq!(pins[0]["number"], "1");
+    assert_eq!(pins[0]["unit"], 1);
+    assert_eq!(pins[0]["position"], json!([0.0, 0.0]));
+    assert!(
+        out.lines[1]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("no part `C9`")
+    );
+    assert_eq!(snapshot(&root), before, "a query writes nothing");
+}
+
 /// A `Document` operand given as a path is a path: refused outside the
 /// project like a `path` operand. An id is not a path and is never confined.
 #[test]

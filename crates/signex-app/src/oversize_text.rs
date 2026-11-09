@@ -11,7 +11,7 @@ use signex_gfx::primitive::text::{TextHAlign, TextItem, TextVAlign};
 // or very long oversize texts is cut here: far above any real sheet, which has
 // a handful of short titles. Past either bound the rest is not drawn and one
 // warning reaches Messages.
-const MAX_OVERSIZE_TEXTS_PER_FRAME: usize = 64;
+pub(crate) const MAX_OVERSIZE_TEXTS_PER_FRAME: usize = 64;
 const MAX_OVERSIZE_TEXT_CHARS: usize = 256;
 
 /// What one frame has spent of the oversize-text bounds.
@@ -19,8 +19,8 @@ pub(crate) struct OversizeBudget {
     drawn: usize,
     /// A text was left out or cut this frame.
     capped: bool,
-    /// Warnings this budget sent to Messages.
-    warnings: usize,
+    /// The warnings this budget sent to Messages.
+    warnings: Vec<&'static str>,
     /// Counts the cap notices; the warning goes out on the first.
     latch: &'static std::sync::atomic::AtomicUsize,
 }
@@ -53,7 +53,7 @@ impl OversizeBudget {
         Self {
             drawn: 0,
             capped: false,
-            warnings: 0,
+            warnings: Vec::new(),
             latch,
         }
     }
@@ -62,28 +62,80 @@ impl OversizeBudget {
     /// bound, or `None` once the per-frame count is spent.
     pub(crate) fn admit<'a>(&mut self, content: &'a str) -> Option<&'a str> {
         if self.drawn >= MAX_OVERSIZE_TEXTS_PER_FRAME {
-            self.note_capped();
+            self.note_capped(CAP_WARNING);
             return None;
         }
         self.drawn += 1;
         let shown = drawn_part(content);
         if shown.len() < content.len() {
-            self.note_capped();
+            self.note_capped(CAP_WARNING);
         }
         Some(shown)
     }
 
+    /// The content each oversize text draws, `None` for one left out or not
+    /// oversize (`None` in `texts`). Texts in the viewport claim the
+    /// per-frame count before texts in the pan margin, each in document
+    /// order, so the drawn set is stable from frame to frame (#2084).
+    pub(crate) fn admit_all<'a>(
+        &mut self,
+        texts: &[Option<(&'a str, Reach)>],
+    ) -> Vec<Option<&'a str>> {
+        let mut shown = vec![None; texts.len()];
+        for class in [Reach::Viewport, Reach::Margin] {
+            for (slot, &(content, reach)) in shown
+                .iter_mut()
+                .zip(texts)
+                .filter_map(|(slot, text)| Some((slot, text.as_ref()?)))
+            {
+                if reach == class {
+                    *slot = match class {
+                        Reach::Viewport => self.admit(content),
+                        Reach::Margin => self.admit_margin(content),
+                    };
+                }
+            }
+        }
+        shown
+    }
+
+    /// [`Self::admit`] for a text in the pan margin: when the count runs out
+    /// on the margin first, the warning says so.
+    fn admit_margin<'a>(&mut self, content: &'a str) -> Option<&'a str> {
+        if self.drawn < MAX_OVERSIZE_TEXTS_PER_FRAME {
+            return self.admit(content);
+        }
+        self.note_capped(if !self.capped {
+            MARGIN_CAP_WARNING
+        } else {
+            CAP_WARNING
+        });
+        None
+    }
+
     /// Record a cap; the first one after the latch was armed warns.
-    fn note_capped(&mut self) {
+    fn note_capped(&mut self, warning: &'static str) {
         self.capped = true;
         if first_notice(self.latch) {
-            self.warnings += 1;
-            crate::diagnostics::log_warning(
-                "This sheet has more or longer oversize text than can be drawn; \
-                 the rest is left out",
-            );
+            self.warnings.push(warning);
+            crate::diagnostics::log_warning(warning);
         }
     }
+}
+
+const CAP_WARNING: &str =
+    "This sheet has more or longer oversize text than can be drawn; the rest is left out";
+
+const MARGIN_CAP_WARNING: &str = "This sheet has more oversize text just outside the view \
+     than can be drawn; the text in view is drawn, some around it is left out";
+
+/// Where an oversize text that can touch the frame lies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Reach {
+    /// It can touch the viewport.
+    Viewport,
+    /// Only the pan margin the retained layer draws past the viewport.
+    Margin,
 }
 
 /// Whether this is the first notice on `latch` since it was armed.
@@ -105,32 +157,67 @@ fn drawn_part(content: &str) -> &str {
     }
 }
 
-/// Whether an oversize text can touch the frame. Only the part that is drawn
-/// is measured, and a text whose widest possible box misses the frame is
-/// culled before any shaping, so a frame never shapes more than a few short
-/// lines per near-screen text. Its corners are rotated about the anchor.
+/// Whether an oversize text can touch the viewport, only the pan margin of
+/// the frame, or neither (`None`, culled). Only the part that is drawn is
+/// measured, and a text whose widest possible box misses is culled before
+/// any shaping, so a frame never shapes more than a few short lines per
+/// near-screen text. Its corners are rotated about the anchor.
 ///
 /// The frame's top-left is `options.frame_origin`, in the coordinates
 /// `position` is in: the retained content layer is drawn into a frame that
 /// reaches a viewport past the viewport on every side, and the fork's
 /// `Frame::size()` does not say where it starts.
-pub(crate) fn on_screen(
+pub(crate) fn reach(
     frame: &canvas::Frame,
     options: crate::renderer_scene_canvas::SceneDrawOptions,
     text: &TextItem,
     position: Point,
     size_px: f32,
-) -> bool {
+) -> Option<Reach> {
     let rect = iced::Rectangle::new(options.frame_origin, frame.size());
-    on_screen_in(rect, text, position, size_px)
+    reach_in(rect, text, position, size_px)
 }
 
-/// [`on_screen`] for a frame covering `frame`.
-fn on_screen_in(frame: iced::Rectangle, text: &TextItem, position: Point, size_px: f32) -> bool {
+/// [`reach`] for a frame covering `frame`.
+fn reach_in(
+    frame: iced::Rectangle,
+    text: &TextItem,
+    position: Point,
+    size_px: f32,
+) -> Option<Reach> {
+    let width = shaped_width(frame, text, position, size_px)?;
+    let touches = |area| box_touches(area, text, position, size_px, width);
+    if touches(viewport_of(frame)) {
+        Some(Reach::Viewport)
+    } else {
+        touches(frame).then_some(Reach::Margin)
+    }
+}
+
+/// The viewport inside `frame`: the screen origin, with the frame's margin
+/// cut off every side. The retained layer's clip reaches the same distance
+/// past each side (`canvas::draw::retained::clip_rect`); a frame that starts
+/// at the origin is all viewport.
+fn viewport_of(frame: iced::Rectangle) -> iced::Rectangle {
+    iced::Rectangle::new(
+        Point::ORIGIN,
+        iced::Size::new(frame.width + 2.0 * frame.x, frame.height + 2.0 * frame.y),
+    )
+}
+
+/// The shaped width in px of what `text` draws, shaped once per text (#2254),
+/// or `None` when even its widest possible box misses `frame`, before any
+/// shaping. The viewport lies inside `frame`, so this bound holds for it too.
+fn shaped_width(
+    frame: iced::Rectangle,
+    text: &TextItem,
+    position: Point,
+    size_px: f32,
+) -> Option<f32> {
     let shown = drawn_part(&text.content);
     let upper = shown.chars().count() as f32 * MAX_GLYPH_ADVANCE_EM * size_px;
     if !box_touches(frame, text, position, size_px, upper) {
-        return false;
+        return None;
     }
     let family = text.family_or(crate::render_config::CANVAS_FONT_FAMILY);
     let width = shown
@@ -141,7 +228,7 @@ fn on_screen_in(frame: iced::Rectangle, text: &TextItem, position: Point, size_p
         })
         .fold(0.0_f32, f32::max)
         * size_px;
-    box_touches(frame, text, position, size_px, width)
+    Some(width)
 }
 
 /// Whether `text`, `width` px wide, anchored at `position`, can touch a frame
@@ -223,7 +310,7 @@ mod tests {
         // This test's own latch: every cap notice reached it, and only the
         // first of them warns.
         assert!(LATCH.load(std::sync::atomic::Ordering::Relaxed) > 1);
-        assert_eq!(budget.warnings, 1, "many caps, one warning");
+        assert_eq!(budget.warnings, [CAP_WARNING], "many caps, one warning");
         let fresh = std::sync::atomic::AtomicUsize::new(0);
         assert!(first_notice(&fresh), "the first notice warns");
         assert!(!first_notice(&fresh), "later ones do not");
@@ -244,6 +331,16 @@ mod tests {
         width: 200.0,
         height: 100.0,
     };
+
+    /// Whether an oversize text can touch a frame covering `frame`.
+    fn on_screen_in(
+        frame: iced::Rectangle,
+        text: &TextItem,
+        position: Point,
+        size_px: f32,
+    ) -> bool {
+        reach_in(frame, text, position, size_px).is_some()
+    }
 
     fn note(rotation: f32) -> TextItem {
         TextItem {
@@ -316,5 +413,83 @@ mod tests {
         assert!(at(500.0, -900.0), "so is the top margin");
         assert!(!at(4000.0, 500.0), "past the right edge it is culled");
         assert!(!at(-1700.0, 500.0), "and past the left one");
+    }
+
+    /// The retained frame reaches a viewport past the viewport on every side,
+    /// so the viewport is the frame less that margin; a frame starting at the
+    /// origin is all viewport.
+    #[test]
+    fn a_text_is_in_the_viewport_or_in_the_pan_margin() {
+        let retained = iced::Rectangle::new(
+            Point::new(-1500.0, -1000.0),
+            iced::Size::new(4500.0, 3000.0),
+        );
+        let at = |frame: iced::Rectangle, x: f32, y: f32| {
+            reach_in(frame, &note(0.0), Point::new(x, y), 10.0)
+        };
+        assert_eq!(at(retained, 500.0, 500.0), Some(Reach::Viewport));
+        assert_eq!(at(retained, -1300.0, 500.0), Some(Reach::Margin), "left");
+        assert_eq!(at(retained, 1700.0, 500.0), Some(Reach::Margin), "right");
+        assert_eq!(at(retained, 500.0, 1300.0), Some(Reach::Margin), "below");
+        assert_eq!(at(retained, 4000.0, 500.0), None, "past the frame");
+        assert_eq!(at(FRAME, 10.0, 10.0), Some(Reach::Viewport));
+    }
+
+    /// Oversize texts in the pan margin ahead of a visible one in document
+    /// order cannot spend the budget it needs (#2084): the viewport claims
+    /// first, the margin gets the rest in document order, and the warning
+    /// names the margin as what was left out.
+    #[test]
+    fn margin_texts_ahead_of_a_visible_one_do_not_take_its_place() {
+        static LATCH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let margin_count = MAX_OVERSIZE_TEXTS_PER_FRAME + 6;
+        let mut texts: Vec<Option<(&str, Reach)>> = vec![Some(("M", Reach::Margin)); margin_count];
+        texts.insert(3, None);
+        texts.push(Some(("V", Reach::Viewport)));
+        let mut budget = OversizeBudget::with_latch(&LATCH);
+        let shown = budget.admit_all(&texts);
+        assert_eq!(shown.len(), texts.len(), "one answer per text, in order");
+        assert_eq!(shown.last(), Some(&Some("V")), "the visible text is drawn");
+        assert_eq!(shown[3], None, "a text that is not oversize stays out");
+        let margin_shown: Vec<usize> = (0..shown.len() - 1)
+            .filter(|&i| shown[i].is_some())
+            .collect();
+        let expected: Vec<usize> = (0..texts.len() - 1)
+            .filter(|&i| i != 3)
+            .take(MAX_OVERSIZE_TEXTS_PER_FRAME - 1)
+            .collect();
+        assert_eq!(margin_shown, expected, "the margin's first texts, in order");
+        assert_eq!(
+            budget.warnings,
+            [MARGIN_CAP_WARNING],
+            "the cap fell on the margin"
+        );
+    }
+
+    /// More visible oversize texts than the budget: the visible ones fill it
+    /// in document order, nothing in the margin is drawn, and the warning is
+    /// the plain cap.
+    #[test]
+    fn a_full_viewport_leaves_the_margin_out() {
+        static LATCH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let mut texts = vec![Some(("M", Reach::Margin))];
+        texts.extend(vec![
+            Some(("V", Reach::Viewport));
+            MAX_OVERSIZE_TEXTS_PER_FRAME + 1
+        ]);
+        let mut budget = OversizeBudget::with_latch(&LATCH);
+        let shown = budget.admit_all(&texts);
+        assert_eq!(shown[0], None, "the margin text is left out");
+        assert!(
+            shown[1..=MAX_OVERSIZE_TEXTS_PER_FRAME]
+                .iter()
+                .all(Option::is_some)
+        );
+        assert_eq!(shown.last(), Some(&None), "the last visible one is over");
+        assert_eq!(
+            budget.warnings,
+            [CAP_WARNING],
+            "visible text was capped first"
+        );
     }
 }

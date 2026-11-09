@@ -55,6 +55,8 @@ pub enum SvgPathCommand {
 
 #[derive(Debug, Clone, Copy)]
 pub struct SvgStyle {
+    /// Stroke opacity, 0.0 to 1.0 (a wire colour's alpha); 1.0 is opaque.
+    pub stroke_alpha: f32,
     pub stroke_rgb: Option<(f32, f32, f32)>,
     pub fill_rgb: Option<(f32, f32, f32)>,
     pub stroke_width: f32,
@@ -225,6 +227,7 @@ mod tests {
             SvgElement::Path {
                 commands: line,
                 style: SvgStyle {
+                    stroke_alpha: 1.0,
                     stroke_rgb: Some(ink),
                     fill_rgb: None,
                     stroke_width: 6.0,

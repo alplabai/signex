@@ -45,6 +45,8 @@ pub struct FootprintEditorPanelContext {
     /// the Properties panel's Auto-fit Courtyard toggle (the
     /// equivalent active-bar button stays for quick access).
     pub auto_fit_courtyard: bool,
+    /// Mirrors `editor.state.layer_visibility` — drives the Layers panel eyes.
+    pub layer_visibility: crate::library::editor::footprint::layers::LayerVisibility,
     /// v0.14.2 — every `.snxfpt` sibling inside the containing
     /// `.snxlib`'s `footprints/` directory. Drives the new Footprint
     /// Library panel (mirror of SCH Library). Empty when the active

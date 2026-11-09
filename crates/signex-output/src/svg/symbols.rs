@@ -36,6 +36,7 @@ pub(super) fn push_symbol_lib_graphics(
         (palette.symbol_stroke, palette.pin)
     };
     let style = |width: f64, fill: FillType| SvgStyle {
+        stroke_alpha: 1.0,
         stroke_rgb: Some(body_rgb),
         fill_rgb: fill_to_rgb(fill, body_rgb, palette.symbol_fill),
         stroke_width: (defaults.symbol_line_mm(width) * xform.mm_to_unit) as f32,
@@ -119,6 +120,7 @@ pub(super) fn push_symbol_lib_graphics(
                     SvgPathCommand::LineTo(px(&body)),
                 ],
                 style: SvgStyle {
+                    stroke_alpha: 1.0,
                     stroke_rgb: Some(pin_rgb),
                     fill_rgb: None,
                     stroke_width: (defaults.symbol_line_mm(width) * xform.mm_to_unit) as f32,

@@ -12,7 +12,7 @@ use iced::widget::Widget as _;
 use iced::{Color, Element, Length, Padding, Size, Theme};
 use iced_runtime::UserInterface;
 use iced_runtime::user_interface::Cache;
-use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind};
+use signex_types::schematic::{HAlign, SchematicSheet, SelectedItem, SelectedKind};
 
 use super::gpu_mount_tests::{Frame, Gpu, fixture, gpu, slot_with};
 use super::tests::test_prefs;
@@ -227,7 +227,7 @@ fn centre_of(
 /// wire (the first one is mostly under the highlight), read off one frame: the
 /// two layers drawn together.
 fn selection_offset(frame: &Frame, mount: Mount, run: &Run) -> (f32, f32) {
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
     let of = |c: signex_types::theme::Color| [c.r, c.g, c.b];
     let band = |x0, y0, x1, y1| {
         let (a, b) = window_px(mount, run, x0, y0);
@@ -238,18 +238,25 @@ fn selection_offset(frame: &Frame, mount: Mount, run: &Run) -> (f32, f32) {
     // it; the second runs (5, 8) to (20, 8) mm, clear of the highlight.
     let (wire, wire_n) =
         centre_of(frame, of(colors.wire), band(4.0, 7.0, 21.0, 9.0)).expect("no wire pixels");
-    let (sel, sel_n) = centre_of(frame, of(colors.selection), band(4.0, 3.5, 21.0, 6.5))
-        .expect("no selection pixels");
+    let (sel, sel_n) = centre_of(
+        frame,
+        of(signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight).accent),
+        band(4.0, 3.5, 21.0, 6.5),
+    )
+    .expect("no selection pixels");
     eprintln!("wire centre {wire:?} ({wire_n} px), selection centre {sel:?} ({sel_n} px)");
     (sel.0 - wire.0, sel.1 - wire.1)
 }
 
 /// Where and how the two frames differ, by the colour class each shows there.
 fn describe_differences(surface: &Frame, trunk: &Frame, differing: &[(u32, u32)]) {
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
     let classes = [
         ("wire", colors.wire),
-        ("selection", colors.selection),
+        (
+            "selection",
+            signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight).accent,
+        ),
         ("paper", colors.paper),
         ("background", colors.background),
     ];
@@ -389,20 +396,65 @@ fn a_pan_to_the_edge_of_the_margin_lines_up() {
 /// x = -1500 px at the start camera: inside the retained layer's left margin,
 /// which is a viewport wide, and outside the viewport itself.
 fn oversize_text_in_the_margin() -> SchematicSheet {
-    use signex_types::schematic::{HAlign, Point as WorldPoint, TextNote, VAlign};
     let mut sheet = SchematicSheet::default();
-    sheet.text_notes.push(TextNote {
+    sheet.text_notes.push(oversize_note(-1500.0, HAlign::Right));
+    sheet
+}
+
+/// An "H" with a 1100 px em, bottom-anchored at (`x`, 900) px at scale
+/// [`SCALE`] from the origin camera.
+fn oversize_note(x: f32, justify_h: HAlign) -> signex_types::schematic::TextNote {
+    use signex_types::schematic::{Point as WorldPoint, TextNote, VAlign};
+    TextNote {
         uuid: uuid::Uuid::now_v7(),
         text: "H".into(),
-        position: WorldPoint::new(f64::from(-1500.0 / SCALE), f64::from(900.0 / SCALE)),
+        position: WorldPoint::new(f64::from(x / SCALE), f64::from(900.0 / SCALE)),
         rotation: 0.0,
         font_size: f64::from(1100.0 / SCALE * signex_types::font::mm_per_em(None)),
         font_family: None,
-        justify_h: HAlign::Right,
+        justify_h,
         justify_v: VAlign::Bottom,
         locked: false,
-    });
-    sheet
+    }
+}
+
+/// More oversize texts in the retained layer's left margin than one frame
+/// draws, ahead in document order of one in view: the text in view is drawn
+/// into the retained layer as on the plain canvas, which culls the margin
+/// (#2254). Claiming in document order, or reading the whole retained frame
+/// as the viewport, spends the budget on the margin and leaves it blank.
+#[test]
+fn margin_texts_ahead_of_one_in_view_do_not_take_its_place_in_the_retained_layer() {
+    let mut gpu = gpu();
+    let mut text_notes: Vec<_> = (0..=crate::oversize_text::MAX_OVERSIZE_TEXTS_PER_FRAME)
+        .map(|_| oversize_note(-1500.0, HAlign::Right))
+        .collect();
+    text_notes.push(oversize_note(600.0, HAlign::Left));
+    let sheet = SchematicSheet {
+        text_notes,
+        ..SchematicSheet::default()
+    };
+    let run = Run {
+        start: iced::Point::ORIGIN,
+        pans: Vec::new(),
+        select: false,
+    };
+    let (plain, _) = last_frame(&mut gpu, Path::Plain, DOCKED, &sheet, &run);
+    let (surface, _) = last_frame(&mut gpu, Path::Surface, DOCKED, &sheet, &run);
+    let blank = last_frame(
+        &mut gpu,
+        Path::Plain,
+        DOCKED,
+        &SchematicSheet::default(),
+        &run,
+    )
+    .0;
+    assert!(
+        differing(&plain, &blank).len() > 1000,
+        "the plain canvas draws the text in view"
+    );
+    let missing = differing(&surface, &plain).len();
+    assert_eq!(missing, 0, "{missing} px of the retained layer differ");
 }
 
 /// The retained layer is built a pan before the text comes into view: the

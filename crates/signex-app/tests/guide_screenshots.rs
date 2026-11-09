@@ -189,6 +189,7 @@ fn sheet() -> SchematicSheet {
         ..Symbol::default()
     });
     sheet.wires.push(Wire {
+        color: None,
         uuid: uuid::Uuid::nil(),
         start: Point::new(100.0, 95.08),
         end: Point::new(115.0, 95.08),
@@ -356,6 +357,7 @@ fn readme_sheet() -> SchematicSheet {
     let tip = |reference: &str, pin: &str| tips[&(reference.to_string(), pin.to_string())];
     let mut wire = |a: (f64, f64), b: (f64, f64)| {
         sheet.wires.push(Wire {
+            color: None,
             uuid: uuid::Uuid::now_v7(),
             start: Point::new(a.0, a.1),
             end: Point::new(b.0, b.1),
@@ -514,20 +516,15 @@ fn render_readme_screenshots() {
         world_x: 88.9,
         world_y: 71.12,
     }));
-    for (theme, name) in [
-        (ThemeId::Signex, "editor.png"),
-        (ThemeId::CatppuccinMocha, "catppuccin-theme.png"),
-        (ThemeId::GitHubDark, "github-dark-theme.png"),
-        (ThemeId::SolarizedLight, "solarized-theme.png"),
-    ] {
-        // Pick the theme the way Preferences does: draft it, then save.
-        let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
-            PrefMsg::DraftTheme(theme),
-        )));
-        let _ = app.update(Message::Preferences(PreferencesMsg::Inner(PrefMsg::Save)));
-        let _ = draw(&mut renderer, &app);
-        shoot(&mut renderer, &app, name);
-    }
+    // The retired-theme shots (catppuccin-, github-dark-, solarized-theme.png)
+    // are no longer rendered; see docs/DECISIONS.md, "Graphite-only themes".
+    // Pick the theme the way Preferences does: draft it, then save.
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+        PrefMsg::DraftTheme(ThemeId::GraphiteLight),
+    )));
+    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(PrefMsg::Save)));
+    let _ = draw(&mut renderer, &app);
+    shoot(&mut renderer, &app, "editor.png");
 }
 
 #[test]

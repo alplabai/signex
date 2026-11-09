@@ -10,6 +10,7 @@ use iced::widget::{Widget, column, pick_list};
 use iced::{Element, Length};
 use signex_types::designator::DesignatorStandard;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{raw, text};
 
 use super::view::{labelled, tab_message};
@@ -49,13 +50,13 @@ pub(super) fn row<'a>(project: &'a LoadedProject, tokens: &ThemeTokens) -> Eleme
         StandardChoice::ALL,
         |choice: &StandardChoice| choice.to_string(),
     )
+    .graphite()
     .on_select(move |choice: StandardChoice| {
         tab_message(ProjectTabMsg::DesignatorStandardPicked {
             project_id,
             standard: choice.0,
         })
     })
-    .text_size(ts.label)
     .width(Length::Fill)
     .boxed();
     let field: Element<'a, Message> = if project.data.has_unreadable_annotation() {

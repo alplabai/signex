@@ -2,6 +2,7 @@
 
 use iced::widget::{Column, container, pick_list, row};
 use iced::{Color, Element, Length, Widget};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{button, raw, text};
 
 use super::super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg};
@@ -92,8 +93,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "dX",
@@ -105,8 +104,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "dY",
@@ -118,8 +115,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
         }
         ArrayKindSummary::Grid {
@@ -142,8 +137,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "ny",
@@ -155,8 +148,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "dX",
@@ -168,8 +159,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "dY",
@@ -181,8 +170,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "Mask",
@@ -194,8 +181,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             // v0.23 — Per-instance checkbox grid. Renders only when
             // both nx and ny resolve to a concrete integer; parameter-
@@ -255,8 +240,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             col = col.push(pad_input_row(
                 "Sweep",
@@ -268,8 +251,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             // Centre point picker — show coordinates if known; the
             // "Re-pick" button arms ToolPending so the next sketch
@@ -325,8 +306,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     value: v,
                 },
                 muted,
-                primary,
-                border_c,
             ));
             // v0.23 — Per-instance checkbox row for Polar arrays.
             // Renders only when count resolves to a concrete integer.
@@ -373,11 +352,11 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     NumberingSchemeKindUi::ALL.as_slice(),
                     |scheme: &NumberingSchemeKindUi| scheme.to_string(),
                 )
+                .graphite()
                 .on_select(move |scheme| PanelMsg::FpEditorSetArrayNumberingScheme {
                     array_id,
                     scheme,
                 })
-                .text_size(10)
                 .padding([3.0, SP.m])
                 .width(Length::Fill),
             ]
@@ -406,8 +385,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             bga.start_row.to_string(),
             move |v| PanelMsg::FpEditorSetBgaStartRow { array_id, value: v },
             muted,
-            primary,
-            border_c,
         ));
         col = col.push(pad_input_row(
             "Start col",
@@ -415,8 +392,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             bga.start_col.to_string(),
             move |v| PanelMsg::FpEditorSetBgaStartCol { array_id, value: v },
             muted,
-            primary,
-            border_c,
         ));
     }
 

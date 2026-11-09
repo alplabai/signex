@@ -611,27 +611,32 @@ fn draw_text_items<'a, F>(
 ) where
     F: Fn([f32; 2]) -> Point + Copy,
 {
-    let mut budget = crate::oversize_text::OversizeBudget::default();
-    for text in texts {
-        if text.content.is_empty() {
-            continue;
-        }
-
+    let texts: Vec<&TextItem> = texts.filter(|text| !text.content.is_empty()).collect();
+    // iced draws oversize text as outlines past its own atlas limit; nothing
+    // reaches it that cannot be seen, and what does is bounded, the viewport
+    // ahead of the pan margin (#2084). Drawing stays in document order.
+    let oversize: Vec<_> = texts
+        .iter()
+        .map(|text| {
+            if options.text_raster(text) != TextRaster::Oversize {
+                return None;
+            }
+            let size_px = options.text_px(text.size_mm, text.family.as_deref());
+            let position = world_to_screen(text.position);
+            let reach = crate::oversize_text::reach(frame, options, text, position, size_px)?;
+            Some((text.content.as_str(), reach))
+        })
+        .collect();
+    let admitted = crate::oversize_text::OversizeBudget::default().admit_all(&oversize);
+    for (text, admitted) in texts.into_iter().zip(admitted) {
         let size_px = options.text_px(text.size_mm, text.family.as_deref());
         let position = world_to_screen(text.position);
         let content = match options.text_raster(text) {
             TextRaster::Skip => continue,
-            // iced draws it as outlines past its own atlas limit; nothing
-            // reaches it that cannot be seen, and what does is bounded.
-            TextRaster::Oversize => {
-                if !crate::oversize_text::on_screen(frame, options, text, position, size_px) {
-                    continue;
-                }
-                match budget.admit(&text.content) {
-                    Some(content) => content.to_string(),
-                    None => continue,
-                }
-            }
+            TextRaster::Oversize => match admitted {
+                Some(content) => content.to_string(),
+                None => continue,
+            },
             TextRaster::Bitmap => text.content.clone(),
         };
         let draw_text = canvas::Text {
@@ -945,8 +950,7 @@ mod canvas_font_tests {
             scale: 4.0,
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
-        let colors =
-            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+        let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteDark);
         let bounds = iced::Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
         let snapshot = crate::schematic_runtime::build_renderer_snapshot(
             &sheet,

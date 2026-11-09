@@ -40,8 +40,8 @@ impl Signex {
             editor.history.undo_len().hash(&mut hasher);
         }
         for tab in ds.tabs.iter().filter(|t| t.path == path) {
-            if let Some(crate::app::TabDocument::Pcb(board)) = &tab.cached_document {
-                feed(&mut hasher, board);
+            if let Some(crate::app::TabDocument::Pcb(engine)) = &tab.cached_document {
+                feed(&mut hasher, engine.board());
             }
         }
         EditStamp(hasher.finish())

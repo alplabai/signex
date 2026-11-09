@@ -165,6 +165,7 @@ fn draw_editor(fp: &Footprint, at: &PreviewState) -> Painted {
         silk_b: &fp.silk_b,
         zoom_step: 1.1,
         trackpad_pan: false,
+        wheel_mode: Default::default(),
     };
     let camera = FootprintCanvasState::with_view(at.scale(), at.offset());
     let renderer = headless_renderer();
@@ -356,10 +357,18 @@ fn wheel_zooms_about_the_cursor_and_drag_pans() {
     let zoomed_offset = state.offset();
     let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
     let _ = Program::<()>::update(&program, &mut state, &press, BOX, cursor);
+    // A cursor move comes with the cursor at its position, as from the runtime.
+    let dragged_to = Point::new(anchor.x + 30.0, anchor.y - 12.0);
     let drag = Event::Mouse(mouse::Event::CursorMoved {
-        position: Point::new(anchor.x + 30.0, anchor.y - 12.0),
+        position: dragged_to,
     });
-    let _ = Program::<()>::update(&program, &mut state, &drag, BOX, cursor);
+    let _ = Program::<()>::update(
+        &program,
+        &mut state,
+        &drag,
+        BOX,
+        mouse::Cursor::Available(dragged_to),
+    );
     assert_eq!(state.offset().x, zoomed_offset.x + 30.0);
     assert_eq!(state.offset().y, zoomed_offset.y - 12.0);
     let release = Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left));
@@ -552,6 +561,93 @@ fn pinch_zoom_is_cursor_anchored_floored_and_ignores_no_ops() {
     }
     assert_eq!(cam.scale, super::MIN_PREVIEW_SCALE);
     assert!(!super::pinch_zoom(&mut cam, anchor, -0.5));
+}
+
+/// Inside a pane scrolled by `scroll`, iced shifts the widget cursor but not
+/// the event's window position. A drag still moves the footprint exactly
+/// with the pointer, on the first move too.
+#[test]
+fn a_drag_in_a_scrolled_pane_pans_one_to_one() {
+    let model = preview_of(&fixture());
+    let mut state = show(&model);
+    let program = FootprintPreview::new(&model);
+    // Window positions; the cursor (content space) is inside the box.
+    let scroll = iced::Vector::new(0.0, 60.0);
+    let cursor = |at: Point| mouse::Cursor::Available(at + scroll);
+    let window_at = Point::new(100.0, 20.0);
+    let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+    let pressed = Program::<()>::update(&program, &mut state, &press, BOX, cursor(window_at));
+    assert!(pressed.is_some(), "the press starts a pan");
+    let before = state.offset();
+    for to in [Point::new(130.0, 20.0), Point::new(150.0, 35.0)] {
+        let moved = Event::Mouse(mouse::Event::CursorMoved { position: to });
+        let _ = Program::<()>::update(&program, &mut state, &moved, BOX, cursor(to));
+        assert_eq!(state.offset(), before + (to - window_at), "to {to:?}");
+    }
+}
+
+/// The Graphite previews paint opaque pad gold (#D8B46A) with a darker
+/// edge, fab ink apart from the copper and a neutral courtyard; the editor
+/// canvases keep their palettes.
+#[test]
+fn graphite_previews_paint_crisp_gold_pads_and_a_neutral_courtyard() {
+    use crate::library::editor::footprint::layers::{FpLayer, LayerPalette};
+    let gold = iced::Color::from_rgb8(0xD8, 0xB4, 0x6A);
+    let spread = |c: iced::Color| c.r.max(c.g).max(c.b) - c.r.min(c.g).min(c.b);
+    {
+        let canvas = LayerPalette::CanvasDark;
+        let preview = canvas.for_preview();
+        assert_ne!(preview, canvas, "{canvas:?} has a preview variant");
+        let copper = FpLayer::FCu.color_in(preview);
+        assert_eq!(copper, gold, "{preview:?}");
+        assert_eq!(preview.pad_fill_alpha(), 1.0, "{preview:?} pads are opaque");
+        let edge = preview.pad_edge(copper);
+        assert!(
+            edge.r < copper.r && edge.g < copper.g && edge.b < copper.b,
+            "{preview:?} edge {edge:?} is darker than the fill"
+        );
+        let courtyard = FpLayer::EdgeCuts.color_in(preview);
+        assert!(
+            spread(courtyard) < 0.05,
+            "{preview:?} courtyard {courtyard:?} is neutral"
+        );
+        let fab = FpLayer::FFab.color_in(preview);
+        assert!(
+            spread(fab) < 0.05,
+            "{preview:?} fab {fab:?} is not copper-toned"
+        );
+        assert!(preview.dashes_courtyard());
+        // The editor canvas itself is unchanged.
+        assert_eq!(canvas.pad_fill_alpha(), 0.85);
+        assert_eq!(canvas.pad_edge(copper), copper);
+        assert_eq!(preview.for_preview(), preview);
+    }
+    assert_eq!(LayerPalette::Legacy.for_preview(), LayerPalette::Legacy);
+    assert!(!LayerPalette::Legacy.dashes_courtyard());
+}
+
+/// `with_theme_tokens` picks the preview palette on Graphite and leaves a
+/// legacy theme on the black board.
+#[test]
+fn theme_tokens_pick_the_preview_palette() {
+    use crate::library::editor::footprint::layers::LayerPalette;
+    use signex_types::theme::{ThemeId, theme_tokens};
+    let model = preview_of(&fixture());
+    let palette = |id| {
+        FootprintPreview::new(&model)
+            .with_theme_tokens(&theme_tokens(id))
+            .graphite
+            .map(|(_, p)| p)
+    };
+    // The board is dark in Graphite Light too.
+    assert_eq!(
+        palette(ThemeId::GraphiteLight),
+        Some(LayerPalette::PreviewDark)
+    );
+    assert_eq!(
+        palette(ThemeId::GraphiteDark),
+        Some(LayerPalette::PreviewDark)
+    );
 }
 
 fn graphic_line(from: [f64; 2], to: [f64; 2]) -> FpGraphic {

@@ -3,10 +3,10 @@
 //! gestures a new user needs immediately (right-click pan, scroll
 //! zoom, F1 for help). Closes UX_IMPROVEMENTS_OVER_ALTIUM §4.3.
 
-use iced::widget::{Space, column, container, row};
+use iced::widget::{column, container};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text};
+use signex_widgets::{raw, text};
 
 use crate::app::{Message, OverlayMsg};
 use crate::styles;
@@ -31,23 +31,13 @@ pub fn window_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
 
 fn build<'a>(tokens: &'a ThemeTokens, windowed: bool) -> Element<'a, Message> {
     let text_primary = styles::ti(tokens.text);
-    let text_secondary = styles::ti(tokens.text_secondary);
 
-    let header = container(
-        row![
-            text(raw("Welcome to Signex"))
-                .size(TS.title)
-                .color(text_primary),
-            Space::new().width(Length::Fill),
-            button(text(raw("✕")).size(TS.body).color(text_secondary))
-                .on_press(Message::Overlay(OverlayMsg::DismissFirstRunTour))
-                .style(styles::menu_item(tokens)),
-        ]
-        .align_y(iced::Alignment::Center)
-        .spacing(SP.m),
-    )
-    .padding([SP.m, SP.l])
-    .style(styles::modal_header_strip(tokens));
+    // The shared dialog header (title, neutral close).
+    let header: Element<'a, Message> = crate::app::view::dialogs::modal_title_header(
+        raw("Welcome to Signex"),
+        Message::Overlay(OverlayMsg::DismissFirstRunTour),
+        tokens,
+    );
 
     let body = container(
         column![

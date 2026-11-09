@@ -99,6 +99,10 @@ mod net_nav;
 #[path = "regression/palette_context_filter.rs"]
 mod palette_context_filter;
 
+// #2222 - the read-only design rule check, from the menu, palette and panel.
+#[path = "regression/pcb_drc.rs"]
+mod pcb_drc;
+
 // #2192 - the PCB ratsnest reaches the canvas and a net can be hidden.
 #[path = "regression/pcb_ratsnest.rs"]
 mod pcb_ratsnest;
@@ -296,6 +300,8 @@ mod deleted_sheet_not_resaved;
 mod exclude_dirty_sheet_prompt;
 #[path = "regression/library_components_panel_actions.rs"]
 mod library_components_panel_actions;
+#[path = "regression/library_components_panel_layout.rs"]
+mod library_components_panel_layout;
 #[path = "regression/library_git_recovery.rs"]
 mod library_git_recovery;
 
@@ -406,6 +412,9 @@ mod multi_selection_edit;
 // #1255, #1670 — in-place editing of a part's designator, value and footprint.
 #[path = "regression/inplace_field_edit.rs"]
 mod inplace_field_edit;
+// 2026-11-07 decision — a power port's net-name text is fixed to the port.
+#[path = "regression/power_port_text_fixed.rs"]
+mod power_port_text_fixed;
 // #1301, #1262, #1260 — Open Datasheet, Edit Symbol and Change Component
 // on a placed part.
 #[path = "regression/placed_part_actions.rs"]
@@ -432,6 +441,9 @@ mod numeric_drafts;
 mod paste_on_cursor;
 #[path = "regression/placement_session.rs"]
 mod placement_session;
+// #114 — the Properties FOOTPRINT card of a placed part.
+#[path = "regression/properties_footprint_card.rs"]
+mod properties_footprint_card;
 #[path = "regression/reprefix_standard.rs"]
 mod reprefix_standard;
 
@@ -466,6 +478,8 @@ mod styled_power_port_not_flag;
 mod click_click_move;
 #[path = "regression/rubber_band_move.rs"]
 mod rubber_band_move;
+#[path = "regression/symbol_drag_entry_points.rs"]
+mod symbol_drag_entry_points;
 
 // #1057 - grid snapping lands on exact nm multiples (align / move).
 #[path = "regression/grid_snap_exact.rs"]
@@ -560,3 +574,5 @@ mod navigator_async;
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]
 mod stroke_zoom_law;
+#[path = "regression/wire_tab_options.rs"]
+mod wire_tab_options;

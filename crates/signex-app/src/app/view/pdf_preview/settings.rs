@@ -3,6 +3,7 @@
 //! `view/pdf_preview.rs` as pure code motion.
 
 use super::super::*;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -100,8 +101,12 @@ impl Signex {
                         move |_| Message::PrintPreview(PrintPreviewMsg::ToggleFile(page.clone()))
                     }),
                     column![
-                        text(raw(name.clone())).size(TS.body).color(text_c),
-                        text(raw(path_str)).size(TS.caption).color(text_muted),
+                        text(signex_i18n::UserText::new(name.clone()))
+                            .size(TS.body)
+                            .color(text_c),
+                        text(signex_i18n::UserText::new(path_str))
+                            .size(TS.caption)
+                            .color(text_muted),
                     ]
                     .spacing(1),
                 ]
@@ -180,6 +185,7 @@ impl Signex {
         variant_options.dedup();
         let variant_picker =
             iced::widget::pick_list(Some(variant_label), variant_options, |s: &String| s.clone())
+                .graphite()
                 .on_select(|s: String| {
                     if s.eq_ignore_ascii_case("Base") {
                         Message::PrintPreview(PrintPreviewMsg::SetVariant(None))
@@ -187,7 +193,6 @@ impl Signex {
                         Message::PrintPreview(PrintPreviewMsg::SetVariant(Some(s)))
                     }
                 })
-                .text_size(11)
                 .width(220);
 
         let labelled_check = |label: &'static str,
@@ -365,8 +370,8 @@ impl Signex {
                 ],
                 |q: &PdfQuality| q.to_string(),
             )
+            .graphite()
             .on_select(|v: PdfQuality| Message::PrintPreview(PrintPreviewMsg::SetQuality(v)))
-            .text_size(11)
             .width(180),
         ]
         .spacing(SP.xs);

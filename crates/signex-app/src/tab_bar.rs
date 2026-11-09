@@ -1,14 +1,16 @@
 //! Document tab bar — tabs for open schematic sheets and PCB.
 
 use iced::widget::scrollable::{Direction, RelativeOffset, Scrollbar};
-use iced::widget::{Row, container, mouse_area, row, scrollable};
+use iced::widget::{Row, container, mouse_area, scrollable};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
-use signex_widgets::{button, raw, text, tooltip};
+use signex_widgets::tab_pill::TabPill;
+use signex_widgets::{raw, text, tooltip};
 
 use crate::app::{Document, DocumentKey, TabInfo};
 use crate::styles::{self, Spacing, TypeScale};
+
+mod graphite;
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -80,6 +82,9 @@ pub struct TabMarks<'p> {
     pub dirty_paths: &'p std::collections::HashSet<std::path::PathBuf>,
     pub read_only_paths: &'p std::collections::HashSet<std::path::PathBuf>,
     pub tooltips_enabled: bool,
+    /// Name of the active document's project, shown at the right end of a
+    /// Graphite strip.
+    pub project_name: Option<&'p str>,
 }
 
 pub fn view<'a>(
@@ -94,14 +99,12 @@ pub fn view<'a>(
         dirty_paths,
         read_only_paths,
         tooltips_enabled,
+        project_name,
     } = *marks;
     // Tabs sit flush against each other — Altium parity. The active
     // pill's accent underline distinguishes it from neighbours; no
     // gap or vertical divider needed.
     let mut bar = Row::new().spacing(0.0);
-
-    let text_primary = styles::ti(tokens.text);
-    let text_muted = styles::ti(tokens.text_secondary);
 
     // Collect the indices of tabs that should render in this window —
     // we need the count up front so each pill knows whether it's the
@@ -124,7 +127,6 @@ pub fn view<'a>(
         let is_active = i == active;
         let is_dragging = dragging == Some(i);
         let is_last = Some(i) == last_idx;
-        let text_c = if is_active { text_primary } else { text_muted };
 
         // Close × after the title; undock lives in the right-click menu.
         // The button captures its own press, so the surrounding
@@ -135,52 +137,19 @@ pub fn view<'a>(
         // 2 px accent strip below. Iced's stock Border can't do "top
         // and sides only", and a stacked-bg fake leaked accent through
         // the rounded corners (visible on dark themes).
-        let pill_style = TabPillStyle {
-            fill: pill_fill(tokens, is_active, is_dragging),
-            // Theme border colour — reads as a subtle divider on
-            // each theme's chrome surface. Tried pure black; it
-            // looked harsh on every theme.
-            border: styles::ti(tokens.border),
-            accent: styles::ti(tokens.accent),
-            is_active,
-            is_last,
-            // Document tabs hang from the top of the editing area:
-            // rounded top corners + accent stripe at the bottom.
-            accent_position: AccentPosition::Bottom,
-        };
-        let mut content = row![]
-            .spacing(TAB_FONT_SIZE * 0.5)
-            .align_y(iced::Alignment::Center);
-        if tab_is_dirty(tab, dirty_paths) {
-            content = content.push(dirty_dot(tokens));
-        }
         let is_read_only = read_only_paths.contains(&tab.path);
-        if is_read_only {
-            content = content.push(
-                text(raw(READ_ONLY_LABEL))
-                    .size(TAB_FONT_SIZE)
-                    .color(styles::ti(tokens.text_secondary))
-                    .boxed(),
-            );
-        }
-        let close_x = button(
-            container(text(raw(CLOSE_GLYPH)).size(CLOSE_GLYPH_SIZE).line_height(
-                iced::widget::text::LineHeight::Absolute(CLOSE_HIT_SIZE.into()),
-            ))
-            .width(CLOSE_HIT_SIZE)
-            .height(CLOSE_HIT_SIZE)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center),
-        )
-        .padding(0)
-        .style(styles::close_x_button(tokens, text_muted))
-        .on_press(TabMessage::CloseClicked(i));
-        let inner = container(
-            content
-                .push(text(raw(label)).size(TAB_FONT_SIZE).color(text_c).boxed())
-                .push(close_x.boxed()),
-        )
-        .padding([SP.s, 10.0]);
+        let pill_style = graphite::pill_style(tokens, is_active, is_dragging, is_last);
+        let inner: Element<'_, TabMessage> = graphite::tab_inner(
+            graphite::TabFace {
+                index: i,
+                kind: &tab.kind,
+                title: label,
+                is_active,
+                is_dirty: tab_is_dirty(tab, dirty_paths),
+                read_only: is_read_only,
+            },
+            tokens,
+        );
         // Cursor: default Pointer on hover so the bar reads as
         // "clickable tabs", switching to Grabbing only while a tab
         // is in flight so the drag-to-reorder / drag-to-undock
@@ -191,12 +160,13 @@ pub fn view<'a>(
         } else {
             iced::mouse::Interaction::Pointer
         };
-        let tab_el: Element<'_, TabMessage> = mouse_area(TabPill::new(inner.boxed(), pill_style))
-            .on_press(TabMessage::StartDrag(i))
-            .on_release(TabMessage::Select(i))
-            .on_right_press(TabMessage::ContextMenu(i))
-            .interaction(cursor)
-            .boxed();
+        let tab_el: Element<'_, TabMessage> =
+            mouse_area(TabPill::new(inner, pill_style).square(true))
+                .on_press(TabMessage::StartDrag(i))
+                .on_release(TabMessage::Select(i))
+                .on_right_press(TabMessage::ContextMenu(i))
+                .interaction(cursor)
+                .boxed();
         // The pill shows an ellipsized title; hovering names the full path.
         let tab_el: Element<'_, TabMessage> =
             match tab_tooltip(&tab.path, is_read_only, tooltips_enabled) {
@@ -212,70 +182,34 @@ pub fn view<'a>(
         bar = bar.push(tab_el);
     }
 
-    // Strip baseline — 1 px theme-border line at the bottom of the
-    // tab bar. Inactive tabs sit "on" the line; the active tab's
-    // accent stripe overlays it at its x-range, visually punching
-    // through. Color follows the theme's border token so it reads
-    // as part of the chrome rather than a hard black edge.
-    let baseline_color = styles::ti(tokens.border);
-    let baseline = container(iced::widget::Space::new())
-        .width(Length::Fill)
-        .height(BASELINE_HEIGHT)
-        .style(move |_: &iced::Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(baseline_color)),
-            ..iced::widget::container::Style::default()
-        });
-    container(iced::widget::column![
-        // More tabs than fit scroll sideways (wheel / thin scrollbar) rather
-        // than being clipped off the right edge.
-        container(
-            scrollable(bar)
-                .id(TAB_STRIP_ID)
-                .direction(Direction::Horizontal(
-                    Scrollbar::new().width(3).scroller_width(3),
-                ))
-                .width(Length::Fill),
-        )
-        .width(Length::Fill)
-        // Tabs hang from the top; the baseline below them sits at the
-        // strip's fixed height.
-        .height(Length::Fill)
-        .padding(iced::Padding {
-            top: STRIP_TOP_PAD,
-            right: 6.0,
-            bottom: 0.0,
-            left: 6.0,
-        }),
-        baseline,
-    ])
-    .width(Length::Fill)
-    .height(TAB_STRIP_HEIGHT)
-    .style(styles::toolbar_strip(tokens))
-    .boxed()
+    let tabs = scrollable(bar)
+        .id(TAB_STRIP_ID)
+        .direction(Direction::Horizontal(
+            Scrollbar::new().width(3).scroller_width(3),
+        ))
+        .width(Length::Fill);
+    graphite::strip(tabs.boxed(), project_name, tokens)
 }
 
-/// Height of the document tab strip: the close-x hit box plus the pill's
-/// vertical padding, the strip's top padding and the 1 px baseline. Both the
-/// strip and the empty-window placeholder take their height from here, so
-/// they cannot diverge and the chrome does not jump when the first tab
-/// opens. It is a whole number of pixels, so the canvas and every overlay
-/// keyed off it start on a pixel boundary. It is derived from the
-/// default type scale and spacing, the same constants the strip's text and
-/// padding use; the app has no runtime UI scale for it to follow.
-pub const TAB_STRIP_HEIGHT: f32 =
-    (CLOSE_HIT_SIZE + 2.0 * SP.s + STRIP_TOP_PAD + BASELINE_HEIGHT).round();
-
-/// Padding above the pills, and the baseline line below them.
-const STRIP_TOP_PAD: f32 = 2.0;
-const BASELINE_HEIGHT: f32 = 1.0;
+/// Height of the document tab strip: the 34 px band from
+/// [`styles::ChromeMetrics`]. The strip and the empty-window placeholder
+/// take their height from here, so they cannot diverge and the chrome does
+/// not jump when the first tab opens.
+pub fn tab_strip_height(_tokens: &ThemeTokens) -> f32 {
+    graphite::strip_height()
+}
 
 /// The strip drawn with no document open: same height and background as the
 /// tab strip, nothing in it.
 pub fn placeholder<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
+    let bg = styles::ti(tokens.bg);
     container(iced::widget::Space::new())
         .width(Length::Fill)
-        .height(TAB_STRIP_HEIGHT)
-        .style(styles::toolbar_strip(tokens))
+        .height(tab_strip_height(tokens))
+        .style(move |_: &iced::Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(bg)),
+            ..iced::widget::container::Style::default()
+        })
         .boxed()
 }
 
@@ -285,24 +219,8 @@ const READ_ONLY_LABEL: &str = "read-only";
 /// Tooltip line saying why a sheet is read-only.
 const READ_ONLY_TOOLTIP: &str = "Read-only: written by a newer Signex. Edit it in that version.";
 
-/// Glyph of the per-tab close button.
-const CLOSE_GLYPH: &str = "\u{00d7}";
-
 /// Tab label font size; the dirty dot is sized from it.
 const TAB_FONT_SIZE: f32 = TS.body;
-/// Close x glyph size and square hit target, both relative to the tab
-/// text so they scale with the base font size. The hit target is rounded up
-/// to a whole pixel so the strip height built from it stays whole.
-const CLOSE_GLYPH_SIZE: f32 = TAB_FONT_SIZE * 1.6;
-const CLOSE_HIT_SIZE: f32 = (TAB_FONT_SIZE * 1.75).ceil();
-
-/// Dirty dot diameter as a fraction of the tab font size.
-const DIRTY_DOT_EM: f32 = 0.6;
-
-/// Dirty dot diameter for a tab label of `font_size`.
-fn dirty_dot_diameter(font_size: f32) -> f32 {
-    font_size * DIRTY_DOT_EM
-}
 
 /// Whether `tab` has unsaved changes: its path is in `dirty`, the set from
 /// [`dirty_tab_paths`] (Component Preview tabs have a synthetic path).
@@ -348,24 +266,6 @@ pub(crate) fn read_only_tab_paths(
         .collect()
 }
 
-/// Round dot in the theme's error colour, shown before a dirty tab's title.
-fn dirty_dot<'a>(tokens: &ThemeTokens) -> Element<'a, TabMessage> {
-    let colour = styles::ti(tokens.error);
-    let d = dirty_dot_diameter(TAB_FONT_SIZE);
-    container(iced::widget::Space::new())
-        .width(d)
-        .height(d)
-        .style(move |_: &iced::Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(colour)),
-            border: iced::Border {
-                radius: (d / 2.0).into(),
-                ..iced::Border::default()
-            },
-            ..iced::widget::container::Style::default()
-        })
-        .boxed()
-}
-
 /// Longest tab title drawn in full; longer ones are cut and end in `…`.
 const MAX_TAB_TITLE_CHARS: usize = 28;
 
@@ -378,55 +278,32 @@ fn ellipsize_title(title: &str, max: usize) -> String {
     format!("{kept}…")
 }
 
-/// Resolve the pill bg fill for the current state. Altium parity:
-/// inactive tabs are dimmer than active so they read as "off" but
-/// still show their tab body (transparent inactive made them look
-/// like floating labels — the strip showed through). Active uses
-/// `tokens.hover` at full alpha; inactive 0.35× the same; drag
-/// tints with theme accent at 22 %.
-fn pill_fill(tokens: &ThemeTokens, is_active: bool, is_dragging: bool) -> iced::Color {
-    let tab_active = styles::ti(tokens.hover);
-    let accent = styles::ti(tokens.accent);
-    if is_dragging {
-        iced::Color { a: 0.22, ..accent }
-    } else if is_active {
-        tab_active
-    } else {
-        iced::Color {
-            a: tab_active.a * 0.35,
-            ..tab_active
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        BASELINE_HEIGHT, CLOSE_GLYPH_SIZE, CLOSE_HIT_SIZE, READ_ONLY_TOOLTIP, SP, STRIP_TOP_PAD,
-        TAB_STRIP_HEIGHT, dirty_dot_diameter, ellipsize_title, read_only_tab_paths,
-        reveal_active_tab, reveal_offset, tab_is_dirty, tab_tooltip,
+        READ_ONLY_TOOLTIP, ellipsize_title, read_only_tab_paths, reveal_active_tab, reveal_offset,
+        tab_is_dirty, tab_tooltip,
     };
     use crate::app::{TabInfo, TabKind};
     use std::collections::HashSet;
     use std::path::PathBuf;
 
-    /// The strip and the no-document placeholder are both exactly
-    /// `TAB_STRIP_HEIGHT` tall.
+    /// The theme draws the 34 px strip, in the strip and in the placeholder
+    /// alike.
     #[test]
-    fn the_strip_and_its_placeholder_both_use_the_height_token() {
+    fn graphite_strip_and_placeholder_are_the_graphite_height() {
         use iced::Length;
         use iced::advanced::Widget as _;
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
-        let fixed = Length::Fixed(super::TAB_STRIP_HEIGHT);
-
-        let placeholder = super::placeholder::<()>(&tokens);
-        assert_eq!(placeholder.size().height, fixed);
-
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        assert_eq!(super::tab_strip_height(&tokens), 34.0);
+        let fixed = Length::Fixed(34.0);
+        assert_eq!(super::placeholder::<()>(&tokens).size().height, fixed);
         let none = HashSet::new();
         let marks = super::TabMarks {
             dirty_paths: &none,
             read_only_paths: &none,
             tooltips_enabled: true,
+            project_name: Some("Sensor node rev B"),
         };
         let strip = super::view(&[], 0, None, &none, &marks, &tokens);
         assert_eq!(strip.size().height, fixed);
@@ -470,12 +347,6 @@ mod tests {
     }
 
     #[test]
-    fn the_dirty_dot_scales_with_the_font_and_stays_smaller_than_it() {
-        assert!(dirty_dot_diameter(22.0) > dirty_dot_diameter(11.0));
-        assert!(dirty_dot_diameter(11.0) < 11.0);
-    }
-
-    #[test]
     fn reveal_offset_is_exact_at_both_ends_and_proportional_between() {
         assert_eq!(reveal_offset(0, 1).x, 0.0);
         assert_eq!(reveal_offset(0, 5).x, 0.0);
@@ -513,41 +384,5 @@ mod tests {
         let cut = ellipsize_title("a_very_long_sheet_name_that_overflows.snxsch", 10);
         assert_eq!(cut.chars().count(), 10);
         assert!(cut.ends_with('…'));
-    }
-
-    /// The close x shows hover and pressed feedback in every built-in
-    /// theme, on an active and an inactive tab alike: the rest colour is
-    /// `text_secondary`, so hover can brighten the glyph to `text`.
-    #[test]
-    fn close_button_hover_and_pressed_differ_from_rest() {
-        use iced::widget::button::Status;
-        for &id in signex_types::theme::ThemeId::BUILTINS {
-            let tokens = signex_types::theme::theme_tokens(id);
-            let rest_text = crate::styles::ti(tokens.text_secondary);
-            let style = crate::styles::close_x_button(&tokens, rest_text);
-            let theme = iced::Theme::Dark;
-            let active = style(&theme, Status::Active);
-            let hovered = style(&theme, Status::Hovered);
-            let pressed = style(&theme, Status::Pressed);
-            assert!(active.background.is_none(), "{id:?}");
-            assert_ne!(hovered.background, active.background, "{id:?}");
-            assert_ne!(pressed.background, hovered.background, "{id:?}");
-            assert_ne!(hovered.text_color, active.text_color, "{id:?}");
-        }
-    }
-
-    /// The tab label's line box and the close glyph both fit the close hit
-    /// box, so the pill is as tall as the hit box and nothing is clamped;
-    /// and the strip is a whole number of pixels, so the chrome below it
-    /// starts on a pixel boundary.
-    #[test]
-    fn the_close_hit_box_fits_the_label_and_the_strip_is_whole_pixels() {
-        const LABEL_LINE_BOX: f32 = super::TAB_FONT_SIZE * 1.3;
-        const {
-            assert!(LABEL_LINE_BOX <= CLOSE_HIT_SIZE);
-            assert!(CLOSE_GLYPH_SIZE <= CLOSE_HIT_SIZE);
-            assert!(TAB_STRIP_HEIGHT == TAB_STRIP_HEIGHT.round());
-            assert!(STRIP_TOP_PAD + BASELINE_HEIGHT + 2.0 * SP.s < TAB_STRIP_HEIGHT);
-        }
     }
 }

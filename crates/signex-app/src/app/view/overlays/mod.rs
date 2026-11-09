@@ -17,13 +17,20 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Width of the command palette card in an undocked window.
 const WINDOW_PALETTE_WIDTH: f32 = 480.0;
+/// Width of the Graphite palette card under the chrome strip (the mock's
+/// 640 px); independent of the search field's own width.
+const GRAPHITE_PALETTE_WIDTH: f32 = 640.0;
 
 mod bars;
 mod modals;
 mod net_hover;
+mod palette;
 pub(super) mod read_only_badge;
 #[cfg(test)]
 mod window_gate_tests;
+mod zoom_pill;
+#[cfg(test)]
+pub(super) use zoom_pill::pill_origin as zoom_pill_origin;
 
 impl Signex {
     /// The canvas rectangle in window coordinates, from the live dock sizes.
@@ -50,6 +57,7 @@ impl Signex {
             extent(Left, ui.left_width),
             extent(Right, ui.right_width),
             extent(Bottom, ui.bottom_height),
+            &self.document_state.panel_ctx.tokens,
         )
     }
 
@@ -187,18 +195,14 @@ impl Signex {
     /// below the chrome strip; scoring + ranking happens in the
     /// `command_palette` module so this view stays a thin renderer.
     pub(super) fn view_command_palette_dropdown(&self) -> Element<'_, Message> {
-        use crate::app::command_palette::{CommandSource, MAX_RESULTS};
-        use iced::widget::{Space, column, container, row, scrollable};
-        use iced::{Alignment, Background, Border, Color};
-        use signex_widgets::{button, raw, text, text_input};
+        use crate::app::command_palette::MAX_RESULTS;
+        use iced::widget::{Space, column, container, scrollable};
+        use iced::{Background, Border, Color};
+        use signex_widgets::{raw, text, text_input};
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let muted_c = crate::styles::ti(tokens.text_secondary);
-        let panel_bg = crate::styles::ti(tokens.panel_bg);
-        let border_c = crate::styles::ti(tokens.border);
-        let accent_c = crate::styles::ti(tokens.accent);
-        let hover_c = crate::styles::ti(tokens.hover);
 
         // Ranked in `update` (`refresh_command_palette_results`), read here.
         let results = &self.ui_state.command_palette.results;
@@ -212,66 +216,19 @@ impl Signex {
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(MAX_RESULTS.min(total));
         for (display_idx, entry) in results.iter().enumerate() {
             let is_active = display_idx == selected;
-            let row_bg = if is_active {
-                Some(Background::Color(hover_c))
-            } else {
-                None
-            };
-            let source_label = match entry.source {
-                CommandSource::Command => "Command",
-                CommandSource::Symbol => "Symbol",
-                CommandSource::Net => "Net",
-                CommandSource::Sheet => "Sheet",
-                CommandSource::File => "File",
-            };
-            let label_col = column![
-                text(raw(entry.label.clone())).size(TS.label).color(text_c),
-                text(raw(if entry.detail.is_empty() {
-                    String::new()
-                } else {
-                    entry.detail.clone()
-                }))
-                .size(TS.caption)
-                .color(muted_c),
-            ]
-            .spacing(SP.xs)
-            .width(Length::Fill);
-            let row_inner = row![
-                label_col,
-                text(raw(source_label)).size(TS.caption).color(muted_c),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center);
-            let btn = button(row_inner)
-                .width(Length::Fill)
-                .padding([6.0, SP.l])
-                .on_press(Message::CommandPalette(CommandPaletteMsg::Select(
-                    display_idx,
-                )))
-                .style(move |_: &iced::Theme, status: button::Status| {
-                    let bg = match status {
-                        button::Status::Hovered | button::Status::Pressed => {
-                            Some(Background::Color(hover_c))
-                        }
-                        _ => row_bg,
-                    };
-                    button::Style {
-                        background: bg,
-                        border: Border {
-                            width: if is_active { 1.0 } else { 0.0 },
-                            radius: 3.0.into(),
-                            color: if is_active {
-                                accent_c
-                            } else {
-                                Color::TRANSPARENT
-                            },
-                            ..Border::default()
-                        },
-                        text_color: text_c,
-                        ..button::Style::default()
-                    }
-                });
-            rows.push(btn.boxed());
+            // `results` is already grouped (see `group_for_display`), so a
+            // header goes wherever the source changes.
+            if display_idx == 0 || results[display_idx - 1].source != entry.source {
+                let count = results.iter().filter(|e| e.source == entry.source).count();
+                rows.push(palette::group_header(tokens, entry.source, count));
+            }
+            rows.push(palette::result_row(
+                tokens,
+                entry,
+                &self.ui_state.command_palette.query,
+                is_active,
+                Message::CommandPalette(CommandPaletteMsg::Select(display_idx)),
+            ));
         }
 
         let body: Element<'_, Message> = if total == 0 {
@@ -281,22 +238,21 @@ impl Signex {
                 .boxed()
         } else {
             let list = column(rows).spacing(SP.xs).padding(SP.s);
-            scrollable(list).height(Length::Shrink).boxed()
+            // Bound the list so the 360 px card keeps room for the search
+            // row above and the hint footer below.
+            let list_cap = 360.0 - 2.0 * (TS.body * 1.6 + 2.0 * SP.l);
+            scrollable(list)
+                .height(Length::Fit.max(list_cap))
+                .style(palette::scrollbar_style(tokens))
+                .boxed()
         };
 
-        // Footer when there are more matches than we render.
-        let footer: Element<'_, Message> = if total > MAX_RESULTS {
-            container(
-                text(raw(format!(
-                    "{} more results — refine query",
-                    total - MAX_RESULTS
-                )))
-                .size(TS.caption)
-                .color(muted_c),
-            )
-            .padding([SP.s, 14.0])
-            .width(Length::Fill)
-            .boxed()
+        // Footer with the hint line, and a note when there are more matches
+        // than we render.
+        let footer: Element<'_, Message> = if total > 0 {
+            let more = (total > MAX_RESULTS)
+                .then(|| format!("{} more results — refine query", total - MAX_RESULTS));
+            palette::hint_footer(tokens, results.get(selected), more)
         } else {
             Space::new().height(0).boxed()
         };
@@ -311,40 +267,41 @@ impl Signex {
         let (card_x, card_w) = if in_window {
             (16.0, WINDOW_PALETTE_WIDTH)
         } else {
-            self.chrome_search_bar_geometry()
+            let (x, _) = self.chrome_search_bar_geometry();
+            let window_w = self.ui_state.window_size.0;
+            let w = GRAPHITE_PALETTE_WIDTH.min((window_w - 32.0).max(WINDOW_PALETTE_WIDTH));
+            (x.min((window_w - w - 16.0).max(16.0)), w)
         };
-        let input: Element<'_, Message> = if let Some(window) = self.ui_state.command_palette.window
-        {
-            text_input(
-                raw("Search files, symbols, commands…"),
-                &self.ui_state.command_palette.query,
-            )
-            .id(crate::app::command_palette::COMMAND_PALETTE_WINDOW_INPUT_ID.clone())
-            .on_input(move |q| {
-                Message::CommandPalette(CommandPaletteMsg::QueryTypedInWindow(window, q))
-            })
-            .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
-            .padding(SP.l)
-            .size(TS.body)
-            .width(Length::Fill)
-            .boxed()
-        } else {
-            Space::new().height(0).boxed()
-        };
+        let ink4 = crate::styles::tokens::resolve(tokens).ink4;
+        let window_input: Option<Element<'_, Message>> =
+            self.ui_state.command_palette.window.map(|window| {
+                text_input(
+                    raw("Search files, symbols, commands…"),
+                    &self.ui_state.command_palette.query,
+                )
+                .id(crate::app::command_palette::COMMAND_PALETTE_WINDOW_INPUT_ID.clone())
+                .on_input(move |q| {
+                    Message::CommandPalette(CommandPaletteMsg::QueryTypedInWindow(window, q))
+                })
+                .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
+                .size(TS.body)
+                .width(Length::Fill)
+                .padding(0)
+                .style(move |_: &iced::Theme, _| iced::widget::text_input::Style {
+                    background: Background::Color(Color::TRANSPARENT),
+                    border: Border::default(),
+                    placeholder: ink4,
+                    value: text_c,
+                    selection: Color { a: 0.4, ..text_c },
+                })
+                .boxed()
+            });
+        let input = palette::search_row(tokens, &self.ui_state.command_palette.query, window_input);
         let card = container(column![input, body, footer])
             .width(card_w)
             .height(Length::Fit.max(360.0))
             .padding(0)
-            .style(move |_: &iced::Theme| container::Style {
-                background: Some(Background::Color(panel_bg)),
-                border: Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: 6.0.into(),
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            });
+            .style(crate::styles::modal_card(tokens));
 
         let y = if in_window {
             16.0
@@ -417,16 +374,17 @@ impl Signex {
         )
         .map(Message::ActiveBar)
         .boxed();
-        let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
+        let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
+        let x_off = crate::active_bar::dropdown_x_offset(ab_menu, &metrics);
         // Bar bottom: MENU_BAR_HEIGHT + tabs + top margin + bar height,
         // plus a small gap so the dropdown visually touches.
-        let ab_y: f32 = canvas_region::CHROME_TOP
-            + crate::active_bar::BAR_TOP_MARGIN_PX
-            + crate::active_bar::BAR_HEIGHT_PX
+        let ab_y: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens)
+            + crate::active_bar::bar_top_margin()
+            + crate::active_bar::bar_height_for(&metrics)
             + crate::active_bar::BAR_DROPDOWN_GAP_PX;
         let (ww, _) = ui.size_of_window(window_id);
         let adjusted_x =
-            x_off + crate::active_bar::bar_left_in_window(interaction.current_tool, ww);
+            x_off + crate::active_bar::bar_left_in_window(interaction.current_tool, ww, &metrics);
         Self::dismiss_and_place(
             Message::ActiveBar(crate::active_bar::ActiveBarMsg::CloseMenus),
             dropdown,
@@ -434,10 +392,10 @@ impl Signex {
         )
     }
 
-    /// Canvas right-click context menu (+ its Place/Align submenu).
-    /// Clamps the menu inside the window; the submenu pops to the right
-    /// (or left on overflow) level with its launcher row. Pushes dismiss,
-    /// menu, then the optional submenu.
+    /// Canvas right-click context menu (+ its Place/Align submenu): the
+    /// card opens at the click and the open submenu's flyout sits beside it,
+    /// level with its launcher row; both are kept inside the window. Pushes
+    /// dismiss, then the placed menu.
     pub(in crate::app) fn context_menu_overlay(
         &self,
         window_id: iced::window::Id,
@@ -450,90 +408,56 @@ impl Signex {
         if !self.overlay_belongs_to(ctx_menu.window, window_id) {
             return Vec::new();
         }
-        let menu = self.view_context_menu(window_id);
-        // The footprint is estimated from the largest possible row count,
-        // so a click near an edge flips the card up or left.
-        let menu_w = Self::CONTEXT_MENU_WIDTH;
-        let origin = self.menu_origin(window_id, (ctx_menu.x, ctx_menu.y), menu_w, 22, true);
-        let mut out = Self::menu_layers(Message::ContextMenu(ContextMenuMsg::Close), menu, origin);
-        if let Some(submenu_kind) = interaction.context_submenu {
+        let card = self.view_context_menu(window_id);
+        let mut menu =
+            super::context_menu::AnchoredMenu::new(card.element, (ctx_menu.x, ctx_menu.y));
+        if let (Some(kind), Some(offset)) = (interaction.context_submenu, card.flyout_offset) {
             let submenu = self.view_context_submenu(
-                submenu_kind,
+                kind,
                 interaction.canvas_for_window(window_id).selected.len(),
             );
-            // Rows and separators above each launcher in `view_context_menu`.
-            let (rows_above, separators_above) = match submenu_kind {
-                // 3 always-visible rows + 1 separator.
-                ContextSubmenu::Place => (3, 1),
-                // Shown only with a selection: the same, then Place / Part
-                // Actions / Sheet Actions / References.
-                ContextSubmenu::Align => (7, 1),
-                // Right under Align, only when a drawing is selected (#1583).
-                ContextSubmenu::Arrange => (8, 1),
-                // Only the project-tree menu opens this one.
-                ContextSubmenu::AddNewToProject => (0, 0),
-            };
-            let sub_origin = super::context_menu::submenu_origin(
-                origin,
-                menu_w,
-                menu_w,
-                rows_above,
-                separators_above,
-                true,
-                self.ui_state.size_of_window(window_id).0,
-            );
-            out.push(Self::submenu_flyout(submenu, sub_origin));
+            menu = menu.flyout(Self::submenu_panel(submenu), offset);
         }
-        out
+        Self::anchored_layers(Message::ContextMenu(ContextMenuMsg::Close), menu)
     }
 
     /// Document-tab right-click menu. Rendered before the project-tree
     /// menu since the two are mutually exclusive. Pushes dismiss then the
-    /// clamped menu.
+    /// placed menu.
     pub(super) fn tab_context_menu_overlay(
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
         let interaction = &self.interaction_state;
         let Some(tab_ctx) = interaction.tab_context_menu.as_ref() else {
-            return self.dock_tab_context_menu_overlay(window_id);
+            return self.dock_tab_context_menu_overlay();
         };
         // Only the main window's tab strip opens this menu, so only the main
         // window paints it (#2037).
         if !self.overlay_belongs_to(None, window_id) {
             return Vec::new();
         }
-        self.menu_overlay(
-            window_id,
+        Self::menu_overlay(
             Message::ContextMenu(ContextMenuMsg::CloseTab),
             self.view_tab_context_menu(tab_ctx),
             (tab_ctx.x, tab_ctx.y),
-            Self::CONTEXT_MENU_WIDTH,
-            5,
         )
     }
 
-    /// Dock panel tab right-click menu: dismiss layer, then the menu clamped
-    /// into the window.
-    fn dock_tab_context_menu_overlay(
-        &self,
-        window_id: iced::window::Id,
-    ) -> Vec<Element<'_, Message>> {
+    /// Dock panel tab right-click menu: dismiss layer, then the placed menu.
+    fn dock_tab_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
         let Some(menu_ctx) = self.document_state.dock.tab_menu else {
             return Vec::new();
         };
-        self.menu_overlay(
-            window_id,
+        Self::menu_overlay(
             Message::Dock(crate::dock::DockMessage::TabMenuDismissed),
             self.view_dock_tab_context_menu(),
             (menu_ctx.x, menu_ctx.y),
-            Self::CONTEXT_MENU_WIDTH,
-            5,
         )
     }
 
     /// Projects-panel tree right-click menu (+ its AddNewToProject
-    /// submenu). Pushes dismiss, menu, then the optional submenu.
+    /// submenu). Pushes dismiss, then the placed menu and its flyout.
     pub(super) fn project_tree_context_menu_overlay(
         &self,
         window_id: iced::window::Id,
@@ -546,51 +470,33 @@ impl Signex {
         if !self.overlay_belongs_to(tree_ctx.window, window_id) {
             return Vec::new();
         }
-        let (menu, menu_w, origin) = self.view_project_tree_context_menu(window_id, tree_ctx);
-        let mut out = Self::menu_layers(
-            Message::ContextMenu(ContextMenuMsg::CloseProjectTree),
-            menu,
-            origin,
-        );
-        // Currently only AddNewToProject opens from this menu: row 2, under
-        // `Make Project Available Online...` and `Validate Project`.
-        if let Some(ContextSubmenu::AddNewToProject) = interaction.context_submenu {
+        let card = self.view_project_tree_context_menu(tree_ctx);
+        let mut menu =
+            super::context_menu::AnchoredMenu::new(card.element, (tree_ctx.x, tree_ctx.y));
+        // Only AddNewToProject opens from this menu.
+        if let (Some(ContextSubmenu::AddNewToProject), Some(offset)) =
+            (interaction.context_submenu, card.flyout_offset)
+        {
             let submenu = self.view_context_submenu(
                 ContextSubmenu::AddNewToProject,
                 interaction.canvas.selected.len(),
             );
-            let sub_origin = super::context_menu::submenu_origin(
-                origin,
-                menu_w,
-                // The flyout is built at the shared width (`submenu.rs`).
-                Self::CONTEXT_MENU_WIDTH,
-                2,
-                0,
-                false,
-                self.ui_state.size_of_window(window_id).0,
-            );
-            out.push(Self::submenu_flyout(submenu, sub_origin));
+            menu = menu.flyout(Self::submenu_panel(submenu), offset);
         }
-        out
+        Self::anchored_layers(Message::ContextMenu(ContextMenuMsg::CloseProjectTree), menu)
     }
 
     /// v0.18.10 — Altium-style grid picker popup. Floats at the cursor
     /// when `G` is pressed in a footprint editor. Pushes dismiss then the
-    /// clamped menu.
-    pub(super) fn grid_picker_overlay(
-        &self,
-        window_id: iced::window::Id,
-    ) -> Vec<Element<'_, Message>> {
+    /// placed menu.
+    pub(super) fn grid_picker_overlay(&self) -> Vec<Element<'_, Message>> {
         let Some(picker) = self.interaction_state.grid_picker.as_ref() else {
             return Vec::new();
         };
-        self.menu_overlay(
-            window_id,
+        Self::menu_overlay(
             Message::Ui(UiMsg::GridPickerClose),
             self.view_grid_picker_menu(),
             (picker.x, picker.y),
-            200.0,
-            13,
         )
     }
 
@@ -663,6 +569,20 @@ impl Signex {
         }
         out
     }
+}
+
+/// `element` with the mouse wheel stopped at its own bounds, so it cannot
+/// reach the canvas underneath (#562). Wrap the painted card, not a
+/// window-sized positioner (`Translate`, a `Fill` column): `mouse_area`
+/// captures wherever its bounds are, so a positioner would take the wheel
+/// over the whole canvas.
+pub(super) fn scroll_guard<'a>(element: Element<'a, Message>) -> Element<'a, Message> {
+    // `Idle` makes the surface count as a hit for the `Stack`, which hands
+    // the layers below a levitating cursor: no hover reaches the canvas.
+    iced::widget::mouse_area(element)
+        .on_scroll(|_| Message::noop())
+        .interaction(iced::mouse::Interaction::Idle)
+        .boxed()
 }
 
 /// The card both hover cards draw: `rows` on the panel background with a 1 px

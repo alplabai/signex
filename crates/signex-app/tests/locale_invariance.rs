@@ -70,6 +70,7 @@ fn add_dangling_wire(sheet: &Path) {
     let text = std::fs::read_to_string(sheet).expect("sample sheet");
     let mut file = SnxSchematic::parse(&text).expect("sample parses");
     file.sheet.wires.push(Wire {
+        color: None,
         uuid: uuid::Uuid::from_u128(0x2056),
         start: Point::new(250.0, 20.0),
         end: Point::new(260.0, 20.0),

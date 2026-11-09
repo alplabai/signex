@@ -64,7 +64,7 @@ fn name_row<'a>(project: &'a LoadedProject, tokens: &ThemeTokens) -> Element<'a,
             project_id: project.id,
         }));
     let name = row![
-        text(raw(project.data.name.as_str()))
+        text(signex_i18n::UserText::new(project.data.name.as_str()))
             .size(ts.label)
             .color(crate::styles::ti(tokens.text))
             .width(Length::Fill),

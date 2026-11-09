@@ -32,6 +32,13 @@ impl Rig {
         // A settled camera: the tests are about hit-testing, not the
         // queued first-view placement.
         editor.pending_view = None;
+        // `new` now fits a symbol that has content; these tests pin the
+        // un-fitted default camera (100%, origin at the viewport centre).
+        editor.camera = crate::canvas::Camera::default();
+        editor.camera.offset = Point::new(
+            SymbolDocument::DEFAULT_SYMBOL_VIEWPORT_WIDTH * 0.5,
+            SymbolDocument::DEFAULT_SYMBOL_VIEWPORT_HEIGHT * 0.5,
+        );
         Self {
             editor,
             cstate: CanvasState::default(),
@@ -619,9 +626,13 @@ fn fit_uses_the_real_canvas_size_not_a_hardcoded_viewport() {
 
     assert_eq!(rig.editor.pending_view, None);
     let centre = rig.screen(0.0, 0.0);
+    // The fit centres the symbol below the floating Active Bar, so the centre
+    // sits half the top clearance below the canvas middle (deliberate, #114).
+    let clearance = crate::library::editor::symbol::updates::FIT_TOP_CLEARANCE;
     assert!(
-        (centre.x - BOUNDS.width / 2.0).abs() < 1.0 && (centre.y - BOUNDS.height / 2.0).abs() < 1.0,
-        "symbol centre {centre:?} should sit at the middle of the {}x{} canvas",
+        (centre.x - BOUNDS.width / 2.0).abs() < 1.0
+            && (centre.y - (BOUNDS.height + clearance) / 2.0).abs() < 1.0,
+        "symbol centre {centre:?} should sit at the middle of the {}x{} canvas, shifted for the Active Bar",
         BOUNDS.width,
         BOUNDS.height
     );

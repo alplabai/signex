@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use iced::Point;
+use signex_engine::pcb::BoardEngine;
 use signex_library::{Footprint, Symbol};
 use signex_types::pcb::PcbBoard;
 
@@ -174,13 +175,25 @@ impl SchematicTabSession {
 /// viewer) can slot in without reshaping callers.
 #[derive(Debug)]
 pub enum TabDocument {
-    Pcb(PcbBoard),
+    Pcb(BoardEngine),
 }
 
 impl TabDocument {
     pub fn as_pcb(&self) -> Option<&PcbBoard> {
         match self {
-            Self::Pcb(board) => Some(board),
+            Self::Pcb(engine) => Some(engine.board()),
+        }
+    }
+
+    pub fn as_pcb_engine(&self) -> Option<&BoardEngine> {
+        match self {
+            Self::Pcb(engine) => Some(engine),
+        }
+    }
+
+    pub fn as_pcb_engine_mut(&mut self) -> Option<&mut BoardEngine> {
+        match self {
+            Self::Pcb(engine) => Some(engine),
         }
     }
 }
@@ -300,6 +313,8 @@ pub struct SymbolDocument {
     pub zoom_step: f32,
     /// "Two-finger scroll pans" preference, synced with `zoom_step`.
     pub trackpad_pan: bool,
+    /// Preferences "Mouse wheel", synced with `trackpad_pan`.
+    pub wheel_mode: crate::canvas::WheelMode,
     /// Last cursor world position over the canvas, in mm. Drives the
     /// status footer's X/Y readout. `None` when the cursor is
     /// outside the canvas. Per-tab — tracking the cursor is
@@ -407,8 +422,8 @@ impl SymbolDocument {
         crate::library::editor::symbol::state::PartView::new(self.active_part, self.active_body)
     }
 
-    const DEFAULT_SYMBOL_VIEWPORT_WIDTH: f32 = 800.0;
-    const DEFAULT_SYMBOL_VIEWPORT_HEIGHT: f32 = 500.0;
+    pub(crate) const DEFAULT_SYMBOL_VIEWPORT_WIDTH: f32 = 800.0;
+    pub(crate) const DEFAULT_SYMBOL_VIEWPORT_HEIGHT: f32 = 500.0;
 
     /// Build a fresh standalone editor state from a `SymbolFile`
     /// container loaded off disk. `path` is the `.snxsym` file the
@@ -430,6 +445,7 @@ impl SymbolDocument {
             camera: crate::canvas::Camera::default(),
             zoom_step: default_zoom_step(),
             trackpad_pan: false,
+            wheel_mode: Default::default(),
             cursor_mm: None,
             pending_view: None,
             selection_filter: Default::default(),
@@ -460,6 +476,13 @@ impl SymbolDocument {
         // The default size above is only a placeholder until the
         // canvas reports its real one.
         self.pending_view = Some(SymbolViewRequest::CenterOrigin);
+        // Fit against the placeholder too, so the first frame is not a
+        // speck at 100% while the real size is still unknown.
+        crate::library::editor::symbol::fit_to_viewport(
+            self,
+            Self::DEFAULT_SYMBOL_VIEWPORT_WIDTH,
+            Self::DEFAULT_SYMBOL_VIEWPORT_HEIGHT,
+        );
     }
 
     /// Borrow the symbol currently being edited. Falls back to the
@@ -525,6 +548,8 @@ pub struct FootprintDocument {
     pub zoom_step: f32,
     /// "Two-finger scroll pans" preference, synced with `zoom_step`.
     pub trackpad_pan: bool,
+    /// Preferences "Mouse wheel", synced with `trackpad_pan`.
+    pub wheel_mode: crate::canvas::WheelMode,
     /// Unsaved edits in this draft. Private: edits call [`Self::mark_dirty`];
     /// the workspace reads and clears it through `DocumentState`.
     dirty: bool,
@@ -671,6 +696,7 @@ impl FootprintDocument {
             canvas_cache: iced::widget::canvas::Cache::default(),
             zoom_step: default_zoom_step(),
             trackpad_pan: false,
+            wheel_mode: Default::default(),
             // An arc repaired on load differs from what is on disk, so the
             // document opens dirty and a save persists the repair.
             dirty: repaired,

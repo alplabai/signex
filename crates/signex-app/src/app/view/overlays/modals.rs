@@ -37,6 +37,7 @@ impl Signex {
             draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
             draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
             draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
+            draft_wheel_mode: ui.preferences_draft_wheel_mode,
             draft_remember_window_geometry: ui.preferences_draft_remember_window_geometry,
             draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
             draft_increment_step: ui.preferences_draft_increment_step,
@@ -51,8 +52,6 @@ impl Signex {
             draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
             draft_zoom_step_percent: ui.preferences_draft_zoom_step_percent,
             draft_ui_scale_percent: ui.preferences_draft_ui_scale_percent,
-            custom_name: ui.custom_theme.as_ref().map(|c| c.name.as_str()),
-            theme_status: &ui.preferences_theme_status,
             dirty: ui.preferences_dirty,
             profiles: &ui.profile_manager,
             default_profile: ui.default_rule_profile.as_deref(),
@@ -66,6 +65,7 @@ impl Signex {
             prefs_load_error: ui.prefs_load_error.as_deref(),
             prefs_status: &ui.preferences_prefs_status,
             keymap_search: &ui.preferences_keymap_search,
+            nav_search: &ui.preferences_nav_search,
             keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
         })
         .map(|m| Message::Preferences(PreferencesMsg::Inner(m)))
@@ -329,19 +329,17 @@ impl Signex {
         .then(|| self.view_erc_dialog())
     }
 
-    /// The dim backdrop the in-window library cards sit on.
-    fn library_scrim<'a>(card: Element<'a, Message>) -> Element<'a, Message> {
+    /// The backdrop the in-window library cards sit on: the themed dialog
+    /// scrim, as under every other in-window dialog.
+    fn library_scrim<'a>(&self, card: Element<'a, Message>) -> Element<'a, Message> {
         container(card)
             .width(Length::Fill)
             .height(Length::Fill)
             .center_x(Length::Fill)
             .center_y(Length::Fill)
-            .style(|_: &iced::Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    0.0, 0.0, 0.0, 0.45,
-                ))),
-                ..Default::default()
-            })
+            .style(crate::app::view::dialogs::scrim_style(
+                &self.document_state.panel_ctx.tokens,
+            ))
             .boxed()
     }
 
@@ -500,7 +498,7 @@ impl Signex {
             return None;
         }
         self.library_dialog_card(modal, None)
-            .map(Self::library_scrim)
+            .map(|card| self.library_scrim(card))
     }
 
     pub(in crate::app::view) fn library_picker_overlay(&self) -> Option<Element<'_, Message>> {
@@ -511,7 +509,7 @@ impl Signex {
     /// window of its own) is painted.
     pub(in crate::app::view) fn edit_row_modal_overlay(&self) -> Vec<Element<'_, Message>> {
         self.library_dialog_card(crate::app::state::ModalId::LibraryEditRow, None)
-            .map(Self::library_scrim)
+            .map(|card| self.library_scrim(card))
             .into_iter()
             .collect()
     }
@@ -519,7 +517,7 @@ impl Signex {
     /// Delete Selected confirm modal; same rule as the edit modal.
     pub(in crate::app::view) fn delete_confirm_overlay(&self) -> Option<Element<'_, Message>> {
         self.library_dialog_card(crate::app::state::ModalId::LibraryDeleteConfirm, None)
-            .map(Self::library_scrim)
+            .map(|card| self.library_scrim(card))
     }
 
     pub(in crate::app::view) fn primitive_picker_overlay(&self) -> Option<Element<'_, Message>> {

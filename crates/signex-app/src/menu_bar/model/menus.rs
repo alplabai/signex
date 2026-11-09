@@ -21,11 +21,6 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
             ctx,
             cmd("close_active_document", "Close Document", "Ctrl+F4"),
         ),
-        item_if(
-            "Close Project",
-            MenuMessage::CloseProject,
-            ctx.commands.has_open_project,
-        ),
         SEP,
         // Save gating: docs/MENU_BAR.md#file-save
         cmd_item_gated(ctx, cmd("save_document", "Save", "Ctrl+S")),
@@ -92,18 +87,10 @@ fn library(ctx: &MenuContext) -> Vec<MenuEntry> {
 }
 
 fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
-    let has_schematic = ctx.commands.has_schematic;
     vec![
         // No shortcut: Ctrl+P is shown on File > Print, which opens this
         // same modal. Gated like Print.
         item_if("PDF…", MenuMessage::ExportPdf, enabled(ctx, "print")),
-        item_if(
-            "Netlist (Protel .NET)...",
-            MenuMessage::ExportNetlist,
-            has_schematic,
-        ),
-        item_if("Bill of Materials…", MenuMessage::ExportBom, has_schematic),
-        item_if("ERC Report…", MenuMessage::ExportErcReport, has_schematic),
     ]
 }
 
@@ -210,9 +197,9 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         panel_item(
             ctx,
-            "Signal",
-            PanelKind::Signal,
-            MenuMessage::OpenSignalPanel,
+            "Signex AI",
+            PanelKind::SignexAi,
+            MenuMessage::OpenSignexAiPanel,
         ),
     ]
 }
@@ -238,27 +225,48 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
 }
 
 pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
+    vec![cmd_item_gated(
+        ctx,
+        cmd("open_parameter_manager", "Parameter Manager...", ""),
+    )]
+}
+
+pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        submenu("Annotation", annotation(ctx)),
-        SEP,
         // F8 (`run_erc`) runs ERC at once; this row opens the dialog.
         cmd_item_gated(ctx, cmd("open_erc_dialog", "Electrical Rules Check", "")),
-        cmd_item_gated(
-            ctx,
-            cmd("open_parameter_manager", "Parameter Manager...", ""),
+        SEP,
+        // Gated like Close Project: with no project there is no tab to open.
+        item_if(
+            "Project Options...",
+            MenuMessage::OpenProjectOptions,
+            ctx.commands.has_open_project,
         ),
         SEP,
-        // The same working BOM dialog File > Export > Bill of Materials
-        // opens (#1251).
         item_if(
-            "Generate BOM",
-            MenuMessage::ExportBom,
-            ctx.commands.has_schematic,
+            "Close Project",
+            MenuMessage::CloseProject,
+            ctx.commands.has_open_project,
         ),
     ]
 }
 
-/// Design ▸ Annotation. The first three rows need an open schematic:
+/// Reports: every output of the open schematic. The BOM row is the one
+/// working BOM dialog (#1251); the old Design > Generate BOM duplicate row is folded in.
+pub(super) fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
+    let has_schematic = ctx.commands.has_schematic;
+    vec![
+        item_if("Bill of Materials…", MenuMessage::ExportBom, has_schematic),
+        item_if(
+            "Netlist (Protel .NET)...",
+            MenuMessage::ExportNetlist,
+            has_schematic,
+        ),
+        item_if("ERC Report…", MenuMessage::ExportErcReport, has_schematic),
+    ]
+}
+
+/// Tools ▸ Annotation. The first three rows need an open schematic:
 /// annotating without one is meaningless.
 fn annotation(ctx: &MenuContext) -> Vec<MenuEntry> {
     let has_schematic = ctx.commands.has_schematic;
@@ -303,10 +311,13 @@ fn annotation(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
+        submenu("Annotation", annotation(ctx)),
+        SEP,
         stub("Assign Footprints"),
         stub("Library Editor"),
         SEP,
-        stub("Design Rule Check"),
+        // Runs `run_drc` on the PCB in view; greyed with no PCB open.
+        cmd_item_gated(ctx, cmd("run_drc", "Design Rule Check", "")),
         stub("Net Inspector"),
         SEP,
         item_if(

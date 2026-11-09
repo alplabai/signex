@@ -469,12 +469,11 @@ fn item_submenu_header<'a>(
 ) -> Element<'a, LibraryMessage> {
     let text_c = ti(tokens.text);
     let hover_c = ti(tokens.hover);
-    let chev = if expanded { "▾" } else { "▸" };
     button(
         row![
             text(raw(label.to_string())).size(FONT_SIZE).color(text_c),
             iced::widget::Space::new().width(Length::Fill),
-            text(raw(chev.to_string())).size(TS.body).color(text_c),
+            signex_widgets::chevron::chevron(expanded, TS.body, text_c),
         ]
         .spacing(SP.m)
         .align_y(iced::Alignment::Center)

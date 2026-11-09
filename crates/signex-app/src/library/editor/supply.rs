@@ -17,6 +17,7 @@ use iced::widget::{Column, Widget, column, pick_list, scrollable};
 use iced::{Element, Length};
 use signex_library::{AlternateStatus, DistributorSource, ManufacturerPart};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
 use signex_widgets::{raw, text, text_input};
 
@@ -167,8 +168,8 @@ fn status_picker<'a>(
 ) -> Element<'a, LibraryMessage> {
     let address = address.clone();
     pick_list(Some(current), STATUS_OPTS, status_label)
+        .graphite()
         .on_select(move |s| editor_event(&address, make(s)))
-        .text_size(TS.label)
         .padding([SP.s, SP.m])
         .width(Length::Fill)
         .boxed()
@@ -369,13 +370,13 @@ fn listing_row<'a>(
         DISTRIBUTOR_OPTS,
         distributor_pick_label,
     )
+    .graphite()
     .on_select(move |value| {
         editor_event(
             &picker_address,
             EditorMsg::SupplyListingSetDistributor { idx, value },
         )
     })
-    .text_size(TS.label)
     .padding([SP.s, SP.m])
     .width(Length::Fill);
 

@@ -31,7 +31,7 @@ use signex_widgets::{button, raw, text, text_input};
 use super::browser::{OVERSCAN_ROWS, visible_range};
 use super::loose_symbols::LooseSymbol;
 use super::messages::{LibraryMessage, PrimitivePickerMsg};
-use super::modal_chrome::{footer_strip, header, primary_btn, secondary_btn};
+use super::modal_chrome::{cancel_btn, footer_strip, header, primary_btn, secondary_btn};
 use super::state::{LibraryState, PrimitivePickerState};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -254,6 +254,7 @@ pub fn view<'a>(
     );
 
     let search = text_input(raw("Filter…"), &picker.filter)
+        .style(crate::panels::form_look::text_input_style)
         .on_input(|s| LibraryMessage::PrimitivePicker(PrimitivePickerMsg::SetFilter(s)))
         .padding(6)
         .size(TS.label);
@@ -359,7 +360,7 @@ pub fn view<'a>(
             LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Browse),
             tokens,
         )],
-        vec![secondary_btn(
+        vec![cancel_btn(
             "Cancel",
             LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel),
             tokens,
@@ -418,7 +419,7 @@ fn copy_confirm_row<'a>(
     let answers: Element<'_, LibraryMessage> = if picker.opening_library.is_some() {
         row![
             text(raw("Opening library…")).size(TS.body),
-            secondary_btn(
+            cancel_btn(
                 "Cancel",
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyDeclined),
                 tokens,
@@ -434,7 +435,7 @@ fn copy_confirm_row<'a>(
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::OpenLibraryConfirmed),
                 tokens,
             ),
-            secondary_btn(
+            cancel_btn(
                 "Cancel",
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyDeclined),
                 tokens,

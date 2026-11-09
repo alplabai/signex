@@ -65,9 +65,16 @@ pub fn scan_sheet(sheet: &SchematicSheet, needle: &str, scope: &DesignatorScope)
             }
         }
         if contains(&symbol.value) {
+            // A power port's net name is part of the port, so a hit selects
+            // the port (docs/DECISIONS.md, 2026-11-07).
+            let kind = if symbol.is_power {
+                SelectedKind::Symbol
+            } else {
+                SelectedKind::SymbolValField
+            };
             hits.push(FindHit {
                 kind: FindKind::Value,
-                item: item(SelectedKind::SymbolValField),
+                item: item(kind),
                 target: TextTarget::SymbolValue(symbol.uuid),
                 text: symbol.value.clone(),
                 placement: None,

@@ -578,3 +578,84 @@ fn a_one_line_text_box_is_unchanged_by_the_line_count() {
         (b.min_x, b.min_y, b.max_x, b.max_y)
     );
 }
+
+fn tips(lib: &LibSymbol, sym: &Symbol) -> Vec<(String, Point)> {
+    pin_tips(lib, sym)
+        .map(|(lp, tip)| (lp.pin.number.clone(), tip))
+        .collect()
+}
+
+fn assert_tip(got: Point, x: f64, y: f64) {
+    assert!(
+        (got.x - x).abs() < 1e-9 && (got.y - y).abs() < 1e-9,
+        "expected ({x}, {y}), got {got:?}"
+    );
+}
+
+#[test]
+fn pin_tips_follow_rotation() {
+    let l = lib(vec![], vec![pin(5.0, 0.0, 0.0, 2.0)]);
+    for (rotation, x, y) in [
+        (0.0, 15.0, 20.0),
+        (90.0, 10.0, 15.0),
+        (180.0, 5.0, 20.0),
+        (270.0, 10.0, 25.0),
+    ] {
+        let got = tips(&l, &placed(10.0, 20.0, rotation));
+        assert_eq!(got.len(), 1);
+        assert_tip(got[0].1, x, y);
+    }
+}
+
+#[test]
+fn pin_tips_follow_mirror() {
+    let l = lib(vec![], vec![pin(5.0, 2.0, 0.0, 2.0)]);
+    // Library Y is up, world Y is down: the unmirrored tip is (5, -2).
+    let plain = placed(10.0, 20.0, 0.0);
+    assert_tip(tips(&l, &plain)[0].1, 15.0, 18.0);
+    let mirror_x = Symbol {
+        mirror_x: true,
+        ..plain.clone()
+    };
+    assert_tip(tips(&l, &mirror_x)[0].1, 15.0, 22.0);
+    let mirror_y = Symbol {
+        mirror_y: true,
+        ..plain
+    };
+    assert_tip(tips(&l, &mirror_y)[0].1, 5.0, 18.0);
+}
+
+#[test]
+fn pin_tips_keep_only_the_placed_unit_and_body() {
+    let mut l = lib(vec![], vec![pin(1.0, 0.0, 0.0, 2.0)]);
+    let mut add = |number: &str, unit: u32, body_style: u32| {
+        let mut p = pin(2.0, 0.0, 0.0, 2.0);
+        p.number = number.into();
+        l.pins.push(LibPin {
+            unit,
+            body_style,
+            pin: p,
+        });
+    };
+    add("U1", 1, 1);
+    add("U2", 2, 1);
+    add("ALT", 0, 2);
+    let numbers =
+        |sym: &Symbol| -> Vec<String> { tips(&l, sym).into_iter().map(|(n, _)| n).collect() };
+    let unit2 = Symbol {
+        unit: 2,
+        ..placed(0.0, 0.0, 0.0)
+    };
+    assert_eq!(numbers(&unit2), ["1", "U2"]);
+    let alt = Symbol {
+        unit: 1,
+        body_style: BodyStyle::Alternate,
+        ..placed(0.0, 0.0, 0.0)
+    };
+    assert_eq!(numbers(&alt), ["ALT"]);
+    let normal = Symbol {
+        unit: 1,
+        ..placed(0.0, 0.0, 0.0)
+    };
+    assert_eq!(numbers(&normal), ["1", "U1"]);
+}

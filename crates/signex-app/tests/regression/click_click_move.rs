@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 fn wire(uuid: uuid::Uuid, y: f64) -> Wire {
     Wire {
+        color: None,
         unknown_columns: Default::default(),
         uuid,
         start: Point::new(10.0, y),
@@ -403,7 +404,7 @@ fn deliver(
     at: iced::Point,
     with_ghost: bool,
 ) -> Option<Message> {
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
     let overrides = HashMap::new();
     let class_styles = HashMap::new();
     let message = {
@@ -414,6 +415,9 @@ fn deliver(
             theme_grid: signex_app::render_config::to_iced(&colors.grid),
             theme_paper: signex_app::render_config::to_iced(&colors.paper),
             canvas_colors: colors,
+            graphite: signex_app::canvas::GraphiteCanvasInk::from_tokens(
+                &signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight),
+            ),
             snap_enabled: false,
             snap_grid_mm: 1.27,
             snap_hotspots: false,
@@ -424,6 +428,7 @@ fn deliver(
             auto_focus: false,
             zoom_step: 1.1,
             trackpad_pan: false,
+            wheel_mode: Default::default(),
             draw_mode: signex_app::app::DrawMode::Ortho90,
             current_tool: signex_app::app::Tool::Select,
             window_width: 1400.0,

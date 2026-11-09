@@ -174,13 +174,10 @@ mod tests {
     }
 
     #[test]
-    fn the_wordmark_scale_is_the_product_of_both_factors() {
+    fn the_render_scale_is_the_product_of_both_factors() {
         // 100 % OS scale at 200 % interface scale draws at 2 device px per
-        // logical px, which is the 2x wordmark tier, not the 1x one.
+        // logical px.
         assert_eq!(render_scale(1.0, 2.0), 2.0);
-        assert_eq!(crate::menu_bar::wordmark_tier(render_scale(1.0, 2.0)), 2);
-        assert_eq!(crate::menu_bar::wordmark_tier(1.0), 1);
-        assert_eq!(crate::menu_bar::wordmark_tier(render_scale(1.5, 1.5)), 3);
     }
 }
 

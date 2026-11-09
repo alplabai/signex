@@ -188,6 +188,12 @@ pub const READ_DOCUMENT: &[Operand] = &[
     optional("offset", OperandKind::Text),
     optional("limit", OperandKind::Text),
 ];
+/// `query_pins`: the pins, with their tip positions, of the part a designator
+/// names on one sheet.
+pub const QUERY_PINS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("designator", OperandKind::Text),
+];
 /// Put a net, by its name in the project netlist, in a class of the project
 /// the named sheet belongs to; no `class` takes it out of its listed class.
 pub const ASSIGN_NET_CLASS: &[Operand] = &[

@@ -8,13 +8,15 @@
 //! panel around it).
 
 use iced::widget::canvas::{self, Action, Cache, Geometry};
-use iced::{Point, Rectangle, Renderer, Theme, Vector, mouse};
+use iced::{Color, Point, Rectangle, Renderer, Theme, Vector, mouse};
 
 use crate::canvas::Camera;
 use crate::library::editor::footprint::canvas::{
     BACKDROP_BG, BACKDROP_GRID, BackdropLook, FootprintCanvasState, PreviewFootprint,
     draw_back_layers, draw_backdrop, draw_courtyard, draw_fab, draw_origin, draw_pads, draw_silk,
+    graphite_look_for,
 };
+use crate::library::editor::footprint::layers::LayerPalette;
 use crate::library::editor::footprint::state::SnapOptions;
 
 mod footprint_scale;
@@ -27,6 +29,9 @@ pub struct FootprintPreview<'a> {
     model: &'a PreviewFootprint,
     /// Per-wheel-notch zoom factor.
     zoom_step: f32,
+    /// Graphite ground colour and layer palette; `None` until
+    /// [`Self::with_theme_tokens`] sets them, which paints the black board.
+    graphite: Option<(iced::Color, LayerPalette)>,
 }
 
 impl<'a> FootprintPreview<'a> {
@@ -34,7 +39,22 @@ impl<'a> FootprintPreview<'a> {
         Self {
             model,
             zoom_step: Camera::zoom_step_factor(Camera::ZOOM_STEP_PERCENT_DEFAULT),
+            graphite: None,
         }
+    }
+
+    /// Paint with the Graphite paper / charcoal canvas look and the preview
+    /// palette (crisp pads, neutral courtyard).
+    pub fn with_theme_tokens(mut self, tokens: &signex_types::theme::ThemeTokens) -> Self {
+        let look = graphite_look_for(tokens);
+        self.graphite = Some((look.bg, look.palette().for_preview()));
+        self
+    }
+
+    /// The Graphite ground colour, `None` before the theme is applied.
+    #[cfg(test)]
+    pub(crate) fn ground(&self) -> Option<Color> {
+        self.graphite.map(|(bg, _)| bg)
     }
 }
 
@@ -65,6 +85,9 @@ pub struct PreviewState {
     /// Ctrl state from the last modifiers event; the wheel zooms with it.
     ctrl_held: bool,
     cache: Cache,
+    /// Ground colour the cached drawing was built with; another colour
+    /// (a theme switch) drops the cache.
+    shown_bg: std::cell::Cell<Option<Color>>,
 }
 
 impl PreviewState {
@@ -161,12 +184,13 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
                 state.pan_from = cursor.position();
                 Some(Action::capture())
             }
-            mouse::Event::CursorMoved { position } => {
+            mouse::Event::CursorMoved { .. } => {
                 let last = state.pan_from?;
+                let position = super::symbol_canvas::drag_position(cursor)?;
                 state
                     .camera
                     .pan_by(Vector::new(position.x - last.x, position.y - last.y));
-                state.pan_from = Some(*position);
+                state.pan_from = Some(position);
                 state.user_moved = true;
                 state.cache.clear();
                 Some(Action::request_redraw().and_capture())
@@ -203,19 +227,35 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
             fitted_camera(self.model, Rectangle::new(Point::ORIGIN, bounds.size()))
         };
         let snap = SnapOptions::default();
+        let bg = self.graphite.map_or(BACKDROP_BG, |(bg, _)| bg);
+        if state.shown_bg.replace(Some(bg)) != Some(bg) {
+            state.cache.clear();
+        }
         let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
             let area = Rectangle::new(Point::ORIGIN, bounds.size());
             let look = BackdropLook {
-                bg: BACKDROP_BG,
+                bg,
                 grid: BACKDROP_GRID,
                 sketch: false,
                 snap: &snap,
             };
             draw_backdrop(frame, &camera, area, look);
-            draw_origin(frame, &camera, false);
-            let layers = self.model.layer_input();
-            draw_back_layers(frame, &camera, self.model.silk_b(), self.model.fab_b());
-            draw_fab(frame, &camera, self.model.fab_f());
+            // The legacy yellow crosshair does not read on the paper ground.
+            if self.graphite.is_none() {
+                draw_origin(frame, &camera, false);
+            }
+            let mut layers = self.model.layer_input();
+            if let Some((_, palette)) = self.graphite {
+                layers.palette = palette;
+            }
+            draw_back_layers(
+                frame,
+                &camera,
+                self.model.silk_b(),
+                self.model.fab_b(),
+                layers.palette,
+            );
+            draw_fab(frame, &camera, self.model.fab_f(), layers.palette);
             draw_silk(frame, &camera, &layers);
             draw_courtyard(frame, &camera, &layers);
             draw_pads(frame, &camera, &layers);

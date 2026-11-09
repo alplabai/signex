@@ -444,6 +444,8 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         }
         FootprintEditorMsg::SketchToolClick { .. } => sketch::tools::apply(editor, msg),
         FootprintEditorMsg::ToggleLayer(..)
+        | FootprintEditorMsg::LayersShowAllClicked
+        | FootprintEditorMsg::LayersTopSideOnlyClicked
         | FootprintEditorMsg::ToggleAutoFit
         | FootprintEditorMsg::SetMode(..)
         | FootprintEditorMsg::TogglePlacementPause
@@ -547,6 +549,8 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | SelectPad(_)
         | SelectSilkF(_)
         | ToggleLayer(_)
+        | LayersShowAllClicked
+        | LayersTopSideOnlyClicked
         | SetPadsTool(_)
         | ToolEscape
         | ToggleActiveBarMenu(_)

@@ -388,7 +388,7 @@ fn the_bar_draws_in_the_browser_and_the_picker_with_a_between_filter() {
         &bounds,
     );
     state.sync_view_caches();
-    let tokens = theme_tokens(ThemeId::Signex);
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
 
     drop(crate::library::browser::view(
         &root,
