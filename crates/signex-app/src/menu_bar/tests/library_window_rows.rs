@@ -120,6 +120,71 @@ fn library_editor_focuses_an_open_browser_tab_without_opening_another() {
     );
 }
 
+fn open_browser(app: &mut Signex, path: &std::path::Path) {
+    let task = app.update(Message::Library(
+        crate::library::LibraryMessage::OpenLibraryBrowser(path.to_path_buf()),
+    ));
+    settle(app, task);
+}
+
+#[test]
+fn library_editor_keeps_the_active_browser_tab_over_a_later_one() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, [first, second]) = schematic_and_two_libraries(dir.path());
+    open_browser(&mut app, &first);
+    open_browser(&mut app, &second);
+    let first_tab = app
+        .document_state
+        .tabs
+        .iter()
+        .position(|tab| tab.path == first)
+        .expect("first browser tab");
+    app.document_state.active_tab = first_tab;
+    app.sync_active_tab();
+    let tabs = app.document_state.tabs.len();
+
+    let task = click(&mut app, "Tools/Library Editor");
+    settle(&mut app, task);
+    assert_eq!(app.document_state.tabs.len(), tabs, "no new tab");
+    assert_eq!(active_browser(&app), Some(first));
+}
+
+#[test]
+fn library_editor_opens_the_library_of_the_active_editor_tab() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, [_, second]) = schematic_and_two_libraries(dir.path());
+    let symbol = second
+        .parent()
+        .expect("library folder")
+        .join("symbols")
+        .join("part.snxsym");
+    let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
+    app.document_state.symbol_editors.insert(
+        symbol.clone(),
+        crate::app::SymbolDocument::new(symbol.clone(), file),
+    );
+    app.document_state.tabs.push(TabInfo {
+        title: "part".into(),
+        path: symbol.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::SymbolEditor(symbol),
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.sync_active_tab();
+    assert_eq!(app.active_editor_library_root(), Some(second.clone()));
+    let tabs = app.document_state.tabs.len();
+
+    let task = click(&mut app, "Tools/Library Editor");
+    settle(&mut app, task);
+    assert_eq!(app.document_state.tabs.len(), tabs + 1, "one tab opened");
+    assert_eq!(
+        active_browser(&app),
+        Some(second),
+        "the editor's own library, not the first open one"
+    );
+}
+
 #[test]
 fn close_all_documents_is_greyed_with_no_tab() {
     assert!(!row_is_live(&bare_app(), "Window/Close All Documents"));

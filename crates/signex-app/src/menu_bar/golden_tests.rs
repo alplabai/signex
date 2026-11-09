@@ -204,6 +204,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("open_components_panel", "PlaceComponent"),
     ("place_power_symbol", "PlacePowerPort"),
     ("place_junction", "PlaceJunction"),
+    // #2247: fixture names only; no `MenuMessage` variant carries these.
     ("place_sheet_entry", "PlaceSheetEntry"),
     ("open_library_browser", "OpenLibraryEditor"),
     ("close_all_documents", "CloseAllDocuments"),

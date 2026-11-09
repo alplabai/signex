@@ -92,7 +92,8 @@ impl Signex {
     }
 
     /// The library Tools ▸ Library Editor shows (#2247): the active Library
-    /// Browser tab, else the last one in the tab strip, else the first open
+    /// Browser tab, else the library of the active symbol or footprint
+    /// editor, else the last browser tab in the strip, else the first open
     /// library. `None` with no library open, which greys the row.
     pub(crate) fn library_editor_target(&self) -> Option<std::path::PathBuf> {
         let tabs = &self.document_state.tabs;
@@ -102,6 +103,7 @@ impl Signex {
         };
         tabs.get(self.document_state.active_tab)
             .and_then(browser)
+            .or_else(|| self.active_editor_library_root())
             .or_else(|| tabs.iter().rev().find_map(browser))
             .or_else(|| {
                 self.library
