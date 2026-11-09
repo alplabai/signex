@@ -47,7 +47,8 @@ impl Signex {
     }
 
     /// The unloaded schematic documents `command` reads: the one a
-    /// `read_document` names, every one for `resolve` and `find_items`.
+    /// `read_document` or `query_pins` names, every one for `resolve` and
+    /// `find_items`.
     fn unloaded_sheets_wanted(
         &self,
         command: &AppCommandId,
@@ -57,7 +58,7 @@ impl Signex {
             entry.key.is_none() && entry.kind == DocumentKind::Schematic && entry.path.is_some()
         };
         match command.as_str() {
-            "read_document" => match args.operand("document") {
+            "read_document" | "query_pins" => match args.operand("document") {
                 Some(OperandValue::Document(target)) => self
                     .resolve_document_target(target)
                     .ok()
