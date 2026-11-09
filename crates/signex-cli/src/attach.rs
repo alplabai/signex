@@ -18,6 +18,7 @@ use crate::edits::{authorize_edits, named_document_paths};
 use crate::policy::{Approved, Policy};
 use crate::protocol::{Mode, Request, ResultLine, Status};
 use crate::roots::folder_and_roots;
+use crate::scrub::{scrub_changed, scrub_data, unknown_id};
 
 pub struct Attached {
     connection: Connection,
@@ -97,9 +98,37 @@ impl Attached {
         if capability_of(approved.meta).writes_files() {
             policy.check_write_targets(&named, roots).map_err(refused)?;
         }
-        connection
+        let mut reply = connection
             .ask(approved.command.as_str(), &approved.operands)
-            .map_err(|why| (Status::Failed, why))
+            .map_err(|why| (Status::Failed, why))?;
+        // The app answers across every project it has open: this run sees only
+        // what lies inside its own folders.
+        let inside = |text: &str| policy.check_resolved(Path::new(text), roots, false).is_ok();
+        reply.changed = scrub_changed(reply.changed, &inside);
+        if capability_of(approved.meta) == Capability::Read {
+            // Log lines are free text that may name any open project's files.
+            reply.messages.clear();
+        }
+        if let Some(data) = reply.data.take() {
+            reply.data = match scrub_data(data, &inside) {
+                Some(data) => Some(data),
+                // Not revealed to exist: the same answer as for an unknown id.
+                None if approved.command.as_str() == "resolve" => {
+                    let id = approved
+                        .operands
+                        .iter()
+                        .find(|(name, _)| name == "id")
+                        .map_or("", |(_, id)| id.as_str());
+                    Some(unknown_id(id))
+                }
+                None => {
+                    return Err(refused(
+                        "the answer names files outside the folders this run may use".into(),
+                    ));
+                }
+            };
+        }
+        Ok(reply)
     }
 
     fn blank(&self, seq: u64, status: Status) -> ResultLine {

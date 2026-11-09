@@ -357,11 +357,13 @@ impl Signex {
         }
         // A headless `signex-cli` run is editing it with no window: opening
         // it here would be a second editor of one file (#1924).
-        if let Some(pid) = self.headless_holder_of(project_path) {
+        if let Some((pid, entry)) = self.headless_holder_of(project_path) {
             anyhow::bail!(
                 "{} is being edited by a headless signex-cli run (process {pid}), so it was \
-                 not opened. Open it again when that run has ended.",
-                super::save::file_label(project_path)
+                 not opened. Open it again when that run has ended; if none is running, \
+                 remove {}",
+                super::save::file_label(project_path),
+                entry.display()
             );
         }
         let mut data = signex_types::project::parse_project(project_path)

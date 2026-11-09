@@ -275,9 +275,11 @@ impl Signex {
     /// `project`, if one does: the app does not open a project an agent is
     /// editing without a window. Asked whether or not agent connections are
     /// on; a few `stat`s and one small read, like the alias check beside it.
-    /// A headless app is the run that holds it (or runs beside another run,
-    /// as it always could): it never refuses.
-    pub(crate) fn headless_holder_of(&self, project: &std::path::Path) -> Option<u32> {
+    /// A headless app is the run that holds it: it never refuses.
+    pub(crate) fn headless_holder_of(
+        &self,
+        project: &std::path::Path,
+    ) -> Option<(u32, std::path::PathBuf)> {
         if self.headless_answers().is_some() {
             return None;
         }

@@ -111,6 +111,16 @@ in the middle of continues.
 - **Same result lines.** Each reply line has the headless shape, with `"mode":
   "attached"`; `messages` are what the app logged during the command and
   `changed` the documents whose content or unsaved state differ.
+- **Only this run's folders are shown.** The app answers a query across every
+  project it has open, so the CLI filters each answer before it prints it:
+  an object whose `path` lies outside the folders this run may use (the
+  project folder and `--allow-path`) is dropped, and so is the object that
+  holds it (an element whose `document` is outside is dropped; `documents`,
+  `elements` and `not_loaded` lose those entries, and `count` is recomputed).
+  `resolve` of an id outside answers `{"found": false, "what": "unknown"}`,
+  the same as for an id that does not exist. `changed` keeps only files
+  inside. The app's log lines (`messages`) of a query are not shown at all:
+  they are free text that may name any open project's files.
 - **Policy first, the app's allowlist on top.** Capabilities, `--save`,
   `--allow-path` and the input limits are applied to every command, and to
   every edit inside `apply_edits`, before anything is sent. The app then
@@ -144,14 +154,23 @@ in the middle of continues.
 
 ### Holding the project
 
-A headless run holds its project for the run: it writes an entry of kind
-`headless` for the project (no endpoint) in the same registry, and removes it
-when the run ends, however it ends (an error, a panic, a refused command).
+A headless run holds its project for the run: it takes an exclusive lock on
+the project's lock file in the registry folder and writes an entry of kind
+`headless` for the project (no endpoint). It removes both when the run ends
+(an error, a panic, a refused command). A run killed by a signal cannot clean
+up, but the kernel drops its lock with the process, so its entry is found stale
+at once, whatever process reuses its id; the next run or Signex removes it.
 A Signex that opens the project meanwhile refuses with a line in Messages and
-an Open Failed notice, and changes nothing; it opens once the run has ended.
-A crashed run leaves an entry that is stale once its process is gone. A
-headless run that finds another headless run holding the project goes on as
-before and leaves that run's entry alone.
+an Open Failed notice that names the entry file, and changes nothing; it
+opens once the run has ended.
+
+A headless run (default or `--headless`) that finds another headless run
+holding the project is refused with "the project is held by another
+signex-cli run (pid N)" and exit 2. A run never goes without its hold: if it
+cannot read the registry (a folder others can enter, a newer entry format), or
+cannot write its entry, it fails with exit 2. If a running Signex registered
+the project between the look and the hold, a default run attaches to it; a
+forced `--headless` fails.
 
 ## Security
 

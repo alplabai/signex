@@ -68,16 +68,6 @@ pub(super) fn entry_file_name(canonical: &Path) -> String {
 /// A project that cannot be resolved is named in the error, after the rest
 /// was done.
 pub(super) fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<(), String> {
-    sync_as(Kind::Gui, dir, owner, projects)
-}
-
-/// [`sync`] for a holder of `kind`.
-pub(super) fn sync_as(
-    kind: Kind,
-    dir: &Path,
-    owner: &Owner,
-    projects: &[PathBuf],
-) -> Result<(), String> {
     let registry = dir.join(REGISTRY_DIR);
     files::prepare_dir(&registry)?;
     let mut wanted = BTreeSet::new();
@@ -93,9 +83,17 @@ pub(super) fn sync_as(
         let name = entry_file_name(&canonical);
         // The other instance of this project that is alive keeps its entry.
         let existing = read_entry(&registry.join(&name));
+        // An entry a newer Signex wrote is not ours to judge or replace.
+        if existing.as_ref().is_some_and(|entry| !is_known(entry)) {
+            problems.push(format!(
+                "{} has an entry in a newer format, which is left alone",
+                canonical.display()
+            ));
+            continue;
+        }
         let entry = Entry {
             format: FORMAT,
-            kind,
+            kind: Kind::Gui,
             project: canonical.to_string_lossy().into_owned(),
             pid: owner.pid,
             socket: owner.endpoint.clone(),
@@ -150,13 +148,17 @@ fn may_take_over(existing: Option<&Entry>, owner: &Owner, live: impl Fn(&Entry) 
 /// boot id gives in `dir`, and only that endpoint is probed. An entry that
 /// names anything else (a link, another folder, a network path) is stale.
 ///
-/// A headless run has no endpoint: its entry is live while its process runs.
+/// A headless run has no endpoint: its entry is live while its process holds
+/// the project's lock file, a kernel lock that dies with the process, so a
+/// killed run and a reused process id are both stale (see `lock_is_held`).
 pub(super) fn entry_is_live(dir: &Path, entry: &Entry) -> bool {
     if !is_boot_id(&entry.boot_id) {
         return false;
     }
     match entry.kind {
-        Kind::Headless => entry.socket.is_empty() && pid_alive(entry.pid),
+        Kind::Headless => {
+            entry.socket.is_empty() && lock_is_held(&lock_path(dir, Path::new(&entry.project)))
+        }
         Kind::Gui => {
             entry.socket == endpoint_name(dir, &entry.boot_id)
                 && pid_alive(entry.pid)
@@ -166,12 +168,98 @@ pub(super) fn entry_is_live(dir: &Path, entry: &Entry) -> bool {
 }
 
 /// The process of a live headless run that holds `canonical` (a project's
-/// canonical path), if one does: the GUI does not open a project a headless
-/// run is editing.
-pub(super) fn held_by_headless(dir: &Path, canonical: &Path) -> Option<u32> {
+/// canonical path), and the entry file that says so, if one does: the GUI does
+/// not open a project a headless run is editing. A runtime folder that is not
+/// ours and private, or an entry that is not a plain file of ours in a format
+/// this app knows, holds nothing.
+pub(super) fn held_by_headless(dir: &Path, canonical: &Path) -> Option<(u32, PathBuf)> {
+    if let Err(why) = files::check_dir(dir) {
+        tracing::debug!("agent registry not read: {why}");
+        return None;
+    }
     let path = dir.join(REGISTRY_DIR).join(entry_file_name(canonical));
-    let entry = read_entry(&path)?;
-    (entry.kind == Kind::Headless && entry_is_live(dir, &entry)).then_some(entry.pid)
+    let entry = read_entry(&path).filter(is_known)?;
+    (entry.kind == Kind::Headless && entry_is_live(dir, &entry)).then_some((entry.pid, path))
+}
+
+/// Whether this app reads the format of `entry`: a newer one is data of a
+/// Signex that knows more, never judged stale and never replaced.
+pub(super) fn is_known(entry: &Entry) -> bool {
+    entry.format <= FORMAT
+}
+
+/// The lock file of the project at `canonical` in `dir`, beside its entry.
+pub(super) fn lock_path(dir: &Path, canonical: &Path) -> PathBuf {
+    let name = entry_file_name(canonical).replace(".json", ".lock");
+    dir.join(REGISTRY_DIR).join(name)
+}
+
+/// Open (making it if need be, 0600, never through a link) and exclusively
+/// lock the lock file at `path`. The lock is the run's life: the kernel drops
+/// it when the process ends, however it ends. Fails if another process holds it.
+pub(super) fn acquire_lock(path: &Path) -> Result<std::fs::File, String> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| format!("cannot open {}: {error}", path.display()))?;
+    let meta = file.metadata().map_err(|error| error.to_string())?;
+    if !meta.is_file() || !owned_by_us(&meta) {
+        return Err(format!(
+            "{} is not a plain file of this user",
+            path.display()
+        ));
+    }
+    match file.try_lock() {
+        Ok(()) => Ok(file),
+        Err(std::fs::TryLockError::WouldBlock) => {
+            Err("the project is held by another signex-cli run".to_string())
+        }
+        Err(std::fs::TryLockError::Error(error)) => {
+            Err(format!("cannot lock {}: {error}", path.display()))
+        }
+    }
+}
+
+/// Is the lock file at `path` locked by a living process? Taking the lock
+/// proves its holder is gone (the lock is released at once); a file that is
+/// missing or not a plain file of ours holds nothing.
+fn lock_is_held(path: &Path) -> bool {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let Ok(file) = options.open(path) else {
+        return false;
+    };
+    let plain = file
+        .metadata()
+        .is_ok_and(|meta| meta.is_file() && owned_by_us(&meta));
+    plain && matches!(file.try_lock(), Err(std::fs::TryLockError::WouldBlock))
+}
+
+/// Whether `meta` is a file of this user (where the system says who owns it).
+fn owned_by_us(meta: &std::fs::Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        meta.uid() == files::own_uid()
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = meta;
+        true
+    }
 }
 
 /// Does a socket answer a connection? The connect does not block, so a peer
@@ -316,9 +404,9 @@ fn remove_own_except(registry: &Path, owner: &Owner, keep: &BTreeSet<String>) ->
             continue;
         }
         let path = item.path();
-        if read_entry(&path)
-            .is_some_and(|entry| entry.pid == owner.pid && entry.boot_id == owner.boot_id)
-            && let Err(why) = files::remove_if_ours(&path)
+        if read_entry(&path).is_some_and(|entry| {
+            is_known(&entry) && entry.pid == owner.pid && entry.boot_id == owner.boot_id
+        }) && let Err(why) = files::remove_if_ours(&path)
         {
             problems.push(why);
         }
@@ -326,18 +414,31 @@ fn remove_own_except(registry: &Path, owner: &Owner, keep: &BTreeSet<String>) ->
     problems
 }
 
-/// The entry in the file at `path`, if it is a small regular file holding one.
+/// The entry in the file at `path`, if it is a small plain file of this user
+/// holding one. The file is opened without following a link and without
+/// blocking (a FIFO put in its place is not opened for reading), and checked
+/// on the descriptor it was opened as, so a swap after the open changes nothing.
 pub(super) fn read_entry(path: &Path) -> Option<Entry> {
-    let meta = std::fs::symlink_metadata(path).ok()?;
-    if !meta.file_type().is_file() {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(not(unix))]
+    {
+        if std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink()) {
+            return None;
+        }
+    }
+    let file = options.open(path).ok()?;
+    let meta = file.metadata().ok()?;
+    if !meta.is_file() || meta.len() > MAX_ENTRY_BYTES || !owned_by_us(&meta) {
         return None;
     }
     let mut text = String::new();
-    std::fs::File::open(path)
-        .ok()?
-        .take(MAX_ENTRY_BYTES)
-        .read_to_string(&mut text)
-        .ok()?;
+    file.take(MAX_ENTRY_BYTES).read_to_string(&mut text).ok()?;
     serde_json::from_str(&text).ok()
 }
 
@@ -358,6 +459,15 @@ mod tests {
             .prefix("snx-1924-registry")
             .tempdir()
             .expect("temp dir")
+    }
+
+    /// A scratch folder only this user can enter, as the runtime folder is.
+    #[cfg(unix)]
+    fn private_scratch() -> tempfile::TempDir {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = scratch();
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        dir
     }
 
     fn entries(dir: &Path) -> Vec<String> {
@@ -603,44 +713,148 @@ mod tests {
         assert_eq!(serde_json::to_value(&headless).unwrap()["kind"], "headless");
     }
 
-    /// Process 1 is always running; a pid above every system's limit never is.
+    /// Write the entry of a headless run `pid` of `format` for the project `a`.
+    #[cfg(unix)]
+    fn plant_headless(dir: &Path, a: &Path, pid: u32, format: u32) -> PathBuf {
+        let registry = dir.join(REGISTRY_DIR);
+        files::prepare_dir(&registry).unwrap();
+        let canonical = std::fs::canonicalize(a).unwrap();
+        let entry = Entry {
+            format,
+            kind: Kind::Headless,
+            project: canonical.to_string_lossy().into_owned(),
+            pid,
+            socket: String::new(),
+            boot_id: CC.into(),
+        };
+        let path = registry.join(entry_file_name(&canonical));
+        std::fs::write(&path, serde_json::to_string(&entry).unwrap()).unwrap();
+        path
+    }
+
+    /// The headless run's lock on the project `a`, held by this test.
+    #[cfg(unix)]
+    fn hold_lock(dir: &Path, a: &Path) -> std::fs::File {
+        let canonical = std::fs::canonicalize(a).unwrap();
+        acquire_lock(&lock_path(dir, &canonical)).expect("a lock")
+    }
+
+    /// A headless entry is live while its lock is held, whatever its pid
+    /// says: process 1 is always running, and holds nothing here.
     #[cfg(unix)]
     #[test]
-    fn a_live_headless_run_holds_a_project_that_only_it_or_its_end_releases() {
-        let dir = scratch();
+    fn a_headless_hold_is_live_while_its_lock_is_held_and_stale_once_it_is_not() {
+        let dir = private_scratch();
+        files::prepare_dir(&dir.path().join(REGISTRY_DIR)).unwrap();
         let a = project(dir.path(), "a.snxprj");
         let canonical = std::fs::canonicalize(&a).unwrap();
-        let headless = |pid: u32| Owner {
-            pid,
-            boot_id: CC.into(),
-            endpoint: String::new(),
-        };
-        sync_as(
-            Kind::Headless,
-            dir.path(),
-            &headless(1),
-            std::slice::from_ref(&a),
-        )
-        .unwrap();
-        assert_eq!(held_by_headless(dir.path(), &canonical), Some(1));
-
+        let entry = plant_headless(dir.path(), &a, 1, FORMAT);
+        let lock = hold_lock(dir.path(), &a);
+        assert_eq!(held_by_headless(dir.path(), &canonical), Some((1, entry)));
         // The app cannot register over it.
         let why = sync(dir.path(), &owner(41, "bb"), std::slice::from_ref(&a)).unwrap_err();
         assert!(why.contains("also open in process 1"), "{why}");
 
-        // A run whose process is gone holds nothing, and the app takes over.
-        sync_as(
-            Kind::Headless,
-            dir.path(),
-            &headless(2_000_000_000),
-            std::slice::from_ref(&a),
-        )
-        .unwrap();
+        // The holder is gone: the kernel dropped its lock. Its pid is reused
+        // (process 1 runs), which makes no difference.
+        drop(lock);
+        assert!(pid_alive(1));
         assert_eq!(held_by_headless(dir.path(), &canonical), None);
         sync(dir.path(), &owner(41, "bb"), std::slice::from_ref(&a)).expect("taken over");
         assert_eq!(entry_pid(dir.path(), &a), 41);
         // An app's entry is never a headless hold.
         assert_eq!(held_by_headless(dir.path(), &canonical), None);
+    }
+
+    /// A second holder cannot take the lock, and the file is not a lock when
+    /// it is a link.
+    #[cfg(unix)]
+    #[test]
+    fn the_lock_is_exclusive_and_never_taken_through_a_link() {
+        let dir = scratch();
+        files::prepare_dir(&dir.path().join(REGISTRY_DIR)).unwrap();
+        let a = project(dir.path(), "a.snxprj");
+        let first = hold_lock(dir.path(), &a);
+        let canonical = std::fs::canonicalize(&a).unwrap();
+        let second = acquire_lock(&lock_path(dir.path(), &canonical)).unwrap_err();
+        assert!(
+            second.contains("held by another signex-cli run"),
+            "{second}"
+        );
+        drop(first);
+
+        let path = lock_path(dir.path(), &canonical);
+        std::fs::remove_file(&path).unwrap();
+        let target = dir.path().join("elsewhere");
+        std::fs::write(&target, "x").unwrap();
+        std::os::unix::fs::symlink(&target, &path).unwrap();
+        assert!(acquire_lock(&path).is_err(), "a link was locked");
+        assert!(!lock_is_held(&path));
+    }
+
+    /// An entry in a format newer than this app's is not its to judge: it is
+    /// no hold, is not replaced and is not removed.
+    #[cfg(unix)]
+    #[test]
+    fn an_entry_in_a_newer_format_is_left_alone_by_every_reader() {
+        let dir = scratch();
+        let a = project(dir.path(), "a.snxprj");
+        let canonical = std::fs::canonicalize(&a).unwrap();
+        let entry = plant_headless(dir.path(), &a, std::process::id(), FORMAT + 1);
+        let before = std::fs::read(&entry).unwrap();
+        let _lock = hold_lock(dir.path(), &a);
+
+        assert_eq!(held_by_headless(dir.path(), &canonical), None);
+        let why = sync(dir.path(), &owner(41, "bb"), std::slice::from_ref(&a)).unwrap_err();
+        assert!(why.contains("newer format"), "{why}");
+        // Its pid and boot id are the ones of this run: still not removed.
+        let ours = Owner {
+            pid: std::process::id(),
+            boot_id: CC.into(),
+            endpoint: String::new(),
+        };
+        remove_all(dir.path(), &ours).unwrap();
+        assert_eq!(std::fs::read(&entry).unwrap(), before);
+    }
+
+    /// The GUI reads the registry on the update thread: a runtime folder that
+    /// is not private, and an entry that is a link or a FIFO, hold nothing and
+    /// block nothing.
+    #[cfg(unix)]
+    #[test]
+    fn the_registry_is_read_only_from_a_private_folder_and_plain_entries() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = private_scratch();
+        files::prepare_dir(&dir.path().join(REGISTRY_DIR)).unwrap();
+        let a = project(dir.path(), "a.snxprj");
+        let canonical = std::fs::canonicalize(&a).unwrap();
+        let entry = plant_headless(dir.path(), &a, 1, FORMAT);
+        let _lock = hold_lock(dir.path(), &a);
+        assert!(held_by_headless(dir.path(), &canonical).is_some());
+
+        // A folder others can enter is not trusted.
+        let mode =
+            |bits| std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(bits));
+        mode(0o755).unwrap();
+        assert_eq!(held_by_headless(dir.path(), &canonical), None);
+        mode(0o700).unwrap();
+
+        // A link in the entry's place is not followed.
+        let plain = std::fs::read(&entry).unwrap();
+        std::fs::remove_file(&entry).unwrap();
+        let target = dir.path().join("target.json");
+        std::fs::write(&target, &plain).unwrap();
+        std::os::unix::fs::symlink(&target, &entry).unwrap();
+        assert_eq!(held_by_headless(dir.path(), &canonical), None);
+        assert!(read_entry(&entry).is_none());
+
+        // A FIFO is not opened for reading: this returns instead of hanging.
+        std::fs::remove_file(&entry).unwrap();
+        let fifo = std::ffi::CString::new(entry.to_str().unwrap()).unwrap();
+        // SAFETY: a valid NUL-terminated path.
+        assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+        assert_eq!(held_by_headless(dir.path(), &canonical), None);
+        assert!(read_entry(&entry).is_none());
     }
 
     #[test]

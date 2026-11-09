@@ -214,6 +214,12 @@ impl Live {
         drop(self.child.stdin.take());
         self.child.wait().expect("signex-cli ends");
     }
+
+    /// End the run the way a signal does: no cleanup runs.
+    pub fn kill(mut self) {
+        self.child.kill().expect("kill signex-cli");
+        self.child.wait().expect("signex-cli ends");
+    }
 }
 
 /// Every file under `dir` with its bytes.

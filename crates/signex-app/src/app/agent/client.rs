@@ -7,7 +7,7 @@
 
 use std::io::{BufRead as _, BufReader, Read as _, Write as _};
 use std::path::{Path, PathBuf};
-#[cfg(unix)]
+use std::sync::mpsc;
 use std::time::Duration;
 
 use serde_json::{Map, Value};
@@ -18,11 +18,13 @@ use super::reply::{MessageLine, Status};
 use super::token::boot_id;
 use super::transport::endpoint_name;
 
-/// How long a reply may take before the client gives up (Unix; a pipe has no
-/// timeout). The app answers inside its update loop, so a long edit list can
-/// take a while.
-#[cfg(unix)]
+/// How long a reply may take before the client gives up. The app answers
+/// inside its update loop, so a long edit list can take a while.
 const REPLY_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// How long a connect may take: a socket whose backlog is full blocks it.
+#[cfg(unix)]
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The longest reply line read, in bytes.
 const MAX_REPLY_BYTES: u64 = 64 * 1024 * 1024;
@@ -103,6 +105,14 @@ pub fn lookup(dir: &Path, project: &Path) -> Result<Lookup, String> {
     let Some(entry) = registry::read_entry(&path) else {
         return Ok(Lookup::Free);
     };
+    // Not ours to judge: neither live nor stale, and never removed or replaced.
+    if !registry::is_known(&entry) {
+        return Err(format!(
+            "{} is in format {}, newer than this signex-cli reads; not touching it",
+            path.display(),
+            entry.format
+        ));
+    }
     let names_this_project = entry.project == canonical.to_string_lossy();
     if !names_this_project || !registry::entry_is_live(dir, &entry) {
         return Ok(Lookup::Stale(StaleEntry { path, entry }));
@@ -118,34 +128,74 @@ pub fn lookup(dir: &Path, project: &Path) -> Result<Lookup, String> {
 }
 
 /// A headless run's hold on a project: an entry of kind `headless` that a GUI
-/// opening the project sees. Dropping it removes the entry, on every way out
-/// of the run.
+/// opening the project sees, and an exclusive lock on the project's lock file
+/// for the run's whole life. The entry is live while the lock is held, and the
+/// kernel drops the lock with the process, so a run killed by a signal and a
+/// reused process id are both found stale. Dropping the hold removes the entry
+/// and the lock file.
 #[derive(Debug)]
 pub struct Hold {
     dir: PathBuf,
     owner: Owner,
+    lock_path: PathBuf,
+    _lock: std::fs::File,
 }
 
-/// Hold `project` for this process. Fails if the entry cannot be written or a
-/// live holder keeps it.
+/// Hold `project` for this process. Fails if another headless run holds it,
+/// a running app has it registered, or the entry cannot be written.
 pub fn hold(dir: &Path, project: &Path) -> Result<Hold, String> {
     let canonical = canonical(project)?;
     files::prepare_dir(dir)?;
+    let registry = dir.join(REGISTRY_DIR);
+    files::prepare_dir(&registry)?;
+    // The lock first: with it no other run holds the project, so an entry of a
+    // headless run found here is a dead run's and is replaced.
+    let lock_path = registry::lock_path(dir, &canonical);
+    let lock = registry::acquire_lock(&lock_path)?;
+    let entry_file = registry.join(registry::entry_file_name(&canonical));
+    if let Some(existing) = registry::read_entry(&entry_file) {
+        if !registry::is_known(&existing) {
+            return Err(format!(
+                "{} is in a newer format; not replacing it",
+                entry_file.display()
+            ));
+        }
+        if existing.kind == Kind::Gui && registry::entry_is_live(dir, &existing) {
+            return Err(format!(
+                "{} is also open in process {}, which keeps its entry",
+                canonical.display(),
+                existing.pid
+            ));
+        }
+    }
     let owner = Owner {
         pid: std::process::id(),
         boot_id: boot_id().ok_or("the system has no randomness")?,
         endpoint: String::new(),
     };
-    registry::sync_as(Kind::Headless, dir, &owner, &[canonical])?;
+    let entry = Entry {
+        format: registry::FORMAT,
+        kind: Kind::Headless,
+        project: canonical.to_string_lossy().into_owned(),
+        pid: owner.pid,
+        socket: String::new(),
+        boot_id: owner.boot_id.clone(),
+    };
+    let text = serde_json::to_string_pretty(&entry).map_err(|error| error.to_string())?;
+    files::write_private(&entry_file, text.as_bytes())?;
     Ok(Hold {
         dir: dir.to_path_buf(),
         owner,
+        lock_path,
+        _lock: lock,
     })
 }
 
 impl Drop for Hold {
     fn drop(&mut self) {
-        if let Err(why) = registry::remove_all(&self.dir, &self.owner) {
+        let removed = registry::remove_all(&self.dir, &self.owner)
+            .and_then(|()| files::remove_if_ours(&self.lock_path));
+        if let Err(why) = removed {
             crate::diagnostics::log_warning(format!("could not remove the project hold: {why}"));
         }
     }
@@ -159,39 +209,95 @@ impl GuiPeer {
     pub fn connect(&self) -> Result<Connection, String> {
         let token = read_token(&self.dir.join(format!("{}.token", self.boot_id)))?;
         let stream = open_stream(&endpoint_name(&self.dir, &self.boot_id))?;
-        Ok(Connection {
-            stream: BufReader::new(stream),
-            token,
-        })
+        Connection::new(stream, token)
     }
 }
 
-/// One open connection to a running app.
+/// One open connection to a running app. Replies are read by a thread of
+/// their own, so a wait for one is bounded on every platform.
 pub struct Connection {
-    stream: BufReader<Stream>,
+    writer: Stream,
+    replies: mpsc::Receiver<Result<String, String>>,
     token: String,
+    timeout: Duration,
 }
 
 impl Connection {
+    fn new(stream: Stream, token: String) -> Result<Self, String> {
+        let reader = stream
+            .try_clone()
+            .map_err(|error| format!("cannot read from the running Signex: {error}"))?;
+        let (sender, replies) = mpsc::channel();
+        std::thread::spawn(move || read_replies(reader, &sender));
+        Ok(Self {
+            writer: stream,
+            replies,
+            token,
+            timeout: REPLY_TIMEOUT,
+        })
+    }
+
+    /// Wait at most `timeout` for a reply, instead of the default.
+    #[must_use]
+    pub fn with_reply_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
     /// Send one command and read its reply.
     pub fn ask(&mut self, id: &str, operands: &[(String, String)]) -> Result<Reply, String> {
         let line = request_line(&self.token, id, operands)?;
-        let socket = self.stream.get_mut();
-        socket
+        self.writer
             .write_all(line.as_bytes())
-            .and_then(|()| socket.write_all(b"\n"))
-            .and_then(|()| socket.flush())
+            .and_then(|()| self.writer.write_all(b"\n"))
+            .and_then(|()| self.writer.flush())
             .map_err(|error| format!("sending to the running Signex: {error}"))?;
-        let mut reply = String::new();
-        (&mut self.stream)
-            .take(MAX_REPLY_BYTES)
-            .read_line(&mut reply)
-            .map_err(|error| format!("reading the running Signex's reply: {error}"))?;
-        if !reply.ends_with('\n') {
-            return Err("the running Signex closed the connection without a full reply".into());
+        match self.replies.recv_timeout(self.timeout) {
+            Ok(reply) => parse_reply(reply?.trim_end()),
+            Err(mpsc::RecvTimeoutError::Timeout) => Err(format!(
+                "the running Signex did not answer within {} s",
+                self.timeout.as_secs_f32()
+            )),
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                Err("the connection to the running Signex ended".into())
+            }
         }
-        parse_reply(reply.trim_end())
     }
+}
+
+/// Send each reply line of `stream` until it ends or the connection is dropped.
+fn read_replies(stream: Stream, sender: &mpsc::Sender<Result<String, String>>) {
+    let mut reader = BufReader::new(stream);
+    loop {
+        let mut line = String::new();
+        let read = (&mut reader).take(MAX_REPLY_BYTES).read_line(&mut line);
+        let item = match read {
+            Ok(0) => Err("the running Signex closed the connection without a reply".to_string()),
+            Ok(_) if !line.ends_with('\n') => {
+                Err("the running Signex sent a reply that is cut off".to_string())
+            }
+            Ok(_) => Ok(line),
+            Err(error) => Err(format!("reading the running Signex's reply: {error}")),
+        };
+        let last = item.is_err();
+        if sender.send(item).is_err() || last {
+            return;
+        }
+    }
+}
+
+/// Run `work` on a thread of its own and wait at most `limit` for it. A blocked
+/// call is left behind (the thread ends when it returns), not waited for.
+#[cfg(any(unix, test))]
+fn within<T: Send + 'static>(
+    limit: Duration,
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, String> {
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || sender.send(work()).ok());
+    receiver
+        .recv_timeout(limit)
+        .map_err(|_| format!("timed out after {} s", limit.as_secs_f32()))
 }
 
 /// One request line, without its newline: the token, the id and the operands
@@ -359,11 +465,12 @@ fn open_stream(endpoint: &str) -> Result<Stream, String> {
             "not attaching: {endpoint} is not a socket of this user"
         ));
     }
-    let stream = Stream::connect(endpoint)
+    let path = endpoint.to_string();
+    let stream = within(CONNECT_TIMEOUT, move || Stream::connect(path))
+        .map_err(|why| format!("cannot connect to {endpoint}: {why}"))?
         .map_err(|error| format!("cannot connect to {endpoint}: {error}"))?;
     stream
-        .set_read_timeout(Some(REPLY_TIMEOUT))
-        .and_then(|()| stream.set_write_timeout(Some(REPLY_TIMEOUT)))
+        .set_write_timeout(Some(REPLY_TIMEOUT))
         .map_err(|error| format!("cannot set a timeout on {endpoint}: {error}"))?;
     Ok(stream)
 }
@@ -389,6 +496,16 @@ fn open_stream(pipe: &str) -> Result<Stream, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_call_that_blocks_is_given_up_on_after_its_limit() {
+        let slow = within(Duration::from_millis(50), || {
+            std::thread::sleep(Duration::from_secs(5));
+        });
+        assert!(slow.unwrap_err().contains("timed out"));
+        let fast = within(Duration::from_secs(5), || 7);
+        assert_eq!(fast, Ok(7));
+    }
 
     #[test]
     fn a_request_line_carries_the_token_the_id_texts_and_the_edit_list_as_json() {

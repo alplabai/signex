@@ -190,10 +190,23 @@ A client finds its project's entry by the digest of the canonical path and
 reads the token from `<boot_id>.token` in the runtime directory. An entry is
 live when its boot id has the right form and its process runs and, for a `gui`
 entry, `socket` is the endpoint that boot id names and answers; a `headless`
-entry is live while its process runs. A client never connects to anything an
-entry names: it derives the endpoint from the boot id. An entry that is not
-live is stale: the client removes it, after the same owner and link check the
-app makes.
+entry is live while a process holds the exclusive lock on the project's lock
+file, `registry/<digest>.lock`, beside the entry. The run takes that lock for
+its whole life and the kernel drops it with the process, so a run killed by a
+signal is found stale at once and a reused process id means nothing: a reader
+tries the lock without waiting, and if it gets it, the holder is gone. A client
+never connects to anything an entry names: it derives the endpoint from the
+boot id. An entry that is not live is stale: the client removes it, after the
+same owner and link check the app makes.
+
+Every reader opens an entry without following a link and without blocking (a
+FIFO put in its place is not opened for reading), and checks the descriptor it
+opened: a plain file of this user, no larger than 64 KiB. The GUI also checks
+the runtime folder first (a real folder of this user that nobody else can
+enter); one that is not holds nothing. An entry whose `format` is higher than
+the reader knows is not the reader's: it is neither live nor stale, and is
+never removed or replaced (`signex-cli` stops with a message; the app leaves it
+and logs).
 
 Two instances with the same project: an app removes only entries that carry
 its own `pid` and `boot_id`, and writes over an entry only if there is none,
@@ -250,9 +263,13 @@ that have ended stay in the quit path's list, which keeps the last 32.
   identification only.
 - `Connection::ask` sends one request line and reads one reply line, in the
   wire format above. A reply that is not the documented shape is an error.
-- `hold` writes the `headless` entry through the registry writer the app
-  uses (one format, one writer); dropping the `Hold` removes it, only if it is
-  still the run's own.
+  Replies are read by a thread of their own and awaited for at most 120 s on
+  every platform; a connect is bounded to 5 s (a full backlog blocks it).
+- `hold` takes the project's lock first, then writes the `headless` entry
+  (one format, the app's file writer). It fails if another run holds the lock or
+  a running app has the project registered; a dead run's entry is replaced.
+  Dropping the `Hold` removes the entry (only if it is still the run's own) and
+  the lock file.
 
 ## The app refuses a held project
 
@@ -262,22 +279,29 @@ Open Failed notice (`<file> is being edited by a headless signex-cli run
 (process N), so it was not opened`), and nothing in the app changes. This
 needs no setting: the registry is read whether or not agent connections are on.
 A project another app holds opens as before (PR A: the registry write logs).
-A headless app (the CLI's own) never refuses, so a run goes on beside another
-as it always could.
+A headless app (the CLI's own) never refuses: it is the run that holds the
+project (a second run is refused before it starts, by `signex-cli`).
+
+Recovery: the notice names the entry file. A hold is live only while its run
+holds the lock, so an entry that stays after its run was killed is stale and is
+ignored; if the notice appears with no run alive (it should not), delete the
+entry file it names.
 
 ## Known limits
 
-- A headless run's hold is live while its process runs: a reused process id
-  keeps a dead run's entry live until that process ends. Remove the entry by
-  hand if that happens.
-- The entry write is not atomic against another writer: two processes that
-  start at the same moment can both find none and both write; the later write
-  wins, and the save-time baseline check remains the backstop.
+- Two processes that start at the same moment can both find no entry: the
+  hold's lock is exclusive, so only one run wins, but an app and a run racing
+  for one project can both register; the later entry write wins, and the
+  save-time baseline check remains the backstop. A stale entry is removed after
+  a re-read that shows it unchanged; an app that rewrites it between that read
+  and the removal can lose its entry, which the app's retry timer restores.
+- The lock is a file lock (`flock`, `LockFileEx`): on a runtime folder on a
+  network file system whose locks are not honoured, a hold is not seen.
 - A Signex with agent connections off has no entry, so a headless run cannot
   know a person has the project open there; and a sheet opened loose, without
   its project, is not refused.
-- On Windows the client has no reply timeout, and has not been run against a
-  real app here.
+- On Windows the client has not been run against a real app here (it is
+  compiled and linted for `x86_64-pc-windows-msvc`).
 - The Windows code (`transport/windows.rs`) is compiled and linted for
   `x86_64-pc-windows-msvc` on its own, and has transport-level tests that run
   on the Windows CI job (a round trip, a hundred clients that connect and close

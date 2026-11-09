@@ -19,6 +19,7 @@ pub mod protocol;
 mod roots;
 mod route;
 mod run;
+mod scrub;
 mod session;
 
 pub use run::{RunReport, run};

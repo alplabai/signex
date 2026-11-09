@@ -126,9 +126,60 @@ fn no_entry_is_free_a_live_app_is_found_and_a_live_headless_run_holds() {
     };
     assert_eq!(peer.pid, std::process::id());
 
-    // Process 1 is always running and has no endpoint: a headless hold.
+    // A headless run holds its lock: live, as long as it does.
+    std::fs::remove_file(fx.entry_file()).unwrap();
+    let run = client::hold(&fx.dir, &fx.project).expect("a hold");
+    let pid = std::process::id();
+    assert!(matches!(fx.lookup(), Lookup::Headless { pid: held } if held == pid));
+    // A second run cannot hold what the first does.
+    let why = client::hold(&fx.dir, &fx.project).unwrap_err();
+    assert!(why.contains("held by another signex-cli run"), "{why}");
+    drop(run);
+
+    // Process 1 is always running, but holds no lock: its entry is a dead
+    // run's whose process id was reused.
     fx.plant(&fx.entry(Kind::Headless, 1, CC));
-    assert!(matches!(fx.lookup(), Lookup::Headless { pid: 1 }));
+    assert!(matches!(fx.lookup(), Lookup::Stale(_)));
+}
+
+#[test]
+fn an_entry_in_a_newer_format_is_not_touched_by_a_lookup_or_a_hold() {
+    let fx = fixture();
+    let newer = Entry {
+        format: FORMAT + 1,
+        ..fx.entry(Kind::Gui, DEAD_PID, CC)
+    };
+    fx.plant(&newer);
+    let before = std::fs::read(fx.entry_file()).unwrap();
+    let why = client::lookup(&fx.dir, &fx.project).unwrap_err();
+    assert!(why.contains("newer than this signex-cli reads"), "{why}");
+    let why = client::hold(&fx.dir, &fx.project).unwrap_err();
+    assert!(why.contains("newer format"), "{why}");
+    assert_eq!(std::fs::read(fx.entry_file()).unwrap(), before);
+}
+
+/// A server that accepts and never answers must not hang a run.
+#[test]
+fn a_reply_that_never_comes_is_given_up_on() {
+    let fx = fixture();
+    let app = fx.live_app(CC);
+    let Lookup::Gui(peer) = fx.lookup() else {
+        panic!("a live app was not found");
+    };
+    let mut connection = peer
+        .connect()
+        .expect("connected")
+        .with_reply_timeout(std::time::Duration::from_millis(100));
+    // Keep what the listener accepted open and silent.
+    let _silent = loop {
+        if let Ok((stream, _)) = app.accept() {
+            break stream;
+        }
+    };
+    let started = std::time::Instant::now();
+    let why = connection.ask("list_documents", &[]).unwrap_err();
+    assert!(why.contains("did not answer"), "{why}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
 }
 
 #[test]

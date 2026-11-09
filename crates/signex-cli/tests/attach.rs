@@ -195,7 +195,7 @@ fn a_run_with_the_project_open_in_a_running_app_runs_there_and_prints_the_headle
     let app = w.app(&[
         answered(json!({"documents": 1}), &[]),
         json!({"id": "apply_edits", "status": "answered", "data": {"applied": 1},
-            "messages": [], "changed": [doc]}),
+            "messages": [{"level": "INFO", "message": "from the app"}], "changed": [doc]}),
     ]);
     let before = snapshot(&w.fx.dir);
 
@@ -214,8 +214,11 @@ fn a_run_with_the_project_open_in_a_running_app_runs_there_and_prints_the_headle
     assert_eq!(first["id"], "list_documents");
     assert_eq!(first["seq"], 1);
     assert_eq!(first["data"], json!({"documents": 1}));
+    // A query's log lines are not shown (they may name other projects' files);
+    // an edit's are.
+    assert_eq!(first["messages"], json!([]));
     assert_eq!(
-        first["messages"],
+        second["messages"],
         json!([{"level": "INFO", "message": "from the app"}])
     );
     assert_eq!(second["seq"], 2);
@@ -384,6 +387,101 @@ fn a_document_of_another_open_project_is_refused_by_id_and_this_projects_is_not(
     assert_eq!(sent[1]["args"]["document"], SHEET_A);
 }
 
+/// The app answers a query across every project it has open. Each of the five
+/// queries shows this run only what lies inside its own folders: nothing of
+/// another open project's paths, text or log lines reaches standard output.
+#[test]
+fn every_query_answer_is_filtered_to_the_runs_folders() {
+    let w = world();
+    let sheet = w.fx.sheet.to_str().unwrap().to_string();
+    let project = w.project().to_string();
+    let b = OTHER_PROJECT_SHEET;
+    let secret_log = json!([{"level": "INFO", "message": format!("read {b} SECRET-PART")}]);
+    let reply = |id: &str, data: Value, changed: Value| {
+        json!({"id": id, "status": "answered", "data": data,
+            "messages": secret_log, "changed": changed})
+    };
+    let element = |text: &str, path: &str| {
+        json!({"id": "e", "kind": "symbol", "text": text,
+            "document": {"id": "d", "path": path, "name": "n"}})
+    };
+    let app = w.app(&[
+        reply(
+            "list_documents",
+            json!({"count": 2, "documents": [
+                {"id": SHEET_A, "path": sheet, "project": {"path": project}},
+                {"id": SHEET_B, "path": b, "project": {"path": "/somewhere/else/B.snxprj"}}]}),
+            json!([sheet, b]),
+        ),
+        reply(
+            "find_items",
+            json!({"count": 2, "elements": [element("mine", &sheet), element("SECRET-PART", b)],
+                "not_loaded": [b, sheet]}),
+            json!([]),
+        ),
+        reply(
+            "resolve",
+            json!({"found": true, "what": "element", "element": element("SECRET-PART", b)}),
+            json!([]),
+        ),
+        reply(
+            "resolve",
+            json!({"found": true, "what": "element", "element": element("mine", &sheet)}),
+            json!([]),
+        ),
+        // (`document_info` is answered by the stand-in from its document list.)
+        reply(
+            "read_document",
+            json!({"revision": 3, "text": "mine"}),
+            json!([]),
+        ),
+    ]);
+    let commands = jsonl(&[
+        json!({"id": "list_documents"}),
+        json!({"id": "find_items", "args": {"kind": "symbol", "project": "B"}}),
+        json!({"id": "resolve", "args": {"id": "44444444-4444-4444-8444-444444444444"}}),
+        json!({"id": "resolve", "args": {"id": "55555555-5555-4555-8555-555555555555"}}),
+        json!({"id": "document_info", "args": {"document": SHEET_A}}),
+        json!({"id": "read_document", "args": {"document": SHEET_A}}),
+    ]);
+    let out = w.cli(&["run", w.project()], &commands);
+    app.finish();
+
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    assert_eq!(out.lines.len(), 6, "{}", out.stdout);
+    for leaked in ["SECRET-PART", "somewhere/else"] {
+        assert!(
+            !out.stdout.contains(leaked),
+            "{leaked} leaked: {}",
+            out.stdout
+        );
+    }
+    let data = |index: usize| &out.lines[index]["data"];
+    // list_documents: B is gone and the count follows.
+    assert_eq!(data(0)["count"], 1);
+    assert_eq!(data(0)["documents"][0]["id"], SHEET_A);
+    assert_eq!(out.lines[0]["changed"], json!([sheet]));
+    // find_items: B's element is gone, so is B in not_loaded; the count follows.
+    assert_eq!(data(1)["count"], 1);
+    assert_eq!(data(1)["elements"][0]["text"], "mine");
+    assert_eq!(data(1)["not_loaded"], json!([sheet]));
+    // resolve: an element of B is answered as an id that does not exist.
+    assert_eq!(
+        data(2),
+        &json!({"found": false, "what": "unknown",
+            "id": "44444444-4444-4444-8444-444444444444"})
+    );
+    assert_eq!(data(3)["found"], true);
+    assert_eq!(data(3)["element"]["text"], "mine");
+    // document_info and read_document of this project's document are whole.
+    assert_eq!(data(4)["path"], sheet);
+    assert_eq!(data(5)["revision"], 3);
+    // The app's log lines of a query are not shown.
+    for line in &out.lines {
+        assert_eq!(line["messages"], json!([]), "{line}");
+    }
+}
+
 /// Sent with no `document`, the app would act on the person's active
 /// document, which the run's folders were never checked against.
 #[test]
@@ -448,8 +546,12 @@ fn a_stale_entry_that_is_a_link_is_not_followed_or_removed() {
     std::fs::write(&precious, "keep me").unwrap();
     symlink(&precious, w.entry_file()).unwrap();
 
+    // The link is not an entry to read, and the hold is not written through
+    // it: the run does not start, and nothing the link names is touched.
     let out = w.cli(&["run", w.project(), "list_documents"], "");
-    assert_eq!(out.lines[0]["mode"], "headless", "{}", out.stderr);
+    assert_eq!(out.code, Some(2), "{}", out.stderr);
+    assert!(out.stderr.contains("is a link"), "{}", out.stderr);
+    assert!(out.lines.is_empty());
     assert_eq!(std::fs::read_to_string(&precious).unwrap(), "keep me");
     assert!(
         w.entry_file()
@@ -565,19 +667,59 @@ fn the_hold_is_released_when_the_run_fails_to_start_or_ends_with_a_refused_comma
     );
 }
 
+/// A second headless run on a held project is refused, with the pid of the
+/// holder, and the holder's entry is not touched.
 #[test]
-fn a_run_that_finds_another_headless_run_holding_the_project_does_not_take_its_hold() {
+fn a_run_that_finds_another_headless_run_holding_the_project_is_refused() {
     let w = world();
-    // Process 1 is always running; it stands for the other run.
-    w.plant("headless", 1, CC, Path::new(""));
+    let mut other = Live::start_in(&w.runtime, &["run", w.project()]);
+    other.send(&json!({"id": "list_documents"}));
     let theirs = w.entry().unwrap();
+    for flags in [&[][..], &["--headless"][..]] {
+        let mut args = vec!["run", w.project(), "list_documents"];
+        args.extend_from_slice(flags);
+        let out = w.cli(&args, "");
+        assert_eq!(out.code, Some(2), "{flags:?}: {}", out.stderr);
+        let want = format!("held by another signex-cli run (pid {})", other.pid());
+        assert!(out.stderr.contains(&want), "{flags:?}: {}", out.stderr);
+        assert!(out.lines.is_empty(), "{flags:?}: it ran anyway");
+        assert_eq!(w.entry().unwrap(), theirs, "the holder's entry was touched");
+    }
+    other.finish();
+}
+
+/// A runtime folder other users can enter is not trusted, so a run that cannot
+/// tell who holds its project does not go on without holding it.
+#[test]
+fn a_runtime_folder_that_others_can_enter_stops_the_run() {
+    let w = world();
+    std::fs::set_permissions(&w.dir, std::fs::Permissions::from_mode(0o755)).unwrap();
     let out = w.cli(&["run", w.project(), "list_documents"], "");
-    assert_eq!(out.lines[0]["mode"], "headless", "{}", out.stderr);
-    assert_eq!(
-        w.entry().unwrap(),
-        theirs,
-        "the other run's hold was replaced"
-    );
+    assert_eq!(out.code, Some(2), "{}", out.stderr);
+    assert!(out.stderr.contains("wider than 700"), "{}", out.stderr);
+    assert!(out.lines.is_empty(), "it ran without a hold");
+}
+
+/// A run killed by a signal leaves its entry; the kernel dropped its lock, so
+/// the next run finds it stale. The same for a pid that a living process reuses.
+#[test]
+fn a_killed_run_and_a_reused_pid_leave_a_stale_hold_and_the_next_run_goes_on() {
+    let w = world();
+    let mut doomed = Live::start_in(&w.runtime, &["run", w.project()]);
+    doomed.send(&json!({"id": "list_documents"}));
+    assert!(w.entry().is_some());
+    doomed.kill();
+    assert!(w.entry().is_some(), "a killed run cleaned up after itself");
+    let out = w.cli(&["run", w.project(), "list_documents"], "");
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    assert_eq!(out.lines[0]["mode"], "headless");
+    assert!(w.entry().is_none());
+
+    // Process 1 runs for ever and holds no lock.
+    w.plant("headless", 1, CC, Path::new(""));
+    let out = w.cli(&["run", w.project(), "list_documents"], "");
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    assert_eq!(out.lines[0]["mode"], "headless");
 }
 
 #[test]
@@ -604,10 +746,12 @@ fn attach_fails_without_a_live_entry_and_headless_fails_while_an_app_holds_the_p
     );
 
     // A headless run holding it is not a running Signex either.
-    w.plant("headless", 1, CC, Path::new(""));
+    let mut run = Live::start_in(&w.runtime, &["run", w.project()]);
+    run.send(&json!({"id": "list_documents"}));
     let held = w.cli(&["run", w.project(), "list_documents", "--attach"], "");
     assert_eq!(held.code, Some(2));
     assert!(held.stderr.contains("headless run"), "{}", held.stderr);
+    run.finish();
 
     // With a live app: --headless refuses to edit a file open in a window,
     // and --attach works.
