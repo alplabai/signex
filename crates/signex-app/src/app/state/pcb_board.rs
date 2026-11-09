@@ -54,8 +54,9 @@ impl DocumentState {
             .and_then(TabDocument::as_pcb_engine_mut)
     }
 
-    /// A landed save matches the board at `path`, open or parked: its
-    /// current state is the save point. Bookkeeping only, never an edit.
+    /// A landed save matches the open board at `path`: its current state is
+    /// the save point. Bookkeeping only, never an edit. (A parked board is
+    /// dropped by `clear_document_dirty` before this runs.)
     pub(crate) fn mark_board_saved(&mut self, path: &Path) {
         if let Some(engine) = self.board_bookkeeping_mut(path) {
             engine.mark_saved();

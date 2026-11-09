@@ -674,3 +674,75 @@ fn a_stale_completion_for_a_parked_board_undone_to_its_save_point_stays_dirty() 
     let _ = app.handle_app_quit_requested();
     assert!(app.ui_state.app_quit_confirm.is_some(), "quit asks first");
 }
+
+fn restore_finished(app: &mut Signex, path: &Path, generation: u64, edit_stamp: u64) {
+    use crate::app::FileMsg;
+    use crate::app::document_read::ReadRequest;
+    use crate::app::restore_job::{EditStamp, RestoreJobDocument, RestoredFile};
+    let restored = RestoredFile {
+        document: RestoreJobDocument::Pcb(Box::new(board())),
+        bytes: std::sync::Arc::new(Vec::new()),
+    };
+    let _ = app.update(Message::File(FileMsg::HistoryRestoreFinished {
+        request: ReadRequest {
+            path: path.to_path_buf(),
+            generation,
+        },
+        sha: "abc1234".into(),
+        edit_stamp: EditStamp(edit_stamp),
+        result: Ok(Box::new(restored)),
+    }));
+}
+
+fn quit_prompts(app: &mut Signex) -> bool {
+    let _ = app.handle_app_quit_requested();
+    app.ui_state.app_quit_confirm.is_some()
+}
+
+/// Review of c80f757f5: a History restore that wrote the file after the
+/// board's tab closed (parked dirty) must leave no save point that names the
+/// old file, or undo back to it reads clean.
+#[test]
+fn a_restore_written_under_a_parked_board_keeps_it_dirty_through_undo() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    run(&mut app, &path, move_to(FP_A, 7.0));
+    let _ = app.close_tab_parking_dirty(0);
+    assert!(app.document_state.parked_pcb_boards.contains_key(&path));
+    // The worker reports after the tab closed, having rewritten the file.
+    restore_finished(&mut app, &path, 0, 0);
+    assert!(app.attach_parked_pcb_tab(path.clone(), "board".into()));
+    undo(&mut app);
+    assert!(
+        dirty(&app, &path),
+        "the file holds the restored revision, not the old save"
+    );
+    assert!(quit_prompts(&mut app));
+}
+
+/// The same with the tab open: the board was edited while the restore ran,
+/// so the edits are kept and the restored file is not loaded.
+#[test]
+fn a_restore_over_board_edits_keeps_the_board_dirty_through_undo() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    run(&mut app, &path, move_to(FP_A, 7.0));
+    let generation = app
+        .document_state
+        .pending_restores
+        .begin(path.clone())
+        .expect("a restore starts");
+    // The stamp the click took differs from the board now: edited meanwhile.
+    restore_finished(&mut app, &path, generation, 0);
+    assert!(app.document_state.tabs.iter().any(|tab| tab.path == path));
+    assert!(
+        !app.document_state
+            .board_engine(&path)
+            .unwrap()
+            .is_at_save_point(),
+        "the save point named the file before the restore"
+    );
+    undo(&mut app);
+    assert!(dirty(&app, &path));
+    assert!(quit_prompts(&mut app));
+}

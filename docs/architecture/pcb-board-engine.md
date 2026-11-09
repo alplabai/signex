@@ -33,9 +33,11 @@ editing UI does not have to decide it.
   `sync_history_dirty` reads the board engine as it reads a sheet engine,
   `mark_document_clean` marks the save point, and a save that lands for a
   snapshot the board has moved past forgets the point and re-syncs the mark.
-  That revision check runs whether or not the tab is still open, and the
-  save-point bookkeeping (`mark_board_saved`, `forget_board_save_point`)
-  reaches a parked engine; only edits are refused there.
+  That revision check runs whether or not the tab is still open, and
+  `forget_board_save_point` reaches a parked engine (a stale completion, a
+  History restore that wrote the file under it); only edits are refused
+  there. `mark_board_saved` reaches the open board only: a landed save
+  drops a parked one.
 - A failed rollback (`RollbackFailed`, unreachable by construction) takes a
   new revision and forgets the save point, so caches rebuild and the board
   reads unsaved.
