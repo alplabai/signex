@@ -183,21 +183,21 @@ unused_must_use = "deny"
 # level, which scripts/check_lint_lockstep.sh now fails CI over (#570).
 
 # Signex fork of iced (upstream master + cherry-picked PRs, see FORK.md in alplabai/iced).
-# Tag iced-signex-v0.15.0-alpha.4 = fork commit a94392b0b (the signex release branch). Pinned by rev, not tag: a tag can be moved. It includes MonitorData::size() dividing by the scale factor (alplabai/iced#49), which the window placement code relies on.
+# Tag iced-signex-v0.15.0-alpha.6 = fork commit f884f8433 (the signex release branch). Pinned by rev, not tag: a tag can be moved. It includes MonitorData::size() dividing by the scale factor (alplabai/iced#49), which the window placement code relies on, and the canvas glyph mesh cache (alplabai/iced#79) for rotated text (#2128).
 [patch.crates-io]
 iced_fonts = { path = "vendor/iced_fonts" }
-iced = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
-iced_core = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
-iced_futures = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
-iced_graphics = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
-iced_program = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
-iced_renderer = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
-iced_runtime = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
-iced_tiny_skia = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
-iced_wgpu = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
-iced_widget = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
-iced_winit = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
-iced_debug = { git = "https://github.com/alplabai/iced", rev = "a94392b0b335b56cbf4608614c0f5677fc985a85" }
+iced = { git = "https://github.com/alplabai/iced", rev = "f884f84337624326a088ca5332eb7ab42ab51464" }
+iced_core = { git = "https://github.com/alplabai/iced", rev = "f884f84337624326a088ca5332eb7ab42ab51464" }
+iced_futures = { git = "https://github.com/alplabai/iced", rev = "f884f84337624326a088ca5332eb7ab42ab51464" }
+iced_graphics = { git = "https://github.com/alplabai/iced", rev = "f884f84337624326a088ca5332eb7ab42ab51464" }
+iced_program = { git = "https://github.com/alplabai/iced", rev = "f884f84337624326a088ca5332eb7ab42ab51464" }
+iced_renderer = { git = "https://github.com/alplabai/iced", rev = "f884f84337624326a088ca5332eb7ab42ab51464" }
+iced_runtime = { git = "https://github.com/alplabai/iced", rev = "f884f84337624326a088ca5332eb7ab42ab51464" }
+iced_tiny_skia = { git = "https://github.com/alplabai/iced", rev = "f884f84337624326a088ca5332eb7ab42ab51464" }
+iced_wgpu = { git = "https://github.com/alplabai/iced", rev = "f884f84337624326a088ca5332eb7ab42ab51464" }
+iced_widget = { git = "https://github.com/alplabai/iced", rev = "f884f84337624326a088ca5332eb7ab42ab51464" }
+iced_winit = { git = "https://github.com/alplabai/iced", rev = "f884f84337624326a088ca5332eb7ab42ab51464" }
+iced_debug = { git = "https://github.com/alplabai/iced", rev = "f884f84337624326a088ca5332eb7ab42ab51464" }
 
 # Local release builds keep cargo's parallel codegen defaults; shipped binaries
 # get lto = "thin" + codegen-units = 1 from env in .github/workflows/release.yml.
