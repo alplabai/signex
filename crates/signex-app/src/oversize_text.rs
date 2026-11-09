@@ -132,8 +132,7 @@ const CAP_WARNING: &str =
     "This sheet has more or longer oversize text than can be drawn; the rest is left out";
 
 const MARGIN_CAP_WARNING: &str = "This sheet has more oversize text just outside the view \
-     than can be drawn; the text in view is drawn, some around it is left out until it is \
-     in view";
+     than can be drawn; the text in view is drawn, some around it is left out";
 
 /// Where an oversize text that can touch the frame lies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
