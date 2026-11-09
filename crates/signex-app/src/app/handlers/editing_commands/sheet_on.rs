@@ -148,9 +148,10 @@ impl Signex {
             )
         });
         let main_shows = self.document_state.active_path.as_deref() == Some(path);
-        let slots = undocked
+        let slots: Vec<&crate::canvas::CanvasSlot> = undocked
             .map(|(_, slot)| slot)
-            .chain(main_shows.then_some(&self.interaction_state.canvas));
+            .chain(main_shows.then_some(&self.interaction_state.canvas))
+            .collect();
         let drawing = |slot: &crate::canvas::CanvasSlot| {
             slot.drawing_mode
                 || !slot.wire_preview.is_empty()
@@ -158,13 +159,15 @@ impl Signex {
                 || !slot.polyline_points.is_empty()
                 || slot.shape_anchor.is_some()
         };
-        if self.is_drawing_on(path) || slots.into_iter().any(drawing) {
+        if self.is_drawing_on(path) || slots.iter().copied().any(drawing) {
             return Some("the person is drawing on this sheet; try again when the wire is done");
         }
         if self.text_edit_targets_sheet_at(path) {
             return Some("the person is typing into an item of this sheet; try again when done");
         }
-        if main_shows && self.ui_state.move_pick.is_some() {
+        // A move is armed on the slot of the window it was armed from
+        // (`arm_move_pick`); `ui_state.move_pick` is one for the whole app.
+        if slots.iter().any(|slot| slot.move_pick.is_some()) {
             return Some("the person has a move armed on this sheet; try again when it is done");
         }
         None

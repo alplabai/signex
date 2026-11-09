@@ -139,6 +139,7 @@ fn app_at_work() -> Signex {
     canvas.drawing_mode = true;
     app.interaction_state.current_tool = crate::app::Tool::Wire;
     app.ui_state.move_pick = Some(crate::canvas::MovePick::Selection);
+    app.interaction_state.canvas.move_pick = Some(crate::canvas::MovePick::Selection);
     app
 }
 
@@ -149,6 +150,7 @@ fn app_idle() -> Signex {
     let canvas = app.interaction_state.active_canvas_mut();
     canvas.wire_preview.clear();
     canvas.drawing_mode = false;
+    canvas.move_pick = None;
     app.ui_state.move_pick = None;
     app
 }
@@ -376,6 +378,25 @@ fn revert_leaves_the_persons_interaction_snapshot_byte_equal() {
         );
         assert_eq!(interaction_snapshot(&app), before, "revert on {file}");
     }
+}
+
+/// The person busy on sheet b (a wire in progress, drawing mode, a move
+/// armed): a revert of an agent step on sheet a, which the main window does not
+/// show, leaves every bit of it as it was.
+#[test]
+fn revert_on_another_sheet_leaves_a_person_busy_on_theirs_byte_equal() {
+    let mut app = app_at_work();
+    let busy = interaction_snapshot(&app);
+    assert!(busy.contains("move_pick=Some(Selection)"), "{busy}");
+    assert!(busy.contains("drawing_mode=true"), "{busy}");
+    let group = applied(&mut app, "a.snxsch", three_edits())["group"]
+        .as_u64()
+        .unwrap();
+    assert!(matches!(
+        revert(&mut app, "a.snxsch", group),
+        CommandOutcome::Answered(_)
+    ));
+    assert_eq!(interaction_snapshot(&app), busy);
 }
 
 /// A move the person armed, with a wire selected, survives an agent batch on
@@ -851,6 +872,7 @@ fn revert_waits_while_the_person_has_a_move_armed_on_that_sheet() {
         .as_u64()
         .unwrap();
     app.ui_state.move_pick = Some(crate::canvas::MovePick::Selection);
+    app.interaction_state.canvas.move_pick = Some(crate::canvas::MovePick::Selection);
     let before = state(&app, "b.snxsch");
     let reason = refusal(revert(&mut app, "b.snxsch", on_b));
     assert!(reason.contains("move armed"), "{reason}");
@@ -987,4 +1009,89 @@ fn a_rolled_back_list_reports_only_its_refusal() {
             .all(|m| !m.contains("Agent: place_junction, place_wire")),
         "nothing says an edit was applied: {said:?}"
     );
+}
+
+/// An undocked window showing `file`, with a slot whose move is `armed`.
+fn undock(app: &mut Signex, file: &str, armed: bool) {
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: path(file),
+            title: file.into(),
+        },
+    );
+    let mut slot = crate::canvas::CanvasSlot::new();
+    slot.move_pick = armed.then_some(crate::canvas::MovePick::Object);
+    app.interaction_state.canvases.insert(window, slot);
+}
+
+/// A move armed from an undocked window (the Active Bar there arms it on that
+/// window's slot) is not cut under, though the main window shows another sheet.
+#[test]
+fn revert_waits_while_a_move_is_armed_from_an_undocked_window_of_that_sheet() {
+    let mut app = app_idle();
+    let group = applied(&mut app, "a.snxsch", three_edits())["group"]
+        .as_u64()
+        .unwrap();
+    undock(&mut app, "a.snxsch", true);
+    app.ui_state.move_pick = Some(crate::canvas::MovePick::Object);
+    let before = state(&app, "a.snxsch");
+    let reason = refusal(revert(&mut app, "a.snxsch", group));
+    assert!(reason.contains("move armed"), "{reason}");
+    assert_eq!(state(&app, "a.snxsch"), before);
+}
+
+/// The opposite: a move armed from an undocked window of b says nothing about
+/// sheet a, which the main window shows; the app-wide flag is not the sheet's.
+#[test]
+fn a_move_armed_on_another_sheets_window_does_not_stop_a_revert() {
+    let mut app = app_idle();
+    fixture::activate(&mut app, &path("a.snxsch"));
+    let group = applied(&mut app, "a.snxsch", three_edits())["group"]
+        .as_u64()
+        .unwrap();
+    undock(&mut app, "b.snxsch", true);
+    app.ui_state.move_pick = Some(crate::canvas::MovePick::Object);
+    assert!(matches!(
+        revert(&mut app, "a.snxsch", group),
+        CommandOutcome::Answered(_)
+    ));
+}
+
+/// What a handler says it did is held until the list lands: a refused list
+/// leaves no line behind, a landed one shows it.
+#[test]
+fn a_rolled_back_list_shows_no_handler_line_and_a_landed_one_does() {
+    let said_since = |mark| -> Vec<String> {
+        crate::diagnostics::entries_since(mark)
+            .entries
+            .into_iter()
+            .map(|entry| entry.message)
+            .collect()
+    };
+    // One sheet per case: the log is shared with the tests running beside.
+    for (file, lands) in [("held-2178-a.snxsch", false), ("held-2178-b.snxsch", true)] {
+        let mut app = app_with(&[(file, 150)]);
+        app.ui_state.snap_enabled = false;
+        applied(
+            &mut app,
+            file,
+            json!([{"id": "color_net", "args": {"at": [5, 0], "color": "#336699"}}]),
+        );
+        let mark = crate::diagnostics::newest_entry_id();
+        let mut edits = vec![json!({"id": "clear_all_net_colors"})];
+        if !lands {
+            edits.push(json!({"id": "place_wire", "args": {"start": [5, 5], "end": [5, 5]}}));
+        }
+        let outcome = apply(&mut app, file, json!(edits));
+        let said = said_since(mark);
+        let cleared = format!("Cleared net-color overrides on {file}");
+        assert_eq!(
+            said.iter().any(|m| m.contains(&cleared)),
+            lands,
+            "{outcome:?} {said:?}"
+        );
+        assert_eq!(matches!(outcome, CommandOutcome::Answered(_)), lands);
+    }
 }

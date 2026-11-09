@@ -78,7 +78,9 @@ Two commands, both with capability `edit` in `signex-cli`:
   - the person is in the middle of something on the sheet, in the main window
     or an undocked one (`Signex::person_busy_on`): drawing (any slot showing
     the sheet has a drawing mode, wire preview, arc, polyline or shape
-    anchor), typing into an item of the sheet, or a move armed (`move_pick`);
+    anchor), typing into an item of the sheet, or a move armed (`move_pick`
+    on any slot showing the sheet: a move armed from an undocked window is
+    armed on that window's slot, the app-wide flag is not read);
   - the group is not one an agent made in this session.
   A reverted step does not land on the redo stack.
 - The headless `undo document=..` of #2172 still exists; on an agent's step it
@@ -99,7 +101,14 @@ the answer in `data` and the sheet in `changed`.
 - `assign_net_class`, annotation and other project-wide data are not edits;
   that needs a decision on how project data joins a sheet's undo step.
 - A click-click move that is already floating is widget-local state the app
-  cannot see; `revert` cannot refuse for it. It ends when its selection is
-  edited (`float_is_stale`), as for any edit of those items.
+  cannot see, so `revert` cannot refuse for it. A revert does not edit the
+  selection for items other than wires, so a float over reverted agent items
+  survives and, on its drop, finds no such uuids: it cancels or does nothing
+  for items that no longer exist. The person's own items and work are not lost,
+  as with their own Ctrl+Z during a float.
+- What the edits' handlers say in Messages (Info lines, for instance "Cleared
+  net-color overrides on ...") is held while the list runs and shown after the
+  commit; a refused list shows none of it. Only this thread's Info lines are
+  held (`diagnostics::hold_info`); warnings and errors are never.
 - A person's redo is ended by an agent edit, as by any edit.
 - The grid check on a placement point reads the person's snap settings.

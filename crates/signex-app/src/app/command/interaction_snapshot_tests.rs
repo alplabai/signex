@@ -22,7 +22,7 @@ pub(in crate::app) fn interaction_snapshot(app: &Signex) -> String {
          drawing_mode={}\npalette={:?}\npending_net_color={:?}\nmove_pick={:?}\n\
          wire_drawing={}\narc={:?}\npolyline={:?}\nshape_anchor={:?}\n\
          pending_port={:?}\ndraw_mode={:?}\npre_placement={:?}\npanel_list_open={}\n\
-         dock_tab_drag={:?}\ndock_floating={}\ndock_drop_preview={:?}\ndock_menu_open={}",
+         dock_tab_drag={:?}\ndock_floating={}\ndock_drop_preview={:?}\ndock_menu_open={}\nslot_move_pick={:?}",
         docs.active_path,
         docs.active_tab,
         docs.active_project,
@@ -48,5 +48,6 @@ pub(in crate::app) fn interaction_snapshot(app: &Signex) -> String {
         docs.dock.floating.len(),
         docs.dock.drop_preview,
         docs.dock.tab_menu.is_some(),
+        canvas.move_pick,
     )
 }

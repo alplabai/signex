@@ -134,8 +134,17 @@ pub(in crate::app::command) fn apply_edits(app: &mut Signex, args: &CommandArgs)
     run_all(app, &path, &edits, label)
 }
 
-/// Run the edits on `path` inside one engine transaction.
+/// Run the edits on `path` inside one engine transaction. What their handlers
+/// say in Messages is true only if the list lands, so those Info lines are held
+/// and shown after the commit, or dropped with the rollback.
 fn run_all(app: &mut Signex, path: &std::path::Path, edits: &[Prepared], label: String) -> Ran {
+    crate::diagnostics::hold_info();
+    let ran = run_listed(app, path, edits, label);
+    crate::diagnostics::release_held_info(matches!(ran.0, CommandOutcome::Answered(_)));
+    ran
+}
+
+fn run_listed(app: &mut Signex, path: &std::path::Path, edits: &[Prepared], label: String) -> Ran {
     let Some(engine) = app.document_state.engines.get_mut(path) else {
         return refused(format!("{} is not loaded", path.display()));
     };
