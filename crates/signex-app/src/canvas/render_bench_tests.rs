@@ -274,7 +274,7 @@ fn counts(sheet: &SchematicSheet) -> String {
     let pins: usize = sheet
         .symbols
         .iter()
-        .map(|s| sheet.body_of(&s).map_or(0, |l| l.pins.len()))
+        .map(|s| sheet.body_of(s).map_or(0, |l| l.pins.len()))
         .sum();
     format!(
         "{} symbols, {} pins, {} wires, {} junctions, {} labels, {} text notes",
