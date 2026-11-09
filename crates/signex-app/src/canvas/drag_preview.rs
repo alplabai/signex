@@ -401,7 +401,9 @@ impl GhostState {
             return ready.snapshot.clone();
         }
         let session = match &self.session {
-            Some((rev, session)) if *rev == revision => session.clone(),
+            Some((rev, session)) if super::drag_layers::is_known(revision) && *rev == revision => {
+                session.clone()
+            }
             _ => {
                 let fresh = Rc::new(signex_engine::MovePreview::new(snap));
                 self.session = Some((revision, fresh.clone()));
@@ -685,6 +687,28 @@ mod tests {
         assert!(!Rc::ptr_eq(&first, &second));
         assert_eq!(second.symbols[0].position, Point::new(50.0, 70.0));
         assert_eq!(first.symbols[0].position, Point::new(50.0, 60.0));
+    }
+
+    /// Revision 0 is "unknown" and matches nothing: a preview and its id index
+    /// built for one sheet at revision 0 must not answer for another sheet
+    /// shown at revision 0.
+    #[test]
+    fn an_unknown_revision_never_reuses_the_preview_or_the_id_index() {
+        let (sheet, item) = sheet_with_wired_resistor();
+        let mut state = GhostState::default();
+        let first = state.refresh_with(&sheet, 0, &[item], 0.0, 10.0);
+        let mut other = sheet.clone();
+        other.symbols[0].position = Point::new(50.0, 60.0);
+        other.wires.push(other.wires[0].clone());
+        other.wires[1].uuid = uuid::Uuid::now_v7();
+        let second = state.refresh_with(&other, 0, &[item], 0.0, 12.5);
+        assert_eq!(first.symbols[0].position, Point::new(50.0, 60.0));
+        assert_eq!(second.symbols[0].position, Point::new(50.0, 72.5));
+        assert_eq!(
+            second.wires.len(),
+            other.wires.len(),
+            "the other sheet's wires"
+        );
     }
 
     /// The review's probe, with the real render cache: build a ghost, commit

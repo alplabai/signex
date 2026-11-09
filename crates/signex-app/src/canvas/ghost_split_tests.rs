@@ -224,6 +224,19 @@ fn the_walk_equals_the_full_split() {
         let full = split_ghost(&base, &ghost, &chosen);
         let frame = split_ghost_walk(&base, &ghost, &chosen, &ids);
         assert_eq!(exact(&frame), exact(&full), "seed {seed}");
+        // An index of another sheet is refused, never read.
+        let other = base_sheet(&mut Lcg(seed + 90_001));
+        let foreign = BaseIds::of(&other);
+        assert!(
+            try_split_ghost_walk(&base, &ghost, &chosen, &foreign).is_none()
+                || other.wires.len() + other.symbols.len() == 0,
+            "seed {seed}: a foreign index was used"
+        );
+        assert_eq!(
+            exact(&split_ghost_walk(&base, &ghost, &chosen, &foreign)),
+            exact(&full),
+            "seed {seed}: a foreign index"
+        );
         match try_split_ghost_walk(&base, &ghost, &chosen, &ids) {
             Some(walk) => {
                 walked += 1;

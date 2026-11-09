@@ -40,6 +40,19 @@ struct KindIds {
     at: HashMap<Uuid, usize>,
     /// Every id once.
     unique: bool,
+    /// How many items, and the sum and xor of their ids: the walk checks the
+    /// sheet it is given against these, so an index of another sheet is
+    /// refused instead of read as "this id is new".
+    len: usize,
+    sum: u128,
+    xor: u128,
+}
+
+/// The sum and xor of the ids, as the fingerprint of a list.
+fn fingerprint(ids: impl Iterator<Item = Uuid>) -> (u128, u128) {
+    ids.fold((0u128, 0u128), |(sum, xor), id| {
+        (sum.wrapping_add(id.as_u128()), xor ^ id.as_u128())
+    })
 }
 
 impl KindIds {
@@ -49,7 +62,14 @@ impl KindIds {
             at.entry(id(item)).or_insert(slot);
         }
         let unique = at.len() == items.len();
-        Self { at, unique }
+        let (sum, xor) = fingerprint(items.iter().map(&id));
+        Self {
+            at,
+            unique,
+            len: items.len(),
+            sum,
+            xor,
+        }
     }
 }
 
@@ -98,7 +118,10 @@ fn walk_kind<T: PartialEq + Clone>(
     skip: &mut HashSet<Uuid>,
     moving: &mut Vec<T>,
 ) -> bool {
-    if !ids.unique {
+    if !ids.unique || ids.len != base.len() {
+        return false;
+    }
+    if fingerprint(base.iter().map(&id)) != (ids.sum, ids.xor) {
         return false;
     }
     // The next pre-move item no ghost item has matched yet.

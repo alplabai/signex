@@ -1,10 +1,11 @@
-//! Job 18 — a component drag runs the local net guard and the walked ghost
-//! split on every way the UI moves a component, and what they show is what
-//! the drop commits. The ghost is `MovePreview` (a preview with the base nets:
-//! the local guard); the drop is `Engine::execute` with none (the guard over
-//! every net). Each test drives real messages through `Signex::update`:
-//! canvas pointer events for a mouse drag, a box select then a drag, the
-//! Active Bar's click-click Move Selection, and the Move Selection dialog.
+//! A component move runs the local net guard on every way the UI moves a
+//! component, and what the ghost shows is what the drop commits. The ghost is
+//! `MovePreview::moved_with` (a preview with the base nets: the local guard),
+//! the call the canvas makes for each cursor step; the drop is
+//! `Engine::execute` with none (the guard over every net). Each test drives
+//! real messages through `Signex::update`: canvas pointer events for a mouse
+//! drag, a box select then a drag, the Active Bar's click-click Move
+//! Selection, the Move Selection dialog, Align and Distribute.
 //!
 //! There is no arrow-key nudge to cover: the keymap has no binding that moves
 //! the selection by a step (`M` / `M M` arm the click-click move).
@@ -79,7 +80,11 @@ fn rig() -> (Signex, Vec<SelectedItem>) {
     sheet.lib_symbols.insert("R".to_string(), resistor_lib());
     let mut symbols = Vec::new();
     for n in 0..10 {
-        let (x, y) = (30.0 + 25.0 * (n % 5) as f64, 40.0 + 30.0 * (n / 5) as f64);
+        // The second row is staggered, so a part moved along the first lands in the clear.
+        let (x, y) = (
+            30.0 + 25.0 * (n % 5) as f64 + 12.5 * (n / 5) as f64,
+            40.0 + 30.0 * (n / 5) as f64,
+        );
         let id = uuid::Uuid::now_v7();
         sheet.symbols.push(Symbol {
             uuid: id,
@@ -146,10 +151,16 @@ fn geometry(sheet: &SchematicSheet) -> String {
         .map(|w| (key(&w.start), key(&w.end)))
         .collect();
     let mut dots: Vec<_> = sheet.junctions.iter().map(|j| key(&j.position)).collect();
+    let mut labels: Vec<_> = sheet
+        .labels
+        .iter()
+        .map(|l| (l.text.clone(), key(&l.position)))
+        .collect();
     symbols.sort();
     wires.sort();
     dots.sort();
-    format!("{symbols:?} {wires:?} {dots:?}")
+    labels.sort();
+    format!("{symbols:?} {wires:?} {dots:?} {labels:?}")
 }
 
 /// What the preview (local guard, walked split inputs) shows for `moves`.
@@ -292,4 +303,65 @@ fn the_move_selection_dialog_commits_what_the_ghost_shows() {
         let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
         (5.0, -10.0)
     });
+}
+
+/// Run the Active Bar `action` on `selection` and hold the commit to the
+/// ghost of the very moves it made (each symbol by its own offset).
+fn assert_action_equals_ghost(
+    app: &mut Signex,
+    selection: &[SelectedItem],
+    action: ActiveBarAction,
+) {
+    app.interaction_state.active_canvas_mut().selected = selection.to_vec();
+    let before = sheet(app);
+    let _ = app.update(Message::ActiveBar(ActiveBarMsg::Action(action.clone())));
+    let after = sheet(app);
+    let at = |s: &SchematicSheet, id| {
+        s.symbols
+            .iter()
+            .find(|y| y.uuid == id)
+            .expect("symbol")
+            .position
+    };
+    let moves: Vec<_> = selection
+        .iter()
+        .map(|item| {
+            let (was, now) = (at(&before, item.uuid), at(&after, item.uuid));
+            (*item, now.x - was.x, now.y - was.y)
+        })
+        .collect();
+    assert!(
+        moves.iter().any(|(_, dx, dy)| *dx != 0.0 || *dy != 0.0),
+        "{action:?} moved nothing"
+    );
+    // The commit and the ghost agree on the geometry and on the nets.
+    let shown = ghost(&before, &moves);
+    let pins = |s: &SchematicSheet| {
+        signex_net::net_signatures(s)
+            .iter()
+            .map(|n| n.terminals.clone())
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    assert_eq!(pins(&after), pins(&shown), "{action:?}: the nets differ");
+    assert_eq!(
+        geometry(&after),
+        geometry(&shown),
+        "{action:?}: the commit differs from the ghost"
+    );
+}
+
+#[test]
+fn align_commits_what_the_ghost_of_its_moves_shows() {
+    let (mut app, symbols) = rig();
+    // Two symbols of different x and y: the lower one moves left, into the clear.
+    let chosen = vec![symbols[1], symbols[7]];
+    assert_action_equals_ghost(&mut app, &chosen, ActiveBarAction::AlignLeft);
+}
+
+#[test]
+fn distribute_commits_what_the_ghost_of_its_moves_shows() {
+    let (mut app, symbols) = rig();
+    // The middle one (x 67.5) is off the even spacing between the outer two.
+    let chosen = vec![symbols[0], symbols[6], symbols[4]];
+    assert_action_equals_ghost(&mut app, &chosen, ActiveBarAction::DistributeHorizontally);
 }
