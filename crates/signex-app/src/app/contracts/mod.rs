@@ -143,6 +143,9 @@ pub enum Message {
     /// `Message::CommandPalette` and routed to
     /// `dispatch_command_palette_message`.
     CommandPalette(CommandPaletteMsg),
+    /// The local agent channel (#1924): a request line from a connected
+    /// agent, or the listener reporting. Routed to `dispatch_agent_message`.
+    Agent(crate::app::agent::AgentMsg),
 }
 
 impl Message {

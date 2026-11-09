@@ -161,6 +161,9 @@ pub enum PrefMsg {
     DraftWindowControlsPlacement(crate::chrome::controls::WindowControlsPlacement),
     /// Toggle opt-in autosave of recovery copies (#104). Persisted on Save.
     DraftAutosaveEnabled(bool),
+    /// Toggle "Allow agent connections" (#1924). Persisted on Save; turning it
+    /// off closes the listener and drops its connections.
+    DraftAgentConnectionsEnabled(bool),
     /// Update the default symbol-editor grid size. Persisted on Save.
     DraftSymbolGridSize(f32),
     /// Update the symbol-editor grid style (applies immediately, persisted).
@@ -324,6 +327,9 @@ pub struct PrefsView<'a> {
     /// Whether the drafted placement only applies after a restart (macOS).
     pub window_controls_restart_note: bool,
     pub draft_autosave_enabled: bool,
+    pub draft_agent_connections_enabled: bool,
+    /// The language the labels read in.
+    pub i18n: &'a signex_i18n::I18n,
     pub draft_symbol_grid_size_mm: f32,
     pub draft_symbol_grid_style: GridStyle,
     pub draft_symbol_pin_selection: PinSelectionMode,
@@ -630,6 +636,8 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_increment_step,
         draft_paste_designators,
         draft_autosave_enabled,
+        draft_agent_connections_enabled,
+        i18n,
         profiles,
         default_profile,
         distributor_settings,
@@ -654,6 +662,10 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             draft_increment_step,
             draft_paste_designators,
             draft_autosave_enabled,
+            editing::AgentConnectionsRow {
+                draft_enabled: draft_agent_connections_enabled,
+                i18n,
+            },
         ),
         PrefNav::RuleProfiles => content_profiles(profiles, default_profile, panel_tokens),
         // Library → Distributor APIs — the library subsystem owns

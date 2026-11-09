@@ -239,6 +239,11 @@ pub struct UiState {
     pub autosave_enabled: bool,
     /// Draft mirror of [`Self::autosave_enabled`] for the Preferences dialog.
     pub preferences_draft_autosave_enabled: bool,
+    /// "Allow agent connections" (#1924): whether this app listens on a
+    /// user-only socket for agents. Off by default; see `docs/AGENT_SOCKET.md`.
+    pub agent_connections_enabled: bool,
+    /// Draft mirror of [`Self::agent_connections_enabled`] for Preferences.
+    pub preferences_draft_agent_connections_enabled: bool,
     /// Saved PCB GPU-render toggle (experimental). The *effective* live value
     /// used by rendering is `PcbCanvas::gpu_render` (updated immediately on
     /// draft change for live preview, like `render_config` globals for
@@ -663,6 +668,7 @@ impl UiState {
             || self.preferences_draft_paste_designators != self.paste_designators
             || self.preferences_draft_window_controls_placement != self.window_controls_placement
             || self.preferences_draft_autosave_enabled != self.autosave_enabled
+            || self.preferences_draft_agent_connections_enabled != self.agent_connections_enabled
             || self.preferences_draft_symbol_grid_style != self.symbol_grid_style
             // Exact `!=` on the f32 is deliberate: the picker assigns from
             // `canvas::grid::GRID_SIZES_MM`, so draft and committed are the

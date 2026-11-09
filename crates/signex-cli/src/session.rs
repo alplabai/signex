@@ -2,14 +2,15 @@
 //! per command. Everything reaches the app through `signex_app::headless`
 //! and the app's own task driver.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use signex_app::app::Signex;
 use signex_app::diagnostics;
 use signex_app::headless::{
-    CommandArgs, CommandOutcome, OperandValue, edit_list_text, parse_edit_list,
+    ChangeSnapshot as Snapshot, CommandArgs, OperandValue, changed_between, edit_list_text,
+    messages_since, outcome_verdict as verdict, parse_edit_list,
 };
 use signex_app::io_ports::HeadlessAnswers;
 use signex_app::keymap::OperandKind;
@@ -19,7 +20,7 @@ use signex_types::project::{ErcRules, RuleProfile};
 use crate::capability::capability_of;
 use crate::confine::canonical;
 use crate::policy::{Approved, Policy};
-use crate::protocol::{MessageLine, Request, ResultLine, Status};
+use crate::protocol::{Request, ResultLine, Status};
 use crate::roots::project_root;
 
 /// How much of a command line the audit log keeps.
@@ -35,10 +36,6 @@ pub struct Session {
     /// lists later widens it.
     roots: Vec<PathBuf>,
 }
-
-/// The state a command can change, per document: engine revision and unsaved
-/// flag. A document that is gone or new differs too.
-type Snapshot = BTreeMap<PathBuf, (u64, bool)>;
 
 impl Session {
     /// Boot the app with `project` open (a `.snxprj`, or a loose sheet), with
@@ -100,14 +97,7 @@ impl Session {
         let (status, reason, data) = self.run(request);
         let windows_dropped = self.driver.dropped_window_actions() > windows_before;
         let dialog_refused = self.dialog_refusals() > dialogs_before;
-        let messages: Vec<MessageLine> = diagnostics::entries_since(log_mark)
-            .entries
-            .into_iter()
-            .map(|entry| MessageLine {
-                level: entry.level.label(),
-                message: entry.message,
-            })
-            .collect();
+        let messages = messages_since(log_mark);
         let (status, reason) =
             honest_status(status, reason, &request.id, windows_dropped, dialog_refused);
         let changed = changed_between(&before, &self.snapshot());
@@ -304,17 +294,7 @@ impl Session {
     }
 
     fn snapshot(&self) -> Snapshot {
-        let state = &self.app.document_state;
-        let dirty = state.dirty_document_paths();
-        let mut all: Snapshot = state
-            .engines
-            .iter()
-            .map(|(path, engine)| (path.clone(), (engine.revision(), dirty.contains(path))))
-            .collect();
-        for path in dirty {
-            all.entry(path).or_insert((0, true));
-        }
-        all
+        self.app.change_snapshot()
     }
 
     fn audit(&self, seq: u64, raw: &str, status: Status, reason: Option<&str>) {
@@ -379,55 +359,6 @@ fn operands_for(approved: &Approved) -> Result<(CommandArgs, Vec<(String, String
     Ok((CommandArgs::none(), answers))
 }
 
-/// What a dispatch outcome means for the result line. A `Ran` that left an
-/// error notice failed; nothing unknown is ever reported as ran.
-fn verdict(
-    id: &str,
-    outcome: CommandOutcome,
-    notice: Option<String>,
-) -> (Status, Option<String>, Option<Value>) {
-    match outcome {
-        CommandOutcome::Ran => match notice {
-            Some(why) => (Status::Failed, Some(why), None),
-            None => (Status::Ran, None, None),
-        },
-        CommandOutcome::UnknownId => (
-            Status::Refused,
-            Some(format!("unknown command `{id}`")),
-            None,
-        ),
-        CommandOutcome::NoBridgeArm => (
-            Status::Refused,
-            Some(format!(
-                "not runnable headless: `{id}` has no dispatch arm yet"
-            )),
-            None,
-        ),
-        // A command that made nothing because the app said why in an error
-        // notice (an open of a missing file) failed; it was not refused.
-        CommandOutcome::Disabled { reason } => match notice {
-            Some(why) => (Status::Failed, Some(why), None),
-            None => (Status::Refused, Some(reason), None),
-        },
-        // A query ran: what it found is the result, never a bare `ran`.
-        CommandOutcome::Answered(value) => (Status::Answered, None, Some(value)),
-        other => (
-            Status::Failed,
-            Some(format!("unexpected outcome {other:?}")),
-            None,
-        ),
-    }
-}
-
-fn changed_between(before: &Snapshot, after: &Snapshot) -> Vec<String> {
-    let paths: BTreeSet<&PathBuf> = before.keys().chain(after.keys()).collect();
-    paths
-        .into_iter()
-        .filter(|path| before.get(*path) != after.get(*path))
-        .map(|path| path.display().to_string())
-        .collect()
-}
-
 /// A command whose only effect was a window the task driver dropped, or a
 /// file dialog the answers could not satisfy, still reports `Ran`. Both are
 /// counted by the app (`TaskDriver::dropped_window_actions`,
@@ -462,31 +393,6 @@ fn honest_status(
 mod tests {
     use super::*;
 
-    fn snap(entries: &[(&str, u64, bool)]) -> Snapshot {
-        entries
-            .iter()
-            .map(|(path, rev, dirty)| (PathBuf::from(path), (*rev, *dirty)))
-            .collect()
-    }
-
-    #[test]
-    fn a_changed_revision_a_flipped_flag_a_new_or_a_gone_document_is_changed() {
-        let before = snap(&[
-            ("a", 1, false),
-            ("b", 1, false),
-            ("c", 1, false),
-            ("d", 1, true),
-        ]);
-        let after = snap(&[
-            ("a", 2, false),
-            ("b", 1, true),
-            ("c", 1, false),
-            ("e", 1, false),
-        ]);
-        assert_eq!(changed_between(&before, &after), ["a", "b", "d", "e"]);
-        assert!(changed_between(&before, &before).is_empty());
-    }
-
     #[test]
     fn a_ran_command_with_a_dropped_window_or_a_refused_dialog_is_refused_and_nothing_else_changes()
     {
@@ -517,54 +423,5 @@ mod tests {
         for status in [Status::Refused, Status::Failed] {
             assert_eq!(honest(status, true, true), (status, Some("why".into())));
         }
-    }
-
-    #[test]
-    fn an_error_notice_makes_a_ran_command_failed_and_unknown_outcomes_never_ran() {
-        let ran = verdict("x", CommandOutcome::Ran, None);
-        assert_eq!(ran.0, Status::Ran);
-        let failed = verdict(
-            "x",
-            CommandOutcome::Ran,
-            Some("Open failed: no file".into()),
-        );
-        assert_eq!(
-            (failed.0, failed.1.as_deref()),
-            (Status::Failed, Some("Open failed: no file"))
-        );
-        let unknown = verdict("x", CommandOutcome::UnknownId, None);
-        assert_eq!(unknown.0, Status::Refused);
-        let arm = verdict("x", CommandOutcome::NoBridgeArm, None);
-        assert!(arm.1.unwrap().contains("no dispatch arm"));
-        let disabled = verdict(
-            "x",
-            CommandOutcome::Disabled {
-                reason: "why".into(),
-            },
-            None,
-        );
-        assert_eq!(
-            (disabled.0, disabled.1.as_deref()),
-            (Status::Refused, Some("why"))
-        );
-        // A refusal the app explained in an error notice (an open of a file
-        // that is not there) is a failure with that notice.
-        let noticed = verdict(
-            "x",
-            CommandOutcome::Disabled {
-                reason: "made no document".into(),
-            },
-            Some("Open failed: no file".into()),
-        );
-        assert_eq!(
-            (noticed.0, noticed.1.as_deref()),
-            (Status::Failed, Some("Open failed: no file"))
-        );
-        // A query's answer is the result: `answered` with `data`.
-        let answer = serde_json::json!({"count": 1});
-        let answered = verdict("x", CommandOutcome::Answered(answer.clone()), None);
-        assert_eq!(answered, (Status::Answered, None, Some(answer)));
-        let not_headless = verdict("x", CommandOutcome::NotHeadless, None);
-        assert_eq!(not_headless.0, Status::Failed);
     }
 }

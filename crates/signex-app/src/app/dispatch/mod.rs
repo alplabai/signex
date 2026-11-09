@@ -114,6 +114,7 @@ impl Signex {
             Message::MoveSelection(msg) => self.dispatch_move_selection_message(msg),
             Message::NetColor(msg) => self.dispatch_net_color_message(msg),
             Message::ParameterManager(msg) => self.dispatch_parameter_manager_message(msg),
+            Message::Agent(msg) => self.dispatch_agent_message(msg),
         }
     }
 

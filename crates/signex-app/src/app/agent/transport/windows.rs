@@ -1,0 +1,258 @@
+//! The Windows named pipe: `\\.\pipe\signex-agent-<boot id>`. Its security
+//! descriptor allows only the current user's SID, remote clients are rejected,
+//! and the client's process token is read at accept and must name the same
+//! user. Not compiled on other systems; see `docs/AGENT_SOCKET.md`.
+
+use std::ffi::c_void;
+use std::io;
+use std::os::windows::io::AsRawHandle as _;
+use std::path::Path;
+
+use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
+use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, LocalFree};
+use windows_sys::Win32::Security::Authorization::{
+    ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+};
+use windows_sys::Win32::Security::{
+    EqualSid, GetTokenInformation, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_QUERY,
+    TOKEN_USER, TokenUser,
+};
+use windows_sys::Win32::System::Pipes::GetNamedPipeClientProcessId;
+use windows_sys::Win32::System::Threading::{
+    GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
+};
+
+/// The pipe's name for this boot: the endpoint a registry entry names.
+pub(in crate::app::agent) fn endpoint_name(_dir: &Path, boot_id: &str) -> String {
+    format!(r"\\.\pipe\signex-agent-{boot_id}")
+}
+
+pub(in crate::app::agent) enum Accepted {
+    Connection {
+        conn: NamedPipeServer,
+        pid: Option<u32>,
+    },
+    /// A client whose user is not this one, or could not be read.
+    Refused { pid: Option<u32>, reason: String },
+}
+
+/// A token handle, closed on drop.
+struct Token(HANDLE);
+
+impl Drop for Token {
+    fn drop(&mut self) {
+        // SAFETY: the handle was opened by this program and is closed once.
+        unsafe { CloseHandle(self.0) };
+    }
+}
+
+/// The user of a token: `TOKEN_USER` and the bytes it points into, kept
+/// 8-aligned.
+struct TokenUserInfo(Vec<u64>);
+
+impl TokenUserInfo {
+    fn of(token: &Token) -> io::Result<Self> {
+        let mut len = 0_u32;
+        // SAFETY: a size query: no buffer, the length comes back in `len`.
+        unsafe { GetTokenInformation(token.0, TokenUser, std::ptr::null_mut(), 0, &mut len) };
+        if len == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let mut buffer = vec![0_u64; (len as usize).div_ceil(8)];
+        // SAFETY: `buffer` holds at least `len` bytes and lives past the call.
+        let read = unsafe {
+            GetTokenInformation(
+                token.0,
+                TokenUser,
+                buffer.as_mut_ptr().cast(),
+                len,
+                &mut len,
+            )
+        };
+        if read == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(Self(buffer))
+    }
+
+    fn user(&self) -> &TOKEN_USER {
+        // SAFETY: filled in by `GetTokenInformation(TokenUser)` into a buffer
+        // aligned for it, and it lives as long as `self`.
+        unsafe { &*self.0.as_ptr().cast::<TOKEN_USER>() }
+    }
+
+    fn same_user_as(&self, other: &Self) -> bool {
+        // SAFETY: both SIDs are valid and live in the two buffers.
+        unsafe { EqualSid(self.user().User.Sid, other.user().User.Sid) != 0 }
+    }
+
+    /// The user's SID as `S-1-5-...`.
+    fn sid_text(&self) -> io::Result<String> {
+        let mut text: *mut u16 = std::ptr::null_mut();
+        // SAFETY: the SID is valid; the system allocates `text`.
+        if unsafe { ConvertSidToStringSidW(self.user().User.Sid, &mut text) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        // SAFETY: `text` is a NUL-terminated wide string until `LocalFree`.
+        let sid = unsafe {
+            let mut len = 0;
+            while *text.add(len) != 0 {
+                len += 1;
+            }
+            let sid = String::from_utf16_lossy(std::slice::from_raw_parts(text, len));
+            LocalFree(text.cast());
+            sid
+        };
+        Ok(sid)
+    }
+}
+
+fn own_token() -> io::Result<Token> {
+    let mut handle: HANDLE = std::ptr::null_mut();
+    // SAFETY: the current process pseudo-handle is always valid.
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut handle) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(Token(handle))
+}
+
+/// The token of process `pid`, if this program may query it. A process of
+/// another user is not open to us, which refuses it.
+fn process_token(pid: u32) -> io::Result<Token> {
+    // SAFETY: plain call; the handle is closed below.
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if process.is_null() {
+        return Err(io::Error::last_os_error());
+    }
+    let process = Token(process);
+    let mut handle: HANDLE = std::ptr::null_mut();
+    // SAFETY: `process` is a valid handle with query access.
+    if unsafe { OpenProcessToken(process.0, TOKEN_QUERY, &mut handle) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(Token(handle))
+}
+
+/// A security descriptor from SDDL text, freed on drop.
+struct Descriptor(PSECURITY_DESCRIPTOR);
+
+// SAFETY: the descriptor is immutable data owned by this value.
+unsafe impl Send for Descriptor {}
+
+impl Descriptor {
+    /// Allow only `sid` (a protected DACL with one ACE), full access.
+    fn only(sid: &str) -> io::Result<Self> {
+        let sddl: Vec<u16> = format!("D:P(A;;GA;;;{sid})")
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+        // SAFETY: `sddl` is NUL-terminated; the system allocates `descriptor`.
+        let converted = unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                sddl.as_ptr(),
+                SDDL_REVISION_1,
+                &mut descriptor,
+                std::ptr::null_mut(),
+            )
+        };
+        if converted == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(Self(descriptor))
+    }
+}
+
+impl Drop for Descriptor {
+    fn drop(&mut self) {
+        // SAFETY: allocated by the system call above and freed once.
+        unsafe { LocalFree(self.0.cast()) };
+    }
+}
+
+pub(in crate::app::agent) struct Listener {
+    name: String,
+    next: NamedPipeServer,
+    descriptor: Descriptor,
+    own: TokenUserInfo,
+}
+
+impl Listener {
+    pub(in crate::app::agent) fn bind(dir: &Path, boot_id: &str) -> io::Result<Self> {
+        let name = endpoint_name(dir, boot_id);
+        let own = TokenUserInfo::of(&own_token()?)?;
+        let descriptor = Descriptor::only(&own.sid_text()?)?;
+        let next = create_instance(&name, &descriptor, true)?;
+        Ok(Self {
+            name,
+            next,
+            descriptor,
+            own,
+        })
+    }
+
+    pub(in crate::app::agent) async fn accept(&mut self) -> io::Result<Accepted> {
+        self.next.connect().await?;
+        let fresh = create_instance(&self.name, &self.descriptor, false)?;
+        let conn = std::mem::replace(&mut self.next, fresh);
+        let mut pid = 0_u32;
+        // SAFETY: the pipe handle is valid for the call.
+        let got = unsafe { GetNamedPipeClientProcessId(conn.as_raw_handle() as HANDLE, &mut pid) };
+        if got == 0 {
+            return Ok(Accepted::Refused {
+                pid: None,
+                reason: format!(
+                    "the client's process could not be read: {}",
+                    io::Error::last_os_error()
+                ),
+            });
+        }
+        let same_user = process_token(pid)
+            .and_then(|token| TokenUserInfo::of(&token))
+            .map(|peer| peer.same_user_as(&self.own));
+        match same_user {
+            Ok(true) => Ok(Accepted::Connection {
+                conn,
+                pid: Some(pid),
+            }),
+            Ok(false) => Ok(Accepted::Refused {
+                pid: Some(pid),
+                reason: "the client is another user".into(),
+            }),
+            Err(error) => Ok(Accepted::Refused {
+                pid: Some(pid),
+                reason: format!("the client's user could not be read: {error}"),
+            }),
+        }
+    }
+
+    /// A pipe has no file to remove.
+    pub(in crate::app::agent) fn remove(_dir: &Path, _boot_id: &str) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// One server instance of the pipe, for the current user only, local clients
+/// only.
+fn create_instance(
+    name: &str,
+    descriptor: &Descriptor,
+    first: bool,
+) -> io::Result<NamedPipeServer> {
+    let mut attributes = SECURITY_ATTRIBUTES {
+        nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: descriptor.0,
+        bInheritHandle: 0,
+    };
+    // SAFETY: `attributes` and the descriptor it points to outlive the call,
+    // which copies what it needs.
+    unsafe {
+        ServerOptions::new()
+            .first_pipe_instance(first)
+            .reject_remote_clients(true)
+            .create_with_security_attributes_raw(
+                name,
+                std::ptr::from_mut(&mut attributes).cast::<c_void>(),
+            )
+    }
+}
