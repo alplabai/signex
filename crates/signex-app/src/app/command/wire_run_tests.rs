@@ -203,6 +203,77 @@ fn a_pin_reference_resolves_an_off_grid_tip_that_a_coordinate_is_refused_for() {
     assert_eq!(outcome, CommandOutcome::Ran);
 }
 
+const LABELS: [&str; 3] = [
+    "place_net_label",
+    "place_global_label",
+    "place_hierarchical_label",
+];
+
+#[test]
+fn a_label_that_would_rename_the_net_at_its_point_is_refused_unless_allowed() {
+    // R1.2 is on the net VCC (a stub with a VCC label).
+    for id in LABELS {
+        let mut app = app_with(two_named_nets());
+        // By pin reference and by coordinate (the stub's interior).
+        for at in ["at=R1.2", "at=16.51,10.16"] {
+            refused_with(
+                &mut app,
+                id,
+                &[at, "text=GND"],
+                "is on net VCC; a GND label there would short VCC and GND; pass allow_merge=true",
+            );
+        }
+        let before = sheet_shape(&app);
+        let outcome = run(&mut app, id, &["at=R1.2", "text=GND", "allow_merge=true"]);
+        assert_eq!(outcome, CommandOutcome::Ran, "{id}");
+        assert_ne!(sheet_shape(&app), before, "{id}");
+    }
+}
+
+#[test]
+fn a_label_with_the_same_name_or_on_an_unnamed_net_or_on_nothing_is_allowed() {
+    let mut sheet = two_named_nets();
+    // C1.2 has an unnamed stub.
+    sheet
+        .wires
+        .push(wire(Point::new(41.91, 12.7), Point::new(41.91, 7.62)));
+    for operands in [
+        ["at=R1.2", "text=VCC"],
+        ["at=C1.2", "text=SENSE"],
+        ["at=41.91,10.16", "text=OTHER"],
+        ["at=63.5,63.5", "text=ANY"],
+    ] {
+        let mut app = app_with(sheet.clone());
+        let outcome = run(&mut app, "place_net_label", &operands);
+        assert_eq!(outcome, CommandOutcome::Ran, "{operands:?}");
+    }
+}
+
+#[test]
+fn a_power_port_that_would_rename_the_net_is_refused_unless_allowed() {
+    let mut app = app_with(two_named_nets());
+    let gnd = ["net_name=GND", "lib_id=power:GND"];
+    refused_with(
+        &mut app,
+        "place_power_symbol",
+        &["at=R1.2", gnd[0], gnd[1]],
+        "a GND power port there would short VCC and GND",
+    );
+    let outcome = run(
+        &mut app,
+        "place_power_symbol",
+        &["at=R1.2", gnd[0], gnd[1], "allow_merge=true"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
+    let mut app = app_with(two_named_nets());
+    let outcome = run(
+        &mut app,
+        "place_power_symbol",
+        &["at=R1.2", "net_name=VCC", "lib_id=power:VCC"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran, "the same name is no short");
+}
+
 #[test]
 fn a_pin_reference_that_cannot_be_resolved_is_refused_and_changes_nothing() {
     let mut app = app_with(two_parts());

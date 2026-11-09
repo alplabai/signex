@@ -34,7 +34,9 @@ pub use pin_contacts::SheetPinContacts;
 mod segment_index;
 pub use segment_index::SegmentIndex;
 mod wire_intent;
-pub use wire_intent::{ExtraItem, ExtraKind, IntentNet, RunEnd, WireIntent, wire_intent};
+pub use wire_intent::{
+    ExtraItem, ExtraKind, IntentNet, RunEnd, WireIntent, net_name_at, wire_intent,
+};
 
 use crate::uf::{Key, find as uf_find, union as uf_union};
 

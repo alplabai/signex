@@ -142,6 +142,19 @@ step, no dirty flag, no Messages line. A run that lands answers
 pin is on the run's net. `place_wire` and `draw_wire` answer `answered`, not
 `ran`.
 
+## Labels and power ports
+
+`place_net_label`, `place_local_net_label`, `place_global_label`,
+`place_hierarchical_label` and `place_power_symbol` from operands, at a
+coordinate or a pin reference, take the best name of the net already at `at`
+(labels and power-port values, by the netlist's naming rule:
+`signex_net::net_name_at`). If that net has a name other than the new label
+text or power `net_name`, the placement is refused as a short ("`at` 16.51,12.7
+is on net VCC; a GND label there would short VCC and GND; pass
+allow_merge=true to merge on purpose"). The same name, an unnamed net, or
+nothing at `at` is allowed. `allow_merge=true` places it anyway. There is no
+`dry_run` for these commands.
+
 ## Bus geometry
 
 `place_bus` and `draw_bus` from operands follow the geometry rules of a wire

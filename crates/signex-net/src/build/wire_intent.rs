@@ -201,6 +201,22 @@ pub fn wire_intent(
     }
 }
 
+/// The best name of the net at `p` on `sheet` (labels and power-port values,
+/// by the netlist's naming rule), or `None` when the net is unnamed or nothing
+/// is at `p`. Used to refuse a label or power port that would rename it.
+pub fn net_name_at(sheet: &SchematicSheet, p: Point) -> Option<String> {
+    let index = SegmentIndex::new(
+        &sheet
+            .wires
+            .iter()
+            .map(|w| (w.start, w.end))
+            .collect::<Vec<_>>(),
+    );
+    let mut conn = merged_connectivity(sheet);
+    conn.root_of_anchored_in(&p, &index);
+    names_at(sheet, &mut conn.parent, [p, p]).into_iter().next()
+}
+
 /// The distinct best names of the nets under `points`, in order.
 fn names_at(
     sheet: &SchematicSheet,

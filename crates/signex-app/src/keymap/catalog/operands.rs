@@ -136,11 +136,13 @@ pub const BUS: &[Operand] = &[
     optional("allow_open", OperandKind::Bool),
     optional("dry_run", OperandKind::Bool),
 ];
-/// A label: its text at a point.
+/// A label: its text at a point. `allow_merge` lets it name a net that already
+/// has another name (#2199).
 pub const LABEL: &[Operand] = &[
     required("at", OperandKind::Point),
     required("text", OperandKind::Text),
     optional("rotation", OperandKind::Angle),
+    optional("allow_merge", OperandKind::Bool),
 ];
 /// A text note at a point.
 pub const TEXT: &[Operand] = &[
@@ -152,6 +154,7 @@ pub const POWER: &[Operand] = &[
     required("at", OperandKind::Point),
     required("net_name", OperandKind::Text),
     required("lib_id", OperandKind::Text),
+    optional("allow_merge", OperandKind::Bool),
 ];
 /// An open dialog's answer.
 pub const OPEN_PATH: &[Operand] = &[required("path", OperandKind::Path)];

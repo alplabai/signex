@@ -173,6 +173,31 @@ impl Signex {
         Ok(Point::new(*x, *y))
     }
 
+    /// A label or power port named `new_name` at `at` is refused when the net
+    /// already there carries another name, unless `allow_merge=true`: it would
+    /// short the two (#2199; rules in `docs/CLI.md`, "Labels and power ports").
+    fn refuse_rename(
+        &self,
+        args: &CommandArgs,
+        at: Point,
+        new_name: &str,
+        what: &str,
+    ) -> Result<(), String> {
+        if matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true))) {
+            return Ok(());
+        }
+        let Some(sheet) = self.document_state.edit_engine().map(|e| e.document()) else {
+            return Ok(());
+        };
+        match signex_net::net_name_at(sheet, at) {
+            Some(existing) if existing != new_name => Err(format!(
+                "`at` {},{} is on net {existing}; a {new_name} {what} there would short {existing} and {new_name}; pass allow_merge=true to merge on purpose",
+                at.x, at.y
+            )),
+            _ => Ok(()),
+        }
+    }
+
     fn place_from_operands(
         &mut self,
         placement: Placement,
@@ -199,6 +224,7 @@ impl Signex {
                 spec.label_type = kind;
                 spec.shape = shape.to_string();
                 spec.text = text(args, "text")?;
+                self.refuse_rename(args, at, &spec.text, "label")?;
                 if let Some(OperandValue::Angle(degrees)) = args.operand("rotation") {
                     spec.rotation = *degrees;
                 }
@@ -214,7 +240,9 @@ impl Signex {
                         "`lib_id` must name a power port style, `power:<name>` (e.g. power:GND, power:VCC), not {lib_id}"
                     ));
                 }
-                placed(self.place_power_at(at, &text(args, "net_name")?, &lib_id))
+                let net_name = text(args, "net_name")?;
+                self.refuse_rename(args, at, &net_name, "power port")?;
+                placed(self.place_power_at(at, &net_name, &lib_id))
             }
             Placement::NoConnect => placed(self.place_no_connect_at(self.grid_point(args, "at")?)),
             Placement::Junction => placed(self.place_junction_at(self.grid_point(args, "at")?)),

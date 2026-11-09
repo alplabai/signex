@@ -225,6 +225,24 @@ fn a_run_ending_on_a_sheet_pin_is_attached_and_names_nothing_extra() {
 }
 
 #[test]
+fn the_net_name_at_a_point_is_the_netlists_best_name_or_none() {
+    use crate::build::net_name_at;
+    let mut sheet = parts(&[("R1", (0.0, 0.0))]);
+    sheet.wires.push(wire(pt(0.0, 0.0), pt(0.0, 10.0)));
+    assert_eq!(net_name_at(&sheet, pt(0.0, 5.0)), None, "unnamed");
+    sheet
+        .labels
+        .push(label("SIG", pt(0.0, 10.0), LabelType::Net));
+    sheet
+        .labels
+        .push(label("VCC", pt(0.0, 10.0), LabelType::Global));
+    // A wire interior and a pin tip both read the net's best name.
+    assert_eq!(net_name_at(&sheet, pt(0.0, 5.0)).as_deref(), Some("VCC"));
+    assert_eq!(net_name_at(&sheet, pt(0.0, 0.0)).as_deref(), Some("VCC"));
+    assert_eq!(net_name_at(&sheet, pt(50.0, 50.0)), None, "nothing there");
+}
+
+#[test]
 fn a_run_that_was_not_applied_is_not_joined() {
     let before = parts(&[("R1", (0.0, 0.0)), ("C1", (20.0, 0.0))]);
     let got = intent(&before, &before, (0.0, 0.0), (20.0, 0.0));

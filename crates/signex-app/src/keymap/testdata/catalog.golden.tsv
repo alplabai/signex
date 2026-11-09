@@ -127,14 +127,14 @@ open_net_color_palette	view	Open net color palette	-	Schematic	-	-	RequiresDocum
 place_bus	place	Draw bus	Bus	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_open:bool?,dry_run:bool?
 place_compile_mask	place	Place Compile Mask directive	Compile Mask	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_design_block	place	Place design block	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
-place_global_label	place	Place global label	Global Label	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,rotation:angle/deg?
-place_hierarchical_label	place	Place hierarchical label	Hierarchical Label	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,rotation:angle/deg?
+place_global_label	place	Place global label	Global Label	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,rotation:angle/deg?,allow_merge:bool?
+place_hierarchical_label	place	Place hierarchical label	Hierarchical Label	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,rotation:angle/deg?,allow_merge:bool?
 place_junction	place	Place junction	Junction	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm
-place_local_net_label	place	Place local net label	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,rotation:angle/deg?
-place_net_label	place	Place net label	Net Label	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,rotation:angle/deg?
+place_local_net_label	place	Place local net label	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,rotation:angle/deg?,allow_merge:bool?
+place_net_label	place	Place net label	Net Label	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,rotation:angle/deg?,allow_merge:bool?
 place_no_connect	place	Place no-connect flag	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm
 place_no_erc	place	Place Generic No ERC directive	Generic No ERC	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm
-place_power_symbol	place	Place power symbol	Power Port	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,net_name:text,lib_id:text
+place_power_symbol	place	Place power symbol	Power Port	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,net_name:text,lib_id:text,allow_merge:bool?
 place_symbol	place	Place symbol	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_text	place	Place text	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text
 place_wire	place	Place wire	Wire	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_merge:bool?,allow_open:bool?,dry_run:bool?
