@@ -405,7 +405,7 @@ impl SchematicCanvas<'_> {
                     &self.selected,
                     &transform,
                     &self.prefs.canvas_colors,
-                    self.prefs.graphite.as_ref(),
+                    &self.prefs.graphite,
                     &self.designators,
                     self.prefs.wire_widths(),
                 );
@@ -497,7 +497,7 @@ impl SchematicCanvas<'_> {
             &erc_overlay,
             transform,
             &self.prefs.canvas_colors,
-            self.prefs.graphite.as_ref(),
+            &self.prefs.graphite,
         );
     }
 

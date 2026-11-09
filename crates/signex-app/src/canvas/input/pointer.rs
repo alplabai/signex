@@ -291,7 +291,7 @@ impl SchematicCanvas<'_> {
         }
         if let Some(pos) = cursor.position_in(bounds) {
             // Active Bar zone: top margin + bar height + slack, centered.
-            let metrics = crate::active_bar::metrics_for(self.prefs.graphite.is_some());
+            let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
             if pos.y < crate::active_bar::bar_zone_height_for(&metrics) {
                 // Calculate which Active Bar button was right-clicked
                 let tool = self.prefs.current_tool;

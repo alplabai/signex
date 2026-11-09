@@ -70,9 +70,6 @@ impl RowPaint {
     }
 }
 
-/// Text size of a menu row label on the legacy look.
-pub const LABEL_SIZE: f32 = MenuMetrics::LEGACY.label_size;
-
 /// Glyph of the submenu chevron column.
 const CHEVRON: &str = "\u{203A}";
 

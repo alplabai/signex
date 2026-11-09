@@ -5,7 +5,7 @@
 use super::layout::{BarSlot, SCHEMATIC_BAR_SLOTS, bar_slots, slot_rects};
 use super::*;
 use crate::app::{DrawMode, Tool};
-use signex_widgets::active_bar::{ActiveBarItem, Metrics, slot_offsets_with};
+use signex_widgets::active_bar::{ActiveBarItem, Metrics, slot_offsets};
 
 use signex_types::theme::ThemeTokens;
 
@@ -57,13 +57,13 @@ fn hit_rects_equal_drawn_rects() {
         let m = Metrics::GRAPHITE;
         for tool in [Tool::Select, Tool::Wire, Tool::Bus] {
             let items = drawn_items(tool, &tokens, tid);
-            let (drawn, total) = slot_offsets_with(&items, &m);
+            let (drawn, total) = slot_offsets(&items, &m);
             assert_eq!(total, bar_width_for(tool, &m), "{tid:?} {tool:?} width");
             let rects = slot_rects(tool, &m);
             assert_eq!(rects.len(), items.len(), "{tool:?} slot count");
             for (i, (left, width)) in rects.iter().copied().enumerate() {
                 assert_eq!(left, drawn[i], "slot {i} left edge");
-                assert_eq!(width, items[i].width_with(&m), "slot {i} width");
+                assert_eq!(width, items[i].width(&m), "slot {i} width");
                 let BarSlot::Trigger(menu) = bar_slots(tool)[i] else {
                     assert_eq!(
                         menu_at(tool, left + width / 2.0, &m),

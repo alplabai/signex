@@ -65,7 +65,7 @@ fn menu_trigger_geometry(
     menu: FpActiveBarMenu,
 ) -> (Option<f32>, f32) {
     let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
-    let (offsets, total) = signex_widgets::active_bar::slot_offsets_with(items, &metrics);
+    let (offsets, total) = signex_widgets::active_bar::slot_offsets(items, &metrics);
     let opens = |item: &ActiveBarItem<LibraryMessage>| -> bool {
         let ActiveBarItem::Button(b) = item else {
             return false;
@@ -277,7 +277,7 @@ fn dropdown_trigger_items(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_widgets::active_bar::{BTN_SIZE, Metrics};
+    use signex_widgets::active_bar::Metrics;
 
     fn editor_in(mode: crate::library::editor::footprint::state::EditorMode) -> FootprintDocument {
         use signex_library::{Footprint, FootprintFile};
@@ -361,7 +361,7 @@ mod tests {
         assert_eq!(customs, 1, "sketch bar should carry the dimension input");
 
         let expected: f32 = 2.0 * m.padding
-            + items.iter().map(|i| i.width_with(&m)).sum::<f32>()
+            + items.iter().map(|i| i.width(&m)).sum::<f32>()
             + m.spacing * (items.len() - 1) as f32;
         let (_, measured) = menu_trigger_geometry(&items, FpActiveBarMenu::Filter);
         assert!(
@@ -375,6 +375,6 @@ mod tests {
         // while measuring a button, and the test would stop proving
         // anything. Checked in a `const` block so that regression breaks
         // the build rather than waiting for a test run.
-        const { assert!(DIM_INPUT_W > BTN_SIZE) };
+        const { assert!(DIM_INPUT_W > Metrics::GRAPHITE.btn) };
     }
 }

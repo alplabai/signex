@@ -63,10 +63,7 @@ impl SchematicCanvas<'_> {
 
         let text_color = crate::render_config::to_iced(&self.prefs.canvas_colors.body);
         // Graphite draws the frame lines softer than the title-block text.
-        let frame_color = self
-            .prefs
-            .graphite
-            .map_or(text_color, |ink| ink.line_strong);
+        let frame_color = self.prefs.graphite.line_strong;
         let _probe = crate::frame_probe::span("canvas.background.frame");
         self.draw_sheet_frame(frame, cam, bounds, frame_color, text_color);
     }
@@ -83,8 +80,8 @@ impl SchematicCanvas<'_> {
             grid_style: self.prefs.grid_style,
             device_px_per_logical_px: self.prefs.device_px_per_logical_px,
             // Graphite: the sheet is the workspace, so it has no border.
-            border: !(self.prefs.graphite.is_some() && paper == self.prefs.theme_bg),
-            fine_dots: self.prefs.graphite.is_some(),
+            border: paper != self.prefs.theme_bg,
+            fine_dots: true,
         }
     }
 
@@ -249,13 +246,13 @@ mod graphite_frame_tests {
         let (overrides, filters) = Default::default();
         let mut prefs = test_prefs(&overrides, &filters);
         let line_strong = Color::from_rgb(0.2, 0.4, 0.6);
-        prefs.graphite = Some(GraphiteCanvasInk {
+        prefs.graphite = GraphiteCanvasInk {
             line_strong,
             accent: Color::from_rgb(0.8, 0.3, 0.1),
             accent_soft: Color::from_rgb(0.9, 0.8, 0.7),
             warn: Color::from_rgb(0.9, 0.6, 0.1),
             err: Color::from_rgb(0.8, 0.1, 0.1),
-        });
+        };
 
         let mut slot = CanvasSlot::new();
         *slot.camera_mut() = Camera {

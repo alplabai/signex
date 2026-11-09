@@ -148,3 +148,73 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         _ => return None,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dock::{DockLayoutSnapshot, DockLayoutStore, PanelPosition, RegionLayout};
+    use crate::panels::PanelKind;
+
+    fn region(panels: &[PanelKind], collapsed: bool) -> RegionLayout {
+        RegionLayout {
+            panels: panels.to_vec(),
+            collapsed,
+        }
+    }
+
+    /// Saves a layout holding Signex AI through the real store and returns
+    /// the saved `prefs.json` text.
+    fn saved(dir: &tempfile::TempDir) -> String {
+        let path = dir.path().join("prefs.json");
+        let layout = DockLayoutSnapshot {
+            left: region(&[PanelKind::Projects], false),
+            right: region(&[PanelKind::Properties, PanelKind::SignexAi], false),
+            bottom: region(&[PanelKind::Messages], true),
+        };
+        PrefsDockLayoutStore::at(path.clone())
+            .write(&layout)
+            .expect("save the dock layout");
+        std::fs::read_to_string(path).expect("read prefs.json")
+    }
+
+    #[test]
+    fn the_signex_ai_panel_round_trips_under_its_layout_key() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let text = saved(&dir);
+        let json: serde_json::Value = serde_json::from_str(&text).expect("prefs.json parses");
+
+        // Saved under "signex_ai".
+        assert_eq!(
+            json["dock"]["right"]["panels"],
+            serde_json::json!(["properties", "signex_ai"])
+        );
+
+        // Loaded back as the same panel.
+        let dock = read_dock_layout_from(Some(&json)).expect("a saved layout loads");
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties, PanelKind::SignexAi]
+        );
+    }
+
+    #[test]
+    fn an_unknown_panel_key_drops_only_that_panel() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let text = saved(&dir).replace("signex_ai", "signal");
+        let json: serde_json::Value = serde_json::from_str(&text).expect("prefs.json parses");
+
+        let dock = read_dock_layout_from(Some(&json)).expect("the layout itself still loads");
+
+        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::Projects]);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties]
+        );
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Bottom),
+            [PanelKind::Messages]
+        );
+        assert!(dock.is_collapsed(PanelPosition::Bottom));
+        assert!(!dock.is_collapsed(PanelPosition::Left));
+    }
+}

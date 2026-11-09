@@ -2,8 +2,7 @@
 //!
 //! The renderer, the slot-offset maths and the app's hit-test all read the
 //! same [`Metrics`], so a drawn button and its hit rect cannot drift apart.
-//! Legacy themes keep the original 26 / 1 / 2 / 2 numbers; Graphite uses
-//! 30 px buttons with 3 px padding and a 1 px gap.
+//! Graphite uses 30 px buttons with 3 px padding and a 1 px gap.
 
 /// Layout numbers of one Active Bar variant.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -25,17 +24,6 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    /// The original multi-colour bar.
-    pub const LEGACY: Self = Self {
-        btn: 26.0,
-        sep_w: 1.0,
-        padding: 2.0,
-        spacing: 2.0,
-        icon: 20.0,
-        chevron: 14.0,
-        sep_h: 18.0,
-    };
-
     /// Graphite: 30 px buttons, 16 px icons, 3 px padding, 1 px gap.
     pub const GRAPHITE: Self = Self {
         btn: 30.0,

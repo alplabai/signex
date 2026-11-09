@@ -1,16 +1,13 @@
 //! Schematic Active Bar geometry: one slot table that the view, the
 //! dropdown anchor and the canvas right-click hit-test all read.
 //!
-//! The pixel constants live in `signex_widgets::active_bar`
-//! (`BTN_SIZE`, `SEP_W`, `ROW_SPACING`, `BAR_PADDING`); the slot order
-//! lives in [`SCHEMATIC_BAR_SLOTS`]. `bar_items` in the parent module
+//! The pixel numbers live in `signex_widgets::active_bar::Metrics`; the slot
+//! order lives in [`SCHEMATIC_BAR_SLOTS`]. `bar_items` in the parent module
 //! is checked against that table by a test, so a button added to the
 //! view without a table entry (or the reverse) fails CI instead of
 //! silently shifting hit rects and dropdown anchors.
 
-use signex_widgets::active_bar::{
-    BAR_PADDING, BTN_SIZE, Metrics, ROW_SPACING, SEP_W, offsets_for_widths_with,
-};
+use signex_widgets::active_bar::{Metrics, offsets_for_widths};
 
 use super::ActiveBarMenu;
 use crate::app::Tool;
@@ -27,15 +24,6 @@ pub(crate) enum BarSlot {
 }
 
 impl BarSlot {
-    /// Width under the legacy metrics (the const bar width reads this).
-    const fn legacy_width(self) -> f32 {
-        match self {
-            Self::Trigger(_) => BTN_SIZE,
-            Self::Separator => SEP_W,
-            Self::DrawModePill => DRAW_MODE_PILL_WIDTH_PX,
-        }
-    }
-
     /// Width under `m`: the number the widget draws and the hit-test reads.
     pub(crate) fn width(self, m: &Metrics) -> f32 {
         match self {
@@ -43,15 +31,6 @@ impl BarSlot {
             Self::Separator => m.sep_w,
             Self::DrawModePill => DRAW_MODE_PILL_WIDTH_PX,
         }
-    }
-}
-
-/// Bar metrics for the canvas hit-test, which only knows the Graphite flag.
-pub(crate) fn metrics_for(graphite: bool) -> Metrics {
-    if graphite {
-        Metrics::GRAPHITE
-    } else {
-        Metrics::LEGACY
     }
 }
 
@@ -83,23 +62,6 @@ pub(crate) const SCHEMATIC_BAR_SLOTS: [BarSlot; 17] = [
     BarSlot::Trigger(ActiveBarMenu::NetColor),
 ];
 
-const fn bar_width_px() -> f32 {
-    let mut x = 2.0 * BAR_PADDING;
-    let mut i = 0;
-    while i < SCHEMATIC_BAR_SLOTS.len() {
-        if i > 0 {
-            x += ROW_SPACING;
-        }
-        x += SCHEMATIC_BAR_SLOTS[i].legacy_width();
-        i += 1;
-    }
-    x
-}
-
-/// Active Bar width without the draw-mode pill, derived from the slot
-/// table and the widget's layout constants.
-pub const BAR_WIDTH_PX: f32 = bar_width_px();
-
 /// The draw-mode pill (and its leading separator) is drawn for these tools.
 pub(crate) fn shows_draw_mode_pill(tool: Tool) -> bool {
     matches!(tool, Tool::Wire | Tool::Bus)
@@ -120,7 +82,7 @@ pub(crate) fn bar_slots(tool: Tool) -> Vec<BarSlot> {
 /// all centre with.
 pub(crate) fn bar_width_for(tool: Tool, m: &Metrics) -> f32 {
     let widths: Vec<f32> = bar_slots(tool).into_iter().map(|s| s.width(m)).collect();
-    offsets_for_widths_with(&widths, m).1
+    offsets_for_widths(&widths, m).1
 }
 
 /// Window-space x of the bar's left edge: the bar is centred on the
@@ -130,31 +92,19 @@ pub(crate) fn bar_left_in_window(tool: Tool, window_width: f32, m: &Metrics) -> 
 }
 
 /// Bar height under `m`: one button row plus the container padding
-/// (legacy 30, Graphite 36).
+/// (Graphite 36).
 pub(crate) fn bar_height_for(m: &Metrics) -> f32 {
     m.bar_height()
 }
 
-/// Gap between the top of the canvas overlay layer and the bar.
-pub(crate) const BAR_TOP_MARGIN_PX: f32 = 4.0;
+/// Gap between the top of the canvas overlay layer and the bar: the bar
+/// floats 10 px below the tab strip.
+const BAR_TOP_MARGIN_PX: f32 = 10.0;
 
-/// Gap between the top of the canvas overlay layer and a Graphite bar.
-const GRAPHITE_BAR_TOP_MARGIN_PX: f32 = 10.0;
-
-/// Top margin of the bar: Graphite floats it 10 px below the tab strip.
-/// The bar view and the dropdown anchor both read this, so they cannot
-/// disagree.
+/// Top margin of the bar. The bar view, the dropdown anchor and the canvas
+/// hit-test all read this, so they cannot disagree.
 pub(crate) fn bar_top_margin() -> f32 {
-    top_margin_for(&Metrics::GRAPHITE)
-}
-
-/// [`bar_top_margin`] from the metrics alone (the canvas hit-test).
-pub(crate) fn top_margin_for(m: &Metrics) -> f32 {
-    if *m == Metrics::GRAPHITE {
-        GRAPHITE_BAR_TOP_MARGIN_PX
-    } else {
-        BAR_TOP_MARGIN_PX
-    }
+    BAR_TOP_MARGIN_PX
 }
 
 /// Extra drop of the symbol editor's floating bar so it sits below the
@@ -168,7 +118,7 @@ pub(crate) fn symbol_editor_bar_drop(_tokens: &signex_types::theme::ThemeTokens)
 
 /// Canvas-local height of the Active Bar zone under `m` (`pos.y < this`).
 pub(crate) fn bar_zone_height_for(m: &Metrics) -> f32 {
-    top_margin_for(m) + bar_height_for(m) + BAR_ZONE_SLACK_PX
+    BAR_TOP_MARGIN_PX + bar_height_for(m) + BAR_ZONE_SLACK_PX
 }
 
 /// Gap between the bar's bottom edge and an open dropdown.
@@ -182,7 +132,7 @@ pub(crate) const BAR_ZONE_SLACK_PX: f32 = 12.0;
 /// measured from the bar's left edge.
 pub(crate) fn slot_rects(tool: Tool, m: &Metrics) -> Vec<(f32, f32)> {
     let widths: Vec<f32> = bar_slots(tool).into_iter().map(|s| s.width(m)).collect();
-    let (offsets, _) = offsets_for_widths_with(&widths, m);
+    let (offsets, _) = offsets_for_widths(&widths, m);
     offsets.into_iter().zip(widths).collect()
 }
 

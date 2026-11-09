@@ -98,10 +98,6 @@ fn camera(app: &Signex) -> (f32, f32, f32) {
 #[test]
 fn the_halo_is_drawn_again_after_a_zoom_pill_zoom() {
     let (mut app, main) = graphite_app_with_selected_wire();
-    assert!(
-        app.canvas_view_prefs(main).graphite.is_some(),
-        "a Graphite halo"
-    );
     assert_eq!(selection_draws(&app, main), 1, "first frame draws");
     assert_eq!(
         selection_draws(&app, main),
