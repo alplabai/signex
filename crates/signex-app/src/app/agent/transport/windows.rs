@@ -267,3 +267,131 @@ fn create_instance(
             )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
+    use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
+    use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
+
+    use super::*;
+
+    /// `ERROR_PIPE_BUSY`: every instance of the pipe is in use for a moment.
+    const PIPE_BUSY: i32 = 231;
+
+    /// A boot id no other test or run shares.
+    fn boot(tag: &str) -> String {
+        format!("wintest-{tag}-{}", std::process::id())
+    }
+
+    /// Open the pipe as a client, waiting out the moments it is busy.
+    async fn open_client(name: &str) -> io::Result<NamedPipeClient> {
+        for _ in 0..500 {
+            match ClientOptions::new().open(name) {
+                Ok(client) => return Ok(client),
+                Err(error) if error.raw_os_error() == Some(PIPE_BUSY) => {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Err(io::Error::other("the pipe stayed busy"))
+    }
+
+    enum Event {
+        Peer(Option<u32>),
+        Failure(String),
+    }
+
+    /// A stand-in for the listener's connection handling: answers a line with
+    /// `ok`, then waits for the client to close. A client that closed before
+    /// it was read (a refusal) is skipped; only an `accept` error is reported.
+    async fn serve_replies(mut listener: Listener, events: UnboundedSender<Event>) {
+        loop {
+            match listener.accept().await {
+                Ok(Accepted::Connection { conn, pid }) => {
+                    events.send(Event::Peer(pid)).ok();
+                    tokio::spawn(async move {
+                        let mut conn = BufReader::new(conn);
+                        let mut line = String::new();
+                        if matches!(conn.read_line(&mut line).await, Ok(read) if read > 0) {
+                            conn.get_mut().write_all(b"ok\n").await.ok();
+                            conn.get_mut().flush().await.ok();
+                            line.clear();
+                            conn.read_line(&mut line).await.ok();
+                        }
+                    });
+                }
+                Ok(Accepted::Refused { .. }) => {}
+                Err(error) => {
+                    events.send(Event::Failure(error.to_string())).ok();
+                    return;
+                }
+            }
+        }
+    }
+
+    async fn ask(name: &str, text: &str) -> String {
+        let mut client = BufReader::new(open_client(name).await.expect("a client"));
+        client.get_mut().write_all(text.as_bytes()).await.unwrap();
+        let mut reply = String::new();
+        tokio::time::timeout(Duration::from_secs(10), client.read_line(&mut reply))
+            .await
+            .expect("an answer in time")
+            .expect("a readable answer");
+        reply
+    }
+
+    #[tokio::test]
+    async fn a_request_round_trips_over_the_pipe_and_its_client_is_this_process() {
+        let id = boot("round");
+        let listener = Listener::bind(Path::new(""), &id).expect("bound");
+        let name = endpoint_name(Path::new(""), &id);
+        let (events, mut seen) = unbounded_channel();
+        let server = tokio::spawn(serve_replies(listener, events));
+
+        assert_eq!(ask(&name, "hello\n").await, "ok\n");
+
+        let Some(Event::Peer(pid)) = seen.recv().await else {
+            panic!("the listener did not accept the client");
+        };
+        assert_eq!(pid, Some(std::process::id()), "the peer check read us");
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn clients_that_connect_and_close_at_once_never_stop_the_listener() {
+        let id = boot("churn");
+        let listener = Listener::bind(Path::new(""), &id).expect("bound");
+        let name = endpoint_name(Path::new(""), &id);
+        let (events, mut seen) = unbounded_channel();
+        let server = tokio::spawn(serve_replies(listener, events));
+
+        for _ in 0..100 {
+            drop(open_client(&name).await.expect("a client"));
+            tokio::task::yield_now().await;
+        }
+        // A real request still gets its answer, and the listener never
+        // reported a failure.
+        assert_eq!(ask(&name, "hello\n").await, "ok\n");
+        while let Ok(event) = seen.try_recv() {
+            if let Event::Failure(why) = event {
+                panic!("the listener stopped: {why}");
+            }
+        }
+        assert!(!server.is_finished(), "the listener is still running");
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn a_second_pipe_of_the_same_name_cannot_be_made_while_one_is_open() {
+        let id = boot("squat");
+        let _first = Listener::bind(Path::new(""), &id).expect("bound");
+        assert!(
+            Listener::bind(Path::new(""), &id).is_err(),
+            "another process could not take the name either"
+        );
+    }
+}

@@ -67,14 +67,6 @@ pub(super) fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<()
         let name = entry_file_name(&canonical);
         // The other instance of this project that is alive keeps its entry.
         let existing = read_entry(&registry.join(&name));
-        if !may_take_over(existing.as_ref(), owner, pid_alive) {
-            let held = existing.map_or(0, |entry| entry.pid);
-            problems.push(format!(
-                "{} is also open in process {held}, which keeps its entry",
-                canonical.display()
-            ));
-            continue;
-        }
         let entry = Entry {
             format: FORMAT,
             project: canonical.to_string_lossy().into_owned(),
@@ -82,6 +74,19 @@ pub(super) fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<()
             socket: owner.endpoint.clone(),
             boot_id: owner.boot_id.clone(),
         };
+        if existing.as_ref() == Some(&entry) {
+            // Already written: a retry does not rewrite it.
+            wanted.insert(name);
+            continue;
+        }
+        if !may_take_over(existing.as_ref(), owner, entry_is_live) {
+            let held = existing.map_or(0, |entry| entry.pid);
+            problems.push(format!(
+                "{} is also open in process {held}, which keeps its entry",
+                canonical.display()
+            ));
+            continue;
+        }
         let text = serde_json::to_string_pretty(&entry).map_err(|error| error.to_string())?;
         match files::write_private(&registry.join(&name), text.as_bytes()) {
             Ok(()) => {
@@ -99,12 +104,40 @@ pub(super) fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<()
 }
 
 /// Whether this run may write over `existing`, the entry already at its
-/// file: there is none, it is ours (this process, or this boot id), or its
-/// process is gone. Another live process keeps its entry.
-fn may_take_over(existing: Option<&Entry>, owner: &Owner, alive: impl Fn(u32) -> bool) -> bool {
+/// file: there is none, it is ours (this process, or this boot id), or it is
+/// stale. Another live instance keeps its entry. `live` says whether the
+/// entry's instance is still there.
+fn may_take_over(existing: Option<&Entry>, owner: &Owner, live: impl Fn(&Entry) -> bool) -> bool {
     existing.is_none_or(|entry| {
-        entry.pid == owner.pid || entry.boot_id == owner.boot_id || !alive(entry.pid)
+        entry.pid == owner.pid || entry.boot_id == owner.boot_id || !live(entry)
     })
+}
+
+/// Is the instance an entry names still there: its process runs (a reused
+/// process id of an unrelated process is not enough) and its socket answers a
+/// connection, which is closed at once without sending a byte. A dead
+/// instance's entry is stale.
+fn entry_is_live(entry: &Entry) -> bool {
+    pid_alive(entry.pid) && endpoint_answers(&entry.socket)
+}
+
+#[cfg(unix)]
+fn endpoint_answers(socket: &str) -> bool {
+    std::os::unix::net::UnixStream::connect(socket).is_ok()
+}
+
+#[cfg(windows)]
+fn endpoint_answers(pipe: &str) -> bool {
+    /// `ERROR_PIPE_BUSY`: the pipe exists and all its instances are in use.
+    const PIPE_BUSY: i32 = 231;
+    match std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(pipe)
+    {
+        Ok(_connected) => true,
+        Err(error) => error.raw_os_error() == Some(PIPE_BUSY),
+    }
 }
 
 /// Is a process with this id running? A process of another user counts: it
@@ -298,6 +331,7 @@ mod tests {
         assert!(entries(dir.path()).is_empty(), "no project, no entry");
     }
 
+    #[cfg(unix)]
     fn entry_pid(dir: &Path, project: &Path) -> u32 {
         let name = entry_file_name(&std::fs::canonicalize(project).unwrap());
         read_entry(&dir.join(REGISTRY_DIR).join(name))
@@ -311,7 +345,14 @@ mod tests {
     fn a_live_other_instance_keeps_its_entry_and_our_close_does_not_remove_it() {
         let dir = scratch();
         let a = project(dir.path(), "a.snxprj");
-        let (ours, theirs) = (owner(41, "bb"), owner(1, "cc"));
+        // Its process runs and its socket answers.
+        let socket = dir.path().join("cc.sock");
+        let _listening = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        let theirs = Owner {
+            endpoint: socket.to_string_lossy().into_owned(),
+            ..owner(1, "cc")
+        };
+        let ours = owner(41, "bb");
         sync(dir.path(), &theirs, std::slice::from_ref(&a)).unwrap();
 
         let why = sync(dir.path(), &ours, std::slice::from_ref(&a)).unwrap_err();
@@ -322,6 +363,28 @@ mod tests {
         sync(dir.path(), &ours, &[]).unwrap();
         remove_all(dir.path(), &ours).unwrap();
         assert_eq!(entry_pid(dir.path(), &a), 1);
+    }
+
+    /// The process id of an entry can belong to an unrelated process by now
+    /// (here, process 1); a socket that refuses a connection shows it.
+    #[cfg(unix)]
+    #[test]
+    fn an_entry_whose_process_id_was_reused_and_whose_socket_is_dead_is_taken_over() {
+        let dir = scratch();
+        let a = project(dir.path(), "a.snxprj");
+        // A socket file whose listener is gone refuses a connection.
+        let socket = dir.path().join("dead.sock");
+        drop(std::os::unix::net::UnixListener::bind(&socket).unwrap());
+        let reused = Owner {
+            endpoint: socket.to_string_lossy().into_owned(),
+            ..owner(1, "ee")
+        };
+        sync(dir.path(), &reused, std::slice::from_ref(&a)).unwrap();
+        assert!(pid_alive(1));
+        assert!(!endpoint_answers(&reused.endpoint));
+
+        sync(dir.path(), &owner(41, "bb"), std::slice::from_ref(&a)).expect("taken over");
+        assert_eq!(entry_pid(dir.path(), &a), 41);
     }
 
     #[cfg(unix)]
@@ -349,8 +412,8 @@ mod tests {
             socket: "s".into(),
             boot_id: boot.into(),
         };
-        let live = |_: u32| true;
-        let gone = |_: u32| false;
+        let live = |_: &Entry| true;
+        let gone = |_: &Entry| false;
         assert!(may_take_over(None, &ours, live), "no entry");
         assert!(
             may_take_over(Some(&entry(41, "zz")), &ours, live),

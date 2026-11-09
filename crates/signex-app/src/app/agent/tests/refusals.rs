@@ -12,6 +12,15 @@ fn doc(file: &str) -> String {
     path(file).display().to_string()
 }
 
+/// An absolute path on every OS that no open project holds.
+fn elsewhere(file: &str) -> String {
+    std::env::temp_dir()
+        .join("snx-1924-elsewhere")
+        .join(file)
+        .display()
+        .to_string()
+}
+
 /// What a refused request must leave as it was.
 fn held(app: &Signex) -> (String, crate::headless::ChangeSnapshot, usize, usize) {
     (
@@ -48,12 +57,18 @@ fn refused_with(app: &mut Signex, input: Input, named: &str, fragment: &str) -> 
     reply
 }
 
-/// How many Messages lines begin with `start` and say `fragment`.
+/// How many Messages lines begin with `start` and say `fragment`. Messages
+/// compacts a line to 160 bytes, so a long line (a long temp path) is cut
+/// before its reason ends: such a line counts by its start alone.
 fn refusals_logged(start: &str, fragment: &str) -> usize {
+    const COMPACTED_AT: usize = 150;
     let _ = crate::diagnostics::init_logging();
     crate::diagnostics::recent_entries()
         .iter()
-        .filter(|entry| entry.message.starts_with(start) && entry.message.contains(fragment))
+        .filter(|entry| {
+            entry.message.starts_with(start)
+                && (entry.message.contains(fragment) || entry.message.len() >= COMPACTED_AT)
+        })
         .count()
 }
 
@@ -179,12 +194,12 @@ fn undo_tool_view_and_window_only_ids_and_a_path_writing_save_are_refused() {
         ("open_erc_dialog", json!({}), "only works in a window"),
         (
             "save_document_as",
-            json!({"document": a, "path": "/tmp/elsewhere.snxsch"}),
+            json!({"document": a, "path": elsewhere("elsewhere.snxsch")}),
             "takes a file path",
         ),
         (
             "open_document",
-            json!({"path": "/tmp/x.snxsch"}),
+            json!({"path": elsewhere("x.snxsch")}),
             "takes a file path",
         ),
         ("not_a_command", json!({}), "unknown command"),
@@ -205,7 +220,7 @@ fn a_document_that_is_not_in_an_open_project_is_refused() {
 
     for (document, fragment) in [
         (
-            "/definitely/not/open.snxsch".to_string(),
+            elsewhere("not-open.snxsch"),
             "is not an open or referenced document",
         ),
         (

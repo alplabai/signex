@@ -21,6 +21,18 @@ type Verdict = (Status, Option<String>, Option<Value>);
 /// The longest reason or command text the Messages line repeats.
 const LOGGED_TEXT_CHARS: usize = 200;
 
+/// How often an unregistered project is tried again while listening.
+pub(super) const REGISTRY_RETRY: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// How many times a failed listener is restarted before it stays off.
+pub(super) const MAX_RESTARTS: u32 = 5;
+
+/// The wait before restart number `restarts` + 1 (2, 4, 8, 16, 32 s), or
+/// `None` once it has been restarted [`MAX_RESTARTS`] times.
+pub(super) fn restart_delay(restarts: u32) -> Option<std::time::Duration> {
+    (restarts < MAX_RESTARTS).then(|| std::time::Duration::from_secs(2_u64 << restarts))
+}
+
 fn refused(reason: impl Into<String>) -> Verdict {
     (Status::Refused, Some(reason.into()), None)
 }
@@ -59,6 +71,7 @@ impl Signex {
                 crate::diagnostics::log_info(format!("Agent connections: listening on {endpoint}"));
                 self.agent.endpoint = Some(endpoint);
                 self.agent.registered = None;
+                self.agent.restarts = 0;
                 if !self.agent.touched.contains(&boot_id) {
                     self.agent.touched.push(boot_id);
                 }
@@ -68,26 +81,74 @@ impl Signex {
                 if self.agent.boot_id() != Some(boot_id.as_str()) {
                     return Task::none();
                 }
-                crate::diagnostics::log_warning(format!("Agent connections: stopped: {reason}"));
                 self.agent.listener_closed();
+                let Some(delay) = restart_delay(self.agent.restarts) else {
+                    crate::diagnostics::log_warning(format!(
+                        "Agent connections: stopped: {reason}; it failed {MAX_RESTARTS} times, so it stays off. Turn \"Allow agent connections\" off and on in Preferences to try again"
+                    ));
+                    return Task::none();
+                };
+                self.agent.restarts += 1;
+                crate::diagnostics::log_warning(format!(
+                    "Agent connections: stopped: {reason}; trying again in {} s",
+                    delay.as_secs()
+                ));
+                // The sleep is made inside the task: `update` runs outside a
+                // runtime.
+                Task::perform(async move { tokio::time::sleep(delay).await }, move |()| {
+                    Message::Agent(AgentMsg::RestartListener {
+                        boot_id: boot_id.clone(),
+                    })
+                })
+            }
+            AgentMsg::RestartListener { boot_id } => {
+                // New ids make a new subscription identity, which iced starts.
+                if self.ui_state.agent_connections_enabled
+                    && self.agent.boot_id() == Some(boot_id.as_str())
+                {
+                    self.agent.rotate_ids();
+                }
                 Task::none()
             }
             AgentMsg::RegistrySynced(result) => {
-                if let Err(why) = result {
-                    crate::diagnostics::log_warning(format!("Agent connections: registry: {why}"));
+                match result {
+                    Ok(()) => self.agent.registry_retry = false,
+                    Err(why) => {
+                        // Said once per run of failures, not at every retry.
+                        if !self.agent.registry_retry {
+                            crate::diagnostics::log_warning(format!(
+                                "Agent connections: registry: {why}; trying again every {} s",
+                                REGISTRY_RETRY.as_secs()
+                            ));
+                        }
+                        self.agent.registry_retry = true;
+                    }
                 }
                 Task::none()
+            }
+            AgentMsg::RegistryRetryTick => {
+                self.agent.registered = None;
+                self.sync_agent_registry().unwrap_or_else(Task::none)
             }
         }
     }
 
     /// The subscription that listens for agents; none while the "Allow agent
     /// connections" setting is off.
+    ///
+    /// While a listener is up and the last registry write left a project
+    /// unregistered, a timer asks for another try every [`REGISTRY_RETRY`].
     pub(crate) fn agent_listener_subscription(&self) -> Subscription<Message> {
-        listener::subscription(
+        let listening = listener::subscription(
             self.agent
                 .listener_config(self.ui_state.agent_connections_enabled),
-        )
+        );
+        let retry = if self.agent.endpoint.is_some() && self.agent.registry_retry {
+            iced::time::every(REGISTRY_RETRY).map(|_| Message::Agent(AgentMsg::RegistryRetryTick))
+        } else {
+            Subscription::none()
+        };
+        Subscription::batch([listening, retry])
     }
 
     /// The Save of Preferences committed the draft of "Allow agent
@@ -101,6 +162,7 @@ impl Signex {
         }
         self.ui_state.agent_connections_enabled = wanted;
         if wanted {
+            self.agent.restarts = 0;
             crate::diagnostics::log_info(
                 "Agent connections: on; an agent running as you can now connect",
             );

@@ -186,18 +186,37 @@ owner and link check the app makes.
 
 Two instances with the same project: an app removes only entries that carry
 its own `pid` and `boot_id`, and writes over an entry only if there is none,
-it is its own (same `pid` or same `boot_id`) or the entry's process is gone.
-The entry of another live process is kept and Messages says the project is
-also open there; closing the project in one instance never unregisters the
-other. The registry is written and removed under one lock, so a write in
-flight cannot bring back an entry the exit removed.
+it is its own (same `pid` or same `boot_id`) or the entry is stale: its process
+is gone, or its socket refuses a connection (a reused process id, or a
+listener that has gone). The check connects and closes at once without
+sending a byte, so the other instance logs nothing. The entry of another
+live instance is kept and Messages says the project is also open there;
+closing the project in one instance never unregisters the other. An entry
+that is already ours and unchanged is not rewritten. The registry is written
+and removed under one lock, so a write in flight cannot bring back an entry
+the exit removed.
+
+A write that fails, or leaves a project to another instance, is tried again:
+while a listener is up and a project is unregistered, a timer asks for
+another try every 5 s (no timer otherwise, and no write at every update).
+Messages says so once per run of failures. So when the other instance quits,
+this one registers the project within seconds.
+
+A listener that fails (it could not bind, or gave up accepting) is restarted
+after 2, 4, 8, 16 and 32 s with a new boot id and token, which gives iced a
+new subscription; after those five restarts it stays off and Messages says to
+turn the setting off and on in Preferences. A successful start resets the
+count.
 
 ## Known limits
 
 - The client (PR B) is not here: nothing yet connects, and nothing checks that
   a headless run holds a project.
 - The Windows code (`transport/windows.rs`) is compiled and linted for
-  `x86_64-pc-windows-msvc` on its own but has not been run.
+  `x86_64-pc-windows-msvc` on its own, and has transport-level tests that run
+  on the Windows CI job (a round trip, a hundred clients that connect and close
+  at once, a second pipe of the same name refused). It was not run locally, and
+  no test drives the whole app through the pipe.
 - A crash leaves its token and socket behind (0600, a dead token). The next
   start of that boot id never happens, so they stay until a client or a later
   version sweeps the folder.

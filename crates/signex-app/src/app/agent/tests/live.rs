@@ -542,3 +542,127 @@ fn a_client_that_never_reads_its_reply_is_dropped_after_the_write_timeout() {
         assert!(ended.is_ok(), "the slot is still held");
     });
 }
+
+/// A project another live instance holds is registered here once that
+/// instance is gone, without a write at every update.
+#[test]
+fn a_project_another_instance_held_is_registered_once_it_quits() {
+    let root = scratch();
+    let (mut app, _config, dir) = app_and_config(root.path());
+    let project = app.document_state.projects[0].path.clone();
+    std::fs::create_dir_all(project.parent().unwrap()).unwrap();
+    std::fs::write(&project, "{}").unwrap();
+    let canonical = std::fs::canonicalize(&project).unwrap();
+    let entry = dir
+        .join(super::super::files::REGISTRY_DIR)
+        .join(registry::entry_file_name(&canonical));
+    super::super::files::prepare_dir(&dir).unwrap();
+    // Instance B (process 1, a socket that answers) registered the project first.
+    let socket = root.path().join("other.sock");
+    let _answers = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    let other = registry::Owner {
+        pid: 1,
+        boot_id: "cc".into(),
+        endpoint: socket.to_string_lossy().into_owned(),
+    };
+    registry::sync(&dir, &other, std::slice::from_ref(&project)).unwrap();
+    let pid_in = |entry: &Path| {
+        serde_json::from_str::<registry::Entry>(&std::fs::read_to_string(entry).unwrap())
+            .unwrap()
+            .pid
+    };
+
+    let mut driver = crate::task_driver::TaskDriver::new();
+    let boot_id = app.agent.boot_id().unwrap().to_string();
+    let task = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id,
+        endpoint: "/run/ours.sock".into(),
+    }));
+    driver.settle(&mut app, task).unwrap();
+    assert_eq!(pid_in(&entry), 1, "the other instance keeps its entry");
+    assert!(app.agent.registry_retry, "the app knows it must try again");
+    assert_eq!(
+        app.agent_listener_subscription().units(),
+        2,
+        "listener + timer"
+    );
+
+    // The other instance quits and removes its entry.
+    std::fs::remove_file(&entry).unwrap();
+    // Ordinary updates do not write again.
+    for _ in 0..3 {
+        let task = app.update(Message::noop());
+        driver.settle(&mut app, task).unwrap();
+    }
+    assert!(!entry.exists(), "no rewrite at every update");
+
+    // The timer ticks: the project is ours.
+    let task = app.update(Message::Agent(AgentMsg::RegistryRetryTick));
+    driver.settle(&mut app, task).unwrap();
+    assert_eq!(pid_in(&entry), std::process::id());
+    assert!(!app.agent.registry_retry);
+    assert_eq!(
+        app.agent_listener_subscription().units(),
+        1,
+        "the timer is off"
+    );
+}
+
+#[test]
+fn a_failed_listener_is_restarted_with_new_ids_a_few_times_and_then_stays_off() {
+    use super::super::handler::{MAX_RESTARTS, restart_delay};
+    let mut app = app_at_work();
+    assert_eq!(restart_delay(0), Some(Duration::from_secs(2)));
+    assert_eq!(restart_delay(4), Some(Duration::from_secs(32)));
+    assert_eq!(restart_delay(MAX_RESTARTS), None);
+
+    let mut seen = vec![app.agent.boot_id().unwrap().to_string()];
+    for attempt in 0..MAX_RESTARTS {
+        let failed = seen.last().unwrap().clone();
+        let task = app.update(Message::Agent(AgentMsg::ListenerFailed {
+            boot_id: failed.clone(),
+            reason: "no socket".into(),
+        }));
+        assert_eq!(task.units(), 1, "attempt {attempt}: a restart is scheduled");
+        assert!(app.agent.endpoint.is_none());
+        // A late timer for an older listener restarts nothing.
+        let _t = app.update(Message::Agent(AgentMsg::RestartListener {
+            boot_id: "0000000000000000".into(),
+        }));
+        assert_eq!(app.agent.boot_id(), Some(failed.as_str()));
+        // The timer of this one gives the app new ids: a new subscription.
+        let before = app.agent.token().unwrap().as_str().to_string();
+        let _t = app.update(Message::Agent(AgentMsg::RestartListener {
+            boot_id: failed,
+        }));
+        assert_ne!(app.agent.token().unwrap().as_str(), before);
+        seen.push(app.agent.boot_id().unwrap().to_string());
+    }
+    let mut unique = seen.clone();
+    unique.sort();
+    unique.dedup();
+    assert_eq!(
+        unique.len(),
+        seen.len(),
+        "every restart has its own boot id"
+    );
+
+    // The next failure is the last: it says how to try again.
+    let said = "it failed 5 times, so it stays off";
+    let logged = crate::diagnostics::logged_count(said);
+    let task = app.update(Message::Agent(AgentMsg::ListenerFailed {
+        boot_id: seen.last().unwrap().clone(),
+        reason: "no socket".into(),
+    }));
+    assert_eq!(task.units(), 0, "no more restarts");
+    assert_eq!(crate::diagnostics::logged_count(said), logged + 1);
+
+    // A start resets the count.
+    app.agent.restarts = 3;
+    let boot_id = app.agent.boot_id().unwrap().to_string();
+    let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id,
+        endpoint: "/live.sock".into(),
+    }));
+    assert_eq!(app.agent.restarts, 0);
+}

@@ -49,6 +49,11 @@ pub enum AgentMsg {
     ListenerFailed { boot_id: String, reason: String },
     /// A registry write finished.
     RegistrySynced(Result<(), String>),
+    /// The retry timer: write the registry again (see `registry_retry`).
+    RegistryRetryTick,
+    /// The backoff after a failed listener is over: start a new one, unless
+    /// `boot_id` is no longer the app's.
+    RestartListener { boot_id: String },
 }
 
 /// What a connection read, before the app has looked at it.

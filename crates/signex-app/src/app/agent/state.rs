@@ -26,6 +26,11 @@ pub(crate) struct AgentState {
     pub(super) registry_lock: Arc<Mutex<()>>,
     /// The boot ids whose files this app may have made, for the quit path.
     pub(super) touched: Vec<String>,
+    /// The last registry write failed or left a project to another instance;
+    /// while it is set (and a listener is up) a timer retries it.
+    pub(super) registry_retry: bool,
+    /// How many times a failed listener was restarted since it last started.
+    pub(super) restarts: u32,
 }
 
 impl AgentState {
@@ -39,6 +44,8 @@ impl AgentState {
             serving: false,
             registry_lock: Arc::default(),
             touched: Vec::new(),
+            registry_retry: false,
+            restarts: 0,
         }
     }
 
@@ -79,6 +86,7 @@ impl AgentState {
     pub(super) fn listener_closed(&mut self) {
         self.endpoint = None;
         self.registered = None;
+        self.registry_retry = false;
     }
 
     /// New ids for the next time the setting goes on. A listener that is
