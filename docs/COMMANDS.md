@@ -36,6 +36,13 @@ keybinding call has no operands and keeps the active document.
 `query_pins document=<doc> designator=<ref>` lists the pins of a part on
 one sheet: number, name, electrical type, hidden, unit, shared and the tip
 in mm.
+
+A point operand (`at`, `start`, `end`) also takes a pin reference
+`<designator>.<pin>` (`R1.2`): the pin's tip on the sheet the edit targets.
+`place_wire`, `draw_wire`, `place_bus` and `draw_bus` check a run before it
+lands and answer with a report (optional operands `allow_merge`,
+`allow_open`, `dry_run`); rules in [CLI.md](CLI.md), "Wire intent".
+
 Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## General

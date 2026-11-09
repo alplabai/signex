@@ -21,6 +21,7 @@ usage error or a project that cannot be opened.
 |---|---|
 | `--keep-going` | run the rest after a refused or failed command (default: stop at the first) |
 | `--save` | allow commands that write files (capability `save`) |
+| `--dry-run` | run every command with `dry_run=true`: a wire or bus run reports and changes nothing; refused for a command without that operand, and together with `--save` |
 | `--allow <caps>` | also allow capabilities (comma list) |
 | `--allow-path <dir>` | also allow paths inside `<dir>` (repeatable) |
 | `--max-line-bytes`, `--max-commands`, `--max-file-bytes` | tighten or raise the input limits |
@@ -59,7 +60,8 @@ one the netlist prints, matched exactly. An unknown or ambiguous designator, a
 power port, a document that is not a schematic or one that cannot be read, or
 a project whose sheet hierarchy is not read yet, is refused with the reason.
 `open_document` and `new_document` answer with the new document's
-`{id, path, kind}`.
+`{id, path, kind}`. A wire or bus run from operands also answers (see "Wire
+intent").
 
 `apply_edits` takes a list of edit commands as its `edits` argument and
 applies them to one sheet as one undo step, and `revert` takes that step back;
@@ -86,6 +88,68 @@ already exists is `refused` without `overwrite: true`. `save_document_as` takes
 or new that makes nothing, with an error notice, is `failed` with that notice.
 A command with no operand that opens a dialog is `refused`, never `ran`, when
 the dialog cannot be answered.
+
+## Pin references
+
+A point operand (`at`, `start`, `end`) also takes `<designator>.<pin>`, split at
+the first `.`: `R1.2`, `U1.VCC`. The pin is its number first, else a pin name
+only one pin has (a pin with no number is known by its name, as in the
+netlist). A multi-unit part is named by its bare designator (there is no `U1A.3`
+form). The reference is the pin's tip on the sheet the edit targets (the
+`document` of `apply_edits`, else the active sheet), never on whichever tab is
+showing, and is accepted off the grid; the grid check stays for coordinates.
+Coordinates keep working: a value with a comma is a coordinate. `color_net`
+takes a coordinate only, and a bus no pin reference ("a bus does not connect to
+pins").
+
+A reference is refused, with the reason, for a designator that is not on the
+sheet, not annotated (`R?`), ambiguous or a power port; a pin that does not
+exist, whose name matches several pins, that is hidden, or whose unit is not
+placed on the sheet; a pin shared by every unit of a part that has several
+units placed (it has several tips, which are named); a project whose sheet
+hierarchy is not read yet or is being re-read ("ask again", the same for
+`query_pins`).
+
+## Wire intent
+
+A person clicking a wire sees what its path touches; a CLI or an agent does not.
+So `place_wire` and `draw_wire` from operands apply the run to a copy of the
+sheet first and judge the result with the netlist derivation
+(`signex_net::wire_intent`; there is no second connectivity model):
+
+1. Only horizontal and vertical segments: the draw mode bends a run as it does a
+   click run, and a segment that is still diagonal (Angle45, FreeAngle) is
+   refused.
+2. No segment crosses the open interior of a symbol body, a power port
+   included; running along a body edge or ending on one does not count.
+3. **Extra connection** (never allowed): the run pulls another pin, label,
+   junction or wire into the net, wherever on its path or bend ("the wire also
+   touches R5.1 at 20.32,5.08"). A start or end on a wire's interior is
+   intended. "Touches" is what the netlist joins: a pin the run only passes
+   over, with no wire end or junction at its tip, is not connected and not named.
+4. **Short**: the two ends are on differently named nets (labels and power
+   ports, by the netlist's naming rule); refused unless `allow_merge=true`.
+5. **Open end**: an end with no pin tip, wire, junction or label under it;
+   refused unless `allow_open=true`.
+6. The two ends must be on one net afterwards; a run that is not is refused
+   whatever the flags (it cannot happen for a connected run, so it signals a
+   bug rather than a choice).
+
+`dry_run=true` (`--dry-run`) answers the report and changes nothing: no undo
+step, no dirty flag, no Messages line. A run that lands answers
+`{"dry_run": false, "segments": [[x1,y1,x2,y2],...], "net": {"name": "N$3",
+"pins": ["C1.1","R1.2"]} | null, "merged": [names]}`; `net` is `null` when no
+pin is on the run's net. `place_wire` and `draw_wire` answer `answered`, not
+`ran`.
+
+## Bus geometry
+
+`place_bus` and `draw_bus` from operands follow the geometry rules of a wire
+(orthogonal segments, no body crossing) and refuse a dangling end: an end must
+sit on an existing bus (an end or its interior), a bus entry or a label, unless
+`allow_open=true`. They have no net check, because bus connectivity is the bus
+analysis, not the netlist. `dry_run` works as for a wire; the answer is
+`{"dry_run", "segments"}`.
 
 ## Security
 
