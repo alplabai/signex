@@ -1,0 +1,3 @@
+Follow-ups decided 2026-11-09 by the maintainer:
+- #2226: re-split panels/element_properties/selected.rs per kind with the Graphite changes (option A was taken in this merge).
+- #2225: Graphite raw() text, to_uppercase display casing and unformatted counts go to the i18n area migrations (#2057-#2062, #2063).
