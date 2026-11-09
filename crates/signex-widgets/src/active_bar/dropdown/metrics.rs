@@ -114,13 +114,11 @@ impl MenuMetrics {
         max_width: 320.0,
     };
 
-    /// The metrics of `tokens`' look.
-    pub fn of(tokens: &ThemeTokens) -> Self {
-        if super::super::skin::Skin::of(tokens).is_some() {
-            Self::GRAPHITE
-        } else {
-            Self::LEGACY
-        }
+    /// The Graphite metrics, whatever the tokens.
+    // TODO(#2207): remove after drag/pan lands; kept for the context-menu
+    // row_effects test, which another branch is editing.
+    pub fn of(_tokens: &ThemeTokens) -> Self {
+        Self::GRAPHITE
     }
 
     /// Height of one item row; `has_icons` is whether the menu has an icon

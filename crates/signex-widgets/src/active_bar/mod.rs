@@ -115,7 +115,7 @@ pub fn slot_offsets<M: 'static + Clone>(items: &[ActiveBarItem<M>]) -> (Vec<f32>
     slot_offsets_with(items, &Metrics::LEGACY)
 }
 
-/// [`slot_offsets`] under `m`; the bar `view` draws with `Metrics::of(tokens)`.
+/// [`slot_offsets`] under `m`; the bar `view` draws with [`Metrics::GRAPHITE`].
 pub fn slot_offsets_with<M: 'static + Clone>(
     items: &[ActiveBarItem<M>],
     m: &Metrics,
@@ -225,8 +225,6 @@ pub const BAR_PADDING: f32 = 2.0;
 /// Gap the row puts between adjacent slots.
 pub const ROW_SPACING: f32 = 2.0;
 
-const BAR_RADIUS: f32 = 4.0;
-
 /// Render the bar.
 ///
 /// Returns an `Element<M>` ready to push into a `Stack` overlay
@@ -237,11 +235,8 @@ pub fn view<'a, M>(items: Vec<ActiveBarItem<M>>, tokens: &'a ThemeTokens) -> Ele
 where
     M: 'static + Clone,
 {
-    let bar_bg = theme_ext::to_color(&tokens.panel_bg);
-    let border = theme_ext::border_color(tokens);
-
     let skin = skin::Skin::of(tokens);
-    let m = Metrics::of(tokens);
+    let m = Metrics::GRAPHITE;
     let mut row_widget = row![].spacing(m.spacing).align_y(iced::Alignment::Center);
     for item in items {
         row_widget = row_widget.push(view_item(item, tokens, &m));
@@ -249,33 +244,16 @@ where
 
     container(row_widget)
         .padding(m.padding)
-        .style(move |_: &Theme| match skin {
-            Some(s) => iced::widget::container::Style {
-                background: Some(iced::Background::Color(s.fill)),
-                border: Border {
-                    width: 1.0,
-                    radius: s.radius.into(),
-                    color: s.border,
-                    ..Border::default()
-                },
-                shadow: s.shadow,
-                ..iced::widget::container::Style::default()
+        .style(move |_: &Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(skin.fill)),
+            border: Border {
+                width: 1.0,
+                radius: skin.radius.into(),
+                color: skin.border,
+                ..Border::default()
             },
-            None => iced::widget::container::Style {
-                background: Some(iced::Background::Color(bar_bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: BAR_RADIUS.into(),
-                    color: border,
-                    ..Border::default()
-                },
-                shadow: iced::Shadow {
-                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
-                    offset: iced::Vector::new(0.0, 2.0),
-                    blur_radius: 8.0,
-                },
-                ..iced::widget::container::Style::default()
-            },
+            shadow: skin.shadow,
+            ..iced::widget::container::Style::default()
         })
         .boxed()
 }
@@ -323,7 +301,6 @@ where
     let skin = skin::Skin::of(tokens);
     let text_c = theme_ext::text_primary(tokens);
     let muted_c = theme_ext::text_secondary(tokens);
-    let hover_c = theme_ext::hover_color(tokens);
     let border = theme_ext::border_color(tokens);
 
     // Disabled icons are tinted to a muted gray so they read as
@@ -337,20 +314,21 @@ where
     // inherit a "natural" fill the way SVGs do.
     let glyph_color = if !b.enabled {
         disabled_tint
-    } else if let Some(s) = skin {
-        if b.selected { s.on_selected } else { s.ink }
     } else if b.selected {
-        Color::WHITE
+        skin.on_selected
     } else {
-        text_c
+        skin.ink
     };
     // Graphite icons are monochrome strokes tinted with the ink token
-    // (the bar surface colour on the armed tool); legacy keeps natural
-    // colours when enabled.
+    // (the bar surface colour on the armed tool).
     let svg_tint: Option<Color> = if !b.enabled {
         Some(disabled_tint)
     } else {
-        skin.map(|s| if b.selected { s.on_selected } else { s.ink })
+        Some(if b.selected {
+            skin.on_selected
+        } else {
+            skin.ink
+        })
     };
 
     let raw_icon: Element<'a, M> = match b.icon {
@@ -419,11 +397,11 @@ where
     // every editor (schematic, SchLib, eventual PCB / PCB-lib) so the
     // bar reads identically wherever it appears.
     // Graphite: token washes instead of white at 6 % (invisible on light
-    // themes) and the 7 px control radius. Legacy themes keep their paint.
+    // themes) and the 7 px control radius.
     let mut btn = button(icon_content).padding(0).style(
         move |_: &Theme, status: iced::widget::button::Status| {
-            let selected_fill = skin.map_or(hover_c, |s| s.selected);
-            let hover_fill = skin.map_or(Color::from_rgba(1.0, 1.0, 1.0, 0.06), |s| s.hover);
+            let selected_fill = skin.selected;
+            let hover_fill = skin.hover;
             let bg = if !enabled {
                 None
             } else if selected {
@@ -440,7 +418,7 @@ where
                 background: bg,
                 border: Border {
                     width: 0.0,
-                    radius: skin.map_or(3.0, |s| s.button_radius).into(),
+                    radius: skin.button_radius.into(),
                     color: border,
                     ..Border::default()
                 },

@@ -225,8 +225,6 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row_w<'a>(
     value: String,
     on_input: impl Fn(String) -> PanelMsg + 'a,
     muted: Color,
-    primary: Color,
-    border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
     container(
         row![
@@ -235,9 +233,7 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row_w<'a>(
                 .size(TS.caption)
                 .width(fw.1)
                 .padding(SP.xs)
-                .style(crate::panels::footprint_editor_properties::fp_field_style(
-                    muted, primary, border_c
-                ))
+                .style(crate::panels::form_look::text_input_style)
                 .on_input(on_input),
         ]
         .spacing(6)
@@ -255,8 +251,6 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
     value: String,
     on_input: impl Fn(String) -> PanelMsg + 'a,
     muted: Color,
-    primary: Color,
-    border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
     pad_input_row_w(
         (Length::Fixed(110.0), Length::Fill),
@@ -265,8 +259,6 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
         value,
         on_input,
         muted,
-        primary,
-        border_c,
     )
 }
 
@@ -435,8 +427,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         values.designator.clone(),
         move |v| pad_designator_msg(target, v),
         muted,
-        primary,
-        border_c,
     ));
 
     use crate::library::editor::footprint::state::PadSide;
@@ -465,8 +455,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         values.net.clone(),
         move |v| pad_net_msg(target, v),
         muted,
-        primary,
-        border_c,
     ));
 
     col = col.push(pad_input_row_w(
@@ -476,8 +464,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         format!("{:.1}", values.rotation_deg),
         move |v| pad_rotation_msg(target, v),
         muted,
-        primary,
-        border_c,
     ));
 
     col = col.push(pad_check_row_w(
@@ -496,8 +482,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         values.template.clone(),
         move |v| pad_template_msg(target, v),
         muted,
-        primary,
-        border_c,
     ));
     col = col.push(pad_input_row_w(
         fw,
@@ -506,8 +490,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         values.template_library.clone(),
         move |v| pad_template_library_msg(target, v),
         muted,
-        primary,
-        border_c,
     ));
 
     col

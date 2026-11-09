@@ -97,7 +97,7 @@ fn plain_card(tokens: &signex_types::theme::ThemeTokens) -> Element<'_, Message>
 fn a_menu_opens_at_the_cursor_and_clamps_only_at_its_own_windows_edge() {
     for id in [ThemeId::GraphiteLight] {
         let tokens = theme_tokens(id);
-        let metrics = MenuMetrics::of(&tokens);
+        let metrics = MenuMetrics::GRAPHITE;
         let card_h = 3.0 * metrics.item_height(false) + 2.0 * metrics.panel_pad;
         for window in [(1400.0_f32, 1000.0_f32), (500.0, 300.0)] {
             let size = iced::Size::new(window.0, window.1);
@@ -174,7 +174,7 @@ fn a_canvas_right_click_opens_the_menu_at_the_cursor() {
     let window = iced::Size::new(1400.0, 1000.0);
     let at = (600.0, 450.0);
     open_canvas_menu(&mut app, at);
-    let metrics = MenuMetrics::of(&app.document_state.panel_ctx.tokens);
+    let metrics = MenuMetrics::GRAPHITE;
     let texts = lay_out_layers(app.context_menu_overlay(main), window);
     let first = find(
         &texts,
@@ -222,7 +222,7 @@ fn a_click_anywhere_on_a_drawn_row_runs_that_row() {
     let (mut app, main) = graphite_app();
     open_canvas_menu(&mut app, (300.0, 200.0));
     let window = iced::Size::new(1400.0, 1000.0);
-    let metrics = MenuMetrics::of(&app.document_state.panel_ctx.tokens);
+    let metrics = MenuMetrics::GRAPHITE;
     let texts = lay_out_layers(app.context_menu_overlay(main), window);
     let label = find(&texts, &super::super::items::command_text("paste")).bounds;
     let hint = app.keymap_shortcut_label("paste");
@@ -281,7 +281,7 @@ fn the_place_flyout_lines_up_with_its_launcher() {
         iced::Size::new(1400.0, 700.0),
     );
     let first = find(&short, "Wire").bounds;
-    let metrics = MenuMetrics::of(&app.document_state.panel_ctx.tokens);
+    let metrics = MenuMetrics::GRAPHITE;
     let flyout_top = mid(first) - metrics.item_height(true) / 2.0 - metrics.panel_pad;
     assert!(
         flyout_top >= 0.0,
@@ -303,7 +303,7 @@ fn rows_and_launchers_lay_out_at_the_metrics_row_height() {
     );
     for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
         let tokens = theme_tokens(id);
-        let metrics = MenuMetrics::of(&tokens);
+        let metrics = MenuMetrics::GRAPHITE;
         for has_icons in [false, true] {
             let with_icon = |item: DropdownItem<Message>| {
                 DropdownEntry::Item(if has_icons {

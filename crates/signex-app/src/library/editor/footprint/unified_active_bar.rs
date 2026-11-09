@@ -63,9 +63,8 @@ pub fn bar_items(
 fn menu_trigger_geometry(
     items: &[ActiveBarItem<LibraryMessage>],
     menu: FpActiveBarMenu,
-    tokens: &ThemeTokens,
 ) -> (Option<f32>, f32) {
-    let metrics = signex_widgets::active_bar::Metrics::of(tokens);
+    let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
     let (offsets, total) = signex_widgets::active_bar::slot_offsets_with(items, &metrics);
     let opens = |item: &ActiveBarItem<LibraryMessage>| -> bool {
         let ActiveBarItem::Button(b) = item else {
@@ -142,8 +141,7 @@ pub fn dropdown_overlay<'a>(
     // the items this same bar just built. Clamp the panel's right edge
     // inside the viewport so a near-rightmost button still keeps it
     // fully visible.
-    let (trigger_x, bar_w) =
-        menu_trigger_geometry(&bar_items(editor, theme_id, tokens), menu, tokens);
+    let (trigger_x, bar_w) = menu_trigger_geometry(&bar_items(editor, theme_id, tokens), menu);
     // No trigger on the current bar means nothing to anchor to — a
     // stale menu key from a mode switch. Draw nothing rather than
     // park a panel over an unrelated button.
@@ -302,11 +300,11 @@ mod tests {
         // The Graphite metrics the padding / button / gap pins describe.
         let tid = ThemeId::DEFAULT;
         let tokens = signex_types::theme::theme_tokens(tid);
-        let m = Metrics::of(&tokens);
+        let m = Metrics::GRAPHITE;
 
         let sketch = editor_in(EditorMode::Sketch);
         let items = bar_items(&sketch, tid, &tokens);
-        let at = |m| menu_trigger_geometry(&items, m, &tokens).0;
+        let at = |m| menu_trigger_geometry(&items, m).0;
 
         // The first shared trigger sits flush against the bar padding.
         assert_eq!(at(FpActiveBarMenu::Filter), Some(m.padding));
@@ -329,11 +327,11 @@ mod tests {
         let pads = editor_in(EditorMode::Normal);
         let pads_items = bar_items(&pads, tid, &tokens);
         assert_eq!(
-            menu_trigger_geometry(&pads_items, FpActiveBarMenu::SketchCreate, &tokens).0,
+            menu_trigger_geometry(&pads_items, FpActiveBarMenu::SketchCreate).0,
             None
         );
         assert!(
-            menu_trigger_geometry(&pads_items, FpActiveBarMenu::Filter, &tokens)
+            menu_trigger_geometry(&pads_items, FpActiveBarMenu::Filter)
                 .0
                 .is_some()
         );
@@ -352,7 +350,7 @@ mod tests {
         // The Graphite metrics the padding / button / gap pins describe.
         let tid = ThemeId::DEFAULT;
         let tokens = signex_types::theme::theme_tokens(tid);
-        let m = Metrics::of(&tokens);
+        let m = Metrics::GRAPHITE;
         let editor = editor_in(EditorMode::Sketch);
         let items = bar_items(&editor, tid, &tokens);
 
@@ -365,7 +363,7 @@ mod tests {
         let expected: f32 = 2.0 * m.padding
             + items.iter().map(|i| i.width_with(&m)).sum::<f32>()
             + m.spacing * (items.len() - 1) as f32;
-        let (_, measured) = menu_trigger_geometry(&items, FpActiveBarMenu::Filter, &tokens);
+        let (_, measured) = menu_trigger_geometry(&items, FpActiveBarMenu::Filter);
         assert!(
             (measured - expected).abs() < 0.01,
             "{measured} vs {expected}"

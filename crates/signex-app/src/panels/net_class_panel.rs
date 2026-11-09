@@ -328,13 +328,11 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
     )
 }
 
-/// Graphite ghost look; a disabled button loses its hover and mutes its label.
+/// Ghost look; a disabled button loses its hover and mutes its label.
 fn ghost_style(theme: &Theme, status: button::Status) -> button::Style {
-    let Some(mut style) = form_look::ghost_button(theme, status) else {
-        return button::secondary(theme, status);
-    };
-    if let (button::Status::Disabled, Some(look)) = (status, form_look::FormLook::of(theme)) {
-        style.text_color = look.ink4;
+    let mut style = form_look::ghost_button(theme, status);
+    if status == button::Status::Disabled {
+        style.text_color = form_look::FormLook::of(theme).ink4;
     }
     style
 }

@@ -60,10 +60,9 @@ fn wheel_reaches_probe(overlays: Vec<Element<'_, Message>>, at: Point) -> bool {
 
 /// Window y of the middle of the bar, `drop` px below the bar margin.
 fn bar_y(app: &Signex, drop: f32) -> f32 {
-    let tokens = &app.document_state.panel_ctx.tokens;
     let m = crate::active_bar::metrics_for(true);
     app.canvas_bounds().y
-        + crate::active_bar::bar_top_margin(tokens)
+        + crate::active_bar::bar_top_margin()
         + drop
         + crate::active_bar::bar_height_for(&m) / 2.0
 }

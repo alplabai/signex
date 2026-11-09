@@ -694,7 +694,7 @@ pub(crate) fn drawn_trigger_centres_with(
     tid: ThemeId,
 ) -> Vec<(ActiveBarMenu, f32)> {
     use signex_widgets::active_bar::{ActiveBarItem, Metrics, slot_offsets_with};
-    let m = Metrics::of(tokens);
+    let m = Metrics::GRAPHITE;
     let items = bar_items(
         tool,
         crate::app::DrawMode::Ortho90,

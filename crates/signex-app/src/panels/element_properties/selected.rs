@@ -93,9 +93,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_input_row(
-                        "(X/Y)", &pos_loc, muted, input_bg, input_bdr,
-                    ));
+                    c = c.push(form_input_row("(X/Y)", &pos_loc, muted, input_bg));
                     let rotation_opts: Vec<String> = vec![
                         "0 Degrees".into(),
                         "90 Degrees".into(),
@@ -170,7 +168,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         library_status,
                         muted,
                         input_bg,
-                        input_bdr,
                         &ctx.tokens,
                     )
                 },
@@ -230,16 +227,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_input_row(
-                        "Physical Name",
-                        &phys_name,
-                        muted,
-                        input_bg,
-                        input_bdr,
-                    ));
-                    c = c.push(form_input_row(
-                        "Net Name", &phys_name, muted, input_bg, input_bdr,
-                    ));
+                    c = c.push(form_input_row("Physical Name", &phys_name, muted, input_bg));
+                    c = c.push(form_input_row("Net Name", &phys_name, muted, input_bg));
                     c = c.push(net_numeric_row(
                         "Power Net",
                         "0.000",
@@ -366,7 +355,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                     &description,
                                     lbl,
                                     input_bg,
-                                    input_bdr,
                                 ));
                             }
                             c = super::library_rows::push_footprint_row(
@@ -377,22 +365,15 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                 lbl,
                             );
                             if !datasheet.is_empty() {
-                                c = c.push(form_input_row(
-                                    "Datasheet",
-                                    &datasheet,
-                                    lbl,
-                                    input_bg,
-                                    input_bdr,
-                                ));
+                                c = c.push(form_input_row("Datasheet", &datasheet, lbl, input_bg));
                             }
                             for (label, value) in &documents {
-                                c = c.push(form_input_row(label, value, lbl, input_bg, input_bdr));
+                                c = c.push(form_input_row(label, value, lbl, input_bg));
                             }
                             c = c.push(super::library_rows::library_id_row(
                                 &lib_id,
                                 lbl,
                                 input_bg,
-                                input_bdr,
                                 &ctx.tokens,
                             ));
                             c = super::library_rows::push_symbol_choice_row(
@@ -408,11 +389,10 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                 library_status,
                                 lbl,
                                 input_bg,
-                                input_bdr,
                                 &ctx.tokens,
                             );
                             c = super::library_rows::push_part_actions(c);
-                            super::body_row::push_body_row(c, id, &body, lbl, input_bg, input_bdr)
+                            super::body_row::push_body_row(c, id, &body, lbl, input_bg)
                         },
                     )
                     .boxed(),
@@ -426,12 +406,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         &ctx.collapsed_sections,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
-                            c = c.push(form_input_row(
-                                "Position", &position, lbl, input_bg, input_bdr,
-                            ));
-                            c = c.push(form_input_row(
-                                "Rotation", &rotation, lbl, input_bg, input_bdr,
-                            ));
+                            c = c.push(form_input_row("Position", &position, lbl, input_bg));
+                            c = c.push(form_input_row("Rotation", &rotation, lbl, input_bg));
                             c
                         },
                     )
@@ -508,9 +484,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                 );
                             } else {
                                 for (name, value) in &section_params {
-                                    c = c.push(form_input_row(
-                                        name, value, lbl, input_bg, input_bdr,
-                                    ));
+                                    c = c.push(form_input_row(name, value, lbl, input_bg));
                                 }
                             }
                             c
@@ -552,7 +526,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                 if is_reference { "Reference" } else { "Value" },
                                 muted,
                                 input_bg,
-                                input_bdr,
                             ));
                             c = c.push(form_edit_row("Text", &text_value, muted, move |s| {
                                 if is_reference {
@@ -561,15 +534,12 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                     PanelMsg::EditSymbolValue(id, s)
                                 }
                             }));
-                            c = c.push(form_input_row(
-                                "Visible", &visible, muted, input_bg, input_bdr,
-                            ));
+                            c = c.push(form_input_row("Visible", &visible, muted, input_bg));
                             c = c.push(form_input_row(
                                 "Fields Autoplaced",
                                 &fields_autoplaced,
                                 muted,
                                 input_bg,
-                                input_bdr,
                             ));
                             c
                         },
@@ -584,33 +554,11 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         &ctx.collapsed_sections,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
-                            c = c.push(form_input_row(
-                                "Position", &position, muted, input_bg, input_bdr,
-                            ));
-                            c = c.push(form_input_row(
-                                "Rotation", &rotation, muted, input_bg, input_bdr,
-                            ));
-                            c = c.push(form_input_row(
-                                "Justify H",
-                                &justify_h,
-                                muted,
-                                input_bg,
-                                input_bdr,
-                            ));
-                            c = c.push(form_input_row(
-                                "Justify V",
-                                &justify_v,
-                                muted,
-                                input_bg,
-                                input_bdr,
-                            ));
-                            c = c.push(form_input_row(
-                                "Text Size",
-                                &text_size,
-                                muted,
-                                input_bg,
-                                input_bdr,
-                            ));
+                            c = c.push(form_input_row("Position", &position, muted, input_bg));
+                            c = c.push(form_input_row("Rotation", &rotation, muted, input_bg));
+                            c = c.push(form_input_row("Justify H", &justify_h, muted, input_bg));
+                            c = c.push(form_input_row("Justify V", &justify_v, muted, input_bg));
+                            c = c.push(form_input_row("Text Size", &text_size, muted, input_bg));
                             c = c.push(font_family_row(
                                 "Font",
                                 font_family.as_deref(),
@@ -655,9 +603,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         &ctx.collapsed_sections,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
-                            c = c.push(form_input_row(
-                                "(X/Y)", &pos_clone, muted, input_bg, input_bdr,
-                            ));
+                            c = c.push(form_input_row("(X/Y)", &pos_clone, muted, input_bg));
                             let rotation_opts: Vec<String> = vec![
                                 "0 Degrees".into(),
                                 "90 Degrees".into(),
@@ -749,7 +695,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             // B/I/U/T row — cosmetic for now.
                             c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
                             // 3x3 Justification grid — Altium's 9-point anchor picker.
-                            c = c.push(form_label("Justification", muted));
+                            c = c.push(form_label("Justification"));
                             c = c.push(
                                 container(justification_grid(
                                     id,
@@ -801,33 +747,11 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         &ctx.collapsed_sections,
                         move || {
                             let mut c = Column::new().spacing(0).width(Length::Fill);
-                            c = c.push(form_input_row(
-                                "Position", &position, muted, input_bg, input_bdr,
-                            ));
-                            c = c.push(form_input_row(
-                                "Rotation", &rotation, muted, input_bg, input_bdr,
-                            ));
-                            c = c.push(form_input_row(
-                                "Justify H",
-                                &justify_h,
-                                muted,
-                                input_bg,
-                                input_bdr,
-                            ));
-                            c = c.push(form_input_row(
-                                "Justify V",
-                                &justify_v,
-                                muted,
-                                input_bg,
-                                input_bdr,
-                            ));
-                            c = c.push(form_input_row(
-                                "Text Size",
-                                &text_size,
-                                muted,
-                                input_bg,
-                                input_bdr,
-                            ));
+                            c = c.push(form_input_row("Position", &position, muted, input_bg));
+                            c = c.push(form_input_row("Rotation", &rotation, muted, input_bg));
+                            c = c.push(form_input_row("Justify H", &justify_h, muted, input_bg));
+                            c = c.push(form_input_row("Justify V", &justify_v, muted, input_bg));
+                            c = c.push(form_input_row("Text Size", &text_size, muted, input_bg));
                             c = c.push(font_family_row(
                                 "Font",
                                 note_font_family.as_deref(),

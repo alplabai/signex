@@ -109,7 +109,6 @@ pub(super) fn library_id_row<'a>(
     lib_id: &str,
     label: impl Into<LabelInk>,
     input_bg: Color,
-    input_bdr: Color,
     tokens: &ThemeTokens,
 ) -> Element<'a, PanelMsg> {
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
@@ -126,7 +125,7 @@ pub(super) fn library_id_row<'a>(
     .width(Length::Fill)
     .clip(true)
     .style(move |theme: &Theme| {
-        let (bg, bdr, radius) = super::super::form_look::value_box(theme, input_bg, input_bdr, 2.0);
+        let (bg, bdr, radius) = super::super::form_look::value_box(theme);
         container::Style {
             background: Some(Background::Color(bg)),
             border: Border {
@@ -177,10 +176,6 @@ pub(super) const OUT_OF_DATE: &str = "Library: out of date";
 /// button. Update replaces the sheet's shared copy, so it affects every
 /// instance of the part on the sheet - the tooltip says so. On Graphite the
 /// status is a warn pill and Update a ghost button.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "a view builder: target, label, status, the colours and the theme are all independent"
-)]
 pub(super) fn push_library_rows<'a>(
     mut c: Column<Element<'a, PanelMsg>>,
     id: uuid::Uuid,
@@ -188,18 +183,11 @@ pub(super) fn push_library_rows<'a>(
     status: LibraryStatus,
     muted: impl Into<LabelInk>,
     input_bg: Color,
-    input_bdr: Color,
     tokens: &ThemeTokens,
 ) -> Column<Element<'a, PanelMsg>> {
     let ink: LabelInk = muted.into();
     if !library_name.is_empty() {
-        c = c.push(form_input_row(
-            "Library",
-            library_name,
-            ink,
-            input_bg,
-            input_bdr,
-        ));
+        c = c.push(form_input_row("Library", library_name, ink, input_bg));
     }
     let LibraryStatus { drifted, missing } = status;
     if missing {
@@ -221,10 +209,7 @@ fn out_of_date_row<'a>(id: uuid::Uuid, tokens: &ThemeTokens) -> Element<'a, Pane
     let update = iced::widget::button(iced::widget::text("Update from library").size(TS.body))
         .padding([SP.xs, SP.m])
         .on_press(PanelMsg::UpdateSymbolFromLibrary(id))
-        .style(|theme: &iced::Theme, status| {
-            super::super::form_look::ghost_button(theme, status)
-                .unwrap_or_else(|| iced::widget::button::primary(theme, status))
-        });
+        .style(super::super::form_look::ghost_button);
     let status: Element<'a, PanelMsg> = container(iced::widget::text(OUT_OF_DATE).size(TS.caption))
         .padding([2.0, 8.0])
         .style(crate::styles::pill(tokens, crate::styles::PillTone::Warn))
@@ -268,10 +253,7 @@ pub(super) fn push_part_actions<'a>(
             iced::widget::button(iced::widget::text(label).size(TS.body))
                 .padding([SP.xs, SP.m])
                 .on_press(message)
-                .style(|theme: &iced::Theme, status| {
-                    super::super::form_look::ghost_button(theme, status)
-                        .unwrap_or_else(|| iced::widget::button::primary(theme, status))
-                })
+                .style(super::super::form_look::ghost_button)
                 .boxed()
         },
     ))

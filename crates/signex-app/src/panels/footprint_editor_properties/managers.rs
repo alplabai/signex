@@ -186,7 +186,7 @@ pub(super) fn render_other_section<'a>(
     // Units row — mm/mils segmented selector (Altium parity). Reuses
     // the schematic Properties panel's `seg_btn` widget so the chrome
     // matches byte-for-byte.
-    col = col.push(super::super::form_label("Units", muted));
+    col = col.push(super::super::form_label("Units"));
     col = col.push(
         container(
             row![

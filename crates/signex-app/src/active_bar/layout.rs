@@ -141,11 +141,11 @@ pub(crate) const BAR_TOP_MARGIN_PX: f32 = 4.0;
 /// Gap between the top of the canvas overlay layer and a Graphite bar.
 const GRAPHITE_BAR_TOP_MARGIN_PX: f32 = 10.0;
 
-/// Top margin of the bar under `tokens`: Graphite floats it 10 px below the
-/// tab strip, every other theme keeps [`BAR_TOP_MARGIN_PX`]. The bar view
-/// and the dropdown anchor both read this, so they cannot disagree.
-pub(crate) fn bar_top_margin(tokens: &signex_types::theme::ThemeTokens) -> f32 {
-    top_margin_for(&Metrics::of(tokens))
+/// Top margin of the bar: Graphite floats it 10 px below the tab strip.
+/// The bar view and the dropdown anchor both read this, so they cannot
+/// disagree.
+pub(crate) fn bar_top_margin() -> f32 {
+    top_margin_for(&Metrics::GRAPHITE)
 }
 
 /// [`bar_top_margin`] from the metrics alone (the canvas hit-test).

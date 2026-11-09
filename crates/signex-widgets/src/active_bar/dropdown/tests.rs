@@ -1,40 +1,19 @@
 use super::*;
-use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
-
-/// Tokens with no extended set: the unskinned look `Skin::of` and
-/// `MenuMetrics::of` fall back to. No built-in theme is unskinned.
-fn unskinned() -> ThemeTokens {
-    let mut tokens = theme_tokens(ThemeId::GraphiteLight);
-    tokens.extended = signex_types::theme::ExtendedTokens::NONE;
-    tokens
-}
-
-#[test]
-fn a_legacy_enabled_icon_keeps_its_own_colours() {
-    assert_eq!(icon_style(false, Color::WHITE, None).color, None);
-}
+use signex_types::theme::{ThemeId, theme_tokens};
 
 #[test]
 fn disabled_icon_is_tinted_muted() {
     let muted = Color::from_rgb(0.5, 0.5, 0.5);
-    assert_eq!(icon_style(true, muted, None).color, Some(muted));
-    assert_eq!(
-        icon_style(true, muted, Some(Color::BLACK)).color,
-        Some(muted)
-    );
+    assert_eq!(icon_style(true, muted, Color::BLACK).color, Some(muted));
 }
 
 /// The Graphite look draws every row icon in one ink, so a menu's icon
-/// column reads monochrome; legacy themes keep the SVG's own colours.
+/// column reads monochrome.
 #[test]
-fn graphite_icons_are_monochrome_and_legacy_icons_keep_their_colours() {
+fn graphite_icons_are_monochrome() {
     let graphite = Look::of(&theme_tokens(ThemeId::GraphiteLight));
-    let ink = graphite.icon_ink.expect("a Graphite icon ink");
-    assert_eq!(
-        icon_style(false, graphite.muted, Some(ink)).color,
-        Some(ink)
-    );
-    assert_eq!(Look::of(&unskinned()).icon_ink, None);
+    let ink = graphite.icon_ink;
+    assert_eq!(icon_style(false, graphite.muted, ink).color, Some(ink));
 }
 
 /// The fork's `Shrink` compresses contents to their minimum, which
@@ -49,6 +28,11 @@ fn panel_without_a_width_hint_fits_its_content() {
     assert_eq!(panel.size().width, Length::Fit);
 }
 
+/// Width of a card of `entries` under the Graphite metrics.
+fn fit(entries: &[DropdownEntry<()>], max_w: f32, ui_family: &str) -> f32 {
+    MenuMetrics::GRAPHITE.fitted_width(entries, max_w, ui_family)
+}
+
 fn labelled(label: &str) -> Vec<DropdownEntry<()>> {
     vec![DropdownEntry::Item(DropdownItem::new(label, ()))]
 }
@@ -57,36 +41,23 @@ fn labelled(label: &str) -> Vec<DropdownEntry<()>> {
 /// longer label, and held at the cap (#2100).
 #[test]
 fn a_fitted_menu_is_narrower_than_the_cap_and_grows_with_its_label() {
-    let tokens = theme_tokens(ThemeId::GraphiteLight);
-    let short = fitted_width(&labelled("Copy"), &tokens, 260.0, "");
-    let long = fitted_width(&labelled("Copy Designator And Value"), &tokens, 260.0, "");
+    let short = fit(&labelled("Copy"), 260.0, "");
+    let long = fit(&labelled("Copy Designator And Value"), 260.0, "");
     assert!(short < 260.0 && short < long, "{short} {long}");
-    assert_eq!(
-        fitted_width(&labelled(&"W".repeat(200)), &tokens, 260.0, ""),
-        260.0
-    );
+    assert_eq!(fit(&labelled(&"W".repeat(200)), 260.0, ""), 260.0);
 }
 
 /// Graphite cards are fitted to their content between 200 and 320 px.
 #[test]
 fn a_graphite_card_is_fitted_between_200_and_320_px() {
-    let tokens = theme_tokens(ThemeId::GraphiteDark);
-    let tiny = fitted_width(&labelled("Cut"), &tokens, f32::MAX, "Inter");
-    let huge = fitted_width(&labelled(&"W".repeat(200)), &tokens, f32::MAX, "Inter");
-    let mid = fitted_width(
-        &labelled("Find Similar Objects Of This Kind"),
-        &tokens,
-        f32::MAX,
-        "",
-    );
+    let tiny = fit(&labelled("Cut"), f32::MAX, "Inter");
+    let huge = fit(&labelled(&"W".repeat(200)), f32::MAX, "Inter");
+    let mid = fit(&labelled("Find Similar Objects Of This Kind"), f32::MAX, "");
     assert_eq!(tiny, 200.0);
     assert_eq!(huge, 320.0);
     assert!(mid > 200.0 && mid < 320.0, "{mid}");
     // A caller's own cap still wins.
-    assert_eq!(
-        fitted_width(&labelled(&"W".repeat(200)), &tokens, 250.0, ""),
-        250.0
-    );
+    assert_eq!(fit(&labelled(&"W".repeat(200)), 250.0, ""), 250.0);
 }
 
 /// A shortcut and a chevron column widen the fitted card.
@@ -116,7 +87,7 @@ fn the_shortcut_and_chevron_columns_are_part_of_the_fitted_width() {
 /// or without icons.
 #[test]
 fn graphite_rows_are_28_px_with_dense_type() {
-    let m = MenuMetrics::of(&theme_tokens(ThemeId::GraphiteLight));
+    let m = MenuMetrics::GRAPHITE;
     assert_eq!(m, MenuMetrics::GRAPHITE);
     assert_eq!(m.item_height(false), 28.0);
     assert_eq!(m.item_height(true), 28.0);
@@ -124,7 +95,6 @@ fn graphite_rows_are_28_px_with_dense_type() {
     assert_eq!(m.shortcut_size, super::MENU_SHORTCUT_SIZE);
     assert_eq!(m.icon_size, 16.0);
     assert!(m.mono_shortcut);
-    assert_eq!(MenuMetrics::of(&unskinned()), MenuMetrics::LEGACY);
 }
 
 /// The open launcher's top is the sum of the rows above it, from the card

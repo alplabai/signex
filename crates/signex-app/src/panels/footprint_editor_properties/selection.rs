@@ -35,7 +35,6 @@ pub(super) fn view_selection<'a>(
         primary,
         border: border_c,
         input_bg,
-        input_bdr,
         panel_bg,
         ..
     } = palette;
@@ -66,7 +65,6 @@ pub(super) fn view_selection<'a>(
                 col,
                 muted,
                 input_bg,
-                input_bdr,
                 "Position",
                 format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
             );
@@ -92,20 +90,12 @@ pub(super) fn view_selection<'a>(
                 .boxed(),
             );
             if !is_section_collapsed("fp_sketch_entity", collapsed_sections) {
-                col = props_kv_row(
-                    col,
-                    muted,
-                    input_bg,
-                    input_bdr,
-                    "Kind",
-                    ent.kind_label.into(),
-                );
+                col = props_kv_row(col, muted, input_bg, "Kind", ent.kind_label.into());
                 if let Some([x, y]) = ent.position_mm {
                     col = props_kv_row(
                         col,
                         muted,
                         input_bg,
-                        input_bdr,
                         "Position",
                         format!("({x:.3}, {y:.3}) mm"),
                     );
@@ -114,7 +104,6 @@ pub(super) fn view_selection<'a>(
                     col,
                     muted,
                     input_bg,
-                    input_bdr,
                     "Construction",
                     if ent.construction {
                         "yes".into()
@@ -126,7 +115,6 @@ pub(super) fn view_selection<'a>(
                     col,
                     muted,
                     input_bg,
-                    input_bdr,
                     "Attached constraints",
                     ent.attached_constraint_count.to_string(),
                 );
@@ -243,9 +231,9 @@ pub(super) fn view_selection<'a>(
 
                 // v0.16.4 — role sub-forms. Render when the
                 // matching `*Attr` is set on the selected entity.
-                col = render_pour_subform(col, fp, id, muted, primary, border_c);
+                col = render_pour_subform(col, fp, id, muted, primary);
                 col = render_keepout_subform(col, fp, id, muted, primary, border_c, panel_bg);
-                col = render_cutout_subform(col, fp, id, muted, primary, border_c, panel_bg);
+                col = render_cutout_subform(col, fp, id, muted, primary, panel_bg);
                 col = render_sketch_pad_subform(
                     col,
                     fp,
@@ -277,22 +265,8 @@ pub(super) fn view_selection<'a>(
                     .boxed(),
                 );
                 if !is_section_collapsed("fp_silk_graphic", collapsed_sections) {
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        input_bg,
-                        input_bdr,
-                        "Kind",
-                        silk.kind_label.into(),
-                    );
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        input_bg,
-                        input_bdr,
-                        "Index",
-                        silk.idx.to_string(),
-                    );
+                    col = props_kv_row(col, muted, input_bg, "Kind", silk.kind_label.into());
+                    col = props_kv_row(col, muted, input_bg, "Index", silk.idx.to_string());
 
                     if silk.from_sketch {
                         // #1718: a baked entry is the sketch's; Pads mode
@@ -308,7 +282,7 @@ pub(super) fn view_selection<'a>(
                             .boxed(),
                         );
                     } else {
-                        col = silk_geometry_rows(col, &silk.kind, muted, primary, border_c);
+                        col = silk_geometry_rows(col, &silk.kind, muted);
 
                         // Stroke width (all kinds).
                         col = col.push(pad_input_row_w(
@@ -318,8 +292,6 @@ pub(super) fn view_selection<'a>(
                             format!("{:.3}", silk.stroke_width_mm),
                             PanelMsg::FpEditorSetSilkStrokeWidth,
                             muted,
-                            primary,
-                            border_c,
                         ));
                         // Filled flag (only meaningful for closed shapes;
                         // surfacing for all so the user can flip it without
@@ -419,29 +391,14 @@ pub(super) fn view_selection<'a>(
                         muted,
                         PanelMsg::FpEditorSetFootprintHeight,
                     ));
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        input_bg,
-                        input_bdr,
-                        "Version",
-                        fp.version.clone(),
-                    );
-                    col = props_kv_row(col, muted, input_bg, input_bdr, "Mode", mode_label.into());
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        input_bg,
-                        input_bdr,
-                        "Pads",
-                        fp.pad_count.to_string(),
-                    );
+                    col = props_kv_row(col, muted, input_bg, "Version", fp.version.clone());
+                    col = props_kv_row(col, muted, input_bg, "Mode", mode_label.into());
+                    col = props_kv_row(col, muted, input_bg, "Pads", fp.pad_count.to_string());
                     if fp.sketch_entity_count > 0 || fp.sketch_constraint_count > 0 {
                         col = props_kv_row(
                             col,
                             muted,
                             input_bg,
-                            input_bdr,
                             "Sketch entities",
                             fp.sketch_entity_count.to_string(),
                         );
@@ -449,7 +406,6 @@ pub(super) fn view_selection<'a>(
                             col,
                             muted,
                             input_bg,
-                            input_bdr,
                             "Constraints",
                             fp.sketch_constraint_count.to_string(),
                         );

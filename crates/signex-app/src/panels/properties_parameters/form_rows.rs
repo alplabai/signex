@@ -67,7 +67,6 @@ pub fn form_input_row<'a, M: 'a>(
     value: &str,
     label_c: impl Into<LabelInk>,
     input_bg: Color,
-    input_border: Color,
 ) -> Element<'a, M> {
     container(
         row![
@@ -85,7 +84,7 @@ pub fn form_input_row<'a, M: 'a>(
             .padding([3, 6])
             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
             .style(move |theme: &Theme| {
-                let (bg, bdr, radius) = form_look::value_box(theme, input_bg, input_border, 2.0);
+                let (bg, bdr, radius) = form_look::value_box(theme);
                 container::Style {
                     background: Some(Background::Color(bg)),
                     border: Border {
@@ -482,12 +481,12 @@ pub fn form_edit_row<'a>(
 }
 
 /// Subsection label: muted caption with room above, no divider.
-pub fn form_label<'a, M: 'a>(label: &str, label_c: Color) -> Element<'a, M> {
+pub fn form_label<'a, M: 'a>(label: &str) -> Element<'a, M> {
     container(
         text(label.to_string())
             .size(TS.caption)
             .style(move |theme: &Theme| iced::widget::text::Style {
-                color: Some(form_look::FormLook::of(theme).map_or(label_c, |l| l.ink3)),
+                color: Some(form_look::FormLook::of(theme).ink3),
                 ..Default::default()
             }),
     )

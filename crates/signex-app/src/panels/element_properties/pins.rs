@@ -79,11 +79,7 @@ pub(super) fn push_focused_pin_section<'a>(
     else {
         return col;
     };
-    let PanelPalette {
-        input_bg,
-        input_bdr,
-        ..
-    } = PanelPalette::from_tokens(&ctx.tokens);
+    let PanelPalette { input_bg, .. } = PanelPalette::from_tokens(&ctx.tokens);
     let title = format!("Pin {}", pin.designator);
     col.push(
         ctx.collapsible(
@@ -102,7 +98,7 @@ pub(super) fn push_focused_pin_section<'a>(
                     ("Hidden", hidden),
                 ];
                 for (label, value) in rows {
-                    c = c.push(form_input_row(label, value, muted, input_bg, input_bdr));
+                    c = c.push(form_input_row(label, value, muted, input_bg));
                 }
                 c
             },

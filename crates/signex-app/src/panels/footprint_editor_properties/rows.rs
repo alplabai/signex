@@ -55,7 +55,6 @@ pub(super) fn value_row<'a>(
     value: &str,
     label_c: Color,
     input_bg: Color,
-    input_border: Color,
 ) -> Element<'a, PanelMsg> {
     let ink = crate::styles::tokens::readable_on(input_bg);
     container(
@@ -74,7 +73,7 @@ pub(super) fn value_row<'a>(
             .padding([3, 6])
             .width(Length::FillPortion(VALUE_PORTION))
             .style(move |theme: &Theme| {
-                let (bg, bdr, radius) = form_look::value_box(theme, input_bg, input_border, 2.0);
+                let (bg, bdr, radius) = form_look::value_box(theme);
                 container::Style {
                     background: Some(Background::Color(bg)),
                     border: Border {

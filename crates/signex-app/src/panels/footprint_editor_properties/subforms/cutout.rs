@@ -18,7 +18,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
     id: signex_sketch::id::SketchEntityId,
     muted: Color,
     primary: Color,
-    border_c: Color,
     panel_bg: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     let Some(c) = fp.selected_cutout.as_ref() else {
@@ -42,9 +41,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
                 text_input("(sharp)", radius_buf)
                     .size(TS.caption)
                     .padding(SP.xs)
-                    .style(crate::panels::footprint_editor_properties::fp_field_style(
-                        muted, primary, border_c
-                    ))
+                    .style(crate::panels::form_look::text_input_style)
                     .on_input(move |v| PanelMsg::FpEditorSetCutoutEdgeRadius { id, value: v }),
             ]
             .spacing(6)
