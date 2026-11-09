@@ -530,6 +530,43 @@ fn an_unsaved_sheet_of_another_project_and_its_elements_never_show() {
     assert_eq!(out.lines[2]["data"]["what"], "unknown");
 }
 
+/// `query_pins` reads one named sheet: another open project's part cannot be
+/// asked about, and this project's answer comes through whole.
+#[test]
+fn a_pin_query_cannot_reach_another_open_projects_part() {
+    let w = world();
+    let pins = json!({"designator": "R1", "count": 1, "pins": [
+        {"number": "1", "name": "A", "electrical_type": "passive", "hidden": false,
+         "unit": 1, "shared": false, "tip": [1.0, 2.0]}]});
+    let app = w.app(&[
+        json!({"id": "query_pins", "status": "answered", "data": pins,
+        "messages": [], "changed": []}),
+    ]);
+    let commands = jsonl(&[
+        json!({"id": "query_pins", "args": {"document": SHEET_B, "designator": "R1"}}),
+        json!({"id": "query_pins", "args": {"document": SHEET_A, "designator": "R1"}}),
+    ]);
+    let out = w.cli(&["run", w.project(), "--keep-going"], &commands);
+    let sent = app.finish();
+
+    assert_eq!(out.lines.len(), 2, "{}", out.stdout);
+    assert_eq!(out.lines[0]["status"], "refused", "{}", out.lines[0]);
+    assert!(
+        out.lines[0]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("--allow-path")
+    );
+    assert_eq!(out.lines[1]["status"], "answered", "{}", out.lines[1]);
+    assert_eq!(out.lines[1]["data"], pins);
+    assert_eq!(
+        sent.len(),
+        1,
+        "the other project's query was sent: {sent:?}"
+    );
+    assert_eq!(sent[0]["args"]["document"], SHEET_A);
+}
+
 /// Sent with no `document`, the app would act on the person's active
 /// document, which the run's folders were never checked against.
 #[test]
