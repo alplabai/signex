@@ -38,9 +38,13 @@ Board geometry asks questions that floating point answers badly:
 
 Besides §5, a pad's half-width and half-height are `mm_to_nm(size) / 2`, which drops 0.5 nm when the size is an odd number of nm. That is below what the file stores.
 
-## Open: the renderer must consume `pcb-geom`
+## The renderer consumes `pcb-geom` (#2190)
 
-`signex-renderer` (`pcb/emit.rs`, `pad_from_footprint`) still builds its own pad centre and size: it does not mirror a bottom-side pad and it floors a zero size at `PCB_DEFAULT_PAD_SIZE_MM`. Until it takes both from `pcb-geom`, a ratsnest end or a click on a bottom-side pad can land where nothing is drawn. **The renderer must consume `pcb-geom` before the first consumer of `pcb-geom` merges** (#662, one lowering); a "kept in step" pair is not allowed. This unit does not change the renderer.
+`signex-renderer` (`pcb/emit.rs`, `pad_from_footprint`) takes a pad's world centre from `pcb_geom::pad_world_center` and its rotation from `Placement`, so a bottom-side pad is drawn at its mirrored centre and a ratsnest end or a click lands on what is drawn (#662, one lowering). A pad `pcb-geom` refuses is not drawn; it is in `BoardIndex::rejected`.
+
+### Drawn size
+
+The renderer floors a pad's drawn size: a zero or negative side draws as `PCB_DEFAULT_PAD_SIZE_MM`, and no side is under 0.05 mm. This stays a renderer rule, not geometry: `pad_shape` keeps the model's size (a zero-size pad has no copper to hit), while the drawing needs something visible to select. The floor changes no centre or angle, so it cannot move a ratsnest end.
 
 ## Ownership of item identity
 
