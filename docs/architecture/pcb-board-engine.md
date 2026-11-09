@@ -19,6 +19,10 @@ editing UI does not have to decide it.
   runs `DocumentState::execute_board` and repaints. No handler writes a
   `PcbBoard`: the one remaining direct write is a document-id repair, which
   is `BoardEngine::reassign_document_id` (not an edit, as for a sheet).
+- The board sketch and what it baked (keepouts, cutouts, mounting holes,
+  V-scores, and the outline when the sketch owns it) change only through
+  `BoardCommand::SetBoardSketch`, one step (#2234). `SetBoardOutline` is
+  refused while the sketch owns the outline. See `docs/PCB_SKETCH.md`.
 - The history is `History<Vec<BoardCommand>>` on `signex-history`. A step
   holds the inverse commands, last first, not a board: a 10k-track board
   makes per-step snapshots too expensive. Undoing a step runs it and stores

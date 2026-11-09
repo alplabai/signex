@@ -137,6 +137,7 @@ pub fn board_10k_tracks() -> PcbBoard {
     }
 
     PcbBoard {
+        sketch: None,
         uuid: Uuid::from_u128(UUID_BOARD),
         version: 1,
         generator: "signex-renderer pcb_10k_track_fixture".to_string(),

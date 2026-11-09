@@ -484,6 +484,12 @@ pub struct PcbBoard {
     pub graphics: Vec<BoardGraphic>,
     #[serde(default)]
     pub texts: Vec<BoardText>,
+    /// The board sketch (#2234) and the keepouts, cutouts, holes and
+    /// V-scores it baked to; `None` for a board drawn without one. Written
+    /// only through the board engine's `SetBoardSketch` command, which also
+    /// writes [`Self::outline`] when the sketch owns it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sketch: Option<crate::pcb_sketch::BoardSketch>,
     /// Keys in the `.snxpcb` manifest, `[stackup]`, `[nets]` and
     /// `[extras.board]` that this build does not recognise, kept per
     /// section so a save re-emits each where it was found. Empty for

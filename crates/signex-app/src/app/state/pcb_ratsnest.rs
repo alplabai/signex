@@ -128,6 +128,7 @@ mod tests {
             unknown_columns: Default::default(),
         };
         PcbBoard {
+            sketch: None,
             uuid: Uuid::nil(),
             version: 1,
             generator: String::new(),

@@ -83,6 +83,7 @@ fn board() -> PcbBoard {
         unknown_columns: Default::default(),
     };
     PcbBoard {
+        sketch: None,
         uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),

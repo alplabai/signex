@@ -68,6 +68,7 @@ fn footprint(uuid: Uuid, link: Option<SymbolLink>, pads: Vec<Pad>) -> Footprint 
 /// unlinked footprint, and net 1 (`VCC`) on A's pad, a track and a via.
 fn board() -> PcbBoard {
     PcbBoard {
+        sketch: None,
         uuid: Uuid::nil(),
         version: 0,
         generator: String::new(),

@@ -10,6 +10,7 @@
 //! board bit for bit.
 
 mod batch;
+mod board_sketch;
 mod command;
 pub mod eco;
 mod engine;
@@ -19,6 +20,8 @@ mod footprint_content;
 mod items;
 pub mod placement;
 
+#[cfg(test)]
+mod board_sketch_tests;
 #[cfg(test)]
 mod content_tests;
 #[cfg(test)]

@@ -23,6 +23,7 @@ const EDITED_THICKNESS: f64 = 2.4;
 
 fn board(thickness: f64) -> PcbBoard {
     PcbBoard {
+        sketch: None,
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         version: 1,

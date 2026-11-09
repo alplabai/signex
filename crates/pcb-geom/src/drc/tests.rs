@@ -11,11 +11,11 @@ const MM: i64 = 1_000_000;
 const HALF: i64 = 125_000;
 const RULE: i64 = 200_000;
 
-fn id(n: u128) -> Uuid {
+pub(super) fn id(n: u128) -> Uuid {
     Uuid::from_u128(n)
 }
 
-fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32, layer: &str) -> Segment {
+pub(super) fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32, layer: &str) -> Segment {
     Segment {
         uuid: id(2000 + n),
         start: Point::new(a.0, a.1),
@@ -27,7 +27,7 @@ fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32, layer: &str) -> Segmen
     }
 }
 
-fn via(n: u128, at: (f64, f64), net: u32) -> Via {
+pub(super) fn via(n: u128, at: (f64, f64), net: u32) -> Via {
     Via {
         uuid: id(3000 + n),
         position: Point::new(at.0, at.1),
@@ -40,7 +40,7 @@ fn via(n: u128, at: (f64, f64), net: u32) -> Via {
     }
 }
 
-fn pad(n: u128, at: (f64, f64), net: u32, pad_type: PadType, layer: &str) -> Pad {
+pub(super) fn pad(n: u128, at: (f64, f64), net: u32, pad_type: PadType, layer: &str) -> Pad {
     Pad {
         uuid: id(n),
         number: n.to_string(),
@@ -62,7 +62,7 @@ fn pad(n: u128, at: (f64, f64), net: u32, pad_type: PadType, layer: &str) -> Pad
     }
 }
 
-fn footprint(n: u128, pads: Vec<Pad>) -> Footprint {
+pub(super) fn footprint(n: u128, pads: Vec<Pad>) -> Footprint {
     Footprint {
         uuid: id(1000 + n),
         reference: format!("U{n}"),
@@ -82,8 +82,13 @@ fn footprint(n: u128, pads: Vec<Pad>) -> Footprint {
     }
 }
 
-fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, vias: Vec<Via>) -> PcbBoard {
+pub(super) fn board(
+    footprints: Vec<Footprint>,
+    segments: Vec<Segment>,
+    vias: Vec<Via>,
+) -> PcbBoard {
     PcbBoard {
+        sketch: None,
         uuid: Uuid::nil(),
         version: 1,
         generator: String::new(),

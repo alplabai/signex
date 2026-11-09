@@ -73,6 +73,7 @@ fn via(uuid: Uuid, x: f64, y: f64, diameter: f64) -> Via {
 
 fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, vias: Vec<Via>) -> PcbBoard {
     PcbBoard {
+        sketch: None,
         uuid: Uuid::nil(),
         version: 1,
         generator: String::new(),
