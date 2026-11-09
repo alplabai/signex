@@ -249,17 +249,17 @@ fn lock_is_held(path: &Path) -> bool {
 }
 
 /// Whether `meta` is a file of this user (where the system says who owns it).
+#[cfg(unix)]
 fn owned_by_us(meta: &std::fs::Metadata) -> bool {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt as _;
-        meta.uid() == files::own_uid()
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = meta;
-        true
-    }
+    use std::os::unix::fs::MetadataExt as _;
+    meta.uid() == files::own_uid()
+}
+
+/// Where the system does not say who owns a file, the user's profile folder is
+/// private by its ACL (see `files::runtime_dir`).
+#[cfg(not(unix))]
+fn owned_by_us(_meta: &std::fs::Metadata) -> bool {
+    true
 }
 
 /// Does a socket answer a connection? The connect does not block, so a peer

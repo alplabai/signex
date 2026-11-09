@@ -228,6 +228,7 @@ impl Connection {
             .try_clone()
             .map_err(|error| format!("cannot read from the running Signex: {error}"))?;
         let (sender, replies) = mpsc::channel();
+        // ast-grep-ignore: no-raw-spawn (the client runs in signex-cli, not in update())
         std::thread::spawn(move || read_replies(reader, &sender));
         Ok(Self {
             writer: stream,
@@ -294,6 +295,7 @@ fn within<T: Send + 'static>(
     work: impl FnOnce() -> T + Send + 'static,
 ) -> Result<T, String> {
     let (sender, receiver) = mpsc::channel();
+    // ast-grep-ignore: no-raw-spawn (the client runs in signex-cli, not in update())
     std::thread::spawn(move || sender.send(work()).ok());
     receiver
         .recv_timeout(limit)
