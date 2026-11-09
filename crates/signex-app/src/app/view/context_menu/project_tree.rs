@@ -98,9 +98,8 @@ impl Signex {
     /// Build the Projects-panel tree-view right-click menu. The item set
     /// is derived from the clicked node's [`TreeNodeRole`] — project root
     /// vs library leaf vs openable leaf vs container branch — so the menu
-    /// matches what Altium shows in each context. Empty-area clicks are
-    /// filtered upstream (no menu shown), so `path` is `Some` whenever
-    /// this runs.
+    /// matches what Altium shows in each context. An empty-area click gets
+    /// the one New Project row.
     ///
     /// Returns the card fitted to its labels; an empty placeholder when the
     /// click names no live row. The overlay places it at the click.
@@ -122,7 +121,7 @@ impl Signex {
     }
 
     /// The pure row data behind [`Self::view_project_tree_context_menu`]:
-    /// `None` when the click names no live tree row.
+    /// `None` when the click names a tree row that no longer exists.
     pub(super) fn project_tree_entries(
         &self,
         ctx: &crate::app::ProjectTreeContextMenuState,
@@ -137,9 +136,21 @@ impl Signex {
             .map_or(&self.document_state.panel_ctx, |w| self.panel_ctx_for(w));
         let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(18);
 
-        // Background (empty-area) clicks currently produce no menu —
-        // Altium shows a "New Project..." flow there which we do not ship yet.
-        let key = ctx.key.as_ref()?;
+        // An empty-area click offers New Project (#2232), the dialog every
+        // other New Project entry opens.
+        let Some(key) = ctx.key.as_ref() else {
+            v.push(dd_msg(
+                None,
+                &signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::DIALOG_NEW_PROJECT_ENTRY_ROW
+                )
+                .into_string(),
+                &self.keymap_shortcut_label("new_document"),
+                Message::Menu(crate::menu_bar::MenuMessage::NewProject),
+            ));
+            return Some(v);
+        };
         // Resolve the stored key against the tree as it is NOW, so the
         // actions below carry indices of the row the user right-clicked
         // even if the tree was rebuilt since. A row that no longer exists

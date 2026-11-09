@@ -8,7 +8,18 @@ use crate::app::Signex;
 use crate::app::state::ProjectId;
 
 impl Signex {
-    pub(crate) fn dispatch_project_tab_message(&mut self, msg: ProjectTabMsg) {
+    pub(crate) fn dispatch_project_tab_message(
+        &mut self,
+        msg: ProjectTabMsg,
+    ) -> iced::Task<crate::app::Message> {
+        if let ProjectTabMsg::SetupEdited { project_id, msg } = msg {
+            return self.edit_project_setup(project_id, msg);
+        }
+        self.apply_project_tab_message(msg);
+        iced::Task::none()
+    }
+
+    fn apply_project_tab_message(&mut self, msg: ProjectTabMsg) {
         match msg {
             ProjectTabMsg::SectionSelected {
                 project_id,
@@ -125,6 +136,8 @@ impl Signex {
             ProjectTabMsg::RenameRequested { project_id } => {
                 self.open_project_rename_from_tab(project_id);
             }
+            // Routed by `dispatch_project_tab_message`, which returns its task.
+            ProjectTabMsg::SetupEdited { .. } => {}
         }
     }
 
@@ -158,12 +171,17 @@ impl Signex {
             // undo step.
             tab.general_history.close_run();
             tab.default_drafts.clear();
+            tab.setup_draft = None;
         }
     }
 
     /// Apply one General edit to the project's data and mark the `.snxprj`
     /// dirty. An edit for a project that is no longer loaded is dropped.
-    fn apply_project_general(&mut self, project_id: ProjectId, command: ProjectGeneralCommand) {
+    pub(super) fn apply_project_general(
+        &mut self,
+        project_id: ProjectId,
+        command: ProjectGeneralCommand,
+    ) {
         let document = &mut self.document_state;
         // The cursor to undo back to is the state before the first edit.
         document.note_project_clean_state(project_id);
@@ -222,6 +240,7 @@ impl Signex {
         let defaults_moved = project.data.schematic_defaults != defaults_before;
         // The boxes show the stored values again.
         tab.default_drafts.clear();
+        tab.setup_draft = None;
         if moved {
             // Dirty unless the step landed back on the saved state.
             document.sync_project_history_dirty(project_id, true);

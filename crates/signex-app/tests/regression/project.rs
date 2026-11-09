@@ -71,6 +71,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         rules: None,
         annotation: None,
         schematic_defaults: Default::default(),
+        project_defaults: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };
@@ -838,6 +839,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         rules: None,
         annotation: None,
         schematic_defaults: Default::default(),
+        project_defaults: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };
@@ -1580,6 +1582,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
                 rules: None,
                 annotation: None,
                 schematic_defaults: Default::default(),
+                project_defaults: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

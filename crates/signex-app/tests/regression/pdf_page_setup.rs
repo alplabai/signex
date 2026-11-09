@@ -767,6 +767,7 @@ fn closing_the_project_forgets_its_documents_page_setup() {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

@@ -252,19 +252,22 @@ pub(in crate::panels) fn tab_chip(theme: &Theme, active: bool, hovered: bool) ->
 pub(in crate::panels) fn section_label<'a, M: 'a>(
     title: &str,
     tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, M> {
     let ink = resolve(tokens).ink4;
-    // user-visible: migrate to the #2063 casemap
-    // ast-grep-ignore: no-case-in-view
-    container(text(raw(title.to_uppercase())).size(TS.section).color(ink))
-        .padding(iced::Padding {
-            top: 12.0,
-            right: 12.0,
-            bottom: 6.0,
-            left: 12.0,
-        })
-        .width(Length::Fill)
-        .boxed()
+    container(
+        text(raw(i18n.upper_for_display(title)))
+            .size(TS.section)
+            .color(ink),
+    )
+    .padding(iced::Padding {
+        top: 12.0,
+        right: 12.0,
+        bottom: 6.0,
+        left: 12.0,
+    })
+    .width(Length::Fill)
+    .boxed()
 }
 
 /// Collapsible-section header of a Graphite form: chevron plus the
@@ -274,12 +277,14 @@ fn graphite_section_header<'a>(
     title: &str,
     is_collapsed: bool,
     tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     let ink = resolve(tokens).ink4;
     let label = row![
         signex_widgets::chevron::chevron(!is_collapsed, TS.section, ink),
-        // user-visible: migrate to the #2063 casemap
-        text(raw(title.to_uppercase())).size(TS.section).color(ink),
+        text(raw(i18n.upper_for_display(title)))
+            .size(TS.section)
+            .color(ink),
     ]
     .spacing(6)
     .align_y(iced::Alignment::Center);
@@ -313,7 +318,7 @@ impl PanelContext {
         content: impl FnOnce() -> Column<Element<'a, PanelMsg>>,
     ) -> Column<Element<'a, PanelMsg>> {
         let is_collapsed = collapsed.contains(key);
-        let mut col = graphite_section_header(key, title, is_collapsed, &self.tokens);
+        let mut col = graphite_section_header(key, title, is_collapsed, &self.tokens, &self.i18n);
         if !is_collapsed {
             col = col.push(content().boxed());
         }

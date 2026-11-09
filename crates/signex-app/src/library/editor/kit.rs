@@ -139,12 +139,12 @@ fn rule<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
 /// Section title with an optional trailing element (a button, a count)
 /// pushed to the right edge, over a header rule.
 pub(crate) fn section_header<'a, M: 'a>(
-    title: &'a str,
+    title: signex_i18n::Localized,
     trailing: Option<Element<'a, M>>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    // Uppercase muted section label.
-    let heading = text(raw(title.to_uppercase()))
+    // Muted section label; the catalog writes it in capitals.
+    let heading = text(title)
         .size(TS.section)
         .style(styles::section_label(tokens))
         .boxed();
@@ -167,23 +167,30 @@ pub(crate) fn card<'a, M: 'a>(content: Element<'a, M>, tokens: &ThemeTokens) -> 
         .boxed()
 }
 
-/// Table header: muted column titles over a header rule. Each column is
-/// `(title, width)`; pass the same widths to [`table_row`] cells.
+/// A table column: its heading (written in capitals in the catalog; `None`
+/// for an untitled action column) and its width.
+pub(crate) type TableColumn = (Option<signex_i18n::MessageId>, Length);
+
+/// Table header: muted column titles over a header rule. Pass the same
+/// widths to [`table_row`] cells.
 pub(crate) fn table_header<'a, M: 'a>(
-    columns: &[(&'a str, Length)],
+    columns: &[TableColumn],
+    i18n: &signex_i18n::I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let muted = resolve(tokens).ink3;
     let mut line: iced::widget::Row<Element<'a, M>> =
         row![].spacing(SP.m).align_y(iced::Alignment::Center);
     for (title, width) in columns {
-        line = line.push(
-            text(raw(title.to_uppercase()))
+        let cell: Element<'a, M> = match title {
+            Some(id) => text(signex_i18n::t!(i18n, *id))
                 .size(TS.section)
                 .color(muted)
                 .width(*width)
                 .boxed(),
-        );
+            None => Space::new().width(*width).boxed(),
+        };
+        line = line.push(cell);
     }
     column![
         container(line)

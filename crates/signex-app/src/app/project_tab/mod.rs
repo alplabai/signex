@@ -15,6 +15,7 @@ mod general;
 mod open;
 mod parameters;
 mod schematic_defaults;
+mod setup;
 mod update;
 mod view;
 
@@ -24,6 +25,8 @@ mod open_command_tests;
 mod save_point_tests;
 #[cfg(test)]
 mod schematic_defaults_tests;
+#[cfg(test)]
+mod setup_tests;
 #[cfg(test)]
 mod undo_routing_tests;
 
@@ -42,14 +45,17 @@ pub enum ProjectSection {
     Parameters,
     /// Widths and sizes of unset schematic items (#2026).
     SchematicDefaults,
+    /// What new PCBs and sheets start from (#2232).
+    Setup,
 }
 
 impl ProjectSection {
     /// Every section, in list order.
-    pub const ALL: [ProjectSection; 3] = [
+    pub const ALL: [ProjectSection; 4] = [
         ProjectSection::General,
         ProjectSection::Parameters,
         ProjectSection::SchematicDefaults,
+        ProjectSection::Setup,
     ];
 
     pub fn label(self) -> &'static str {
@@ -57,6 +63,7 @@ impl ProjectSection {
             ProjectSection::General => "General",
             ProjectSection::Parameters => "Parameters",
             ProjectSection::SchematicDefaults => "Schematic defaults",
+            ProjectSection::Setup => "Project setup",
         }
     }
 }
@@ -75,6 +82,9 @@ pub struct ProjectTabState {
     /// section switch shows the stored values again.
     pub default_drafts:
         std::collections::HashMap<signex_types::project::SchematicDefaultField, String>,
+    /// The Project setup section as edited (#2232), until the next undo,
+    /// redo or section switch shows the stored values again.
+    pub setup_draft: Option<crate::app::NewProjectState>,
 }
 
 /// Messages of a Project tab, namespaced under `ProjectMsg::Tab`. Each
@@ -134,6 +144,12 @@ pub enum ProjectTabMsg {
     SchematicDefaultShapeFillPicked {
         project_id: ProjectId,
         fill: Option<signex_types::schematic::FillType>,
+    },
+    /// An edit in the Project setup section (#2232), in the New Project
+    /// dialog's own message words.
+    SetupEdited {
+        project_id: ProjectId,
+        msg: crate::app::NewProjectMsg,
     },
     /// Rename… in the General section: the project-tree Rename flow.
     RenameRequested {

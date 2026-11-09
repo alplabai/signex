@@ -8,7 +8,7 @@
 
 const GUIDE: &str = include_str!("../../../../docs/USER_GUIDE.md");
 const MENU_SRC: &str = include_str!("../../src/menu_bar/model/menus.rs");
-const PANEL_SRC: &str = include_str!("../../src/panels/components_panel/mod.rs");
+const PANELS_FTL: &str = include_str!("../../../signex-i18n/locales/en-US/panels.ftl");
 
 /// Menu labels the guide's walkthrough tells the user to click, as spelled in
 /// `menu_bar/model/menus.rs` (ASCII `...`; the guide writes the ellipsis character).
@@ -59,7 +59,8 @@ fn walkthrough_menu_labels_exist_in_the_menu_source() {
 
 #[test]
 fn guide_stock_section_matches_the_panel() {
-    assert!(PANEL_SRC.contains("Stock library not found"));
+    // The panel's text lives in its en-US catalog since #2225.
+    assert!(PANELS_FTL.contains("Stock library not found"));
     assert!(GUIDE.contains("Stock library not found"));
 }
 

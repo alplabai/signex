@@ -3,14 +3,15 @@
 //! Cancel, Apply and OK reuse the discard, save and save-and-close actions;
 //! Restore defaults has no backend yet and is drawn disabled.
 
-use super::graphite_fields::{graphite_label, nav_matches, nav_search};
+use super::graphite_fields::{graphite_label, group_messages, nav_matches, nav_search};
 use super::{PrefMsg, PrefNav, PrefsView, SP, TS, build_content, build_prefs_file_banner};
 use crate::app::view::dialogs::{PREFERENCES_HEADER_H, graphite_header};
 use crate::styles::{self, DialogButtonKind, PillTone, Radii, dialog_button, ti, tokens};
 use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
+use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text};
+use signex_widgets::{button, text};
 
 /// Navigation width (236 px at the default base).
 pub(super) const GRAPHITE_NAV_W: f32 = styles::chrome_px(236.0 * 11.0 / 12.0);
@@ -35,7 +36,13 @@ pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Elemen
     let t = v.panel_tokens;
     let mut items: Vec<Element<'a, PrefMsg>> = Vec::new();
     if with_header {
-        let subtitle = format!("{} / {}", v.nav.group(), graphite_label(v.nav));
+        let subtitle = t!(
+            v.i18n,
+            ids::PREFERENCES_SUBTITLE,
+            "group" => t!(v.i18n, group_messages(v.nav).0).into_string(),
+            "page" => t!(v.i18n, graphite_label(v.nav)).into_string()
+        )
+        .into_string();
         items.push(graphite_header(
             "Preferences",
             Some(subtitle),
@@ -61,7 +68,7 @@ pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Elemen
     };
     items.push(
         row![
-            graphite_nav(v.nav, v.nav_search, t),
+            graphite_nav(v.nav, v.nav_search, t, v.i18n),
             divider,
             build_content(v)
         ]
@@ -80,19 +87,25 @@ pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Elemen
         .boxed()
 }
 
-fn graphite_nav<'a>(active: PrefNav, query: &'a str, t: &ThemeTokens) -> Element<'a, PrefMsg> {
+fn graphite_nav<'a>(
+    active: PrefNav,
+    query: &'a str,
+    t: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PrefMsg> {
     let mut col = column![].spacing(2).padding(SP.m).width(Length::Fill);
-    col = col.push(nav_search(query, t));
+    col = col.push(nav_search(query, t, i18n));
     let mut last_group = "";
-    for &item in PrefNav::ALL.iter().filter(|&&n| nav_matches(n, query)) {
+    for &item in PrefNav::ALL
+        .iter()
+        .filter(|&&n| nav_matches(i18n, n, query))
+    {
         let group = item.group();
         if group != last_group {
             last_group = group;
             col = col.push(
                 container(
-                    // user-visible: migrate to the #2063 casemap
-                    // ast-grep-ignore: no-case-in-view
-                    text(raw(group.to_uppercase()))
+                    text(t!(i18n, group_messages(item).1))
                         .size(TS.section)
                         .style(styles::section_label(t)),
                 )
@@ -105,7 +118,7 @@ fn graphite_nav<'a>(active: PrefNav, query: &'a str, t: &ThemeTokens) -> Element
                 .boxed(),
             );
         }
-        col = col.push(nav_row(item, item == active, t));
+        col = col.push(nav_row(item, item == active, t, i18n));
     }
     let bg = ti(t.panel_bg);
     container(
@@ -123,16 +136,20 @@ fn graphite_nav<'a>(active: PrefNav, query: &'a str, t: &ThemeTokens) -> Element
     .boxed()
 }
 
-fn nav_row<'a>(item: PrefNav, active: bool, t: &ThemeTokens) -> Element<'a, PrefMsg> {
+fn nav_row<'a>(item: PrefNav, active: bool, t: &ThemeTokens, i18n: &I18n) -> Element<'a, PrefMsg> {
     let (ink, selected, hover) = (
         ti(t.text),
         ti(t.selection),
         tokens::overlay(t, tokens::Overlay::Hover),
     );
     button(
-        container(text(raw(graphite_label(item))).size(TS.label).color(ink))
-            .padding([SP.s, SP.m])
-            .width(Length::Fill),
+        container(
+            text(t!(i18n, graphite_label(item)))
+                .size(TS.label)
+                .color(ink),
+        )
+        .padding([SP.s, SP.m])
+        .width(Length::Fill),
     )
     .padding(0)
     .width(Length::Fill)
@@ -161,12 +178,12 @@ fn nav_row<'a>(item: PrefNav, active: bool, t: &ThemeTokens) -> Element<'a, Pref
 fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
     let t = v.panel_tokens;
     let note: Element<'a, PrefMsg> = if v.dirty {
-        container(text(raw("Unsaved changes")).size(TS.caption))
+        container(text(t!(v.i18n, ids::PREFERENCES_UNSAVED)).size(TS.caption))
             .padding([2.0, SP.m])
             .style(styles::pill(t, PillTone::Warn))
             .boxed()
     } else if v.nav == PrefNav::Appearance {
-        text(raw("Theme changes preview live"))
+        text(t!(v.i18n, ids::PREFERENCES_THEME_PREVIEW_HINT))
             .size(TS.label)
             .color(tokens::resolve(t).ink3)
             .boxed()

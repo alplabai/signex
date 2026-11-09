@@ -67,6 +67,7 @@ impl std::fmt::Display for DatasheetMode {
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
     address: EditorAddress,
     read_only: bool,
     veil: Color,
@@ -83,7 +84,11 @@ pub fn view<'a>(
             tokens,
         ),
     );
-    let header = kit::section_header("Datasheets", Some(add), tokens);
+    let header = kit::section_header(
+        signex_i18n::t!(i18n, signex_i18n::ids::EDITORS_COMPONENT_DATASHEETS_HEADING),
+        Some(add),
+        tokens,
+    );
     let intro = text(raw(INTRO))
         .size(TS.caption)
         .color(theme_ext::text_secondary(tokens))

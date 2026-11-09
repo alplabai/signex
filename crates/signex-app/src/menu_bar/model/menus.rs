@@ -220,7 +220,7 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::PlaceNoConnect,
             ctx.commands.has_schematic,
         ),
-        stub("Sheet Entry"),
+        cmd_item_gated(ctx, cmd("place_sheet_entry", "Sheet Entry", "")),
     ]
 }
 
@@ -314,7 +314,8 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         submenu("Annotation", annotation(ctx)),
         SEP,
         stub("Assign Footprints"),
-        stub("Library Editor"),
+        // Opens or focuses a Library Browser tab: docs/MENU_BAR.md#tools-library-editor
+        cmd_item_gated(ctx, cmd("open_library_browser", "Library Editor", "")),
         SEP,
         // Runs `run_drc` on the PCB in view; greyed with no PCB open.
         cmd_item_gated(ctx, cmd("run_drc", "Design Rule Check", "")),
@@ -355,12 +356,12 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
     ]
 }
 
-pub(super) fn window() -> Vec<MenuEntry> {
+pub(super) fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         stub("Tile Horizontally"),
         stub("Tile Vertically"),
         SEP,
-        stub("Close All Documents"),
+        cmd_item_gated(ctx, cmd("close_all_documents", "Close All Documents", "")),
     ]
 }
 

@@ -3,9 +3,10 @@
 
 use iced::widget::{column, container, row};
 use iced::{Border, Color, Element, Length, Widget as _};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::text;
 use signex_widgets::tree_view::{BadgeTone, TreeIcon, TreeNode, TreeStyle};
-use signex_widgets::{raw, text};
 
 use super::{ErcSeverityLite, PanelContext, PanelMsg};
 use crate::styles::tokens::{relative_luminance, resolve};
@@ -118,27 +119,27 @@ pub fn button_radius(_tokens: &ThemeTokens) -> f32 {
 }
 
 /// "2 h ago" style age of a commit.
-fn age(time: chrono::DateTime<chrono::Utc>) -> String {
+fn age(i18n: &I18n, time: chrono::DateTime<chrono::Utc>) -> Localized {
     let secs = (chrono::Utc::now() - time).num_seconds().max(0);
     match secs {
-        0..=59 => "just now".to_string(),
-        60..=3599 => format!("{} min ago", secs / 60),
-        3600..=86399 => format!("{} h ago", secs / 3600),
-        _ => format!("{} d ago", secs / 86400),
+        0..=59 => t!(i18n, ids::PANELS_SUMMARY_AGE_NOW),
+        60..=3599 => t!(i18n, ids::PANELS_SUMMARY_AGE_MINUTES, "count" => secs / 60),
+        3600..=86399 => t!(i18n, ids::PANELS_SUMMARY_AGE_HOURS, "count" => secs / 3600),
+        _ => t!(i18n, ids::PANELS_SUMMARY_AGE_DAYS, "count" => secs / 86400),
     }
 }
 
 /// One cell of the summary grid: a caption over a value.
 fn summary_cell<'a>(
     tokens: &ThemeTokens,
-    caption: &'static str,
-    value: String,
+    caption: Localized,
+    value: Localized,
     color: Color,
 ) -> Element<'a, PanelMsg> {
     let r = resolve(tokens);
     column![
-        text(raw(caption)).size(TS.caption).color(r.ink4).boxed(),
-        text(raw(value))
+        text(caption).size(TS.caption).color(r.ink4).boxed(),
+        text(value)
             .size(TS.caption)
             .color(color)
             .font(iced::Font {
@@ -159,6 +160,7 @@ fn summary_cell<'a>(
 /// has loaded.
 pub(crate) fn summary_card<'a>(ctx: &PanelContext) -> Option<Element<'a, PanelMsg>> {
     let tokens = &ctx.tokens;
+    let i18n = &*ctx.i18n;
     let r = resolve(tokens);
     let count = |severity| {
         ctx.erc_diagnostics
@@ -167,7 +169,7 @@ pub(crate) fn summary_card<'a>(ctx: &PanelContext) -> Option<Element<'a, PanelMs
             .count()
     };
     let (erc, erc_color) = if ctx.erc_diagnostics.is_empty() {
-        ("\u{2014}".to_string(), r.ink3)
+        (t!(i18n, ids::PANELS_SUMMARY_NO_VALUE), r.ink3)
     } else {
         let errors = count(ErcSeverityLite::Error);
         let warnings = count(ErcSeverityLite::Warning);
@@ -178,11 +180,24 @@ pub(crate) fn summary_card<'a>(ctx: &PanelContext) -> Option<Element<'a, PanelMs
         } else {
             r.ink3
         };
-        (format!("{errors} errors \u{b7} {warnings} warn"), color)
+        (
+            t!(
+                i18n,
+                ids::PANELS_SUMMARY_ERC_COUNTS,
+                "errors" => errors,
+                "warnings" => warnings
+            ),
+            color,
+        )
     };
     let mut cells = vec![
-        summary_cell(tokens, "ERC", erc, erc_color),
-        summary_cell(tokens, "DRC", "\u{2014}".to_string(), r.ink3),
+        summary_cell(tokens, t!(i18n, ids::PANELS_SUMMARY_ERC), erc, erc_color),
+        summary_cell(
+            tokens,
+            t!(i18n, ids::PANELS_SUMMARY_DRC),
+            t!(i18n, ids::PANELS_SUMMARY_NO_VALUE),
+            r.ink3,
+        ),
     ];
     let has_git = ctx
         .projects
@@ -192,7 +207,12 @@ pub(crate) fn summary_card<'a>(ctx: &PanelContext) -> Option<Element<'a, PanelMs
         && ctx.history.mode == super::history::HistoryRenderMode::Ready
         && let Some(last) = ctx.history.entries.first()
     {
-        cells.push(summary_cell(tokens, "Last commit", age(last.time), r.ink3));
+        cells.push(summary_cell(
+            tokens,
+            t!(i18n, ids::PANELS_SUMMARY_LAST_COMMIT),
+            age(i18n, last.time),
+            r.ink3,
+        ));
     }
     let mut grid: iced::widget::Column<Element<'a, PanelMsg>> =
         iced::widget::Column::new().spacing(8).width(Length::Fill);

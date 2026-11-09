@@ -4,8 +4,9 @@
 
 use iced::widget::{column, container};
 use iced::{Element, Length, Widget as _};
+use signex_i18n::Localized;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{raw, text};
+use signex_widgets::text;
 
 use crate::styles::{self, TypeScale, ti, tokens::resolve};
 
@@ -14,22 +15,18 @@ const TS: TypeScale = TypeScale::DEFAULT;
 /// The card, 12 px padded, filling the panel width.
 pub fn empty_state_card<'a, M: 'a>(
     tokens: &ThemeTokens,
-    title: &str,
-    body: &str,
-    caption: Option<&str>,
+    title: Localized,
+    body: Localized,
+    caption: Option<Localized>,
 ) -> Element<'a, M> {
     let mut lines = column![
-        text(raw(title.to_string()))
-            .size(TS.label)
-            .color(ti(tokens.text)),
-        text(raw(body.to_string()))
-            .size(TS.dense)
-            .color(ti(tokens.text_secondary)),
+        text(title).size(TS.label).color(ti(tokens.text)),
+        text(body).size(TS.dense).color(ti(tokens.text_secondary)),
     ]
     .spacing(6);
     if let Some(caption) = caption {
         lines = lines.push(
-            text(raw(caption.to_string()))
+            text(caption)
                 .size(TS.caption)
                 .color(resolve(tokens).ink4)
                 .boxed(),

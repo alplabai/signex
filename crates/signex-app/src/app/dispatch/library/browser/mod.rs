@@ -91,6 +91,28 @@ impl Signex {
         }
     }
 
+    /// The library Tools ▸ Library Editor shows (#2247): the active Library
+    /// Browser tab, else the library of the active symbol or footprint
+    /// editor, else the last browser tab in the strip, else the first open
+    /// library. `None` with no library open, which greys the row.
+    pub(crate) fn library_editor_target(&self) -> Option<std::path::PathBuf> {
+        let tabs = &self.document_state.tabs;
+        let browser = |tab: &crate::app::TabInfo| match &tab.kind {
+            crate::app::TabKind::LibraryBrowser(path) => Some(path.clone()),
+            _ => None,
+        };
+        tabs.get(self.document_state.active_tab)
+            .and_then(browser)
+            .or_else(|| self.active_editor_library_root())
+            .or_else(|| tabs.iter().rev().find_map(browser))
+            .or_else(|| {
+                self.library
+                    .open_libraries
+                    .first()
+                    .map(|lib| lib.root.clone())
+            })
+    }
+
     /// Steps 2 and 3 of opening a Library Browser tab — seed the
     /// per-browser state, then activate or push the tab.
     ///

@@ -336,11 +336,13 @@ fn metadata_for_linear(id: &str) -> Option<&'static CommandMetadata> {
 /// screen until someone decides it is global.
 const GLOBAL_COMMANDS: &[&str] = &[
     "new_document",
+    "new_project_with_profile",
     "open_document",
     "save_document",
     "save_document_as",
     "print",
     "close_active_document",
+    "close_all_documents",
     "next_document_tab",
     "previous_document_tab",
     "undo",
@@ -348,6 +350,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "open_command_palette",
     "open_preferences",
     "open_schematic_preferences",
+    "open_library_browser",
     "show_current_command_hotkeys",
     "show_current_command_shortcuts",
     "toggle_floating_panels",

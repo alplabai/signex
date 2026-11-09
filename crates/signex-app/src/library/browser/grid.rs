@@ -37,6 +37,7 @@ pub(super) fn view_grid<'a>(
     browser: &'a LibraryBrowserState,
     caches: GridCaches<'_>,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let GridCaches {
@@ -69,7 +70,7 @@ pub(super) fn view_grid<'a>(
                     // Lifecycle pills: not sortable, so a plain label.
                     r = r.push(
                         container(
-                            text(raw("Lifecycle"))
+                            text(t!(i18n, ids::LIBRARY_BROWSER_LIFECYCLE))
                                 .size(BROWSER_HEADER_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(header_ink),
@@ -86,12 +87,18 @@ pub(super) fn view_grid<'a>(
             // appended to the label. Other columns render plain so the
             // user can spot the sort target at a glance.
             let column_key = c.kind.sort_key();
+            let caption = match &c.kind {
+                ColumnKind::Parameter(_) => {
+                    crate::library::range_filter::parameter_caption(i18n, &c.label)
+                }
+                _ => c.label.clone(),
+            };
             let label_text = match active_sort {
                 Some(s) if s.key == column_key => {
                     let arrow = if s.descending { "▼" } else { "▲" };
-                    format!("{}  {arrow}", c.label)
+                    format!("{caption}  {arrow}")
                 }
-                _ => c.label.clone(),
+                _ => caption,
             };
             // Wrap the header label in a borderless button so a click
             // toggles the sort. Stage 8 of `v0.9-snxlib-as-file-plan.md`.
@@ -236,7 +243,7 @@ pub(super) fn view_grid<'a>(
                 if matches!(c.kind, ColumnKind::Description | ColumnKind::Updated) {
                     data_row = data_row.push(
                         container(
-                            text(raw(fit(row_value, c.width)))
+                            text(UserText::new(fit(row_value, c.width)))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
@@ -258,7 +265,7 @@ pub(super) fn view_grid<'a>(
                     let color = theme_ext::text_secondary(tokens);
                     data_row = data_row.push(
                         container(
-                            text(raw(fit(label, c.width)))
+                            text(UserText::new(fit(label, c.width)))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(color),
@@ -276,7 +283,7 @@ pub(super) fn view_grid<'a>(
                 if matches!(c.kind, ColumnKind::Price) {
                     data_row = data_row.push(
                         container(
-                            text(raw(fit(prices.text(r), c.width)))
+                            text(UserText::new(fit(prices.text(r), c.width)))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
@@ -296,7 +303,7 @@ pub(super) fn view_grid<'a>(
                 if matches!(c.kind, ColumnKind::Tags) {
                     data_row = data_row.push(
                         container(
-                            text(raw(fit(row_value, c.width)))
+                            text(UserText::new(fit(row_value, c.width)))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
@@ -358,7 +365,7 @@ pub(super) fn view_grid<'a>(
                     };
                     data_row = data_row.push(
                         container(
-                            text(raw(fit(row_value, c.width)))
+                            text(UserText::new(fit(row_value, c.width)))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(color),
@@ -377,7 +384,7 @@ pub(super) fn view_grid<'a>(
                 if read_only {
                     data_row = data_row.push(
                         container(
-                            text(raw(fit(row_value, c.width)))
+                            text(UserText::new(fit(row_value, c.width)))
                                 .size(BROWSER_TEXT_SIZE)
                                 .font(look::cell_font(&c.kind))
                                 .wrapping(iced::widget::text::Wrapping::None)

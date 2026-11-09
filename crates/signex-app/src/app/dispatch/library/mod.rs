@@ -339,6 +339,10 @@ impl Signex {
             }
             // ── Library Browser tab ──────────────────────────────────
             LibraryMessage::OpenLibraryBrowser(path) => self.handle_open_library_browser(path),
+            LibraryMessage::LibraryEditorRequested => match self.library_editor_target() {
+                Some(path) => self.handle_open_library_browser(path),
+                None => Task::none(),
+            },
             LibraryMessage::MountFinished { path, prepared } => {
                 self.handle_mount_finished(path, prepared)
             }

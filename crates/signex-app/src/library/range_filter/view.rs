@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use iced::widget::{Widget, column, container, pick_list, row};
 use iced::{Element, Length};
+use signex_i18n::UserText;
 use signex_library::RangeOp;
 use signex_types::quantity::{SiPrefix, Unit};
 use signex_types::theme::ThemeTokens;
@@ -35,6 +36,16 @@ impl std::fmt::Display for FilterColumn {
     }
 }
 
+/// A parameter name as a column caption: its first letter in capitals
+/// ("value" shows as "Value"), cased for the UI language.
+pub(crate) fn parameter_caption(i18n: &signex_i18n::I18n, name: &str) -> String {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) => i18n.upper_for_display(first.encode_utf8(&mut [0; 4])) + chars.as_str(),
+        None => String::new(),
+    }
+}
+
 /// The bar: one row per filtered column, and a picker to add another.
 /// `None` when there is nothing to filter and no filter to show.
 ///
@@ -45,6 +56,7 @@ pub(crate) fn range_filter_bar<'a, M: Clone + 'a>(
     columns: &[FilterColumn],
     excluded: &BTreeMap<String, usize>,
     tokens: &'a ThemeTokens,
+    i18n: &'a signex_i18n::I18n,
     wrap: impl Fn(RangeFilterMsg) -> M + 'a,
 ) -> Option<Element<'a, M>> {
     let free: Vec<FilterColumn> = columns
@@ -62,23 +74,26 @@ pub(crate) fn range_filter_bar<'a, M: Clone + 'a>(
             .iter()
             .find(|c| &c.key == key)
             .map_or(key.as_str(), |c| c.label.as_str());
+        let label = parameter_caption(i18n, label);
         let dropped = excluded.get(key).copied().unwrap_or(0);
-        bar = bar.push(filter_row(key, label, draft, dropped, tokens, &wrap));
+        bar = bar.push(filter_row(key, &label, draft, dropped, tokens, &wrap));
     }
     if !free.is_empty() {
         let w = Rc::clone(&wrap);
         bar = bar.push(
-            pick_list(None::<FilterColumn>, free, |c: &FilterColumn| c.to_string())
-                .graphite()
-                .on_select(move |c: FilterColumn| {
-                    w(RangeFilterMsg::ColumnPicked {
-                        key: c.key,
-                        unit: c.unit,
-                    })
+            pick_list(None::<FilterColumn>, free, move |c: &FilterColumn| {
+                format!("{} ({})", parameter_caption(i18n, &c.label), c.unit.glyph())
+            })
+            .graphite()
+            .on_select(move |c: FilterColumn| {
+                w(RangeFilterMsg::ColumnPicked {
+                    key: c.key,
+                    unit: c.unit,
                 })
-                .placeholder_label(raw("Add range filter…"))
-                .padding(SP.s)
-                .boxed(),
+            })
+            .placeholder_label(raw("Add range filter…"))
+            .padding(SP.s)
+            .boxed(),
         );
     }
     Some(bar.boxed())
@@ -194,7 +209,7 @@ fn bound<'a, M: Clone + 'a>(
         })
     })
     .unwrap_or_else(|| {
-        text(raw(unit.glyph().to_string()))
+        text(UserText::new(unit.glyph()))
             .size(TS.body)
             .color(theme_ext::text_secondary(tokens))
             .boxed()

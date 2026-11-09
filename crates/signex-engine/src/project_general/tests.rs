@@ -362,3 +362,48 @@ fn depth_one_and_a_thousand_are_honoured() {
         assert_eq!(steps, depth);
     }
 }
+
+#[test]
+fn each_project_setup_pick_is_its_own_step_and_typing_one_field_is_one() {
+    use signex_types::project::{PcbField, ProjectSetup, SetupProfile};
+    let pick = |setup: &ProjectSetup| ProjectGeneralCommand::SetProjectDefaults {
+        defaults: setup.defaults(),
+        designators: None,
+        typing: None,
+    };
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let hobby = ProjectSetup::from_profile(SetupProfile::Hobby);
+    let hdi = ProjectSetup::from_profile(SetupProfile::Hdi);
+    assert!(history.apply(&mut data, pick(&hobby)));
+    assert!(history.apply(&mut data, pick(&hdi)));
+    assert!(history.undo(&mut data));
+    assert_eq!(
+        data.project_defaults,
+        hobby.defaults(),
+        "Ctrl+Z returns Hobby"
+    );
+
+    // Typing in one rule field is one step; a pick after it is another.
+    let mut typed = hobby.clone();
+    for clearance in [0.3, 0.31, 0.315] {
+        typed.pcb.clearance_mm = clearance;
+        history.apply(
+            &mut data,
+            ProjectGeneralCommand::SetProjectDefaults {
+                defaults: typed.defaults(),
+                designators: None,
+                typing: Some(PcbField::Clearance),
+            },
+        );
+    }
+    assert!(history.apply(&mut data, pick(&hdi)));
+    assert!(history.undo(&mut data));
+    assert_eq!(data.project_defaults, typed.defaults());
+    assert!(history.undo(&mut data));
+    assert_eq!(
+        data.project_defaults,
+        hobby.defaults(),
+        "the typing was one step"
+    );
+}

@@ -101,11 +101,12 @@ pub type LoadedLibrary = (String, usize);
 
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
+    i18n: &'a signex_i18n::I18n,
     open_shortcut: &str,
     recent: &'a [PathBuf],
     libraries: &[LoadedLibrary],
 ) -> Element<'a, Message> {
-    graphite::view(tokens, open_shortcut, recent, libraries)
+    graphite::view(tokens, i18n, open_shortcut, recent, libraries)
 }
 
 pub fn hint_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
@@ -155,11 +156,17 @@ mod tests {
     #[test]
     fn recent_section_is_absent_without_entries_and_present_with_them() {
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark);
-        let empty = lay_out_texts(view(&tokens, "Ctrl+O", &[], &[]), SMALL_WINDOW);
+        let empty = lay_out_texts(
+            view(&tokens, &signex_i18n::I18n::en_us(), "Ctrl+O", &[], &[]),
+            SMALL_WINDOW,
+        );
         assert!(empty.iter().all(|t| !t.text.starts_with("proj")));
 
         let some = paths(2);
-        let texts = lay_out_texts(view(&tokens, "Ctrl+O", &some, &[]), SMALL_WINDOW);
+        let texts = lay_out_texts(
+            view(&tokens, &signex_i18n::I18n::en_us(), "Ctrl+O", &some, &[]),
+            SMALL_WINDOW,
+        );
         // The Graphite screen names an entry in its list and on its card.
         let mut order: Vec<_> = texts
             .iter()
@@ -178,9 +185,15 @@ mod tests {
     #[test]
     fn an_unbound_open_shortcut_leaves_no_empty_keycap() {
         let tokens = graphite();
-        let bound = lay_out_texts(view(&tokens, "F2", &[], &[]), SMALL_WINDOW);
+        let bound = lay_out_texts(
+            view(&tokens, &signex_i18n::I18n::en_us(), "F2", &[], &[]),
+            SMALL_WINDOW,
+        );
         assert!(bound.iter().any(|t| t.text == "F2"));
-        let unbound = lay_out_texts(view(&tokens, "", &[], &[]), SMALL_WINDOW);
+        let unbound = lay_out_texts(
+            view(&tokens, &signex_i18n::I18n::en_us(), "", &[], &[]),
+            SMALL_WINDOW,
+        );
         assert!(unbound.iter().any(|t| t.text == "Open\u{2026}"));
         assert!(
             unbound.iter().all(|t| !t.text.trim().is_empty()),
@@ -202,7 +215,10 @@ mod tests {
     fn labels_stay_on_one_line_and_inside_a_small_window() {
         let tokens = graphite();
         let recent = paths(MAX_START_RECENT + 2);
-        let texts = lay_out_texts(view(&tokens, "Ctrl+O", &recent, &[]), SMALL_WINDOW);
+        let texts = lay_out_texts(
+            view(&tokens, &signex_i18n::I18n::en_us(), "Ctrl+O", &recent, &[]),
+            SMALL_WINDOW,
+        );
         let one_line = BASE * 2.0;
         for label in ["New project", "Open Sample Project", "proj0.snxprj"] {
             let bounds = find(&texts, label).bounds;
@@ -252,7 +268,10 @@ mod tests {
         );
 
         for window in [MIN_SENSIBLE_WINDOW, SMALL_WINDOW] {
-            let texts = lay_out_texts(view(&tokens, "Ctrl+O", &recent, &[]), window);
+            let texts = lay_out_texts(
+                view(&tokens, &signex_i18n::I18n::en_us(), "Ctrl+O", &recent, &[]),
+                window,
+            );
             for (label, size) in &labels {
                 let bounds = find(&texts, label).bounds;
                 let natural = crate::layout_probe::natural::<()>(

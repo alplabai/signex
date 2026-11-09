@@ -643,6 +643,7 @@ fn push_waiver_project(app: &mut Signex, dir: &Path, old: uuid::Uuid, other: uui
                 }),
                 annotation: None,
                 schematic_defaults: Default::default(),
+                project_defaults: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

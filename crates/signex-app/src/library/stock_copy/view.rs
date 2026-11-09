@@ -29,10 +29,14 @@ pub(crate) fn intro_texts(label: &str, noun: &str) -> (String, String) {
 }
 
 /// The note shown when the library used before can no longer take the copy.
-pub(crate) fn previous_note(previous: &std::path::Path) -> String {
-    format!(
-        "The library used before ({}) is no longer open or writable.",
-        previous.display()
+pub(crate) fn previous_note(
+    i18n: &signex_i18n::I18n,
+    previous: &std::path::Path,
+) -> signex_i18n::Localized {
+    signex_i18n::t!(
+        i18n,
+        signex_i18n::ids::LIBRARY_STOCK_COPY_PREVIOUS_GONE,
+        "path" => previous.display().to_string()
     )
 }
 
@@ -40,6 +44,7 @@ pub fn view<'a>(
     library: &'a LibraryState,
     state: &'a StockCopyState,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let ts = TypeScale::default();
@@ -55,7 +60,7 @@ pub fn view<'a>(
     let mut body = column![intro].spacing(sp.m);
     if let Some(previous) = &state.previous_unavailable {
         body = body.push(
-            text(raw(previous_note(previous)))
+            text(previous_note(i18n, previous))
                 .size(ts.caption)
                 .color(muted)
                 .boxed(),
