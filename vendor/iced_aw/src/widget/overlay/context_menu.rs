@@ -242,8 +242,11 @@ mod tests {
     #[derive(Clone)]
     enum TestMessage {}
 
+    // The overlay lays its content out on creation, and that layout reads the
+    // content's widget state, so the tree must be built for the content (an
+    // empty, stateless tree panics on the downcast).
     fn create_test_tree() -> Tree {
-        Tree::empty()
+        Tree::new::<TestMessage, _, ()>(&Text::<iced_widget::Theme>::new("Test content"))
     }
 
     fn create_test_content() -> Element<'static, TestMessage, iced_widget::Theme, ()> {

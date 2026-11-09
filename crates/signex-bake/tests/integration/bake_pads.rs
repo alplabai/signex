@@ -458,7 +458,7 @@ fn bake_construction_entities_skipped() {
 #[test]
 fn bake_construction_entity_with_silk_attr_emits_no_warning() {
     use signex_sketch::attr::SilkAttr;
-    use signex_types::layer::SignexLayer;
+    use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
     let mut s = Sketch::new();
     let p = s.add_point(0.0, 0.0);
@@ -468,7 +468,7 @@ fn bake_construction_entity_with_silk_attr_emits_no_warning() {
     {
         let e = s.data.entities.iter_mut().find(|e| e.id == p).unwrap();
         e.silk = Some(SilkAttr {
-            layer: SignexLayer::TopSilk,
+            layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
         });
     }
     s.set_construction(p, true);
@@ -490,7 +490,7 @@ fn bake_non_construction_entity_with_silk_attr_no_longer_warns_in_v014() {
     // v0.14: silk bake moved to crate::silk; pad.rs no longer warns
     // about SilkAttr — the dispatcher invokes bake_silk separately.
     use signex_sketch::attr::SilkAttr;
-    use signex_types::layer::SignexLayer;
+    use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
     let mut s = Sketch::new();
     let p = s.add_point(0.0, 0.0);
@@ -498,7 +498,7 @@ fn bake_non_construction_entity_with_silk_attr_no_longer_warns_in_v014() {
     {
         let e = s.data.entities.iter_mut().find(|e| e.id == p).unwrap();
         e.silk = Some(SilkAttr {
-            layer: SignexLayer::TopSilk,
+            layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
         });
     }
 

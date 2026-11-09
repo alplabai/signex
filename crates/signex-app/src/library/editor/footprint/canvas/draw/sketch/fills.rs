@@ -166,7 +166,7 @@ pub(super) fn draw_filled_closed_loops(
 ) {
     use signex_sketch::entity::{Entity, EntityKind};
     use signex_sketch::id::SketchEntityId;
-    use signex_types::layer::SignexLayer;
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
     use std::collections::{HashMap, HashSet};
 
     // v0.16.2 — pick a fill colour for a loop by inspecting each
@@ -177,38 +177,46 @@ pub(super) fn draw_filled_closed_loops(
             return Some(FpLayer::FCu);
         }
         if let Some(s) = entity.silk.as_ref() {
-            return Some(if matches!(s.layer, SignexLayer::TopSilk) {
-                FpLayer::FSilks
-            } else {
-                FpLayer::BSilks
-            });
+            return Some(
+                if matches!(s.layer, PcbLayer::Technical(TechnicalLayer::SilkscreenTop)) {
+                    FpLayer::FSilks
+                } else {
+                    FpLayer::BSilks
+                },
+            );
         }
         if entity.courtyard.is_some() {
             return Some(FpLayer::EdgeCuts);
         }
         if let Some(m) = entity.mask_opening.as_ref() {
-            return Some(if matches!(m.layer, SignexLayer::TopSolderMask) {
-                FpLayer::FFab
-            } else {
-                FpLayer::BFab
-            });
+            return Some(
+                if matches!(m.layer, PcbLayer::Technical(TechnicalLayer::SolderMaskTop)) {
+                    FpLayer::FFab
+                } else {
+                    FpLayer::BFab
+                },
+            );
         }
         if let Some(m) = entity.mask_exclude.as_ref() {
-            return Some(if matches!(m.layer, SignexLayer::TopSolderMask) {
-                FpLayer::FFab
-            } else {
-                FpLayer::BFab
-            });
+            return Some(
+                if matches!(m.layer, PcbLayer::Technical(TechnicalLayer::SolderMaskTop)) {
+                    FpLayer::FFab
+                } else {
+                    FpLayer::BFab
+                },
+            );
         }
         if let Some(p) = entity.paste_aperture.as_ref() {
-            return Some(if matches!(p.layer, SignexLayer::TopPaste) {
-                FpLayer::FFab
-            } else {
-                FpLayer::BFab
-            });
+            return Some(
+                if matches!(p.layer, PcbLayer::Technical(TechnicalLayer::PasteTop)) {
+                    FpLayer::FFab
+                } else {
+                    FpLayer::BFab
+                },
+            );
         }
         if let Some(p) = entity.pour.as_ref() {
-            return Some(if matches!(p.layer, SignexLayer::TopCopper) {
+            return Some(if matches!(p.layer, PcbLayer::Copper(CopperLayer::Top)) {
                 FpLayer::FCu
             } else {
                 FpLayer::BCu

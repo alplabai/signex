@@ -120,6 +120,21 @@ fn build_with_class(
         class,
         parameters,
         WorkflowMode::Personal,
+        "SNX-TWO",
+    )
+}
+
+/// [`fixture`] whose row carries the internal part number `pn`, so a test
+/// can match a log line that only its own part can produce.
+pub(crate) fn fixture_with_part_number(pn: &str) -> Fixture {
+    build_in_mode(
+        "lib",
+        None,
+        two_unit_symbol(),
+        "IC",
+        ParamMap::new(),
+        WorkflowMode::Personal,
+        pn,
     )
 }
 
@@ -132,6 +147,7 @@ pub(crate) fn team_fixture(name: &str) -> Fixture {
         "IC",
         ParamMap::new(),
         WorkflowMode::Team,
+        "SNX-TWO",
     )
 }
 
@@ -142,6 +158,7 @@ fn build_in_mode(
     class: &str,
     parameters: ParamMap,
     mode: WorkflowMode,
+    part_number: &str,
 ) -> Fixture {
     signex_library::git_identity::test_identity::install();
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -188,7 +205,7 @@ fn build_in_mode(
     let row = ComponentRow {
         alternate_symbols: Vec::new(),
         row_id,
-        internal_pn: InternalPn::new("SNX-TWO"),
+        internal_pn: InternalPn::new(part_number),
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
