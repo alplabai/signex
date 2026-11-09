@@ -45,6 +45,10 @@ impl PanelContext {
         if self.diagnostics.last().map(|e| e.id) != main.diagnostics.last().map(|e| e.id) {
             self.diagnostics.clone_from(&main.diagnostics);
         }
+        if self.pcb_drc != main.pcb_drc {
+            self.pcb_drc.clone_from(&main.pcb_drc);
+        }
+        self.i18n = main.i18n.clone();
         if self.component_classes != main.component_classes {
             self.component_classes.clone_from(&main.component_classes);
         }

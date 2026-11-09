@@ -100,6 +100,8 @@ mod net_nav;
 mod palette_context_filter;
 
 // #2192 - the PCB ratsnest reaches the canvas and a net can be hidden.
+#[path = "regression/pcb_drc.rs"]
+mod pcb_drc;
 #[path = "regression/pcb_ratsnest.rs"]
 mod pcb_ratsnest;
 

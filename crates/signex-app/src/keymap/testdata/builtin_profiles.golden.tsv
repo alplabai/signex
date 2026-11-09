@@ -286,6 +286,7 @@ altium	hint	-	-	color_net
 altium	hint	-	-	clear_all_net_colors
 altium	hint	-	-	assign_net_class
 altium	hint	-	-	place_component
+altium	hint	-	-	run_drc
 altium	hint	-	2	footprint_mode_pads
 altium	hint	-	1	footprint_mode_sketch
 altium	hint	-	3	footprint_mode_view_3d
@@ -588,6 +589,7 @@ classic	hint	-	-	color_net
 classic	hint	-	-	clear_all_net_colors
 classic	hint	-	-	assign_net_class
 classic	hint	-	-	place_component
+classic	hint	-	-	run_drc
 classic	hint	-	2	footprint_mode_pads
 classic	hint	-	1	footprint_mode_sketch
 classic	hint	-	3	footprint_mode_view_3d

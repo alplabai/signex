@@ -1,5 +1,5 @@
 use super::*;
-use signex_types::pcb::{PadNet, PadShape, Point, Segment, Via};
+use signex_types::pcb::{Footprint, Pad, PadNet, PadShape, PadType, Point, Segment, Via, ViaType};
 use uuid::Uuid;
 
 const MM: i64 = 1_000_000;

@@ -665,6 +665,8 @@ impl Signex {
             erc_results_stale: self.erc_results_stale(),
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
+            pcb_drc: self.pcb_drc_panel(),
+            i18n: self.ui_state.i18n.clone(),
             selection_filters: self.interaction_state.selection_filters.clone(),
             custom_filter_presets: self.interaction_state.custom_filter_presets.clone(),
             active_custom_filter_tab: self.interaction_state.active_custom_filter_tab,

@@ -12,7 +12,7 @@ use crate::units::PointNm;
 const ELLIPSE_STEPS: usize = 32;
 
 /// A shape reduced to what the overlap test needs.
-enum Core {
+pub(crate) enum Core {
     /// Every point within `radius` of the segment `a`-`b`.
     Stadium { a: PointNm, b: PointNm, radius: i64 },
     /// A convex polygon, corners in order.
@@ -77,7 +77,7 @@ impl Shape {
         }
     }
 
-    fn core(&self) -> Core {
+    pub(crate) fn core(&self) -> Core {
         match *self {
             Shape::Disc { center, radius } => Core::Stadium {
                 a: center,
@@ -211,7 +211,7 @@ fn point_in_polygon(poly: &[PointNm], p: PointNm) -> bool {
 }
 
 /// Whether `p` lies in (or on) a convex polygon of either winding.
-fn inside_convex(poly: &[PointNm], p: PointNm) -> bool {
+pub(crate) fn inside_convex(poly: &[PointNm], p: PointNm) -> bool {
     let turns = (0..poly.len()).map(|i| orientation(poly[i], poly[(i + 1) % poly.len()], p));
     let (mut left, mut right) = (false, false);
     for turn in turns {
@@ -222,7 +222,7 @@ fn inside_convex(poly: &[PointNm], p: PointNm) -> bool {
 }
 
 /// Whether an edge normal of `poly` separates it from `other`.
-fn separated(poly: &[PointNm], other: &[PointNm]) -> bool {
+pub(crate) fn separated(poly: &[PointNm], other: &[PointNm]) -> bool {
     (0..poly.len()).any(|i| {
         let edge = poly[(i + 1) % poly.len()].minus(poly[i]);
         let normal = PointNm::new(-edge.y, edge.x);
