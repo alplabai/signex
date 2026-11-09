@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use iced::Point;
+use signex_engine::pcb::BoardEngine;
 use signex_library::{Footprint, Symbol};
 use signex_types::pcb::PcbBoard;
 
@@ -174,13 +175,25 @@ impl SchematicTabSession {
 /// viewer) can slot in without reshaping callers.
 #[derive(Debug)]
 pub enum TabDocument {
-    Pcb(PcbBoard),
+    Pcb(BoardEngine),
 }
 
 impl TabDocument {
     pub fn as_pcb(&self) -> Option<&PcbBoard> {
         match self {
-            Self::Pcb(board) => Some(board),
+            Self::Pcb(engine) => Some(engine.board()),
+        }
+    }
+
+    pub fn as_pcb_engine(&self) -> Option<&BoardEngine> {
+        match self {
+            Self::Pcb(engine) => Some(engine),
+        }
+    }
+
+    pub fn as_pcb_engine_mut(&mut self) -> Option<&mut BoardEngine> {
+        match self {
+            Self::Pcb(engine) => Some(engine),
         }
     }
 }
