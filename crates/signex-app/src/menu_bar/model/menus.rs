@@ -306,7 +306,8 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         stub("Assign Footprints"),
         stub("Library Editor"),
         SEP,
-        stub("Design Rule Check"),
+        // Runs `run_drc` on the PCB in view; greyed with no PCB open.
+        cmd_item_gated(ctx, cmd("run_drc", "Design Rule Check", "")),
         stub("Net Inspector"),
         SEP,
         item_if(

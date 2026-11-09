@@ -33,6 +33,8 @@ pub struct InteractionState {
     pub pcb_selection: crate::pcb_canvas::PcbSelectionState,
     /// The active board's ratsnest lines and the nets hidden from them.
     pub pcb_ratsnest: super::pcb_ratsnest::PcbRatsnest,
+    /// The board check the Messages panel lists (#2222).
+    pub pcb_drc: super::pcb_drc::PcbDrc,
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,

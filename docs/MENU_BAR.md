@@ -50,6 +50,12 @@ own. Two rows point at an id other than the one their key suggests (#1991):
   dialog to choose the rules. `run_erc` (F8) runs ERC at once. The row shows no
   key, as `open_erc_dialog` has no default binding.
 
+## Tools ▸ Design Rule Check {#tools-drc}
+
+Tools ▸ Design Rule Check runs `run_drc` (#2222) on the PCB in view and is
+greyed while no PCB is open. The command is also in the command palette and
+as the Run DRC button of the Messages panel; no keymap preset binds it.
+
 ## File ▸ Library {#file-library}
 
 File ▸ Library carries only "Open Library..." (libraries outside the active

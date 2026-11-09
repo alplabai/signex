@@ -4,7 +4,7 @@
 
 use serde_json::json;
 
-use super::{app_at_work, call, path, revision, snapshot, uid};
+use super::{app_at_work, call, call_as, path, revision, snapshot, uid};
 use crate::app::command::queries::tests::WIRE_A;
 
 fn doc(file: &str) -> String {
@@ -48,15 +48,18 @@ fn a_query_and_an_edit_land_while_the_person_is_mid_interaction_and_their_state_
 
 #[test]
 fn every_request_is_logged_with_the_client_pid_the_command_and_the_outcome() {
+    // A pid no other test sends: the diagnostics ring is shared by every
+    // test thread, so a common pid lets their lines into the count (#2227).
+    const PID: u32 = 52_271;
     let mut app = app_at_work();
-    let answered_line = "Agent request (pid 4242): `list_documents` -> answered";
-    let refused_line = "Agent request (pid 4242): `undo` -> refused";
+    let answered_line = "Agent request (pid 52271): `list_documents` -> answered";
+    let refused_line = "Agent request (pid 52271): `undo` -> refused";
     let answered = crate::diagnostics::logged_count(answered_line);
     let refused = crate::diagnostics::logged_count(refused_line);
 
-    let listed = call(&mut app, "list_documents", json!({}));
+    let listed = call_as(&mut app, PID, "list_documents", json!({}));
     assert_eq!(listed["status"], "answered");
-    call(&mut app, "undo", json!({"document": doc("a.snxsch")}));
+    call_as(&mut app, PID, "undo", json!({"document": doc("a.snxsch")}));
 
     assert_eq!(
         crate::diagnostics::logged_count(answered_line),

@@ -98,6 +98,18 @@ impl Signex {
         Some(out)
     }
 
+    /// Select exactly `items` on the board in view (a DRC violation's
+    /// items, #2222).
+    pub(crate) fn select_pcb_items(&mut self, items: &[pcb_geom::ItemRef]) {
+        if self.with_pcb_selection(|sel, board| {
+            sel.build_index(board);
+            sel.select_items(items)
+        }) == Some(true)
+        {
+            self.refresh_pcb_highlight();
+        }
+    }
+
     /// Hand the canvas the copper to paint for the current selection.
     fn refresh_pcb_highlight(&mut self) {
         let highlight = self

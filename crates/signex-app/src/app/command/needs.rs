@@ -29,6 +29,7 @@ pub(crate) enum Needs {
     Canvas,
     FitTarget,
     FootprintEditor,
+    Pcb,
 }
 
 impl Needs {
@@ -74,6 +75,7 @@ impl Needs {
             // The keystroke opens the footprint editor's grid picker and does
             // nothing elsewhere.
             Self::FootprintEditor => ctx.has_footprint_editor,
+            Self::Pcb => ctx.has_pcb,
         }
     }
 
@@ -101,6 +103,7 @@ impl Needs {
             Self::Canvas => "No schematic or PCB is open",
             Self::FitTarget => "No schematic or PCB is open",
             Self::FootprintEditor => "No footprint editor is open",
+            Self::Pcb => "No PCB is open",
         }
     }
 }
@@ -156,6 +159,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // The table lists the active sheet's symbols.
         | "open_parameter_manager" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
+        "run_drc" => Needs::Pcb,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => Needs::FitTarget,
