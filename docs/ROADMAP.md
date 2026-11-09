@@ -316,8 +316,9 @@ viewer for boards that nothing in Signex can create is not a milestone
 worth stopping at.
 
 **Three modes, one tool layer.** Signex AI works as an assistant, as an
-agent or as a generator. The mode is chosen per project in the New Project
-setup (#2232: Off, Assistant or Agentic) and can be switched in the AI panel.
+agent or as a generator. In the Pro build the mode is chosen per project
+when the project is created and can be switched in the AI panel; the
+Community New Project setup (#2232) has no AI choice.
 All three call the same undoable commands the menus and keys call (the
 Command Registry, #278, which moves here from Advanced Schematic), all act
 under the user's identity, and none writes to disk without the user's save.
