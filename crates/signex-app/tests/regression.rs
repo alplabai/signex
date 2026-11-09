@@ -99,6 +99,10 @@ mod net_nav;
 #[path = "regression/palette_context_filter.rs"]
 mod palette_context_filter;
 
+// #2192 - the PCB ratsnest reaches the canvas and a net can be hidden.
+#[path = "regression/pcb_ratsnest.rs"]
+mod pcb_ratsnest;
+
 // #1245 - the Parameter Manager opens from a catalog command.
 #[path = "regression/parameter_manager_open.rs"]
 mod parameter_manager_open;
@@ -118,6 +122,9 @@ mod diagnostics_routing;
 
 #[path = "regression/autosave.rs"]
 mod autosave;
+
+#[path = "regression/pcb_canvas_select.rs"]
+mod pcb_canvas_select;
 
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;

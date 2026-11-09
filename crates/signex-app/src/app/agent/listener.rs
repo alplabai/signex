@@ -3,7 +3,7 @@
 //! setting goes off the runtime drops the subscription, and with it the
 //! listener, the connections and (through [`Guard`]) the socket, the token and
 //! the registry entries. A connection only frames lines: each becomes a
-//! `Message::Agent` that `Signex::update` answers, so nothing here touches the
+//! `FileMsg::Agent` that `Signex::update` answers, so nothing here touches the
 //! app's state. See `docs/AGENT_SOCKET.md`.
 
 use std::hash::{Hash, Hasher};
@@ -207,7 +207,9 @@ pub(super) async fn serve(config: ListenerConfig, mut out: mpsc::Sender<Message>
 
 /// Send `msg` to the app; `false` once the app is no longer listening.
 async fn say(out: &mut mpsc::Sender<Message>, msg: AgentMsg) -> bool {
-    out.send(Message::Agent(msg)).await.is_ok()
+    out.send(Message::File(crate::app::FileMsg::Agent(msg)))
+        .await
+        .is_ok()
 }
 
 /// One connection: each line is a request, answered by one line, in order.

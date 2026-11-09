@@ -35,6 +35,7 @@ signex-widgets = { workspace = true }
 signex-i18n = { workspace = true }
 signex-erc = { workspace = true }
 signex-erc-dsl = { workspace = true }
+pcb-geom = { path = "../pcb-geom" }
 signex-net = { workspace = true }
 signex-output = { workspace = true }
 signex-library = { workspace = true, features = [
