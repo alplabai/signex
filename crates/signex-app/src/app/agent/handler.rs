@@ -104,9 +104,9 @@ impl Signex {
                 // The sleep is made inside the task: `update` runs outside a
                 // runtime.
                 Task::perform(async move { tokio::time::sleep(delay).await }, move |()| {
-                    Message::File(crate::app::FileMsg::Agent(AgentMsg::RestartListener {
+                    Message::Agent(AgentMsg::RestartListener {
                         boot_id: boot_id.clone(),
-                    }))
+                    })
                 })
             }
             AgentMsg::RestartListener { boot_id } => {
@@ -162,8 +162,7 @@ impl Signex {
                 .listener_config(self.ui_state.agent_connections_enabled),
         );
         let retry = if self.agent.endpoint.is_some() && self.agent.registry_retry {
-            iced::time::every(REGISTRY_RETRY)
-                .map(|_| Message::File(crate::app::FileMsg::Agent(AgentMsg::RegistryRetryTick)))
+            iced::time::every(REGISTRY_RETRY).map(|_| Message::Agent(AgentMsg::RegistryRetryTick))
         } else {
             Subscription::none()
         };
@@ -226,10 +225,10 @@ impl Signex {
                 .unwrap_or_else(|error| Err(format!("the registry write did not finish: {error}")))
             },
             move |result| {
-                Message::File(crate::app::FileMsg::Agent(AgentMsg::RegistrySynced {
+                Message::Agent(AgentMsg::RegistrySynced {
                     boot_id: boot_id.clone(),
                     result,
-                }))
+                })
             },
         ))
     }

@@ -77,6 +77,7 @@ mod tests {
                 "document_info",
                 "find_items",
                 "list_documents",
+                "query_pins",
                 "read_document",
                 "resolve",
                 "revert",

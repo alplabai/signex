@@ -114,9 +114,7 @@ pub(super) fn ask_with_task(app: &mut Signex, input: Input) -> (Value, iced::Tas
         input,
         reply,
     };
-    let task = app.update(Message::File(crate::app::FileMsg::Agent(
-        AgentMsg::Request(call),
-    )));
+    let task = app.update(Message::Agent(AgentMsg::Request(call)));
     let line = answer
         .try_recv()
         .expect("the app did not drop the reply")

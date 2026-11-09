@@ -1,5 +1,5 @@
 //! The read-only query commands (#2172): `list_documents`, `document_info`,
-//! `resolve`, `find_items` and `read_document`. Each answers with data through
+//! `resolve`, `find_items`, `read_document` and `query_pins`. Each answers with data through
 //! [`CommandOutcome::Answered`], never a bare `Ran`, and reads only the
 //! documents (engines, boards, editors, projects, the library): no active
 //! tab, window, selection or panel is looked at, and none is changed. What it
@@ -11,6 +11,7 @@
 mod documents;
 mod elements;
 mod find;
+mod pins;
 mod read;
 mod sheet_view;
 mod transient;
@@ -30,6 +31,7 @@ const QUERY_IDS: &[&str] = &[
     "resolve",
     "find_items",
     "read_document",
+    "query_pins",
 ];
 
 /// Every query command id.
@@ -85,6 +87,7 @@ impl Signex {
             "document_info" => self.document_info(args),
             "resolve" => self.resolve_id(args),
             "find_items" => self.find(args),
+            "query_pins" => self.query_pins(args),
             _ => self.read_document(args),
         };
         // The heads of referenced files that were never read are read now,
@@ -112,3 +115,6 @@ fn missing_required(command: &AppCommandId, args: &CommandArgs) -> Option<&'stat
 
 #[cfg(test)]
 pub(in crate::app) mod tests;
+
+#[cfg(test)]
+pub(in crate::app) mod pins_tests;
