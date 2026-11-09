@@ -328,38 +328,52 @@ fn a_file_a_project_names_outside_its_folder_is_not_read_for_an_agent_but_is_for
 }
 
 #[test]
-fn save_close_and_net_class_assignment_are_refused_on_every_document_and_change_nothing() {
+fn closing_the_persons_active_document_is_refused_and_changes_nothing() {
     let mut app = app_at_work();
-    for file in ["a.snxsch", "b.snxsch"] {
-        for (id, extra, fragment) in [
-            (
-                "save_document",
-                json!({}),
-                "saving the person's file is not available to agents yet",
-            ),
-            (
-                "close_active_document",
-                json!({}),
-                "changes the person's tab strip",
-            ),
-            (
-                "assign_net_class",
-                json!({"net_name": "GND"}),
-                "net classes are project-wide data",
-            ),
-        ] {
-            let mut args = json!({"document": doc(file)});
-            args.as_object_mut()
-                .unwrap()
-                .extend(extra.as_object().unwrap().clone());
-            let request = line(&app, id, args);
-            refuse_line(&mut app, request, &format!("`{id}`"), fragment);
-        }
-    }
+    let request = line(
+        &app,
+        "close_active_document",
+        json!({"document": doc("b.snxsch")}),
+    );
+    refuse_line(
+        &mut app,
+        request,
+        "`close_active_document`",
+        "is the person's active document",
+    );
     assert!(
         app.document_state
             .tabs
             .iter()
             .any(|t| t.path == path("b.snxsch"))
+    );
+}
+
+#[test]
+fn closing_a_document_shown_in_a_window_of_its_own_is_refused_and_changes_nothing() {
+    let mut app = app_at_work();
+    app.ui_state.windows.insert(
+        iced::window::Id::unique(),
+        crate::app::state::WindowKind::UndockedTab {
+            path: path("a.snxsch"),
+            title: "a".to_string(),
+        },
+    );
+    let request = line(
+        &app,
+        "close_active_document",
+        json!({"document": doc("a.snxsch")}),
+    );
+    refuse_line(
+        &mut app,
+        request,
+        "`close_active_document`",
+        "is open in a window of its own",
+    );
+    assert!(
+        app.document_state
+            .tabs
+            .iter()
+            .any(|t| t.path == path("a.snxsch"))
     );
 }
