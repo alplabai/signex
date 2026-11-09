@@ -66,7 +66,7 @@ shared with `signex-cli`: one mapping, never a fake `ran`.
 Derived from the command catalog (`allow.rs`), not listed by hand:
 
 - the #2172 queries: `list_documents`, `document_info`, `resolve`, `find_items`,
-  `read_document`;
+  `read_document`, `query_pins`;
 - a command that names its document with the `document` operand and takes no
   file path, except the three held back below: today `apply_edits`, `revert`,
   `color_net` and `clear_all_net_colors`. A test pins the final set, so a
