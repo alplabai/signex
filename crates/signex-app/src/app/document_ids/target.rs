@@ -65,7 +65,7 @@ impl Signex {
                             path_key_with(path, self.identity_fold_for(path)) == key
                         })
                     })
-                    .ok_or_else(|| format!("{text} is not an open or referenced document"))
+                    .ok_or_else(|| format!("not an open or referenced document: {text}"))
             }
         }
     }

@@ -51,6 +51,12 @@ pub(super) fn boot_id() -> Option<String> {
     random_hex(8)
 }
 
+/// Is `text` the form of a boot id: 16 lowercase hex characters? An entry file
+/// is data another process wrote; this keeps it from naming anything else.
+pub(super) fn is_boot_id(text: &str) -> bool {
+    text.len() == 16 && text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
 fn random_hex(bytes: usize) -> Option<String> {
     let mut raw = vec![0_u8; bytes];
     getrandom::fill(&mut raw).ok()?;

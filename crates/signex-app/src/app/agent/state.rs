@@ -29,6 +29,8 @@ pub(crate) struct AgentState {
     /// The last registry write failed or left a project to another instance;
     /// while it is set (and a listener is up) a timer retries it.
     pub(super) registry_retry: bool,
+    /// A registry write is running; a retry tick waits for it.
+    pub(super) registry_in_flight: bool,
     /// How many times a failed listener was restarted since it last started.
     pub(super) restarts: u32,
 }
@@ -45,6 +47,7 @@ impl AgentState {
             registry_lock: Arc::default(),
             touched: Vec::new(),
             registry_retry: false,
+            registry_in_flight: false,
             restarts: 0,
         }
     }
@@ -87,12 +90,17 @@ impl AgentState {
         self.endpoint = None;
         self.registered = None;
         self.registry_retry = false;
+        self.registry_in_flight = false;
     }
 
     /// New ids for the next time the setting goes on. A listener that is
     /// being dropped removes the files named by its own boot id, which a new
-    /// one must not share, and an old token never works again.
+    /// one must not share, and an old token never works again. The old id
+    /// leaves `touched`: its listener cleans its own files as it ends.
     pub(super) fn rotate_ids(&mut self) {
+        if let Some((old, _)) = &self.ids {
+            self.touched.retain(|id| id != old);
+        }
         self.ids = boot_id().zip(Token::generate());
     }
 

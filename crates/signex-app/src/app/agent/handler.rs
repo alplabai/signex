@@ -71,17 +71,29 @@ impl Signex {
                 crate::diagnostics::log_info(format!("Agent connections: listening on {endpoint}"));
                 self.agent.endpoint = Some(endpoint);
                 self.agent.registered = None;
-                self.agent.restarts = 0;
+                // The last listener's registry trouble is not this one's.
+                self.agent.registry_retry = false;
+                self.agent.registry_in_flight = false;
                 if !self.agent.touched.contains(&boot_id) {
                     self.agent.touched.push(boot_id);
                 }
                 self.sync_agent_registry().unwrap_or_else(Task::none)
+            }
+            AgentMsg::ListenerHealthy { boot_id } => {
+                // Only a listener that has served a connection earns back its
+                // restarts; one that binds and then fails does not.
+                if self.agent.boot_id() == Some(boot_id.as_str()) {
+                    self.agent.restarts = 0;
+                }
+                Task::none()
             }
             AgentMsg::ListenerFailed { boot_id, reason } => {
                 if self.agent.boot_id() != Some(boot_id.as_str()) {
                     return Task::none();
                 }
                 self.agent.listener_closed();
+                // Its future ended and cleaned its own files.
+                self.agent.touched.retain(|id| *id != boot_id);
                 let Some(delay) = restart_delay(self.agent.restarts) else {
                     crate::diagnostics::log_warning(format!(
                         "Agent connections: stopped: {reason}; it failed {MAX_RESTARTS} times, so it stays off. Turn \"Allow agent connections\" off and on in Preferences to try again"
@@ -110,7 +122,12 @@ impl Signex {
                 }
                 Task::none()
             }
-            AgentMsg::RegistrySynced(result) => {
+            AgentMsg::RegistrySynced { boot_id, result } => {
+                // The result of a listener that is gone is not this one's.
+                if self.agent.boot_id() != Some(boot_id.as_str()) {
+                    return Task::none();
+                }
+                self.agent.registry_in_flight = false;
                 match result {
                     Ok(()) => self.agent.registry_retry = false,
                     Err(why) => {
@@ -127,6 +144,11 @@ impl Signex {
                 Task::none()
             }
             AgentMsg::RegistryRetryTick => {
+                // A write that has not finished (a peer that does not answer)
+                // is not piled on.
+                if self.agent.registry_in_flight {
+                    return Task::none();
+                }
                 self.agent.registered = None;
                 self.sync_agent_registry().unwrap_or_else(Task::none)
             }
@@ -192,7 +214,9 @@ impl Signex {
             return None;
         }
         self.agent.registered = Some(projects.clone());
+        self.agent.registry_in_flight = true;
         let lock = self.agent.registry_lock.clone();
+        let boot_id = owner.boot_id.clone();
         Some(Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
@@ -204,7 +228,12 @@ impl Signex {
                 .await
                 .unwrap_or_else(|error| Err(format!("the registry write did not finish: {error}")))
             },
-            |result| Message::Agent(AgentMsg::RegistrySynced(result)),
+            move |result| {
+                Message::Agent(AgentMsg::RegistrySynced {
+                    boot_id: boot_id.clone(),
+                    result,
+                })
+            },
         ))
     }
 

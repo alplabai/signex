@@ -47,8 +47,15 @@ pub enum AgentMsg {
     ListenerStarted { boot_id: String, endpoint: String },
     /// The listener of `boot_id` could not start or gave up.
     ListenerFailed { boot_id: String, reason: String },
-    /// A registry write finished.
-    RegistrySynced(Result<(), String>),
+    /// The listener of `boot_id` accepted its first connection: it works, so
+    /// a failure after this starts the restart count again.
+    ListenerHealthy { boot_id: String },
+    /// A registry write of the listener `boot_id` finished. A result of a
+    /// listener that is gone is ignored.
+    RegistrySynced {
+        boot_id: String,
+        result: Result<(), String>,
+    },
     /// The retry timer: write the registry again (see `registry_retry`).
     RegistryRetryTick,
     /// The backoff after a failed listener is over: start a new one, unless

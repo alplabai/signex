@@ -57,18 +57,14 @@ fn refused_with(app: &mut Signex, input: Input, named: &str, fragment: &str) -> 
     reply
 }
 
-/// How many Messages lines begin with `start` and say `fragment`. Messages
-/// compacts a line to 160 bytes, so a long line (a long temp path) is cut
-/// before its reason ends: such a line counts by its start alone.
+/// How many Messages lines begin with `start` and say `fragment`. A line over
+/// 160 bytes is compacted and ends in `...`; the reasons come first, so what
+/// the person needs is still in it.
 fn refusals_logged(start: &str, fragment: &str) -> usize {
-    const COMPACTED_AT: usize = 150;
     let _ = crate::diagnostics::init_logging();
     crate::diagnostics::recent_entries()
         .iter()
-        .filter(|entry| {
-            entry.message.starts_with(start)
-                && (entry.message.contains(fragment) || entry.message.len() >= COMPACTED_AT)
-        })
+        .filter(|entry| entry.message.starts_with(start) && entry.message.contains(fragment))
         .count()
 }
 
@@ -221,7 +217,7 @@ fn a_document_that_is_not_in_an_open_project_is_refused() {
     for (document, fragment) in [
         (
             elsewhere("not-open.snxsch"),
-            "is not an open or referenced document",
+            "not an open or referenced document",
         ),
         (
             doc("loose.snxsch"),
@@ -287,6 +283,28 @@ fn document_less_queries_never_show_a_loose_sheet_to_an_agent() {
         "project sheets stay"
     );
     assert_eq!(held(&app), before);
+}
+
+#[test]
+fn a_long_path_does_not_push_the_reason_out_of_the_messages_line() {
+    let mut app = app_at_work();
+    let long = elsewhere(&format!("{}.snxsch", "n".repeat(200)));
+    let request = line(&app, "read_document", json!({"document": long}));
+    let reply = refuse_line(
+        &mut app,
+        request,
+        "`read_document`",
+        "not an open or referenced document",
+    );
+    // The line is compacted to 160 bytes and says why before it says where.
+    assert!(
+        crate::diagnostics::recent_entries().iter().any(|e| e
+            .message
+            .starts_with("Agent request (pid 4242): `read_document`")
+            && e.message.contains("not an open or referenced document")
+            && e.message.ends_with("...")),
+        "{reply}"
+    );
 }
 
 #[test]

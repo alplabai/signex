@@ -558,12 +558,13 @@ fn a_project_another_instance_held_is_registered_once_it_quits() {
         .join(registry::entry_file_name(&canonical));
     super::super::files::prepare_dir(&dir).unwrap();
     // Instance B (process 1, a socket that answers) registered the project first.
-    let socket = root.path().join("other.sock");
+    let boot_id = "cccccccccccccccc";
+    let socket = super::super::transport::endpoint_name(&dir, boot_id);
     let _answers = std::os::unix::net::UnixListener::bind(&socket).unwrap();
     let other = registry::Owner {
         pid: 1,
-        boot_id: "cc".into(),
-        endpoint: socket.to_string_lossy().into_owned(),
+        boot_id: boot_id.into(),
+        endpoint: socket,
     };
     registry::sync(&dir, &other, std::slice::from_ref(&project)).unwrap();
     let pid_in = |entry: &Path| {
@@ -657,12 +658,138 @@ fn a_failed_listener_is_restarted_with_new_ids_a_few_times_and_then_stays_off() 
     assert_eq!(task.units(), 0, "no more restarts");
     assert_eq!(crate::diagnostics::logged_count(said), logged + 1);
 
-    // A start resets the count.
+    // A start alone does not reset the count; a connection served does.
     app.agent.restarts = 3;
+    let boot_id = app.agent.boot_id().unwrap().to_string();
+    let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id: boot_id.clone(),
+        endpoint: "/live.sock".into(),
+    }));
+    assert_eq!(app.agent.restarts, 3);
+    let _t = app.update(Message::Agent(AgentMsg::ListenerHealthy {
+        boot_id: "0000000000000000".into(),
+    }));
+    assert_eq!(
+        app.agent.restarts, 3,
+        "a stale listener's health is not ours"
+    );
+    let _t = app.update(Message::Agent(AgentMsg::ListenerHealthy { boot_id }));
+    assert_eq!(app.agent.restarts, 0);
+}
+
+/// A listener that binds and then fails again and again (the restart loop the
+/// cap exists to stop) is restarted at most `MAX_RESTARTS` times, and the ids
+/// it leaves behind do not pile up.
+#[test]
+fn a_listener_that_starts_and_fails_every_time_is_restarted_at_most_five_times() {
+    use super::super::handler::MAX_RESTARTS;
+    let mut app = app_at_work();
+    let mut scheduled = 0;
+    for _round in 0..12 {
+        let boot_id = app.agent.boot_id().unwrap().to_string();
+        let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+            boot_id: boot_id.clone(),
+            endpoint: "/live.sock".into(),
+        }));
+        let task = app.update(Message::Agent(AgentMsg::ListenerFailed {
+            boot_id: boot_id.clone(),
+            reason: "accept failed".into(),
+        }));
+        if task.units() > 0 {
+            scheduled += 1;
+        }
+        let _t = app.update(Message::Agent(AgentMsg::RestartListener { boot_id }));
+    }
+    assert_eq!(scheduled, MAX_RESTARTS, "no endless restart loop");
+    assert!(
+        app.agent.touched.len() <= 1,
+        "boot ids of ended listeners are forgotten: {:?}",
+        app.agent.touched
+    );
+}
+
+#[test]
+fn the_listener_reports_healthy_once_after_its_first_connection() {
+    let root = scratch();
+    let (mut app, config, _dir) = app_and_config(root.path());
+    let rt = runtime();
+    rt.block_on(async {
+        let (server, mut messages, socket) = start(&mut app, &config).await;
+        let _first = UnixStream::connect(&socket).await.unwrap();
+        let next = tokio::time::timeout(Duration::from_secs(5), messages.next())
+            .await
+            .expect("a message after the connection");
+        let Some(Message::Agent(AgentMsg::ListenerHealthy { boot_id })) = next else {
+            panic!("the first connection did not report the listener healthy");
+        };
+        assert_eq!(boot_id, config.boot_id);
+        let _second = UnixStream::connect(&socket).await.unwrap();
+        let again = tokio::time::timeout(Duration::from_millis(300), messages.next()).await;
+        assert!(again.is_err(), "reported once, not for every connection");
+        server.abort();
+    });
+}
+
+/// The result of a registry write of a listener that is gone must not decide
+/// whether the next listener's first failure is said.
+#[test]
+fn a_late_registry_failure_of_a_gone_listener_does_not_hide_the_next_ones() {
+    let mut app = app_at_work();
+    let current = app.agent.boot_id().unwrap().to_string();
+    let _t = app.update(Message::Agent(AgentMsg::ListenerFailed {
+        boot_id: current.clone(),
+        reason: "closed".into(),
+    }));
+    // A failure from the listener that is gone arrives late.
+    let _t = app.update(Message::Agent(AgentMsg::RegistrySynced {
+        boot_id: "0000000000000000".into(),
+        result: Err("late failure of the old one".into()),
+    }));
+    assert!(!app.agent.registry_retry, "a stale result is ignored");
+
+    let boot_id = app.agent.boot_id().unwrap().to_string();
+    let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id: boot_id.clone(),
+        endpoint: "/live.sock".into(),
+    }));
+    let said = "first failure of the new one";
+    let logged = crate::diagnostics::logged_count(said);
+    let _t = app.update(Message::Agent(AgentMsg::RegistrySynced {
+        boot_id,
+        result: Err(said.into()),
+    }));
+    assert_eq!(crate::diagnostics::logged_count(said), logged + 1);
+
+    // A start also clears what the last listener left.
+    app.agent.registry_retry = true;
     let boot_id = app.agent.boot_id().unwrap().to_string();
     let _t = app.update(Message::Agent(AgentMsg::ListenerStarted {
         boot_id,
         endpoint: "/live.sock".into(),
     }));
-    assert_eq!(app.agent.restarts, 0);
+    assert!(!app.agent.registry_retry);
+}
+
+#[test]
+fn a_retry_tick_waits_for_a_registry_write_still_running() {
+    let mut app = app_at_work();
+    let boot_id = app.agent.boot_id().unwrap().to_string();
+    // The write is started and has not finished.
+    let started = app.update(Message::Agent(AgentMsg::ListenerStarted {
+        boot_id: boot_id.clone(),
+        endpoint: "/live.sock".into(),
+    }));
+    assert!(started.units() > 0);
+    assert!(app.agent.registry_in_flight);
+    let tick = app.update(Message::Agent(AgentMsg::RegistryRetryTick));
+    assert_eq!(tick.units(), 0, "no second write while one is running");
+
+    // Once it has finished, the tick works again.
+    let _t = app.update(Message::Agent(AgentMsg::RegistrySynced {
+        boot_id,
+        result: Err("a project is held".into()),
+    }));
+    assert!(!app.agent.registry_in_flight);
+    let tick = app.update(Message::Agent(AgentMsg::RegistryRetryTick));
+    assert!(tick.units() > 0);
 }

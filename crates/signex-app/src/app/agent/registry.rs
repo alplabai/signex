@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
 use super::files::{self, REGISTRY_DIR};
+use super::token::is_boot_id;
+use super::transport::endpoint_name;
 
 /// The version of the entry format. A change that breaks a reader moves it.
 pub(super) const FORMAT: u32 = 1;
@@ -79,7 +81,7 @@ pub(super) fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<()
             wanted.insert(name);
             continue;
         }
-        if !may_take_over(existing.as_ref(), owner, entry_is_live) {
+        if !may_take_over(existing.as_ref(), owner, |entry| entry_is_live(dir, entry)) {
             let held = existing.map_or(0, |entry| entry.pid);
             problems.push(format!(
                 "{} is also open in process {held}, which keeps its entry",
@@ -117,13 +119,47 @@ fn may_take_over(existing: Option<&Entry>, owner: &Owner, live: impl Fn(&Entry) 
 /// process id of an unrelated process is not enough) and its socket answers a
 /// connection, which is closed at once without sending a byte. A dead
 /// instance's entry is stale.
-fn entry_is_live(entry: &Entry) -> bool {
-    pid_alive(entry.pid) && endpoint_answers(&entry.socket)
+///
+/// A file in a shared folder is not trusted for where to connect: the entry
+/// must carry a boot id of the right form and name exactly the endpoint that
+/// boot id gives in `dir`, and only that endpoint is probed. An entry that
+/// names anything else (a link, another folder, a network path) is stale.
+fn entry_is_live(dir: &Path, entry: &Entry) -> bool {
+    is_boot_id(&entry.boot_id)
+        && entry.socket == endpoint_name(dir, &entry.boot_id)
+        && pid_alive(entry.pid)
+        && endpoint_answers(&entry.socket)
 }
 
+/// Does a socket answer a connection? The connect does not block: a peer that
+/// is too busy to accept (a full backlog, a stopped process) answers `EAGAIN`
+/// or `EINPROGRESS` and counts as there. The connection is closed at once.
 #[cfg(unix)]
 fn endpoint_answers(socket: &str) -> bool {
-    std::os::unix::net::UnixStream::connect(socket).is_ok()
+    let path = socket.as_bytes();
+    // SAFETY: plain socket calls on a descriptor made and closed here, and a
+    // zeroed `sockaddr_un` filled within its bounds.
+    unsafe {
+        let mut address: libc::sockaddr_un = std::mem::zeroed();
+        if path.len() >= address.sun_path.len() || path.contains(&0) {
+            return false;
+        }
+        address.sun_family = libc::AF_UNIX as libc::sa_family_t;
+        for (slot, byte) in address.sun_path.iter_mut().zip(path) {
+            *slot = *byte as libc::c_char;
+        }
+        let fd = libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0);
+        if fd < 0 {
+            return false;
+        }
+        let flags = libc::fcntl(fd, libc::F_GETFL);
+        libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+        let size = std::mem::size_of::<libc::sockaddr_un>() as libc::socklen_t;
+        let connected = libc::connect(fd, (&raw const address).cast(), size) == 0;
+        let error = std::io::Error::last_os_error().raw_os_error();
+        libc::close(fd);
+        connected || matches!(error, Some(libc::EINPROGRESS | libc::EAGAIN))
+    }
 }
 
 #[cfg(windows)]
@@ -345,13 +381,8 @@ mod tests {
     fn a_live_other_instance_keeps_its_entry_and_our_close_does_not_remove_it() {
         let dir = scratch();
         let a = project(dir.path(), "a.snxprj");
-        // Its process runs and its socket answers.
-        let socket = dir.path().join("cc.sock");
-        let _listening = std::os::unix::net::UnixListener::bind(&socket).unwrap();
-        let theirs = Owner {
-            endpoint: socket.to_string_lossy().into_owned(),
-            ..owner(1, "cc")
-        };
+        // Its process runs and the socket its boot id names answers.
+        let (theirs, _listening) = listening_owner(dir.path(), 1, CC);
         let ours = owner(41, "bb");
         sync(dir.path(), &theirs, std::slice::from_ref(&a)).unwrap();
 
@@ -373,18 +404,108 @@ mod tests {
         let dir = scratch();
         let a = project(dir.path(), "a.snxprj");
         // A socket file whose listener is gone refuses a connection.
-        let socket = dir.path().join("dead.sock");
-        drop(std::os::unix::net::UnixListener::bind(&socket).unwrap());
-        let reused = Owner {
-            endpoint: socket.to_string_lossy().into_owned(),
-            ..owner(1, "ee")
-        };
+        let (reused, listener) = listening_owner(dir.path(), 1, EE);
+        drop(listener);
         sync(dir.path(), &reused, std::slice::from_ref(&a)).unwrap();
         assert!(pid_alive(1));
         assert!(!endpoint_answers(&reused.endpoint));
 
         sync(dir.path(), &owner(41, "bb"), std::slice::from_ref(&a)).expect("taken over");
         assert_eq!(entry_pid(dir.path(), &a), 41);
+    }
+
+    /// An entry file is data another process wrote: what it names is not
+    /// probed unless it is exactly the endpoint its boot id gives here.
+    #[cfg(unix)]
+    #[test]
+    fn an_entry_that_names_any_other_socket_or_a_malformed_boot_id_is_stale() {
+        let dir = scratch();
+        let a = project(dir.path(), "a.snxprj");
+        // A live process, and a socket that answers, but not the boot id's.
+        let (answering, _listener) = listening_owner(dir.path(), 1, CC);
+        let planted = Owner {
+            boot_id: EE.into(),
+            ..answering.clone()
+        };
+        let planted_entry = Entry {
+            format: FORMAT,
+            project: "p".into(),
+            pid: 1,
+            socket: planted.endpoint.clone(),
+            boot_id: planted.boot_id.clone(),
+        };
+        assert!(!entry_is_live(dir.path(), &planted_entry), "another socket");
+        let live_entry = Entry {
+            boot_id: CC.into(),
+            ..planted_entry
+        };
+        assert!(entry_is_live(dir.path(), &live_entry), "its own socket");
+        // The same socket under a boot id of the wrong form.
+        let (odd, _odd_listener) = listening_owner(dir.path(), 1, "cc");
+        let odd_entry = Entry {
+            socket: odd.endpoint.clone(),
+            boot_id: "cc".into(),
+            ..live_entry
+        };
+        assert!(
+            !entry_is_live(dir.path(), &odd_entry),
+            "a malformed boot id"
+        );
+
+        sync(dir.path(), &planted, std::slice::from_ref(&a)).unwrap();
+        sync(dir.path(), &owner(41, "bb"), std::slice::from_ref(&a)).expect("taken over");
+        assert_eq!(entry_pid(dir.path(), &a), 41);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_socket_answers_only_while_something_listens() {
+        let dir = scratch();
+        let (live, listener) = listening_owner(dir.path(), 1, CC);
+        assert!(endpoint_answers(&live.endpoint));
+        drop(listener);
+        assert!(!endpoint_answers(&live.endpoint), "a dead socket file");
+        assert!(!endpoint_answers(
+            &dir.path().join("none").to_string_lossy()
+        ));
+        assert!(
+            !endpoint_answers(&"x".repeat(500)),
+            "too long for a socket path"
+        );
+    }
+
+    /// Boot ids of the right form.
+    #[cfg(unix)]
+    const CC: &str = "cccccccccccccccc";
+    #[cfg(unix)]
+    const EE: &str = "eeeeeeeeeeeeeeee";
+
+    /// An instance `pid` / `boot` listening on the socket its boot id names
+    /// in `dir`.
+    #[cfg(unix)]
+    fn listening_owner(
+        dir: &Path,
+        pid: u32,
+        boot: &str,
+    ) -> (Owner, std::os::unix::net::UnixListener) {
+        let socket = endpoint_name(dir, boot);
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        let owner = Owner {
+            pid,
+            boot_id: boot.into(),
+            endpoint: socket,
+        };
+        (owner, listener)
+    }
+
+    #[test]
+    fn a_boot_id_has_one_form() {
+        assert!(is_boot_id("0123456789abcdef"));
+        assert!(!is_boot_id("0123456789ABCDEF"));
+        assert!(!is_boot_id("0123456789abcde"));
+        assert!(!is_boot_id("0123456789abcdef0"));
+        assert!(!is_boot_id("../../etc/passwd"));
+        assert!(!is_boot_id(""));
     }
 
     #[cfg(unix)]

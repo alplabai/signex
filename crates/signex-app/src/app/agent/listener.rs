@@ -158,6 +158,7 @@ pub(super) async fn serve(config: ListenerConfig, mut out: mpsc::Sender<Message>
     }
     let mut connections = FuturesUnordered::new();
     let mut failures = 0_u32;
+    let mut healthy = false;
     loop {
         tokio::select! {
             accepted = listener.accept() => match accepted {
@@ -179,6 +180,14 @@ pub(super) async fn serve(config: ListenerConfig, mut out: mpsc::Sender<Message>
                 }
                 Ok(Accepted::Connection { conn, pid }) => {
                     failures = 0;
+                    if !healthy {
+                        // The first connection shows the listener works.
+                        healthy = true;
+                        let boot_id = config.boot_id.clone();
+                        if !say(&mut out, AgentMsg::ListenerHealthy { boot_id }).await {
+                            return;
+                        }
+                    }
                     if connections.len() >= MAX_CONNECTIONS {
                         drop(conn);
                         let reason = format!("more than {MAX_CONNECTIONS} connections at once");

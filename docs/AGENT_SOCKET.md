@@ -188,8 +188,13 @@ Two instances with the same project: an app removes only entries that carry
 its own `pid` and `boot_id`, and writes over an entry only if there is none,
 it is its own (same `pid` or same `boot_id`) or the entry is stale: its process
 is gone, or its socket refuses a connection (a reused process id, or a
-listener that has gone). The check connects and closes at once without
-sending a byte, so the other instance logs nothing. The entry of another
+listener that has gone). An entry file is data another process wrote, so
+only the endpoint its boot id gives is probed: the boot id must be 16
+lowercase hex characters and `socket` must equal the endpoint that boot id
+names in the runtime folder, or the entry is stale and nothing it names is
+touched. The probe does not block (a peer too busy to accept counts as
+there), connects and closes at once without sending a byte, so the other
+instance logs nothing. The entry of another
 live instance is kept and Messages says the project is also open there;
 closing the project in one instance never unregisters the other. An entry
 that is already ours and unchanged is not rewritten. The registry is written
@@ -199,14 +204,18 @@ the exit removed.
 A write that fails, or leaves a project to another instance, is tried again:
 while a listener is up and a project is unregistered, a timer asks for
 another try every 5 s (no timer otherwise, and no write at every update).
-Messages says so once per run of failures. So when the other instance quits,
-this one registers the project within seconds.
+Messages says so once per run of failures; the result of a write of a
+listener that is gone is ignored, and a tick waits while a write is still
+running. So when the other instance quits, this one registers the project
+within seconds.
 
 A listener that fails (it could not bind, or gave up accepting) is restarted
 after 2, 4, 8, 16 and 32 s with a new boot id and token, which gives iced a
 new subscription; after those five restarts it stays off and Messages says to
-turn the setting off and on in Preferences. A successful start resets the
-count.
+turn the setting off and on in Preferences. Only a listener that has served a
+connection earns the count back (a listener that binds and then fails again
+does not), and turning the setting on resets it. The boot ids of listeners
+that have ended are forgotten, so the quit path's list stays short.
 
 ## Known limits
 
