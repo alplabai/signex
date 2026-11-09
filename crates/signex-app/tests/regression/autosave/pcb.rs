@@ -13,6 +13,7 @@ use signex_app::app::{
 };
 use signex_app::autosave::{AutosaveMsg, RecoveryChoice, sidecar};
 use signex_app::menu_bar::MenuMessage;
+use signex_engine::pcb::BoardEngine;
 use signex_types::pcb::PcbBoard;
 
 use super::complete;
@@ -103,7 +104,10 @@ fn edit(app: &mut Signex, doc: &Path) {
         .iter_mut()
         .find(|tab| tab.path == doc)
         .unwrap();
-    tab.cached_document = Some(TabDocument::Pcb(board(EDITED_THICKNESS)));
+    tab.cached_document = Some(TabDocument::Pcb(BoardEngine::new(
+        board(EDITED_THICKNESS),
+        1,
+    )));
     app.document_state.mark_document_dirty(doc);
 }
 
@@ -220,7 +224,7 @@ fn decide_later_keeps_the_copy_and_autosave_does_not_overwrite_it() {
         .iter_mut()
         .find(|tab| tab.path == f.doc)
         .unwrap();
-    tab.cached_document = Some(TabDocument::Pcb(board(3.2)));
+    tab.cached_document = Some(TabDocument::Pcb(BoardEngine::new(board(3.2), 1)));
     next.document_state.mark_document_dirty(&f.doc);
     tick(&mut next);
     assert_eq!(std::fs::read(sidecar_of(&f)).unwrap(), copy);
@@ -277,10 +281,10 @@ fn restore_keeps_the_id_of_the_open_board() {
         .iter_mut()
         .find(|tab| tab.path == f.doc)
         .unwrap();
-    let Some(TabDocument::Pcb(board)) = tab.cached_document.as_mut() else {
+    let Some(TabDocument::Pcb(engine)) = tab.cached_document.as_mut() else {
         panic!("an open PCB tab")
     };
-    board.uuid = live;
+    engine.reassign_document_id(live);
     answer(&mut next, RecoveryChoice::Restore);
     assert_eq!(thickness_in_tab(&next, &f.doc), EDITED_THICKNESS);
     let tab = next

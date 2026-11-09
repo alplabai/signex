@@ -68,3 +68,7 @@ When `Distance` lands, `pcb-geom`'s boundary takes `Distance` instead of a raw `
 - Each consumer converts once, at the index or query boundary. A consumer that needs mm back (a ratsnest line to draw) converts with `nm_to_mm`.
 - An item with a non-finite or out-of-range coordinate cannot be hit-tested; the caller sees it in `rejected` and reports it.
 - `pcb-geom` depends on `signex-types` only (plus `rstar` and `uuid`). It is a domain crate: no UI or GPU dependency (`scripts/check_arch_guard.sh`).
+
+## Addendum: hosting board edits
+
+Board edits enter through one `BoardEngine` per open board, with an inverse-command history on `signex-history` and a revision that the ratsnest and the pick index key on. See `docs/architecture/pcb-board-engine.md` (#661 slice 7).

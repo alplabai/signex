@@ -416,7 +416,8 @@ impl Signex {
         canvas.set_grid(main.grid_visible, main.visible_grid_mm);
         // Selection is routed for the main window's board only.
         canvas.selectable = false;
-        canvas.set_renderer_snapshot(Some(signex_renderer::pcb::PcbSnapshot::from_board(board)));
+        let snapshot = self.interaction_state.pcb_ratsnest.snapshot_of(path, board);
+        canvas.set_renderer_snapshot(Some(snapshot));
         canvas.fit_to_board();
         Some(canvas)
     }
@@ -573,7 +574,7 @@ impl Signex {
         warn_if_read_only(&path, board.unknown.newer_minor_source.as_deref());
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
-        self.document_state.stamp_pcb_revision(&path);
+        let engine = self.document_state.new_board_engine(&path, board);
         // An earlier run's recovery copy of this board (#1185): hold
         // autosave back and let `update` start the check, as for a sheet.
         self.document_state.autosave.begin_check(&path);
@@ -582,7 +583,7 @@ impl Signex {
         self.document_state.tabs.push(TabInfo {
             title,
             path,
-            cached_document: Some(TabDocument::Pcb(board)),
+            cached_document: Some(TabDocument::Pcb(engine)),
             project_id,
             kind: super::TabKind::Pcb,
         });

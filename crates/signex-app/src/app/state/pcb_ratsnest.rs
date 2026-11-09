@@ -53,6 +53,16 @@ impl PcbRatsnest {
         }
     }
 
+    /// A snapshot of a board the cache does not hold (an undocked window's
+    /// board that is not the active tab), with its ratsnest as the active
+    /// tab draws it. Computes the lines without replacing the cache.
+    pub(crate) fn snapshot_of(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
+        let lines = pcb_geom::ratsnest(board);
+        let none = BTreeSet::new();
+        let hidden = self.hidden_nets.get(path).unwrap_or(&none);
+        PcbSnapshot::from_board(board).with_ratsnest(&lines, hidden)
+    }
+
     /// `snapshot` with the lines of every net of `board` that is not hidden.
     pub(crate) fn apply(&self, board: &Path, snapshot: PcbSnapshot) -> PcbSnapshot {
         let none = BTreeSet::new();

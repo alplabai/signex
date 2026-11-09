@@ -298,6 +298,11 @@ impl Signex {
                 engine.forget_save_point();
                 self.document_state.mark_document_dirty(&path);
             }
+            // The same for a board, open or parked with its edits.
+            if wrote && self.document_state.holds_pcb(&path) {
+                self.document_state.forget_board_save_point(&path);
+                self.document_state.mark_document_dirty(&path);
+            }
             self.report_restore_without_tab(&path, sha, &result, has_edits);
             return Task::none();
         };
@@ -363,6 +368,7 @@ impl Signex {
         if let Some(engine) = self.document_state.engines.get_mut(path) {
             engine.forget_save_point();
         }
+        self.document_state.forget_board_save_point(path);
         self.document_state.mark_document_dirty(path);
         self.report_restore_failure(format!(
             "{} was edited while its restore to {sha} ran, so the unsaved edits were kept and \
