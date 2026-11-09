@@ -48,9 +48,31 @@ impl Shape {
             },
             Shape::Capsule { a, b, radius } => Core::Stadium { a, b, radius },
             Shape::Rect { .. } | Shape::Ellipse { .. } => {
-                Core::Polygon(self.outline(ELLIPSE_STEPS))
+                flat_to_stadium(self.outline(ELLIPSE_STEPS))
             }
         }
+    }
+}
+
+/// A polygon with no area (a zero-size or zero-width pad) is a point or a
+/// segment: the convex tests would read it as containing every point on its
+/// line, so it becomes the segment between its two farthest corners.
+fn flat_to_stadium(poly: Vec<PointNm>) -> Core {
+    let Some(&first) = poly.first() else {
+        return Core::Polygon(poly);
+    };
+    let far = |from: PointNm| {
+        poly.iter()
+            .copied()
+            .max_by_key(|p| p.distance_sq(from))
+            .unwrap_or(from)
+    };
+    let a = far(first);
+    let b = far(a);
+    if poly.iter().all(|&p| orientation(a, b, p) == 0) {
+        Core::Stadium { a, b, radius: 0 }
+    } else {
+        Core::Polygon(poly)
     }
 }
 

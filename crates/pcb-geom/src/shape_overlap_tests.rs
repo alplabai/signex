@@ -76,3 +76,53 @@ fn an_ellipse_overlaps_a_disc_on_its_long_axis_only() {
     assert!(oval.overlaps(&at(3, 0)));
     assert!(!oval.overlaps(&at(0, 3)));
 }
+
+#[test]
+fn a_zero_size_pad_is_a_point_not_the_whole_plane() {
+    let pad = Shape::Rect {
+        center: PointNm::new(0, 0),
+        half_w: 0,
+        half_h: 0,
+        rotation_deg: 0.0,
+    };
+    let far_track = Shape::Capsule {
+        a: PointNm::new(5_000_000, -5_000_000),
+        b: PointNm::new(5_000_000, 5_000_000),
+        radius: 100_000,
+    };
+    assert!(!pad.overlaps(&far_track) && !far_track.overlaps(&pad));
+    assert!(!pad.overlaps(&rect(5, 0, 1, 0.0)));
+    let through = Shape::Capsule {
+        a: p(-1, 0),
+        b: p(1, 0),
+        radius: 0,
+    };
+    assert!(pad.overlaps(&through) && through.overlaps(&pad));
+    assert!(pad.overlaps(&rect(0, 0, 1, 30.0)));
+}
+
+#[test]
+fn a_zero_width_pad_is_a_segment_and_stops_at_its_ends() {
+    let sliver = Shape::Rect {
+        center: p(0, 0),
+        half_w: 0,
+        half_h: MM,
+        rotation_deg: 0.0,
+    };
+    let beyond_end = Shape::Disc {
+        center: p(0, 3),
+        radius: MM / 2,
+    };
+    assert!(!sliver.overlaps(&beyond_end));
+    let at_end = Shape::Disc {
+        center: p(0, 2),
+        radius: MM,
+    };
+    assert!(sliver.overlaps(&at_end));
+    let across = Shape::Capsule {
+        a: p(-1, 0),
+        b: p(1, 0),
+        radius: 0,
+    };
+    assert!(sliver.overlaps(&across));
+}
