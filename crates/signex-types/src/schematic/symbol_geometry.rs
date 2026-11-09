@@ -89,6 +89,70 @@ pub fn pin_tips<'a>(
     instance_pins(lib, sym).map(move |lp| (lp, xform.apply(lp.pin.position)))
 }
 
+/// World box of `sym`'s body: the graphics of its unit and body style, with
+/// no pins and no text, strokes not counted. `None` when it draws no body.
+pub fn body_bounds(lib: &LibSymbol, sym: &Symbol) -> Option<Aabb> {
+    let t = SymbolTransform::from_symbol(sym);
+    let body = lib.effective_body(sym.unit, sym.body_style);
+    let mut lowered = Vec::new();
+    for lg in &lib.graphics {
+        if item_shown(lg.unit, lg.body_style, sym.unit, body) {
+            lower_graphic(&lg.graphic, &t, &mut lowered);
+        }
+    }
+    lowered
+        .iter()
+        .filter_map(|p| match p {
+            SymbolPrimitive::Path { points, .. } => points_bounds(points),
+            SymbolPrimitive::Circle { center, radius, .. } => {
+                points_bounds(&[*center]).map(|b| b.expand(*radius))
+            }
+            SymbolPrimitive::Arc {
+                start, mid, end, ..
+            } => Some(arc_bounds(*start, *mid, *end)),
+            SymbolPrimitive::Text { .. } | SymbolPrimitive::Pin { .. } => None,
+        })
+        .reduce(|a, b| a.union(&b))
+}
+
+/// Slack for float noise when a wire runs along or ends on a body edge.
+const BODY_EDGE_TOLERANCE_MM: f64 = 1e-6;
+
+/// Whether the segment `a`..`b` meets the open interior of `bounds`. Running
+/// along an edge, or ending on one, does not count; ending inside does.
+pub fn segment_crosses_interior(bounds: &Aabb, a: Point, b: Point) -> bool {
+    let tol = BODY_EDGE_TOLERANCE_MM;
+    let lo = [bounds.min_x + tol, bounds.min_y + tol];
+    let hi = [bounds.max_x - tol, bounds.max_y - tol];
+    // Slab clip of the segment `a + t (b - a)`, t in [0, 1], to the open box.
+    let (mut t0, mut t1) = (0.0_f64, 1.0_f64);
+    for axis in 0..2 {
+        let (from, to) = if axis == 0 { (a.x, b.x) } else { (a.y, b.y) };
+        let d = to - from;
+        if d.abs() < f64::EPSILON {
+            if from <= lo[axis] || from >= hi[axis] {
+                return false;
+            }
+            continue;
+        }
+        let (u, v) = ((lo[axis] - from) / d, (hi[axis] - from) / d);
+        t0 = t0.max(u.min(v));
+        t1 = t1.min(u.max(v));
+    }
+    t0 < t1
+}
+
+/// The first placed symbol (a power port included) whose body the segment
+/// `a`..`b` crosses, if any.
+pub fn symbol_crossed_by(sheet: &super::SchematicSheet, a: Point, b: Point) -> Option<&Symbol> {
+    sheet.symbols.iter().find(|sym| {
+        sheet
+            .resolve_lib_symbol(sym)
+            .and_then(|lib| body_bounds(&lib, sym))
+            .is_some_and(|bounds| segment_crosses_interior(&bounds, a, b))
+    })
+}
+
 /// Unit direction of a pin in library space (Y-up), from its rotation.
 pub fn pin_direction(rotation_deg: f64) -> (f64, f64) {
     match rotation_deg.rem_euclid(360.0).round() as i32 {
@@ -523,3 +587,7 @@ pub fn text_aabb_lines(
 #[cfg(test)]
 #[path = "symbol_geometry_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "body_bounds_tests.rs"]
+mod body_tests;

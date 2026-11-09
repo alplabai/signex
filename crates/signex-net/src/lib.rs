@@ -21,12 +21,15 @@ pub use net_class::{
 
 mod build;
 mod bus;
+mod bus_ends;
+pub use bus_ends::dangling_bus_ends;
 #[cfg(test)]
 mod fixtures;
 pub use build::{
-    ConnectedPoints, FloodElements, NetExtent, SegmentIndex, SheetConnectivity, SheetPinContacts,
-    best_net_name_of, build_netlist, connected_net_items, connected_points, flood_net_elements,
-    is_power_flag, name_carrying_ports, net_extent_at, point_on_segment, pt_key,
+    ConnectedPoints, ExtraItem, ExtraKind, FloodElements, IntentNet, NetExtent, RunEnd,
+    SegmentIndex, SheetConnectivity, SheetPinContacts, WireIntent, best_net_name_of, build_netlist,
+    connected_net_items, connected_points, flood_net_elements, is_power_flag, name_carrying_ports,
+    net_extent_at, point_on_segment, pt_key, wire_intent,
 };
 pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
 
