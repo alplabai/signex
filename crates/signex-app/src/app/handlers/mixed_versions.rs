@@ -55,7 +55,8 @@ impl Signex {
 /// The Messages line for a part whose units draw with different versions.
 fn mixed_version_text(reference: &str, path: &std::path::Path) -> String {
     format!(
-        "{reference} on {}: its units use different versions of the library symbol;          use Update from library to bring them together",
+        "{reference} on {}: its units use different versions of the library symbol; \
+         use Update from library to bring them together",
         path.display()
     )
 }
