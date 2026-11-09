@@ -157,10 +157,11 @@ fn enablement_follows_the_board_selection_and_its_lock() {
 }
 
 #[test]
-fn a_sheet_keeps_rotate_enabled_with_nothing_selected() {
+fn with_no_board_rotate_greys_without_a_target_and_flip_selection_always() {
     let dir = tempfile::tempdir().unwrap();
     let app = app_workspace(&dir.path().to_string_lossy(), &[]);
-    assert!(enabled(&app, "rotate_clockwise"));
+    assert!(!enabled(&app, "rotate_clockwise"), "nothing to turn");
+    assert!(!enabled(&app, "move_object"), "nothing to pick from");
     assert!(
         !enabled(&app, "flip_selection"),
         "Flip Selection is for a board"
