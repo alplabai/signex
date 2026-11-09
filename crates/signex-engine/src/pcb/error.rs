@@ -28,4 +28,10 @@ pub enum BoardCommandError {
     FaceMismatch(Uuid),
     #[error("{field} must be a finite number")]
     NonFinite { field: &'static str },
+    #[error(
+        "the board changed since revision {expected} (it is at {current}); read it again and retry"
+    )]
+    StaleRevision { expected: u64, current: u64 },
+    #[error("a failed command could not be rolled back: {0}")]
+    RollbackFailed(String),
 }
