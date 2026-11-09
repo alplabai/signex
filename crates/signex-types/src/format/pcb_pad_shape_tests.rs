@@ -112,6 +112,27 @@ fn a_roundrect_ratio_outside_zero_to_half_fails_naming_the_value() {
 }
 
 #[test]
+fn a_roundrect_ratio_the_reader_refuses_is_refused_on_save() {
+    for ratio in [0.6, -0.1, f64::NAN] {
+        let err = SnxPcb::new(board_with(vec![pad(1, PadShape::RoundRect, ratio, 0.0)]))
+            .write_string()
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("\"pads\"")
+                && err.contains("row 0")
+                && err.contains("\"roundrect_ratio\""),
+            "{err}"
+        );
+    }
+    // Only a round-rect carries the ratio; another shape saves with any value.
+    let text = SnxPcb::new(board_with(vec![pad(1, PadShape::Rect, 0.6, 0.0)]))
+        .write_string()
+        .unwrap();
+    SnxPcb::parse(&text).unwrap();
+}
+
+#[test]
 fn a_rotation_cell_that_is_not_a_number_fails_naming_the_value() {
     let turned = SnxPcb::new(board_with(vec![pad(1, PadShape::Rect, 0.0, 30.0)]))
         .write_string()

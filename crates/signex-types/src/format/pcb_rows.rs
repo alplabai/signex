@@ -605,6 +605,12 @@ fn take_net_locked_cell(columns: &mut UnknownColumns) -> bool {
     }
 }
 
+/// A round-rect corner ratio must be within 0..=0.5; other shapes ignore it.
+/// The reader and the writer share this rule.
+fn roundrect_ratio_fits(shape: PadShape, ratio: f64) -> bool {
+    shape != PadShape::RoundRect || (0.0..=0.5).contains(&ratio)
+}
+
 pub(in crate::format) fn pad_to_row(
     pad: &Pad,
     footprint_ref: &str,
@@ -620,6 +626,11 @@ pub(in crate::format) fn pad_to_row(
         .as_ref()
         .map(|n| (n.number, n.name.clone()))
         .unwrap_or((0, String::new()));
+    // The reader refuses this ratio, so writing it would save a board
+    // that cannot reopen.
+    if !roundrect_ratio_fits(pad.shape, pad.roundrect_ratio) {
+        return Err(NonFiniteField("roundrect_ratio"));
+    }
     Ok(PcbPadRow {
         uuid: pad.uuid,
         footprint_ref: footprint_ref.to_string(),
@@ -650,7 +661,7 @@ pub(in crate::format) fn row_to_pad(
 ) -> Result<Pad, FormatError> {
     let shape = parse_pad_shape(&row.shape, block, index)?;
     let ratio = row.roundrect_ratio;
-    if shape == PadShape::RoundRect && !(0.0..=0.5).contains(&ratio) {
+    if !roundrect_ratio_fits(shape, ratio) {
         return Err(pad_field_error(
             block,
             index,
