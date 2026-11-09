@@ -245,7 +245,7 @@ fn collect_zones(board: &PcbBoard) -> Vec<ZoneCopper> {
                 .map(|&p| PointNm::from_mm(p, "zone.outline"))
                 .collect();
             match outline {
-                Ok(outline) if zone.net != 0 && layers != 0 && outline.len() >= 3 => {
+                Ok(outline) if zone.net != 0 && layers != 0 && !outline.is_empty() => {
                     Some(ZoneCopper {
                         net: zone.net,
                         layers,

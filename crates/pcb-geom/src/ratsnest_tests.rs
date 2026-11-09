@@ -671,3 +671,78 @@ fn overlapping_zones_on_another_layer_or_net_do_not_join() {
     assert_eq!(ratsnest(&zones_a_and_b(8.0, "BottomCopper", 1)), apart());
     assert_eq!(ratsnest(&zones_a_and_b(8.0, "TopCopper", 2)), apart());
 }
+
+// ---- degenerate zones: no area, so a segment or a point, never the plane --
+
+fn flat_zone(uuid: u128, pts: &[(f64, f64)]) -> signex_types::pcb::Zone {
+    let mut z = zone(1, "TopCopper", (0.0, 0.0, 0.0, 0.0));
+    z.uuid = id(uuid);
+    z.outline = pts.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    z
+}
+
+#[test]
+fn a_zone_with_no_area_joins_nothing_it_does_not_touch() {
+    // Pads at (0,0) and (20,0). Each flat zone sits 8 mm from pad 1 and
+    // 8 mm from pad 2, or (the single point) 5 mm above pad 1.
+    let lone = |pts: &[(f64, f64)]| two_pads_with(vec![], vec![], vec![flat_zone(4800, pts)]);
+    assert_eq!(
+        ratsnest(&lone(&[(8.0, 0.0), (10.0, 0.0), (12.0, 0.0)])),
+        apart()
+    );
+    assert_eq!(ratsnest(&lone(&[(8.0, 0.0), (12.0, 0.0)])), apart());
+    assert_eq!(ratsnest(&lone(&[(10.0, 0.0)])), apart());
+    assert_eq!(
+        ratsnest(&lone(&[(0.0, 5.0), (0.0, 5.0), (0.0, 5.0)])),
+        apart()
+    );
+    // Collinear but slanted, off the pads.
+    assert_eq!(
+        ratsnest(&lone(&[(5.0, 5.0), (7.0, 7.0), (9.0, 9.0)])),
+        apart()
+    );
+}
+
+#[test]
+fn a_zone_with_no_area_joins_what_its_segment_crosses() {
+    let lone = |pts: &[(f64, f64)]| two_pads_with(vec![], vec![], vec![flat_zone(4800, pts)]);
+    // The segment runs through both pads: joined, with 3 points or 2.
+    assert!(ratsnest(&lone(&[(-2.0, 0.0), (10.0, 0.0), (22.0, 0.0)])).is_empty());
+    assert!(ratsnest(&lone(&[(-2.0, 0.0), (22.0, 0.0)])).is_empty());
+    // Ends exactly on pad 2's edge (19.5) joins; 1 nm short does not.
+    assert!(ratsnest(&lone(&[(-2.0, 0.0), (19.5, 0.0)])).is_empty());
+    assert_eq!(ratsnest(&lone(&[(-2.0, 0.0), (19.499_999, 0.0)])), apart());
+    // A single point on pad 2 touches only pad 2.
+    assert_eq!(ratsnest(&lone(&[(20.0, 0.0)])), apart());
+}
+
+#[test]
+fn a_zone_with_no_area_beside_a_real_zone_meets_it_only_by_touching() {
+    // Zone A over pad 1 is flat (x -2..10 on y=0); B is a real zone over
+    // pad 2 starting at b_x0.
+    let flat_a = |b_x0: f64| {
+        let mut b = zone(1, "TopCopper", (b_x0, -2.0, 22.0, 2.0));
+        b.uuid = id(4900);
+        two_pads_with(
+            vec![],
+            vec![],
+            vec![flat_zone(4800, &[(-2.0, 0.0), (4.0, 0.0), (10.0, 0.0)]), b],
+        )
+    };
+    assert!(ratsnest(&flat_a(8.0)).is_empty());
+    assert!(ratsnest(&flat_a(10.0)).is_empty());
+    assert_eq!(ratsnest(&flat_a(10.000_001)), apart());
+    // Two flat zones: crossing joins, parallel 1 nm apart does not.
+    let two_flat = |y: f64| {
+        two_pads_with(
+            vec![],
+            vec![],
+            vec![
+                flat_zone(4800, &[(-2.0, 0.0), (10.0, 0.0)]),
+                flat_zone(4801, &[(10.0, y), (22.0, y)]),
+            ],
+        )
+    };
+    assert!(ratsnest(&two_flat(0.0)).is_empty());
+    assert_eq!(ratsnest(&two_flat(0.000_001)), apart());
+}

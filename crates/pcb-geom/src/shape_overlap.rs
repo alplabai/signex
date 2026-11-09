@@ -41,13 +41,21 @@ impl Shape {
 
     /// Whether the shape shares a point with the simple polygon `poly`
     /// (corners in order, either winding, convex or not); touching counts.
-    /// A polygon with fewer than 3 corners holds nothing. The shape is a
-    /// stadium or a convex polygon, so it meets `poly` exactly when an edge
-    /// of `poly` reaches it, or it lies wholly inside `poly`, or `poly` lies
-    /// wholly inside it. Integer nm; no floats beyond `outline`'s ellipse.
+    /// The shape is a stadium or a convex polygon, so it meets `poly`
+    /// exactly when an edge of `poly` reaches it, or it lies wholly inside
+    /// `poly`, or `poly` lies wholly inside it. Integer nm; no floats
+    /// beyond `outline`'s ellipse.
+    ///
+    /// A `poly` with no area (fewer than 3 distinct corners, or all
+    /// collinear) is a point or a zero-width segment, like a flat pad: it
+    /// meets only what touches that segment, never the plane around it. An
+    /// empty `poly` meets nothing.
     pub fn overlaps_polygon(&self, poly: &[PointNm]) -> bool {
-        if poly.len() < 3 {
+        if poly.is_empty() {
             return false;
+        }
+        if let Some((a, b)) = flat_segment(poly) {
+            return self.overlaps(&Shape::Capsule { a, b, radius: 0 });
         }
         let edges = (0..poly.len()).map(|i| (poly[i], poly[(i + 1) % poly.len()]));
         match self.core() {
@@ -78,9 +86,31 @@ impl Shape {
             },
             Shape::Capsule { a, b, radius } => Core::Stadium { a, b, radius },
             Shape::Rect { .. } | Shape::Ellipse { .. } => {
-                Core::Polygon(self.outline(ELLIPSE_STEPS))
+                flat_to_stadium(self.outline(ELLIPSE_STEPS))
             }
         }
+    }
+}
+
+/// A polygon with no area (a zero-size or zero-width pad) is a point or a
+/// segment: the convex tests would read it as containing every point on its
+/// line, so it becomes the segment between its two farthest corners.
+fn flat_to_stadium(poly: Vec<PointNm>) -> Core {
+    let Some(&first) = poly.first() else {
+        return Core::Polygon(poly);
+    };
+    let far = |from: PointNm| {
+        poly.iter()
+            .copied()
+            .max_by_key(|p| p.distance_sq(from))
+            .unwrap_or(from)
+    };
+    let a = far(first);
+    let b = far(a);
+    if poly.iter().all(|&p| orientation(a, b, p) == 0) {
+        Core::Stadium { a, b, radius: 0 }
+    } else {
+        Core::Polygon(poly)
     }
 }
 
@@ -104,23 +134,60 @@ fn stadium_meets_polygon(a: PointNm, b: PointNm, radius: i64, poly: &[PointNm]) 
     (0..poly.len()).any(|i| segment_gap_within(a, b, poly[i], poly[(i + 1) % poly.len()], radius))
 }
 
+/// The segment a polygon with no area (all corners collinear, or one or two
+/// distinct points) collapses to, its two farthest corners; `None` for an
+/// empty ring or one with area. A point gives a zero-length segment.
+fn flat_segment(poly: &[PointNm]) -> Option<(PointNm, PointNm)> {
+    let first = *poly.first()?;
+    let far = |from: PointNm| {
+        poly.iter()
+            .copied()
+            .max_by_key(|p| p.distance_sq(from))
+            .unwrap_or(from)
+    };
+    let a = far(first);
+    let b = far(a);
+    poly.iter()
+        .all(|&p| orientation(a, b, p) == 0)
+        .then_some((a, b))
+}
+
 /// Whether two simple polygons (corners in order, convex or not) share a
 /// point; touching counts. Two simple polygons meet exactly when an edge of
 /// one meets an edge of the other, or one holds a corner of the other
-/// (wholly inside). Integer nm.
+/// (wholly inside). Integer nm. A ring with no area is the point or
+/// zero-width segment it collapses to (see [`Shape::overlaps_polygon`]), so
+/// it never "holds" a corner and is never held; an empty ring meets nothing.
 pub(crate) fn polygons_meet(a: &[PointNm], b: &[PointNm]) -> bool {
-    if a.len() < 3 || b.len() < 3 {
+    if a.is_empty() || b.is_empty() {
         return false;
     }
-    let edge = |p: &[PointNm], i: usize| (p[i], p[(i + 1) % p.len()]);
-    (0..a.len()).any(|i| {
-        let (p, q) = edge(a, i);
-        (0..b.len()).any(|j| {
-            let (r, t) = edge(b, j);
-            segments_intersect(p, q, r, t)
-        })
-    }) || point_in_polygon(a, b[0])
-        || point_in_polygon(b, a[0])
+    match (flat_segment(a), flat_segment(b)) {
+        (Some((p, q)), Some((r, t))) => segments_intersect(p, q, r, t),
+        (Some((p, q)), None) => Shape::Capsule {
+            a: p,
+            b: q,
+            radius: 0,
+        }
+        .overlaps_polygon(b),
+        (None, Some((r, t))) => Shape::Capsule {
+            a: r,
+            b: t,
+            radius: 0,
+        }
+        .overlaps_polygon(a),
+        (None, None) => {
+            let edge = |p: &[PointNm], i: usize| (p[i], p[(i + 1) % p.len()]);
+            (0..a.len()).any(|i| {
+                let (p, q) = edge(a, i);
+                (0..b.len()).any(|j| {
+                    let (r, t) = edge(b, j);
+                    segments_intersect(p, q, r, t)
+                })
+            }) || point_in_polygon(a, b[0])
+                || point_in_polygon(b, a[0])
+        }
+    }
 }
 
 /// Whether `p` lies in or on a simple polygon (even-odd crossing count).

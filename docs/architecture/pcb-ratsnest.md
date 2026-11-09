@@ -45,6 +45,11 @@ crate would be the "kept in step" pair ADR-0005 bans.
   outlines meet (an edge crossing or touching, or one wholly inside the
   other) are one copper, found through an R-tree of outline boxes. Zones 1 nm
   apart do not join.
+- A zone outline with no area (fewer than 3 distinct points, all collinear,
+  or one point repeated) is a zero-width segment or a point, like a
+  zero-width pad: it joins only what touches that segment or point, and
+  never the plane around it. It never "holds" a corner of another zone or
+  is held by one. An empty outline is no copper.
 - Not modelled: the zone fill itself (#2216 tracks using the filled polygon,
   holes and clearance, once fills are computed). Until then zone holes and
   the clearance the fill keeps from other nets are ignored: a pad inside a

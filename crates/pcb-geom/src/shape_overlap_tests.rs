@@ -95,7 +95,11 @@ fn polygons_meet_on_crossing_touching_and_containing_but_not_a_1_nm_gap() {
     assert!(!polygons_meet(&a, &sq(10 + 1, 10 + 1, 20, 20)));
     assert!(polygons_meet(&a, &sq(2, 2, 4, 4))); // b inside a
     assert!(polygons_meet(&sq(2, 2, 4, 4), &a)); // a inside b
-    assert!(!polygons_meet(&a, &a[..2]));
+    assert!(polygons_meet(&a, &a[..2])); // a 2-point ring is its segment, on a's edge
+    assert!(!polygons_meet(
+        &a,
+        &[PointNm::new(50, 50), PointNm::new(60, 50)]
+    ));
     // A U-shape: a square in its notch touches no copper of it.
     let u = vec![
         PointNm::new(0, 0),
@@ -109,4 +113,78 @@ fn polygons_meet_on_crossing_touching_and_containing_but_not_a_1_nm_gap() {
     ];
     assert!(!polygons_meet(&u, &sq(12, 12, 18, 18)));
     assert!(polygons_meet(&u, &sq(12, 8, 18, 18)));
+}
+
+#[test]
+
+fn a_zero_size_pad_is_a_point_not_the_whole_plane() {
+    let pad = Shape::Rect {
+        center: PointNm::new(0, 0),
+        half_w: 0,
+        half_h: 0,
+        rotation_deg: 0.0,
+    };
+    let far_track = Shape::Capsule {
+        a: PointNm::new(5_000_000, -5_000_000),
+        b: PointNm::new(5_000_000, 5_000_000),
+        radius: 100_000,
+    };
+    assert!(!pad.overlaps(&far_track) && !far_track.overlaps(&pad));
+    assert!(!pad.overlaps(&rect(5, 0, 1, 0.0)));
+    let through = Shape::Capsule {
+        a: p(-1, 0),
+        b: p(1, 0),
+        radius: 0,
+    };
+    assert!(pad.overlaps(&through) && through.overlaps(&pad));
+    assert!(pad.overlaps(&rect(0, 0, 1, 30.0)));
+}
+
+#[test]
+fn a_zero_width_pad_is_a_segment_and_stops_at_its_ends() {
+    let sliver = Shape::Rect {
+        center: p(0, 0),
+        half_w: 0,
+        half_h: MM,
+        rotation_deg: 0.0,
+    };
+    let beyond_end = Shape::Disc {
+        center: p(0, 3),
+        radius: MM / 2,
+    };
+    assert!(!sliver.overlaps(&beyond_end));
+    let at_end = Shape::Disc {
+        center: p(0, 2),
+        radius: MM,
+    };
+    assert!(sliver.overlaps(&at_end));
+    let across = Shape::Capsule {
+        a: p(-1, 0),
+        b: p(1, 0),
+        radius: 0,
+    };
+    assert!(sliver.overlaps(&across));
+}
+
+#[test]
+fn a_polygon_with_no_area_is_a_segment_or_point_for_both_polygon_tests() {
+    let sq = vec![p(0, 0), p(10, 0), p(10, 10), p(0, 10)];
+    let line = vec![p(-5, 5), p(5, 5), p(15, 5)]; // crosses sq
+    let far_line = vec![p(20, 5), p(30, 5), p(40, 5)];
+    let dot = vec![p(5, 5), p(5, 5), p(5, 5)]; // inside sq
+    let far_dot = vec![p(50, 50)];
+    assert!(polygons_meet(&sq, &line) && polygons_meet(&line, &sq));
+    assert!(!polygons_meet(&sq, &far_line) && !polygons_meet(&far_line, &sq));
+    assert!(polygons_meet(&sq, &dot) && polygons_meet(&dot, &sq));
+    assert!(!polygons_meet(&sq, &far_dot) && !polygons_meet(&far_dot, &sq));
+    assert!(!polygons_meet(&line, &far_line));
+    assert!(polygons_meet(&line, &vec![p(5, 0), p(5, 10)]));
+    assert!(!polygons_meet(&sq, &[]));
+    // Against a shape: a pad 5 mm from a collinear ring is not met; one on it is.
+    let pad = rect(0, 0, 1, 0.0);
+    assert!(!pad.overlaps_polygon(&[p(6, 0), p(8, 0), p(10, 0)]));
+    assert!(!pad.overlaps_polygon(&[p(6, 0), p(10, 0)]));
+    assert!(pad.overlaps_polygon(&[p(-3, 0), p(0, 0), p(3, 0)]));
+    assert!(pad.overlaps_polygon(&[p(1, 0)]));
+    assert!(!pad.overlaps_polygon(&[]));
 }
