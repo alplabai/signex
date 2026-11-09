@@ -870,6 +870,11 @@
     "category": "edit"
   },
   {
+    "id": "run_drc",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "run_erc",
     "group": "Schematic",
     "category": "validation"

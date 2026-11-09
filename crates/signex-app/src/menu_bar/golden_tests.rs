@@ -205,6 +205,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_junction", "PlaceJunction"),
     ("next_grid", "CycleGrid"),
     ("open_erc_dialog", "OpenErcDialog"),
+    ("run_drc", "RunDrc"),
     ("open_parameter_manager", "OpenParameterManager"),
     ("annotate_schematic_quietly", "AnnotateQuietly"),
     ("force_annotate_all_schematics", "AnnotateForceAll"),

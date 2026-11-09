@@ -411,6 +411,9 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .boxed(),
     );
     col = col.push(separator(&ctx.tokens).boxed());
+    if let Some(drc) = super::drc::section(ctx) {
+        col = col.push(drc);
+    }
 
     if ctx.diagnostics.is_empty() {
         col = col.push(

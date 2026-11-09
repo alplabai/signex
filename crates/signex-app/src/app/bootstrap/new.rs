@@ -590,6 +590,7 @@ impl Signex {
                     erc_results_stale: false,
                     diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
                     diagnostics: crate::diagnostics::recent_entries(),
+                    pcb_drc: None,
                     selection_filters: crate::active_bar::SelectionFilter::ALL
                         .iter()
                         .copied()
@@ -642,6 +643,7 @@ impl Signex {
                 pcb_canvases: std::collections::HashMap::new(),
                 pcb_selection: Default::default(),
                 pcb_ratsnest: Default::default(),
+                pcb_drc: Default::default(),
                 dragging: None,
                 drag_start_pos: None,
                 drag_start_size: 0.0,
