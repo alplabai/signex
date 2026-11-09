@@ -1,11 +1,10 @@
-//! The draft behind the New Project dialog (#2232): profile, fab template,
-//! AI mode and every value, as one plain struct the dialog and the
+//! The draft behind the New Project dialog (#2232): profile, fab template
+//! and every value, as one plain struct the dialog and the
 //! `new_project_with_profile` command both drive.
 
 use super::rule_file::RuleTemplate;
 use super::setup::{
-    AiMode, COPPER_LAYERS, DEFAULT_DESIGNATORS, PcbDefaults, PcbField, ProjectDefaults,
-    SHEET_UNITS, SheetDefaults,
+    COPPER_LAYERS, DEFAULT_DESIGNATORS, PcbDefaults, PcbField, ProjectDefaults, SheetDefaults,
 };
 use crate::designator::DesignatorStandard;
 use crate::schematic::{SheetOrientation, SheetSize};
@@ -88,7 +87,6 @@ pub struct ProjectSetup {
     pub fab: Option<FabTemplate>,
     /// An imported rule file is applied.
     pub imported: bool,
-    pub ai_mode: AiMode,
     pub pcb: PcbDefaults,
     pub sheet: SheetDefaults,
     pub designators: DesignatorStandard,
@@ -107,7 +105,6 @@ impl ProjectSetup {
             profile,
             fab: None,
             imported: false,
-            ai_mode: AiMode::Assistant,
             pcb: profile.pcb(CUSTOM_START_LAYERS),
             sheet: SheetDefaults::default(),
             designators: DEFAULT_DESIGNATORS,
@@ -179,27 +176,54 @@ impl ProjectSetup {
         ProjectDefaults {
             pcb: Some(self.pcb.clone()),
             sheet: Some(self.sheet.clone()),
-            ai_mode: Some(self.ai_mode),
         }
     }
 
-    /// The preview's sheet line parts: paper and orientation, the unit and
-    /// the grid pitch.
-    pub fn sheet_line(&self) -> (String, String, f64) {
+    /// The preview's sheet line: the paper and its orientation, such as
+    /// `A3 landscape`.
+    pub fn sheet_line(&self) -> String {
         let (size, orientation) = SheetSize::parse(&self.sheet.paper_size);
         let word = match orientation {
             SheetOrientation::Landscape => "landscape",
             SheetOrientation::Portrait => "portrait",
         };
-        let paper = format!("{} {word}", size.token(SheetOrientation::Landscape));
-        (paper, self.sheet.units.to_string(), self.sheet.grid_mm)
+        format!("{} {word}", size.token(SheetOrientation::Landscape))
+    }
+
+    /// The draft for defaults a project already stores: the profile whose
+    /// rules they match (else Custom), and the stored sheet and designator
+    /// standard. A project that stores none starts on Standard.
+    pub fn from_stored(
+        defaults: &ProjectDefaults,
+        designators: Option<DesignatorStandard>,
+    ) -> Self {
+        let mut setup = Self::default();
+        if let Some(pcb) = &defaults.pcb {
+            setup.custom_layers = pcb.copper_layers;
+            setup.profile = [
+                SetupProfile::Hobby,
+                SetupProfile::Standard,
+                SetupProfile::Hdi,
+            ]
+            .into_iter()
+            .find(|p| p.pcb(pcb.copper_layers) == *pcb)
+            .unwrap_or(SetupProfile::Custom);
+            setup.pcb = pcb.clone();
+        }
+        if let Some(sheet) = &defaults.sheet {
+            setup.sheet = sheet.clone();
+        }
+        if let Some(standard) = designators {
+            setup.designators = standard;
+        }
+        setup
     }
 
     /// Apply `key=value,key=value` overrides on top of the profile, the form
     /// the `new_project_with_profile` command takes. Keys: `layers`,
     /// `thickness`, `clearance`, `track`, `via`, `drill` (mm), `sheet`,
-    /// `title_block` (`true`/`false`), `grid` (mm), `units` (`mm`, `mil`,
-    /// `in`) and `designators` (`ieee315`, `din40719_2`, `iec81346_2`).
+    /// `title_block` (`true`/`false`) and `designators` (`ieee315`,
+    /// `din40719_2`, `iec81346_2`).
     pub fn apply_overrides(&mut self, text: &str) -> Result<(), String> {
         for pair in text.split(',').map(str::trim).filter(|p| !p.is_empty()) {
             let (key, value) = pair
@@ -250,19 +274,6 @@ impl ProjectSetup {
                 self.sheet.show_title_block = value
                     .parse()
                     .map_err(|_| format!("override `title_block`: {value} is not true or false"))?;
-            }
-            "grid" => {
-                self.sheet.grid_mm = value
-                    .parse::<f64>()
-                    .ok()
-                    .filter(|g| g.is_finite() && (0.01..=100.0).contains(g))
-                    .ok_or_else(|| format!("override `grid`: {value} must be 0.01 to 100 mm"))?;
-            }
-            "units" => {
-                self.sheet.units = SHEET_UNITS
-                    .into_iter()
-                    .find(|u| u.to_string() == value)
-                    .ok_or_else(|| format!("override `units`: {value} is not mm, mil or in"))?;
             }
             "designators" => {
                 self.designators = DesignatorStandard::ALL

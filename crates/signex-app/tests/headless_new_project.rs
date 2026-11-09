@@ -15,7 +15,7 @@ use signex_app::fonts::catalog::{FontSet, install_before_boot};
 use signex_app::headless::{CommandArgs, CommandOutcome};
 use signex_app::keymap::AppCommandId;
 use signex_app::task_driver::TaskDriver;
-use signex_types::project::{AiMode, ErcRules, RuleProfile};
+use signex_types::project::{ErcRules, RuleProfile};
 
 const PROBE_ENV: &str = "SIGNEX_HEADLESS_NEW_PROJECT_PROBE";
 
@@ -94,7 +94,6 @@ fn with_profile() {
         "name=Motor Driver Rev A",
         &location,
         "profile=hobby",
-        "ai_mode=off",
         "overrides=layers=6,clearance=0.12,sheet=A4",
     ]) {
         CommandOutcome::Answered(value) => value,
@@ -113,7 +112,6 @@ fn with_profile() {
     let pcb = data.project_defaults.pcb.expect("pcb defaults");
     assert_eq!((pcb.copper_layers, pcb.clearance_mm), (6, 0.12));
     assert_eq!(pcb.track_width_mm, 0.25, "the rest is the hobby profile");
-    assert_eq!(data.project_defaults.ai_mode, Some(AiMode::Off));
     assert_eq!(data.project_defaults.sheet.expect("sheet").paper_size, "A4");
 
     // Without the folder, straight into the location.
@@ -139,10 +137,6 @@ fn refusals() {
         (
             vec!["name=P", location.as_str(), "profile=gold"],
             "profile `gold`",
-        ),
-        (
-            vec!["name=P", location.as_str(), "ai_mode=max"],
-            "ai_mode `max`",
         ),
         (
             vec!["name=P", location.as_str(), "overrides=clearance=9"],

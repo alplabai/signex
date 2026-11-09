@@ -5,13 +5,12 @@ use iced::widget::{Space, column, container, pick_list, row};
 use iced::{Alignment, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::designator::DesignatorStandard;
-use signex_types::project::{FabTemplate, PcbField, PcbValueError, SHEET_SIZES, SHEET_UNITS};
+use signex_types::project::{FabTemplate, PcbField, PcbValueError, SHEET_SIZES};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{button, text, text_input};
 
-use super::{SP, TS, labelled_row, np};
-use crate::app::Message;
+use super::{SP, TS, labelled_row};
 use crate::app::new_project::{NewProjectMsg, NewProjectState, RULE_FIELDS};
 use crate::styles::{Radii, ti, tokens};
 
@@ -20,10 +19,10 @@ const VALUE_W: f32 = 64.0;
 
 /// The disclosure: header button, and the two columns when open.
 pub(super) fn section<'a>(
-    state: &'a NewProjectState,
+    state: &NewProjectState,
     i18n: &I18n,
     tokens: &ThemeTokens,
-) -> Element<'a, Message> {
+) -> Element<'a, NewProjectMsg> {
     let ink = tokens::resolve(tokens).ink3;
     let header = button(
         row![
@@ -40,7 +39,7 @@ pub(super) fn section<'a>(
     )
     .padding([SP.l, SP.l])
     .width(Length::Fill)
-    .on_press(np(NewProjectMsg::CustomizeToggled))
+    .on_press(NewProjectMsg::CustomizeToggled)
     .style(crate::styles::ghost_button(tokens));
     let mut body = column![header];
     if state.customize_open {
@@ -80,7 +79,7 @@ pub(super) fn section<'a>(
         .boxed()
 }
 
-fn heading<'a>(id: MessageId, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
+fn heading<'a>(id: MessageId, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, NewProjectMsg> {
     text(t!(i18n, id))
         .size(TS.section)
         .color(tokens::resolve(tokens).ink4)
@@ -92,11 +91,11 @@ fn fab_chip<'a>(
     selected: bool,
     on_press: NewProjectMsg,
     tokens: &ThemeTokens,
-) -> Element<'a, Message> {
+) -> Element<'a, NewProjectMsg> {
     let tokens = *tokens;
     button(text(caption).size(TS.body))
         .padding([SP.s, SP.l])
-        .on_press(np(on_press))
+        .on_press(on_press)
         .style(move |_: &Theme, status| {
             let mut style = super::cards::card_style(&tokens, selected, status);
             style.border.radius = Radii::GRAPHITE.pill.into();
@@ -135,7 +134,7 @@ fn value_error_text(problem: &PcbValueError, field: PcbField, i18n: &I18n) -> Lo
     }
 }
 
-fn stepper<'a>(state: &NewProjectState, tokens: &ThemeTokens) -> Element<'a, Message> {
+fn stepper<'a>(state: &NewProjectState, tokens: &ThemeTokens) -> Element<'a, NewProjectMsg> {
     let step = |glyph: &'static str, delta: i8| {
         button(
             text(UserText::new(glyph))
@@ -145,7 +144,7 @@ fn stepper<'a>(state: &NewProjectState, tokens: &ThemeTokens) -> Element<'a, Mes
         )
         .padding([SP.s, SP.m])
         .width(Length::Fixed(TS.label * 2.0))
-        .on_press(np(NewProjectMsg::LayersStepped(delta)))
+        .on_press(NewProjectMsg::LayersStepped(delta))
         .style(crate::styles::outline_button(tokens))
     };
     let value = container(
@@ -165,15 +164,15 @@ fn stepper<'a>(state: &NewProjectState, tokens: &ThemeTokens) -> Element<'a, Mes
 }
 
 fn rule_row<'a>(
-    state: &'a NewProjectState,
+    state: &NewProjectState,
     field: PcbField,
     i18n: &I18n,
     tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let input = text_input(UserText::new(""), state.drafts.text(field))
+) -> Element<'a, NewProjectMsg> {
+    let input = text_input(UserText::new(""), state.drafts.text(field).to_string())
         .style(crate::panels::form_look::text_input_style)
-        .on_input(move |v| np(NewProjectMsg::RuleEdited(field, v)))
-        .on_submit(np(NewProjectMsg::SubmitRequested))
+        .on_input(move |v| NewProjectMsg::RuleEdited(field, v))
+        .on_submit(NewProjectMsg::SubmitRequested)
         .size(TS.dense)
         .font(super::super::graphite::mono())
         .align_x(iced::alignment::Horizontal::Right)
@@ -205,11 +204,11 @@ fn rule_row<'a>(
     col.boxed()
 }
 
-fn pcb_rules<'a>(
-    state: &'a NewProjectState,
+pub(crate) fn pcb_rules<'a>(
+    state: &NewProjectState,
     i18n: &I18n,
     tokens: &ThemeTokens,
-) -> Element<'a, Message> {
+) -> Element<'a, NewProjectMsg> {
     let setup = &state.setup;
     let chip = |fab: FabTemplate, id: MessageId| {
         fab_chip(
@@ -287,7 +286,7 @@ fn choice<'a, T>(
     on_select: impl Fn(T) -> NewProjectMsg + 'a,
     i18n: &I18n,
     tokens: &ThemeTokens,
-) -> Element<'a, Message>
+) -> Element<'a, NewProjectMsg>
 where
     T: Clone + PartialEq + std::fmt::Debug + 'a,
 {
@@ -298,16 +297,16 @@ where
     let current = options.iter().find(|o| o.value == *selected).cloned();
     let picker = pick_list(current, options, |o: &Opt<T>| o.label.clone())
         .graphite()
-        .on_select(move |o: Opt<T>| np(on_select(o.value)))
+        .on_select(move |o: Opt<T>| on_select(o.value))
         .width(Length::Fixed(VALUE_W * 2.2));
     labelled_row(t!(i18n, caption), picker.boxed(), tokens)
 }
 
-fn schematic<'a>(
-    state: &'a NewProjectState,
+pub(crate) fn schematic<'a>(
+    state: &NewProjectState,
     i18n: &I18n,
     tokens: &ThemeTokens,
-) -> Element<'a, Message> {
+) -> Element<'a, NewProjectMsg> {
     let sheet = &state.setup.sheet;
     let sizes: Vec<(String, String)> = SHEET_SIZES
         .iter()
@@ -341,29 +340,6 @@ fn schematic<'a>(
         i18n,
         tokens,
     );
-    let grids: Vec<(GridMm, String)> = crate::canvas::grid::GRID_SIZES_MM
-        .iter()
-        .map(|g| {
-            let mm = crate::canvas::grid::pitch_mm_exact(*g);
-            (GridMm(mm), format!("{mm} mm"))
-        })
-        .collect();
-    let grid_choice = choice(
-        ids::DIALOG_NEW_PROJECT_SCH_GRID,
-        &GridMm(sheet.grid_mm),
-        grids,
-        |g: GridMm| NewProjectMsg::GridPicked(g.0),
-        i18n,
-        tokens,
-    );
-    let units_choice = choice(
-        ids::DIALOG_NEW_PROJECT_SCH_UNITS,
-        &sheet.units,
-        SHEET_UNITS.iter().map(|u| (*u, u.to_string())).collect(),
-        NewProjectMsg::UnitsPicked,
-        i18n,
-        tokens,
-    );
     let designators = choice(
         ids::DIALOG_NEW_PROJECT_SCH_DESIGNATORS,
         &state.setup.designators,
@@ -379,14 +355,8 @@ fn schematic<'a>(
         heading(ids::DIALOG_NEW_PROJECT_SHEET_HEADING, i18n, tokens),
         size_choice,
         block_choice,
-        grid_choice,
-        units_choice,
         designators,
     ]
     .spacing(SP.m);
     container(col.padding(SP.l)).boxed()
 }
-
-/// A grid pitch in mm, compared by value so the picker shows the current one.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct GridMm(f64);

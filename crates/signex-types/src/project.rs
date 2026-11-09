@@ -32,8 +32,8 @@ pub use schematic_defaults::{
     SchematicDefaultOverrides,
 };
 pub use setup::{
-    AiMode, COPPER_LAYERS, DEFAULT_DESIGNATORS, PcbDefaults, PcbField, PcbValueError,
-    ProjectDefaults, SHEET_SIZES, SHEET_UNITS, SheetDefaults, copper_layers,
+    COPPER_LAYERS, DEFAULT_DESIGNATORS, PcbDefaults, PcbField, PcbValueError, ProjectDefaults,
+    SHEET_SIZES, SheetDefaults, copper_layers,
 };
 pub use setup_profile::{FabTemplate, ProjectSetup, SetupProfile, designator_token};
 pub use unknown::UnknownJson;
@@ -243,8 +243,7 @@ pub struct ProjectData {
     /// re-saves without a `schematic_defaults` key.
     #[serde(default, skip_serializing_if = "SchematicDefaultOverrides::is_empty")]
     pub schematic_defaults: SchematicDefaultOverrides,
-    /// What a new PCB or sheet in this project starts from, and the Signex AI
-    /// mode (#2232). Set when the project is created; skipped on save when
+    /// What a new PCB or sheet in this project starts from (#2232). Set when the project is created; skipped on save when
     /// nothing is set.
     #[serde(default, skip_serializing_if = "ProjectDefaults::is_empty")]
     pub project_defaults: ProjectDefaults,

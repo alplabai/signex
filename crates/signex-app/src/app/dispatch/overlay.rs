@@ -131,10 +131,7 @@ impl Signex {
                 self.handle_window_hierarchy_assembled(&root, generation, assembly)
             }
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
-            ProjectMsg::Tab(msg) => {
-                self.dispatch_project_tab_message(msg);
-                Task::none()
-            }
+            ProjectMsg::Tab(msg) => self.dispatch_project_tab_message(msg),
             ProjectMsg::FileSaved(done) => self.handle_project_file_saved(*done),
             ProjectMsg::AddExistingFilePicked { project_id, paths } => {
                 self.handle_add_existing_file_picked(project_id, paths)

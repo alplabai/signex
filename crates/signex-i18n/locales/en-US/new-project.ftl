@@ -43,22 +43,6 @@ dialog-new-project-summary-custom-layers = { $layers } copper layers
 
 dialog-new-project-summary-custom-note = set every value yourself
 
-dialog-new-project-ai-heading = How should Signex AI work in this project?
-
-dialog-new-project-ai-hint = Change it any time in Project Options.
-
-dialog-new-project-ai-off-name = Off
-
-dialog-new-project-ai-off-blurb = No AI in this project. Everything stays manual and offline.
-
-dialog-new-project-ai-assistant-name = Assistant
-
-dialog-new-project-ai-assistant-blurb = Answers, reviews and suggests. You apply every change yourself.
-
-dialog-new-project-ai-agentic-name = Agentic
-
-dialog-new-project-ai-agentic-blurb = Makes edits for you as undoable steps. You review and accept each one.
-
 dialog-new-project-customize = Customize settings
 
 dialog-new-project-customize-optional = (optional)
@@ -108,10 +92,6 @@ dialog-new-project-sch-title-block-default = Signex default
 
 dialog-new-project-sch-title-block-none = None
 
-dialog-new-project-sch-grid = Grid
-
-dialog-new-project-sch-units = Units
-
 dialog-new-project-sch-designators = Designators
 
 # A sheet size in the picker.
@@ -126,7 +106,7 @@ dialog-new-project-preview-layers = { $count }-layer
 dialog-new-project-preview-board = board, { $thickness } thick
 
 # Sheet line; $paper such as A3 landscape.
-dialog-new-project-preview-sheet = { $paper } sheet, { $unit } grid { $grid }
+dialog-new-project-preview-sheet = { $paper } sheet
 
 dialog-new-project-preview-note = New schematics and PCBs in this project start from these settings. Edit them any time in Project Options.
 

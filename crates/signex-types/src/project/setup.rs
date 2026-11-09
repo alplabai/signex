@@ -1,5 +1,5 @@
-//! The defaults a project is created with (#2232): PCB rules, sheet
-//! defaults and the Signex AI mode.
+//! The defaults a project is created with (#2232): PCB rules and sheet
+//! defaults.
 //!
 //! They are the project's own: a PCB or sheet added later starts from them
 //! with no dialog. Every part is optional and written only when set, so a
@@ -9,42 +9,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::coord::Unit;
 use crate::designator::DesignatorStandard;
 use crate::pcb::{LayerDef, PcbBoard, PcbSetup};
 use crate::pcb_layer::{CopperLayer, InnerCopper, PcbLayer, TechnicalLayer};
 use crate::schematic::SchematicSheet;
-
-/// How Signex AI works in a project. This only records the choice.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AiMode {
-    /// No AI; everything stays manual and offline.
-    Off,
-    /// Answers, reviews and suggests; the user applies every change.
-    #[default]
-    Assistant,
-    /// Makes edits itself, each one labelled and undoable.
-    Agentic,
-}
-
-impl AiMode {
-    /// Every mode, in the order the cards list them.
-    pub const ALL: [Self; 3] = [Self::Off, Self::Assistant, Self::Agentic];
-
-    /// The word a command operand or a rule file uses.
-    pub const fn token(self) -> &'static str {
-        match self {
-            Self::Off => "off",
-            Self::Assistant => "assistant",
-            Self::Agentic => "agentic",
-        }
-    }
-
-    pub fn from_token(token: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|m| m.token() == token)
-    }
-}
 
 /// The copper layer counts a board can have.
 pub const COPPER_LAYERS: std::ops::RangeInclusive<u8> = 1..=32;
@@ -234,9 +202,6 @@ pub struct SheetDefaults {
     pub paper_size: String,
     /// Draw the title block on the frame.
     pub show_title_block: bool,
-    /// Snap pitch in mm.
-    pub grid_mm: f64,
-    pub units: Unit,
 }
 
 /// Sheet sizes the setup offers, as `paper_size` tokens.
@@ -244,23 +209,17 @@ pub const SHEET_SIZES: [&str; 12] = [
     "A5", "A4", "A3", "A2", "A1", "A0", "ANSI A", "ANSI B", "ANSI C", "ANSI D", "Letter", "Legal",
 ];
 
-/// Units the setup offers.
-pub const SHEET_UNITS: [Unit; 3] = [Unit::Mm, Unit::Mil, Unit::Inch];
-
 impl Default for SheetDefaults {
     fn default() -> Self {
         Self {
             paper_size: "A3".into(),
             show_title_block: true,
-            grid_mm: 2.54,
-            units: Unit::Mm,
         }
     }
 }
 
 impl SheetDefaults {
-    /// Put these on a new sheet: paper size and title block. The grid and
-    /// units are read from the project when the sheet opens.
+    /// Put these on a new sheet: paper size and title block.
     pub fn apply(&self, sheet: &mut SchematicSheet) {
         sheet.paper_size = self.paper_size.clone();
         sheet.frame.show_title_block = self.show_title_block;
@@ -274,8 +233,6 @@ pub struct ProjectDefaults {
     pub pcb: Option<PcbDefaults>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sheet: Option<SheetDefaults>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ai_mode: Option<AiMode>,
 }
 
 impl ProjectDefaults {

@@ -1,14 +1,13 @@
-//! The profile cards and the Signex AI mode cards.
+//! The profile cards.
 
 use iced::widget::{Space, column, container, row, svg};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
-use signex_types::project::{AiMode, SetupProfile};
+use signex_types::project::SetupProfile;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, button::Status, text};
 
-use super::{SP, TS, np};
-use crate::app::Message;
+use super::{SP, TS};
 use crate::app::new_project::{NewProjectMsg, NewProjectState};
 use crate::styles::{Radii, ti, tokens};
 
@@ -17,7 +16,7 @@ pub(super) const SELECTED_BORDER: f32 = 1.5;
 
 const CHECK: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>"#;
 
-fn check_mark<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+fn check_mark<'a>(tokens: &ThemeTokens) -> Element<'a, NewProjectMsg> {
     let ink = tokens::resolve(tokens).accent_text;
     svg(svg::Handle::from_memory(CHECK))
         .width(Length::Fixed(TS.title))
@@ -59,10 +58,10 @@ pub(in crate::app::view) fn card_style(
 fn card<'a>(
     title: String,
     selected: bool,
-    lines: Vec<Element<'a, Message>>,
-    on_press: Message,
+    lines: Vec<Element<'a, NewProjectMsg>>,
+    on_press: NewProjectMsg,
     tokens: &ThemeTokens,
-) -> Element<'a, Message> {
+) -> Element<'a, NewProjectMsg> {
     let mut head = row![
         text(UserText::new(title))
             .size(TS.title)
@@ -83,7 +82,7 @@ fn card<'a>(
         .boxed()
 }
 
-fn blurb<'a>(i18n: &I18n, id: MessageId, tokens: &ThemeTokens) -> Element<'a, Message> {
+fn blurb<'a>(i18n: &I18n, id: MessageId, tokens: &ThemeTokens) -> Element<'a, NewProjectMsg> {
     text(t!(i18n, id))
         .size(TS.body)
         .color(ti(tokens.text_secondary))
@@ -100,9 +99,9 @@ fn summary<'a>(
     profile: SetupProfile,
     i18n: &I18n,
     tokens: &ThemeTokens,
-) -> Vec<Element<'a, Message>> {
+) -> Vec<Element<'a, NewProjectMsg>> {
     let ink = tokens::resolve(tokens).ink3;
-    let line = |text_: signex_i18n::Localized| -> Element<'a, Message> {
+    let line = |text_: signex_i18n::Localized| -> Element<'a, NewProjectMsg> {
         text(text_)
             .size(TS.caption)
             .font(super::super::graphite::mono())
@@ -139,7 +138,7 @@ fn heading_row<'a>(
     heading: signex_i18n::Localized,
     hint: signex_i18n::Localized,
     tokens: &ThemeTokens,
-) -> Element<'a, Message> {
+) -> Element<'a, NewProjectMsg> {
     row![
         text(heading).size(TS.label).color(ti(tokens.text)),
         Space::new().width(Length::Fill),
@@ -150,11 +149,11 @@ fn heading_row<'a>(
 }
 
 /// "Start from a profile": the four profile cards.
-pub(super) fn profiles<'a>(
+pub(crate) fn profiles<'a>(
     state: &NewProjectState,
     i18n: &I18n,
     tokens: &ThemeTokens,
-) -> Element<'a, Message> {
+) -> Element<'a, NewProjectMsg> {
     let entries = [
         (
             SetupProfile::Hobby,
@@ -184,7 +183,7 @@ pub(super) fn profiles<'a>(
             t!(i18n, name).into_string(),
             state.setup.profile == profile,
             lines,
-            np(NewProjectMsg::ProfilePicked(profile)),
+            NewProjectMsg::ProfilePicked(profile),
             tokens,
         )
     });
@@ -192,50 +191,6 @@ pub(super) fn profiles<'a>(
         heading_row(
             t!(i18n, ids::DIALOG_NEW_PROJECT_PROFILE_HEADING),
             t!(i18n, ids::DIALOG_NEW_PROJECT_PROFILE_HINT),
-            tokens
-        ),
-        row(cards).spacing(SP.l).height(Length::Shrink),
-    ]
-    .spacing(SP.m)
-    .boxed()
-}
-
-/// "How should Signex AI work in this project?": Off, Assistant, Agentic.
-pub(super) fn ai_modes<'a>(
-    state: &NewProjectState,
-    i18n: &I18n,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let entries = [
-        (
-            AiMode::Off,
-            ids::DIALOG_NEW_PROJECT_AI_OFF_NAME,
-            ids::DIALOG_NEW_PROJECT_AI_OFF_BLURB,
-        ),
-        (
-            AiMode::Assistant,
-            ids::DIALOG_NEW_PROJECT_AI_ASSISTANT_NAME,
-            ids::DIALOG_NEW_PROJECT_AI_ASSISTANT_BLURB,
-        ),
-        (
-            AiMode::Agentic,
-            ids::DIALOG_NEW_PROJECT_AI_AGENTIC_NAME,
-            ids::DIALOG_NEW_PROJECT_AI_AGENTIC_BLURB,
-        ),
-    ];
-    let cards = entries.map(|(mode, name, text_id)| {
-        card(
-            t!(i18n, name).into_string(),
-            state.setup.ai_mode == mode,
-            vec![blurb(i18n, text_id, tokens)],
-            np(NewProjectMsg::AiModePicked(mode)),
-            tokens,
-        )
-    });
-    column![
-        heading_row(
-            t!(i18n, ids::DIALOG_NEW_PROJECT_AI_HEADING),
-            t!(i18n, ids::DIALOG_NEW_PROJECT_AI_HINT),
             tokens
         ),
         row(cards).spacing(SP.l).height(Length::Shrink),

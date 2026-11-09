@@ -1,6 +1,7 @@
 # Project setup (New Project dialog)
 
-File > New Project opens one dialog (#2232). Nothing is written to disk
+File > New Project, the Start screen button, the command palette, Ctrl+N and
+the Projects panel's empty-area menu (New Project...) open one dialog (#2232). Nothing is written to disk
 until **Create project**. The same choices are available without the dialog
 through the `new_project_with_profile` command.
 
@@ -25,12 +26,10 @@ through the `new_project_with_profile` command.
   | HDI | 6 | 1.2 mm | 0.1 mm | 0.1 mm | 0.3 / 0.15 mm |
   | Custom | 1 to 32 (starts at 8) | 1.6 mm | 0.15 mm | 0.2 mm | 0.5 / 0.25 mm |
 
-- **Signex AI mode**: Off, Assistant (the default) or Agentic. Only the
-  choice is stored; the AI itself comes later.
 - **Customize settings** (folded by default): the PCB rules (a rule template,
   the copper-layer stepper, clearance, track width, via size, via drill, all
   in mm and validated as you type) and the schematic defaults (sheet size,
-  title block, grid, units, designator standard). Moving the layer stepper
+  title block, designator standard). Moving the layer stepper
   switches the profile to Custom.
 - **Preview**: the stack-up on the board ground, the board line and the sheet
   line.
@@ -77,26 +76,34 @@ The new `.snxprj` gets, only when set:
 
 - `project_defaults.pcb`: copper layers, thickness, clearance, track width,
   via size and via drill (mm).
-- `project_defaults.sheet`: paper size token, title block on or off, grid in
-  mm and units.
-- `project_defaults.ai_mode`: `off`, `assistant` or `agentic`.
+- `project_defaults.sheet`: paper size token and title block on or off.
 - `annotation.designator_standard`, the existing Project Options setting.
 
 A PCB added to the project starts from `project_defaults.pcb` (layers,
 thickness and the board setup rules), and a schematic sheet added to it
-starts with the paper size and title block of `project_defaults.sheet`. They
-stay editable in Project Options, Board Setup and Sheet Setup.
+starts with the paper size and title block of `project_defaults.sheet`.
+
+Grid and units are not part of the project setup: they are app preferences,
+not stored per sheet, so a project value would do nothing.
+
+## Editing later
+
+Project Options has a **Project setup** section with the dialog's own profile
+cards, PCB rules and schematic defaults, filled in from the
+project. An edit is a project edit like the other sections: it marks the
+`.snxprj` dirty, is written by Save, and Ctrl+Z undoes it. A value that does
+not parse keeps its inline reason and stores nothing. The first edit of a
+project that stores no defaults writes both parts.
 
 ## The command
 
 ```text
 new_project_with_profile name=<text> location=<absolute path>
     [make_folder=true|false] [profile=hobby|standard|hdi|custom]
-    [ai_mode=off|assistant|agentic] [overrides=key=value,key=value]
+    [overrides=key=value,key=value]
 ```
 
 `overrides` keys: `layers`, `thickness`, `clearance`, `track`, `via`, `drill`
 (mm), `sheet` (such as `A4` or `ANSI A portrait`), `title_block`
-(`true`/`false`), `grid` (mm), `units` (`mm`, `mil`, `in`) and `designators`
-(`ieee315`, `din40719_2`, `iec81346_2`). It answers with the id, path and kind
+(`true`/`false`) and `designators` (`ieee315`, `din40719_2`, `iec81346_2`). It answers with the id, path and kind
 of the project it made. Without operands, the palette entry opens the dialog.

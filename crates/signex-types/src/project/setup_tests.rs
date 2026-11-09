@@ -44,7 +44,6 @@ fn the_profiles_carry_the_approved_values() {
     assert_eq!(row(SetupProfile::Hdi), (6, 1.2, 0.1, 0.1, 0.3, 0.15));
     assert_eq!(SetupProfile::Custom.pcb(11).copper_layers, 11);
     assert_eq!(ProjectSetup::default().profile, SetupProfile::Standard);
-    assert_eq!(ProjectSetup::default().ai_mode, AiMode::Assistant);
 }
 
 #[test]
@@ -98,7 +97,7 @@ fn rule_values_are_validated_with_a_reason() {
 fn overrides_apply_on_the_profile_and_refuse_bad_input_by_key() {
     let mut setup = ProjectSetup::from_profile(SetupProfile::Hobby);
     setup
-        .apply_overrides("layers=6, clearance=0.12,sheet=A4,units=mil,designators=din40719_2")
+        .apply_overrides("layers=6, clearance=0.12,sheet=A4,designators=din40719_2")
         .unwrap();
     assert_eq!(setup.pcb.copper_layers, 6);
     assert_eq!(setup.profile, SetupProfile::Custom);
@@ -188,7 +187,6 @@ fn project_defaults_are_written_only_when_set_and_round_trip() {
     let bytes = encode_project(&data).unwrap();
     let back = parse_project_bytes(std::path::Path::new("P.snxprj"), &bytes).unwrap();
     assert_eq!(back.project_defaults, data.project_defaults);
-    assert_eq!(back.project_defaults.ai_mode, Some(AiMode::Assistant));
     assert_eq!(back.project_defaults.pcb.unwrap().copper_layers, 6);
 }
 
@@ -239,8 +237,31 @@ fn a_new_sheet_inherits_the_size_and_the_title_block() {
 
 #[test]
 fn the_sheet_line_reads_like_the_preview() {
+    assert_eq!(ProjectSetup::default().sheet_line(), "A3 landscape");
+}
+
+#[test]
+fn a_stored_setup_reads_back_as_the_profile_it_matches() {
+    let hdi = ProjectSetup::from_profile(SetupProfile::Hdi);
+    let back = ProjectSetup::from_stored(&hdi.defaults(), None);
+    assert_eq!(back.profile, SetupProfile::Hdi);
+    assert_eq!(back.pcb, hdi.pcb);
+    let mut custom = ProjectSetup::default();
+    custom.set_layers(10);
+    let back = ProjectSetup::from_stored(
+        &custom.defaults(),
+        Some(crate::designator::DesignatorStandard::Iec81346_2),
+    );
     assert_eq!(
-        ProjectSetup::default().sheet_line(),
-        ("A3 landscape".to_string(), "mm".to_string(), 2.54)
+        (back.profile, back.pcb.copper_layers, back.custom_layers()),
+        (SetupProfile::Custom, 10, 10)
+    );
+    assert_eq!(
+        back.designators,
+        crate::designator::DesignatorStandard::Iec81346_2
+    );
+    assert_eq!(
+        ProjectSetup::from_stored(&ProjectDefaults::default(), None),
+        ProjectSetup::default()
     );
 }

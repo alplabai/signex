@@ -63,14 +63,6 @@ define_ids! {
     DIALOG_NEW_PROJECT_SUMMARY_TRACKS = "dialog-new-project-summary-tracks";
     DIALOG_NEW_PROJECT_SUMMARY_CUSTOM_LAYERS = "dialog-new-project-summary-custom-layers";
     DIALOG_NEW_PROJECT_SUMMARY_CUSTOM_NOTE = "dialog-new-project-summary-custom-note";
-    DIALOG_NEW_PROJECT_AI_HEADING = "dialog-new-project-ai-heading";
-    DIALOG_NEW_PROJECT_AI_HINT = "dialog-new-project-ai-hint";
-    DIALOG_NEW_PROJECT_AI_OFF_NAME = "dialog-new-project-ai-off-name";
-    DIALOG_NEW_PROJECT_AI_OFF_BLURB = "dialog-new-project-ai-off-blurb";
-    DIALOG_NEW_PROJECT_AI_ASSISTANT_NAME = "dialog-new-project-ai-assistant-name";
-    DIALOG_NEW_PROJECT_AI_ASSISTANT_BLURB = "dialog-new-project-ai-assistant-blurb";
-    DIALOG_NEW_PROJECT_AI_AGENTIC_NAME = "dialog-new-project-ai-agentic-name";
-    DIALOG_NEW_PROJECT_AI_AGENTIC_BLURB = "dialog-new-project-ai-agentic-blurb";
     DIALOG_NEW_PROJECT_CUSTOMIZE = "dialog-new-project-customize";
     DIALOG_NEW_PROJECT_CUSTOMIZE_OPTIONAL = "dialog-new-project-customize-optional";
     DIALOG_NEW_PROJECT_PCB_HEADING = "dialog-new-project-pcb-heading";
@@ -94,8 +86,6 @@ define_ids! {
     DIALOG_NEW_PROJECT_SCH_TITLE_BLOCK = "dialog-new-project-sch-title-block";
     DIALOG_NEW_PROJECT_SCH_TITLE_BLOCK_DEFAULT = "dialog-new-project-sch-title-block-default";
     DIALOG_NEW_PROJECT_SCH_TITLE_BLOCK_NONE = "dialog-new-project-sch-title-block-none";
-    DIALOG_NEW_PROJECT_SCH_GRID = "dialog-new-project-sch-grid";
-    DIALOG_NEW_PROJECT_SCH_UNITS = "dialog-new-project-sch-units";
     DIALOG_NEW_PROJECT_SCH_DESIGNATORS = "dialog-new-project-sch-designators";
     DIALOG_NEW_PROJECT_SHEET_LANDSCAPE = "dialog-new-project-sheet-landscape";
     DIALOG_NEW_PROJECT_PREVIEW_HEADING = "dialog-new-project-preview-heading";

@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use signex_types::project::{PcbField, PcbValueError, ProjectSetup, SetupProfile};
 
+use super::NewProjectMsg;
 use super::target::{TargetProblem, TargetStatus};
 
 /// Characters a project name cannot hold: they are separators or reserved on
@@ -240,6 +241,47 @@ impl NewProjectState {
         let next = u8::try_from(next.clamp(1, 32)).unwrap_or(1);
         self.setup.set_layers(next);
         self.customize_open = true;
+    }
+}
+
+impl NewProjectState {
+    /// Apply a message that edits the setup (profile, rules, sheet),
+    /// the part the dialog shares with the Project tab. `false` for any other
+    /// message, which is left to the caller.
+    pub(crate) fn apply_setup(&mut self, msg: NewProjectMsg) -> bool {
+        use NewProjectMsg as M;
+        match msg {
+            M::ProfilePicked(p) => self.pick_profile(p),
+            M::CustomizeToggled => self.customize_open = !self.customize_open,
+            M::FabPicked(fab) => {
+                self.setup.apply_fab(fab);
+                self.import_error = None;
+                self.refresh_drafts();
+            }
+            M::RulesFileRead(Some(Ok(template))) => {
+                self.setup.apply_template(&template);
+                self.import_error = None;
+                self.refresh_drafts();
+            }
+            M::RulesFileRead(Some(Err(why))) => self.import_error = Some(why),
+            M::RulesFileRead(None) => {}
+            M::LayersStepped(delta) => self.step_layers(delta),
+            M::RuleEdited(field, text) => self.edit_rule(field, text),
+            M::SheetSizePicked(size) => self.setup.sheet.paper_size = size,
+            M::TitleBlockPicked(on) => self.setup.sheet.show_title_block = on,
+            M::DesignatorsPicked(standard) => self.setup.designators = standard,
+            _ => return false,
+        }
+        true
+    }
+
+    /// A draft for the Project tab, from what the project stores.
+    pub(crate) fn of_project(data: &signex_types::project::ProjectData) -> Self {
+        let mut state = Self::new(String::new());
+        state.setup = ProjectSetup::from_stored(&data.project_defaults, data.designator_standard());
+        state.refresh_drafts();
+        state.customize_open = true;
+        state
     }
 }
 

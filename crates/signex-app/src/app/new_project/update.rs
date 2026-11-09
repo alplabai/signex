@@ -105,68 +105,7 @@ impl Signex {
                 self.with_new_project(|s| s.make_folder = on);
                 self.recheck_new_project_target()
             }
-            M::ProfilePicked(p) => {
-                self.with_new_project(|s| s.pick_profile(p));
-                Task::none()
-            }
-            M::AiModePicked(mode) => {
-                self.with_new_project(|s| s.setup.ai_mode = mode);
-                Task::none()
-            }
-            M::CustomizeToggled => {
-                self.with_new_project(|s| s.customize_open = !s.customize_open);
-                Task::none()
-            }
-            M::FabPicked(fab) => {
-                self.with_new_project(|s| {
-                    s.setup.apply_fab(fab);
-                    s.import_error = None;
-                    s.refresh_drafts();
-                });
-                Task::none()
-            }
-            M::ImportRequested => self.import_rule_file(),
-            M::RulesFileRead(None) => Task::none(),
-            M::RulesFileRead(Some(Ok(template))) => {
-                self.with_new_project(|s| {
-                    s.setup.apply_template(&template);
-                    s.import_error = None;
-                    s.refresh_drafts();
-                });
-                Task::none()
-            }
-            M::RulesFileRead(Some(Err(why))) => {
-                self.with_new_project(|s| s.import_error = Some(why));
-                Task::none()
-            }
-            M::LayersStepped(delta) => {
-                self.with_new_project(|s| s.step_layers(delta));
-                Task::none()
-            }
-            M::RuleEdited(field, text) => {
-                self.with_new_project(|s| s.edit_rule(field, text));
-                Task::none()
-            }
-            M::SheetSizePicked(size) => {
-                self.with_new_project(|s| s.setup.sheet.paper_size = size);
-                Task::none()
-            }
-            M::TitleBlockPicked(on) => {
-                self.with_new_project(|s| s.setup.sheet.show_title_block = on);
-                Task::none()
-            }
-            M::GridPicked(mm) => {
-                self.with_new_project(|s| s.setup.sheet.grid_mm = mm);
-                Task::none()
-            }
-            M::UnitsPicked(unit) => {
-                self.with_new_project(|s| s.setup.sheet.units = unit);
-                Task::none()
-            }
-            M::DesignatorsPicked(standard) => {
-                self.with_new_project(|s| s.setup.designators = standard);
-                Task::none()
-            }
+            M::ImportRequested => import_rule_file(&self.ui_state.io.picker, Message::from),
             M::TargetChecked { generation, status } => {
                 self.with_new_project(|s| {
                     if s.generation == generation {
@@ -178,6 +117,12 @@ impl Signex {
             M::SubmitRequested => self.create_project_from_dialog(),
             M::CancelRequested => {
                 self.ui_state.new_project = None;
+                Task::none()
+            }
+            setup => {
+                self.with_new_project(|s| {
+                    s.apply_setup(setup);
+                });
                 Task::none()
             }
         }
@@ -205,22 +150,6 @@ impl Signex {
                 dialog.pick_folder().await
             },
             |picked| Message::from(NewProjectMsg::LocationPicked(picked)),
-        )
-    }
-
-    fn import_rule_file(&mut self) -> Task<Message> {
-        let picker = self.ui_state.io.picker.clone();
-        Task::perform(
-            async move {
-                let path = picker
-                    .dialog()
-                    .set_title("Import rules")
-                    .add_filter("Rule file", &["toml"])
-                    .pick_file()
-                    .await?;
-                Some(on_blocking_pool(move || read_rule_file(&path)).await)
-            },
-            |read| Message::from(NewProjectMsg::RulesFileRead(read)),
         )
     }
 
@@ -261,4 +190,26 @@ fn read_rule_file(path: &std::path::Path) -> Result<signex_types::project::RuleT
         .and_then(|f| f.take(cap).read_to_string(&mut text))
         .map_err(|e| format!("{}: {e}", path.display()))?;
     signex_types::project::RuleTemplate::parse(&text).map_err(|e| e.to_string())
+}
+
+/// Import rules: pick a rule file and read it off the update thread. `wrap`
+/// routes the result to the surface that asked (the dialog or the Project
+/// tab).
+pub(crate) fn import_rule_file(
+    picker: &crate::io_ports::Picker,
+    wrap: impl Fn(NewProjectMsg) -> Message + Send + 'static,
+) -> Task<Message> {
+    let picker = picker.clone();
+    Task::perform(
+        async move {
+            let path = picker
+                .dialog()
+                .set_title("Import rules")
+                .add_filter("Rule file", &["toml"])
+                .pick_file()
+                .await?;
+            Some(on_blocking_pool(move || read_rule_file(&path)).await)
+        },
+        move |read| wrap(NewProjectMsg::RulesFileRead(read)),
+    )
 }

@@ -1,5 +1,5 @@
 //! The New Project setup dialog (#2232): name and place, profile cards, the
-//! Signex AI mode, the folded-away Customize section and the stack-up
+//! folded-away Customize section and the stack-up
 //! preview. Draft and rules: `app/new_project/`.
 
 use iced::widget::{Space, column, container, row, scrollable};
@@ -16,8 +16,8 @@ use crate::styles::{
     DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split, ti, tokens,
 };
 
-mod cards;
-mod customize;
+pub(crate) mod cards;
+pub(crate) mod customize;
 mod preview;
 #[cfg(test)]
 mod tests;
@@ -70,16 +70,15 @@ impl Signex {
             container(
                 column![
                     fields(state, i18n, tokens),
-                    cards::profiles(state, i18n, tokens),
-                    cards::ai_modes(state, i18n, tokens),
-                    customize::section(state, i18n, tokens),
+                    cards::profiles(state, i18n, tokens).map(np),
+                    customize::section(state, i18n, tokens).map(np),
                 ]
                 .spacing(SP.xl + SP.s),
             )
             .padding([SP.xl + SP.s, SP.xl + SP.m]),
         )
         .width(Length::Fill);
-        let body = row![left, preview::pane(state, i18n, tokens)].height(Length::Shrink);
+        let body = row![left, preview::pane(state, i18n, tokens).map(np)].height(Length::Shrink);
         let hint = text(t!(i18n, ids::DIALOG_NEW_PROJECT_FOOTER_HINT))
             .size(TS.body)
             .color(tokens::muted_text(tokens))
@@ -209,11 +208,11 @@ fn blocker_text(state: &NewProjectState, i18n: &I18n) -> Option<Label<'static>> 
 }
 
 /// A field label and its control on one line, the control right-aligned.
-fn labelled_row<'a>(
+fn labelled_row<'a, M: 'a>(
     caption: Localized,
-    control: Element<'a, Message>,
+    control: Element<'a, M>,
     tokens: &signex_types::theme::ThemeTokens,
-) -> Element<'a, Message> {
+) -> Element<'a, M> {
     row![
         text(caption).size(TS.label).color(ti(tokens.text)),
         Space::new().width(Length::Fill),

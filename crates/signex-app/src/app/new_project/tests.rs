@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use signex_types::project::{AiMode, PcbField, SetupProfile};
+use signex_types::project::{PcbField, SetupProfile};
 
 use super::state::{NewProjectState, project_file_in};
 use super::target::{TargetProblem, TargetStatus, check_target};
@@ -27,11 +27,10 @@ fn dialog(app: &mut Signex, msg: NewProjectMsg) {
 }
 
 #[test]
-fn a_fresh_dialog_is_standard_4_layer_with_the_assistant() {
+fn a_fresh_dialog_is_standard_4_layer() {
     let s = NewProjectState::new(String::new());
     assert_eq!(s.setup.profile, SetupProfile::Standard);
     assert_eq!(s.setup.pcb.copper_layers, 4);
-    assert_eq!(s.setup.ai_mode, AiMode::Assistant);
     assert!(s.make_folder);
     assert!(!s.customize_open, "Customize is folded by default");
 }
@@ -234,7 +233,6 @@ fn create_writes_the_project_with_the_chosen_defaults() {
         NewProjectMsg::NameEdited("Motor Driver Rev A".into()),
     );
     dialog(&mut app, NewProjectMsg::ProfilePicked(SetupProfile::Hdi));
-    dialog(&mut app, NewProjectMsg::AiModePicked(AiMode::Agentic));
     dialog(&mut app, NewProjectMsg::SheetSizePicked("A4".into()));
     dialog(&mut app, NewProjectMsg::SubmitRequested);
     assert!(
@@ -252,7 +250,6 @@ fn create_writes_the_project_with_the_chosen_defaults() {
         (pcb.copper_layers, pcb.clearance_mm, pcb.thickness_mm),
         (6, 0.1, 1.2)
     );
-    assert_eq!(data.project_defaults.ai_mode, Some(AiMode::Agentic));
     assert_eq!(
         data.project_defaults.sheet.as_ref().unwrap().paper_size,
         "A4"

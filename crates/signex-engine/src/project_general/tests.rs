@@ -362,3 +362,29 @@ fn depth_one_and_a_thousand_are_honoured() {
         assert_eq!(steps, depth);
     }
 }
+
+#[test]
+fn project_defaults_are_one_undoable_run() {
+    use signex_types::project::{ProjectSetup, SetupProfile};
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let mut setup = ProjectSetup::from_profile(SetupProfile::Hobby);
+    assert!(history.apply(
+        &mut data,
+        ProjectGeneralCommand::SetProjectDefaults(setup.defaults())
+    ));
+    setup.set_layers(10);
+    assert!(history.apply(
+        &mut data,
+        ProjectGeneralCommand::SetProjectDefaults(setup.defaults())
+    ));
+    assert_eq!(
+        data.project_defaults.pcb.as_ref().map(|p| p.copper_layers),
+        Some(10)
+    );
+    assert!(history.undo(&mut data));
+    assert!(
+        data.project_defaults.is_empty(),
+        "one undo takes the run back"
+    );
+}

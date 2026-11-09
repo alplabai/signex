@@ -8,8 +8,7 @@ use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
 use signex_widgets::text;
 
 use super::{PREVIEW_W, SP, TS};
-use crate::app::Message;
-use crate::app::new_project::NewProjectState;
+use crate::app::new_project::{NewProjectMsg, NewProjectState};
 use crate::styles::{Radii, ti, tokens};
 
 /// Width of a stack-up bar.
@@ -74,7 +73,7 @@ const MATERIALS: Materials = Materials {
     dielectric: Color::from_rgb(0.36, 0.35, 0.27),
 };
 
-fn bar<'a>(color: Color, height: f32) -> Element<'a, Message> {
+fn bar<'a>(color: Color, height: f32) -> Element<'a, NewProjectMsg> {
     container(Space::new())
         .width(Length::Fixed(BAR_W))
         .height(Length::Fixed(height))
@@ -89,7 +88,7 @@ fn bar<'a>(color: Color, height: f32) -> Element<'a, Message> {
         .boxed()
 }
 
-fn layer_row<'a>(layer: Layer, copper: u8, i18n: &I18n, ink: Color) -> Element<'a, Message> {
+fn layer_row<'a>(layer: Layer, copper: u8, i18n: &I18n, ink: Color) -> Element<'a, NewProjectMsg> {
     let (color, height, name): (Color, f32, Localized) = match layer {
         Layer::Silk => (
             MATERIALS.silk,
@@ -149,7 +148,7 @@ pub(super) fn pane<'a>(
     state: &NewProjectState,
     i18n: &I18n,
     tokens: &ThemeTokens,
-) -> Element<'a, Message> {
+) -> Element<'a, NewProjectMsg> {
     let ground = crate::styles::board_canvas_colors().background;
     let ground = ti(ground);
     let ink = tokens::resolve(&theme_tokens(ThemeId::GraphiteDark)).ink3;
@@ -177,7 +176,7 @@ pub(super) fn pane<'a>(
             },
             ..container::Style::default()
         });
-    let (paper, unit, grid) = state.setup.sheet_line();
+    let paper = state.setup.sheet_line();
     let thickness = format!("{} mm", state.setup.pcb.thickness_mm);
     let bold = iced::Font {
         weight: iced::font::Weight::Semibold,
@@ -196,9 +195,7 @@ pub(super) fn pane<'a>(
     let sheet_line = text(t!(
         i18n,
         ids::DIALOG_NEW_PROJECT_PREVIEW_SHEET,
-        "paper" => paper,
-        "unit" => unit,
-        "grid" => format!("{grid}")
+        "paper" => paper
     ))
     .size(TS.label)
     .color(ti(tokens.text));

@@ -11,14 +11,13 @@ pub(crate) use command::new_project_with_profile;
 pub use state::NewProjectState;
 pub(crate) use state::{Blocker, NameProblem, RULE_FIELDS, check_name};
 pub(crate) use target::{TargetProblem, TargetStatus};
-pub(crate) use update::NAME_INPUT_ID;
+pub(crate) use update::{NAME_INPUT_ID, import_rule_file};
 
 #[cfg(test)]
 mod tests;
 
-use signex_types::coord::Unit;
 use signex_types::designator::DesignatorStandard;
-use signex_types::project::{AiMode, FabTemplate, PcbField, RuleTemplate, SetupProfile};
+use signex_types::project::{FabTemplate, PcbField, RuleTemplate, SetupProfile};
 
 impl From<NewProjectMsg> for crate::app::Message {
     fn from(msg: NewProjectMsg) -> Self {
@@ -35,7 +34,6 @@ pub enum NewProjectMsg {
     LocationPicked(Option<std::path::PathBuf>),
     MakeFolderToggled(bool),
     ProfilePicked(SetupProfile),
-    AiModePicked(AiMode),
     CustomizeToggled,
     FabPicked(FabTemplate),
     ImportRequested,
@@ -46,8 +44,6 @@ pub enum NewProjectMsg {
     RuleEdited(PcbField, String),
     SheetSizePicked(String),
     TitleBlockPicked(bool),
-    GridPicked(f64),
-    UnitsPicked(Unit),
     DesignatorsPicked(DesignatorStandard),
     /// The disk check of generation `generation` finished.
     TargetChecked {

@@ -3,7 +3,7 @@
 //! agents; it writes through the same worker as the dialog's Create.
 
 use iced::Task;
-use signex_types::project::{AiMode, ProjectSetup, SetupProfile};
+use signex_types::project::{ProjectSetup, SetupProfile};
 
 use super::check_name;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
@@ -36,10 +36,6 @@ fn setup_from(args: &CommandArgs) -> Result<ProjectSetup, String> {
             .ok_or_else(|| format!("profile `{t}` is not hobby, standard, hdi or custom"))?,
     };
     let mut setup = ProjectSetup::from_profile(profile);
-    if let Some(t) = text(args, "ai_mode") {
-        setup.ai_mode = AiMode::from_token(t)
-            .ok_or_else(|| format!("ai_mode `{t}` is not off, assistant or agentic"))?;
-    }
     if let Some(overrides) = text(args, "overrides") {
         setup.apply_overrides(overrides)?;
     }
@@ -47,7 +43,7 @@ fn setup_from(args: &CommandArgs) -> Result<ProjectSetup, String> {
 }
 
 /// `new_project_with_profile name=.. location=.. [make_folder=..] [profile=..]
-/// [ai_mode=..] [overrides=..]`.
+/// [overrides=..]`.
 pub(crate) fn new_project_with_profile(app: &mut Signex, args: &CommandArgs) -> Ran {
     let (Some(name), Some(location)) = (text(args, "name"), text(args, "location")) else {
         return refused("`new_project_with_profile` needs the operands `name` and `location`");

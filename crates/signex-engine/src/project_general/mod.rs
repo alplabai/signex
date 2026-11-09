@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::designator::DesignatorStandard;
 use signex_types::project::{
-    AnnotationState, ProjectData, SchematicDefaultField, SchematicDefaultOverrides,
+    AnnotationState, ProjectData, ProjectDefaults, SchematicDefaultField, SchematicDefaultOverrides,
 };
 
 /// How many undo steps are kept unless the `undo_depth` setting says
@@ -56,6 +56,9 @@ pub enum ProjectGeneralCommand {
     SetSchematicDefaultLineStyle(Option<signex_types::net_class::NetLineStyle>),
     /// The fill new shapes are placed with (#2026).
     SetSchematicDefaultShapeFill(Option<signex_types::schematic::FillType>),
+    /// What new PCBs and sheets start from (#2232), as edited in the Project
+    /// setup section.
+    SetProjectDefaults(ProjectDefaults),
 }
 
 /// The `title_block` keys a project parameter shares with a sheet: empty
@@ -82,6 +85,7 @@ struct GeneralSnapshot {
     parameters: BTreeMap<String, String>,
     annotation: AnnotationState,
     schematic_defaults: SchematicDefaultOverrides,
+    project_defaults: ProjectDefaults,
 }
 
 impl GeneralSnapshot {
@@ -91,6 +95,7 @@ impl GeneralSnapshot {
             parameters: data.parameters.clone(),
             annotation: data.annotation_state(),
             schematic_defaults: data.schematic_defaults.clone(),
+            project_defaults: data.project_defaults.clone(),
         }
     }
 
@@ -100,6 +105,7 @@ impl GeneralSnapshot {
         data.parameters = self.parameters;
         data.restore_annotation_state(self.annotation);
         data.schematic_defaults = self.schematic_defaults;
+        data.project_defaults = self.project_defaults;
     }
 }
 
@@ -120,6 +126,7 @@ enum RunField {
     General,
     SchematicDefault(SchematicDefaultField),
     SchematicDefaultFont,
+    ProjectDefaults,
 }
 
 impl RunField {
@@ -129,6 +136,7 @@ impl RunField {
                 Self::SchematicDefault(*field)
             }
             ProjectGeneralCommand::SetSchematicDefaultFont(_) => Self::SchematicDefaultFont,
+            ProjectGeneralCommand::SetProjectDefaults(_) => Self::ProjectDefaults,
             _ => Self::General,
         }
     }
@@ -209,6 +217,9 @@ impl ProjectGeneralHistory {
             }
             ProjectGeneralCommand::SetSchematicDefaultShapeFill(fill) => {
                 data.schematic_defaults.set_shape_fill(fill);
+            }
+            ProjectGeneralCommand::SetProjectDefaults(defaults) => {
+                data.project_defaults = defaults;
             }
         }
         if GeneralSnapshot::of(data) == before {
