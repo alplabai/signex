@@ -16,6 +16,7 @@ mod drag_layers;
 pub(crate) mod drag_preview;
 mod draw;
 mod erc_marker;
+mod ghost_split;
 mod gpu_drag;
 pub(crate) mod gpu_mount;
 mod gpu_text_layer;
@@ -943,6 +944,8 @@ mod app_loop_bench_tests;
 mod background_reuse_tests;
 #[cfg(test)]
 mod draw_order_tests;
+#[cfg(test)]
+mod ghost_split_tests;
 #[cfg(test)]
 mod ghost_tests;
 #[cfg(test)]

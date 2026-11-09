@@ -21,6 +21,7 @@ use iced_runtime::user_interface::Cache;
 use super::render_bench_tests::{Generated, Variant, WINDOW, WORK_SCALE, generate, rig};
 use super::*;
 use crate::app::{Message, Signex, TabInfo, TabKind, UiMsg};
+use signex_types::schematic::{SelectedItem, SelectedKind};
 
 struct Frame {
     view: Duration,
@@ -353,12 +354,44 @@ fn app_loop_bench() {
     // Drag: restore the camera, select the block, press on the handle wire.
     *app.interaction_state.active_canvas_mut().camera_mut() = camera.clone();
     // `SIGNEX_BENCH_SELECT=one` drags the single wire under the handle (a
-    // placed part is about as cheap); the default drags the whole block.
-    let selected = if std::env::var("SIGNEX_BENCH_SELECT").is_ok_and(|v| v == "one") {
+    // placed part is about as cheap); `symbols:N` drags the N symbols nearest
+    // the middle cell's IC (`symbols:1` is just that IC), grabbed by it, their
+    // pin wires staying on (`SIGNEX_BENCH_KEEP_WIRES=1`); the default drags the
+    // whole block.
+    let select = std::env::var("SIGNEX_BENCH_SELECT").unwrap_or_default();
+    let mut grab = g.handle;
+    let selected = if select == "one" {
         let hit = app
             .item_hit_at(g.handle.0, g.handle.1)
             .expect("the handle wire");
         vec![hit]
+    } else if let Some(n) = select.strip_prefix("symbols:") {
+        let n: usize = n.parse().expect("symbols:<count>");
+        // The middle cell's IC is the first symbol the handle's cell holds.
+        let centre = g
+            .sheet
+            .symbols
+            .iter()
+            .filter(|s| s.lib_id == "IC")
+            .min_by(|a, b| {
+                let d = |s: &signex_types::schematic::Symbol| {
+                    (s.position.x - g.handle.0).hypot(s.position.y - g.handle.1 + 20.0)
+                };
+                d(a).total_cmp(&d(b))
+            })
+            .expect("an IC");
+        grab = (centre.position.x, centre.position.y);
+        let mut near: Vec<_> = g.sheet.symbols.iter().collect();
+        near.sort_by(|a, b| {
+            let d = |s: &signex_types::schematic::Symbol| {
+                (s.position.x - grab.0).hypot(s.position.y - grab.1)
+            };
+            d(a).total_cmp(&d(b))
+        });
+        near.into_iter()
+            .take(n)
+            .map(|s| SelectedItem::new(s.uuid, SelectedKind::Symbol))
+            .collect()
     } else {
         g.block.clone()
     };
@@ -366,8 +399,8 @@ fn app_loop_bench() {
     app.interaction_state.active_canvas_mut().clear_bg_cache();
     warm(&mut app, &mut rig, &mut cache);
     let start = iced::Point::new(
-        origin.x + camera.offset.x + g.handle.0 as f32 * camera.scale,
-        origin.y + camera.offset.y + g.handle.1 as f32 * camera.scale,
+        origin.x + camera.offset.x + grab.0 as f32 * camera.scale,
+        origin.y + camera.offset.y + grab.1 as f32 * camera.scale,
     );
     let mut frames = Vec::new();
     let _ = frame(

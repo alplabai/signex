@@ -3,7 +3,8 @@
 //! connected when moving" is on, the attached wires rubber-banded exactly as
 //! the engine will commit them (#963).
 
-use super::drag_layers::{DragFrame, moved_item_ids, split_ghost};
+use super::drag_layers::{DragFrame, moved_item_ids};
+use super::ghost_split::{BaseIds, split_ghost_walk};
 use crate::schematic_runtime::SchematicRenderSnapshot;
 use signex_types::schematic::SelectedItem;
 
@@ -314,6 +315,9 @@ struct DragGhost {
 #[derive(Debug, Default)]
 pub struct GhostState {
     session: Option<(u64, Rc<signex_engine::MovePreview>)>,
+    /// The ids of the pre-move sheet, indexed once per drag so each ghost step
+    /// is split by a walk, not by indexing both sheets again.
+    base_ids: Option<(u64, Rc<BaseIds>)>,
     ghost: Option<DragGhost>,
     /// The held references already reported for this drag, so the Messages
     /// panel hears each set once, not on every cursor step.
@@ -409,7 +413,17 @@ impl GhostState {
         let moves: Vec<_> = selection.iter().map(|item| (*item, dx, dy)).collect();
         let (moved, held) = session.moved_with(&moves, true);
         let snapshot = Rc::new(moved);
-        let frame = split_ghost(snap, &snapshot, &moved_item_ids(snap, selection));
+        let ids = match &self.base_ids {
+            Some((rev, ids)) if super::drag_layers::is_known(revision) && *rev == revision => {
+                ids.clone()
+            }
+            _ => {
+                let fresh = Rc::new(BaseIds::of(snap));
+                self.base_ids = Some((revision, fresh.clone()));
+                fresh
+            }
+        };
+        let frame = split_ghost_walk(snap, &snapshot, &moved_item_ids(snap, selection), &ids);
         self.ghost = Some(DragGhost {
             key,
             snapshot: snapshot.clone(),
