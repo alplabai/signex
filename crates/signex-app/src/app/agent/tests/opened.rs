@@ -122,6 +122,8 @@ fn closing_another_dirty_sheet_parks_it_with_its_edits_and_the_person_is_as_they
     );
 
     assert_eq!(closed["status"], "ran", "{closed}");
+    // No sheet is reloaded, so no load-time warning is logged again.
+    assert_eq!(closed["messages"], json!([]), "{closed}");
     assert_eq!(app.document_state.tabs.len(), tabs - 1);
     assert!(app.document_state.tabs.iter().all(|tab| tab.path != a));
     // Parked, not discarded: the engine and its edits stay, still unsaved.
