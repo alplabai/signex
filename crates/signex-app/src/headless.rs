@@ -20,7 +20,10 @@ use std::path::PathBuf;
 use iced::Task;
 use signex_types::project::RuleProfile;
 
-pub use crate::app::command::{CommandArgs, CommandOutcome, OperandError, OperandValue};
+pub use crate::app::command::{
+    CommandArgs, CommandOutcome, EditSpec, MAX_EDITS, OperandError, OperandValue, edit_list_text,
+    edit_refusal, operand_text, parse_edit_list,
+};
 pub use crate::app::document_ids::DocumentTarget;
 use crate::app::{Message, Signex};
 use crate::io_ports::{HeadlessAnswers, Picker};

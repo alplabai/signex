@@ -184,12 +184,62 @@ impl Log for SignexLogger {
 
         let rendered = format!("{}", record.args());
         let (code, message) = summarize_record(record.target(), &rendered);
+        if record.level() == Level::Info && hold_if_held(&code, &message, &rendered) {
+            return;
+        }
         push_entry(DiagnosticLevel::from(record.level()), code, message);
 
         eprintln!("[{}] {rendered}", record.level());
     }
 
     fn flush(&self) {}
+}
+
+/// Info lines of one thread held back while an agent's edit list runs
+/// (#2178): the handlers it calls say what they did, and that is only true if
+/// the list lands. Only this thread's Info lines are held; warnings and errors
+/// are never.
+struct HeldInfo {
+    code: String,
+    message: String,
+    rendered: String,
+}
+
+thread_local! {
+    static HELD_INFO: std::cell::RefCell<Option<Vec<HeldInfo>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+fn hold_if_held(code: &str, message: &str, rendered: &str) -> bool {
+    HELD_INFO.with(|held| {
+        held.borrow_mut()
+            .as_mut()
+            .map(|lines| {
+                lines.push(HeldInfo {
+                    code: code.to_string(),
+                    message: message.to_string(),
+                    rendered: rendered.to_string(),
+                });
+            })
+            .is_some()
+    })
+}
+
+/// Start holding this thread's Info lines.
+pub fn hold_info() {
+    HELD_INFO.with(|held| *held.borrow_mut() = Some(Vec::new()));
+}
+
+/// Stop holding: show the held lines in order (`show`), or drop them.
+pub fn release_held_info(show: bool) {
+    let lines = HELD_INFO.with(|held| held.borrow_mut().take());
+    if !show {
+        return;
+    }
+    for line in lines.unwrap_or_default() {
+        push_entry(DiagnosticLevel::Info, line.code, line.message);
+        eprintln!("[INFO] {}", line.rendered);
+    }
 }
 
 static CONFIGURED_LEVEL: OnceLock<LevelFilter> = OnceLock::new();

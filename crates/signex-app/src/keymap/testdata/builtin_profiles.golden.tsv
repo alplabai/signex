@@ -78,6 +78,7 @@ altium	bind	Global	Shift+G	command:cycle_snap_grid_backward
 altium	bind	Footprint	1	command:footprint_mode_sketch
 altium	bind	Footprint	2	command:footprint_mode_pads
 altium	bind	Footprint	3	command:footprint_mode_view_3d
+altium	hint	-	-	apply_edits
 altium	hint	-	-	autoplace_fields
 altium	hint	-	-	bring_drawings_forward
 altium	hint	-	-	bring_drawings_to_front
@@ -152,6 +153,7 @@ altium	hint	-	-	repeat_last_item
 altium	hint	-	R I	report_manager_bom
 altium	hint	-	-	reset_local_coordinates
 altium	hint	-	-	resolve
+altium	hint	-	-	revert
 altium	hint	-	Shift+SPACE	rotate_clockwise
 altium	hint	-	SPACE	rotate_counterclockwise
 altium	hint	-	Ctrl+R	rubber_stamp_copy
@@ -378,6 +380,7 @@ classic	bind	Global	~	command:clear_net_highlighting
 classic	bind	Footprint	1	command:footprint_mode_sketch
 classic	bind	Footprint	2	command:footprint_mode_pads
 classic	bind	Footprint	3	command:footprint_mode_view_3d
+classic	hint	-	-	apply_edits
 classic	hint	-	O	autoplace_fields
 classic	hint	-	-	bring_drawings_forward
 classic	hint	-	-	bring_drawings_to_front
@@ -452,6 +455,7 @@ classic	hint	-	INS	repeat_last_item
 classic	hint	-	-	report_manager_bom
 classic	hint	-	SPACE	reset_local_coordinates
 classic	hint	-	-	resolve
+classic	hint	-	-	revert
 classic	hint	-	Shift+R	rotate_clockwise
 classic	hint	-	R	rotate_counterclockwise
 classic	hint	-	-	rubber_stamp_copy

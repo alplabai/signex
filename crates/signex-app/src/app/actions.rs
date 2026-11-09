@@ -219,8 +219,17 @@ impl Signex {
     /// (pin end, wire end, junction) within the capture radius when the
     /// electrical-grid toggle (Shift+E) is on, otherwise on the grid.
     pub(crate) fn snap_wire_point(&self, x: f64, y: f64) -> (f64, f64) {
+        // An agent's edit list snaps against the sheet it edits, not the
+        // person's canvas.
+        let sheet = if self.document_state.agent_edit_running() {
+            self.document_state
+                .edit_engine()
+                .map(signex_engine::Engine::document)
+        } else {
+            self.active_render_snapshot()
+        };
         if self.ui_state.snap_hotspots
-            && let Some(sheet) = self.active_render_snapshot()
+            && let Some(sheet) = sheet
             && let Some(p) = signex_types::schematic::snap_to_hotspot(
                 sheet,
                 signex_types::schematic::Point::new(x, y),

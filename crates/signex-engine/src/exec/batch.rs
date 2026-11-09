@@ -70,6 +70,9 @@ impl Engine {
         commands: impl IntoIterator<Item = Command>,
         group: Option<UndoGroupId>,
     ) -> Result<CommandResult, EngineError> {
+        if self.transaction.is_some() {
+            return self.batch_in_transaction(commands);
+        }
         debug_assert!(
             !self.history_suppressed,
             "execute_batch does not nest: the inner batch would consume the outer batch's history entry"
@@ -133,7 +136,7 @@ impl Engine {
     ///
     /// Returns the coalesced patch, or `None` when no command in the batch
     /// changed anything.
-    fn run_batch(
+    pub(super) fn run_batch(
         &mut self,
         commands: impl IntoIterator<Item = Command>,
     ) -> Result<Option<PatchPair>, EngineError> {

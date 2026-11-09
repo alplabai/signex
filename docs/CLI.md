@@ -53,6 +53,10 @@ the active document. `list_documents`, `document_info`, `resolve`,
 with the answer in `data`. `open_document` and `new_document` answer with the
 new document's `{id, path, kind}`.
 
+`apply_edits` takes a list of edit commands as its `edits` argument and
+applies them to one sheet as one undo step, and `revert` takes that step back;
+both answer in `data`. See [AGENT_EDITS.md](AGENT_EDITS.md).
+
 ```
 {"run": "<uuid>", "seq": 2, "id": "color_net", "status": "ran",
  "messages": [{"level": "INFO", "message": "..."}], "changed": ["<path>"]}

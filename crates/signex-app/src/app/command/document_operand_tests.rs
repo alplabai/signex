@@ -400,6 +400,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "close_active_document",
         "document_info",
         "read_document",
+        "apply_edits",
+        "revert",
     ] {
         let operands = metadata_for_str(name).expect("row").operands;
         let document = operands.iter().find(|op| op.name == "document");
@@ -425,6 +427,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "document_info",
                     "read_document",
                     "find_items",
+                    "apply_edits",
+                    "revert",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

@@ -91,6 +91,11 @@ impl UndoGroupId {
     pub const fn new(raw: u64) -> Self {
         Self(raw)
     }
+
+    /// The raw value, as an agent names the group in `revert`.
+    pub const fn get(self) -> u64 {
+        self.0
+    }
 }
 
 /// The parameter cell a run of keystrokes is editing, and where the history
@@ -390,6 +395,7 @@ impl Engine {
         // `exec/batch.rs` for why this is suppressed up front rather than
         // truncated away afterwards.
         if self.history_suppressed {
+            self.absorb_into_transaction(patch_pair);
             return;
         }
 

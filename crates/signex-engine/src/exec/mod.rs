@@ -17,6 +17,7 @@ mod place;
 mod replace_lib_symbol;
 mod structure;
 mod symbol_body;
+pub(crate) mod transaction;
 
 #[cfg(test)]
 mod change_component_tests;

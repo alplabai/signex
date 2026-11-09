@@ -9,6 +9,9 @@
 //! the main window's, an undocked window's and the native menu's.
 
 pub(crate) mod active_bar;
+#[cfg(test)]
+mod agent_edit_tests;
+mod agent_edits;
 mod args;
 pub(crate) mod bridge;
 #[cfg(test)]
@@ -32,6 +35,9 @@ pub(crate) mod queries;
 mod undo_agreement_tests;
 mod window_document;
 
+pub use agent_edits::{
+    EditSpec, MAX_EDITS, edit_list_text, edit_refusal, operand_text, parse_edit_list,
+};
 pub use args::CommandArgs;
 pub(crate) use args::InvocationContext;
 use bridge::core_to_message;
