@@ -665,6 +665,10 @@ impl Signex {
             let strip = self.pcb_for_window(window_id).and_then(|board| {
                 pcb_strip::layer_strip(board, &self.document_state.panel_ctx.tokens)
             });
+            // Selection, hover and marquee paint above the board and take no input.
+            let highlight = canvas(pcb_canvas.highlight_layer())
+                .width(Length::Fill)
+                .height(Length::Fill);
             if pcb_canvas.gpu_render {
                 // Stack the GPU shader ABOVE the CPU canvas: the canvas paints
                 // the opaque background + grid and owns pan/zoom/cursor/fit;
@@ -687,9 +691,9 @@ impl Signex {
                 ))
                 .width(Length::Fill)
                 .height(Length::Fill);
-                pcb_strip::with_strip(stack![base, content_shader].boxed(), strip)
+                pcb_strip::with_strip(stack![base, content_shader, highlight].boxed(), strip)
             } else {
-                pcb_strip::with_strip(base, strip)
+                pcb_strip::with_strip(stack![base, highlight].boxed(), strip)
             }
         } else {
             // "Nothing loaded" gets the actionable start screen; "project

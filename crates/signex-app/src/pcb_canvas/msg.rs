@@ -1,0 +1,28 @@
+//! What the PCB canvas reports to the app (#2191). Points are board mm.
+
+use pcb_geom::ClickMode;
+use signex_types::pcb::Point;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PcbCanvasMsg {
+    /// The pointer moved over the canvas. `zoom_pct` feeds the status
+    /// readout; `tolerance_mm` is the hover reach at the current zoom.
+    PointerMoved {
+        at: Point,
+        zoom_pct: f64,
+        tolerance_mm: f64,
+    },
+    /// The left button was pressed and released in place.
+    Clicked {
+        at: Point,
+        tolerance_mm: f64,
+        mode: ClickMode,
+    },
+    /// The left button was released after dragging a box. Left to right
+    /// is a window, right to left a crossing.
+    BoxSelected {
+        from: Point,
+        to: Point,
+        mode: ClickMode,
+    },
+}

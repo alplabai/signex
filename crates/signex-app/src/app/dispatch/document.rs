@@ -93,6 +93,7 @@ impl Signex {
     /// completions.
     pub(crate) fn dispatch_file_message(&mut self, msg: FileMsg) -> Task<Message> {
         match msg {
+            FileMsg::Agent(msg) => self.dispatch_agent_message(msg),
             FileMsg::Opened(path) => {
                 let task = self.handle_document_file_opened(path);
                 Task::batch([task, self.finish_update()])

@@ -902,7 +902,11 @@ impl Signex {
             None => Subscription::none(),
         };
 
+        // The agent listener (#1924): none while "Allow agent connections" is off.
+        let agent_listener = self.agent_listener_subscription();
+
         Subscription::batch([
+            agent_listener,
             window_subscriptions::window_focus(),
             window_subscriptions::native_menu_activations(),
             chord_cancel,

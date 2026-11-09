@@ -26,6 +26,7 @@ pub(crate) mod ownership_index;
 mod parameter_table;
 mod path_key;
 mod pcb_board;
+mod pcb_ratsnest;
 mod pcb_revision;
 mod pdf_page_setup;
 mod pdf_preview_raster;
@@ -54,6 +55,7 @@ pub use error_notice::{ErrorNotice, NoticeAction};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use parameter_table::ParameterTableState;
+pub(crate) use pcb_ratsnest::RatsnestKey;
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
@@ -75,6 +77,9 @@ pub struct Signex {
     /// The macOS system menu bar built from the menu model; inert elsewhere
     /// (docs/MENU_BAR.md, "Native macOS menu").
     pub(crate) native_menu: crate::menu_bar::native::NativeMenuState,
+    /// The local agent listener's runtime state (#1924); inert while the
+    /// "Allow agent connections" preference is off.
+    pub(crate) agent: crate::app::agent::AgentState,
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached

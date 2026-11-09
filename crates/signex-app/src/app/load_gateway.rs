@@ -414,15 +414,38 @@ impl Signex {
         canvas.set_theme_colors(main.theme_bg, main.theme_grid);
         canvas.canvas_colors = main.canvas_colors;
         canvas.set_grid(main.grid_visible, main.visible_grid_mm);
+        // Selection is routed for the main window's board only.
+        canvas.selectable = false;
         canvas.set_renderer_snapshot(Some(signex_renderer::pcb::PcbSnapshot::from_board(board)));
         canvas.fit_to_board();
         Some(canvas)
     }
 
+    /// The active tab's path and board revision: what the ratsnest cache
+    /// is keyed by.
+    fn active_pcb_ratsnest_key(&self) -> Option<super::state::RatsnestKey> {
+        let path = &self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)?
+            .path;
+        let revision = *self.document_state.pcb_revisions.get(path)?;
+        Some((path.clone(), revision))
+    }
+
     pub(crate) fn sync_pcb_canvas_from_visible_board(&mut self) {
-        let renderer_snapshot = self
-            .active_pcb()
-            .map(signex_renderer::pcb::PcbSnapshot::from_board);
+        // The ratsnest is recomputed only when the board's revision moved.
+        let ratsnest_key = self.active_pcb_ratsnest_key();
+        let board_path = self.active_tab_path().unwrap_or_default();
+        let mut ratsnest = std::mem::take(&mut self.interaction_state.pcb_ratsnest);
+        let renderer_snapshot = self.active_pcb().map(|board| {
+            ratsnest.refresh(ratsnest_key, board);
+            ratsnest.apply(
+                &board_path,
+                signex_renderer::pcb::PcbSnapshot::from_board(board),
+            )
+        });
+        self.interaction_state.pcb_ratsnest = ratsnest;
 
         // An undocked window showing the same tab draws the same board
         // (#494). Its camera stays its own.
@@ -445,6 +468,7 @@ impl Signex {
         self.interaction_state
             .pcb_canvas
             .set_renderer_snapshot(renderer_snapshot);
+        self.note_pcb_board_changed();
     }
 
     pub(crate) fn open_schematic_tab(
@@ -668,6 +692,7 @@ impl Signex {
         self.interaction_state
             .pcb_canvas
             .set_renderer_snapshot(None);
+        self.note_pcb_board_changed();
         self.interaction_state.pcb_canvas.clear_bg_cache();
         self.interaction_state.pcb_canvas.clear_content_cache();
 

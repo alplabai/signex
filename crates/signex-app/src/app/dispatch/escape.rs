@@ -252,6 +252,9 @@ impl Signex {
     /// window the Esc came from. Only the *visuals* are per-window, and
     /// `clear_transient_schematic_tool_state` sweeps all of them.
     fn escape_tool_reset(&mut self) -> Task<Message> {
+        if self.has_active_pcb() {
+            self.clear_pcb_selection();
+        }
         self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
             crate::app::Tool::Select,
         )))

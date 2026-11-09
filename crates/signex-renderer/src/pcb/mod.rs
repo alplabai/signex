@@ -98,7 +98,7 @@ impl PcbSnapshot {
         let mut pads = Vec::new();
         for footprint in &board.footprints {
             for pad in &footprint.pads {
-                pads.push(pad_from_footprint(footprint, pad));
+                pads.extend(pad_from_footprint(footprint, pad));
             }
         }
 
@@ -141,7 +141,9 @@ impl PcbSnapshot {
 }
 
 mod emit;
+mod ratsnest;
 use emit::*;
+pub use ratsnest::ratsnest_inputs;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PcbSliceFamily {

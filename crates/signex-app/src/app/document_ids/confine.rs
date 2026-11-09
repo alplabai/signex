@@ -54,11 +54,12 @@ fn readable_file(path: &Path) -> Result<(), String> {
 }
 
 impl Signex {
-    /// Whether a query may read `path`, a file `project` references. Always in
-    /// a GUI session; in a headless one only inside the project folder. A
-    /// refusal is named in Messages.
+    /// Whether a query may read `path`, a file `project` references. Always
+    /// for a person in a GUI session; for a headless run or an agent on the
+    /// app's agent channel (#1924) only inside the project folder. A refusal
+    /// is named in Messages.
     pub(crate) fn may_read_referenced(&self, project: &LoadedProject, path: &Path) -> bool {
-        if self.headless_answers().is_none() {
+        if self.headless_answers().is_none() && !self.agent.serving {
             return true;
         }
         match inside_project(project, path).and_then(|()| readable_file(path)) {

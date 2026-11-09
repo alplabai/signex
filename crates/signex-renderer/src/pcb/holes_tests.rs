@@ -95,3 +95,19 @@ fn holes_that_break_the_invariant_are_not_emitted() {
         "only the fixture's two valid holes are drawn"
     );
 }
+
+#[test]
+fn bottom_side_pad_is_drawn_at_its_mirrored_centre() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../signex-types/tests/corpus/pcb/footprint-bottom-layer.snxpcb");
+    let text = std::fs::read_to_string(path).expect("read fixture");
+    let board = signex_types::format::SnxPcb::parse(&text)
+        .expect("parse fixture")
+        .board;
+    assert_eq!(board.footprints[0].layer, "BottomCopper");
+    let snapshot = PcbSnapshot::from_board(&board);
+    // Local (11, 20) mm, mirror x, turn 180 deg, origin (50, 25): (61, 5).
+    let center = snapshot.pads[0].center;
+    assert!((center[0] - 61.0).abs() < 1e-4, "x {}", center[0]);
+    assert!((center[1] - 5.0).abs() < 1e-4, "y {}", center[1]);
+}

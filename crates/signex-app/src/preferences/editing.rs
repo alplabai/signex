@@ -22,6 +22,14 @@ const PASTE_DESIGNATORS_HELP: &str = "What pasted parts are called. Keep leaves 
 
 const AUTOSAVE_HELP: &str = "When on, Signex keeps a recovery copy of each schematic, symbol and footprint with unsaved changes about once a minute. The copy is a separate file in the Signex config folder (recovery); your own file is never touched by it. The copy is removed when you save the document, close it without keeping the changes, or quit with Discard All, even if you turn this off first. Off by default.";
 
+/// What the "Allow agent connections" row (#1924) shows: its draft and the
+/// language its labels read in.
+#[derive(Clone, Copy)]
+pub(super) struct AgentConnectionsRow<'a> {
+    pub(super) draft_enabled: bool,
+    pub(super) i18n: &'a signex_i18n::I18n,
+}
+
 pub(super) fn content_editing<'a>(
     draft_move_keeps_wires: bool,
     draft_net_hover_enabled: bool,
@@ -29,7 +37,12 @@ pub(super) fn content_editing<'a>(
     draft_increment_step: i32,
     draft_paste_designators: crate::paste_prefs::PasteDesignators,
     draft_autosave_enabled: bool,
+    agent_connections: AgentConnectionsRow<'_>,
 ) -> Element<'a, PrefMsg> {
+    let AgentConnectionsRow {
+        draft_enabled: draft_agent_connections_enabled,
+        i18n,
+    } = agent_connections;
     let setting = row![
         column![
             text(raw("Keep wires connected when moving"))
@@ -147,6 +160,30 @@ pub(super) fn content_editing<'a>(
     ]
     .align_y(iced::Alignment::Center);
 
+    let agent_connections = row![
+        column![
+            text(signex_i18n::t!(
+                i18n,
+                signex_i18n::ids::PREFERENCES_AGENT_CONNECTIONS_LABEL
+            ))
+            .size(TS.label)
+            .style(text_primary),
+            text(signex_i18n::t!(
+                i18n,
+                signex_i18n::ids::PREFERENCES_AGENT_CONNECTIONS_HELP
+            ))
+            .size(TS.caption)
+            .style(text_muted),
+        ]
+        .spacing(3)
+        .width(320),
+        Space::new().width(Length::Fill),
+        checkbox(draft_agent_connections_enabled)
+            .size(TS.heading)
+            .on_toggle(PrefMsg::DraftAgentConnectionsEnabled),
+    ]
+    .align_y(iced::Alignment::Center);
+
     column![
         section_title("Schematic — Editing"),
         Space::new().height(10),
@@ -161,6 +198,8 @@ pub(super) fn content_editing<'a>(
         paste_designators,
         Space::new().height(14),
         autosave,
+        Space::new().height(14),
+        agent_connections,
     ]
     .padding([SP.xl, 20.0])
     .boxed()
