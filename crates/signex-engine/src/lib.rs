@@ -40,6 +40,8 @@ mod field_follow_tests;
 #[cfg(test)]
 mod lock_tests;
 #[cfg(test)]
+mod move_fold_local_tests;
+#[cfg(test)]
 mod object_lock_tests;
 #[cfg(test)]
 mod wire_merge_tests;
@@ -113,12 +115,12 @@ pub use sheet_placement::{
     unused_sheet_stem,
 };
 use signex_types::schematic::{SchematicSheet, SelectedItem};
-pub(crate) use transform::TouchingPairs;
 pub use transform::place_fields_for_new_symbol;
 pub use transform::rubber_band::{
     BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, before_nets, follow_moved_pins,
     moved_pin_tips,
 };
+pub(crate) use transform::{PreWires, TouchingPairs};
 
 /// Whether `key` names one of the symbol's built-in fields (`reference`,
 /// `value`, `footprint`, any case). Those have their own commands, so
@@ -193,6 +195,16 @@ pub struct Engine {
     /// The pre-move sheet's minted dots and their verdicts, to revalidate only
     /// the dots near changed wires (drag previews).
     preset_dots: Option<std::sync::Arc<transform::DotVerdicts>>,
+    /// The pre-move sheet's wires, to fold only where a move changed them
+    /// (drag previews).
+    preset_wires: Option<std::sync::Arc<PreWires>>,
+    /// The pre-move sheet itself, which a drag preview's move reads in place
+    /// of a copy of the engine's document (drag previews).
+    preset_sheet: Option<std::sync::Arc<SchematicSheet>>,
+    /// Test switch: a move folds by weighing every wire, as it did before the
+    /// fold looked only where wires changed.
+    #[cfg(test)]
+    full_scan_moves: bool,
     /// Net colour of each wire the app has painted, by wire uuid. The engine
     /// never changes it; a merge reads it so two wires of different colours
     /// are not folded into one (see `transform::merge`).
@@ -211,10 +223,14 @@ pub(crate) fn next_revision() -> u64 {
 /// (`docs/INCREMENTAL_NETS.md`).
 #[derive(Debug)]
 pub struct MovePreview {
-    sheet: SchematicSheet,
+    sheet: std::sync::Arc<SchematicSheet>,
     before: BeforeNets,
     base: Option<std::sync::Arc<signex_net::NetBase>>,
     dots: Option<std::sync::Arc<transform::DotVerdicts>>,
+    wires: std::sync::Arc<PreWires>,
+    /// Test switch: fold the moved sheet by weighing every wire.
+    #[cfg(test)]
+    full_scan_moves: bool,
 }
 
 impl MovePreview {
@@ -226,7 +242,10 @@ impl MovePreview {
             before: std::sync::Arc::new(base.derive(sheet)),
             base: Some(std::sync::Arc::new(base)),
             dots: transform::DotVerdicts::new(sheet).map(std::sync::Arc::new),
-            sheet: sheet.clone(),
+            wires: std::sync::Arc::new(PreWires::new(&sheet.wires)),
+            #[cfg(test)]
+            full_scan_moves: false,
+            sheet: std::sync::Arc::new(sheet.clone()),
         }
     }
 
@@ -260,12 +279,18 @@ impl MovePreview {
         keep_wires: bool,
         wire_colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     ) -> (SchematicSheet, Vec<String>) {
-        let Ok(mut engine) = Engine::new(self.sheet.clone()) else {
-            return (self.sheet.clone(), Vec::new());
+        let Ok(mut engine) = Engine::new(SchematicSheet::clone(&self.sheet)) else {
+            return (SchematicSheet::clone(&self.sheet), Vec::new());
         };
         engine.preset_before = Some(self.before.clone());
         engine.preset_base.clone_from(&self.base);
         engine.preset_dots.clone_from(&self.dots);
+        engine.preset_wires = Some(self.wires.clone());
+        engine.preset_sheet = Some(self.sheet.clone());
+        #[cfg(test)]
+        {
+            engine.full_scan_moves = self.full_scan_moves;
+        }
         engine.set_wire_colors(wire_colors.clone());
         // The commit skips locked symbols; the ghost must too, or it shows
         // nothing moving while the free items jump on release.
@@ -277,10 +302,10 @@ impl MovePreview {
             &|symbol| format!("a wire on {symbol}'s pin ({symbol} is locked)"),
         );
         let Some(command) = command else {
-            return (self.sheet.clone(), held);
+            return (SchematicSheet::clone(&self.sheet), held);
         };
         if engine.execute(command).is_err() {
-            return (self.sheet.clone(), held);
+            return (SchematicSheet::clone(&self.sheet), held);
         }
         // The engine is spent: hand its sheet over instead of copying it.
         (std::mem::take(&mut engine.document), held)
@@ -316,6 +341,10 @@ impl Engine {
             preset_before: None,
             preset_base: None,
             preset_dots: None,
+            preset_wires: None,
+            preset_sheet: None,
+            #[cfg(test)]
+            full_scan_moves: false,
             wire_colors: std::collections::HashMap::new(),
         })
     }
@@ -352,6 +381,10 @@ impl Engine {
             preset_before: None,
             preset_base: None,
             preset_dots: None,
+            preset_wires: None,
+            preset_sheet: None,
+            #[cfg(test)]
+            full_scan_moves: false,
             wire_colors: std::collections::HashMap::new(),
         })
     }
@@ -640,6 +673,10 @@ impl Engine {
     /// placeholder that nothing reads.
     fn pre_image(&mut self, cmd: &Command) -> SchematicSheet {
         if self.history_suppressed && !cmd.reads_pre_image() {
+            return SchematicSheet::default();
+        }
+        // A preview's move reads the preview's sheet, and records nothing.
+        if self.preset_sheet.is_some() && matches!(cmd, Command::MoveEach { .. }) {
             return SchematicSheet::default();
         }
         #[cfg(test)]

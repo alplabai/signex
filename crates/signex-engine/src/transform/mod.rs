@@ -540,7 +540,7 @@ mod wire_index;
 use autoplace::autoplace_fields;
 pub use autoplace::place_fields_for_new_symbol;
 pub(crate) use dot_verdicts::DotVerdicts;
-pub(crate) use merge::TouchingPairs;
+pub(crate) use merge::{PreWires, TouchingPairs};
 use wire_index::WireIndex;
 
 // ---------------------------------------------------------------------------
