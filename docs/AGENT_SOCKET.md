@@ -25,8 +25,8 @@ whatever its config root says.
 The listener is an iced `Subscription` (`listener.rs`). One future owns the
 socket, every connection and the files, so ending the subscription ends all of
 them. A connection only frames lines; each request line becomes
-`Message::File(FileMsg::Agent(AgentMsg::Request { .. }))` (the File family: the
-work is on documents, from outside the window) and runs inside `Signex::update`,
+`Message::Agent(AgentMsg::Request { .. })` (its own root family, routed to
+`dispatch_agent_message`) and runs inside `Signex::update`,
 like a click. That is one sequential queue: a person's edit and an agent's
 request never interleave inside an edit. The reply goes back to the connection
 when `update` has run the request. No window is created and nothing in
