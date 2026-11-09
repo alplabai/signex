@@ -697,7 +697,7 @@ fn an_attached_project_save_goes_through_when_every_file_it_writes_is_inside() {
     };
 
     // No pending library: the project file alone.
-    let app = w.app(&[done.clone()]);
+    let app = w.app(std::slice::from_ref(&done));
     let out = save(&w);
     assert_eq!(out.lines[0]["status"], "ran", "{}", out.stdout);
     assert_eq!(app.finish().len(), 1);
@@ -736,8 +736,24 @@ fn an_attached_project_save_is_refused_when_a_pending_library_is_outside() {
     );
     assert_eq!(out.lines[0]["status"], "refused", "{}", out.stdout);
     let reason = out.lines[0]["reason"].as_str().unwrap();
-    assert!(reason.contains(outside), "{reason}");
+    // The refusal does not name it: the agent was never told that file.
+    assert!(!out.stdout.contains(outside), "{}", out.stdout);
+    assert!(!out.stdout.contains("theirs.snxlib"), "{}", out.stdout);
     assert!(reason.contains("--allow-path"), "{reason}");
+    // The answer the agent can ask for does not list it, or any write list.
+    let info = w.cli(
+        &[
+            "run",
+            w.project(),
+            "document_info",
+            "--arg",
+            &format!("document={PROJECT_DOC}"),
+        ],
+        "",
+    );
+    assert_eq!(info.lines[0]["status"], "answered", "{}", info.stdout);
+    assert!(!info.stdout.contains("theirs.snxlib"), "{}", info.stdout);
+    assert!(!info.stdout.contains("save_writes"), "{}", info.stdout);
     assert!(app.finish().is_empty(), "the app was sent the save");
     assert!(!Path::new(outside).exists());
 }

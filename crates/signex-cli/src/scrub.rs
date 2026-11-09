@@ -49,6 +49,10 @@ pub(crate) fn scrub_data(data: Value, inside: &dyn Fn(&str) -> bool) -> Option<V
     if let Some(Value::Array(items)) = map.get_mut("not_loaded") {
         items.retain(|item| item.as_str().is_none_or(inside));
     }
+    // The files a project's save would write (never printed, see `attach.rs`).
+    if let Some(Value::Array(items)) = map.get_mut("save_writes") {
+        items.retain(|item| item.as_str().is_some_and(inside));
+    }
     let listed = ["documents", "elements"]
         .into_iter()
         .filter_map(|key| map.get(key).and_then(Value::as_array))
@@ -144,13 +148,13 @@ mod tests {
         assert_eq!(unknown_id("u")["what"], "unknown");
     }
 
-    /// A `document_info` answer for the run's own project keeps the files its
-    /// save writes (not a judged key).
+    /// The files a project's save writes are kept only when inside.
     #[test]
-    fn a_projects_save_writes_survive_as_the_answers_own_data() {
+    fn a_projects_save_writes_are_filtered_to_what_is_inside() {
         let info = json!({"path": "/a/P.snxprj", "kind": "project",
-            "save_writes": ["/a/libs/n.snxlib"]});
-        assert_eq!(scrub_data(info.clone(), &inside), Some(info));
+            "save_writes": ["/a/libs/n.snxlib", "/b/theirs.snxlib", 7]});
+        let kept = scrub_data(info, &inside).unwrap();
+        assert_eq!(kept["save_writes"], json!(["/a/libs/n.snxlib"]));
     }
 
     /// An unsaved sheet has a null `path`: it is shown only if its project is

@@ -9,6 +9,7 @@
 
 use std::path::{Path, PathBuf};
 
+use serde_json::Value;
 use signex_app::headless::agent_client::{Connection, Reply};
 
 use signex_app::keymap::OperandKind;
@@ -114,7 +115,14 @@ impl Attached {
         reply.messages.clear();
         if let Some(data) = reply.data.take() {
             reply.data = match scrub_data(data, &inside) {
-                Some(data) => Some(data),
+                // `save_writes` is for this check alone (made on the raw reply):
+                // it can list files outside the run's folders, so it is never printed.
+                Some(mut data) => {
+                    if let Value::Object(map) = &mut data {
+                        map.remove("save_writes");
+                    }
+                    Some(data)
+                }
                 // Not revealed to exist: the same answer as for an unknown id.
                 None if approved.command.as_str() == "resolve" => {
                     let id = approved
@@ -215,7 +223,17 @@ fn check_side_writes(
                     .map(|file| file.as_str().map(PathBuf::from))
                     .collect::<Option<Vec<_>>>()
                     .ok_or("the running Signex named a file its save writes without a path")?;
-                policy.check_write_targets(&writes, roots)?;
+                // The refusal names no file: one outside the run's folders may
+                // belong to another project, and the agent was never told it.
+                for file in &writes {
+                    policy
+                        .check_write_targets(std::slice::from_ref(file), roots)
+                        .map_err(|_| {
+                            "a file its save writes is not inside the folders this run may use \
+                             (--allow-path adds one)"
+                                .to_string()
+                        })?;
+                }
             }
             Some(_) => {}
             None => {

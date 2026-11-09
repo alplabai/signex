@@ -166,9 +166,10 @@ in the middle of continues.
   lists them with the app's `save_side_writes` and confines each); the running
   app tells them in the `save_writes` of its `document_info` answer, and the
   save is sent only when the project file and every file in `save_writes` are
-  inside the run's folders. Otherwise it is refused, naming the file that is
-  outside (`--allow-path` adds a folder); an answer without the list is refused
-  too. A sheet's plain save writes nothing else. The resolve and the command
+  inside the run's folders. Otherwise it is refused without naming the file
+  (it may belong to another project; `--allow-path` adds a folder); an answer
+  without the list is refused too. `save_writes` is never printed: the CLI
+  removes it from the `document_info` answer it shows. A sheet's plain save writes nothing else. The resolve and the command
   are two requests, so a document that is re-pointed between them (a person
   saving as, closing and reopening) is the same residual race as above.
 - **Dry run.** Without `--save`, nothing is written to disk by the CLI when
