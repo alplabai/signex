@@ -416,7 +416,8 @@ impl Signex {
         canvas.set_grid(main.grid_visible, main.visible_grid_mm);
         // Selection is routed for the main window's board only.
         canvas.selectable = false;
-        canvas.set_renderer_snapshot(Some(signex_renderer::pcb::PcbSnapshot::from_board(board)));
+        let snapshot = self.interaction_state.pcb_ratsnest.snapshot_of(path, board);
+        canvas.set_renderer_snapshot(Some(snapshot));
         canvas.fit_to_board();
         Some(canvas)
     }

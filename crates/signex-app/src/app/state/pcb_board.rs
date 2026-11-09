@@ -43,7 +43,7 @@ impl DocumentState {
         self.parked_pcb_boards.get(path)
     }
 
-    /// The engine of the PCB tab at , for a write. A parked engine is
+    /// The engine of the PCB tab at `path`, for a write. A parked engine is
     /// read-only: nothing may step it while its save can be in flight, or the
     /// landing save would clean a board that moved after the snapshot.
     pub(crate) fn board_engine_mut(&mut self, path: &Path) -> Option<&mut BoardEngine> {
@@ -52,6 +52,31 @@ impl DocumentState {
             .find(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)
             .and_then(|tab| tab.cached_document.as_mut())
             .and_then(TabDocument::as_pcb_engine_mut)
+    }
+
+    /// A landed save matches the board at `path`, open or parked: its
+    /// current state is the save point. Bookkeeping only, never an edit.
+    pub(crate) fn mark_board_saved(&mut self, path: &Path) {
+        if let Some(engine) = self.board_bookkeeping_mut(path) {
+            engine.mark_saved();
+        }
+    }
+
+    /// The file at `path` holds a snapshot no step of the board reproduces,
+    /// open or parked: it reads unsaved until the next save.
+    pub(crate) fn forget_board_save_point(&mut self, path: &Path) {
+        if let Some(engine) = self.board_bookkeeping_mut(path) {
+            engine.forget_save_point();
+        }
+    }
+
+    /// The engine at `path`, tab or parked, for the save-point calls above.
+    /// Kept private so an edit cannot reach a parked engine through it.
+    fn board_bookkeeping_mut(&mut self, path: &Path) -> Option<&mut BoardEngine> {
+        if self.has_pcb_tab(path) {
+            return self.board_engine_mut(path);
+        }
+        self.parked_pcb_boards.get_mut(path)
     }
 
     /// Every board engine a tab or a parked board holds.

@@ -74,7 +74,7 @@ impl Signex {
         let Some(board) = self.document_state.pcb_board(path) else {
             return;
         };
-        let snapshot = signex_renderer::pcb::PcbSnapshot::from_board(board);
+        let snapshot = self.interaction_state.pcb_ratsnest.snapshot_of(path, board);
         for (id, canvas) in &mut self.interaction_state.pcb_canvases {
             let shows = matches!(
                 self.ui_state.windows.get(id),

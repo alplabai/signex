@@ -33,13 +33,16 @@ editing UI does not have to decide it.
   `sync_history_dirty` reads the board engine as it reads a sheet engine,
   `mark_document_clean` marks the save point, and a save that lands for a
   snapshot the board has moved past forgets the point and re-syncs the mark.
-  That revision check runs whether or not the tab is still open.
+  That revision check runs whether or not the tab is still open, and the
+  save-point bookkeeping (`mark_board_saved`, `forget_board_save_point`)
+  reaches a parked engine; only edits are refused there.
 - A failed rollback (`RollbackFailed`, unreachable by construction) takes a
   new revision and forgets the save point, so caches rebuild and the board
   reads unsaved.
 - After any board change every window that shows the board repaints: the
   main canvas when it is the active tab, and each undocked window showing
-  that path. Repainting does not cancel the active tool.
+  that path, with its ratsnest (`PcbRatsnest::snapshot_of`). Repainting does
+  not cancel the active tool.
 - Undo and Redo reach a board through `UndoTarget::Document(Pcb)`: the same
   `undo` / `redo` command ids, menu enablement and keys as every document:
   Edit menu rows, the toolbar and Active Bar buttons, Ctrl+Z / Ctrl+Y, the

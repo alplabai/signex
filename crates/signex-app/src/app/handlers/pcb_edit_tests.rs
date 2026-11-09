@@ -644,3 +644,33 @@ fn a_board_edit_does_not_cancel_the_active_tool() {
     undo(&mut app);
     assert_eq!(app.interaction_state.current_tool, crate::app::Tool::Wire);
 }
+
+/// Re-review of #2235: undo back to the load save point during the write,
+/// then close (parks it dirty). The stale completion must forget the parked
+/// engine's save point, or the board reads clean and quit loses the file's
+/// difference from memory.
+#[test]
+fn a_stale_completion_for_a_parked_board_undone_to_its_save_point_stays_dirty() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    run(&mut app, &path, move_to(FP_A, 7.0));
+    let landed = begin_save(&mut app);
+    undo(&mut app);
+    assert!(dirty(&app, &path), "a write in flight holds the mark");
+    let _ = app.close_tab_parking_dirty(0);
+    assert!(app.document_state.parked_pcb_boards.contains_key(&path));
+    for message in landed {
+        let _ = app.update(message);
+    }
+    assert!(
+        dirty(&app, &path),
+        "the file holds the edit, the parked board does not"
+    );
+    assert!(app.document_state.holds_pcb(&path));
+    assert!(
+        !app.document_state.parked_pcb_boards[&path].is_at_save_point(),
+        "no step reproduces the file"
+    );
+    let _ = app.handle_app_quit_requested();
+    assert!(app.ui_state.app_quit_confirm.is_some(), "quit asks first");
+}

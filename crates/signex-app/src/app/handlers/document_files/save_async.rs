@@ -402,9 +402,7 @@ impl Signex {
         if current != revision {
             // The file now holds a snapshot the board has moved past: no
             // history step reproduces it, so undo must not read clean.
-            if let Some(engine) = self.document_state.board_engine_mut(path) {
-                engine.forget_save_point();
-            }
+            self.document_state.forget_board_save_point(path);
             self.document_state.sync_history_dirty(path);
             return;
         }

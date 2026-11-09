@@ -230,9 +230,7 @@ impl DocumentState {
         if let Some(engine) = self.engines.get_mut(path) {
             engine.mark_saved();
         }
-        if let Some(engine) = self.board_engine_mut(path) {
-            engine.mark_saved();
-        }
+        self.mark_board_saved(path);
         self.record_project_saved_state(path);
         if let Some(editor) = self.symbol_editors.get_mut(path) {
             editor.mark_saved();
