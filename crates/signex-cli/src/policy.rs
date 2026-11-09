@@ -277,12 +277,10 @@ mod tests {
             err,
             "`save_document` needs the `save` capability; pass --save"
         );
+        // Window only comes before the capability (#2170).
         let err =
             authorize(&policy(&DEFAULT), &fx, &request("report_manager_bom", &[])).unwrap_err();
-        assert_eq!(
-            err,
-            "`report_manager_bom` needs the `export` capability; pass --allow export"
-        );
+        assert_eq!(err, "`report_manager_bom` only works in a window");
         let held = policy(&[Capability::Read, Capability::Edit, Capability::Save]);
         assert!(authorize(&held, &fx, &request("save_document", &[])).is_ok());
     }

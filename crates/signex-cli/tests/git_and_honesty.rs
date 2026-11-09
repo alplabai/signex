@@ -124,23 +124,21 @@ fn a_command_whose_only_effect_was_a_dropped_window_is_refused() {
         json!({"id": "annotate_schematic"}),
     ]);
     let out = run_cli(
-        &[
-            "run",
-            fx.project.to_str().unwrap(),
-            "--keep-going",
-            "--allow",
-            "export",
-        ],
+        &["run", fx.project.to_str().unwrap(), "--keep-going"],
         commands,
     );
-    for index in [1, 2] {
-        let reason = refusal(&out, index);
-        assert!(
-            reason.contains("needs a window"),
-            "{reason}\n{}",
-            out.stdout
-        );
-    }
+    // The catalog says the BOM dialog is window only (#2170); annotate runs
+    // and its only effect is a confirm window the driver dropped.
+    assert_eq!(
+        refusal(&out, 1),
+        "`report_manager_bom` only works in a window"
+    );
+    let reason = refusal(&out, 2);
+    assert!(
+        reason.contains("needs a window"),
+        "{reason}\n{}",
+        out.stdout
+    );
 }
 
 #[test]
