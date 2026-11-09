@@ -97,8 +97,9 @@ pub enum Enablement {
 /// GUI/undo/visibility flags for a command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CommandFlags {
-    /// Only meaningful/available when driven from the GUI: the command has
-    /// no operand form, so no headless or scripted equivalent (#1934).
+    /// Window UI only: a modal, a panel, the view, an armed tool or a pointer
+    /// gesture. It has no operand form and a headless caller is refused it
+    /// (#1934, #2170).
     pub gui_only: bool,
     /// Acts without a window although it neither mutates the document nor
     /// takes operands (a selection step, a copy, a check). Only a headless
@@ -552,6 +553,27 @@ mod tests {
         assert_eq!(id("run_erc").headless_use(), Some(HeadlessUse::Runs));
         assert!(id("run_erc").headless_refusal().is_none());
         assert!(id("rotate_selection").headless_refusal().is_none());
+    }
+
+    /// A row with no flag and no operands is undecided, never silently runnable.
+    #[test]
+    fn an_undecided_row_has_no_headless_use() {
+        let undecided = CommandMetadata {
+            id: "undecided",
+            flags: CommandFlags::NONE,
+            ..CommandMetadata::DEFAULT
+        };
+        assert_eq!(undecided.headless_use(), None);
+        assert_eq!(undecided.headless_refusal(), None);
+        let both = CommandMetadata {
+            flags: CommandFlags {
+                gui_only: true,
+                runs_headless: true,
+                ..CommandFlags::NONE
+            },
+            ..undecided
+        };
+        assert_eq!(both.headless_use(), None);
     }
 
     #[test]

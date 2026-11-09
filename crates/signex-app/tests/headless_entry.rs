@@ -344,7 +344,7 @@ fn run() {
     driver.settle(&mut app, end).expect("session ended");
     assert!(driver.has_exited());
     let written = std::fs::read_to_string(isolated.path().join("prefs.json")).expect("prefs");
-    assert!(written.contains("grid_visible"), "{written}");
+    assert!(written.contains("first_run_tour_dismissed"), "{written}");
     assert_eq!(snapshot(&real), before, "the real config root changed");
 }
 
