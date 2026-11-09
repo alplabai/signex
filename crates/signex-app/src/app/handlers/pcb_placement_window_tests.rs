@@ -56,6 +56,12 @@ struct Rig {
 fn rig() -> Rig {
     let dir = tempfile::tempdir().unwrap();
     let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    // A fresh process opens the first-run tour, and its rung takes every Esc.
+    app.ui_state.first_run_tour_open = false;
+    assert!(
+        app.escape_overlay_message().is_none(),
+        "nothing else may claim the Escs these tests send"
+    );
     app.ui_state
         .keymap_profiles
         .set_active_profile("altium")
