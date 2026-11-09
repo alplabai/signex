@@ -75,7 +75,8 @@ pub(crate) fn visible_pitch_mm(
     span_w_mm: f32,
     span_h_mm: f32,
 ) -> Option<f32> {
-    if !(grid_mm > 0.0) || !(scale > 0.0) {
+    // NaN must be refused too, so test it explicitly rather than with `<=`.
+    if grid_mm.is_nan() || grid_mm <= 0.0 || scale.is_nan() || scale <= 0.0 {
         return None;
     }
     let mut pitch = grid_mm;
