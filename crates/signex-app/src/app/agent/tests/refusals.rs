@@ -68,6 +68,17 @@ fn refusals_logged(start: &str, fragment: &str) -> usize {
         .count()
 }
 
+/// [`refuse_line`] without counting Messages lines: two tests that give the
+/// same reason would count each other's line when they run in one process.
+fn refused_unlogged(app: &mut Signex, text: String, fragment: &str) {
+    let before = held(app);
+    let reply = ask(app, text);
+    assert_eq!(reply["status"], "refused", "{reply}");
+    let reason = reply["reason"].as_str().unwrap_or_default();
+    assert!(reason.contains(fragment), "{reply}");
+    assert_eq!(held(app), before, "{fragment} changed something");
+}
+
 fn refuse_line(app: &mut Signex, text: String, named: &str, fragment: &str) -> Value {
     refused_with(app, Input::Line(text), named, fragment)
 }
@@ -362,12 +373,7 @@ fn closing_a_sheet_the_person_is_typing_the_title_block_of_is_refused_and_the_dr
         "close_active_document",
         json!({"document": doc("a.snxsch")}),
     );
-    refuse_line(
-        &mut app,
-        request,
-        "`close_active_document`",
-        "the person is editing this sheet's title block",
-    );
+    refused_unlogged(&mut app, request, "the person is editing this sheet's");
     assert_eq!(app.document_state.drafts.title_blocks().len(), 1);
     assert!(
         app.document_state
@@ -389,12 +395,7 @@ fn closing_a_sheet_the_person_is_typing_a_paper_edge_of_is_refused_and_the_draft
         "close_active_document",
         json!({"document": doc("a.snxsch")}),
     );
-    refuse_line(
-        &mut app,
-        request,
-        "`close_active_document`",
-        "or page settings",
-    );
+    refused_unlogged(&mut app, request, "or page settings");
     assert_eq!(
         app.document_state
             .drafts
