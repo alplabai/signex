@@ -35,7 +35,15 @@ fn part_units<'a>(
         .filter(|s| !s.is_power && paths.iter().any(|p| s.designator_in(p) == designator))
         .collect();
     let Some(first_lib) = units.first().map(|s| s.lib_id.as_str()) else {
-        return Err(format!("no part `{designator}` on this sheet"));
+        let is_power_port = sheet
+            .symbols
+            .iter()
+            .any(|s| s.is_power && paths.iter().any(|p| s.designator_in(p) == designator));
+        return Err(if is_power_port {
+            format!("`{designator}` is a power port, not a part")
+        } else {
+            format!("no part `{designator}` on this sheet")
+        });
     };
     let one_lib = units.iter().all(|s| s.lib_id == first_lib);
     units.sort_by_key(|s| s.unit);
@@ -76,7 +84,7 @@ pub(super) fn pins_of(
                 "electrical_type": lp.pin.direction,
                 "hidden": !lp.pin.visible,
                 "unit": sym.unit,
-                "shared": lp.unit == 0,
+                "shared": lp.unit == 0 && lib.unit_count() > 1,
                 "position": [tip.x, tip.y],
             }));
         }
@@ -105,7 +113,12 @@ impl Signex {
                 );
             }
         };
-        let mut paths = self.instance_paths_of(&entry);
+        let mut paths = self.instance_paths_of(&entry).ok_or_else(|| {
+            "the project's sheet hierarchy is not read yet, so the designators of this sheet \
+             are not known; ask again once the project has loaded"
+                .to_string()
+        })?;
+        // A sheet no walk reaches is named at the root, as its own netlist is.
         if paths.is_empty() {
             paths.push(InstancePath::root());
         }

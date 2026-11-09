@@ -107,7 +107,8 @@ fn render() -> String {
          `query_pins` are read-only queries that answer with data\n\
          (`CommandOutcome::Answered`); `find` is still the Find dialog.\n\
          `query_pins document=<doc> designator=<ref>` lists the pins of a part on\n\
-         one sheet: number, name, electrical type, hidden, unit and the tip in mm.\n\
+         one sheet: number, name, electrical type, hidden, unit, shared and the tip\n\
+         in mm.\n\
          Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).\n",
     );
 

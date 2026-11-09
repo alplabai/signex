@@ -81,6 +81,7 @@ pub(in crate::app) fn pin_sheet() -> SchematicSheet {
                 in_body(lib_pin("A", 0, 1.0, true), 0),
                 in_body(lib_pin("N", 0, 2.0, true), 1),
                 in_body(lib_pin("D", 0, 3.0, true), 2),
+                in_body(lib_pin("Y", 2, 4.0, true), 0),
             ],
         ),
         (
@@ -107,7 +108,10 @@ pub(in crate::app) fn pin_sheet() -> SchematicSheet {
     r5.instances = vec![instance(&InstancePath::root(), "R7")];
     let mut u4_alternate = part("U4", "DM", 2, (210.0, 0.0));
     u4_alternate.body_style = BodyStyle::Alternate;
+    let mut port = part("#PWR01", "R", 1, (500.0, 0.0));
+    port.is_power = true;
     sheet.symbols = vec![
+        port,
         r1,
         r2,
         r5,
@@ -182,7 +186,7 @@ fn a_rotated_resistor_lists_its_tips_where_the_canvas_hit_test_finds_them() {
     assert_eq!(pins[0]["electrical_type"], "passive");
     assert_eq!(pins[0]["hidden"], false);
     assert_eq!(pins[0]["unit"], 1);
-    assert_eq!(pins[0]["shared"], true);
+    assert_eq!(pins[0]["shared"], false, "a one-unit part shares nothing");
     assert_tip(&pins[0], 50.0, 52.54);
     assert_tip(&pins[1], 50.0, 47.46);
     assert_snaps(&app, &pins);
@@ -248,6 +252,7 @@ fn a_shared_pin_is_listed_for_a_unit_on_the_other_body() {
             entry("N", 1, true),
             entry("A", 2, true),
             entry("D", 2, true),
+            entry("Y", 2, false),
         ]
     );
     assert_snaps(&app, &pins);
@@ -287,6 +292,49 @@ fn the_designator_is_the_one_an_instance_entry_gives_at_the_root() {
     assert!(reason.contains("no part `R5`"), "{reason}");
 }
 
+/// `top` places `child` twice; the child's one part is R1 at the first
+/// placement and R101 at the second. `child` is not open: the query reads it
+/// for the answer, as a headless run does.
+#[test]
+fn a_project_sheet_placed_twice_answers_each_placements_designator() {
+    use crate::app::handlers::menu::export::tests::current_placement::placed_twice_listing;
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_twice_listing(&dir, &["top.snxsch", "child.snxsch"]);
+    let command = AppCommandId::new("query_pins").unwrap();
+    let operands = [
+        format!("document={}", child.display()),
+        "designator=R1".into(),
+    ];
+    let args = CommandArgs::parse_operands(&command, &[&operands[0], &operands[1]]).unwrap();
+    // Before the project's hierarchy is read the designators are unknown:
+    // refused, not guessed from the root path.
+    match app.run_query_headless(&command, &args).expect("a query").0 {
+        CommandOutcome::Disabled { reason } => assert!(reason.contains("hierarchy"), "{reason}"),
+        other => panic!("was not refused: {other:?}"),
+    }
+    crate::app::runtime::sheet_tree_tests::settle(&mut app, true);
+    let mut ask = |designator: &str| {
+        let operands = [
+            format!("document={}", child.display()),
+            format!("designator={designator}"),
+        ];
+        let args = CommandArgs::parse_operands(&command, &[&operands[0], &operands[1]]).unwrap();
+        app.run_query_headless(&command, &args).expect("a query").0
+    };
+    let answered = |outcome| match outcome {
+        CommandOutcome::Answered(value) => value["pins"].clone(),
+        other => panic!("was not answered: {other:?}"),
+    };
+    let (first, second) = (answered(ask("R1")), answered(ask("R101")));
+    assert_eq!(first.as_array().unwrap().len(), 1, "{first}");
+    assert_eq!(first, second, "one sheet, one set of tips");
+    match ask("R201") {
+        CommandOutcome::Disabled { reason } => assert!(reason.contains("no part"), "{reason}"),
+        other => panic!("was not refused: {other:?}"),
+    }
+}
+
 #[test]
 fn a_reused_sheet_answers_each_placements_designator_with_the_same_tips() {
     let (first, second) = (
@@ -317,6 +365,7 @@ fn what_cannot_be_named_is_refused_with_the_reason() {
         ("U2", "ambiguous"),
         ("U3", "ambiguous"),
         ("R?", "not annotated"),
+        ("#PWR01", "power port"),
     ] {
         let operands = on(designator);
         let reason = refusal(&mut app, &[&operands[0], &operands[1]]);

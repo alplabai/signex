@@ -34,7 +34,8 @@ keybinding call has no operands and keeps the active document.
 `query_pins` are read-only queries that answer with data
 (`CommandOutcome::Answered`); `find` is still the Find dialog.
 `query_pins document=<doc> designator=<ref>` lists the pins of a part on
-one sheet: number, name, electrical type, hidden, unit and the tip in mm.
+one sheet: number, name, electrical type, hidden, unit, shared and the tip
+in mm.
 Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## General
