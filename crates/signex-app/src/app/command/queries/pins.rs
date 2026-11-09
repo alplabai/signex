@@ -9,13 +9,13 @@
 //! unit that is not placed is not listed.
 
 use serde_json::{Value, json};
-use signex_types::schematic::{InstancePath, SchematicSheet, Symbol, pin_tips};
+use signex_types::schematic::{InstancePath, Pin, Point, SchematicSheet, Symbol, pin_tips};
 
 use super::{Answer, text_operand};
 use crate::app::Signex;
 use crate::app::command::CommandArgs;
 use crate::app::document::DocumentKey;
-use crate::app::document_ids::DocumentKind;
+use crate::app::document_ids::{DocumentEntry, DocumentKind};
 
 /// The placed units of the one part `designator` names on `sheet` at any of
 /// `paths`, by unit.
@@ -72,14 +72,8 @@ pub(super) fn pins_of(
             .resolve_lib_symbol(sym)
             .ok_or_else(|| format!("the library symbol `{}` is not in this sheet", sym.lib_id))?;
         for (lp, tip) in pin_tips(&lib, sym) {
-            // The pin id ERC and the netlist use: the number, else the name.
-            let number = if lp.pin.number.is_empty() {
-                &lp.pin.name
-            } else {
-                &lp.pin.number
-            };
             pins.push(json!({
-                "number": number,
+                "number": pin_id(&lp.pin),
                 "name": lp.pin.name,
                 "electrical_type": lp.pin.direction,
                 "hidden": !lp.pin.visible,
@@ -92,7 +86,171 @@ pub(super) fn pins_of(
     Ok(pins)
 }
 
+/// One pin of a placed unit, as a reference to it reads it.
+struct PlacedPin {
+    id: String,
+    name: String,
+    visible: bool,
+    tip: Point,
+}
+
+/// The tip of pin `pin` of the part `designator` names on `sheet`. `pin` is a
+/// pin id (number, else name) matched exactly, else a pin name that only one
+/// pin of the placed units has. Refused, with the reason, for what is not one
+/// tip on this sheet: see "Pin references" in `docs/CLI.md`.
+pub(in crate::app::command) fn pin_tip_of(
+    sheet: &SchematicSheet,
+    designator: &str,
+    pin: &str,
+    paths: &[InstancePath],
+) -> Result<Point, String> {
+    let units = part_units(sheet, designator, paths)?;
+    let mut placed = Vec::new();
+    for sym in &units {
+        let lib = sheet
+            .resolve_lib_symbol(sym)
+            .ok_or_else(|| format!("the library symbol `{}` is not in this sheet", sym.lib_id))?;
+        for (lp, tip) in pin_tips(&lib, sym) {
+            placed.push(PlacedPin {
+                id: pin_id(&lp.pin).to_string(),
+                name: lp.pin.name.clone(),
+                visible: lp.pin.visible,
+                tip,
+            });
+        }
+    }
+    let by_id: Vec<&PlacedPin> = placed.iter().filter(|p| p.id == pin).collect();
+    let found = if by_id.is_empty() {
+        by_id_or_name(&placed, designator, pin)?
+    } else {
+        by_id
+    };
+    let Some(first) = found.first() else {
+        return Err(not_placed_or_missing(sheet, &units, designator, pin));
+    };
+    if !first.visible {
+        return Err(format!(
+            "pin `{pin}` of `{designator}` is hidden, so no wire can attach to it"
+        ));
+    }
+    if let [_, _, ..] = found.as_slice() {
+        let tips: Vec<String> = found
+            .iter()
+            .map(|p| format!("{},{}", p.tip.x, p.tip.y))
+            .collect();
+        return Err(format!(
+            "pin `{pin}` of `{designator}` is shared by every unit and several units are placed, so it has several tips ({}); name a point instead",
+            tips.join(" and ")
+        ));
+    }
+    Ok(first.tip)
+}
+
+/// The pins whose name is `pin`, when they are one pin (a shared pin shows at
+/// each placed unit); several different pins are ambiguous.
+fn by_id_or_name<'a>(
+    placed: &'a [PlacedPin],
+    designator: &str,
+    pin: &str,
+) -> Result<Vec<&'a PlacedPin>, String> {
+    let named: Vec<&PlacedPin> = placed.iter().filter(|p| p.name == pin).collect();
+    let mut ids: Vec<&str> = named.iter().map(|p| p.id.as_str()).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    if ids.len() > 1 {
+        return Err(format!(
+            "pin name `{pin}` of `{designator}` matches several pins ({}); use the pin number",
+            ids.join(", ")
+        ));
+    }
+    Ok(named)
+}
+
+/// Why no placed pin matched: it is on a unit this sheet does not place, or
+/// the part has no such pin.
+fn not_placed_or_missing(
+    sheet: &SchematicSheet,
+    units: &[&Symbol],
+    designator: &str,
+    pin: &str,
+) -> String {
+    let elsewhere = units
+        .first()
+        .and_then(|sym| sheet.resolve_lib_symbol(sym))
+        .and_then(|lib| {
+            lib.pins
+                .iter()
+                .find(|lp| pin_id(&lp.pin) == pin || lp.pin.name == pin)
+                .map(|lp| lp.unit)
+        });
+    match elsewhere {
+        Some(unit) => format!(
+            "pin `{pin}` of `{designator}` belongs to unit {unit}, which is not placed on this sheet (or is not in its body style)"
+        ),
+        None => format!("`{designator}` has no pin `{pin}`"),
+    }
+}
+
+/// The pin id ERC and the netlist use: the number, else the name.
+fn pin_id(pin: &Pin) -> &str {
+    if pin.number.is_empty() {
+        &pin.name
+    } else {
+        &pin.number
+    }
+}
+
+/// The refusal for a sheet hierarchy a re-read is replacing: a designator is
+/// only known per instance path, and the paths are about to change.
+const HIERARCHY_BEING_READ: &str = "the project's sheet hierarchy is being re-read; ask again";
+
 impl Signex {
+    /// The instance paths `entry`'s sheet is placed at, for naming its parts:
+    /// refused while the project's hierarchy is unread or being re-read. A
+    /// sheet no walk reaches is named at the root, as its own netlist is.
+    pub(in crate::app::command) fn pin_instance_paths(
+        &self,
+        entry: &DocumentEntry,
+    ) -> Result<Vec<InstancePath>, String> {
+        let docs = &self.document_state;
+        let project = entry
+            .project
+            .as_ref()
+            .and_then(|named| docs.projects.iter().find(|p| p.path == named.path));
+        if project.is_some_and(|p| docs.project_fs.hierarchy_current(p.id) == Some(false)) {
+            return Err(HIERARCHY_BEING_READ.to_string());
+        }
+        let mut paths = self.instance_paths_of(entry).ok_or_else(|| {
+            "the project's sheet hierarchy is not read yet, so the designators of this sheet \
+             are not known; ask again once the project has loaded"
+                .to_string()
+        })?;
+        if paths.is_empty() {
+            paths.push(InstancePath::root());
+        }
+        Ok(paths)
+    }
+
+    /// The tip of `designator.pin` on the sheet an edit acts on (the agent's
+    /// target, else the active sheet), never on whichever tab is showing.
+    pub(in crate::app::command) fn pin_ref_tip(
+        &self,
+        designator: &str,
+        pin: &str,
+    ) -> Result<Point, String> {
+        let docs = &self.document_state;
+        let (Some(path), Some(engine)) = (docs.edit_path(), docs.edit_engine()) else {
+            return Err("no schematic is open".to_string());
+        };
+        let entry = self
+            .document_entries()
+            .into_iter()
+            .find(|e| matches!(&e.key, Some(DocumentKey::Schematic(p)) if p == path))
+            .ok_or("the sheet is not one this session lists")?;
+        let paths = self.pin_instance_paths(&entry)?;
+        pin_tip_of(engine.document(), designator, pin, &paths)
+    }
+
     /// `query_pins document=<doc> designator=<ref>`.
     pub(super) fn query_pins(&self, args: &CommandArgs) -> Answer {
         let entry = self.document_operand(args)?;
@@ -113,15 +271,7 @@ impl Signex {
                 );
             }
         };
-        let mut paths = self.instance_paths_of(&entry).ok_or_else(|| {
-            "the project's sheet hierarchy is not read yet, so the designators of this sheet \
-             are not known; ask again once the project has loaded"
-                .to_string()
-        })?;
-        // A sheet no walk reaches is named at the root, as its own netlist is.
-        if paths.is_empty() {
-            paths.push(InstancePath::root());
-        }
+        let paths = self.pin_instance_paths(&entry)?;
         let pins = pins_of(sheet, designator, &paths)?;
         Ok(json!({ "designator": designator, "count": pins.len(), "pins": pins }))
     }

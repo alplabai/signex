@@ -125,7 +125,7 @@ pub(in crate::app::command) fn apply_edits(app: &mut Signex, args: &CommandArgs)
     if edits.is_empty() {
         return (
             CommandOutcome::Answered(
-                json!({"changed": false, "revision": engine.revision(), "group": null, "edits": 0}),
+                json!({"changed": false, "revision": engine.revision(), "group": null, "edits": 0, "results": []}),
             ),
             Task::none(),
         );
@@ -154,10 +154,19 @@ fn run_listed(app: &mut Signex, path: &std::path::Path, edits: &[Prepared], labe
     app.document_state.agent_edits.target = Some(path.to_path_buf());
     app.document_state.agent_edits.owed = RenderInvalidation::NONE;
     let mut tasks = Vec::new();
+    // What each edit answered, by index; `null` for one that only ran.
+    let mut results = Vec::new();
     let mut failure = None;
     for (index, edit) in edits.iter().enumerate() {
         match (edit.handler)(app, &edit.args) {
-            (CommandOutcome::Ran, task) => tasks.push(task),
+            (CommandOutcome::Ran, task) => {
+                tasks.push(task);
+                results.push(serde_json::Value::Null);
+            }
+            (CommandOutcome::Answered(answer), task) => {
+                tasks.push(task);
+                results.push(answer);
+            }
             (CommandOutcome::Disabled { reason }, _) => {
                 failure = Some(format!(
                     "edit {} (`{}`): {reason}",
@@ -217,9 +226,9 @@ fn run_listed(app: &mut Signex, path: &std::path::Path, edits: &[Prepared], labe
                 .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
             group.get()
         ));
-        json!({"changed": true, "revision": revision, "group": group.get(), "label": label, "edits": count})
+        json!({"changed": true, "revision": revision, "group": group.get(), "label": label, "edits": count, "results": results})
     } else {
-        json!({"changed": false, "revision": revision, "group": null, "edits": count})
+        json!({"changed": false, "revision": revision, "group": null, "edits": count, "results": results})
     };
     (CommandOutcome::Answered(answer), Task::batch(tasks))
 }

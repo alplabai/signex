@@ -31,6 +31,7 @@ pub(crate) use place_label::GLOBAL_PORT_SHAPE;
 mod place_point;
 mod place_text;
 mod place_wire;
+pub(crate) use place_wire::{bus_commands, wire_commands};
 mod shape_tool;
 #[cfg(test)]
 mod shape_tool_tests;

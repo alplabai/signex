@@ -155,6 +155,48 @@ fn app_idle() -> Signex {
     app
 }
 
+/// #2199: a wire edit answers its report, which `apply_edits` carries in
+/// `results` by edit index (`null` for an edit that only ran); a dry run among
+/// the edits changes nothing, and a refused wire refuses the whole list.
+#[test]
+fn a_wire_edit_answers_its_report_in_results_and_a_refused_one_rolls_the_list_back() {
+    let mut app = app_idle();
+    let edits = json!([
+        {"id": "place_junction", "args": {"at": [20, 20]}},
+        {"id": "place_wire", "args": {"start": [26, 26], "end": [28, 26], "allow_open": true}},
+        {"id": "place_wire", "args": {"start": [26, 40], "end": [28, 40], "allow_open": true, "dry_run": true}},
+    ]);
+    let before = shape(&app, "b.snxsch");
+    let answer = applied(&mut app, "b.snxsch", edits);
+    let results = answer["results"].as_array().expect("results");
+    assert_eq!(results.len(), 3);
+    assert_eq!(results[0], Value::Null);
+    assert_eq!(results[1]["dry_run"], false);
+    assert_eq!(results[1]["segments"], json!([[26.0, 26.0, 28.0, 26.0]]));
+    assert_eq!(results[2]["dry_run"], true);
+    let after = shape(&app, "b.snxsch");
+    assert!(after.contains("W 26.000,26.000 28.000,26.000"), "{after}");
+    assert!(
+        !after.contains("W 26.000,40.000"),
+        "the dry run placed nothing: {after}"
+    );
+    assert_ne!(before, after);
+
+    // An open end without `allow_open` refuses the list; nothing of it stays.
+    let kept = state(&app, "b.snxsch");
+    let refused = refusal(apply(
+        &mut app,
+        "b.snxsch",
+        json!([
+            {"id": "place_junction", "args": {"at": [30, 30]}},
+            {"id": "place_wire", "args": {"start": [34, 34], "end": [36, 34]}},
+        ]),
+    ));
+    assert!(refused.contains("edit 2 (`place_wire`)"), "{refused}");
+    assert!(refused.contains("nothing to connect to"), "{refused}");
+    assert_eq!(state(&app, "b.snxsch"), kept);
+}
+
 #[test]
 fn one_undo_reverts_exactly_the_batch() {
     let mut app = app_at_work();
@@ -429,8 +471,8 @@ fn an_agent_deleting_the_selected_wire_drops_it_from_the_selection() {
         &mut app,
         "b.snxsch",
         json!([
-            {"id": "place_wire", "args": {"start": [20, 20], "end": [30, 20]}},
-            {"id": "place_wire", "args": {"start": [40, 20], "end": [50, 20]}},
+            {"id": "place_wire", "args": {"start": [20, 20], "end": [30, 20], "allow_open": true}},
+            {"id": "place_wire", "args": {"start": [40, 20], "end": [50, 20], "allow_open": true}},
         ]),
     );
     let newer = {
@@ -599,7 +641,7 @@ fn the_agent_gets_no_undo_through_the_headless_undo_of_its_own_step() {
 fn a_batch_equals_the_same_edits_made_one_by_one_through_the_same_ids() {
     let edits = json!([
         {"id": "place_junction", "args": {"at": [20, 20]}},
-        {"id": "place_wire", "args": {"start": [20, 20], "end": [30, 20]}},
+        {"id": "place_wire", "args": {"start": [20, 20], "end": [30, 20], "allow_open": true}},
         {"id": "place_net_label", "args": {"at": [24, 24], "text": "AGENT", "rotation": 90}},
         {"id": "place_power_symbol", "args": {"at": [26, 26], "net_name": "VCC", "lib_id": "power:VCC"}},
         {"id": "draw_rectangle", "args": {"start": [40, 40], "end": [50, 45]}},
@@ -624,10 +666,12 @@ fn a_batch_equals_the_same_edits_made_one_by_one_through_the_same_ids() {
             })
             .collect();
         let name = edit["id"].as_str().unwrap();
-        assert_eq!(
-            run(&mut one_by_one, name, &operands),
-            CommandOutcome::Ran,
-            "{name}"
+        // A wire run answers its report; every other edit here only runs.
+        let outcome = run(&mut one_by_one, name, &operands);
+        assert!(
+            outcome == CommandOutcome::Ran
+                || (name == "place_wire" && matches!(outcome, CommandOutcome::Answered(_))),
+            "{name}: {outcome:?}"
         );
     }
     assert_eq!(shape(&batch, "a.snxsch"), shape(&one_by_one, "a.snxsch"));
@@ -777,7 +821,7 @@ fn a_wire_edit_snaps_to_the_target_sheets_hotspots() {
         apply(
             &mut app,
             "a.snxsch",
-            json!([{"id": "place_wire", "args": {"start": [50, 50], "end": [60, 50]}}])
+            json!([{"id": "place_wire", "args": {"start": [50, 50], "end": [60, 50], "allow_open": true}}])
         ),
         CommandOutcome::Answered(_)
     ));

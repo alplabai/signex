@@ -7,6 +7,37 @@ use signex_types::schematic::{Bus, BusEntry, Point, Wire};
 use super::super::super::helpers::constrain_segments;
 use super::super::super::*;
 
+/// The commands that place `segments` as wires: one per segment.
+pub(crate) fn wire_commands(segments: &[(Point, Point)]) -> Vec<signex_engine::Command> {
+    segments
+        .iter()
+        .map(|seg| signex_engine::Command::PlaceWireSegment {
+            wire: Wire {
+                unknown_columns: Default::default(),
+                uuid: uuid::Uuid::now_v7(),
+                start: seg.0,
+                end: seg.1,
+                stroke_width: 0.0,
+                locked: false,
+            },
+        })
+        .collect()
+}
+
+/// [`wire_commands`] for a bus.
+pub(crate) fn bus_commands(segments: &[(Point, Point)]) -> Vec<signex_engine::Command> {
+    segments
+        .iter()
+        .map(|seg| signex_engine::Command::PlaceBus {
+            bus: Bus {
+                uuid: uuid::Uuid::now_v7(),
+                start: seg.0,
+                end: seg.1,
+            },
+        })
+        .collect()
+}
+
 impl Signex {
     /// Place wire segments from `start` to `end`, both already snapped, bent
     /// as `mode` routes them. The point the last segment ends on, which the
@@ -18,19 +49,7 @@ impl Signex {
         mode: DrawMode,
     ) -> (Point, bool) {
         let segments = constrain_segments(start, end, mode);
-        let commands: Vec<_> = segments
-            .iter()
-            .map(|seg| signex_engine::Command::PlaceWireSegment {
-                wire: Wire {
-                    unknown_columns: Default::default(),
-                    uuid: uuid::Uuid::now_v7(),
-                    start: seg.0,
-                    end: seg.1,
-                    stroke_width: 0.0,
-                    locked: false,
-                },
-            })
-            .collect();
+        let commands = wire_commands(&segments);
         let changed = !commands.is_empty() && self.apply_engine_commands(commands, false, false);
         (segments.last().map(|s| s.1).unwrap_or(end), changed)
     }
@@ -43,16 +62,7 @@ impl Signex {
         mode: DrawMode,
     ) -> (Point, bool) {
         let segments = constrain_segments(start, end, mode);
-        let commands: Vec<_> = segments
-            .iter()
-            .map(|seg| signex_engine::Command::PlaceBus {
-                bus: Bus {
-                    uuid: uuid::Uuid::now_v7(),
-                    start: seg.0,
-                    end: seg.1,
-                },
-            })
-            .collect();
+        let commands = bus_commands(&segments);
         let changed = !commands.is_empty() && self.apply_engine_commands(commands, false, false);
         (segments.last().map(|s| s.1).unwrap_or(end), changed)
     }

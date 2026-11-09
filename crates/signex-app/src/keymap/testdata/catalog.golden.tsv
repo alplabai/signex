@@ -124,7 +124,7 @@ next_sheet	navigation	Next sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui
 open_child_sheet	navigation	Open the selected sheet symbol's child sheet	Open Child Sheet	Schematic	-	-	RequiresSelection	gui_only	-
 open_components_panel	panels	Open Components panel / place components	Component...	Schematic	-	-	Always	gui_only	-
 open_net_color_palette	view	Open net color palette	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
-place_bus	place	Draw bus	Bus	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm
+place_bus	place	Draw bus	Bus	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_open:bool?,dry_run:bool?
 place_compile_mask	place	Place Compile Mask directive	Compile Mask	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_design_block	place	Place design block	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_global_label	place	Place global label	Global Label	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,rotation:angle/deg?
@@ -137,7 +137,7 @@ place_no_erc	place	Place Generic No ERC directive	Generic No ERC	Schematic	-	-	R
 place_power_symbol	place	Place power symbol	Power Port	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,net_name:text,lib_id:text
 place_symbol	place	Place symbol	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_text	place	Place text	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text
-place_wire	place	Place wire	Wire	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm
+place_wire	place	Place wire	Wire	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_merge:bool?,allow_open:bool?,dry_run:bool?
 place_wire_to_bus_entry	place	Place wire-to-bus entry	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 previous_highlighted_net_item	select	Previous item on highlighted net	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 previous_sheet	navigation	Previous sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
@@ -179,8 +179,8 @@ align_bottom	modify	Align bottom	Align Bottom	Schematic	-	-	RequiresSelection	mu
 align_vertical_centers	modify	Align vertical centers	Align Vertical Centers	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
 distribute_vertically	modify	Distribute vertically	Distribute Vertically	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
 align_to_grid	modify	Align to grid	Align To Grid	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
-draw_wire	place	Draw wire	Wire	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm
-draw_bus	place	Draw bus	Bus	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm
+draw_wire	place	Draw wire	Wire	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_merge:bool?,allow_open:bool?,dry_run:bool?
+draw_bus	place	Draw bus	Bus	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_open:bool?,dry_run:bool?
 place_bus_entry	place	Place bus entry	Bus Entry	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_signal_harness	place	Place signal harness	Signal Harness	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_harness_connector	place	Place harness connector	Harness Connector	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-

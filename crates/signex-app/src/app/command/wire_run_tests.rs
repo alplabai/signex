@@ -1,0 +1,559 @@
+//! #2199 — a wire or bus run from operands: pin references, the intent check
+//! and the geometry rules, the escapes, the dry run, and the click it equals.
+
+use serde_json::{Value, json};
+use signex_types::schematic::{
+    Bus, BusEntry, LabelType, LibGraphic, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle,
+    Point, SchematicSheet, Symbol,
+};
+use uuid::Uuid;
+
+use super::{CommandArgs, CommandOutcome};
+use crate::app::handlers::canvas::placement_tests::{app_with_tool, click, grid, sheet_shape};
+use crate::app::{DrawMode, Signex, Tool};
+use crate::keymap::AppCommandId;
+
+/// A resistor with a 2.54 x 1.016 body and pins 1 and 2 at x = -3.81 and +3.81.
+fn resistor() -> LibSymbol {
+    let mut lib: LibSymbol = serde_json::from_value(json!({ "id": "R" })).unwrap();
+    lib.graphics = vec![LibGraphic {
+        unit: 0,
+        body_style: 1,
+        graphic: signex_types::schematic::Graphic::Rectangle {
+            start: Point::new(-1.27, -0.508),
+            end: Point::new(1.27, 0.508),
+            width: 0.0,
+            fill: signex_types::schematic::FillType::None,
+        },
+    }];
+    let pin = |number: &str, x: f64| LibPin {
+        unit: 0,
+        body_style: 1,
+        pin: Pin {
+            direction: PinDirection::Passive,
+            shape_style: PinShapeStyle::Plain,
+            position: Point::new(x, 0.0),
+            rotation: 0.0,
+            length: 2.54,
+            name: format!("N{number}"),
+            number: number.into(),
+            visible: true,
+            name_visible: true,
+            number_visible: true,
+        },
+    };
+    lib.pins = vec![pin("1", -3.81), pin("2", 3.81)];
+    lib
+}
+
+fn part(reference: &str, at: Point) -> Symbol {
+    Symbol {
+        uuid: Uuid::now_v7(),
+        lib_id: "R".into(),
+        reference: reference.into(),
+        position: at,
+        unit: 1,
+        ..Symbol::default()
+    }
+}
+
+fn wire(a: Point, b: Point) -> signex_types::schematic::Wire {
+    signex_types::schematic::Wire {
+        start: a,
+        end: b,
+        ..Default::default()
+    }
+}
+
+fn label(text: &str, at: Point) -> signex_types::schematic::Label {
+    signex_types::schematic::Label::new(text, at, LabelType::Net)
+}
+
+/// R1 at (12.7, 12.7) with tips (8.89, 12.7) and (16.51, 12.7); C1 at
+/// (38.1, 12.7) with tips (34.29, 12.7) and (41.91, 12.7): all on the grid.
+fn two_parts() -> SchematicSheet {
+    let mut sheet = SchematicSheet::default();
+    sheet.lib_symbols.insert("R".into(), resistor());
+    sheet.symbols = vec![part("R1", grid(10.0, 10.0)), part("C1", grid(30.0, 10.0))];
+    sheet
+}
+
+/// `sheet` as the active sheet of an app with the select tool.
+fn app_with(sheet: SchematicSheet) -> Signex {
+    let mut app = app_with_tool(Tool::Select);
+    let path = app.document_state.active_path.clone().expect("a sheet");
+    app.document_state
+        .engines
+        .insert(path, signex_engine::Engine::new(sheet).expect("engine"));
+    app
+}
+
+fn run(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
+    let id = AppCommandId::new(id).expect("a catalog id");
+    let args = CommandArgs::parse_operands(&id, operands).expect("operands parse");
+    app.run_operands(&id, &args).0
+}
+
+fn answered(outcome: CommandOutcome) -> Value {
+    match outcome {
+        CommandOutcome::Answered(value) => value,
+        other => panic!("not answered: {other:?}"),
+    }
+}
+
+fn refusal(outcome: CommandOutcome) -> String {
+    match outcome {
+        CommandOutcome::Disabled { reason } => reason,
+        other => panic!("not refused: {other:?}"),
+    }
+}
+
+fn document(app: &Signex) -> SchematicSheet {
+    app.document_state
+        .edit_engine()
+        .expect("a sheet")
+        .document()
+        .clone()
+}
+
+/// A refused run changes nothing.
+fn refused_with(app: &mut Signex, id: &str, operands: &[&str], fragment: &str) {
+    let before = serde_json::to_vec(&document(app)).unwrap();
+    let reason = refusal(run(app, id, operands));
+    assert!(reason.contains(fragment), "{id} {operands:?}: {reason}");
+    assert_eq!(
+        serde_json::to_vec(&document(app)).unwrap(),
+        before,
+        "{reason}"
+    );
+}
+
+/// [`sheet_shape`] with every number rounded to a nanometre: a pin tip is the
+/// part's origin plus an offset, the grid point a click lands on is a product,
+/// and the two can differ in the last bit.
+fn nm_shape(app: &Signex) -> Value {
+    fn round(value: &mut Value) {
+        match value {
+            Value::Number(n) if n.is_f64() => {
+                let nm = (n.as_f64().unwrap_or_default() * 1e6).round() / 1e6;
+                *value = json!(nm);
+            }
+            Value::Object(map) => map.values_mut().for_each(round),
+            Value::Array(items) => items.iter_mut().for_each(round),
+            _ => {}
+        }
+    }
+    let mut shape = sheet_shape(app);
+    round(&mut shape);
+    shape
+}
+
+#[test]
+fn a_wire_between_two_pin_references_equals_two_clicks_on_the_tips() {
+    for id in ["place_wire", "draw_wire"] {
+        let mut app = app_with(two_parts());
+        let empty = sheet_shape(&app);
+        let report = answered(run(&mut app, id, &["start=R1.2", "end=C1.1"]));
+        assert_ne!(sheet_shape(&app), empty, "{id} placed nothing");
+
+        // Two clicks on the same tips, which a wire click pulls onto.
+        let mut clicked = app_with(two_parts());
+        clicked.ui_state.snap_hotspots = true;
+        let (a, b) = (
+            clicked.pin_ref_tip("R1", "2").unwrap(),
+            clicked.pin_ref_tip("C1", "1").unwrap(),
+        );
+        let _ = clicked.dispatch_command_reporting(
+            &AppCommandId::new(id).unwrap(),
+            CommandArgs::none(),
+            None,
+        );
+        click(&mut clicked, (a.x, a.y));
+        click(&mut clicked, (b.x, b.y));
+        assert_eq!(nm_shape(&app), nm_shape(&clicked), "{id}");
+
+        assert_eq!(report["dry_run"], false);
+        assert_eq!(report["net"]["pins"], json!(["C1.1", "R1.2"]));
+        assert_eq!(report["merged"], json!([]));
+        let segment = report["segments"][0].as_array().unwrap();
+        let wanted = [a.x, a.y, b.x, b.y];
+        assert!(
+            segment
+                .iter()
+                .zip(wanted)
+                .all(|(got, want)| (got.as_f64().unwrap() - want).abs() < 1e-9),
+            "{segment:?}"
+        );
+    }
+}
+
+#[test]
+fn a_pin_reference_resolves_an_off_grid_tip_that_a_coordinate_is_refused_for() {
+    let mut sheet = two_parts();
+    sheet.symbols.push(part("R3", Point::new(50.1, 30.3)));
+    let mut app = app_with(sheet);
+    // Tip of R3 pin 1: (46.29, 30.3), off the 1.27 grid.
+    refused_with(&mut app, "place_junction", &["at=46.29,30.3"], "grid");
+    let outcome = run(&mut app, "place_junction", &["at=R3.1"]);
+    assert_eq!(outcome, CommandOutcome::Ran);
+    let junction = document(&app).junctions[0].position;
+    assert!((junction.x - 46.29).abs() < 1e-9 && (junction.y - 30.3).abs() < 1e-9);
+    // The label of any point operand takes one as well.
+    let outcome = run(&mut app, "place_net_label", &["at=R3.2", "text=A"]);
+    assert_eq!(outcome, CommandOutcome::Ran);
+}
+
+#[test]
+fn a_pin_reference_that_cannot_be_resolved_is_refused_and_changes_nothing() {
+    let mut app = app_with(two_parts());
+    for (start, fragment) in [
+        ("R9.1", "no part `R9`"),
+        ("R1.7", "no pin `7`"),
+        ("R?.1", "not annotated"),
+    ] {
+        let start = format!("start={start}");
+        refused_with(&mut app, "place_wire", &[&start, "end=C1.1"], fragment);
+    }
+    refused_with(&mut app, "place_wire", &["start=R1.2", "end=C9.1"], "`end`");
+}
+
+#[test]
+fn a_run_with_the_same_pin_at_both_ends_is_refused() {
+    let mut app = app_with(two_parts());
+    refused_with(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=R1.2"],
+        "same point",
+    );
+}
+
+#[test]
+fn a_path_that_touches_another_pin_is_refused_with_the_item_and_its_place() {
+    // R5 stands upright above the run with its pin 1 tip on it, at (25.4, 12.7).
+    let mut sheet = two_parts();
+    let mut r5 = part("R5", Point::new(25.4, 8.89));
+    r5.rotation = 90.0;
+    sheet.symbols.push(r5);
+    // A pin the run only passes over joins nothing: the netlist needs a wire
+    // end or a junction at its tip, so the run is as clean as it was drawn.
+    let mut passing = app_with(sheet.clone());
+    let report = answered(run(&mut passing, "place_wire", &["start=R1.2", "end=C1.1"]));
+    assert_eq!(report["net"]["pins"], json!(["C1.1", "R1.2"]));
+    // With a stub ending on the tip the engine joins it with a junction.
+    sheet
+        .wires
+        .push(wire(Point::new(25.4, 12.7), Point::new(25.4, 11.43)));
+    let mut app = app_with(sheet);
+    let reason = refusal(run(&mut app, "place_wire", &["start=R1.2", "end=C1.1"]));
+    assert!(
+        reason.contains("the wire also touches pin R5.1 at 25.4,"),
+        "{reason}"
+    );
+}
+
+#[test]
+fn a_wire_end_touched_on_the_path_is_named() {
+    let mut sheet = two_parts();
+    sheet.wires.push(wire(grid(18.0, 10.0), grid(18.0, 8.0)));
+    let mut app = app_with(sheet);
+    let reason = refusal(run(&mut app, "place_wire", &["start=R1.2", "end=C1.1"]));
+    assert!(reason.contains("another wire at 22.86,"), "{reason}");
+}
+
+#[test]
+fn a_bend_that_lands_on_a_pin_is_refused() {
+    // The bend of (R1.2 -> (34.29, 25.4)) is at (34.29, 12.7): C1 pin 1.
+    let mut app = app_with(two_parts());
+    refused_with(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=34.29,25.4", "allow_open=true"],
+        "pin C1.1 at 34.29,",
+    );
+}
+
+#[test]
+fn a_label_touched_on_the_path_is_refused() {
+    let mut sheet = two_parts();
+    sheet.labels.push(label("SENSE", grid(20.0, 10.0)));
+    let mut app = app_with(sheet);
+    refused_with(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=C1.1"],
+        "label `SENSE`",
+    );
+}
+
+/// R1.2 and C1.1 on stubs that carry the labels VCC and GND.
+fn two_named_nets() -> SchematicSheet {
+    let mut sheet = two_parts();
+    sheet
+        .wires
+        .push(wire(Point::new(16.51, 12.7), Point::new(16.51, 7.62)));
+    sheet
+        .wires
+        .push(wire(Point::new(34.29, 12.7), Point::new(34.29, 7.62)));
+    sheet.labels.push(label("VCC", Point::new(16.51, 7.62)));
+    sheet.labels.push(label("GND", Point::new(34.29, 7.62)));
+    sheet
+}
+
+#[test]
+fn a_run_between_two_named_nets_is_a_short_unless_allowed() {
+    let mut app = app_with(two_named_nets());
+    refused_with(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=C1.1"],
+        "`VCC` and `GND`",
+    );
+    let before = sheet_shape(&app);
+    let report = answered(run(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=C1.1", "allow_merge=true"],
+    ));
+    assert_ne!(sheet_shape(&app), before);
+    assert_eq!(report["merged"], json!(["VCC", "GND"]));
+}
+
+#[test]
+fn an_end_with_nothing_under_it_is_refused_unless_allowed() {
+    let mut app = app_with(two_parts());
+    refused_with(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=25.4,12.7"],
+        "`end` 25.4,12.7 has nothing to connect to",
+    );
+    refused_with(
+        &mut app,
+        "place_wire",
+        &["start=25.4,25.4", "end=30.48,25.4"],
+        "`start` 25.4,25.4 and `end` 30.48,25.4 have nothing",
+    );
+    let report = answered(run(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=25.4,12.7", "allow_open=true"],
+    ));
+    assert_eq!(report["net"]["pins"], json!(["R1.2"]));
+}
+
+#[test]
+fn a_start_on_a_wire_interior_is_intended_and_joins_that_net() {
+    let mut sheet = two_parts();
+    sheet
+        .wires
+        .push(wire(Point::new(16.51, 12.7), Point::new(34.29, 12.7)));
+    sheet.symbols.push(part("R4", grid(20.0, 20.0)));
+    let mut app = app_with(sheet);
+    // R4.2 tip (29.21, 25.4), straight up to the wire's interior.
+    let report = answered(run(
+        &mut app,
+        "place_wire",
+        &["start=R4.2", "end=29.21,12.7"],
+    ));
+    assert_eq!(report["net"]["pins"], json!(["C1.1", "R1.2", "R4.2"]));
+}
+
+#[test]
+fn only_horizontal_and_vertical_segments_are_placed() {
+    // A 45 degree diagonal for Angle45, any slope for FreeAngle.
+    for (mode, end) in [
+        (DrawMode::Angle45, "end=21.59,17.78"),
+        (DrawMode::FreeAngle, "end=31.75,17.78"),
+    ] {
+        let mut app = app_with(two_parts());
+        app.interaction_state.draw_mode = mode;
+        refused_with(
+            &mut app,
+            "place_wire",
+            &["start=R1.2", end, "allow_open=true"],
+            "only horizontal and vertical",
+        );
+    }
+    // Ortho90 bends the same points into two orthogonal segments.
+    let mut app = app_with(two_parts());
+    let report = answered(run(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=31.75,17.78", "allow_open=true"],
+    ));
+    assert_eq!(report["segments"].as_array().map(Vec::len), Some(2));
+}
+
+#[test]
+fn a_run_through_a_symbol_body_is_refused_even_along_its_own_pins() {
+    let mut app = app_with(two_parts());
+    refused_with(
+        &mut app,
+        "place_wire",
+        &["start=R1.1", "end=R1.2"],
+        "crosses the body of R1",
+    );
+}
+
+#[test]
+fn a_run_along_a_body_edge_does_not_cross_it() {
+    let mut app = app_with(two_parts());
+    // R1's body spans x 11.43..13.97, y 12.192..13.208: the run is on its
+    // left edge, past the pin row.
+    let report = answered(run(
+        &mut app,
+        "place_wire",
+        &["start=11.43,7.62", "end=11.43,17.78", "allow_open=true"],
+    ));
+    assert_eq!(report["segments"].as_array().map(Vec::len), Some(1));
+}
+
+fn bytes_and_state(app: &Signex) -> (Vec<u8>, u64, bool, Option<u64>) {
+    let path = app
+        .document_state
+        .edit_path()
+        .expect("a sheet")
+        .to_path_buf();
+    (
+        serde_json::to_vec(&document(app)).unwrap(),
+        app.document_state.engines[&path].revision(),
+        app.document_state.is_document_dirty(&path),
+        crate::diagnostics::newest_entry_id(),
+    )
+}
+
+#[test]
+fn a_dry_run_reports_and_leaves_the_document_untouched() {
+    for (id, operands) in [
+        ("place_wire", vec!["start=R1.2", "end=C1.1", "dry_run=true"]),
+        (
+            "place_bus",
+            vec![
+                "start=12.7,25.4",
+                "end=25.4,25.4",
+                "dry_run=true",
+                "allow_open=true",
+            ],
+        ),
+    ] {
+        let mut app = app_with(two_parts());
+        let before = bytes_and_state(&app);
+        let report = answered(run(&mut app, id, &operands));
+        assert_eq!(report["dry_run"], true, "{id}");
+        assert!(report["segments"].is_array(), "{id}");
+        assert_eq!(bytes_and_state(&app), before, "{id}");
+        // Nothing to undo: the document is as it was after an undo as well.
+        let _ = app.dispatch_command_reporting(
+            &AppCommandId::new("undo").unwrap(),
+            CommandArgs::none(),
+            None,
+        );
+        assert_eq!(bytes_and_state(&app).0, before.0, "{id}");
+    }
+}
+
+#[test]
+fn a_wire_that_lands_is_one_undo_step_and_marks_the_sheet_dirty() {
+    let mut app = app_with(two_parts());
+    let before = bytes_and_state(&app);
+    let _ = answered(run(&mut app, "place_wire", &["start=R1.2", "end=C1.1"]));
+    let after = bytes_and_state(&app);
+    assert_ne!(after.0, before.0);
+    assert!(after.2, "dirty");
+    let _ = app.dispatch_command_reporting(
+        &AppCommandId::new("undo").unwrap(),
+        CommandArgs::none(),
+        None,
+    );
+    assert_eq!(bytes_and_state(&app).0, before.0);
+}
+
+#[test]
+fn a_dry_run_refuses_what_the_run_would() {
+    let mut app = app_with(two_named_nets());
+    refused_with(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=C1.1", "dry_run=true"],
+        "`VCC` and `GND`",
+    );
+}
+
+/// A bus on y = 25.4 from x = 12.7 to 25.4, with a label on its right end.
+fn with_bus() -> SchematicSheet {
+    let mut sheet = two_parts();
+    sheet.buses.push(Bus {
+        uuid: Uuid::now_v7(),
+        start: Point::new(12.7, 25.4),
+        end: Point::new(25.4, 25.4),
+    });
+    sheet.bus_entries.push(BusEntry {
+        uuid: Uuid::now_v7(),
+        position: Point::new(12.7, 38.1),
+        size: (2.54, 2.54),
+    });
+    sheet.labels.push(label("D[0..7]", Point::new(50.8, 25.4)));
+    sheet
+}
+
+#[test]
+fn a_bus_connects_to_a_bus_an_entry_or_a_label_or_is_refused_open() {
+    let mut app = app_with(with_bus());
+    // A bus's interior to a label, and an entry to a bus's end: nothing is open.
+    for (id, start, end) in [
+        ("place_bus", "19.05,25.4", "50.8,25.4"),
+        ("draw_bus", "12.7,38.1", "12.7,25.4"),
+    ] {
+        let (start, end) = (format!("start={start}"), format!("end={end}"));
+        let report = answered(run(&mut app, id, &[&start, &end]));
+        assert!(report["segments"].is_array(), "{id}");
+        assert!(report.get("net").is_none(), "a bus has no net diff");
+    }
+    refused_with(
+        &mut app,
+        "place_bus",
+        &["start=63.5,25.4", "end=63.5,38.1"],
+        "have nothing to connect to (a bus, bus entry or label)",
+    );
+    let outcome = run(
+        &mut app,
+        "place_bus",
+        &["start=63.5,25.4", "end=63.5,38.1", "allow_open=true"],
+    );
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+}
+
+#[test]
+fn a_bus_takes_no_pin_reference_and_keeps_the_geometry_rules() {
+    let mut app = app_with(with_bus());
+    refused_with(
+        &mut app,
+        "place_bus",
+        &["start=R1.2", "end=25.4,25.4"],
+        "a bus does not connect to pins",
+    );
+    refused_with(
+        &mut app,
+        "draw_bus",
+        &["start=12.7,25.4", "end=C1.1", "allow_open=true"],
+        "a bus does not connect to pins",
+    );
+    app.interaction_state.draw_mode = DrawMode::FreeAngle;
+    refused_with(
+        &mut app,
+        "place_bus",
+        &["start=12.7,25.4", "end=25.4,38.1", "allow_open=true"],
+        "only horizontal and vertical",
+    );
+    app.interaction_state.draw_mode = DrawMode::Ortho90;
+    refused_with(
+        &mut app,
+        "place_bus",
+        &["start=5.08,12.7", "end=20.32,12.7", "allow_open=true"],
+        "crosses the body of R1",
+    );
+}

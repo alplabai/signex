@@ -78,6 +78,9 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("project", OperandKind::Text),
     ("name", OperandKind::Text),
     ("dirty", OperandKind::Bool),
+    ("allow_merge", OperandKind::Bool),
+    ("allow_open", OperandKind::Bool),
+    ("dry_run", OperandKind::Bool),
     ("designator", OperandKind::Text),
     ("value", OperandKind::Text),
     ("net", OperandKind::Text),
@@ -115,6 +118,23 @@ pub const AT: &[Operand] = &[required("at", OperandKind::Point)];
 pub const SEGMENT: &[Operand] = &[
     required("start", OperandKind::Point),
     required("end", OperandKind::Point),
+];
+/// A wire run, checked against the sheet before it lands (#2199): `allow_merge`
+/// lets it join two differently named nets, `allow_open` leaves an end
+/// unconnected, `dry_run` reports without changing anything.
+pub const WIRE: &[Operand] = &[
+    required("start", OperandKind::Point),
+    required("end", OperandKind::Point),
+    optional("allow_merge", OperandKind::Bool),
+    optional("allow_open", OperandKind::Bool),
+    optional("dry_run", OperandKind::Bool),
+];
+/// A bus run: as [`WIRE`], without a net to merge.
+pub const BUS: &[Operand] = &[
+    required("start", OperandKind::Point),
+    required("end", OperandKind::Point),
+    optional("allow_open", OperandKind::Bool),
+    optional("dry_run", OperandKind::Bool),
 ];
 /// A label: its text at a point.
 pub const LABEL: &[Operand] = &[

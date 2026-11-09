@@ -6,10 +6,13 @@
 //! shape anchor.
 //!
 //! The points are explicit input in mm and are not snapped: one a click would
-//! snap elsewhere is refused, so nothing lands off the grid silently. What the
-//! operands do not name comes from the pre-placement form and the project
-//! defaults, as for a click; that includes the wire draw mode, so a diagonal
-//! wire or bus bends as a click-drawn one does.
+//! snap elsewhere is refused, so nothing lands off the grid silently. A point
+//! may instead be a pin reference, `R1.2`, which is the pin's tip on the sheet
+//! the edit targets, on or off the grid (#2199). What the operands do not name
+//! comes from the pre-placement form and the project defaults, as for a click;
+//! that includes the wire draw mode, so a diagonal wire or bus bends as a
+//! click-drawn one does. Wires and buses are checked before they land and
+//! answer with a report (`wire_runs`).
 
 use iced::Task;
 use signex_types::schematic::{LabelType, Point};
@@ -44,7 +47,7 @@ fn run(app: &mut Signex, args: &CommandArgs, placement: Placement) -> Ran {
         CommandOutcome::disabled(reason)
     } else {
         match app.place_from_operands(placement, args) {
-            Ok(()) => CommandOutcome::Ran,
+            Ok(outcome) => outcome,
             Err(reason) => CommandOutcome::disabled(reason),
         }
     };
@@ -138,16 +141,23 @@ impl Signex {
         self.point_where_a_click_lands(args, name, Self::snap_to_grid)
     }
 
-    /// The point operand `name`, refused unless `snap` (what the click of
-    /// the same tool applies) leaves it where it is.
+    /// The point operand `name`: a pin reference is that pin's tip, wherever
+    /// it is; a coordinate is refused unless `snap` (what the click of the
+    /// same tool applies) leaves it where it is.
     fn point_where_a_click_lands(
         &self,
         args: &CommandArgs,
         name: &str,
         snap: fn(&Self, f64, f64) -> (f64, f64),
     ) -> Result<Point, String> {
-        let Some(OperandValue::Point(x, y)) = args.operand(name) else {
-            return Err(format!("operand `{name}` is missing"));
+        let (x, y) = match args.operand(name) {
+            Some(OperandValue::Point(x, y)) => (x, y),
+            Some(OperandValue::PinRef { designator, pin }) => {
+                return self
+                    .pin_ref_tip(designator, pin)
+                    .map_err(|why| format!("`{name}`: {why}"));
+            }
+            _ => return Err(format!("operand `{name}` is missing")),
         };
         let (sx, sy) = snap(self, *x, *y);
         let nm = |mm: f64| (mm * 1e6).round() as i64;
@@ -163,6 +173,20 @@ impl Signex {
     }
 
     fn place_from_operands(
+        &mut self,
+        placement: Placement,
+        args: &CommandArgs,
+    ) -> Result<CommandOutcome, String> {
+        if let Placement::Wire | Placement::Bus | Placement::Line | Placement::Rectangle = placement
+        {
+            return self.place_segment_from_operands(placement, args);
+        }
+        self.place_at_from_operands(placement, args)
+            .map(|()| CommandOutcome::Ran)
+    }
+
+    /// The placements at one point.
+    fn place_at_from_operands(
         &mut self,
         placement: Placement,
         args: &CommandArgs,
@@ -200,7 +224,7 @@ impl Signex {
                 placed(self.place_text_at(self.grid_point(args, "at")?, text(args, "text")?))
             }
             Placement::Wire | Placement::Bus | Placement::Line | Placement::Rectangle => {
-                self.place_segment_from_operands(placement, args)
+                Err("a segment placement is not a point placement".to_string())
             }
         }
     }
@@ -209,7 +233,17 @@ impl Signex {
         &mut self,
         placement: Placement,
         args: &CommandArgs,
-    ) -> Result<(), String> {
+    ) -> Result<CommandOutcome, String> {
+        // A bus connects to buses, bus entries and labels, never to a pin.
+        if matches!(placement, Placement::Bus)
+            && ["start", "end"]
+                .iter()
+                .any(|name| matches!(args.operand(name), Some(OperandValue::PinRef { .. })))
+        {
+            return Err(
+                "a bus does not connect to pins; give `start` and `end` as coordinates".to_string(),
+            );
+        }
         // A wire click also pulls onto a nearby pin end, wire end or junction
         // (`snap_wire_point`); a bus, line or rectangle click only snaps to
         // the grid.
@@ -226,13 +260,19 @@ impl Signex {
         if start == end {
             return Err("`start` and `end` are the same point".to_string());
         }
-        let mode = self.interaction_state.draw_mode;
+        if matches!(placement, Placement::Wire | Placement::Bus) {
+            return self.run_segment_operands(
+                args,
+                start,
+                end,
+                matches!(placement, Placement::Bus),
+            );
+        }
         let (width, fill) = pre_placement_shape(&self.document_state);
         match placement {
-            Placement::Wire => placed(self.place_wire_at(start, end, mode).1),
-            Placement::Bus => placed(self.place_bus_at(start, end, mode).1),
             Placement::Line => placed(self.place_line_at(start, end, width)),
             _ => placed(self.place_rect_at(start, end, width, fill)),
         }
+        .map(|()| CommandOutcome::Ran)
     }
 }

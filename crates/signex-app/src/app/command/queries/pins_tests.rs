@@ -375,3 +375,93 @@ fn what_cannot_be_named_is_refused_with_the_reason() {
     let reason = refusal(&mut app, &[&missing, "designator=R1"]);
     assert!(reason.contains("not an open or referenced"), "{reason}");
 }
+
+fn tip_of(sheet: &SchematicSheet, designator: &str, pin: &str) -> Result<Point, String> {
+    super::pins::pin_tip_of(sheet, designator, pin, &[InstancePath::root()])
+}
+
+fn assert_point(got: Point, x: f64, y: f64) {
+    assert!(
+        (got.x - x).abs() < 1e-9 && (got.y - y).abs() < 1e-9,
+        "expected ({x}, {y}), got {got:?}"
+    );
+}
+
+#[test]
+fn a_pin_reference_is_the_tip_query_pins_lists_by_number_or_by_name() {
+    let sheet = pin_sheet();
+    assert_point(tip_of(&sheet, "R1", "2").unwrap(), 50.0, 47.46);
+    assert_point(tip_of(&sheet, "R1", "N2").unwrap(), 50.0, 47.46);
+    // A pin with no number is its name; a pin on a part's other unit is found
+    // from the bare designator.
+    assert_eq!(tip_of(&sheet, "Q1", "CLK").map(|p| p.y), Ok(0.0));
+    assert_point(tip_of(&sheet, "U1", "3").unwrap(), 123.0, 100.0);
+}
+
+#[test]
+fn the_pin_number_wins_over_a_pin_name_and_an_ambiguous_name_is_refused() {
+    let mut sheet = pin_sheet();
+    sheet.lib_symbols.get_mut("R").unwrap().pins[0].pin.name = "2".into();
+    // `2` is pin 2's number, though pin 1 is also named `2`.
+    assert_point(tip_of(&sheet, "R1", "2").unwrap(), 50.0, 47.46);
+    for lp in &mut sheet.lib_symbols.get_mut("R").unwrap().pins {
+        lp.pin.name = "X".into();
+    }
+    let reason = tip_of(&sheet, "R1", "X").unwrap_err();
+    assert!(reason.contains("matches several pins (1, 2)"), "{reason}");
+}
+
+#[test]
+fn a_pin_that_is_not_one_tip_on_this_sheet_is_refused_with_the_reason() {
+    let sheet = pin_sheet();
+    for (designator, pin, fragment) in [
+        ("R1", "9", "has no pin `9`"),
+        ("U1", "2", "belongs to unit 2, which is not placed"),
+        ("U1", "8", "is hidden"),
+        ("U4", "A", "has several tips"),
+        ("C9", "1", "no part `C9`"),
+        ("R?", "1", "not annotated"),
+        ("#PWR01", "1", "power port"),
+        ("U2", "1", "ambiguous"),
+    ] {
+        let reason = tip_of(&sheet, designator, pin).unwrap_err();
+        assert!(reason.contains(fragment), "{designator}.{pin}: {reason}");
+    }
+    // The pin common to the normal body but placed once has one tip.
+    assert!(tip_of(&sheet, "U4", "N").is_ok());
+}
+
+/// A project whose hierarchy is wanted but not walked yet is being read: the
+/// designators of its sheets are not final, so neither query nor reference
+/// answers from them.
+#[test]
+fn a_hierarchy_being_read_refuses_query_pins_and_pin_references() {
+    use crate::app::handlers::menu::export::tests::current_placement::placed_twice_listing;
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_twice_listing(&dir, &["top.snxsch", "child.snxsch"]);
+    let command = AppCommandId::new("query_pins").unwrap();
+    let operands = [
+        format!("document={}", child.display()),
+        "designator=R1".to_string(),
+    ];
+    let args = CommandArgs::parse_operands(&command, &[&operands[0], &operands[1]]).unwrap();
+    match app.run_query_headless(&command, &args).expect("a query").0 {
+        CommandOutcome::Disabled { reason } => {
+            assert!(reason.contains("being re-read"), "{reason}")
+        }
+        other => panic!("was not refused: {other:?}"),
+    }
+    let reason = app.pin_ref_tip("R_TOP", "1").unwrap_err();
+    assert!(reason.contains("being re-read"), "{reason}");
+    crate::app::runtime::sheet_tree_tests::settle(&mut app, true);
+    // Read: the gate is open (whatever the part answers is its own reason).
+    let after = app.pin_ref_tip("R_TOP", "1");
+    assert!(
+        after
+            .as_ref()
+            .err()
+            .is_none_or(|e| !e.contains("hierarchy")),
+        "{after:?}"
+    );
+}
