@@ -114,6 +114,7 @@ fn footprint(reference: &str, pads: &[&str]) -> Footprint {
         graphics: Vec::new(),
         properties: Vec::new(),
         schematic_link: None,
+        library_ref: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
@@ -781,3 +782,4 @@ fn a_renamed_net_renames_kept_pads_and_zones_and_undoes() {
 
 mod link_tests;
 mod lock_tests;
+mod pin_map_tests;

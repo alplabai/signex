@@ -76,6 +76,8 @@ mod pcb_footprints_tests;
 #[cfg(test)]
 mod pcb_layer_tests;
 #[cfg(test)]
+mod pcb_lib_ref_tests;
+#[cfg(test)]
 mod pcb_lock_name_tests;
 #[cfg(test)]
 mod pcb_pad_shape_tests;
@@ -249,6 +251,14 @@ pub enum FormatError {
         prefix: String,
         len: usize,
         max: usize,
+    },
+    #[error("block {block:?}: row {row} field {field:?} value {value:?} cannot be saved: {why}")]
+    UnwritableField {
+        block: String,
+        row: usize,
+        field: String,
+        value: String,
+        why: String,
     },
     #[error("TSV block {block:?}: row {row} field {field:?} parse error: {message}")]
     TsvFieldParse {
@@ -798,7 +808,13 @@ impl SnxPcb {
         }
 
         // TSV blocks: footprints, pads, tracks, vias.
-        let footprint_rows = build_rows("footprints", &self.board.footprints, footprint_to_row)?;
+        let footprint_rows = self
+            .board
+            .footprints
+            .iter()
+            .enumerate()
+            .map(|(row, fp)| footprint_to_row(fp).map_err(|e| e.at("footprints", row)))
+            .collect::<Result<Vec<_>, _>>()?;
         let mut pad_rows: Vec<PcbPadRow> = Vec::new();
         for fp in &self.board.footprints {
             for pad in &fp.pads {

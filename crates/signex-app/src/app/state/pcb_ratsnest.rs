@@ -111,6 +111,7 @@ mod tests {
             layer: "TopCopper".into(),
             locked: false,
             schematic_link: None,
+            library_ref: None,
             pads: xs
                 .iter()
                 .enumerate()

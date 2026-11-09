@@ -38,6 +38,7 @@ fn fp(rotation: f64, layer: &str, pads: Vec<Pad>) -> Footprint {
         layer: layer.into(),
         locked: false,
         schematic_link: None,
+        library_ref: None,
         pads,
         graphics: Vec::new(),
         properties: Vec::new(),

@@ -51,25 +51,26 @@ impl From<BoardCommandError> for BoardEditError {
     }
 }
 
-/// An agent's edit: the undo label and the revision it read.
+/// A labelled edit checked against the revision its author read: an agent's
+/// step, or an Update PCB change list built from one revision of the board.
 #[derive(Debug, Clone, Copy)]
-pub struct AgentStep<'a> {
+pub struct CheckedStep<'a> {
     pub label: &'a str,
     pub expected_revision: u64,
 }
 
 impl DocumentState {
     /// Run `commands` on the board at `path` as one undo step, all or
-    /// nothing. With `agent`, the step is labelled and refused when the
-    /// board moved past the revision the agent read.
+    /// nothing. With `checked`, the step is labelled and refused when the
+    /// board moved past the revision it was built from.
     pub(crate) fn execute_board(
         &mut self,
         path: &Path,
         commands: Vec<BoardCommand>,
-        agent: Option<AgentStep<'_>>,
+        checked: Option<CheckedStep<'_>>,
     ) -> Result<Vec<BoardPatch>, BoardEditError> {
         let engine = self.editable_board(path)?;
-        let patches = match agent {
+        let patches = match checked {
             Some(step) => engine.execute_labelled(commands, step.label, step.expected_revision),
             None => engine.execute_batch(commands),
         }?;
