@@ -13,10 +13,13 @@
 //! derived in full. What "reach" means, and why it is enough, is written up in
 //! `docs/INCREMENTAL_NETS.md`.
 
+mod delta;
 mod derive;
 mod level1;
 mod merge;
 mod records;
+
+pub use delta::NetDelta;
 
 use std::collections::HashMap;
 
@@ -58,6 +61,8 @@ pub struct NetBase {
     buckets: HashMap<Key, Vec<Elem>>,
     segments: SegmentIndex,
     items: ItemGrid,
+    /// What the delta derive (`delta.rs`) reads of the base nets.
+    names: delta::BaseNets,
 }
 
 impl std::fmt::Debug for NetBase {
@@ -195,6 +200,7 @@ impl NetBase {
         let root = compress(&mut parent);
         let buckets = kinds.buckets(|k| root.get(&k).copied().unwrap_or(k));
         let items = kinds.items();
+        let names = delta::BaseNets::new(sheet, &clusters);
         Self {
             usable: kinds.unique(),
             lib_symbols: sheet.lib_symbols.clone(),
@@ -209,6 +215,7 @@ impl NetBase {
             buckets,
             segments: index,
             items,
+            names,
         }
     }
 }

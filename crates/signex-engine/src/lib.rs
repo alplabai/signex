@@ -65,6 +65,8 @@ mod rubber_band_tests;
 mod rubber_band_turn_tests;
 #[cfg(test)]
 mod save_point_tests;
+#[cfg(test)]
+mod symbol_drag_local_tests;
 
 #[cfg(test)]
 mod sheet_identity_tests;
@@ -130,6 +132,7 @@ pub use transform::rubber_band::{
     BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, before_nets, follow_moved_pins,
     moved_pin_tips,
 };
+
 pub(crate) use transform::{PreWires, TouchingPairs};
 
 /// Whether `key` names one of the symbol's built-in fields (`reference`,
@@ -213,6 +216,10 @@ pub struct Engine {
     /// fold looked only where wires changed.
     #[cfg(test)]
     full_scan_moves: bool,
+    /// Test switch: the net guard compares over every net, as it did before it
+    /// compared only the nets a move reaches.
+    #[cfg(test)]
+    full_scan_guard: bool,
 }
 
 /// Process-wide revision source: values are never reused across engines.
@@ -235,6 +242,9 @@ pub struct MovePreview {
     /// Test switch: fold the moved sheet by weighing every wire.
     #[cfg(test)]
     full_scan_moves: bool,
+    /// Test switch: the net guard compares over every net.
+    #[cfg(test)]
+    full_scan_guard: bool,
 }
 
 impl MovePreview {
@@ -249,6 +259,8 @@ impl MovePreview {
             wires: std::sync::Arc::new(PreWires::new(&sheet.wires)),
             #[cfg(test)]
             full_scan_moves: false,
+            #[cfg(test)]
+            full_scan_guard: false,
             sheet: std::sync::Arc::new(sheet.clone()),
         }
     }
@@ -283,9 +295,25 @@ impl MovePreview {
         moves: &[(SelectedItem, f64, f64)],
         keep_wires: bool,
     ) -> (SchematicSheet, Vec<String>) {
-        let Ok(mut engine) = Engine::new(SchematicSheet::clone(&self.sheet)) else {
+        let Some((mut engine, held, result)) = self.moved_engine(moves, keep_wires) else {
             return (SchematicSheet::clone(&self.sheet), Vec::new());
         };
+        if !matches!(result, Some(Ok(_))) {
+            return (SchematicSheet::clone(&self.sheet), held);
+        }
+        // The engine is spent: hand its sheet over instead of copying it.
+        (std::mem::take(&mut engine.document), held)
+    }
+
+    /// The throwaway engine of [`Self::moved_with`] after the move, the
+    /// references the lock held back, and the move's result (`None` when the
+    /// lock held every item back).
+    fn moved_engine(
+        &self,
+        moves: &[(SelectedItem, f64, f64)],
+        keep_wires: bool,
+    ) -> Option<MovedEngine> {
+        let mut engine = Engine::new(SchematicSheet::clone(&self.sheet)).ok()?;
         engine.preset_before = Some(self.before.clone());
         engine.preset_base.clone_from(&self.base);
         engine.preset_dots.clone_from(&self.dots);
@@ -294,6 +322,7 @@ impl MovePreview {
         #[cfg(test)]
         {
             engine.full_scan_moves = self.full_scan_moves;
+            engine.full_scan_guard = self.full_scan_guard;
         }
         // The commit skips locked symbols; the ghost must too, or it shows
         // nothing moving while the free items jump on release.
@@ -304,16 +333,28 @@ impl MovePreview {
             },
             &|symbol| format!("a wire on {symbol}'s pin ({symbol} is locked)"),
         );
-        let Some(command) = command else {
-            return (SchematicSheet::clone(&self.sheet), held);
-        };
-        if engine.execute(command).is_err() {
-            return (SchematicSheet::clone(&self.sheet), held);
-        }
-        // The engine is spent: hand its sheet over instead of copying it.
-        (std::mem::take(&mut engine.document), held)
+        let result = command.map(|command| engine.execute(command));
+        Some((engine, held, result))
+    }
+
+    /// [`Self::moved_with`] with everything the move left on the engine.
+    #[cfg(test)]
+    pub(crate) fn moved_report(
+        &self,
+        moves: &[(SelectedItem, f64, f64)],
+        keep_wires: bool,
+    ) -> Option<MovedEngine> {
+        self.moved_engine(moves, keep_wires)
     }
 }
+
+/// A preview's throwaway engine, the references the lock held back and the
+/// move's result.
+type MovedEngine = (
+    Engine,
+    Vec<String>,
+    Option<Result<CommandResult, EngineError>>,
+);
 
 impl Engine {
     pub fn new(document: SchematicSheet) -> Result<Self, EngineError> {
@@ -346,6 +387,8 @@ impl Engine {
             preset_sheet: None,
             #[cfg(test)]
             full_scan_moves: false,
+            #[cfg(test)]
+            full_scan_guard: false,
         })
     }
 
@@ -383,6 +426,8 @@ impl Engine {
             preset_sheet: None,
             #[cfg(test)]
             full_scan_moves: false,
+            #[cfg(test)]
+            full_scan_guard: false,
         })
     }
 

@@ -26,7 +26,7 @@ const MOVES_PER_SEED: u64 = 4;
 /// fixed key order. A uuid the move minted (a dot, a wire the rubber band
 /// adds) is random in each run, so each is written as its number in order of
 /// appearance; every uuid of `original` is kept as it is.
-fn exact(sheet: &SchematicSheet, original: &SchematicSheet) -> String {
+pub(crate) fn exact(sheet: &SchematicSheet, original: &SchematicSheet) -> String {
     fn walk(
         value: &mut serde_json::Value,
         known: &HashSet<String>,
@@ -406,7 +406,7 @@ fn the_local_fold_equals_the_full_scan_over_a_drag() {
     );
 }
 
-fn corpus_sheets() -> Vec<std::path::PathBuf> {
+pub(crate) fn corpus_sheets() -> Vec<std::path::PathBuf> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut paths = Vec::new();
     for dir in [

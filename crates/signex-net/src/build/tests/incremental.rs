@@ -674,3 +674,66 @@ fn random_edits_derive_the_same_nets_as_the_full_derive() {
         }
     }
 }
+
+/// `derive_delta` is the full derive too: the base nets less `removed` plus
+/// `added` are the nets of the edited sheet, and a queried point sits on the
+/// net the full derive puts it on. Edits remove and rename labels and power
+/// ports, so the nets of clusters far from the change that were joined to it
+/// by name must be recomputed.
+#[test]
+fn random_edits_give_a_delta_that_rebuilds_the_full_derive() {
+    let (mut offered, mut local, mut removed_and_added, mut far_joined) = (0, 0, 0, 0);
+    for seed in [0xA11CE, 0xB0B, 0x5EED, 0xFEED_F00D] {
+        let mut rng = Lcg(seed);
+        for round in 0..1500 {
+            let before = random_sheet(&mut rng);
+            let base = NetBase::new(&before);
+            let mut cand = before.clone();
+            for step in 0..4 {
+                for _ in 0..(1 + rng.next(4)) {
+                    edit(&mut cand, &mut rng);
+                }
+                let at: Vec<_> = (0..4)
+                    .map(|_| (pt_key(&rng.spot()), rng.chance(50)))
+                    .chain(
+                        cand.child_sheets
+                            .iter()
+                            .flat_map(|c| c.pins.iter().map(|p| (pt_key(&p.position), true))),
+                    )
+                    .collect();
+                let where_ = format!("seed {seed:#x} round {round} step {step}");
+                let Some(delta) = base.derive_delta(&cand, &at) else {
+                    assert!(!base.delta_ready(), "{where_}: no delta from a ready base");
+                    continue;
+                };
+                let (full, full_at) = net_signatures_at(&cand, &at);
+                let shown = || format!("{where_}\nbefore {}\nafter {}", dump(&before), dump(&cand));
+                assert_eq!(base.nets_with(&delta), full, "{}", shown());
+                for ((id, in_added), (full_id, in_full)) in delta.found.iter().zip(&full_at) {
+                    assert_eq!(id, full_id, "{}", shown());
+                    assert_eq!(
+                        in_added.map(|n| &delta.added[n]),
+                        in_full.map(|n| &full[n]),
+                        "{}",
+                        shown()
+                    );
+                }
+                offered += 1;
+                local += usize::from(delta.added.len() * 2 <= full.len().max(1));
+                removed_and_added +=
+                    usize::from(!delta.removed.is_empty() && !delta.added.is_empty());
+                // A net rebuilt with a cluster the edit did not touch: it
+                // holds more than one base net's worth of labels.
+                far_joined += usize::from(delta.added.iter().any(|net| net.labels.len() >= 2));
+            }
+        }
+    }
+    eprintln!(
+        "delta: {offered} offered, {local} local, {removed_and_added} replaced nets, \
+         {far_joined} rebuilt nets joined by name"
+    );
+    assert!(offered >= 15_000, "only {offered} deltas");
+    assert!(local >= 5_000, "only {local} local");
+    assert!(removed_and_added >= 10_000, "only {removed_and_added}");
+    assert!(far_joined >= 1_000, "only {far_joined}");
+}

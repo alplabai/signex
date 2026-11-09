@@ -195,6 +195,12 @@ impl Engine {
             self.preset_before.clone(),
             self.preset_base.clone(),
         );
+        #[cfg(test)]
+        let guard = if self.full_scan_guard {
+            guard.without_local()
+        } else {
+            guard
+        };
         let mut policy = crate::Policy::default();
         for round in 0.. {
             fresh(self);
