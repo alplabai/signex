@@ -23,6 +23,8 @@ JSON result line per command. It stops at the first command that is not ok.
 OPTIONS (run):
     --keep-going            run the rest after a refused or failed command
     --save                  allow commands that write files (capability `save`)
+    --dry-run               run every command with dry_run=true (a wire or bus run
+                            reports and changes nothing); not with --save
     --allow <caps>          also allow capabilities: read, edit, save, export,
                             delete, library-write (default: read,edit)
     --allow-path <dir>      also allow paths inside <dir> (repeatable)
@@ -46,6 +48,8 @@ pub struct RunOptions {
     /// A command id and its `key=value` arguments, instead of reading stdin.
     pub single: Option<(String, Vec<String>)>,
     pub keep_going: bool,
+    /// Every command runs with `dry_run=true` (#2199).
+    pub dry_run: bool,
     pub capabilities: BTreeSet<Capability>,
     pub allow_paths: Vec<PathBuf>,
     pub limits: Limits,
@@ -73,6 +77,7 @@ fn parse_run(mut args: impl Iterator<Item = String>) -> Result<RunOptions, Strin
         project: PathBuf::new(),
         single: None,
         keep_going: false,
+        dry_run: false,
         capabilities: Capability::DEFAULT.into_iter().collect(),
         allow_paths: Vec::new(),
         limits: Limits::default(),
@@ -81,6 +86,7 @@ fn parse_run(mut args: impl Iterator<Item = String>) -> Result<RunOptions, Strin
         let mut value = |flag: &str| args.next().ok_or_else(|| format!("{flag} needs a value"));
         match arg.as_str() {
             "--keep-going" => options.keep_going = true,
+            "--dry-run" => options.dry_run = true,
             "--save" => {
                 options.capabilities.insert(Capability::Save);
             }
@@ -105,6 +111,9 @@ fn parse_run(mut args: impl Iterator<Item = String>) -> Result<RunOptions, Strin
             flag if flag.starts_with("--") => return Err(format!("unknown option `{flag}`")),
             _ => positional.push(arg),
         }
+    }
+    if options.dry_run && options.capabilities.contains(&Capability::Save) {
+        return Err("--dry-run changes nothing, so it cannot be combined with --save".into());
     }
     let mut positional = positional.into_iter();
     options.project = positional
@@ -188,7 +197,8 @@ mod tests {
             Capability::Delete,
         ]);
         assert_eq!(more.capabilities, want);
-        assert!(more.keep_going);
+        assert!(more.keep_going && !more.dry_run);
+        assert!(run(&["run", "p.snxprj", "--dry-run"]).dry_run);
     }
 
     #[test]
@@ -237,6 +247,18 @@ mod tests {
             (&["run", "p", "--save2"], "unknown option `--save2`"),
             (&["run", "p", "--arg", "a=b"], "--arg needs a command id"),
             (&["run", "p", "id", "extra"], "unexpected argument `extra`"),
+            (
+                &["run", "p", "--dry-run", "--save"],
+                "--dry-run changes nothing",
+            ),
+            (
+                &["run", "p", "--save", "--dry-run"],
+                "--dry-run changes nothing",
+            ),
+            (
+                &["run", "p", "--allow", "save", "--dry-run"],
+                "--dry-run changes nothing",
+            ),
             (
                 &["run", "p", "--max-commands", "many"],
                 "needs a whole number",

@@ -13,8 +13,27 @@ use crate::cli::RunOptions;
 use crate::confine::canonical;
 use crate::input::{Line, read_line};
 use crate::policy::Policy;
-use crate::protocol::{ResultLine, parse_request, request_from_args};
+use crate::protocol::{Request, ResultLine, parse_request, request_from_args};
 use crate::session::Session;
+
+/// `--dry-run`: `request` with `dry_run=true`, or why it cannot be one: only a
+/// command with a `dry_run` operand can promise to change nothing.
+fn with_dry_run(mut request: Request, dry_run: bool) -> Result<Request, String> {
+    if !dry_run {
+        return Ok(request);
+    }
+    let takes_it = signex_app::keymap::metadata_for_str(&request.id)
+        .is_some_and(|meta| meta.operands.iter().any(|op| op.name == "dry_run"));
+    if !takes_it {
+        return Err(format!(
+            "--dry-run needs a command with a `dry_run` operand; `{}` has none, so it would change the document",
+            request.id
+        ));
+    }
+    request.operands.retain(|(name, _)| name != "dry_run");
+    request.operands.push(("dry_run".into(), "true".into()));
+    Ok(request)
+}
 
 /// What a finished run did.
 #[derive(Debug)]
@@ -88,7 +107,8 @@ pub fn run(
     };
 
     if let Some((id, args)) = &options.single {
-        let line = match request_from_args(id, args) {
+        let line = match request_from_args(id, args).and_then(|r| with_dry_run(r, options.dry_run))
+        {
             Ok(request) => session.execute(1, &request, id),
             Err(reason) => session.reject(1, id, reason),
         };
@@ -119,7 +139,10 @@ pub fn run(
                 );
                 session.reject(seq, &raw, reason)
             } else {
-                match text.and_then(|text| parse_request(&text)) {
+                match text
+                    .and_then(|text| parse_request(&text))
+                    .and_then(|request| with_dry_run(request, options.dry_run))
+                {
                     Ok(request) => session.execute(seq, &request, &raw),
                     Err(reason) => session.reject(seq, &raw, reason),
                 }
