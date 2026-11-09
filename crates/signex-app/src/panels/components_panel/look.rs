@@ -247,7 +247,6 @@ pub(super) fn library_header<'a>(
             .wrapping(iced::widget::text::Wrapping::None),
         crate::library::editor::kit::toned_pill(
             // user-visible: migrate to the #2063 casemap
-            // ast-grep-ignore: no-case-in-view
             source.label().to_uppercase(),
             PillTone::Neutral,
             tokens

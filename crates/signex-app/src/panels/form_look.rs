@@ -279,7 +279,6 @@ fn graphite_section_header<'a>(
     let label = row![
         signex_widgets::chevron::chevron(!is_collapsed, TS.section, ink),
         // user-visible: migrate to the #2063 casemap
-        // ast-grep-ignore: no-case-in-view
         text(raw(title.to_uppercase())).size(TS.section).color(ink),
     ]
     .spacing(6)

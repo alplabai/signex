@@ -288,7 +288,7 @@ fn bold() -> iced::Font {
 /// Hint footer: navigation caps, the Run cap and what Enter will run.
 pub(super) fn hint_footer<'a, M: 'a>(
     theme_tokens: &ThemeTokens,
-    selected: Option<&CommandEntry>,
+    _selected: Option<&CommandEntry>,
     extra: Option<String>,
 ) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
@@ -301,7 +301,6 @@ pub(super) fn hint_footer<'a, M: 'a>(
     line = line.push(hint("Run"));
     line = line.push(Space::new().width(Length::Fill).boxed());
     // "Enter Run" already says what Enter does; no sentence repeats it.
-    let _ = selected;
     if let Some(more) = extra {
         line = line.push(
             text(raw(more))

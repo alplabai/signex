@@ -39,7 +39,6 @@ fn field<'a>(
     }
     column![
         // user-visible: migrate to the #2063 casemap
-        // ast-grep-ignore: no-case-in-view
         text(raw(label.to_uppercase()))
             .size(TS.section)
             .color(r.ink3)
