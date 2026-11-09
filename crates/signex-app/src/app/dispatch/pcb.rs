@@ -25,6 +25,14 @@ impl Signex {
             PcbMsg::CanvasInWindow { window, msg } => {
                 self.run_in_window(window, false, |app| app.dispatch_pcb_canvas_message(msg))
             }
+            PcbMsg::View(event) => {
+                self.apply_pcb_view_event(None, event);
+                Task::none()
+            }
+            PcbMsg::ViewInWindow { window, event } => {
+                self.apply_pcb_view_event(Some(window), event);
+                Task::none()
+            }
         }
     }
 }

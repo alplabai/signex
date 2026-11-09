@@ -168,6 +168,21 @@ impl Signex {
         request
     }
 
+    /// The Layers panel: the active board's rows, hidden layers and active layer.
+    fn pcb_layers_panel_state(&self) -> crate::panels::PcbLayersPanel {
+        let Some(board) = self.active_pcb() else {
+            return crate::panels::PcbLayersPanel {
+                i18n: self.ui_state.i18n.clone(),
+                ..Default::default()
+            };
+        };
+        let view = self
+            .active_tab_path()
+            .map(|path| self.pcb_layer_view(&path))
+            .unwrap_or_default();
+        crate::panels::PcbLayersPanel::new(&board.layers, &view, self.ui_state.i18n.clone())
+    }
+
     /// The Net Classes section's state: the panel's own selection and drafts
     /// carried over, the table and history flags read from the active project.
     fn net_class_panel_state(&self) -> crate::panels::NetClassPanel {
@@ -614,6 +629,7 @@ impl Signex {
         let erc_violation_waivers = self.erc_violation_waiver_entries();
 
         let net_classes = self.net_class_panel_state();
+        let pcb_layers = self.pcb_layers_panel_state();
 
         let (panel_tokens, panel_theme_id) = self.panel_theme();
         self.document_state.panel_ctx = crate::panels::PanelContext {
@@ -681,6 +697,7 @@ impl Signex {
             signal_mode,
             projects_view,
             net_classes,
+            pcb_layers,
             project_tree: kept_project_tree,
             project_tree_builds,
             project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),

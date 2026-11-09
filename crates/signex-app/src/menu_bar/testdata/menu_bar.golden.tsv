@@ -60,6 +60,12 @@ View/Toggle Grid	item	Toggle Grid	toggle_visible_grid	Shift+Ctrl+G	ToggleGrid	11
 View/Cycle Grid Size	item	Cycle Grid Size	-	-	CycleGrid	11111111	cmd:next_grid
 View/AutoFocus (dim unselected)	item	AutoFocus (dim unselected)	toggle_auto_focus	F9	ToggleAutoFocus	11111111	cmd:toggle_auto_focus
 View/---	separator	-	-	-	-	-	-
+View/Toggle Ratsnest	item	Toggle Ratsnest	-	-	ToggleRatsnest	01100000	cmd:toggle_ratsnest
+View/Next Layer	item	Next Layer	-	-	NextLayer	01100000	cmd:next_layer
+View/Previous Layer	item	Previous Layer	-	-	PreviousLayer	01100000	cmd:prev_layer
+View/Toggle Layer Visibility	item	Toggle Layer Visibility	-	-	ToggleLayerVisibility	01100000	cmd:toggle_layer_visibility
+View/Show All Layers	item	Show All Layers	-	-	ShowAllLayers	01100000	cmd:show_all_layers
+View/---	separator	-	-	-	-	-	-
 View/Projects	item	Projects	-	-	OpenProjectsPanel	11111111	always
 View/Components	item	Components	-	-	OpenComponentsPanel	11111111	always
 View/Navigator	item	Navigator	-	-	OpenNavigatorPanel	11111111	always
@@ -67,6 +73,7 @@ View/Properties	item	Properties	-	-	OpenPropertiesPanel	11111111	always
 View/ERC	item	ERC	-	-	OpenErcPanel	11111111	always
 View/Messages	item	Messages	-	-	OpenMessagesPanel	11111111	always
 View/Signex AI	item	Signex AI	-	-	OpenSignexAiPanel	11111111	always
+View/Layers	item	Layers	-	-	OpenLayersPanel	11111111	always
 Project	menu	Project	-	-	-	-	-
 Project/Electrical Rules Check	item	Electrical Rules Check	-	-	OpenErcDialog	01001000	cmd:open_erc_dialog
 Project/---	separator	-	-	-	-	-	-

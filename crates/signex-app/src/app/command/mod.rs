@@ -250,6 +250,16 @@ impl Signex {
             {
                 self.dispatch_update(Message::CanvasEventInWindow { window_id, event })
             }
+            // A board-view command typed in an undocked PCB window acts on
+            // the board that window shows (#2223).
+            (Some(Message::Pcb(PcbMsg::View(event))), Some(window_id))
+                if self.undocked_pcb_path(window_id).is_some() =>
+            {
+                self.dispatch_update(Message::Pcb(PcbMsg::ViewInWindow {
+                    window: window_id,
+                    event,
+                }))
+            }
             // Any other command typed in an undocked document window acts on
             // the sheet that window shows (#1966).
             (Some(message), Some(window_id)) if self.is_document_window(window_id) => {

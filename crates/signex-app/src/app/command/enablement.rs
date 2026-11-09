@@ -211,7 +211,9 @@ impl Signex {
         };
         CommandContext {
             has_schematic,
-            has_pcb: self.has_active_pcb(),
+            // An undocked PCB window is enabled by the board it shows (#2223).
+            has_pcb: self.has_active_pcb()
+                || window.is_some_and(|id| self.undocked_pcb_path(id).is_some()),
             undocked_has_canvas: self.undocked_tab_has_canvas(window),
             document_is_schematic: own.is_schematic,
             document_is_editor: own.is_editor,

@@ -515,6 +515,11 @@
     "category": "select"
   },
   {
+    "id": "next_layer",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "next_sheet",
     "group": "Schematic",
     "category": "navigation"
@@ -775,6 +780,11 @@
     "category": "interactive"
   },
   {
+    "id": "prev_layer",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "previous_document_tab",
     "group": "General",
     "category": "window"
@@ -955,6 +965,11 @@
     "category": "view"
   },
   {
+    "id": "show_all_layers",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "show_current_command_hotkeys",
     "group": "General",
     "category": "help"
@@ -1000,9 +1015,24 @@
     "category": "window"
   },
   {
+    "id": "toggle_layer_visibility",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "toggle_layers_panel",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "toggle_properties_panel",
     "group": "General",
     "category": "panels"
+  },
+  {
+    "id": "toggle_ratsnest",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "toggle_schematic_filter_panel",

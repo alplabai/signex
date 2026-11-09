@@ -113,6 +113,8 @@ pub enum MenuMessage {
     OpenErcPanel,
     OpenMessagesPanel,
     OpenSignexAiPanel,
+    /// View ▸ Layers: show the Layers panel (#2223).
+    OpenLayersPanel,
     /// Place ▸ Text — the text-note tool.
     PlaceText,
     /// Place ▸ No Connect — the no-connect tool.
@@ -190,6 +192,7 @@ impl MenuMessage {
                 | Self::OpenErcPanel
                 | Self::OpenMessagesPanel
                 | Self::OpenSignexAiPanel
+                | Self::OpenLayersPanel
         )
     }
 }

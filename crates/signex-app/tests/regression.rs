@@ -107,6 +107,10 @@ mod pcb_drc;
 #[path = "regression/pcb_ratsnest.rs"]
 mod pcb_ratsnest;
 
+// #2223 - the board view: ratsnest, layer visibility, the active layer.
+#[path = "regression/pcb_view.rs"]
+mod pcb_view;
+
 // #1245 - the Parameter Manager opens from a catalog command.
 #[path = "regression/parameter_manager_open.rs"]
 mod parameter_manager_open;

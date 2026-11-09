@@ -194,6 +194,10 @@ impl Signex {
             UiMsg::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
                 self.handle_menu_message(MenuMessage::OpenPropertiesPanel)
             }
+            UiMsg::StatusBar(StatusBarRequest::ActiveLayerStepRequested) => self
+                .dispatch_pcb_message(PcbMsg::View(PcbViewMsg::ActiveLayerStepped {
+                    forward: true,
+                })),
             UiMsg::StatusBar(StatusBarRequest::CancelAltiumImport) => {
                 self.handle_altium_import_cancel();
                 Task::none()

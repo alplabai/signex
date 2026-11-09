@@ -80,6 +80,8 @@ pub struct PanelContext {
     pub projects_view: super::ProjectsView,
     /// Net Classes section of the General tab (#1042).
     pub net_classes: NetClassPanel,
+    /// Layers panel of the active board (#2223).
+    pub pcb_layers: PcbLayersPanel,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
     /// How many times `project_tree` has been rebuilt; `refresh_panel_ctx`

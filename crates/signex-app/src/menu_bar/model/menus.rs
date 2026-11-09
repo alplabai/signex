@@ -183,6 +183,16 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             cmd("toggle_auto_focus", "AutoFocus (dim unselected)", "F9"),
         ),
         SEP,
+        // The board view: greyed unless a PCB is open.
+        cmd_item_gated(ctx, cmd("toggle_ratsnest", "Toggle Ratsnest", "")),
+        cmd_item_gated(ctx, cmd("next_layer", "Next Layer", "")),
+        cmd_item_gated(ctx, cmd("prev_layer", "Previous Layer", "")),
+        cmd_item_gated(
+            ctx,
+            cmd("toggle_layer_visibility", "Toggle Layer Visibility", ""),
+        ),
+        cmd_item_gated(ctx, cmd("show_all_layers", "Show All Layers", "")),
+        SEP,
         // Panels work without an active document (they show an empty
         // state), so these are always available.
         panel_item(
@@ -221,6 +231,12 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             "Signex AI",
             PanelKind::SignexAi,
             MenuMessage::OpenSignexAiPanel,
+        ),
+        panel_item(
+            ctx,
+            "Layers",
+            PanelKind::Layers,
+            MenuMessage::OpenLayersPanel,
         ),
     ]
 }

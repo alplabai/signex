@@ -166,6 +166,19 @@ and vias that end on a moved, rotated, flipped or deleted footprint stay
 where they are. Flip Selection has no default key and
 is greyed outside a board.
 
+## View: board view {#view-board}
+
+Five View rows act on the board in view and are greyed without one (#2223):
+Toggle Ratsnest, Next Layer, Previous Layer, Toggle Layer Visibility (the
+active layer) and Show All Layers. Next and Previous Layer show the keys of
+the active keymap: `Shift++` and `-` in the Altium and Classic profiles, which
+bind `+`, `Shift++`, `*` and `Shift+*` to Next Layer and `-` to Previous Layer
+in the `pcb` context. The Layers panel row sits with the other panel rows and,
+like them, works without a document (the panel shows its empty state). In an
+undocked PCB window the keys and rows act on that window's board. What a row
+changes is the board view in `UiState::pcb_layer_views`: never the board,
+never its file. See `docs/DECISIONS.md` (2026-11-09).
+
 ## Native macOS menu {#native-macos-menu}
 
 On macOS the main menu lives in the system menu bar (NSMenu), built with the

@@ -626,4 +626,6 @@ pub enum StatusBarRequest {
     /// Click on the "Importing …" segment cancels the running Altium
     /// import (#1123).
     CancelAltiumImport,
+    /// Click on the active-layer pill steps to the next copper layer (#2223).
+    ActiveLayerStepRequested,
 }
