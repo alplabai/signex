@@ -125,6 +125,7 @@ Naming rules:
 Each slice owns its own `Message` sub-enums (in `messages/`, or a single `messages.rs` while small). The root `Message` and the library `EditorMsg` wrap those sub-enums; they do not carry a flat leaf tail. This is A1's `.map(Message::Surface)` composition made real in the type system, and it pairs one-to-one with the `updates/` split (D2).
 
 - **Target shape:** `Message::<Surface>(<Surface>Msg)`, and one level down `EditorMsg::<Surface>(<Surface>Msg)`.
+- **Enforced by** `app::contracts::tests::root_message_stays_namespaced`: it counts the root's flat leaves (a unit variant, a struct variant or a tuple carrying a plain value; a namespaced variant is a single-field tuple whose type ends in `Msg`, `Message`, `Event` or `Request`, or is on the test's explicit list), and that count may only go down. A looser cap on all variants stays as a sanity check. A new surface therefore adds one `Message::<Surface>(<Surface>Msg)` variant, never a leaf.
 - **Migrate away from:** the ~223-variant root `Message` (~20 namespaced, ~200 flat leaves like `PrintPreview*`, `BomPreview*`, `Grid*`, `NetColor*`) and the ~140-variant **flat** `EditorMsg`.
 - **Collapse the duplicate:** `EditorMsg` carries dead `Symbol*`/`Footprint*` variants (inert no-op arm) while real symbol/footprint editing runs through a separate, parallel `PrimitiveEditorMsg` (~134 variants). Merge onto one namespaced path; do not maintain two enums for the same surfaces.
 
