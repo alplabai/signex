@@ -1,4 +1,4 @@
-format = "snxsch/1"
+format = "snxsch/1.1"
 schematic_id = "00000000-0000-0000-0000-000000000000"
 version = 1
 generator = "signex-test"
@@ -44,6 +44,7 @@ exclude_from_sim = false
 locked = false
 custom_properties = []
 instances = []
+body_ref = "opa2#9133b9d1"
 
 [extras.symbols.0192a8c0-0000-7001-8000-000000000001.fields]
 
@@ -60,7 +61,7 @@ no_erc_directives = []
 
 [extras.sheet.title_block]
 
-[extras.sheet.lib_symbols.opa2]
+[extras.sheet.lib_symbols."opa2#9133b9d1"]
 id = "opa2"
 reference = "U"
 value = "opa2"
@@ -77,84 +78,84 @@ show_pin_numbers = false
 show_pin_names = true
 pin_name_offset = 0.508
 
-[[extras.sheet.lib_symbols.opa2.graphics]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic]
 type = "polyline"
 width = 0.254
 fill = "none"
 
-[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.points]]
 x = 0.0
 y = 0.0
 
-[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.points]]
 x = 2.54
 y = 0.0
 
-[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.points]]
 x = 2.54
 y = 2.54
 
-[[extras.sheet.lib_symbols.opa2.graphics]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic]
 type = "rectangle"
 width = 0.254
 fill = "background"
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic.start]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.start]
 x = -5.08
 y = -5.08
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic.end]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.end]
 x = 5.08
 y = 5.08
 
-[[extras.sheet.lib_symbols.opa2.graphics]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics]]
 unit = 1
 body_style = 1
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic]
 type = "circle"
 radius = 1.27
 width = 0.0
 fill = "outline"
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic.center]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.center]
 x = 0.0
 y = 0.0
 
-[[extras.sheet.lib_symbols.opa2.graphics]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics]]
 unit = 2
 body_style = 1
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic]
 type = "arc"
 width = 0.15
 fill = "none"
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic.start]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.start]
 x = 1.0
 y = 0.0
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic.mid]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.mid]
 x = 0.0
 y = 1.0
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic.end]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.end]
 x = -1.0
 y = 0.0
 
-[[extras.sheet.lib_symbols.opa2.graphics]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic]
 type = "text"
 text = "OPA"
 rotation = 90.0
@@ -164,15 +165,15 @@ italic = true
 justify_h = "right"
 justify_v = "top"
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic.position]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.position]
 x = 0.0
 y = -3.0
 
-[[extras.sheet.lib_symbols.opa2.graphics]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic]
 type = "text_box"
 text = "box"
 rotation = 0.0
@@ -182,44 +183,44 @@ italic = true
 width = 0.1
 fill = "background"
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic.position]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.position]
 x = 0.0
 y = 3.0
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic.size]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.size]
 x = 5.0
 y = 2.0
 
-[[extras.sheet.lib_symbols.opa2.graphics]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols.opa2.graphics.graphic]
+[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic]
 type = "bezier"
 width = 0.2
 fill = "none"
 
-[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.points]]
 x = 0.0
 y = 0.0
 
-[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.points]]
 x = 1.0
 y = 2.0
 
-[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.points]]
 x = 2.0
 y = 2.0
 
-[[extras.sheet.lib_symbols.opa2.graphics.graphic.points]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".graphics.graphic.points]]
 x = 3.0
 y = 0.0
 
-[[extras.sheet.lib_symbols.opa2.pins]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".pins]]
 unit = 1
 body_style = 1
 
-[extras.sheet.lib_symbols.opa2.pins.pin]
+[extras.sheet.lib_symbols."opa2#9133b9d1".pins.pin]
 direction = "input"
 shape_style = "plain"
 rotation = 0.0
@@ -230,15 +231,15 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols.opa2.pins.pin.position]
+[extras.sheet.lib_symbols."opa2#9133b9d1".pins.pin.position]
 x = -7.62
 y = 2.54
 
-[[extras.sheet.lib_symbols.opa2.pins]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".pins]]
 unit = 1
 body_style = 1
 
-[extras.sheet.lib_symbols.opa2.pins.pin]
+[extras.sheet.lib_symbols."opa2#9133b9d1".pins.pin]
 direction = "output"
 shape_style = "inverted_bubble"
 rotation = 180.0
@@ -249,15 +250,15 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols.opa2.pins.pin.position]
+[extras.sheet.lib_symbols."opa2#9133b9d1".pins.pin.position]
 x = 7.62
 y = 0.0
 
-[[extras.sheet.lib_symbols.opa2.pins]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".pins]]
 unit = 2
 body_style = 1
 
-[extras.sheet.lib_symbols.opa2.pins.pin]
+[extras.sheet.lib_symbols."opa2#9133b9d1".pins.pin]
 direction = "power_input"
 shape_style = "clock_triangle"
 rotation = 270.0
@@ -268,15 +269,15 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols.opa2.pins.pin.position]
+[extras.sheet.lib_symbols."opa2#9133b9d1".pins.pin.position]
 x = 0.0
 y = 7.62
 
-[[extras.sheet.lib_symbols.opa2.pins]]
+[[extras.sheet.lib_symbols."opa2#9133b9d1".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols.opa2.pins.pin]
+[extras.sheet.lib_symbols."opa2#9133b9d1".pins.pin]
 direction = "bidirectional"
 shape_style = "schmitt"
 rotation = 90.0
@@ -287,6 +288,6 @@ visible = true
 name_visible = true
 number_visible = true
 
-[extras.sheet.lib_symbols.opa2.pins.pin.position]
+[extras.sheet.lib_symbols."opa2#9133b9d1".pins.pin.position]
 x = 0.0
 y = -7.62

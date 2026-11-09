@@ -89,3 +89,24 @@ fn a_remounted_unreadable_library_is_reported_again() {
     let _ = app.handle_library_drift_checked(report(lib, "RemountLib1903", "disk gone"));
     assert_eq!(logged_count(needle) - before, 2);
 }
+
+/// A fallback body stored under a key that is not its own id ("Device:R" for
+/// a body whose id is "R") is re-keyed on load to "R#hash"; drift still
+/// judges it against the library symbol the *instance* names (#2209).
+#[test]
+fn a_re_keyed_body_is_judged_against_its_instances_lib_id() {
+    use signex_types::schematic::{LibSymbol, SchematicSheet, Symbol};
+    let body: LibSymbol = serde_json::from_str(r#"{"id":"R"}"#).unwrap();
+    let mut sheet = SchematicSheet::default();
+    sheet.lib_symbols.insert("Device:R".into(), body);
+    sheet.symbols.push(Symbol {
+        lib_id: "Device:R".into(),
+        ..Default::default()
+    });
+    sheet.upgrade_unversioned_bodies();
+    assert!(sheet.lib_symbols.keys().all(|k| k.starts_with("R#")));
+
+    let entries = referenced_bodies(&sheet);
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].1, "Device:R");
+}

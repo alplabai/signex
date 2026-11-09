@@ -19,6 +19,7 @@ fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
         unknown: Default::default(),
         uuid,
         lib_id: "Device:R".to_string(),
+        body_ref: String::new(),
         reference: reference.to_string(),
         value: "10k".to_string(),
         footprint: String::new(),

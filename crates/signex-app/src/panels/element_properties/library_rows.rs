@@ -89,9 +89,17 @@ pub(super) fn push_footprint_row<'a>(
 
 /// How the sheet's embedded copy compares with the library (#912, #1845).
 #[derive(Clone, Copy)]
-pub(super) struct LibraryStatus {
+pub(super) struct LibraryStatus<'a> {
     pub(super) drifted: bool,
+    /// Placed instances of the part on the sheet that draw with an older
+    /// version of the library symbol (0: unknown or none).
+    pub(super) older_instances: usize,
+    /// The selected instance already draws with the current version, so
+    /// "Only this one" has nothing to do for it.
+    pub(super) this_one_current: bool,
     pub(super) missing: bool,
+    /// The UI language's catalog, for the labels these rows render.
+    pub(super) i18n: &'a signex_i18n::I18n,
 }
 
 /// Append the readable `Library` row and, when the sheet's embedded copy
@@ -102,11 +110,12 @@ pub(super) fn push_library_rows<'a>(
     mut c: Column<Element<'a, PanelMsg>>,
     id: uuid::Uuid,
     library_name: &str,
-    status: LibraryStatus,
+    status: LibraryStatus<'_>,
     muted: Color,
     input_bg: Color,
     input_bdr: Color,
 ) -> Column<Element<'a, PanelMsg>> {
+    use signex_i18n::{ids, t};
     if !library_name.is_empty() {
         c = c.push(form_input_row(
             "Library",
@@ -116,41 +125,63 @@ pub(super) fn push_library_rows<'a>(
             input_bdr,
         ));
     }
-    let LibraryStatus { drifted, missing } = status;
+    let LibraryStatus {
+        drifted,
+        older_instances,
+        this_one_current,
+        missing,
+        i18n,
+    } = status;
     if missing {
         c = c.push(
-            signex_widgets::text(signex_widgets::raw(
-                "Library: symbol missing (sheet keeps its embedded copy)",
-            ))
-            .size(TS.body)
-            .color(muted)
-            .boxed(),
+            signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_SYMBOL_MISSING))
+                .size(TS.body)
+                .color(muted)
+                .boxed(),
         );
     }
     if drifted {
         let update = signex_widgets::button(
-            signex_widgets::text(signex_widgets::raw("Update from library")).size(TS.body),
+            signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_UPDATE)).size(TS.body),
         )
         .padding([SP.xs, SP.m])
         .on_press(PanelMsg::UpdateSymbolFromLibrary(id));
-        c = c.push(
-            iced::widget::row![
-                signex_widgets::text(signex_widgets::raw("Library: out of date"))
-                    .size(TS.body)
-                    .color(muted),
+        let only_this = signex_widgets::button(
+            signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_ONLY_THIS_ONE)).size(TS.body),
+        )
+        .padding([SP.xs, SP.m])
+        .on_press(PanelMsg::UpdateSymbolFromLibraryOnly(id));
+        let note = match older_instances {
+            0 => signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_OUT_OF_DATE)),
+            n => signex_widgets::text(
+                t!(i18n, ids::PROPERTIES_LIBRARY_OLDER_INSTANCES, "count" => n),
+            ),
+        };
+        let mut actions = iced::widget::row![
+            note.size(TS.body).color(muted),
+            signex_widgets::tooltip(
+                update,
+                signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_UPDATE_TIP)).size(TS.body),
+                iced::widget::tooltip::Position::Bottom,
+            ),
+        ];
+        if !this_one_current {
+            actions = actions.push(
                 signex_widgets::tooltip(
-                    update,
-                    signex_widgets::text(signex_widgets::raw(
-                        "Updates every instance of this part on the sheet"
-                    ))
-                    .size(TS.body),
+                    only_this,
+                    signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_ONLY_THIS_ONE_TIP))
+                        .size(TS.body),
                     iced::widget::tooltip::Position::Bottom,
-                ),
-            ]
-            .spacing(SP.m)
-            .padding([SP.xs, SP.m])
-            .align_y(iced::Alignment::Center)
-            .boxed(),
+                )
+                .boxed(),
+            );
+        }
+        c = c.push(
+            actions
+                .spacing(SP.m)
+                .padding([SP.xs, SP.m])
+                .align_y(iced::Alignment::Center)
+                .boxed(),
         );
     }
     c

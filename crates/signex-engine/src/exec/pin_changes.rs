@@ -120,7 +120,7 @@ pub fn switch_blockers(
     let Some(sym) = doc.symbols.iter().find(|s| s.uuid == symbol_id) else {
         return SwitchBlockers::default();
     };
-    let old_pins = shown_pins(doc.lib_symbols.get(&sym.lib_id), sym);
+    let old_pins = shown_pins(doc.body_of(sym), sym);
     let new_pins = shown_pins(Some(new_drawing), sym);
     let gate = connected_points(doc);
     let PinChanges { lost, gained } = instance_pin_changes(doc, &gate, sym, &old_pins, &new_pins);

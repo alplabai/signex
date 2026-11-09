@@ -307,7 +307,7 @@ pub enum SchDrawing {
 // Library symbol table
 // ---------------------------------------------------------------------------
 
-/// The sheet's embedded library symbols, keyed by lib id.
+/// The sheet's embedded library symbols, keyed by body ref (`<lib_id>#<hash>`; see `Symbol::body_ref`).
 ///
 /// Reference-counted so a sheet copy (the per-frame drag preview, the engine's
 /// undo snapshot) shares the table instead of deep-copying every `LibSymbol`.
