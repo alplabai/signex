@@ -92,6 +92,29 @@ fn the_dry_run_flag_sets_the_operand_and_refuses_what_has_none() {
 }
 
 #[test]
+fn a_dry_run_of_a_project_opens_the_sheet_and_answers_queries_unchanged() {
+    let (_guard, root) = temp_root();
+    let fx = pins_fixture(&root);
+    let project = fx.project.to_str().unwrap();
+    let before = snapshot(&root);
+    let out = run_cli(
+        &["run", project, "--dry-run"],
+        jsonl(&[
+            json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
+            json!({"id": "query_pins", "args": {"document": "main.snxsch", "designator": "R1"}}),
+            wire(),
+        ]),
+    );
+    assert_eq!(out.code, Some(0), "{}", out.stdout);
+    assert_eq!(out.lines[0]["status"], "answered", "{}", out.stdout);
+    assert_eq!(out.lines[1]["status"], "answered", "{}", out.stdout);
+    assert_eq!(out.lines[2]["status"], "answered", "{}", out.stdout);
+    assert_eq!(out.lines[2]["data"]["dry_run"], true);
+    assert_eq!(out.lines[2]["data"]["net"]["pins"], json!(["C1.1", "R1.2"]));
+    assert_eq!(snapshot(&root), before, "the files are byte-identical");
+}
+
+#[test]
 fn the_dry_run_flag_with_save_is_a_usage_error() {
     let (_guard, root) = temp_root();
     let fx = pins_fixture(&root);

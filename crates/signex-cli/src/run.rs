@@ -17,9 +17,16 @@ use crate::protocol::{Request, ResultLine, parse_request, request_from_args};
 use crate::session::Session;
 
 /// `--dry-run`: `request` with `dry_run=true`, or why it cannot be one: only a
-/// command with a `dry_run` operand can promise to change nothing.
+/// command with a `dry_run` operand can promise to change nothing. A read-only
+/// query and `open_document` (it opens a sheet, changes none) run as given.
 fn with_dry_run(mut request: Request, dry_run: bool) -> Result<Request, String> {
     if !dry_run {
+        return Ok(request);
+    }
+    let harmless = request.id == "open_document"
+        || signex_app::keymap::AppCommandId::new(request.id.as_str())
+            .is_ok_and(|id| signex_app::headless::is_query(&id));
+    if harmless {
         return Ok(request);
     }
     let takes_it = signex_app::keymap::metadata_for_str(&request.id)

@@ -21,7 +21,7 @@ usage error or a project that cannot be opened.
 |---|---|
 | `--keep-going` | run the rest after a refused or failed command (default: stop at the first) |
 | `--save` | allow commands that write files (capability `save`) |
-| `--dry-run` | run every command with `dry_run=true`: a wire or bus run reports and changes nothing; refused for a command without that operand, and together with `--save` |
+| `--dry-run` | run every command with `dry_run=true`: a wire or bus run reports and changes nothing. A read-only query and `open_document` run as given; any other command without that operand is refused, and so is `--save` together with it |
 | `--allow <caps>` | also allow capabilities (comma list) |
 | `--allow-path <dir>` | also allow paths inside `<dir>` (repeatable) |
 | `--max-line-bytes`, `--max-commands`, `--max-file-bytes` | tighten or raise the input limits |
@@ -159,13 +159,16 @@ placement is refused as a short ("`at` 16.51,12.7 is on net VCC, X; a GND label
 there would short VCC, X and GND; pass allow_merge=true to merge on purpose").
 A name the net already carries, an unnamed net, or nothing at `at` is allowed.
 `allow_merge=true` places it anyway. There is no `dry_run` for these commands.
+A power flag (`power:PWR_FLAG`) never names a net, so it is not checked for a
+short.
 
 Two more refusals apply to a pin reference only (a coordinate is unchanged),
-and have no escape:
+and have no escape. The pin-reference placements that are join-checked are the
+wire, the label, the power port and the junction:
 
-- A label or power port whose tip lies under a wire the pin is not on (no end
-  or junction there) is refused ("the label on R1.2 also touches pin C1.1 ...
-  would join them to the net"): the label would anchor the tip to that wire
+- A label, power port or junction whose tip lies under a wire the pin is not on
+  (no end or junction there) is refused ("the label on R1.2 also touches pin
+  C1.1 ... would join them to the net"): it would anchor the tip to that wire
   and join its net. This is rule 3 of "Wire intent", applied to the tip.
 - A power port on a pin whose tip has no wire end, junction or label is refused
   ("would touch the pin without connecting"): pin to pin is no connection, so

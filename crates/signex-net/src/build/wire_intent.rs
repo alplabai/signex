@@ -288,19 +288,26 @@ pub fn has_connection_anchor(sheet: &SchematicSheet, p: Point) -> bool {
         || sheet.labels.iter().any(|l| pt_key(&l.position) == key)
 }
 
-/// What a label or power port placed on the pin `at` names would pull onto
-/// that pin's net: the label anchors the tip to a wire passing under it (end
-/// or interior), joining that wire's net. The same end rules as a wire run
-/// (`wire_intent`), with a label added to a copy of the sheet.
-pub fn joins_at_pin(before: &SchematicSheet, at: EndSpec) -> Vec<ExtraItem> {
+/// What a label, power port or (`junction`) junction placed on the pin `at`
+/// would pull onto that pin's net: it anchors the tip to a wire passing under
+/// it (end or interior), joining that wire's net. The same end rules as a wire
+/// run (`wire_intent`), with the item added to a copy of the sheet.
+pub fn joins_at_pin(before: &SchematicSheet, at: EndSpec, junction: bool) -> Vec<ExtraItem> {
     let mut after = before.clone();
-    // An empty text anchors the tip but joins no same-name net: a short by
-    // name is the rename check's, with its own escape.
-    after.labels.push(signex_types::schematic::Label::new(
-        "",
-        at.at,
-        signex_types::schematic::LabelType::Net,
-    ));
+    if junction {
+        after.junctions.push(signex_types::schematic::Junction {
+            position: at.at,
+            ..Default::default()
+        });
+    } else {
+        // An empty text anchors the tip but joins no same-name net: a short by
+        // name is the rename check's, with its own escape.
+        after.labels.push(signex_types::schematic::Label::new(
+            "",
+            at.at,
+            signex_types::schematic::LabelType::Net,
+        ));
+    }
     wire_intent(before, &after, at.clone(), at).extra
 }
 

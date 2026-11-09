@@ -112,16 +112,18 @@ fn a_label_on_a_referenced_pin_under_a_passing_wire_would_join_that_wire() {
     // junction there, so R1.1 is on no net until a label anchors the tip.
     let mut before = parts(&[("R1", (0.0, 0.0)), ("C1", (0.0, 10.0))]);
     before.wires.push(wire(pt(0.0, 10.0), pt(0.0, -10.0)));
-    let extra = joins_at_pin(&before, pin_ref(&before, "R1"));
-    assert!(
-        extra
-            .iter()
-            .any(|i| i.kind == ExtraKind::Pin && i.identity == "C1.1"),
-        "{extra:?}"
-    );
+    for junction in [false, true] {
+        let extra = joins_at_pin(&before, pin_ref(&before, "R1"), junction);
+        assert!(
+            extra
+                .iter()
+                .any(|i| i.kind == ExtraKind::Pin && i.identity == "C1.1"),
+            "{extra:?}"
+        );
+    }
     // On a tip nothing passes under, nothing is pulled in.
     let alone = parts(&[("R1", (0.0, 0.0))]);
-    assert!(joins_at_pin(&alone, pin_ref(&alone, "R1")).is_empty());
+    assert!(joins_at_pin(&alone, pin_ref(&alone, "R1"), true).is_empty());
 }
 
 #[test]

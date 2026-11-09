@@ -201,7 +201,13 @@ impl Signex {
     /// A label or power port on a pin reference is refused, with no escape,
     /// when it would pull another net onto the pin's: a wire passing under the
     /// tip joins through the label (the same end rules as a wire run).
-    fn refuse_joins(&self, args: &CommandArgs, at: Point, what: &str) -> Result<(), String> {
+    fn refuse_joins(
+        &self,
+        args: &CommandArgs,
+        at: Point,
+        what: &str,
+        junction: bool,
+    ) -> Result<(), String> {
         let Some(OperandValue::PinRef { designator, pin }) = args.operand("at") else {
             return Ok(());
         };
@@ -215,7 +221,7 @@ impl Signex {
             at,
             pin: Some((resolved.symbol, resolved.pin)),
         };
-        let extra = signex_net::joins_at_pin(engine.document(), spec);
+        let extra = signex_net::joins_at_pin(engine.document(), spec, junction);
         if extra.is_empty() {
             return Ok(());
         }
@@ -279,7 +285,7 @@ impl Signex {
                 spec.label_type = kind;
                 spec.shape = shape.to_string();
                 spec.text = text(args, "text")?;
-                self.refuse_joins(args, at, "label")?;
+                self.refuse_joins(args, at, "label", false)?;
                 self.refuse_rename(args, at, &spec.text, "label")?;
                 if let Some(OperandValue::Angle(degrees)) = args.operand("rotation") {
                     spec.rotation = *degrees;
@@ -298,12 +304,19 @@ impl Signex {
                 }
                 let net_name = text(args, "net_name")?;
                 self.refuse_unconnected_pin(args, at, "power port")?;
-                self.refuse_joins(args, at, "power port")?;
-                self.refuse_rename(args, at, &net_name, "power port")?;
+                self.refuse_joins(args, at, "power port", false)?;
+                // A flag marks a net as driven and never names it.
+                if !signex_net::is_power_flag(&lib_id) {
+                    self.refuse_rename(args, at, &net_name, "power port")?;
+                }
                 placed(self.place_power_at(at, &net_name, &lib_id))
             }
             Placement::NoConnect => placed(self.place_no_connect_at(self.grid_point(args, "at")?)),
-            Placement::Junction => placed(self.place_junction_at(self.grid_point(args, "at")?)),
+            Placement::Junction => {
+                let at = self.grid_point(args, "at")?;
+                self.refuse_joins(args, at, "junction", true)?;
+                placed(self.place_junction_at(at))
+            }
             Placement::NoErc => {
                 placed(self.place_no_erc_directive_at(self.grid_point(args, "at")?))
             }

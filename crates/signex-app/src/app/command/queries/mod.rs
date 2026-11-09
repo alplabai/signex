@@ -40,7 +40,7 @@ pub(crate) fn query_command_ids() -> impl Iterator<Item = &'static str> {
 }
 
 /// Is `command` one of the query commands?
-pub(crate) fn is_query(command: &AppCommandId) -> bool {
+pub fn is_query(command: &AppCommandId) -> bool {
     query_command_ids().any(|query| query == command.as_str())
 }
 

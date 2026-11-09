@@ -332,8 +332,28 @@ fn a_label_on_a_referenced_pin_under_a_passing_wire_is_refused_with_no_escape() 
             "label on R1.2 also touches pin C1.1",
         );
     }
+    // A junction by pin reference joins the same way; by coordinate it is the
+    // caller's own.
+    refused_with(
+        &mut app,
+        "place_junction",
+        &["at=R1.2"],
+        "junction on R1.2 also touches pin C1.1",
+    );
     // By coordinate the label is the caller's own T onto the wire.
     let outcome = run(&mut app, "place_net_label", &["at=16.51,12.7", "text=SIG"]);
+    assert_eq!(outcome, CommandOutcome::Ran);
+}
+
+#[test]
+fn a_power_flag_on_a_named_net_is_no_short() {
+    // A flag marks the net as driven and never names it.
+    let mut app = app_with(two_named_nets());
+    let outcome = run(
+        &mut app,
+        "place_power_symbol",
+        &["at=R1.2", "net_name=PWR_FLAG", "lib_id=power:PWR_FLAG"],
+    );
     assert_eq!(outcome, CommandOutcome::Ran);
 }
 
