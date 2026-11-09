@@ -356,8 +356,9 @@ impl Signex {
             );
         }
         // A headless `signex-cli` run is editing it with no window: opening
-        // it here would be a second editor of one file (#1924).
-        if let Some((pid, entry)) = self.headless_holder_of(project_path) {
+        // it here would be a second editor of one file (#1924). The claim is
+        // the shared lock a window holds while the project is open.
+        if let Err((pid, entry)) = self.claim_project(project_path) {
             anyhow::bail!(
                 "{} is being edited by a headless signex-cli run (process {pid}), so it was \
                  not opened. Open it again when that run has ended; if none is running, \

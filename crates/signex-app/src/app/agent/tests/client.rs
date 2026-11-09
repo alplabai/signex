@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use super::super::client::{self, Lookup};
 use super::super::files::{self, REGISTRY_DIR};
-use super::super::registry::{Entry, FORMAT, Kind};
+use super::super::registry::{self, Entry, FORMAT, Kind};
 use super::super::transport::endpoint_name;
 
 /// Boot ids of the right form.
@@ -23,6 +23,8 @@ struct Fixture {
     _root: tempfile::TempDir,
     dir: PathBuf,
     project: PathBuf,
+    /// The windows' shared locks on the project, which a running app holds.
+    windows: std::cell::RefCell<Vec<std::fs::File>>,
 }
 
 fn fixture() -> Fixture {
@@ -39,6 +41,7 @@ fn fixture() -> Fixture {
         _root: root,
         dir,
         project,
+        windows: std::cell::RefCell::new(Vec::new()),
     }
 }
 
@@ -75,13 +78,28 @@ impl Fixture {
     }
 
     /// An app of this process listening where its boot id says, with its
-    /// token file and its entry.
+    /// token file and its entry, and its window's lock on the project.
     fn live_app(&self, boot_id: &str) -> UnixListener {
         let listener = UnixListener::bind(endpoint_name(&self.dir, boot_id)).unwrap();
         listener.set_nonblocking(true).unwrap();
         self.write_token(boot_id, 0o600);
         self.plant(&self.entry(Kind::Gui, std::process::id(), boot_id));
+        self.open_in_a_window();
         listener
+    }
+
+    /// A window that has the project open: its shared lock.
+    fn open_in_a_window(&self) {
+        let canonical = std::fs::canonicalize(&self.project).unwrap();
+        match registry::claim_shared(&self.dir, &canonical) {
+            Ok(lock) => self.windows.borrow_mut().push(lock),
+            Err(_) => panic!("a window could not claim the project"),
+        }
+    }
+
+    /// Every window closes (or the apps crash): no lock is held any more.
+    fn close_every_window(&self) {
+        self.windows.borrow_mut().clear();
     }
 
     fn token_file(&self, boot_id: &str) -> PathBuf {
@@ -126,8 +144,9 @@ fn no_entry_is_free_a_live_app_is_found_and_a_live_headless_run_holds() {
     };
     assert_eq!(peer.pid, std::process::id());
 
-    // A headless run holds its lock: live, as long as it does.
+    // The window closes. A headless run holds its lock: live, as long as it does.
     std::fs::remove_file(fx.entry_file()).unwrap();
+    fx.close_every_window();
     let run = client::hold(&fx.dir, &fx.project).expect("a hold");
     let pid = std::process::id();
     assert!(matches!(fx.lookup(), Lookup::Headless { pid: held } if held == pid));
@@ -247,55 +266,86 @@ fn a_hold_leaves_its_lock_file_in_place() {
 }
 
 #[test]
-fn a_dead_pid_a_wrong_socket_a_bad_boot_id_or_another_project_is_stale() {
+fn an_entry_is_stale_only_when_no_window_holds_the_project_and_attachable_only_when_it_checks_out()
+{
     let fx = fixture();
     let _app = fx.live_app(CC);
     let live = fx.entry(Kind::Gui, std::process::id(), CC);
-    let stale = |entry: &Entry, why: &str| {
+    let bad = [
+        (
+            "a dead pid",
+            Entry {
+                pid: DEAD_PID,
+                ..live.clone()
+            },
+        ),
+        (
+            "a malformed boot id",
+            Entry {
+                boot_id: "cc".into(),
+                ..live.clone()
+            },
+        ),
+        (
+            "another project",
+            Entry {
+                project: "/another/Project.snxprj".into(),
+                ..live.clone()
+            },
+        ),
+        (
+            "a socket the boot id does not name",
+            Entry {
+                socket: "/tmp/elsewhere.sock".into(),
+                ..live.clone()
+            },
+        ),
+        (
+            "a dead headless run",
+            fx.entry(Kind::Headless, DEAD_PID, EE),
+        ),
+    ];
+    // A window holds the project: whatever the entry says, it is not stale
+    // (the project is open), and nothing is attached to that does not check out.
+    for (why, entry) in &bad {
+        fx.plant(entry);
+        assert!(
+            !matches!(fx.lookup(), Lookup::Stale(_) | Lookup::Gui(_)),
+            "{why}: {:?}",
+            fx.lookup()
+        );
+    }
+    fx.plant(&live);
+    assert!(matches!(fx.lookup(), Lookup::Gui(_)), "the live app");
+    // No window holds it any more: every one of those entries is stale.
+    fx.close_every_window();
+    for (why, entry) in &bad {
         fx.plant(entry);
         assert!(matches!(fx.lookup(), Lookup::Stale(_)), "{why}");
-    };
-    stale(
-        &Entry {
-            pid: DEAD_PID,
-            ..live.clone()
-        },
-        "a dead pid",
-    );
-    stale(
-        &Entry {
-            boot_id: "cc".into(),
-            ..live.clone()
-        },
-        "a malformed boot id",
-    );
-    stale(
-        &Entry {
-            project: "/another/Project.snxprj".into(),
-            ..live.clone()
-        },
-        "another project",
-    );
-    stale(
-        &Entry {
-            socket: "/tmp/elsewhere.sock".into(),
-            ..live.clone()
-        },
-        "a socket the boot id does not name",
-    );
-    stale(
-        &fx.entry(Kind::Headless, DEAD_PID, EE),
-        "a dead headless run",
-    );
-    // And the live one is still live.
+    }
     fx.plant(&live);
-    assert!(matches!(fx.lookup(), Lookup::Gui(_)));
+    assert!(matches!(fx.lookup(), Lookup::Stale(_)), "the app is gone");
+}
+
+/// Someone has the project open but no entry says who: nothing to attach to,
+/// and not free.
+#[test]
+fn a_held_project_with_no_entry_is_not_free() {
+    let fx = fixture();
+    fx.open_in_a_window();
+    assert!(
+        matches!(fx.lookup(), Lookup::GuiNotListening { pid: None }),
+        "{:?}",
+        fx.lookup()
+    );
+    fx.close_every_window();
+    assert!(matches!(fx.lookup(), Lookup::Free));
 }
 
 /// An entry is data another process wrote: whatever socket it names is never
 /// connected to, not even to see if it answers.
 #[test]
-fn a_planted_entry_naming_another_socket_is_stale_and_that_socket_is_never_touched() {
+fn a_planted_entry_naming_another_socket_is_not_attached_to_and_that_socket_is_never_touched() {
     let fx = fixture();
     let planted_path = fx.dir.join("planted.sock");
     let planted = UnixListener::bind(&planted_path).unwrap();
@@ -307,7 +357,7 @@ fn a_planted_entry_naming_another_socket_is_stale_and_that_socket_is_never_touch
         ..fx.entry(Kind::Gui, std::process::id(), CC)
     };
     fx.plant(&entry);
-    assert!(matches!(fx.lookup(), Lookup::Stale(_)));
+    assert!(matches!(fx.lookup(), Lookup::GuiNotListening { .. }));
 
     // A live app's entry never leads the client anywhere but its own endpoint.
     fx.plant(&fx.entry(Kind::Gui, std::process::id(), CC));
@@ -345,6 +395,7 @@ fn a_stale_entry_is_removed_only_if_it_is_still_stale_and_a_plain_file_of_ours()
     );
 
     // A link in the entry's place is not read, so it is never removed.
+    fx.close_every_window();
     std::fs::remove_file(fx.entry_file()).unwrap();
     let target = fx.dir.join("precious");
     std::fs::write(&target, serde_json::to_string(&dead).unwrap()).unwrap();

@@ -30,9 +30,14 @@ pub(crate) struct AgentState {
     /// person works in (`Signex::boot`) does. An app made otherwise (a test, a
     /// headless run, which holds its project itself) does not.
     pub(crate) lists_projects: bool,
-    /// Serialises registry writes and removals, which run on worker threads,
-    /// and holds the lock of every open project (see `registry::Locks`).
-    pub(super) registry_lock: Arc<Mutex<super::registry::Locks>>,
+    /// Serialises registry writes and removals, which run on worker threads;
+    /// holds the number of the last write that ran (`registry::sync_in_order`).
+    pub(super) registry_lock: Arc<Mutex<u64>>,
+    /// The number of the last write started.
+    pub(super) registry_seq: u64,
+    /// The shared lock this window holds on each project it has open, by the
+    /// project's path, for as long as it stays open (see `claim_project`).
+    pub(super) project_locks: std::collections::BTreeMap<PathBuf, std::fs::File>,
     /// The boot ids whose files this app may have made, for the quit path.
     pub(super) touched: Vec<String>,
     /// The last registry write failed or left a project to another instance;
@@ -55,6 +60,8 @@ impl AgentState {
             serving: false,
             lists_projects: false,
             registry_lock: Arc::default(),
+            registry_seq: 0,
+            project_locks: std::collections::BTreeMap::new(),
             touched: Vec::new(),
             registry_retry: false,
             registry_in_flight: false,

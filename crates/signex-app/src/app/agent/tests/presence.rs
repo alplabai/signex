@@ -8,7 +8,7 @@ use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
 
 use super::super::client::{self, Lookup};
-use super::super::files::{self, REGISTRY_DIR};
+use super::super::files::REGISTRY_DIR;
 use super::super::registry::{Entry, FORMAT, Kind};
 use super::super::transport::endpoint_name;
 use crate::app::{Message, Signex};
@@ -29,8 +29,9 @@ fn fixture() -> Fixture {
         .prefix("snx-1924p")
         .tempdir()
         .expect("temp dir");
+    // The runtime folder does not exist yet, as on a fresh boot or login: with
+    // agent connections off no listener makes it, the listing must.
     let dir = root.path().join("run");
-    files::prepare_dir(&dir).expect("runtime dir");
     let project = root.path().join("P.snxprj");
     std::fs::write(&project, b"").expect("project file");
     let (mut app, _boot) = Signex::new();
@@ -100,10 +101,21 @@ fn an_open_project_is_listed_without_a_socket_or_a_token_while_agent_connections
     );
     // A client sees an app that has the project and cannot be attached to.
     assert!(
-        matches!(fx.lookup(), Lookup::GuiNotListening { pid } if pid == std::process::id()),
+        matches!(fx.lookup(), Lookup::GuiNotListening { pid: Some(pid) } if pid == std::process::id()),
         "{:?}",
         fx.lookup()
     );
+}
+
+/// On a fresh runtime folder with agent connections off, the open project is
+/// listed and held: a headless run is refused, not let in.
+#[test]
+fn a_fresh_runtime_folder_does_not_let_a_headless_run_edit_an_open_project() {
+    let fx = fixture();
+    assert!(fx.dir.is_dir(), "the listing made the runtime folder");
+    assert!(fx.entry().is_some(), "nothing is listed on a fresh boot");
+    let refused = client::hold(&fx.dir, &fx.project);
+    assert!(refused.is_err(), "a run took a project open in the window");
 }
 
 #[test]
@@ -115,18 +127,20 @@ fn a_project_that_closes_loses_its_entry_and_its_lock() {
     assert!(fx.entry().is_none(), "a closed project is still listed");
     assert!(matches!(fx.lookup(), Lookup::Free), "{:?}", fx.lookup());
     // It opens again: listed again.
-    fx.app.document_state.projects = kept;
+    drop(kept);
+    let _task = fx.app.handle_document_file_opened(Some(fx.project.clone()));
     fx.settle();
     assert!(fx.entry().is_some());
+    assert!(client::hold(&fx.dir, &fx.project).is_err());
 }
 
 /// A crash leaves the entry, but the kernel drops the lock with the process.
 #[test]
 fn an_entry_left_by_a_crashed_app_is_stale() {
-    let fx = fixture();
+    let mut fx = fixture();
     assert!(fx.entry().is_some());
     // The process is gone, its pid is not (this test's process, or a reused one).
-    fx.app.agent.registry_lock.lock().unwrap().clear();
+    fx.app.agent.project_locks.clear();
     assert!(fx.entry().is_some(), "the entry stays");
     assert!(matches!(fx.lookup(), Lookup::Stale(_)), "{:?}", fx.lookup());
 }

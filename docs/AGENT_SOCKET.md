@@ -200,20 +200,31 @@ without one is a format 1 entry and reads as `gui`. Format 3 added the
 `gui` entry without a socket, which a format 2 reader would misjudge as
 stale, so it reads a format 3 entry as one it does not know.
 
-A client finds its project's entry by the digest of the canonical path and
-reads the token from `<boot_id>.token` in the runtime directory. An entry is
-live when its boot id has the right form and, for a `gui` entry with a socket,
-its process runs and `socket` is the endpoint that boot id names and answers;
-a `headless` entry, and a `gui` entry without a socket, are live while a
-process holds the exclusive lock on the project's lock file,
-`registry/<digest>.lock`, beside the entry. The run, or the app while the
-project is open, takes that lock and the kernel drops it with the process, so
+**The lock decides who has the project open.** Every window that has a project
+open holds a SHARED lock on `registry/<digest>.lock`, beside the entry, from
+the moment it opens the project (in the update that opens it, with one small
+file open and a non-blocking lock) until it closes it; a headless run holds
+the lock EXCLUSIVELY. So many windows can have one project open, a headless
+run cannot take it while any window does, and a window cannot open a project a
+run holds (it refuses, as above). The kernel drops a lock with its process, so
 a process killed by a signal is found stale at once and a reused process id
-means nothing: a reader tries the lock without waiting, and if it gets it, the
-holder is gone. A client
-never connects to anything an entry names: it derives the endpoint from the
-boot id. An entry that is not live is stale: the client removes it, after the
-same owner and link check the app makes.
+means nothing. A reader asks for the lock exclusively without waiting: it
+fails while anyone holds it, and if it succeeds every holder is gone.
+
+A client finds its project's entry by the digest of the canonical path and
+reads the token from `<boot_id>.token` in the runtime directory, and judges it
+by the lock first. With nobody holding the lock the project is free, and an
+entry that remains is stale (removed after the same owner and link check the
+app makes). With the lock held an entry is never stale: if it names a live app
+whose boot id has the right form, whose `socket` is the endpoint that boot id
+names, whose process runs and whose endpoint answers, the client attaches;
+if it is a `headless` entry (no socket) it is a headless run; anything else
+(no socket, no entry yet, an entry that does not check out) is a project open
+where there is nothing to attach to. A client never connects to anything an
+entry names: it derives the endpoint from the boot id. The registry write
+makes the runtime folder first (with agent connections off no listener does).
+Registry writes run on worker threads and can reach the lock out of order, so
+each carries a number and one older than the last applied is dropped.
 
 Every reader opens an entry without following a link and without blocking (a
 FIFO put in its place is not opened for reading), and checks the descriptor it
@@ -288,22 +299,27 @@ that have ended stay in the quit path's list, which keeps the last 32.
 - `hold` takes the project's lock first (a few attempts, 5 x 20 ms: a reader's
   momentary lock must not fail a starting run; and the path must still name the
   locked file), then writes the `headless` entry (one format, the app's file
-  writer). It fails if another run holds the lock or a running app has the
-  project registered; a dead run's entry is replaced. Dropping the `Hold`
+  writer). It fails if another run holds the lock or a window has the project
+  open (its shared lock; its entry, when one is written, names it); a dead
+  run's entry is replaced. Dropping the `Hold`
   removes the entry (only if it is still the run's own). The lock file is never
   deleted: an empty 0600 file is harmless, and deleting a locked file would let
   a second run lock the unlinked one.
 
 ## The app refuses a held project
 
-When the app opens a project (any way: Open, a recent file, the command line)
-whose entry is a live `headless` hold, it refuses: a line in Messages and an
-Open Failed notice (`<file> is being edited by a headless signex-cli run
-(process N), so it was not opened`), and nothing in the app changes. This
-needs no setting: the registry is read whether or not agent connections are on.
-A project another app holds opens as before (PR A: the registry write logs).
-A headless app (the CLI's own) never refuses: it is the run that holds the
-project (a second run is refused before it starts, by `signex-cli`).
+When the window opens a project (any way: Open, a recent file, the command
+line) it takes the shared lock at once, and if a headless run holds it
+exclusively the window refuses: a line in Messages and an Open Failed notice
+(`<file> is being edited by a headless signex-cli run (process N), so it was
+not opened`), and nothing in the app changes. This needs no setting: the lock
+is taken whether or not agent connections are on. A project another window has
+open opens as before (the shared locks coexist; the later entry write logs
+that it is also open there). The lock is taken in the update that opens the
+project, so a run cannot slip in between the open and the registry write. A
+headless app (the CLI's own) and an app made for a test hold no lock and never
+refuse: the run holds the project (a second run is refused before it starts,
+by `signex-cli`).
 
 Recovery: the notice names the entry file. A hold is live only while its run
 holds the lock, so an entry that stays after its run was killed is stale and is
@@ -312,12 +328,13 @@ entry file it names.
 
 ## Known limits
 
-- Two processes that start at the same moment can both find no entry: the
-  hold's lock is exclusive, so only one run wins, but an app and a run racing
-  for one project can both register; the later entry write wins, and the
-  save-time baseline check remains the backstop. A stale entry is removed after
-  a re-read that shows it unchanged; an app that rewrites it between that read
-  and the removal can lose its entry, which the app's retry timer restores.
+- The lock keeps a window and a run apart (one or the other has it), but the
+  entry is a separate write: two windows with one project both want to write
+  its entry, the first keeps it and the other logs and retries every 5 s, so
+  after the first closes the project there can be no entry for a few seconds;
+  the lock still says it is open. A stale entry is removed after a re-read that
+  shows it unchanged; an app that rewrites it between that read and the removal
+  can lose its entry, which the app's retry timer restores.
 - The lock is a file lock (`flock`, `LockFileEx`): on a runtime folder on a
   network file system whose locks are not honoured, a hold is not seen.
 - A sheet opened loose, without its project, is not listed and not refused.

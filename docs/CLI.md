@@ -205,19 +205,24 @@ forced `--headless` fails.
 
 ### A project open in Signex that does not listen
 
-A Signex lists every open project in the registry and holds its lock even
-while "Allow agent connections" is off; its entry then names no socket. A run
-that finds such an entry does not run headless on the same files (two copies
-of the document would diverge). On any route (`--attach` too) it stops with
-exit 2 and no output:
+A Signex window holds a shared lock on every project it has open, from the
+moment it opens it until it closes it (many windows can have one project open;
+a headless run holds the lock exclusively, so it cannot take a project any
+window has), and lists it in the registry, even while "Allow agent
+connections" is off; its entry then names no socket. A run that finds the
+project's lock held (and no entry it can attach to) does not run headless on
+the same files (two copies of the document would diverge). On any route
+(`--attach` too) it stops with exit 2 and no output:
 
 ```
 <project> is open in Signex (pid N). To let an agent work on it, turn on Preferences > Allow agent connections.
 ```
 
-Once the person turns the setting on, the same entry names the socket and the
-run attaches. A Signex that crashed leaves its entry, but its lock is gone, so
-the entry is stale and the run goes on.
+(With the lock held and no entry yet, the message says the project is open in
+Signex or held by a run that is just starting, without a pid.) Once the person
+turns the setting on, the same entry names the socket and the run attaches. A
+Signex that crashed leaves its entry, but its lock is gone, so the entry is
+stale and the run goes on. An entry is never stale while its lock is held.
 
 ## Security
 

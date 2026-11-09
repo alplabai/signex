@@ -212,20 +212,29 @@ impl Signex {
             .map(|project| project.path.clone())
             .collect();
         projects.sort();
+        // A project that got open some way that did not claim it (the open
+        // handler does) is claimed now; a window that closed a project lets go
+        // of its lock at once, in step with the update (the entry follows on
+        // the worker).
+        for project in &projects {
+            self.claim_project(project).ok();
+        }
+        self.agent
+            .project_locks
+            .retain(|path, _| projects.contains(path));
         if self.agent.registered.as_ref() == Some(&projects) {
             return None;
         }
         self.agent.registered = Some(projects.clone());
         self.agent.registry_in_flight = true;
+        self.agent.registry_seq += 1;
+        let seq = self.agent.registry_seq;
         let lock = self.agent.registry_lock.clone();
         let boot_id = owner.boot_id.clone();
         Some(Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    let mut held = lock
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    registry::sync(&dir, &owner, &projects, &mut held)
+                    registry::sync_in_order(&dir, &owner, &projects, seq, &lock)
                 })
                 .await
                 .unwrap_or_else(|error| Err(format!("the registry write did not finish: {error}")))
@@ -266,6 +275,7 @@ impl Signex {
         // Nothing is listed again after the exit path: an update that runs
         // before the process ends must not write the entries back.
         self.agent.lists_projects = false;
+        self.agent.project_locks.clear();
         let lock = self.agent.registry_lock.clone();
         Task::perform(
             async move {
@@ -282,21 +292,45 @@ impl Signex {
         .chain(next)
     }
 
-    /// The process of a live headless run that holds the project at
-    /// `project`, if one does: the app does not open a project an agent is
-    /// editing without a window. Asked whether or not agent connections are
-    /// on; a few `stat`s and one small read, like the alias check beside it.
-    /// A headless app is the run that holds it: it never refuses.
-    pub(crate) fn headless_holder_of(
-        &self,
+    /// The window claims the project it is about to open: it takes the shared
+    /// lock on the project's lock file, now, in the update that opens it, and
+    /// holds it for as long as the project stays open. Many windows can hold
+    /// it; a headless `signex-cli` run holds it exclusively, so while one runs
+    /// this fails with the run's process and its entry file, and the app does
+    /// not open a project an agent is editing without a window. The lock is
+    /// what `signex-cli` finds when it looks: nothing can slip in between this
+    /// and the registry entry, which is written later, on a worker. One small
+    /// file open and a non-blocking lock, the class of IO that reading the
+    /// project file here is. Only the window lists (and claims): an app made
+    /// for a test, and the headless run itself, do not. A lock that cannot be
+    /// made for another reason is said in Messages and the project opens.
+    pub(crate) fn claim_project(
+        &mut self,
         project: &std::path::Path,
-    ) -> Option<(u32, std::path::PathBuf)> {
-        if self.headless_answers().is_some() {
-            return None;
+    ) -> Result<(), (u32, std::path::PathBuf)> {
+        if !self.agent.lists_projects || self.agent.project_locks.contains_key(project) {
+            return Ok(());
         }
-        let dir = self.agent.runtime_dir().ok()?;
-        let canonical = std::fs::canonicalize(project).ok()?;
-        registry::held_by_headless(dir, &canonical)
+        let (Ok(dir), Ok(canonical)) = (
+            self.agent.runtime_dir().cloned(),
+            std::fs::canonicalize(project),
+        ) else {
+            return Ok(());
+        };
+        match registry::claim_shared(&dir, &canonical) {
+            Ok(lock) => {
+                self.agent.project_locks.insert(project.to_path_buf(), lock);
+                Ok(())
+            }
+            Err(registry::LockError::Held) => Err(registry::headless_holder(&dir, &canonical)),
+            Err(registry::LockError::Other(why)) => {
+                crate::diagnostics::log_warning(format!(
+                    "Agent registry: {} could not be locked: {why}",
+                    project.display()
+                ));
+                Ok(())
+            }
+        }
     }
 
     fn handle_agent_request(&mut self, call: AgentCall) -> Task<Message> {

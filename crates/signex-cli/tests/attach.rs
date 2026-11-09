@@ -91,6 +91,11 @@ impl World {
     /// returned file.
     fn open_without_listening(&self) -> std::fs::File {
         self.plant("gui", std::process::id(), CC, Path::new(""));
+        self.window_lock()
+    }
+
+    /// The shared lock a window holds on the project while it has it open.
+    fn window_lock(&self) -> std::fs::File {
         let lock = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
@@ -98,7 +103,7 @@ impl World {
             .truncate(false)
             .open(self.entry_file().with_extension("lock"))
             .unwrap();
-        lock.try_lock().expect("the app's lock");
+        lock.try_lock_shared().expect("the window's lock");
         lock
     }
 
@@ -133,7 +138,9 @@ impl World {
             (SHEET_B.into(), OTHER_PROJECT_SHEET.into()),
             (PROJECT_DOC.into(), self.project().to_string()),
         ];
-        FakeApp::serve(listener, replies, docs)
+        let mut app = FakeApp::serve(listener, replies, docs);
+        app.window = Some(self.window_lock());
+        app
     }
 }
 
@@ -143,6 +150,8 @@ struct FakeApp {
     requests: Arc<Mutex<Vec<Value>>>,
     stop: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
+    /// The app's window lock on the project, held for as long as it runs.
+    window: Option<std::fs::File>,
 }
 
 impl FakeApp {
@@ -188,6 +197,7 @@ impl FakeApp {
             requests,
             stop,
             thread: Some(thread),
+            window: None,
         }
     }
 

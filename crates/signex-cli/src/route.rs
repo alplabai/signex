@@ -70,11 +70,18 @@ pub(crate) fn place_in(
 
 /// A Signex has the project open and does not listen: the run does not edit
 /// the same files behind it, for any route.
-fn not_listening(project: &impl std::fmt::Display, pid: u32) -> String {
-    format!(
-        "{project} is open in Signex (pid {pid}). To let an agent work on it, turn on \
-         Preferences > Allow agent connections."
-    )
+fn not_listening(project: &impl std::fmt::Display, pid: Option<u32>) -> String {
+    match pid {
+        Some(pid) => format!(
+            "{project} is open in Signex (pid {pid}). To let an agent work on it, turn on \
+             Preferences > Allow agent connections."
+        ),
+        // Someone holds the project and no entry says who (yet).
+        None => format!(
+            "{project} is open in Signex, or held by a signex-cli run that is just starting. \
+             To let an agent work on it, turn on Preferences > Allow agent connections."
+        ),
+    }
 }
 
 /// Take the hold. If that fails under `Auto` because a running Signex
@@ -120,6 +127,15 @@ mod tests {
         let entry = serde_json::json!({"format": 2, "kind": "gui", "project": canonical,
             "pid": std::process::id(), "socket": socket, "boot_id": boot});
         let file = agent_client::entry_path(&dir, &project).unwrap();
+        // The app's window has the project open: its shared lock.
+        let window = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(file.with_extension("lock"))
+            .unwrap();
+        window.try_lock_shared().unwrap();
         std::fs::write(file, entry.to_string()).unwrap();
 
         assert!(matches!(

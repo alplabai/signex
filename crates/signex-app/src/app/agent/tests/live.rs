@@ -208,13 +208,11 @@ fn the_client_attaches_through_the_registry_and_its_query_and_edit_change_the_ru
         let (server, mut messages, _socket) = start(&mut app, &config).await;
         // The write the app's own worker makes once the listener is up.
         let owner = app.agent.owner().expect("the app is listening");
-        registry::sync(
-            &dir,
-            &owner,
-            std::slice::from_ref(&project),
-            &mut registry::Locks::new(),
-        )
-        .unwrap();
+        registry::sync(&dir, &owner, std::slice::from_ref(&project)).unwrap();
+        // And the window's lock on the open project, taken when it opened.
+        let _window = registry::claim_shared(&dir, &std::fs::canonicalize(&project).unwrap())
+            .ok()
+            .expect("the window's lock");
 
         let (client_dir, client_project, client_doc) = (dir.clone(), project.clone(), doc.clone());
         let attached = std::thread::spawn(move || -> Result<Vec<Reply>, String> {
@@ -536,7 +534,7 @@ fn quitting_with_the_setting_off_removes_an_entry_of_this_run_that_outlived_its_
 fn cleanup_waits_for_a_registry_write_in_flight() {
     use std::sync::{Arc, Mutex, mpsc};
     let dir = scratch();
-    let lock = Arc::new(Mutex::new(registry::Locks::new()));
+    let lock = Arc::new(Mutex::new(0_u64));
     let held = lock.lock().unwrap();
     let (done, finished) = mpsc::channel();
     let worker = {
@@ -643,13 +641,7 @@ fn a_project_another_instance_held_is_registered_once_it_quits() {
         boot_id: boot_id.into(),
         endpoint: socket,
     };
-    registry::sync(
-        &dir,
-        &other,
-        std::slice::from_ref(&project),
-        &mut registry::Locks::new(),
-    )
-    .unwrap();
+    registry::sync(&dir, &other, std::slice::from_ref(&project)).unwrap();
     let pid_in = |entry: &Path| {
         serde_json::from_str::<registry::Entry>(&std::fs::read_to_string(entry).unwrap())
             .unwrap()
@@ -841,13 +833,7 @@ fn a_late_registry_write_of_an_ended_listener_is_removed_on_quit() {
         boot_id: old,
         endpoint: "/run/old.sock".into(),
     };
-    registry::sync(
-        &dir,
-        &late,
-        std::slice::from_ref(&project),
-        &mut registry::Locks::new(),
-    )
-    .unwrap();
+    registry::sync(&dir, &late, std::slice::from_ref(&project)).unwrap();
     assert!(entry.exists());
 
     let mut driver = crate::task_driver::TaskDriver::new();

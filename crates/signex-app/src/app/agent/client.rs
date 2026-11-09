@@ -42,16 +42,18 @@ pub fn runtime_dir() -> Result<PathBuf, String> {
 pub enum Lookup {
     /// No entry.
     Free,
-    /// An entry nobody answers for: its process is gone, its boot id or
-    /// endpoint is not the form this app writes, or it names another project.
+    /// An entry nobody holds the project's lock for: whatever wrote it is gone.
+    /// Never an entry while its lock is held.
     Stale(StaleEntry),
     /// A running app listens and has the project open.
     Gui(GuiPeer),
     /// A live headless run holds the project.
     Headless { pid: u32 },
-    /// A running app has the project open and does not listen (agent
-    /// connections are off): nothing to attach to, and not to be edited behind.
-    GuiNotListening { pid: u32 },
+    /// Someone has the project's lock but there is nothing to attach to: a
+    /// running app that does not listen (agent connections are off), or whose
+    /// entry is not (yet) one that can be attached to. Not to be edited behind.
+    /// `pid` is the entry's process, if there is an entry.
+    GuiNotListening { pid: Option<u32> },
 }
 
 /// A stale entry that may be removed with [`StaleEntry::remove`].
@@ -105,8 +107,16 @@ pub fn lookup(dir: &Path, project: &Path) -> Result<Lookup, String> {
         Err(error) => return Err(format!("cannot inspect {}: {error}", dir.display())),
     }
     let path = entry_path(dir, &canonical)?;
+    // The lock decides whether anyone has the project open (a window holds it
+    // shared, a headless run exclusively); the entry only says who, and where
+    // to attach. An entry is never stale while its lock is held.
+    let held = registry::lock_is_held(&registry::lock_path(dir, &canonical));
     let Some(entry) = registry::read_entry(&path) else {
-        return Ok(Lookup::Free);
+        return Ok(if held {
+            Lookup::GuiNotListening { pid: None }
+        } else {
+            Lookup::Free
+        });
     };
     // Not ours to judge: neither live nor stale, and never removed or replaced.
     if !registry::is_known(&entry) {
@@ -116,18 +126,24 @@ pub fn lookup(dir: &Path, project: &Path) -> Result<Lookup, String> {
             entry.format
         ));
     }
-    let names_this_project = entry.project == canonical.to_string_lossy();
-    if !names_this_project || !registry::entry_is_live(dir, &entry) {
+    if !held {
         return Ok(Lookup::Stale(StaleEntry { path, entry }));
     }
+    let names_this_project = entry.project == canonical.to_string_lossy();
     Ok(match entry.kind {
-        Kind::Headless => Lookup::Headless { pid: entry.pid },
-        Kind::Gui if entry.socket.is_empty() => Lookup::GuiNotListening { pid: entry.pid },
-        Kind::Gui => Lookup::Gui(GuiPeer {
-            pid: entry.pid,
-            dir: dir.to_path_buf(),
-            boot_id: entry.boot_id,
-        }),
+        Kind::Headless if names_this_project && entry.socket.is_empty() => {
+            Lookup::Headless { pid: entry.pid }
+        }
+        Kind::Gui if names_this_project && registry::attachable(dir, &entry) => {
+            Lookup::Gui(GuiPeer {
+                pid: entry.pid,
+                dir: dir.to_path_buf(),
+                boot_id: entry.boot_id,
+            })
+        }
+        _ => Lookup::GuiNotListening {
+            pid: Some(entry.pid),
+        },
     })
 }
 
@@ -172,20 +188,15 @@ pub fn hold(dir: &Path, project: &Path) -> Result<Hold, String> {
             });
         }
     };
-    if let Some(existing) = registry::read_entry(&entry_file) {
-        if !registry::is_known(&existing) {
-            return Err(format!(
-                "{} is in a newer format; not replacing it",
-                entry_file.display()
-            ));
-        }
-        if existing.kind == Kind::Gui && registry::entry_is_live(dir, &existing) {
-            return Err(format!(
-                "{} is also open in process {}, which keeps its entry",
-                canonical.display(),
-                existing.pid
-            ));
-        }
+    // Holding the lock means no window has the project open, so whatever entry
+    // is here is a dead one's, unless a newer Signex wrote it.
+    if let Some(existing) = registry::read_entry(&entry_file)
+        && !registry::is_known(&existing)
+    {
+        return Err(format!(
+            "{} is in a newer format; not replacing it",
+            entry_file.display()
+        ));
     }
     let owner = Owner {
         pid: std::process::id(),
@@ -213,8 +224,7 @@ impl Drop for Hold {
     /// Removes the entry. The lock file stays: deleting a locked file lets a
     /// second run lock the unlinked one (see `registry::acquire_lock`).
     fn drop(&mut self) {
-        if let Err(why) = registry::remove_all(&self.dir, &self.owner, &mut registry::Locks::new())
-        {
+        if let Err(why) = registry::remove_all(&self.dir, &self.owner) {
             crate::diagnostics::log_warning(format!("could not remove the project hold: {why}"));
         }
     }

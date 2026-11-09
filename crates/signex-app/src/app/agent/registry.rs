@@ -22,11 +22,6 @@ use super::transport::endpoint_name;
 /// for a stale one, so it must not read it at all.
 pub(super) const FORMAT: u32 = 3;
 
-/// The locks this app holds, one per open project, by entry file name. A lock
-/// is held while its project is open and dropped (never deleted) when it
-/// closes; see [`acquire_lock`].
-pub(super) type Locks = std::collections::BTreeMap<String, std::fs::File>;
-
 /// The largest entry this app reads back while cleaning up.
 const MAX_ENTRY_BYTES: u64 = 64 * 1024;
 
@@ -71,17 +66,35 @@ pub(super) fn entry_file_name(canonical: &Path) -> String {
     format!("{hex}.json")
 }
 
-/// Write the entry of every project in `projects`, holding each one's lock, and
-/// remove this run's other entries and locks (a closed project). Entries of
-/// other processes are never touched. With an empty `owner.endpoint` the entry
-/// says the app has the project open and does not listen. A project that
-/// cannot be resolved is named in the error, after the rest was done.
-pub(super) fn sync(
+/// [`sync`] for the write number `seq`, under `applied`, the number of the last
+/// write that ran: writes run on worker threads and can reach this lock out of
+/// order, and an older list must never be written after a newer one. A write
+/// older than the last applied is dropped.
+pub(super) fn sync_in_order(
     dir: &Path,
     owner: &Owner,
     projects: &[PathBuf],
-    locks: &mut Locks,
+    seq: u64,
+    applied: &std::sync::Mutex<u64>,
 ) -> Result<(), String> {
+    let mut last = applied
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if seq < *last {
+        return Ok(());
+    }
+    *last = seq;
+    sync(dir, owner, projects)
+}
+
+/// Write the entry of every project in `projects` and remove this run's other
+/// entries (a closed project). Entries of other processes are never touched.
+/// With an empty `owner.endpoint` the entry says the app has the project open
+/// and does not listen. The runtime folder is made first, as `hold` does: with
+/// agent connections off no listener ever makes it. A project that cannot be
+/// resolved is named in the error, after the rest was done.
+pub(super) fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<(), String> {
+    files::prepare_dir(dir)?;
     let registry = dir.join(REGISTRY_DIR);
     files::prepare_dir(&registry)?;
     let mut wanted = BTreeSet::new();
@@ -113,35 +126,21 @@ pub(super) fn sync(
             socket: owner.endpoint.clone(),
             boot_id: owner.boot_id.clone(),
         };
-        // The project's lock, held while it is open: it is what says this app
-        // is alive when the entry has no socket. Another holder keeps the project.
-        let held_elsewhere = format!(
-            "{} is also open in process {}, which keeps its entry",
-            canonical.display(),
-            existing.as_ref().map_or(0, |entry| entry.pid)
-        );
-        if !locks.contains_key(&name) {
-            match acquire_lock(&lock_path(dir, &canonical)) {
-                Ok(lock) => {
-                    locks.insert(name.clone(), lock);
-                }
-                Err(_) => {
-                    problems.push(held_elsewhere);
-                    continue;
-                }
-            }
-        }
         if existing.as_ref() == Some(&entry) {
             // Already written: a retry does not rewrite it.
             wanted.insert(name);
             continue;
         }
-        // With the lock held, an entry with no socket (a headless run, an app
-        // that does not listen) is a dead one's; one with a socket is judged by
-        // its socket.
-        let live = |entry: &Entry| !entry.socket.is_empty() && entry_is_live(dir, entry);
+        // The window holds the project's lock while it is open (`claim_shared`),
+        // so no headless run has it: a headless entry here is a dead run's.
+        // Another window's entry is judged by its process and its socket.
+        let live = |entry: &Entry| entry.kind == Kind::Gui && entry_is_live(dir, entry);
         if !may_take_over(existing.as_ref(), owner, live) {
-            problems.push(held_elsewhere);
+            problems.push(format!(
+                "{} is also open in process {}, which keeps its entry",
+                canonical.display(),
+                existing.as_ref().map_or(0, |entry| entry.pid)
+            ));
             continue;
         }
         let text = serde_json::to_string_pretty(&entry).map_err(|error| error.to_string())?;
@@ -153,8 +152,6 @@ pub(super) fn sync(
         }
     }
     problems.extend(remove_own_except(&registry, owner, &wanted));
-    // A project no longer open releases its lock (the lock file stays).
-    locks.retain(|name, _| wanted.contains(name));
     if problems.is_empty() {
         Ok(())
     } else {
@@ -194,23 +191,28 @@ pub(super) fn entry_is_live(dir: &Path, entry: &Entry) -> bool {
             entry.socket.is_empty() && lock_is_held(&lock_path(dir, Path::new(&entry.project)))
         }
         // An app that has the project open and does not listen (agent
-        // connections off) holds the project's lock, as a headless run does.
-        Kind::Gui if entry.socket.is_empty() => {
-            lock_is_held(&lock_path(dir, Path::new(&entry.project)))
-        }
-        Kind::Gui => {
-            entry.socket == endpoint_name(dir, &entry.boot_id)
-                && pid_alive(entry.pid)
-                && endpoint_answers(&entry.socket)
-        }
+        // connections off). From another window's side only its process can be
+        // judged (a client judges by the lock, see `client::lookup`).
+        Kind::Gui if entry.socket.is_empty() => pid_alive(entry.pid),
+        Kind::Gui => attachable(dir, entry),
     }
 }
 
+/// Whether a client may connect to the app an entry names: its boot id has the
+/// right form, `socket` is the endpoint that boot id gives, its process runs
+/// and the endpoint answers.
+pub(super) fn attachable(dir: &Path, entry: &Entry) -> bool {
+    is_boot_id(&entry.boot_id)
+        && !entry.socket.is_empty()
+        && entry.socket == endpoint_name(dir, &entry.boot_id)
+        && pid_alive(entry.pid)
+        && endpoint_answers(&entry.socket)
+}
+
 /// The process of a live headless run that holds `canonical` (a project's
-/// canonical path), and the entry file that says so, if one does: the GUI does
-/// not open a project a headless run is editing. A runtime folder that is not
-/// ours and private, or an entry that is not a plain file of ours in a format
-/// this app knows, holds nothing.
+/// canonical path), and the entry file that says so, if one does. A runtime
+/// folder that is not ours and private, or an entry that is not a plain file of
+/// ours in a format this app knows, holds nothing.
 pub(super) fn held_by_headless(dir: &Path, canonical: &Path) -> Option<(u32, PathBuf)> {
     if let Err(why) = files::check_dir(dir) {
         tracing::debug!("agent registry not read: {why}");
@@ -219,6 +221,14 @@ pub(super) fn held_by_headless(dir: &Path, canonical: &Path) -> Option<(u32, Pat
     let path = dir.join(REGISTRY_DIR).join(entry_file_name(canonical));
     let entry = read_entry(&path).filter(is_known)?;
     (entry.kind == Kind::Headless && entry_is_live(dir, &entry)).then_some((entry.pid, path))
+}
+
+/// The process and entry file for the notice of an open refused because a
+/// headless run holds the project's lock: `(0, entry file)` when no entry names
+/// the run yet (it writes its entry just after it takes the lock).
+pub(super) fn headless_holder(dir: &Path, canonical: &Path) -> (u32, PathBuf) {
+    held_by_headless(dir, canonical)
+        .unwrap_or_else(|| (0, dir.join(REGISTRY_DIR).join(entry_file_name(canonical))))
 }
 
 /// Whether this app reads the format of `entry`: a newer one is data of a
@@ -242,17 +252,62 @@ pub(super) fn lock_path(dir: &Path, canonical: &Path) -> PathBuf {
 /// A reader's momentary lock in [`lock_is_held`] can make one attempt fail, so
 /// a few are made with short pauses before the project counts as held.
 pub(super) fn acquire_lock(path: &Path) -> Result<std::fs::File, String> {
-    acquire_lock_with(path, LOCK_ATTEMPTS, LOCK_PAUSE)
+    acquire_lock_with(path, Lock::Exclusive, LOCK_ATTEMPTS, LOCK_PAUSE, || {}).map_err(|why| {
+        match why {
+            LockError::Held => HELD_MESSAGE.to_string(),
+            LockError::Other(text) => text,
+        }
+    })
 }
 
 const LOCK_ATTEMPTS: u32 = 5;
 const LOCK_PAUSE: std::time::Duration = std::time::Duration::from_millis(20);
 
-fn acquire_lock_with(
+/// What a project lock says when it is refused.
+pub(super) const HELD_MESSAGE: &str =
+    "the project is held by another signex-cli run or open in a Signex";
+
+/// Who may hold a project at once: any number of windows (shared), or one
+/// headless run (exclusive), never both. A reader asks for exclusive without
+/// waiting, which fails while anyone holds it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Lock {
+    Shared,
+    Exclusive,
+}
+
+pub(super) enum LockError {
+    /// The other kind of holder has it.
+    Held,
+    Other(String),
+}
+
+/// A window's claim on the project at `canonical`: the shared lock, taken
+/// synchronously when the project opens and held (by the returned file) for as
+/// long as it stays open. Fails with `Held` while a headless run holds it. The
+/// runtime folder is made first, as for any hold.
+pub(super) fn claim_shared(dir: &Path, canonical: &Path) -> Result<std::fs::File, LockError> {
+    files::prepare_dir(dir).map_err(LockError::Other)?;
+    files::prepare_dir(&dir.join(REGISTRY_DIR)).map_err(LockError::Other)?;
+    acquire_lock_with(
+        &lock_path(dir, canonical),
+        Lock::Shared,
+        LOCK_ATTEMPTS,
+        LOCK_PAUSE,
+        || {},
+    )
+}
+
+/// [`acquire_lock`] for either kind, with its attempts and pause; `before_verify`
+/// runs between the lock and the check that the path still names the file (a
+/// test swaps the file there).
+pub(super) fn acquire_lock_with(
     path: &Path,
+    how: Lock,
     attempts: u32,
     pause: std::time::Duration,
-) -> Result<std::fs::File, String> {
+    mut before_verify: impl FnMut(),
+) -> Result<std::fs::File, LockError> {
     for attempt in 1..=attempts {
         let mut options = std::fs::OpenOptions::new();
         options.read(true).write(true).create(true).truncate(false);
@@ -263,32 +318,45 @@ fn acquire_lock_with(
                 .mode(0o600)
                 .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
         }
-        let file = options
-            .open(path)
-            .map_err(|error| format!("cannot open {}: {error}", path.display()))?;
-        let meta = file.metadata().map_err(|error| error.to_string())?;
+        let file = options.open(path).map_err(|error| {
+            LockError::Other(format!("cannot open {}: {error}", path.display()))
+        })?;
+        let meta = file
+            .metadata()
+            .map_err(|error| LockError::Other(error.to_string()))?;
         if !meta.is_file() || !owned_by_us(&meta) {
-            return Err(format!(
+            return Err(LockError::Other(format!(
                 "{} is not a plain file of this user",
                 path.display()
-            ));
+            )));
         }
-        match file.try_lock() {
-            // The path must still name the file that is locked: one that was
-            // replaced since the open is a lock on nothing anyone else sees.
-            Ok(()) if names_same_file(&file, path) => return Ok(file),
-            Ok(()) => {}
+        let locked = match how {
+            Lock::Exclusive => file.try_lock(),
+            Lock::Shared => file.try_lock_shared(),
+        };
+        match locked {
+            Ok(()) => {
+                before_verify();
+                // The path must still name the file that is locked: one that was
+                // replaced since the open is a lock on nothing anyone else sees.
+                if names_same_file(&file, path) {
+                    return Ok(file);
+                }
+            }
             Err(std::fs::TryLockError::WouldBlock) => {
                 if attempt < attempts {
                     std::thread::sleep(pause);
                 }
             }
             Err(std::fs::TryLockError::Error(error)) => {
-                return Err(format!("cannot lock {}: {error}", path.display()));
+                return Err(LockError::Other(format!(
+                    "cannot lock {}: {error}",
+                    path.display()
+                )));
             }
         }
     }
-    Err("the project is held by another signex-cli run".to_string())
+    Err(LockError::Held)
 }
 
 /// Whether `path` still names the file `file` was opened as. (Where an open
@@ -307,10 +375,11 @@ fn names_same_file(_file: &std::fs::File, _path: &Path) -> bool {
     true
 }
 
-/// Is the lock file at `path` locked by a living process? Taking the lock
-/// proves its holder is gone (the lock is released at once); a file that is
-/// missing or not a plain file of ours holds nothing.
-fn lock_is_held(path: &Path) -> bool {
+/// Is the lock file at `path` locked, shared or exclusive, by a living
+/// process? An exclusive try fails while anyone holds it; taking it proves
+/// every holder is gone (it is released at once); a file that is missing or not
+/// a plain file of ours holds nothing.
+pub(super) fn lock_is_held(path: &Path) -> bool {
     let mut options = std::fs::OpenOptions::new();
     options.read(true);
     #[cfg(unix)]
@@ -454,10 +523,9 @@ fn pid_alive(pid: u32) -> bool {
     }
 }
 
-/// Remove every entry of this run and release its locks (the app is quitting,
-/// or a headless run ends). The lock files stay.
-pub(super) fn remove_all(dir: &Path, owner: &Owner, locks: &mut Locks) -> Result<(), String> {
-    locks.clear();
+/// Remove every entry of this run (the app is quitting, or a headless run
+/// ends). The lock files stay.
+pub(super) fn remove_all(dir: &Path, owner: &Owner) -> Result<(), String> {
     let registry = dir.join(REGISTRY_DIR);
     if !registry.is_dir() {
         return Ok(());
@@ -527,16 +595,6 @@ pub(super) fn read_entry(path: &Path) -> Option<Entry> {
 mod tests {
     use super::*;
 
-    /// [`super::sync`] with locks that last only for the call: most of these
-    /// tests list apps that listen, whose liveness is their socket.
-    fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<(), String> {
-        super::sync(dir, owner, projects, &mut Locks::new())
-    }
-
-    fn remove_all(dir: &Path, owner: &Owner) -> Result<(), String> {
-        super::remove_all(dir, owner, &mut Locks::new())
-    }
-
     fn owner(pid: u32, boot: &str) -> Owner {
         Owner {
             pid,
@@ -545,20 +603,24 @@ mod tests {
         }
     }
 
+    /// A scratch folder only this user can enter, as the runtime folder is
+    /// (the registry write refuses one others can enter).
     fn scratch() -> tempfile::TempDir {
-        tempfile::Builder::new()
+        let dir = tempfile::Builder::new()
             .prefix("snx-1924-registry")
             .tempdir()
-            .expect("temp dir")
+            .expect("temp dir");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        dir
     }
 
-    /// A scratch folder only this user can enter, as the runtime folder is.
     #[cfg(unix)]
     fn private_scratch() -> tempfile::TempDir {
-        use std::os::unix::fs::PermissionsExt as _;
-        let dir = scratch();
-        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-        dir
+        scratch()
     }
 
     fn entries(dir: &Path) -> Vec<String> {
@@ -844,9 +906,12 @@ mod tests {
         let entry = plant_headless(dir.path(), &a, 1, FORMAT);
         let lock = hold_lock(dir.path(), &a);
         assert_eq!(held_by_headless(dir.path(), &canonical), Some((1, entry)));
-        // The app cannot register over it.
-        let why = sync(dir.path(), &owner(41, "bb"), std::slice::from_ref(&a)).unwrap_err();
-        assert!(why.contains("also open in process 1"), "{why}");
+        // A window cannot open what a run holds.
+        assert!(matches!(
+            claim_shared(dir.path(), &canonical),
+            Err(LockError::Held)
+        ));
+        assert_eq!(headless_holder(dir.path(), &canonical).0, 1);
 
         // The holder is gone: the kernel dropped its lock. Its pid is reused
         // (process 1 runs), which makes no difference.
@@ -857,6 +922,104 @@ mod tests {
         assert_eq!(entry_pid(dir.path(), &a), 41);
         // An app's entry is never a headless hold.
         assert_eq!(held_by_headless(dir.path(), &canonical), None);
+    }
+
+    /// Any number of windows share a project; a headless run shares it with
+    /// none, in either order.
+    #[cfg(unix)]
+    #[test]
+    fn windows_share_a_project_and_a_headless_run_shares_it_with_none() {
+        let dir = private_scratch();
+        let a = project(dir.path(), "a.snxprj");
+        let canonical = std::fs::canonicalize(&a).unwrap();
+        let window = || match claim_shared(dir.path(), &canonical) {
+            Ok(lock) => lock,
+            Err(_) => panic!("a window could not claim the project"),
+        };
+        let exclusive = || {
+            acquire_lock_with(
+                &lock_path(dir.path(), &canonical),
+                Lock::Exclusive,
+                1,
+                std::time::Duration::ZERO,
+                || {},
+            )
+        };
+        let (first, second) = (window(), window());
+        assert!(lock_is_held(&lock_path(dir.path(), &canonical)));
+        assert!(
+            matches!(exclusive(), Err(LockError::Held)),
+            "a run took an open project"
+        );
+        // One window closes: the project is still open in the other.
+        drop(first);
+        assert!(lock_is_held(&lock_path(dir.path(), &canonical)));
+        assert!(
+            matches!(exclusive(), Err(LockError::Held)),
+            "a gap while one window is open"
+        );
+        drop(second);
+        let run = exclusive().ok().expect("the run, with no window");
+        // And a window cannot open what a run holds.
+        assert!(matches!(
+            claim_shared(dir.path(), &canonical),
+            Err(LockError::Held)
+        ));
+        drop(run);
+    }
+
+    /// The same-file check is part of acquiring: a lock taken on a file that
+    /// was replaced meanwhile is not returned.
+    #[cfg(unix)]
+    #[test]
+    fn a_lock_on_a_file_replaced_meanwhile_is_not_returned() {
+        let dir = private_scratch();
+        files::prepare_dir(&dir.path().join(REGISTRY_DIR)).unwrap();
+        let a = project(dir.path(), "a.snxprj");
+        let path = lock_path(dir.path(), &std::fs::canonicalize(&a).unwrap());
+        let swapped = std::cell::Cell::new(false);
+        let file = acquire_lock_with(&path, Lock::Exclusive, 3, std::time::Duration::ZERO, || {
+            if !swapped.replace(true) {
+                std::fs::remove_file(&path).unwrap();
+                std::fs::write(&path, "").unwrap();
+            }
+        })
+        .ok()
+        .expect("the second attempt locks the new file");
+        assert!(names_same_file(&file, &path), "a lock on an unlinked file");
+    }
+
+    /// Writes reach the worker out of order: an older list never follows a
+    /// newer one.
+    #[test]
+    fn an_older_registry_write_never_follows_a_newer_one() {
+        let dir = scratch();
+        let (a, b) = (
+            project(dir.path(), "a.snxprj"),
+            project(dir.path(), "b.snxprj"),
+        );
+        let ours = owner(41, "bb");
+        let applied = std::sync::Mutex::new(0_u64);
+        sync_in_order(dir.path(), &ours, &[a.clone(), b], 2, &applied).unwrap();
+        assert_eq!(entries(dir.path()).len(), 2);
+        // The older write (one project fewer) arrives late and is dropped.
+        sync_in_order(dir.path(), &ours, &[a], 1, &applied).unwrap();
+        assert_eq!(
+            entries(dir.path()).len(),
+            2,
+            "an older list removed an entry"
+        );
+    }
+
+    /// With agent connections off no listener makes the runtime folder: the
+    /// listing makes it, or nothing is listed on a fresh boot.
+    #[test]
+    fn the_registry_write_makes_the_runtime_folder() {
+        let root = scratch();
+        let dir = root.path().join("not-made-yet");
+        let a = project(root.path(), "a.snxprj");
+        sync(&dir, &owner(41, "bb"), std::slice::from_ref(&a)).expect("written");
+        assert_eq!(entries(&dir).len(), 1);
     }
 
     /// A second holder cannot take the lock, and the file is not a lock when
@@ -933,8 +1096,8 @@ mod tests {
             drop(reader);
         });
         // One attempt finds it held; the run's own few attempts outlast it.
-        let once = acquire_lock_with(&path, 1, std::time::Duration::ZERO);
-        assert!(once.unwrap_err().contains("held by another"));
+        let once = acquire_lock_with(&path, Lock::Exclusive, 1, std::time::Duration::ZERO, || {});
+        assert!(matches!(once.unwrap_err(), LockError::Held));
         let held = acquire_lock(&path);
         releaser.join().unwrap();
         assert!(held.is_ok(), "a reader's momentary lock failed the run");
