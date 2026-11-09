@@ -35,6 +35,7 @@ fn fixture() -> Fixture {
     std::fs::write(&project, b"").expect("project file");
     let (mut app, _boot) = Signex::new();
     app.agent.runtime_dir = Ok(dir.clone());
+    app.agent.lists_projects = true;
     assert!(
         !app.ui_state.agent_connections_enabled,
         "the default is off"
@@ -168,4 +169,14 @@ fn a_headless_run_cannot_hold_a_project_an_app_has_open() {
     assert!(why.contains("is also open in process"), "{why}");
     // And the entry is still the app's.
     assert_eq!(fx.entry().unwrap().kind, Kind::Gui);
+}
+
+/// Only the window the person works in lists its projects: not an app made
+/// for a test, nor a headless run, which holds its project itself.
+#[test]
+fn the_boot_of_the_window_lists_its_projects_and_a_plain_app_does_not() {
+    let (plain, _task) = Signex::new();
+    assert!(!plain.agent.lists_projects);
+    let (window, _task) = Signex::boot(Vec::new());
+    assert!(window.agent.lists_projects);
 }

@@ -86,6 +86,8 @@ pub(super) fn app_in(dir: &std::path::Path) -> Signex {
         case_decided: false,
     });
     app.ui_state.snap_enabled = false;
+    // As the window the person works in: it lists its open projects.
+    app.agent.lists_projects = true;
     fixture::activate(&mut app, &dir.join("b.snxsch"));
     let canvas = app.interaction_state.active_canvas_mut();
     canvas.selected = vec![SelectedItem::new(uid(WIRE_A), SelectedKind::Wire)];

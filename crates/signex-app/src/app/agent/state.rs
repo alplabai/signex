@@ -26,8 +26,9 @@ pub(crate) struct AgentState {
     /// True while an agent request runs, so the code under it can tell an
     /// agent's call from a click.
     pub(crate) serving: bool,
-    /// Whether the open projects are listed in the registry. Only a headless
-    /// app does not: it is the run that holds its project.
+    /// Whether the open projects are listed in the registry: the window the
+    /// person works in (`Signex::boot`) does. An app made otherwise (a test, a
+    /// headless run, which holds its project itself) does not.
     pub(crate) lists_projects: bool,
     /// Serialises registry writes and removals, which run on worker threads,
     /// and holds the lock of every open project (see `registry::Locks`).
@@ -52,7 +53,7 @@ impl AgentState {
             endpoint: None,
             registered: None,
             serving: false,
-            lists_projects: true,
+            lists_projects: false,
             registry_lock: Arc::default(),
             touched: Vec::new(),
             registry_retry: false,

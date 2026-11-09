@@ -12,7 +12,11 @@ impl Signex {
     /// document (#317), so a file association opens its file through the
     /// same flow as File > Open — including its error notice.
     pub fn boot(startup_paths: Vec<std::path::PathBuf>) -> (Self, Task<Message>) {
-        let (app, boot_task) = Self::new();
+        let (mut app, boot_task) = Self::new();
+        // The window the person works in lists its open projects for the agent
+        // registry (#1924); an app made any other way (a test, a headless run)
+        // does not.
+        app.agent.lists_projects = true;
         Self::boot_from(app, boot_task, startup_paths)
     }
 
