@@ -134,6 +134,14 @@ fn one_command_runs_from_arguments_and_a_failed_open_is_failed_not_ran() {
     );
     assert_eq!(statuses(&ok.lines), ["answered"], "{}", ok.stderr);
     assert_eq!(ok.code, Some(0));
+    // Open answers with the document it opened (#2155): id, path and kind.
+    let answer = &ok.lines[0]["data"];
+    assert_eq!(answer["path"], fx.sheet.display().to_string(), "{answer}");
+    assert_eq!(answer["kind"], "schematic", "{answer}");
+    assert!(
+        answer["id"].as_str().is_some_and(|id| !id.is_empty()),
+        "{answer}"
+    );
 
     // Inside the project, but not a file: the app reports an error notice.
     let missing = run_cli(
@@ -285,6 +293,44 @@ fn queries_answer_with_data_and_a_document_is_named_by_id_or_by_path() {
         "R1 is found by its designator"
     );
     assert_eq!(out.lines[5]["data"]["what"], "document");
+    assert_eq!(snapshot(&root), before, "a query writes nothing");
+}
+
+/// #2199: `query_pins` answers with a part's pins and their tips, and refuses
+/// a designator the sheet does not have.
+#[test]
+fn query_pins_answers_with_the_pins_and_refuses_an_unknown_designator() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let project = fx.project.to_str().unwrap();
+    let before = snapshot(&root);
+
+    let out = run_cli(
+        &["run", project],
+        jsonl(&[
+            json!({"id": "query_pins", "args": {"document": "main.snxsch", "designator": "R1"}}),
+            json!({"id": "query_pins", "args": {"document": "main.snxsch", "designator": "C9"}}),
+        ]),
+    );
+
+    assert_eq!(
+        statuses(&out.lines),
+        ["answered", "refused"],
+        "{}\n{}",
+        out.stdout,
+        out.stderr
+    );
+    let pins = out.lines[0]["data"]["pins"].as_array().unwrap();
+    assert_eq!(pins.len(), 1);
+    assert_eq!(pins[0]["number"], "1");
+    assert_eq!(pins[0]["unit"], 1);
+    assert_eq!(pins[0]["position"], json!([0.0, 0.0]));
+    assert!(
+        out.lines[1]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("no part `C9`")
+    );
     assert_eq!(snapshot(&root), before, "a query writes nothing");
 }
 

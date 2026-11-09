@@ -8,6 +8,8 @@ mod annotate_golden_tests;
 mod annotate_job;
 #[cfg(test)]
 mod annotate_job_tests;
+#[cfg(test)]
+mod annotate_mixed_versions_tests;
 mod annotate_pass;
 mod annotate_placements;
 mod annotate_preview;

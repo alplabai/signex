@@ -144,6 +144,7 @@ fn field_symbol(ref_text: Option<TextProp>) -> Symbol {
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),
         lib_id: "Device:R".into(),
+        body_ref: String::new(),
         reference: "R1".into(),
         value: "10k".into(),
         footprint: String::new(),

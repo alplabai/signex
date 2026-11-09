@@ -15,8 +15,10 @@
 //!
 //! `"<library uuid>:<symbol uuid>"` — the identity of the `.snxsym`
 //! primitive the row binds, never the row (many rows may share a symbol).
-//! It is both `LibSymbol.id` and the placed `Symbol.lib_id`, so
-//! re-placing the same symbol reuses one `lib_symbols` entry.
+//! It is both `LibSymbol.id` and the placed `Symbol.lib_id`. The embedded
+//! body is keyed by its version, `Symbol.body_ref` (`"<lib_id>#<hash>"`), so
+//! re-placing an unchanged symbol reuses one `lib_symbols` entry and a
+//! changed one adds a second version beside the first.
 //!
 //! ## IO
 //!
@@ -32,10 +34,10 @@
 //! libraries (the worker gets an id-to-path map); if that library is not
 //! open the failure says so.
 //!
-//! Drift (#912) is tracked in `library/drift.rs`. Re-placing keeps the
-//! sheet's existing copy of the `LibSymbol` so existing instances never
-//! change silently; when it differs from the library's, a warning points
-//! at Properties > "Update from library".
+//! Drift (#912) is tracked in `library/drift.rs`. A new placement always
+//! draws with the library's current symbol. Parts already on the sheet keep
+//! the version they were placed with until the user runs Properties >
+//! "Update from library", so nothing changes silently.
 
 use iced::Task;
 use std::path::{Path, PathBuf};
@@ -235,20 +237,14 @@ impl Signex {
             reference,
             signex_types::schematic::Point::new(0.0, 0.0),
         );
-        self.warn_if_sheet_copy_differs(&resolved.lib_symbol, &resolved.internal_pn);
-        // The click binds the placed symbol to the sheet's existing copy of
-        // the body when there is one (`RegisterLibSymbol` keeps it), so the
-        // ghost and its turns show THAT copy, not the library's newer one.
-        let body = self
-            .document_state
-            .engines
-            .get(target_sheet)
-            .and_then(|e| e.document().lib_symbols.get(&resolved.lib_symbol.id))
-            .cloned()
-            .unwrap_or(resolved.lib_symbol);
+        // A new placement always draws with the library's current symbol; a
+        // sheet that holds an older version keeps it for the parts placed
+        // from it (#2209).
+        let body = resolved.lib_symbol;
+        placed.body_ref = body.body_ref();
         signex_engine::place_fields_for_new_symbol(&mut placed, &body);
         let mut fragment = signex_types::schematic::SchematicSheet::default();
-        fragment.lib_symbols.insert(body.id.clone(), body);
+        fragment.lib_symbols.insert(placed.body_ref.clone(), body);
         fragment.symbols.push(placed);
         self.arm_placement_session(
             PlacementPayload::new(fragment),
@@ -285,28 +281,6 @@ impl Signex {
             resolved.prefix_override.as_deref(),
             &resolved.prefix,
         )
-    }
-
-    /// `RegisterLibSymbol` keeps an existing entry under the same key, so
-    /// a library symbol edited since the first placement is not picked up.
-    /// Say so instead of silently using the stale copy.
-    fn warn_if_sheet_copy_differs(
-        &self,
-        fresh: &signex_types::schematic::LibSymbol,
-        internal_pn: &str,
-    ) {
-        let Some(existing) = self
-            .document_state
-            .active_engine()
-            .and_then(|e| e.document().lib_symbols.get(&fresh.id))
-        else {
-            return;
-        };
-        if !existing.same_body(fresh) {
-            crate::diagnostics::log_warning(format!(
-                "Library symbol for {internal_pn} changed since it was first placed; the sheet keeps its existing copy. Select a placed {internal_pn} and use \"Update from library\" in Properties to adopt the new one."
-            ));
-        }
     }
 
     pub(crate) fn report_place_failure(&mut self, detail: &str) {
