@@ -269,40 +269,7 @@ impl PanelKind {
             PanelKind::SignexAi => ids::PANELS_KIND_SIGNEX_AI,
             PanelKind::Drc => ids::PANELS_KIND_DRC,
             PanelKind::LayerStack => ids::PANELS_KIND_LAYER_STACK,
-            PanelKind::NetClasses => ids::PANELS_KIND_NET_CLASSES,
-            PanelKind::Variants => ids::PANELS_KIND_VARIANTS,
-            PanelKind::SchFilter => ids::PANELS_KIND_SCH_FILTER,
-            PanelKind::SchList => ids::PANELS_KIND_SCH_LIST,
-            PanelKind::BomStudio => ids::PANELS_KIND_BOM_STUDIO,
-            PanelKind::Favorites => ids::PANELS_KIND_FAVORITES,
-            PanelKind::Snippets => ids::PANELS_KIND_SNIPPETS,
-            PanelKind::Todo => ids::PANELS_KIND_TODO,
-            PanelKind::Wiki => ids::PANELS_KIND_WIKI,
-            PanelKind::OutputJobs => ids::PANELS_KIND_OUTPUT_JOBS,
-            PanelKind::Library => ids::PANELS_KIND_LIBRARY,
-            PanelKind::SchLibrary => ids::PANELS_KIND_SCH_LIBRARY,
-            PanelKind::FootprintLibrary => ids::PANELS_KIND_FOOTPRINT_LIBRARY,
-            PanelKind::FootprintLayers => ids::PANELS_KIND_FOOTPRINT_LAYERS,
-            PanelKind::SymbolPins => ids::PANELS_KIND_SYMBOL_PINS,
-            PanelKind::PcbNets => ids::PANELS_KIND_PCB_NETS,
-            PanelKind::History => ids::PANELS_KIND_HISTORY,
-        }
-    }
-
-    /// The catalog message of [`Self::label`] (dock tabs and titles).
-    pub fn message(self) -> signex_i18n::MessageId {
-        use signex_i18n::ids;
-        match self {
-            PanelKind::Projects => ids::PANELS_KIND_PROJECTS,
-            PanelKind::Components => ids::PANELS_KIND_COMPONENTS,
-            PanelKind::Navigator => ids::PANELS_KIND_NAVIGATOR,
-            PanelKind::Properties => ids::PANELS_KIND_PROPERTIES,
-            PanelKind::Filter => ids::PANELS_KIND_FILTER,
-            PanelKind::Erc => ids::PANELS_KIND_ERC,
-            PanelKind::Messages => ids::PANELS_KIND_MESSAGES,
-            PanelKind::SignexAi => ids::PANELS_KIND_SIGNEX_AI,
-            PanelKind::Drc => ids::PANELS_KIND_DRC,
-            PanelKind::LayerStack => ids::PANELS_KIND_LAYER_STACK,
+            PanelKind::Layers => ids::PANELS_KIND_LAYERS,
             PanelKind::NetClasses => ids::PANELS_KIND_NET_CLASSES,
             PanelKind::Variants => ids::PANELS_KIND_VARIANTS,
             PanelKind::SchFilter => ids::PANELS_KIND_SCH_FILTER,

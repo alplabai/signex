@@ -472,6 +472,7 @@ define_ids! {
     PANELS_KIND_FOOTPRINT_LAYERS = "panels-kind-footprint-layers";
     PANELS_KIND_SYMBOL_PINS = "panels-kind-symbol-pins";
     PANELS_KIND_PCB_NETS = "panels-kind-pcb-nets";
+    PANELS_KIND_LAYERS = "panels-kind-layers";
     PANELS_KIND_HISTORY = "panels-kind-history";
     PANELS_STATUS_BAR_PANELS = "panels-status-bar-panels";
     PANELS_TAB_READ_ONLY = "panels-tab-read-only";
