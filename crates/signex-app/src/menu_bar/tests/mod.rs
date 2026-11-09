@@ -14,6 +14,7 @@ mod edit_rows;
 mod file_rows;
 mod help_tools_rows;
 mod language_switch;
+mod library_window_rows;
 mod place_design_rows;
 mod view_rows;
 mod walk;

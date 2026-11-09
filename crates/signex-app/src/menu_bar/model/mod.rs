@@ -128,7 +128,7 @@ pub fn menu_bar_model(ctx: &MenuContext) -> MenuBarModel {
         menus::design(ctx),
         menus::tools(ctx),
         menus::reports(ctx),
-        menus::window(),
+        menus::window(ctx),
         menus::help(ctx),
     ];
     MenuBarModel {

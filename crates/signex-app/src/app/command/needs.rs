@@ -29,6 +29,7 @@ pub(crate) enum Needs {
     Canvas,
     FitTarget,
     FootprintEditor,
+    Library,
 }
 
 impl Needs {
@@ -74,6 +75,9 @@ impl Needs {
             // The keystroke opens the footprint editor's grid picker and does
             // nothing elsewhere.
             Self::FootprintEditor => ctx.has_footprint_editor,
+            // Library Editor focuses an open Library Browser tab, else opens the
+            // first open library.
+            Self::Library => ctx.has_open_library,
         }
     }
 
@@ -101,6 +105,7 @@ impl Needs {
             Self::Canvas => "No schematic or PCB is open",
             Self::FitTarget => "No schematic or PCB is open",
             Self::FootprintEditor => "No footprint editor is open",
+            Self::Library => "No library is open",
         }
     }
 }
@@ -115,7 +120,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "save_document" => Needs::SaveTarget,
         "save_document_as" => Needs::SaveAsTarget,
         "print" => Needs::PrintTarget,
-        "close_active_document" => Needs::Document,
+        "close_active_document" | "close_all_documents" => Needs::Document,
         "undo" => Needs::Undo,
         "redo" => Needs::Redo,
         "cut" | "copy" | "duplicate" => Needs::Selection,
@@ -149,6 +154,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_hierarchical_label"
         | "place_port"
         | "place_off_sheet_connector"
+        | "place_sheet_entry"
         | "open_components_panel"
         | "place_symbol"
         | "measure_distance"
@@ -160,6 +166,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => Needs::FitTarget,
         "cycle_snap_grid_forward" | "open_grid_picker" => Needs::FootprintEditor,
+        "open_library_browser" => Needs::Library,
         _ => return None,
     })
 }

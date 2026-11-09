@@ -15,16 +15,13 @@
 /// The first string literal after each `stub(` call in `model/menus.rs`: the
 /// row's label, or the command id the label is read from.
 const EXPECTED_STUBS: &[&str] = &[
-    "Sheet Entry",
     "Back Annotate Schematics...",
     "Number Schematic Sheets...",
     "Assign Footprints",
-    "Library Editor",
     "Design Rule Check",
     "Net Inspector",
     "Tile Horizontally",
     "Tile Vertically",
-    "Close All Documents",
 ];
 
 /// Literal `unavailable` rows that are allowed to stay unexplained.

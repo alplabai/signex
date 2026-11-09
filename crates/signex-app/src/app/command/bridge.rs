@@ -240,6 +240,13 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "placement_properties" => Message::Tool(ToolMessage::PrePlacementTab),
         // The same message File > Close Document sends.
         "close_active_document" => Message::Menu(MenuMessage::CloseDocument),
+        // The project tree's Close Project Documents and the tab menu's Close
+        // All Documents close every tab the same way, parking dirty drafts.
+        "close_all_documents" => Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            crate::app::ProjectTreeAction::CloseAllDocuments,
+        )),
+        // Tools ▸ Library Editor (#2247).
+        "open_library_browser" => Message::Library(LibraryMessage::LibraryEditorRequested),
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),

@@ -87,7 +87,7 @@ fn power_port_arms_the_gnd_port() {
 }
 
 #[test]
-fn place_rows_need_a_schematic_and_the_sheet_entry_stub_is_inert() {
+fn place_rows_need_a_schematic() {
     let app = bare_app();
     for path in [
         "Place/Wire",
@@ -98,10 +98,27 @@ fn place_rows_need_a_schematic_and_the_sheet_entry_stub_is_inert() {
         "Place/Junction",
         "Place/Text",
         "Place/No Connect",
+        "Place/Sheet Entry",
     ] {
         assert!(!row_is_live(&app, path), "{path} is live with no schematic");
     }
-    assert!(!row_is_live(&one_symbol_selected(), "Place/Sheet Entry"));
+    assert!(!row_is_live(&loaded_board_app(), "Place/Sheet Entry"));
+}
+
+/// #2247: the row was a stub; it now arms the Active Bar's Sheet Entry tool.
+#[test]
+fn sheet_entry_arms_the_sheet_entry_tool_and_nothing_else() {
+    let mut app = one_symbol_selected();
+    assert!(row_is_live(&app, "Place/Sheet Entry"));
+    let before = probe(&app);
+    let _ = click(&mut app, "Place/Sheet Entry");
+    assert_eq!(
+        probe(&app),
+        Probe {
+            tool: "SheetEntry".to_string(),
+            ..before
+        }
+    );
 }
 
 fn unnumbered(refs: &[&str]) -> Signex {

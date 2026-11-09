@@ -217,12 +217,10 @@ fn stub_rows_are_not_live() {
     let app = one_symbol_selected();
     for path in [
         "Tools/Assign Footprints",
-        "Tools/Library Editor",
         "Tools/Design Rule Check",
         "Tools/Net Inspector",
         "Window/Tile Horizontally",
         "Window/Tile Vertically",
-        "Window/Close All Documents",
         "Tools/Annotation/Back Annotate Schematics...",
         "Tools/Annotation/Number Schematic Sheets...",
     ] {

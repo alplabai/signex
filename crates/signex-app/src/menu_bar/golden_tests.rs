@@ -39,6 +39,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
             has_open_project: true,
             has_parent_sheet: true,
             has_active_path: true,
+            has_open_library: true,
             ..base
         }),
         with(CommandContext {
@@ -203,6 +204,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("open_components_panel", "PlaceComponent"),
     ("place_power_symbol", "PlacePowerPort"),
     ("place_junction", "PlaceJunction"),
+    ("place_sheet_entry", "PlaceSheetEntry"),
+    ("open_library_browser", "OpenLibraryEditor"),
+    ("close_all_documents", "CloseAllDocuments"),
     ("next_grid", "CycleGrid"),
     ("open_erc_dialog", "OpenErcDialog"),
     ("open_parameter_manager", "OpenParameterManager"),

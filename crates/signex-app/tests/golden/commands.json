@@ -125,6 +125,11 @@
     "category": "file"
   },
   {
+    "id": "close_all_documents",
+    "group": "General",
+    "category": "window"
+  },
+  {
     "id": "color_net",
     "group": "Schematic",
     "category": "view"
@@ -548,6 +553,11 @@
     "id": "open_grid_properties",
     "group": "General",
     "category": "view"
+  },
+  {
+    "id": "open_library_browser",
+    "group": "General",
+    "category": "library"
   },
   {
     "id": "open_net_color_palette",
