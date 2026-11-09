@@ -295,6 +295,10 @@ pub(super) fn close(app: &mut Signex, args: &CommandArgs) -> Ran {
         .iter()
         .position(|tab| DocumentKey::of(tab).as_ref() == Some(&key));
     match index {
+        // An agent's close of another tab leaves the person's session alone.
+        Some(index) if app.agent.serving && index != app.document_state.active_tab => {
+            ran(app.close_background_tab_parking_dirty(index))
+        }
         Some(index) => ran(app.close_tab_parking_dirty(index)),
         None => refused(format!("{} is not open in a tab", entry.name)),
     }

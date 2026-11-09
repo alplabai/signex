@@ -12,33 +12,12 @@ use crate::keymap::{AppCommandId, OperandKind, metadata_for};
 /// `consistency` in the tests keeps this list to ids the catalog has.
 pub(super) const PERSON_ONLY: &[&str] = &["undo", "redo"];
 
-/// Commands that would pass the derivation and are held back until the
-/// maintainer opens them (a decision pending, see `docs/AGENT_SOCKET.md`):
-/// each with the reason an agent is told.
-pub(super) const NOT_YET_FOR_AGENTS: &[(&str, &str)] = &[
-    (
-        "save_document",
-        "saving the person's file is not available to agents yet",
-    ),
-    (
-        "close_active_document",
-        "closing a document changes the person's tab strip, which is not available to agents yet",
-    ),
-    (
-        "assign_net_class",
-        "net classes are project-wide data, not available to agents yet",
-    ),
-];
-
 /// Why `command` is not on the agent channel, or `None` when it is.
 pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
     let id = command.as_str();
     let Some(meta) = metadata_for(command) else {
         return Some(format!("unknown command `{id}`"));
     };
-    if let Some((_, reason)) = NOT_YET_FOR_AGENTS.iter().find(|(held, _)| *held == id) {
-        return Some((*reason).to_string());
-    }
     if PERSON_ONLY.contains(&id) {
         return Some(format!(
             "`{id}` is the person's own; an agent takes back its step with `revert`"
@@ -91,7 +70,9 @@ mod tests {
             allowed(),
             [
                 "apply_edits",
+                "assign_net_class",
                 "clear_all_net_colors",
+                "close_active_document",
                 "color_net",
                 "document_info",
                 "find_items",
@@ -100,26 +81,8 @@ mod tests {
                 "read_document",
                 "resolve",
                 "revert",
+                "save_document",
             ]
-        );
-    }
-
-    #[test]
-    fn the_held_back_commands_would_pass_the_derivation_and_are_refused_with_their_reason() {
-        for (name, reason) in NOT_YET_FOR_AGENTS {
-            let meta = metadata_for(&id(name)).expect("in the catalog");
-            assert!(
-                meta.operands
-                    .iter()
-                    .any(|op| op.name == "document" && op.kind == OperandKind::Document)
-                    && meta.operands.iter().all(|op| op.kind != OperandKind::Path),
-                "`{name}` is refused by the derivation already"
-            );
-            assert_eq!(refusal(&id(name)).as_deref(), Some(*reason));
-        }
-        assert_eq!(
-            refusal(&id("save_document")).as_deref(),
-            Some("saving the person's file is not available to agents yet")
         );
     }
 
