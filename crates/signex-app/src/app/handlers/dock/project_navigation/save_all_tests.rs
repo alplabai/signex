@@ -277,12 +277,8 @@ fn a_save_all_write_superseded_by_a_later_ctrl_s_does_not_quit_before_that_save_
     );
 
     let after = feed_then_settle(&mut app, save_all_messages);
-    // One unit: the cancel answering a pending system quit request, no close.
-    assert_eq!(
-        after.units(),
-        1,
-        "no quit while the sheet's save is unreported"
-    );
+    // Exactly one cancelled system quit request: no exit, no window close.
+    crate::task_driver::assert_quit_declined(after);
     assert!(app.document_state.is_document_dirty(&sheet));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(format!("{notice:?}").contains("Sheet.snxsch"), "{notice:?}");
@@ -299,8 +295,8 @@ fn save_all_over_a_running_primitive_ctrl_s_keeps_signex_open_until_it_lands() {
     let save_all_task = save_all(&mut app, &[symbol.clone(), sheet]);
 
     let after = feed_then_settle(&mut app, outputs(save_all_task));
-    // One unit: the cancel answering a pending system quit request, no close.
-    assert_eq!(after.units(), 1, "the symbol has not reported back yet");
+    // Exactly one cancelled system quit request: no exit, no window close.
+    crate::task_driver::assert_quit_declined(after);
     assert!(app.document_state.is_document_dirty(&symbol));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(format!("{notice:?}").contains("Lib.snxsym"), "{notice:?}");
@@ -601,12 +597,8 @@ fn an_undecided_directory_writes_once_and_keeps_the_other_spelling_dirty() {
     assert_eq!(*sink.0.lock().unwrap(), vec![upper.clone()], "one write");
     assert!(!app.document_state.is_document_dirty(&upper));
     assert!(app.document_state.is_document_dirty(&lower));
-    // One unit: the cancel answering a pending system quit request, no close.
-    assert_eq!(
-        after.units(),
-        1,
-        "Signex must not quit over the unsaved file"
-    );
+    // Exactly one cancelled system quit request: no exit, no window close.
+    crate::task_driver::assert_quit_declined(after);
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(format!("{notice:?}").contains("lib.snxsch"), "{notice:?}");
 }
@@ -642,12 +634,8 @@ fn an_undecided_project_keeps_the_other_spelling_dirty_too() {
 
     assert_eq!(*sink.0.lock().unwrap(), vec![upper.clone()]);
     assert!(app.document_state.is_document_dirty(&lower));
-    // One unit: the cancel answering a pending system quit request, no close.
-    assert_eq!(
-        after.units(),
-        1,
-        "Signex must not quit over the unsaved file"
-    );
+    // Exactly one cancelled system quit request: no exit, no window close.
+    crate::task_driver::assert_quit_declined(after);
 }
 
 /// A coloured sheet at `dir/Sheet.snxsch`, clean, and the id of its wire.

@@ -757,7 +757,7 @@ impl Signex {
     /// (`cancel_quit` does nothing when no request is pending).
     pub(crate) fn handle_app_quit_requested(&mut self) -> Task<Message> {
         if !self.prepare_quit() {
-            return iced::system::cancel_quit();
+            return Self::decline_quit();
         }
         // Guard against a second close request stacking a duplicate
         // modal while the first is still up.
@@ -778,6 +778,14 @@ impl Signex {
         });
         self.ui_state.quit_confirm_refreshed = false;
         Task::none()
+    }
+
+    /// The app stays open: answer a pending system quit request with a
+    /// cancel, and say so in the Messages panel (it does nothing when no
+    /// request is pending).
+    pub(crate) fn decline_quit() -> Task<Message> {
+        crate::diagnostics::log_info("Quit: cancelled, Signex stays open");
+        iced::system::cancel_quit()
     }
 
     /// Drop entries from the open quit prompt that are no longer unsaved — a
@@ -801,7 +809,7 @@ impl Signex {
         if confirm.dirty_paths.is_empty() && confirm.dirty_rows.is_empty() {
             self.ui_state.app_quit_confirm = None;
             self.ui_state.quit_confirm_refreshed = false;
-            return iced::system::cancel_quit();
+            return Self::decline_quit();
         }
         Task::none()
     }
@@ -862,7 +870,7 @@ impl Signex {
             return Task::none();
         };
         match choice {
-            ProjectCloseChoice::Cancel => iced::system::cancel_quit(),
+            ProjectCloseChoice::Cancel => Self::decline_quit(),
             ProjectCloseChoice::DiscardAll => {
                 // Discard only what the user was shown. An edit made since
                 // (a window that was not locked, a route nobody thought of)

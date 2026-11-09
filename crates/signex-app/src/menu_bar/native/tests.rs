@@ -362,6 +362,62 @@ fn the_native_file_menu_has_the_approved_rows() {
     );
 }
 
+fn en() -> std::sync::Arc<signex_i18n::I18n> {
+    signex_i18n::I18n::en_us()
+}
+
+#[test]
+fn inputs_compare_by_what_the_menu_reads() {
+    use crate::app::command::CommandContext;
+    let recent = recent_paths();
+    let new = |ctx, recent: &[PathBuf], locked, panels| {
+        MenuInputs::new(ctx, recent, locked, panels, en())
+    };
+    let a = new(CommandContext::default(), &recent, false, Vec::new());
+    assert_eq!(
+        a,
+        new(CommandContext::default(), &recent, false, Vec::new())
+    );
+    assert_ne!(a, new(CommandContext::default(), &recent, true, Vec::new()));
+    assert_ne!(
+        a,
+        new(CommandContext::default(), &recent[1..], false, Vec::new())
+    );
+    let dirty = CommandContext {
+        project_dirty: true,
+        ..CommandContext::default()
+    };
+    assert_ne!(a, new(dirty, &recent, false, Vec::new()));
+    let panels = vec![crate::panels::PanelKind::Properties];
+    assert_ne!(a, new(CommandContext::default(), &recent, false, panels));
+}
+
+#[test]
+fn the_menu_inputs_follow_the_active_keymap() {
+    let compile = || {
+        std::sync::Arc::new(
+            crate::keymap::ShortcutProfileSet::built_ins()
+                .unwrap()
+                .compile_active(),
+        )
+    };
+    let (first, again) = (compile(), compile());
+    let base = || {
+        MenuInputs::new(
+            crate::app::command::CommandContext::default(),
+            &[],
+            false,
+            Vec::new(),
+            en(),
+        )
+    };
+    assert_eq!(
+        base().with_keymap(first.clone()),
+        base().with_keymap(first.clone())
+    );
+    assert_ne!(base().with_keymap(first), base().with_keymap(again));
+}
+
 /// #2055: a new language changes the root titles, which the fork sees as a
 /// different menu and rebuilds.
 #[test]

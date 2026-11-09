@@ -235,6 +235,8 @@ fn a_system_quit_request_asks_to_confirm_while_something_is_unsaved() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _path) = dirty_app_in(dir.path());
     let before = probe(&app);
+    let needle = "Quit: the system asked Signex to quit";
+    let logged_before = crate::diagnostics::logged_count(needle);
     let _ = app.update(Message::Window(crate::app::WindowMsg::QuitRequested));
     assert_eq!(
         probe(&app),
@@ -242,6 +244,10 @@ fn a_system_quit_request_asks_to_confirm_while_something_is_unsaved() {
             quit_confirm: true,
             ..before
         }
+    );
+    assert!(
+        crate::diagnostics::logged_count(needle) > logged_before,
+        "the request was not logged"
     );
 }
 
@@ -264,10 +270,7 @@ fn cancelling_the_quit_prompt_answers_the_system_request() {
     let answer = app.handle_app_quit_confirm(crate::app::ProjectCloseChoice::Cancel);
 
     assert!(app.ui_state.app_quit_confirm.is_none());
-    assert_eq!(answer.units(), 1, "Cancel did not answer the request");
-    let mut driver = crate::task_driver::TaskDriver::new();
-    assert!(driver.outputs(answer).expect("settled").is_empty());
-    assert!(!driver.has_exited(), "Cancel must not exit");
+    crate::task_driver::assert_quit_declined(answer);
 }
 
 /// A quit held back by a running rename or delete leaves the app open, so the
@@ -282,10 +285,7 @@ fn a_held_quit_request_is_declined() {
         crate::app::CaseFold::PRESERVE,
     );
     let answer = app.handle_app_quit_requested();
-    assert_eq!(answer.units(), 1, "the held quit was not answered");
-    let mut driver = crate::task_driver::TaskDriver::new();
-    assert!(driver.outputs(answer).expect("settled").is_empty());
-    assert!(!driver.has_exited());
+    crate::task_driver::assert_quit_declined(answer);
 }
 
 #[test]

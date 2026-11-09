@@ -19,7 +19,7 @@ mod state;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use state::NativeMenuState;
+pub(crate) use state::{MenuInputs, NativeMenuState};
 
 /// Title of the app menu. AppKit shows the process name regardless.
 const APP_MENU_TITLE: &str = "Signex";
@@ -27,7 +27,8 @@ const APP_MENU_TITLE: &str = "Signex";
 const ABOUT_LABEL: &str = "About Signex";
 const PREFERENCES_LABEL: &str = "Preferences...";
 
-/// The one key equivalent the bar registers (docs/MENU_BAR.md).
+/// The one key equivalent a custom row registers; the stock rows (Quit, Hide,
+/// Hide Others) bring their own (docs/MENU_BAR.md).
 const PREFERENCES_KEY: &str = "CmdOrCtrl+,";
 
 /// Gap between a row's label and its shortcut text.
@@ -45,6 +46,20 @@ pub(crate) fn build(model: &MenuBarModel, locked: bool) -> iced_menu::Menu<Messa
             .map(|menu| model_menu(menu, true, locked)),
     );
     iced_menu::Menu::new(items)
+}
+
+/// The bar `inputs` describe: the model for that window state, language and
+/// keymap, built.
+pub(crate) fn build_for(inputs: &MenuInputs) -> iced_menu::Menu<Message> {
+    let ctx = super::MenuContext {
+        commands: inputs.commands(),
+        recent_projects: inputs.recent(),
+        open_panels: inputs.open_panels().to_vec(),
+        active_keymap: inputs.keymap(),
+        i18n: inputs.i18n(),
+        ..super::MenuContext::default()
+    };
+    build(&super::model::menu_bar_model(&ctx), inputs.locked())
 }
 
 /// What a model row sends: its action, routed and lock-checked when it

@@ -15,22 +15,25 @@ impl Signex {
             .or(self.ui_state.main_window_id)
     }
 
+    /// What the native menu is built from, read off the Model.
+    pub(crate) fn native_menu_inputs(&self) -> crate::menu_bar::native::MenuInputs {
+        use std::sync::Arc;
+
+        crate::menu_bar::native::MenuInputs::new(
+            self.command_context(self.native_menu_window()),
+            self.ui_state.recent_projects.entries(),
+            self.has_locking_confirm_modal(),
+            self.open_panels(),
+            Arc::clone(&self.ui_state.i18n),
+        )
+        .with_keymap(Arc::clone(&self.ui_state.active_keymap))
+    }
+
     /// The menu bar as the Model stands now. The iced runtime calls it after
     /// every update on macOS and syncs the system menu to it; it never calls
-    /// it elsewhere.
+    /// it elsewhere. The menu is rebuilt only when an input it reads changed.
     pub fn native_menu(&self) -> iced::menu::Menu<Message> {
-        let ctx = crate::menu_bar::MenuContext {
-            commands: self.command_context(self.native_menu_window()),
-            recent_projects: self.ui_state.recent_projects.entries(),
-            open_panels: self.open_panels(),
-            active_keymap: Some(std::sync::Arc::clone(&self.ui_state.active_keymap)),
-            i18n: std::sync::Arc::clone(&self.ui_state.i18n),
-            ..crate::menu_bar::MenuContext::default()
-        };
-        crate::menu_bar::native::build(
-            &crate::menu_bar::model::menu_bar_model(&ctx),
-            self.has_locking_confirm_modal(),
-        )
+        self.native_menu.menu(self.native_menu_inputs())
     }
 
     /// The message a native row sends, routed like the in-window row of the
@@ -160,6 +163,35 @@ mod tests {
         ));
         app.ui_state.focused_window = None;
         assert_eq!(app.native_menu_window(), Some(main));
+    }
+
+    /// The runtime asks for the menu after every update batch (every canvas
+    /// mouse move): only a changed input may rebuild it.
+    #[test]
+    fn the_native_menu_is_rebuilt_only_when_an_input_changed() {
+        let (mut app, _task) = Signex::new();
+        let _ = app.native_menu();
+        let built = app.native_menu.builds();
+
+        let _ = app.native_menu();
+        let _ = app.native_menu();
+        assert_eq!(app.native_menu.builds(), built, "same inputs rebuilt");
+
+        open_quit_confirm(&mut app, &["/p/a.snxsch"]);
+        let _ = app.native_menu();
+        assert_eq!(app.native_menu.builds(), built + 1, "the lock was missed");
+
+        let _ = app.update(Message::Ui(UiMsg::LanguageChanged(
+            signex_i18n::LanguagePref::Locale("en-XA".to_owned()),
+        )));
+        let _ = app.native_menu();
+        assert_eq!(
+            app.native_menu.builds(),
+            built + 2,
+            "the language was missed"
+        );
+        let _ = app.native_menu();
+        assert_eq!(app.native_menu.builds(), built + 2);
     }
 
     #[test]

@@ -137,8 +137,10 @@ macOS waits (at logout only for a limited time), so every path that keeps the
 app open answers it with `iced::system::cancel_quit()` (a no-op when nothing
 is pending): the prompt's Cancel, a quit held back by a running rename or
 delete, a Save All that left files unsaved, and the prompt closing itself
-because everything was saved behind it. A quit prompt window that vanishes
-without a close request is not answered.
+because everything was saved behind it, and a prompt window that vanishes
+without a close request (treated as Cancel). Each decision is logged to the
+Messages panel ("Quit: the system asked Signex to quit", "Quit: cancelled,
+Signex stays open").
 
 **Check marks.** The View menu's panel rows carry `MenuItem::checked`, read
 from `MenuContext::open_panels` (`Signex::open_panels`, the same
@@ -157,8 +159,9 @@ key, which bypasses the widget-capture rule in `app/dispatch/input.rs` (a
 focused text input owns Ctrl/Command + C, V, X, A, Z), and the keymap treats
 `Ctrl` as the physical Control key on every OS (#1441), so a native Command
 key equivalent would disagree with the profile. Keys keep going through the
-keymap, so a key is never dispatched twice. Preferences' Command+comma is the
-only registered one, and it collides with no editing key.
+keymap, so a key is never dispatched twice. The four app-menu key equivalents
+(Preferences' Command+comma and the stock Quit, Hide and Hide Others) are the
+only registered ones, and none collides with editing.
 
 **Exit.** The native File menu leaves out Exit and the separator above it:
 Quit in the app menu replaces it. Windows and Linux keep Exit.
@@ -195,8 +198,10 @@ replace, shortcuts) do not lock it.
 **Sync.** The runtime calls `Signex::native_menu` after every `update`
 (macOS only), so the menu reads the Model like a view: `CommandContext` of the
 focused window, recent projects, the lock, open panels, the keymap and the
-language. It builds the whole model each time; the fork decides what, if
-anything, to touch in AppKit.
+language. The built menu is cached in `NativeMenuState` with the
+`MenuInputs` it came from and rebuilt only when one of them changed (the
+runtime asks after every update batch, canvas mouse moves included); the fork
+then decides what, if anything, to touch in AppKit.
 
 **Window strip.** With the native menu in use the in-window row and the
 wordmark are not drawn from the first frame on (so they do not flash before the

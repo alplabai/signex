@@ -16,9 +16,9 @@ fn only_lower_dirty(dir: &Path, differ: bool) -> (Signex, PathBuf, PathBuf) {
     (app, upper, lower)
 }
 
-fn assert_quit_held_open(app: &Signex, after: &iced::Task<crate::app::Message>, name: &str) {
-    // One unit: the cancel answering a pending system quit request, no close.
-    assert_eq!(after.units(), 1, "Signex must not close over unsaved edits");
+fn assert_quit_held_open(app: &Signex, after: iced::Task<crate::app::Message>, name: &str) {
+    // Exactly one cancelled system quit request: no exit, no window close.
+    crate::task_driver::assert_quit_declined(after);
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(format!("{notice:?}").contains(name), "{notice:?}");
 }
@@ -35,7 +35,7 @@ fn a_refused_save_keeps_the_dirty_spelling_dirty_and_blocks_quit() {
 
     assert!(app.document_state.is_document_dirty(&lower));
     assert_eq!(std::fs::read(&upper).expect("read"), b"on-disk");
-    assert_quit_held_open(&app, &after, "lib.snxsch");
+    assert_quit_held_open(&app, after, "lib.snxsch");
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn both_spellings_dirty_and_differing_are_refused_and_both_stay_dirty() {
 
     assert!(app.document_state.is_document_dirty(&upper));
     assert!(app.document_state.is_document_dirty(&lower));
-    assert_quit_held_open(&app, &after, "snxsch");
+    assert_quit_held_open(&app, after, "snxsch");
 }
 
 #[test]
@@ -133,8 +133,8 @@ fn three_spellings_with_two_dirty_stay_dirty_when_the_write_fails() {
     );
     assert!(app.document_state.is_document_dirty(&upper));
     assert!(app.document_state.is_document_dirty(&lower));
-    // One unit: the cancel answering a pending system quit request, no close.
-    assert_eq!(after.units(), 1, "Signex must not close over unsaved edits");
+    // Exactly one cancelled system quit request: no exit, no window close.
+    crate::task_driver::assert_quit_declined(after);
 }
 
 #[test]
