@@ -3,7 +3,7 @@
 //!
 //! The iced runtime asks for the menu after every `update` batch (every
 //! canvas mouse move too), so `NativeMenuState::menu` rebuilds it only when
-//! an input the menu reads changed, as the old muda sync did.
+//! an input the menu reads changed.
 
 #[cfg(test)]
 use std::cell::Cell;

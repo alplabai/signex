@@ -125,6 +125,15 @@ fn row_paths_are_unique_outside_open_recent() {
             .collect();
         let unique: HashSet<&String> = rows.iter().collect();
         assert_eq!(unique.len(), rows.len(), "duplicate row path in {rows:?}");
+        // A row's label carries its shortcut text after four spaces.
+        for path in ["/File/Save", "/Help/About Signex"] {
+            let with_shortcut = format!("{path}    ");
+            assert!(
+                rows.iter()
+                    .any(|row| row == path || row.starts_with(&with_shortcut)),
+                "{path} is missing from {rows:?}"
+            );
+        }
     }
 }
 

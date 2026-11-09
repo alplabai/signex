@@ -173,8 +173,9 @@ is pending): the prompt's Cancel, a quit held back by a running rename or
 delete, a Save All that left files unsaved, and the prompt closing itself
 because everything was saved behind it, and a prompt window that vanishes
 without a close request (treated as Cancel). Each decision is logged to the
-Messages panel ("Quit: the system asked Signex to quit", "Quit: cancelled,
-Signex stays open").
+Messages panel ("Quit: the system asked Signex to quit", "Quit: not quitting,
+Signex stays open"). The second line is written on every OS whenever a quit
+is declined, a system request or not.
 
 **Check marks.** The View menu's panel rows carry `MenuItem::checked`, read
 from `MenuContext::open_panels` (`Signex::open_panels`, the same
