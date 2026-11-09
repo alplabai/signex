@@ -231,6 +231,15 @@ impl Signex {
                 set(&end_names[1])
             ));
         }
+        // Names on other sheets: a name that reaches the net from there counts.
+        let project = self.project_name_changes(&after, start)?;
+        if let Some(names) = project.first()
+            && !flag(args, "allow_merge")
+        {
+            return Err(super::project_names::project_change_refusal(
+                "wire", start, names,
+            ));
+        }
         if !open.is_empty() && !flag(args, "allow_open") {
             return Err(open_refusal(
                 &open,
@@ -239,11 +248,16 @@ impl Signex {
                 "a pin, wire, junction or label",
             ));
         }
+        let merged = if short {
+            names
+        } else {
+            project.into_iter().next().unwrap_or_default()
+        };
         let report = json!({
             "ends": ends_json(args, start, end),
             "segments": segments_json(&segments),
             "net": net.map(|n| json!({ "name": n.name, "pins": n.pins })),
-            "merged": if short { names } else { Vec::new() },
+            "merged": merged,
         });
         Ok((commands, report))
     }

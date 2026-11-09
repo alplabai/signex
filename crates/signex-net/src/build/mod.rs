@@ -40,7 +40,9 @@ pub use wire_intent::{
 };
 mod placement_intent;
 pub(crate) use placement_intent::name_changes;
-pub use placement_intent::{NameChange, PlacementIntent, placement_intent};
+pub use placement_intent::{
+    NameChange, PlacementIntent, net_reaches_other_sheets, placement_intent,
+};
 
 use crate::uf::{Key, find as uf_find, union as uf_union};
 

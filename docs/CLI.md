@@ -160,6 +160,15 @@ sheet first and judge the result with the netlist derivation
    whatever the flags (it cannot happen for a connected run, so it signals a
    bug rather than a choice).
 
+Names are judged across the project: when the sheet belongs to a project, rule 4
+(and a placement's name change) compares the project's stitched nets before and
+after, so a name that reaches a net from another sheet counts; when the project
+cannot be read completely, a net that reaches a sheet pin, hierarchical or
+global label or power port is refused with the reason (`allow_merge` does not
+lift that). A route sent as chained `place_wire` edits (A to B, then B to C) is
+judged per edit against the sheet as it stands, so every edit but the last needs
+`allow_open=true`.
+
 `dry_run=true` (`--dry-run`) answers the report and changes nothing: no undo
 step, no dirty flag, no Messages line. A run that lands answers
 `{"dry_run": false, "ends": [{"ref": "R1.2", "at": [x, y]}, {"at": [x, y]}],

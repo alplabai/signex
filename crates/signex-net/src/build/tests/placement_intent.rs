@@ -95,6 +95,37 @@ fn the_same_name_an_alias_and_an_unnamed_net_are_no_change() {
 }
 
 #[test]
+fn a_net_reaches_other_sheets_by_a_sheet_pin_a_global_or_hierarchical_label_or_a_port() {
+    use crate::build::net_reaches_other_sheets;
+    let base = || {
+        let mut sheet = empty_sheet();
+        sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+        sheet
+    };
+    let mut plain = base();
+    plain
+        .labels
+        .push(label("LOCAL", pt(0.0, 0.0), LabelType::Net));
+    assert!(!net_reaches_other_sheets(&plain, pt(5.0, 0.0)));
+    for kind in [LabelType::Global, LabelType::Hierarchical] {
+        let mut sheet = base();
+        sheet.labels.push(label("X", pt(10.0, 0.0), kind));
+        assert!(net_reaches_other_sheets(&sheet, pt(5.0, 0.0)), "{kind:?}");
+    }
+    let mut ported = base();
+    add_lib(
+        &mut ported,
+        "P",
+        vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+    );
+    place_power(&mut ported, "#PWR1", "P", "VCC", pt(10.0, 0.0));
+    assert!(net_reaches_other_sheets(&ported, pt(5.0, 0.0)));
+    let mut pinned = base();
+    with_sheet_pin(&mut pinned, (0.0, 0.0));
+    assert!(net_reaches_other_sheets(&pinned, pt(5.0, 0.0)));
+}
+
+#[test]
 fn a_junction_merges_named_nets_only_when_their_names_differ() {
     let mut before = empty_sheet();
     before.wires.push(wire(pt(0.0, 0.0), pt(20.0, 0.0)));

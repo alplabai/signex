@@ -196,7 +196,6 @@ fn r1_sheet(id: u128, x: f64) -> signex_types::schematic::SchematicSheet {
 #[test]
 fn an_edit_naming_another_document_than_the_list_is_refused() {
     let mut app = app_idle();
-    let other = format!("document={}", path("a.snxsch").display());
     let before = state(&app, "b.snxsch");
     let reason = refusal(apply(
         &mut app,
@@ -208,7 +207,6 @@ fn an_edit_naming_another_document_than_the_list_is_refused() {
         "{reason}"
     );
     assert_eq!(state(&app, "b.snxsch"), before);
-    drop(other);
     // The same document repeated is fine.
     let own = path("b.snxsch").display().to_string();
     let answer = applied(

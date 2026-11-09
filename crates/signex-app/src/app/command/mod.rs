@@ -35,6 +35,9 @@ mod outcome;
 #[cfg(test)]
 mod placement_operand_tests;
 mod placement_operands;
+#[cfg(test)]
+mod project_name_tests;
+mod project_names;
 pub(crate) mod queries;
 #[cfg(test)]
 mod undo_agreement_tests;

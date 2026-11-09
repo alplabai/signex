@@ -308,10 +308,19 @@ impl Signex {
         if !intent.extra.is_empty() {
             return Err(super::wire_runs::extra_refusal(&subject, &intent.extra));
         }
-        let allowed = matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true)));
-        match intent.changes.first() {
-            Some(change) if !allowed => Err(name_change_refusal(what, at, change)),
-            _ => Ok(()),
+        // Names on other sheets: unknown names refuse with no escape.
+        let project = self.project_name_changes(&after, at)?;
+        if matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true))) {
+            return Ok(());
+        }
+        if let Some(change) = intent.changes.first() {
+            return Err(name_change_refusal(what, at, change));
+        }
+        match project.first() {
+            Some(names) => Err(super::project_names::project_change_refusal(
+                what, at, names,
+            )),
+            None => Ok(()),
         }
     }
 

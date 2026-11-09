@@ -100,6 +100,41 @@ fn points(sheet: &SchematicSheet) -> Vec<Point> {
     points
 }
 
+/// Whether the net at `p` on `sheet` can carry a name from another sheet: it
+/// reaches a sheet pin, a hierarchical or global label, or a power port. When
+/// the rest of the project cannot be read, such a net's names are unknown.
+pub fn net_reaches_other_sheets(sheet: &SchematicSheet, p: Point) -> bool {
+    use signex_types::schematic::LabelType;
+    let index = SegmentIndex::new(
+        &sheet
+            .wires
+            .iter()
+            .map(|w| (w.start, w.end))
+            .collect::<Vec<_>>(),
+    );
+    let mut conn = merged_connectivity(sheet);
+    conn.root_of_anchored_in(&p, &index);
+    let pins: Vec<Point> = sheet
+        .child_sheets
+        .iter()
+        .flat_map(|c| c.pins.iter().map(|pin| pin.position))
+        .collect();
+    for pin in &pins {
+        conn.root_of_anchored_in(pin, &index);
+    }
+    let root = conn.root_of(&p);
+    let on_pin = pins.iter().any(|pin| conn.root_of(pin) == root);
+    let labels = super::collect_net_labels(sheet, &mut conn.parent);
+    let carries_label = labels.get(&root).is_some_and(|ls| {
+        ls.iter()
+            .any(|l| matches!(l.label_type, LabelType::Global | LabelType::Hierarchical))
+    });
+    let carries_port = super::power_name_carriers(sheet, &mut conn.parent)
+        .iter()
+        .any(|(r, ..)| *r == root);
+    on_pin || carries_label || carries_port
+}
+
 fn net_changes(before: &SchematicSheet, after: &SchematicSheet) -> Vec<NameChange> {
     let index = |s: &SchematicSheet| {
         SegmentIndex::new(&s.wires.iter().map(|w| (w.start, w.end)).collect::<Vec<_>>())

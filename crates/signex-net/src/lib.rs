@@ -32,7 +32,7 @@ pub use build::{
     NetExtent, PlacementIntent, RunEnd, SegmentIndex, SheetConnectivity, SheetPinContacts,
     WireIntent, best_net_name_of, build_netlist, connected_net_items, connected_points,
     flood_net_elements, has_connection_anchor, is_power_flag, name_carrying_ports, net_extent_at,
-    placement_intent, point_on_segment, pt_key, wire_intent,
+    net_reaches_other_sheets, placement_intent, point_on_segment, pt_key, wire_intent,
 };
 pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
 
@@ -48,5 +48,5 @@ pub use project::{
     NetNameSource, NumberingIssue, ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey,
     SheetNumbering, SheetOccurrence, SheetPage, StitchIssue, build_project_netlist,
     build_project_netlist_indexed, instance_entry_designators, is_auto_name, multi_named_nets,
-    project_occurrences, sheet_numbering,
+    project_name_changes, project_occurrences, sheet_numbering,
 };
