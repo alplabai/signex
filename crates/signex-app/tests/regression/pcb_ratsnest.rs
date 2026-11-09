@@ -39,6 +39,7 @@ fn two_pad_board() -> PcbBoard {
         layer: "TopCopper".into(),
         locked: false,
         schematic_link: None,
+        library_ref: None,
         pads: vec![pad(1, 0.0), pad(2, 5.0)],
         graphics: vec![],
         properties: vec![],

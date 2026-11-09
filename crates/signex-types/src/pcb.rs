@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::format::{BoardUnknown, UnknownColumns, UnknownFields, parse_pcb_layer};
+use crate::part::FootprintSourceRef;
 use crate::pcb_layer::PcbLayer;
 use crate::property::PcbProperty;
 use crate::schematic::InstancePath;
@@ -297,6 +298,11 @@ pub struct Footprint {
     /// a footprint placed by hand or on a board saved before the link.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schematic_link: Option<SymbolLink>,
+    /// The library footprint this one was built from; `None` for a footprint
+    /// drawn on the board or saved before the field. Saved in the optional
+    /// `lib_ref` footprint column. See ADR-0005 section 13.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub library_ref: Option<FootprintSourceRef>,
     /// Keys in this footprint's `[extras.footprints.<uuid>]` table that
     /// this build does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]

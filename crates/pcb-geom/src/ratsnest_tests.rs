@@ -41,6 +41,7 @@ fn footprint(n: u128, layer: &str, pads: Vec<Pad>) -> Footprint {
         layer: layer.into(),
         locked: false,
         schematic_link: None,
+        library_ref: None,
         pads,
         graphics: Vec::new(),
         properties: Vec::new(),
