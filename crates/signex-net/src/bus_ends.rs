@@ -7,6 +7,15 @@ use signex_types::schematic::{Point, SchematicSheet};
 
 use crate::{RunEnd, SegmentIndex, pt_key};
 
+/// Whether `key` is either end of a bus entry, as `attach_entries` reads one
+/// (a rotated entry has a negative size).
+pub(crate) fn entry_end_at(sheet: &SchematicSheet, key: crate::uf::Key) -> bool {
+    sheet.bus_entries.iter().any(|e| {
+        let far = Point::new(e.position.x + e.size.0, e.position.y + e.size.1);
+        pt_key(&e.position) == key || pt_key(&far) == key
+    })
+}
+
 /// The ends of the run `start`..`end` with no existing bus (end or interior),
 /// bus entry or label at the point.
 pub fn dangling_bus_ends(sheet: &SchematicSheet, start: Point, end: Point) -> Vec<RunEnd> {
@@ -15,12 +24,7 @@ pub fn dangling_bus_ends(sheet: &SchematicSheet, start: Point, end: Point) -> Ve
     let attached = |p: &Point| {
         let key = pt_key(p);
         index.contains(key)
-            // Either end of an entry, as `attach_entries` reads it (a rotated
-            // entry has a negative size).
-            || sheet.bus_entries.iter().any(|e| {
-                let far = Point::new(e.position.x + e.size.0, e.position.y + e.size.1);
-                pt_key(&e.position) == key || pt_key(&far) == key
-            })
+            || entry_end_at(sheet, key)
             || sheet.labels.iter().any(|l| pt_key(&l.position) == key)
     };
     [(RunEnd::Start, start), (RunEnd::End, end)]

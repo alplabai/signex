@@ -173,6 +173,30 @@ impl Signex {
         Ok(Point::new(*x, *y))
     }
 
+    /// A power port on a pin reference whose tip has no wire end, junction or
+    /// label would only touch the pin: pin to pin is no connection (ADR-0002
+    /// D5.1), so the port would sit on nothing. Coordinates are unchanged.
+    fn refuse_unconnected_pin(
+        &self,
+        args: &CommandArgs,
+        at: Point,
+        what: &str,
+    ) -> Result<(), String> {
+        let Some(OperandValue::PinRef { designator, pin }) = args.operand("at") else {
+            return Ok(());
+        };
+        let connected = self
+            .document_state
+            .edit_engine()
+            .is_none_or(|e| signex_net::connected_points(e.document()).contains(&at));
+        if connected {
+            return Ok(());
+        }
+        Err(format!(
+            "a {what} on {designator}.{pin} would touch the pin without connecting; draw a wire to it first or place a label"
+        ))
+    }
+
     /// A label or power port named `new_name` at `at` is refused when the net
     /// already there carries another name, unless `allow_merge=true`: it would
     /// short the two (#2199; rules in `docs/CLI.md`, "Labels and power ports").
@@ -241,6 +265,7 @@ impl Signex {
                     ));
                 }
                 let net_name = text(args, "net_name")?;
+                self.refuse_unconnected_pin(args, at, "power port")?;
                 self.refuse_rename(args, at, &net_name, "power port")?;
                 placed(self.place_power_at(at, &net_name, &lib_id))
             }

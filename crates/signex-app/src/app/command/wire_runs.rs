@@ -5,7 +5,9 @@
 //! first. Rules and refusals: `docs/CLI.md`, "Wire intent" and "Bus geometry".
 
 use serde_json::{Value, json};
-use signex_net::{ExtraItem, ExtraKind, RunEnd, WireIntent, dangling_bus_ends, wire_intent};
+use signex_net::{
+    EndSpec, ExtraItem, ExtraKind, RunEnd, WireIntent, dangling_bus_ends, wire_intent,
+};
 use signex_types::schematic::{Point, SchematicSheet, symbol_crossed_by};
 
 use super::{CommandArgs, CommandOutcome, OperandValue};
@@ -128,6 +130,18 @@ impl Signex {
         Ok(scratch.document().clone())
     }
 
+    /// What the operand `name` named at `at`: the pin, for a pin reference.
+    fn end_spec(&self, args: &CommandArgs, name: &str, at: Point) -> EndSpec {
+        let pin = match args.operand(name) {
+            Some(OperandValue::PinRef { designator, pin }) => self
+                .pin_ref(designator, pin)
+                .ok()
+                .map(|resolved| (resolved.symbol, resolved.pin)),
+            _ => None,
+        };
+        EndSpec { at, pin }
+    }
+
     /// Check the wire run and build its commands and report.
     fn plan_wire(
         &self,
@@ -149,7 +163,12 @@ impl Signex {
             open,
             joined,
             net,
-        } = wire_intent(before, &after, start, end);
+        } = wire_intent(
+            before,
+            &after,
+            self.end_spec(args, "start", start),
+            self.end_spec(args, "end", end),
+        );
         if !extra.is_empty() {
             return Err(extra_refusal(&extra));
         }

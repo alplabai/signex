@@ -1,7 +1,7 @@
 //! #2199 — what a headless wire run pulls into its net besides its two ends.
 
 use super::*;
-use crate::build::{ExtraKind, RunEnd, WireIntent, wire_intent};
+use crate::build::{EndSpec, ExtraKind, RunEnd, WireIntent, wire_intent};
 
 /// Parts with one pin on their origin, at the given points.
 fn parts(points: &[(&str, (f64, f64))]) -> SchematicSheet {
@@ -37,7 +37,85 @@ fn intent(
     start: (f64, f64),
     end: (f64, f64),
 ) -> WireIntent {
-    wire_intent(before, after, pt(start.0, start.1), pt(end.0, end.1))
+    wire_intent(
+        before,
+        after,
+        EndSpec::at(pt(start.0, start.1)),
+        EndSpec::at(pt(end.0, end.1)),
+    )
+}
+
+/// The end `reference`.1 names, as a pin reference: its tip and pin.
+fn pin_ref(sheet: &SchematicSheet, reference: &str) -> EndSpec {
+    let sym = sheet
+        .symbols
+        .iter()
+        .find(|s| s.reference == reference)
+        .expect("a part");
+    EndSpec {
+        at: sym.position,
+        pin: Some((sym.uuid, "1".into())),
+    }
+}
+
+#[test]
+fn a_wire_passing_under_a_referenced_pin_is_not_joined_silently() {
+    // R1.1 sits on the interior of a GND wire with no end or junction there.
+    let mut before = parts(&[("R1", (0.0, 0.0)), ("C1", (20.0, 0.0))]);
+    before.wires.push(wire(pt(0.0, -10.0), pt(0.0, 10.0)));
+    before
+        .labels
+        .push(label("GND", pt(0.0, 10.0), LabelType::Net));
+    // The engine mints the T junction at the run's end on the passing wire.
+    let after = run(&before, &[((0.0, 0.0), (20.0, 0.0))], &[(0.0, 0.0)]);
+    for start in [pin_ref(&before, "R1"), EndSpec::at(pt(0.0, 0.0))] {
+        let got = wire_intent(&before, &after, start, pin_ref(&before, "C1"));
+        assert!(
+            !identities(&got, ExtraKind::Label).is_empty(),
+            "the GND net is pulled in: {got:?}"
+        );
+    }
+}
+
+#[test]
+fn a_power_port_touching_a_referenced_pin_is_extra() {
+    // A GND port butted on R1.1 pin to pin is no connection (ADR-0002 D5.1);
+    // the run to R1.1 would make it one.
+    let mut before = parts(&[("R1", (0.0, 0.0)), ("C1", (20.0, 0.0))]);
+    place_power(&mut before, "#PWR1", "P", "GND", pt(0.0, 0.0));
+    let after = run(&before, &[((0.0, 0.0), (20.0, 0.0))], &[]);
+    let got = wire_intent(
+        &before,
+        &after,
+        pin_ref(&before, "R1"),
+        pin_ref(&before, "C1"),
+    );
+    assert_eq!(identities(&got, ExtraKind::Pin), ["#PWR1.1"], "{got:?}");
+
+    // With a stub wire on the tip both pins are already connected; the other
+    // pin at a referenced tip is still not the pin named.
+    before.wires.push(wire(pt(0.0, 0.0), pt(0.0, -5.0)));
+    let after = run(&before, &[((0.0, 0.0), (20.0, 0.0))], &[]);
+    let got = wire_intent(
+        &before,
+        &after,
+        pin_ref(&before, "R1"),
+        pin_ref(&before, "C1"),
+    );
+    assert_eq!(identities(&got, ExtraKind::Pin), ["#PWR1.1"], "{got:?}");
+}
+
+#[test]
+fn a_run_ending_on_either_end_of_a_bus_entry_is_attached() {
+    let mut before = parts(&[("R1", (0.0, 0.0))]);
+    before.bus_entries.push(signex_types::schematic::BusEntry {
+        uuid: Uuid::nil(),
+        position: pt(20.0, 10.0),
+        size: (-2.54, -2.54),
+    });
+    let after = run(&before, &[((0.0, 0.0), (17.46, 7.46))], &[]);
+    let got = intent(&before, &after, (0.0, 0.0), (17.46, 7.46));
+    assert!(got.open.is_empty(), "{got:?}");
 }
 
 fn identities(intent: &WireIntent, kind: ExtraKind) -> Vec<&str> {

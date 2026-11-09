@@ -377,7 +377,7 @@ fn what_cannot_be_named_is_refused_with_the_reason() {
 }
 
 fn tip_of(sheet: &SchematicSheet, designator: &str, pin: &str) -> Result<Point, String> {
-    super::pins::pin_tip_of(sheet, designator, pin, &[InstancePath::root()])
+    super::pins::pin_tip_of(sheet, designator, pin, &[InstancePath::root()]).map(|r| r.tip)
 }
 
 fn assert_point(got: Point, x: f64, y: f64) {

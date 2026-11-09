@@ -88,6 +88,7 @@ pub(super) fn pins_of(
 
 /// One pin of a placed unit, as a reference to it reads it.
 struct PlacedPin {
+    symbol: uuid::Uuid,
     id: String,
     name: String,
     visible: bool,
@@ -103,7 +104,7 @@ pub(in crate::app::command) fn pin_tip_of(
     designator: &str,
     pin: &str,
     paths: &[InstancePath],
-) -> Result<Point, String> {
+) -> Result<PinRefTip, String> {
     let units = part_units(sheet, designator, paths)?;
     let mut placed = Vec::new();
     for sym in &units {
@@ -112,6 +113,7 @@ pub(in crate::app::command) fn pin_tip_of(
             .ok_or_else(|| format!("the library symbol `{}` is not in this sheet", sym.lib_id))?;
         for (lp, tip) in pin_tips(&lib, sym) {
             placed.push(PlacedPin {
+                symbol: sym.uuid,
                 id: pin_id(&lp.pin).to_string(),
                 name: lp.pin.name.clone(),
                 visible: lp.pin.visible,
@@ -143,7 +145,19 @@ pub(in crate::app::command) fn pin_tip_of(
             tips.join(" and ")
         ));
     }
-    Ok(first.tip)
+    Ok(PinRefTip {
+        tip: first.tip,
+        symbol: first.symbol,
+        pin: first.id.clone(),
+    })
+}
+
+/// What a pin reference resolved to: the tip, and the pin as the netlist names
+/// a terminal (the placed symbol and the pin id).
+pub(in crate::app::command) struct PinRefTip {
+    pub tip: Point,
+    pub symbol: uuid::Uuid,
+    pub pin: String,
 }
 
 /// The pins whose name is `pin`, when they are one pin (a shared pin shows at
@@ -238,6 +252,15 @@ impl Signex {
         designator: &str,
         pin: &str,
     ) -> Result<Point, String> {
+        self.pin_ref(designator, pin).map(|resolved| resolved.tip)
+    }
+
+    /// [`Self::pin_ref_tip`] with the pin as the netlist names it.
+    pub(in crate::app::command) fn pin_ref(
+        &self,
+        designator: &str,
+        pin: &str,
+    ) -> Result<PinRefTip, String> {
         let docs = &self.document_state;
         let (Some(path), Some(engine)) = (docs.edit_path(), docs.edit_engine()) else {
             return Err("no schematic is open".to_string());

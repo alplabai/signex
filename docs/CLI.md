@@ -124,13 +124,19 @@ sheet first and judge the result with the netlist derivation
    included; running along a body edge or ending on one does not count.
 3. **Extra connection** (never allowed): the run pulls another pin, label,
    junction or wire into the net, wherever on its path or bend ("the wire also
-   touches R5.1 at 20.32,5.08"). A start or end on a wire's interior is
-   intended. "Touches" is what the netlist joins: a pin the run only passes
-   over, with no wire end or junction at its tip, is not connected and not named.
+   touches R5.1 at 20.32,5.08"). "Touches" is what the netlist joins: a pin
+   the run only passes over, with no wire end or junction at its tip, is not
+   connected and not named. What an end intends is what is connected there
+   before the run (wire ends, junctions, labels, connected pins, sheet pins) and
+   what the caller named: a pin reference names only that pin (another pin on
+   the same tip is extra), a coordinate names the pins at the point. A start
+   or end on a wire's interior is a T the caller asked for only for a
+   coordinate with no pin tip there; for a pin reference, or any end on a pin
+   tip, a wire passing under the tip is not intended, so its net is extra.
 4. **Short**: the two ends are on differently named nets (labels and power
    ports, by the netlist's naming rule); refused unless `allow_merge=true`.
-5. **Open end**: an end with no pin tip, wire, junction or label under it;
-   refused unless `allow_open=true`.
+5. **Open end**: an end with no pin tip, wire, junction, label, sheet pin or
+   bus entry (either end of it) under it; refused unless `allow_open=true`.
 6. The two ends must be on one net afterwards; a run that is not is refused
    whatever the flags (it cannot happen for a connected run, so it signals a
    bug rather than a choice).
@@ -153,7 +159,10 @@ text or power `net_name`, the placement is refused as a short ("`at` 16.51,12.7
 is on net VCC; a GND label there would short VCC and GND; pass
 allow_merge=true to merge on purpose"). The same name, an unnamed net, or
 nothing at `at` is allowed. `allow_merge=true` places it anyway. There is no
-`dry_run` for these commands.
+`dry_run` for these commands. A power port on a pin reference whose tip has no
+wire end, junction or label is refused ("would touch the pin without
+connecting"): pin to pin is no connection, so draw a wire to it first or place
+a label. A coordinate is unchanged.
 
 ## Bus geometry
 

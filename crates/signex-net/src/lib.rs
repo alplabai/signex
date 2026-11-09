@@ -26,7 +26,7 @@ pub use bus_ends::dangling_bus_ends;
 #[cfg(test)]
 mod fixtures;
 pub use build::{
-    ConnectedPoints, ExtraItem, ExtraKind, FloodElements, IntentNet, NetExtent, RunEnd,
+    ConnectedPoints, EndSpec, ExtraItem, ExtraKind, FloodElements, IntentNet, NetExtent, RunEnd,
     SegmentIndex, SheetConnectivity, SheetPinContacts, WireIntent, best_net_name_of, build_netlist,
     connected_net_items, connected_points, flood_net_elements, is_power_flag, name_carrying_ports,
     net_extent_at, net_name_at, point_on_segment, pt_key, wire_intent,

@@ -275,6 +275,74 @@ fn a_power_port_that_would_rename_the_net_is_refused_unless_allowed() {
 }
 
 #[test]
+fn a_wire_passing_under_a_referenced_pin_is_not_joined_silently() {
+    // A GND wire runs over R1.2's tip with no end or junction there, so R1.2
+    // is on no net; a run to it would join GND.
+    let mut sheet = two_parts();
+    sheet
+        .wires
+        .push(wire(Point::new(16.51, 5.08), Point::new(16.51, 20.32)));
+    sheet.labels.push(label("GND", Point::new(16.51, 5.08)));
+    let mut app = app_with(sheet);
+    refused_with(
+        &mut app,
+        "place_wire",
+        &["start=R1.2", "end=C1.1"],
+        "also touches",
+    );
+    // A coordinate on the pin tip is no T either.
+    refused_with(
+        &mut app,
+        "place_wire",
+        &["start=16.51,12.7", "end=C1.1"],
+        "also touches",
+    );
+    // A plain coordinate on the wire is the T the caller asked for.
+    let report = answered(run(
+        &mut app,
+        "place_wire",
+        &["start=16.51,10.16", "end=34.29,10.16", "allow_open=true"],
+    ));
+    assert_eq!(report["dry_run"], false);
+}
+
+#[test]
+fn a_wire_may_start_on_either_end_of_a_bus_entry() {
+    let mut sheet = two_parts();
+    sheet.bus_entries.push(BusEntry {
+        uuid: Uuid::now_v7(),
+        position: Point::new(5.08, 25.4),
+        size: (2.54, -2.54),
+    });
+    let mut app = app_with(sheet);
+    // The entry's wire-side end is (7.62, 22.86).
+    let report = answered(run(
+        &mut app,
+        "place_wire",
+        &["start=7.62,22.86", "end=R1.1"],
+    ));
+    assert_eq!(report["dry_run"], false);
+}
+
+#[test]
+fn a_power_port_on_a_referenced_pin_that_connects_to_nothing_is_refused() {
+    let mut app = app_with(two_parts());
+    refused_with(
+        &mut app,
+        "place_power_symbol",
+        &["at=R1.2", "net_name=GND", "lib_id=power:GND"],
+        "would touch the pin without connecting",
+    );
+    // A coordinate is unchanged.
+    let outcome = run(
+        &mut app,
+        "place_power_symbol",
+        &["at=16.51,12.7", "net_name=GND", "lib_id=power:GND"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
+}
+
+#[test]
 fn a_pin_reference_that_cannot_be_resolved_is_refused_and_changes_nothing() {
     let mut app = app_with(two_parts());
     for (start, fragment) in [

@@ -66,13 +66,37 @@ pub struct WireIntent {
     pub net: Option<IntentNet>,
 }
 
+/// What the caller named at one end of the run: a point, and the pin when it
+/// was given as a pin reference.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EndSpec {
+    pub at: Point,
+    /// The placed symbol and pin id (`Terminal::symbol`, `Terminal::pin`) a
+    /// pin reference named. Only that pin is intended at the point.
+    pub pin: Option<(Uuid, String)>,
+}
+
+impl EndSpec {
+    /// An end given as a coordinate.
+    pub fn at(at: Point) -> Self {
+        Self { at, pin: None }
+    }
+}
+
 /// Judge the run from `start` to `end` that turned `before` into `after`.
+///
+/// What an end intends is what is connected there before the run by the
+/// netlist's own gate (wire ends, junctions, labels, terminal pins, sheet
+/// pins) and what the caller named: a pin reference names only that pin, a
+/// coordinate names the pins at the point. A wire passing under an end is a
+/// T the caller asked for only for a coordinate end with no pin tip there.
 pub fn wire_intent(
     before: &SchematicSheet,
     after: &SchematicSheet,
-    start: Point,
-    end: Point,
+    start: EndSpec,
+    end: EndSpec,
 ) -> WireIntent {
+    let (ends, start, end) = ([start.clone(), end.clone()], start.at, end.at);
     let root = InstancePath::root();
     let segments = |s: &SchematicSheet| -> Vec<(Point, Point)> {
         s.wires.iter().map(|w| (w.start, w.end)).collect()
@@ -92,10 +116,15 @@ pub fn wire_intent(
                 .map(move |sp| (sp.position, format!("{} of {}", sp.name, cs.name)))
         })
         .collect();
-    for p in [start, end].iter().chain(sheet_pins.iter().map(|(p, _)| p)) {
+    let tip_keys = pin_tip_keys(before);
+    let tapped_ends = ends
+        .iter()
+        .filter(|e| e.pin.is_none() && !tip_keys.contains(&pt_key(&e.at)))
+        .map(|e| &e.at);
+    for p in tapped_ends.chain(sheet_pins.iter().map(|(p, _)| p)) {
         b.root_of_anchored_in(p, &before_index);
     }
-    let wanted: HashSet<Key> = [b.root_of(&start), b.root_of(&end)].into();
+    let wanted: HashSet<Key> = ends.iter().map(|e| b.root_of(&e.at)).collect();
     let names = names_at(before, &mut b.parent, [start, end]);
     let before_terminal_root: HashMap<(Uuid, String), Key> =
         collect_terminals_at(before, &root, &mut b.parent)
@@ -128,15 +157,35 @@ pub fn wire_intent(
     let on_new = |a: &mut crate::SheetConnectivity, p: &Point| a.root_of(p) == new_root;
 
     let mut extra = Vec::new();
-    let ends = [pt_key(&start), pt_key(&end)];
+    let named: HashSet<(Uuid, String)> = ends.iter().filter_map(|e| e.pin.clone()).collect();
+    let ref_keys: HashSet<Key> = ends
+        .iter()
+        .filter(|e| e.pin.is_some())
+        .map(|e| pt_key(&e.at))
+        .collect();
+    let coord_keys: HashSet<Key> = ends
+        .iter()
+        .filter(|e| e.pin.is_none())
+        .map(|e| pt_key(&e.at))
+        .collect();
     for (found_root, found) in collect_terminals_at(after, &root, &mut a.parent) {
         if found_root != new_root {
             continue;
         }
         for (t, tip) in found {
-            let intended = match before_terminal_root.get(&(t.symbol, t.pin.clone())) {
-                Some(r) => wanted.contains(r),
-                None => ends.contains(&pt_key(&tip)),
+            let id = (t.symbol, t.pin.clone());
+            let key = pt_key(&tip);
+            let intended = if named.contains(&id) {
+                true
+            } else if ref_keys.contains(&key) {
+                // Another pin on a referenced tip is not the pin named.
+                false
+            } else if coord_keys.contains(&key) {
+                true
+            } else {
+                before_terminal_root
+                    .get(&id)
+                    .is_some_and(|r| wanted.contains(r))
             };
             if !intended {
                 extra.push(ExtraItem {
@@ -188,7 +237,7 @@ pub fn wire_intent(
 
     let open = [(RunEnd::Start, start), (RunEnd::End, end)]
         .into_iter()
-        .filter(|(_, p)| !has_item_at(before, &before_index, p))
+        .filter(|(_, p)| !has_item_at(before, &before_index, &tip_keys, p))
         .map(|(end, _)| end)
         .collect();
     let joined = on_new(&mut a, &end);
@@ -246,21 +295,38 @@ fn names_at(
     names
 }
 
-/// Whether a pin tip, a wire (end or interior), a junction or a label sits at `p`.
-fn has_item_at(sheet: &SchematicSheet, index: &SegmentIndex, p: &Point) -> bool {
+/// The 1 um keys of every pin tip on `sheet`.
+fn pin_tip_keys(sheet: &SchematicSheet) -> HashSet<Key> {
+    sheet
+        .symbols
+        .iter()
+        .filter_map(|sym| Some((sym, sheet.resolve_lib_symbol(sym)?)))
+        .flat_map(|(sym, lib)| {
+            pin_tips(&lib, sym)
+                .map(|(_, tip)| pt_key(&tip))
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// Whether a pin tip, a wire (end or interior), a junction, a label, a sheet
+/// pin or either end of a bus entry sits at `p`.
+fn has_item_at(
+    sheet: &SchematicSheet,
+    index: &SegmentIndex,
+    tips: &HashSet<Key>,
+    p: &Point,
+) -> bool {
     let key = pt_key(p);
     index.contains(key)
+        || tips.contains(&key)
         || sheet.junctions.iter().any(|j| pt_key(&j.position) == key)
         || sheet.labels.iter().any(|l| pt_key(&l.position) == key)
         || sheet
             .child_sheets
             .iter()
             .any(|cs| cs.pins.iter().any(|sp| pt_key(&sp.position) == key))
-        || sheet.symbols.iter().any(|sym| {
-            sheet
-                .resolve_lib_symbol(sym)
-                .is_some_and(|lib| pin_tips(&lib, sym).any(|(_, tip)| pt_key(&tip) == key))
-        })
+        || crate::bus_ends::entry_end_at(sheet, key)
 }
 
 /// The netlist net the wire at `start` is on, if a pin lands on it.
