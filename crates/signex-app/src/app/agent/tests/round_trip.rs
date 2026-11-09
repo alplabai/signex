@@ -64,3 +64,24 @@ fn every_request_is_logged_with_the_client_pid_the_command_and_the_outcome() {
     );
     assert_eq!(crate::diagnostics::logged_count(refused_line), refused + 1);
 }
+
+#[test]
+fn query_pins_answers_on_the_agent_channel_and_changes_nothing() {
+    use crate::app::command::queries::pins_tests::pin_sheet;
+    use crate::app::handlers::editing_commands::net_color_driver as fixture;
+
+    let mut app = app_at_work();
+    // Sheet B is one of the open project's; give it the part to ask about.
+    fixture::add_sheet_with(&mut app, &path("b.snxsch"), pin_sheet());
+    app.document_state.mark_document_clean(&path("b.snxsch"));
+
+    let reply = call(
+        &mut app,
+        "query_pins",
+        json!({"document": doc("b.snxsch"), "designator": "R1"}),
+    );
+
+    assert_eq!(reply["status"], "answered", "{reply}");
+    assert_eq!(reply["data"]["count"], 2, "{reply}");
+    assert_eq!(reply["changed"], json!([]));
+}

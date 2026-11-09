@@ -103,10 +103,12 @@ fn render() -> String {
          one, and it changes no tab, focus, panel or selection. A person's palette or\n\
          keybinding call has no operands and keeps the active document.\n\
          \n\
-         `list_documents`, `document_info`, `resolve`, `find_items` and `read_document` are\n\
-         read-only queries that answer with data (`CommandOutcome::Answered`); `find` is\n\
-         still the Find dialog. Ids and where each file kind stores\n\
-         one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).\n",
+         `list_documents`, `document_info`, `resolve`, `find_items`, `read_document` and\n\
+         `query_pins` are read-only queries that answer with data\n\
+         (`CommandOutcome::Answered`); `find` is still the Find dialog.\n\
+         `query_pins document=<doc> designator=<ref>` lists the pins of a part on\n\
+         one sheet: number, name, electrical type, hidden, unit and the tip in mm.\n\
+         Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).\n",
     );
 
     for group in CommandGroup::ALL {
