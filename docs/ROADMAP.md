@@ -327,8 +327,8 @@ under the user's identity, and none writes to disk without the user's save.
   explanations, design reviews, and ERC / DRC fix suggestions. The AI edits
   only when asked, and every edit is shown as a preview and applied as one
   undoable step.
-- **Agent** (Pro only; maintainer decision 2026-11-09, modelled on the agent
-  mode of code editors): the user gives a goal ("add a USB-C supply with 3.3 V and
+- **Agent** (Pro only; maintainer decision 2026-11-09 in `DECISIONS.md`,
+  modelled on the agent mode of code editors): the user gives a goal ("add a USB-C supply with 3.3 V and
   5 V rails", "fix every ERC error on this sheet", "place and route the
   power section"). The agent plans the steps, runs tools in a loop across
   sheets and the board, runs ERC / DRC and the project's requirement checks
@@ -336,12 +336,13 @@ under the user's identity, and none writes to disk without the user's save.
   needs the user. The user watches progress live in the AI panel and stops
   it at any time. When it finishes, its work is one change set, shown on
   the canvas per sheet and board, that the user can keep or undo as a whole
-  or change by change (the full visual diff is #761), and every turn is a checkpoint to go back to. Tools
-  that reach outside the design (distributor search, library writes,
-  running an export) ask first, unless the user allows that tool for the
-  session.
-- **Generator:** the agent runs a staged workflow and drives from a written specification (function,
-  interfaces, power, size, cost, preferred parts), in stages. Each stage
+  or change by change (the full visual diff is #761), and every turn is a
+  checkpoint to go back to. Tools that reach outside the design
+  (distributor search, library writes, running an export) ask first, unless
+  the user allows that tool for the session.
+- **Generator:** the agent runs a staged workflow and drives from a written
+  specification (function, interfaces, power, size, cost, preferred parts),
+  in stages. Each stage
   stops for the user's approval as a change list they can review entry by
   entry: (1) architecture, a block diagram and a power tree; (2) parts,
   from the user's libraries first and then distributors, as a BOM with
@@ -368,7 +369,7 @@ it changed and why, and it prefers the simpler design when both pass.
 | **Router: Walkaround** | As below: obstacle-aware A* routing, which the Generator's board stage routes with |
 | **Chat & Context** | Signex AI panel (streaming chat, markdown rendering); design context (parts, nets, ERC / DRC results); local session history; the client for Signex's hosted AI service |
 | **Agent Mode** (Pro) | Built in the separate Pro repository; the Community repository holds none of it. The agent loop (plan, act through the tools, check, repair) runs in Signex's hosted service and the desktop executes its tool calls through the Command Registry; live step list in the AI panel with stop; the turn's work as one reviewable change set with keep or undo per change (the full visual diff is #761); checkpoints per turn; approval prompts for tools that reach outside the design, with allow-for-this-session |
-| **Requirements & Verification** | The checks run in Community too, like ERC and DRC; Pro's agent uses them as its done condition. The project requirements list (ERC / DRC rules, net classes, rail budgets, board size, BOM cost and approved parts) as deterministic checks; pass and fail with evidence in the AI panel; the done condition for Agent and Generator work |
+| **Requirements & Verification** | Community, not Pro: it can ship on its own, ahead of the rest of this gate, whose exit criteria are Pro. The checks run in Community like ERC and DRC; Pro's agent uses them as its done condition. The project requirements list (ERC / DRC rules, net classes, rail budgets, board size, BOM cost and approved parts) as deterministic checks; pass and fail with evidence in the AI panel; the done condition for Agent and Generator work |
 | **Edit & Analysis Tools** | Assistant mode: undoable tools over the Command Registry for schematic and board (place a part, wire, set a value, delete, place a footprint, route a net); check_erc and check_drc; fix suggestions applied as reviewable changes |
 | **Generator: Schematic** | Generator stages 1–3: specification to architecture, parts and an ERC-clean schematic, each stage a reviewable change list |
 | **Generator: Board** | Generator stage 4: the board created from the schematic, outline, placement, routing with the Walkaround router, DRC-clean |
