@@ -158,7 +158,7 @@ mod tests {
         app.open_pcb_tab(path.clone(), "board_repair".into(), repaired_board(false));
         assert!(app.document_state.is_document_dirty(&path));
         assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
-        let Some(crate::app::TabDocument::Pcb(board)) = app
+        let Some(crate::app::TabDocument::Pcb(engine)) = app
             .document_state
             .tabs
             .last()
@@ -166,7 +166,7 @@ mod tests {
         else {
             panic!("a board tab");
         };
-        assert!(board.unknown.load_repairs.is_empty());
+        assert!(engine.board().unknown.load_repairs.is_empty());
     }
 
     #[test]
