@@ -391,7 +391,6 @@ impl Signex {
         saved: crate::app::state::CommitBytes,
     ) {
         crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
-        let tab_open = self.document_state.tabs.iter().any(|tab| tab.path == path);
         // A missing key reads as 0 on both sides (begin uses the same
         // fallback), so it can never pin a tab dirty.
         let current = self
@@ -400,12 +399,13 @@ impl Signex {
             .get(path)
             .copied()
             .unwrap_or(0);
-        if tab_open && current != revision {
+        if current != revision {
             // The file now holds a snapshot the board has moved past: no
             // history step reproduces it, so undo must not read clean.
             if let Some(engine) = self.document_state.board_engine_mut(path) {
                 engine.forget_save_point();
             }
+            self.document_state.sync_history_dirty(path);
             return;
         }
         self.finish_clean_save(path, saved);

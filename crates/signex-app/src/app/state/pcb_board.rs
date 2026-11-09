@@ -15,6 +15,9 @@ use crate::app::{TabDocument, TabKind};
 use signex_engine::pcb::BoardEngine;
 use signex_types::pcb::PcbBoard;
 
+/// The engines of closed dirty PCB tabs, by path.
+pub(crate) type ParkedBoards = std::collections::HashMap<PathBuf, BoardEngine>;
+
 impl DocumentState {
     /// Does a PCB tab, or a board parked without one, hold `path`?
     pub(crate) fn holds_pcb(&self, path: &Path) -> bool {
@@ -40,16 +43,15 @@ impl DocumentState {
         self.parked_pcb_boards.get(path)
     }
 
+    /// The engine of the PCB tab at , for a write. A parked engine is
+    /// read-only: nothing may step it while its save can be in flight, or the
+    /// landing save would clean a board that moved after the snapshot.
     pub(crate) fn board_engine_mut(&mut self, path: &Path) -> Option<&mut BoardEngine> {
-        if self.has_pcb_tab(path) {
-            return self
-                .tabs
-                .iter_mut()
-                .find(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)
-                .and_then(|tab| tab.cached_document.as_mut())
-                .and_then(TabDocument::as_pcb_engine_mut);
-        }
-        self.parked_pcb_boards.get_mut(path)
+        self.tabs
+            .iter_mut()
+            .find(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)
+            .and_then(|tab| tab.cached_document.as_mut())
+            .and_then(TabDocument::as_pcb_engine_mut)
     }
 
     /// Every board engine a tab or a parked board holds.
@@ -94,7 +96,7 @@ impl DocumentState {
         }
     }
 
-    fn has_pcb_tab(&self, path: &Path) -> bool {
+    pub(crate) fn has_pcb_tab(&self, path: &Path) -> bool {
         self.tabs
             .iter()
             .any(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)

@@ -9,6 +9,10 @@ editing UI does not have to decide it.
 - A PCB tab holds a `signex_engine::pcb::BoardEngine` (`TabDocument::Pcb`),
   not a bare `PcbBoard`. A dirty tab that closes parks the engine, history
   included (`state/pcb_board.rs`, #2149, #2196); reopening takes it back.
+  A parked engine is read-only: no edit, undo or redo reaches it
+  (`BoardEditError::Parked`, `undo document=` refuses), because Save All
+  may be writing it, and a step during that write would let the landing
+  save clean a board that moved after the snapshot.
 - `BoardEngine::execute_batch(Vec<BoardCommand>)` is the only mutation path.
   `execute` is one command; both are one undo step, all or nothing. In the app
   the door is `Signex::execute_board_commands` (`handlers/pcb_edit.rs`), which
@@ -28,12 +32,20 @@ editing UI does not have to decide it.
 - Dirty, save and close go through the single owner (`docs/DIRTY_STATE.md`):
   `sync_history_dirty` reads the board engine as it reads a sheet engine,
   `mark_document_clean` marks the save point, and a save that lands for a
-  snapshot the board has moved past forgets the point.
+  snapshot the board has moved past forgets the point and re-syncs the mark.
+  That revision check runs whether or not the tab is still open.
+- A failed rollback (`RollbackFailed`, unreachable by construction) takes a
+  new revision and forgets the save point, so caches rebuild and the board
+  reads unsaved.
+- After any board change every window that shows the board repaints: the
+  main canvas when it is the active tab, and each undocked window showing
+  that path. Repainting does not cancel the active tool.
 - Undo and Redo reach a board through `UndoTarget::Document(Pcb)`: the same
   `undo` / `redo` command ids, menu enablement and keys as every document:
   Edit menu rows, the toolbar and Active Bar buttons, Ctrl+Z / Ctrl+Y, the
   palette and `undo document=<board>` all run that command; each is greyed
-  by the board engine's history (`undo_availability`).
+  by the board engine's history (`undo_availability`). In an undocked board
+  window they step that window's board, whatever the main window shows.
 
 ## Agents
 

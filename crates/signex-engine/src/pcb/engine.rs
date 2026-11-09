@@ -87,7 +87,8 @@ impl BoardEngine {
             return Ok(Vec::new());
         }
         self.check_lease(&commands)?;
-        let (inverses, patches) = apply_all(&mut self.board, commands)?;
+        let (inverses, patches) =
+            apply_all(&mut self.board, commands).inspect_err(|error| self.note_failure(error))?;
         // A new edit cuts the redo branch, labels and all.
         let applied = self.history.position();
         self.labels.retain(|at, _| *at <= applied);
@@ -142,12 +143,24 @@ impl BoardEngine {
             return Ok(None);
         };
         self.check_lease(&step)?;
-        let (inverses, patches) = apply_all(&mut self.board, step)?;
+        let (inverses, patches) =
+            apply_all(&mut self.board, step).inspect_err(|error| self.note_failure(error))?;
         self.history.begin_step(undo);
         self.history.finish_step(undo_step(inverses), undo);
         self.revision += 1;
         self.prune_labels();
         Ok(Some(patches))
+    }
+
+    /// A refusal leaves the board as it was. A failed rollback leaves it
+    /// part-edited, which no revision, history step or save point describes:
+    /// take a new revision so derived data is rebuilt, and forget the save
+    /// point so the board reads unsaved.
+    pub(super) fn note_failure(&mut self, error: &BoardCommandError) {
+        if matches!(error, BoardCommandError::RollbackFailed(_)) {
+            self.revision += 1;
+            self.history.forget();
+        }
     }
 
     /// The hook where the collab lease check goes (COLLABORATION_PLAN,

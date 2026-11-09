@@ -10,7 +10,7 @@ use std::path::Path;
 use signex_engine::pcb::{BoardCommand, BoardPatch};
 
 use crate::app::Signex;
-use crate::app::state::{AgentStep, BoardEditError};
+use crate::app::state::pcb_edit::{AgentStep, BoardEditError};
 
 impl Signex {
     /// Run `commands` on the board at `path` as one undo step, all or
@@ -50,11 +50,41 @@ impl Signex {
         }
     }
 
-    /// The board at `path` changed: repaint the canvas, the ratsnest and the
-    /// pick index (all keyed on its revision) when it is the one in view.
+    /// The board at `path` changed: repaint every window that shows it. The
+    /// main window's canvas, ratsnest and pick index follow the revision when
+    /// it is the active tab; an undocked window keeps its own camera. This
+    /// repaints only: it does not touch the tool or the placement in progress.
     fn after_board_change(&mut self, path: &Path) {
-        if self.active_tab_path().as_deref() == Some(path) {
-            self.apply_loaded_pcb_document(false, false);
+        let active = self.active_tab_path().as_deref() == Some(path);
+        if active {
+            // Also repaints the undocked windows that show the active tab.
+            self.sync_pcb_canvas_from_visible_board();
+            let canvas = &mut self.interaction_state.pcb_canvas;
+            canvas.clear_bg_cache();
+            canvas.clear_content_cache();
+            self.sync_panel_ctx_from_visible_document();
+        } else {
+            self.repaint_undocked_boards(path);
+        }
+    }
+
+    /// Give each undocked window that shows the board at `path` its new
+    /// geometry.
+    fn repaint_undocked_boards(&mut self, path: &Path) {
+        let Some(board) = self.document_state.pcb_board(path) else {
+            return;
+        };
+        let snapshot = signex_renderer::pcb::PcbSnapshot::from_board(board);
+        for (id, canvas) in &mut self.interaction_state.pcb_canvases {
+            let shows = matches!(
+                self.ui_state.windows.get(id),
+                Some(crate::app::state::WindowKind::UndockedTab { path: shown, .. })
+                    if shown == path
+            );
+            if shows {
+                canvas.set_renderer_snapshot(Some(snapshot.clone()));
+                canvas.clear_content_cache();
+            }
         }
     }
 }

@@ -91,10 +91,11 @@ pub(crate) use signex_history::SavePoint;
 #[cfg(test)]
 pub(crate) use state::WindowKind;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
+pub use state::pcb_edit::{AgentStep, BoardEditError};
 pub use state::project_case::CaseProbeOutcome;
 pub use state::{
-    AgentStep, BoardEditError, CaseFold, DocumentState, InteractionState, KeymapRecorderState,
-    LoadedProject, PageSetupInputs, PreviewState, ProjectId, Signex, UiState,
+    CaseFold, DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
+    PreviewState, ProjectId, Signex, UiState,
 };
 pub use symbol_history::SymbolHistorySnapshot;
 

@@ -17,6 +17,8 @@ use super::DocumentState;
 #[derive(Debug, Clone, PartialEq)]
 pub enum BoardEditError {
     NotLoaded(PathBuf),
+    /// The tab is closed and its unsaved board is only kept for saving.
+    Parked(PathBuf),
     /// The board opened read-only (a newer format) and is never written.
     ReadOnly(PathBuf),
     Refused(BoardCommandError),
@@ -26,6 +28,11 @@ impl std::fmt::Display for BoardEditError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotLoaded(path) => write!(f, "no PCB is open at {}", path.display()),
+            Self::Parked(path) => write!(
+                f,
+                "{} is closed with unsaved edits kept for saving; reopen it to edit or undo",
+                path.display()
+            ),
             Self::ReadOnly(path) => write!(
                 f,
                 "{} opened read-only (newer format); it cannot be edited",
@@ -97,6 +104,9 @@ impl DocumentState {
         &mut self,
         path: &Path,
     ) -> Result<&mut signex_engine::pcb::BoardEngine, BoardEditError> {
+        if !self.has_pcb_tab(path) && self.parked_pcb_boards.contains_key(path) {
+            return Err(BoardEditError::Parked(path.to_path_buf()));
+        }
         let engine = self
             .board_engine_mut(path)
             .ok_or_else(|| BoardEditError::NotLoaded(path.to_path_buf()))?;
@@ -115,8 +125,11 @@ impl DocumentState {
         self.sync_history_dirty(path);
     }
 
-    /// `(can_undo, can_redo)` of the board at `path`.
+    /// `(can_undo, can_redo)` of the board at `path`; none for a parked one.
     pub(crate) fn board_history_available(&self, path: &Path) -> (bool, bool) {
+        if !self.has_pcb_tab(path) {
+            return (false, false);
+        }
         self.board_engine(path)
             .map_or((false, false), |e| (e.can_undo(), e.can_redo()))
     }

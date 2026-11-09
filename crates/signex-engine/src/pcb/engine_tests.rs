@@ -251,3 +251,17 @@ fn a_labelled_step_is_one_undo_entry_that_carries_its_label() {
     assert_eq!(engine.redo_label(), None);
     assert_eq!(engine.undo_label(), None);
 }
+
+#[test]
+fn a_failed_rollback_takes_a_new_revision_and_forgets_the_save_point() {
+    let mut engine = engine();
+    let revision = engine.revision();
+    // A refusal that rolled back cleanly changes neither.
+    engine.note_failure(&BoardCommandError::FootprintNotFound(Uuid::nil()));
+    assert_eq!(engine.revision(), revision);
+    assert!(engine.is_at_save_point());
+    // A rollback that failed left a board no revision describes.
+    engine.note_failure(&BoardCommandError::RollbackFailed("x".into()));
+    assert!(engine.revision() > revision);
+    assert!(!engine.is_at_save_point());
+}

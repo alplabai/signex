@@ -12,7 +12,7 @@ use uuid::Uuid;
 use super::document_files::save_async_tests::{begin_save, press_save};
 use crate::app::document::{Document, DocumentKey, UndoTarget};
 use crate::app::handlers::menu::export::tests::app_workspace;
-use crate::app::state::{AgentStep, BoardEditError};
+use crate::app::state::pcb_edit::{AgentStep, BoardEditError};
 use crate::app::{EditMsg, Message, Signex};
 
 const FP_A: u128 = 0xa;
@@ -433,4 +433,214 @@ fn the_title_count_and_tab_dot_follow_the_boards_history() {
     assert!(enabled(&app, "save"));
     menu_row(&mut app, "undo");
     assert!((dot(&app), app.document_state.dirty_document_count()) == (false, 0));
+}
+
+use crate::app::command::{CommandArgs, CommandOutcome};
+
+fn undo_by_document(app: &mut Signex, command: &str, document: &str) -> CommandOutcome {
+    let id = crate::keymap::AppCommandId::new(command).unwrap();
+    let operand = format!("document={document}");
+    let args = CommandArgs::parse_operands(&id, &[operand.as_str()]).expect("operands parse");
+    app.run_operands(&id, &args).0
+}
+
+fn drain(task: iced::Task<Message>) -> Vec<Message> {
+    use futures::StreamExt;
+    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+        return Vec::new();
+    };
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        let mut out = Vec::new();
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                out.push(message);
+            }
+        }
+        out
+    })
+}
+
+fn encoded(board: &PcbBoard) -> Vec<u8> {
+    signex_types::format::SnxPcb::new(board.clone())
+        .write_string()
+        .unwrap()
+        .into_bytes()
+}
+
+#[test]
+fn undo_by_document_steps_an_open_board() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let original = live(&app, &path);
+    let document = id(1).to_string();
+    assert!(matches!(
+        undo_by_document(&mut app, "undo", &document),
+        CommandOutcome::Disabled { .. }
+    ));
+    run(&mut app, &path, move_to(FP_A, 7.0));
+    let edited = live(&app, &path);
+    assert_eq!(
+        undo_by_document(&mut app, "undo", &document),
+        CommandOutcome::Ran
+    );
+    assert_eq!(live(&app, &path), original);
+    assert!(!dirty(&app, &path));
+    assert_eq!(
+        undo_by_document(&mut app, "redo", &document),
+        CommandOutcome::Ran
+    );
+    assert_eq!(live(&app, &path), edited);
+    assert!(dirty(&app, &path));
+}
+
+/// Review of #2235: a parked board could be stepped while its save was in
+/// flight, and the landing save then cleaned the undone state away.
+#[test]
+fn a_parked_board_cannot_be_stepped_so_a_save_in_flight_loses_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    run(&mut app, &path, move_to(FP_A, 7.0));
+    let edited_board = app.document_state.pcb_board(&path).unwrap().clone();
+    let edited = live(&app, &path);
+    let _ = app.close_tab_parking_dirty(0);
+
+    // Save All starts the write of the parked board.
+    let task = app
+        .begin_pcb_save(path.clone())
+        .expect("save starts")
+        .expect("a dirty board has bytes to write");
+    let landed = drain(task);
+
+    // Every way of stepping or editing the parked board is refused.
+    let document = id(1).to_string();
+    let CommandOutcome::Disabled { reason } = undo_by_document(&mut app, "undo", &document) else {
+        panic!("undo of a parked board must be refused");
+    };
+    assert!(reason.contains("reopen"), "{reason}");
+    assert!(!app.step_board_history(&path, true));
+    assert_eq!(
+        app.execute_board_commands(&path, vec![move_to(FP_B, 9.0)], None),
+        Err(BoardEditError::Parked(path.clone()))
+    );
+    assert_eq!(
+        app.document_state.board_history_available(&path),
+        (false, false)
+    );
+    assert_eq!(live(&app, &path), edited);
+    assert!(dirty(&app, &path));
+    for parked in app.document_state.parked_pcb_boards.keys() {
+        assert!(
+            app.document_state.is_document_dirty(parked),
+            "a parked board is held only while it is dirty"
+        );
+    }
+
+    for message in landed {
+        let _ = app.update(message);
+    }
+    assert!(!dirty(&app, &path));
+    assert!(!app.document_state.holds_pcb(&path), "released once saved");
+    assert_eq!(std::fs::read(&path).unwrap(), encoded(&edited_board));
+}
+
+/// A completion for an older revision never cleans a board whose tab is
+/// closed either.
+#[test]
+fn a_stale_completion_never_cleans_a_board_without_a_tab() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    run(&mut app, &path, move_to(FP_A, 7.0));
+    let landed = begin_save(&mut app);
+    run(&mut app, &path, move_to(FP_A, 8.0));
+    let _ = app.close_tab_parking_dirty(0);
+    for message in landed {
+        let _ = app.update(message);
+    }
+    assert!(dirty(&app, &path), "the file holds an older snapshot");
+    assert!(app.document_state.holds_pcb(&path));
+}
+
+fn undock(app: &mut Signex, path: &Path) -> iced::window::Id {
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: path.to_path_buf(),
+            title: "board".into(),
+        },
+    );
+    let canvas = app.new_pcb_canvas_for(path).expect("board canvas");
+    app.interaction_state.pcb_canvases.insert(window, canvas);
+    window
+}
+
+/// The main window shows a schematic tab; the board is undocked.
+fn board_undocked_behind_a_schematic(dir: &Path) -> (Signex, PathBuf, iced::window::Id) {
+    let (mut app, path) = app_with_board(dir);
+    let window = undock(&mut app, &path);
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "sheet".into(),
+        path: dir.join("sheet.snxsch"),
+        cached_document: None,
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    (app, path, window)
+}
+
+fn drawn(app: &Signex, window: iced::window::Id) -> String {
+    let canvas = &app.interaction_state.pcb_canvases[&window];
+    format!("{:?}", canvas.active_renderer_snapshot().expect("snapshot"))
+}
+
+#[test]
+fn undo_in_an_undocked_board_window_steps_that_board_and_repaints_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path, window) = board_undocked_behind_a_schematic(dir.path());
+    let original = live(&app, &path);
+    let drawn_before = drawn(&app, window);
+    run(&mut app, &path, move_to(FP_A, 30.0));
+    let drawn_edited = drawn(&app, window);
+    assert_ne!(drawn_edited, drawn_before, "the edit repaints the window");
+
+    assert!(
+        app.undo_availability(&app.undo_target(Some(window))).0,
+        "the window's menu offers Undo"
+    );
+    let undo_id = crate::keymap::AppCommandId::new("undo").unwrap();
+    let _ = app.dispatch_command(&undo_id, CommandArgs::none(), Some(window));
+    assert_eq!(live(&app, &path), original);
+    assert_eq!(drawn(&app, window), drawn_before);
+    assert!(!dirty(&app, &path));
+
+    let redo_id = crate::keymap::AppCommandId::new("redo").unwrap();
+    let _ = app.dispatch_command(&redo_id, CommandArgs::none(), Some(window));
+    assert_eq!(drawn(&app, window), drawn_edited);
+}
+
+#[test]
+fn an_agent_edit_to_a_board_that_is_not_the_active_tab_repaints_its_window() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path, window) = board_undocked_behind_a_schematic(dir.path());
+    let before = drawn(&app, window);
+    let step = AgentStep {
+        label: "Agent: nudge",
+        expected_revision: revision(&app, &path),
+    };
+    app.execute_board_commands(&path, vec![move_to(FP_B, 33.0)], Some(step))
+        .unwrap();
+    assert_ne!(drawn(&app, window), before);
+    let engine = app.document_state.board_engine(&path).unwrap();
+    assert_eq!(engine.undo_label(), Some("Agent: nudge"));
+}
+
+#[test]
+fn a_board_edit_does_not_cancel_the_active_tool() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    app.interaction_state.current_tool = crate::app::Tool::Wire;
+    run(&mut app, &path, move_to(FP_A, 7.0));
+    undo(&mut app);
+    assert_eq!(app.interaction_state.current_tool, crate::app::Tool::Wire);
 }
