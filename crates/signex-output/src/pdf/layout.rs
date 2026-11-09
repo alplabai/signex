@@ -32,7 +32,7 @@ pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
 
     for sym in &sheet.schematic.symbols {
         let lowered = lower_placed_symbol(
-            sheet.schematic.lib_symbols.get(&sym.lib_id),
+            sheet.schematic.body_of(sym),
             sym,
             &signex_types::schematic::SchematicDefaults::BUILT_IN,
         );

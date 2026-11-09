@@ -216,7 +216,7 @@ pub fn build_renderer_snapshot(
             symbol::push_primitives(&primitives, &style, &mut sink);
         }
         pin_texts.extend(symbol::pin_text_inputs(
-            snapshot.lib_symbols.get(&symbol.lib_id),
+            snapshot.body_of(symbol),
             symbol,
             &symbol::PinTextStyle {
                 name: style.pin,

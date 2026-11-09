@@ -344,7 +344,7 @@ fn readme_sheet() -> SchematicSheet {
     }
     for sym in &sheet.symbols {
         let xform = SymbolTransform::from_symbol(sym);
-        let lib = sheet.lib_symbols.get(&sym.lib_id).expect("lib");
+        let lib = sheet.body_of(sym).expect("lib");
         for p in &lib.pins {
             let tip = xform.apply(p.pin.position);
             tips.insert(

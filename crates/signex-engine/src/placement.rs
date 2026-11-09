@@ -23,7 +23,11 @@ pub struct PlacementPayload {
 
 impl PlacementPayload {
     /// Wrap `fragment`, whose items are positioned relative to the cursor.
-    pub fn new(fragment: SchematicSheet) -> Self {
+    pub fn new(mut fragment: SchematicSheet) -> Self {
+        // `RegisterLibSymbol` keys a body by its own hash, so the pasted
+        // symbols must name that key, not whichever key the source sheet
+        // stored the body under (an older hash, or the bare lib id).
+        fragment.upgrade_unversioned_bodies();
         Self { fragment }
     }
 

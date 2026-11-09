@@ -36,6 +36,7 @@ fn placement(id: &str) -> [Command; 2] {
             symbol: Symbol {
                 uuid: uuid::Uuid::now_v7(),
                 lib_id: id.to_string(),
+                body_ref: lib_symbol(id).body_ref(),
                 ..Default::default()
             },
         },
@@ -61,7 +62,7 @@ fn registering_an_existing_key_is_unchanged_and_records_nothing() {
 
     // Only the first registration is on the undo stack.
     engine.undo().unwrap();
-    assert!(!engine.document().lib_symbols.contains_key("L:S"));
+    assert!(engine.document().lib_symbols.is_empty());
     assert!(!engine.can_undo());
 }
 
@@ -77,7 +78,12 @@ fn undo_of_a_batch_that_reuses_an_entry_keeps_the_entry() {
 
     engine.undo().unwrap();
     assert_eq!(engine.document().symbols.len(), symbols);
-    assert!(engine.document().lib_symbols.contains_key("L:S"));
+    assert!(
+        engine
+            .document()
+            .lib_symbols
+            .contains_key(&lib_symbol("L:S").body_ref())
+    );
 }
 
 #[test]
@@ -92,5 +98,10 @@ fn undo_then_redo_of_a_new_registration_restores_both() {
 
     engine.redo().unwrap();
     assert_eq!(engine.document().symbols.len(), symbols + 1);
-    assert!(engine.document().lib_symbols.contains_key("L:S"));
+    assert!(
+        engine
+            .document()
+            .lib_symbols
+            .contains_key(&lib_symbol("L:S").body_ref())
+    );
 }

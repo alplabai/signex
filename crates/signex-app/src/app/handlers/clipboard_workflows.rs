@@ -219,12 +219,7 @@ impl Signex {
                 Some(crate::app::state::ErrorNotice::new("Paste Failed", detail));
             return None;
         }
-        let (payload, differing) = copied.payload.adopt_sheet_bodies(sheet);
-        for id in differing {
-            crate::diagnostics::log_warning(format!(
-                "Library symbol {id} in the clipboard differs from the copy this sheet already holds; the sheet keeps its existing copy, so the pasted parts use it. Select a pasted part and use \"Update from library\" in Properties to adopt a newer one."
-            ));
-        }
+        let payload = copied.payload.clone();
         Some((payload, target, copied.origin))
     }
 }

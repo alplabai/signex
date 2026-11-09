@@ -85,15 +85,7 @@ impl Signex {
             .document_state
             .engines
             .iter()
-            .map(|(path, engine)| {
-                let entries = engine
-                    .document()
-                    .lib_symbols
-                    .iter()
-                    .map(|(id, sym)| (id.clone(), sym.clone()))
-                    .collect();
-                (path.clone(), entries)
-            })
+            .map(|(path, engine)| (path.clone(), referenced_bodies(engine.document())))
             .collect();
         let parts = self
             .document_state
@@ -122,6 +114,9 @@ impl Signex {
         drift.names.retain(|lib_id, _| mounted(lib_id));
         for rows in drift.drifted.values_mut().chain(drift.missing.values_mut()) {
             rows.retain(|lib_id| mounted(lib_id));
+        }
+        for rows in drift.stale_bodies.values_mut() {
+            rows.retain(|key| mounted(signex_types::schematic::lib_id_of_body_ref(key)));
         }
     }
 
@@ -172,6 +167,9 @@ impl Signex {
             drifted.insert(sheet, entries);
         }
         self.library.drift.drifted = drifted;
+        let mut stale = report.stale_bodies;
+        stale.retain(|sheet, _| self.document_state.engines.contains_key(sheet));
+        self.library.drift.stale_bodies = stale;
         self.record_missing_symbols(report.missing, &report.unreadable);
         let mut names = report.names;
         keep_unreadable_names(&mut names, &self.library.drift.names, &report.unreadable);
@@ -232,7 +230,15 @@ impl Signex {
 
     /// Properties ▸ "Update from library" for the placed symbol `uuid`: the
     /// instances of its `lib_id` go to the shared off-thread apply read.
-    pub(crate) fn update_symbol_from_library(&mut self, uuid: uuid::Uuid) -> Task<Message> {
+    ///
+    /// `only_this` is "Only this one": just that part (all its units) moves to
+    /// the library's current version; by default every instance of the library
+    /// symbol on the sheet does.
+    pub(crate) fn update_symbol_from_library(
+        &mut self,
+        uuid: uuid::Uuid,
+        only_this: bool,
+    ) -> Task<Message> {
         let Some(sheet) = self.document_state.active_path.clone() else {
             return Task::none();
         };
@@ -266,8 +272,13 @@ impl Signex {
             ));
             return Task::none();
         }
-        let stamps = instance_stamps(engine.document(), &lib_id, &Default::default());
+        let mut stamps = instance_stamps(engine.document(), &lib_id, &Default::default());
+        let only = only_this.then(|| signex_engine::placed_unit_ids(engine.document(), uuid));
+        if let Some(units) = &only {
+            stamps.retain(|s| units.contains(&s.symbol));
+        }
         let input = ApplyInput {
+            only,
             sheet,
             engine_instance: engine.instance_id(),
             any_unchecked: false,
@@ -277,6 +288,26 @@ impl Signex {
         };
         self.spawn_apply_read(input)
     }
+}
+
+/// The embedded bodies some placed symbol draws with. A version nothing
+/// references (its last instance was deleted or moved) is not judged: it
+/// would read "out of date" for good, with nothing for Update to move.
+pub(crate) fn referenced_bodies(
+    doc: &signex_types::schematic::SchematicSheet,
+) -> Vec<(String, String, signex_types::schematic::LibSymbol)> {
+    // The library symbol is what an instance names, not what the key spells.
+    let mut used: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+    for s in &doc.symbols {
+        used.entry(s.body_key()).or_insert(&s.lib_id);
+    }
+    doc.lib_symbols
+        .iter()
+        .filter_map(|(key, body)| {
+            let lib_id = used.get(key.as_str())?;
+            Some((key.clone(), (*lib_id).to_owned(), body.clone()))
+        })
+        .collect()
 }
 
 /// An unreadable library says nothing about its rows: carry the previous

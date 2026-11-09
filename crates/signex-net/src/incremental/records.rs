@@ -41,6 +41,8 @@ impl<G> Kind<G> {
 #[derive(Debug)]
 pub(super) struct SymGeom {
     lib_id: String,
+    /// The version of the body the pins come from (#2209).
+    body_ref: String,
     position: Point,
     rotation: f64,
     mirror_x: bool,
@@ -57,6 +59,7 @@ impl SymGeom {
     pub(super) fn of(sheet: &SchematicSheet, sym: &Symbol) -> Self {
         Self {
             lib_id: sym.lib_id.clone(),
+            body_ref: sym.body_ref.clone(),
             position: sym.position,
             rotation: sym.rotation,
             mirror_x: sym.mirror_x,
@@ -78,6 +81,7 @@ impl SymGeom {
             && self.body_style == sym.body_style
             && self.is_power == sym.is_power
             && self.lib_id == sym.lib_id
+            && self.body_ref == sym.body_ref
             && self.value == sym.value
     }
 }
