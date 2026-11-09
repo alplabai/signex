@@ -885,8 +885,7 @@ fn the_tree_root_menu_opened_near_the_bottom_edge_stays_inside_the_window() {
     let mut app = one_symbol();
     let idx = loaded_project(&mut app, "P.snxprj", true);
     let rows = tree_root_rows(&mut app, idx, true);
-    let metrics =
-        signex_widgets::active_bar_dropdown::MenuMetrics::of(&app.document_state.panel_ctx.tokens);
+    let metrics = signex_widgets::active_bar_dropdown::MenuMetrics::GRAPHITE;
     let height = metrics.card_height(&rows).expect("plain rows");
     let has_icons = rows
         .iter()

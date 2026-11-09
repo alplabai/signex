@@ -2,8 +2,6 @@
 //! renderer, the width fit and the flyout placement, so a drawn row and the
 //! place a caller expects it cannot drift apart.
 
-use signex_types::theme::ThemeTokens;
-
 use super::{DropdownEntry, DropdownItem};
 
 /// Family the shortcut column draws in on the Graphite look.
@@ -64,30 +62,6 @@ pub struct MenuMetrics {
 }
 
 impl MenuMetrics {
-    /// The original look: 13 px labels, 20 px icons, content-tall rows.
-    pub const LEGACY: Self = Self {
-        label_size: 13.0,
-        shortcut_size: 11.0,
-        mono_shortcut: false,
-        header_size: 10.0,
-        check_size: 13.0,
-        chevron_size: 18.0,
-        chevron_width: 10.0,
-        icon_size: 20.0,
-        row_spacing: 8.0,
-        cluster_gap: 20.0,
-        row_pad_x: 12.0,
-        row_height: None,
-        row_pad_y: 5.0,
-        header_height: None,
-        header_pad_y: 4.0,
-        row_radius: 0.0,
-        panel_pad: 4.0,
-        separator_margin: 0.0,
-        min_width: 0.0,
-        max_width: f32::MAX,
-    };
-
     /// The Graphite look: dense 13 px type on 28 px rows, a 16 px
     /// monochrome icon column, a mono shortcut column and a chevron column,
     /// cards fitted between 200 and 320 px.
@@ -113,13 +87,6 @@ impl MenuMetrics {
         min_width: 200.0,
         max_width: 320.0,
     };
-
-    /// The Graphite metrics, whatever the tokens.
-    // TODO(#2207): remove after drag/pan lands; kept for the context-menu
-    // row_effects test, which another branch is editing.
-    pub fn of(_tokens: &ThemeTokens) -> Self {
-        Self::GRAPHITE
-    }
 
     /// Height of one item row; `has_icons` is whether the menu has an icon
     /// column (a content-sized row is then at least icon tall).

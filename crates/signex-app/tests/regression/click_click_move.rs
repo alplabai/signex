@@ -415,7 +415,9 @@ fn deliver(
             theme_grid: signex_app::render_config::to_iced(&colors.grid),
             theme_paper: signex_app::render_config::to_iced(&colors.paper),
             canvas_colors: colors,
-            graphite: None,
+            graphite: signex_app::canvas::GraphiteCanvasInk::from_tokens(
+                &signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight),
+            ),
             snap_enabled: false,
             snap_grid_mm: 1.27,
             snap_hotspots: false,

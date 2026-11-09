@@ -63,7 +63,7 @@ fn a_graphite_card_is_fitted_between_200_and_320_px() {
 /// A shortcut and a chevron column widen the fitted card.
 #[test]
 fn the_shortcut_and_chevron_columns_are_part_of_the_fitted_width() {
-    let m = MenuMetrics::LEGACY;
+    let m = MenuMetrics::GRAPHITE;
     let plain = m.fitted_width(&labelled("Find Similar Objects"), f32::MAX, "");
     let with_shortcut = m.fitted_width(
         &[DropdownEntry::Item(

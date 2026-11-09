@@ -118,7 +118,7 @@ fn a_pinch_as_ctrl_wheel_zooms_the_canvas() {
 
 /// The y of the middle of the floating Active Bar, in window coordinates.
 fn bar_middle_y(app: &Signex) -> f32 {
-    let m = crate::active_bar::metrics_for(true);
+    let m = signex_widgets::active_bar::Metrics::GRAPHITE;
     app.canvas_bounds().y
         + crate::active_bar::bar_top_margin()
         + crate::active_bar::bar_height_for(&m) / 2.0

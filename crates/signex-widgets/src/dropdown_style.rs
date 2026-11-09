@@ -2,9 +2,8 @@
 //!
 //! Call sites add [`GraphiteDropdown::graphite`] right after `pick_list(..)`;
 //! none keeps its own colours, font or size: the closed field reads in the UI
-//! face at the menu label size, the same as every menu row. The look is found from the theme's name (the
-//! Graphite themes only), so the style closures need no tokens. On any other
-//! theme the stock iced style applies.
+//! face at the menu label size, the same as every menu row. The look is found
+//! from the theme's name, so the style closures need no tokens.
 
 use std::borrow::Borrow;
 
@@ -44,18 +43,16 @@ pub struct DropdownLook {
 }
 
 impl DropdownLook {
-    /// The look of `tokens`, or `None` for a theme that sets no extended token.
-    pub fn of(tokens: &ThemeTokens) -> Option<Self> {
+    /// The look of `tokens`; an extended token a theme leaves unset falls
+    /// back to the panel / text colours.
+    pub fn of(tokens: &ThemeTokens) -> Self {
         let e = &tokens.extended;
-        if e.is_empty() {
-            return None;
-        }
         let ink = text_primary(tokens);
         let panel = to_color(&tokens.panel_bg);
         let pick = |set: &Option<signex_types::theme::Color>, fallback: Color| {
             set.as_ref().map_or(fallback, to_color)
         };
-        Some(Self {
+        Self {
             field: pick(&e.field, panel),
             ink,
             ink3: pick(&e.ink3, text_secondary(tokens)),
@@ -78,18 +75,16 @@ impl DropdownLook {
                 &e.shadow,
                 Color::from_rgba(0.0, 0.0, 0.0, SHADOW_FALLBACK_ALPHA),
             ),
-        })
+        }
     }
 
-    /// The look of the Graphite theme `theme` names, else `None`.
-    pub fn of_theme(theme: &Theme) -> Option<Self> {
-        let name = theme.to_string();
-        let id = if name.starts_with("Graphite Light") {
+    /// The look of the Graphite theme `theme` names: Light for Graphite
+    /// Light, Dark for every other.
+    pub fn of_theme(theme: &Theme) -> Self {
+        let id = if theme.to_string().starts_with("Graphite Light") {
             ThemeId::GraphiteLight
-        } else if name.starts_with("Graphite Dark") {
-            ThemeId::GraphiteDark
         } else {
-            return None;
+            ThemeId::GraphiteDark
         };
         Self::of(&theme_tokens(id))
     }
@@ -138,20 +133,14 @@ impl DropdownLook {
     }
 }
 
-/// `pick_list` field style: Graphite, else the stock style.
+/// `pick_list` field style.
 pub fn pick_list_style(theme: &Theme, status: pick_list::Status) -> pick_list::Style {
-    match DropdownLook::of_theme(theme) {
-        Some(look) => look.field_style(status),
-        None => pick_list::default(theme, status),
-    }
+    DropdownLook::of_theme(theme).field_style(status)
 }
 
-/// `pick_list` menu style: Graphite, else the stock style.
+/// `pick_list` menu style.
 pub fn pick_list_menu_style(theme: &Theme) -> menu::Style {
-    match DropdownLook::of_theme(theme) {
-        Some(look) => look.menu_style(),
-        None => menu::default(theme),
-    }
+    DropdownLook::of_theme(theme).menu_style()
 }
 
 /// Gives a `pick_list` the shared look.

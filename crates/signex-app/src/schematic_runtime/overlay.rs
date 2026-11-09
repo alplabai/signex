@@ -97,7 +97,7 @@ pub fn draw_erc_markers(
     markers: &[ErcMarker],
     transform: &ScreenTransform,
     colors: &CanvasColors,
-    graphite: Option<&crate::canvas::GraphiteCanvasInk>,
+    graphite: &crate::canvas::GraphiteCanvasInk,
 ) {
     if markers.is_empty() {
         return;
@@ -112,8 +112,8 @@ pub fn draw_erc_markers(
         let (paper, background) = (to_iced(&colors.paper), to_iced(&colors.background));
         // Graphite: errors in the theme's err, warnings in its warn.
         let stroke = match (graphite, marker.severity) {
-            (Some(ink), ErcSeverity::Error) => marker_stroke_from(ink.err, paper, background),
-            (Some(ink), ErcSeverity::Warning) => marker_stroke_from(ink.warn, paper, background),
+            (ink, ErcSeverity::Error) => marker_stroke_from(ink.err, paper, background),
+            (ink, ErcSeverity::Warning) => marker_stroke_from(ink.warn, paper, background),
             _ => marker_stroke(marker.severity, paper, background),
         };
         let fill = Color {

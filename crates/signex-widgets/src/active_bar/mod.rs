@@ -86,13 +86,9 @@ impl<M: 'static + Clone> ActiveBarItem<M> {
         Self::Custom { content, width }
     }
 
-    /// Width this slot renders at, excluding the row spacing around it.
-    pub fn width(&self) -> f32 {
-        self.width_with(&Metrics::LEGACY)
-    }
-
-    /// [`Self::width`] under `m` (Graphite buttons are wider).
-    pub fn width_with(&self, m: &Metrics) -> f32 {
+    /// Width this slot renders at under `m`, excluding the row spacing
+    /// around it.
+    pub fn width(&self, m: &Metrics) -> f32 {
         match self {
             Self::Button(_) => m.btn,
             Self::Separator => m.sep_w,
@@ -111,17 +107,14 @@ impl<M: 'static + Clone> ActiveBarItem<M> {
 /// consumer is the point — the layout constants are private and the
 /// item list is the only truth about what got drawn, so a bar that
 /// gains, loses, or reorders a slot moves its dropdowns automatically.
-pub fn slot_offsets<M: 'static + Clone>(items: &[ActiveBarItem<M>]) -> (Vec<f32>, f32) {
-    slot_offsets_with(items, &Metrics::LEGACY)
-}
-
-/// [`slot_offsets`] under `m`; the bar `view` draws with [`Metrics::GRAPHITE`].
-pub fn slot_offsets_with<M: 'static + Clone>(
+///
+/// Measured under `m`; the bar `view` draws with [`Metrics::GRAPHITE`].
+pub fn slot_offsets<M: 'static + Clone>(
     items: &[ActiveBarItem<M>],
     m: &Metrics,
 ) -> (Vec<f32>, f32) {
-    let widths: Vec<f32> = items.iter().map(|i| i.width_with(m)).collect();
-    offsets_for_widths_with(&widths, m)
+    let widths: Vec<f32> = items.iter().map(|i| i.width(m)).collect();
+    offsets_for_widths(&widths, m)
 }
 
 /// [`slot_offsets`] for a bar described only by its slot widths.
@@ -129,12 +122,7 @@ pub fn slot_offsets_with<M: 'static + Clone>(
 /// Lets a consumer that knows the bar's slot order but has no item
 /// list (a hit-test running outside the view) use the same row maths
 /// as the renderer instead of re-deriving it.
-pub fn offsets_for_widths(widths: &[f32]) -> (Vec<f32>, f32) {
-    offsets_for_widths_with(widths, &Metrics::LEGACY)
-}
-
-/// [`offsets_for_widths`] under `m`.
-pub fn offsets_for_widths_with(widths: &[f32], m: &Metrics) -> (Vec<f32>, f32) {
+pub fn offsets_for_widths(widths: &[f32], m: &Metrics) -> (Vec<f32>, f32) {
     let mut offsets = Vec::with_capacity(widths.len());
     let mut x = m.padding;
     for (i, width) in widths.iter().enumerate() {
@@ -208,22 +196,6 @@ pub enum ActiveBarIcon {
     /// been authored yet.
     Glyph(&'static str),
 }
-
-/// Pixel sizes — match the schematic editor's existing visual
-/// rhythm so the bar reads identically across every editor.
-///
-/// The four that decide *horizontal* layout are public: consumers
-/// anchor dropdown panels under specific buttons, which they cannot do
-/// without them. Prefer [`slot_offsets`] over doing that arithmetic by
-/// hand — copies of these numbers in consumer crates are exactly the
-/// drift this is here to prevent.
-pub const BTN_SIZE: f32 = 26.0;
-/// Width of a [`ActiveBarItem::Separator`].
-pub const SEP_W: f32 = 1.0;
-/// Padding inside the bar container, all four sides.
-pub const BAR_PADDING: f32 = 2.0;
-/// Gap the row puts between adjacent slots.
-pub const ROW_SPACING: f32 = 2.0;
 
 /// Render the bar.
 ///

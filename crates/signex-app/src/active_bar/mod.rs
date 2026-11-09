@@ -21,10 +21,9 @@ mod planned;
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
 pub use dropdown::{dropdown_x_offset, view_dropdown};
-pub use layout::BAR_WIDTH_PX;
 pub(crate) use layout::{
     BAR_DROPDOWN_GAP_PX, bar_height_for, bar_left_in_window, bar_top_margin, bar_width_for,
-    bar_zone_height_for, menu_at, metrics_for, symbol_editor_bar_drop,
+    bar_zone_height_for, menu_at, symbol_editor_bar_drop,
 };
 pub use planned::{PLANNED_TOOLS, PLANNED_TOOLTIP, is_planned, planned_name, refusal_line};
 
@@ -693,7 +692,7 @@ pub(crate) fn drawn_trigger_centres_with(
     tokens: &signex_types::theme::ThemeTokens,
     tid: ThemeId,
 ) -> Vec<(ActiveBarMenu, f32)> {
-    use signex_widgets::active_bar::{ActiveBarItem, Metrics, slot_offsets_with};
+    use signex_widgets::active_bar::{ActiveBarItem, Metrics, slot_offsets};
     let m = Metrics::GRAPHITE;
     let items = bar_items(
         tool,
@@ -704,7 +703,7 @@ pub(crate) fn drawn_trigger_centres_with(
         false,
         false,
     );
-    let (offsets, total) = slot_offsets_with(&items, &m);
+    let (offsets, total) = slot_offsets(&items, &m);
     let bar_left = (window_width - total) / 2.0;
     items
         .iter()
@@ -712,7 +711,7 @@ pub(crate) fn drawn_trigger_centres_with(
         .filter_map(|(item, left)| match item {
             ActiveBarItem::Button(b) => match b.on_right_press {
                 Some(ActiveBarMsg::ToggleMenu(menu)) => {
-                    Some((menu, bar_left + left + item.width_with(&m) / 2.0))
+                    Some((menu, bar_left + left + item.width(&m) / 2.0))
                 }
                 _ => None,
             },

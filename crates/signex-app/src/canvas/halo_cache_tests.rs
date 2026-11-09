@@ -16,10 +16,12 @@ use crate::schematic_runtime::selection::{overlay_inputs_for_boxes, selection_bo
 use crate::schematic_runtime::{Designators, SchematicRenderCache, ScreenTransform, WireWidths};
 
 const EPS_MM: f32 = 1e-3;
+const LIGHT: signex_types::theme::ThemeId = signex_types::theme::ThemeId::GraphiteLight;
+const DARK: signex_types::theme::ThemeId = signex_types::theme::ThemeId::GraphiteDark;
 
 fn graphite_ink() -> GraphiteCanvasInk {
     let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
-    GraphiteCanvasInk::from_tokens(&tokens).expect("graphite")
+    GraphiteCanvasInk::from_tokens(&tokens)
 }
 
 fn colors() -> signex_types::theme::CanvasColors {
@@ -36,7 +38,7 @@ fn transform() -> ScreenTransform {
 }
 
 /// The overlay primitives `boxes` lower to.
-fn lowered(boxes: &[Aabb], graphite: Option<&GraphiteCanvasInk>) -> Scene {
+fn lowered(boxes: &[Aabb], graphite: &GraphiteCanvasInk) -> Scene {
     let snapshot = SchematicSnapshot {
         overlays: overlay_inputs_for_boxes(boxes, &transform(), &colors(), graphite),
         ..Default::default()
@@ -105,11 +107,9 @@ fn a_cached_halo_carried_by_the_drag_delta_is_the_halo_at_the_shifted_sheet() {
     assert!((plan.shift.0 - dx).abs() < 1e-6 && (plan.shift.1 - dy).abs() < 1e-6);
     let boxes = |v: &[Option<Aabb>]| v.iter().flatten().copied().collect::<Vec<_>>();
     let ink = graphite_ink();
-    for graphite in [Some(&ink), None] {
-        let cached = lowered(&boxes(&base), graphite);
-        let fresh = lowered(&boxes(&now), graphite);
-        assert_translated(&cached, &fresh, (dx as f32, dy as f32));
-    }
+    let cached = lowered(&boxes(&base), &ink);
+    let fresh = lowered(&boxes(&now), &ink);
+    assert_translated(&cached, &fresh, (dx as f32, dy as f32));
 }
 
 #[test]
@@ -155,9 +155,9 @@ fn the_halos_are_lowered_once_per_selection_zoom_and_theme_not_per_drag_step() {
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
     let renderer = crate::layout_probe::headless_renderer();
-    let frame = |slot: &CanvasSlot, dx: f64, graphite: bool| {
+    let frame = |slot: &CanvasSlot, dx: f64, theme: signex_types::theme::ThemeId| {
         let mut prefs = test_prefs(&overrides, &filters);
-        prefs.graphite = graphite.then(graphite_ink);
+        prefs.graphite = GraphiteCanvasInk::from_tokens(&signex_types::theme::theme_tokens(theme));
         let moved = shift_snapshot_for_selection(&g.sheet, &slot.selected, dx, dx * 0.5);
         let drag = SchematicCanvas::new(slot, prefs)
             .draw_drag_selection(&renderer, bounds, &moved)
@@ -166,13 +166,13 @@ fn the_halos_are_lowered_once_per_selection_zoom_and_theme_not_per_drag_step() {
     };
 
     // Act
-    let first = frame(&slot, 3.0, true);
-    let second = frame(&slot, 9.0, true);
+    let first = frame(&slot, 3.0, LIGHT);
+    let second = frame(&slot, 9.0, LIGHT);
     let after_steps = slot.halo_tessellations();
-    let _ = frame(&slot, 9.0, false);
+    let _ = frame(&slot, 9.0, DARK);
     let after_theme = slot.halo_tessellations();
     slot.selected.pop();
-    let _ = frame(&slot, 9.0, false);
+    let _ = frame(&slot, 9.0, DARK);
     let after_selection = slot.halo_tessellations();
 
     // Assert

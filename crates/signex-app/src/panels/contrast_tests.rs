@@ -7,7 +7,7 @@ use super::status::{erc_row_text, erc_severity_text};
 use crate::app::Signex;
 use crate::styles::ti;
 use crate::styles::tokens::{
-    MIN_TEXT_CONTRAST, UNREADABLE_CONTRAST, contrast_ratio, relative_luminance,
+    MIN_TEXT_CONTRAST, UNREADABLE_CONTRAST, composite_over, contrast_ratio, relative_luminance,
 };
 use iced::Color;
 use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
@@ -225,5 +225,34 @@ fn white_on_accent_segments_are_unchanged_on_every_builtin() {
             muted,
             "{id:?}"
         );
+    }
+}
+
+/// The "+ Add Filter" call-to-action (`form_look::ghost_button`) must read in
+/// every state on both Graphite themes: its label over the button fill
+/// composited on the panel background.
+#[test]
+fn add_filter_button_label_is_readable_in_every_state_on_every_graphite_theme() {
+    use iced::widget::button::Status;
+    for &id in ThemeId::BUILTINS {
+        let theme = Signex::id_to_iced_theme(id);
+        let panel = ti(theme_tokens(id).panel_bg);
+        for status in [
+            Status::Active,
+            Status::Hovered,
+            Status::Pressed,
+            Status::Disabled,
+        ] {
+            let style = super::form_look::ghost_button(&theme, status);
+            let fill = match style.background {
+                Some(iced::Background::Color(c)) => composite_over(c, panel),
+                _ => panel,
+            };
+            assert_readable(
+                &format!("{id:?} Add Filter {status:?}"),
+                style.text_color,
+                fill,
+            );
+        }
     }
 }

@@ -31,7 +31,7 @@ struct HaloKey {
     camera: (f32, f32, f32),
     device_px_per_logical_px: f32,
     colors: signex_types::theme::CanvasColors,
-    graphite: Option<GraphiteCanvasInk>,
+    graphite: GraphiteCanvasInk,
 }
 
 /// The selected boxes before the drag moved anything.
@@ -168,14 +168,14 @@ impl SchematicCanvas<'_> {
             device_px_per_logical_px: self.prefs.device_px_per_logical_px,
         };
         let colors = &self.prefs.canvas_colors;
-        let graphite = self.prefs.graphite.as_ref();
+        let graphite = &self.prefs.graphite;
         let key = HaloKey {
             base: generation,
             shifted: plan.shifted,
             camera: (cam.offset.x, cam.offset.y, cam.scale),
             device_px_per_logical_px: self.prefs.device_px_per_logical_px,
             colors: *colors,
-            graphite: graphite.copied(),
+            graphite: *graphite,
         };
         if halos.key.as_ref() != Some(&key) {
             halos.cache.clear();
