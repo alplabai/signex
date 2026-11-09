@@ -2,9 +2,13 @@
 //! silkscreen, fab and courtyard, read as they are. The sketch solver never
 //! runs here; the footprint is what its last bake stored.
 //!
-//! Nothing is guessed. A layer token, pad shape or drill the board cannot
-//! hold exactly refuses the whole footprint with
-//! [`FootprintResolveError::Unconvertible`]. Mapping rules:
+//! Nothing is guessed. A layer token, pad shape, drill or pad setting the
+//! board cannot hold, and a footprint feature it has no place for (3D body,
+//! STEP model, anchor, pours and the like), refuse the whole footprint with
+//! [`FootprintResolveError::Unconvertible`]. The one exception: pad solder
+//! mask and paste margins (global and per side) are not carried, because the
+//! board model has no field for them yet; the board uses its own rules.
+//! Mapping rules:
 //! `docs/architecture/library-footprint-bindings.md`, "Board footprints".
 
 use signex_types::format::{parse_pcb_layer, pcb_layer_token};
@@ -15,7 +19,7 @@ use signex_types::property::PcbProperty;
 use uuid::Uuid;
 
 use crate::primitive::footprint::{
-    Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape,
+    Body3D, Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape,
 };
 
 /// The board form of `footprint`: top side, origin at (0, 0), rotation 0,
@@ -76,6 +80,18 @@ fn unconvertible(what: &'static str, value: impl Into<String>) -> FootprintResol
 /// keepouts, cutouts, v-scores and standalone mask or paste shapes would be
 /// lost, so a footprint that has any is refused, not carried over without.
 fn refuse_unheld_features(footprint: &Footprint) -> Result<(), FootprintResolveError> {
+    if footprint.anchor != [0.0, 0.0] {
+        return Err(unconvertible(
+            "footprint anchor",
+            format!("{:?}", footprint.anchor),
+        ));
+    }
+    if footprint.body_3d != Body3D::default() {
+        return Err(unconvertible("footprint 3D body", "set"));
+    }
+    if let Some(step) = &footprint.step_attachment {
+        return Err(unconvertible("footprint STEP model", step.filename.clone()));
+    }
     let features = [
         ("footprint copper pours", footprint.pours.len()),
         ("footprint keepouts", footprint.keepouts.len()),
@@ -97,6 +113,7 @@ fn point(xy: [f64; 2]) -> Point {
 
 fn board_pad(pad: &Pad) -> Result<pcb::Pad, FootprintResolveError> {
     let (shape, roundrect_ratio) = pad_shape(&pad.shape)?;
+    refuse_pad_settings(pad)?;
     let offset = (pad.copper_offset_x_mm, pad.copper_offset_y_mm);
     if offset.0.unwrap_or(0.0) != 0.0 || offset.1.unwrap_or(0.0) != 0.0 {
         return Err(unconvertible(
@@ -120,6 +137,27 @@ fn board_pad(pad: &Pad) -> Result<pcb::Pad, FootprintResolveError> {
         unknown: Default::default(),
         unknown_columns: Default::default(),
     })
+}
+
+/// Pad settings the board has no field for: refused when not the default, so
+/// a tented, paste-less, direct-connect, featured or test-point pad never
+/// lands on the board as a plain one.
+fn refuse_pad_settings(pad: &Pad) -> Result<(), FootprintResolveError> {
+    let settings = [
+        ("pad tented on top", pad.mask_tented_top),
+        ("pad tented on bottom", pad.mask_tented_bottom),
+        ("pad without paste on top", !pad.paste_enabled_top),
+        ("pad without paste on bottom", !pad.paste_enabled_bottom),
+        ("pad without thermal relief", !pad.thermal_relief),
+        ("pad top feature", !pad.feature_top.is_none()),
+        ("pad bottom feature", !pad.feature_bottom.is_none()),
+        ("pad test point", !pad.testpoint.is_default()),
+        ("pad electrical type", !pad.electrical_type.is_default()),
+    ];
+    match settings.into_iter().find(|(_, set)| *set) {
+        Some((what, _)) => Err(unconvertible(what, pad.number.clone())),
+        None => Ok(()),
+    }
 }
 
 /// A plated half-hole is a plated hole on the board; a fiducial is a

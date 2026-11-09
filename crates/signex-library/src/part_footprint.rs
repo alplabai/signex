@@ -54,6 +54,14 @@ pub fn resolve_part_footprint(
         footprint: address.uuid,
         version: library.version.clone(),
     };
+    // The board saves this identity; one it could not read back (an empty
+    // version) would make the board unopenable, so it is refused here.
+    if FootprintSourceRef::parse(&source.to_string()).as_ref() != Some(&source) {
+        return Err(FootprintResolveError::Unconvertible {
+            what: "library footprint identity",
+            value: source.to_string(),
+        });
+    }
     let mut footprint = board_footprint(&library)?;
     footprint.library_ref = Some(source.clone());
     Ok(ResolvedFootprint {

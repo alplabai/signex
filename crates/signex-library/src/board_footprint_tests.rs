@@ -323,3 +323,84 @@ fn the_board_footprint_is_top_side_at_the_origin_with_empty_texts() {
     let again = board_footprint(&lib).unwrap();
     assert_ne!(again.pads[0].uuid, board.pads[0].uuid);
 }
+
+#[test]
+fn pad_settings_the_board_cannot_hold_are_refused() {
+    use signex_sketch::attr::{ElectricalType, PadFeature, TestpointFlags};
+    type Set = fn(&mut Pad);
+    let cases: [(&str, Set); 9] = [
+        ("pad tented on top", |p| p.mask_tented_top = true),
+        ("pad tented on bottom", |p| p.mask_tented_bottom = true),
+        ("pad without paste on top", |p| p.paste_enabled_top = false),
+        ("pad without paste on bottom", |p| {
+            p.paste_enabled_bottom = false
+        }),
+        ("pad without thermal relief", |p| p.thermal_relief = false),
+        ("pad top feature", |p| {
+            p.feature_top = PadFeature::Counterbore
+        }),
+        ("pad bottom feature", |p| {
+            p.feature_bottom = PadFeature::Countersink
+        }),
+        ("pad test point", |p| {
+            p.testpoint = TestpointFlags {
+                top_fab: true,
+                ..TestpointFlags::default()
+            }
+        }),
+        ("pad electrical type", |p| {
+            p.electrical_type = ElectricalType::Source
+        }),
+    ];
+    for (what, set) in cases {
+        let mut p = pad("7", PadKind::Smd, PadShape::Rect, &["F.Cu"]);
+        set(&mut p);
+        assert_eq!(
+            convert_one(p),
+            Err(FootprintResolveError::Unconvertible {
+                what,
+                value: "7".into()
+            })
+        );
+    }
+}
+
+#[test]
+fn margins_are_not_carried_and_do_not_refuse() {
+    let mut p = pad("1", PadKind::Smd, PadShape::Rect, &["F.Cu"]);
+    p.solder_mask_margin = Some(0.05);
+    p.paste_margin = Some(-0.02);
+    p.mask_margin_top = Some(0.1);
+    p.paste_margin_bottom = Some(0.1);
+    assert!(convert_one(p).is_ok());
+}
+
+#[test]
+fn a_3d_body_a_step_model_and_an_anchor_are_refused() {
+    use crate::primitive::footprint::StepAttachment;
+    let mut body = library(Vec::new());
+    body.body_3d.height_mm = 2.5;
+    let mut step = library(Vec::new());
+    step.step_attachment = Some(StepAttachment {
+        content_hash: "ab".into(),
+        filename: "SOT-23.step".into(),
+        offset_xyz: [0.0; 3],
+        rotation_xyz: [0.0; 3],
+    });
+    let mut anchor = library(Vec::new());
+    anchor.anchor = [0.5, 0.0];
+    let cases = [
+        (body, "footprint 3D body", "set"),
+        (step, "footprint STEP model", "SOT-23.step"),
+        (anchor, "footprint anchor", "[0.5, 0.0]"),
+    ];
+    for (fp, what, value) in cases {
+        assert_eq!(
+            board_footprint(&fp),
+            Err(FootprintResolveError::Unconvertible {
+                what,
+                value: value.into()
+            })
+        );
+    }
+}

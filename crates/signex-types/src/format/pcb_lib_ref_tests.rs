@@ -98,6 +98,27 @@ fn the_cell_is_library_colon_footprint_at_version() {
     assert_eq!(FootprintSourceRef::parse(&lib.to_string()), Some(lib));
 }
 
+/// The writer never saves a cell the reader refuses: the board would not
+/// reopen.
+#[test]
+fn a_library_identity_that_would_not_read_back_is_refused_on_save() {
+    // An empty version writes `<lib>:<fp>@`, which the reader refuses.
+    let empty = source(7, "");
+    assert_eq!(FootprintSourceRef::parse(&empty.to_string()), None);
+    let error = SnxPcb::new(board([None, Some(empty)]))
+        .write_string()
+        .unwrap_err();
+    match error {
+        FormatError::NonFiniteField { block, row, field } => {
+            assert_eq!(
+                (block.as_str(), row, field.as_str()),
+                ("footprints", 1, "lib_ref")
+            );
+        }
+        other => panic!("expected the save to be refused at lib_ref, got {other:?}"),
+    }
+}
+
 #[test]
 fn a_malformed_cell_is_refused_naming_the_field_and_value() {
     let lib = source(7, "1.2.0");

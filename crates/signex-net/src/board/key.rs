@@ -9,7 +9,7 @@ use signex_types::pcb::{Footprint, Pad, PcbBoard};
 use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
-use crate::parts::PartAnchor;
+use crate::parts::DesignPart;
 
 /// The link between a schematic terminal and a board pad: two sides that
 /// produce the same key are the same electrical terminal.
@@ -58,8 +58,10 @@ pub struct SymbolPadKey {
     /// Unit -> its part's anchor, for every unit some footprint links to.
     /// A unit named by two different links belongs to the first.
     anchor_of: HashMap<(InstancePath, Uuid), Uuid>,
-    /// Which pad each pin of a part lands on; a part with no map is 1:1.
-    pin_maps: HashMap<PartAnchor, PinPadMap>,
+    /// Which pad each pin lands on, by (sheet, unit) for every unit of a
+    /// mapped part, so a terminal finds its map whichever unit it is on and
+    /// whatever units a footprint link lists. A part with no map is 1:1.
+    pin_maps: HashMap<(InstancePath, Uuid), PinPadMap>,
 }
 
 impl SymbolPadKey {
@@ -88,9 +90,19 @@ impl SymbolPadKey {
     }
 
     /// Land each pin of a part on the pad its map names (a library part's
-    /// pin-to-pad overrides). Parts not in `pin_maps` stay 1:1.
-    pub fn with_pin_maps(mut self, pin_maps: HashMap<PartAnchor, PinPadMap>) -> Self {
-        self.pin_maps = pin_maps;
+    /// pin-to-pad overrides). The map is keyed by every unit of the part, not
+    /// by an anchor, so it applies even when a footprint link lists fewer
+    /// units than the schematic. Parts not listed stay 1:1.
+    pub fn with_pin_maps<'a>(
+        mut self,
+        pin_maps: impl IntoIterator<Item = (&'a DesignPart, PinPadMap)>,
+    ) -> Self {
+        for (part, map) in pin_maps {
+            for unit in &part.units {
+                self.pin_maps
+                    .insert((part.sheet.clone(), *unit), map.clone());
+            }
+        }
         self
     }
 }
@@ -103,24 +115,21 @@ impl PadLinkKey for SymbolPadKey {
         if terminal.symbol.is_nil() {
             return None;
         }
+        let unit = (terminal.occurrence.clone(), terminal.symbol);
         let part = self
             .anchor_of
-            .get(&(terminal.occurrence.clone(), terminal.symbol))
+            .get(&unit)
             .copied()
             .unwrap_or(terminal.symbol);
-        let anchor = PartAnchor {
-            sheet: terminal.occurrence.clone(),
-            part,
+        // A mapped pad is cleaned like a pin: a blank one links nothing.
+        let pad = match self.pin_maps.get(&unit) {
+            Some(map) => clean(map.pad_for(pad))?,
+            None => pad,
         };
-        let pad = self
-            .pin_maps
-            .get(&anchor)
-            .map_or(pad, |map| map.pad_for(pad))
-            .to_string();
         Some(SymbolPad {
-            sheet: anchor.sheet,
+            sheet: unit.0,
             part,
-            pad,
+            pad: pad.to_string(),
         })
     }
 

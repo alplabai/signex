@@ -486,7 +486,7 @@ pub(in crate::format) fn footprint_to_row(
     let unknown_columns = with_lib_ref_cell(
         with_link_cell(fp.unknown_columns.clone(), fp.schematic_link.as_ref()),
         fp.library_ref.as_ref(),
-    );
+    )?;
     Ok(PcbFootprintRow {
         uuid: fp.uuid,
         ref_des: fp.reference.clone(),
@@ -584,14 +584,21 @@ fn take_link_cell(columns: &mut UnknownColumns) -> Option<SymbolLink> {
 /// a block that has some.
 pub(in crate::format) const LIB_REF_COLUMN: &str = "lib_ref";
 
+/// The reader refuses a cell that does not parse back to the same value (an
+/// empty version, say), so writing one would save a board that cannot
+/// reopen: the save is refused instead.
 fn with_lib_ref_cell(
     mut columns: UnknownColumns,
     library_ref: Option<&FootprintSourceRef>,
-) -> UnknownColumns {
+) -> Result<UnknownColumns, NonFiniteField> {
     if let Some(library_ref) = library_ref {
-        columns.set(LIB_REF_COLUMN, library_ref.to_string());
+        let cell = library_ref.to_string();
+        if FootprintSourceRef::parse(&cell).as_ref() != Some(library_ref) {
+            return Err(NonFiniteField(LIB_REF_COLUMN));
+        }
+        columns.set(LIB_REF_COLUMN, cell);
     }
-    columns
+    Ok(columns)
 }
 
 /// An empty cell is "no library footprint". Any other cell must read back

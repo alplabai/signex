@@ -140,6 +140,20 @@ fn a_row_without_a_footprint_an_unoffered_one_and_a_missing_one_are_refused() {
 }
 
 #[test]
+fn a_library_footprint_with_an_empty_version_is_refused() {
+    let (row, _, mut library) = fixture();
+    let default = row.footprint_ref.unwrap();
+    library.get_mut(&default).unwrap().version = String::new();
+    assert_eq!(
+        resolve_part_footprint(&row, None, lookup(&library)),
+        Err(FootprintResolveError::Unconvertible {
+            what: "library footprint identity",
+            value: format!("{}:{}@", default.library_id, default.uuid),
+        })
+    );
+}
+
+#[test]
 fn a_footprint_the_board_cannot_hold_is_refused_through_the_resolver() {
     let (row, _, mut library) = fixture();
     let default = row.footprint_ref.unwrap();
