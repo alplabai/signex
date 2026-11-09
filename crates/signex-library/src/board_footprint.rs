@@ -12,8 +12,8 @@
 //! - the 3D body and STEP model (maintainer decision, Caner, 2026-11-09): the
 //!   board footprint keeps `library_ref` to the library footprint, and the 3D
 //!   view reads the model from there. Nothing is copied, nothing is lost.
-//! Mapping rules:
-//! `docs/architecture/library-footprint-bindings.md`, "Board footprints".
+//!
+//! Mapping rules: `docs/architecture/library-footprint-bindings.md`, "Board footprints".
 
 use signex_types::format::{parse_pcb_layer, pcb_layer_token};
 use signex_types::part::FootprintResolveError;
