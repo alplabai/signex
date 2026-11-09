@@ -117,6 +117,17 @@ impl Signex {
                 Task::none()
             }
             M::SubmitRequested => self.create_project_from_dialog(),
+            // While Create writes, Cancel and Esc wait: the project would be
+            // created and opened anyway.
+            M::CancelRequested
+                if self
+                    .ui_state
+                    .new_project
+                    .as_ref()
+                    .is_some_and(|s| s.creating.is_some()) =>
+            {
+                Task::none()
+            }
             M::CancelRequested => {
                 self.ui_state.new_project = None;
                 Task::none()
@@ -182,6 +193,27 @@ impl Signex {
             setup: Some(state.setup.clone()),
         };
         let chosen = location.join(format!("{name}.snxprj"));
+        // A Create that would not start says why in the dialog instead of
+        // leaving it waiting.
+        let refusal = if self.document_state.pending_opens.contains(&chosen) {
+            Some(
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::DIALOG_NEW_PROJECT_ERR_CREATE_PENDING
+                )
+                .into_string(),
+            )
+        } else {
+            crate::app::handlers::document_files::new_project::new_project_parts(&chosen)
+                .err()
+                .map(|e| format!("{e:#}"))
+        };
+        if let Some(why) = refusal {
+            if let Some(state) = self.ui_state.new_project.as_mut() {
+                state.create_error = Some(why);
+            }
+            return Task::none();
+        }
         // The dialog stays open, its Create off, until the writes land: a
         // failure keeps the setup and shows why (`finish_dialog_create`).
         if let Some(state) = self.ui_state.new_project.as_mut() {

@@ -45,6 +45,14 @@ pub(super) fn view<'a>(
         }
     };
     let wrap = edited(project.id);
+    let unreadable = project.data.has_unreadable_project_defaults().then(|| {
+        signex_widgets::text(signex_i18n::t!(
+            i18n,
+            signex_i18n::ids::DIALOG_NEW_PROJECT_SETUP_UNREADABLE
+        ))
+        .size(crate::styles::TypeScale::default().caption)
+        .color(crate::styles::ti(tokens.text_secondary))
+    });
     let body: Element<'a, NewProjectMsg> = column![
         cards::profiles(state, i18n, tokens),
         row![
@@ -55,7 +63,12 @@ pub(super) fn view<'a>(
     ]
     .spacing(sp.xl + sp.s)
     .boxed();
-    container(body.map(wrap)).padding([sp.xl, sp.xl]).boxed()
+    let mut col: iced::widget::Column<Element<'a, Message>> = column![].spacing(sp.m);
+    if let Some(note) = unreadable {
+        col = col.push(note.boxed());
+    }
+    let body = col.push(body.map(wrap).boxed());
+    container(body).padding([sp.xl, sp.xl]).boxed()
 }
 
 /// Which stored part an edit of the section touches.
@@ -131,6 +144,12 @@ impl Signex {
         let mut defaults = stored;
         let mut designators = None;
         match part {
+            // Only rules the loader accepts are stored (drill smaller than
+            // the via, every value in range); otherwise the last good stored
+            // rules stay and the inline reason shows.
+            SetupPart::Pcb if !draft.setup.pcb.problems().is_empty() => {
+                return iced::Task::none();
+            }
             SetupPart::Pcb => defaults.pcb = Some(draft.setup.pcb.clone()),
             SetupPart::Sheet => defaults.sheet = Some(draft.setup.sheet.clone()),
             SetupPart::Designators => {

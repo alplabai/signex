@@ -58,11 +58,13 @@ impl Signex {
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
-        let header = super::header::graphite_header(
+        let creating = state.creating.is_some();
+        let cancel = (!creating).then(|| np(NewProjectMsg::CancelRequested));
+        let header = super::header::graphite_header_closing(
             s(i18n, ids::DIALOG_NEW_PROJECT_TITLE),
             None,
             None,
-            np(NewProjectMsg::CancelRequested),
+            cancel.clone(),
             super::header::DIALOG_HEADER_H,
             tokens,
         );
@@ -89,11 +91,18 @@ impl Signex {
                 dialog_button(
                     &s(i18n, ids::DIALOG_NEW_PROJECT_CANCEL),
                     DialogButtonKind::Cancel,
-                    Some(np(NewProjectMsg::CancelRequested)),
+                    cancel,
                     tokens,
                 ),
                 dialog_button(
-                    &s(i18n, ids::DIALOG_NEW_PROJECT_CREATE),
+                    &s(
+                        i18n,
+                        if creating {
+                            ids::DIALOG_NEW_PROJECT_CREATING
+                        } else {
+                            ids::DIALOG_NEW_PROJECT_CREATE
+                        },
+                    ),
                     super::graphite::call_to_action(tokens),
                     state
                         .can_create()

@@ -886,12 +886,21 @@ mod tests {
             !submit(&app.route_key(w, &character("a", keyboard::Modifiers::default()))),
             "other keys reach the fields"
         );
-        app.ui_state.new_project.as_mut().unwrap().dropdown_open = true;
+        let _ = app.update(Message::from(crate::app::NewProjectMsg::DropdownToggled(
+            true,
+        )));
         assert!(
             app.route_key(w, &named(keyboard::key::Named::Enter))
                 .is_none(),
             "an open dropdown owns Enter"
         );
+        // A real pick closes the list, so Enter submits again.
+        let _ = app.update(Message::from(crate::app::NewProjectMsg::SheetSizePicked(
+            "A4".into(),
+        )));
+        assert!(submit(
+            &app.route_key(w, &named(keyboard::key::Named::Enter))
+        ));
     }
 
     // ── Consumer 4: F1 ──────────────────────────────────────────────

@@ -168,3 +168,53 @@ fn a_pick_is_stored_while_a_rule_field_holds_a_bad_value() {
         .clone();
     assert_eq!(sheet.map(|s| s.paper_size), Some("A2".to_string()));
 }
+
+#[test]
+fn rules_the_loader_would_refuse_are_not_stored() {
+    let mut app = app();
+    edit(&mut app, NewProjectMsg::ProfilePicked(SetupProfile::Hobby));
+    let good = app.document_state.projects[0]
+        .data
+        .project_defaults
+        .pcb
+        .clone();
+    // Each value is in range alone; together the drill (0.3) is not smaller
+    // than the via.
+    edit(
+        &mut app,
+        NewProjectMsg::RuleEdited(PcbField::ViaSize, "0.25".into()),
+    );
+    assert_eq!(
+        app.document_state.projects[0].data.project_defaults.pcb, good,
+        "the last good rules stay stored"
+    );
+    let id = app.document_state.projects[0].id;
+    let draft = app.document_state.project_tabs[&id]
+        .setup_draft
+        .as_ref()
+        .unwrap();
+    assert!(
+        draft.drafts.problem(PcbField::ViaDrill).is_some(),
+        "the inline reason shows"
+    );
+}
+
+#[test]
+fn an_unreadable_section_is_kept_and_the_section_still_builds() {
+    let mut app = app();
+    let path = app.document_state.projects[0].path.clone();
+    let bytes =
+        signex_types::project::encode_project(&app.document_state.projects[0].data).unwrap();
+    let mut json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    json["project_defaults"] = serde_json::json!({"pcb": {"copper_layers": 300}});
+    let reread =
+        signex_types::project::parse_project_bytes(&path, json.to_string().as_bytes()).unwrap();
+    app.document_state.projects[0].data = reread;
+    assert!(
+        app.document_state.projects[0]
+            .data
+            .has_unreadable_project_defaults()
+    );
+    let id = app.document_state.projects[0].id;
+    let _ = app.view_project_tab(id);
+}

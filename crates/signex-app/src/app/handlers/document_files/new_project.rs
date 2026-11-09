@@ -15,7 +15,7 @@ use signex_library::vcs_target_guard::{KnownFolders, enclosing_project};
 const OS_CLUTTER: [&str; 3] = [".DS_Store", "Thumbs.db", "desktop.ini"];
 
 /// The `.snxprj` must end in `.snxprj`, have a parent and a UTF-8 stem.
-pub(super) fn new_project_parts(project_path: &Path) -> Result<(&Path, String)> {
+pub(crate) fn new_project_parts(project_path: &Path) -> Result<(&Path, String)> {
     if project_path
         .extension()
         .and_then(|e| e.to_str())

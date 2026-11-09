@@ -170,3 +170,12 @@ dialog-new-project-err-rules-no-pcb = it has no [pcb] table.
 dialog-new-project-err-rules-missing = { $key } is missing from [pcb].
 dialog-new-project-err-rules-value = { $key }: { $why }
 dialog-new-project-err-rules-too-large = it is larger than { $max } bytes.
+
+# Create button label while the project is being written.
+dialog-new-project-creating = Creating…
+
+# Create refused because the same project is already being created.
+dialog-new-project-err-create-pending = This project is already being created.
+
+# Project Options, Project setup section: the stored section is not usable.
+dialog-new-project-setup-unreadable = The project's setup defaults are not readable by this version of Signex; they are kept unchanged and not applied. The values below are not stored.

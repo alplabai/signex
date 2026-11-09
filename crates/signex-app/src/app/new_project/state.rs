@@ -277,9 +277,20 @@ impl NewProjectState {
             M::RulesFileRead(None) => {}
             M::LayersStepped(delta) => self.step_layers(delta),
             M::RuleEdited(field, text) => self.edit_rule(field, text),
-            M::SheetSizePicked(size) => self.setup.sheet.paper_size = size,
-            M::TitleBlockPicked(on) => self.setup.sheet.show_title_block = on,
-            M::DesignatorsPicked(standard) => self.setup.designators = standard,
+            // A pick closes its list; `on_close` only fires on an outside
+            // click, so the pick clears the open flag itself.
+            M::SheetSizePicked(size) => {
+                self.setup.sheet.paper_size = size;
+                self.dropdown_open = false;
+            }
+            M::TitleBlockPicked(on) => {
+                self.setup.sheet.show_title_block = on;
+                self.dropdown_open = false;
+            }
+            M::DesignatorsPicked(standard) => {
+                self.setup.designators = standard;
+                self.dropdown_open = false;
+            }
             M::DropdownToggled(open) => self.dropdown_open = open,
             _ => return false,
         }

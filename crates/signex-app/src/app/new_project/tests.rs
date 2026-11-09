@@ -409,3 +409,64 @@ fn a_location_that_is_itself_a_project_is_refused_without_the_folder() {
         "{status:?}"
     );
 }
+
+#[test]
+fn enter_submits_again_after_a_dropdown_pick() {
+    let (mut app, _t) = Signex::new();
+    settle(&mut app, Message::Menu(MenuMessage::NewProject));
+    for pick in [
+        NewProjectMsg::SheetSizePicked("A4".into()),
+        NewProjectMsg::TitleBlockPicked(false),
+        NewProjectMsg::DesignatorsPicked(signex_types::designator::DesignatorStandard::Din40719_2),
+    ] {
+        dialog(&mut app, NewProjectMsg::DropdownToggled(true));
+        assert!(app.ui_state.new_project.as_ref().unwrap().dropdown_open);
+        dialog(&mut app, pick);
+        assert!(
+            !app.ui_state.new_project.as_ref().unwrap().dropdown_open,
+            "the pick closed the list"
+        );
+    }
+}
+
+#[test]
+fn cancel_and_esc_wait_while_create_writes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, _t) = Signex::new();
+    settle(&mut app, Message::Menu(MenuMessage::NewProject));
+    dialog(
+        &mut app,
+        NewProjectMsg::LocationEdited(tmp.path().display().to_string()),
+    );
+    dialog(&mut app, NewProjectMsg::NameEdited("Busy".into()));
+    let task = app.update(Message::from(NewProjectMsg::SubmitRequested));
+    let _ = app.update(Message::from(NewProjectMsg::CancelRequested));
+    assert!(
+        app.ui_state.new_project.is_some(),
+        "Cancel does not close the dialog while Create writes"
+    );
+    TaskDriver::new().settle(&mut app, task).expect("settled");
+    assert!(
+        app.ui_state.new_project.is_none(),
+        "it closes when Create lands"
+    );
+    assert!(tmp.path().join("Busy").join("Busy.snxprj").is_file());
+}
+
+#[test]
+fn a_create_that_cannot_start_says_why_and_does_not_hang() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, _t) = Signex::new();
+    settle(&mut app, Message::Menu(MenuMessage::NewProject));
+    dialog(
+        &mut app,
+        NewProjectMsg::LocationEdited(tmp.path().display().to_string()),
+    );
+    dialog(&mut app, NewProjectMsg::NameEdited("Twice".into()));
+    let chosen = tmp.path().join("Twice.snxprj");
+    assert!(app.document_state.pending_opens.insert(chosen));
+    dialog(&mut app, NewProjectMsg::SubmitRequested);
+    let state = app.ui_state.new_project.as_ref().unwrap();
+    assert!(state.creating.is_none(), "not left waiting");
+    assert!(state.create_error.is_some(), "the reason is shown");
+}
