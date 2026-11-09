@@ -162,6 +162,7 @@ pub(super) fn add(
         }
     }
     items.iter().try_for_each(check_finite)?;
+    check_item_uuids(board, &ids)?;
     let new_pads = items.iter().flat_map(|item| match item {
         BoardItem::Footprint(fp) => fp.pads.as_slice(),
         _ => &[],
@@ -202,11 +203,35 @@ pub(super) fn check_pad_uuids<'a>(
         .chain(board.vias.iter().map(|v| v.uuid))
         .chain(board.zones.iter().map(|z| z.uuid))
         .chain(board.texts.iter().map(|t| t.uuid))
+        .chain(std::iter::once(board.uuid))
         .chain(new_items.iter().copied())
         .collect();
     for pad in pads {
         if !taken.insert(pad.uuid) {
             return Err(BoardCommandError::PadAlreadyPresent(pad.uuid));
+        }
+    }
+    Ok(())
+}
+
+/// The same id space for the new items themselves: refuse one whose uuid the
+/// board itself, any board pad, or a board item or new item of another kind
+/// already uses. (Same-kind repeats are `ItemAlreadyPresent` and
+/// `DuplicateItem`, checked first.)
+fn check_item_uuids(board: &PcbBoard, ids: &[BoardItemId]) -> Result<(), BoardCommandError> {
+    let mut taken: HashSet<Uuid> = board
+        .footprints
+        .iter()
+        .flat_map(|fp| std::iter::once(fp.uuid).chain(fp.pads.iter().map(|p| p.uuid)))
+        .chain(board.segments.iter().map(|s| s.uuid))
+        .chain(board.vias.iter().map(|v| v.uuid))
+        .chain(board.zones.iter().map(|z| z.uuid))
+        .chain(board.texts.iter().map(|t| t.uuid))
+        .chain(std::iter::once(board.uuid))
+        .collect();
+    for &id in ids {
+        if !taken.insert(id.split().1) {
+            return Err(BoardCommandError::UuidAlreadyUsed(id));
         }
     }
     Ok(())

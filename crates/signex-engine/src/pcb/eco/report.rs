@@ -73,7 +73,7 @@ fn describe(change: &EcoChange) -> String {
         } => {
             let why = match reason {
                 ChangeReason::Footprint => "",
-                ChangeReason::NewerVersion => " (newer library version)",
+                ChangeReason::OtherVersion => " (other library version)",
             };
             format!("Change {reference}: {from} -> {to}{why}")
         }
@@ -115,6 +115,7 @@ fn blocked_text(why: &EcoBlock) -> String {
             format!("fewer pads numbered {number}; a net or lock would be lost")
         }
         EcoBlock::Unplaceable(e) => format!("cannot be placed: {e}"),
+        EcoBlock::PartNotRead => "the part could not be read back from its sheet".into(),
     }
 }
 
@@ -134,6 +135,17 @@ fn note_text(note: &EcoNote) -> String {
             ..
         } => format!(
             "{reference}.{pad_number} is locked and not on the new footprint; its lock goes with it"
+        ),
+        EcoNote::PadLosesNet {
+            reference,
+            pad_number,
+            net,
+            ..
+        } => format!(
+            "{reference}.{pad_number} is on net {net} and not on the new footprint; the pad and its net go"
+        ),
+        EcoNote::PartNotRead { designator } => format!(
+            "part {designator} could not be read back from its sheet; its footprint is left as it is"
         ),
         EcoNote::KeptUnlinked { reference, .. } => {
             format!("{reference} is not linked to a part and is kept")

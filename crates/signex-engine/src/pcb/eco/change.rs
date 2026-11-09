@@ -23,8 +23,9 @@ pub enum EcoKey {
     SetDesignator(Uuid),
     SetValue(Uuid),
     Link(Uuid),
-    /// A board net the change adds, by the number it takes.
-    AddNet(u32),
+    /// A board net the change adds, by its name: the number it takes can
+    /// shift when other nets come or go.
+    AddNet(String),
     RemoveNet(u32),
     RenameNet(u32),
     /// A pad whose net changes, by footprint and pad uuid.
@@ -67,8 +68,9 @@ impl EcoGroup {
 pub enum ChangeReason {
     /// The part now binds a different footprint.
     Footprint,
-    /// Same footprint, a newer library version: listed, not ticked.
-    NewerVersion,
+    /// Same footprint, another library version (versions are not ordered
+    /// here): listed, not ticked.
+    OtherVersion,
 }
 
 /// What a row does.
@@ -147,6 +149,9 @@ pub enum EcoBlock {
     PadsCannotCarry { number: String },
     /// The footprint cannot be measured for staging (a non-finite value).
     Unplaceable(String),
+    /// The part's sheet or first unit could not be read back, so nothing
+    /// about it can be compared.
+    PartNotRead,
 }
 
 /// Something the user should know that is not a row.
@@ -161,6 +166,17 @@ pub enum EcoNote {
         reference: String,
         pad_number: String,
     },
+    /// A pad's number is not on the new footprint: the pad goes, and its net
+    /// with it.
+    PadLosesNet {
+        footprint: Uuid,
+        reference: String,
+        pad_number: String,
+        net: String,
+    },
+    /// A part whose sheet or first unit could not be read back: its footprint
+    /// is left as it is.
+    PartNotRead { designator: String },
     /// A footprint with no link and no part of its designator; it is kept.
     KeptUnlinked { footprint: Uuid, reference: String },
     /// Net sync left a pad or terminal as it was (from `assign_pad_nets`).
@@ -237,13 +253,26 @@ impl EcoChangeList {
         changed && row.group < EcoGroup::Nets
     }
 
-    /// Whether `row` takes effect: ticked, and every row it needs ticked.
+    /// Whether `row` takes effect: ticked, and every row it needs takes
+    /// effect in turn. Needs may form a cycle (a rename and the pad rows
+    /// that follow it need each other): a row met again on the way counts
+    /// as taking effect if it is ticked.
     pub fn applies(&self, row: &EcoRow) -> bool {
-        row.on
-            && row
-                .needs
-                .iter()
-                .all(|k| self.row(k).is_some_and(|needed| needed.on))
+        let mut seen = BTreeSet::new();
+        self.applies_within(row, &mut seen)
+    }
+
+    fn applies_within(&self, row: &EcoRow, seen: &mut BTreeSet<EcoKey>) -> bool {
+        if !row.on {
+            return false;
+        }
+        if !seen.insert(row.key.clone()) {
+            return true;
+        }
+        row.needs.iter().all(|k| {
+            self.row(k)
+                .is_some_and(|needed| self.applies_within(needed, seen))
+        })
     }
 
     /// The keys ticked now.
@@ -255,13 +284,76 @@ impl EcoChangeList {
             .collect()
     }
 
-    /// Carry the user's choices over from `previous` (a list before Refresh):
-    /// a row found there by key keeps its tick, where it can be ticked.
-    pub fn keep_choices_from(&mut self, previous: &EcoChangeList) {
+    /// Carry the user's choices over from `previous` (the list before a
+    /// Refresh of the same design, `input`): a row found there by key, whose
+    /// change is still the same choice, keeps its tick where it can be
+    /// ticked. The net rows are then recomputed for the carried footprint
+    /// ticks, so they never describe a board the ticks no longer make, and
+    /// their own ticks are carried the same way.
+    pub fn keep_choices_from(&mut self, previous: &EcoChangeList, input: &super::EcoInput) {
+        self.carry_ticks(previous);
+        super::refresh_nets(self, input);
+        self.carry_ticks(previous);
+    }
+
+    fn carry_ticks(&mut self, previous: &EcoChangeList) {
         for row in &mut self.rows {
-            if let Some(old) = previous.row(&row.key) {
+            if let Some(old) = previous.row(&row.key)
+                && old.change.same_choice(&row.change)
+            {
                 row.on = old.on && row.blocked.is_none();
             }
+        }
+    }
+}
+
+impl EcoChange {
+    /// Whether a tick given to `self` still means the same thing for
+    /// `other`. An added footprint may be staged elsewhere; a change of
+    /// footprint is the same only for the same source, target and reason;
+    /// every other row must match exactly.
+    pub(crate) fn same_choice(&self, other: &EcoChange) -> bool {
+        match (self, other) {
+            (Self::AddFootprint { footprint: a }, Self::AddFootprint { footprint: b }) => {
+                a.library_ref == b.library_ref
+                    && a.footprint_id == b.footprint_id
+                    && a.reference == b.reference
+                    && a.value == b.value
+            }
+            (
+                Self::ChangeFootprint {
+                    from: fa,
+                    to: ta,
+                    reason: ra,
+                    ..
+                },
+                Self::ChangeFootprint {
+                    from: fb,
+                    to: tb,
+                    reason: rb,
+                    ..
+                },
+            ) => fa == fb && ta == tb && ra == rb,
+            // A new net's number can shift; its name is what was chosen.
+            (Self::AddNet { name: a, .. }, Self::AddNet { name: b, .. }) => a == b,
+            (
+                Self::PadNet {
+                    from: fa,
+                    to: ta,
+                    locked: la,
+                    ..
+                },
+                Self::PadNet {
+                    from: fb,
+                    to: tb,
+                    locked: lb,
+                    ..
+                },
+            ) => {
+                let name = |n: &Option<PadNet>| n.as_ref().map(|n| n.name.clone());
+                fa == fb && la == lb && name(ta) == name(tb)
+            }
+            (a, b) => a == b,
         }
     }
 }

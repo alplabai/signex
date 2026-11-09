@@ -961,3 +961,82 @@ fn a_pad_off_the_number_line_is_refused_on_add_and_replace() {
         }
     }
 }
+
+/// One id space, both ways (#1312 review): a new pad may not take the
+/// board's own uuid, and a new track, via, text or footprint may not take a
+/// pad's, the board's or another kind's uuid.
+#[test]
+fn new_items_share_one_id_space_with_the_board_and_its_pads() {
+    use BoardCommandError as E;
+    let board_id = board().uuid;
+    let mut on_board_id = template_with_pads(NEW_FP, 0xd0);
+    on_board_id.pads[0].uuid = board_id;
+    let segment_as = |uuid: Uuid| {
+        let mut s = new_segment();
+        s.uuid = uuid;
+        s
+    };
+    let mut via = board().vias[0].clone();
+    via.uuid = id(PAD_A1);
+    let mut text = board().texts[0].clone();
+    text.uuid = id(PAD_A1);
+    let mut footprint = template_with_pads(NEW_FP, 0xd0);
+    footprint.uuid = id(PAD_A1);
+    let cases = [
+        (
+            BoardCommand::AddItems {
+                items: vec![BoardItem::Footprint(on_board_id.clone())],
+            },
+            E::PadAlreadyPresent(board_id),
+        ),
+        (
+            BoardCommand::ReplaceFootprint {
+                footprint: id(FP_A),
+                with: Box::new(on_board_id),
+            },
+            E::PadAlreadyPresent(board_id),
+        ),
+        (
+            BoardCommand::AddItems {
+                items: vec![BoardItem::Segment(segment_as(id(PAD_A1)))],
+            },
+            E::UuidAlreadyUsed(BoardItemId::Segment(id(PAD_A1))),
+        ),
+        (
+            BoardCommand::AddItems {
+                items: vec![BoardItem::Via(via)],
+            },
+            E::UuidAlreadyUsed(BoardItemId::Via(id(PAD_A1))),
+        ),
+        (
+            BoardCommand::AddItems {
+                items: vec![BoardItem::Text(text)],
+            },
+            E::UuidAlreadyUsed(BoardItemId::Text(id(PAD_A1))),
+        ),
+        (
+            BoardCommand::AddItems {
+                items: vec![BoardItem::Footprint(footprint)],
+            },
+            E::UuidAlreadyUsed(BoardItemId::Footprint(id(PAD_A1))),
+        ),
+        (
+            BoardCommand::AddItems {
+                items: vec![BoardItem::Segment(segment_as(board_id))],
+            },
+            E::UuidAlreadyUsed(BoardItemId::Segment(board_id)),
+        ),
+        (
+            BoardCommand::AddItems {
+                items: vec![BoardItem::Segment(segment_as(id(VIA_1)))],
+            },
+            E::UuidAlreadyUsed(BoardItemId::Segment(id(VIA_1))),
+        ),
+    ];
+    for (command, expected) in cases {
+        let mut b = board();
+        let before = snapshot(&b);
+        assert_eq!(command.clone().apply(&mut b), Err(expected), "{command:?}");
+        assert_eq!(snapshot(&b), before);
+    }
+}

@@ -20,6 +20,8 @@ pub enum BoardCommandError {
     DuplicatePadChange { footprint: Uuid, pad: Uuid },
     #[error("uuid {0} of a new pad is already used on the board")]
     PadAlreadyPresent(Uuid),
+    #[error("{0:?} takes a uuid the board or another item already uses")]
+    UuidAlreadyUsed(BoardItemId),
     #[error("footprint template {0} is not on a top-side layer this build reads")]
     TemplateNotTopSide(Uuid),
     #[error(

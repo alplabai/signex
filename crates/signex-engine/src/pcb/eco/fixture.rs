@@ -86,6 +86,7 @@ pub(super) fn part(
         value: value.into(),
         on_board: true,
         footprint,
+        read: true,
     }
 }
 
@@ -160,6 +161,7 @@ pub(super) fn netlist(nets: &[(&str, &[Pin<'_>])]) -> Netlist {
 }
 
 /// Everything `diff_board` reads, owned.
+#[derive(Clone)]
 pub(super) struct Design {
     pub board: PcbBoard,
     pub revision: u64,

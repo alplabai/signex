@@ -157,6 +157,13 @@ fn footprint_rows(
     duplicates: &HashSet<String>,
 ) {
     let id = fp.uuid;
+    if !part.read {
+        // Nothing about the part is known: leave its footprint alone.
+        list.notes.push(EcoNote::PartNotRead {
+            designator: part.part.designator.clone(),
+        });
+        return;
+    }
     if !part.on_board {
         list.rows.push(remove_row(fp));
         return;
@@ -217,7 +224,7 @@ fn change_reason(fp: &Footprint, resolved: &ResolvedFootprint) -> Option<ChangeR
     let to = &resolved.source;
     match &fp.library_ref {
         Some(from) if from.library == to.library && from.footprint == to.footprint => {
-            (from.version != to.version).then_some(ChangeReason::NewerVersion)
+            (from.version != to.version).then_some(ChangeReason::OtherVersion)
         }
         Some(_) => Some(ChangeReason::Footprint),
         None => {
@@ -236,12 +243,23 @@ fn change_row(
     with.library_ref = Some(resolved.source.clone());
     remint_pads(&mut with, fp.uuid, &resolved.source);
     let new_numbers: HashSet<&str> = with.pads.iter().map(|p| p.number.as_str()).collect();
-    for pad in fp.pads.iter().filter(|p| p.net_locked) {
-        if !new_numbers.contains(pad.number.as_str()) {
+    for pad in &fp.pads {
+        if new_numbers.contains(pad.number.as_str()) {
+            continue;
+        }
+        if pad.net_locked {
             list.notes.push(EcoNote::PadLosesLock {
                 footprint: fp.uuid,
                 reference: fp.reference.clone(),
                 pad_number: pad.number.clone(),
+            });
+        }
+        if let Some(net) = &pad.net {
+            list.notes.push(EcoNote::PadLosesNet {
+                footprint: fp.uuid,
+                reference: fp.reference.clone(),
+                pad_number: pad.number.clone(),
+                net: net.name.clone(),
             });
         }
     }
@@ -306,6 +324,11 @@ fn add_row(part: &EcoPart, duplicates: &HashSet<String>) -> EcoRow {
                 value: part.value.clone(),
                 ..empty_footprint()
             };
+            let block = if part.read {
+                EcoBlock::MissingFootprint(why.clone())
+            } else {
+                EcoBlock::PartNotRead
+            };
             return EcoRow::new(
                 key,
                 EcoGroup::AddFootprints,
@@ -314,7 +337,7 @@ fn add_row(part: &EcoPart, duplicates: &HashSet<String>) -> EcoRow {
                 },
                 true,
             )
-            .blocked(EcoBlock::MissingFootprint(why.clone()));
+            .blocked(block);
         }
     };
     let mut fp = resolved.footprint.clone();

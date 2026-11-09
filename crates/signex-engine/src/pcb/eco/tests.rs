@@ -184,7 +184,7 @@ fn a_different_footprint_is_changed_and_a_newer_version_is_listed_unticked() {
     assert!(matches!(
         newer.change,
         EcoChange::ChangeFootprint {
-            reason: ChangeReason::NewerVersion,
+            reason: ChangeReason::OtherVersion,
             ..
         }
     ));
@@ -452,9 +452,79 @@ fn ticks_survive_a_refresh() {
     let mut list = design.diff();
     list.set_on(&EcoKey::SetValue(u(0xa1)), false);
     let mut refreshed = design.diff();
-    refreshed.keep_choices_from(&list);
+    refreshed.keep_choices_from(&list, &design.input());
     assert!(!refreshed.row(&EcoKey::SetValue(u(0xa1))).unwrap().on);
     assert!(refreshed.row(&add_key(&[0x301])).unwrap().on);
+}
+
+/// Beyond values and adds: a removal, a link and a pad row keep their
+/// ticks through a Refresh too, and the net rows follow the carried ticks.
+#[test]
+fn removal_link_and_pad_ticks_survive_a_refresh() {
+    let mut design = synced();
+    design.parts.retain(|p| p.part.designator != "R2");
+    design.board.footprints[2].schematic_link = None;
+    design.netlist.nets[0]
+        .terminals
+        .retain(|t| t.reference != "U1" || t.pin != "3");
+    design.netlist.nets[2]
+        .terminals
+        .push(netlist(&[("GND", &[(0x201, "U1", "3")])]).nets[0].terminals[0].clone());
+    let mut list = design.diff();
+    let remove = EcoKey::RemoveFootprint(u(0xa2));
+    let link = EcoKey::Link(u(0xa3));
+    let u1_3 = list
+        .rows
+        .iter()
+        .find(|r| matches!(&r.change, EcoChange::PadNet { reference, pad_number, .. } if reference == "U1" && pad_number == "3"))
+        .map(|r| r.key.clone())
+        .expect("U1.3 moves to GND");
+    for key in [&remove, &link, &u1_3] {
+        assert!(list.row(key).unwrap().on, "{key:?}");
+        list.set_on(key, false);
+    }
+    let mut refreshed = design.diff();
+    refreshed.keep_choices_from(&list, &design.input());
+    for key in [&remove, &link] {
+        assert!(!refreshed.row(key).unwrap().on, "{key:?}");
+    }
+    assert!(
+        refreshed.row(&u1_3).is_none_or(|r| !r.on),
+        "{}",
+        report_text(&refreshed)
+    );
+}
+
+/// Review point 9: a part that cannot be read back is never dropped, so its
+/// footprint is not listed for removal; with no footprint it is blocked.
+#[test]
+fn a_part_that_cannot_be_read_back_keeps_its_footprint() {
+    let mut design = synced();
+    let r1 = &mut design.parts[0];
+    r1.read = false;
+    r1.value = String::new();
+    r1.footprint = Err(FootprintResolveError::NoFootprint);
+    let mut ghost = part("R9", &[0x109], "", Err(FootprintResolveError::NoFootprint));
+    ghost.read = false;
+    design.parts.push(ghost);
+    let list = design.diff();
+    assert!(
+        !list.rows.iter().any(|r| match &r.change {
+            EcoChange::RemoveFootprint { footprint, .. }
+            | EcoChange::SetValue { footprint, .. }
+            | EcoChange::ChangeFootprint { footprint, .. } => *footprint == u(0xa1),
+            _ => false,
+        }),
+        "{}",
+        report_text(&list)
+    );
+    assert!(list.notes.contains(&EcoNote::PartNotRead {
+        designator: "R1".into()
+    }));
+    assert_eq!(
+        list.row(&add_key(&[0x109])).unwrap().blocked,
+        Some(EcoBlock::PartNotRead)
+    );
 }
 
 #[test]

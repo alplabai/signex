@@ -20,9 +20,11 @@
 //! - A part with `on_board == false` is removed, or not added. DNP parts are
 //!   placed.
 //! - Nothing linked under a sheet that could not be read is removed.
-//! - A newer library version of the same footprint is listed, unticked.
+//! - Another library version of the same footprint is listed, unticked.
 //! - Remove and change rows of a locked footprint start unticked.
-//! - A pad whose net is locked gets no pad net row.
+//! - A pad whose net is locked gets no pad net row, except to follow a
+//!   rename of its own net.
+//! - A part that cannot be read back is never removed or changed.
 
 mod change;
 mod diff;
@@ -64,6 +66,10 @@ pub struct EcoPart {
     pub on_board: bool,
     /// Its footprint, resolved by the caller from the part's library row.
     pub footprint: Result<ResolvedFootprint, FootprintResolveError>,
+    /// `false` when the part's sheet or first unit could not be read back:
+    /// its value and footprint are unknown, so its footprint is left as it
+    /// is (never removed) and a part with none gets a blocked add row.
+    pub read: bool,
 }
 
 /// What [`diff_board`] compares.
@@ -81,25 +87,41 @@ pub struct EcoInput<'a> {
 }
 
 /// The design's parts from its placed sheets, with each part's footprint
-/// resolved by `resolve` (given the part and its first unit's symbol).
+/// resolved by `resolve` (given the part and its first unit's symbol). A
+/// part whose sheet or first unit is not found is kept with `read: false`,
+/// never dropped: dropping it would list its footprint for removal.
 pub fn design_eco_parts(
     sheets: &[(InstancePath, &SchematicSheet)],
     mut resolve: impl FnMut(&DesignPart, &Symbol) -> Result<ResolvedFootprint, FootprintResolveError>,
 ) -> Vec<EcoPart> {
     signex_net::design_parts(sheets)
         .into_iter()
-        .filter_map(|part| {
-            let sheet = sheets.iter().find(|(path, _)| *path == part.sheet)?.1;
-            let first = sheet
-                .symbols
+        .map(|part| {
+            let first = sheets
                 .iter()
-                .find(|s| part.units.first() == Some(&s.uuid))?;
-            Some(EcoPart {
-                value: first.value.clone(),
-                on_board: first.on_board,
-                footprint: resolve(&part, first),
-                part,
-            })
+                .find(|(path, _)| *path == part.sheet)
+                .and_then(|(_, sheet)| {
+                    sheet
+                        .symbols
+                        .iter()
+                        .find(|s| part.units.first() == Some(&s.uuid))
+                });
+            match first {
+                Some(first) => EcoPart {
+                    value: first.value.clone(),
+                    on_board: first.on_board,
+                    footprint: resolve(&part, first),
+                    read: true,
+                    part,
+                },
+                None => EcoPart {
+                    value: String::new(),
+                    on_board: true,
+                    footprint: Err(FootprintResolveError::NoFootprint),
+                    read: false,
+                    part,
+                },
+            }
         })
         .collect()
 }
