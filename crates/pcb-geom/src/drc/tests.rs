@@ -73,6 +73,7 @@ fn footprint(n: u128, pads: Vec<Pad>) -> Footprint {
         layer: "TopCopper".into(),
         locked: false,
         schematic_link: None,
+        library_ref: None,
         pads,
         graphics: Vec::new(),
         properties: Vec::new(),

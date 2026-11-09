@@ -57,6 +57,7 @@ fn footprint(uuid: Uuid, reference: &str, x: f64, locked: bool, pads: Vec<Pad>) 
         layer: "TopCopper".into(),
         locked,
         schematic_link: None,
+        library_ref: None,
         pads,
         graphics: Vec::new(),
         properties: Vec::new(),
