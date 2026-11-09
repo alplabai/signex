@@ -68,21 +68,25 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
 - the #2172 queries: `list_documents`, `document_info`, `resolve`, `find_items`,
   `read_document`, `query_pins`;
 - a command that names its document with the `document` operand and takes no
-  file path, except the three held back below: today `apply_edits`, `revert`,
-  `color_net` and `clear_all_net_colors`. A test pins the final set, so a
-  catalog row that joins or leaves it is a visible decision.
+  file path: today `apply_edits`, `revert`, `color_net`,
+  `clear_all_net_colors`, `assign_net_class`, `save_document` and
+  `close_active_document`. A test pins this set, so a catalog row that joins or
+  leaves it is a visible decision.
 
-Held back (`NOT_YET_FOR_AGENTS`, each with the reason the agent is told). They
-pass the derivation and are refused until the maintainer opens them:
+The last three are open to agents by the maintainer's decision (#1924):
 
-- `save_document`: "saving the person's file is not available to agents yet".
-  It could write the person's half-done unsaved work on that sheet. Candidate to
-  open later behind PR B's `--save` gate.
-- `close_active_document`: it changes the person's tab strip.
-- `assign_net_class`: project-wide data, which #2178 also keeps out of
-  `apply_edits`.
-
-**Maintainer decision pending:** these three are the candidates to open later.
+- `save_document` writes the named document only, as a person's Save of that
+  document does; its side writes stay confined to what the headless run allows
+  (`save_side_writes`). It never saves another document.
+- `close_active_document` closes the named document's tab as its close button
+  does; a document with unsaved edits is parked, never discarded. It is refused
+  when the document is the person's active tab, or is shown in a window of its
+  own, since closing it would move their tab or close that window, and when the
+  person has a pending title-block or paper-edge draft for that sheet, since
+  closing would drop their unconfirmed typing.
+- `assign_net_class` runs by document as in the headless run: the project's
+  class table changes, and the pick is one step on that sheet's undo timeline
+  (#2171), after the person's own steps.
 
 Refused with a reason: `undo` and `redo` (`PERSON_ONLY`, the one hand-kept
 constant, checked against the catalog by a test; the agent takes back its own
@@ -319,5 +323,6 @@ entry file it names.
   version sweeps the folder.
 - A query on a project sheet that is not loaded reads it on the update thread,
   as the headless run does (#665 tracks synchronous reads).
-- An agent cannot save, close a tab or assign a net class yet (see "Held
-  back"); a person saves.
+- `save_document` answers `ran` when the save has started; its result reaches
+  Messages when the write finishes. It writes that sheet's unsaved work,
+  including edits the person made; the `--save` gate is the CLI's (PR B).
