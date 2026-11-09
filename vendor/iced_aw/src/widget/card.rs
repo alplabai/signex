@@ -202,6 +202,7 @@ where
                     border: iced_core::Border::default(),
                     shadow: iced_core::Shadow::default(),
                     snap: false,
+                    focus_ring: None,
                 }
             })
             .on_press(msg);
