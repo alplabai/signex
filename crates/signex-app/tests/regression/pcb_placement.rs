@@ -408,26 +408,33 @@ fn a_locked_footprint_refuses_every_edit_with_a_notice() {
         "the pad selects its locked footprint"
     );
     let before = snapshot(&f.app);
-    let since = diagnostics::newest_entry_id().unwrap_or(0);
     let attempts = [
-        key(KeyToken::Space, false),
-        key(KeyToken::Character("x".into()), false),
-        key(KeyToken::Delete, false),
-        Message::PcbCanvas(PcbCanvasMsg::FootprintDropped {
-            from: Point::new(30.0, 10.0),
-            to: Point::new(35.0, 10.0),
-        }),
+        ("Rotate", key(KeyToken::Space, false)),
+        ("Flip", key(KeyToken::Character("x".into()), false)),
+        ("Delete", key(KeyToken::Delete, false)),
+        (
+            "Move",
+            Message::PcbCanvas(PcbCanvasMsg::FootprintDropped {
+                from: Point::new(30.0, 10.0),
+                to: Point::new(35.0, 10.0),
+            }),
+        ),
     ];
-    let tries = attempts.len();
-    for attempt in attempts {
+    // The diagnostics ring is shared by every test thread and holds a few
+    // hundred lines, so each refusal is looked for right after its own
+    // attempt and by its own operation name, not counted at the end (#2227).
+    for (operation, attempt) in attempts {
+        let since = diagnostics::newest_entry_id().unwrap_or(0);
         send(&mut f.app, attempt);
         assert_eq!(snapshot(&f.app), before, "a locked footprint stays put");
+        let wanted = format!("{operation}: U2 is locked");
+        assert!(
+            diagnostics::recent_entries()
+                .iter()
+                .any(|e| e.id > since && e.message.contains(&wanted)),
+            "the {operation} refusal names the locked footprint"
+        );
     }
-    let notices = diagnostics::recent_entries()
-        .iter()
-        .filter(|e| e.id > since && e.message.contains("U2 is locked"))
-        .count();
-    assert_eq!(notices, tries, "each refusal names the locked footprint");
     assert!(!can_undo(&f.app), "no undo step was made");
 }
 
