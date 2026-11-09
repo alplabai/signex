@@ -38,7 +38,7 @@ fn sheet_entry(name: &str) -> SheetEntry {
 /// `b` with a wire selected, the wire tool, a wire in progress and a
 /// command-palette query typed; agent connections on and listening.
 pub(super) fn app_at_work() -> Signex {
-    app_in(&path("a.snxsch").parent().unwrap().to_path_buf())
+    app_in(path("a.snxsch").parent().unwrap())
 }
 
 /// [`app_at_work`] with the project's folder `dir`: a test that writes files
