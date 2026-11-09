@@ -1,0 +1,29 @@
+# Properties panel: the Library rows of a placed library part (#2209).
+
+# Button beside "Update from library": update only the selected part, leaving
+# the other instances of the library symbol on the version they have.
+properties-library-only-this-one = Only this one
+
+# Tooltip of the "Only this one" button.
+properties-library-only-this-one-tip = Updates only this part; the others keep their version
+
+# Note beside the Update buttons: how many placed instances draw with an older
+# version of the library symbol. $count is a whole number of instances.
+properties-library-older-instances =
+    { $count ->
+        [one] Library: { $count } instance uses an older version
+       *[other] Library: { $count } instances use an older version
+    }
+
+# Note beside the Update buttons when the library symbol changed but the sheet
+# cannot say how many instances are behind.
+properties-library-out-of-date = Library: out of date
+
+# Shown when the placed part's library symbol no longer exists in its library.
+properties-library-symbol-missing = Library: symbol missing (sheet keeps its embedded copy)
+
+# Button: replace the part's embedded drawing with the library's current one.
+properties-library-update = Update from library
+
+# Tooltip of the "Update from library" button.
+properties-library-update-tip = Updates every instance of this part on the sheet

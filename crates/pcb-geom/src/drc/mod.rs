@@ -12,13 +12,14 @@ use crate::units::PointNm;
 pub use check::run;
 pub use rules::{DEFAULT_CLEARANCE_MM, DrcRules};
 
-/// What a violation breaks.
+/// What a violation breaks. Declared most severe first: a report sorts by
+/// kind, so a capped list of rows keeps the shorts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ViolationKind {
-    /// Copper of two nets, on a shared layer, closer than the rule.
-    Clearance,
     /// Copper of two nets that touches or overlaps.
     Short,
+    /// Copper of two nets, on a shared layer, closer than the rule.
+    Clearance,
     /// One missing link of a net the ratsnest still shows open.
     Unconnected,
 }

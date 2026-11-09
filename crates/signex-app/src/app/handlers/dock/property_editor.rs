@@ -143,16 +143,6 @@ impl Signex {
                     true,
                 );
             }
-            crate::panels::PanelMsg::EditSymbolLibId(uuid, new_lib) => {
-                self.apply_engine_command(
-                    signex_engine::Command::UpdateSymbolLibId {
-                        symbol_id: *uuid,
-                        lib_id: new_lib.clone(),
-                    },
-                    true,
-                    true,
-                );
-            }
             crate::panels::PanelMsg::EditSymbolValueFontSizePt(uuid, pt) => {
                 self.apply_engine_command(
                     signex_engine::Command::UpdateSymbolTextSize {

@@ -34,6 +34,7 @@ impl Signex {
             .unwrap_or(0);
         if self.interaction_state.pcb_drc.is_running_for(&path) {
             // One run per board at a time: its result is what the panel will show.
+            crate::diagnostics::log_info("DRC: a check of this board is already running");
             return Task::none();
         }
         let classes = self

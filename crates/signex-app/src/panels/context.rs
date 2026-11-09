@@ -40,6 +40,8 @@ pub struct PanelContext {
     /// Active theme id. Feeds the icon registry so dock/panel SVGs tint
     /// to the theme's accent (see `crate::icons`).
     pub theme_id: signex_types::theme::ThemeId,
+    /// The UI language's message catalog, for labels a panel renders itself.
+    pub i18n: std::sync::Arc<signex_i18n::I18n>,
     // Live settings (synced from Signex on every update)
     pub unit: Unit,
     pub grid_visible: bool,
@@ -195,8 +197,6 @@ pub struct PanelContext {
     pub diagnostics: Vec<crate::diagnostics::DiagnosticEntry>,
     /// The active board's design-rule check; `None` with no PCB in view (#2222).
     pub pcb_drc: Option<super::DrcPanel>,
-    /// The language the panels render text in.
-    pub i18n: std::sync::Arc<signex_i18n::I18n>,
     /// Selection filter state, shared with the Active Bar.
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// User-defined custom filter presets (capped at

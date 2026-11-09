@@ -329,7 +329,7 @@ impl Signex {
                 preferences_draft_net_hover_enabled: net_hover_enabled,
                 trackpad_pan,
                 preferences_draft_trackpad_pan: trackpad_pan,
-                i18n: i18n.clone(),
+                i18n: std::sync::Arc::clone(&i18n),
                 remember_window_geometry,
                 preferences_draft_remember_window_geometry: remember_window_geometry,
                 drag_direction_select,
@@ -522,6 +522,7 @@ impl Signex {
                     symbol_lists_key: None,
                     tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
                     theme_id: ThemeId::Signex,
+                    i18n,
                     canvas_colors: signex_types::theme::canvas_colors(ThemeId::Signex),
                     device_px_per_logical_px:
                         signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
@@ -588,7 +589,6 @@ impl Signex {
                     diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
                     diagnostics: crate::diagnostics::recent_entries(),
                     pcb_drc: None,
-                    i18n: i18n.clone(),
                     selection_filters: crate::active_bar::SelectionFilter::ALL
                         .iter()
                         .copied()

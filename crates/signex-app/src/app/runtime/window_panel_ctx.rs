@@ -18,6 +18,7 @@ impl PanelContext {
         self.canvas_colors = main.canvas_colors;
         self.device_px_per_logical_px = main.device_px_per_logical_px;
         self.theme_id = main.theme_id;
+        self.i18n = std::sync::Arc::clone(&main.i18n);
         self.unit = main.unit;
         self.grid_visible = main.grid_visible;
         self.snap_enabled = main.snap_enabled;
@@ -48,7 +49,6 @@ impl PanelContext {
         if self.pcb_drc != main.pcb_drc {
             self.pcb_drc.clone_from(&main.pcb_drc);
         }
-        self.i18n = main.i18n.clone();
         if self.component_classes != main.component_classes {
             self.component_classes.clone_from(&main.component_classes);
         }

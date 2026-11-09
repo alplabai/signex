@@ -41,7 +41,11 @@ impl Signex {
             // follow-up and stay bool.
             // "Update from library" reads the library off-thread.
             if let crate::panels::PanelMsg::UpdateSymbolFromLibrary(uuid) = panel_msg {
-                let task = self.update_symbol_from_library(*uuid);
+                let task = self.update_symbol_from_library(*uuid, false);
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::UpdateSymbolFromLibraryOnly(uuid) = panel_msg {
+                let task = self.update_symbol_from_library(*uuid, true);
                 return Task::batch([task, self.finish_update()]);
             }
             if let crate::panels::PanelMsg::PlacedPartAction(action) = panel_msg {
