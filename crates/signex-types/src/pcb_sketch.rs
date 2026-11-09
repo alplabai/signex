@@ -57,6 +57,10 @@ pub struct PcbHole {
     /// Whether the hole is plated.
     #[serde(default)]
     pub plated: bool,
+    /// The net a plated hole joins (for example GND), or `None` for an
+    /// isolated or unplated hole (Caner, 2026-11-09).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub net: Option<u32>,
 }
 
 #[cfg(test)]
@@ -109,8 +113,21 @@ mod tests {
             position: Point { x: 4.0, y: 4.0 },
             drill: 3.2,
             plated: false,
+            net: None,
         };
         let json = serde_json::to_string(&hole).unwrap();
+        assert!(
+            !json.contains("net"),
+            "an isolated hole writes no net: {json}"
+        );
         assert_eq!(serde_json::from_str::<PcbHole>(&json).unwrap(), hole);
+
+        let grounded = PcbHole {
+            plated: true,
+            net: Some(1),
+            ..hole
+        };
+        let json = serde_json::to_string(&grounded).unwrap();
+        assert_eq!(serde_json::from_str::<PcbHole>(&json).unwrap(), grounded);
     }
 }
