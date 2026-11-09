@@ -116,9 +116,16 @@ in the middle of continues.
   reason comes back as the result line's `reason` (`undo` and `redo`, which
   are the person's; `save_document`, `close_active_document` and
   `assign_net_class`, held back; a command with a file path; anything that
-  does not name its document). A `document` given as an id is resolved by the
-  app, which confines it to the documents of the projects it has open; one
-  given as a path is confined here like any path.
+  does not name its document). Every `document` operand, an id or a path, in
+  the command and in each edit of `apply_edits`, is first resolved by the app
+  (a `document_info` query on the same connection) to the file it holds, and
+  that file is confined like a path operand: inside the project folder or
+  an `--allow-path`, no link out. A document of another project the same app has
+  open is refused, as in a headless run; an id the app does not know is refused
+  with the app's reason. The side writes of a save are not checked here: the app
+  refuses every file-writing command for an agent. The resolve and the command
+  are two requests, so a document that is re-pointed between them (a person
+  saving as, closing and reopening) is the same residual race as above.
 - **Dry run.** Nothing is written to disk by the CLI when attached. What a
   command changes stays in the person's open app as unsaved changes; the
   person saves, or undoes it. (`--save` lets a `save_document` through the CLI's

@@ -18,7 +18,7 @@ use signex_app::task_driver::TaskDriver;
 use signex_types::project::{ErcRules, RuleProfile};
 
 use crate::capability::capability_of;
-use crate::edits::authorize_edits;
+use crate::edits::{authorize_edits, named_document_paths};
 use crate::policy::{Approved, Policy};
 use crate::protocol::{Mode, Request, ResultLine, Status};
 use crate::roots::folder_and_roots;
@@ -203,27 +203,9 @@ impl Session {
     /// no link out, within the size cap). An operand that names no document
     /// is refused with the app's reason.
     fn named_document_paths(&mut self, approved: &Approved) -> Result<Vec<PathBuf>, String> {
-        let writes = capability_of(approved.meta).writes_files();
-        let mut paths = Vec::new();
-        for (name, text) in &approved.operands {
-            let is_document = approved
-                .meta
-                .operands
-                .iter()
-                .any(|operand| operand.name == *name && operand.kind == OperandKind::Document);
-            if !is_document {
-                continue;
-            }
-            let path = self
-                .app
-                .document_path(text)
-                .map_err(|why| format!("operand `{name}`: {why}"))?;
-            self.policy
-                .check_resolved(&path, &self.roots, writes)
-                .map_err(|why| format!("operand `{name}`: {why}"))?;
-            paths.push(path);
-        }
-        Ok(paths)
+        named_document_paths(&self.policy, &self.roots, approved, |text| {
+            self.app.document_path(text)
+        })
     }
 
     /// The files saving the `named` documents writes besides them, each

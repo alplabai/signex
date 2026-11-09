@@ -11,7 +11,8 @@ use std::path::{Path, PathBuf};
 
 use signex_app::headless::agent_client::{Connection, Reply};
 
-use crate::edits::authorize_edits;
+use crate::capability::capability_of;
+use crate::edits::{authorize_edits, named_document_paths};
 use crate::policy::Policy;
 use crate::protocol::{Mode, Request, ResultLine, Status};
 use crate::roots::folder_and_roots;
@@ -75,20 +76,25 @@ impl Attached {
             .policy
             .authorize(request, &self.project_dir, &self.roots)
             .map_err(refused)?;
-        // A `document` given as an id is resolved by the app, which confines
-        // it to the documents of the projects it has open.
-        authorize_edits(
-            &self.policy,
-            &self.project_dir,
-            &self.roots,
-            &mut approved,
-            |_| Ok(()),
-        )
+        let (policy, roots, connection) = (&self.policy, &self.roots, &mut self.connection);
+        // Every `document` operand, an id or a path, in the command and in
+        // each edit, is resolved by the app to the file it holds and confined
+        // like any path: the app only knows which projects are open, and
+        // another open project is not this run's to touch.
+        authorize_edits(policy, &self.project_dir, roots, &mut approved, |checked| {
+            named_document_paths(policy, roots, checked, |text| resolve(connection, text)).map(drop)
+        })
         .map_err(refused)?;
-        self.policy
-            .recheck(&approved, &self.roots)
-            .map_err(refused)?;
-        self.connection
+        policy.recheck(&approved, roots).map_err(refused)?;
+        let named =
+            named_document_paths(policy, roots, &approved, |text| resolve(connection, text))
+                .map_err(refused)?;
+        // A save is refused by the app for an agent; the side writes of a save
+        // (the project file, other sheets) are therefore never reached.
+        if capability_of(approved.meta).writes_files() {
+            policy.check_write_targets(&named, roots).map_err(refused)?;
+        }
+        connection
             .ask(approved.command.as_str(), &approved.operands)
             .map_err(|why| (Status::Failed, why))
     }
@@ -106,4 +112,24 @@ impl Attached {
             changed: Vec::new(),
         }
     }
+}
+
+/// The file the running app holds the document `text` (an id or a path) as,
+/// from its `document_info` answer; the app's reason when it holds none.
+fn resolve(connection: &mut Connection, text: &str) -> Result<PathBuf, String> {
+    let reply = connection.ask(
+        "document_info",
+        &[("document".to_string(), text.to_string())],
+    )?;
+    if reply.status != Status::Answered {
+        return Err(reply
+            .reason
+            .unwrap_or_else(|| "the running Signex does not know it".to_string()));
+    }
+    reply
+        .data
+        .as_ref()
+        .and_then(|data| data["path"].as_str())
+        .map(PathBuf::from)
+        .ok_or_else(|| "it has no file".to_string())
 }

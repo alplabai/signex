@@ -1,13 +1,45 @@
-//! The edits of an `apply_edits` call, each authorized as a command of its
-//! own: the one check a headless run and an attached run both make before the
-//! call goes anywhere.
+//! The checks a headless run and an attached run both make before a command
+//! goes anywhere: each edit of an `apply_edits` call authorized as a command of
+//! its own, and every `document` operand resolved by the app and confined.
 
 use std::path::{Path, PathBuf};
 
 use signex_app::headless::{edit_list_text, parse_edit_list};
+use signex_app::keymap::OperandKind;
 
+use crate::capability::capability_of;
 use crate::policy::{Approved, Policy};
 use crate::protocol::Request;
+
+/// The files the `document` operands of `approved` name, resolved by the app
+/// (`resolve`: an id or a path to the file it is held as, or the app's reason)
+/// and each checked like a path operand (inside the allowed folders, no link
+/// out, within the size cap). An operand that names no document is refused.
+pub(crate) fn named_document_paths(
+    policy: &Policy,
+    roots: &[PathBuf],
+    approved: &Approved,
+    mut resolve: impl FnMut(&str) -> Result<PathBuf, String>,
+) -> Result<Vec<PathBuf>, String> {
+    let writes = capability_of(approved.meta).writes_files();
+    let mut paths = Vec::new();
+    for (name, text) in &approved.operands {
+        let is_document = approved
+            .meta
+            .operands
+            .iter()
+            .any(|operand| operand.name == *name && operand.kind == OperandKind::Document);
+        if !is_document {
+            continue;
+        }
+        let path = resolve(text).map_err(|why| format!("operand `{name}`: {why}"))?;
+        policy
+            .check_resolved(&path, roots, writes)
+            .map_err(|why| format!("operand `{name}`: {why}"))?;
+        paths.push(path);
+    }
+    Ok(paths)
+}
 
 /// Authorize every edit of `approved` (an `apply_edits` call; any other
 /// command has none) like a command of its own (not `gui_only`, the `edit`

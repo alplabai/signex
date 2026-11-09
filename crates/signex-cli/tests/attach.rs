@@ -25,6 +25,11 @@ const CC: &str = "cccccccccccccccc";
 const TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 /// Above every system's process id limit.
 const DEAD_PID: u32 = 2_000_000_000;
+/// A sheet of the run's project, and one of another project the same app has
+/// open (a folder the run was never given), by id.
+const SHEET_A: &str = "11111111-1111-4111-8111-111111111111";
+const SHEET_B: &str = "22222222-2222-4222-8222-222222222222";
+const OTHER_PROJECT_SHEET: &str = "/somewhere/else/ProjectB/b.snxsch";
 
 /// A runtime folder (`$XDG_RUNTIME_DIR/signex-agent`) and a project.
 struct World {
@@ -103,7 +108,13 @@ impl World {
         listener.set_nonblocking(true).unwrap();
         self.token(CC, 0o600);
         self.plant("gui", std::process::id(), CC, &socket);
-        FakeApp::serve(listener, replies)
+        let sheet = self.fx.sheet.to_str().unwrap().to_string();
+        let docs = vec![
+            (sheet.clone(), sheet.clone()),
+            (SHEET_A.into(), sheet),
+            (SHEET_B.into(), OTHER_PROJECT_SHEET.into()),
+        ];
+        FakeApp::serve(listener, replies, docs)
     }
 }
 
@@ -116,7 +127,10 @@ struct FakeApp {
 }
 
 impl FakeApp {
-    fn serve(listener: UnixListener, replies: &[Value]) -> Self {
+    /// `docs` maps a document operand (an id or a path) to the file the app
+    /// holds it as; `document_info` is answered from it and does not use up
+    /// one of `replies`.
+    fn serve(listener: UnixListener, replies: &[Value], docs: Vec<(String, String)>) -> Self {
         let requests = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
         let mut replies: VecDeque<Value> = replies.iter().cloned().collect();
@@ -131,11 +145,20 @@ impl FakeApp {
                 let mut reader = BufReader::new(stream);
                 let mut line = String::new();
                 while reader.read_line(&mut line).unwrap_or(0) > 0 {
-                    seen.lock()
-                        .unwrap()
-                        .push(serde_json::from_str(&line).unwrap());
+                    let request: Value = serde_json::from_str(&line).unwrap();
+                    seen.lock().unwrap().push(request.clone());
                     line.clear();
-                    let reply = replies.pop_front().unwrap_or_else(|| json!({}));
+                    let reply = if request["id"] == "document_info" {
+                        let asked = request["args"]["document"].as_str().unwrap_or_default();
+                        match docs.iter().find(|(text, _)| text == asked) {
+                            Some((_, path)) => json!({"id": "document_info", "status": "answered",
+                                "data": {"path": path}, "messages": [], "changed": []}),
+                            None => json!({"id": "document_info", "status": "refused",
+                                "reason": "no document has the id", "messages": [], "changed": []}),
+                        }
+                    } else {
+                        replies.pop_front().unwrap_or_else(|| json!({}))
+                    };
                     writeln!(reader.get_mut(), "{reply}").unwrap();
                 }
             }
@@ -147,11 +170,15 @@ impl FakeApp {
         }
     }
 
-    /// Stop serving and return every request line it was sent.
+    /// Stop serving and return every command it was sent (not the
+    /// `document_info` lookups that check a document before a command).
     fn finish(mut self) -> Vec<Value> {
         self.stop.store(true, Ordering::SeqCst);
         self.thread.take().unwrap().join().unwrap();
-        self.requests.lock().unwrap().clone()
+        let sent = self.requests.lock().unwrap().clone();
+        sent.into_iter()
+            .filter(|request| request["id"] != "document_info")
+            .collect()
     }
 }
 
@@ -283,6 +310,68 @@ fn the_runs_policy_applies_before_anything_is_sent_and_the_apps_refusals_come_ba
     assert_eq!(sent[0]["id"], "save_document");
 }
 
+/// The app only knows which projects it has open: a document of another open
+/// project, named by id, is resolved to its file and confined like a path.
+#[test]
+fn a_document_of_another_open_project_is_refused_by_id_and_this_projects_is_not() {
+    let w = world();
+    let app = w.app(&[]);
+    let edit = |args: Value| json!({"id": "place_junction", "args": args});
+    let on_b = json!({"document": SHEET_B, "edits": [edit(json!({"at": [1, 2]}))]});
+    let nested = json!({"document": SHEET_A, "edits": [
+        {"id": "color_net", "args": {"document": SHEET_B, "at": [0, 0], "color": "#336699"}}]});
+    let unknown = json!({"document": "33333333-3333-4333-8333-333333333333", "edits": []});
+    let commands = jsonl(&[
+        json!({"id": "read_document", "args": {"document": SHEET_B}}),
+        json!({"id": "apply_edits", "args": on_b}),
+        json!({"id": "apply_edits", "args": nested}),
+        json!({"id": "document_info", "args": {"document": unknown["document"]}}),
+        json!({"id": "apply_edits", "args": unknown}),
+    ]);
+    let out = w.cli(&["run", w.project(), "--keep-going"], &commands);
+    let sent = app.finish();
+
+    assert_eq!(out.lines.len(), 5, "{}", out.stdout);
+    for (index, line) in out.lines.iter().enumerate() {
+        assert_eq!(line["status"], "refused", "line {index}: {line}");
+    }
+    let reason = |index: usize| out.lines[index]["reason"].as_str().unwrap().to_string();
+    assert!(reason(0).contains("--allow-path"), "{}", reason(0));
+    assert!(reason(1).contains("--allow-path"), "{}", reason(1));
+    assert!(
+        reason(2).starts_with("edit 1 (`color_net`)"),
+        "{}",
+        reason(2)
+    );
+    assert!(
+        reason(3).contains("no document has the id"),
+        "{}",
+        reason(3)
+    );
+    assert!(
+        reason(4).contains("no document has the id"),
+        "{}",
+        reason(4)
+    );
+    assert!(sent.is_empty(), "a command reached the app: {sent:?}");
+
+    // A document of this project, by id, goes through.
+    let w = world();
+    let done = json!({"id": "apply_edits", "status": "answered", "data": {},
+        "messages": [], "changed": []});
+    let app = w.app(&[answered(json!({}), &[]), done]);
+    let commands = jsonl(&[
+        json!({"id": "read_document", "args": {"document": SHEET_A}}),
+        json!({"id": "apply_edits", "args": {"document": SHEET_A,
+            "edits": [edit(json!({"at": [1, 2]}))]}}),
+    ]);
+    let out = w.cli(&["run", w.project()], &commands);
+    let sent = app.finish();
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    assert_eq!(sent.len(), 2);
+    assert_eq!(sent[1]["args"]["document"], SHEET_A);
+}
+
 #[test]
 fn a_stale_entry_is_removed_and_the_run_is_headless() {
     for (why, kind, pid, boot, socket) in [
@@ -344,6 +433,7 @@ fn a_planted_entry_naming_another_socket_is_stale_and_that_socket_is_never_conne
             listener
         },
         &[],
+        Vec::new(),
     );
     w.token(CC, 0o600);
     // A live process, and a socket that answers: not the one CC names.
