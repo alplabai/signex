@@ -378,6 +378,34 @@ fn closing_a_sheet_the_person_is_typing_the_title_block_of_is_refused_and_the_dr
 }
 
 #[test]
+fn closing_a_sheet_the_person_is_typing_a_paper_edge_of_is_refused_and_the_draft_stays() {
+    let mut app = app_at_work();
+    let a = path("a.snxsch");
+    app.document_state
+        .drafts
+        .set_paper_edge(&a, crate::panels::PaperEdge::Width, "4");
+    let request = line(
+        &app,
+        "close_active_document",
+        json!({"document": doc("a.snxsch")}),
+    );
+    refuse_line(
+        &mut app,
+        request,
+        "`close_active_document`",
+        "or page settings",
+    );
+    assert_eq!(
+        app.document_state
+            .drafts
+            .paper_edge_text(&a, crate::panels::PaperEdge::Width)
+            .as_deref(),
+        Some("4")
+    );
+    assert!(app.document_state.tabs.iter().any(|t| t.path == a));
+}
+
+#[test]
 fn closing_a_document_shown_in_a_window_of_its_own_is_refused_and_changes_nothing() {
     let mut app = app_at_work();
     app.ui_state.windows.insert(

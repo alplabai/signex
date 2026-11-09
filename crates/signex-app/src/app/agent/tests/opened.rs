@@ -114,6 +114,7 @@ fn closing_another_dirty_sheet_parks_it_with_its_edits_and_the_person_is_as_they
     let tabs = app.document_state.tabs.len();
     arm(&mut app);
     let person = person_without_tabs(&app);
+    let b_engine = app.document_state.engines[&path("b.snxsch")].instance_id();
 
     let closed = call(
         &mut app,
@@ -122,8 +123,11 @@ fn closing_another_dirty_sheet_parks_it_with_its_edits_and_the_person_is_as_they
     );
 
     assert_eq!(closed["status"], "ran", "{closed}");
-    // No sheet is reloaded, so no load-time warning is logged again.
-    assert_eq!(closed["messages"], json!([]), "{closed}");
+    // The person's sheet is not reloaded or replaced.
+    assert_eq!(
+        app.document_state.engines[&path("b.snxsch")].instance_id(),
+        b_engine
+    );
     assert_eq!(app.document_state.tabs.len(), tabs - 1);
     assert!(app.document_state.tabs.iter().all(|tab| tab.path != a));
     // Parked, not discarded: the engine and its edits stay, still unsaved.
@@ -260,4 +264,23 @@ fn assigning_a_net_class_on_a_background_sheet_leaves_the_person_as_they_were() 
         ["VCC"]
     );
     assert_eq!(snapshot(&app), person);
+}
+
+/// Outside an agent request (a headless run, which has no person) a close
+/// takes the normal path, tab sync included: the gate is the agent's alone.
+#[test]
+fn a_close_that_is_not_an_agent_request_takes_the_normal_path() {
+    let mut app = mid_interaction();
+    let id = crate::keymap::AppCommandId::new("close_active_document").unwrap();
+    let operands = format!("document={}", path("a.snxsch").display());
+    let args = crate::app::command::CommandArgs::parse_operands(&id, &[operands.as_str()]).unwrap();
+    assert!(!app.agent.serving);
+
+    let (outcome, _task) = app.run_operands(&id, &args);
+
+    assert_eq!(outcome, crate::app::command::CommandOutcome::Ran);
+    assert!(
+        app.interaction_state.editing_text.is_none(),
+        "the normal close syncs the active tab, which ends an open text edit"
+    );
 }

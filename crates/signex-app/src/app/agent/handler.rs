@@ -425,13 +425,17 @@ impl Signex {
                     entry.name
                 ));
             }
-            if entry.path.as_ref().is_some_and(|path| {
-                self.document_state
-                    .drafts
-                    .title_block_sheets()
-                    .contains(path)
-            }) {
-                return Err("the person is editing this sheet's title block".to_string());
+            // Closing drops a sheet's drafts of every kind (title block,
+            // paper edge): the person's unconfirmed typing is not the agent's
+            // to finish or lose.
+            if entry
+                .path
+                .as_ref()
+                .is_some_and(|path| self.document_state.drafts.has_sheet(path))
+            {
+                return Err(
+                    "the person is editing this sheet's title block or page settings".to_string(),
+                );
             }
         }
         Ok(())
