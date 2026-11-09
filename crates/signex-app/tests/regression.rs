@@ -322,6 +322,10 @@ mod cross_sheet_multiple_names;
 #[path = "regression/cross_probe.rs"]
 mod cross_probe;
 
+// #1312 — Update PCB from schematic, its entry points and New PCB.
+#[path = "regression/update_pcb.rs"]
+mod update_pcb;
+
 // #1836 — hierarchy mistakes the project ERC must report.
 #[path = "regression/hierarchy_checks.rs"]
 mod hierarchy_checks;

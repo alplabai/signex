@@ -128,6 +128,7 @@ impl Signex {
             Message::PcbCanvas(msg) => self.dispatch_pcb_canvas_message(msg),
             Message::Pcb(msg) => self.dispatch_pcb_message(msg),
             Message::CrossProbe(msg) => self.dispatch_cross_probe_message(msg),
+            Message::UpdatePcb(msg) => self.dispatch_update_pcb_message(msg),
         }
     }
 

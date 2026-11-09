@@ -224,6 +224,26 @@ impl EcoRow {
     }
 }
 
+/// The tick state of one group: `on` of its `open` (not blocked) rows are
+/// ticked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GroupTicks {
+    pub on: usize,
+    pub open: usize,
+}
+
+impl GroupTicks {
+    /// Every open row is ticked (and there is one).
+    pub fn all(self) -> bool {
+        self.open > 0 && self.on == self.open
+    }
+
+    /// Some open rows are ticked and some are not.
+    pub fn mixed(self) -> bool {
+        self.on > 0 && self.on < self.open
+    }
+}
+
 /// The whole list, for the board at `revision`.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct EcoChangeList {
@@ -273,6 +293,34 @@ impl EcoChangeList {
             self.row(k)
                 .is_some_and(|needed| self.applies_within(needed, seen))
         })
+    }
+
+    /// How many rows of `group` can be ticked (not blocked), and how many of
+    /// them are: the group checkbox is on when all are, off when none is,
+    /// mixed between.
+    pub fn group_ticks(&self, group: EcoGroup) -> GroupTicks {
+        let open = self
+            .rows
+            .iter()
+            .filter(|r| r.group == group && r.blocked.is_none());
+        let (on, open) = open.fold((0, 0), |(on, all), r| (on + usize::from(r.on), all + 1));
+        GroupTicks { on, open }
+    }
+
+    /// Tick or untick every row of `group` that is not blocked. Returns
+    /// whether a footprint row changed, as [`Self::set_on`] does.
+    pub fn set_group_on(&mut self, group: EcoGroup, on: bool) -> bool {
+        let keys: Vec<EcoKey> = self
+            .rows
+            .iter()
+            .filter(|r| r.group == group)
+            .map(|r| r.key.clone())
+            .collect();
+        let mut footprint_changed = false;
+        for key in &keys {
+            footprint_changed |= self.set_on(key, on);
+        }
+        footprint_changed
     }
 
     /// The keys ticked now.

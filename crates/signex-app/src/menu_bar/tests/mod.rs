@@ -167,6 +167,7 @@ pub(super) fn menu_context_in(app: &Signex, window: Option<iced::window::Id>) ->
         open_panels: app.open_panels(),
         i18n: std::sync::Arc::clone(&app.ui_state.i18n),
         cross_select: app.interaction_state.cross_select.enabled,
+        pcb_sync: app.pcb_sync_label(window),
     }
 }
 
@@ -274,6 +275,8 @@ pub(super) struct Probe {
     /// Edit ▸ Move arms a pick on a sheet or a board (#2240).
     pub move_pick: bool,
     pub pcb_carry: bool,
+    /// Design ▸ Update PCB Document opens the Update PCB dialog (#1312).
+    pub update_pcb: bool,
 }
 
 pub(super) fn probe(app: &Signex) -> Probe {
@@ -346,6 +349,7 @@ pub(super) fn probe(app: &Signex) -> Probe {
             .unwrap_or_default(),
         move_pick: app.ui_state.move_pick.is_some(),
         pcb_carry: app.interaction_state.pcb_carry.is_some(),
+        update_pcb: app.ui_state.update_pcb.is_some(),
     }
 }
 

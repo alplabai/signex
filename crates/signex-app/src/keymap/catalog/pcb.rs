@@ -87,4 +87,16 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #1312: the project's one board, from the project defaults, opened
+    // unsaved (File > New > PCB, Projects > Add New > PCB).
+    CommandMetadata {
+        id: "new_pcb_document",
+        category: "file",
+        label: "New PCB in the project",
+        menu_label: Some("PCB"),
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        ..CommandMetadata::DEFAULT
+    },
 ];

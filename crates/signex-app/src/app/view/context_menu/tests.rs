@@ -15,6 +15,7 @@ use signex_widgets::tree_view::TreeIcon;
 
 mod new_project_row;
 mod row_effects;
+mod update_pcb_rows;
 
 const TID: ThemeId = ThemeId::GraphiteDark;
 

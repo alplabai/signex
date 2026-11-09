@@ -446,14 +446,17 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #1312: the Update PCB dialog, from a schematic or (Import Changes) a
+    // board of a project. Execute is one undo step on the board.
     CommandMetadata {
         id: "update_pcb_from_schematic",
         category: "pcb_sync",
         label: "Update PCB from schematic",
         menu_label: None,
         group: CommandGroup::Schematic,
-        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::APPLY,
         ..CommandMetadata::DEFAULT
     },
 ];

@@ -137,6 +137,9 @@ pub enum Message {
     /// Cross Probe and Cross Select Mode between the schematic and the
     /// board (#1312). Routed to `dispatch_cross_probe_message`.
     CrossProbe(CrossProbeMsg),
+    /// Update PCB from schematic and New PCB (#1312). Routed to
+    /// `dispatch_update_pcb_message`.
+    UpdatePcb(crate::app::UpdatePcbMsg),
     /// Export subsystem message family — namespaced (ADR-0001 D3).
     /// PDF / netlist / BOM export lifecycle plus the export-error
     /// modal dismiss. Routed to `dispatch_export_message`.

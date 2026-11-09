@@ -184,6 +184,9 @@ use super::model::{ItemState, Menu, MenuEntry, menu_bar_model};
 /// pins which row runs which command.
 const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("new_document", "NewProject"),
+    // #1312: fixture names only, like #2247's.
+    ("new_pcb_document", "NewPcb"),
+    ("update_pcb_from_schematic", "UpdatePcb"),
     ("open_document", "OpenProject"),
     ("close_active_document", "CloseDocument"),
     ("save_document", "Save"),

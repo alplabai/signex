@@ -102,6 +102,8 @@ pub(crate) struct MenuInputs {
     i18n: Arc<signex_i18n::I18n>,
     /// Cross Select Mode is on: its Tools row shows a check mark (#1312).
     cross_select: bool,
+    /// What Design ▸ Update PCB Document names (#1312).
+    pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
 }
 
 impl PartialEq for MenuInputs {
@@ -111,6 +113,7 @@ impl PartialEq for MenuInputs {
             && self.locked == other.locked
             && self.open_panels == other.open_panels
             && self.cross_select == other.cross_select
+            && self.pcb_sync == other.pcb_sync
             && match (&self.keymap, &other.keymap) {
                 (Some(a), Some(b)) => Arc::ptr_eq(a, b),
                 (None, None) => true,
@@ -139,7 +142,22 @@ impl MenuInputs {
             keymap: None,
             i18n,
             cross_select: true,
+            pcb_sync: None,
         }
+    }
+
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // set by the macOS sync
+    pub(crate) fn with_pcb_sync(
+        mut self,
+        label: Option<crate::app::update_pcb::PcbSyncLabel>,
+    ) -> Self {
+        self.pcb_sync = label;
+        self
+    }
+
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub(crate) fn pcb_sync(&self) -> Option<crate::app::update_pcb::PcbSyncLabel> {
+        self.pcb_sync.clone()
     }
 
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // set by the macOS sync

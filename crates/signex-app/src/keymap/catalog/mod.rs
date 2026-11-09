@@ -370,6 +370,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "run_erc",
     "open_erc_dialog",
     "update_pcb_from_schematic",
+    "new_pcb_document",
 ];
 
 /// The editor contexts in which `command` can act, or `None` when it is

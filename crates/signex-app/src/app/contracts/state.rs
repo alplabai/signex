@@ -395,6 +395,12 @@ pub enum ProjectTreeAction {
     /// blank `.snxsch`, registers it as a SheetEntry, marks the
     /// project dirty, and refreshes the tree (no tab opens).
     AddNewSchematic(signex_widgets::tree_view::TreeKey),
+    /// Project root → Add New ▸ PCB: the project's one board, from its
+    /// defaults, opened unsaved (#1312).
+    AddNewPcb(signex_widgets::tree_view::TreeKey),
+    /// Project root → Update PCB Document: the Update PCB dialog for that
+    /// project (#1312).
+    UpdatePcb(signex_widgets::tree_view::TreeKey),
     /// project-root → Add New ▸ Symbol Library. Save-As dialog
     /// scoped to the project dir, writes an empty `.snxsym`, opens
     /// the file as a primitive editor tab. Altium parity: Schematic
@@ -447,6 +453,8 @@ impl ProjectTreeAction {
             | OpenProjectOptions(k)
             | AddExistingToProject(k)
             | AddNewSchematic(k)
+            | AddNewPcb(k)
+            | UpdatePcb(k)
             | AddProjectSymbolLibrary(k)
             | AddProjectFootprintLibrary(k)
             | OpenEnableVersionControl(k) => Some(k),

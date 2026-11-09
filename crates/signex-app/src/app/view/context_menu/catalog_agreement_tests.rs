@@ -74,6 +74,8 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
         "planned, tree-addressed",
     ),
     ("Validate Project", "tree-addressed"),
+    // #1312: runs for the clicked project, which the palette cannot name.
+    ("Update PCB Document", "tree-addressed"),
     ("Add Existing to Project...", "tree-addressed"),
     ("Rename...", "tree-addressed"),
     ("Close Project Documents", "tree-addressed"),

@@ -223,6 +223,9 @@ pub struct MenuContext<'a> {
     /// Cross Select Mode is on: Tools ▸ Cross Select Mode shows a check
     /// mark (#1312). On by default, like the mode.
     pub cross_select: bool,
+    /// What Design ▸ Update PCB Document names: the board a schematic in
+    /// view updates, or the project a board imports from (#1312).
+    pub(crate) pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
 }
 
 impl Default for MenuContext<'_> {
@@ -235,6 +238,7 @@ impl Default for MenuContext<'_> {
             open_panels: Vec::new(),
             i18n: signex_i18n::I18n::en_us(),
             cross_select: true,
+            pcb_sync: None,
         }
     }
 }

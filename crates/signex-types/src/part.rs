@@ -95,6 +95,10 @@ pub struct ResolvedFootprint {
 pub enum FootprintResolveError {
     #[error("the part binds no footprint")]
     NoFootprint,
+    /// The part names a library row that no open library holds (the library
+    /// is not open, or the row was deleted).
+    #[error("row {row} of library {library} is not in an open library")]
+    RowNotFound { library: Uuid, row: Uuid },
     #[error("footprint {footprint} of library {library} is not one the part offers")]
     NotOffered { library: Uuid, footprint: Uuid },
     #[error(

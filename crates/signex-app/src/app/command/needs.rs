@@ -42,6 +42,11 @@ pub(crate) enum Needs {
     PcbPlacement,
     /// Cross Probe: something selected on the board or sheet in view (#1312).
     ProbeTarget,
+    /// Update PCB: a schematic or a board in view, with a project open
+    /// (#1312).
+    PcbSync,
+    /// New PCB: a project is open.
+    OpenProject,
     Library,
 }
 
@@ -101,6 +106,14 @@ impl Needs {
             Self::PcbPlacement => ctx.pcb.shown && ctx.pcb.placeable,
             Self::ProbeTarget if ctx.pcb.shown => ctx.pcb.any,
             Self::ProbeTarget => ctx.has_schematic && ctx.has_selection,
+            Self::PcbSync => {
+                ctx.has_open_project
+                    && (ctx.has_schematic
+                        || ctx.has_pcb
+                        || ctx.document_is_schematic
+                        || ctx.pcb.shown)
+            }
+            Self::OpenProject => ctx.has_open_project,
             // Library Editor focuses an open Library Browser tab, else opens the
             // first open library.
             Self::Library => ctx.has_open_library,
@@ -141,6 +154,8 @@ impl Needs {
             Self::MoveObject => "No schematic or PCB is open",
             Self::PcbPlacement => "No unlocked footprint is selected on a PCB",
             Self::ProbeTarget => "Nothing is selected on the sheet or board to cross probe",
+            Self::PcbSync => "No schematic or PCB of an open project is in view",
+            Self::OpenProject => "No project is open",
             Self::Library => "No library is open",
         }
     }
@@ -219,6 +234,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
         "run_drc" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
+        "update_pcb_from_schematic" => Needs::PcbSync,
+        "new_pcb_document" => Needs::OpenProject,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => Needs::FitTarget,

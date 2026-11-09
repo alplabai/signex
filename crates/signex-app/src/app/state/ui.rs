@@ -419,6 +419,9 @@ pub struct UiState {
     /// The New Project setup dialog, while open (#2232). Nothing is on disk
     /// until its Create.
     pub new_project: Option<crate::app::NewProjectState>,
+    /// The Update PCB dialog, while open, or a headless `apply=true` run
+    /// (#1312).
+    pub update_pcb: Option<crate::app::UpdatePcbState>,
     /// The Find Similar Objects dialog, while open (#1257).
     pub find_similar: Option<crate::find_similar::FindSimilarState>,
     /// Token of the newest Find Similar project search. Lives outside the

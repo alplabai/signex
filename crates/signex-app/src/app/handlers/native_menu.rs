@@ -79,6 +79,7 @@ impl Signex {
         )
         .with_keymap(Arc::clone(&self.ui_state.active_keymap))
         .with_cross_select(self.interaction_state.cross_select.enabled)
+        .with_pcb_sync(self.pcb_sync_label(self.native_menu_window()))
     }
 
     /// Rebuild the native spec and apply it, only when what it reads

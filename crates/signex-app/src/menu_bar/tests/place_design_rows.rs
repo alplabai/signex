@@ -328,3 +328,62 @@ fn wiring_rows_close_an_open_active_bar_menu_and_remember_the_tool() {
         );
     }
 }
+
+/// The first Design row, as the main window's bar draws it now.
+fn update_pcb_row(app: &Signex) -> MenuItem {
+    let model = menu_bar_model(&menu_context(app));
+    let design = model
+        .menus
+        .iter()
+        .find(|m| m.title == "Design")
+        .expect("Design menu");
+    match design.entries.first() {
+        Some(MenuEntry::Item(item)) => item.clone(),
+        other => panic!("Design starts with a row, got {other:?}"),
+    }
+}
+
+/// #1312: on a project's sheet the row names the project's board and opens
+/// the Update PCB dialog.
+#[test]
+fn design_update_pcb_names_the_board_on_a_sheet_and_opens_the_dialog() {
+    let mut app = one_symbol_selected();
+    let index = open_project(&mut app, "P.snxprj");
+    app.document_state.projects[index].data.pcb_file = Some("P.snxpcb".to_string());
+    let row = update_pcb_row(&app);
+    assert!(
+        row.label.starts_with("Update PCB Document"),
+        "{}",
+        row.label
+    );
+    assert!(row.label.contains("P.snxpcb"), "{}", row.label);
+    assert!(row.is_enabled());
+    let _ = app.update(Message::Menu(row.dispatches().expect("live").clone()));
+    assert!(app.ui_state.update_pcb.is_some(), "the dialog opened");
+}
+
+/// #1312: on a project's board the same row reads Import Changes From the
+/// project; without a project it is greyed.
+#[test]
+fn design_update_pcb_reads_import_changes_on_a_board() {
+    let mut app = loaded_board_app();
+    assert!(!update_pcb_row(&app).is_enabled(), "no project: greyed");
+    open_project(&mut app, "P.snxprj");
+    let row = update_pcb_row(&app);
+    assert!(
+        row.label.starts_with("Import Changes From"),
+        "{}",
+        row.label
+    );
+    assert!(row.label.contains("P.snxprj"), "{}", row.label);
+    assert!(row.is_enabled());
+}
+
+/// #1312: File ▸ New ▸ PCB is live with a project open and greyed without.
+#[test]
+fn file_new_pcb_follows_the_open_project() {
+    let mut app = bare_app();
+    assert!(!row_is_live(&app, "File/New/PCB"));
+    open_project(&mut app, "P.snxprj");
+    assert!(row_is_live(&app, "File/New/PCB"));
+}

@@ -102,6 +102,7 @@ pub(crate) fn build_for(inputs: &MenuInputs) -> NativeBuild {
         active_keymap: inputs.keymap(),
         i18n: inputs.i18n(),
         cross_select: inputs.cross_select(),
+        pcb_sync: inputs.pcb_sync(),
         ..super::MenuContext::default()
     };
     build(&super::model::menu_bar_model(&ctx), inputs.locked())

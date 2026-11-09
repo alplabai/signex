@@ -33,7 +33,7 @@ mod nets;
 mod report;
 
 pub use change::{
-    ChangeReason, EcoBlock, EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow,
+    ChangeReason, EcoBlock, EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow, GroupTicks,
 };
 pub use diff::diff_board;
 pub use lower::{EcoRefusal, check, lower};
@@ -42,6 +42,8 @@ pub use report::report_text;
 
 #[cfg(test)]
 mod fixture;
+#[cfg(test)]
+mod group_tests;
 #[cfg(test)]
 mod net_tests;
 #[cfg(test)]

@@ -67,7 +67,10 @@ Schematics... and Number Schematic Sheets....
 - Netlist (Protel .NET)...
 - ERC Report...
 
-**Design** keeps Parameter Manager... only. **File ▸ Export** keeps PDF only.
+**Design** has Update PCB Document (see
+[Design ▸ Update PCB Document](#design-update-pcb)), a separator, then
+Parameter Manager.... **File ▸ New** has PCB (`new_pcb_document`). **File ▸
+Export** keeps PDF only.
 Project tree actions with no menu message or command id (add or remove a
 document, Enable Version Control, History, Validate Project) stay in the tree's
 context menu; the menu gets no stub for them.
@@ -104,6 +107,24 @@ mark while the mode is on, which it is by default. While on, a selection on
 one side is selected in every sheet or board window on screen on the other
 side; it never opens a document or takes focus. The Altium preset binds it to
 Ctrl+Shift+X. How parts and nets are matched: `DECISIONS.md`, 2026-11-09.
+
+## Design ▸ Update PCB Document, File ▸ New ▸ PCB {#design-update-pcb}
+
+Design ▸ Update PCB Document runs `update_pcb_from_schematic` (#1312) and
+opens the Update PCB dialog for the project of the document in view. Its
+label follows that document: on a schematic it is Update PCB Document
+`<board>` (the project's board file, or no name when the project has none), on
+a board Import Changes From `<project>`. It is greyed unless a schematic or a
+board is in view and a project is open. The undocked windows' menu bars word
+and gate it by the window's own document. The same command is in the command
+palette, and the Projects tree's project row has an Update PCB Document row
+for the clicked project. No keymap preset binds it. The dialog:
+[UPDATE_PCB.md](UPDATE_PCB.md).
+
+File ▸ New ▸ PCB runs `new_pcb_document`: the project in view gets its board,
+named after the project, from its project defaults. It is greyed with no
+project open. Projects ▸ Add New ▸ PCB does the same for the clicked project.
+The board opens as an unsaved tab; nothing is written until Save.
 
 ## File ▸ Library {#file-library}
 

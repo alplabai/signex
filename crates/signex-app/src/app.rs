@@ -64,6 +64,7 @@ pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_depth;
 mod undo_groups;
+pub(crate) mod update_pcb;
 pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
 pub(crate) mod view;
 
@@ -100,6 +101,7 @@ pub use state::{
     PreviewState, ProjectId, Signex, UiState,
 };
 pub use symbol_history::SymbolHistorySnapshot;
+pub use update_pcb::{UpdatePcbMsg, UpdatePcbState};
 
 // Re-exported so modal dialogs outside `state` can reference the type.
 pub use state::AnnotateOrder;
@@ -120,6 +122,8 @@ impl Signex {
         // Cross select follows whatever this message selected, and a Cross
         // Probe asked for runs once its target is open (#1312).
         tasks.push(self.sync_cross_select());
+        // An Update PCB waiting for its board starts reading once it opened.
+        tasks.push(self.sync_update_pcb());
         self.sync_undo_depth();
         // A Save completed behind the quit prompt must not leave it listing
         // files that are no longer unsaved (#1833).

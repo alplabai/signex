@@ -2,11 +2,12 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_toggle, item, item_if, panel_item, stub, submenu,
-    unavailable,
+    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, item, item_if, panel_item, stub,
+    submenu, unavailable,
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
+use crate::app::update_pcb::PcbSyncLabel;
 use crate::menu_bar::{MenuContext, enabled};
 use crate::panels::PanelKind;
 
@@ -15,6 +16,11 @@ const SEP: MenuEntry = MenuEntry::Separator;
 pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         cmd_item(ctx, cmd("new_document", "New Project", "Ctrl+N")),
+        // A board for the open project (#1312); greyed with no project.
+        submenu(
+            "New",
+            vec![cmd_item_gated(ctx, cmd("new_pcb_document", "PCB", ""))],
+        ),
         cmd_item(ctx, cmd("open_document", "Open...", "Ctrl+O")),
         submenu("Open Recent", open_recent(ctx)),
         SEP,
@@ -262,10 +268,36 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
 }
 
 pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
-    vec![cmd_item_gated(
+    vec![
+        update_pcb_row(ctx),
+        SEP,
+        cmd_item_gated(
+            ctx,
+            cmd("open_parameter_manager", "Parameter Manager...", ""),
+        ),
+    ]
+}
+
+/// Design ▸ Update PCB Document `<board>` on a schematic, Import Changes
+/// From `<project>` on a board (#1312): one command, worded for the
+/// document in view.
+fn update_pcb_row(ctx: &MenuContext) -> MenuEntry {
+    use signex_i18n::{ids, t};
+    let i18n = &ctx.i18n;
+    let label = match &ctx.pcb_sync {
+        Some(PcbSyncLabel::UpdateBoard(Some(board))) => {
+            t!(i18n, ids::UPDATE_PCB_MENU_UPDATE_BOARD, "board" => board.as_str())
+        }
+        Some(PcbSyncLabel::ImportFrom(project)) => {
+            t!(i18n, ids::UPDATE_PCB_MENU_IMPORT, "project" => project.as_str())
+        }
+        Some(PcbSyncLabel::UpdateBoard(None)) | None => t!(i18n, ids::UPDATE_PCB_MENU_UPDATE),
+    };
+    cmd_item_gated_as(
         ctx,
-        cmd("open_parameter_manager", "Parameter Manager...", ""),
-    )]
+        cmd("update_pcb_from_schematic", "Update PCB Document", ""),
+        label.into_string(),
+    )
 }
 
 pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {

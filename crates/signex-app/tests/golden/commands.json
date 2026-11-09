@@ -505,6 +505,11 @@
     "category": "file"
   },
   {
+    "id": "new_pcb_document",
+    "group": "Pcb",
+    "category": "file"
+  },
+  {
     "id": "new_project_with_profile",
     "group": "General",
     "category": "file"

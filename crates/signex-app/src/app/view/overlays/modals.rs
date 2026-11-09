@@ -300,6 +300,16 @@ impl Signex {
             .then(|| self.view_new_project_dialog())
     }
 
+    /// Update PCB from Schematic (#1312); a headless `apply=true` run has no
+    /// dialog.
+    pub(in crate::app::view) fn update_pcb_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .update_pcb
+            .as_ref()
+            .is_some_and(|s| !s.apply)
+            .then(|| self.view_update_pcb_dialog())
+    }
+
     pub(in crate::app::view) fn selection_filter_custom_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {
