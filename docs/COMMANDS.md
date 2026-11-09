@@ -266,7 +266,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## PCB
 
-_No commands in this group yet._
+| command id | label | category | Altium | Classic |
+| --- | --- | --- | --- | --- |
+| `run_drc` | Run the design rule check on the board | pcb | — | — |
 
 ## 3D
 

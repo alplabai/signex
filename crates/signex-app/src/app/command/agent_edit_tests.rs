@@ -1140,13 +1140,22 @@ fn undo_of_a_mixed_agent_step_repaints_every_kind() {
 fn a_rolled_back_list_reports_only_its_refusal() {
     let mut app = app_idle();
     let mark = crate::diagnostics::newest_entry_id();
-    let reason = refusal(apply(
+    // A summary no other test sends: the log is shared with the tests running
+    // beside this one, and other lists of these two ids do apply (#2227).
+    let current = revision(&app, "b.snxsch");
+    let edits = json!([
+        {"id": "place_junction", "args": {"at": [20, 20]}},
+        {"id": "place_wire", "args": {"start": [5, 5], "end": [5, 5]}},
+    ]);
+    let reason = refusal(run(
         &mut app,
-        "b.snxsch",
-        json!([
-            {"id": "place_junction", "args": {"at": [20, 20]}},
-            {"id": "place_wire", "args": {"start": [5, 5], "end": [5, 5]}},
-        ]),
+        "apply_edits",
+        &[
+            format!("document={}", path("b.snxsch").display()),
+            format!("expect_revision={current}"),
+            format!("edits={edits}"),
+            "summary=rolled back list 2227".to_string(),
+        ],
     ));
     assert!(reason.contains("Nothing was applied"), "{reason}");
     let said: Vec<String> = crate::diagnostics::entries_since(mark)
@@ -1155,10 +1164,8 @@ fn a_rolled_back_list_reports_only_its_refusal() {
         .map(|entry| entry.message)
         .collect();
     assert!(
-        // The label this list would have had; the log is shared with the
-        // tests running beside this one.
-        said.iter()
-            .all(|m| !m.contains("Agent: place_junction, place_wire")),
+        // The label this list would have had.
+        said.iter().all(|m| !m.contains("rolled back list 2227")),
         "nothing says an edit was applied: {said:?}"
     );
 }
