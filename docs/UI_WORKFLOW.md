@@ -6,7 +6,7 @@ This is how UI / chrome work gets done in Signex without burning round-trips on 
 
 1. **Spec the change before touching code.** Drop an annotated screenshot or a short bullet list with concrete numbers (corner radius in px, border colour as hex, padding, font weight, hover/active fills). Words like "rounded a bit" / "match Altium" / "more accent" are imprecise — every interpretation costs a build cycle.
 
-2. **Iterate inside the chrome catalog, not the full app.** `cargo run -p chrome-catalog` mounts every chrome variant side-by-side (tabs in 5 states × 7 themes, modal cards, project tree rows, …) in a small dev-built binary that rebuilds in seconds. The full app takes ~90 s on a release rebuild + a project to open + panels to arrange.
+2. **Iterate inside the chrome catalog, not the full app.** `cargo run -p chrome-catalog` mounts every chrome variant side-by-side (tabs in 5 states × 2 themes, modal cards, project tree rows, …) in a small dev-built binary that rebuilds in seconds. The full app takes ~90 s on a release rebuild + a project to open + panels to arrange.
 
 3. **Use dev builds for chrome work.** Release builds are required for canvas perf testing on the AMD 880M, but chrome iteration doesn't render canvases. `cargo run -p chrome-catalog` (~10–15 s incremental) is the right loop for tab / panel / modal / button styling.
 

@@ -7,7 +7,7 @@
 
 use super::*;
 use iced::widget::{Space, column, container, row, scrollable};
-use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use iced::{Background, Color, Element, Length, Theme, Widget};
 use signex_widgets::{button, raw, text};
 
 use crate::app::state::AnnotateOrder;
@@ -15,13 +15,14 @@ use crate::app::state::AnnotateOrder;
 use super::widgets::{draggable_header, fit_modal_size, modal_title_header, os_title_bar_slot};
 use crate::styles::{
     DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_footer_split,
-    dialog_message,
 };
 
 mod controls;
 mod reprefix_confirm;
 
-use controls::{bordered_style, check_pip, order_preview, order_radio};
+use super::graphite as gr;
+use super::graphite_annotate as ga;
+use controls::{bordered_style, check_pip, order_radio, scroll_style};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -74,8 +75,9 @@ impl Signex {
 
         // ── Header (draggable when in-window; OS-window-drag when
         // detached) ──
-        let header_content: Element<'_, Message> = modal_title_header(
+        let header_content: Element<'_, Message> = gr::titled_header(
             "Annotate",
+            self.detached_modal_subtitle(crate::app::state::ModalId::AnnotateDialog),
             Message::Annotate(AnnotateMsg::CloseDialog),
             tokens,
         );
@@ -89,11 +91,6 @@ impl Signex {
             os_title_bar_slot()
         };
 
-        // ── Left column: Schematic Annotation Configuration ──
-        let left_title = text(raw("Schematic Annotation Configuration"))
-            .size(TS.label)
-            .color(text_c);
-
         let order_row = column![
             text(raw("Order of Processing"))
                 .size(TS.caption)
@@ -105,16 +102,14 @@ impl Signex {
                             "Up Then Across",
                             AnnotateOrder::UpThenAcross,
                             self.ui_state.annotate_order,
-                            text_c,
-                            border_c,
+                            tokens,
                         ),
                         Space::new().width(4),
                         order_radio(
                             "Across Then Down",
                             AnnotateOrder::AcrossThenDown,
                             self.ui_state.annotate_order,
-                            text_c,
-                            border_c,
+                            tokens,
                         ),
                     ]
                     .spacing(0),
@@ -124,16 +119,14 @@ impl Signex {
                             "Down Then Across",
                             AnnotateOrder::DownThenAcross,
                             self.ui_state.annotate_order,
-                            text_c,
-                            border_c,
+                            tokens,
                         ),
                         Space::new().width(4),
                         order_radio(
                             "Across Then Up",
                             AnnotateOrder::AcrossThenUp,
                             self.ui_state.annotate_order,
-                            text_c,
-                            border_c,
+                            tokens,
                         ),
                     ]
                     .spacing(0),
@@ -141,7 +134,7 @@ impl Signex {
                 .spacing(0)
                 .width(Length::FillPortion(3)),
                 Space::new().width(8),
-                order_preview(self.ui_state.annotate_order, text_c, text_muted, border_c),
+                ga::order_diagram(tokens, self.ui_state.annotate_order),
             ]
             .align_y(iced::Alignment::Start)
             .spacing(0),
@@ -155,7 +148,7 @@ impl Signex {
             container(text(raw("Designator")).size(TS.body).color(text_c),)
                 .padding([5.0, 10.0])
                 .width(Length::Fill)
-                .style(bordered_style(border_c)),
+                .style(bordered_style(tokens)),
         ]
         .spacing(SP.s);
 
@@ -166,7 +159,7 @@ impl Signex {
             container(text(raw("Off")).size(TS.body).color(text_muted))
                 .padding([5.0, 10.0])
                 .width(Length::Fill)
-                .style(bordered_style(border_c)),
+                .style(bordered_style(tokens)),
         ]
         .spacing(SP.s);
 
@@ -209,13 +202,15 @@ impl Signex {
             param_rows = param_rows.push(
                 (row![
                     row![
-                        check_pip(false, border_c),
+                        check_pip(false, tokens),
                         Space::new().width(6),
-                        text(raw(name.clone())).size(TS.body).color(text_c),
+                        text(signex_i18n::UserText::new(name.clone()))
+                            .size(TS.body)
+                            .color(text_c),
                     ]
                     .align_y(iced::Alignment::Center)
                     .width(Length::FillPortion(5)),
-                    container(check_pip(true, border_c))
+                    container(check_pip(true, tokens))
                         .align_x(iced::alignment::Horizontal::Right)
                         .width(Length::FillPortion(1)),
                 ]
@@ -247,14 +242,16 @@ impl Signex {
                 container(text(raw("None")).size(TS.body).color(text_muted))
                     .padding([SP.s, SP.m])
                     .width(Length::FillPortion(3))
-                    .style(bordered_style(border_c)),
+                    .style(bordered_style(tokens)),
             ]
             .align_y(iced::Alignment::Center)
             .spacing(6),
             Space::new().height(6),
-            container(scrollable(param_rows).height(280))
+            container(scrollable(param_rows)
+                .height(98)
+                .style(scroll_style(tokens)))
                 .padding(SP.xs)
-                .style(bordered_style(border_c)),
+                .style(bordered_style(tokens)),
             Space::new().height(4),
             text(raw("Parameter matching is visual grouping only — the annotation engine ignores these checkboxes for now."))
                 .size(TS.caption)
@@ -262,95 +259,31 @@ impl Signex {
         ]
         .spacing(SP.s);
 
-        // Sheets list: include every open tab so the multi-sheet view is
-        // visible. All but the active sheet render greyed because only the
-        // active snapshot feeds the preview for v0.7.
-        let mut sheet_rows: iced::widget::Column<Element<'_, Message>> = column![].spacing(0);
         let active_title = self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
             .map(|t| t.title.clone());
-        for (idx, tab) in self.document_state.tabs.iter().enumerate() {
-            let is_active = Some(&tab.title) == active_title.as_ref();
-            let row_color = if is_active { text_c } else { text_muted };
-            let suffix_placeholder = if is_active { "" } else { "—" };
-            sheet_rows = sheet_rows.push(
-                (row![
-                    row![
-                        check_pip(is_active, border_c),
-                        Space::new().width(6),
-                        text(raw(tab.title.clone())).size(TS.body).color(row_color),
-                    ]
-                    .align_y(iced::Alignment::Center)
-                    .width(Length::FillPortion(6)),
-                    text(raw("All"))
-                        .size(TS.body)
-                        .color(row_color)
-                        .width(Length::FillPortion(1)),
-                    text(raw(format!("{idx}")))
-                        .size(TS.body)
-                        .color(row_color)
-                        .width(Length::FillPortion(1)),
-                    text(raw(format!("{}", idx + 1)))
-                        .size(TS.body)
-                        .color(row_color)
-                        .width(Length::FillPortion(1)),
-                    row![
-                        check_pip(false, border_c),
-                        Space::new().width(6),
-                        text(raw(suffix_placeholder.to_string()))
-                            .size(TS.body)
-                            .color(row_color),
-                    ]
-                    .align_y(iced::Alignment::Center)
-                    .width(Length::FillPortion(2)),
-                ]
-                .padding([3.0, SP.m])
-                .align_y(iced::Alignment::Center))
-                .boxed(),
-            );
-        }
-        if self.document_state.tabs.is_empty() {
-            sheet_rows = sheet_rows.push(
-                (container(
-                    text(raw("No schematic tab open."))
-                        .size(TS.body)
-                        .color(text_muted),
-                )
-                .padding([6.0, SP.m]))
-                .boxed(),
-            );
-        }
+
+        // The mock's sheet card (checkbox, mono name, Start, Add Suffix) over
+        // the open sheets.
+        let sheets_view: Element<'_, Message> = {
+            let rows = self
+                .document_state
+                .tabs
+                .iter()
+                .map(|tab| ga::SheetRow {
+                    name: tab.title.clone(),
+                    on: Some(&tab.title) == active_title.as_ref(),
+                })
+                .collect();
+            ga::sheet_table(tokens, rows, "No schematic tab open.")
+        };
 
         let sheets_table = column![
             text(raw("Schematic Sheets To Annotate")).size(TS.label).color(text_c),
             Space::new().height(4),
-            row![
-                text(raw("Schematic Sheet"))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(Length::FillPortion(6)),
-                text(raw("Scope"))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(Length::FillPortion(1)),
-                text(raw("Ord..."))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(Length::FillPortion(1)),
-                text(raw("Start"))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(Length::FillPortion(1)),
-                text(raw("Add Suffix"))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(Length::FillPortion(2)),
-            ]
-            .padding([SP.xs, SP.m]),
-            container(scrollable(sheet_rows).height(180))
-                .style(bordered_style(border_c)),
+            sheets_view,
             Space::new().height(4),
             text(raw("Scope / Start / Suffix columns are visual only — multi-sheet wiring lands with Advanced Schematic."))
                 .size(TS.caption)
@@ -360,8 +293,6 @@ impl Signex {
         .spacing(SP.s);
 
         let left_col = column![
-            left_title,
-            Space::new().height(6),
             order_row,
             Space::new().height(8),
             process_location,
@@ -440,62 +371,58 @@ impl Signex {
                 } else {
                     entry.proposed.clone()
                 };
-                let lock_tick = if is_locked { "\u{2713}" } else { "" };
                 let uuid = entry.uuid;
-                let lock_btn: Element<'_, Message> = button(
-                    container(text(raw(lock_tick.to_string())).size(TS.body).color(text_c))
-                        .width(22)
-                        .height(16)
-                        .align_x(iced::alignment::Horizontal::Center)
-                        .align_y(iced::alignment::Vertical::Center),
-                )
-                .on_press(Message::Annotate(AnnotateMsg::ToggleLock(uuid)))
-                .padding(0.0)
-                .style(move |_: &Theme, _| button::Style {
-                    background: Some(Background::Color(if is_locked {
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.12)
+                // The lock is a checkbox.
+                let lock_btn: Element<'_, Message> = button(ga::checkbox_pip(tokens, is_locked))
+                    .on_press(Message::Annotate(AnnotateMsg::ToggleLock(uuid)))
+                    .padding(0.0)
+                    .style(ga::bare_button_style)
+                    .boxed();
+                // Designators in mono; a changing row is tinted and its proposed
+                // designator takes the accent ink.
+                let cur_text = text(raw(entry.current.clone()))
+                    .size(TS.body)
+                    .color(cur_color)
+                    .width(Length::FillPortion(2))
+                    .font(gr::mono());
+                let new_text = text(raw(proposed_display))
+                    .size(TS.body)
+                    .color(if changing {
+                        gr::changed_ink(tokens)
                     } else {
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.03)
-                    })),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: border_c,
-                        ..Border::default()
-                    },
-                    text_color: text_c,
-                    ..button::Style::default()
-                })
-                .boxed();
-                rows_col = rows_col.push(
-                    (row![
-                        container(lock_btn)
-                            .width(Length::Fixed(42.0))
-                            .padding([0.0, 6.0]),
-                        text(raw(entry.current.clone()))
-                            .size(TS.body)
-                            .color(cur_color)
-                            .width(Length::FillPortion(2)),
-                        text(raw(proposed_display))
-                            .size(TS.body)
-                            .color(new_color)
-                            .width(Length::FillPortion(2)),
-                        text(raw(entry.sheet.clone()))
-                            .size(TS.body)
-                            .color(text_muted)
-                            .width(Length::FillPortion(3)),
-                    ]
-                    .align_y(iced::Alignment::Center)
-                    .padding([SP.xs, SP.m]))
-                    .boxed(),
-                );
+                        new_color
+                    })
+                    .width(Length::FillPortion(2))
+                    .font(gr::mono());
+                let line = row![
+                    container(lock_btn)
+                        .width(Length::Fixed(42.0))
+                        .padding([0.0, 6.0]),
+                    cur_text,
+                    new_text,
+                    text(signex_i18n::UserText::new(entry.sheet.clone()))
+                        .size(TS.body)
+                        .color(text_muted)
+                        .width(Length::FillPortion(3)),
+                ]
+                .align_y(iced::Alignment::Center)
+                .padding([SP.xs, SP.m]);
+                let line: Element<'_, Message> = container(line)
+                    .width(Length::Fill)
+                    .style(gr::changed_row(tokens, changing))
+                    .boxed();
+                rows_col = rows_col.push(line);
             }
         }
 
-        let right_list = container(scrollable(rows_col).height(Length::Fill))
-            .height(Length::Fill)
-            .padding(SP.s)
-            .style(bordered_style(border_c));
+        let right_list = container(
+            scrollable(rows_col)
+                .height(Length::Fill)
+                .style(scroll_style(tokens)),
+        )
+        .height(Length::Fill)
+        .padding(SP.s)
+        .style(bordered_style(tokens));
 
         // Count only rows where proposed != current (actual changes).
         let changes: usize = proposed.iter().filter(|e| e.current != e.proposed).count();
@@ -576,8 +503,14 @@ impl Signex {
                     ))),
                 ),
                 dialog_button(
+                    "Close",
+                    DialogButtonKind::Cancel,
+                    Some(Message::Annotate(AnnotateMsg::CloseDialog)),
+                    tokens,
+                ),
+                dialog_button(
                     "Accept Changes",
-                    DialogButtonKind::Primary,
+                    gr::call_to_action(tokens),
                     if changes == 0 || self.ui_state.annotate_preview.loading || busy {
                         None
                     } else {
@@ -587,14 +520,13 @@ impl Signex {
                     },
                     tokens,
                 ),
-                secondary("Close", Some(Message::Annotate(AnnotateMsg::CloseDialog))),
             ],
         );
 
         let body_row = row![
             // Fill portions bound each column, so long lines wrap instead
             // of running past the dialog edge (#1770).
-            container(scrollable(left_col))
+            container(scrollable(left_col).style(scroll_style(tokens)))
                 .padding([14.0, 14.0])
                 .width(Length::FillPortion(10)),
             container(iced::widget::Space::new().width(1).height(Length::Fill),).style(
@@ -664,15 +596,20 @@ impl Signex {
         let dialog = container(
             column![
                 header,
-                dialog_body(dialog_message(
-                    "Every reference designator will be reset to '?', then the sheet will be renumbered from 1.
-This cannot be undone through Ctrl+Z alone — consider saving first.",
+                dialog_body(crate::styles::dialog_intro(
+                    crate::styles::DialogIcon::Warn,
+                    "Reset every designator?",
+                    Some(
+                        "Every reference designator will be reset to '?', then the sheet will be renumbered from 1.
+This cannot be undone through Ctrl+Z alone — consider saving first."
+                            .to_owned()
+                    ),
                     tokens,
                 )),
                 dialog_footer(vec![
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::Annotate(AnnotateMsg::CloseResetConfirm)),
                         tokens,
                     ),

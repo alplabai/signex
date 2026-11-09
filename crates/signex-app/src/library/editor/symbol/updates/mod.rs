@@ -20,7 +20,10 @@ mod transform;
 mod ui;
 
 use body::apply_symbol_body;
+#[cfg(test)]
+pub(crate) use camera::FIT_TOP_CLEARANCE;
 use camera::apply_symbol_camera;
+pub(crate) use camera::fit_to_viewport;
 use context_menu::apply_symbol_context_menu;
 use history::apply_symbol_history;
 use join::apply_symbol_join;

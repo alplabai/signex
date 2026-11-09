@@ -603,6 +603,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
             .unwrap_or(0),
         selected_sketch_entity,
         auto_fit_courtyard: editor.state.auto_fit_courtyard,
+        layer_visibility: editor.state.layer_visibility,
         library_siblings,
         library_stem,
         internal_footprints,

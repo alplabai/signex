@@ -60,8 +60,12 @@ pub const HAIRLINE: f32 = 1.0;
 pub struct TypeScale {
     /// Hints, secondary status lines, small badges (10 px at an 11 px base).
     pub caption: f32,
+    /// Uppercase section labels (11 px at the default 12 px base).
+    pub section: f32,
     /// Default running text and controls (11 px at an 11 px base).
     pub body: f32,
+    /// Dense tables and mono readouts (12 px at the default 12 px base).
+    pub dense: f32,
     /// Emphasised control labels and inputs (12 px at an 11 px base).
     pub label: f32,
     /// Card / section titles (13 px at an 11 px base).
@@ -86,7 +90,9 @@ impl TypeScale {
     pub const fn from_base(base: f32) -> Self {
         Self {
             caption: base * 10.0 / 11.0,
+            section: base * 11.0 / 12.0,
             body: base,
+            dense: base,
             label: base * 12.0 / 11.0,
             title: base * 13.0 / 11.0,
             heading: base * 14.0 / 11.0,

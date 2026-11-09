@@ -4,15 +4,19 @@
 //! No Iced fork — composition only.
 
 pub mod active_bar;
+pub mod chevron;
+pub mod dropdown_style;
 pub mod history_pane;
 mod house;
 mod house_extra;
 pub mod icon_button;
 mod label;
 pub mod passive_calculator;
+pub mod segmented;
 pub mod status_bar;
 pub mod tab_pill;
 pub mod theme_ext;
+pub mod toggle_switch;
 pub mod translate;
 pub mod tree_view;
 
@@ -28,6 +32,10 @@ pub use house_extra::{
     toggler,
 };
 pub use label::{Label, raw};
+pub use segmented::{SegmentedStyle, segmented};
+pub use tab_pill::{AccentPosition, TabPill, TabPillStyle};
+pub use toggle_switch::{ToggleSwitchStyle, toggle_switch};
+pub use tree_view::TreeStyle;
 
 // The iced modules behind the house functions of the same name, so
 // `use signex_widgets::button;` brings `button(..)` and `button::Style`.
@@ -46,7 +54,6 @@ pub mod text_input {
 pub mod tooltip {
     pub use iced::widget::tooltip::*;
 }
-pub use tab_pill::{AccentPosition, TabPill, TabPillStyle};
 pub use translate::Translate;
 
 // ─── Extension Traits (Ludusavi pattern) ─────────────────────

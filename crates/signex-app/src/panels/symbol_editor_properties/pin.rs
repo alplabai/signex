@@ -2,6 +2,7 @@
 
 use iced::widget::{Column, column, container, row};
 use iced::{Color, Element, Length, Widget};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{PickListPlaceholder, raw, text};
 
 use super::super::{NumericDraft, NumericFieldKey, PanelMsg, SymbolPinSummary, numeric_input};
@@ -45,6 +46,7 @@ fn view_pin_symbol_picker<'a>(
         options.to_vec(),
         |(label, _): &(&'static str, K)| label.to_string(),
     )
+    .graphite()
     .on_select(
         move |(_, value): (&'static str, K)| PanelMsg::SymEditorSetPinSymbol {
             pin_idx,
@@ -52,8 +54,7 @@ fn view_pin_symbol_picker<'a>(
             value,
         },
     )
-    .padding([SP.xs, SP.s])
-    .text_size(10);
+    .padding([SP.xs, SP.s]);
     container(
         row![
             text(raw(label.to_string()))
@@ -151,14 +152,14 @@ pub(super) fn view_pin_selection<'a>(
         electrical_options.to_vec(),
         |(label, _): &(&'static str, signex_library::PinDirection)| label.to_string(),
     )
+    .graphite()
     .placeholder_label(raw(pin.electrical.clone()))
     .on_select(
         move |(_, value): (&'static str, signex_library::PinDirection)| {
             PanelMsg::SymEditorSetPinElectrical { pin_idx, value }
         },
     )
-    .padding([SP.xs, SP.s])
-    .text_size(11);
+    .padding([SP.xs, SP.s]);
     let electrical_row: Element<'a, PanelMsg> = container(
         row![
             text(raw("Electrical"))
@@ -230,14 +231,14 @@ pub(super) fn view_pin_selection<'a>(
         orientation_options.to_vec(),
         |(label, _): &(&'static str, signex_library::PinOrientation)| label.to_string(),
     )
+    .graphite()
     .placeholder_label(raw(pin.orientation.clone()))
     .on_select(
         move |(_, value): (&'static str, signex_library::PinOrientation)| {
             PanelMsg::SymEditorSetPinOrientation { pin_idx, value }
         },
     )
-    .padding([SP.xs, SP.s])
-    .text_size(11);
+    .padding([SP.xs, SP.s]);
     let orientation_row: Element<'a, PanelMsg> = container(
         row![
             text(raw("Orientation"))

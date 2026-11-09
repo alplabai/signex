@@ -20,7 +20,7 @@ fn scene_of(drawings: Vec<SchDrawing>) -> Scene {
     build_schematic_scene(
         &sheet,
         &transform,
-        &canvas_colors(ThemeId::Signex),
+        &canvas_colors(ThemeId::GraphiteLight),
         bounds,
         None,
         SceneOverrides::default(),
@@ -209,7 +209,7 @@ fn above_drawings_go_to_the_front_bucket_in_file_order() {
     let scene = build_schematic_scene(
         &sheet,
         &transform,
-        &canvas_colors(ThemeId::Signex),
+        &canvas_colors(ThemeId::GraphiteLight),
         bounds,
         None,
         SceneOverrides::default(),

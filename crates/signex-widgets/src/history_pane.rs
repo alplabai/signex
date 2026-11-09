@@ -91,7 +91,9 @@ where
 
     for entry in entries {
         let header = iced::widget::row![
-            text(raw(entry.author_name.clone())).size(12).color(primary),
+            text(signex_i18n::UserText::new(entry.author_name.clone()))
+                .size(12)
+                .color(primary),
             Space::new().width(Length::Fill),
             text(raw(format_relative(entry.time, now)))
                 .size(11)
@@ -101,8 +103,12 @@ where
 
         let card_inner = column![
             header,
-            text(raw(entry.subject.clone())).size(13).color(primary),
-            text(raw(short_sha(&entry.sha))).size(11).color(muted),
+            text(signex_i18n::UserText::new(entry.subject.clone()))
+                .size(13)
+                .color(primary),
+            text(signex_i18n::UserText::new(short_sha(&entry.sha)))
+                .size(11)
+                .color(muted),
         ]
         .spacing(2);
 

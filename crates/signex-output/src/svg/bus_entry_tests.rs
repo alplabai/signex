@@ -19,7 +19,7 @@ fn css((r, g, b): (f32, f32, f32)) -> String {
 
 #[test]
 fn bus_entry_is_stroked_in_its_own_colour() {
-    let colors = canvas_colors(ThemeId::CatppuccinMocha);
+    let colors = canvas_colors(ThemeId::GraphiteDark);
     let palette = SchematicPalette::from(&colors);
     assert_ne!(
         palette.bus, palette.bus_entry,

@@ -386,8 +386,9 @@ enum (see `PCB_LAYERS_PLAN.md`).
 
 ## 8. Schematic Canvas Themes
 
-Signex ships with six built-in color themes for the schematic canvas. All
-themes are available in both Community and Pro editions.
+Signex ships with two built-in color themes: Graphite Light and Graphite Dark.
+Both are available in both Community and Pro editions. The table below records
+the retired palettes for reference only.
 
 ### 8.1. Theme Color Table
 
@@ -415,15 +416,17 @@ themes are available in both Community and Pro editions.
 - Every rendered element reads its color from the active theme's token set
 - Theme switching re-renders the entire canvas immediately (invalidate all
   render caches)
-- The default theme is **Catppuccin Mocha** (dark, high contrast, easy on eyes)
+- The default theme for a new install is **Graphite Light**; a stored theme
+  choice is kept. **Graphite Dark** is its dark twin; the other themes were
+  removed (see `docs/DECISIONS.md`, "Graphite-only themes"). The colour table
+  above covers the retired themes only.
 - The user selects a theme from View → Theme or from Preferences
 - Theme choice persists across sessions
-- Custom themes are a post-PCB-Viewer feature; the Community Preview ships only the six built-in
-  themes
+- Custom themes are removed; Signex ships only the two Graphite themes
 
 ### 8.3. Theme Token Structure
 
-All six themes are defined as a `CanvasColors` struct with named tokens. The
+Both themes are defined as a `CanvasColors` struct with named tokens. The
 render layer always resolves colors through these tokens, never through
 hardcoded hex values.
 
@@ -674,7 +677,7 @@ not exist.
 - All interactive elements are keyboard-reachable (no mouse-only operations)
 - Color is never the only way to convey information (shape, label, or pattern
   accompanies every color-coded indicator)
-- Themes include one light option (Solarized Light) for users who prefer or
+- Themes include one light option (Graphite Light) for users who prefer or
   require light backgrounds
 - The high-contrast theme variant is planned for after the PCB Viewer
 - Text sizes in panels use the system font size setting where possible

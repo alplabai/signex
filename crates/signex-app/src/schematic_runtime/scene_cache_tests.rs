@@ -24,7 +24,7 @@ fn at(
     x: f32,
     scale: f32,
 ) -> Option<std::sync::Arc<Scene>> {
-    let colors = canvas_colors(ThemeId::Signex);
+    let colors = canvas_colors(ThemeId::GraphiteLight);
     let transform = ScreenTransform {
         offset_x: x,
         offset_y: 0.0,
@@ -68,7 +68,7 @@ fn generation_is_stable_on_pan_and_bumps_on_rebuild() {
 #[test]
 fn a_new_display_scale_rebuilds_the_scene_and_misses_the_fit() {
     let sheet = sheet_with_wire();
-    let colors = canvas_colors(ThemeId::Signex);
+    let colors = canvas_colors(ThemeId::GraphiteLight);
     let transform_at = |dpi: f32| ScreenTransform {
         offset_x: 0.0,
         offset_y: 0.0,
@@ -191,7 +191,7 @@ fn invalidate_forces_a_rebuild_and_a_theme_change_does_too() {
         scale: 4.0,
         device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
-    let other = canvas_colors(ThemeId::Nord);
+    let other = canvas_colors(ThemeId::GraphiteDark);
     cache.scene_for(
         &sheet,
         &transform,
@@ -207,7 +207,7 @@ fn invalidate_forces_a_rebuild_and_a_theme_change_does_too() {
 fn a_panned_scene_still_contains_the_wire() {
     let sheet = sheet_with_wire();
     let mut cache = ContentSceneCache::default();
-    let colors = canvas_colors(ThemeId::Signex);
+    let colors = canvas_colors(ThemeId::GraphiteLight);
     for x in [0.0_f32, 40.0] {
         let transform = ScreenTransform {
             offset_x: x,
@@ -244,7 +244,7 @@ fn sheet_with_wire_between(start: (f64, f64), end: (f64, f64)) -> SchematicRende
 /// replayed scene holds the wire and how many builds happened.
 fn replay_after_pan(sheet: &SchematicRenderSnapshot, dx: f32, dy: f32) -> (bool, u32) {
     let mut cache = ContentSceneCache::default();
-    let colors = canvas_colors(ThemeId::Signex);
+    let colors = canvas_colors(ThemeId::GraphiteLight);
     let mut has_line = false;
     for (x, y) in [(0.0, 0.0), (dx, dy)] {
         let transform = ScreenTransform {
@@ -303,7 +303,7 @@ fn a_pan_past_the_margin_in_either_axis_rebuilds() {
 #[test]
 fn drag_path_bounds_at_a_non_zero_origin_keep_a_left_edge_wire() {
     let sheet = sheet_with_wire_between((10.0, 10.0), (40.0, 10.0));
-    let colors = canvas_colors(ThemeId::Signex);
+    let colors = canvas_colors(ThemeId::GraphiteLight);
     let transform = ScreenTransform {
         offset_x: 0.0,
         offset_y: 0.0,
@@ -335,7 +335,7 @@ fn drag_path_bounds_at_a_non_zero_origin_keep_a_left_edge_wire() {
 fn setting_the_render_cache_drops_the_cached_scene() {
     let sheet = sheet_with_wire();
     let mut slot = crate::canvas::CanvasSlot::default();
-    let colors = canvas_colors(ThemeId::Signex);
+    let colors = canvas_colors(ThemeId::GraphiteLight);
     let transform = ScreenTransform {
         offset_x: 0.0,
         offset_y: 0.0,

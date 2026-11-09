@@ -13,6 +13,10 @@ use crate::library::messages::FootprintEditorMsg;
 pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEditorMsg) {
     match msg {
         FootprintEditorMsg::ToggleLayer(name) => toggle_layer(editor, name),
+        FootprintEditorMsg::LayersShowAllClicked => set_layers(editor, LayerPreset::All),
+        FootprintEditorMsg::LayersTopSideOnlyClicked => {
+            set_layers(editor, LayerPreset::TopSideOnly)
+        }
         FootprintEditorMsg::ToggleAutoFit => toggle_auto_fit(editor),
         FootprintEditorMsg::SetMode(mode) => set_mode(editor, mode),
         FootprintEditorMsg::TogglePlacementPause => toggle_placement_pause(editor),
@@ -37,6 +41,19 @@ fn toggle_layer(editor: &mut crate::app::FootprintDocument, name: String) {
         editor.state.layer_visibility.toggle(layer);
         editor.canvas_cache.clear();
     }
+}
+
+enum LayerPreset {
+    All,
+    TopSideOnly,
+}
+
+fn set_layers(editor: &mut crate::app::FootprintDocument, preset: LayerPreset) {
+    match preset {
+        LayerPreset::All => editor.state.layer_visibility.show_all(),
+        LayerPreset::TopSideOnly => editor.state.layer_visibility.show_top_side_only(),
+    }
+    editor.canvas_cache.clear();
 }
 
 fn toggle_auto_fit(editor: &mut crate::app::FootprintDocument) {

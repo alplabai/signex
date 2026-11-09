@@ -126,7 +126,7 @@ impl LifecycleFilter {
 
     /// Whether a row in `state` should render under this filter.
     /// Deprecated rows are hidden by default and render tinted when
-    /// `IncludeDeprecated` shows them (see `lifecycle_dot_color`).
+    /// `IncludeDeprecated` shows them.
     /// `LifecycleState` is `#[non_exhaustive]`, so any future variant
     /// falls through to hidden.
     pub fn allows(self, state: signex_library::LifecycleState) -> bool {
@@ -629,6 +629,9 @@ pub struct LibraryState {
     /// filter. Stage 9 ships the simple substring matcher; the full
     /// search syntax (plan §5) is polish work.
     pub components_panel: ComponentsPanelState,
+    /// Footprints read for the Properties FOOTPRINT card, by footprint and
+    /// `data_version`.
+    pub properties_footprints: crate::panels::FootprintCards,
     /// `.snxlib` mounts currently being prepared off the UI thread —
     /// issue #99 part 2c. Keyed by the `.snxlib` file path, valued by
     /// why the mount was asked for.
@@ -768,9 +771,7 @@ impl ComponentsMountSource {
         }
     }
 
-    /// Section key — lower-case identifier used for the
-    /// `ComponentsPanelToggleSection` message + panel-state field
-    /// dispatch.
+    /// Lower-case identifier of the source.
     pub fn key(self) -> &'static str {
         match self {
             Self::Project => "project",
@@ -780,28 +781,34 @@ impl ComponentsMountSource {
         }
     }
 
-    /// Every section in stable display order — Project, Installed,
-    /// Global, then Stock last.
+    /// Every source in list order: Stock first, then Project, Installed
+    /// and Global.
     pub const ORDER: &'static [ComponentsMountSource] = &[
+        ComponentsMountSource::Stock,
         ComponentsMountSource::Project,
         ComponentsMountSource::Installed,
         ComponentsMountSource::Global,
-        ComponentsMountSource::Stock,
+    ];
+
+    /// The sources "+ Add" can mount a library into, in menu order.
+    pub const ADDABLE: &'static [ComponentsMountSource] = &[
+        ComponentsMountSource::Project,
+        ComponentsMountSource::Installed,
+        ComponentsMountSource::Global,
     ];
 }
 
-/// Per-source collapse + filter state for the Components Panel.
-/// Persists across panel re-renders but not across app restarts —
-/// cheap session-scoped UI flags.
+/// Source filter, collapse and filter state for the Components Panel.
+/// Session-scoped (not persisted): the panel keeps no other preference on
+/// disk either.
 #[derive(Debug, Clone)]
 pub struct ComponentsPanelState {
-    /// `true` while the named section is collapsed. Sections are
-    /// `"project"`, `"installed"`, `"global"` (stock has its own
-    /// `collapsed_stock`).
-    pub collapsed_project: bool,
-    pub collapsed_installed: bool,
-    pub collapsed_global: bool,
-    pub collapsed_stock: bool,
+    /// The source chip selected under the search box; `None` is "All".
+    pub source_filter: Option<ComponentsMountSource>,
+    /// Libraries the user collapsed (by root); every other library is open.
+    pub collapsed_libraries: std::collections::HashSet<PathBuf>,
+    /// The header "+ Add" menu is open.
+    pub add_menu_open: bool,
     /// Substring filter applied to mpn / manufacturer / internal_pn
     /// / library name. Empty = show everything. Stage 9 uses a
     /// case-insensitive `contains` match across all three fields;
@@ -838,10 +845,9 @@ pub struct ComponentsPanelState {
 impl Default for ComponentsPanelState {
     fn default() -> Self {
         Self {
-            collapsed_project: false,
-            collapsed_installed: false,
-            collapsed_global: false,
-            collapsed_stock: false,
+            source_filter: None,
+            collapsed_libraries: Default::default(),
+            add_menu_open: false,
             filter: String::new(),
             rows: PanelRows::default(),
             selected: None,

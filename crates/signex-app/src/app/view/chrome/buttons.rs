@@ -13,6 +13,8 @@ use crate::menu_bar::MENU_BAR_HEIGHT;
 
 /// One Windows-style button.
 pub(crate) const WINDOWS_BTN_W: f32 = 46.0;
+/// The Graphite button is 44 px wide.
+const GRAPHITE_BTN_W: f32 = 44.0;
 const WINDOWS_ICON: f32 = 14.0;
 
 /// Linux (libadwaita-like) round button: diameter, icon, gap, edge padding.
@@ -39,17 +41,32 @@ pub(super) struct Palette {
     pub text: Color,
     pub hover: Color,
     pub close_hover: Color,
+    /// Graphite theme: 44 px Windows buttons.
+    pub graphite: bool,
+}
+
+fn windows_width(graphite: bool) -> f32 {
+    if graphite {
+        GRAPHITE_BTN_W
+    } else {
+        WINDOWS_BTN_W
+    }
 }
 
 /// Width of a group of `count` buttons in `style`, edge padding included.
+#[cfg(test)]
 fn group_width(style: WindowControlsStyle, count: usize) -> f32 {
+    group_width_for(style, count, false)
+}
+
+fn group_width_for(style: WindowControlsStyle, count: usize, graphite: bool) -> f32 {
     let n = count as f32;
     if count == 0 {
         return 0.0;
     }
     match style {
         WindowControlsStyle::MacNative => 0.0,
-        WindowControlsStyle::Windows => n * WINDOWS_BTN_W,
+        WindowControlsStyle::Windows => n * windows_width(graphite),
         WindowControlsStyle::Linux => n * LINUX_BTN + (n - 1.0) * LINUX_GAP + 2.0 * LINUX_EDGE,
         WindowControlsStyle::MacDrawn => n * MAC_DOT + (n - 1.0) * MAC_GAP + 2.0 * MAC_EDGE,
     }
@@ -58,13 +75,26 @@ fn group_width(style: WindowControlsStyle, count: usize) -> f32 {
 /// `(leading, trailing)` widths the strip reserves for window controls. The
 /// native macOS lights are not ours to draw but still need the room, except
 /// in fullscreen where the OS hides them.
+#[cfg(test)]
 pub(crate) fn extents(layout: &WindowControlsLayout, fullscreen: bool) -> (f32, f32) {
+    extents_for(layout, fullscreen, false)
+}
+
+/// [`extents`] for a Graphite theme when `graphite` is set.
+pub(crate) fn extents_for(
+    layout: &WindowControlsLayout,
+    fullscreen: bool,
+    graphite: bool,
+) -> (f32, f32) {
     let leading = match layout.style {
         WindowControlsStyle::MacNative if fullscreen => 0.0,
         WindowControlsStyle::MacNative => MAC_NATIVE_INSET,
-        style => group_width(style, layout.leading.len()),
+        style => group_width_for(style, layout.leading.len(), graphite),
     };
-    (leading, group_width(layout.style, layout.trailing.len()))
+    (
+        leading,
+        group_width_for(layout.style, layout.trailing.len(), graphite),
+    )
 }
 
 /// What sits at the strip's left edge: reserved room for the native lights,
@@ -75,7 +105,7 @@ pub(super) fn leading(
     fullscreen: bool,
 ) -> Element<'static, Message> {
     if layout.is_native() {
-        let (inset, _) = extents(layout, fullscreen);
+        let (inset, _) = extents_for(layout, fullscreen, pal.graphite);
         return Space::new().width(inset).boxed();
     }
     group(&layout.leading, layout.style, pal)
@@ -172,7 +202,7 @@ fn windows_button(kind: WindowButton, pal: Palette) -> Element<'static, Message>
     };
     let text = pal.text;
     button(centered(icon(kind, pal, WINDOWS_ICON)))
-        .width(WINDOWS_BTN_W)
+        .width(windows_width(pal.graphite))
         .height(MENU_BAR_HEIGHT)
         .padding(0)
         .on_press(press_message(kind))

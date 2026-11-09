@@ -36,7 +36,7 @@ impl PreviewNeeds {
         let has_footprint = held.is_some_and(|s| s.footprint.is_some());
         let has_sim = held.is_some_and(|s| s.sim.is_some());
         match tab {
-            PreviewTab::Preview => Self {
+            PreviewTab::Preview | PreviewTab::PinMap => Self {
                 symbol: (!has_symbol).then_some(row.symbol_ref),
                 footprint: row.footprint_ref.filter(|_| !has_footprint),
                 sim: None,

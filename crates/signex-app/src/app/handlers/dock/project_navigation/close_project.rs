@@ -26,7 +26,7 @@ impl Signex {
         self.commit_title_block_drafts_where(|sheet| owned.iter().any(|p| p == sheet));
     }
 
-    /// File ▸ Close Project: close the active project through the same gate
+    /// Project ▸ Close Project: close the active project through the same gate
     /// as the project tree's Close Project; nothing when none is open.
     pub(crate) fn close_active_project(&mut self) -> Task<Message> {
         let active = self.document_state.active_project;

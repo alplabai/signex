@@ -11,7 +11,7 @@ use iced::{Element, Length, Widget};
 use signex_widgets::{raw, text, text_input};
 
 use super::rule_editor::{RuleEditor, rule_editor};
-use super::widgets::{draggable_header, fit_modal_size, modal_title_header, os_title_bar_slot};
+use super::widgets::{draggable_header, fit_modal_size, os_title_bar_slot};
 use crate::app::document::UndoTarget;
 use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split};
 
@@ -45,8 +45,9 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
-        let header_content: Element<'_, Message> = modal_title_header(
+        let header_content: Element<'_, Message> = super::graphite::titled_header(
             "Electrical Rules Check",
+            self.detached_modal_subtitle(crate::app::state::ModalId::ErcDialog),
             Message::Erc(ErcMsg::CloseDialog),
             tokens,
         );
@@ -148,12 +149,17 @@ impl Signex {
             extras,
             vec![
                 dialog_button(
+                    "Close",
+                    DialogButtonKind::Cancel,
+                    Some(Message::Erc(ErcMsg::CloseDialog)),
+                    tokens,
+                ),
+                dialog_button(
                     "Run ERC",
                     DialogButtonKind::Primary,
                     Some(Message::Erc(ErcMsg::Run)),
                     tokens,
                 ),
-                secondary("Close", Some(Message::Erc(ErcMsg::CloseDialog))),
             ],
         );
 
@@ -168,6 +174,28 @@ impl Signex {
             on_pin_cell: |row, col| Message::Erc(ErcMsg::PinMatrixCellCycled { row, col }),
         });
 
+        // Severity chips with the rule counts above the grid.
+        let chips: Element<'_, Message> = {
+            let mut counts = [0usize; 4];
+            for rule in &signex_erc::RuleKind::ALL {
+                let current = severity_map
+                    .get(rule)
+                    .copied()
+                    .unwrap_or_else(|| rule.default_severity());
+                let slot = match current {
+                    signex_erc::Severity::Error => 0,
+                    signex_erc::Severity::Warning => 1,
+                    signex_erc::Severity::Info => 2,
+                    signex_erc::Severity::Off => 3,
+                };
+                counts[slot] += 1;
+            }
+            container(super::graphite::severity_chips(tokens, counts))
+                .padding([SP.l, 14.0])
+                .width(Length::Fill)
+                .boxed()
+        };
+
         // In-window: sized to the window-capped modal. Detached: the OS
         // window owns the size, so fill it. The body scrolls; the footer
         // holds the buttons and stays outside the scrollable (#1227).
@@ -180,6 +208,7 @@ impl Signex {
         let dialog = container(
             column![
                 header,
+                chips,
                 container(iced::widget::scrollable(
                     container(body).padding([14, 14]).width(Length::Fill)
                 ))
@@ -233,7 +262,7 @@ impl Signex {
             ),
             dialog_button(
                 "Cancel",
-                DialogButtonKind::Secondary,
+                DialogButtonKind::Cancel,
                 Some(Message::Erc(ErcMsg::ProfileUpdateCancelled)),
                 tokens,
             ),
@@ -305,8 +334,11 @@ impl Signex {
         } else {
             let submit = || Message::Erc(ErcMsg::ProfileSaveSubmitted);
             let editable = !dialog.busy;
-            let mut name_input = text_input(raw("Profile name"), &dialog.name).size(TS.body);
+            let mut name_input = text_input(raw("Profile name"), &dialog.name)
+                .style(crate::panels::form_look::text_input_style)
+                .size(TS.body);
             let mut version_input = text_input(raw("Version"), &dialog.version)
+                .style(crate::panels::form_look::text_input_style)
                 .size(TS.body)
                 .width(90);
             if editable {
@@ -346,7 +378,7 @@ impl Signex {
                     ),
                     dialog_button(
                         "Cancel",
-                        DialogButtonKind::Secondary,
+                        DialogButtonKind::Cancel,
                         Some(Message::Erc(ErcMsg::ProfileSaveCancelled)),
                         tokens,
                     ),

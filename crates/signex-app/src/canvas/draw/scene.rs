@@ -380,6 +380,9 @@ impl SchematicCanvas<'_> {
             // During a drag we can't rely on overlay_cache — it must redraw
             // with the shifted positions every frame.
             let draw_overlay = |frame: &mut canvas::Frame| {
+                #[cfg(test)]
+                self.overlay_tessellations
+                    .set(self.overlay_tessellations.get() + 1);
                 let transform = crate::schematic_runtime::ScreenTransform {
                     offset_x: cam.offset.x,
                     offset_y: cam.offset.y,
@@ -392,50 +395,25 @@ impl SchematicCanvas<'_> {
                     &self.selected,
                     &transform,
                     &self.prefs.canvas_colors,
+                    &self.prefs.graphite,
                     &self.designators,
                     self.prefs.wire_widths(),
                 );
-                self.draw_focused_pin(frame, snapshot, bounds);
-                crate::schematic_runtime::lock_indicator::draw_lock_indicators(
-                    frame,
-                    snapshot,
-                    &transform,
-                    &self.prefs.canvas_colors,
-                    &self.designators,
-                    self.prefs.wire_widths(),
-                );
-                let erc_overlay: Vec<crate::schematic_runtime::overlay::ErcMarker> = self
-                    .erc_markers
-                    .iter()
-                    .map(|marker| crate::schematic_runtime::overlay::ErcMarker {
-                        x_mm: marker.x,
-                        y_mm: marker.y,
-                        net_level: marker.net_level,
-                        severity: match marker.severity {
-                            ErcMarkerSeverity::Error => {
-                                crate::schematic_runtime::overlay::ErcSeverity::Error
-                            }
-                            ErcMarkerSeverity::Warning => {
-                                crate::schematic_runtime::overlay::ErcSeverity::Warning
-                            }
-                            ErcMarkerSeverity::Info => {
-                                crate::schematic_runtime::overlay::ErcSeverity::Info
-                            }
-                        },
-                    })
-                    .collect();
-                crate::schematic_runtime::overlay::draw_erc_markers(
-                    frame,
-                    &erc_overlay,
-                    &transform,
-                    &self.prefs.canvas_colors,
-                );
+                self.draw_selection_extras(frame, snapshot, bounds, &transform);
             };
             if drag_offset.is_some() {
                 let mut frame = canvas::Frame::new(renderer, bounds.size());
                 draw_overlay(&mut frame);
                 return Some(frame.into_geometry());
             } else {
+                // The layer is drawn in screen space, so a camera it was not
+                // drawn at leaves it stale: the zoom pill and the menu zoom
+                // clear only the background and content caches.
+                let key = (cam.offset.x, cam.offset.y, cam.scale);
+                if self.overlay_cache_camera.get() != Some(key) {
+                    self.overlay_cache.clear();
+                    self.overlay_cache_camera.set(Some(key));
+                }
                 let sel_overlay = self
                     .overlay_cache
                     .draw(renderer, bounds.size(), draw_overlay);
@@ -444,6 +422,75 @@ impl SchematicCanvas<'_> {
         }
         None
     }
+    /// Layer 3 of a drag frame, bottom to top, each with the translation to
+    /// draw it under. The halos of the items that only moved are cached and
+    /// shifted; everything else is drawn this frame (see `canvas::halo_cache`).
+    pub(in crate::canvas) fn draw_drag_selection_layers(
+        &self,
+        renderer: &Renderer,
+        bounds: Rectangle,
+        moving: &crate::schematic_runtime::SchematicRenderSnapshot,
+        drag_offset: Option<(f64, f64)>,
+    ) -> Vec<(canvas::Geometry, Option<iced::Vector>)> {
+        if let Some(drag) = self.draw_drag_selection(renderer, bounds, moving) {
+            let mut layers = Vec::with_capacity(2);
+            if let Some((halos, shift)) = drag.halos {
+                layers.push((halos, Some(shift)));
+            }
+            layers.push((drag.live, None));
+            return layers;
+        }
+        self.draw_selection(renderer, bounds, Some(moving), drag_offset)
+            .map(|geometry| (geometry, None))
+            .into_iter()
+            .collect()
+    }
+
+    /// What the selection layer draws over the halos: the clicked pin, the
+    /// padlocks of locked items and the ERC markers.
+    pub(in crate::canvas) fn draw_selection_extras(
+        &self,
+        frame: &mut canvas::Frame,
+        snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
+        bounds: Rectangle,
+        transform: &crate::schematic_runtime::ScreenTransform,
+    ) {
+        self.draw_focused_pin(frame, snapshot, bounds);
+        crate::schematic_runtime::lock_indicator::draw_lock_indicators(
+            frame,
+            snapshot,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.designators,
+            self.prefs.wire_widths(),
+        );
+        let erc_overlay: Vec<crate::schematic_runtime::overlay::ErcMarker> = self
+            .erc_markers
+            .iter()
+            .map(|marker| crate::schematic_runtime::overlay::ErcMarker {
+                x_mm: marker.x,
+                y_mm: marker.y,
+                net_level: marker.net_level,
+                severity: match marker.severity {
+                    ErcMarkerSeverity::Error => {
+                        crate::schematic_runtime::overlay::ErcSeverity::Error
+                    }
+                    ErcMarkerSeverity::Warning => {
+                        crate::schematic_runtime::overlay::ErcSeverity::Warning
+                    }
+                    ErcMarkerSeverity::Info => crate::schematic_runtime::overlay::ErcSeverity::Info,
+                },
+            })
+            .collect();
+        crate::schematic_runtime::overlay::draw_erc_markers(
+            frame,
+            &erc_overlay,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.prefs.graphite,
+        );
+    }
+
     /// The clicked pin, drawn over its part in the selection colour: the pin
     /// line and a dot at its connecting end (#2086).
     fn draw_focused_pin(

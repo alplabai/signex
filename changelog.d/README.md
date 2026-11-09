@@ -1,4 +1,4 @@
-# Changelog fragments
+- # Changelog fragments
 
 Do not edit `CHANGELOG.md` in a PR. Add a fragment here instead, so two open
 PRs never conflict on the same lines (#748).

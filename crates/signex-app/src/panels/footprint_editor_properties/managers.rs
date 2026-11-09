@@ -102,7 +102,7 @@ pub(super) fn render_grid_manager<'a>(
                             .size(TS.caption)
                             .color(if is_active { primary } else { muted })
                             .width(Length::Fixed(40.0)),
-                        text(raw(g.name.as_str()))
+                        text(signex_i18n::UserText::new(g.name.as_str()))
                             .size(TS.caption)
                             .color(if is_active { primary } else { muted })
                             .width(Length::Fill),
@@ -181,15 +181,13 @@ pub(super) fn render_other_section<'a>(
         muted,
         primary,
         input_bg,
-        input_bdr,
-        seg_hover,
         ..
     } = palette;
     use signex_types::coord::Unit;
     // Units row — mm/mils segmented selector (Altium parity). Reuses
     // the schematic Properties panel's `seg_btn` widget so the chrome
     // matches byte-for-byte.
-    col = col.push(super::super::form_label("Units", muted));
+    col = col.push(super::super::form_label("Units"));
     col = col.push(
         container(
             row![
@@ -200,8 +198,6 @@ pub(super) fn render_other_section<'a>(
                     input_bg,
                     primary,
                     muted,
-                    seg_hover,
-                    input_bdr,
                 ),
                 super::super::seg_btn(
                     "mils",
@@ -210,8 +206,6 @@ pub(super) fn render_other_section<'a>(
                     input_bg,
                     primary,
                     muted,
-                    seg_hover,
-                    input_bdr,
                 ),
             ]
             .spacing(0.0)

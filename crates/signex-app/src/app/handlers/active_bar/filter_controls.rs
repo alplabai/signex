@@ -19,11 +19,17 @@ impl Signex {
     }
 
     pub(crate) fn handle_active_bar_all_filters_toggle(&mut self) -> Task<Message> {
-        if self.interaction_state.selection_filters.len() == SelectionFilter::ALL.len() {
-            self.interaction_state.selection_filters.clear();
-        } else {
+        let all_on = self.interaction_state.selection_filters.len() == SelectionFilter::ALL.len();
+        self.set_all_selection_filters(!all_on)
+    }
+
+    /// Turn every selection-filter category on (`all`) or off.
+    pub(crate) fn set_all_selection_filters(&mut self, all: bool) -> Task<Message> {
+        if all {
             self.interaction_state.selection_filters =
                 SelectionFilter::ALL.iter().copied().collect();
+        } else {
+            self.interaction_state.selection_filters.clear();
         }
         self.document_state.panel_ctx.selection_filters =
             self.interaction_state.selection_filters.clone();

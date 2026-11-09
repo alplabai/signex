@@ -16,14 +16,22 @@ impl SymbolCanvas<'_> {
     ) -> Vec<signex_renderer::schematic::TextInput> {
         [FieldKey::Reference, FieldKey::Value]
             .into_iter()
-            .map(|key| {
+            .filter_map(|key| {
                 let is_selected = match selected {
                     Some(SymbolSelection::Field(k)) => *k == key,
                     Some(SymbolSelection::All) => true,
                     _ => false,
                 };
+                // A `#` reference (`#PWR?`, `#FLG?`) is hidden in every schematic;
+                // drawing it here lands on the pin name of a power symbol.
+                if key == FieldKey::Reference
+                    && !is_selected
+                    && state::field_text(self.symbol, key).starts_with('#')
+                {
+                    return None;
+                }
                 let [x, y] = state::field_pos(self.symbol, key, self.view);
-                signex_renderer::schematic::TextInput {
+                Some(signex_renderer::schematic::TextInput {
                     content: state::field_text(self.symbol, key).to_owned(),
                     position: [x as f32, y as f32],
                     size_mm: state::FIELD_TEXT_SIZE_MM as f32,
@@ -38,7 +46,7 @@ impl SymbolCanvas<'_> {
                     h_align: HAlign::Left,
                     v_align: VAlign::Top,
                     family: None,
-                }
+                })
             })
             .collect()
     }

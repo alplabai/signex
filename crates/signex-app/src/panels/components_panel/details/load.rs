@@ -93,6 +93,7 @@ pub fn load_details(
         internal_pn: row.internal_pn.to_string(),
         class: row.class.as_str().to_owned(),
         lifecycle: format!("{:?}", row.state),
+        state: row.state,
         manufacturer: row.primary_mpn.manufacturer.clone(),
         mpn: row.primary_mpn.mpn.clone(),
         description: row.description.clone(),

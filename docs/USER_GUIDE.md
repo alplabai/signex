@@ -146,17 +146,22 @@ zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
 A symbol is a part on the sheet: a resistor, a connector, a chip. Symbols come
 from libraries.
 
-**Libraries.** The Components panel (**View ▸ Components**) lists mounted
-libraries in four sections: **Project**, **Installed**, **Global** and
-**Stock**. The **Stock** section is the library that ships with Signex. It is
-mounted on every launch; you do not add it, and its parts can be placed
-(34 component rows: resistors, capacitors, inductors, diodes, LEDs,
+**Libraries.** The Components panel (**View ▸ Components**) lists every
+mounted library in one list. Each row has an expand chevron, the library name,
+a badge for where it comes from (**STOCK**, **PROJECT**, **INSTALLED** or
+**GLOBAL**) and its component count; expanding it lists its components. The
+list runs Stock first, then Project, Installed and Global. Chips under the
+search box (**All** and each source that has a library, with its library
+count) narrow the list to one source. The **Stock** library ships with
+Signex. It is mounted on every launch; you do not add it, and its parts can be
+placed (34 component rows: resistors, capacitors, inductors, diodes, LEDs,
 transistors, connectors, 74HC logic and more). If the installer's copy cannot
-be found, the section says "Stock library not found. Reinstall Signex to
-restore the bundled parts." The **Installed** and **Global** sections have a
-**+ Add Library…** button, and **File ▸ Library ▸ Open Library…** mounts a
-`.snxlib` library. Type in **Filter components…** to narrow the list. Clicking
-a part row opens its Component Preview tab.
+be found, the list says "Stock library not found. Reinstall Signex to restore
+the bundled parts." when you pick the Stock chip. The **+ Add** button in the
+panel header asks where to add a library (**Project**, **Installed** or
+**Global**), and **File ▸ Library ▸ Open Library…** mounts a `.snxlib`
+library. Type in **Filter components…** to narrow the components. Clicking a
+part row opens its Component Preview tab.
 
 The stock library is read-only. Opening one of its **symbols** or
 **footprints** for editing does not open the original: the first time, a
@@ -384,10 +389,10 @@ Annotation gives every symbol a unique reference designator such as `R1`, `R2`.
 It acts on placed symbols, so with none on the sheet there is nothing to
 annotate (section 5).
 
-- **Design ▸ Annotation ▸ Annotate Schematics…** opens the annotation dialog.
+- **Tools ▸ Annotation ▸ Annotate Schematics…** opens the annotation dialog.
   Its right side lists the proposed changes (current and proposed designator
   for each symbol). Press **Accept Changes** to apply them, then **Close**.
-- **Design ▸ Annotation ▸ Annotate Schematics Quietly** (`Alt+A`) applies the
+- **Tools ▸ Annotation ▸ Annotate Schematics Quietly** (`Alt+A`) applies the
   changes without opening the dialog.
 - **Reset & Renumber** in the dialog, or **Force Annotate All Schematics**
   (`Shift+Alt+A`), renumbers everything from scratch.
@@ -518,7 +523,7 @@ ERC (electrical rules check) scans the design for wiring mistakes, such as
 pins that connect nothing or two outputs wired together.
 
 1. Press `F8`. This runs the check on the project immediately.
-   Alternatively choose **Design ▸ Electrical Rules Check**, which opens a
+   Alternatively choose **Project ▸ Electrical Rules Check**, which opens a
    dialog where you can set the severity of each rule and press **Run ERC**.
 2. The **ERC** panel opens with the results. Its header shows the number of
    errors, warnings and info items, and `<` and `>` step through them.
@@ -595,7 +600,7 @@ is nothing to lose at save time. Messages says once per opened sheet which file
 was not changed. Open the file in the newer Signex to edit it.
 
 ## 11. Export PDF and BOM
-
+The PDF is under **File ▸ Export**; the BOM, netlist and ERC report are under **Reports**. Both need a schematic open.
 Both exports are under **File ▸ Export** and need a schematic open.
 
 **PDF**
@@ -612,7 +617,7 @@ Both exports are under **File ▸ Export** and need a schematic open.
 
 **BOM (bill of materials)**
 
-1. Choose **File ▸ Export ▸ Bill of Materials…**.
+1. Choose **Reports ▸ Bill of Materials…**.
 2. A preview of the table opens. Adjust the options and press **Export…**.
 3. In the save dialog, name the file. The format can be CSV (`.csv`), Excel
    (`.xlsx`) or HTML (`.html`).
@@ -624,7 +629,7 @@ it, and **Save As** in the document's own folder. With no project open, or for
 the bundled Sample Project (which lives in the app's config folder), the export
 and New Project dialogs leave the folder to the operating system.
 
-The same menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
+The Reports menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
 The ERC report writes the results of the newest ERC run and does not run ERC
 itself: run it first (section 9), or the menu says so and writes nothing. It
 lists the rows the ERC panel shows, and when you have edited the sheet since the
@@ -692,9 +697,9 @@ the default Altium profile; the menu path always works.
 5. **Name the net.** Choose **Place ▸ Net Label** (or press `P` then `N`),
    click the wire, press `Esc`, double-click the label, type the name, and press
    `Enter` (section 7).
-6. **Annotate.** Press `Alt+A` (**Design ▸ Annotation ▸ Annotate Schematics
+6. **Annotate.** Press `Alt+A` (**Tools ▸ Annotation ▸ Annotate Schematics
    Quietly**) to give every part a unique reference designator (section 8).
-   **Design ▸ Annotation ▸ Annotate Schematics…** shows the proposed changes
+   **Tools ▸ Annotation ▸ Annotate Schematics…** shows the proposed changes
    first.
 7. **Run ERC.** Press `F8`, read the **ERC** panel, and click a row to jump to
    the item (section 9). Fix what it reports, then run it again.

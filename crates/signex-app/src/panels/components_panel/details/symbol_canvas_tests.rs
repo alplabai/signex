@@ -30,7 +30,7 @@ fn the_preview_is_a_placed_symbol_the_canvas_can_draw() {
     let scene = build_schematic_scene(
         &sheet,
         &transform,
-        &canvas_colors(ThemeId::Signex),
+        &canvas_colors(ThemeId::GraphiteLight),
         Rectangle::with_size(size),
         None,
         SceneOverrides::default(),
@@ -133,7 +133,7 @@ const DOTS: SheetGrid = SheetGrid {
 fn program(lib: LibSymbol, grid: SheetGrid) -> SymbolSheetPreview {
     SymbolSheetPreview {
         lib,
-        colors: canvas_colors(ThemeId::Signex),
+        colors: canvas_colors(ThemeId::GraphiteLight),
         grid,
         device_px_per_logical_px: UNSCALED,
         zoom_step: Camera::zoom_step_factor(Camera::ZOOM_STEP_PERCENT_DEFAULT),
@@ -143,7 +143,7 @@ fn program(lib: LibSymbol, grid: SheetGrid) -> SymbolSheetPreview {
 #[test]
 fn the_first_draw_and_any_change_rebuild_but_the_same_symbol_does_not() {
     let lib = body_symbol();
-    let colors = canvas_colors(ThemeId::Signex);
+    let colors = canvas_colors(ThemeId::GraphiteLight);
     let mut shown = None;
     assert!(
         take_rebuild(&mut shown, &(lib.clone(), colors, DOTS)),
@@ -165,7 +165,7 @@ fn the_first_draw_and_any_change_rebuild_but_the_same_symbol_does_not() {
         "settled again"
     );
 
-    let dark = canvas_colors(ThemeId::SolarizedLight);
+    let dark = canvas_colors(ThemeId::GraphiteDark);
     assert_ne!(colors, dark, "the two themes must differ");
     assert!(
         take_rebuild(&mut shown, &(other.clone(), dark, DOTS)),
@@ -302,9 +302,46 @@ fn event(event: mouse::Event, state: &mut PreviewState, p: &SymbolSheetPreview) 
     over(iced::Event::Mouse(event), state, p)
 }
 
+/// Deliver `event` the way the runtime does: a cursor move comes with the
+/// cursor at its position; anything else finds it over the box.
 fn over(event: iced::Event, state: &mut PreviewState, p: &SymbolSheetPreview) -> bool {
-    let cursor = mouse::Cursor::Available(iced::Point::new(100.0, 80.0));
-    canvas::Program::<()>::update(p, state, &event, BOX, cursor).is_some()
+    let at = match event {
+        iced::Event::Mouse(mouse::Event::CursorMoved { position }) => position,
+        _ => iced::Point::new(100.0, 80.0),
+    };
+    canvas::Program::<()>::update(p, state, &event, BOX, mouse::Cursor::Available(at)).is_some()
+}
+
+/// Inside a pane scrolled by `scroll`, iced shifts the widget cursor by the
+/// scroll offset but hands the event its window position unchanged. A drag
+/// still moves the drawing exactly with the pointer, on the first move too.
+#[test]
+fn a_drag_in_a_scrolled_pane_pans_one_to_one() {
+    let p = program(body_symbol(), DOTS);
+    let mut state = shown(&p);
+    // Window positions; the cursor (content space) is inside the box.
+    let scroll = Vector::new(0.0, 60.0);
+    let window_at = iced::Point::new(100.0, 20.0);
+    let press = iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+    let cursor = |at: iced::Point| mouse::Cursor::Available(at + scroll);
+    let pressed = canvas::Program::<()>::update(&p, &mut state, &press, BOX, cursor(window_at));
+    assert!(pressed.is_some(), "the press starts a pan");
+    let before = state.camera.offset;
+    for (step, to) in [(130.0, 20.0), (150.0, 35.0)].into_iter().enumerate() {
+        let to = iced::Point::new(to.0, to.1);
+        let moved = iced::Event::Mouse(mouse::Event::CursorMoved { position: to });
+        let _ = canvas::Program::<()>::update(&p, &mut state, &moved, BOX, cursor(to));
+        assert_eq!(
+            state.camera.offset,
+            before + (to - window_at),
+            "move {step} follows the pointer"
+        );
+    }
+    // Over a scrollbar or a layer above, the obstructed cursor still drags.
+    let to = iced::Point::new(160.0, 40.0);
+    let moved = iced::Event::Mouse(mouse::Event::CursorMoved { position: to });
+    let _ = canvas::Program::<()>::update(&p, &mut state, &moved, BOX, cursor(to).obstruct());
+    assert_eq!(state.camera.offset, before + (to - window_at));
 }
 
 fn hold_ctrl(state: &mut PreviewState, p: &SymbolSheetPreview) {

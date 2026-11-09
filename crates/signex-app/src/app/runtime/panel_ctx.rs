@@ -32,6 +32,35 @@ impl Signex {
         Some((library_path, table, row))
     }
 
+    /// The active Component editor tab's row, for the Graphite Properties dock.
+    fn compute_component_sheet(&self) -> Option<crate::panels::ComponentSheet> {
+        let tab = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)?;
+        let editor = tab.kind.as_component_editor()?;
+        let lib = self.library.library_at(&editor.library_path)?;
+        let row = lib
+            .tables
+            .get(&editor.table)?
+            .iter()
+            .find(|r| signex_library::RowId::from_uuid(r.row_id) == editor.row_id)?;
+        Some(crate::panels::ComponentSheet {
+            internal_pn: row.internal_pn.as_str().to_string(),
+            manufacturer: row.primary_mpn.manufacturer.clone(),
+            mpn: row.primary_mpn.mpn.clone(),
+            lifecycle: crate::library::editor::kit::lifecycle_label(row.state).to_string(),
+            version: row.version.clone(),
+            library: editor
+                .library_path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            table: editor.table.clone(),
+            updated: row.updated.format("%Y-%m-%d").to_string(),
+        })
+    }
+
     /// Record which row's bindings the Properties panel needs summarised;
     /// `start_row_summary_read` fetches them. Never reads the disk.
     pub(super) fn want_row_summaries(&mut self) {
@@ -263,6 +292,26 @@ impl Signex {
         // window's refresh runs with its sheet swapped in and must not
         // retarget them at that sheet's project.
         let main_level = self.interaction_state.acting_window.is_none();
+        if main_level {
+            let context = match self
+                .document_state
+                .tabs
+                .get(self.document_state.active_tab)
+                .map(|tab| &tab.kind)
+            {
+                Some(crate::app::TabKind::FootprintEditor(_)) => {
+                    Some(crate::dock::EditorContext::Footprint)
+                }
+                Some(crate::app::TabKind::SymbolEditor(_)) => {
+                    Some(crate::dock::EditorContext::Symbol)
+                }
+                Some(crate::app::TabKind::Pcb) => Some(crate::dock::EditorContext::Pcb),
+                _ => None,
+            };
+            if let Some(context) = context {
+                self.document_state.dock.seed_for_editor(context);
+            }
+        }
         let previous_navigator = std::mem::take(&mut self.document_state.panel_ctx.navigator);
         let navigator = if main_level {
             self.drop_pending_profile_update_for_other_project();
@@ -442,6 +491,7 @@ impl Signex {
                     libraries,
                     is_active: Some(p.id) == active_id,
                     is_dirty: dirty_paths.contains(&p.path),
+                    version_control: p.data.enable_git,
                 }
             })
             .collect();
@@ -485,6 +535,8 @@ impl Signex {
 
         let canvas_font_popup_open = self.document_state.panel_ctx.canvas_font_popup_open;
         let properties_tab = self.document_state.panel_ctx.properties_tab;
+        let signal_mode = self.document_state.panel_ctx.signal_mode;
+        let projects_view = self.document_state.panel_ctx.projects_view.clone();
         let selection_count = self.document_state.panel_ctx.selection_count;
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
@@ -493,6 +545,7 @@ impl Signex {
         let multi_draft = self.document_state.panel_ctx.multi_draft.clone();
         let symbol_choices = self.document_state.panel_ctx.symbol_choices.clone();
         let footprint_choices = self.document_state.panel_ctx.footprint_choices.clone();
+        let footprint_card = self.document_state.panel_ctx.footprint_card.clone();
         let drawing_edit_buf_page =
             active_schematic_snapshot.map(|sheet| (sheet.page.origin, sheet.paper_size.clone()));
         let drawing_edit_buf =
@@ -507,6 +560,8 @@ impl Signex {
         let selected_child_sheet = self.document_state.panel_ctx.selected_child_sheet.clone();
         let child_sheet_border_picker_open =
             self.document_state.panel_ctx.child_sheet_border_picker_open;
+        let wire_color_picker = self.document_state.panel_ctx.wire_color_picker;
+        let selected_wire_style = self.document_state.panel_ctx.selected_wire_style;
         let child_sheet_fill_picker_open =
             self.document_state.panel_ctx.child_sheet_fill_picker_open;
         let child_sheet_border_advanced_open = self
@@ -623,12 +678,18 @@ impl Signex {
             canvas_font_italic: self.ui_state.canvas_font_italic,
             canvas_font_popup_open,
             properties_tab,
+            signal_mode,
+            projects_view,
             net_classes,
             project_tree: kept_project_tree,
             project_tree_builds,
             project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),
             navigator,
             library_row_detail: self.compute_library_row_detail(),
+            component_sheet: self.compute_component_sheet(),
+            pcb_nets: self
+                .active_pcb_snapshot()
+                .map(crate::panels::PcbNetsSummary::of),
             selection_count,
             selected_uuid,
             selected_kind,
@@ -637,6 +698,7 @@ impl Signex {
             multi_draft,
             symbol_choices,
             footprint_choices,
+            footprint_card,
             drawing_edit_buf,
             drawing_edit_buf_for,
             drawing_edit_buf_page,
@@ -647,6 +709,8 @@ impl Signex {
             child_sheet_fill_picker_open,
             child_sheet_border_advanced_open,
             child_sheet_fill_advanced_open,
+            wire_color_picker,
+            selected_wire_style,
             child_sheet_stroke_width_buf,
             child_sheet_name_buf,
             child_sheet_file_buf,

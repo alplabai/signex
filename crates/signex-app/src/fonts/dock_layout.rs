@@ -94,7 +94,7 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         SchFilter => "sch_filter",
         SchList => "sch_list",
         Messages => "messages",
-        Signal => "signal",
+        SignexAi => "signex_ai",
         Drc => "drc",
         BomStudio => "bom_studio",
         Favorites => "favorites",
@@ -108,6 +108,9 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         Library => "library",
         SchLibrary => "sch_library",
         FootprintLibrary => "footprint_library",
+        FootprintLayers => "footprint_layers",
+        SymbolPins => "symbol_pins",
+        PcbNets => "pcb_nets",
         History => "history",
     }
 }
@@ -124,7 +127,7 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "sch_filter" => SchFilter,
         "sch_list" => SchList,
         "messages" => Messages,
-        "signal" => Signal,
+        "signex_ai" => SignexAi,
         "drc" => Drc,
         "bom_studio" => BomStudio,
         "favorites" => Favorites,
@@ -138,7 +141,80 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "library" => Library,
         "sch_library" => SchLibrary,
         "footprint_library" => FootprintLibrary,
+        "footprint_layers" => FootprintLayers,
+        "symbol_pins" => SymbolPins,
+        "pcb_nets" => PcbNets,
         "history" => History,
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dock::{DockLayoutSnapshot, DockLayoutStore, PanelPosition, RegionLayout};
+    use crate::panels::PanelKind;
+
+    fn region(panels: &[PanelKind], collapsed: bool) -> RegionLayout {
+        RegionLayout {
+            panels: panels.to_vec(),
+            collapsed,
+        }
+    }
+
+    /// Saves a layout holding Signex AI through the real store and returns
+    /// the saved `prefs.json` text.
+    fn saved(dir: &tempfile::TempDir) -> String {
+        let path = dir.path().join("prefs.json");
+        let layout = DockLayoutSnapshot {
+            left: region(&[PanelKind::Projects], false),
+            right: region(&[PanelKind::Properties, PanelKind::SignexAi], false),
+            bottom: region(&[PanelKind::Messages], true),
+        };
+        PrefsDockLayoutStore::at(path.clone())
+            .write(&layout)
+            .expect("save the dock layout");
+        std::fs::read_to_string(path).expect("read prefs.json")
+    }
+
+    #[test]
+    fn the_signex_ai_panel_round_trips_under_its_layout_key() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let text = saved(&dir);
+        let json: serde_json::Value = serde_json::from_str(&text).expect("prefs.json parses");
+
+        // Saved under "signex_ai".
+        assert_eq!(
+            json["dock"]["right"]["panels"],
+            serde_json::json!(["properties", "signex_ai"])
+        );
+
+        // Loaded back as the same panel.
+        let dock = read_dock_layout_from(Some(&json)).expect("a saved layout loads");
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties, PanelKind::SignexAi]
+        );
+    }
+
+    #[test]
+    fn an_unknown_panel_key_drops_only_that_panel() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let text = saved(&dir).replace("signex_ai", "signal");
+        let json: serde_json::Value = serde_json::from_str(&text).expect("prefs.json parses");
+
+        let dock = read_dock_layout_from(Some(&json)).expect("the layout itself still loads");
+
+        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::Projects]);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties]
+        );
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Bottom),
+            [PanelKind::Messages]
+        );
+        assert!(dock.is_collapsed(PanelPosition::Bottom));
+        assert!(!dock.is_collapsed(PanelPosition::Left));
+    }
 }

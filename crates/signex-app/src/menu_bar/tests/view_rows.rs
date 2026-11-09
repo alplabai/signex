@@ -122,7 +122,7 @@ fn panel_rows_show_their_panel_and_check_it() {
         ("Properties", PanelKind::Properties),
         ("ERC", PanelKind::Erc),
         ("Messages", PanelKind::Messages),
-        ("Signal", PanelKind::Signal),
+        ("Signex AI", PanelKind::SignexAi),
     ] {
         let mut app = one_symbol_selected();
         app.document_state.dock.close_panel(kind);

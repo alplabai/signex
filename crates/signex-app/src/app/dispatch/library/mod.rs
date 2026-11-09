@@ -514,8 +514,18 @@ impl Signex {
             }
 
             // ── Components Panel (Stage 9) ────────────────────────────
-            LibraryMessage::ComponentsPanelToggleSection(src) => {
-                self.handle_components_panel_toggle_section(src)
+            LibraryMessage::ComponentsPanelToggleLibrary(root) => {
+                self.handle_components_panel_toggle_library(root)
+            }
+            LibraryMessage::ComponentsPanelSourceFilterChanged(source) => {
+                let panel = &mut self.library.components_panel;
+                panel.source_filter = source;
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelAddMenuToggled => {
+                let panel = &mut self.library.components_panel;
+                panel.add_menu_open = !panel.add_menu_open;
+                Task::none()
             }
             LibraryMessage::ComponentsPanelRowPressed(key) => {
                 self.handle_components_panel_row_pressed(key)
@@ -554,6 +564,10 @@ impl Signex {
                     .components_panel
                     .details
                     .finish(&key, generation, result);
+                Task::none()
+            }
+            LibraryMessage::PropertiesFootprintCardLoaded { key, result } => {
+                self.finish_footprint_card_load(key, result);
                 Task::none()
             }
             LibraryMessage::ComponentsPanelFootprintPicked(reference) => {

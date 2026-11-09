@@ -234,6 +234,7 @@ mod follow_tests {
             size: (2.54, 2.54),
         });
         s.wires.push(Wire {
+            color: None,
             uuid: Uuid::now_v7(),
             start: Point::new(2.54, 12.54),
             end: Point::new(12.54, 12.54),

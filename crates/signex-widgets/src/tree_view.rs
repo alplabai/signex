@@ -16,26 +16,10 @@ use iced::widget::{Column, Row, Space, container, mouse_area, scrollable, svg};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
-// ─── SVG Chevron Icons (cached handles) ──────────────────────
-
-const SVG_CHEVRON_RIGHT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4z" fill="currentColor"/></svg>"#;
-const SVG_CHEVRON_DOWN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 5 4-5z" fill="currentColor"/></svg>"#;
-
-fn chevron_right_handle() -> svg::Handle {
-    static HANDLE: OnceLock<svg::Handle> = OnceLock::new();
-    HANDLE
-        .get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_RIGHT))
-        .clone()
-}
-
-fn chevron_down_handle() -> svg::Handle {
-    static HANDLE: OnceLock<svg::Handle> = OnceLock::new();
-    HANDLE
-        .get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_DOWN))
-        .clone()
-}
-
 use crate::theme_ext;
+
+mod style;
+pub use style::{BadgeTone, BadgeTones, TreeStyle};
 
 // ─── Data Model ───────────────────────────────────────────────
 
@@ -243,6 +227,10 @@ pub struct TreeNode {
     /// user can find their place in a multi-sheet project at a
     /// glance — Altium parity.
     pub is_active: bool,
+    /// Tint of the badge pill (themed rows only).
+    pub badge_tone: BadgeTone,
+    /// Small monospace note on the right of the row (themed rows only).
+    pub meta: Option<String>,
 }
 
 impl TreeNode {
@@ -260,6 +248,8 @@ impl TreeNode {
             is_open: false,
             is_dirty: false,
             is_active: false,
+            badge_tone: BadgeTone::Neutral,
+            meta: None,
         }
     }
 
@@ -277,6 +267,8 @@ impl TreeNode {
             is_open: false,
             is_dirty: false,
             is_active: false,
+            badge_tone: BadgeTone::Neutral,
+            meta: None,
         }
     }
 
@@ -294,6 +286,18 @@ impl TreeNode {
     /// Builder variant: mark the node as accented (bold at depth 0).
     pub fn with_accent(mut self, accent: bool) -> Self {
         self.accent = accent;
+        self
+    }
+
+    /// Builder: tint the badge pill.
+    pub fn with_badge_tone(mut self, tone: BadgeTone) -> Self {
+        self.badge_tone = tone;
+        self
+    }
+
+    /// Builder: set the monospace note shown on the right of a themed row.
+    pub fn with_meta(mut self, meta: impl Into<String>) -> Self {
+        self.meta = Some(meta.into());
         self
     }
 
@@ -342,7 +346,6 @@ const INDENT_PER_DEPTH: f32 = 12.0; // Altium: ~12px per depth at compact densit
 const BASE_PAD_LEFT: f32 = 4.0; // minimal base indent
 const ELEM_GAP: f32 = 2.0; // Altium: very tight gaps
 const ICON_LABEL_GAP: f32 = 4.0; // Tight gap right of the icon (Altium parity)
-const CHEVRON_W: f32 = 8.0; // triangle column — half-step smaller to match smaller icon
 const ICON_SZ: f32 = 12.0; // Chamfered SVG silhouettes — Altium parity at compact density
 /// Default row label size; the metrics below are tuned for it and scale
 /// with `TreeView::text_size` relative to it.
@@ -374,6 +377,8 @@ struct Metrics {
     chevron: f32,
     icon: f32,
     pad_v: f32,
+    /// Opt-in themed row look; `None` keeps the compact legacy rows.
+    style: Option<TreeStyle>,
 }
 
 impl Metrics {
@@ -384,9 +389,10 @@ impl Metrics {
             badge: BADGE_SZ * k,
             empty: EMPTY_SZ * k,
             indent: INDENT_PER_DEPTH * k,
-            chevron: CHEVRON_W * k,
+            chevron: crate::chevron::side(font),
             icon: ICON_SZ * k,
             pad_v: f32::from(PAD_V) * k,
+            style: None,
         }
     }
 }
@@ -406,6 +412,7 @@ pub struct TreeView<'a> {
     selected: Option<&'a [String]>,
     tokens: &'a ThemeTokens,
     text_size: f32,
+    style: Option<TreeStyle>,
 }
 
 impl<'a> TreeView<'a> {
@@ -415,7 +422,14 @@ impl<'a> TreeView<'a> {
             selected: None,
             tokens,
             text_size: FONT_SZ,
+            style: None,
         }
+    }
+
+    /// Opt in to the themed row look (fixed height, rounded selection, inset).
+    pub fn style(mut self, style: TreeStyle) -> Self {
+        self.style = Some(style);
+        self
     }
 
     /// Row label size in px; badge, "(empty)", indent, icon and padding scale with it.
@@ -431,7 +445,10 @@ impl<'a> TreeView<'a> {
 
     /// Build the tree into a scrollable Element.
     pub fn view(self) -> Element<'static, TreeMsg> {
-        let metrics = Metrics::for_text_size(self.text_size);
+        let metrics = Metrics {
+            style: self.style,
+            ..Metrics::for_text_size(self.text_size)
+        };
         let mut col: Column<Element<'static, TreeMsg>> =
             Column::new().spacing(0.0).width(Length::Fill);
         for node in self.roots {
@@ -450,7 +467,16 @@ impl<'a> TreeView<'a> {
         // the background context menu (Expand all / Collapse all / Refresh).
         // Row right-clicks are captured earlier by per-row mouse_areas and
         // take priority — they never propagate to this outer handler.
-        mouse_area(scrollable(col).width(Length::Fill))
+        let inset = self.style.map_or(0.0, |s| s.inset);
+        let body: Element<'static, TreeMsg> = if inset > 0.0 {
+            container(col)
+                .padding([0.0, inset])
+                .width(Length::Fill)
+                .boxed()
+        } else {
+            col.boxed()
+        };
+        mouse_area(scrollable(body).width(Length::Fill))
             .on_right_press(TreeMsg::BackgroundContextMenu)
             .boxed()
     }
@@ -476,8 +502,16 @@ fn render_node(
     // they read cleanly next to the full-colour SVG icons. Older
     // builds used `text_secondary` back when icons were muted
     // Unicode glyphs.
+    let sel_ink = m.style.map_or(FG_ON_SELECTION, |s| s.selected_ink);
+    // Themed rows sit on a light or dark panel, so unselected chrome uses
+    // the secondary text colour instead of the legacy literal white.
+    let chrome_c = match (is_sel, m.style) {
+        (true, _) => sel_ink,
+        (false, Some(_)) => theme_ext::text_secondary(tokens),
+        (false, None) => FG_ON_SELECTION,
+    };
     let txt_c = if is_sel {
-        FG_ON_SELECTION
+        sel_ink
     } else {
         theme_ext::text_primary(tokens)
     };
@@ -488,7 +522,9 @@ fn render_node(
         let base = theme_ext::text_secondary(tokens);
         Color::from_rgba(base.r, base.g, base.b, 0.5)
     };
-    let sel_bg = theme_ext::selection_color(tokens);
+    let sel_bg = m
+        .style
+        .map_or_else(|| theme_ext::selection_color(tokens), |s| s.selected_fill);
     let hov_bg = theme_ext::hover_color(tokens);
 
     // --- Assemble row ---
@@ -497,6 +533,10 @@ fn render_node(
     let mut r: Row<Element<'static, TreeMsg>> = Row::new()
         .spacing(ELEM_GAP)
         .align_y(iced::Alignment::Center);
+    if m.style.is_some() {
+        // Fill the fixed-height button so the content centres in it.
+        r = r.height(Length::Fill);
+    }
 
     // Left indent
     if pad_left > 0.0 {
@@ -505,21 +545,7 @@ fn render_node(
 
     // Chevron — SVG icon (Unicode triangles render as colored emoji on Windows)
     if is_expandable {
-        let handle = if node.expanded {
-            chevron_down_handle()
-        } else {
-            chevron_right_handle()
-        };
-        r = r.push(
-            svg(handle)
-                .width(m.chevron)
-                .height(m.chevron)
-                .style(|_: &Theme, _| svg::Style {
-                    color: Some(FG_ON_SELECTION),
-                    ..Default::default()
-                })
-                .boxed(),
-        );
+        r = r.push(crate::chevron::chevron(node.expanded, m.font, chrome_c).boxed());
     } else {
         r = r.push(Space::new().width(m.chevron).boxed());
     }
@@ -568,16 +594,51 @@ fn render_node(
     }
     r = r.push(label.boxed());
 
-    // Badge (right-aligned, very muted, single line)
-    if let Some(badge) = &node.badge {
+    // Themed meta note, right-aligned ahead of the badge.
+    let meta = node.meta.as_ref().filter(|_| m.style.is_some());
+    if let Some(meta) = meta {
         r = r.push(iced::widget::space::horizontal().boxed());
         r = r.push(
-            text(raw(badge.clone()))
+            text(raw(meta.clone()))
                 .size(m.badge)
-                .color(badge_c)
+                .font(iced::Font::MONOSPACE)
+                .color(theme_ext::text_secondary(tokens))
                 .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
         );
+        r = r.push(Space::new().width(RIGHT_INDICATOR_GAP).boxed());
+    }
+
+    // Badge (right-aligned, very muted, single line)
+    if let Some(badge) = &node.badge {
+        if meta.is_none() {
+            r = r.push(iced::widget::space::horizontal().boxed());
+        }
+        let badge_text = text(raw(badge.clone()))
+            .size(m.badge)
+            .wrapping(iced::widget::text::Wrapping::None);
+        if m.style.is_some() {
+            // Themed rows draw the badge as a count / kind pill.
+            let (fill, ink) = m
+                .style
+                .and_then(|s| s.tone_colors(node.badge_tone))
+                .unwrap_or((hov_bg, theme_ext::text_secondary(tokens)));
+            r = r.push(
+                container(badge_text.color(ink))
+                    .padding([0.0, 5.0])
+                    .style(move |_: &Theme| container::Style {
+                        background: Some(Background::Color(fill)),
+                        border: iced::Border {
+                            radius: 999.0.into(),
+                            ..iced::Border::default()
+                        },
+                        ..container::Style::default()
+                    })
+                    .boxed(),
+            );
+        } else {
+            r = r.push(badge_text.color(badge_c).boxed());
+        }
     }
 
     // Right-side indicators (Altium parity):
@@ -588,7 +649,7 @@ fn render_node(
     // dirty state already implies open and only one indicator's worth
     // of width fits comfortably in narrow Projects panels.
     if node.is_open || node.is_dirty {
-        if node.badge.is_none() {
+        if node.badge.is_none() && meta.is_none() {
             r = r.push(iced::widget::space::horizontal().boxed());
         } else {
             r = r.push(Space::new().width(RIGHT_INDICATOR_GAP).boxed());
@@ -602,7 +663,7 @@ fn render_node(
             // accent is reserved for the active-project marker so
             // mixing accent colour into the open indicator made the
             // tree feel noisy at a glance.
-            FG_ON_SELECTION
+            chrome_c
         };
         let sz = if node.is_dirty {
             DIRTY_DOT_SZ
@@ -641,14 +702,18 @@ fn render_node(
         let s = sel_bg;
         Color::from_rgba(s.r, s.g, s.b, 0.45)
     };
+    let row_radius = m.style.map_or(2.0, |s| s.radius);
     let row_btn = button(r)
-        .padding(iced::Padding {
-            top: m.pad_v,
-            right: f32::from(PAD_R),
-            bottom: m.pad_v,
-            left: f32::from(PAD_R),
-        })
+        .padding(style::row_padding(
+            m.style.as_ref(),
+            m.pad_v,
+            f32::from(PAD_R),
+        ))
         .width(Length::Fill)
+        .height(
+            m.style
+                .map_or(Length::Shrink, |s| Length::Fixed(s.row_height)),
+        )
         .on_press(msg)
         .style(move |_theme: &Theme, status: button::Status| {
             let bg = match (is_sel, is_active, status) {
@@ -663,7 +728,7 @@ fn render_node(
                 background: bg,
                 text_color: txt_c,
                 border: Border {
-                    radius: 2.0.into(),
+                    radius: row_radius.into(),
                     ..Border::default()
                 },
                 ..button::Style::default()
@@ -791,7 +856,7 @@ mod tests {
 
     #[test]
     fn text_size_defaults_to_the_compact_tree_size_and_is_overridable() {
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         let roots = tree();
         let view = TreeView::new(&roots, &tokens);
         assert_eq!(view.text_size, 10.5);
@@ -801,6 +866,11 @@ mod tests {
         assert_eq!(view.text_size, 12.0);
         assert_eq!(m.font, 12.0);
         assert!(m.badge < m.font && m.icon > ICON_SZ);
+        assert_eq!(
+            m.chevron,
+            crate::chevron::side(m.font),
+            "tree rows use the shared chevron box"
+        );
     }
 
     fn key(parts: &[&str]) -> TreeKey {

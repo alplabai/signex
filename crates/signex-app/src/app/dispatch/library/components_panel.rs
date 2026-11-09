@@ -1,5 +1,5 @@
-//! Components Panel handlers (Stage 9) — section collapse, add-library
-//! from the Installed / Global headers, promote-to-global, and
+//! Components Panel handlers (Stage 9) — library collapse, add-library
+//! from the header menu, promote-to-global, and
 //! place-into-schematic.
 //!
 //! Split out of the library dispatcher (`dispatch/library`).
@@ -7,18 +7,14 @@
 use super::*;
 
 impl Signex {
-    /// Toggle the collapse flag for the named section.
-    pub(super) fn handle_components_panel_toggle_section(
+    /// Expand or collapse the library mounted at `root`.
+    pub(super) fn handle_components_panel_toggle_library(
         &mut self,
-        src: crate::library::state::ComponentsMountSource,
+        root: std::path::PathBuf,
     ) -> Task<Message> {
-        use crate::library::state::ComponentsMountSource;
-        let p = &mut self.library.components_panel;
-        match src {
-            ComponentsMountSource::Project => p.collapsed_project = !p.collapsed_project,
-            ComponentsMountSource::Installed => p.collapsed_installed = !p.collapsed_installed,
-            ComponentsMountSource::Global => p.collapsed_global = !p.collapsed_global,
-            ComponentsMountSource::Stock => p.collapsed_stock = !p.collapsed_stock,
+        let collapsed = &mut self.library.components_panel.collapsed_libraries;
+        if !collapsed.remove(&root) {
+            collapsed.insert(root);
         }
         Task::none()
     }
@@ -426,6 +422,7 @@ impl Signex {
         &mut self,
         source: crate::library::state::ComponentsMountSource,
     ) -> Task<Message> {
+        self.library.components_panel.add_menu_open = false;
         if source == crate::library::state::ComponentsMountSource::Project {
             return self.reject_project_add_library();
         }

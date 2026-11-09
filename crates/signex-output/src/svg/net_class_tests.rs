@@ -200,3 +200,23 @@ fn a_junction_override_beats_the_class_colour_but_does_not_tint_alone() {
         "an override alone does not tint the dot, as on the canvas"
     );
 }
+
+#[test]
+fn a_semi_transparent_wire_colour_is_written_with_its_alpha() {
+    let mut sheet = sheet_with_wire();
+    sheet.schematic.wires[0].color = Some(Color::new(255, 0, 0, 0x80));
+    let opts = PdfOptions::default();
+
+    let (_, style) = wire_path(&sheet, &opts);
+    assert!((style.stroke_alpha - 128.0 / 255.0).abs() < 1e-6);
+
+    let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);
+    let ctx = SvgRenderContext::from_sheet(&sheet, &opts, w_mm, h_mm, 72.0 / 25.4, None);
+    let svg = ctx.svg_document();
+    assert!(svg.contains("stroke-opacity=\"0.50"), "{svg}");
+
+    // An opaque wire writes no opacity attribute at all.
+    sheet.schematic.wires[0].color = Some(Color::new(255, 0, 0, 255));
+    let ctx = SvgRenderContext::from_sheet(&sheet, &opts, w_mm, h_mm, 72.0 / 25.4, None);
+    assert!(!ctx.svg_document().contains("stroke-opacity"));
+}

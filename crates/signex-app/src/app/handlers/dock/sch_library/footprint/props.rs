@@ -46,6 +46,29 @@ impl Signex {
         follow
     }
 
+    /// Forward a layer-visibility message of the Layers panel to the
+    /// active footprint editor and refresh the panel context so the eyes
+    /// show the new state.
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_layer_msg(
+        &mut self,
+        msg: crate::library::messages::FootprintEditorMsg,
+    ) -> Task<Message> {
+        let mut follow = Task::none();
+        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_footprint_editor()
+        {
+            let path = path.clone();
+            follow = self.update(Message::Library(
+                crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: crate::library::messages::PrimitiveEdit::Footprint(msg),
+                },
+            ));
+            self.refresh_panel_ctx();
+        }
+        follow
+    }
+
     pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_role(
         &mut self,
         id: &signex_sketch::id::SketchEntityId,

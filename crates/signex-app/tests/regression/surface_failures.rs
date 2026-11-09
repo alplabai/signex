@@ -4,7 +4,7 @@
 //! Covers: a failed Ctrl+S and a failed Component Preview row save raise the
 //! Save Failed card; closing a dirty primitive / Component Preview tab parks
 //! the draft instead of discarding it; History ▸ Restore over unsaved edits
-//! asks first; a refresh keeps a Custom theme's tokens.
+//! asks first; a refresh keeps the live theme's tokens.
 
 use signex_app::app::{
     ComponentEditorTab, ContextMenuMsg, FileMsg, Message, Signex, TabContextAction, TabInfo,
@@ -13,7 +13,7 @@ use signex_app::app::{
 use signex_app::dock::DockMessage;
 use signex_app::library::messages::{EditorMsg, LibraryMessage};
 use signex_app::panels::PanelMsg;
-use signex_types::theme::{CustomThemeFile, ThemeId, canvas_colors, theme_tokens};
+use signex_types::theme::{ThemeId, theme_tokens};
 use tempfile::TempDir;
 
 use crate::primitive_dirty_quit::{
@@ -165,16 +165,13 @@ fn history_restore_over_unsaved_edits_asks_before_it_acts() {
 }
 
 #[test]
-fn panel_refresh_keeps_the_custom_theme_tokens() {
+fn panel_refresh_keeps_the_live_theme_tokens() {
     let (mut app, _t) = Signex::new();
-    let custom = theme_tokens(ThemeId::Nord);
-    assert_ne!(custom, theme_tokens(ThemeId::Signex));
-    app.ui_state.custom_theme = Some(CustomThemeFile {
-        name: "mine".into(),
-        tokens: custom,
-        canvas: canvas_colors(ThemeId::Signex),
-    });
-    app.ui_state.theme_id = ThemeId::Custom;
+    // Not the default the panel context is seeded with.
+    let live = ThemeId::DEFAULT.light_dark_counterpart();
+    let custom = theme_tokens(live);
+    assert_ne!(custom, theme_tokens(ThemeId::DEFAULT));
+    app.ui_state.theme_id = live;
 
     // Any update ends in a panel-context refresh.
     let tmp = TempDir::new().unwrap();

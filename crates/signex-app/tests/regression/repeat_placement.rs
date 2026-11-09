@@ -31,6 +31,8 @@ fn arm_label(app: &mut Signex, text: &str) {
         cursor_x_mm: 0.0,
         cursor_y_mm: 0.0,
         shape_width_mm: 0.0,
+        wire_width: Default::default(),
+        wire_color: None,
         shape_fill: signex_types::schematic::FillType::None,
     });
 }
@@ -126,6 +128,8 @@ fn repeat_last_item_repeats_a_text_note_with_the_next_value() {
         cursor_x_mm: 0.0,
         cursor_y_mm: 0.0,
         shape_width_mm: 0.0,
+        wire_width: Default::default(),
+        wire_color: None,
         shape_fill: signex_types::schematic::FillType::None,
     });
     click_n(&mut app, 1);

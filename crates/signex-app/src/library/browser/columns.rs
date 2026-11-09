@@ -50,10 +50,19 @@ pub(super) enum ColumnKind {
     /// Read-only cached distributor price (qty-1 break, currency, age).
     /// Present only when some row of the table has a cached price.
     Price,
+    /// Read-only free-text description. Shown on Graphite themes only.
+    Description,
+    /// Read-only date the row was last updated. Shown on Graphite themes only.
+    Updated,
     Parameter(String),
 }
 
 impl ColumnKind {
+    /// Columns drawn on Graphite themes only; legacy themes keep their set.
+    pub(super) fn graphite_only(&self) -> bool {
+        matches!(self, ColumnKind::Description | ColumnKind::Updated)
+    }
+
     /// Stable sort key matching `LibraryMessage::BrowserSortColumn`'s
     /// `column_key` field. Ties columns to their cell-edit buffers
     /// and to the [`super::super::state::BrowserSort`] state.
@@ -67,6 +76,8 @@ impl ColumnKind {
             ColumnKind::Footprint => "footprint_ref".to_string(),
             ColumnKind::Tags => "parameters.tags".to_string(),
             ColumnKind::Price => "price".to_string(),
+            ColumnKind::Description => "description".to_string(),
+            ColumnKind::Updated => "updated".to_string(),
             ColumnKind::Parameter(key) => format!("parameters.{key}"),
         }
     }
@@ -150,6 +161,8 @@ impl ColumnKind {
             // The price lives in the pricing cache, not on the row; see
             // `PriceView`.
             ColumnKind::Price => String::new(),
+            ColumnKind::Description => r.description.clone(),
+            ColumnKind::Updated => r.updated.format("%Y-%m-%d").to_string(),
             ColumnKind::Parameter(key) => match r.parameters.get(key) {
                 Some(v) => v.display(),
                 None => String::new(),
@@ -199,6 +212,12 @@ pub(super) fn derive_columns(
         kind: ColumnKind::Mpn,
         width: 130.0,
     });
+    // Graphite only (the grid skips it elsewhere).
+    columns.push(GridColumn {
+        label: "Description".to_string(),
+        kind: ColumnKind::Description,
+        width: 200.0,
+    });
 
     // Stage 14: surface row revision + released-flag as a single
     // column. Rendered with a 🔒 prefix on released rows. Always
@@ -223,6 +242,11 @@ pub(super) fn derive_columns(
         label: "Footprint".to_string(),
         kind: ColumnKind::Footprint,
         width: 140.0,
+    });
+    columns.push(GridColumn {
+        label: "Updated".to_string(),
+        kind: ColumnKind::Updated,
+        width: 90.0,
     });
 
     // Cached distributor price, once Refresh All Pricing has stored one.
@@ -318,28 +342,6 @@ pub(super) fn derive_columns(
         });
     }
     columns
-}
-
-/// Per-lifecycle indicator dot colour. Matches plan §6:
-///
-/// * Released → green;
-/// * Draft / InReview → neutral grey ("active, but not preferred");
-/// * Deprecated → amber/yellow;
-/// * Obsolete → muted dark grey.
-///
-/// Centralised here so both the dot and any future lifecycle badge
-/// in the side preview pane can pull the same colour.
-pub(super) fn lifecycle_dot_color(state: LifecycleState) -> iced::Color {
-    match state {
-        LifecycleState::Released => iced::Color::from_rgb(0.30, 0.78, 0.40),
-        LifecycleState::InReview => iced::Color::from_rgb(0.50, 0.65, 0.95),
-        LifecycleState::Draft => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.45),
-        LifecycleState::Deprecated => iced::Color::from_rgb(0.96, 0.78, 0.10),
-        LifecycleState::Obsolete => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.20),
-        // `LifecycleState` is `#[non_exhaustive]` — fall back to the
-        // muted "Draft" colour for any future state we haven't styled yet.
-        _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.30),
-    }
 }
 
 fn shorten_label(key: &str) -> String {

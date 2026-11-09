@@ -254,7 +254,7 @@ fn place_move_button(
     use crate::library::editor::footprint::unified_active_bar::bar_items;
     use signex_types::theme::{ThemeId, theme_tokens};
 
-    let tid = ThemeId::CatppuccinMocha;
+    let tid = ThemeId::GraphiteDark;
     let tokens = theme_tokens(tid);
     bar_items(&editor, tid, &tokens).remove(2)
 }

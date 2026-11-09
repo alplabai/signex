@@ -524,11 +524,12 @@ pub enum LibraryMessage {
     LibraryUpdatesCancel,
 
     // ── Components Panel (Stage 9 of v0.9-snxlib-as-file) ───────────
-    /// Toggle the collapse flag for the named section
-    /// ("project" / "installed" / "global"). The dispatcher looks
-    /// the section up by name so adding a fourth section later
-    /// doesn't ripple through the message enum.
-    ComponentsPanelToggleSection(super::super::state::ComponentsMountSource),
+    /// Expand or collapse the library mounted at this root in the list.
+    ComponentsPanelToggleLibrary(std::path::PathBuf),
+    /// A source chip under the search box was picked; `None` is "All".
+    ComponentsPanelSourceFilterChanged(Option<super::super::state::ComponentsMountSource>),
+    /// The header "+ Add" button was pressed: open or close its menu.
+    ComponentsPanelAddMenuToggled,
     /// The pointer went down on a Components panel row: it is selected (the
     /// details section fills) and a drag onto the schematic is armed. A
     /// click, double click included, only selects; it never places a part
@@ -556,6 +557,13 @@ pub enum LibraryMessage {
         generation: u64,
         result: Result<Box<crate::panels::components_panel::details::ComponentDetails>, String>,
     },
+    /// The off-thread read of the selected placed part's footprint for its
+    /// Properties FOOTPRINT card finished. A read for a key nothing waits
+    /// for any more is dropped.
+    PropertiesFootprintCardLoaded {
+        key: crate::panels::FootprintCardKey,
+        result: Result<std::sync::Arc<crate::panels::FootprintCardFacts>, String>,
+    },
     /// A footprint was picked in the details view of the selected row
     /// (#1234): the details preview shows it and Place builds the part with it.
     ComponentsPanelFootprintPicked(signex_library::primitive::PrimitiveRef),
@@ -567,8 +575,7 @@ pub enum LibraryMessage {
     /// The user dismissed the shared-library-id notices at the top of the
     /// Components panel (#1908).
     IdClashNoticesDismissed,
-    /// "+ Add Library…" button on the Installed / Global section
-    /// header. Opens the file picker with `*.snxlib`
+    /// A "+ Add" menu item (Project / Installed / Global). Opens the file picker with `*.snxlib`
     /// filter and lands in `ComponentsPanelAddLibraryAt`.
     ComponentsPanelAddLibrary(super::super::state::ComponentsMountSource),
     /// Result of the Add Library file dialog. `None` = user

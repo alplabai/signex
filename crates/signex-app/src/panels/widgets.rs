@@ -11,21 +11,6 @@ const SP: Spacing = Spacing::DEFAULT;
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-// SVG chevrons (same as tree_view for consistency)
-const SVG_CHEVRON_RIGHT: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4z" fill="currentColor"/></svg>"#;
-const SVG_CHEVRON_DOWN: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 5 4-5z" fill="currentColor"/></svg>"#;
-
-fn chevron_right() -> svg::Handle {
-    static H: OnceLock<svg::Handle> = OnceLock::new();
-    H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_RIGHT))
-        .clone()
-}
-fn chevron_down() -> svg::Handle {
-    static H: OnceLock<svg::Handle> = OnceLock::new();
-    H.get_or_init(|| svg::Handle::from_memory(SVG_CHEVRON_DOWN))
-        .clone()
-}
-
 pub fn shape_icon_handle(
     elem_type: &str,
     theme: signex_types::theme::ThemeId,
@@ -52,11 +37,6 @@ pub fn collapsible_section_header<'a>(
     border_c: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     let is_collapsed = collapsed.contains(key);
-    let chevron_handle = if is_collapsed {
-        chevron_right()
-    } else {
-        chevron_down()
-    };
     let key_owned = key.to_string();
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
@@ -65,13 +45,7 @@ pub fn collapsible_section_header<'a>(
         signex_widgets::button(
             container(
                 row![
-                    svg(chevron_handle)
-                        .width(10)
-                        .height(10)
-                        .style(move |_: &Theme, _| iced::widget::svg::Style {
-                            color: Some(header_color),
-                            ..Default::default()
-                        }),
+                    signex_widgets::chevron::chevron(!is_collapsed, TS.label, header_color),
                     text(raw(title.to_string()))
                         .size(TS.label)
                         .color(header_color),
@@ -105,23 +79,6 @@ pub fn is_section_collapsed(key: &str, collapsed: &CollapsedSections) -> bool {
     collapsed.contains(key)
 }
 
-/// Collapsible section: clickable header with SVG chevron, hides content when collapsed.
-pub fn collapsible_section<'a>(
-    key: &str,
-    title: &str,
-    collapsed: &CollapsedSections,
-    header_color: Color,
-    border_c: Color,
-    content: impl FnOnce() -> Column<Element<'a, PanelMsg>>,
-) -> Column<Element<'a, PanelMsg>> {
-    let is_collapsed = collapsed.contains(key);
-    let mut col = collapsible_section_header(key, title, collapsed, header_color, border_c);
-    if !is_collapsed {
-        col = col.push(content().boxed());
-    }
-    col
-}
-
 /// Property key-value row (owned strings to avoid lifetime issues in closures).
 pub fn prop_kv_row<'a>(
     key: &str,
@@ -148,8 +105,8 @@ pub fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> iced::widget::Tex
     // user-visible: migrate to the #2063 casemap
     // ast-grep-ignore: no-case-in-view
     text(raw(title.to_uppercase()))
-        .size(TS.caption)
-        .color(theme_ext::text_secondary(tokens))
+        .size(TS.section)
+        .style(crate::styles::section_label(tokens))
 }
 
 pub fn separator<'a>(tokens: &ThemeTokens) -> iced::widget::Text<'a> {
@@ -229,23 +186,59 @@ pub fn part_tree_row<'a>(
     .boxed()
 }
 
-/// Property-row label: wraps at spaces inside its fill-portion column, so a
-/// narrow panel grows the row; a single over-long word is clipped, never split
-/// mid-word, and never reaches the value column.
-pub fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
-    property_label_sized(label, color, TS.body, PROPERTY_LABEL_PORTION)
+/// Width of the Properties label column on Graphite: the mock's fixed grid
+/// column, so a label such as "Designator" is never clipped by a narrow dock.
+pub const GRAPHITE_PROPERTY_LABEL_WIDTH: f32 = 92.0;
+
+/// Colour and column width of a property-row label. A bare [`Color`] keeps
+/// the legacy fill-portion column; [`LabelInk::graphite`] picks the
+/// fixed Graphite column.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LabelInk {
+    pub color: Color,
+    pub width: Length,
+}
+
+impl From<Color> for LabelInk {
+    fn from(color: Color) -> Self {
+        Self {
+            color,
+            width: Length::FillPortion(PROPERTY_LABEL_PORTION),
+        }
+    }
+}
+
+impl LabelInk {
+    /// The Graphite label look: the fixed column.
+    pub fn graphite(color: Color) -> Self {
+        Self {
+            color,
+            width: Length::Fixed(GRAPHITE_PROPERTY_LABEL_WIDTH),
+        }
+    }
+}
+
+/// Property-row label: wraps at spaces inside its column, so a narrow panel
+/// grows the row; a single over-long word is clipped, never split mid-word,
+/// and never reaches the value column.
+pub fn property_label<'a, M: 'a>(
+    label: impl Into<String>,
+    ink: impl Into<LabelInk>,
+) -> Element<'a, M> {
+    let ink = ink.into();
+    property_label_sized(label, ink.color, TS.body, ink.width)
 }
 
 /// Like `property_label`, but with a narrower label column (used by `form_edit_row_f64`).
 fn property_label_small<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
-    property_label_sized(label, color, TS.body, 2)
+    property_label_sized(label, color, TS.body, Length::FillPortion(2))
 }
 
 fn property_label_sized<'a, M: 'a>(
     label: impl Into<String>,
     color: Color,
     size: f32,
-    portion: u16,
+    width: Length,
 ) -> Element<'a, M> {
     container(
         text(raw(label.into()))
@@ -253,7 +246,7 @@ fn property_label_sized<'a, M: 'a>(
             .color(color)
             .wrapping(iced::widget::text::Wrapping::Word),
     )
-    .width(Length::FillPortion(portion))
+    .width(width)
     .clip(true)
     .boxed()
 }
@@ -291,25 +284,7 @@ pub fn shape_fill_row<'a>(
         button(text(raw(label)).size(TS.body))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::SetPrePlacementShapeFill(ft))
-            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(if active {
-                    Color::from_rgb(0.20, 0.36, 0.58)
-                } else {
-                    Color::from_rgba(0.25, 0.25, 0.28, 0.4)
-                })),
-                border: iced::Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: Color::from_rgb(0.28, 0.28, 0.32),
-                    ..iced::Border::default()
-                },
-                text_color: if active {
-                    Color::from_rgb(1.0, 1.0, 1.0)
-                } else {
-                    muted
-                },
-                ..iced::widget::button::Style::default()
-            })
+            .style(super::form_look::option_tile(active))
             .boxed()
     };
     row![
@@ -333,4 +308,15 @@ pub fn shape_fill_row<'a>(
     .spacing(6)
     .align_y(iced::Alignment::Center)
     .boxed()
+}
+
+#[cfg(test)]
+mod label_tests {
+    use super::*;
+
+    #[test]
+    fn graphite_labels_get_the_fixed_92_px_column() {
+        let ink = LabelInk::graphite(Color::BLACK);
+        assert_eq!(ink.width, Length::Fixed(92.0));
+    }
 }

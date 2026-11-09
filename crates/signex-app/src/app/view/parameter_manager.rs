@@ -62,6 +62,7 @@ impl Signex {
 
         let toolbar = row![
             text_input(raw("Filter rows"), &table.filter)
+                .style(crate::panels::form_look::text_input_style)
                 .on_input(
                     |text| Message::ParameterManager(ParameterManagerMsg::FilterChanged(text))
                 )
@@ -69,6 +70,7 @@ impl Signex {
                 .size(TS.body)
                 .width(iced::Length::Fixed(220.0)),
             text_input(raw("New parameter"), &table.new_key)
+                .style(crate::panels::form_look::text_input_style)
                 .on_input(
                     |text| Message::ParameterManager(ParameterManagerMsg::NewKeyChanged(text))
                 )
@@ -129,15 +131,15 @@ impl Signex {
             .filter(|s| !s.is_power && row_matches_filter(&table.filter, s))
         {
             let mut r = row![
-                text(raw(sym.reference.clone()))
+                text(signex_i18n::UserText::new(sym.reference.clone()))
                     .size(TS.body)
                     .color(text_c)
                     .width(iced::Length::Fixed(100.0)),
-                text(raw(sym.value.clone()))
+                text(signex_i18n::UserText::new(sym.value.clone()))
                     .size(TS.body)
                     .color(text_c)
                     .width(iced::Length::Fixed(160.0)),
-                text(raw(sym.footprint.clone()))
+                text(signex_i18n::UserText::new(sym.footprint.clone()))
                     .size(TS.body)
                     .color(text_muted)
                     .width(iced::Length::Fixed(200.0)),
@@ -148,6 +150,7 @@ impl Signex {
                 let k_str = k.clone();
                 r = r.push(
                     text_input(raw(""), shown)
+                        .style(crate::panels::form_look::text_input_style)
                         .on_input(move |text| {
                             Message::ParameterManager(ParameterManagerMsg::Edit {
                                 symbol_uuid: sym_uuid,

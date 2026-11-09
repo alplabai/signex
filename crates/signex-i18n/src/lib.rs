@@ -43,6 +43,7 @@ macro_rules! define_ids {
 }
 
 define_ids! {
+    DIALOG_AUTOSAVE_RECOVERY_AUTOSAVED_AGE = "dialog-autosave-recovery-autosaved-age";
     DRC_RUN = "drc-run";
     DRC_HEADING = "drc-heading";
     DRC_DEFAULT_CLEARANCE = "drc-default-clearance";
@@ -65,6 +66,7 @@ define_ids! {
     DRC_LAYER_INNER = "drc-layer-inner";
     LANGUAGE_SYSTEM_DEFAULT = "language-system-default";
     MENU_FILE = "menu-file";
+    OVERLAY_PLACEMENT_PAUSED_ESC_HINT = "overlay-placement-paused-esc-hint";
     PROPERTIES_LIBRARY_OUT_OF_DATE = "properties-library-out-of-date";
     PROPERTIES_LIBRARY_SYMBOL_MISSING = "properties-library-symbol-missing";
     PROPERTIES_LIBRARY_UPDATE = "properties-library-update";

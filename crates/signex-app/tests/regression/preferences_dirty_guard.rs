@@ -7,90 +7,9 @@
 
 use signex_app::app::{Message, PreferencesMsg, Signex, WindowMsg};
 use signex_app::preferences::PrefMsg;
-use signex_types::theme::{CustomThemeFile, ThemeId, canvas_colors, theme_tokens};
 
-fn custom_theme_json(name: &str) -> String {
-    let custom = CustomThemeFile {
-        name: name.to_string(),
-        tokens: theme_tokens(ThemeId::Signex),
-        canvas: canvas_colors(ThemeId::Signex),
-    };
-    serde_json::to_string(&custom).expect("serialise a fixture CustomThemeFile")
-}
-
-/// Finding 1 (data-loss): `preferences_draft_differs()` used to compare only
-/// the 7 appearance drafts, so an imported theme (which sets
-/// `preferences_dirty` imperatively via `custom_theme`, invisible to that
-/// comparator) got silently clobbered back to "clean" by the next unrelated
-/// appearance-draft recompute — exactly reproducing the review's repro:
-/// theme ALREADY Custom (so `preferences_draft_theme` reads `Custom` both
-/// before and after the import — the enum-tag comparison alone can't see a
-/// same-tag content swap) → Import Theme replaces `custom_theme`'s content →
-/// toggle an unrelated appearance draft.
-#[test]
-fn theme_import_dirty_flag_survives_an_unrelated_appearance_toggle() {
-    let (mut app, _t) = Signex::new();
-
-    // Precondition: theme is ALREADY Custom (live + draft agree) BEFORE the
-    // dialog opens, so the real open flow (`seed_preferences_drafts_from_live`)
-    // seeds `preferences_draft_theme = Custom` from the live value — the
-    // draft-theme enum comparison is then a no-op before AND after the
-    // import, isolating the sticky flag as the only thing that can catch a
-    // same-tag content swap.
-    let original = CustomThemeFile {
-        name: "Original".to_string(),
-        tokens: theme_tokens(ThemeId::Signex),
-        canvas: canvas_colors(ThemeId::Signex),
-    };
-    app.ui_state.theme_id = ThemeId::Custom;
-    app.ui_state.custom_theme = Some(original);
-    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
-    assert!(
-        !app.ui_state.preferences_dirty,
-        "fixture precondition: opening must seed a clean dialog"
-    );
-    assert!(
-        !app.ui_state.preferences_draft_differs(),
-        "fixture precondition: nothing differs right after opening"
-    );
-
-    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
-        PrefMsg::ThemeFileLoaded(custom_theme_json("Imported Replacement")),
-    )));
-    assert!(
-        app.ui_state.preferences_dirty,
-        "importing a theme must mark the dialog dirty even when the draft \
-         theme ID was already Custom"
-    );
-    assert_eq!(app.ui_state.preferences_draft_theme, ThemeId::Custom);
-
-    // An unrelated appearance-draft change the old bare comparator would see
-    // as "nothing differs" (grid style set to its own current value).
-    let current_grid_style = app.ui_state.preferences_draft_grid_style;
-    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
-        PrefMsg::DraftGridStyle(current_grid_style),
-    )));
-
-    assert!(
-        app.ui_state.preferences_dirty,
-        "an unrelated appearance-draft recompute must not clobber the \
-         imported-theme dirty flag back to clean"
-    );
-
-    // And the close guard (in-app X / Esc) must still refuse to discard it.
-    let _ = app.update(Message::Preferences(PreferencesMsg::Close));
-    assert!(
-        app.ui_state.preferences_open,
-        "Close must refuse to dismiss while the import is still unsaved"
-    );
-    assert_eq!(
-        app.ui_state.custom_theme.as_ref().map(|c| c.name.as_str()),
-        Some("Imported Replacement"),
-        "a refused Close must not revert the unsaved import either"
-    );
-}
-
-/// Finding 1, keymap half: a pending keyboard-shortcut rebind (which never
+/// Finding 1 (keymap half; the theme-import half went with Import Theme):
+/// a pending keyboard-shortcut rebind (which never
 /// touches the 7 appearance-draft fields at all) must also keep the dialog
 /// dirty across an appearance toggle.
 #[test]
@@ -143,7 +62,8 @@ fn os_close_request_is_refused_while_preferences_is_dirty() {
         .expect("Preferences Open must register a detached window");
 
     app.ui_state.preferences_dirty = true;
-    app.ui_state.preferences_draft_theme = ThemeId::Custom;
+    let drafted = app.ui_state.theme_id.light_dark_counterpart();
+    app.ui_state.preferences_draft_theme = drafted;
 
     let task = app.update(Message::Window(WindowMsg::WindowCloseRequested(window_id)));
 
@@ -154,7 +74,7 @@ fn os_close_request_is_refused_while_preferences_is_dirty() {
          (Task::none()), not proceed to iced::window::close"
     );
     // Refusing to close must not itself touch the drafts either.
-    assert_eq!(app.ui_state.preferences_draft_theme, ThemeId::Custom);
+    assert_eq!(app.ui_state.preferences_draft_theme, drafted);
     assert!(app.ui_state.preferences_open);
 }
 

@@ -230,6 +230,7 @@ impl OpenOverlays {
             // top — but a behaviour change, and part 2 is a derivation.
             OverlayId::PlacementPaused
             | OverlayId::SchematicActiveBar
+            | OverlayId::CanvasZoomPill
             | OverlayId::FootprintActiveBar
             | OverlayId::FootprintContextMenu
             | OverlayId::FootprintMoveBy

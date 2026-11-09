@@ -2,4 +2,4 @@
 # Regenerate with: bash scripts/check_layer_ratchet.sh --generate
 symbol_transform_outside_types=0
 union_find_outside_net=4
-app_library_editor_internals=199
+app_library_editor_internals=198

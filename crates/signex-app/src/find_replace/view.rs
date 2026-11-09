@@ -43,19 +43,9 @@ fn build<'a>(
         "Find"
     };
 
-    let header = container(
-        row![
-            text(raw(title)).size(TS.heading).color(text_primary),
-            Space::new().width(Length::Fill),
-            button(text(raw("Close")).size(TS.body).color(text_secondary))
-                .on_press(FindReplaceMsg::Close)
-                .style(crate::styles::menu_item(tokens)),
-        ]
-        .align_y(iced::Alignment::Center)
-        .spacing(SP.m),
-    )
-    .padding([10, 14])
-    .style(crate::styles::toolbar_strip(tokens));
+    // The shared dialog header (title, neutral close).
+    let header: Element<'a, FindReplaceMsg> =
+        crate::app::view::dialogs::modal_title_header(raw(title), FindReplaceMsg::Close, tokens);
 
     let query_row = row![
         text(raw("Find"))
@@ -63,6 +53,7 @@ fn build<'a>(
             .color(text_secondary)
             .width(80),
         text_input(raw("Search text"), &state.query)
+            .style(crate::panels::form_look::text_input_style)
             .on_input(FindReplaceMsg::QueryChanged)
             .padding([6.0, SP.m])
             .size(TS.label)
@@ -101,6 +92,7 @@ fn build<'a>(
                     .color(text_secondary)
                     .width(80),
                 text_input(raw("Replacement text"), &state.replacement)
+                    .style(crate::panels::form_look::text_input_style)
                     .on_input(FindReplaceMsg::ReplacementChanged)
                     .padding([6.0, SP.m])
                     .size(TS.label)
@@ -195,9 +187,13 @@ fn build<'a>(
                     .and_then(|p| p.file_name())
                     .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                 rows.push(
-                    container(text(raw(name)).size(TS.body).color(accent))
-                        .padding([6.0, SP.s])
-                        .boxed(),
+                    container(
+                        text(signex_i18n::UserText::new(name))
+                            .size(TS.body)
+                            .color(accent),
+                    )
+                    .padding([6.0, SP.s])
+                    .boxed(),
                 );
             }
             rows.push(result_row(idx, hit));
@@ -253,7 +249,7 @@ fn build<'a>(
     let header: Element<'a, FindReplaceMsg> = if windowed {
         Space::new().height(0).boxed()
     } else {
-        header.boxed()
+        header
     };
     let (dialog_w, dialog_h) = if windowed {
         (Length::Fill, Length::Fill)
@@ -271,7 +267,7 @@ fn build<'a>(
         .width(dialog_w)
         .height(dialog_h),
     )
-    .style(crate::styles::context_menu(tokens));
+    .style(crate::styles::modal_card(tokens));
     if windowed {
         return dialog.boxed();
     }
@@ -291,9 +287,6 @@ fn build<'a>(
     )
     .width(Length::Fill)
     .height(Length::Fill)
-    .style(|_: &Theme| container::Style {
-        background: Some(Background::Color(crate::styles::tokens::scrim(0.5))),
-        ..container::Style::default()
-    })
+    .style(crate::app::view::dialogs::scrim_style(tokens))
     .boxed()
 }

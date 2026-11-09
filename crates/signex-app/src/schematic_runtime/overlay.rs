@@ -60,6 +60,11 @@ fn severity_color(severity: ErcSeverity) -> Color {
 /// `background`: the severity colour, pulled toward black on a light sheet and
 /// toward white on a dark one until it reads against both (#1768).
 fn marker_stroke(severity: ErcSeverity, paper: Color, background: Color) -> Color {
+    marker_stroke_from(severity_color(severity), paper, background)
+}
+
+/// [`marker_stroke`] starting from `base` instead of the severity colour.
+fn marker_stroke_from(base: Color, paper: Color, background: Color) -> Color {
     use crate::styles::tokens::{contrast_ratio, relative_luminance};
     // Pull toward whichever pole sits farther from both sheet colours.
     let toward = if relative_luminance(paper).min(relative_luminance(background)) > 0.5 {
@@ -71,7 +76,7 @@ fn marker_stroke(severity: ErcSeverity, paper: Color, background: Color) -> Colo
     } else {
         1.0
     };
-    let mut color = severity_color(severity);
+    let mut color = base;
     for _ in 0..20 {
         if contrast_ratio(color, paper).min(contrast_ratio(color, background))
             >= MARKER_MIN_CONTRAST
@@ -92,6 +97,7 @@ pub fn draw_erc_markers(
     markers: &[ErcMarker],
     transform: &ScreenTransform,
     colors: &CanvasColors,
+    graphite: &crate::canvas::GraphiteCanvasInk,
 ) {
     if markers.is_empty() {
         return;
@@ -103,11 +109,13 @@ pub fn draw_erc_markers(
             push_net_marker(&mut overlays, marker, transform, colors);
             continue;
         }
-        let stroke = marker_stroke(
-            marker.severity,
-            to_iced(&colors.paper),
-            to_iced(&colors.background),
-        );
+        let (paper, background) = (to_iced(&colors.paper), to_iced(&colors.background));
+        // Graphite: errors in the theme's err, warnings in its warn.
+        let stroke = match (graphite, marker.severity) {
+            (ink, ErcSeverity::Error) => marker_stroke_from(ink.err, paper, background),
+            (ink, ErcSeverity::Warning) => marker_stroke_from(ink.warn, paper, background),
+            _ => marker_stroke(marker.severity, paper, background),
+        };
         let fill = Color {
             a: MARKER_DISC_ALPHA,
             ..stroke

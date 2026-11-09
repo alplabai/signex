@@ -19,6 +19,13 @@ pub enum PanelMsg {
     /// footprint editor by tab and flips its `auto_fit_courtyard`
     /// flag via the existing `FootprintToggleAutoFit` path.
     FpEditorToggleAutoFitCourtyard,
+    /// Layers panel — an eye toggle was pressed; carries the standard
+    /// layer name (`F.Cu`, `B.SilkS`, ...).
+    FpEditorLayerEyeClicked(String),
+    /// Layers panel — "Show all" was pressed.
+    FpEditorLayersShowAllClicked,
+    /// Layers panel — "Top side only" was pressed.
+    FpEditorLayersTopSideOnlyClicked,
     /// v0.16.2 — Properties-panel Role pick_list emit. Routed
     /// through the dock handler which forwards to
     /// `LibraryMessage::PrimitiveEditorEvent { ... FootprintSketchSetRole }`
@@ -638,6 +645,10 @@ pub enum PanelMsg {
     /// Net Classes section of the Properties panel (#1042). One nested
     /// message so the section adds no flat leaves.
     NetClass(NetClassMsg),
+    /// Signex AI panel: the Assistant / Generator switch (view-only state).
+    Signal(super::signal::SignalMsg),
+    /// Graphite Projects panel: file filter and group chevrons (view-only).
+    Projects(super::ProjectsMsg),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active
     /// `PanelContext.library_row_detail`. Routes to
@@ -730,6 +741,21 @@ pub enum PanelMsg {
     TogglePrePlacementItalic,
     TogglePrePlacementUnderline,
     SetPrePlacementShapeWidth(f64),
+    /// Wire Tab form: the width of the wires routed from now on.
+    SetPrePlacementWireWidth(signex_types::schematic::WireWidthPreset),
+    /// Wire Tab form: the colour of the wires routed from now on (`None` =
+    /// the theme's wire colour).
+    SetPrePlacementWireColor(Option<signex_types::theme::Color>),
+    /// Properties of a selected wire: its width, as an undoable edit.
+    EditWireWidth(uuid::Uuid, signex_types::schematic::WireWidthPreset),
+    /// Properties of a selected wire: its colour, as an undoable edit.
+    EditWireColor(uuid::Uuid, Option<signex_types::theme::Color>),
+    /// Open or close the wire colour palette.
+    ToggleWireColorPicker,
+    /// Switch the wire colour picker to the full HSV / RGB picker.
+    OpenWireColorAdvancedPicker,
+    /// Close the wire colour picker without a pick.
+    CancelWireColorPicker,
     /// A keystroke in a numeric box: the raw text is kept as a draft and,
     /// when it already parses, applied to the model.
     NumericFieldTyped(super::NumericFieldKey, String),
