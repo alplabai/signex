@@ -1075,7 +1075,6 @@ fn every_properties_message_that_writes_the_shown_sheet_or_its_context_is_scoped
         P::ChildSheetStrokeWidthTyping(id, String::new()),
         P::CommitChildSheetStrokeWidth(id),
         P::ResetChildSheetStyle(id),
-        P::EditSymbolLibId(id, String::new()),
         P::UpdateSymbolFromLibrary(id),
         P::PlacedPartAction(PlacedPartAction::EditSymbol),
         P::SetPrePlacementText(String::new()),

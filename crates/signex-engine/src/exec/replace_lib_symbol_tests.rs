@@ -51,16 +51,28 @@ fn lib_symbol(description: &str, pins: Vec<LibPin>) -> LibSymbol {
     }
 }
 
+/// The description of the body the first symbol draws with.
+fn drawn(engine: &Engine) -> String {
+    let doc = engine.document();
+    doc.body_of(&doc.symbols[0])
+        .expect("body")
+        .description
+        .clone()
+}
+
 /// A sheet with the symbol at (10, 10) and a wire on pin "2" (world 12.54, 10).
 fn engine_with_wired_pin_2() -> Engine {
     let mut sheet = test_sheet();
-    sheet.lib_symbols.insert(
-        ID.into(),
-        lib_symbol("old", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]),
-    );
+    let old_ref = sheet
+        .embed_body(lib_symbol(
+            "old",
+            vec![lib_pin("1", -2.54), lib_pin("2", 2.54)],
+        ))
+        .unwrap();
     sheet.symbols.push(Symbol {
         uuid: uuid::Uuid::now_v7(),
         lib_id: ID.into(),
+        body_ref: old_ref,
         reference: "U1".into(),
         position: Point::new(10.0, 10.0),
         unit: 1,
@@ -80,15 +92,16 @@ fn replace_swaps_the_copy_and_one_undo_restores_it() {
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
     let result = engine
         .execute(Command::ReplaceLibSymbol {
+            only: None,
             lib_symbol: fresh,
             library_versions: vec![],
         })
         .unwrap();
     assert!(result.changed);
-    assert_eq!(engine.document().lib_symbols[ID].description, "new");
+    assert_eq!(drawn(&engine), "new");
 
     engine.undo().unwrap();
-    assert_eq!(engine.document().lib_symbols[ID].description, "old");
+    assert_eq!(drawn(&engine), "old");
     assert!(!engine.can_undo());
 }
 
@@ -98,6 +111,7 @@ fn replacing_with_an_identical_symbol_records_nothing() {
     let same = lib_symbol("old", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
     let result = engine
         .execute(Command::ReplaceLibSymbol {
+            only: None,
             lib_symbol: same,
             library_versions: vec![],
         })
@@ -113,6 +127,7 @@ fn a_vanishing_unconnected_pin_is_allowed() {
     assert!(
         engine
             .execute(Command::ReplaceLibSymbol {
+                only: None,
                 lib_symbol: fresh,
                 library_versions: vec![],
             })
@@ -127,6 +142,7 @@ fn a_vanishing_connected_pin_is_refused_and_nothing_changes() {
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54)]);
     let err = engine
         .execute(Command::ReplaceLibSymbol {
+            only: None,
             lib_symbol: fresh,
             library_versions: vec![],
         })
@@ -137,7 +153,7 @@ fn a_vanishing_connected_pin_is_refused_and_nothing_changes() {
         }
         other => panic!("unexpected error: {other:?}"),
     }
-    assert_eq!(engine.document().lib_symbols[ID].description, "old");
+    assert_eq!(drawn(&engine), "old");
     assert!(!engine.can_undo());
 }
 
@@ -148,6 +164,7 @@ fn a_connected_pin_that_moves_is_refused() {
     assert!(
         engine
             .execute(Command::ReplaceLibSymbol {
+                only: None,
                 lib_symbol: fresh,
                 library_versions: vec![],
             })
@@ -173,6 +190,7 @@ fn a_label_on_a_pin_tip_counts_as_a_connection() {
     assert!(
         engine
             .execute(Command::ReplaceLibSymbol {
+                only: None,
                 lib_symbol: fresh,
                 library_versions: vec![],
             })
@@ -190,6 +208,7 @@ fn a_new_pin_landing_on_an_existing_connection_is_refused() {
     );
     match engine
         .execute(Command::ReplaceLibSymbol {
+            only: None,
             lib_symbol: fresh,
             library_versions: vec![],
         })
@@ -211,6 +230,7 @@ fn a_removed_unit_is_refused() {
     assert!(matches!(
         engine
             .execute(Command::ReplaceLibSymbol {
+                only: None,
                 lib_symbol: fresh,
                 library_versions: vec![],
             })
@@ -230,6 +250,7 @@ fn engine_with_bare_symbol() -> Engine {
 fn drop_pin_2(engine: &mut Engine) -> Result<crate::CommandResult, EngineError> {
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54)]);
     engine.execute(Command::ReplaceLibSymbol {
+        only: None,
         lib_symbol: fresh,
         library_versions: vec![],
     })
@@ -295,6 +316,7 @@ fn a_new_pin_on_a_connection_is_refused_when_the_sheet_has_no_embedded_copy() {
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
     match engine
         .execute(Command::ReplaceLibSymbol {
+            only: None,
             lib_symbol: fresh,
             library_versions: vec![],
         })
@@ -317,13 +339,14 @@ fn a_replace_with_no_embedded_copy_succeeds_when_no_fresh_pin_is_connected() {
     assert!(
         engine
             .execute(Command::ReplaceLibSymbol {
+                only: None,
                 lib_symbol: fresh,
                 library_versions: vec![],
             })
             .unwrap()
             .changed
     );
-    assert_eq!(engine.document().lib_symbols[ID].description, "new");
+    assert_eq!(drawn(&engine), "new");
 }
 
 #[test]
@@ -333,6 +356,7 @@ fn replace_stamps_library_versions_in_the_same_undo_step() {
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
     engine
         .execute(Command::ReplaceLibSymbol {
+            only: None,
             lib_symbol: fresh,
             library_versions: vec![(uuid, LinkStamp::version("2.0.0"))],
         })
@@ -340,7 +364,7 @@ fn replace_stamps_library_versions_in_the_same_undo_step() {
     assert_eq!(engine.document().symbols[0].library_version, "2.0.0");
     engine.undo().unwrap();
     assert_eq!(engine.document().symbols[0].library_version, "");
-    assert_eq!(engine.document().lib_symbols[ID].description, "old");
+    assert_eq!(drawn(&engine), "old");
     assert!(!engine.can_undo());
 }
 
@@ -359,6 +383,7 @@ fn only_instances_of_the_replaced_lib_id_are_stamped() {
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
     engine
         .execute(Command::ReplaceLibSymbol {
+            only: None,
             lib_symbol: fresh,
             library_versions: vec![
                 (mine, LinkStamp::version("2.0.0")),
@@ -376,12 +401,13 @@ fn refusal_leaves_the_version_untouched() {
     let uuid = engine.document().symbols[0].uuid;
     let fresh = lib_symbol("new", vec![lib_pin("1", -2.54)]);
     let err = engine.execute(Command::ReplaceLibSymbol {
+        only: None,
         lib_symbol: fresh,
         library_versions: vec![(uuid, LinkStamp::version("2.0.0"))],
     });
     assert!(err.is_err());
     assert_eq!(engine.document().symbols[0].library_version, "");
-    assert_eq!(engine.document().lib_symbols[ID].description, "old");
+    assert_eq!(drawn(&engine), "old");
 }
 
 /// A pin of `unit` numbered "1" at local x = 2.54, the tip the wired helpers
@@ -419,6 +445,7 @@ fn engine_with_shared_pin() -> Engine {
 fn replace(engine: &mut Engine, pins: Vec<LibPin>) -> Result<bool, EngineError> {
     engine
         .execute(Command::ReplaceLibSymbol {
+            only: None,
             lib_symbol: lib_symbol("new", pins),
             library_versions: vec![],
         })
@@ -485,19 +512,20 @@ fn undo_snapshots_share_lib_symbols_and_a_replace_does_not_bleed_into_them() {
     // snapshot keep the old description.
     engine
         .execute(Command::ReplaceLibSymbol {
+            only: None,
             lib_symbol: lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]),
             library_versions: vec![],
         })
         .unwrap();
-    assert_eq!(held[ID].description, "old");
-    assert_eq!(engine.document().lib_symbols[ID].description, "new");
+    assert_eq!(held.values().next().unwrap().description, "old");
+    assert_eq!(drawn(&engine), "new");
 
     engine.undo().unwrap();
-    assert_eq!(engine.document().lib_symbols[ID].description, "old");
+    assert_eq!(drawn(&engine), "old");
     assert!(engine.document().lib_symbols.shares_storage_with(&held));
     engine.redo().unwrap();
-    assert_eq!(engine.document().lib_symbols[ID].description, "new");
-    assert_eq!(held[ID].description, "old");
+    assert_eq!(drawn(&engine), "new");
+    assert_eq!(held.values().next().unwrap().description, "old");
 }
 
 /// The stamp alone moved: the copy is the same, the version is the same, the
@@ -519,6 +547,7 @@ fn a_stamp_only_replace_records_an_undo_step_and_undo_restores_the_old_stamp() {
     let same_copy = lib_symbol("old", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
     let result = engine
         .execute(Command::ReplaceLibSymbol {
+            only: None,
             lib_symbol: same_copy,
             library_versions: vec![(
                 uuid,
@@ -538,4 +567,221 @@ fn a_stamp_only_replace_records_an_undo_step_and_undo_restores_the_old_stamp() {
     assert!(engine.can_undo());
     engine.undo().unwrap();
     assert_eq!(engine.document().symbols[0].library_stamp, Some(old));
+}
+
+/// Two parts of one library symbol: R1 at (10, 10), R2 at (40, 10).
+fn engine_with_two_parts() -> Engine {
+    let mut sheet = engine_with_bare_symbol().document().clone();
+    let mut second = sheet.symbols[0].clone();
+    second.uuid = uuid::Uuid::now_v7();
+    second.reference = "U2".into();
+    second.position = Point::new(40.0, 10.0);
+    sheet.symbols.push(second);
+    Engine::new(sheet).unwrap()
+}
+
+fn drawn_by(engine: &Engine, index: usize) -> String {
+    let doc = engine.document();
+    doc.body_of(&doc.symbols[index])
+        .expect("body")
+        .description
+        .clone()
+}
+
+fn replace_cmd(only: Option<Vec<uuid::Uuid>>, description: &str) -> Command {
+    Command::ReplaceLibSymbol {
+        only,
+        lib_symbol: lib_symbol(description, vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]),
+        library_versions: vec![],
+    }
+}
+
+#[test]
+fn registering_a_changed_body_adds_a_version_and_the_old_instance_keeps_its_drawing() {
+    let mut engine = engine_with_bare_symbol();
+    let newer = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
+    let new_ref = newer.body_ref();
+    engine
+        .execute_batch(vec![
+            Command::RegisterLibSymbol {
+                lib_symbol: newer.clone(),
+            },
+            Command::PlaceSymbol {
+                symbol: Symbol {
+                    uuid: uuid::Uuid::now_v7(),
+                    lib_id: ID.into(),
+                    body_ref: new_ref.clone(),
+                    reference: "U2".into(),
+                    position: Point::new(40.0, 10.0),
+                    unit: 1,
+                    ..Default::default()
+                },
+            },
+        ])
+        .unwrap();
+    assert_eq!(engine.document().lib_symbols.len(), 2);
+    assert_eq!(drawn_by(&engine, 0), "old");
+    assert_eq!(drawn_by(&engine, 1), "new");
+    engine.undo().unwrap();
+    assert_eq!(engine.document().lib_symbols.len(), 1);
+    assert_eq!(drawn_by(&engine, 0), "old");
+}
+
+#[test]
+fn registering_a_different_body_under_a_taken_ref_is_a_collision() {
+    let mut engine = engine_with_bare_symbol();
+    let newer = lib_symbol("new", vec![]);
+    let mut doc = engine.document().clone();
+    doc.lib_symbols
+        .insert(newer.body_ref(), lib_symbol("other", vec![]));
+    engine = Engine::new(doc).unwrap();
+    let err = engine
+        .execute(Command::RegisterLibSymbol { lib_symbol: newer })
+        .expect_err("collision");
+    assert!(
+        matches!(err, EngineError::LibSymbolBodyCollision(_)),
+        "{err}"
+    );
+}
+
+#[test]
+fn update_all_moves_every_instance_drops_the_old_version_and_one_undo_restores_both() {
+    let mut engine = engine_with_two_parts();
+    engine.execute(replace_cmd(None, "new")).unwrap();
+    assert_eq!(
+        (drawn_by(&engine, 0), drawn_by(&engine, 1)),
+        ("new".into(), "new".into())
+    );
+    assert_eq!(
+        engine.document().lib_symbols.len(),
+        1,
+        "the old version is dropped"
+    );
+    engine.undo().unwrap();
+    assert_eq!(
+        (drawn_by(&engine, 0), drawn_by(&engine, 1)),
+        ("old".into(), "old".into())
+    );
+    assert_eq!(engine.document().lib_symbols.len(), 1);
+    assert!(!engine.can_undo());
+}
+
+#[test]
+fn update_only_this_one_leaves_the_other_part_on_the_old_version() {
+    let mut engine = engine_with_two_parts();
+    let first = engine.document().symbols[0].uuid;
+    engine
+        .execute(replace_cmd(Some(vec![first]), "new"))
+        .unwrap();
+    assert_eq!(
+        (drawn_by(&engine, 0), drawn_by(&engine, 1)),
+        ("new".into(), "old".into())
+    );
+    assert_eq!(
+        engine.document().lib_symbols.len(),
+        2,
+        "both versions coexist"
+    );
+    engine.undo().unwrap();
+    assert_eq!(
+        (drawn_by(&engine, 0), drawn_by(&engine, 1)),
+        ("old".into(), "old".into())
+    );
+}
+
+#[test]
+fn update_refuses_when_a_connected_pin_would_be_lost_and_changes_nothing() {
+    let mut engine = engine_with_wired_pin_2();
+    let err = drop_pin_2(&mut engine).expect_err("refused");
+    assert!(
+        matches!(err, EngineError::LibSymbolPinsConnected { .. }),
+        "{err}"
+    );
+    assert_eq!(drawn(&engine), "old");
+    assert!(!engine.can_undo());
+}
+
+#[test]
+fn update_refuses_a_ref_collision_before_it_rewrites_anything() {
+    // The fresh body's ref is held by a body with other content.
+    let fresh = lib_symbol("fresh", vec![]);
+    let squatter = lib_symbol("squatter", vec![]);
+    let mut doc = engine_with_bare_symbol().document().clone();
+    doc.lib_symbols.insert(fresh.body_ref(), squatter);
+    let mut engine = Engine::new(doc).unwrap();
+    let before = engine.document().clone();
+    let err = engine
+        .execute(Command::ReplaceLibSymbol {
+            only: None,
+            lib_symbol: fresh,
+            library_versions: vec![],
+        })
+        .expect_err("collision");
+    assert!(
+        matches!(err, EngineError::LibSymbolBodyCollision(_)),
+        "{err}"
+    );
+    assert_eq!(
+        engine.document().symbols,
+        before.symbols,
+        "no body_ref moved"
+    );
+    assert!(
+        engine
+            .document()
+            .lib_symbols
+            .shares_storage_with(&before.lib_symbols)
+    );
+}
+
+/// Two unannotated `U?` units of one library symbol, units 1 and 2.
+fn two_unannotated_units() -> (Engine, uuid::Uuid, uuid::Uuid) {
+    let two_units = |description: &str| {
+        let mut second = lib_pin("3", 2.54);
+        second.unit = 2;
+        lib_symbol(
+            description,
+            vec![lib_pin("1", -2.54), lib_pin("2", 2.54), second],
+        )
+    };
+    let mut sheet = test_sheet();
+    let old_ref = sheet.embed_body(two_units("old")).unwrap();
+    let mut ids = Vec::new();
+    for (unit, x) in [(1, 10.0), (2, 40.0)] {
+        let uuid = uuid::Uuid::now_v7();
+        ids.push(uuid);
+        sheet.symbols.push(Symbol {
+            uuid,
+            lib_id: ID.into(),
+            body_ref: old_ref.clone(),
+            reference: "U?".into(),
+            position: Point::new(x, 10.0),
+            unit,
+            ..Default::default()
+        });
+    }
+    (Engine::new(sheet).unwrap(), ids[0], ids[1])
+}
+
+#[test]
+fn only_this_one_does_not_drag_along_another_unannotated_unit() {
+    let (mut engine, first, second) = two_unannotated_units();
+    let mut fresh = lib_symbol("new", vec![lib_pin("1", -2.54), lib_pin("2", 2.54)]);
+    let mut p3 = lib_pin("3", 2.54);
+    p3.unit = 2;
+    fresh.pins.push(p3);
+    engine
+        .execute(Command::ReplaceLibSymbol {
+            only: Some(vec![first]),
+            lib_symbol: fresh,
+            library_versions: vec![],
+        })
+        .unwrap();
+    let doc = engine.document();
+    let description = |id| {
+        let sym = doc.symbols.iter().find(|s| s.uuid == id).unwrap();
+        doc.body_of(sym).unwrap().description.clone()
+    };
+    assert_eq!(description(first), "new");
+    assert_eq!(description(second), "old", "a U? unit is a part of its own");
 }

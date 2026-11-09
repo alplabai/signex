@@ -362,6 +362,24 @@ fn sample_operands(id: &str) -> Vec<String> {
         .collect()
 }
 
+/// `run_operands` on a command with operands and no handler (a query is
+/// answered elsewhere, never by a handler) says so instead of running.
+#[test]
+fn run_operands_refuses_a_command_with_operands_and_no_handler() {
+    let command = id("resolve");
+    assert!(operand_handler(&command).is_none());
+    let args = CommandArgs::parse_operands(&command, &["id=x"]).expect("operands parse");
+    let (mut app, _task) = Signex::new();
+
+    let (outcome, _) = app.run_operands(&command, &args);
+
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason }
+            if reason == "operands are declared but not run yet (#1934)"),
+        "{outcome:?}"
+    );
+}
+
 /// A command that declares operands has a handler or is refused as not run
 /// yet; a handler on a command that declares none is a handler nobody can
 /// reach. Adding either without the other fails here.

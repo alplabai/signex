@@ -467,7 +467,7 @@ fn change_component_confirmed_for_an_undocked_windows_sheet_changes_that_sheet()
         .find(|s| !s.is_power)
         .expect("a part")
         .clone();
-    let mut lib_symbol = doc.lib_symbols[&symbol.lib_id].clone();
+    let mut lib_symbol = doc.body_of(&symbol).expect("body").clone();
     lib_symbol.id = "L:NEW".to_string();
     let resolved = ResolvedPlacement {
         lib_id: "L:NEW".to_string(),

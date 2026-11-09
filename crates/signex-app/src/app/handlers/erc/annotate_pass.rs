@@ -56,6 +56,19 @@ impl Signex {
             label,
         } = pass;
         let mut writes: Vec<PendingWrite> = Vec::new();
+        // Designators before the pass, to tell afterwards which symbols it
+        // renumbered.
+        let before: std::collections::HashMap<_, std::collections::HashMap<uuid::Uuid, String>> =
+            self.document_state
+                .engines
+                .iter()
+                .map(|(path, engine)| {
+                    let refs = (engine.document().symbols.iter())
+                        .map(|s| (s.uuid, s.reference.clone()))
+                        .collect();
+                    (path.clone(), refs)
+                })
+                .collect();
         // Every sheet the counter must cover - cached tabs, unopened sheets
         // and the active engine alike - in the ONE order
         // `ordered_project_sheet_paths` defines. The preview walks the same
@@ -251,6 +264,7 @@ impl Signex {
             );
             return PassApplied::without_writes(task);
         }
+        self.warn_mixed_after_renumbering(&before);
         let changed_sheets = touched_sheets.live.len();
         touched_sheets.parked = parked_here.iter().cloned().collect();
         // Owed to disk already, so an undo before the write lands still names them.

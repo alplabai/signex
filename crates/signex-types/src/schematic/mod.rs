@@ -523,16 +523,6 @@ impl LibSymbol {
             PIN_NAME_OFFSET_MM
         }
     }
-
-    /// Whether `other` is the same body: every stored field equal. The one
-    /// comparison behind "the sheet's copy differs from the library's" for
-    /// both a library placement and a paste.
-    pub fn same_body(&self, other: &Self) -> bool {
-        matches!(
-            (serde_json::to_string(self), serde_json::to_string(other)),
-            (Ok(a), Ok(b)) if a == b
-        )
-    }
 }
 
 fn default_true() -> bool {
@@ -651,6 +641,11 @@ pub struct Pin {
 pub struct Symbol {
     pub uuid: Uuid,
     pub lib_id: String,
+    /// Key of the embedded body this symbol draws with (`lib_symbols`), a
+    /// version of the library symbol `lib_id` names. Empty: drawn by
+    /// `lib_id`. See `lib_symbol_version`.
+    #[serde(default)]
+    pub body_ref: String,
     #[serde(default)]
     pub reference: String,
     #[serde(default)]
@@ -759,6 +754,7 @@ impl Default for Symbol {
         Self {
             uuid: Uuid::nil(),
             lib_id: String::new(),
+            body_ref: String::new(),
             reference: String::new(),
             value: String::new(),
             footprint: String::new(),
@@ -805,10 +801,15 @@ mod field_style;
 mod instance_path;
 pub use field_style::{field_effective_style, readable_text_style};
 pub use instance_path::InstancePath;
+
+mod lib_symbol_version;
+pub use lib_symbol_version::{BodyRefCollision, lib_id_of_body_ref};
 mod parts;
 pub use parts::*;
 #[cfg(test)]
 mod item_anchor_tests;
+#[cfg(test)]
+mod lib_symbol_version_tests;
 mod row_stamp;
 #[cfg(test)]
 mod row_stamp_tests;
