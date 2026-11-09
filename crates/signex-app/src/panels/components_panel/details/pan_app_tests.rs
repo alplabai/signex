@@ -457,12 +457,15 @@ fn assert_drag_pans(app: &mut Live, from: Point, what: &str) {
         "{what}: a drag move asks for a redraw ({:?})",
         app.redraws
     );
-    // Inside the preview: from the first grab row down, beside the press.
-    // The drawing has moved, and moved exactly with the pointer: the frame
-    // after the drag is the frame before it shifted by the drag.
+    // Inside the preview, beside the press: the drawing has moved, and moved
+    // exactly with the pointer, so the frame after the drag is the frame
+    // before it shifted by the drag. The size readout (top-left) and the
+    // scale bar (bottom-left) stay put while the drawing pans (#1952), so the
+    // band sits below the readout, also at the shifted source rows, and
+    // above the scale bar.
     let area = Rectangle::new(
-        Point::new(from.x + 2.0, from.y - 7.0),
-        Size::new(100.0, 70.0),
+        Point::new(from.x + 2.0, from.y + 15.0),
+        Size::new(100.0, 30.0),
     );
     let (changed, total) = mismatched_pixels(&frames[0], &frames[3], area, (0, 0));
     assert!(
