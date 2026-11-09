@@ -14,15 +14,12 @@
 use super::*;
 
 use super::items::{
-    dd_cmd_disabled, dd_command, dd_disabled, dd_msg, dd_planned, submenu_launcher,
+    dd_cmd_disabled, dd_command, dd_disabled, dd_msg, dd_planned, dd_planned_submenu,
+    submenu_launcher,
 };
 use crate::icons as ic;
-use signex_types::theme::{ThemeId, ThemeTokens};
+use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Command ids whose keyboard hint the canvas menu shows.
 pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
@@ -79,96 +76,6 @@ impl CanvasShortcuts {
 }
 
 impl Signex {
-    /// v0.18.10 — Altium-style grid picker popup body. Renders the
-    /// standard 1mil…2.5mm ladder; clicking a row sends
-    /// `Message::Ui(UiMsg::GridPickerSelect(step_mm))` and closes the popup.
-    pub(in crate::app::view) fn view_grid_picker_menu(&self) -> Element<'_, Message> {
-        use iced::widget::{Widget as _, column, container};
-        use signex_widgets::{button, raw, text};
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let primary = signex_widgets::theme_ext::text_primary(tokens);
-        let muted = signex_widgets::theme_ext::text_secondary(tokens);
-        let panel_bg = signex_widgets::theme_ext::to_color(&tokens.panel_bg);
-        let border_c = signex_widgets::theme_ext::border_color(tokens);
-        let active_step = self
-            .document_state
-            .tabs
-            .get(self.document_state.active_tab)
-            .and_then(|t| match &t.kind {
-                crate::app::TabKind::FootprintEditor(p) => {
-                    self.document_state.footprint_editors.get(p)
-                }
-                _ => None,
-            })
-            .map(|e| e.state.snap_options.grid_step_mm);
-
-        // Altium-standard ladder. Mil entries first (imperial designs
-        // anchor on 50mil), metric second.
-        const LADDER: &[(&str, f64)] = &[
-            ("1 Mil", 0.0254),
-            ("5 Mil", 0.127),
-            ("10 Mil", 0.254),
-            ("20 Mil", 0.508),
-            ("25 Mil", 0.635),
-            ("50 Mil", 1.27),
-            ("100 Mil", 2.54),
-            ("0.025 mm", 0.025),
-            ("0.100 mm", 0.100),
-            ("0.250 mm", 0.250),
-            ("0.500 mm", 0.500),
-            ("1.000 mm", 1.000),
-            ("2.500 mm", 2.500),
-        ];
-
-        let mut col = column![].spacing(0).width(iced::Length::Fixed(200.0));
-        for (label, step_mm) in LADDER {
-            let is_active = active_step
-                .map(|s| (s - step_mm).abs() < 1e-9)
-                .unwrap_or(false);
-            let lbl_color = if is_active { primary } else { muted };
-            let row_label = *label;
-            let row_step = *step_mm;
-            let btn = button(
-                container(text(raw(row_label)).size(TS.body).color(lbl_color))
-                    .padding([SP.s, SP.l])
-                    .width(iced::Length::Fill),
-            )
-            .padding(0)
-            .on_press(Message::Ui(UiMsg::GridPickerSelect(row_step)))
-            .style(move |_: &iced::Theme, status| iced::widget::button::Style {
-                background: match status {
-                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06),
-                    )),
-                    _ => Some(iced::Background::Color(iced::Color::TRANSPARENT)),
-                },
-                border: iced::Border {
-                    width: 0.0,
-                    radius: 0.0.into(),
-                    color: iced::Color::TRANSPARENT,
-                    ..iced::Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            })
-            .width(iced::Length::Fill);
-            col = col.push(btn.boxed());
-        }
-
-        container(col)
-            .padding(SP.s)
-            .style(move |_: &iced::Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(panel_bg)),
-                border: iced::Border {
-                    width: 1.0,
-                    radius: 4.0.into(),
-                    color: border_c,
-                    ..iced::Border::default()
-                },
-                ..iced::widget::container::Style::default()
-            })
-            .boxed()
-    }
-
     /// The selection shape and project row key the canvas menu is built
     /// from; the view and the row-effect tests share it. The selection is
     /// the one of the sheet `window_id` shows (#1910).
@@ -209,25 +116,22 @@ impl Signex {
     pub(in crate::app::view) fn view_context_menu(
         &self,
         window_id: iced::window::Id,
-    ) -> Element<'_, Message> {
+    ) -> super::placement::MenuCard<'_> {
         let tid = self.ui_state.effective_theme_id();
         // Shortcut hints read from the active keymap profile; a command
         // it does not bind has none.
         let sc = CanvasShortcuts::resolve(|id| self.keymap_shortcut_label(id));
         let tokens = &self.document_state.panel_ctx.tokens;
+        let ui_font = &self.document_state.panel_ctx.ui_font_name;
         let board = self.pcb_targets(Some(window_id));
         if board.shown {
             let entries = pcb_canvas_menu_entries(tid, board, &sc);
-            return signex_widgets::active_bar_dropdown::view(
-                entries,
-                tokens,
-                Some(Self::CONTEXT_MENU_WIDTH),
-            );
+            return super::placement::menu_card(entries, tokens, ui_font);
         }
         let (selection, project_key) = self.canvas_menu_inputs(window_id);
         let active_submenu = self.interaction_state.context_submenu;
-        let entries = canvas_menu_entries(tid, tokens, selection, active_submenu, project_key, &sc);
-        signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
+        let entries = canvas_menu_entries(tid, selection, active_submenu, project_key, &sc);
+        super::placement::menu_card(entries, tokens, ui_font)
     }
 
     /// Build the document-tab right-click menu. Resolves the tab title and
@@ -258,8 +162,8 @@ impl Signex {
             // take the main window's shortcuts.
             already_undocked || tab.kind.as_project().is_some(),
         );
-        let tokens = &self.document_state.panel_ctx.tokens;
-        signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
+        let panel_ctx = &self.document_state.panel_ctx;
+        super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name).element
     }
 }
 
@@ -278,7 +182,6 @@ pub(super) struct CanvasSelection {
 /// shape is unit-testable without a window.
 pub(super) fn canvas_menu_entries(
     tid: ThemeId,
-    tokens: &ThemeTokens,
     selection: CanvasSelection,
     active_submenu: Option<ContextSubmenu>,
     project_key: Option<signex_widgets::tree_view::TreeKey>,
@@ -311,31 +214,26 @@ pub(super) fn canvas_menu_entries(
     ));
     v.push(DropdownEntry::Separator);
     v.push(submenu_launcher(
-        tokens,
         Some(ic::icon_dd_place_menu(tid)),
         "Place",
         ContextSubmenu::Place,
         active_submenu == Some(ContextSubmenu::Place),
     ));
-    v.push(dd_planned(
+    v.push(dd_planned_submenu(
         Some(ic::icon_dd_part_actions(tid)),
         "Part Actions",
-        Some(SUBMENU_ARROW),
     ));
-    v.push(dd_planned(
+    v.push(dd_planned_submenu(
         Some(ic::icon_dd_sheet_actions(tid)),
         "Sheet Actions",
-        Some(SUBMENU_ARROW),
     ));
 
     if has_selection {
-        v.push(dd_planned(
+        v.push(dd_planned_submenu(
             Some(ic::icon_dd_references(tid)),
             "References",
-            Some(SUBMENU_ARROW),
         ));
         v.push(submenu_launcher(
-            tokens,
             Some(ic::icon_dd_align_menu(tid)),
             "Align",
             ContextSubmenu::Align,
@@ -343,22 +241,16 @@ pub(super) fn canvas_menu_entries(
         ));
         if drawing_selected {
             v.push(submenu_launcher(
-                tokens,
                 Some(ic::icon_dd_align_menu(tid)),
                 "Arrange",
                 ContextSubmenu::Arrange,
                 active_submenu == Some(ContextSubmenu::Arrange),
             ));
         }
-        v.push(dd_planned(
-            Some(ic::icon_dd_unions(tid)),
-            "Unions",
-            Some(SUBMENU_ARROW),
-        ));
-        v.push(dd_planned(
+        v.push(dd_planned_submenu(Some(ic::icon_dd_unions(tid)), "Unions"));
+        v.push(dd_planned_submenu(
             Some(ic::icon_dd_snippets(tid)),
             "Snippets",
-            Some(SUBMENU_ARROW),
         ));
     }
 

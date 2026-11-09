@@ -13,16 +13,18 @@ use crate::styles::{self, TypeScale};
 const TS: TypeScale = TypeScale::DEFAULT;
 
 mod dropdown;
+#[cfg(test)]
+mod glyph_tests;
+mod glyphs;
 mod layout;
 mod planned;
 
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
 pub use dropdown::{dropdown_x_offset, view_dropdown};
-pub use layout::BAR_WIDTH_PX;
 pub(crate) use layout::{
-    BAR_DROPDOWN_GAP_PX, BAR_HEIGHT_PX, BAR_TOP_MARGIN_PX, BAR_ZONE_HEIGHT_PX, bar_left_in_window,
-    bar_width_for, menu_at,
+    BAR_DROPDOWN_GAP_PX, bar_height_for, bar_left_in_window, bar_top_margin, bar_width_for,
+    bar_zone_height_for, menu_at, symbol_editor_bar_drop,
 };
 pub use planned::{PLANNED_TOOLS, PLANNED_TOOLTIP, is_planned, planned_name, refusal_line};
 
@@ -169,6 +171,11 @@ pub enum ActiveBarMsg {
     Action(ActiveBarAction),
     ToggleFilter(SelectionFilter),
     ToggleAllFilters,
+    /// The All cell of the Graphite filter's All / None control was picked:
+    /// every category on.
+    AllFiltersPicked,
+    /// The None cell was picked: every category off.
+    NoFiltersPicked,
     /// Replace the active filter set with the user-defined preset at
     /// `index` (0..N). No-op if the index is out of range or the slot is
     /// empty. Source: shortcut buttons in the Filter dropdown.
@@ -387,114 +394,6 @@ pub enum ActiveBarAction {
     PlaceComponent,
 }
 
-/// Resolve the toolbar icon for the last-used action in a group.
-fn action_icon(action: &ActiveBarAction, tid: ThemeId) -> svg::Handle {
-    match action {
-        // Base select cursor
-        ActiveBarAction::ToolSelect => ic::icon_select(tid),
-        // Align / Distribute
-        ActiveBarAction::AlignLeft => ic::icon_dd_align_left(tid),
-        ActiveBarAction::AlignRight => ic::icon_dd_align_right(tid),
-        ActiveBarAction::AlignTop => ic::icon_dd_align_top(tid),
-        ActiveBarAction::AlignBottom => ic::icon_dd_align_bottom(tid),
-        ActiveBarAction::AlignHorizontalCenters => ic::icon_dd_align_hcenter(tid),
-        ActiveBarAction::AlignVerticalCenters => ic::icon_dd_align_vcenter(tid),
-        ActiveBarAction::AlignToGrid => ic::icon_dd_align_grid(tid),
-        ActiveBarAction::DistributeHorizontally => ic::icon_dd_dist_horiz(tid),
-        ActiveBarAction::DistributeVertically => ic::icon_dd_dist_vert(tid),
-        // Net colours — fall back to the 4-quadrant palette glyph since
-        // a per-colour icon would just be a coloured square.
-        ActiveBarAction::NetColorBlue
-        | ActiveBarAction::NetColorRed
-        | ActiveBarAction::NetColorLightGreen
-        | ActiveBarAction::NetColorLightBlue
-        | ActiveBarAction::NetColorFuchsia
-        | ActiveBarAction::NetColorYellow
-        | ActiveBarAction::NetColorDarkGreen => ic::icon_netcolor(tid),
-        // Selection modes
-        ActiveBarAction::LassoSelect => ic::icon_dd_select_lasso(tid),
-        ActiveBarAction::InsideArea => ic::icon_dd_select_inside(tid),
-        ActiveBarAction::OutsideArea => ic::icon_dd_select_outside(tid),
-        ActiveBarAction::TouchingRectangle => ic::icon_dd_select_touching_rect(tid),
-        ActiveBarAction::TouchingLine => ic::icon_dd_select_touching_line(tid),
-        ActiveBarAction::SelectAll => ic::icon_dd_select_all(tid),
-        ActiveBarAction::SelectConnection => ic::icon_dd_select_connection(tid),
-        ActiveBarAction::ToggleSelection => ic::icon_dd_select_toggle(tid),
-        // Move / Transform
-        ActiveBarAction::Drag => ic::icon_dd_drag(tid),
-        ActiveBarAction::DragSelection => ic::icon_dd_drag_sel(tid),
-        ActiveBarAction::Move => ic::icon_dd_move(tid),
-        ActiveBarAction::MoveSelection => ic::icon_dd_move_sel(tid),
-        ActiveBarAction::MoveSelectionXY => ic::icon_dd_move_xy(tid),
-        ActiveBarAction::MoveToFront => ic::icon_dd_move_to_front(tid),
-        ActiveBarAction::RotateSelection => ic::icon_dd_rotate(tid),
-        ActiveBarAction::RotateSelectionCW => ic::icon_dd_rotate_cw(tid),
-        ActiveBarAction::FlipSelectedX => ic::icon_dd_flip_x(tid),
-        ActiveBarAction::FlipSelectedY => ic::icon_dd_flip_y(tid),
-        ActiveBarAction::BringToFront => ic::icon_dd_bring_front(tid),
-        ActiveBarAction::BringToFrontOf => ic::icon_dd_bring_front_of(tid),
-        ActiveBarAction::SendToBack => ic::icon_dd_send_back(tid),
-        ActiveBarAction::SendToBackOf => ic::icon_dd_send_back_of(tid),
-        // Net colour
-        ActiveBarAction::NetColorCustom => ic::icon_dd_net_color_custom(tid),
-        ActiveBarAction::ClearNetColor => ic::icon_dd_net_color_clear(tid),
-        ActiveBarAction::ClearAllNetColors => ic::icon_dd_net_color_clear_all(tid),
-        // Wiring
-        ActiveBarAction::DrawWire => ic::icon_dd_wire(tid),
-        ActiveBarAction::DrawBus => ic::icon_dd_bus(tid),
-        ActiveBarAction::PlaceBusEntry => ic::icon_dd_bus_entry(tid),
-        ActiveBarAction::PlaceNetLabel => ic::icon_dd_net_label(tid),
-        ActiveBarAction::PlaceJunction => ic::icon_dd_junction(tid),
-        // Power
-        ActiveBarAction::PlacePowerGND => ic::icon_dd_gnd(tid),
-        ActiveBarAction::PlacePowerVCC => ic::icon_dd_vcc(tid),
-        ActiveBarAction::PlacePowerPlus12 => ic::icon_dd_pwr_plus12(tid),
-        ActiveBarAction::PlacePowerPlus5 => ic::icon_dd_pwr_plus5(tid),
-        ActiveBarAction::PlacePowerMinus5 => ic::icon_dd_pwr_minus5(tid),
-        ActiveBarAction::PlacePowerArrow => ic::icon_dd_pwr_arrow(tid),
-        ActiveBarAction::PlacePowerWave => ic::icon_dd_pwr_wave(tid),
-        ActiveBarAction::PlacePowerBar => ic::icon_dd_pwr_bar(tid),
-        ActiveBarAction::PlacePowerCircle => ic::icon_dd_pwr_circle(tid),
-        ActiveBarAction::PlacePowerSignalGND => ic::icon_dd_pwr_signal_gnd(tid),
-        ActiveBarAction::PlacePowerEarth => ic::icon_dd_pwr_earth(tid),
-        // Port
-        ActiveBarAction::PlacePort => ic::icon_dd_port(tid),
-        ActiveBarAction::PlaceOffSheetConnector => ic::icon_dd_off_sheet(tid),
-        // Harness
-        ActiveBarAction::PlaceSignalHarness => ic::icon_dd_harness(tid),
-        ActiveBarAction::PlaceHarnessConnector => ic::icon_dd_harness_conn(tid),
-        ActiveBarAction::PlaceHarnessEntry => ic::icon_dd_harness_entry(tid),
-        // Sheet
-        ActiveBarAction::PlaceSheetSymbol => ic::icon_dd_sheet_symbol(tid),
-        ActiveBarAction::PlaceSheetEntry => ic::icon_dd_sheet_entry(tid),
-        ActiveBarAction::PlaceDeviceSheetSymbol => ic::icon_dd_device_sheet(tid),
-        ActiveBarAction::PlaceReuseBlock => ic::icon_dd_reuse_block(tid),
-        // Directives
-        ActiveBarAction::PlaceParameterSet => ic::icon_dd_param_set(tid),
-        ActiveBarAction::PlaceNoERC => ic::icon_dd_no_erc(tid),
-        ActiveBarAction::PlaceDiffPair => ic::icon_dd_diff_pair(tid),
-        ActiveBarAction::PlaceBlanket => ic::icon_dd_blanket(tid),
-        ActiveBarAction::PlaceCompileMask => ic::icon_dd_blanket(tid),
-        // Text
-        ActiveBarAction::PlaceTextString => ic::icon_dd_text_string(tid),
-        ActiveBarAction::PlaceTextFrame => ic::icon_dd_text_frame(tid),
-        ActiveBarAction::PlaceNote => ic::icon_dd_note(tid),
-        // Shapes
-        ActiveBarAction::DrawArc => ic::icon_dd_arc(tid),
-        ActiveBarAction::DrawFullCircle => ic::icon_dd_circle(tid),
-        ActiveBarAction::DrawEllipticalArc => ic::icon_dd_arc(tid),
-        ActiveBarAction::DrawEllipse => ic::icon_dd_ellipse(tid),
-        ActiveBarAction::DrawLine => ic::icon_dd_line(tid),
-        ActiveBarAction::DrawRectangle => ic::icon_dd_rect(tid),
-        ActiveBarAction::DrawRoundRectangle => ic::icon_dd_round_rect(tid),
-        ActiveBarAction::DrawPolygon => ic::icon_dd_polygon(tid),
-        ActiveBarAction::DrawBezier => ic::icon_dd_bezier(tid),
-        ActiveBarAction::PlaceGraphic => ic::icon_dd_graphic(tid),
-        // Fallback — use the generic select icon
-        _ => ic::icon_select(tid),
-    }
-}
-
 // ─── View: Active Bar ────────────────────────────────────────
 
 /// Hover text for a bar button: its name, plus the shared "planned" note
@@ -565,13 +464,10 @@ fn bar_items(
                 .unwrap_or(default),
         )
     };
-    let last_icon = |group: &str, default_icon: svg::Handle| -> svg::Handle {
-        last_tool
-            .get(group)
-            .filter(|a| !is_planned(a))
-            .map(|a| action_icon(a, tid))
-            .unwrap_or(default_icon)
-    };
+    // Graphite draws monochrome stroke glyphs only for the group defaults;
+    // the multi-colour per-action icons would tint into solid blobs, so a
+    // button keeps its group glyph. Power has monochrome family variants,
+    // so it follows the last-used port (see `glyphs`).
 
     // Helper — build a button item with the schematic editor's
     // standard pattern: left-click action + right-click dropdown +
@@ -641,14 +537,16 @@ fn bar_items(
     items.push(ActiveBarItem::Separator);
 
     items.push(btn(
-        last_icon("wiring", ic::icon_wire(tid)),
+        ic::icon_wire(tid),
         current_tool == crate::app::Tool::Wire || current_tool == crate::app::Tool::Bus,
         last("wiring", ActiveBarAction::DrawWire),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Wiring)),
         "Wiring",
     ));
+    let power_icon =
+        glyphs::PowerGlyph::of(last_tool.get("power").filter(|a| !is_planned(a))).handle(tid);
     items.push(btn(
-        last_icon("power", ic::icon_power(tid)),
+        power_icon,
         false,
         last("power", ActiveBarAction::PlacePowerGND),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Power)),
@@ -657,28 +555,28 @@ fn bar_items(
     items.push(ActiveBarItem::Separator);
 
     items.push(btn(
-        last_icon("harness", ic::icon_harness(tid)),
+        ic::icon_harness(tid),
         false,
         last("harness", ActiveBarAction::PlaceSignalHarness),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Harness)),
         "Harness",
     ));
     items.push(btn(
-        last_icon("sheet", ic::icon_sheetsym(tid)),
+        ic::icon_sheetsym(tid),
         false,
         last("sheet", ActiveBarAction::PlaceSheetSymbol),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SheetSymbol)),
         "Sheet Symbol",
     ));
     items.push(btn(
-        last_icon("port", ic::icon_port(tid)),
+        ic::icon_port(tid),
         false,
         last("port", ActiveBarAction::PlacePort),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Port)),
         "Port / Connector",
     ));
     items.push(btn(
-        last_icon("directives", ic::icon_directives(tid)),
+        ic::icon_directives(tid),
         false,
         last("directives", DIRECTIVES_DEFAULT_ACTION),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Directives)),
@@ -687,14 +585,14 @@ fn bar_items(
     items.push(ActiveBarItem::Separator);
 
     items.push(btn(
-        last_icon("text", ic::icon_text(tid)),
+        ic::icon_text(tid),
         current_tool == crate::app::Tool::Text,
         last("text", ActiveBarAction::PlaceTextString),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::TextTools)),
         "Text",
     ));
     items.push(btn(
-        last_icon("shapes", ic::icon_shapes(tid)),
+        ic::icon_shapes(tid),
         matches!(
             current_tool,
             crate::app::Tool::Line | crate::app::Tool::Rectangle | crate::app::Tool::Circle
@@ -773,26 +671,43 @@ mod pill_tests {
     }
 }
 
-/// Window-space centre x of every dropdown trigger the view draws for
-/// `tool` in a window `window_width` wide, derived from the drawn items
-/// and the widget's own row maths (not from `layout`'s slot table).
 #[cfg(test)]
-pub(crate) fn drawn_trigger_centres(
+mod layout_tests;
+
+/// Window-space centre x of every dropdown trigger the view draws for
+/// `tool` in a window `window_width` wide under theme `tid`, derived from
+/// the drawn items and the widget's own row maths (not from `layout`'s
+/// slot table).
+#[cfg(test)]
+pub(crate) fn drawn_trigger_centres_for(
     tool: crate::app::Tool,
     window_width: f32,
+    tid: ThemeId,
 ) -> Vec<(ActiveBarMenu, f32)> {
-    use signex_widgets::active_bar::{ActiveBarItem, slot_offsets};
-    let tokens = signex_types::theme::theme_tokens(ThemeId::Signex);
+    let tokens = signex_types::theme::theme_tokens(tid);
+    drawn_trigger_centres_with(tool, window_width, &tokens, tid)
+}
+
+/// [`drawn_trigger_centres_for`] with explicit `tokens`.
+#[cfg(test)]
+pub(crate) fn drawn_trigger_centres_with(
+    tool: crate::app::Tool,
+    window_width: f32,
+    tokens: &signex_types::theme::ThemeTokens,
+    tid: ThemeId,
+) -> Vec<(ActiveBarMenu, f32)> {
+    use signex_widgets::active_bar::{ActiveBarItem, Metrics, slot_offsets};
+    let m = Metrics::GRAPHITE;
     let items = bar_items(
         tool,
         crate::app::DrawMode::Ortho90,
         &std::collections::HashMap::new(),
-        &tokens,
-        ThemeId::Signex,
+        tokens,
+        tid,
         false,
         false,
     );
-    let (offsets, total) = slot_offsets(&items);
+    let (offsets, total) = slot_offsets(&items, &m);
     let bar_left = (window_width - total) / 2.0;
     items
         .iter()
@@ -800,7 +715,7 @@ pub(crate) fn drawn_trigger_centres(
         .filter_map(|(item, left)| match item {
             ActiveBarItem::Button(b) => match b.on_right_press {
                 Some(ActiveBarMsg::ToggleMenu(menu)) => {
-                    Some((menu, bar_left + left + item.width() / 2.0))
+                    Some((menu, bar_left + left + item.width(&m) / 2.0))
                 }
                 _ => None,
             },
@@ -809,95 +724,13 @@ pub(crate) fn drawn_trigger_centres(
         .collect()
 }
 
+/// [`drawn_trigger_centres_with`] under the Graphite metrics, which the
+/// canvas hit-test tests (Graphite prefs) use.
 #[cfg(test)]
-mod layout_tests {
-    use super::layout::{BarSlot, SCHEMATIC_BAR_SLOTS, bar_slots, slot_rects};
-    use super::*;
-    use crate::app::{DrawMode, Tool};
-    use signex_widgets::active_bar::{BTN_SIZE, slot_offsets};
-
-    fn drawn_items(tool: Tool) -> Vec<signex_widgets::active_bar::ActiveBarItem<ActiveBarMsg>> {
-        let tokens = signex_types::theme::theme_tokens(ThemeId::Signex);
-        bar_items(
-            tool,
-            DrawMode::Ortho90,
-            &std::collections::HashMap::new(),
-            &tokens,
-            ThemeId::Signex,
-            false,
-            false,
-        )
-    }
-
-    /// The view's item list and the slot table must describe the same bar.
-    #[test]
-    fn bar_items_follow_the_slot_table() {
-        use signex_widgets::active_bar::ActiveBarItem;
-        let slots: Vec<BarSlot> = drawn_items(Tool::Select)
-            .iter()
-            .map(|item| match item {
-                ActiveBarItem::Separator => BarSlot::Separator,
-                ActiveBarItem::Button(b) => match b.on_right_press {
-                    Some(ActiveBarMsg::ToggleMenu(menu)) => BarSlot::Trigger(menu),
-                    _ => panic!("bar button without a dropdown trigger"),
-                },
-                ActiveBarItem::Custom { .. } => panic!("unexpected custom slot"),
-            })
-            .collect();
-        assert_eq!(slots, SCHEMATIC_BAR_SLOTS);
-    }
-
-    /// Hit rects are the rects the renderer lays out (same row maths),
-    /// also while the draw-mode pill widens the bar.
-    #[test]
-    fn hit_rects_equal_drawn_rects() {
-        for tool in [Tool::Select, Tool::Wire, Tool::Bus] {
-            let items = drawn_items(tool);
-            let (drawn, total) = slot_offsets(&items);
-            assert_eq!(total, bar_width_for(tool), "{tool:?} total width");
-            if tool == Tool::Select {
-                assert_eq!(total, BAR_WIDTH_PX);
-            } else {
-                assert_eq!(total, BAR_WIDTH_PX + 1.0 + 2.0 + 2.0 + 42.0);
-            }
-            let rects = slot_rects(tool);
-            assert_eq!(rects.len(), items.len(), "{tool:?} slot count");
-            for (i, (left, width)) in rects.iter().copied().enumerate() {
-                assert_eq!(left, drawn[i], "slot {i} left edge");
-                assert_eq!(width, items[i].width(), "slot {i} width");
-                let BarSlot::Trigger(menu) = bar_slots(tool)[i] else {
-                    assert_eq!(menu_at(tool, left + width / 2.0), None, "non-trigger {i}");
-                    continue;
-                };
-                assert_eq!(menu_at(tool, left), Some(menu));
-                assert_eq!(menu_at(tool, left + width - 0.01), Some(menu));
-                assert_ne!(menu_at(tool, left + width), Some(menu));
-                assert_ne!(menu_at(tool, left - 0.01), Some(menu));
-                assert_eq!(dropdown_x_offset(menu), left);
-            }
-        }
-    }
-
-    /// #1509: with the pill shown the dropdown anchor (window-space left
-    /// edge of the trigger) lands on the drawn button, not 23.5 px off.
-    #[test]
-    fn dropdown_anchor_matches_drawn_button_with_pill() {
-        for window_width in [1400.0_f32, 1117.0] {
-            for (menu, centre) in drawn_trigger_centres(Tool::Wire, window_width) {
-                let anchor = dropdown_x_offset(menu) + bar_left_in_window(Tool::Wire, window_width);
-                assert_eq!(
-                    anchor + BTN_SIZE / 2.0,
-                    centre,
-                    "{menu:?} at {window_width}"
-                );
-            }
-        }
-    }
-
-    /// Pre-#1495 literal for the right-click zone.
-    #[test]
-    fn active_bar_zone_height_is_unchanged() {
-        assert_eq!(BAR_ZONE_HEIGHT_PX, 46.0);
-        assert_eq!(BAR_TOP_MARGIN_PX, 4.0);
-    }
+pub(crate) fn drawn_trigger_centres(
+    tool: crate::app::Tool,
+    window_width: f32,
+) -> Vec<(ActiveBarMenu, f32)> {
+    let tokens = signex_types::theme::theme_tokens(ThemeId::DEFAULT);
+    drawn_trigger_centres_with(tool, window_width, &tokens, ThemeId::DEFAULT)
 }

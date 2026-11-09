@@ -1,6 +1,7 @@
 //! Schematic defaults section view. Pure: reads the project, emits
 //! `ProjectTabMsg`s.
 
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use std::collections::HashMap;
 
 use iced::widget::{column, container, pick_list};
@@ -81,13 +82,13 @@ pub(in crate::app::project_tab) fn view<'a>(
         LineChoice::ALL,
         LineChoice::to_string,
     )
+    .graphite()
     .on_select(move |choice: LineChoice| {
         tab_message(ProjectTabMsg::SchematicDefaultLineStylePicked {
             project_id,
             line: choice.0,
         })
     })
-    .text_size(ts.label)
     .width(Length::Fill);
     body = body.push(labelled("Wire line style", line, tokens));
     let fill = pick_list(
@@ -95,13 +96,13 @@ pub(in crate::app::project_tab) fn view<'a>(
         FillChoice::ALL,
         FillChoice::to_string,
     )
+    .graphite()
     .on_select(move |choice: FillChoice| {
         tab_message(ProjectTabMsg::SchematicDefaultShapeFillPicked {
             project_id,
             fill: choice.0,
         })
     })
-    .text_size(ts.label)
     .width(Length::Fill);
     body = body.push(labelled("New shape fill", fill, tokens));
     container(body).padding([sp.xl, sp.xl]).boxed()

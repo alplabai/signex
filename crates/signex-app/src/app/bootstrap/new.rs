@@ -4,8 +4,6 @@
 use super::super::*;
 
 use crate::canvas::CanvasSlot;
-use crate::dock::{DockArea, PanelPosition};
-use crate::panels::PanelKind;
 
 impl Signex {
     /// [`Signex::new`] plus one `FileMsg::Opened` per command-line
@@ -80,32 +78,14 @@ impl Signex {
         let prefs_json = crate::fonts::load_prefs_json();
         let prefs = prefs_json.as_ref();
         let (first_run_tour_open, tour_boot) = first_run_tour_boot(prefs);
-        // Default panel layout — restored from disk if a previous
-        // session persisted one, otherwise seeded with the Altium-ish
-        // defaults: Projects + Components + Signal on the left,
-        // Properties + Messages on the right, ERC on the bottom
-        // (user's request — bottom is reserved for future log tails).
-        let dock = match crate::fonts::read_dock_layout_from(prefs) {
+        // Default panel layout — restored from disk if a previous session
+        // persisted one, otherwise the Graphite first-run layout: the short
+        // Messages dock. A saved layout is never replaced.
+        let saved_dock = crate::fonts::read_dock_layout_from(prefs);
+        let graphite_first_run = saved_dock.is_none();
+        let dock = match saved_dock {
             Some(saved) => saved,
-            None => {
-                // Which panels open, in tab order. *Where* each one
-                // goes is `PanelPosition::default_for`, so the boot
-                // layout and every later "open panel X" agree on one
-                // home per kind (#641).
-                let mut d = DockArea::new();
-                for kind in [
-                    PanelKind::Projects,
-                    PanelKind::Components,
-                    PanelKind::Library,
-                    PanelKind::Signal,
-                    PanelKind::Properties,
-                    PanelKind::Messages,
-                    PanelKind::Erc,
-                ] {
-                    d.add_panel(PanelPosition::default_for(kind), kind);
-                }
-                d
-            }
+            None => crate::dock::graphite_first_run(),
         };
         let dock_layout_sync = crate::dock::DockLayoutSync::new(
             std::sync::Arc::new(crate::fonts::PrefsDockLayoutStore::user_prefs()),
@@ -143,6 +123,7 @@ impl Signex {
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
         let trackpad_pan = crate::fonts::read_trackpad_pan_pref_from(prefs);
+        let wheel_mode = crate::fonts::read_wheel_mode_pref_from(prefs);
         let i18n = std::sync::Arc::new(signex_i18n::I18n::new(
             &crate::fonts::read_language_pref_from(prefs),
         ));
@@ -287,7 +268,11 @@ impl Signex {
                 canvas_font_italic: false,
                 left_width: 240.0,
                 right_width: 220.0,
-                bottom_height: crate::app::state::DEFAULT_BOTTOM_PANEL_HEIGHT,
+                bottom_height: if graphite_first_run {
+                    crate::dock::GRAPHITE_BOTTOM_HEIGHT
+                } else {
+                    crate::app::state::DEFAULT_BOTTOM_PANEL_HEIGHT
+                },
                 window_size: (1400.0, 900.0),
                 window_os_scales: std::collections::HashMap::new(),
                 undocked_window_sizes: std::collections::HashMap::new(),
@@ -328,6 +313,8 @@ impl Signex {
                 preferences_draft_net_hover_enabled: net_hover_enabled,
                 trackpad_pan,
                 preferences_draft_trackpad_pan: trackpad_pan,
+                wheel_mode,
+                preferences_draft_wheel_mode: wheel_mode,
                 i18n: std::sync::Arc::clone(&i18n),
                 remember_window_geometry,
                 preferences_draft_remember_window_geometry: remember_window_geometry,
@@ -350,6 +337,7 @@ impl Signex {
                 edit_row_window_vanished: Default::default(),
                 recovery_window_vanished: 0,
                 library_modal_owners: Default::default(),
+                borderless_dialog_windows: Default::default(),
                 main_window_monitor_size: None,
                 autosave_enabled,
                 preferences_draft_autosave_enabled: autosave_enabled,
@@ -361,7 +349,6 @@ impl Signex {
                 preferences_draft_symbol_grid_style: symbol_grid_style,
                 symbol_pin_selection,
                 preferences_draft_symbol_pin_selection: symbol_pin_selection,
-                preferences_theme_status: String::new(),
                 preferences_keymap_editor: keymap_editor,
                 preferences_keymap_status: String::new(),
                 keymap_load_error,
@@ -374,10 +361,9 @@ impl Signex {
                 prefs_load_error,
                 preferences_prefs_status: String::new(),
                 preferences_keymap_search: String::new(),
+                preferences_nav_search: String::new(),
                 preferences_keymap_recorder: None,
                 preferences_dirty: false,
-                preferences_dirty_sticky: false,
-                custom_theme: None,
                 rename_dialog: None,
                 remove_dialog: None,
                 project_close_confirm: None,
@@ -519,10 +505,10 @@ impl Signex {
                     lib_symbol_names: vec![],
                     placed_symbols: vec![],
                     symbol_lists_key: None,
-                    tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
-                    theme_id: ThemeId::Signex,
+                    tokens: signex_types::theme::theme_tokens(ThemeId::DEFAULT),
+                    theme_id: ThemeId::DEFAULT,
                     i18n,
-                    canvas_colors: signex_types::theme::canvas_colors(ThemeId::Signex),
+                    canvas_colors: signex_types::theme::canvas_colors(ThemeId::DEFAULT),
                     device_px_per_logical_px:
                         signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
                     unit: Unit::Mm,
@@ -543,12 +529,16 @@ impl Signex {
                     canvas_font_popup_open: false,
 
                     properties_tab: 0,
+                    signal_mode: Default::default(),
+                    projects_view: Default::default(),
                     net_classes: Default::default(),
                     project_tree: vec![],
                     project_tree_builds: 0,
                     project_tree_selected: None,
                     navigator: crate::panels::NavigatorModel::default(),
                     library_row_detail: None,
+                    component_sheet: None,
+                    pcb_nets: None,
                     selection_count: 0,
                     selected_uuid: None,
                     selected_kind: None,
@@ -557,6 +547,7 @@ impl Signex {
                     multi_draft: None,
                     symbol_choices: vec![],
                     footprint_choices: vec![],
+                    footprint_card: None,
                     drawing_edit_buf: std::collections::HashMap::new(),
                     drawing_edit_buf_for: None,
                     drawing_edit_buf_page: None,
@@ -564,6 +555,8 @@ impl Signex {
                     selected_drawing_placement: Default::default(),
                     selected_child_sheet: None,
                     child_sheet_border_picker_open: false,
+                    wire_color_picker: Default::default(),
+                    selected_wire_style: None,
                     child_sheet_fill_picker_open: false,
                     child_sheet_border_advanced_open: false,
                     child_sheet_fill_advanced_open: false,
@@ -766,6 +759,10 @@ impl Signex {
             mount_task,
             tour_boot,
         ]);
+        // The panel context above was seeded with Signex tokens; point it at the
+        // saved theme before the first frame, so a Graphite first launch does not
+        // draw one frame (and every dialog window) in the old palette.
+        app.sync_theme();
         (app, boot_task)
     }
 }
@@ -834,6 +831,46 @@ mod tests {
             assert!(!s.exit_on_close_request, "native={native}");
             assert_eq!(s.decorations, native);
         }
+    }
+
+    /// The first frame draws with the saved theme's tokens, not the seed's.
+    #[test]
+    fn the_first_frame_uses_the_saved_themes_tokens() {
+        let (app, _boot) = Signex::new();
+        let saved = app.ui_state.theme_id;
+        assert_eq!(app.document_state.panel_ctx.theme_id, saved);
+        assert_eq!(
+            app.document_state.panel_ctx.tokens,
+            signex_types::theme::theme_tokens(saved),
+        );
+    }
+
+    /// Picking a theme in Preferences previews it live through the real
+    /// message path (no `theme_id` poke): the panel tokens follow the draft
+    /// and fall back when Preferences closes without saving.
+    #[test]
+    fn a_draft_theme_previews_through_the_preferences_messages() {
+        use crate::app::{Message, PreferencesMsg};
+        use crate::preferences::PrefMsg;
+        let (mut app, _boot) = Signex::new();
+        let saved = app.ui_state.theme_id;
+        let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+        for draft in [
+            saved.light_dark_counterpart(),
+            saved,
+            saved.light_dark_counterpart(),
+        ] {
+            let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+                PrefMsg::DraftTheme(draft),
+            )));
+            assert_eq!(app.document_state.panel_ctx.theme_id, draft);
+            assert_eq!(
+                app.document_state.panel_ctx.tokens,
+                signex_types::theme::theme_tokens(draft),
+                "{draft:?}"
+            );
+        }
+        assert_eq!(app.ui_state.theme_id, saved, "the saved theme is untouched");
     }
 
     /// #1470 — startup mounts nothing before the first frame: the stock and

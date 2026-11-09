@@ -64,8 +64,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
         p.net.clone(),
         move |v| PanelMsg::FpEditorSetSketchPadNet { id, value: v },
         muted,
-        primary,
-        border_c,
     ));
     col = col.push(pad_check_row(
         "Locked",
@@ -80,8 +78,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
         p.template.clone(),
         move |v| PanelMsg::FpEditorSetSketchPadTemplate { id, value: v },
         muted,
-        primary,
-        border_c,
     ));
     col = col.push(pad_input_row(
         "Library",
@@ -89,8 +85,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
         p.template_library.clone(),
         move |v| PanelMsg::FpEditorSetSketchPadTemplateLibrary { id, value: v },
         muted,
-        primary,
-        border_c,
     ));
 
     // Pad Features.
@@ -210,8 +204,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
         corner_buf,
         move |v| PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value: v },
         muted,
-        primary,
-        border_c,
     ));
 
     // Hole Details (THT pads only).
@@ -232,8 +224,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
             tol_p_buf,
             move |v| PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value: v },
             muted,
-            primary,
-            border_c,
         ));
         let tol_m_buf = p
             .hole_tolerance_minus_mm
@@ -245,8 +235,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
             tol_m_buf,
             move |v| PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value: v },
             muted,
-            primary,
-            border_c,
         ));
         let rot_buf = p
             .hole_rotation_deg
@@ -258,8 +246,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
             rot_buf,
             move |v| PanelMsg::FpEditorSetSketchPadHoleRotation { id, value: v },
             muted,
-            primary,
-            border_c,
         ));
         let cox_buf = p
             .copper_offset_x_mm
@@ -271,8 +257,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
             cox_buf,
             move |v| PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value: v },
             muted,
-            primary,
-            border_c,
         ));
         let coy_buf = p
             .copper_offset_y_mm
@@ -284,8 +268,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
             coy_buf,
             move |v| PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value: v },
             muted,
-            primary,
-            border_c,
         ));
     }
 

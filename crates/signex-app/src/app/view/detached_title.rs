@@ -26,6 +26,21 @@ impl Signex {
         }
         .unwrap_or_else(|| detached_modal_title(modal).to_owned())
     }
+
+    /// The subtitle a dialog's header carries beside its title: the same
+    /// line in the in-window header and in a borderless window's title bar.
+    pub(crate) fn detached_modal_subtitle(&self, modal: ModalId) -> Option<String> {
+        match modal {
+            ModalId::AnnotateDialog => Some("Schematic Annotation Configuration".to_owned()),
+            ModalId::ErcDialog => Some(
+                self.document_state
+                    .active_document_project()
+                    .map_or_else(|| "Machine rules".to_string(), |p| p.data.name.clone()),
+            ),
+            ModalId::BomPreview => Some("BOM preview".to_owned()),
+            _ => None,
+        }
+    }
 }
 
 /// Native title-bar text of a detached modal window. Matches the header

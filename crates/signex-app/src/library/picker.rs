@@ -24,7 +24,7 @@ use signex_widgets::theme_ext;
 use signex_widgets::{button, raw, text, text_input};
 
 use super::messages::{LibraryMessage, PickerMsg, PlacedPartMsg};
-use super::modal_chrome::{footer_strip, header, primary_btn_if, secondary_btn};
+use super::modal_chrome::{cancel_btn, footer_strip, header, primary_btn_if};
 use super::placed_part::{change_preview_view, datasheet_choice_view};
 use super::range_filter::range_filter_bar;
 use super::state::{PickerMode, PickerState};
@@ -78,6 +78,7 @@ pub fn view<'a>(
         raw("Search internal PN / MPN / description…"),
         &picker.filter,
     )
+    .style(crate::panels::form_look::text_input_style)
     .on_input(|s| LibraryMessage::Picker(PickerMsg::FilterChanged(s)))
     .padding(6)
     .size(TS.label);
@@ -112,7 +113,7 @@ pub fn view<'a>(
             };
             let row_widget = button(
                 row![
-                    text(raw(summary.internal_pn.as_str()))
+                    text(signex_i18n::UserText::new(summary.internal_pn.as_str()))
                         .size(TS.body)
                         .color(text_c)
                         .width(Length::FillPortion(2)),
@@ -120,11 +121,11 @@ pub fn view<'a>(
                         .size(TS.body)
                         .color(muted)
                         .width(Length::Fixed(96.0)),
-                    text(raw(summary.mpn.as_str()))
+                    text(signex_i18n::UserText::new(summary.mpn.as_str()))
                         .size(TS.body)
                         .color(text_c)
                         .width(Length::FillPortion(3)),
-                    text(raw(summary.description.as_str()))
+                    text(signex_i18n::UserText::new(summary.description.as_str()))
                         .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(4)),
@@ -169,7 +170,7 @@ pub fn view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn("Cancel", LibraryMessage::ClosePicker, tokens),
+            cancel_btn("Cancel", LibraryMessage::ClosePicker, tokens),
             primary_btn_if(
                 if changing { "Next" } else { "Place" },
                 if changing {

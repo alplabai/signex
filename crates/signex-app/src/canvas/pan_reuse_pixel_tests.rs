@@ -227,7 +227,7 @@ fn centre_of(
 /// wire (the first one is mostly under the highlight), read off one frame: the
 /// two layers drawn together.
 fn selection_offset(frame: &Frame, mount: Mount, run: &Run) -> (f32, f32) {
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
     let of = |c: signex_types::theme::Color| [c.r, c.g, c.b];
     let band = |x0, y0, x1, y1| {
         let (a, b) = window_px(mount, run, x0, y0);
@@ -238,18 +238,25 @@ fn selection_offset(frame: &Frame, mount: Mount, run: &Run) -> (f32, f32) {
     // it; the second runs (5, 8) to (20, 8) mm, clear of the highlight.
     let (wire, wire_n) =
         centre_of(frame, of(colors.wire), band(4.0, 7.0, 21.0, 9.0)).expect("no wire pixels");
-    let (sel, sel_n) = centre_of(frame, of(colors.selection), band(4.0, 3.5, 21.0, 6.5))
-        .expect("no selection pixels");
+    let (sel, sel_n) = centre_of(
+        frame,
+        of(signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight).accent),
+        band(4.0, 3.5, 21.0, 6.5),
+    )
+    .expect("no selection pixels");
     eprintln!("wire centre {wire:?} ({wire_n} px), selection centre {sel:?} ({sel_n} px)");
     (sel.0 - wire.0, sel.1 - wire.1)
 }
 
 /// Where and how the two frames differ, by the colour class each shows there.
 fn describe_differences(surface: &Frame, trunk: &Frame, differing: &[(u32, u32)]) {
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
     let classes = [
         ("wire", colors.wire),
-        ("selection", colors.selection),
+        (
+            "selection",
+            signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight).accent,
+        ),
         ("paper", colors.paper),
         ("background", colors.background),
     ];

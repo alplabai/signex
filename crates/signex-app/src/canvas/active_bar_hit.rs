@@ -22,6 +22,9 @@ fn right_press_at(
     let mut prefs = test_prefs(&overrides, &filters);
     prefs.current_tool = tool;
     prefs.window_width = WINDOW_WIDTH;
+    prefs.graphite = GraphiteCanvasInk::from_tokens(&signex_types::theme::theme_tokens(
+        signex_types::theme::ThemeId::DEFAULT,
+    ));
     let view = SchematicCanvas::new(&slot, prefs);
     let bounds = Rectangle {
         x: canvas_left,

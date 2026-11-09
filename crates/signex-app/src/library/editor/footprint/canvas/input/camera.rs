@@ -83,9 +83,8 @@ impl FootprintCanvas<'_> {
         None
     }
 
-    /// Scroll-wheel zoom, anchored on the cursor. With "Two-finger scroll
-    /// pans" on, a pixel-delta (trackpad) scroll pans instead, unless
-    /// Ctrl/Cmd is held.
+    /// Scroll-wheel zoom, anchored on the cursor, or a pan: see
+    /// [`crate::canvas::wheel_intent`] for the preferences.
     pub(in crate::library::editor::footprint::canvas) fn on_wheel_scrolled(
         &self,
         cstate: &mut FootprintCanvasState,
@@ -93,11 +92,15 @@ impl FootprintCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
-        let intent = crate::canvas::Camera::scroll_intent(
+        let intent = crate::canvas::wheel_intent(
             delta,
             50.0,
             self.trackpad_pan,
-            cstate.current_modifiers.command() || cstate.current_modifiers.control(),
+            self.wheel_mode,
+            crate::canvas::WheelKeys {
+                zoom: cstate.current_modifiers.command() || cstate.current_modifiers.control(),
+                shift: cstate.current_modifiers.shift(),
+            },
         );
         let cursor_pos = cursor.position_in(bounds)?;
         match intent {

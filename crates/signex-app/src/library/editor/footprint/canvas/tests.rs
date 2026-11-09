@@ -244,6 +244,7 @@ mod drag_track_end {
             silk_b: &[],
             zoom_step: 1.1,
             trackpad_pan: false,
+            wheel_mode: Default::default(),
         }
     }
 
@@ -525,6 +526,7 @@ mod wheel_zoom {
             silk_b: &[],
             zoom_step: step,
             trackpad_pan: false,
+            wheel_mode: Default::default(),
         };
         let mut cstate = FootprintCanvasState::default();
         let before = cstate.scale;
@@ -542,6 +544,50 @@ mod wheel_zoom {
             "got {}",
             cs.scale / before
         );
+    }
+
+    fn offset_after_scroll_mode_wheel(shift: bool) -> (f32, iced::Vector, FootprintCanvasState) {
+        let state = FootprintEditorState::empty();
+        let cache = canvas::Cache::new();
+        let fpc = FootprintCanvas {
+            state: &state,
+            address: EditorAddress::new(
+                std::path::PathBuf::from("/tmp/lib.snxlib"),
+                "footprints".to_string(),
+                signex_library::RowId::new(),
+            ),
+            bg_color: Color::WHITE,
+            grid_color: Color::BLACK,
+            cache: &cache,
+            sketch: None,
+            silk_f: &[],
+            silk_b: &[],
+            zoom_step: 1.1,
+            trackpad_pan: false,
+            wheel_mode: crate::canvas::WheelMode::Scroll,
+        };
+        let mut cstate = FootprintCanvasState::default();
+        if shift {
+            cstate.current_modifiers = iced::keyboard::Modifiers::SHIFT;
+        }
+        let (scale, offset) = (cstate.scale, cstate.offset);
+        let cursor = mouse::Cursor::Available(Point::new(400.0, 300.0));
+        let delta = mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 };
+        let _ = fpc.on_wheel_scrolled(&mut cstate, &delta, BOUNDS, cursor);
+        (scale, iced::Vector::new(offset.x, offset.y), cstate)
+    }
+
+    #[test]
+    fn scroll_mode_pans_vertically_and_shift_pans_horizontally() {
+        let (scale, offset, cs) = offset_after_scroll_mode_wheel(false);
+        assert_eq!(cs.scale, scale, "a pan keeps the zoom");
+        assert_eq!(cs.offset.x, offset.x);
+        assert_ne!(cs.offset.y, offset.y);
+
+        let (scale, offset, cs) = offset_after_scroll_mode_wheel(true);
+        assert_eq!(cs.scale, scale);
+        assert_ne!(cs.offset.x, offset.x);
+        assert_eq!(cs.offset.y, offset.y);
     }
 
     #[test]
@@ -611,6 +657,7 @@ mod initial_fit {
             silk_b: &[],
             zoom_step: 1.1,
             trackpad_pan: false,
+            wheel_mode: Default::default(),
         };
         let mut cstate = FootprintCanvasState::default();
         let event = Event::Window(window::Event::RedrawRequested(std::time::Instant::now()));
@@ -655,6 +702,7 @@ mod initial_fit {
             silk_b: &[],
             zoom_step: 1.1,
             trackpad_pan: false,
+            wheel_mode: Default::default(),
         };
         let mut cstate = FootprintCanvasState::default();
         let message = fpc

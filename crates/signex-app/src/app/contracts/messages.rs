@@ -87,6 +87,14 @@ pub enum WindowMsg {
     /// direction. Replaces the WS_THICKFRAME edges we lose when
     /// decorations are disabled.
     StartMainWindowResize(iced::window::Direction),
+    /// The title bar of a borderless dialog window was pressed: the OS
+    /// moves that window.
+    DialogTitleBarPressed(iced::window::Id),
+    /// A resize edge of a borderless dialog window was pressed.
+    DialogEdgePressed(iced::window::Id, iced::window::Direction),
+    /// The close button in a borderless dialog window's title bar was
+    /// clicked; handled as the OS close of that window.
+    DialogCloseClicked(iced::window::Id),
     /// Custom min/max/close buttons in the borderless main-window chrome.
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,

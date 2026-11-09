@@ -1,5 +1,5 @@
 use iced::widget::{Column, container, row};
-use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use iced::{Element, Length, Theme, Widget};
 use signex_widgets::{raw, text, text_input};
 
 use super::super::{
@@ -29,7 +29,6 @@ pub(super) fn view_sections<'a>(
         primary,
         border: border_c,
         input_bg,
-        input_bdr,
         ..
     } = palette;
     // Track no-selection state so the v0.18.13 Library Options
@@ -78,27 +77,9 @@ pub(super) fn view_sections<'a>(
                 )
                 .padding([3.0, SP.l])
                 .on_press(PanelMsg::FpEditorToggleSnapOption(flag))
-                .style(move |_: &Theme, status: iced::widget::button::Status| {
-                    let bg = match status {
-                        iced::widget::button::Status::Hovered => {
-                            Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)))
-                        }
-                        _ => Some(Background::Color(if on {
-                            Color::from_rgba8(0x2E, 0x33, 0x45, 1.0)
-                        } else {
-                            Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0)
-                        })),
-                    };
-                    iced::widget::button::Style {
-                        background: bg,
-                        border: Border {
-                            width: 1.0,
-                            radius: 2.0.into(),
-                            color: input_bdr,
-                            ..Default::default()
-                        },
-                        ..iced::widget::button::Style::default()
-                    }
+                .style(move |theme: &Theme, status: iced::widget::button::Status| {
+                    let hovered = matches!(status, iced::widget::button::Status::Hovered);
+                    crate::panels::form_look::segment_cell(theme, on, hovered)
                 })
                 .boxed()
             };
@@ -114,6 +95,7 @@ pub(super) fn view_sections<'a>(
             )
             .padding([SP.xs, SP.m])
             .width(Length::Fill)
+            .style(crate::panels::form_look::segmented_frame)
             .boxed(),
         );
 
@@ -244,9 +226,7 @@ pub(super) fn view_sections<'a>(
                     text_input(raw(""), format!("{value:.3}"))
                         .size(TS.caption)
                         .padding(SP.xs)
-                        .style(crate::panels::footprint_editor_properties::fp_field_style(
-                            muted, primary, border_c
-                        ))
+                        .style(crate::panels::form_look::text_input_style)
                         .on_input(on_input),
                 ]
                 .spacing(6)
@@ -337,16 +317,14 @@ pub(super) fn view_sections<'a>(
                 for (name, expr) in &fp.sketch_parameters {
                     let name_clone = name.clone();
                     let row = row![
-                        text(raw(name))
+                        text(signex_i18n::UserText::new(name))
                             .size(TS.caption)
                             .color(primary)
                             .width(Length::Fixed(110.0)),
                         text_input(raw("expression…"), expr)
                             .size(TS.caption)
                             .padding(SP.xs)
-                            .style(crate::panels::footprint_editor_properties::fp_field_style(
-                                muted, primary, border_c
-                            ))
+                            .style(crate::panels::form_look::text_input_style)
                             .on_input(move |new_expr| PanelMsg::FpEditorEditParameter {
                                 name: name_clone.clone(),
                                 expr: new_expr,
@@ -380,7 +358,6 @@ pub(super) fn view_sections<'a>(
                 col,
                 muted,
                 input_bg,
-                input_bdr,
                 "Sketch entities",
                 fp.sketch_entity_count.to_string(),
             );
@@ -388,24 +365,15 @@ pub(super) fn view_sections<'a>(
                 col,
                 muted,
                 input_bg,
-                input_bdr,
                 "Constraints",
                 fp.sketch_constraint_count.to_string(),
             );
             if let Some(s) = fp.last_solve.as_ref() {
+                col = props_kv_row(col, muted, input_bg, "Iterations", s.iterations.to_string());
                 col = props_kv_row(
                     col,
                     muted,
                     input_bg,
-                    input_bdr,
-                    "Iterations",
-                    s.iterations.to_string(),
-                );
-                col = props_kv_row(
-                    col,
-                    muted,
-                    input_bg,
-                    input_bdr,
                     "Elapsed",
                     format!("{} ms", s.elapsed_ms),
                 );
@@ -413,7 +381,6 @@ pub(super) fn view_sections<'a>(
                     col,
                     muted,
                     input_bg,
-                    input_bdr,
                     "Residual norm",
                     format!("{:.3e}", s.final_residual_norm),
                 );
@@ -421,11 +388,10 @@ pub(super) fn view_sections<'a>(
                     col,
                     muted,
                     input_bg,
-                    input_bdr,
                     "Over-constrained",
                     s.over_constraint_count.to_string(),
                 );
-                col = super::redundant::push_redundant_rows(col, s, muted, input_bg, input_bdr);
+                col = super::redundant::push_redundant_rows(col, s, muted, input_bg);
             } else {
                 col = col.push(
                     container(text(raw("(no solve yet)")).size(TS.caption).color(muted))

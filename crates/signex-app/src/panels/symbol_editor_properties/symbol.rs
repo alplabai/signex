@@ -4,8 +4,10 @@ use iced::widget::{Column, Widget, container, row};
 use iced::{Color, Element, Length};
 use signex_widgets::{raw, text};
 
+use super::super::form_look;
 use super::super::{ColorFieldProps, PanelMsg, SymbolEditorPanelContext, color_field};
 use crate::styles::{Spacing, TypeScale};
+use signex_types::theme::ThemeTokens;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -59,6 +61,7 @@ pub(super) fn view_symbol_selection<'a>(
     muted: Color,
     primary: Color,
     border_c: Color,
+    tokens: &ThemeTokens,
 ) -> Column<Element<'a, PanelMsg>> {
     // The .snxsym editor is a SYMBOL editor — symbol-level
     // visual / geometric properties only. Component metadata
@@ -83,6 +86,7 @@ pub(super) fn view_symbol_selection<'a>(
                     .padding([SP.xs, SP.s])
                     .size(TS.body)
                     .on_input(on_input)
+                    .style(form_look::text_input_style)
                     .width(Length::FillPortion(3)),
             ]
             .spacing(SP.s)
@@ -94,12 +98,7 @@ pub(super) fn view_symbol_selection<'a>(
     };
 
     // ── ▾ Symbol ──
-    col = col.push(super::super::thin_sep(border_c));
-    col = col.push(
-        container(text(raw("Symbol")).size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .boxed(),
-    );
+    col = col.push(super::section_title("Symbol", tokens));
     col = col.push(text_field(
         "Design Item ID",
         sym.symbol_name.as_str(),
@@ -139,12 +138,7 @@ pub(super) fn view_symbol_selection<'a>(
     col = col.push(super::prop_row_static("Part", part_label, muted, primary));
 
     // ── ▾ Graphical ──
-    col = col.push(super::super::thin_sep(border_c));
-    col = col.push(
-        container(text(raw("Graphical")).size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .boxed(),
-    );
+    col = col.push(super::section_title("Graphical", tokens));
     let mirrored_row: Element<'a, PanelMsg> = container(
         row![
             text(raw("Mirrored"))
@@ -153,6 +147,7 @@ pub(super) fn view_symbol_selection<'a>(
                 .width(Length::FillPortion(2)),
             signex_widgets::checkbox(sym.symbol_mirrored)
                 .size(TS.heading)
+                .style(form_look::checkbox_style)
                 .on_toggle(|_| PanelMsg::SymEditorToggleSymbolMirrored),
         ]
         .spacing(SP.s)
@@ -164,12 +159,7 @@ pub(super) fn view_symbol_selection<'a>(
     col = col.push(mirrored_row);
 
     // ── Local Colors (Fills / Lines / Pins) ──
-    col = col.push(super::super::thin_sep(border_c));
-    col = col.push(
-        container(text(raw("Local Colors")).size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .boxed(),
-    );
+    col = col.push(super::section_title("Local Colors", tokens));
     col = col.push(local_color_field(
         "Fills",
         crate::app::LocalColorSlot::Fill,

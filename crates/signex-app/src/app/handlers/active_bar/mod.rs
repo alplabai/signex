@@ -4,6 +4,8 @@ use super::super::*;
 
 mod action_groups;
 mod filter_controls;
+#[cfg(test)]
+mod filter_scope_tests;
 mod placement_presets;
 #[cfg(test)]
 mod planned_action_tests;
@@ -42,6 +44,8 @@ impl Signex {
             }
             ActiveBarMsg::ToggleFilter(filter) => self.handle_active_bar_filter_toggle(filter),
             ActiveBarMsg::ToggleAllFilters => self.handle_active_bar_all_filters_toggle(),
+            ActiveBarMsg::AllFiltersPicked => self.set_all_selection_filters(true),
+            ActiveBarMsg::NoFiltersPicked => self.set_all_selection_filters(false),
             ActiveBarMsg::ApplyCustomFilter(idx) => self.handle_apply_custom_filter_preset(idx),
             ActiveBarMsg::Action(action) => self.handle_active_bar_action(action),
         }

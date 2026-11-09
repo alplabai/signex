@@ -18,6 +18,7 @@ use iced::widget::{Widget, column, container, pick_list, row, scrollable, text_e
 use iced::{Element, Length};
 use signex_library::SimKind;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
 use signex_widgets::{TextEditorPlaceholder, raw, text, text_input};
 
@@ -168,8 +169,8 @@ pub fn view<'a>(
         SIM_KIND_OPTS.map(SimKindPick),
         |k: &SimKindPick| k.to_string(),
     )
+    .graphite()
     .on_select(move |SimKindPick(k)| event(&kind_address, EditorMsg::SimSetKind(k)))
-    .text_size(TS.body)
     .padding([SP.s, SP.m])
     .boxed();
 
@@ -270,11 +271,17 @@ fn view_pin_node_table<'a>(
             });
         let cells: Vec<(Element<'a, LibraryMessage>, Length)> = vec![
             (
-                text(raw(line.number)).size(TS.body).color(text_c).boxed(),
+                text(signex_i18n::UserText::new(line.number))
+                    .size(TS.body)
+                    .color(text_c)
+                    .boxed(),
                 PIN_COLUMNS[0].1,
             ),
             (
-                text(raw(line.name)).size(TS.body).color(muted).boxed(),
+                text(signex_i18n::UserText::new(line.name))
+                    .size(TS.body)
+                    .color(muted)
+                    .boxed(),
                 PIN_COLUMNS[1].1,
             ),
             (input.boxed(), PIN_COLUMNS[2].1),

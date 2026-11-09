@@ -55,7 +55,7 @@ fn class_style(
 }
 
 fn scene_line(sheet: &SchematicRenderSnapshot, styling: Option<WireStyling<'_>>) -> LineSegment {
-    let colors = canvas_colors(ThemeId::Signex);
+    let colors = canvas_colors(ThemeId::GraphiteLight);
     let transform = ScreenTransform {
         offset_x: 0.0,
         offset_y: 0.0,
@@ -84,7 +84,7 @@ fn scene_line(sheet: &SchematicRenderSnapshot, styling: Option<WireStyling<'_>>)
 #[test]
 fn scene_cache_rebuilds_on_class_style_or_designator_change() {
     let sheet = sheet_with_wire();
-    let colors = canvas_colors(ThemeId::Signex);
+    let colors = canvas_colors(ThemeId::GraphiteLight);
     let transform = ScreenTransform {
         offset_x: 0.0,
         offset_y: 0.0,
@@ -296,7 +296,7 @@ fn junction_draw_color(styling: Option<WireStyling<'_>>) -> [f32; 4] {
         position: Point::new(10.0, 10.0),
         ..Default::default()
     });
-    let colors = canvas_colors(ThemeId::Signex);
+    let colors = canvas_colors(ThemeId::GraphiteLight);
     let transform = ScreenTransform {
         offset_x: 0.0,
         offset_y: 0.0,
@@ -333,7 +333,7 @@ fn junction_class(color: Option<ThemeColor>) -> WireClassStyles {
 
 #[test]
 fn a_junction_takes_its_net_class_colour_and_otherwise_the_theme_colour() {
-    let theme = to_rgba(to_iced(&canvas_colors(ThemeId::Signex).junction));
+    let theme = to_rgba(to_iced(&canvas_colors(ThemeId::GraphiteLight).junction));
     let red = ThemeColor::new(255, 0, 0, 255);
     let no_overrides = HashMap::new();
     let styling = |classes| WireStyling {
@@ -354,7 +354,7 @@ fn a_junction_takes_its_net_class_colour_and_otherwise_the_theme_colour() {
 
 #[test]
 fn a_junction_override_beats_the_class_colour_but_does_not_tint_alone() {
-    let theme = to_rgba(to_iced(&canvas_colors(ThemeId::Signex).junction));
+    let theme = to_rgba(to_iced(&canvas_colors(ThemeId::GraphiteLight).junction));
     let green = ThemeColor::new(0, 255, 0, 255);
     let mut overrides = HashMap::new();
     overrides.insert(JUNCTION_ID, green);
@@ -398,7 +398,7 @@ fn every_segment_of_a_bent_wire_gets_the_same_colour_and_width() {
             ..Default::default()
         });
     }
-    let colors = canvas_colors(ThemeId::Signex);
+    let colors = canvas_colors(ThemeId::GraphiteLight);
     let transform = ScreenTransform {
         offset_x: 0.0,
         offset_y: 0.0,

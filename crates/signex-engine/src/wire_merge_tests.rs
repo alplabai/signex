@@ -383,6 +383,34 @@ fn a_locked_wire_is_never_folded_away() {
 }
 
 #[test]
+fn wires_with_different_own_colours_never_fold_and_equal_ones_do() {
+    use signex_types::theme::Color;
+    let red = Some(Color::new(255, 0, 0, 255));
+    for (a, b) in [(red, None), (None, red), (red, red), (None, None)] {
+        for full_scan in [false, true] {
+            let mut sheet = SchematicSheet::default();
+            add_wire(&mut sheet, (0.0, 0.0), (5.0, 0.0));
+            let second = add_wire(&mut sheet, (10.0, 0.0), (15.0, 0.0));
+            sheet.wires[0].color = a;
+            sheet.wires[1].color = b;
+            let mut engine = Engine::new(sheet).expect("engine");
+            engine.full_scan_moves = full_scan;
+            engine
+                .execute(Command::MoveEach {
+                    moves: vec![(wire_item(second), -5.0, 0.0)],
+                    keep_wires: false,
+                })
+                .expect("move");
+            let folded = engine.document().wires.len() == 1;
+            assert_eq!(folded, a == b, "{a:?} + {b:?}, full_scan {full_scan}");
+            if folded {
+                assert_eq!(engine.document().wires[0].color, a);
+            }
+        }
+    }
+}
+
+#[test]
 fn a_pair_that_already_met_end_to_end_is_not_folded_by_an_unrelated_edit() {
     let mut sheet = SchematicSheet::default();
     add_wire(&mut sheet, (0.0, 0.0), (10.0, 0.0));

@@ -40,6 +40,8 @@ pub struct PcbCanvasState {
     /// Ctrl/Cmd held, tracked from `ModifiersChanged` (mouse events carry no
     /// modifiers); keeps a modified scroll zooming under "Two-finger scroll pans".
     zoom_modifier: bool,
+    /// Shift held; Shift+wheel pans sideways in "Mouse wheel: Scroll" mode.
+    shift_held: bool,
     /// Left-button click / box gesture in flight.
     gesture: gesture::Gesture,
 }
@@ -96,6 +98,8 @@ pub struct PcbCanvas {
     pub zoom_step: f32,
     /// "Two-finger scroll pans" preference, synced with `zoom_step`.
     pub trackpad_pan: bool,
+    /// Preferences "Mouse wheel", synced with `trackpad_pan`.
+    pub wheel_mode: crate::canvas::WheelMode,
     pub theme_bg: Color,
     pub theme_grid: Color,
     pub canvas_colors: signex_types::theme::CanvasColors,
@@ -127,7 +131,7 @@ impl Default for PcbCanvas {
 
 impl PcbCanvas {
     pub fn new() -> Self {
-        let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+        let colors = crate::styles::board_canvas_colors();
         Self {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
@@ -142,6 +146,7 @@ impl PcbCanvas {
             gpu_render: false,
             zoom_step: Camera::zoom_step_factor(Camera::ZOOM_STEP_PERCENT_DEFAULT),
             trackpad_pan: false,
+            wheel_mode: Default::default(),
             theme_bg: crate::render_config::to_iced(&colors.background),
             theme_grid: crate::render_config::to_iced(&colors.grid),
             canvas_colors: colors,
@@ -639,10 +644,19 @@ impl canvas::Program<Message> for PcbCanvas {
         match event {
             Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
                 state.zoom_modifier = mods.command() || mods.control();
+                state.shift_held = mods.shift();
             }
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                let intent =
-                    Camera::scroll_intent(delta, 50.0, self.trackpad_pan, state.zoom_modifier);
+                let intent = crate::canvas::wheel_intent(
+                    delta,
+                    50.0,
+                    self.trackpad_pan,
+                    self.wheel_mode,
+                    crate::canvas::WheelKeys {
+                        zoom: state.zoom_modifier,
+                        shift: state.shift_held,
+                    },
+                );
                 if let Some(cursor_pos) = cursor.position_in(bounds)
                     && self.camera.borrow_mut().apply_scroll(
                         cursor_pos,

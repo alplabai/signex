@@ -30,7 +30,7 @@ fn main() -> iced::Result {
         eprintln!("[signex] failed to initialize logging: {error:#}");
     }
 
-    // Read the persisted UI font preference (defaults to "Roboto").
+    // Read the persisted UI font preference (defaults to "Inter").
     let ui_font_name = fonts::read_ui_font_pref();
 
     iced::daemon(
@@ -54,12 +54,18 @@ fn main() -> iced::Result {
     // Roboto — UI chrome (panels, toolbars, menus, dialogs).
     .font(bundled::ROBOTO_REGULAR)
     .font(bundled::ROBOTO_BOLD)
+    // Inter — default UI chrome; JetBrains Mono — chrome-only mono text.
+    .font(bundled::INTER_REGULAR)
+    .font(bundled::INTER_MEDIUM)
+    .font(bundled::INTER_SEMIBOLD)
+    .font(bundled::JETBRAINS_MONO_REGULAR)
+    .font(bundled::JETBRAINS_MONO_MEDIUM)
     // iced_aw bundled icon font — used by ColorPicker (Cancel / OK
     // glyphs) and other iced_aw widgets. Without this their action
     // buttons render as empty rectangles.
     .font(iced_aw::ICED_AW_FONT_BYTES)
     // Default UI font resolves through the Preferences-panel pick. When
-    // it matches a bundled family ("Roboto" / "Iosevka") iced uses the
+    // it matches a bundled family ("Inter" / "Roboto" / "Iosevka") iced uses the
     // embedded TTF directly; otherwise it falls back to a system font.
     .default_font(iced::Font::with_family(ui_font_name.as_str()))
     .run()

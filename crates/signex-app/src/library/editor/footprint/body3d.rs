@@ -11,6 +11,7 @@ use iced::{Border, Element, Length, Theme};
 use iced_aw::NumberInput;
 use signex_library::{Body3D, BodyShape};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
 use signex_widgets::{button, raw, text};
 
@@ -58,13 +59,13 @@ pub fn view<'a>(
     ];
     let shape_addr = address.clone();
     let shape_picker = pick_list(Some(ShapePick(body.shape)), opts, ShapePick::to_string)
+        .graphite()
         .on_select(move |ShapePick(s)| LibraryMessage::EditorEvent {
             library_path: shape_addr.library_path.clone(),
             table: shape_addr.table.clone(),
             row_id: shape_addr.row_id,
             msg: EditorMsg::SetBodyShape(s),
         })
-        .text_size(TS.body)
         .padding([SP.s, SP.m]);
 
     // Numeric inputs — height_mm / offset_z_mm.

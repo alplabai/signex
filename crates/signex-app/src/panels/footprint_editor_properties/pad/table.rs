@@ -6,6 +6,7 @@
 
 use iced::widget::{Widget, container, pick_list};
 use iced::{Color, Length, Theme};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{raw, text, text_input};
 
 use super::super::super::{PanelMsg, PanelPalette};
@@ -98,16 +99,11 @@ pub(super) fn pad_table_input_cell<'a>(
     value: String,
     placeholder: &'a str,
     on_input: impl Fn(String) -> PanelMsg + 'a,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
     text_input(raw(placeholder), value)
         .size(TS.caption)
         .padding(SP.xs)
-        .style(crate::panels::footprint_editor_properties::fp_field_style(
-            muted, primary, border_c,
-        ))
+        .style(crate::panels::form_look::text_input_style)
         .on_input(on_input)
         .boxed()
 }
@@ -122,8 +118,8 @@ where
     T: Clone + Eq + std::fmt::Display + 'static,
 {
     pick_list(Some(selected), options, |t: &T| t.to_string())
+        .graphite()
         .on_select(on_change)
-        .text_size(10)
         .padding([SP.xs, 6.0])
         .width(Length::Fill)
         .boxed()
@@ -138,7 +134,8 @@ pub(super) fn pad_table_check_cell<'a>(
         signex_widgets::checkbox(on)
             .on_toggle(on_toggle)
             .size(TS.label)
-            .spacing(0),
+            .spacing(0)
+            .style(crate::panels::form_look::checkbox_style),
     )
     .padding([SP.xs, SP.s])
     .boxed()
@@ -221,22 +218,8 @@ pub(super) fn pad_copper_row<'a>(
     let y_buf = buf_or_empty(values.size_y_mm);
     let cells = if is_authoritative {
         vec![
-            pad_table_input_cell(
-                x_buf,
-                "",
-                move |v| pad_size_x_msg(target, v),
-                muted,
-                primary,
-                border_c,
-            ),
-            pad_table_input_cell(
-                y_buf,
-                "",
-                move |v| pad_size_y_msg(target, v),
-                muted,
-                primary,
-                border_c,
-            ),
+            pad_table_input_cell(x_buf, "", move |v| pad_size_x_msg(target, v)),
+            pad_table_input_cell(y_buf, "", move |v| pad_size_y_msg(target, v)),
             pad_table_picklist_cell(PadShapeChoice::ALL, current_shape, move |c| {
                 pad_shape_msg(target, c.to_lib())
             }),

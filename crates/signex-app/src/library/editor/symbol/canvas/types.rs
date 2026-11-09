@@ -219,6 +219,9 @@ pub struct CanvasState {
     /// Ctrl/Cmd held, from `ModifiersChanged` (mouse events carry no
     /// modifiers); a modified scroll keeps zooming under "Two-finger scroll pans".
     pub zoom_modifier: bool,
+    /// Shift held, from `ModifiersChanged`; Shift+wheel pans sideways in
+    /// "Mouse wheel: Scroll" mode.
+    pub shift_held: bool,
     /// True when the user is mid-drag of the currently-selected pin.
     pub dragging: bool,
     /// `(graphic_idx, handle)` while the user drags a graphic resize

@@ -309,7 +309,7 @@ impl LoadedProject {
 
 /// #431 — pending "Export anyway (incomplete)?" prompt for netlist export.
 ///
-/// Raised (instead of a dead-end error) when `File ▸ Export Netlist` derives a
+/// Raised (instead of a dead-end error) when `Reports ▸ Netlist` derives a
 /// netlist that does not cover the whole project. Holds the picked `save_path`
 /// and the omitted-page `messages` so the two prompt actions can act without
 /// re-deriving: "Export anyway" writes the partial `.net` (a clean file —

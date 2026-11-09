@@ -99,6 +99,135 @@ impl FpLayer {
     }
 }
 
+/// Shade of a preview pad's edge relative to its fill.
+const PAD_EDGE_SHADE: f32 = 0.7;
+
+/// Which colour set the footprint canvas and layer widgets paint with.
+/// Graphite themes get the Graphite values; every other theme keeps the
+/// Altium-flavoured set of [`FpLayer::color`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LayerPalette {
+    #[default]
+    Legacy,
+    Graphite,
+    /// Graphite colours tuned for the charcoal canvas.
+    CanvasDark,
+    /// Read-only previews on the charcoal canvas: opaque pad gold with a
+    /// darker edge, fab ink apart from the copper and a neutral courtyard.
+    PreviewDark,
+}
+
+impl LayerPalette {
+    /// Outline colour of a selected pad or silk graphic.
+    pub fn selection_ink(self) -> Color {
+        Color::WHITE
+    }
+
+    /// The preview variant of a canvas palette; any other palette as is.
+    pub fn for_preview(self) -> Self {
+        match self {
+            LayerPalette::CanvasDark => LayerPalette::PreviewDark,
+            other => other,
+        }
+    }
+
+    fn is_preview(self) -> bool {
+        self == LayerPalette::PreviewDark
+    }
+
+    /// Whether the courtyard is drawn dashed (the Graphite canvases).
+    pub fn dashes_courtyard(self) -> bool {
+        !matches!(self, LayerPalette::Legacy | LayerPalette::Graphite)
+    }
+
+    /// Alpha of a pad's copper fill: opaque in previews so the gold stays
+    /// crisp on the paper, slightly see-through elsewhere.
+    pub fn pad_fill_alpha(self) -> f32 {
+        if self.is_preview() { 1.0 } else { 0.85 }
+    }
+
+    /// Edge stroke of a pad filled with `fill`: a darker copper in
+    /// previews, the fill colour itself elsewhere.
+    pub fn pad_edge(self, fill: Color) -> Color {
+        if self.is_preview() {
+            Color::from_rgb(
+                fill.r * PAD_EDGE_SHADE,
+                fill.g * PAD_EDGE_SHADE,
+                fill.b * PAD_EDGE_SHADE,
+            )
+        } else {
+            Color { a: 1.0, ..fill }
+        }
+    }
+
+    /// The palette a theme paints with: every theme is Graphite.
+    pub fn for_tokens(_tokens: &signex_types::theme::ThemeTokens) -> Self {
+        Self::Graphite
+    }
+}
+
+/// The board side a layer sits on; drives the grouping of the layers panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FpSide {
+    Top,
+    Bottom,
+    Board,
+}
+
+impl FpSide {
+    /// Display order of the groups in the layers panel.
+    pub const ORDER: &'static [FpSide] = &[FpSide::Top, FpSide::Bottom, FpSide::Board];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            FpSide::Top => "Top side",
+            FpSide::Bottom => "Bottom side",
+            FpSide::Board => "Board",
+        }
+    }
+}
+
+impl FpLayer {
+    /// The side of the board this layer belongs to.
+    pub fn side(self) -> FpSide {
+        match self {
+            FpLayer::FCu | FpLayer::FSilks | FpLayer::FFab => FpSide::Top,
+            FpLayer::BCu | FpLayer::BSilks | FpLayer::BFab => FpSide::Bottom,
+            FpLayer::EdgeCuts => FpSide::Board,
+        }
+    }
+
+    /// Colour in `palette`. Graphite: pad gold on top copper, blue on
+    /// bottom copper, warm white silk, board-outline yellow. The canvas
+    /// variants put the courtyard (drawn with the Edge.Cuts colour) in
+    /// magenta and keep silk readable on their background.
+    pub fn color_in(self, palette: LayerPalette) -> Color {
+        match palette {
+            LayerPalette::Legacy => self.color(),
+            LayerPalette::PreviewDark => match self {
+                FpLayer::FFab => Color::from_rgb8(0xA3, 0xA5, 0xAB),
+                FpLayer::EdgeCuts => Color::from_rgb8(0x5B, 0x5E, 0x66),
+                _ => self.color_in(LayerPalette::CanvasDark),
+            },
+            LayerPalette::CanvasDark => match self {
+                FpLayer::FFab => Color::from_rgb8(0x4F, 0xA6, 0xB8),
+                FpLayer::BFab => Color::from_rgb8(0x3D, 0x7F, 0x8D),
+                FpLayer::EdgeCuts => Color::from_rgb8(0xD1, 0x6B, 0xA5),
+                _ => self.color_in(LayerPalette::Graphite),
+            },
+            LayerPalette::Graphite => match self {
+                FpLayer::FCu => Color::from_rgb8(0xD8, 0xB4, 0x6A),
+                FpLayer::BCu => Color::from_rgb8(0x3B, 0x6F, 0xD8),
+                FpLayer::FSilks => Color::from_rgb8(0xF2, 0xEF, 0xE6),
+                FpLayer::BSilks => Color::from_rgb8(0xA8, 0xA2, 0xC8),
+                FpLayer::FFab => Color::from_rgb8(0x9E, 0xA3, 0xAE),
+                FpLayer::BFab => Color::from_rgb8(0x6F, 0x73, 0x7C),
+                FpLayer::EdgeCuts => Color::from_rgb8(0xE7, 0xD9, 0xA8),
+            },
+        }
+    }
+}
+
 /// Per-layer visibility map — a 7-entry struct we index by `FpLayer`
 /// rather than a `HashMap` so the footprint state is `Clone +
 /// PartialEq` without a derive dance.
@@ -141,6 +270,32 @@ impl LayerVisibility {
             FpLayer::BFab => self.b_fab,
             FpLayer::EdgeCuts => self.edge_cuts,
         }
+    }
+
+    /// Every layer visible.
+    pub fn show_all(&mut self) {
+        *self = Self {
+            f_cu: true,
+            b_cu: true,
+            f_silks: true,
+            b_silks: true,
+            f_fab: true,
+            b_fab: true,
+            edge_cuts: true,
+        };
+    }
+
+    /// Top-side layers and the board outline visible, bottom side hidden.
+    pub fn show_top_side_only(&mut self) {
+        *self = Self {
+            f_cu: true,
+            b_cu: false,
+            f_silks: true,
+            b_silks: false,
+            f_fab: true,
+            b_fab: false,
+            edge_cuts: true,
+        };
     }
 
     pub fn toggle(&mut self, layer: FpLayer) {

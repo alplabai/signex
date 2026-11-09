@@ -316,6 +316,7 @@ classic	bind	Global	Ctrl+F	command:find
 classic	bind	Global	Ctrl+F5	command:zoom_to_selection_area
 classic	bind	Global	Ctrl+G	command:toggle_search_panel
 classic	bind	Global	Ctrl+HOME	command:zoom_to_all_objects
+classic	bind	Global	Ctrl+K	command:open_command_palette
 classic	bind	Global	Ctrl+L	command:place_global_label
 classic	bind	Global	Ctrl+N	command:new_document
 classic	bind	Global	Ctrl+O	command:open_document
