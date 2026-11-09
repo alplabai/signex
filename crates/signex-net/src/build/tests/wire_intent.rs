@@ -175,6 +175,55 @@ fn an_end_with_nothing_under_it_is_open() {
     assert!(got.joined && got.extra.is_empty());
 }
 
+/// A child sheet named `Sub` with one pin `SDA` at `at`.
+fn with_sheet_pin(sheet: &mut SchematicSheet, at: Xy) {
+    use signex_types::schematic::{ChildSheet, FillType, SheetPin};
+    sheet.child_sheets.push(ChildSheet {
+        uuid: Uuid::now_v7(),
+        name: "Sub".into(),
+        filename: "sub.snxsch".into(),
+        position: pt(at.0, at.1 + 20.0),
+        size: (10.0, 10.0),
+        stroke_width: 0.0,
+        fill: FillType::None,
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: vec![SheetPin {
+            uuid: Uuid::now_v7(),
+            name: "SDA".into(),
+            direction: "input".into(),
+            position: pt(at.0, at.1),
+            rotation: 0.0,
+            auto_generated: false,
+            user_moved: false,
+        }],
+        instances: Vec::new(),
+    });
+}
+
+#[test]
+fn a_sheet_pin_on_the_path_is_an_extra_connection_with_no_junction() {
+    // The project netlist joins a sheet pin to the wire under it, end or
+    // interior, so the run pulls it in.
+    let mut before = parts(&[("R1", (0.0, 0.0)), ("C1", (20.0, 0.0))]);
+    with_sheet_pin(&mut before, (10.0, 0.0));
+    let after = run(&before, &[((0.0, 0.0), (20.0, 0.0))], &[]);
+    let got = intent(&before, &after, (0.0, 0.0), (20.0, 0.0));
+    assert_eq!(identities(&got, ExtraKind::SheetPin), ["SDA of Sub"]);
+    assert_eq!(got.extra[0].position, pt(10.0, 0.0));
+}
+
+#[test]
+fn a_run_ending_on_a_sheet_pin_is_attached_and_names_nothing_extra() {
+    let mut before = parts(&[("R1", (0.0, 0.0))]);
+    with_sheet_pin(&mut before, (10.0, 0.0));
+    let after = run(&before, &[((0.0, 0.0), (10.0, 0.0))], &[]);
+    let got = intent(&before, &after, (0.0, 0.0), (10.0, 0.0));
+    assert!(got.extra.is_empty(), "{got:?}");
+    assert!(got.open.is_empty(), "{got:?}");
+}
+
 #[test]
 fn a_run_that_was_not_applied_is_not_joined() {
     let before = parts(&[("R1", (0.0, 0.0)), ("C1", (20.0, 0.0))]);

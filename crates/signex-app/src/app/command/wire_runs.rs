@@ -32,6 +32,7 @@ fn describe(item: &ExtraItem) -> String {
         ExtraKind::Label => format!("label `{}`", item.identity),
         ExtraKind::Junction => "a junction".to_string(),
         ExtraKind::Wire => "another wire".to_string(),
+        ExtraKind::SheetPin => format!("sheet pin {}", item.identity),
     };
     format!("{what} at {}", at(item.position))
 }

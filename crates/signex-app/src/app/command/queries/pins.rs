@@ -205,21 +205,21 @@ fn pin_id(pin: &Pin) -> &str {
 const HIERARCHY_BEING_READ: &str = "the project's sheet hierarchy is being re-read; ask again";
 
 impl Signex {
-    /// The instance paths `entry`'s sheet is placed at, for naming its parts:
-    /// refused while the project's hierarchy is unread or being re-read. A
-    /// sheet no walk reaches is named at the root, as its own netlist is.
-    pub(in crate::app::command) fn pin_instance_paths(
-        &self,
-        entry: &DocumentEntry,
-    ) -> Result<Vec<InstancePath>, String> {
+    /// Whether `entry`'s project has a hierarchy walk wanted that has not
+    /// landed (or is out of date).
+    fn hierarchy_being_read(&self, entry: &DocumentEntry) -> bool {
         let docs = &self.document_state;
-        let project = entry
+        entry
             .project
             .as_ref()
-            .and_then(|named| docs.projects.iter().find(|p| p.path == named.path));
-        if project.is_some_and(|p| docs.project_fs.hierarchy_current(p.id) == Some(false)) {
-            return Err(HIERARCHY_BEING_READ.to_string());
-        }
+            .and_then(|named| docs.projects.iter().find(|p| p.path == named.path))
+            .is_some_and(|p| docs.project_fs.hierarchy_current(p.id) == Some(false))
+    }
+
+    /// The instance paths `entry`'s sheet is placed at, for naming its parts:
+    /// refused while the project's hierarchy is unread. A sheet no walk
+    /// reaches is named at the root, as its own netlist is.
+    fn pin_instance_paths(&self, entry: &DocumentEntry) -> Result<Vec<InstancePath>, String> {
         let mut paths = self.instance_paths_of(entry).ok_or_else(|| {
             "the project's sheet hierarchy is not read yet, so the designators of this sheet \
              are not known; ask again once the project has loaded"
@@ -247,6 +247,10 @@ impl Signex {
             .into_iter()
             .find(|e| matches!(&e.key, Some(DocumentKey::Schematic(p)) if p == path))
             .ok_or("the sheet is not one this session lists")?;
+        // Only a reference that is about to edit waits for a hierarchy re-read.
+        if self.hierarchy_being_read(&entry) {
+            return Err(HIERARCHY_BEING_READ.to_string());
+        }
         let paths = self.pin_instance_paths(&entry)?;
         pin_tip_of(engine.document(), designator, pin, &paths)
     }

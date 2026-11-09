@@ -155,6 +155,80 @@ fn app_idle() -> Signex {
     app
 }
 
+/// A sheet holding R1 at `x`, 10: pins 1 and 2 at x - 3.81 and x + 3.81.
+fn r1_sheet(id: u128, x: f64) -> signex_types::schematic::SchematicSheet {
+    use signex_types::schematic::{LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol};
+    let pin = |number: &str, dx: f64| LibPin {
+        unit: 0,
+        body_style: 1,
+        pin: Pin {
+            direction: PinDirection::Passive,
+            shape_style: PinShapeStyle::Plain,
+            position: Point::new(dx, 0.0),
+            rotation: 0.0,
+            length: 2.54,
+            name: String::new(),
+            number: number.into(),
+            visible: true,
+            name_visible: true,
+            number_visible: true,
+        },
+    };
+    let mut lib: LibSymbol = serde_json::from_value(json!({ "id": "R" })).unwrap();
+    lib.pins = vec![pin("1", -3.81), pin("2", 3.81)];
+    let mut sheet = signex_types::schematic::SchematicSheet {
+        uuid: uuid::Uuid::from_u128(id),
+        ..Default::default()
+    };
+    sheet.lib_symbols.insert("R".into(), lib);
+    sheet.symbols.push(Symbol {
+        uuid: uuid::Uuid::now_v7(),
+        lib_id: "R".into(),
+        reference: "R1".into(),
+        position: Point::new(x, 10.0),
+        unit: 1,
+        ..Default::default()
+    });
+    sheet
+}
+
+/// #2199: a pin reference in an edit resolves on the call's `document`, not on
+/// the sheet that is active.
+#[test]
+fn a_pin_reference_in_an_edit_resolves_on_the_target_sheet_not_the_active_one() {
+    let mut app = app_with(&[]);
+    fixture::add_sheet_with(&mut app, &path("pa.snxsch"), r1_sheet(300, 20.0));
+    fixture::add_sheet_with(&mut app, &path("pb.snxsch"), r1_sheet(301, 60.0));
+    app.document_state.mark_document_clean(&path("pa.snxsch"));
+    app.document_state.mark_document_clean(&path("pb.snxsch"));
+    fixture::activate(&mut app, &path("pa.snxsch"));
+    let answer = applied(
+        &mut app,
+        "pb.snxsch",
+        json!([{"id": "place_junction", "args": {"at": "R1.2"}}]),
+    );
+    assert_eq!(answer["changed"], true);
+    let junctions = |file: &str| {
+        app.document_state.engines[&path(file)]
+            .document()
+            .junctions
+            .iter()
+            .map(|j| j.position)
+            .collect::<Vec<_>>()
+    };
+    assert!(
+        junctions("pa.snxsch").is_empty(),
+        "the active sheet is untouched"
+    );
+    let [tip] = junctions("pb.snxsch")[..] else {
+        panic!("one junction on the target");
+    };
+    assert!(
+        (tip.x - 63.81).abs() < 1e-9 && (tip.y - 10.0).abs() < 1e-9,
+        "{tip:?}"
+    );
+}
+
 /// #2199: a wire edit answers its report, which `apply_edits` carries in
 /// `results` by edit index (`null` for an edit that only ran); a dry run among
 /// the edits changes nothing, and a refused wire refuses the whole list.

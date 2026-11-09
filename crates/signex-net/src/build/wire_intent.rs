@@ -32,6 +32,8 @@ pub enum ExtraKind {
     Label,
     Junction,
     Wire,
+    /// A child-sheet pin; the identity is `<pin> of <sheet name>`.
+    SheetPin,
 }
 
 /// An item that was on another net before and is on the run's net now.
@@ -79,8 +81,19 @@ pub fn wire_intent(
 
     // Anchor every point before reading any root: an anchor can re-root a class.
     let mut b = merged_connectivity(before);
-    for p in [start, end] {
-        b.root_of_anchored_in(&p, &before_index);
+    // A child-sheet pin joins the wire it sits on, end or interior, with no
+    // junction: the project netlist anchors it as `SheetPinContacts` says.
+    let sheet_pins: Vec<(Point, String)> = before
+        .child_sheets
+        .iter()
+        .flat_map(|cs| {
+            cs.pins
+                .iter()
+                .map(move |sp| (sp.position, format!("{} of {}", sp.name, cs.name)))
+        })
+        .collect();
+    for p in [start, end].iter().chain(sheet_pins.iter().map(|(p, _)| p)) {
+        b.root_of_anchored_in(p, &before_index);
     }
     let wanted: HashSet<Key> = [b.root_of(&start), b.root_of(&end)].into();
     let names = names_at(before, &mut b.parent, [start, end]);
@@ -100,12 +113,14 @@ pub fn wire_intent(
         .map(|j| b.root_of(&j.position))
         .collect();
     let before_wire_roots: Vec<Key> = before.wires.iter().map(|w| b.root_of(&w.start)).collect();
+    let before_sheet_pin_roots: Vec<Key> = sheet_pins.iter().map(|(p, _)| b.root_of(p)).collect();
 
     let after_index = SegmentIndex::new(&segments(after));
     let mut a = merged_connectivity(after);
     for p in std::iter::once(&start)
         .chain(std::iter::once(&end))
         .chain(before.wires.iter().map(|w| &w.start))
+        .chain(sheet_pins.iter().map(|(p, _)| p))
     {
         a.root_of_anchored_in(p, &after_index);
     }
@@ -156,6 +171,15 @@ pub fn wire_intent(
                 kind: ExtraKind::Wire,
                 identity: w.uuid.to_string(),
                 position: w.start,
+            });
+        }
+    }
+    for ((p, name), r) in sheet_pins.iter().zip(&before_sheet_pin_roots) {
+        if !wanted.contains(r) && on_new(&mut a, p) {
+            extra.push(ExtraItem {
+                kind: ExtraKind::SheetPin,
+                identity: name.clone(),
+                position: *p,
             });
         }
     }
@@ -212,6 +236,10 @@ fn has_item_at(sheet: &SchematicSheet, index: &SegmentIndex, p: &Point) -> bool 
     index.contains(key)
         || sheet.junctions.iter().any(|j| pt_key(&j.position) == key)
         || sheet.labels.iter().any(|l| pt_key(&l.position) == key)
+        || sheet
+            .child_sheets
+            .iter()
+            .any(|cs| cs.pins.iter().any(|sp| pt_key(&sp.position) == key))
         || sheet.symbols.iter().any(|sym| {
             sheet
                 .resolve_lib_symbol(sym)

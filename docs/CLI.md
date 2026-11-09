@@ -107,8 +107,8 @@ sheet, not annotated (`R?`), ambiguous or a power port; a pin that does not
 exist, whose name matches several pins, that is hidden, or whose unit is not
 placed on the sheet; a pin shared by every unit of a part that has several
 units placed (it has several tips, which are named); a project whose sheet
-hierarchy is not read yet or is being re-read ("ask again", the same for
-`query_pins`).
+hierarchy is not read yet or is being re-read ("ask again"). `query_pins`
+refuses only a hierarchy that is not read yet.
 
 ## Wire intent
 

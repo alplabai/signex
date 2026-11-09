@@ -435,7 +435,7 @@ fn a_pin_that_is_not_one_tip_on_this_sheet_is_refused_with_the_reason() {
 /// designators of its sheets are not final, so neither query nor reference
 /// answers from them.
 #[test]
-fn a_hierarchy_being_read_refuses_query_pins_and_pin_references() {
+fn a_hierarchy_being_read_refuses_pin_references_and_query_pins_keeps_its_refusal() {
     use crate::app::handlers::menu::export::tests::current_placement::placed_twice_listing;
 
     let dir = tempfile::tempdir().unwrap();
@@ -447,8 +447,9 @@ fn a_hierarchy_being_read_refuses_query_pins_and_pin_references() {
     ];
     let args = CommandArgs::parse_operands(&command, &[&operands[0], &operands[1]]).unwrap();
     match app.run_query_headless(&command, &args).expect("a query").0 {
+        // `query_pins` keeps its own refusal: only a reference waits for a re-read.
         CommandOutcome::Disabled { reason } => {
-            assert!(reason.contains("being re-read"), "{reason}")
+            assert!(reason.contains("not read yet"), "{reason}")
         }
         other => panic!("was not refused: {other:?}"),
     }

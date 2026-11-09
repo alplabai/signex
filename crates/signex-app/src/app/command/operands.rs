@@ -154,6 +154,10 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
             .map(|n| n + 0.0)
     };
     match operand.kind {
+        // A lone number (`1.5`) is a mistyped coordinate, not a pin reference.
+        OperandKind::Point if !text.contains(',') && is_number_pair(text) => {
+            Err(invalid("x,y in mm"))
+        }
         OperandKind::Point if !text.contains(',') => {
             pin_ref(text).ok_or_else(|| invalid("x,y in mm, or a pin reference like R1.2"))
         }
@@ -196,6 +200,13 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
             .map(OperandValue::Document)
             .map_err(invalid),
     }
+}
+
+/// Whether both sides of the first `.` are numbers (`1.5`, `10.16`).
+fn is_number_pair(text: &str) -> bool {
+    text.split_once('.')
+        .is_some_and(|(a, b)| a.parse::<f64>().is_ok() && b.parse::<f64>().is_ok())
+        || text.parse::<f64>().is_ok()
 }
 
 /// `<designator>.<pin>`, split at the first `.`; neither side empty, no
@@ -264,10 +275,16 @@ mod tests {
                 .operand("at"),
             Some(&OperandValue::Point(1.5, 2.0))
         );
-        for bad in ["R1", "R1.", ".2", "R 1.2", "R1.\t2", "R1.2,", "1,a.b"] {
+        for bad in [
+            "R1", "R1.", ".2", "R 1.2", "R1.\t2", "R1.2,", "1,a.b", "1.5", "10.16", "5",
+        ] {
             let err = parse("place_junction", &[&format!("at={bad}")]).unwrap_err();
             assert!(matches!(err, OperandError::Invalid { .. }), "{bad}: {err}");
         }
+        // A bare JSON number reaches the parser as the same text.
+        let text = crate::app::command::operand_text("at", &serde_json::json!(1.5)).unwrap();
+        let err = parse("place_junction", &[&format!("at={text}")]).unwrap_err();
+        assert_eq!(err.to_string(), "operand `at` must be x,y in mm, got `1.5`");
     }
 
     #[test]

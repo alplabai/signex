@@ -10,9 +10,10 @@
 //! may instead be a pin reference, `R1.2`, which is the pin's tip on the sheet
 //! the edit targets, on or off the grid (#2199). What the operands do not name
 //! comes from the pre-placement form and the project defaults, as for a click;
-//! that includes the wire draw mode, so a diagonal wire or bus bends as a
-//! click-drawn one does. Wires and buses are checked before they land and
-//! answer with a report (`wire_runs`).
+//! that includes the wire draw mode, which bends a run as it does a click
+//! run; a wire or bus that is still diagonal after the bend is refused. Wires
+//! and buses are checked before they land and answer with a report
+//! (`wire_runs`); they still commit through the click's `apply_engine_commands`.
 
 use iced::Task;
 use signex_types::schematic::{LabelType, Point};

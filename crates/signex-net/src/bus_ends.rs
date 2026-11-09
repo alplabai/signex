@@ -15,7 +15,12 @@ pub fn dangling_bus_ends(sheet: &SchematicSheet, start: Point, end: Point) -> Ve
     let attached = |p: &Point| {
         let key = pt_key(p);
         index.contains(key)
-            || sheet.bus_entries.iter().any(|e| pt_key(&e.position) == key)
+            // Either end of an entry, as `attach_entries` reads it (a rotated
+            // entry has a negative size).
+            || sheet.bus_entries.iter().any(|e| {
+                let far = Point::new(e.position.x + e.size.0, e.position.y + e.size.1);
+                pt_key(&e.position) == key || pt_key(&far) == key
+            })
             || sheet.labels.iter().any(|l| pt_key(&l.position) == key)
     };
     [(RunEnd::Start, start), (RunEnd::End, end)]
@@ -57,6 +62,24 @@ mod tests {
         for from in [pt(5.0, 0.0), pt(0.0, 20.0), pt(0.0, 30.0), pt(10.0, 0.0)] {
             assert!(dangling_bus_ends(&sheet, from, from).is_empty(), "{from:?}");
         }
+    }
+
+    #[test]
+    fn the_far_end_of_a_rotated_entry_is_attached_too() {
+        let mut sheet = empty_sheet();
+        // A rotated entry: position (20, 20), size (-2.54, 2.54).
+        sheet.bus_entries.push(BusEntry {
+            uuid: Uuid::nil(),
+            position: pt(20.0, 20.0),
+            size: (-2.54, 2.54),
+        });
+        for at in [pt(20.0, 20.0), pt(17.46, 22.54)] {
+            assert!(dangling_bus_ends(&sheet, at, at).is_empty(), "{at:?}");
+        }
+        assert_eq!(
+            dangling_bus_ends(&sheet, pt(22.54, 22.54), pt(20.0, 20.0)).len(),
+            1
+        );
     }
 
     #[test]
