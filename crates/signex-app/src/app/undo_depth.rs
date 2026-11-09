@@ -30,6 +30,9 @@ impl Signex {
         for engine in docs.engines.values_mut() {
             engine.set_undo_depth(depth);
         }
+        for engine in docs.board_engines_mut() {
+            engine.set_undo_depth(depth);
+        }
         for editor in docs.symbol_editors.values_mut() {
             editor.history.set_cap(depth);
         }

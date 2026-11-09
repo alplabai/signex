@@ -590,6 +590,6 @@ mod tests {
         else {
             panic!("pcb tab holds the restored board");
         };
-        assert!(restored.unknown.load_repairs.is_empty());
+        assert!(restored.board().unknown.load_repairs.is_empty());
     }
 }

@@ -401,6 +401,11 @@ impl Signex {
             .copied()
             .unwrap_or(0);
         if tab_open && current != revision {
+            // The file now holds a snapshot the board has moved past: no
+            // history step reproduces it, so undo must not read clean.
+            if let Some(engine) = self.document_state.board_engine_mut(path) {
+                engine.forget_save_point();
+            }
             return;
         }
         self.finish_clean_save(path, saved);

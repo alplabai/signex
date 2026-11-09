@@ -93,8 +93,8 @@ pub(crate) use state::WindowKind;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
 pub use state::project_case::CaseProbeOutcome;
 pub use state::{
-    CaseFold, DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
-    PreviewState, ProjectId, Signex, UiState,
+    AgentStep, BoardEditError, CaseFold, DocumentState, InteractionState, KeymapRecorderState,
+    LoadedProject, PageSetupInputs, PreviewState, ProjectId, Signex, UiState,
 };
 pub use symbol_history::SymbolHistorySnapshot;
 

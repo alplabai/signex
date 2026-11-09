@@ -201,7 +201,7 @@ fn mark_dirty(app: &mut Signex, path: &Path) {
 }
 
 /// Ctrl+S through `update`, then the write task as the iced runtime runs it.
-fn press_save(app: &mut Signex) {
+pub(crate) fn press_save(app: &mut Signex) {
     for message in begin_save(app) {
         let _ = app.update(message);
     }
@@ -209,7 +209,7 @@ fn press_save(app: &mut Signex) {
 
 /// Ctrl+S and the write itself; the completion messages are returned unrouted
 /// so a test can edit the document before they land.
-fn begin_save(app: &mut Signex) -> Vec<Message> {
+pub(crate) fn begin_save(app: &mut Signex) -> Vec<Message> {
     use futures::StreamExt;
     let task = app.update(Message::File(FileMsg::Save));
     let Some(mut stream) = iced_runtime::task::into_stream(task) else {
@@ -227,7 +227,7 @@ fn begin_save(app: &mut Signex) -> Vec<Message> {
     })
 }
 
-fn no_commit_requested(app: &Signex) -> bool {
+pub(crate) fn no_commit_requested(app: &Signex) -> bool {
     app.document_state.inflight_git_commits.is_empty()
         && app.document_state.pending_git_commits.is_empty()
 }

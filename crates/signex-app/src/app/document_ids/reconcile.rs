@@ -135,12 +135,12 @@ impl Signex {
             }
             DocumentKey::Pcb(path) => {
                 for tab in docs.tabs.iter_mut().filter(|tab| &tab.path == path) {
-                    if let Some(TabDocument::Pcb(board)) = &mut tab.cached_document {
-                        board.uuid = id.as_uuid();
+                    if let Some(TabDocument::Pcb(engine)) = &mut tab.cached_document {
+                        engine.reassign_document_id(id.as_uuid());
                     }
                 }
-                if let Some(board) = docs.parked_pcb_boards.get_mut(path) {
-                    board.uuid = id.as_uuid();
+                if let Some(engine) = docs.parked_pcb_boards.get_mut(path) {
+                    engine.reassign_document_id(id.as_uuid());
                 }
             }
             DocumentKey::Symbol(path) => {

@@ -169,6 +169,17 @@ fn step(app: &mut Signex, args: &CommandArgs, undo: bool) -> Ran {
             }),
             Err(reason) => refused(reason),
         },
+        DocumentKey::Pcb(path) => {
+            if app.step_board_history(path, undo) {
+                ran(Task::none())
+            } else {
+                refused(if undo {
+                    "Nothing to undo"
+                } else {
+                    "Nothing to redo"
+                })
+            }
+        }
         _ => refused(format!(
             "{} is a {}: undo by document is not available for that kind yet",
             entry.name,
