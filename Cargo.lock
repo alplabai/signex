@@ -5638,6 +5638,7 @@ dependencies = [
  "dirs",
  "fontdb 0.23.0",
  "futures",
+ "getrandom 0.4.2",
  "git2",
  "iced",
  "iced_aw",

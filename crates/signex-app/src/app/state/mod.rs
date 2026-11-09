@@ -77,6 +77,9 @@ pub struct Signex {
     /// The macOS system menu bar built from the menu model; inert elsewhere
     /// (docs/MENU_BAR.md, "Native macOS menu").
     pub(crate) native_menu: crate::menu_bar::native::NativeMenuState,
+    /// The local agent listener's runtime state (#1924); inert while the
+    /// "Allow agent connections" preference is off.
+    pub(crate) agent: crate::app::agent::AgentState,
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached

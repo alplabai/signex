@@ -269,6 +269,9 @@ mod zoom_speed_pref;
 #[path = "regression/ui_scale_pref.rs"]
 mod ui_scale_pref;
 
+#[path = "regression/agent_connections_pref.rs"]
+mod agent_connections_pref;
+
 #[path = "regression/external_change_followups.rs"]
 mod external_change_followups;
 

@@ -159,7 +159,19 @@ impl Signex {
     /// Every document: the ones held in memory, then the files open projects
     /// reference that are not. Ordered by kind, then path, so the answer
     /// does not depend on a map's iteration order.
+    ///
+    /// For an agent's request (#1924) only the documents of an open project:
+    /// the queries and the `document` operand never see a loose sheet.
     pub(crate) fn document_entries(&self) -> Vec<DocumentEntry> {
+        let mut entries = self.all_document_entries();
+        if self.agent.serving {
+            entries.retain(|entry| entry.project.is_some());
+        }
+        entries
+    }
+
+    /// [`Self::document_entries`] for every caller: the id repair reads all.
+    pub(crate) fn all_document_entries(&self) -> Vec<DocumentEntry> {
         let docs = &self.document_state;
         let mut entries = Vec::new();
         for (path, engine) in &docs.engines {

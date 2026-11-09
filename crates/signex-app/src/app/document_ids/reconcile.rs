@@ -21,7 +21,7 @@ impl Signex {
     /// documents that were given a new id.
     pub(crate) fn reconcile_document_ids(&mut self) -> Vec<DocumentKey> {
         let mut held: Vec<DocumentEntry> = self
-            .document_entries()
+            .all_document_entries()
             .into_iter()
             .filter(|entry| entry.key.is_some() && entry.loaded)
             .collect();
