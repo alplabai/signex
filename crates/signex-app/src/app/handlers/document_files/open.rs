@@ -5,7 +5,9 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 
 use super::super::super::*;
-use super::new_project::{RuleSeed, new_project_parts, write_new_project_files};
+use super::new_project::{
+    NewProjectPlan, RuleSeed, new_project_parts, write_new_project_files_with,
+};
 use super::spelling::OpenGate;
 
 impl Signex {
@@ -46,7 +48,16 @@ impl Signex {
         let Some(path) = path else {
             return iced::Task::none();
         };
+        self.start_new_project(path, NewProjectPlan::default())
+    }
 
+    /// Write a new project at `path` off the update thread, as `plan` says,
+    /// and open it when the writes land (`handle_new_project_written`).
+    pub(crate) fn start_new_project(
+        &mut self,
+        path: PathBuf,
+        plan: NewProjectPlan,
+    ) -> iced::Task<Message> {
         self.interaction_state.editing_text = None;
         self.interaction_state.context_menu = None;
 
@@ -67,7 +78,10 @@ impl Signex {
                 iced::Task::perform(
                     super::super::dock::project_navigation::add_io::on_blocking_pool({
                         let path = path.clone();
-                        move || write_new_project_files(&path, &seed).map_err(|e| format!("{e:#}"))
+                        move || {
+                            write_new_project_files_with(&path, &seed, &plan)
+                                .map_err(|e| format!("{e:#}"))
+                        }
                     }),
                     move |result| Message::File(FileMsg::NewProjectWritten { path, result }),
                 )

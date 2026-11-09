@@ -91,6 +91,11 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("edits", OperandKind::Text),
     ("summary", OperandKind::Text),
     ("group", OperandKind::Text),
+    ("location", OperandKind::Path),
+    ("make_folder", OperandKind::Bool),
+    ("profile", OperandKind::Text),
+    ("ai_mode", OperandKind::Text),
+    ("overrides", OperandKind::Text),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -139,6 +144,17 @@ pub const OPEN_PATH: &[Operand] = &[required("path", OperandKind::Path)];
 pub const SAVE_PATH: &[Operand] = &[
     required("path", OperandKind::Path),
     optional("overwrite", OperandKind::Bool),
+];
+
+/// A new project from the dialog's choices (#2232): where, which profile,
+/// the AI mode and `key=value` overrides.
+pub const NEW_PROJECT: &[Operand] = &[
+    required("name", OperandKind::Text),
+    required("location", OperandKind::Path),
+    optional("make_folder", OperandKind::Bool),
+    optional("profile", OperandKind::Text),
+    optional("ai_mode", OperandKind::Text),
+    optional("overrides", OperandKind::Text),
 ];
 
 /// Colour the net under a point of the named document's sheet.

@@ -49,6 +49,7 @@ mirror_y	modify	Mirror along Y-axis	Mirror Y	General	-	-	RequiresSelection	mutat
 move_object	modify	Move object	Move	General	-	-	Always	gui_only,mutates_doc,undoable	-
 move_selection	modify	Move selection	Move Selection	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 new_document	file	New	New Project	General	-	-	Always	-	path:path,overwrite:bool?
+new_project_with_profile	file	New project from a profile	-	General	-	-	Always	-	name:text,location:path,make_folder:bool?,profile:text?,ai_mode:text?,overrides:text?
 next_document_tab	window	Next open document tab	-	General	-	-	Always	gui_only	-
 next_grid	view	Next grid	Cycle Grid Size	General	-	-	Always	gui_only	-
 open_command_palette	commands	Open command palette	-	General	-	-	Always	gui_only	-

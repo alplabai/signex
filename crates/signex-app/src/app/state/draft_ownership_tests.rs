@@ -38,6 +38,7 @@ fn project(id: u32, dir: &str, locals: &[&str]) -> LoadedProject {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

@@ -904,6 +904,7 @@ fn join_project_with_a_second_sheet(app: &mut Signex) -> PathBuf {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

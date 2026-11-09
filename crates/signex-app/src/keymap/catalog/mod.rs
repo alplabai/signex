@@ -336,6 +336,7 @@ fn metadata_for_linear(id: &str) -> Option<&'static CommandMetadata> {
 /// screen until someone decides it is global.
 const GLOBAL_COMMANDS: &[&str] = &[
     "new_document",
+    "new_project_with_profile",
     "open_document",
     "save_document",
     "save_document_as",

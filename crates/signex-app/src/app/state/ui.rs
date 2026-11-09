@@ -412,6 +412,9 @@ pub struct UiState {
     /// carries the in-flight Step X / Step Y / link buffers so
     /// keystrokes don't immediately mutate the active editor.
     pub grid_properties: Option<crate::app::GridPropertiesState>,
+    /// The New Project setup dialog, while open (#2232). Nothing is on disk
+    /// until its Create.
+    pub new_project: Option<crate::app::NewProjectState>,
     /// The Find Similar Objects dialog, while open (#1257).
     pub find_similar: Option<crate::find_similar::FindSimilarState>,
     /// Token of the newest Find Similar project search. Lives outside the

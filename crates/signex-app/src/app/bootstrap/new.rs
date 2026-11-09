@@ -372,6 +372,7 @@ impl Signex {
                 app_quit_confirm: None,
                 enable_version_control: None,
                 grid_properties: None,
+                new_project: None,
                 find_similar: None,
                 find_similar_generation: 0,
                 paste_array: None,

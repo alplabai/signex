@@ -490,6 +490,11 @@
     "category": "file"
   },
   {
+    "id": "new_project_with_profile",
+    "group": "General",
+    "category": "file"
+  },
+  {
     "id": "next_document_tab",
     "group": "General",
     "category": "window"

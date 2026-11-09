@@ -514,6 +514,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "new_project_with_profile",
+        category: "file",
+        label: "New project from a profile",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::NEW_PROJECT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "next_document_tab",
         category: "window",
         label: "Next open document tab",

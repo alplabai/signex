@@ -293,6 +293,13 @@ impl Signex {
         .then(|| self.view_grid_properties_dialog())
     }
 
+    pub(in crate::app::view) fn new_project_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .new_project
+            .is_some()
+            .then(|| self.view_new_project_dialog())
+    }
+
     pub(in crate::app::view) fn selection_filter_custom_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {

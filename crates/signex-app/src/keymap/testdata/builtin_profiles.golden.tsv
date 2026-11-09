@@ -128,6 +128,7 @@ altium	hint	-	Y	mirror_y
 altium	hint	-	M M	move_object
 altium	hint	-	-	move_selection
 altium	hint	-	Ctrl+N	new_document
+altium	hint	-	-	new_project_with_profile
 altium	hint	-	Ctrl+TAB	next_document_tab
 altium	hint	-	-	next_grid
 altium	hint	-	Ctrl+Shift+P	open_command_palette
@@ -431,6 +432,7 @@ classic	hint	-	Y	mirror_y
 classic	hint	-	-	move_object
 classic	hint	-	M	move_selection
 classic	hint	-	Ctrl+N	new_document
+classic	hint	-	-	new_project_with_profile
 classic	hint	-	-	next_document_tab
 classic	hint	-	N	next_grid
 classic	hint	-	Ctrl+Shift+P	open_command_palette

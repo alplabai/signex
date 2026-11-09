@@ -18,6 +18,7 @@ mod erc;
 mod graphite;
 mod graphite_annotate;
 mod header;
+mod new_project;
 mod project;
 mod rule_editor;
 mod sizes;

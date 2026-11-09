@@ -141,6 +141,8 @@ enum InputConsumer {
     CommandPalette,
     /// The Esc ladder (#535 / #547 / #554), resolved in `escape.rs`.
     Escape,
+    /// Enter creates the project while the New Project dialog is open (#2232).
+    NewProject,
     /// F1 toggles the keyboard-shortcuts sheet.
     ShortcutsSheet,
     /// Ctrl/Alt+1-8 — the digit is data the keymap profile cannot
@@ -156,10 +158,11 @@ enum InputConsumer {
 /// Order is behaviour. It is ported verbatim from the `if` chain this
 /// module replaced, and it is NOT derived from `PAINT_ORDER` — see the
 /// module docs for the counterexample that rules that out.
-const CLAIM_ORDER: [InputConsumer; 6] = [
+const CLAIM_ORDER: [InputConsumer; 7] = [
     InputConsumer::KeymapRecorder,
     InputConsumer::CommandPalette,
     InputConsumer::Escape,
+    InputConsumer::NewProject,
     InputConsumer::ShortcutsSheet,
     InputConsumer::SelectionSlots,
     InputConsumer::Keymap,
@@ -317,6 +320,7 @@ impl Signex {
             InputConsumer::KeymapRecorder => self.claim_keymap_recorder(target, event),
             InputConsumer::CommandPalette => self.claim_command_palette(target, event),
             InputConsumer::Escape => Self::claim_escape(window, event),
+            InputConsumer::NewProject => self.claim_new_project(target, event),
             InputConsumer::ShortcutsSheet => self.claim_shortcuts_sheet(target, event),
             InputConsumer::SelectionSlots => Self::claim_selection_slots(event),
             InputConsumer::Keymap => Self::claim_keymap(window, event),
@@ -436,6 +440,21 @@ impl Signex {
         Claim::Consume(Message::Input(InputMsg::EscapePressed {
             window: Some(window),
         }))
+    }
+
+    /// Enter creates the project while the New Project dialog is open. Every
+    /// other key is left to the dialog's fields and the keymap.
+    fn claim_new_project(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
+        if self.ui_state.new_project.is_none() || !target.paints_overlay_stack() {
+            return Claim::Pass;
+        }
+        match event {
+            keyboard::Event::KeyPressed {
+                key: keyboard::Key::Named(keyboard::key::Named::Enter),
+                ..
+            } => Claim::Consume(Message::from(crate::app::NewProjectMsg::SubmitRequested)),
+            _ => Claim::Pass,
+        }
     }
 
     /// F1 toggles the keyboard-shortcuts sheet: open if closed, close if
@@ -649,6 +668,7 @@ mod tests {
             InputConsumer::KeymapRecorder,
             InputConsumer::CommandPalette,
             InputConsumer::Escape,
+            InputConsumer::NewProject,
             InputConsumer::ShortcutsSheet,
             InputConsumer::SelectionSlots,
             InputConsumer::Keymap,
@@ -832,6 +852,31 @@ mod tests {
                 Some(Message::Input(InputMsg::EscapePressed { window: Some(id) })) if id == w
             ),
             "the ladder resolves in `escape.rs` against live state"
+        );
+    }
+
+    #[test]
+    fn enter_creates_only_while_the_new_project_dialog_is_open() {
+        let mut app = quiet_app();
+        let w = main_window(&app);
+        let submit = |m: &Option<Message>| {
+            matches!(
+                m,
+                Some(Message::Project(crate::app::ProjectMsg::Setup(
+                    crate::app::NewProjectMsg::SubmitRequested
+                )))
+            )
+        };
+        assert!(!submit(
+            &app.route_key(w, &named(keyboard::key::Named::Enter))
+        ));
+        app.ui_state.new_project = Some(crate::app::NewProjectState::new(String::new()));
+        assert!(submit(
+            &app.route_key(w, &named(keyboard::key::Named::Enter))
+        ));
+        assert!(
+            !submit(&app.route_key(w, &character("a", keyboard::Modifiers::default()))),
+            "other keys reach the fields"
         );
     }
 

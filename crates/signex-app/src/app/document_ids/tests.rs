@@ -53,6 +53,7 @@ fn app_with_project(dir: &Path) -> Signex {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

@@ -11,12 +11,18 @@ use crate::document_id::DocumentId;
 
 mod annotation;
 mod erc_waiver;
+mod rule_file;
 mod rule_profile;
 mod rules;
 mod schematic_defaults;
+mod setup;
+mod setup_profile;
+#[cfg(test)]
+mod setup_tests;
 mod unknown;
 pub use annotation::{AnnotationSettings, AnnotationState};
 pub use erc_waiver::ErcWaiver;
+pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
 pub use rule_profile::{
     RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
 };
@@ -25,6 +31,11 @@ pub use schematic_defaults::{
     MAX_BUS_WIDTH_MM, MAX_DEFAULT_WIDTH_MM, MIN_TEXT_SIZE_PT, SchematicDefaultField,
     SchematicDefaultOverrides,
 };
+pub use setup::{
+    AiMode, COPPER_LAYERS, DEFAULT_DESIGNATORS, PcbDefaults, PcbField, PcbValueError,
+    ProjectDefaults, SHEET_SIZES, SHEET_UNITS, SheetDefaults, copper_layers,
+};
+pub use setup_profile::{FabTemplate, ProjectSetup, SetupProfile, designator_token};
 pub use unknown::UnknownJson;
 
 /// Reads a stored `document_id`; a value that is not one reads as absent, so
@@ -232,6 +243,11 @@ pub struct ProjectData {
     /// re-saves without a `schematic_defaults` key.
     #[serde(default, skip_serializing_if = "SchematicDefaultOverrides::is_empty")]
     pub schematic_defaults: SchematicDefaultOverrides,
+    /// What a new PCB or sheet in this project starts from, and the Signex AI
+    /// mode (#2232). Set when the project is created; skipped on save when
+    /// nothing is set.
+    #[serde(default, skip_serializing_if = "ProjectDefaults::is_empty")]
+    pub project_defaults: ProjectDefaults,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -469,6 +485,7 @@ mod tests {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         };
@@ -502,6 +519,7 @@ mod tests {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         };
@@ -715,6 +733,7 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         rules: None,
         annotation: None,
         schematic_defaults: Default::default(),
+        project_defaults: Default::default(),
         parameters: Default::default(),
         unknown: UnknownJson::default(),
     })

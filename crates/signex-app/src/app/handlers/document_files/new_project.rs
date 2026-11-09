@@ -38,11 +38,33 @@ pub(super) fn new_project_parts(project_path: &Path) -> Result<(&Path, String)> 
     Ok((dir, stem))
 }
 
+/// Where the `.snxprj` goes relative to the path the project was asked for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum NewProjectLayout {
+    /// A Save-As pick `<parent>/<stem>.snxprj`: the project is the folder
+    /// `<parent>/<stem>/`, reusing a same-named empty `<parent>` (#1205).
+    #[default]
+    Picked,
+    /// The dialog's "Create folder" on: always `<parent>/<stem>/<stem>.snxprj`.
+    NamedFolder,
+    /// The dialog's "Create folder" off: `<parent>/<stem>.snxprj` in a folder
+    /// the user already made.
+    InPlace,
+}
+
+/// What a New Project writes besides the blank project: where it goes and the
+/// setup the dialog chose (#2232). The default is the plain pick.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct NewProjectPlan {
+    pub layout: NewProjectLayout,
+    pub setup: Option<signex_types::project::ProjectSetup>,
+}
+
 /// Where a New Project lands: its folder, its `.snxprj`, and whether the
 /// folder is already there (an empty one the user made).
-pub(super) struct NewProjectTarget {
-    folder: PathBuf,
-    project_path: PathBuf,
+pub(crate) struct NewProjectTarget {
+    pub(crate) folder: PathBuf,
+    pub(crate) project_path: PathBuf,
     folder_exists: bool,
     /// The user's same-named parent was not usable, so the project went into
     /// `<parent>/<stem>/` instead of the parent itself.
@@ -52,19 +74,57 @@ pub(super) struct NewProjectTarget {
 /// Where a New Project chosen at `chosen` lands. Reads the disk, so it runs on
 /// the blocking worker. Refuses a folder that is not empty, already holds a
 /// project, or sits inside another project; never creates anything.
-pub(super) fn resolve_new_project(chosen: &Path) -> Result<NewProjectTarget> {
-    resolve_new_project_with(chosen, &KnownFolders::from_system())
+pub(crate) fn resolve_new_project(
+    chosen: &Path,
+    layout: NewProjectLayout,
+) -> Result<NewProjectTarget> {
+    resolve_new_project_with(chosen, &KnownFolders::from_system(), layout)
 }
 
-fn resolve_new_project_with(chosen: &Path, known: &KnownFolders) -> Result<NewProjectTarget> {
+fn resolve_in_place(
+    parent: &Path,
+    marker: String,
+    known: &KnownFolders,
+) -> Result<NewProjectTarget> {
+    if !parent.is_dir() {
+        anyhow::bail!("{} is not a folder", parent.display());
+    }
+    if let Some(outer) = enclosing_project(parent, known) {
+        anyhow::bail!(
+            "{} is inside the project in {} — pick a location outside it",
+            parent.display(),
+            outer.display()
+        );
+    }
+    let project_path = parent.join(marker);
+    if project_path.exists() {
+        anyhow::bail!("{} already exists", project_path.display());
+    }
+    Ok(NewProjectTarget {
+        folder: parent.to_path_buf(),
+        project_path,
+        folder_exists: true,
+        nested_in_same_named_parent: false,
+    })
+}
+
+fn resolve_new_project_with(
+    chosen: &Path,
+    known: &KnownFolders,
+    layout: NewProjectLayout,
+) -> Result<NewProjectTarget> {
     let (parent, stem) = new_project_parts(chosen)?;
     let marker = format!("{stem}.snxprj");
+    if layout == NewProjectLayout::InPlace {
+        return resolve_in_place(parent, marker, known);
+    }
     // ASCII case-insensitive on every volume: on a case-sensitive one this
     // only reuses a `foo` folder for project `Foo`, which is harmless.
-    let parent_is_the_project_folder = parent
-        .file_name()
-        .and_then(|n| n.to_str())
-        .is_some_and(|n| n.eq_ignore_ascii_case(&stem));
+    let parent_is_the_project_folder = layout == NewProjectLayout::Picked
+        && parent
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.eq_ignore_ascii_case(&stem));
     // The user already made `<stem>/` and picked inside it: use it as is
     // rather than nesting `<stem>/<stem>/`.
     if parent_is_the_project_folder && holds_a_project(parent)? {
@@ -175,18 +235,30 @@ impl Created {
 /// `<stem>.snxsch`, then the managed `.gitignore` block (#1117). Returns the
 /// `.snxprj` actually written. A failure removes what this call created.
 /// Runs on a blocking worker, never in `update`.
+#[cfg(test)]
 pub(super) fn write_new_project_files(chosen: &Path, seed: &RuleSeed) -> Result<PathBuf> {
+    write_new_project_files_with(chosen, seed, &NewProjectPlan::default())
+}
+
+/// The New Project writes for a dialog-made plan: the layout, and the
+/// setup stored in the `.snxprj` and applied to the first sheet.
+pub(crate) fn write_new_project_files_with(
+    chosen: &Path,
+    seed: &RuleSeed,
+    plan: &NewProjectPlan,
+) -> Result<PathBuf> {
     let (_, stem) = new_project_parts(chosen)?;
-    let target = resolve_new_project(chosen)?;
+    let target = resolve_new_project(chosen, plan.layout)?;
     let mut created = Created::default();
-    let result = write_into(&target, &stem, &mut created, &|dir| {
+    let sheet = plan.setup.as_ref().map(|setup| &setup.sheet);
+    let result = write_into(&target, &stem, &mut created, sheet, &|dir| {
         signex_types::project_vcs_files::ensure_project_gitignore(dir)
     });
     if result.is_err() {
         created.roll_back(&target.folder);
     }
     if result.is_ok() {
-        seed_project_rules(&target.project_path, seed);
+        seed_project_rules(&target.project_path, seed, plan.setup.as_ref());
     }
     if result.is_ok() && target.nested_in_same_named_parent {
         crate::diagnostics::log_info(format!(
@@ -219,7 +291,11 @@ pub(crate) struct RuleSeed {
 /// provenance. The project already exists, so a failure here is reported and
 /// the project is left as created: it then uses the machine's rules until
 /// the user stores some.
-fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
+fn seed_project_rules(
+    project_path: &Path,
+    seed: &RuleSeed,
+    setup: Option<&signex_types::project::ProjectSetup>,
+) {
     if let Some(dir) = seed.dir.as_deref()
         && let Err(why) = crate::app::rule_profile_ui::run_all(dir, &seed.pending)
     {
@@ -234,6 +310,13 @@ fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
     }
     let stored = signex_types::project::parse_project(project_path).and_then(|mut data| {
         data.rules = Some(rules);
+        if let Some(setup) = setup {
+            data.project_defaults = setup.defaults();
+            data.annotation = Some(signex_types::project::AnnotationSettings {
+                designator_standard: Some(setup.designators),
+                ..Default::default()
+            });
+        }
         data.document_id
             .get_or_insert_with(signex_types::document_id::DocumentId::new);
         signex_types::project::write_project(project_path, &data)
@@ -252,6 +335,7 @@ fn write_into(
     target: &NewProjectTarget,
     stem: &str,
     created: &mut Created,
+    sheet_defaults: Option<&signex_types::project::SheetDefaults>,
     ensure_gitignore: &dyn Fn(
         &Path,
     ) -> Result<(), signex_types::project_vcs_files::ManagedFileError>,
@@ -274,7 +358,10 @@ fn write_into(
     created.files.push(target.project_path.clone());
 
     let sch_path = dir.join(format!("{stem}.snxsch"));
-    let sheet = super::blank_schematic_sheet();
+    let mut sheet = super::blank_schematic_sheet();
+    if let Some(defaults) = sheet_defaults {
+        defaults.apply(&mut sheet);
+    }
     let serialised = signex_types::format::SnxSchematic::new(sheet)
         .write_string()
         .context("serialise blank schematic")?;
@@ -301,10 +388,12 @@ mod tests {
         let _ = crate::diagnostics::init_logging();
         let tmp = tempfile::tempdir().unwrap();
         let chosen = tmp.path().join("GI.snxprj");
-        let target = resolve_new_project_with(&chosen, &KnownFolders::default()).unwrap();
+        let target =
+            resolve_new_project_with(&chosen, &KnownFolders::default(), NewProjectLayout::Picked)
+                .unwrap();
         let mut created = Created::default();
 
-        let result = write_into(&target, "GI", &mut created, &|_| {
+        let result = write_into(&target, "GI", &mut created, None, &|_| {
             Err(
                 signex_types::project_vcs_files::ManagedFileError::NotRegularFile {
                     path: ".gitignore".into(),
@@ -520,7 +609,8 @@ mod tests {
             desktop.join("Foo.snxprj"),
             desktop.join("work").join("X.snxprj"),
         ] {
-            let target = resolve_new_project_with(&chosen, &known).unwrap();
+            let target =
+                resolve_new_project_with(&chosen, &known, NewProjectLayout::Picked).unwrap();
             assert!(target.folder.ends_with(chosen.file_stem().unwrap()));
         }
     }
@@ -531,7 +621,11 @@ mod tests {
         let alpha = tmp.path().join("Alpha");
         std::fs::create_dir(&alpha).unwrap();
         std::fs::write(alpha.join("Alpha.snxprj"), b"").unwrap();
-        let err = resolve_new_project_with(&alpha.join("Beta.snxprj"), &KnownFolders::default());
+        let err = resolve_new_project_with(
+            &alpha.join("Beta.snxprj"),
+            &KnownFolders::default(),
+            NewProjectLayout::Picked,
+        );
         assert!(err.is_err_and(|e| e.to_string().contains("inside the project")));
     }
 }

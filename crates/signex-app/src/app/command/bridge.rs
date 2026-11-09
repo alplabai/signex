@@ -192,7 +192,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_components_panel" | "place_symbol" => {
             Message::Library(crate::library::LibraryMessage::OpenPicker)
         }
-        "new_document" => Message::Menu(MenuMessage::NewProject),
+        "new_document" | "new_project_with_profile" => Message::Menu(MenuMessage::NewProject),
         "open_command_palette" => Message::CommandPalette(CommandPaletteMsg::Open),
         "open_document" => Message::Menu(MenuMessage::OpenProject),
         "open_grid_properties" => Message::GridProperties(GridPropertiesMsg::Open),

@@ -331,6 +331,8 @@ mod library_dangling_refs;
 mod library_delete_undo;
 #[path = "regression/managed_gitignore.rs"]
 mod managed_gitignore;
+#[path = "regression/new_project_dialog.rs"]
+mod new_project_dialog;
 #[path = "regression/new_project_fit.rs"]
 mod new_project_fit;
 #[path = "regression/new_project_folder.rs"]
