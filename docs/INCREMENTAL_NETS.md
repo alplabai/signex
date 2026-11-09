@@ -110,8 +110,8 @@ not built. This also speeds up the commit.
 Every command that changes wire geometry (the drop of a move, delete, rotate,
 mirror, place wire, break wire) reconciles the dots against only the wires
 whose bounding box meets a touched wire's box or a judged dot, each grown by
-`RECONCILE_MARGIN_MM` (`transform/region_wires.rs`), three junction
-tolerances. That gives the same answers as every wire, because no test reads
+`RECONCILE_MARGIN_MM` (`transform/region_wires.rs`), five junction
+tolerances (0.05 mm): two of reach plus three of headroom. That gives the same answers as every wire, because no test reads
 a wire farther away:
 
 1. Each test reads a wire within one tolerance of its query point, per axis.
@@ -124,8 +124,8 @@ a wire farther away:
    that wire's own box holds the point); a judged dot; a dot just minted,
    which is one of the first two.
 3. So a wire any test reads has its box within `2 * tol` of a touched wire's
-   box, or within `tol` of a judged dot. The third tolerance is headroom for
-   the float rounding of the grown boxes, which is many orders below `tol`.
+   box, or within `tol` of a judged dot. The other three tolerances are
+   headroom; the float rounding of the grown boxes is many orders below `tol`.
 
 The order of the wires is kept, so candidate lists, and with them the order
 in which dots are minted, are the same. `commit_local_tests.rs` holds every

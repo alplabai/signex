@@ -81,11 +81,13 @@ fn rig() -> (Signex, Vec<SelectedItem>) {
     sheet.lib_symbols.insert("R".to_string(), resistor_lib());
     let mut symbols = Vec::new();
     for n in 0..10 {
-        // Row one at x 30, 60 .. 150; row two 10 mm right of it, at x 40, 70
-        // .. 160, so a part moved 10 mm along its row lands between two parts
-        // with at least 2 mm clear on each side.
+        // Row one at x 30, 60 .. 150; row two 7.5 mm right of it, at x 37.5,
+        // 67.5 .. 157.5. Align and Distribute below move a part of row two
+        // 7.5 mm along it: under the 10 mm pin pitch, so neither stub it
+        // drags reaches over the other stub or pin (a longer move pins the
+        // part off its wires).
         let (x, y) = (
-            30.0 + 30.0 * (n % 5) as f64 + 10.0 * (n / 5) as f64,
+            30.0 + 30.0 * (n % 5) as f64 + 7.5 * (n / 5) as f64,
             40.0 + 30.0 * (n / 5) as f64,
         );
         let id = uuid::Uuid::now_v7();
@@ -361,7 +363,12 @@ fn assert_action_equals_ghost(
     assert_eq!(
         pins(&after),
         pins(&before),
-        "{action:?}: the move changed the nets"
+        "{action:?}: the move changed the nets; wires after: {:?}",
+        after
+            .wires
+            .iter()
+            .map(|w| ((w.start.x, w.start.y), (w.end.x, w.end.y)))
+            .collect::<Vec<_>>()
     );
     // The commit and the ghost agree on the geometry and on the nets.
     let shown = ghost(&before, &moves);
@@ -376,21 +383,22 @@ fn assert_action_equals_ghost(
 #[test]
 fn align_commits_what_the_ghost_of_its_moves_shows() {
     let (mut app, symbols) = rig();
-    // R3 (90, 40) and R8 (100, 70): R8 moves 10 mm left to x 90, between R7
-    // (reaching to x 78) and R9 (from x 120); R8 then spans x 80 to 98.
+    // R3 (90, 40) and R8 (97.5, 70): R8 moves 7.5 mm left to x 90. Its stubs
+    // then run x 85 to 87.5 and 95 to 105.5, between R7 (reaching to x 75.5)
+    // and R9 (from x 117.5).
     let chosen = vec![symbols[2], symbols[7]];
-    let expected = [(symbols[7], -10.0, 0.0)];
+    let expected = [(symbols[7], -7.5, 0.0)];
     assert_action_equals_ghost(&mut app, &chosen, ActiveBarAction::AlignLeft, &expected);
 }
 
 #[test]
 fn distribute_commits_what_the_ghost_of_its_moves_shows() {
     let (mut app, symbols) = rig();
-    // R6 (x 40), R7 (x 70) and R4 (x 120): R7 moves 10 mm right to the even
-    // spacing at x 80, between R6 (reaching to x 48) and R8 (from x 90); R7
-    // then spans x 70 to 88.
-    let chosen = vec![symbols[5], symbols[6], symbols[3]];
-    let expected = [(symbols[6], 10.0, 0.0)];
+    // R1 (x 30), R7 (x 67.5) and R4 (x 120): R7 moves 7.5 mm right to the
+    // even spacing at x 75. Its stubs then run x 57.5 to 70 and 75.5 to 80,
+    // between R6 (reaching to x 45.5) and R8 (from x 87.5).
+    let chosen = vec![symbols[0], symbols[6], symbols[3]];
+    let expected = [(symbols[6], 7.5, 0.0)];
     assert_action_equals_ghost(
         &mut app,
         &chosen,
