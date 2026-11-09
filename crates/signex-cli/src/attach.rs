@@ -109,10 +109,10 @@ impl Attached {
         // what lies inside its own folders.
         let inside = |text: &str| policy.check_resolved(Path::new(text), roots, false).is_ok();
         reply.changed = scrub_changed(reply.changed, &inside);
-        if capability_of(approved.meta) == Capability::Read {
-            // Log lines are free text that may name any open project's files.
-            reply.messages.clear();
-        }
+        // Log lines are free text that may name any open project's files (a
+        // duplicate document id, another thread's line in the shared log), so
+        // no command's are shown. The app's own Messages panel keeps them all.
+        reply.messages.clear();
         if let Some(data) = reply.data.take() {
             reply.data = match scrub_data(data, &inside) {
                 Some(data) => Some(data),

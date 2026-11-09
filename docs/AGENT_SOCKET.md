@@ -265,11 +265,18 @@ that have ended stay in the quit path's list, which keeps the last 32.
   wire format above. A reply that is not the documented shape is an error.
   Replies are read by a thread of their own and awaited for at most 120 s on
   every platform; a connect is bounded to 5 s (a full backlog blocks it).
-- `hold` takes the project's lock first, then writes the `headless` entry
-  (one format, the app's file writer). It fails if another run holds the lock or
-  a running app has the project registered; a dead run's entry is replaced.
-  Dropping the `Hold` removes the entry (only if it is still the run's own) and
-  the lock file.
+  Replies are matched to requests by order: after any failure, a timeout above
+  all, the connection is broken for good (a late reply must never be taken for
+  the next answer) and every later `ask` fails; a reply that names another
+  command than the one asked is a failure too.
+- `hold` takes the project's lock first (a few attempts, 5 x 20 ms: a reader's
+  momentary lock must not fail a starting run; and the path must still name the
+  locked file), then writes the `headless` entry (one format, the app's file
+  writer). It fails if another run holds the lock or a running app has the
+  project registered; a dead run's entry is replaced. Dropping the `Hold`
+  removes the entry (only if it is still the run's own). The lock file is never
+  deleted: an empty 0600 file is harmless, and deleting a locked file would let
+  a second run lock the unlinked one.
 
 ## The app refuses a held project
 

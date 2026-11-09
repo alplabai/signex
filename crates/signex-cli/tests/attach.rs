@@ -183,7 +183,8 @@ impl FakeApp {
 }
 
 fn answered(data: Value, changed: &[&str]) -> Value {
-    json!({"id": "list_documents", "status": "answered", "data": data,
+    // The stand-in answers whatever it is asked, so it names no command.
+    json!({"id": null, "status": "answered", "data": data,
         "messages": [{"level": "INFO", "message": "from the app"}], "changed": changed})
 }
 
@@ -214,13 +215,10 @@ fn a_run_with_the_project_open_in_a_running_app_runs_there_and_prints_the_headle
     assert_eq!(first["id"], "list_documents");
     assert_eq!(first["seq"], 1);
     assert_eq!(first["data"], json!({"documents": 1}));
-    // A query's log lines are not shown (they may name other projects' files);
-    // an edit's are.
+    // The app's log lines are shown for no command: they may name another
+    // open project's files (the app's own Messages panel keeps them all).
     assert_eq!(first["messages"], json!([]));
-    assert_eq!(
-        second["messages"],
-        json!([{"level": "INFO", "message": "from the app"}])
-    );
+    assert_eq!(second["messages"], json!([]));
     assert_eq!(second["seq"], 2);
     assert_eq!(second["changed"], json!([doc]));
     assert_eq!(first["run"], second["run"], "one run id");
@@ -534,6 +532,58 @@ fn an_unsaved_sheet_of_another_project_and_its_elements_never_show() {
     assert_eq!(listed["documents"][1]["name"], "mine-unsaved");
     assert_eq!(out.lines[1]["data"]["count"], 0);
     assert_eq!(out.lines[2]["data"]["what"], "unknown");
+}
+
+/// The run's own sheet comes back whole: the `path` of an instance, or of a
+/// library, is not a file, and only the keys that name documents are judged.
+#[test]
+fn a_read_of_the_runs_own_sheet_comes_back_byte_equal() {
+    let w = world();
+    let sheet = w.fx.sheet.to_str().unwrap().to_string();
+    let data = json!({
+        "document": {"id": SHEET_A, "path": sheet, "name": "a", "project": null},
+        "header": {"instances": [{"path": "/aaaa-bbbb/cccc-dddd", "reference": "R1"}],
+            "libraries": [{"path": "libs/Device.snxlib", "kind": "shared"}]},
+        "elements": {"symbol": [{"id": "s", "path": "/aaaa-bbbb", "ref": "R1"}]},
+        "total": 1, "offset": 0, "limit": 100, "next_offset": null});
+    let app = w.app(&[
+        json!({"id": "read_document", "status": "answered", "data": data,
+        "messages": [], "changed": []}),
+    ]);
+    let out = w.cli(
+        &[
+            "run",
+            w.project(),
+            "read_document",
+            "--arg",
+            &format!("document={SHEET_A}"),
+        ],
+        "",
+    );
+    app.finish();
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    assert_eq!(out.lines[0]["data"], data);
+}
+
+/// No command's log lines are shown: an edit's can name another project's
+/// files too (a duplicate document id, another thread's line).
+#[test]
+fn an_edits_log_lines_are_not_shown() {
+    let w = world();
+    let line = json!([{"level": "WARN",
+        "message": "has the same document id as /somewhere/else/ProjectB/b.snxsch"}]);
+    let app = w.app(&[
+        json!({"id": "apply_edits", "status": "answered", "data": {},
+        "messages": line, "changed": []}),
+    ]);
+    let edits = json!([{"id": "place_junction", "args": {"at": [1, 2]}}]);
+    let commands = jsonl(&[json!({"id": "apply_edits",
+        "args": {"document": SHEET_A, "edits": edits}})]);
+    let out = w.cli(&["run", w.project()], &commands);
+    app.finish();
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    assert_eq!(out.lines[0]["messages"], json!([]));
+    assert!(!out.stdout.contains("somewhere/else"), "{}", out.stdout);
 }
 
 /// `query_pins` reads one named sheet: another open project's part cannot be

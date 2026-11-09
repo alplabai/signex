@@ -131,13 +131,12 @@ pub fn lookup(dir: &Path, project: &Path) -> Result<Lookup, String> {
 /// opening the project sees, and an exclusive lock on the project's lock file
 /// for the run's whole life. The entry is live while the lock is held, and the
 /// kernel drops the lock with the process, so a run killed by a signal and a
-/// reused process id are both found stale. Dropping the hold removes the entry
-/// and the lock file.
+/// reused process id are both found stale. Dropping the hold removes the entry;
+/// the (empty) lock file stays.
 #[derive(Debug)]
 pub struct Hold {
     dir: PathBuf,
     owner: Owner,
-    lock_path: PathBuf,
     _lock: std::fs::File,
 }
 
@@ -186,16 +185,15 @@ pub fn hold(dir: &Path, project: &Path) -> Result<Hold, String> {
     Ok(Hold {
         dir: dir.to_path_buf(),
         owner,
-        lock_path,
         _lock: lock,
     })
 }
 
 impl Drop for Hold {
+    /// Removes the entry. The lock file stays: deleting a locked file lets a
+    /// second run lock the unlinked one (see `registry::acquire_lock`).
     fn drop(&mut self) {
-        let removed = registry::remove_all(&self.dir, &self.owner)
-            .and_then(|()| files::remove_if_ours(&self.lock_path));
-        if let Err(why) = removed {
+        if let Err(why) = registry::remove_all(&self.dir, &self.owner) {
             crate::diagnostics::log_warning(format!("could not remove the project hold: {why}"));
         }
     }
@@ -220,6 +218,8 @@ pub struct Connection {
     replies: mpsc::Receiver<Result<String, String>>,
     token: String,
     timeout: Duration,
+    /// A request failed: see [`Connection::ask`].
+    broken: bool,
 }
 
 impl Connection {
@@ -235,6 +235,7 @@ impl Connection {
             replies,
             token,
             timeout: REPLY_TIMEOUT,
+            broken: false,
         })
     }
 
@@ -245,23 +246,48 @@ impl Connection {
         self
     }
 
-    /// Send one command and read its reply.
+    /// Send one command and read its reply. Replies are matched to requests
+    /// by order, so after any failure (a timeout above all: the reply may still
+    /// arrive) the connection is broken for good: a late reply must never be
+    /// taken for the answer to the next request. Every later `ask` fails.
     pub fn ask(&mut self, id: &str, operands: &[(String, String)]) -> Result<Reply, String> {
+        if self.broken {
+            return Err(
+                "the connection to the running Signex failed earlier in this run, so nothing \
+                 more is sent on it"
+                    .into(),
+            );
+        }
         let line = request_line(&self.token, id, operands)?;
+        let outcome = self.exchange(id, &line);
+        self.broken = outcome.is_err();
+        outcome
+    }
+
+    fn exchange(&mut self, id: &str, line: &str) -> Result<Reply, String> {
         self.writer
             .write_all(line.as_bytes())
             .and_then(|()| self.writer.write_all(b"\n"))
             .and_then(|()| self.writer.flush())
             .map_err(|error| format!("sending to the running Signex: {error}"))?;
-        match self.replies.recv_timeout(self.timeout) {
-            Ok(reply) => parse_reply(reply?.trim_end()),
-            Err(mpsc::RecvTimeoutError::Timeout) => Err(format!(
-                "the running Signex did not answer within {} s",
-                self.timeout.as_secs_f32()
-            )),
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                Err("the connection to the running Signex ended".into())
+        let reply = match self.replies.recv_timeout(self.timeout) {
+            Ok(reply) => parse_reply(reply?.trim_end())?,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                return Err(format!(
+                    "the running Signex did not answer within {} s",
+                    self.timeout.as_secs_f32()
+                ));
             }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Err("the connection to the running Signex ended".into());
+            }
+        };
+        // The app names the command it answers; another one is not our reply.
+        match reply.id.as_deref() {
+            Some(answered) if answered != id => Err(format!(
+                "the running Signex answered `{answered}` to a request for `{id}`"
+            )),
+            _ => Ok(reply),
         }
     }
 }

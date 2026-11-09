@@ -182,6 +182,70 @@ fn a_reply_that_never_comes_is_given_up_on() {
     assert!(started.elapsed() < std::time::Duration::from_secs(10));
 }
 
+/// Replies are matched to requests by order. A reply that comes after its
+/// request timed out must not be taken for the answer to the next one: it
+/// would let a check of one document pass for another's.
+#[test]
+fn a_late_reply_is_never_taken_for_the_answer_to_the_next_request() {
+    use std::io::{BufRead as _, BufReader, Write as _};
+    let fx = fixture();
+    let app = fx.live_app(CC);
+    let Lookup::Gui(peer) = fx.lookup() else {
+        panic!("a live app was not found");
+    };
+    // The app answers the first request after the client has given up on it.
+    let server = std::thread::spawn(move || {
+        let late = std::time::Duration::from_millis(300);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
+            let Ok((stream, _)) = app.accept() else {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+                continue;
+            };
+            stream.set_nonblocking(false).unwrap();
+            let mut reader = BufReader::new(stream);
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap_or(0) > 0 {
+                std::thread::sleep(late);
+                let reply = r#"{"id":"read_document","status":"answered","data":{"revision":1},"messages":[],"changed":[]}"#;
+                writeln!(reader.get_mut(), "{reply}").ok();
+                std::thread::sleep(late);
+                return;
+            }
+        }
+    });
+    let mut connection = peer
+        .connect()
+        .expect("connected")
+        .with_reply_timeout(std::time::Duration::from_millis(100));
+    let first = connection.ask("read_document", &[]).unwrap_err();
+    assert!(first.contains("did not answer"), "{first}");
+    // The first reply is on its way; the second request must not receive it.
+    let second = connection.ask("read_document", &[]);
+    let why = second.expect_err("a late reply was taken for the next answer");
+    assert!(why.contains("failed earlier"), "{why}");
+    server.join().unwrap();
+}
+
+/// A hold removes its entry and leaves its (empty) lock file: deleting a file
+/// that is locked lets a second run lock the unlinked one.
+#[test]
+fn a_hold_leaves_its_lock_file_in_place() {
+    let fx = fixture();
+    let run = client::hold(&fx.dir, &fx.project).expect("held");
+    let lock = fx
+        .dir
+        .join(REGISTRY_DIR)
+        .join(fx.entry_file().file_name().unwrap())
+        .with_extension("lock");
+    assert!(lock.exists());
+    drop(run);
+    assert!(!fx.entry_file().exists(), "the entry outlived the run");
+    assert!(lock.exists(), "the lock file was deleted");
+    // And the next run holds again.
+    drop(client::hold(&fx.dir, &fx.project).expect("held again"));
+}
+
 #[test]
 fn a_dead_pid_a_wrong_socket_a_bad_boot_id_or_another_project_is_stale() {
     let fx = fixture();

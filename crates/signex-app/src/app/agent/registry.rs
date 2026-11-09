@@ -196,36 +196,76 @@ pub(super) fn lock_path(dir: &Path, canonical: &Path) -> PathBuf {
 
 /// Open (making it if need be, 0600, never through a link) and exclusively
 /// lock the lock file at `path`. The lock is the run's life: the kernel drops
-/// it when the process ends, however it ends. Fails if another process holds it.
+/// it when the process ends, however it ends. Fails if another process holds
+/// it. A lock file is never deleted (an empty 0600 file is harmless): deleting
+/// one while locked lets a second holder lock the unlinked file.
+///
+/// A reader's momentary lock in [`lock_is_held`] can make one attempt fail, so
+/// a few are made with short pauses before the project counts as held.
 pub(super) fn acquire_lock(path: &Path) -> Result<std::fs::File, String> {
-    let mut options = std::fs::OpenOptions::new();
-    options.read(true).write(true).create(true).truncate(false);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt as _;
-        options
-            .mode(0o600)
-            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
-    }
-    let file = options
-        .open(path)
-        .map_err(|error| format!("cannot open {}: {error}", path.display()))?;
-    let meta = file.metadata().map_err(|error| error.to_string())?;
-    if !meta.is_file() || !owned_by_us(&meta) {
-        return Err(format!(
-            "{} is not a plain file of this user",
-            path.display()
-        ));
-    }
-    match file.try_lock() {
-        Ok(()) => Ok(file),
-        Err(std::fs::TryLockError::WouldBlock) => {
-            Err("the project is held by another signex-cli run".to_string())
+    acquire_lock_with(path, LOCK_ATTEMPTS, LOCK_PAUSE)
+}
+
+const LOCK_ATTEMPTS: u32 = 5;
+const LOCK_PAUSE: std::time::Duration = std::time::Duration::from_millis(20);
+
+fn acquire_lock_with(
+    path: &Path,
+    attempts: u32,
+    pause: std::time::Duration,
+) -> Result<std::fs::File, String> {
+    for attempt in 1..=attempts {
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true).write(true).create(true).truncate(false);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt as _;
+            options
+                .mode(0o600)
+                .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
         }
-        Err(std::fs::TryLockError::Error(error)) => {
-            Err(format!("cannot lock {}: {error}", path.display()))
+        let file = options
+            .open(path)
+            .map_err(|error| format!("cannot open {}: {error}", path.display()))?;
+        let meta = file.metadata().map_err(|error| error.to_string())?;
+        if !meta.is_file() || !owned_by_us(&meta) {
+            return Err(format!(
+                "{} is not a plain file of this user",
+                path.display()
+            ));
+        }
+        match file.try_lock() {
+            // The path must still name the file that is locked: one that was
+            // replaced since the open is a lock on nothing anyone else sees.
+            Ok(()) if names_same_file(&file, path) => return Ok(file),
+            Ok(()) => {}
+            Err(std::fs::TryLockError::WouldBlock) => {
+                if attempt < attempts {
+                    std::thread::sleep(pause);
+                }
+            }
+            Err(std::fs::TryLockError::Error(error)) => {
+                return Err(format!("cannot lock {}: {error}", path.display()));
+            }
         }
     }
+    Err("the project is held by another signex-cli run".to_string())
+}
+
+/// Whether `path` still names the file `file` was opened as. (Where an open
+/// file cannot be deleted or replaced, it always does.)
+#[cfg(unix)]
+fn names_same_file(file: &std::fs::File, path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    match (file.metadata(), std::fs::symlink_metadata(path)) {
+        (Ok(opened), Ok(named)) => opened.dev() == named.dev() && opened.ino() == named.ino(),
+        _ => false,
+    }
+}
+
+#[cfg(not(unix))]
+fn names_same_file(_file: &std::fs::File, _path: &Path) -> bool {
+    true
 }
 
 /// Is the lock file at `path` locked by a living process? Taking the lock
@@ -790,6 +830,61 @@ mod tests {
         std::os::unix::fs::symlink(&target, &path).unwrap();
         assert!(acquire_lock(&path).is_err(), "a link was locked");
         assert!(!lock_is_held(&path));
+    }
+
+    /// A lock on a file that was deleted or replaced is a lock on nothing: the
+    /// path must still name the locked file, or the attempt is not a hold.
+    #[cfg(unix)]
+    #[test]
+    fn a_lock_counts_only_while_the_path_still_names_the_locked_file() {
+        let dir = private_scratch();
+        files::prepare_dir(&dir.path().join(REGISTRY_DIR)).unwrap();
+        let a = project(dir.path(), "a.snxprj");
+        let path = lock_path(dir.path(), &std::fs::canonicalize(&a).unwrap());
+        let lock = acquire_lock(&path).expect("a lock");
+        assert!(names_same_file(&lock, &path));
+        assert!(lock_is_held(&path));
+
+        // What an earlier version did on drop: delete the file while locked.
+        std::fs::remove_file(&path).unwrap();
+        assert!(
+            !names_same_file(&lock, &path),
+            "a deleted file is still named"
+        );
+        std::fs::write(&path, "").unwrap();
+        assert!(
+            !names_same_file(&lock, &path),
+            "a replaced file is still named"
+        );
+        assert!(
+            !lock_is_held(&path),
+            "a lock on the old file holds the new one"
+        );
+    }
+
+    /// A reader's momentary lock must not make a starting run think the
+    /// project is held: the attempt is repeated a few times.
+    #[cfg(unix)]
+    #[test]
+    fn a_readers_momentary_lock_does_not_fail_a_starting_run() {
+        let dir = private_scratch();
+        files::prepare_dir(&dir.path().join(REGISTRY_DIR)).unwrap();
+        let a = project(dir.path(), "a.snxprj");
+        let path = lock_path(dir.path(), &std::fs::canonicalize(&a).unwrap());
+        drop(acquire_lock(&path).unwrap());
+
+        let reader = std::fs::File::open(&path).unwrap();
+        reader.try_lock().expect("the reader's lock");
+        let releaser = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(40));
+            drop(reader);
+        });
+        // One attempt finds it held; the run's own few attempts outlast it.
+        let once = acquire_lock_with(&path, 1, std::time::Duration::ZERO);
+        assert!(once.unwrap_err().contains("held by another"));
+        let held = acquire_lock(&path);
+        releaser.join().unwrap();
+        assert!(held.is_ok(), "a reader's momentary lock failed the run");
     }
 
     /// An entry in a format newer than this app's is not its to judge: it is

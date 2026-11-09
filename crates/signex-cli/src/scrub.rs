@@ -8,92 +8,81 @@
 
 use serde_json::{Map, Value, json};
 
-/// `data` without what names a file `inside` does not accept, or `None` when
-/// the answer itself is such an object. Every object with a string `path`, and
-/// every entry of a `not_loaded` list, is checked; a `count` beside a
-/// `documents` or `elements` list is recomputed.
+/// `data` without what names a document or file `inside` does not accept, or
+/// `None` when the answer itself is such a document or element. Only the keys
+/// the queries use for documents are judged: the answer's `document`,
+/// `element` and `project`, and the lists `documents`, `sheets`, `elements` and
+/// `not_loaded`. Everything else is the answer's own data and is left whole: a
+/// `path` inside it (an instance path, a library's relative path) is not a
+/// file. A `count` beside a `documents` or `elements` list is recomputed.
 pub(crate) fn scrub_data(data: Value, inside: &dyn Fn(&str) -> bool) -> Option<Value> {
-    match data {
-        Value::Object(map) => scrub_object(map, inside),
-        Value::Array(items) => Some(Value::Array(scrub_items(items, inside))),
-        other => Some(other),
+    let Value::Object(mut map) = data else {
+        return Some(data);
+    };
+    for key in ["document", "project"] {
+        if let Some(Value::Object(document)) = map.get(key)
+            && !document_ok(document, inside)
+        {
+            return None;
+        }
     }
-}
-
-fn scrub_items(items: Vec<Value>, inside: &dyn Fn(&str) -> bool) -> Vec<Value> {
-    items
-        .into_iter()
-        .filter_map(|item| scrub_data(item, inside))
-        .collect()
-}
-
-fn scrub_object(map: Map<String, Value>, inside: &dyn Fn(&str) -> bool) -> Option<Value> {
-    if !proven_inside(&map, inside) {
+    if let Some(Value::Object(element)) = map.get("element")
+        && !element_ok(element, inside)
+    {
         return None;
     }
-    let mut out = Map::new();
-    for (key, child) in map {
-        let kept = match child {
-            // Fail closed: a listed document or element is kept only if it
-            // says whose it is (a document names a `path`, an element a
-            // `document` with one), and what it says is then proven.
-            Value::Array(items) if key == "documents" => Some(Value::Array(scrub_items(
-                items
-                    .into_iter()
-                    .filter(|item| item.get("path").is_some())
-                    .collect(),
-                inside,
-            ))),
-            Value::Array(items) if key == "elements" => Some(Value::Array(scrub_items(
-                items
-                    .into_iter()
-                    .filter(|item| item.get("document").and_then(|d| d.get("path")).is_some())
-                    .collect(),
-                inside,
-            ))),
-            Value::Array(items) if key == "not_loaded" => Some(Value::Array(
-                items
-                    .into_iter()
-                    .filter(|item| item.as_str().is_none_or(inside))
-                    .collect(),
-            )),
-            // An object that holds a dropped one is dropped with it.
-            Value::Object(object) => Some(scrub_object(object, inside)?),
-            other => scrub_data(other, inside),
-        };
-        if let Some(kept) = kept {
-            out.insert(key, kept);
+    // Fail closed: a listed document or element is kept only if it says whose
+    // it is, and what it says is then proven.
+    let lists: [(&str, fn(&Map<String, Value>, &dyn Fn(&str) -> bool) -> bool); 3] = [
+        ("documents", document_ok),
+        ("sheets", document_ok),
+        ("elements", element_ok),
+    ];
+    for (key, keep) in lists {
+        if let Some(Value::Array(items)) = map.get_mut(key) {
+            items.retain(|item| item.as_object().is_some_and(|object| keep(object, inside)));
         }
+    }
+    if let Some(Value::Array(items)) = map.get_mut("not_loaded") {
+        items.retain(|item| item.as_str().is_none_or(inside));
     }
     let listed = ["documents", "elements"]
         .into_iter()
-        .filter_map(|key| out.get(key).and_then(Value::as_array))
+        .filter_map(|key| map.get(key).and_then(Value::as_array))
         .map(Vec::len)
         .collect::<Vec<_>>();
     if let ([len], true) = (
         listed.as_slice(),
-        out.get("count").is_some_and(Value::is_number),
+        map.get("count").is_some_and(Value::is_number),
     ) {
-        out.insert("count".into(), json!(len));
+        map.insert("count".into(), json!(len));
     }
-    Some(Value::Object(out))
+    Some(Value::Object(map))
 }
 
-/// Whether an object that names a document may be shown. One without a `path`
-/// key names none. One with a string `path` is inside if that path is. One
-/// whose `path` is null (a sheet never saved) or of another shape is shown only
-/// if the project that owns it (`project.path`) is inside; with no proof it is
-/// hidden, not shown.
-fn proven_inside(map: &Map<String, Value>, inside: &dyn Fn(&str) -> bool) -> bool {
-    match map.get("path") {
-        None => true,
+/// An element is shown only if its `document` is.
+fn element_ok(element: &Map<String, Value>, inside: &dyn Fn(&str) -> bool) -> bool {
+    element
+        .get("document")
+        .and_then(Value::as_object)
+        .is_some_and(|document| document_ok(document, inside))
+}
+
+/// Whether an object that names a document may be shown. It must say whose it
+/// is, by a `path` key: a string is inside if that path is; a null (a sheet
+/// never saved) is shown only if the project that owns it (`project.path`) is
+/// inside. A `project` it names must be inside too. With no proof it is hidden.
+fn document_ok(document: &Map<String, Value>, inside: &dyn Fn(&str) -> bool) -> bool {
+    let project = document
+        .get("project")
+        .and_then(|project| project.get("path"))
+        .and_then(Value::as_str);
+    let own = match document.get("path") {
         Some(Value::String(path)) => inside(path),
-        Some(_) => map
-            .get("project")
-            .and_then(|project| project.get("path"))
-            .and_then(Value::as_str)
-            .is_some_and(inside),
-    }
+        Some(_) => project.is_some_and(inside),
+        None => false,
+    };
+    own && project.is_none_or(inside)
 }
 
 /// The files a `changed` list names that `inside` accepts.

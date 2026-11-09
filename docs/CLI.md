@@ -117,18 +117,26 @@ in the middle of continues.
   a wide mode, a file of another user or one that is not a token ends the run
   with exit 2. It does not fall back to headless: the app has the project.
 - **Same result lines.** Each reply line has the headless shape, with `"mode":
-  "attached"`; `messages` are what the app logged during the command and
-  `changed` the documents whose content or unsaved state differ.
+  "attached"`; `messages` is always empty (see below) and `changed` is the
+  documents whose content or unsaved state differ. Replies are matched to
+  requests by order, so after any failed request (a timeout above all: its reply
+  may still arrive) the connection is closed for good: every later command of
+  the run fails with "the connection ... failed earlier" and the run never falls
+  back to headless.
 - **Only this run's folders are shown.** The app answers a query across every
   project it has open, so the CLI filters each answer before it prints it:
-  an object whose `path` lies outside the folders this run may use (the
-  project folder and `--allow-path`) is dropped, and so is the object that
-  holds it (an element whose `document` is outside is dropped; `documents`,
-  `elements` and `not_loaded` lose those entries, and `count` is recomputed).
+  a document whose `path` lies outside the folders this run may use (the
+  project folder and `--allow-path`) is dropped, and so is an element whose
+  `document` is outside. Only the keys that name documents are judged (the
+  answer's `document`, `element` and `project`, and the lists `documents`,
+  `sheets`, `elements` and `not_loaded`); the rest of an answer, such as a
+  `read_document`'s instances and libraries, comes back whole, because a `path`
+  inside it is not a file. `count` is recomputed.
   `resolve` of an id outside answers `{"found": false, "what": "unknown"}`,
   the same as for an id that does not exist. `changed` keeps only files
-  inside. The app's log lines (`messages`) of a query are not shown at all:
-  they are free text that may name any open project's files. The filter fails
+  inside. The app's log lines (`messages`) are shown for no command, queries
+  or edits: they are free text that may name any open project's files (the
+  app's own Messages panel keeps them all). The filter fails
   closed: a document is shown only if it can be proven this run's, by its own
   `path` or, for a sheet never saved (a null `path`), by its owning
   `project.path`; a listed document or element that says neither is hidden.
@@ -170,8 +178,10 @@ in the middle of continues.
 
 A headless run holds its project for the run: it takes an exclusive lock on
 the project's lock file in the registry folder and writes an entry of kind
-`headless` for the project (no endpoint). It removes both when the run ends
-(an error, a panic, a refused command). A run killed by a signal cannot clean
+`headless` for the project (no endpoint). It removes the entry when the run
+ends (an error, a panic, a refused command); the empty lock file stays, as
+deleting a locked file would let a second run lock the unlinked one. A run
+killed by a signal cannot clean
 up, but the kernel drops its lock with the process, so its entry is found stale
 at once, whatever process reuses its id; the next run or Signex removes it.
 A Signex that opens the project meanwhile refuses with a line in Messages and
