@@ -20,6 +20,9 @@ use std::path::PathBuf;
 use iced::Task;
 use signex_types::project::RuleProfile;
 
+pub use crate::app::agent::{
+    ChangeSnapshot, MessageLine, Status, changed_between, messages_since, outcome_verdict,
+};
 pub use crate::app::command::{
     CommandArgs, CommandOutcome, EditSpec, MAX_EDITS, OperandError, OperandValue, edit_list_text,
     edit_refusal, operand_text, parse_edit_list,
@@ -111,6 +114,9 @@ impl Signex {
             app.set_undo_depth(read.depth);
         }
         app.ui_state.io = crate::io_ports::IoPorts::headless(Default::default());
+        // A headless run never listens, whatever the config root says.
+        app.ui_state.agent_connections_enabled = false;
+        app.ui_state.preferences_draft_agent_connections_enabled = false;
         let rules_applied = app.handle_user_default_loaded(&Ok(Some(rules.clone())));
         let opens = Self::startup_open_messages(paths)
             .into_iter()

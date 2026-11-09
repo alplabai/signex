@@ -109,6 +109,8 @@ impl Signex {
     /// writes), wait for the ones in flight, then run `next`.
     pub(crate) fn flush_quit_writes_then(&mut self, next: Task<Message>) -> Task<Message> {
         self.warn_owed_cascades_at_quit();
+        // The agent socket, token and registry entries go just before `next`.
+        let next = self.agent_cleanup_then(next);
         // A pricing walk must not write into a library after quit, and an
         // in-flight save + commit is waited for.
         let next = self.wait_for_pricing_then(next);

@@ -44,6 +44,8 @@ impl Signex {
             draft_window_controls_placement: ui.preferences_draft_window_controls_placement,
             window_controls_restart_note: self.window_controls_needs_restart(),
             draft_autosave_enabled: ui.preferences_draft_autosave_enabled,
+            draft_agent_connections_enabled: ui.preferences_draft_agent_connections_enabled,
+            i18n: &ui.i18n,
             draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
             draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
             draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,

@@ -496,6 +496,26 @@ pub fn write_autosave_enabled_pref_at(path: &Path, enabled: bool) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Allow agent connections (#1924)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the "Allow agent connections" toggle. Off when the key is missing or
+/// not a boolean: no socket exists unless the person turned it on.
+pub fn read_agent_connections_pref_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json["agent_connections_enabled"].as_bool())
+        .unwrap_or(false)
+}
+
+pub fn write_agent_connections_pref(enabled: bool) {
+    update_prefs_json(&prefs_path(), "agent_connections_enabled", |prefs| {
+        prefs.insert(
+            "agent_connections_enabled".to_string(),
+            serde_json::json!(enabled),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Interface scale (#1228)
 // ──────────────────────────────────────────────────────────────────────────
 

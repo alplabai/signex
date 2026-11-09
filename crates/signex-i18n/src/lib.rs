@@ -45,6 +45,8 @@ macro_rules! define_ids {
 define_ids! {
     LANGUAGE_SYSTEM_DEFAULT = "language-system-default";
     MENU_FILE = "menu-file";
+    PREFERENCES_AGENT_CONNECTIONS_LABEL = "preferences-agent-connections-label";
+    PREFERENCES_AGENT_CONNECTIONS_HELP = "preferences-agent-connections-help";
 }
 
 /// Render a message: `t!(i18n, ids::MENU_FILE)` or, with arguments,
