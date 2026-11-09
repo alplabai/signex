@@ -123,8 +123,8 @@ is enforced before the app sees a command.
   test. `delete` has no command yet: it exists so the first file-removing
   command cannot run unnamed.
 - **Honest results.** A command whose only effect was a window the headless
-  driver dropped (`annotate_schematic`) is `refused`
-  ("needs a window"), and so is a dialog that could not be answered. Closing a
+  driver dropped is `refused` ("needs a window"; the catalog already refuses
+  the known ones, see `gui_only` below), and so is a dialog that could not be answered. Closing a
   document with unsaved changes closes its tab and parks the edits in memory,
   as in the GUI; the end-of-run log lists the sheet as unsaved.
 - **No code execution, no network.** The run uses a throwaway config root,
