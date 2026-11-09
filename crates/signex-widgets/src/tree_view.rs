@@ -516,6 +516,7 @@ fn render_node(
                 .height(m.chevron)
                 .style(|_: &Theme, _| svg::Style {
                     color: Some(FG_ON_SELECTION),
+                    ..Default::default()
                 })
                 .boxed(),
         );
@@ -538,6 +539,7 @@ fn render_node(
         let accent = theme_ext::accent(tokens);
         icon_w.style(move |_: &Theme, _| svg::Style {
             color: Some(accent),
+            ..Default::default()
         })
     } else {
         icon_w

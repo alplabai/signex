@@ -70,6 +70,7 @@ pub fn collapsible_section_header<'a>(
                         .height(10)
                         .style(move |_: &Theme, _| iced::widget::svg::Style {
                             color: Some(header_color),
+                            ..Default::default()
                         }),
                     text(raw(title.to_string()))
                         .size(TS.label)

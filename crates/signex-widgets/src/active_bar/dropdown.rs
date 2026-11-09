@@ -179,6 +179,7 @@ pub fn tooltip_style(
 fn icon_style(disabled: bool, muted: iced::Color) -> iced::widget::svg::Style {
     iced::widget::svg::Style {
         color: disabled.then_some(muted),
+        ..Default::default()
     }
 }
 

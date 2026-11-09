@@ -86,6 +86,7 @@ impl Signex {
                 .height(12)
                 .style(move |_: &iced::Theme, _| svg::Style {
                     color: Some(muted_c),
+                    ..Default::default()
                 });
         let palette_input = text_input(
             raw("Search files, symbols, commands…"),

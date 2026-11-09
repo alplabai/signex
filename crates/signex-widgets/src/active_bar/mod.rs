@@ -308,6 +308,7 @@ where
                 } else {
                     Some(disabled_tint)
                 },
+                ..Default::default()
             })
             .boxed(),
         ActiveBarIcon::Raster(handle) => image::<image::Handle>(handle)
@@ -330,6 +331,7 @@ where
                     } else {
                         Some(disabled_tint)
                     },
+                    ..Default::default()
                 })
                 .boxed(),
             ActiveBarIcon::Raster(handle) => image::<image::Handle>(handle)

@@ -23,6 +23,7 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         .height(ICON_SIZE)
         .style(move |_: &Theme, _| svg::Style {
             color: Some(text_color),
+            ..Default::default()
         });
     let header = container(
         row![

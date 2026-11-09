@@ -226,6 +226,7 @@ pub(crate) fn close_x_button<'a, M: Clone + 'a>(message: M) -> Element<'a, M> {
             .height(MODAL_CLOSE_X_HIT_H)
             .style(|theme: &Theme, status| svg::Style {
                 color: Some(close_glyph_color_for(theme, status == svg::Status::Hovered)),
+                ..Default::default()
             }),
     )
     .padding(0)
