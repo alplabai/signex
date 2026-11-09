@@ -10,6 +10,7 @@
 //!
 //! Hit-testing reads the model, never the render output (#662).
 
+mod body;
 mod flip;
 mod index;
 mod mst;
@@ -22,6 +23,7 @@ mod transform;
 mod union_find;
 mod units;
 
+pub use body::footprint_body;
 pub use flip::flip_footprint;
 pub use index::{BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected};
 pub use mst::{Edge, euclidean_mst, spanning_forest};

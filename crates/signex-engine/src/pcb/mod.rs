@@ -14,6 +14,7 @@ mod engine;
 mod error;
 mod footprint;
 mod items;
+pub mod placement;
 
 #[cfg(test)]
 mod engine_tests;

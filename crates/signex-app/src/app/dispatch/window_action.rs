@@ -137,6 +137,7 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
                 | EditMsg::RotateSelectedCounterclockwise
                 | EditMsg::MirrorSelectedX
                 | EditMsg::MirrorSelectedY
+                | EditMsg::FlipSelection
                 | EditMsg::Copy
                 | EditMsg::Cut
                 | EditMsg::Paste

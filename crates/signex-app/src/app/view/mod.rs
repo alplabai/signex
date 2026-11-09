@@ -696,13 +696,8 @@ impl Signex {
             let base = if is_main {
                 base
             } else {
-                base.map(move |msg| match msg {
-                    Message::CanvasEvent(event) => {
-                        Message::CanvasEventInWindow { window_id, event }
-                    }
-                    other => other,
-                })
-                .boxed()
+                base.map(move |msg| overlay_id::scope_pcb_canvas_message(window_id, msg))
+                    .boxed()
             };
             // Selection, hover and marquee paint above the board and take no input.
             let highlight = canvas(pcb_canvas.highlight_layer())

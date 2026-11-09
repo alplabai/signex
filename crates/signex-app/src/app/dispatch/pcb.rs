@@ -13,6 +13,9 @@ impl Signex {
                 }
                 Task::none()
             }
+            PcbMsg::CanvasInWindow { window, msg } => {
+                self.run_in_window(window, false, |app| app.dispatch_pcb_canvas_message(msg))
+            }
         }
     }
 }

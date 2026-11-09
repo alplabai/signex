@@ -21,8 +21,11 @@ const HIT_REACH_PX: f32 = 4.0;
 pub(super) struct Gesture {
     modifiers: Modifiers,
     press: Option<iced::Point>,
-    /// The press has passed the drag threshold and owns the canvas marquee.
+    /// The press has passed the drag threshold and owns the canvas marquee,
+    /// or (with `carrying`) drags the selected footprints.
     dragging: bool,
+    /// The press landed on a selected footprint: a drag moves it (#2240).
+    carrying: bool,
 }
 
 impl Gesture {
@@ -45,6 +48,9 @@ impl Gesture {
                 self.drop_press(canvas);
                 let pos = cursor.position_in(bounds)?;
                 self.press = Some(pos);
+                let at = canvas.screen_to_world(pos, bounds);
+                self.carrying =
+                    self.modifiers.is_empty() && canvas.grabs(at, hover_reach_mm(canvas.scale()));
                 // The canvas captures the press, so the app-wide listener
                 // never sees it: close an open context menu here, whether
                 // or not the press later ends in a release.
@@ -55,8 +61,32 @@ impl Gesture {
             }
             Event::Mouse(mouse::Event::CursorLeft) => {
                 self.press?;
+                let carried = self.carrying && self.dragging;
                 self.drop_press(canvas);
+                if carried {
+                    let msg = Message::PcbCanvas(PcbCanvasMsg::FootprintDragCancelled);
+                    return Some(canvas::Action::publish(msg));
+                }
                 Some(canvas::Action::request_redraw())
+            }
+            Event::Mouse(mouse::Event::CursorMoved { .. }) if self.carrying => {
+                let press = self.press?;
+                if self.dragging && !canvas.carry.get() {
+                    // Esc dropped the drag: the gesture is over.
+                    self.drop_press(canvas);
+                    return None;
+                }
+                let pos = cursor.position_in(bounds)?;
+                if !self.dragging && !past_threshold(press, pos) {
+                    return None;
+                }
+                self.dragging = true;
+                canvas.carry.set(true);
+                let msg = PcbCanvasMsg::FootprintDragged {
+                    from: canvas.screen_to_world(press, bounds),
+                    to: canvas.screen_to_world(pos, bounds),
+                };
+                Some(canvas::Action::publish(Message::PcbCanvas(msg)).and_capture())
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 let press = self.press?;
@@ -80,7 +110,12 @@ impl Gesture {
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 let press = self.press?;
-                let cancelled = self.dragging && canvas.marquee.get().is_none();
+                let carried = self.carrying && self.dragging;
+                let cancelled = if carried {
+                    !canvas.carry.get()
+                } else {
+                    self.dragging && canvas.marquee.get().is_none()
+                };
                 self.drop_press(canvas);
                 if cancelled {
                     return Some(canvas::Action::capture());
@@ -90,7 +125,12 @@ impl Gesture {
                     .map(|p| iced::Point::new(p.x - bounds.x, p.y - bounds.y))
                     .unwrap_or(press);
                 let mode = click_mode(self.modifiers);
-                let msg = if past_threshold(press, pos) {
+                let msg = if carried {
+                    PcbCanvasMsg::FootprintDropped {
+                        from: canvas.screen_to_world(press, bounds),
+                        to: canvas.screen_to_world(pos, bounds),
+                    }
+                } else if past_threshold(press, pos) {
                     PcbCanvasMsg::BoxSelected {
                         from: canvas.screen_to_world(press, bounds),
                         to: canvas.screen_to_world(pos, bounds),
@@ -112,7 +152,9 @@ impl Gesture {
     fn drop_press(&mut self, canvas: &PcbCanvas) {
         self.press = None;
         self.dragging = false;
+        self.carrying = false;
         canvas.marquee.set(None);
+        canvas.carry.set(false);
     }
 }
 

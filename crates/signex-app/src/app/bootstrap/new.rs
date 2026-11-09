@@ -637,6 +637,8 @@ impl Signex {
                 pcb_canvas,
                 pcb_canvases: std::collections::HashMap::new(),
                 pcb_selection: Default::default(),
+                pcb_selections: std::collections::HashMap::new(),
+                pcb_carry: None,
                 pcb_ratsnest: Default::default(),
                 dragging: None,
                 drag_start_pos: None,

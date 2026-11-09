@@ -2,10 +2,12 @@
 //! geometry is `pcb_geom`'s, the index is built once per board revision and
 //! kept until that revision changes.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use pcb_geom::{BoardIndex, ClickMode, ItemRef, PointNm, Selection, marquee_select, pick};
 use signex_types::pcb::{PcbBoard, Point};
+use uuid::Uuid;
 
 use super::highlight::Highlight;
 
@@ -29,6 +31,11 @@ impl PcbSelectionState {
 
     pub fn hover(&self) -> Option<ItemRef> {
         self.hover
+    }
+
+    /// The board the selection was last aligned with.
+    pub fn document(&self) -> Option<&Path> {
+        self.document.as_deref()
     }
 
     /// How many times the index was built; one per board change at most.
@@ -110,7 +117,8 @@ impl PcbSelectionState {
         self.selection.apply_marquee(&hits, mode)
     }
 
-    /// The copper to paint for the selection and the hover.
+    /// The copper to paint for the selection and the hover. A selected
+    /// footprint paints its body outline and all its pads.
     pub fn highlight(&mut self, board: &PcbBoard) -> Highlight {
         if self.selection.is_empty() && self.hover.is_none() {
             return Highlight::default();
@@ -119,15 +127,68 @@ impl PcbSelectionState {
         let Some(index) = &self.index else {
             return Highlight::default();
         };
-        let selected = index
+        let whole: BTreeSet<Uuid> = self
+            .selection
             .items()
-            .filter(|i| self.selection.contains(i.item))
-            .map(|i| i.shape)
+            .filter_map(|item| match item {
+                ItemRef::Footprint(id) => Some(id),
+                _ => None,
+            })
             .collect();
-        let hover = self
-            .hover
-            .and_then(|h| index.items().find(|i| i.item == h).map(|i| i.shape));
-        Highlight { selected, hover }
+        let mut highlight = Highlight::default();
+        for indexed in index.items() {
+            match indexed.item {
+                ItemRef::Footprint(id) if whole.contains(&id) => {
+                    highlight.bodies.push(indexed.shape);
+                }
+                ItemRef::Pad { footprint, .. } if whole.contains(&footprint) => {
+                    highlight.selected.push(indexed.shape);
+                }
+                item if self.selection.contains(item) => highlight.selected.push(indexed.shape),
+                _ => {}
+            }
+        }
+        if let Some(hovered) = self.hover
+            && let Some(found) = index.items().find(|i| i.item == hovered)
+        {
+            match hovered {
+                ItemRef::Footprint(_) => highlight.hover_body = Some(found.shape),
+                _ => highlight.hover = Some(found.shape),
+            }
+        }
+        highlight
+    }
+
+    /// The body and pads of each footprint in `footprints`: what a press
+    /// grabs to drag them, and what the drag preview paints.
+    pub fn footprint_shapes(
+        &mut self,
+        board: &PcbBoard,
+        footprints: &BTreeSet<Uuid>,
+    ) -> Vec<pcb_geom::Shape> {
+        if footprints.is_empty() {
+            return Vec::new();
+        }
+        self.ensure_index(board);
+        let Some(index) = &self.index else {
+            return Vec::new();
+        };
+        index
+            .items()
+            .filter(|i| match i.item {
+                ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => {
+                    footprints.contains(&id)
+                }
+                ItemRef::Track(_) | ItemRef::Via(_) => false,
+            })
+            .map(|i| i.shape)
+            .collect()
+    }
+
+    /// Empty the selection after its items were deleted, keeping the hover;
+    /// whether it held anything.
+    pub fn clear_selection(&mut self) -> bool {
+        self.selection.clear()
     }
 
     fn pick_at(
@@ -146,7 +207,7 @@ impl PcbSelectionState {
         if self.index.is_some() {
             return;
         }
-        let index = BoardIndex::build(board);
+        let index = BoardIndex::build_selectable(board);
         if let Some(line) = rejected_line(&index) {
             self.report.push(line);
         }
@@ -192,6 +253,7 @@ fn describe(item: ItemRef) -> String {
         ItemRef::Pad { footprint, pad } => format!("pad {pad} of footprint {footprint}"),
         ItemRef::Track(id) => format!("track {id}"),
         ItemRef::Via(id) => format!("via {id}"),
+        ItemRef::Footprint(id) => format!("footprint {id}"),
     }
 }
 

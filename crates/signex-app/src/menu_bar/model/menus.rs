@@ -118,12 +118,32 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("smart_paste", "Paste Special", "Shift+Ctrl+V")),
         cmd_item_gated(ctx, cmd("duplicate", "Duplicate", "Ctrl+D")),
         cmd_item_gated(ctx, cmd("delete_selection", "Delete", "Del")),
+        submenu("Move", move_menu(ctx)),
         submenu("Arrange", arrange(ctx)),
         SEP,
         cmd_item_gated(ctx, cmd("select_all", "Select All", "Ctrl+A")),
         SEP,
         cmd_item_gated(ctx, cmd("find", "Find", "Ctrl+F")),
         cmd_item_gated(ctx, cmd("find_and_replace", "Find and Replace", "Ctrl+H")),
+    ]
+}
+
+/// Edit ▸ Move: move, turn and mirror the selection, on a sheet and on a
+/// board (#2240). Flip Selection puts footprints on the other board side.
+/// Gated by the commands, so a locked footprint greys the board rows.
+fn move_menu(ctx: &MenuContext) -> Vec<MenuEntry> {
+    vec![
+        cmd_item_gated(ctx, cmd("move_object", "Move", "")),
+        cmd_item_gated(ctx, cmd("move_selection", "Move Selection", "")),
+        SEP,
+        cmd_item_gated(ctx, cmd("rotate_counterclockwise", "Rotate", "Space")),
+        cmd_item_gated(
+            ctx,
+            cmd("rotate_clockwise", "Rotate Clockwise", "Shift+Space"),
+        ),
+        cmd_item_gated(ctx, cmd("mirror_x", "Mirror X", "X")),
+        cmd_item_gated(ctx, cmd("mirror_y", "Mirror Y", "Y")),
+        cmd_item_gated(ctx, cmd("flip_selection", "Flip Selection", "")),
     ]
 }
 

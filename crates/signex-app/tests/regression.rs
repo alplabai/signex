@@ -125,6 +125,8 @@ mod autosave;
 
 #[path = "regression/pcb_canvas_select.rs"]
 mod pcb_canvas_select;
+#[path = "regression/pcb_placement.rs"]
+mod pcb_placement;
 
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;

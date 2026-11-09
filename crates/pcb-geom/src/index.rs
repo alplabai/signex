@@ -1,4 +1,5 @@
-//! An R-tree of a board's pads, tracks and vias, and the hit-tests on it.
+//! An R-tree of a board's pads, tracks and vias (and, for selection, the
+//! footprint bodies), and the hit-tests on it.
 //!
 //! Envelopes are `i128` so every area rstar computes while it builds the
 //! tree fits, at any coordinate [`MAX_ABS_NM`](crate::MAX_ABS_NM) allows.
@@ -9,6 +10,7 @@ use rstar::{AABB, RTree, RTreeObject};
 use signex_types::pcb::{PcbBoard, Point, Segment, Via};
 use uuid::Uuid;
 
+use crate::body::footprint_body;
 use crate::rect::RectNm;
 use crate::shape::Shape;
 use crate::transform::pad_shape;
@@ -17,9 +19,16 @@ use crate::units::{GeomError, MAX_ABS_NM, PointNm, mm_to_nm};
 /// A model item the index holds, by identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ItemRef {
-    Pad { footprint: Uuid, pad: Uuid },
+    Pad {
+        footprint: Uuid,
+        pad: Uuid,
+    },
     Track(Uuid),
     Via(Uuid),
+    /// A footprint as one placed part, hit on its body
+    /// ([`footprint_body`](crate::footprint_body)). Only the selection index
+    /// ([`BoardIndex::build_selectable`]) holds it.
+    Footprint(Uuid),
 }
 
 /// An item and its copper, as stored in the tree.
@@ -78,6 +87,17 @@ impl BoardIndex {
     /// cannot convert is listed in [`rejected`](Self::rejected), not dropped
     /// silently.
     pub fn build(board: &PcbBoard) -> Self {
+        Self::build_with(board, false)
+    }
+
+    /// [`build`](Self::build) plus each footprint's body as an
+    /// [`ItemRef::Footprint`], for hover and selection. Connectivity reads
+    /// [`build`](Self::build), which holds copper only.
+    pub fn build_selectable(board: &PcbBoard) -> Self {
+        Self::build_with(board, true)
+    }
+
+    fn build_with(board: &PcbBoard, bodies: bool) -> Self {
         let mut items = Vec::new();
         let mut rejected = Vec::new();
         let mut keep = |item: ItemRef, shape: Result<Shape, GeomError>| match shape {
@@ -101,6 +121,14 @@ impl BoardIndex {
         }
         for via in &board.vias {
             keep(ItemRef::Via(via.uuid), via_shape(via));
+        }
+        if bodies {
+            for footprint in &board.footprints {
+                keep(
+                    ItemRef::Footprint(footprint.uuid),
+                    footprint_body(footprint),
+                );
+            }
         }
         let mut seen = HashSet::new();
         items.retain(|indexed| {

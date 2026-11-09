@@ -793,7 +793,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         id: "rotate_clockwise",
         category: "modify",
         label: "Rotate clockwise by 90 degrees",
-        menu_label: None,
+        menu_label: Some("Rotate Clockwise"),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,

@@ -168,8 +168,9 @@ fn the_same_holds_in_an_undocked_windows_own_bar() {
 const KNOWN_INERT: &[(&str, &[&str])] = &[];
 
 /// What a row run from an undocked window can move besides [`probe`]: the
-/// selection and zoom of each window canvas, and the symbols of every sheet.
-fn window_state(app: &Signex) -> (Vec<(usize, f64)>, usize) {
+/// selection and zoom of each window canvas, and the symbols and revision
+/// of every sheet (a rotate keeps the count).
+fn window_state(app: &Signex) -> (Vec<(usize, f64)>, usize, u64) {
     let canvases = app
         .interaction_state
         .canvases
@@ -182,7 +183,13 @@ fn window_state(app: &Signex) -> (Vec<(usize, f64)>, usize) {
         .values()
         .map(|e| e.document().symbols.len())
         .sum();
-    (canvases, symbols)
+    let revisions = app
+        .document_state
+        .engines
+        .values()
+        .map(signex_engine::Engine::revision)
+        .sum();
+    (canvases, symbols, revisions)
 }
 
 /// Live rows of `build`'s app whose click moved nothing, as `(row, state)`.

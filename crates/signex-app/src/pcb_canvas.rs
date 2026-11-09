@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
+mod carry;
 mod cull;
 mod gesture;
 mod highlight;
 mod msg;
 mod select;
 
+pub use carry::{CarryKind, PcbCarry, carry_delta};
 pub use highlight::{Highlight, HighlightLayer};
 pub use msg::PcbCanvasMsg;
 pub use select::PcbSelectionState;
@@ -25,13 +27,15 @@ use signex_renderer::pcb::{PcbRenderer, PcbSnapshot};
 use signex_renderer::schematic::ViewRenderer;
 use signex_renderer::theme::ResolvedTheme;
 
-use crate::app::Message;
+use crate::app::{ContextMenuMsg, Message};
 use crate::canvas::{Camera, CanvasEvent};
 use cull::{CULL_MARGIN_PX, SceneBounds, WorldRect, visible};
 
 #[derive(Debug, Default)]
 pub struct PcbCanvasState {
     panning: bool,
+    /// The right or middle press moved the view, so its release opens no menu.
+    pan_moved: bool,
     last_pan_pos: Option<iced::Point>,
     /// Ctrl/Cmd held, tracked from `ModifiersChanged` (mouse events carry no
     /// modifiers); keeps a modified scroll zooming under "Two-finger scroll pans".
@@ -102,8 +106,12 @@ pub struct PcbCanvas {
     highlight: Highlight,
     /// Box being dragged, in board mm; transient, read by the highlight layer.
     marquee: std::cell::Cell<Option<(signex_types::pcb::Point, signex_types::pcb::Point)>>,
-    /// Whether this canvas reports clicks and hovers. Off for an undocked
-    /// window's canvas until selection is routed per window.
+    /// The body and pads of the selected footprints, set by the app: a
+    /// press on one drags them instead of starting a box (#2240).
+    grab: Vec<pcb_geom::Shape>,
+    /// A footprint drag is live; Esc clears it and the gesture quits.
+    carry: std::cell::Cell<bool>,
+    /// Whether this canvas reports clicks and hovers.
     pub selectable: bool,
 }
 
@@ -141,6 +149,8 @@ impl PcbCanvas {
             visible_grid_mm: 2.54,
             highlight: Highlight::default(),
             marquee: std::cell::Cell::new(None),
+            grab: Vec::new(),
+            carry: std::cell::Cell::new(false),
             selectable: true,
         }
     }
@@ -149,9 +159,31 @@ impl PcbCanvas {
         self.highlight = highlight;
     }
 
-    /// Drop a box being dragged (Esc); the gesture sees it gone and quits.
+    pub fn highlight(&self) -> &Highlight {
+        &self.highlight
+    }
+
+    /// What a press grabs to drag the selected footprints.
+    pub fn set_grab(&mut self, grab: Vec<pcb_geom::Shape>) {
+        self.grab = grab;
+    }
+
+    /// Whether a press at `at` (board mm) lands on a grabbed footprint.
+    pub fn grabs(&self, at: signex_types::pcb::Point, reach_mm: f64) -> bool {
+        let (Ok(p), Ok(reach)) = (
+            pcb_geom::PointNm::from_mm(at, "press"),
+            pcb_geom::mm_to_nm(reach_mm, "reach"),
+        ) else {
+            return false;
+        };
+        self.grab.iter().any(|shape| shape.contains(p, reach))
+    }
+
+    /// Drop a box or a footprint drag in progress (Esc); the gesture sees
+    /// it gone and quits.
     pub fn cancel_marquee(&self) {
         self.marquee.set(None);
+        self.carry.set(false);
     }
 
     pub fn highlight_layer(&self) -> HighlightLayer<'_> {
@@ -636,14 +668,27 @@ impl canvas::Program<Message> for PcbCanvas {
             Event::Mouse(mouse::Event::ButtonPressed(button)) => {
                 if matches!(button, mouse::Button::Right | mouse::Button::Middle) {
                     state.panning = true;
+                    state.pan_moved = false;
                     state.last_pan_pos = cursor.position_in(bounds);
                     return Some(canvas::Action::capture());
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(button)) => {
                 if matches!(button, mouse::Button::Right | mouse::Button::Middle) {
+                    let moved = std::mem::take(&mut state.pan_moved);
                     state.panning = false;
                     state.last_pan_pos = None;
+                    // A right click that did not pan opens the board's menu (#2240).
+                    if *button == mouse::Button::Right
+                        && !moved
+                        && self.selectable
+                        && let Some(pos) = cursor.position_in(bounds)
+                    {
+                        let show = ContextMenuMsg::Show(bounds.x + pos.x, bounds.y + pos.y);
+                        return Some(
+                            canvas::Action::publish(Message::ContextMenu(show)).and_capture(),
+                        );
+                    }
                 }
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
@@ -654,6 +699,7 @@ impl canvas::Program<Message> for PcbCanvas {
                         self.camera
                             .borrow_mut()
                             .pan(cursor_pos.x - last_pan_pos.x, cursor_pos.y - last_pan_pos.y);
+                        state.pan_moved |= cursor_pos != last_pan_pos;
                         state.last_pan_pos = Some(cursor_pos);
                         return Some(
                             canvas::Action::publish(Message::CanvasEvent(CanvasEvent::ViewMoved))

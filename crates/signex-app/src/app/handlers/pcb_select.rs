@@ -1,6 +1,6 @@
 //! PCB canvas hover and selection (#2191). Read-only: nothing here edits
-//! the board. The index and the selection live in
-//! `InteractionState::pcb_selection`.
+//! the board; a drag or Move is handed to `pcb_placement` (#2240). The
+//! index and the selection live in `InteractionState::pcb_selection`.
 
 use iced::Task;
 use signex_types::pcb::PcbBoard;
@@ -22,6 +22,7 @@ impl Signex {
                 {
                     self.refresh_pcb_highlight();
                 }
+                self.pcb_move_followed(at);
                 // The status readout follows the pointer as before.
                 self.update(Message::CanvasEvent(CanvasEvent::CursorAt {
                     x: at.x as f32,
@@ -34,6 +35,9 @@ impl Signex {
                 tolerance_mm,
                 mode,
             } => {
+                if self.pcb_move_clicked(at, tolerance_mm) {
+                    return self.close_context_menu_on_press();
+                }
                 if self.with_pcb_selection(|sel, board| sel.click(board, at, tolerance_mm, mode))
                     == Some(true)
                 {
@@ -49,6 +53,18 @@ impl Signex {
                 }
                 self.close_context_menu_on_press()
             }
+            PcbCanvasMsg::FootprintDragged { from, to } => {
+                self.pcb_footprints_dragged(from, to);
+                Task::none()
+            }
+            PcbCanvasMsg::FootprintDropped { from, to } => {
+                self.pcb_footprints_dropped(from, to);
+                Task::none()
+            }
+            PcbCanvasMsg::FootprintDragCancelled => {
+                self.end_pcb_carry();
+                Task::none()
+            }
         }
     }
 
@@ -58,10 +74,12 @@ impl Signex {
         self.update(Message::ContextMenu(ContextMenuMsg::Close))
     }
 
-    /// Esc on a board: drop the selection, the hover and a box in progress.
+    /// Esc on a board: drop the selection, the hover, a box in progress and
+    /// a drag or Move in progress.
     pub(crate) fn clear_pcb_selection(&mut self) {
         self.interaction_state.pcb_canvas.cancel_marquee();
-        if self.interaction_state.pcb_selection.clear() {
+        let carried = self.interaction_state.pcb_carry.take().is_some();
+        if self.interaction_state.pcb_selection.clear() || carried {
             self.refresh_pcb_highlight();
         }
     }
@@ -81,7 +99,7 @@ impl Signex {
     /// Run `f` on the selection state and the active board, after aligning
     /// the state with that board's document and revision. What the index
     /// build left out is reported to the Messages panel.
-    fn with_pcb_selection<R>(
+    pub(crate) fn with_pcb_selection<R>(
         &mut self,
         f: impl FnOnce(&mut PcbSelectionState, &PcbBoard) -> R,
     ) -> Option<R> {
@@ -98,11 +116,30 @@ impl Signex {
         Some(out)
     }
 
-    /// Hand the canvas the copper to paint for the current selection.
-    fn refresh_pcb_highlight(&mut self) {
-        let highlight = self
-            .with_pcb_selection(|sel, board| sel.highlight(board))
-            .unwrap_or_default();
-        self.interaction_state.pcb_canvas.set_highlight(highlight);
+    /// Hand the canvas the copper to paint for the current selection, the
+    /// preview of a drag or Move, and what a press grabs to drag (#2240).
+    pub(crate) fn refresh_pcb_highlight(&mut self) {
+        let carry = self.interaction_state.pcb_carry.clone();
+        let painted = self.with_pcb_selection(|sel, board| {
+            let mut highlight = sel.highlight(board);
+            let selected = sel.selection().footprints();
+            let grab = sel.footprint_shapes(board, &selected);
+            if let Some(carry) = carry.filter(|c| c.anchor.is_some()) {
+                let by = pcb_geom::PointNm::from_mm(carry.delta, "carry");
+                highlight.ghost = match by {
+                    Ok(by) => sel
+                        .footprint_shapes(board, &carry.footprints)
+                        .into_iter()
+                        .map(|shape| shape.translated(by))
+                        .collect(),
+                    Err(_) => Vec::new(),
+                };
+            }
+            (highlight, grab)
+        });
+        let (highlight, grab) = painted.unwrap_or_default();
+        let canvas = &mut self.interaction_state.pcb_canvas;
+        canvas.set_highlight(highlight);
+        canvas.set_grab(grab);
     }
 }

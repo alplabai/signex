@@ -226,7 +226,12 @@ impl Signex {
         // Altium convention: right-click during placement terminates
         // the placement flow (tool-stuck OR ghost-armed OR pending
         // power/port OR paused preview OR net-colour pen armed)
-        // instead of opening the context menu.
+        // instead of opening the context menu. On a board that is a
+        // footprint Move in progress (#2240).
+        if self.interaction_state.pcb_carry.is_some() {
+            self.end_pcb_carry();
+            return Task::none();
+        }
         let canvas = self.interaction_state.active_canvas();
         let placement_active = self.interaction_state.current_tool != Tool::Select
             || canvas.ghost_label.is_some()

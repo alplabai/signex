@@ -36,6 +36,15 @@ Edit/Paste	item	Paste	paste	Ctrl+V	Paste	01000000	cmd:paste
 Edit/Paste Special	item	Paste Special	smart_paste	Shift+Ctrl+V	SmartPaste	01000000	cmd:smart_paste
 Edit/Duplicate	item	Duplicate	duplicate	Ctrl+D	Duplicate	01000000	cmd:duplicate
 Edit/Delete	item	Delete	delete_selection	Del	Delete	01000010	cmd:delete_selection
+Edit/Move	submenu	Move	-	-	-	-	-
+Edit/Move/Move	item	Move	-	-	MoveObject	01000000	cmd:move_object
+Edit/Move/Move Selection	item	Move Selection	-	-	MoveSelection	01000000	cmd:move_selection
+Edit/Move/---	separator	-	-	-	-	-	-
+Edit/Move/Rotate	item	Rotate	rotate_counterclockwise	Space	Rotate	01000000	cmd:rotate_counterclockwise
+Edit/Move/Rotate Clockwise	item	Rotate Clockwise	rotate_clockwise	Shift+Space	RotateClockwise	01000000	cmd:rotate_clockwise
+Edit/Move/Mirror X	item	Mirror X	mirror_x	X	MirrorX	01000000	cmd:mirror_x
+Edit/Move/Mirror Y	item	Mirror Y	mirror_y	Y	MirrorY	01000000	cmd:mirror_y
+Edit/Move/Flip Selection	item	Flip Selection	-	-	FlipSelection	00000000	cmd:flip_selection
 Edit/Arrange	submenu	Arrange	-	-	-	-	-
 Edit/Arrange/Bring to Front	item	Bring to Front	-	-	BringDrawingsToFront	00000000	cmd:bring_drawings_to_front
 Edit/Arrange/Send to Back	item	Send to Back	-	-	SendDrawingsToBack	00000000	cmd:send_drawings_to_back

@@ -385,6 +385,11 @@
     "category": "modify"
   },
   {
+    "id": "flip_selection",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
     "id": "footprint_mode_pads",
     "group": "ThreeD",
     "category": "library"

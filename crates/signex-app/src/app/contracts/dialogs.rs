@@ -875,6 +875,8 @@ pub enum EditMsg {
     MirrorSelectedX,
     /// Mirror the current selection about the Y axis.
     MirrorSelectedY,
+    /// Flip the selected footprints to the other side of the board (#2240).
+    FlipSelection,
     /// Copy the current selection to the clipboard.
     Copy,
     /// Cut the current selection to the clipboard.

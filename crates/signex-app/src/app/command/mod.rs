@@ -213,8 +213,12 @@ impl Signex {
         if let Some(result) = self.window_document_command(command, &args, window) {
             return result;
         }
-        let unmet = enablement::disabled_reason(command, &self.command_context(window));
-        if unmet.is_some() && !enablement::explains_when_unavailable(command) {
+        let context = self.command_context(window);
+        let unmet = enablement::disabled_reason(command, &context);
+        if unmet.is_some()
+            && !enablement::explains_when_unavailable(command)
+            && !enablement::explains_refusal_in(command, &context)
+        {
             return (
                 CommandOutcome::disabled(unmet.unwrap_or_default()),
                 Task::none(),

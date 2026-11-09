@@ -76,7 +76,7 @@ report_manager_bom	reports	Report Manager / BOM	-	General	-	-	Always	gui_only	-
 reset_local_coordinates	view	Reset local coordinates	-	General	-	-	Always	gui_only	-
 resolve	file	Resolve id	-	General	-	-	Always	-	id:text
 revert	edit	Revert an agent's edit step	-	General	-	-	Always	mutates_doc	document:document,group:text
-rotate_clockwise	modify	Rotate clockwise by 90 degrees	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
+rotate_clockwise	modify	Rotate clockwise by 90 degrees	Rotate Clockwise	General	-	-	RequiresSelection	mutates_doc,undoable	-
 rotate_counterclockwise	modify	Rotate counterclockwise by 90 degrees	Rotate	General	-	-	RequiresSelection	mutates_doc,undoable	-
 rubber_stamp_copy	edit	Rubber-stamp copy / repeated paste	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 save_document	file	Save document	Save	General	-	-	Always	-	document:document
@@ -208,7 +208,8 @@ color_net	view	Color net	Custom Color...	Schematic	-	-	RequiresDocument(Schemati
 clear_all_net_colors	view	Clear all net colors	Clear All Net Colors	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document
 assign_net_class	design	Assign net to class	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,net_name:text,class:text?
 place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
-footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
+flip_selection	modify	Flip selection to the other board side	Flip Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	-
+footprint_mode_pads	librarySwitch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_recompute_courtyard_outline	library	Recompute footprint courtyard outline from pads	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
