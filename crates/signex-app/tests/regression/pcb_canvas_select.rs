@@ -39,6 +39,7 @@ fn board() -> PcbBoard {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        rotation: 0.0,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),

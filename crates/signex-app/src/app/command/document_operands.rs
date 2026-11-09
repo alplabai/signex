@@ -143,6 +143,14 @@ fn step(app: &mut Signex, args: &CommandArgs, undo: bool) -> Ran {
     let Some(key) = entry.key else {
         return refused(format!("{} is not loaded", entry.name));
     };
+    if let DocumentKey::Pcb(path) = &key
+        && !app.document_state.has_pcb_tab(path)
+    {
+        return refused(format!(
+            "{} is closed with unsaved edits kept for saving; reopen it to undo",
+            entry.name
+        ));
+    }
     let (can_undo, can_redo) = app.undo_availability(&UndoTarget::Document(key.clone()));
     if !(if undo { can_undo } else { can_redo }) {
         return refused(if undo {
@@ -169,6 +177,17 @@ fn step(app: &mut Signex, args: &CommandArgs, undo: bool) -> Ran {
             }),
             Err(reason) => refused(reason),
         },
+        DocumentKey::Pcb(path) => {
+            if app.step_board_history(path, undo) {
+                ran(Task::none())
+            } else {
+                refused(if undo {
+                    "Nothing to undo"
+                } else {
+                    "Nothing to redo"
+                })
+            }
+        }
         _ => refused(format!(
             "{} is a {}: undo by document is not available for that kind yet",
             entry.name,
@@ -273,6 +292,10 @@ pub(super) fn close(app: &mut Signex, args: &CommandArgs) -> Ran {
         .iter()
         .position(|tab| DocumentKey::of(tab).as_ref() == Some(&key));
     match index {
+        // An agent's close of another tab leaves the person's session alone.
+        Some(index) if app.agent.serving && index != app.document_state.active_tab => {
+            ran(app.close_background_tab_parking_dirty(index))
+        }
         Some(index) => ran(app.close_tab_parking_dirty(index)),
         None => refused(format!("{} is not open in a tab", entry.name)),
     }

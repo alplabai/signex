@@ -35,6 +35,9 @@ pub mod net_nav;
 pub mod parameter_manager;
 pub mod paste;
 pub mod pcb_drc;
+mod pcb_edit;
+#[cfg(test)]
+mod pcb_edit_tests;
 mod pcb_parking;
 pub mod pcb_select;
 pub mod placed_part;

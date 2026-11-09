@@ -55,6 +55,7 @@ fn pad(n: u128, at: (f64, f64), net: u32, pad_type: PadType, layer: &str) -> Pad
             name: format!("N{net}"),
         }),
         roundrect_ratio: 0.0,
+        rotation: 0.0,
         net_locked: false,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -411,16 +412,25 @@ fn a_zero_size_pad_is_a_point_and_a_zero_width_pad_a_line() {
 }
 
 #[test]
-fn round_rect_pads_are_checked_as_their_bounding_rectangle_for_now() {
-    // TODO(#680): a round-rect pad keeps its sharp corners here, so this
-    // pins today's documented approximation, not the true copper.
+fn a_round_rect_pad_is_checked_with_its_rounded_corner() {
+    // Pads are measured on their real outline (#680): a round-rect's corner
+    // is farther from a diagonal track than a sharp rectangle's.
     let rules = DrcRules::new(RULE);
-    // A track passing the corner (5.5, 0.5) diagonally.
-    let diagonal = vec![track(1, (6.0, 1.2), (7.0, 0.2), 2, "TopCopper")];
-    let with = |shape| board(vec![pad_sized((1.0, 1.0), shape)], diagonal.clone(), vec![]);
-    let sharp = run(&with(PadShape::Rect), &rules);
-    let round = run(&with(PadShape::RoundRect), &rules);
-    assert_eq!(round.violations, sharp.violations);
+    // A track along x + y = 6.4, about 0.16 mm of air from the sharp corner
+    // (5.5, 0.5) but about 0.37 mm from a fully rounded one.
+    let diagonal = vec![track(1, (5.0, 1.4), (7.0, -0.6), 2, "TopCopper")];
+    let with = |shape, ratio| {
+        let mut fp = pad_sized((1.0, 1.0), shape);
+        fp.pads[0].roundrect_ratio = ratio;
+        board(vec![fp], diagonal.clone(), vec![])
+    };
+    let sharp = run(&with(PadShape::Rect, 0.0), &rules);
+    assert_eq!(kinds(&sharp), [ViolationKind::Clearance], "{sharp:?}");
+    // A ratio of 0 is a plain rectangle.
+    assert_eq!(run(&with(PadShape::RoundRect, 0.0), &rules).violations, sharp.violations);
+    let round = run(&with(PadShape::RoundRect, 0.5), &rules);
+    let gap = |r: &DrcReport| r.violations.first().map_or(i64::MAX, |v| v.measured_nm);
+    assert!(gap(&round) > gap(&sharp), "{round:?} vs {sharp:?}");
 }
 
 #[test]

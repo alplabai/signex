@@ -1,8 +1,9 @@
 //! How far apart two copper shapes are (#2222): the measure behind the
 //! clearance check, exact in `i128` nm like [`Shape::overlaps`].
 //!
-//! A disc and a track are a segment with a radius; a rectangle or ellipse
-//! is a convex polygon (see `shape_overlap`). The foot of a perpendicular
+//! A disc, a track and an oval are a segment with a radius; a rectangle is
+//! a convex polygon, and a round-rect is its inset rectangle with the corner
+//! radius (see `shape_overlap`). The foot of a perpendicular
 //! rounds to the nearest nm, so a diagonal gap is read to within 1 nm.
 
 use crate::shape::{Shape, closest_on_segment, segments_intersect};
@@ -63,7 +64,7 @@ impl Shape {
 fn radius(core: &Core) -> i64 {
     match core {
         Core::Stadium { radius, .. } => *radius,
-        Core::Polygon(_) => 0,
+        Core::Polygon(_, radius) => *radius,
     }
 }
 
@@ -71,7 +72,7 @@ fn radius(core: &Core) -> i64 {
 fn outline(core: &Core) -> (Vec<PointNm>, bool) {
     match core {
         Core::Stadium { a, b, .. } => (vec![*a, *b], false),
-        Core::Polygon(poly) => (poly.clone(), true),
+        Core::Polygon(poly, _) => (poly.clone(), true),
     }
 }
 
@@ -93,15 +94,15 @@ fn cores_meet(a: &Core, b: &Core) -> bool {
         (Core::Stadium { a: p, b: q, .. }, Core::Stadium { a: r, b: s, .. }) => {
             segments_intersect(*p, *q, *r, *s)
         }
-        (Core::Stadium { a: p, b: q, .. }, Core::Polygon(poly))
-        | (Core::Polygon(poly), Core::Stadium { a: p, b: q, .. }) => {
+        (Core::Stadium { a: p, b: q, .. }, Core::Polygon(poly, _))
+        | (Core::Polygon(poly, _), Core::Stadium { a: p, b: q, .. }) => {
             poly.len() >= 3
                 && (inside_convex(poly, *p)
                     || inside_convex(poly, *q)
                     || (0..poly.len())
                         .any(|i| segments_intersect(*p, *q, poly[i], poly[(i + 1) % poly.len()])))
         }
-        (Core::Polygon(p), Core::Polygon(q)) => {
+        (Core::Polygon(p, _), Core::Polygon(q, _)) => {
             p.len() >= 3 && q.len() >= 3 && !(separated(p, q) || separated(q, p))
         }
     }

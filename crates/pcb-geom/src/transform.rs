@@ -5,8 +5,8 @@
 //! Pad coordinates stay library-local in the model; the mirror lives here
 //! only (ADR-0005 §7).
 //! Rotation is counter-clockwise in the model's axes, the sense the PCB
-//! renderer turns pads (`signex-renderer` `pcb/emit.rs`). A board pad has
-//! no angle of its own: it turns with its footprint.
+//! renderer turns pads. A pad turns with its footprint and by its own
+//! `rotation` on top of it.
 
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{Footprint, Pad, PadShape};
@@ -82,17 +82,33 @@ pub fn pad_world_center(footprint: &Footprint, pad: &Pad) -> Result<PointNm, Geo
     Ok(placement.to_world(PointNm::from_mm(pad.position, "pad.position")?))
 }
 
-/// `pad`'s copper outline on the board. Rect-like shapes without their own
-/// parameters on a board pad (round-rect, trapezoid, custom) are their
-/// bounding rectangle, as the renderer draws them (`pad_outline.rs`).
+/// The angle `pad`'s own axes make with the board's x axis, degrees
+/// counter-clockwise: the footprint's rotation composed with the pad's own.
+/// A bottom-side footprint mirrors x, which reverses the pad's own turn
+/// (`M R(t) M = R(-t)`).
+pub fn pad_world_rotation_deg(footprint: &Footprint, pad: &Pad) -> Result<f64, GeomError> {
+    if !pad.rotation.is_finite() {
+        return Err(GeomError::Unrepresentable("pad.rotation"));
+    }
+    let placement = Placement::of_footprint(footprint)?;
+    let own = match placement.side {
+        Side::Top => pad.rotation,
+        Side::Bottom => -pad.rotation,
+    };
+    Ok(placement.rotation_deg + own)
+}
+
+/// `pad`'s copper on the board, the one outline hit-testing, the ratsnest
+/// and the renderer all read. A circle is a disc, an oval a stadium along
+/// its longer side, a rectangle and a round-rect turn with the composed
+/// angle of [`pad_world_rotation_deg`].
 pub fn pad_shape(footprint: &Footprint, pad: &Pad) -> Result<Shape, GeomError> {
+    let rotation_deg = pad_world_rotation_deg(footprint, pad)?;
     let placement = Placement::of_footprint(footprint)?;
     let center = placement.to_world(PointNm::from_mm(pad.position, "pad.position")?);
     let half_w = (mm_to_nm(pad.size.x, "pad.size")? / 2).abs();
     let half_h = (mm_to_nm(pad.size.y, "pad.size")? / 2).abs();
-    // Rect and ellipse outlines are symmetric about both axes, so the x
-    // mirror of a bottom-side footprint moves the centre but not the angle.
-    let rotation_deg = placement.rotation_deg;
+    let (sin, cos) = sin_cos_deg(rotation_deg);
     Ok(match pad.shape {
         PadShape::Circle => Shape::Disc {
             center,
@@ -102,20 +118,46 @@ pub fn pad_shape(footprint: &Footprint, pad: &Pad) -> Result<Shape, GeomError> {
             center,
             radius: half_w,
         },
-        PadShape::Oval => Shape::Ellipse {
+        PadShape::Oval => {
+            // The stadium's end-cap centres lie on the longer side.
+            let reach = half_w.max(half_h) - half_w.min(half_h);
+            let along = if half_w > half_h {
+                PointNm::new(reach, 0)
+            } else {
+                PointNm::new(0, reach)
+            };
+            let tip = rotate(along, sin, cos);
+            Shape::Capsule {
+                a: center.minus(tip),
+                b: center.plus(tip),
+                radius: half_w.min(half_h),
+            }
+        }
+        PadShape::Rect => Shape::Rect {
             center,
             half_w,
             half_h,
             rotation_deg,
         },
-        // TODO(#680): round-rect, trapezoid and custom pads read as their bounding
-        // rectangle until pads get their real outline; see docs/architecture/pcb-drc.md.
-        PadShape::Rect | PadShape::RoundRect | PadShape::Trapezoid | PadShape::Custom => {
-            Shape::Rect {
-                center,
-                half_w,
-                half_h,
-                rotation_deg,
+        PadShape::RoundRect => {
+            let short = half_w.min(half_h);
+            let radius =
+                ((pad.roundrect_ratio * 2.0 * short as f64).round() as i64).clamp(0, short);
+            if radius == 0 {
+                Shape::Rect {
+                    center,
+                    half_w,
+                    half_h,
+                    rotation_deg,
+                }
+            } else {
+                Shape::RoundRect {
+                    center,
+                    half_w,
+                    half_h,
+                    radius,
+                    rotation_deg,
+                }
             }
         }
     })
@@ -184,6 +226,7 @@ mod tests {
             layers: Vec::new(),
             net: None,
             roundrect_ratio: 0.0,
+            rotation: 0.0,
             net_locked: false,
             unknown: Default::default(),
             unknown_columns: Default::default(),
@@ -279,14 +322,11 @@ mod tests {
         let oval = pad_shape(&fp, &pad(0.0, 0.0, 2.0, 1.0, PadShape::Oval)).unwrap();
         assert!(matches!(
             oval,
-            Shape::Ellipse {
-                half_w: 1_000_000,
-                half_h: 500_000,
+            Shape::Capsule {
+                radius: 500_000,
                 ..
             }
         ));
-        let rr = pad_shape(&fp, &pad(0.0, 0.0, 2.0, 1.0, PadShape::RoundRect)).unwrap();
-        assert!(matches!(rr, Shape::Rect { rotation_deg, .. } if rotation_deg == 30.0));
     }
 
     #[test]
@@ -304,3 +344,7 @@ mod tests {
         assert_eq!(sin_cos_deg(-1e-20), (0.0, 1.0));
     }
 }
+
+#[cfg(test)]
+#[path = "pad_shape_tests.rs"]
+mod pad_shape_tests;

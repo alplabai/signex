@@ -4,6 +4,7 @@
 
 #[cfg(unix)]
 mod live;
+mod opened;
 mod refusals;
 mod round_trip;
 
@@ -14,7 +15,7 @@ use signex_types::schematic::{Point, SelectedItem, SelectedKind};
 
 use super::{AgentCall, AgentMsg, AgentReply, Input};
 use crate::app::command::interaction_snapshot_tests::interaction_snapshot;
-use crate::app::command::queries::tests::{WIRE_A, app_with, path, uid};
+use crate::app::command::queries::tests::{WIRE_A, path, sheet, uid};
 use crate::app::handlers::editing_commands::net_color_driver as fixture;
 use crate::app::state::LoadedProject;
 use crate::app::{Message, Signex};
@@ -37,9 +38,20 @@ fn sheet_entry(name: &str) -> SheetEntry {
 /// `b` with a wire selected, the wire tool, a wire in progress and a
 /// command-palette query typed; agent connections on and listening.
 pub(super) fn app_at_work() -> Signex {
-    let mut app = app_with(&[("a.snxsch", SHEET_A), ("b.snxsch", SHEET_B)]);
+    app_in(path("a.snxsch").parent().unwrap())
+}
+
+/// [`app_at_work`] with the project's folder `dir`: a test that writes files
+/// gives it a folder of its own.
+pub(super) fn app_in(dir: &std::path::Path) -> Signex {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _task) = Signex::new();
+    for (name, id) in [("a.snxsch", SHEET_A), ("b.snxsch", SHEET_B)] {
+        fixture::add_sheet_with(&mut app, &dir.join(name), sheet(id));
+        app.document_state.mark_document_clean(&dir.join(name));
+    }
     let id = app.document_state.mint_project_id();
-    let dir = path("a.snxsch").parent().unwrap().to_path_buf();
+    let dir = dir.to_path_buf();
     app.document_state.projects.push(LoadedProject {
         id,
         path: dir.join("P.snxprj"),
@@ -68,7 +80,7 @@ pub(super) fn app_at_work() -> Signex {
         case_decided: false,
     });
     app.ui_state.snap_enabled = false;
-    fixture::activate(&mut app, &path("b.snxsch"));
+    fixture::activate(&mut app, &dir.join("b.snxsch"));
     let canvas = app.interaction_state.active_canvas_mut();
     canvas.selected = vec![SelectedItem::new(uid(WIRE_A), SelectedKind::Wire)];
     canvas.wire_preview = vec![Point::new(1.0, 2.0)];
@@ -90,18 +102,24 @@ pub(super) fn line(app: &Signex, id: &str, args: Value) -> String {
 
 /// Run `input` as a request from process 4242 and read the reply.
 pub(super) fn ask_raw(app: &mut Signex, input: Input) -> Value {
+    ask_with_task(app, input).0
+}
+
+/// [`ask_raw`], and the task the request left for the app to run (a save's
+/// write).
+pub(super) fn ask_with_task(app: &mut Signex, input: Input) -> (Value, iced::Task<Message>) {
     let (reply, mut answer) = AgentReply::channel();
     let call = AgentCall {
         pid: Some(4242),
         input,
         reply,
     };
-    let _task = app.update(Message::Agent(AgentMsg::Request(call)));
+    let task = app.update(Message::Agent(AgentMsg::Request(call)));
     let line = answer
         .try_recv()
         .expect("the app did not drop the reply")
         .expect("the app answered inside update");
-    serde_json::from_str(&line).expect("a reply is JSON")
+    (serde_json::from_str(&line).expect("a reply is JSON"), task)
 }
 
 pub(super) fn ask(app: &mut Signex, text: String) -> Value {

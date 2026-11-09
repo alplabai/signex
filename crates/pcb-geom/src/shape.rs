@@ -23,11 +23,14 @@ pub enum Shape {
         half_h: i64,
         rotation_deg: f64,
     },
-    /// An ellipse turned `rotation_deg` counter-clockwise about its centre.
-    Ellipse {
+    /// A rectangle with quarter-circle corners of `radius` (at most the
+    /// shorter half side), turned `rotation_deg` counter-clockwise about
+    /// its centre.
+    RoundRect {
         center: PointNm,
         half_w: i64,
         half_h: i64,
+        radius: i64,
         rotation_deg: f64,
     },
 }
@@ -47,7 +50,7 @@ impl Shape {
                 half_h,
                 ..
             }
-            | Shape::Ellipse {
+            | Shape::RoundRect {
                 center,
                 half_w,
                 half_h,
@@ -70,18 +73,22 @@ impl Shape {
                 let [c0, c1, c2, c3] = self.box_corners();
                 RectNm::new(c0, c1).union(&RectNm::new(c2, c3))
             }
-            Shape::Ellipse {
+            // The inset rectangle grown by the corner radius is the exact
+            // extent, however the pad is turned.
+            Shape::RoundRect {
                 center,
                 half_w,
                 half_h,
+                radius,
                 rotation_deg,
-            } => {
-                let (sin, cos) = sin_cos_deg(rotation_deg);
-                let (a, b) = (half_w as f64, half_h as f64);
-                let ex = (a * a * cos * cos + b * b * sin * sin).sqrt().ceil() as i64;
-                let ey = (a * a * sin * sin + b * b * cos * cos).sqrt().ceil() as i64;
-                RectNm::around(center, ex, ey)
+            } => Shape::Rect {
+                center,
+                half_w: half_w - radius,
+                half_h: half_h - radius,
+                rotation_deg,
             }
+            .aabb()
+            .inflate(radius),
         }
     }
 
@@ -104,62 +111,113 @@ impl Shape {
                 let local = to_frame(p, center, rotation_deg);
                 local.x.abs() <= half_w + tol && local.y.abs() <= half_h + tol
             }
-            Shape::Ellipse {
+            Shape::RoundRect {
                 center,
                 half_w,
                 half_h,
+                radius,
                 rotation_deg,
             } => {
                 let local = to_frame(p, center, rotation_deg);
-                inside_ellipse(local, half_w + tol, half_h + tol)
+                // Past the straight sides in both axes the corner arc rules.
+                let dx = local.x.abs() - (half_w - radius);
+                let dy = local.y.abs() - (half_h - radius);
+                if dx > 0 && dy > 0 {
+                    within(
+                        i128::from(dx) * i128::from(dx) + i128::from(dy) * i128::from(dy),
+                        radius + tol,
+                    )
+                } else {
+                    local.x.abs() <= half_w + tol && local.y.abs() <= half_h + tol
+                }
             }
         }
     }
 
-    /// Whether the shape shares a point with `rect`. Exact for discs,
-    /// tracks and rectangles; an ellipse is tested by its bounding
-    /// rectangle in its own frame, so a marquee near its tips may touch it.
+    /// Whether the shape shares a point with `rect`. Exact integer nm for
+    /// every shape, a rounded rectangle included.
     pub fn touches_rect(&self, rect: &RectNm) -> bool {
         match *self {
             Shape::Disc { center, radius } => {
                 within(rect.clamp(center).distance_sq(center), radius)
             }
             Shape::Capsule { a, b, radius } => capsule_touches_rect(a, b, radius, rect),
-            Shape::Rect { .. } | Shape::Ellipse { .. } => {
-                polygons_overlap(&self.box_corners(), &rect.corners())
-            }
+            Shape::Rect { .. } => polygons_overlap(&self.box_corners(), &rect.corners()),
+            Shape::RoundRect { .. } => self.overlaps_polygon(&rect.corners()),
         }
     }
 
-    /// The outline of a rectangle (4 corners) or an ellipse (`steps`
-    /// points), counter-clockwise, for drawing; empty for a disc or a track.
+    /// The outline of a rectangle (4 corners) or a rounded rectangle
+    /// (`steps + 1` points per corner arc), counter-clockwise; empty for a
+    /// disc or a track. Drawing a pad uses [`ring`](Self::ring), which
+    /// covers every shape.
     pub fn outline(&self, steps: usize) -> Vec<PointNm> {
         match *self {
             Shape::Rect { .. } => self.box_corners().to_vec(),
-            Shape::Ellipse {
+            Shape::RoundRect {
                 center,
                 half_w,
                 half_h,
+                radius,
                 rotation_deg,
             } => {
                 let (sin, cos) = sin_cos_deg(rotation_deg);
-                let steps = steps.max(8);
-                (0..steps)
-                    .map(|i| {
-                        let t = std::f64::consts::TAU * i as f64 / steps as f64;
-                        let local = PointNm::new(
-                            (half_w as f64 * t.cos()).round() as i64,
-                            (half_h as f64 * t.sin()).round() as i64,
-                        );
-                        rotate(local, sin, cos).plus(center)
+                let steps = steps.max(2);
+                // Corner arcs counter-clockwise from the +x,+y corner.
+                let mut pts = [(1, 1, 0.0), (-1, 1, 0.25), (-1, -1, 0.5), (1, -1, 0.75)]
+                    .into_iter()
+                    .flat_map(|(sx, sy, turn)| {
+                        (0..=steps).map(move |i| {
+                            let t = std::f64::consts::TAU * (turn + 0.25 * i as f64 / steps as f64);
+                            PointNm::new(
+                                sx * (half_w - radius) + (radius as f64 * t.cos()).round() as i64,
+                                sy * (half_h - radius) + (radius as f64 * t.sin()).round() as i64,
+                            )
+                        })
                     })
-                    .collect()
+                    .map(|local| rotate(local, sin, cos).plus(center))
+                    .collect::<Vec<_>>();
+                // Where one arc meets the next (ratio 0.5), the points repeat.
+                pts.dedup();
+                if pts.len() > 1 && pts.first() == pts.last() {
+                    pts.pop();
+                }
+                pts
             }
             Shape::Disc { .. } | Shape::Capsule { .. } => Vec::new(),
         }
     }
 
-    /// The corners of a rectangle or of an ellipse's frame box,
+    /// A closed counter-clockwise ring of any shape, for drawing a pad:
+    /// `steps` points per quarter turn of a round part.
+    pub fn ring(&self, steps: usize) -> Vec<PointNm> {
+        let steps = steps.max(2);
+        let arc = |end: PointNm, radius: i64, from: f64, count: usize| {
+            (0..=count).map(move |i| {
+                let t = from + std::f64::consts::PI * i as f64 / count as f64;
+                PointNm::new(
+                    end.x + (radius as f64 * t.cos()).round() as i64,
+                    end.y + (radius as f64 * t.sin()).round() as i64,
+                )
+            })
+        };
+        match *self {
+            Shape::Rect { .. } | Shape::RoundRect { .. } => self.outline(steps),
+            Shape::Disc { center, radius } => arc(center, radius, 0.0, 2 * steps)
+                .take(2 * steps)
+                .chain(arc(center, radius, std::f64::consts::PI, 2 * steps).take(2 * steps))
+                .collect(),
+            Shape::Capsule { a, b, radius } => {
+                let axis = ((b.y - a.y) as f64).atan2((b.x - a.x) as f64);
+                let half = std::f64::consts::FRAC_PI_2;
+                arc(b, radius, axis - half, 2 * steps)
+                    .chain(arc(a, radius, axis + half, 2 * steps))
+                    .collect()
+            }
+        }
+    }
+
+    /// The corners of a rectangle or of a rounded rectangle's frame box,
     /// counter-clockwise; for other shapes, of the bounding box.
     fn box_corners(&self) -> [PointNm; 4] {
         match *self {
@@ -169,11 +227,12 @@ impl Shape {
                 half_h,
                 rotation_deg,
             }
-            | Shape::Ellipse {
+            | Shape::RoundRect {
                 center,
                 half_w,
                 half_h,
                 rotation_deg,
+                ..
             } => {
                 let (sin, cos) = sin_cos_deg(rotation_deg);
                 [(-1, -1), (1, -1), (1, 1), (-1, 1)].map(|(sx, sy)| {
@@ -195,18 +254,6 @@ pub(crate) fn within(distance_sq: i128, limit: i64) -> bool {
 fn to_frame(p: PointNm, center: PointNm, rotation_deg: f64) -> PointNm {
     let (sin, cos) = sin_cos_deg(rotation_deg);
     rotate(p.minus(center), -sin, cos)
-}
-
-fn inside_ellipse(local: PointNm, half_w: i64, half_h: i64) -> bool {
-    if half_w <= 0 || half_h <= 0 {
-        // Degenerate: a segment along the axis that kept a length.
-        return local.x.abs() <= half_w.max(0) && local.y.abs() <= half_h.max(0);
-    }
-    let (x, y) = (
-        local.x as f64 / half_w as f64,
-        local.y as f64 / half_h as f64,
-    );
-    x * x + y * y <= 1.0
 }
 
 /// The point of segment `a`–`b` nearest to `p`.

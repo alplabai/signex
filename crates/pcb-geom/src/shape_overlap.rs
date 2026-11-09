@@ -2,21 +2,20 @@
 //! ratsnest uses, so a track across a pad or two overlapping pads count.
 //!
 //! A disc and a track are a segment with a radius. A rectangle is a convex
-//! polygon; an ellipse is the polygon of its [`ELLIPSE_STEPS`] outline
-//! points, so an ellipse is under-read by less than its sagitta.
+//! polygon; a rounded rectangle is its rectangle inset by the corner radius
+//! plus that radius, so the test is exact integer nm and agrees with
+//! [`Shape::contains`].
 
 use crate::shape::{Shape, closest_on_segment, orientation, segments_intersect, within};
 use crate::units::PointNm;
-
-/// Outline points standing in for an ellipse.
-const ELLIPSE_STEPS: usize = 32;
 
 /// A shape reduced to what the overlap test needs.
 pub(crate) enum Core {
     /// Every point within `radius` of the segment `a`-`b`.
     Stadium { a: PointNm, b: PointNm, radius: i64 },
-    /// A convex polygon, corners in order.
-    Polygon(Vec<PointNm>),
+    /// Every point within `radius` of a convex polygon, corners in order
+    /// (radius 0 for a plain rectangle).
+    Polygon(Vec<PointNm>, i64),
 }
 
 impl Shape {
@@ -31,11 +30,28 @@ impl Shape {
                     radius: s,
                 },
             ) => segment_gap_within(a, b, c, d, radius.max(0) + s.max(0)),
-            (Core::Stadium { a, b, radius }, Core::Polygon(poly))
-            | (Core::Polygon(poly), Core::Stadium { a, b, radius }) => {
-                stadium_meets_polygon(a, b, radius, &poly)
+            (Core::Stadium { a, b, radius }, Core::Polygon(poly, r))
+            | (Core::Polygon(poly, r), Core::Stadium { a, b, radius }) => {
+                stadium_meets_polygon(a, b, radius.max(0) + r, &poly)
             }
-            (Core::Polygon(p), Core::Polygon(q)) => !(separated(&p, &q) || separated(&q, &p)),
+            (Core::Polygon(p, r), Core::Polygon(q, s)) => {
+                !(separated(&p, &q) || separated(&q, &p)) || {
+                    // Disjoint convex polygons: the gap runs edge to edge.
+                    let limit = r + s;
+                    limit > 0
+                        && (0..p.len()).any(|i| {
+                            (0..q.len()).any(|j| {
+                                segment_gap_within(
+                                    p[i],
+                                    p[(i + 1) % p.len()],
+                                    q[j],
+                                    q[(j + 1) % q.len()],
+                                    limit,
+                                )
+                            })
+                        })
+                }
+            }
         }
     }
 
@@ -44,7 +60,7 @@ impl Shape {
     /// The shape is a stadium or a convex polygon, so it meets `poly`
     /// exactly when an edge of `poly` reaches it, or it lies wholly inside
     /// `poly`, or `poly` lies wholly inside it. Integer nm; no floats
-    /// beyond `outline`'s ellipse.
+    /// beyond the rotated corners.
     ///
     /// A `poly` with no area (fewer than 3 distinct corners, or all
     /// collinear) is a point or a zero-width segment, like a flat pad: it
@@ -65,13 +81,14 @@ impl Shape {
                         .into_iter()
                         .any(|(c, d)| segment_gap_within(a, b, c, d, radius.max(0)))
             }
-            Core::Polygon(own) => {
+            Core::Polygon(own, radius) => {
                 own.len() >= 3
                     && (own.iter().any(|&p| point_in_polygon(poly, p))
                         || inside_convex(&own, poly[0])
                         || edges.into_iter().any(|(c, d)| {
-                            (0..own.len())
-                                .any(|i| segments_intersect(own[i], own[(i + 1) % own.len()], c, d))
+                            (0..own.len()).any(|i| {
+                                segment_gap_within(own[i], own[(i + 1) % own.len()], c, d, radius)
+                            })
                         }))
             }
         }
@@ -85,9 +102,23 @@ impl Shape {
                 radius,
             },
             Shape::Capsule { a, b, radius } => Core::Stadium { a, b, radius },
-            Shape::Rect { .. } | Shape::Ellipse { .. } => {
-                flat_to_stadium(self.outline(ELLIPSE_STEPS))
-            }
+            Shape::Rect { .. } => flat_to_stadium(self.outline(0), 0),
+            Shape::RoundRect {
+                center,
+                half_w,
+                half_h,
+                radius,
+                rotation_deg,
+            } => flat_to_stadium(
+                Shape::Rect {
+                    center,
+                    half_w: half_w - radius,
+                    half_h: half_h - radius,
+                    rotation_deg,
+                }
+                .outline(0),
+                radius,
+            ),
         }
     }
 }
@@ -95,9 +126,10 @@ impl Shape {
 /// A polygon with no area (a zero-size or zero-width pad) is a point or a
 /// segment: the convex tests would read it as containing every point on its
 /// line, so it becomes the segment between its two farthest corners.
-fn flat_to_stadium(poly: Vec<PointNm>) -> Core {
+/// `radius` is how far the copper reaches past `poly`.
+fn flat_to_stadium(poly: Vec<PointNm>, radius: i64) -> Core {
     let Some(&first) = poly.first() else {
-        return Core::Polygon(poly);
+        return Core::Polygon(poly, radius);
     };
     let far = |from: PointNm| {
         poly.iter()
@@ -108,9 +140,9 @@ fn flat_to_stadium(poly: Vec<PointNm>) -> Core {
     let a = far(first);
     let b = far(a);
     if poly.iter().all(|&p| orientation(a, b, p) == 0) {
-        Core::Stadium { a, b, radius: 0 }
+        Core::Stadium { a, b, radius }
     } else {
-        Core::Polygon(poly)
+        Core::Polygon(poly, radius)
     }
 }
 

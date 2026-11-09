@@ -17,18 +17,16 @@ mask (`copper_layers` lists them), a location and the two distances. The
 report is sorted, so a run is the same on every machine.
 
 A gap equal to the rule passes; one nm under fails. The comparison is exact
-(`Separation::is_under` compares squared nm), but it is exact **for the
-shapes `pcb-geom` has, and some pads are approximations of their copper**:
+(`Separation::is_under` compares squared nm) for every pad shape:
 
 | Pad shape | Read as | Effect on the check |
 |---|---|---|
-| Rect, round pad, track, via | itself | exact; the only rounding is the foot of a perpendicular on a diagonal, under 1 nm |
-| Oval | a 32-point polygon inscribed in the ellipse | the gap is exact along the axes and over-read by up to about 0.5 % of the major semi-axis (5 um on a 2 mm pad) between vertices, so a gap just under the rule can pass |
-| Round-rect | its bounding rectangle (corner radius ignored) | the corners are too far out, so a clearance can be reported that the real copper meets |
-| Trapezoid, custom | its bounding rectangle | the same, both ways of misjudging a non-rectangular outline |
+| Rect, round pad, oval, track, via | itself | exact; the only rounding is the foot of a perpendicular on a diagonal, under 1 nm |
+| Round-rect | its inset rectangle swollen by the corner radius | exact, the same way |
 
-Pads are to get their real, rotated outline in `pcb-geom` (#680); the check
-follows without change. `transform.rs` carries the TODO.
+Pads read their real, rotated outline from `pcb_geom::pad_shape` (#680), so
+the check measures the copper as drawn. Trapezoid and custom pads are not in
+the format (#2242).
 
 ## Rules
 
