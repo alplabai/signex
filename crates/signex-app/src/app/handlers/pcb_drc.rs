@@ -32,6 +32,10 @@ impl Signex {
             .get(&path)
             .copied()
             .unwrap_or(0);
+        if self.interaction_state.pcb_drc.is_running_for(&path) {
+            // One run per board at a time: its result is what the panel will show.
+            return Task::none();
+        }
         let classes = self
             .document_state
             .active_document_project()
@@ -82,7 +86,7 @@ impl Signex {
         self.active_pcb()?;
         let drc = &self.interaction_state.pcb_drc;
         let mut panel = crate::panels::DrcPanel {
-            running: drc.is_running(),
+            running: drc.is_running_for(&path),
             ..Default::default()
         };
         let Some(done) = drc.done_for(&path) else {

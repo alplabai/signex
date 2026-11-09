@@ -7,8 +7,22 @@ drc-idle = Run DRC to check the board against its rules.
 drc-running = Checking the board...
 drc-clean = No violations.
 drc-stale = The board changed after this check; run it again.
-drc-summary = { $clearance } clearance, { $short } short, { $unconnected } unconnected
-drc-skipped = { $count } items could not be checked.
+drc-summary =
+    { $clearance ->
+        [one] 1 clearance violation
+       *[other] { $clearance } clearance violations
+    }, { $short ->
+        [one] 1 short
+       *[other] { $short } shorts
+    }, { $unconnected ->
+        [one] 1 unconnected link
+       *[other] { $unconnected } unconnected links
+    }
+drc-skipped =
+    { $count ->
+        [one] 1 item could not be checked.
+       *[other] { $count } items could not be checked.
+    }
 drc-more = and { $count } more not shown
 
 drc-kind-clearance = Clearance

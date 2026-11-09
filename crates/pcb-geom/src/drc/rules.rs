@@ -61,10 +61,11 @@ impl DrcRules {
         self.clearance.max(of(a)).max(of(b))
     }
 
-    /// The largest clearance any pair can need.
-    pub(super) fn largest(&self) -> i64 {
-        let class = self.net_clearance.values().copied().max().unwrap_or(0);
-        self.clearance.max(class).min(MAX_ABS_NM)
+    /// The most any pair with `net` in it can need: how far from an item of
+    /// `net` another net's copper can matter. Pairs where the other net's
+    /// class asks for more are found from that other item.
+    pub(super) fn reach_of(&self, net: u32) -> i64 {
+        self.required(net, net).min(MAX_ABS_NM)
     }
 }
 

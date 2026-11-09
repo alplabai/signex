@@ -108,6 +108,8 @@ pub fn pad_shape(footprint: &Footprint, pad: &Pad) -> Result<Shape, GeomError> {
             half_h,
             rotation_deg,
         },
+        // TODO(#680): round-rect, trapezoid and custom pads read as their bounding
+        // rectangle until pads get their real outline; see docs/architecture/pcb-drc.md.
         PadShape::Rect | PadShape::RoundRect | PadShape::Trapezoid | PadShape::Custom => {
             Shape::Rect {
                 center,

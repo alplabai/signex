@@ -16,9 +16,19 @@ Each violation carries its items (sorted), the two nets, the shared layer
 mask (`copper_layers` lists them), a location and the two distances. The
 report is sorted, so a run is the same on every machine.
 
-A gap equal to the rule passes; one nm under fails. The test is exact
-(`Separation::is_under` compares squared nm); the only rounding is the foot
-of a perpendicular on a diagonal track, under 1 nm (see `shape.rs`).
+A gap equal to the rule passes; one nm under fails. The comparison is exact
+(`Separation::is_under` compares squared nm), but it is exact **for the
+shapes `pcb-geom` has, and some pads are approximations of their copper**:
+
+| Pad shape | Read as | Effect on the check |
+|---|---|---|
+| Rect, round pad, track, via | itself | exact; the only rounding is the foot of a perpendicular on a diagonal, under 1 nm |
+| Oval | a 32-point polygon inscribed in the ellipse | the gap is exact along the axes and over-read by up to about 0.5 % of the major semi-axis (5 um on a 2 mm pad) between vertices, so a gap just under the rule can pass |
+| Round-rect | its bounding rectangle (corner radius ignored) | the corners are too far out, so a clearance can be reported that the real copper meets |
+| Trapezoid, custom | its bounding rectangle | the same, both ways of misjudging a non-rectangular outline |
+
+Pads are to get their real, rotated outline in `pcb-geom` (#680); the check
+follows without change. `transform.rs` carries the TODO.
 
 ## Rules
 
@@ -46,8 +56,9 @@ a debug run takes about 0.35 s).
 
 ## In the app
 
-`run_drc` (command catalog, group PCB, enabled with a PCB document) and the
-Run DRC button in the Messages panel send `Message::Pcb(PcbMsg::DrcRequested)`.
+`run_drc` (command catalog, group PCB, enabled with a PCB document), the
+Tools > Design Rule Check menu row (greyed with no PCB), the command palette
+and the Run DRC button in the Messages panel send `Message::Pcb(PcbMsg::DrcRequested)`.
 The board is copied and checked in `spawn_blocking`; a result is applied only
 if no newer run began. The Messages panel lists the violations (first 500)
 above the log, and clicking a row selects its items with the #2191
@@ -55,8 +66,16 @@ selection. The summary and the first 20 violations are also logged, which is
 what a headless run reports. A report is marked stale when the board's
 revision moved after it.
 
+## Zones
+
+`Unconnected` is the ratsnest, so it joins copper through zones the way the
+ratsnest does (#2215): a pad island joined only through a same-net pour is not
+reported open. The pour itself is not checked: a zone's clearance to other
+nets (#2216) and its fill are not modelled, so a zone is never a `Clearance`
+or `Short` party.
+
 ## Not checked yet
 
-Hole-to-hole, silk-to-pad, courtyard overlap, zone fill clearance (#2216),
-annular ring, copper with no net (net 0 is skipped, like in the ratsnest),
-and a rule per layer or per object kind. Each is its own follow-up.
+Hole-to-hole, silk-to-pad, courtyard overlap, zone clearance (#2216), annular
+ring, copper with no net (net 0 is skipped, like in the ratsnest), and a rule
+per layer or per object kind. Each is its own follow-up.

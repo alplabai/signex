@@ -4,6 +4,10 @@
 
 use pcb_geom::{ItemRef, ViolationKind};
 use signex_app::app::{FileMsg, Message, PcbMsg, Signex};
+use signex_app::dock::DockMessage;
+use signex_app::keymap::AppCommandId;
+use signex_app::menu_bar::MenuMessage;
+use signex_app::panels::PanelMsg;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{PcbBoard, Point, Segment};
 use uuid::Uuid;
@@ -57,6 +61,12 @@ fn open(board: PcbBoard) -> (Signex, tempfile::TempDir, std::path::PathBuf) {
     (app, tmp, path)
 }
 
+/// The open board as the tab holds it, for a before/after comparison.
+fn board_dump(app: &Signex) -> String {
+    let docs = &app.document_state;
+    format!("{:?}", docs.tabs[docs.active_tab].cached_document)
+}
+
 fn run_drc(app: &mut Signex) {
     let task = app.update(Message::Pcb(PcbMsg::DrcRequested));
     crate::drive::drive(app, task);
@@ -107,13 +117,43 @@ fn the_check_lists_the_close_pair_and_clicking_it_selects_both_tracks() {
 #[test]
 fn the_check_does_not_edit_the_board() {
     let (mut app, _tmp, path) = open_board();
-    let revision = app.document_state.pcb_revisions.get(&path).copied();
+    let board_before = board_dump(&app);
+    let file_before = std::fs::read(&path).unwrap();
     run_drc(&mut app);
-    assert_eq!(
-        app.document_state.pcb_revisions.get(&path).copied(),
-        revision
-    );
+    assert!(app.interaction_state.pcb_drc.done_for(&path).is_some());
+    assert_eq!(board_dump(&app), board_before);
+    assert_eq!(std::fs::read(&path).unwrap(), file_before);
     assert_eq!(app.document_state.dirty_document_count(), 0);
+}
+
+#[test]
+fn the_tools_menu_row_runs_the_check_and_is_greyed_without_a_board() {
+    let run_row = |app: &mut Signex| {
+        let id = AppCommandId::new("run_drc").expect("id");
+        let task = app.update(Message::Menu(MenuMessage::Command(id)));
+        crate::drive::drive(app, task);
+    };
+    let (mut app, _tmp, path) = open_board();
+    run_row(&mut app);
+    let done = app
+        .interaction_state
+        .pcb_drc
+        .done_for(&path)
+        .expect("report");
+    assert_eq!(done.report.violations.len(), 1);
+
+    let (mut none, _boot) = Signex::new();
+    none.ui_state.first_run_tour_open = false;
+    run_row(&mut none);
+    assert!(none.document_state.panel_ctx.pcb_drc.is_none());
+}
+
+#[test]
+fn the_panel_button_message_runs_the_check() {
+    let (mut app, _tmp, path) = open_board();
+    let task = app.update(Message::Dock(DockMessage::Panel(PanelMsg::RunDrc)));
+    crate::drive::drive(&mut app, task);
+    assert!(app.interaction_state.pcb_drc.done_for(&path).is_some());
 }
 
 #[test]

@@ -2,14 +2,13 @@
 //! bounding-box query per item, so the cost follows what is near each item,
 //! not the square of the item count.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use signex_types::pcb::PcbBoard;
 
 use crate::copper::{CopperItem, collect_copper};
 use crate::index::{BoardIndex, ItemRef};
 use crate::ratsnest::ratsnest;
-use crate::rect::RectNm;
 use crate::units::PointNm;
 
 use super::{DrcReport, DrcRules, Violation, ViolationKind};
@@ -30,17 +29,23 @@ pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
 
 /// Shorts and clearance violations between copper of different nets.
 fn copper_pairs(items: &[CopperItem], index: &BoardIndex, rules: &DrcRules) -> Vec<Violation> {
-    let slot: HashMap<ItemRef, usize> =
-        items.iter().enumerate().map(|(i, c)| (c.item, i)).collect();
-    let reach = rules.largest();
+    // The first copy of a repeated identity is the one the index holds.
+    let mut slot: HashMap<ItemRef, usize> = HashMap::new();
+    for (i, c) in items.iter().enumerate() {
+        slot.entry(c.item).or_insert(i);
+    }
+    let mut seen: HashSet<(usize, usize)> = HashSet::new();
     let mut found = Vec::new();
     for (i, a) in items.iter().enumerate() {
-        let near = a.shape.aabb().inflate(reach);
+        let near = a.shape.aabb().inflate(rules.reach_of(a.net));
         for hit in index.bounds_meeting(&near) {
-            // Each pair once, from its lower slot.
-            let Some(&j) = slot.get(&hit.item).filter(|&&j| j > i) else {
+            let Some(&j) = slot.get(&hit.item).filter(|&&j| j != i) else {
                 continue;
             };
+            // A pair is looked at once, from whichever side finds it first.
+            if !seen.insert((i.min(j), i.max(j))) {
+                continue;
+            }
             if let Some(v) = check_pair(a, &items[j], rules) {
                 found.push(v);
             }
@@ -67,7 +72,7 @@ fn check_pair(a: &CopperItem, b: &CopperItem, rules: &DrcRules) -> Option<Violat
             items,
             nets,
             layers: shared,
-            at: overlap_center(&a.shape.aabb(), &b.shape.aabb()),
+            at: shared_point(a, b),
             measured_nm: 0,
             required_nm: required,
         });
@@ -85,11 +90,23 @@ fn check_pair(a: &CopperItem, b: &CopperItem, rules: &DrcRules) -> Option<Violat
     })
 }
 
-/// The centre of where two bounding boxes meet.
-fn overlap_center(a: &RectNm, b: &RectNm) -> PointNm {
-    let lo = PointNm::new(a.min.x.max(b.min.x), a.min.y.max(b.min.y));
-    let hi = PointNm::new(a.max.x.min(b.max.x), a.max.y.min(b.max.y));
-    PointNm::new(lo.x + (hi.x - lo.x) / 2, lo.y + (hi.y - lo.y) / 2)
+/// A point on both coppers where they meet: the first of a few candidates
+/// (the centre of where the bounding boxes meet, then each shape's own
+/// centre) that lies on both. A diagonal track across a pad corner can have
+/// the first fall on neither; with none on both, the first is used.
+fn shared_point(a: &CopperItem, b: &CopperItem) -> PointNm {
+    let (ra, rb) = (a.shape.aabb(), b.shape.aabb());
+    let lo = PointNm::new(ra.min.x.max(rb.min.x), ra.min.y.max(rb.min.y));
+    let hi = PointNm::new(ra.max.x.min(rb.max.x), ra.max.y.min(rb.max.y));
+    let meet = mid(lo, hi);
+    [meet, mid(ra.min, ra.max), mid(rb.min, rb.max)]
+        .into_iter()
+        .find(|&p| a.shape.contains(p, 0) && b.shape.contains(p, 0))
+        .unwrap_or(meet)
+}
+
+fn mid(a: PointNm, b: PointNm) -> PointNm {
+    PointNm::new(a.x + (b.x - a.x) / 2, a.y + (b.y - a.y) / 2)
 }
 
 /// One violation per link the ratsnest still draws.

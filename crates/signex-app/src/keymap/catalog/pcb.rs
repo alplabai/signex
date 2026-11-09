@@ -8,7 +8,7 @@ pub(super) const PCB: &[CommandMetadata] = &[
         id: "run_drc",
         category: "pcb",
         label: "Run the design rule check on the board",
-        menu_label: Some("Run DRC"),
+        menu_label: Some("Design Rule Check"),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::RUNS_HEADLESS,

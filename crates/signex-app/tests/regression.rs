@@ -99,9 +99,11 @@ mod net_nav;
 #[path = "regression/palette_context_filter.rs"]
 mod palette_context_filter;
 
-// #2192 - the PCB ratsnest reaches the canvas and a net can be hidden.
+// #2222 - the read-only design rule check, from the menu, palette and panel.
 #[path = "regression/pcb_drc.rs"]
 mod pcb_drc;
+
+// #2192 - the PCB ratsnest reaches the canvas and a net can be hidden.
 #[path = "regression/pcb_ratsnest.rs"]
 mod pcb_ratsnest;
 

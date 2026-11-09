@@ -74,8 +74,9 @@ impl PcbDrc {
         current
     }
 
-    pub fn is_running(&self) -> bool {
-        self.running
+    /// Whether a run on the board at `path` is in flight.
+    pub fn is_running_for(&self, path: &Path) -> bool {
+        self.running && self.target.as_ref().is_some_and(|(p, _)| p == path)
     }
 
     /// The last report, if it is for the board at `path`.
@@ -107,9 +108,11 @@ mod tests {
         let first = drc.begin(PathBuf::from("a.snxpcb"), 1);
         let second = drc.begin(PathBuf::from("a.snxpcb"), 2);
         assert!(!drc.finish(first, report(), BTreeMap::new()));
-        assert!(drc.is_running() && drc.done_for(Path::new("a.snxpcb")).is_none());
+        let a = Path::new("a.snxpcb");
+        assert!(drc.is_running_for(a) && drc.done_for(a).is_none());
+        assert!(!drc.is_running_for(Path::new("b.snxpcb")));
         assert!(drc.finish(second, report(), BTreeMap::new()));
-        assert!(!drc.is_running());
+        assert!(!drc.is_running_for(a));
         assert_eq!(
             drc.done_for(Path::new("a.snxpcb")).map(|d| d.revision),
             Some(2)
@@ -130,7 +133,7 @@ mod tests {
         assert!(run(&mut drc, "a.snxpcb"));
         let next = drc.begin(PathBuf::from("a.snxpcb"), 2);
         assert!(drc.abandon(next));
-        assert!(!drc.is_running());
+        assert!(!drc.is_running_for(Path::new("a.snxpcb")));
         assert!(drc.done_for(Path::new("a.snxpcb")).is_some());
         assert!(!drc.abandon(next - 1));
     }

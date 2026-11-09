@@ -312,3 +312,110 @@ fn the_rules_come_from_the_setup_the_default_and_the_net_classes() {
     b.setup.as_mut().unwrap().clearance = f64::NAN;
     assert!(DrcRules::for_board(&b, &[]).is_err());
 }
+
+fn blind_via(n: u128, at: (f64, f64), net: u32, bottom: &str, via_type: ViaType) -> Via {
+    Via {
+        layers: vec!["TopCopper".into(), bottom.into()],
+        via_type,
+        ..via(n, at, net)
+    }
+}
+
+#[test]
+fn a_blind_or_micro_via_reaches_only_the_layers_it_spans() {
+    let rules = DrcRules::new(RULE);
+    for via_type in [ViaType::Blind, ViaType::Micro] {
+        // Spans Top to Inner2; its edge is at 0.3 mm, a track at 0.5 mm
+        // has copper from 0.375 mm: 0.075 mm apart, under the rule.
+        let via = blind_via(1, (5.0, 0.0), 1, "Inner2Copper", via_type);
+        let track_on = |layer: &str| track(1, (0.0, 0.5), (10.0, 0.5), 2, layer);
+        let beyond = board(vec![], vec![track_on("Inner3Copper")], vec![via.clone()]);
+        assert!(
+            run(&beyond, &rules).is_clean(),
+            "{via_type:?} below its span"
+        );
+        let inside = board(vec![], vec![track_on("Inner1Copper")], vec![via.clone()]);
+        let report = run(&inside, &rules);
+        assert_eq!(kinds(&report), [ViolationKind::Clearance], "{via_type:?}");
+        // Inner1 is bit 1.
+        assert_eq!(report.violations[0].layers, 1 << 1);
+        let at_end = board(vec![], vec![track_on("Inner2Copper")], vec![via]);
+        assert_eq!(kinds(&run(&at_end, &rules)), [ViolationKind::Clearance]);
+    }
+}
+
+fn pad_sized(size: (f64, f64), shape: PadShape) -> Footprint {
+    let mut p = pad(1, (5.0, 0.0), 1, PadType::Smd, "TopCopper");
+    p.size = Point::new(size.0, size.1);
+    p.shape = shape;
+    footprint(1, vec![p])
+}
+
+#[test]
+fn a_zero_size_pad_is_a_point_and_a_zero_width_pad_a_line() {
+    let rules = DrcRules::new(RULE);
+    // A point at (5, 0); a track 0.2 mm away has copper from 0.075 mm.
+    let point = board(
+        vec![pad_sized((0.0, 0.0), PadShape::Rect)],
+        vec![track(1, (0.0, 0.2), (10.0, 0.2), 2, "TopCopper")],
+        vec![],
+    );
+    let report = run(&point, &rules);
+    assert_eq!(kinds(&report), [ViolationKind::Clearance]);
+    assert_eq!(report.violations[0].measured_nm, 75_000);
+    // The same point 0.4 mm away is clear.
+    let clear = board(
+        vec![pad_sized((0.0, 0.0), PadShape::Rect)],
+        vec![track(1, (0.0, 0.4), (10.0, 0.4), 2, "TopCopper")],
+        vec![],
+    );
+    assert!(run(&clear, &rules).is_clean());
+
+    // A line from (5, -0.5) to (5, 0.5) crossed by a track is a short; its
+    // line does not stretch past its ends.
+    let line = pad_sized((0.0, 1.0), PadShape::Rect);
+    let crossed = board(
+        vec![line.clone()],
+        vec![track(1, (0.0, 0.0), (10.0, 0.0), 2, "TopCopper")],
+        vec![],
+    );
+    assert_eq!(kinds(&run(&crossed, &rules)), [ViolationKind::Short]);
+    let past = board(
+        vec![line],
+        vec![track(1, (0.0, 2.0), (10.0, 2.0), 2, "TopCopper")],
+        vec![],
+    );
+    assert!(run(&past, &rules).is_clean());
+}
+
+#[test]
+fn round_rect_pads_are_checked_as_their_bounding_rectangle_for_now() {
+    // TODO(#680): a round-rect pad keeps its sharp corners here, so this
+    // pins today's documented approximation, not the true copper.
+    let rules = DrcRules::new(RULE);
+    // A track passing the corner (5.5, 0.5) diagonally.
+    let diagonal = vec![track(1, (6.0, 1.2), (7.0, 0.2), 2, "TopCopper")];
+    let with = |shape| board(vec![pad_sized((1.0, 1.0), shape)], diagonal.clone(), vec![]);
+    let sharp = run(&with(PadShape::Rect), &rules);
+    let round = run(&with(PadShape::RoundRect), &rules);
+    assert_eq!(round.violations, sharp.violations);
+}
+
+#[test]
+fn an_oval_pad_is_measured_to_its_tip_exactly_and_off_axis_by_a_32_gon() {
+    // The tip of the polygon is a vertex, so the gap along the axis is exact.
+    let rules = DrcRules::new(RULE);
+    let oval = |x: f64| {
+        board(
+            vec![pad_sized((2.0, 1.0), PadShape::Oval)],
+            // Vertical track; tip of the pad at x = 6.0 mm; half width 0.125 mm.
+            vec![track(1, (x, -3.0), (x, 3.0), 2, "TopCopper")],
+            vec![],
+        )
+    };
+    assert!(run(&oval(6.325), &rules).is_clean());
+    assert_eq!(
+        kinds(&run(&oval(6.324_999), &rules)),
+        [ViolationKind::Clearance]
+    );
+}

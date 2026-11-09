@@ -87,19 +87,16 @@ fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
     (kind, detail, place)
 }
 
-/// The section, or nothing when no PCB is in view.
-pub(super) fn section<'a>(ctx: &'a PanelContext) -> Option<Element<'a, PanelMsg>> {
-    let drc = ctx.pcb_drc.as_ref()?;
-    let i18n = &*ctx.i18n;
-    let muted = theme_ext::text_secondary(&ctx.tokens);
-    let primary = theme_ext::text_primary(&ctx.tokens);
-    let note = |message: Localized, color: Color| -> Element<'a, PanelMsg> {
-        text(message).size(TS.caption).color(color).boxed()
-    };
+type Rows<'a> = Column<Element<'a, PanelMsg>>;
 
-    let mut col: Column<Element<'a, PanelMsg>> =
-        Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
-    col = col.push(
+fn note<'a>(message: Localized, color: Color) -> Element<'a, PanelMsg> {
+    text(message).size(TS.caption).color(color).boxed()
+}
+
+fn header<'a>(ctx: &'a PanelContext, col: Rows<'a>) -> Rows<'a> {
+    let i18n = &*ctx.i18n;
+    let primary = theme_ext::text_primary(&ctx.tokens);
+    col.push(
         row![
             text(t!(i18n, ids::DRC_HEADING))
                 .size(TS.body)
@@ -112,81 +109,105 @@ pub(super) fn section<'a>(ctx: &'a PanelContext) -> Option<Element<'a, PanelMsg>
         ]
         .align_y(iced::Alignment::Center)
         .boxed(),
-    );
+    )
+}
+
+/// The state line(s) above the rows: running, idle, or what the last run
+/// found. The default-clearance notice comes first among them.
+fn status<'a>(ctx: &'a PanelContext, drc: &DrcPanel, mut col: Rows<'a>) -> Rows<'a> {
+    let i18n = &*ctx.i18n;
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    let warn = theme_ext::warning_color(&ctx.tokens);
     if drc.running {
-        col = col.push(note(t!(i18n, ids::DRC_RUNNING), muted));
-    } else if !drc.ran {
-        col = col.push(note(t!(i18n, ids::DRC_IDLE), muted));
+        return col.push(note(t!(i18n, ids::DRC_RUNNING), muted));
+    }
+    if !drc.ran {
+        return col.push(note(t!(i18n, ids::DRC_IDLE), muted));
+    }
+    if let Some(mm) = &drc.default_clearance_mm {
+        col = col.push(note(
+            t!(i18n, ids::DRC_DEFAULT_CLEARANCE, "clearance" => mm.clone()),
+            muted,
+        ));
+    }
+    if drc.stale {
+        col = col.push(note(t!(i18n, ids::DRC_STALE), warn));
+    }
+    col = if drc.rows.is_empty() && drc.skipped == 0 {
+        col.push(note(
+            t!(i18n, ids::DRC_CLEAN),
+            theme_ext::success_color(&ctx.tokens),
+        ))
     } else {
-        if drc.stale {
-            col = col.push(note(
-                t!(i18n, ids::DRC_STALE),
-                theme_ext::warning_color(&ctx.tokens),
-            ));
-        }
-        if let Some(mm) = &drc.default_clearance_mm {
-            col = col.push(note(
-                t!(i18n, ids::DRC_DEFAULT_CLEARANCE, "clearance" => mm.clone()),
-                muted,
-            ));
-        }
-        if drc.rows.is_empty() && drc.skipped == 0 {
-            col = col.push(note(
-                t!(i18n, ids::DRC_CLEAN),
-                theme_ext::success_color(&ctx.tokens),
-            ));
-        } else {
-            col = col.push(note(
-                t!(
-                    i18n, ids::DRC_SUMMARY,
-                    "clearance" => drc.clearance, "short" => drc.short,
-                    "unconnected" => drc.unconnected
-                ),
-                muted,
-            ));
-        }
-        if drc.skipped > 0 {
-            col = col.push(note(
-                t!(i18n, ids::DRC_SKIPPED, "count" => drc.skipped),
-                theme_ext::warning_color(&ctx.tokens),
-            ));
+        col.push(note(
+            t!(
+                i18n, ids::DRC_SUMMARY,
+                "clearance" => drc.clearance, "short" => drc.short,
+                "unconnected" => drc.unconnected
+            ),
+            muted,
+        ))
+    };
+    if drc.skipped > 0 {
+        col = col.push(note(
+            t!(i18n, ids::DRC_SKIPPED, "count" => drc.skipped),
+            warn,
+        ));
+    }
+    col
+}
+
+/// One clickable violation row.
+fn violation_row<'a>(ctx: &'a PanelContext, violation: &DrcRow) -> Element<'a, PanelMsg> {
+    let i18n = &*ctx.i18n;
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    let primary = theme_ext::text_primary(&ctx.tokens);
+    let (kind, detail, place) = row_text(i18n, violation);
+    let color = match violation.kind {
+        ViolationKind::Short => theme_ext::error_color(&ctx.tokens),
+        _ => theme_ext::warning_color(&ctx.tokens),
+    };
+    let mut line = row![
+        text(kind).size(TS.body).color(color),
+        Space::new().width(6).height(Length::Shrink),
+        text(detail).size(TS.body).color(primary),
+        Space::new().width(6).height(Length::Shrink),
+        text(place)
+            .size(TS.body)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .color(muted),
+    ]
+    .align_y(iced::Alignment::Center)
+    .width(Length::Fill);
+    if let Some(layer) = layer_label(i18n, violation.layer) {
+        line = line
+            .push(Space::new().width(6).height(Length::Shrink).boxed())
+            .push(text(layer).size(TS.body).color(muted).boxed());
+    }
+    signex_widgets::button(line)
+        .width(Length::Fill)
+        .padding([SP.xs, 6.0])
+        .on_press(PanelMsg::DrcViolationPicked(violation.index))
+        .style(crate::styles::menu_item(&ctx.tokens))
+        .boxed()
+}
+
+/// The section, or nothing when no PCB is in view.
+pub(super) fn section<'a>(ctx: &'a PanelContext) -> Option<Element<'a, PanelMsg>> {
+    let drc = ctx.pcb_drc.as_ref()?;
+    let col: Rows<'a> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
+    let mut col = status(ctx, drc, header(ctx, col));
+    if !drc.running {
+        for violation in &drc.rows {
+            col = col.push(violation_row(ctx, violation));
         }
     }
-    for violation in &drc.rows {
-        let (kind, detail, place) = row_text(i18n, violation);
-        let color = match violation.kind {
-            ViolationKind::Short => theme_ext::error_color(&ctx.tokens),
-            _ => theme_ext::warning_color(&ctx.tokens),
-        };
-        let mut line = row![
-            text(kind).size(TS.body).color(color),
-            Space::new().width(6).height(Length::Shrink),
-            text(detail).size(TS.body).color(primary),
-            Space::new().width(6).height(Length::Shrink),
-            text(place)
-                .size(TS.body)
-                .wrapping(iced::widget::text::Wrapping::None)
-                .color(muted),
-        ]
-        .align_y(iced::Alignment::Center)
-        .width(Length::Fill);
-        if let Some(layer) = layer_label(i18n, violation.layer) {
-            line = line
-                .push(Space::new().width(6).height(Length::Shrink).boxed())
-                .push(text(layer).size(TS.body).color(muted).boxed());
-        }
-        col = col.push(
-            signex_widgets::button(line)
-                .width(Length::Fill)
-                .padding([SP.xs, 6.0])
-                .on_press(PanelMsg::DrcViolationPicked(violation.index))
-                .style(crate::styles::menu_item(&ctx.tokens))
-                .boxed(),
-        );
+    if drc.hidden > 0 && !drc.running {
+        let muted = theme_ext::text_secondary(&ctx.tokens);
+        col = col.push(note(
+            t!(&*ctx.i18n, ids::DRC_MORE, "count" => drc.hidden),
+            muted,
+        ));
     }
-    if drc.hidden > 0 {
-        col = col.push(note(t!(i18n, ids::DRC_MORE, "count" => drc.hidden), muted));
-    }
-    col = col.push(separator(&ctx.tokens).boxed());
-    Some(col.boxed())
+    Some(col.push(separator(&ctx.tokens).boxed()).boxed())
 }
