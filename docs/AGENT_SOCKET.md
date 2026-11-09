@@ -4,11 +4,12 @@ A person keeps Signex open; an agent works on the same project through the CLI.
 The agent is a component of Signex, not a user of its window: it names its
 document, uses the engine channel and never changes the person's active tab,
 focus, panels, selection or tool. This page is the design of the running app's
-side (PR A of #1924): the listener, its security and the registry. The CLI side
-(connect when a live entry exists, otherwise run headless; a GUI refusing a
-project a headless run holds) is PR B.
+side: the listener, its security and the registry. The CLI side (connect when a
+live entry exists, otherwise run headless and hold the project; a GUI refusing
+a project a headless run holds) is "Client" below and in [CLI.md](CLI.md).
 
-Code: `crates/signex-app/src/app/agent/`.
+Code: `crates/signex-app/src/app/agent/`; the client half is `client.rs`,
+which `signex-cli` uses through `signex_app::headless::agent_client`.
 
 ## Off by default
 
@@ -171,7 +172,8 @@ share an entry and the name holds no path text.
 
 ```json
 {
-  "format": 1,
+  "format": 2,
+  "kind": "gui",
   "project": "/canonical/path/Demo.snxprj",
   "pid": 4242,
   "socket": "/run/user/1000/signex-agent/3f9c0d1e5a7b2c44.sock",
@@ -179,11 +181,19 @@ share an entry and the name holds no path text.
 }
 ```
 
-A client finds its project's entry by the digest of the canonical path, opens
-`socket` and reads the token from `<boot_id>.token` in the same folder as the
-socket (the pipe's token is in the runtime directory). An entry whose `pid` is
-dead or whose socket refuses is stale: the client removes it, after the same
-owner and link check the app makes.
+`kind` is `gui` (a running app that listens) or `headless` (a `signex-cli` run
+that holds the project and has no endpoint: `socket` is empty and `boot_id` is
+only its identity). Format 2 added `kind`; an entry without one is a format 1
+entry and reads as `gui`.
+
+A client finds its project's entry by the digest of the canonical path and
+reads the token from `<boot_id>.token` in the runtime directory. An entry is
+live when its boot id has the right form and its process runs and, for a `gui`
+entry, `socket` is the endpoint that boot id names and answers; a `headless`
+entry is live while its process runs. A client never connects to anything an
+entry names: it derives the endpoint from the boot id. An entry that is not
+live is stale: the client removes it, after the same owner and link check the
+app makes.
 
 Two instances with the same project: an app removes only entries that carry
 its own `pid` and `boot_id`, and writes over an entry only if there is none,
@@ -224,10 +234,50 @@ connection earns the count back (a listener that binds and then fails again
 does not), and turning the setting on resets it. The boot ids of listeners
 that have ended stay in the quit path's list, which keeps the last 32.
 
+## Client
+
+`signex-cli run` (PR B of #1924, behaviour in [CLI.md](CLI.md)) uses
+`client.rs`:
+
+- `lookup` reads the entry of a project (the directory must pass the same
+  owner and mode check as the app's) and answers `Free`, `Stale`, `Gui` or
+  `Headless`. `StaleEntry::remove` re-reads the entry and removes it only if it
+  is unchanged and the user's own plain file.
+- `GuiPeer::connect` reads the token file, which must be a plain file of this
+  user with no group or other permission, opened without following a link
+  (`O_NOFOLLOW`); it checks the endpoint is a socket of this user and connects
+  to the endpoint the boot id names. On Windows the pipe is opened for
+  identification only.
+- `Connection::ask` sends one request line and reads one reply line, in the
+  wire format above. A reply that is not the documented shape is an error.
+- `hold` writes the `headless` entry through the registry writer the app
+  uses (one format, one writer); dropping the `Hold` removes it, only if it is
+  still the run's own.
+
+## The app refuses a held project
+
+When the app opens a project (any way: Open, a recent file, the command line)
+whose entry is a live `headless` hold, it refuses: a line in Messages and an
+Open Failed notice (`<file> is being edited by a headless signex-cli run
+(process N), so it was not opened`), and nothing in the app changes. This
+needs no setting: the registry is read whether or not agent connections are on.
+A project another app holds opens as before (PR A: the registry write logs).
+A headless app (the CLI's own) never refuses, so a run goes on beside another
+as it always could.
+
 ## Known limits
 
-- The client (PR B) is not here: nothing yet connects, and nothing checks that
-  a headless run holds a project.
+- A headless run's hold is live while its process runs: a reused process id
+  keeps a dead run's entry live until that process ends. Remove the entry by
+  hand if that happens.
+- The entry write is not atomic against another writer: two processes that
+  start at the same moment can both find none and both write; the later write
+  wins, and the save-time baseline check remains the backstop.
+- A Signex with agent connections off has no entry, so a headless run cannot
+  know a person has the project open there; and a sheet opened loose, without
+  its project, is not refused.
+- On Windows the client has no reply timeout, and has not been run against a
+  real app here.
 - The Windows code (`transport/windows.rs`) is compiled and linted for
   `x86_64-pc-windows-msvc` on its own, and has transport-level tests that run
   on the Windows CI job (a round trip, a hundred clients that connect and close

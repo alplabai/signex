@@ -59,6 +59,22 @@ pub(super) fn prepare_dir(dir: &Path) -> Result<(), String> {
     }
 }
 
+/// Refuse `dir` unless it is a real folder of this user that nobody else can
+/// enter. Creates nothing: for a client that must not make the folder.
+pub(super) fn check_dir(dir: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        unix::check_dir(dir)
+    }
+    #[cfg(not(unix))]
+    {
+        match std::fs::symlink_metadata(dir) {
+            Ok(meta) if meta.file_type().is_dir() => Ok(()),
+            _ => Err(format!("{} is not a plain folder", dir.display())),
+        }
+    }
+}
+
 /// Write `bytes` to `path` as a private file (0600), replacing what is there
 /// in one step. The temporary file is created new, never through a link.
 pub(super) fn write_private(path: &Path, bytes: &[u8]) -> Result<(), String> {

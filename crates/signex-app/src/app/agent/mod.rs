@@ -11,6 +11,7 @@
 //! `docs/AGENT_SOCKET.md`.
 
 mod allow;
+pub mod client;
 mod files;
 mod handler;
 mod listener;

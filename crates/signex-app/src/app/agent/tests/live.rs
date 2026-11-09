@@ -14,9 +14,11 @@ use tokio::io::{AsyncBufReadExt as _, AsyncReadExt as _, AsyncWriteExt as _, Buf
 use tokio::net::UnixStream;
 
 use super::super::AgentMsg;
+use super::super::client::{self, Lookup, Reply};
 use super::super::listener::token_path;
 use super::super::listener::{ListenerConfig, serve};
 use super::super::registry::{self, FORMAT};
+use super::super::reply::Status;
 use super::super::state::MAX_TOUCHED;
 use super::super::wire::MAX_REQUEST_BYTES;
 use super::{app_at_work, line, path, revision, snapshot};
@@ -183,6 +185,74 @@ fn the_files_are_private_and_a_query_and_an_edit_run_while_the_person_is_mid_int
         assert_eq!(first["status"], "answered");
         assert_eq!(second["status"], "refused");
 
+        server.abort();
+    });
+}
+
+/// What `signex-cli` does when a person has the project open: it finds the
+/// app through the registry, reads the token file, and its query and edit run
+/// in the app while the person's own state is untouched.
+#[test]
+fn the_client_attaches_through_the_registry_and_its_query_and_edit_change_the_running_app() {
+    let root = scratch();
+    let (mut app, config, dir) = app_and_config(root.path());
+    app.refresh_panel_ctx();
+    let project = app.document_state.projects[0].path.clone();
+    std::fs::create_dir_all(project.parent().unwrap()).unwrap();
+    std::fs::write(&project, "{}").unwrap();
+    let person = snapshot(&app);
+    let doc = path("b.snxsch").display().to_string();
+    let started = revision(&app, "b.snxsch");
+    let rt = runtime();
+    rt.block_on(async {
+        let (server, mut messages, _socket) = start(&mut app, &config).await;
+        // The write the app's own worker makes once the listener is up.
+        let owner = app.agent.owner().expect("the app is listening");
+        registry::sync(&dir, &owner, std::slice::from_ref(&project)).unwrap();
+
+        let (client_dir, client_project, client_doc) = (dir.clone(), project.clone(), doc.clone());
+        let attached = std::thread::spawn(move || -> Result<Vec<Reply>, String> {
+            let Lookup::Gui(peer) = client::lookup(&client_dir, &client_project)? else {
+                return Err("no running app was found".into());
+            };
+            let mut connection = peer.connect()?;
+            let on = |name: &str, text: String| (name.to_string(), text);
+            let edits = json!([{"id": "place_junction", "args": {"at": [20, 20]}}]).to_string();
+            Ok(vec![
+                connection.ask("read_document", &[on("document", client_doc.clone())])?,
+                connection.ask(
+                    "apply_edits",
+                    &[
+                        on("document", client_doc.clone()),
+                        on("expect_revision", started.to_string()),
+                        on("edits", edits),
+                    ],
+                )?,
+                connection.ask("undo", &[on("document", client_doc)])?,
+            ])
+        });
+        while !attached.is_finished() {
+            let next = tokio::time::timeout(Duration::from_millis(20), messages.next()).await;
+            if let Ok(Some(message)) = next {
+                let _task = app.update(message);
+            }
+        }
+        let replies = attached.join().expect("the client ran").expect("attached");
+
+        assert_eq!(replies[0].status, Status::Answered);
+        assert_eq!(replies[0].data.as_ref().unwrap()["revision"], started);
+        assert_eq!(replies[1].status, Status::Answered, "{:?}", replies[1]);
+        assert_eq!(replies[1].changed, std::slice::from_ref(&doc));
+        assert!(revision(&app, "b.snxsch") > started, "the change landed");
+        // The agent channel's refusals come back with the app's reason.
+        assert_eq!(replies[2].status, Status::Refused);
+        assert!(
+            replies[2]
+                .reason
+                .as_deref()
+                .is_some_and(|why| why.contains("undo"))
+        );
+        assert_eq!(snapshot(&app), person, "the person's state is byte equal");
         server.abort();
     });
 }

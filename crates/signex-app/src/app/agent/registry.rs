@@ -1,7 +1,7 @@
 //! The registry: one small file per open project in the runtime directory,
 //! naming the process that holds it and where to reach it (#1924). A client
-//! (PR B of #1924) lists the folder, reads the entry of its project, and
-//! connects to `socket` with the token in `<boot_id>.token` beside it. The
+//! (`client`) reads the entry of its project, and connects to the endpoint
+//! its boot id names with the token in `<boot_id>.token` beside it. The
 //! format is in `docs/AGENT_SOCKET.md`, "Registry".
 
 use std::collections::BTreeSet;
@@ -16,19 +16,33 @@ use super::token::is_boot_id;
 use super::transport::endpoint_name;
 
 /// The version of the entry format. A change that breaks a reader moves it.
-pub(super) const FORMAT: u32 = 1;
+/// 2 added `kind`; an entry without one is a format 1 entry of a GUI.
+pub(super) const FORMAT: u32 = 2;
 
 /// The largest entry this app reads back while cleaning up.
 const MAX_ENTRY_BYTES: u64 = 64 * 1024;
 
+/// Who holds a project: a running app that listens, or a headless
+/// `signex-cli` run, which has no endpoint.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(super) enum Kind {
+    #[default]
+    Gui,
+    Headless,
+}
+
 /// One entry, as written to `<registry>/<digest of the project path>.json`.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(super) struct Entry {
     pub(super) format: u32,
+    #[serde(default)]
+    pub(super) kind: Kind,
     /// The project file's canonical path.
     pub(super) project: String,
     pub(super) pid: u32,
-    /// The Unix socket path, or the Windows pipe name.
+    /// The Unix socket path, or the Windows pipe name; empty for a headless
+    /// run.
     pub(super) socket: String,
     pub(super) boot_id: String,
 }
@@ -54,6 +68,16 @@ pub(super) fn entry_file_name(canonical: &Path) -> String {
 /// A project that cannot be resolved is named in the error, after the rest
 /// was done.
 pub(super) fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<(), String> {
+    sync_as(Kind::Gui, dir, owner, projects)
+}
+
+/// [`sync`] for a holder of `kind`.
+pub(super) fn sync_as(
+    kind: Kind,
+    dir: &Path,
+    owner: &Owner,
+    projects: &[PathBuf],
+) -> Result<(), String> {
     let registry = dir.join(REGISTRY_DIR);
     files::prepare_dir(&registry)?;
     let mut wanted = BTreeSet::new();
@@ -71,6 +95,7 @@ pub(super) fn sync(dir: &Path, owner: &Owner, projects: &[PathBuf]) -> Result<()
         let existing = read_entry(&registry.join(&name));
         let entry = Entry {
             format: FORMAT,
+            kind,
             project: canonical.to_string_lossy().into_owned(),
             pid: owner.pid,
             socket: owner.endpoint.clone(),
@@ -124,11 +149,29 @@ fn may_take_over(existing: Option<&Entry>, owner: &Owner, live: impl Fn(&Entry) 
 /// must carry a boot id of the right form and name exactly the endpoint that
 /// boot id gives in `dir`, and only that endpoint is probed. An entry that
 /// names anything else (a link, another folder, a network path) is stale.
-fn entry_is_live(dir: &Path, entry: &Entry) -> bool {
-    is_boot_id(&entry.boot_id)
-        && entry.socket == endpoint_name(dir, &entry.boot_id)
-        && pid_alive(entry.pid)
-        && endpoint_answers(&entry.socket)
+///
+/// A headless run has no endpoint: its entry is live while its process runs.
+pub(super) fn entry_is_live(dir: &Path, entry: &Entry) -> bool {
+    if !is_boot_id(&entry.boot_id) {
+        return false;
+    }
+    match entry.kind {
+        Kind::Headless => entry.socket.is_empty() && pid_alive(entry.pid),
+        Kind::Gui => {
+            entry.socket == endpoint_name(dir, &entry.boot_id)
+                && pid_alive(entry.pid)
+                && endpoint_answers(&entry.socket)
+        }
+    }
+}
+
+/// The process of a live headless run that holds `canonical` (a project's
+/// canonical path), if one does: the GUI does not open a project a headless
+/// run is editing.
+pub(super) fn held_by_headless(dir: &Path, canonical: &Path) -> Option<u32> {
+    let path = dir.join(REGISTRY_DIR).join(entry_file_name(canonical));
+    let entry = read_entry(&path)?;
+    (entry.kind == Kind::Headless && entry_is_live(dir, &entry)).then_some(entry.pid)
 }
 
 /// Does a socket answer a connection? The connect does not block, so a peer
@@ -284,7 +327,7 @@ fn remove_own_except(registry: &Path, owner: &Owner, keep: &BTreeSet<String>) ->
 }
 
 /// The entry in the file at `path`, if it is a small regular file holding one.
-fn read_entry(path: &Path) -> Option<Entry> {
+pub(super) fn read_entry(path: &Path) -> Option<Entry> {
     let meta = std::fs::symlink_metadata(path).ok()?;
     if !meta.file_type().is_file() {
         return None;
@@ -349,6 +392,7 @@ mod tests {
             entry,
             Entry {
                 format: FORMAT,
+                kind: Kind::Gui,
                 project: canonical.to_string_lossy().into_owned(),
                 pid: 41,
                 socket: "/run/bb.sock".into(),
@@ -461,6 +505,7 @@ mod tests {
         };
         let planted_entry = Entry {
             format: FORMAT,
+            kind: Kind::Gui,
             project: "p".into(),
             pid: 1,
             socket: planted.endpoint.clone(),
@@ -545,6 +590,60 @@ mod tests {
     }
 
     #[test]
+    fn an_entry_written_before_kinds_existed_reads_as_a_gui_holder() {
+        let old = r#"{"format":1,"project":"/p","pid":7,"socket":"/s","boot_id":"bb"}"#;
+        let entry: Entry = serde_json::from_str(old).unwrap();
+        assert_eq!(entry.kind, Kind::Gui);
+        let written = serde_json::to_value(&entry).unwrap();
+        assert_eq!(written["kind"], "gui");
+        let headless = Entry {
+            kind: Kind::Headless,
+            ..entry
+        };
+        assert_eq!(serde_json::to_value(&headless).unwrap()["kind"], "headless");
+    }
+
+    /// Process 1 is always running; a pid above every system's limit never is.
+    #[cfg(unix)]
+    #[test]
+    fn a_live_headless_run_holds_a_project_that_only_it_or_its_end_releases() {
+        let dir = scratch();
+        let a = project(dir.path(), "a.snxprj");
+        let canonical = std::fs::canonicalize(&a).unwrap();
+        let headless = |pid: u32| Owner {
+            pid,
+            boot_id: CC.into(),
+            endpoint: String::new(),
+        };
+        sync_as(
+            Kind::Headless,
+            dir.path(),
+            &headless(1),
+            std::slice::from_ref(&a),
+        )
+        .unwrap();
+        assert_eq!(held_by_headless(dir.path(), &canonical), Some(1));
+
+        // The app cannot register over it.
+        let why = sync(dir.path(), &owner(41, "bb"), std::slice::from_ref(&a)).unwrap_err();
+        assert!(why.contains("also open in process 1"), "{why}");
+
+        // A run whose process is gone holds nothing, and the app takes over.
+        sync_as(
+            Kind::Headless,
+            dir.path(),
+            &headless(2_000_000_000),
+            std::slice::from_ref(&a),
+        )
+        .unwrap();
+        assert_eq!(held_by_headless(dir.path(), &canonical), None);
+        sync(dir.path(), &owner(41, "bb"), std::slice::from_ref(&a)).expect("taken over");
+        assert_eq!(entry_pid(dir.path(), &a), 41);
+        // An app's entry is never a headless hold.
+        assert_eq!(held_by_headless(dir.path(), &canonical), None);
+    }
+
+    #[test]
     fn a_boot_id_has_one_form() {
         assert!(is_boot_id("0123456789abcdef"));
         assert!(!is_boot_id("0123456789ABCDEF"));
@@ -574,6 +673,7 @@ mod tests {
         let ours = owner(41, "bb");
         let entry = |pid: u32, boot: &str| Entry {
             format: FORMAT,
+            kind: Kind::Gui,
             project: "p".into(),
             pid,
             socket: "s".into(),

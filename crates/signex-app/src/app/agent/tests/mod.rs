@@ -3,6 +3,10 @@
 //! listener reported as up; a request is run as `Signex::update` runs it.
 
 #[cfg(unix)]
+mod client;
+#[cfg(unix)]
+mod hold;
+#[cfg(unix)]
 mod live;
 mod refusals;
 mod round_trip;

@@ -271,6 +271,21 @@ impl Signex {
         .chain(next)
     }
 
+    /// The process of a live headless run that holds the project at
+    /// `project`, if one does: the app does not open a project an agent is
+    /// editing without a window. Asked whether or not agent connections are
+    /// on; a few `stat`s and one small read, like the alias check beside it.
+    /// A headless app is the run that holds it (or runs beside another run,
+    /// as it always could): it never refuses.
+    pub(crate) fn headless_holder_of(&self, project: &std::path::Path) -> Option<u32> {
+        if self.headless_answers().is_some() {
+            return None;
+        }
+        let dir = self.agent.runtime_dir().ok()?;
+        let canonical = std::fs::canonicalize(project).ok()?;
+        registry::held_by_headless(dir, &canonical)
+    }
+
     fn handle_agent_request(&mut self, call: AgentCall) -> Task<Message> {
         let mark = crate::diagnostics::newest_entry_id();
         let before = self.change_snapshot();

@@ -333,6 +333,15 @@ impl Signex {
                 super::save::file_label(project_path)
             );
         }
+        // A headless `signex-cli` run is editing it with no window: opening
+        // it here would be a second editor of one file (#1924).
+        if let Some(pid) = self.headless_holder_of(project_path) {
+            anyhow::bail!(
+                "{} is being edited by a headless signex-cli run (process {pid}), so it was \
+                 not opened. Open it again when that run has ended.",
+                super::save::file_label(project_path)
+            );
+        }
         let mut data = signex_types::project::parse_project(project_path)
             .with_context(|| format!("parse project {}", project_path.display()))?;
         // A project an older build wrote has no id yet: it gets one now and
