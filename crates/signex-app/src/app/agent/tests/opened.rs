@@ -113,8 +113,24 @@ fn closing_another_dirty_sheet_parks_it_with_its_edits_and_the_person_is_as_they
     assert!(app.document_state.is_document_dirty(&a));
     let tabs = app.document_state.tabs.len();
     arm(&mut app);
+    // A symbol whose library entry is missing, under a name no other test
+    // uses: loading the sheet logs a warning that names it.
+    let unique = "ZqCloseNoReload";
+    let b = path("b.snxsch");
+    let mut document = app.document_state.engines[&b].document().clone();
+    document.symbols.push(signex_types::schematic::Symbol {
+        uuid: uuid::Uuid::now_v7(),
+        lib_id: format!("{unique}:U1"),
+        ..Default::default()
+    });
+    let engine = app.document_state.engines.get_mut(&b).unwrap();
+    engine
+        .execute(signex_engine::Command::ReplaceDocument { document })
+        .unwrap();
+    let logged = || crate::diagnostics::logged_count(unique);
     let person = person_without_tabs(&app);
-    let b_engine = app.document_state.engines[&path("b.snxsch")].instance_id();
+    let b_engine = app.document_state.engines[&b].instance_id();
+    let warnings = logged();
 
     let closed = call(
         &mut app,
@@ -123,11 +139,14 @@ fn closing_another_dirty_sheet_parks_it_with_its_edits_and_the_person_is_as_they
     );
 
     assert_eq!(closed["status"], "ran", "{closed}");
-    // The person's sheet is not reloaded or replaced.
+    // The person's sheet is not replaced, and not reloaded: a reload logs its
+    // load-time warnings again.
     assert_eq!(
-        app.document_state.engines[&path("b.snxsch")].instance_id(),
-        b_engine
+        app.document_state.engines[&b].instance_id(),
+        b_engine,
+        "not replaced"
     );
+    assert_eq!(logged(), warnings, "not reloaded");
     assert_eq!(app.document_state.tabs.len(), tabs - 1);
     assert!(app.document_state.tabs.iter().all(|tab| tab.path != a));
     // Parked, not discarded: the engine and its edits stay, still unsaved.

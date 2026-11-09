@@ -80,7 +80,9 @@ The last three are open to agents by the maintainer's decision (#1924):
 - `close_active_document` closes the named document's tab as its close button
   does; a document with unsaved edits is parked, never discarded. It is refused
   when the document is the person's active tab, or is shown in a window of its
-  own, since closing it would move their tab or close that window.
+  own, since closing it would move their tab or close that window, and when the
+  person has a pending title-block or paper-edge draft for that sheet, since
+  closing would drop their unconfirmed typing.
 - `assign_net_class` runs by document as in the headless run: the project's
   class table changes, and the pick is one step on that sheet's undo timeline
   (#2171), after the person's own steps.
