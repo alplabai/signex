@@ -68,6 +68,28 @@ fn is_dirty(fx: &Fx) -> bool {
     fx.app.document_state.is_document_dirty(&fx.prj)
 }
 
+/// The agent channel says what saving a project writes besides its file (a
+/// client that confines writes checks them, #1924): the pending libraries.
+#[test]
+fn document_info_of_a_project_lists_the_libraries_its_save_would_write() {
+    use crate::app::command::queries::tests::answer;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    let operand = format!("document={}", fx.prj.display());
+
+    let info = answer(&mut fx.app, "document_info", &[&operand]);
+    assert_eq!(info["kind"], "project", "{info}");
+    assert_eq!(
+        info["save_writes"],
+        serde_json::json!([fx.lib.display().to_string()])
+    );
+
+    fx.app.document_state.projects[0].pending_libraries.clear();
+    let info = answer(&mut fx.app, "document_info", &[&operand]);
+    assert_eq!(info["save_writes"], serde_json::json!([]));
+}
+
 #[test]
 fn begin_creates_and_writes_nothing_until_the_task_runs() {
     let tmp = tempfile::tempdir().unwrap();

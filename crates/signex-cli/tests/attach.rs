@@ -126,6 +126,12 @@ impl World {
     /// id's endpoint, a token file and an entry, replying with `replies` in
     /// turn.
     fn app(&self, replies: &[Value]) -> FakeApp {
+        self.app_saving(replies, Vec::new())
+    }
+
+    /// [`Self::app`] whose project document says saving it writes `save_writes`
+    /// besides its file (the libraries it has pending).
+    fn app_saving(&self, replies: &[Value], save_writes: Vec<String>) -> FakeApp {
         let socket = self.socket(CC);
         let listener = UnixListener::bind(&socket).unwrap();
         listener.set_nonblocking(true).unwrap();
@@ -138,7 +144,7 @@ impl World {
             (SHEET_B.into(), OTHER_PROJECT_SHEET.into()),
             (PROJECT_DOC.into(), self.project().to_string()),
         ];
-        let mut app = FakeApp::serve(listener, replies, docs);
+        let mut app = FakeApp::serve(listener, replies, docs, save_writes);
         app.window = Some(self.window_lock());
         app
     }
@@ -158,7 +164,12 @@ impl FakeApp {
     /// `docs` maps a document operand (an id or a path) to the file the app
     /// holds it as; `document_info` is answered from it and does not use up
     /// one of `replies`.
-    fn serve(listener: UnixListener, replies: &[Value], docs: Vec<(String, String)>) -> Self {
+    fn serve(
+        listener: UnixListener,
+        replies: &[Value],
+        docs: Vec<(String, String)>,
+        save_writes: Vec<String>,
+    ) -> Self {
         let requests = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
         let mut replies: VecDeque<Value> = replies.iter().cloned().collect();
@@ -179,10 +190,15 @@ impl FakeApp {
                     let reply = if request["id"] == "document_info" {
                         let asked = request["args"]["document"].as_str().unwrap_or_default();
                         match docs.iter().find(|(text, _)| text == asked) {
-                            Some((_, path)) => json!({"id": "document_info", "status": "answered",
-                                "data": {"path": path,
-                                    "kind": if asked == PROJECT_DOC { "project" } else { "schematic" }},
-                                "messages": [], "changed": []}),
+                            Some((_, path)) => {
+                                let mut data = json!({"path": path, "kind": "schematic"});
+                                if asked == PROJECT_DOC {
+                                    data["kind"] = json!("project");
+                                    data["save_writes"] = json!(save_writes);
+                                }
+                                json!({"id": "document_info", "status": "answered",
+                                    "data": data, "messages": [], "changed": []})
+                            }
                             None => json!({"id": "document_info", "status": "refused",
                                 "reason": "no document has the id", "messages": [], "changed": []}),
                         }
@@ -618,8 +634,7 @@ fn an_edits_log_lines_are_not_shown() {
 }
 
 /// `save_document` is on the agent channel (#2231): the CLI's `--save` gate and
-/// its confinement still apply first, and a project file, whose save writes
-/// libraries the CLI cannot list, is not saved from an attached run.
+/// its confinement still apply first (a project file's save is the next tests).
 #[test]
 fn an_attached_save_needs_save_and_stays_inside_the_runs_folders() {
     let w = world();
@@ -650,15 +665,6 @@ fn an_attached_save_needs_save_and_stays_inside_the_runs_folders() {
             .contains("--allow-path")
     );
     assert!(!other.stdout.contains("somewhere/else"), "{}", other.stdout);
-    // The project file: its save writes libraries the CLI cannot check.
-    let project = save(PROJECT_DOC, &["--save"]);
-    assert_eq!(project.lines[0]["status"], "refused", "{}", project.stdout);
-    assert!(
-        project.lines[0]["reason"]
-            .as_str()
-            .unwrap()
-            .contains("save its sheets")
-    );
     // A sheet of this project, with --save, is sent.
     let sheet = save(SHEET_A, &["--save"]);
     assert_eq!(sheet.code, Some(0), "{}", sheet.stderr);
@@ -667,6 +673,73 @@ fn an_attached_save_needs_save_and_stays_inside_the_runs_folders() {
     assert_eq!(sent.len(), 1, "only the sheet's save was sent: {sent:?}");
     assert_eq!(sent[0]["id"], "save_document");
     assert_eq!(sent[0]["args"]["document"], SHEET_A);
+}
+
+/// Saving the project file is allowed from an attached run (#1924) when the
+/// file and every file the app says the save also writes (`save_writes`, the
+/// libraries it has pending) are inside the run's folders.
+#[test]
+fn an_attached_project_save_goes_through_when_every_file_it_writes_is_inside() {
+    let w = world();
+    let done = json!({"id": "save_document", "status": "ran", "messages": [], "changed": []});
+    let save = |w: &World| {
+        w.cli(
+            &[
+                "run",
+                w.project(),
+                "save_document",
+                "--arg",
+                &format!("document={PROJECT_DOC}"),
+                "--save",
+            ],
+            "",
+        )
+    };
+
+    // No pending library: the project file alone.
+    let app = w.app(&[done.clone()]);
+    let out = save(&w);
+    assert_eq!(out.lines[0]["status"], "ran", "{}", out.stdout);
+    assert_eq!(app.finish().len(), 1);
+    drop(w);
+
+    // A pending library inside the project folder.
+    let w = world();
+    let inside = w.fx.dir.join("libs").join("mine.snxlib");
+    let app = w.app_saving(&[done], vec![inside.to_str().unwrap().into()]);
+    let out = save(&w);
+    assert_eq!(out.lines[0]["status"], "ran", "{}", out.stdout);
+    let sent = app.finish();
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    assert_eq!(sent[0]["args"]["document"], PROJECT_DOC);
+}
+
+/// A pending library outside the run's folders refuses the whole save: nothing
+/// is sent to the app, and the refusal names that file.
+#[test]
+fn an_attached_project_save_is_refused_when_a_pending_library_is_outside() {
+    let w = world();
+    let outside = w.dir.join("elsewhere").join("theirs.snxlib");
+    let outside = outside.to_str().unwrap();
+    let done = json!({"id": "save_document", "status": "ran", "messages": [], "changed": []});
+    let app = w.app_saving(&[done], vec![outside.into()]);
+    let out = w.cli(
+        &[
+            "run",
+            w.project(),
+            "save_document",
+            "--arg",
+            &format!("document={PROJECT_DOC}"),
+            "--save",
+        ],
+        "",
+    );
+    assert_eq!(out.lines[0]["status"], "refused", "{}", out.stdout);
+    let reason = out.lines[0]["reason"].as_str().unwrap();
+    assert!(reason.contains(outside), "{reason}");
+    assert!(reason.contains("--allow-path"), "{reason}");
+    assert!(app.finish().is_empty(), "the app was sent the save");
+    assert!(!Path::new(outside).exists());
 }
 
 /// `query_pins` reads one named sheet: another open project's part cannot be
@@ -839,6 +912,7 @@ fn a_planted_entry_naming_another_socket_is_stale_and_that_socket_is_never_conne
             listener
         },
         &[],
+        Vec::new(),
         Vec::new(),
     );
     w.token(CC, 0o600);

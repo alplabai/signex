@@ -81,7 +81,10 @@ The last three are open to agents by the maintainer's decision (#1924):
 
 - `save_document` writes the named document only, as a person's Save of that
   document does; its side writes stay confined to what the headless run allows
-  (`save_side_writes`). It never saves another document.
+  (`save_side_writes`). It never saves another document. For a project
+  document, `document_info` answers `save_writes`: the absolute paths a save
+  would write besides the project file (its pending libraries), so a client
+  that confines writes can check them before it asks; absent for a sheet.
 - `close_active_document` closes the named document's tab as its close button
   does; a document with unsaved edits is parked, never discarded. It is refused
   when the document is the person's active tab, or is shown in a window of its

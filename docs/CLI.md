@@ -164,9 +164,11 @@ in the middle of continues.
   `--save`, and its named file is checked as a write target as in a headless
   run. A save of a project file writes libraries besides it (the headless run
   lists them with the app's `save_side_writes` and confines each); the running
-  app does not tell them, so an attached save of a project file is refused
-  ("save its sheets, or run headless"). A sheet's plain save writes nothing
-  else. The resolve and the command
+  app tells them in the `save_writes` of its `document_info` answer, and the
+  save is sent only when the project file and every file in `save_writes` are
+  inside the run's folders. Otherwise it is refused, naming the file that is
+  outside (`--allow-path` adds a folder); an answer without the list is refused
+  too. A sheet's plain save writes nothing else. The resolve and the command
   are two requests, so a document that is re-pointed between them (a person
   saving as, closing and reopening) is the same residual race as above.
 - **Dry run.** Without `--save`, nothing is written to disk by the CLI when

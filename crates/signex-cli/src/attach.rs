@@ -99,7 +99,7 @@ impl Attached {
         .map_err(refused)?;
         if capability_of(approved.meta).writes_files() {
             policy.check_write_targets(&named, roots).map_err(refused)?;
-            refuse_unchecked_side_writes(connection, &approved).map_err(refused)?;
+            check_side_writes(policy, roots, connection, &approved).map_err(refused)?;
         }
         let mut reply = connection
             .ask(approved.command.as_str(), &approved.operands)
@@ -176,10 +176,14 @@ fn names_its_document(approved: &Approved) -> Result<(), String> {
 
 /// A save writes more than the document it names when that is a project file
 /// (the libraries it has pending); the headless run lists them with the app's
-/// `save_side_writes` and confines each. The running app does not tell them, so
-/// an attached save of a project file is refused: a sheet's plain save writes
-/// nothing else. Any other file-writing command is not on the agent channel.
-fn refuse_unchecked_side_writes(
+/// `save_side_writes` and confines each. The running app tells them in the
+/// `save_writes` of its `document_info` answer for a project, and each is
+/// confined the same way; a sheet's plain save writes nothing else. A project
+/// whose answer lacks the list is refused (fail closed). Any other
+/// file-writing command is not on the agent channel.
+fn check_side_writes(
+    policy: &Policy,
+    roots: &[PathBuf],
     connection: &mut Connection,
     approved: &Approved,
 ) -> Result<(), String> {
@@ -196,14 +200,30 @@ fn refuse_unchecked_side_writes(
             "document_info",
             &[("document".to_string(), text.to_string())],
         )?;
-        let kind = reply.data.as_ref().and_then(|data| data["kind"].as_str());
-        if matches!(kind, None | Some("project")) {
-            return Err(format!(
-                "`{}` of a {} is not available to an attached run: the files its save writes \
-                 besides it cannot be checked here; save its sheets, or run headless",
-                approved.command.as_str(),
-                kind.unwrap_or("document of unknown kind"),
-            ));
+        let data = reply.data.as_ref();
+        match data.and_then(|data| data["kind"].as_str()) {
+            Some("project") => {
+                let writes = data
+                    .and_then(|data| data["save_writes"].as_array())
+                    .ok_or_else(|| {
+                        format!(
+                            "`{}`: the running Signex did not say what saving the project writes",
+                            approved.command.as_str()
+                        )
+                    })?
+                    .iter()
+                    .map(|file| file.as_str().map(PathBuf::from))
+                    .collect::<Option<Vec<_>>>()
+                    .ok_or("the running Signex named a file its save writes without a path")?;
+                policy.check_write_targets(&writes, roots)?;
+            }
+            Some(_) => {}
+            None => {
+                return Err(format!(
+                    "`{}` of a document of unknown kind is not available to an attached run",
+                    approved.command.as_str()
+                ));
+            }
         }
     }
     Ok(())

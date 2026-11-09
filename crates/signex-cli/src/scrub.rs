@@ -144,6 +144,15 @@ mod tests {
         assert_eq!(unknown_id("u")["what"], "unknown");
     }
 
+    /// A `document_info` answer for the run's own project keeps the files its
+    /// save writes (not a judged key).
+    #[test]
+    fn a_projects_save_writes_survive_as_the_answers_own_data() {
+        let info = json!({"path": "/a/P.snxprj", "kind": "project",
+            "save_writes": ["/a/libs/n.snxlib"]});
+        assert_eq!(scrub_data(info.clone(), &inside), Some(info));
+    }
+
     /// An unsaved sheet has a null `path`: it is shown only if its project is
     /// proven inside; its elements say no project, so they are hidden.
     #[test]
