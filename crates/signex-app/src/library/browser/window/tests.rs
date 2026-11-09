@@ -392,6 +392,7 @@ fn grid_element<'a>(
             names: crate::library::browser::names::PrimitiveNames::of(lib),
         },
         tokens,
+        &signex_i18n::I18n::en_us(),
         false,
     )
 }

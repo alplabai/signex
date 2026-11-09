@@ -33,8 +33,20 @@ fn the_dialog_draws_in_every_theme_from_tokens_alone() {
     };
     for id in ThemeId::BUILTINS {
         let tokens = theme_tokens(*id);
-        drop(view(&library, &state, &tokens, false));
-        drop(view(&library, &state, &tokens, true));
+        drop(view(
+            &library,
+            &state,
+            &tokens,
+            &signex_i18n::I18n::en_us(),
+            false,
+        ));
+        drop(view(
+            &library,
+            &state,
+            &tokens,
+            &signex_i18n::I18n::en_us(),
+            true,
+        ));
     }
 }
 

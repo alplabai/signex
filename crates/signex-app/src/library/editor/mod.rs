@@ -585,7 +585,7 @@ mod tests {
             signex_library::RowId::from(state.row.row_id),
         );
         crate::layout_probe::lay_out_texts(
-            view_header(state, &tokens, address, false),
+            view_header(state, &tokens, &signex_i18n::I18n::en_us(), address, false),
             iced::Size::new(1400.0, 200.0),
         )
         .into_iter()

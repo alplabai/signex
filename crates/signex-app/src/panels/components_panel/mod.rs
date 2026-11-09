@@ -612,6 +612,7 @@ mod tests {
                 &state.components_panel,
                 "",
                 tokens,
+                &signex_i18n::I18n::en_us(),
             )
         }
         let texts = crate::layout_probe::lay_out_texts(build(&state, &tokens), window);
@@ -680,6 +681,7 @@ mod tests {
                     &state.components_panel,
                     "",
                     &tokens,
+                    &signex_i18n::I18n::en_us(),
                 )
             };
             let texts = crate::layout_probe::lay_out_texts(build(), window);
@@ -998,6 +1000,7 @@ mod tests {
                     &state.components_panel,
                     "",
                     &tokens,
+                    &signex_i18n::I18n::en_us(),
                 ),
                 window,
             )
