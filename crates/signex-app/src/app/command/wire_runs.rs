@@ -11,6 +11,7 @@ use signex_net::{
 };
 use signex_types::schematic::{Point, SchematicSheet, symbol_crossed_by};
 
+use super::project_names::{aliases_of, needing_merge, project_change_refusal};
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::Signex;
 use crate::app::handlers::canvas::{bus_commands, wire_commands};
@@ -232,12 +233,11 @@ impl Signex {
         // Names on other sheets: a name that reaches the net from there counts.
         let project =
             self.project_name_changes(&after, &[start, end], flag(args, "allow_merge"))?;
-        if let Some(names) = project.first()
+        let rename = needing_merge(&project);
+        if let Some(change) = rename
             && !flag(args, "allow_merge")
         {
-            return Err(super::project_names::project_change_refusal(
-                "wire", start, names,
-            ));
+            return Err(project_change_refusal("wire", start, &change.names));
         }
         if !open.is_empty() && !flag(args, "allow_open") {
             return Err(open_refusal(
@@ -250,13 +250,16 @@ impl Signex {
         let merged = if short {
             names
         } else {
-            project.into_iter().next().unwrap_or_default()
+            rename
+                .map(|change| change.names.clone())
+                .unwrap_or_default()
         };
         let report = json!({
             "ends": ends_json(args, start, end),
             "segments": segments_json(&segments),
             "net": net.map(|n| json!({ "name": n.name, "pins": n.pins })),
             "merged": merged,
+            "aliases": aliases_of(&project),
         });
         Ok((commands, report))
     }
@@ -289,6 +292,14 @@ impl Signex {
                 named.join(" and ")
             ));
         }
+        // Member nets joined across sheets by the run, with names that differ.
+        let project =
+            self.project_name_changes(&after, &[start, end], flag(args, "allow_merge"))?;
+        if let Some(change) = needing_merge(&project)
+            && !flag(args, "allow_merge")
+        {
+            return Err(project_change_refusal("bus", start, &change.names));
+        }
         let open = dangling_bus_ends(sheet, start, end);
         if !open.is_empty() && !flag(args, "allow_open") {
             return Err(open_refusal(&open, start, end, "a bus, bus entry or label"));
@@ -298,6 +309,7 @@ impl Signex {
             "segments": segments_json(&segments),
             "bus": intent.resulting,
             "merged": if merge { intent.names } else { Vec::new() },
+            "aliases": aliases_of(&project),
         });
         Ok((commands, report))
     }

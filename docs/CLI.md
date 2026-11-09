@@ -123,8 +123,11 @@ The same position also takes `<sheet name>.<entry name>`: `Charger.SDA` is the
 connection point of the entry (sheet pin) `SDA` of the sheet symbol `Charger`
 placed on the target sheet, accepted off the grid like a pin tip. The sheet name
 is the symbol's name as `read_document` reports it (`name` of the `sheet_entry`
-element), the entry the sheet pin's `name`, both exact and without whitespace or
-a `.`. An end given so names exactly that sheet pin: another item on its point
+element), the entry the sheet pin's `name`, both exact. The value is split at the
+FIRST `.`, so an entry or pin name may contain a `.` (`U1.A.B` is pin `A.B`) but
+a sheet name or designator may not; a space inside a name is kept
+(`Power Stage.VIN`), the ends of the value are trimmed, and a value with a comma
+is a coordinate. An end given so names exactly that sheet pin: another item on its point
 (a part pin, another entry) is extra, and the project name check applies as for
 any end. `ends` in an answer carries the reference as given. It is refused for a
 sheet or entry that is not on the sheet, two sheet symbols with that name, two
@@ -178,27 +181,37 @@ the sheet belongs to a project, rule 4 (and a placement's name change) compares
 the project's stitched nets (`signex_net::project_name_changes`; net scope is
 `docs/NET_NAMING.md`: net labels local, global labels and power ports joined
 project-wide by name, hierarchical labels through the matching sheet pin, each
-placement of a child sheet with its own nets) before and after. It is a change
-when a net after the edit absorbed two or more nets that carry names (two
-placements of one child sheet are two nets, and so are two nets that carry the
-same name set), or one named net and gained a name it did not carry (a local
-label naming a sheet-pin net differently gives a signal a second name). A net
-with no name, here or on another sheet, may gain one or join a named net
-freely; a name that reaches a net from another sheet makes it named. The extra
-rule stays per sheet. A net that reaches no sheet pin, hierarchical or global
-label or power port is judged on its sheet only and costs no project read. When
-the project cannot be read completely (a sheet missing or unreadable, a child
-reference leaving its folder) and the net reaches one of those, the edit is
-refused with the reason, and `allow_merge=true` places it anyway. A route sent
+placement of a child sheet with its own nets) before and after. A net's own
+names come from net labels, global labels and power ports (a power flag names
+nothing); a name that reaches it only through a child's hierarchical label is
+an alias. A net is compared by its own names if it has any, else by its aliases.
+The edit needs `allow_merge` when a net after it absorbed two nets whose such
+names differ (`I2C1_SDA` and `I2C2_SDA`, `VCC` and `GND`, the alias-only
+`SensorA.SDA` and `SensorB.SCL`), or a net that has own names gained an own name
+it did not carry. Everything else joins freely: the same names (`U1/SDA` and
+`U2/SDA` of two placements of one child join on a shared bus), unnamed nets, a
+net with no own name gaining one (naming a parent net `I2C1_SDA` that reaches
+the entry `SDA`), and an own-named parent net joined to an entry whose child
+label differs. A run's answer lists the names the joined net carries only as
+aliases in `aliases`. The extra rule stays per sheet. A net that reaches no sheet pin, hierarchical or global label or power
+port is judged on its sheet only and costs no project read. A no-connect is
+not judged. A bus run is judged like a wire. When the project cannot be read
+completely (a sheet missing or unreadable, a child reference leaving its
+folder, or the edited sheet not among the project's sheets) and the net reaches
+another sheet, the edit is refused with the reason, and `allow_merge=true`
+places it anyway. A route sent
 as chained `place_wire` edits (A to B, then B to C) is judged per edit against
 the sheet as it stands, so every edit but the last needs `allow_open=true`.
 
 `dry_run=true` (`--dry-run`) answers the report and changes nothing: no undo
-step, no dirty flag, no Messages line. A run that lands answers
+step, no dirty flag, and no Messages line from the run or its checks (reading a
+closed sheet of the project may still show that sheet's own load warnings). A
+run that lands answers
 `{"dry_run": false, "ends": [{"ref": "R1.2", "at": [x, y]}, {"at": [x, y]}],
 "segments": [[x1,y1,x2,y2],...], "net": {"name": "N$3", "pins":
-["C1.1","R1.2"]} | null, "merged": [names]}`; `net` is `null` when no pin is on
-the run's net. `ends` records both ends as given: the pin reference (`ref`,
+["C1.1","R1.2"]} | null, "merged": [names], "aliases": [names]}`; `net` is
+`null` when no pin is on the run's net; `aliases` are the names the joined net
+carries only through a child sheet's hierarchical label. `ends` records both ends as given: the pin reference (`ref`,
 only for an end given as one) and the point it resolved to (`at`), so a
 journal of the run holds both; it carries no file path. `dry_run` is in every
 answer, dry or not. A bus answers the same with `"bus": [names]` for `net`.

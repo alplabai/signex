@@ -109,6 +109,23 @@ fn refusal(outcome: CommandOutcome) -> String {
 }
 
 #[test]
+fn a_sheet_name_with_a_space_is_a_sheet_entry_reference() {
+    let mut named = top();
+    named.child_sheets[0].name = "Power Stage".into();
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_of(&dir, named);
+    let outcome = run(
+        &mut app,
+        "place_wire",
+        &["start=U1.2", "end=Power Stage.SDA"],
+    );
+    let CommandOutcome::Answered(report) = outcome else {
+        panic!("not answered: {outcome:?}");
+    };
+    assert_eq!(report["ends"][1]["ref"], "Power Stage.SDA");
+}
+
+#[test]
 fn a_wire_from_a_part_pin_to_a_sheet_entry_lands_on_the_sheet_pin_and_joins_the_child_net() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = app_of(&dir, top());
@@ -212,6 +229,44 @@ fn a_sheet_entry_reference_is_refused_with_the_reason() {
     }
 }
 
+/// `top()` with only the entry `SDA`, and U2 whose pin 2 tip (30.48, 38.1) is
+/// straight below it, on a net labelled `label`.
+fn top_with_u2(label: &str) -> SchematicSheet {
+    let mut sheet = top();
+    sheet.child_sheets[0].pins.retain(|p| p.name == "SDA");
+    sheet.symbols.push(part("U2", Point::new(26.67, 38.1)));
+    sheet.wires.push(Wire {
+        uuid: Uuid::now_v7(),
+        start: Point::new(30.48, 38.1),
+        end: Point::new(35.56, 38.1),
+        ..Default::default()
+    });
+    sheet
+        .labels
+        .push(Label::new(label, Point::new(35.56, 38.1), LabelType::Net));
+    sheet
+}
+
+#[test]
+fn a_parents_name_wired_to_an_entry_joins_freely_and_the_childs_name_is_an_alias() {
+    let ends = ["start=Charger.SDA", "end=U2.2"];
+    // The child calls its net SDA (an alias on the parent). U2's net is SDA:
+    // the same name, nothing to report; or I2C_SDA: the alias is reported.
+    for (label, aliases) in [
+        ("SDA", serde_json::json!([])),
+        ("I2C_SDA", serde_json::json!(["SDA"])),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_of(&dir, top_with_u2(label));
+        let outcome = run(&mut app, "place_wire", &ends);
+        let CommandOutcome::Answered(report) = outcome else {
+            panic!("not answered: {outcome:?}");
+        };
+        assert_eq!(report["aliases"], aliases, "{label}");
+        assert_eq!(report["merged"], serde_json::json!([]), "{label}");
+    }
+}
+
 #[test]
 fn a_sheet_entry_end_names_only_that_pin_and_a_net_label_on_it_is_judged_across_the_project() {
     // U1.2's tip sits on the entry's point: a wire from the entry would also
@@ -227,17 +282,26 @@ fn a_sheet_entry_end_names_only_that_pin_and_a_net_label_on_it_is_judged_across_
     ));
     assert!(said.contains("pin U1.2"), "{said}");
 
-    // A local label that names the child's net differently is a second name
-    // for one signal: refused unless allow_merge.
+    // A local label on a net that reaches the entry only names it beside the
+    // child's alias: free. A second, different own name is a rename.
     let dir = tempfile::tempdir().unwrap();
     let mut app = app_of(&dir, top());
     run(&mut app, "place_wire", &["start=U1.2", "end=Charger.SDA"]);
+    let outcome = run(
+        &mut app,
+        "place_net_label",
+        &["at=Charger.SDA", "text=I2C_SDA"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
     let said = refusal(run(
         &mut app,
         "place_net_label",
         &["at=Charger.SDA", "text=OTHER"],
     ));
-    assert!(said.contains("reach it from other sheets"), "{said}");
+    assert!(
+        said.contains("would add OTHER to the net {I2C_SDA}"),
+        "{said}"
+    );
     let outcome = run(
         &mut app,
         "place_net_label",

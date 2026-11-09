@@ -45,8 +45,8 @@ pub use signature::{NetSignature, net_members, net_signatures, net_signatures_at
 mod project;
 pub use project::{
     HoverPin, MultiNamedNet, NetAnchor, NetHover, NetIndex, NetMember, NetMemberKind, NetMembers,
-    NetNameSource, NumberingIssue, ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey,
-    SheetNumbering, SheetOccurrence, SheetPage, StitchIssue, build_project_netlist,
+    NetNameSource, NumberingIssue, ProjectGraph, ProjectNetChange, ProjectNetlist, ProjectRoot,
+    SheetKey, SheetNumbering, SheetOccurrence, SheetPage, StitchIssue, build_project_netlist,
     build_project_netlist_indexed, instance_entry_designators, is_auto_name, multi_named_nets,
     project_name_changes, project_occurrences, sheet_numbering,
 };

@@ -187,9 +187,100 @@ fn an_unreadable_project_refuses_what_reaches_other_sheets_and_allows_the_rest()
         &[port[0], port[1], port[2], "allow_merge=true"],
     );
     assert_eq!(outcome, CommandOutcome::Ran);
+    // A no-connect never joins nets or adds a name: it is not judged here.
+    let outcome = run(&mut app, "place_no_connect", &["at=2.54,0"]);
+    assert_eq!(outcome, CommandOutcome::Ran);
     // A net label on a net nothing links outward is allowed.
     let outcome = run(&mut app, "place_net_label", &["at=5.08,20.32", "text=FREE"]);
     assert_eq!(outcome, CommandOutcome::Ran);
+}
+
+#[test]
+fn a_sheet_opened_under_another_spelling_than_the_parent_writes_is_still_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    // The parent writes `Child.snxsch`; the file and its tab are `child.snxsch`.
+    let mut top = SchematicSheet::default();
+    top.child_sheets
+        .push(sheet_symbol("U", "Child.snxsch", &[]));
+    // The child: a wire on the entry S of its own sheet symbol G (so, across
+    // the project, named S and Q by g.snxsch, though unnamed on this sheet),
+    // and a wire named R.
+    let mut inner = SchematicSheet::default();
+    inner
+        .child_sheets
+        .push(sheet_symbol("G", "g.snxsch", &[("S", (0.0, 0.0))]));
+    inner.wires.push(wire((0.0, 0.0), (10.16, 0.0)));
+    inner.wires.push(wire((0.0, 20.32), (10.16, 20.32)));
+    inner
+        .labels
+        .push(Label::new("R", Point::new(5.08, 20.32), LabelType::Net));
+    let mut grand = child_with(&["S"]);
+    grand
+        .labels
+        .push(Label::new("Q", Point::new(5.08, 0.0), LabelType::Net));
+    write(&dir.path().join("top.snxsch"), top);
+    write(&dir.path().join("child.snxsch"), inner);
+    write(&dir.path().join("g.snxsch"), grand);
+    if !dir.path().join("Child.snxsch").exists() {
+        return; // a case-sensitive volume: the spelling is a different file
+    }
+    // The project lists the child as a page under its own spelling.
+    let _ = crate::diagnostics::init_logging();
+    let mut app = app_workspace(
+        &dir.path().to_string_lossy(),
+        &["top.snxsch", "child.snxsch"],
+    );
+    // This volume ignores case, so the project keys `Child` and `child` as one.
+    app.document_state.projects[0].case_fold = crate::app::state::scope::CaseFold::FOLD;
+    app.ui_state.snap_enabled = false;
+    app.open_or_focus_sheet_path(dir.path().join("child.snxsch"));
+    app.refresh_panel_ctx();
+    let reason = refusal(run(
+        &mut app,
+        "place_wire",
+        &["start=10.16,0", "end=10.16,20.32"],
+    ));
+    assert!(reason.contains("reach it from other sheets"), "{reason}");
+}
+
+fn bus(a: (f64, f64), b: (f64, f64)) -> signex_types::schematic::Bus {
+    signex_types::schematic::Bus {
+        uuid: Uuid::now_v7(),
+        start: Point::new(a.0, a.1),
+        end: Point::new(b.0, b.1),
+    }
+}
+
+#[test]
+fn a_bus_run_is_judged_on_the_project_like_a_wire() {
+    // A bus run is judged on the project like a wire: from the end of a bus
+    // that a hierarchical label takes to another sheet, in a project that
+    // cannot be read (a join of member nets across sheets needs the same
+    // stitch; two member nets of one bus carry one name on a sheet, so the
+    // unreadable case is the observable one).
+    let dir = tempfile::tempdir().unwrap();
+    let mut top = SchematicSheet::default();
+    top.buses.push(bus((0.0, 0.0), (0.0, 20.32)));
+    top.labels.push(Label::new(
+        "D[0..3]",
+        Point::new(0.0, 20.32),
+        LabelType::Hierarchical,
+    ));
+    top.child_sheets.push(sheet_symbol("U", "gone.snxsch", &[]));
+    write(&dir.path().join("top.snxsch"), top);
+    let mut app = open_project(&dir);
+    let run_from = ["start=0,20.32", "end=20.32,20.32", "allow_open=true"];
+    let reason = refusal(run(&mut app, "place_bus", &run_from));
+    assert!(reason.contains("cannot be read completely"), "{reason}");
+    let outcome = run(
+        &mut app,
+        "place_bus",
+        &[run_from[0], run_from[1], run_from[2], "allow_merge=true"],
+    );
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
 }
 
 #[test]
@@ -277,7 +368,7 @@ fn child_with(names: &[&str]) -> SchematicSheet {
 }
 
 #[test]
-fn a_short_is_refused_even_when_another_net_carries_the_same_names() {
+fn two_entries_named_only_by_the_child_with_different_names_are_a_rename() {
     let dir = tempfile::tempdir().unwrap();
     let mut top = SchematicSheet::default();
     let entries = [("A", (0.0, 0.0)), ("B", (0.0, 20.32))];
@@ -292,9 +383,44 @@ fn a_short_is_refused_even_when_another_net_carries_the_same_names() {
     write(&dir.path().join("top.snxsch"), top);
     write(&dir.path().join("c.snxsch"), child_with(&["A", "B"]));
     let mut app = open_project(&dir);
+    // Alias-only nets A and B (the globals elsewhere change nothing): two
+    // signals made one.
     let ends = ["start=5.08,0", "end=5.08,20.32"];
     let reason = refusal(run(&mut app, "place_wire", &ends));
     assert!(reason.contains("{A, B}"), "{reason}");
+    let outcome = run(
+        &mut app,
+        "place_wire",
+        &[ends[0], ends[1], "allow_merge=true"],
+    );
+    let CommandOutcome::Answered(report) = outcome else {
+        panic!("not answered: {outcome:?}");
+    };
+    assert_eq!(report["aliases"], serde_json::json!(["A", "B"]));
+    assert_eq!(report["merged"], serde_json::json!(["A", "B"]));
+}
+
+#[test]
+fn two_nets_with_different_own_names_are_a_rename_across_the_project() {
+    // The parent's nets are named SDA_A and SDA_B by net labels; the entries
+    // carry the child's aliases. A wire between them is refused.
+    let dir = tempfile::tempdir().unwrap();
+    let mut top = SchematicSheet::default();
+    let entries = [("A", (0.0, 0.0)), ("B", (0.0, 20.32))];
+    top.child_sheets
+        .push(sheet_symbol("U", "c.snxsch", &entries));
+    top.wires.push(wire((0.0, 0.0), (5.08, 0.0)));
+    top.wires.push(wire((0.0, 20.32), (5.08, 20.32)));
+    for (text, y) in [("SDA_A", 0.0), ("SDA_B", 20.32)] {
+        top.labels
+            .push(Label::new(text, Point::new(5.08, y), LabelType::Net));
+    }
+    write(&dir.path().join("top.snxsch"), top);
+    write(&dir.path().join("c.snxsch"), child_with(&["A", "B"]));
+    let mut app = open_project(&dir);
+    let ends = ["start=5.08,0", "end=5.08,20.32"];
+    let reason = refusal(run(&mut app, "place_wire", &ends));
+    assert!(reason.contains("allow_merge"), "{reason}");
     let outcome = run(
         &mut app,
         "place_wire",
@@ -307,29 +433,31 @@ fn a_short_is_refused_even_when_another_net_carries_the_same_names() {
 }
 
 #[test]
-fn two_placements_of_one_child_are_two_nets_and_a_wire_between_them_is_a_short() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut top = SchematicSheet::default();
-    for (name, y) in [("U1", 0.0), ("U2", 20.32)] {
-        top.child_sheets
-            .push(sheet_symbol(name, "c.snxsch", &[("SIG", (0.0, y))]));
-        top.wires.push(wire((0.0, y), (5.08, y)));
-    }
-    write(&dir.path().join("top.snxsch"), top);
-    write(&dir.path().join("c.snxsch"), child_with(&["SIG"]));
-    let mut app = open_project(&dir);
+fn two_placements_of_one_child_join_freely_on_the_same_entry_and_not_on_different_ones() {
     let ends = ["start=5.08,0", "end=5.08,20.32"];
-    let reason = refusal(run(&mut app, "place_wire", &ends));
-    assert!(reason.contains("{SIG}"), "{reason}");
-    let outcome = run(
-        &mut app,
-        "place_wire",
-        &[ends[0], ends[1], "allow_merge=true"],
-    );
-    assert!(
-        matches!(outcome, CommandOutcome::Answered(_)),
-        "{outcome:?}"
-    );
+    for (second, rename) in [("SIG", false), ("SCL", true)] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut top = SchematicSheet::default();
+        for (name, entry, y) in [("U1", "SIG", 0.0), ("U2", second, 20.32)] {
+            top.child_sheets
+                .push(sheet_symbol(name, "c.snxsch", &[(entry, (0.0, y))]));
+            top.wires.push(wire((0.0, y), (5.08, y)));
+        }
+        write(&dir.path().join("top.snxsch"), top);
+        write(&dir.path().join("c.snxsch"), child_with(&["SIG", "SCL"]));
+        let mut app = open_project(&dir);
+        let outcome = run(&mut app, "place_wire", &ends);
+        if rename {
+            let reason = refusal(outcome);
+            assert!(reason.contains("{SCL, SIG}"), "{reason}");
+        } else {
+            // The same entry of both placements is a shared bus.
+            assert!(
+                matches!(outcome, CommandOutcome::Answered(_)),
+                "{outcome:?}"
+            );
+        }
+    }
 }
 
 #[test]

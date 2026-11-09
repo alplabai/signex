@@ -111,7 +111,8 @@ fn render() -> String {
          in mm.\n\
          \n\
          A point operand (`at`, `start`, `end`) also takes a pin reference\n\
-         `<designator>.<pin>` (`R1.2`): the pin's tip on the sheet the edit targets.\n\
+         `<designator>.<pin>` (`R1.2`) or `<sheet name>.<entry name>` (`Charger.SDA`):\n\
+         the pin's tip, or the sheet entry's point, on the sheet the edit targets.\n\
          `place_wire`, `draw_wire`, `place_bus` and `draw_bus` check a run before it\n\
          lands and answer with a report (optional operands `allow_merge`,\n\
          `allow_open`, `dry_run`); rules in [CLI.md](CLI.md), \"Wire intent\".\n\

@@ -61,7 +61,7 @@ mod root_order;
 mod sheet_numbers;
 
 pub use members::{NetMember, NetMemberKind, NetMembers};
-pub use name_changes::project_name_changes;
+pub use name_changes::{ProjectNetChange, project_name_changes};
 pub use names::{MultiNamedNet, NetNameSource};
 pub use net_index::{HoverPin, NetAnchor, NetHover, NetIndex, is_auto_name};
 

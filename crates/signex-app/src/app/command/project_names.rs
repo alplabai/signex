@@ -8,6 +8,7 @@
 //! stands. The check is read-only and silent: no Messages line. Rules:
 //! `docs/CLI.md`, "Why `allow_merge`".
 
+use signex_net::ProjectNetChange;
 use signex_types::schematic::{Point, SchematicSheet};
 
 use crate::app::Signex;
@@ -15,20 +16,21 @@ use crate::app::project_sheets::{
     ProjectSheetSet, assemble_project_sheets_quiet, project_graph_quiet, project_pages,
     project_roots, resolve_netlist_root_for, sheet_key_with,
 };
+use crate::app::state::scope::path_key_with;
 
 impl Signex {
-    /// The name sets of the nets of the project that the edit, which turned the
-    /// edit target into `after` at `points`, merges or renames (empty for a
-    /// loose sheet, and for an edit whose nets reach no other sheet: nothing
-    /// there can carry a name from elsewhere). When the project cannot be read
-    /// completely and a net of the edit reaches another sheet, its names are
-    /// unknown: refused, unless `allow_merge`.
+    /// The nets of the project that the edit, which turned the edit target into
+    /// `after` at `points`, merges or renames, with whether each needs
+    /// `allow_merge` (empty for a loose sheet, and for an edit whose nets reach
+    /// no other sheet: nothing there can carry a name from elsewhere). When the
+    /// project cannot be read completely and a net of the edit reaches another
+    /// sheet, its names are unknown: refused, unless `allow_merge`.
     pub(super) fn project_name_changes(
         &self,
         after: &SchematicSheet,
         points: &[Point],
         allow_merge: bool,
-    ) -> Result<Vec<Vec<String>>, String> {
+    ) -> Result<Vec<ProjectNetChange>, String> {
         let docs = &self.document_state;
         let Some(path) = docs.edit_path().map(std::path::Path::to_path_buf) else {
             return Ok(Vec::new());
@@ -57,10 +59,6 @@ impl Signex {
             own = assemble();
             &mut own
         };
-        // A sheet the project's netlist does not reach has no names to share.
-        if !set.sheets.contains_key(&path) {
-            return Ok(Vec::new());
-        }
         let complete = set.unreadable.is_empty()
             && set.absent.is_empty()
             && set.refused.is_empty()
@@ -78,10 +76,25 @@ impl Signex {
         let Some(current) = docs.edit_engine().map(|e| e.document().clone()) else {
             return Ok(Vec::new());
         };
+        // The walk keys a sheet by the spelling it first met (`Child.snxsch`
+        // for a tab opened as `child.snxsch`): find it as the walk dedupes.
+        let wanted = path_key_with(&path, fold);
+        let Some(spelled) = set
+            .sheets
+            .keys()
+            .find(|p| path_key_with(p, fold) == wanted)
+            .cloned()
+        else {
+            return if allow_merge {
+                Ok(Vec::new())
+            } else {
+                Err("this sheet is not among the sheets the project reads, so the names on its net are unknown; pass allow_merge=true to place it anyway (see docs/CLI.md, \"Why allow_merge\")".to_string())
+            };
+        };
         let base = project.dir().to_path_buf();
-        set.sheets.insert(path.clone(), current);
+        set.sheets.insert(spelled.clone(), current);
         let before = project_graph_quiet(&set.sheets, Some(&base), Some(&root), fold);
-        set.sheets.insert(path, after.clone());
+        set.sheets.insert(spelled, after.clone());
         let after_graph = project_graph_quiet(&set.sheets, Some(&base), Some(&root), fold);
         let roots = project_roots(
             sheet_key_with(&root, Some(&base), fold),
@@ -105,6 +118,19 @@ impl Signex {
             &project_after,
         ))
     }
+}
+
+/// The first change that needs `allow_merge`.
+pub(super) fn needing_merge(changes: &[ProjectNetChange]) -> Option<&ProjectNetChange> {
+    changes.iter().find(|change| change.needs_allow_merge)
+}
+
+/// The names the changed nets now carry only through a child's hierarchical
+/// label, sorted.
+pub(super) fn aliases_of(changes: &[ProjectNetChange]) -> Vec<String> {
+    let aliases: std::collections::BTreeSet<&String> =
+        changes.iter().flat_map(|change| &change.aliases).collect();
+    aliases.into_iter().cloned().collect()
 }
 
 /// The refusal for an edit that gives a net of the project names it did not

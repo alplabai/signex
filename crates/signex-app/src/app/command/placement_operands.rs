@@ -305,16 +305,22 @@ impl Signex {
         if !intent.extra.is_empty() {
             return Err(super::wire_runs::extra_refusal(&subject, &intent.extra));
         }
-        if matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true))) {
+        // A no-connect never joins nets or adds a name: nothing to judge.
+        if what == "no-connect"
+            || matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true)))
+        {
             return Ok(());
         }
         if let Some(change) = intent.changes.first() {
             return Err(name_change_refusal(what, at, change));
         }
         // Names that reach the net from other sheets.
-        match self.project_name_changes(&after, &[at], false)?.first() {
-            Some(names) => Err(super::project_names::project_change_refusal(
-                what, at, names,
+        let project = self.project_name_changes(&after, &[at], false)?;
+        match super::project_names::needing_merge(&project) {
+            Some(change) => Err(super::project_names::project_change_refusal(
+                what,
+                at,
+                &change.names,
             )),
             None => Ok(()),
         }

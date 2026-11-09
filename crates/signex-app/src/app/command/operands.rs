@@ -158,9 +158,9 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
         OperandKind::Point if !text.contains(',') && is_number_pair(text) => {
             Err(invalid("x,y in mm"))
         }
-        OperandKind::Point if !text.contains(',') => {
-            pin_ref(text).ok_or_else(|| invalid("x,y in mm, or a pin reference like R1.2"))
-        }
+        OperandKind::Point if !text.contains(',') => pin_ref(text).ok_or_else(|| {
+            invalid("x,y in mm, a pin reference like R1.2, or a sheet entry like Charger.SDA")
+        }),
         OperandKind::Point => {
             let (x, y) = text.split_once(',').ok_or_else(|| invalid("x,y in mm"))?;
             // A coordinate the document cannot store as nm would make it unsaveable.
@@ -209,11 +209,13 @@ fn is_number_pair(text: &str) -> bool {
         || text.parse::<f64>().is_ok()
 }
 
-/// `<designator>.<pin>`, split at the first `.`; neither side empty, no
-/// whitespace or control characters.
+/// `<designator>.<pin>` or `<sheet name>.<entry name>`, split at the first `.`
+/// (an entry or pin name may contain a `.`, a designator or sheet name may
+/// not); neither side empty, no control characters. The value is trimmed; a
+/// space inside a name (`Power Stage.VIN`) stays.
 fn pin_ref(text: &str) -> Option<OperandValue> {
-    let (designator, pin) = text.split_once('.')?;
-    let clean = |s: &str| !s.is_empty() && !s.chars().any(|c| c.is_whitespace() || c.is_control());
+    let (designator, pin) = text.trim().split_once('.')?;
+    let clean = |s: &str| !s.is_empty() && !s.chars().any(char::is_control);
     (clean(designator) && clean(pin)).then(|| OperandValue::PinRef {
         designator: designator.to_string(),
         pin: pin.to_string(),
@@ -264,6 +266,9 @@ mod tests {
             ("R1.2", pin("R1", "2")),
             ("U1.VCC", pin("U1", "VCC")),
             ("U1.A.B", pin("U1", "A.B")),
+            // A space inside a sheet name stays; the ends are trimmed.
+            ("Power Stage.VIN", pin("Power Stage", "VIN")),
+            (" R1.2 ", pin("R1", "2")),
         ] {
             let args = parse("place_junction", &[&format!("at={text}")]).unwrap();
             assert_eq!(args.operand("at"), Some(&want), "{text}");
@@ -276,7 +281,7 @@ mod tests {
             Some(&OperandValue::Point(1.5, 2.0))
         );
         for bad in [
-            "R1", "R1.", ".2", "R 1.2", "R1.\t2", "R1.2,", "1,a.b", "1.5", "10.16", "5",
+            "R1", "R1.", ".2", "R1.\t2", "R1.2,", "1,a.b", "1.5", "10.16", "5",
         ] {
             let err = parse("place_junction", &[&format!("at={bad}")]).unwrap_err();
             assert!(matches!(err, OperandError::Invalid { .. }), "{bad}: {err}");
