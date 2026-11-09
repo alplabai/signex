@@ -83,6 +83,7 @@ fn every_field_is_accounted_for() {
     let Symbol {
         uuid: _,
         lib_id: _,
+        body_ref: _,
         reference: _,
         value: _,
         footprint: _,

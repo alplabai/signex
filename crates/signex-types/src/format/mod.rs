@@ -129,7 +129,12 @@ use tsv::{parse_optional_block, write_tsv_section};
 /// Current `.snxsch` format version. The token is `<kind>/<major>[.<minor>]`;
 /// see `version.rs` for the load/save policy. A major bump is a wire-format
 /// break: older Signex versions refuse to open the file.
-pub const SNXSCH_FORMAT_V1: &str = "snxsch/1";
+///
+/// 1.1 (#2209): `lib_symbols` is keyed by body ref (`<lib_id>#<hash>`) and a
+/// symbol names its body in `body_ref`. A 1.0 build reads that table by
+/// `lib_id` and would show parts without pins, so 1.0 builds open 1.1 files
+/// read-only (`is_newer_minor`) instead.
+pub const SNXSCH_FORMAT_V1: &str = "snxsch/1.1";
 
 /// Current `.snxpcb` format version. 1.1: pads are keyed to their footprint
 /// by uuid (1.0 keyed by reference designator) and the stackup carries
@@ -620,7 +625,10 @@ impl SnxSchematic {
                 load_repairs: Vec::new(),
             },
         };
+        sheet.upgrade_unversioned_bodies();
+        let body_repairs = sheet.repair_dangling_body_refs();
         sheet.unknown.load_repairs = uuid_repair::repair_duplicate_uuids(&mut sheet);
+        sheet.unknown.load_repairs.splice(0..0, body_repairs);
         let size_repairs = text_size_repair::clamp_oversize_text(&mut sheet);
         sheet.unknown.load_repairs.extend(size_repairs);
 

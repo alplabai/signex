@@ -72,6 +72,16 @@ pub enum SheetLoadRepair {
         old: Uuid,
         new: Uuid,
     },
+    /// A symbol named an embedded library symbol version the sheet does not
+    /// hold (#2209). `repointed` is the only version of that library symbol
+    /// on the sheet, which the symbol now draws with; `None` leaves the
+    /// symbol dangling, with `versions` other versions on the sheet.
+    BodyRefDangling {
+        object: RepairedObject,
+        missing: String,
+        repointed: Option<String>,
+        versions: usize,
+    },
 }
 
 impl RepairedObject {
@@ -128,6 +138,24 @@ impl SheetLoadRepair {
                 old,
                 new,
             } => format!("pin {pin} of symbol {symbol} repeated uuid {old}; new uuid {new}"),
+            Self::BodyRefDangling {
+                object,
+                missing,
+                repointed: Some(to),
+                ..
+            } => format!(
+                "{} drew with library symbol version {missing}, which the sheet does not                  hold; now draws with {to}, the only version of it here",
+                object.label()
+            ),
+            Self::BodyRefDangling {
+                object,
+                missing,
+                versions,
+                ..
+            } => format!(
+                "{} draws with library symbol version {missing}, which the sheet does not                  hold ({versions} other versions here); it draws without pins until                  updated from the library",
+                object.label()
+            ),
         }
     }
 }

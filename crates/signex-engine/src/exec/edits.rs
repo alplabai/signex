@@ -365,17 +365,22 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
-            Command::UpdateSymbolLibId { symbol_id, lib_id } => {
+            Command::UpdateSymbolLibId {
+                symbol_id,
+                lib_id,
+                body_ref,
+            } => {
                 let changed = self
                     .document
                     .symbols
                     .iter_mut()
                     .find(|s| s.uuid == symbol_id)
                     .map(|s| {
-                        if s.lib_id == lib_id {
+                        if s.lib_id == lib_id && s.body_ref == body_ref {
                             false
                         } else {
                             s.lib_id = lib_id;
+                            s.body_ref = body_ref;
                             true
                         }
                     })
