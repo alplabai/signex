@@ -19,6 +19,9 @@ mod document_operand_tests;
 mod document_operands;
 pub(crate) mod enablement;
 #[cfg(test)]
+mod file_operand_tests;
+mod file_operands;
+#[cfg(test)]
 mod headless_gui_only_tests;
 #[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
@@ -154,7 +157,10 @@ impl Signex {
         if let Some(window_id) = window
             && matches!(command.as_str(), "undo" | "redo")
             && self.undocked_tab_has_canvas(window)
-            && self.undo_target(window) != UndoTarget::None
+            && !matches!(
+                self.undo_target(window),
+                UndoTarget::None | UndoTarget::Document(DocumentKey::Pcb(_))
+            )
         {
             let mut outcome = CommandOutcome::Ran;
             let task = self.run_in_window(window_id, true, |app| {
@@ -173,8 +179,7 @@ impl Signex {
             && let target = self.undo_target(window)
             && !matches!(
                 target,
-                UndoTarget::ProjectRules(_)
-                    | UndoTarget::Document(DocumentKey::Schematic(_) | DocumentKey::Pcb(_))
+                UndoTarget::ProjectRules(_) | UndoTarget::Document(DocumentKey::Schematic(_))
             )
         {
             let undo = command.as_str() == "undo";

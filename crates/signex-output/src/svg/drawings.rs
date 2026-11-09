@@ -50,6 +50,7 @@ pub(super) fn push_sch_drawing_path(
                     SvgPathCommand::LineTo(pt(xform.x(end.x), xform.px_y(end.y))),
                 ],
                 style: SvgStyle {
+                    stroke_alpha: 1.0,
                     stroke_rgb: Some(stroke),
                     fill_rgb: None,
                     stroke_width: (w_mm * xform.mm_to_unit) as f32,
@@ -74,6 +75,7 @@ pub(super) fn push_sch_drawing_path(
                 x2 - x1,
                 y2 - y1,
                 SvgStyle {
+                    stroke_alpha: 1.0,
                     stroke_rgb: Some(stroke),
                     fill_rgb: fill_to_rgb(*fill, stroke, body_fill),
                     stroke_width: (w_mm * xform.mm_to_unit) as f32,
@@ -104,6 +106,7 @@ pub(super) fn push_sch_drawing_path(
             out.push(SvgElement::Path {
                 commands: cmds,
                 style: SvgStyle {
+                    stroke_alpha: 1.0,
                     stroke_rgb: Some(stroke),
                     fill_rgb: fill_to_rgb(*fill, stroke, body_fill),
                     stroke_width: (w_mm * xform.mm_to_unit) as f32,
@@ -125,6 +128,7 @@ pub(super) fn push_sch_drawing_path(
                 cy,
                 r,
                 SvgStyle {
+                    stroke_alpha: 1.0,
                     stroke_rgb: Some(stroke),
                     fill_rgb: fill_to_rgb(*fill, stroke, body_fill),
                     stroke_width: (w_mm * xform.mm_to_unit) as f32,
@@ -151,6 +155,7 @@ pub(super) fn push_sch_drawing_path(
             out.push(SvgElement::Path {
                 commands: cmds,
                 style: SvgStyle {
+                    stroke_alpha: 1.0,
                     stroke_rgb: Some(stroke),
                     fill_rgb: fill_to_rgb(*fill, stroke, body_fill),
                     stroke_width: (w_mm * xform.mm_to_unit) as f32,

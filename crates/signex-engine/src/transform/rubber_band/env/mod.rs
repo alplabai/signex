@@ -8,9 +8,14 @@ use signex_net::{point_on_segment, pt_key, uf::Key};
 use signex_types::schematic::{Point, SchematicSheet, SymbolTransform, Wire, instance_pins};
 use uuid::Uuid;
 
+#[cfg(test)]
+pub(crate) use grid::scan_all_on;
+use grid::{Grid, Kind};
+
 use super::{Move, Policy};
 
 mod follow;
+mod grid;
 mod overlap;
 mod route;
 
@@ -43,6 +48,13 @@ pub(super) struct Env {
     /// Where every moving pin's tip was: a joint on one of these is where a
     /// pin still has to be reconnected, so it cannot slide.
     old_tips: HashSet<Key>,
+    /// Where things are, so a question reads what is near and not the sheet.
+    grid: Grid,
+    /// Dots and no-connects the pass moved: the only ones written back.
+    moved_junctions: Vec<usize>,
+    moved_no_connects: Vec<usize>,
+    /// While a follow may still be undone: each wire end it moved, as it was.
+    undo: Option<Vec<(usize, Point, Point)>>,
 }
 
 /// Everything on an old tip other than the wires attached to it.
@@ -104,7 +116,7 @@ impl Env {
         for pin in document.child_sheets.iter().flat_map(|c| c.pins.iter()) {
             tips.push((pin.uuid, key(&pin.position)));
         }
-        Self {
+        let mut env = Self {
             wires: document.wires.clone(),
             removed: HashSet::new(),
             placed: HashSet::new(),
@@ -129,7 +141,76 @@ impl Env {
             selected,
             moving,
             old_tips,
+            grid: Grid::default(),
+            moved_junctions: Vec::new(),
+            moved_no_connects: Vec::new(),
+            undo: None,
+        };
+        env.build_grid();
+        env
+    }
+
+    fn build_grid(&mut self) {
+        #[cfg(test)]
+        if grid::scan_all_requested() {
+            self.grid.scan_all();
         }
+        for index in 0..self.wires.len() {
+            self.refile_wire(index);
+        }
+        for (index, (_, p)) in self.labels.iter().enumerate() {
+            self.grid.file(Kind::Label, index, key(p), key(p));
+        }
+        for (index, (_, p)) in self.junctions.iter().enumerate() {
+            self.grid.file(Kind::Junction, index, key(p), key(p));
+        }
+        for (index, (_, p)) in self.no_connects.iter().enumerate() {
+            self.grid.file(Kind::NoConnect, index, key(p), key(p));
+        }
+        for (index, (_, k)) in self.tips.iter().enumerate() {
+            self.grid.file(Kind::Tip, index, *k, *k);
+        }
+    }
+
+    /// Wire `index` has a new place (or is new): file it there too.
+    pub(super) fn refile_wire(&mut self, index: usize) {
+        let wire = &self.wires[index];
+        self.grid
+            .file(Kind::Wire, index, key(&wire.start), key(&wire.end));
+    }
+
+    /// Indices of the wires with a box over `k` (live or not).
+    pub(super) fn grid_wires_at(&self, k: Key) -> Vec<usize> {
+        self.grid.near(Kind::Wire, k, k, self.wires.len())
+    }
+
+    /// Indices of the no-connects that can be on `k`.
+    pub(super) fn no_connects_near(&self, k: Key) -> Vec<usize> {
+        self.grid
+            .near(Kind::NoConnect, k, k, self.no_connects.len())
+    }
+
+    /// No-connect `index` has a new place: file it there too.
+    pub(super) fn file_no_connect(&mut self, index: usize) {
+        let k = key(&self.no_connects[index].1);
+        self.grid.file(Kind::NoConnect, index, k, k);
+    }
+
+    /// Dot `index` has a new place: file it there too.
+    pub(super) fn file_junction(&mut self, index: usize) {
+        let k = key(&self.junctions[index].1);
+        self.grid.file(Kind::Junction, index, k, k);
+    }
+
+    /// The live wires that can meet the box `a`-`b`, in sheet order.
+    pub(super) fn wires_near(&self, a: Key, b: Key) -> Vec<(usize, &Wire)> {
+        (self
+            .grid
+            .near(Kind::Wire, a, b, self.wires.len())
+            .into_iter())
+        .filter(|index| !self.removed.contains(index))
+        .map(|index| (index, &self.wires[index]))
+        .collect()
     }
 
     pub(in crate::transform::rubber_band) fn write_back(self, document: &mut SchematicSheet) {
@@ -138,9 +219,12 @@ impl Env {
             removed,
             junctions,
             no_connects,
+            moved_junctions,
+            moved_no_connects,
             ..
         } = self;
-        for (uuid, position) in no_connects {
+        for index in moved_no_connects {
+            let (uuid, position) = no_connects[index];
             if let Some(mark) = document.no_connects.iter_mut().find(|n| n.uuid == uuid) {
                 mark.position = position;
             }
@@ -151,24 +235,18 @@ impl Env {
             .filter(|(index, _)| !removed.contains(index))
             .map(|(_, wire)| wire)
             .collect();
-        for (uuid, position) in junctions {
+        for index in moved_junctions {
+            let (uuid, position) = junctions[index];
             if let Some(dot) = document.junctions.iter_mut().find(|j| j.uuid == uuid) {
                 dot.position = position;
             }
         }
     }
 
-    pub(super) fn live(&self) -> impl Iterator<Item = (usize, &Wire)> {
-        self.wires
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| !self.removed.contains(index))
-    }
-
     /// Everything stationary on `at`, ignoring the wire indices in `skip`.
     pub(super) fn probe(&self, at: Key, skip: &[usize]) -> Probe {
         let mut probe = Probe::default();
-        for (index, wire) in self.live() {
+        for (index, wire) in self.wires_near(at, at) {
             if skip.contains(&index) {
                 continue;
             }
@@ -179,23 +257,44 @@ impl Env {
                 probe.interior = true;
             }
         }
-        probe.label = self
-            .labels
-            .iter()
+        let near = |kind, len: usize| self.grid.near(kind, at, at, len);
+        probe.label = near(Kind::Label, self.labels.len())
+            .into_iter()
+            .map(|i| &self.labels[i])
             .any(|(uuid, p)| key(p) == at && !self.selected.contains(uuid));
-        probe.no_connect = self.no_connects.iter().any(|(_, p)| key(p) == at);
-        probe.stationary_pin = self
-            .tips
-            .iter()
+        probe.no_connect = near(Kind::NoConnect, self.no_connects.len())
+            .into_iter()
+            .map(|i| &self.no_connects[i])
+            .any(|(_, p)| key(p) == at);
+        probe.stationary_pin = near(Kind::Tip, self.tips.len())
+            .into_iter()
+            .map(|i| &self.tips[i])
             .any(|(owner, k)| *k == at && !self.moving.contains(owner));
-        probe.junctions = self
-            .junctions
-            .iter()
-            .enumerate()
-            .filter(|(_, (uuid, p))| key(p) == at && !self.selected.contains(uuid))
-            .map(|(index, _)| index)
+        probe.junctions = near(Kind::Junction, self.junctions.len())
+            .into_iter()
+            .filter(|&i| {
+                let (uuid, p) = &self.junctions[i];
+                key(p) == at && !self.selected.contains(uuid)
+            })
             .collect();
         probe
+    }
+
+    /// The keys of the labels, dots, no-connects and pin tips that can meet
+    /// the box `a`-`b`.
+    fn points_near(&self, a: Key, b: Key) -> Vec<Key> {
+        let of = |kind, list: &[(Uuid, Point)]| -> Vec<Key> {
+            (self.grid.near(kind, a, b, list.len()).into_iter())
+                .map(|i| key(&list[i].1))
+                .collect()
+        };
+        let mut keys = of(Kind::Label, &self.labels);
+        keys.extend(of(Kind::Junction, &self.junctions));
+        keys.extend(of(Kind::NoConnect, &self.no_connects));
+        keys.extend(
+            (self.grid.near(Kind::Tip, a, b, self.tips.len()).into_iter()).map(|i| self.tips[i].1),
+        );
+        keys
     }
 
     /// True when `seg` would touch something foreign anywhere but at the
@@ -210,13 +309,14 @@ impl Env {
             end: seg.1,
             ..Default::default()
         };
-        if self
-            .live()
+        let near = self.wires_near(a, b);
+        if near
+            .iter()
             .any(|(_, wire)| wire.locked && overlap::wires_overlap(&probe, wire))
         {
             return true;
         }
-        for (index, wire) in self.live() {
+        for (index, wire) in near {
             if ignore.contains(&index) {
                 continue;
             }
@@ -231,17 +331,9 @@ impl Env {
                 return true;
             }
         }
-        let on = |p: &Point| {
-            let k = key(p);
-            free(k) && point_on_segment(k, a, b)
-        };
-        self.labels.iter().any(|(_, p)| on(p))
-            || self.junctions.iter().any(|(_, p)| on(p))
-            || self.no_connects.iter().any(|(_, p)| on(p))
-            || self
-                .tips
-                .iter()
-                .any(|(_, k)| free(*k) && point_on_segment(*k, a, b))
+        self.points_near(a, b)
+            .into_iter()
+            .any(|k| free(k) && point_on_segment(k, a, b))
     }
 
     /// Anything other than the endpoints strictly inside the span `a`-`b`
@@ -257,17 +349,15 @@ impl Env {
         let (ka, kb) = (key(a), key(b));
         let inside =
             |k: Key| k != ka && k != kb && Some(k) != except && point_on_segment(k, ka, kb);
-        self.live().any(|(index, w)| {
+        self.wires_near(ka, kb).into_iter().any(|(index, w)| {
             !skip.contains(&index) && (inside(key(&w.start)) || inside(key(&w.end)))
-        }) || self.labels.iter().any(|(_, p)| inside(key(p)))
-            || self.junctions.iter().any(|(_, p)| inside(key(p)))
-            || self.no_connects.iter().any(|(_, p)| inside(key(p)))
-            || self.tips.iter().any(|(_, k)| inside(*k))
+        }) || self.points_near(ka, kb).into_iter().any(inside)
     }
 
     /// Unselected, unfinished wires with an end on `at`: `(index, end is start)`.
     pub(super) fn attached(&self, at: Key) -> Vec<(usize, bool)> {
-        self.live()
+        self.wires_near(at, at)
+            .into_iter()
             .filter(|(_, w)| !self.selected.contains(&w.uuid))
             .flat_map(|(index, w)| {
                 let mut ends = Vec::new();

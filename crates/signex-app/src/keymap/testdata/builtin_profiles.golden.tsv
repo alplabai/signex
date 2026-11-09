@@ -146,6 +146,7 @@ altium	hint	-	TAB	placement_properties
 altium	hint	-	Ctrl+Shift+TAB	previous_document_tab
 altium	hint	-	-	previous_grid
 altium	hint	-	Ctrl+P	print
+altium	hint	-	-	query_pins
 altium	hint	-	-	read_document
 altium	hint	-	Ctrl+Y	redo
 altium	hint	-	END	refresh_view
@@ -450,6 +451,7 @@ classic	hint	-	-	placement_properties
 classic	hint	-	-	previous_document_tab
 classic	hint	-	Shift+N	previous_grid
 classic	hint	-	Ctrl+P	print
+classic	hint	-	-	query_pins
 classic	hint	-	-	read_document
 classic	hint	-	Ctrl+Y	redo
 classic	hint	-	F5	refresh_view

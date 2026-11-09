@@ -205,6 +205,7 @@ fn refused_commands() -> Vec<(&'static str, Command)> {
         (
             "change the library id",
             Command::UpdateSymbolLibId {
+                body_ref: String::new(),
                 symbol_id: id(1),
                 lib_id: "Device:C".into(),
             },

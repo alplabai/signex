@@ -26,7 +26,7 @@ const MOVES_PER_SEED: u64 = 4;
 /// fixed key order. A uuid the move minted (a dot, a wire the rubber band
 /// adds) is random in each run, so each is written as its number in order of
 /// appearance; every uuid of `original` is kept as it is.
-fn exact(sheet: &SchematicSheet, original: &SchematicSheet) -> String {
+pub(crate) fn exact(sheet: &SchematicSheet, original: &SchematicSheet) -> String {
     fn walk(
         value: &mut serde_json::Value,
         known: &HashSet<String>,
@@ -70,8 +70,8 @@ fn lattice(rng: &mut Lcg) -> (f64, f64) {
 }
 
 /// A sheet, its net colours set on it (`SchematicSheet::net_colors`).
-struct Rig {
-    sheet: SchematicSheet,
+pub(crate) struct Rig {
+    pub(crate) sheet: SchematicSheet,
 }
 
 const RED: Color = Color::new(255, 0, 0, 255);
@@ -139,7 +139,7 @@ fn add_child(sheet: &mut SchematicSheet, rng: &mut Lcg) {
 /// dots, no-connects, buses with entries, child sheets with pins; wires with
 /// their own colour, a net colour or foreign columns, zero-length wires and
 /// exact duplicates.
-fn random_rig(rng: &mut Lcg) -> Rig {
+pub(crate) fn random_rig(rng: &mut Lcg) -> Rig {
     let mut sheet = test_sheet();
     for n in 0..rng.next(4) {
         let at = Point::new(20.0 + 20.0 * n as f64, 20.0 + 10.0 * rng.next(3) as f64);
@@ -223,7 +223,7 @@ fn random_rig(rng: &mut Lcg) -> Rig {
 }
 
 /// Every selectable item of the sheet that moves.
-fn movable(sheet: &SchematicSheet) -> Vec<SelectedItem> {
+pub(crate) fn movable(sheet: &SchematicSheet) -> Vec<SelectedItem> {
     let item = SelectedItem::new;
     let mut items = Vec::new();
     items.extend(sheet.wires.iter().map(|w| item(w.uuid, SelectedKind::Wire)));
@@ -406,7 +406,7 @@ fn the_local_fold_equals_the_full_scan_over_a_drag() {
     );
 }
 
-fn corpus_sheets() -> Vec<std::path::PathBuf> {
+pub(crate) fn corpus_sheets() -> Vec<std::path::PathBuf> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut paths = Vec::new();
     for dir in [

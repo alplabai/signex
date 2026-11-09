@@ -296,7 +296,10 @@ fn a_parked_board_is_kept_by_the_close_scan_and_prompts_at_quit() {
     app.document_state.tabs.clear();
     app.document_state.park_pcb_board(
         t.path.clone(),
-        crate::app::handlers::document_files::save_async_tests::empty_board(),
+        signex_engine::pcb::BoardEngine::new(
+            crate::app::handlers::document_files::save_async_tests::empty_board(),
+            1,
+        ),
     );
     let refs = app.document_state.sheet_ref_inputs().resolve(|_| true);
     let scan =

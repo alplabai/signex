@@ -760,6 +760,7 @@ fn samples() -> Vec<(String, Command)> {
     add(
         "UpdateSymbolLibId",
         Command::UpdateSymbolLibId {
+            body_ref: String::new(),
             symbol_id: sym,
             lib_id: "L:T".into(),
         },
@@ -844,6 +845,7 @@ fn samples() -> Vec<(String, Command)> {
     add(
         "ReplaceLibSymbol",
         Command::ReplaceLibSymbol {
+            only: None,
             lib_symbol: lib_symbol("L:S", "new"),
             library_versions: vec![(sym, LinkStamp::version("2"))],
         },

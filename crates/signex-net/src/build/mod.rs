@@ -19,9 +19,7 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::designator::compare_references;
 use signex_types::net::{Net, NetId, Netlist, Terminal};
-use signex_types::schematic::{
-    InstancePath, Label, LabelType, Point, SchematicSheet, SymbolTransform, instance_pins,
-};
+use signex_types::schematic::{InstancePath, Label, LabelType, Point, SchematicSheet, pin_tips};
 use uuid::Uuid;
 
 mod connected_items;
@@ -213,9 +211,8 @@ fn power_port_pins_of(sheet: &SchematicSheet, with_flags: bool) -> Vec<(Point, &
         let Some(lib_sym) = sheet.resolve_lib_symbol(sym) else {
             continue;
         };
-        let xform = SymbolTransform::from_symbol(sym);
-        for lp in instance_pins(&lib_sym, sym) {
-            ports.push((xform.apply(lp.pin.position), sym.value.as_str(), sym.uuid));
+        for (_, tip) in pin_tips(&lib_sym, sym) {
+            ports.push((tip, sym.value.as_str(), sym.uuid));
         }
     }
     ports
@@ -574,9 +571,7 @@ pub(crate) fn collect_terminals_at(
         let Some(lib_sym) = sheet.resolve_lib_symbol(sym) else {
             continue;
         };
-        let xform = SymbolTransform::from_symbol(sym);
-        for lp in instance_pins(&lib_sym, sym) {
-            let world_pos = xform.apply(lp.pin.position);
+        for (lp, world_pos) in pin_tips(&lib_sym, sym) {
             if !gate.contains(&world_pos) {
                 continue;
             }

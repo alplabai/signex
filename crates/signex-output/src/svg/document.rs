@@ -71,6 +71,7 @@ impl SvgRenderContext {
             width,
             height,
             SvgStyle {
+                stroke_alpha: 1.0,
                 stroke_rgb: None,
                 fill_rgb: Some(palette.paper),
                 stroke_width: 0.0,
@@ -86,6 +87,7 @@ impl SvgRenderContext {
             (width - 1.0).max(1.0),
             (height - 1.0).max(1.0),
             SvgStyle {
+                stroke_alpha: 1.0,
                 stroke_rgb: Some(palette.sheet_border),
                 fill_rgb: None,
                 stroke_width: 1.0,
@@ -129,6 +131,11 @@ impl SvgRenderContext {
             elements.push(SvgElement::Path {
                 commands,
                 style: SvgStyle {
+                    stroke_alpha: wire_style::wire_alpha(
+                        wire,
+                        &sheet.schematic.net_colors,
+                        &opts.net_class_styles,
+                    ),
                     stroke_rgb: Some(wire_style::wire_rgb(
                         wire,
                         &sheet.schematic.net_colors,
@@ -148,6 +155,7 @@ impl SvgRenderContext {
                     SvgPathCommand::LineTo(pt(xform.x(bus.end.x), xform.px_y(bus.end.y))),
                 ],
                 style: SvgStyle {
+                    stroke_alpha: 1.0,
                     stroke_rgb: Some(palette.bus),
                     fill_rgb: None,
                     stroke_width: (opts.schematic_defaults.bus_mm() * xform.mm_to_unit) as f32,
@@ -168,6 +176,7 @@ impl SvgRenderContext {
                     )),
                 ],
                 style: SvgStyle {
+                    stroke_alpha: 1.0,
                     stroke_rgb: Some(palette.bus_entry),
                     fill_rgb: None,
                     stroke_width: (opts.schematic_defaults.wire_mm(0.0, None) * xform.mm_to_unit)
@@ -193,6 +202,7 @@ impl SvgRenderContext {
                 cy,
                 radius,
                 SvgStyle {
+                    stroke_alpha: 1.0,
                     stroke_rgb: Some(junction_rgb),
                     fill_rgb: Some(junction_rgb),
                     stroke_width: 0.8,
@@ -284,6 +294,7 @@ impl SvgRenderContext {
                 w,
                 h,
                 SvgStyle {
+                    stroke_alpha: 1.0,
                     stroke_rgb: Some(palette.child_sheet_stroke),
                     fill_rgb: None,
                     stroke_width: (opts.schematic_defaults.shape_stroke_mm(child.stroke_width)
@@ -319,10 +330,6 @@ impl SvgRenderContext {
         }
 
         // Full symbol body graphics from library definitions.
-        let mut lib_by_id: HashMap<&str, &signex_types::schematic::LibSymbol> = HashMap::new();
-        for ls in sheet.schematic.lib_symbols.values() {
-            lib_by_id.entry(ls.id.as_str()).or_insert(ls);
-        }
         for sym in &sheet.schematic.symbols {
             let symbol_vars = symbol_eval_variables(sym);
             let mut refdes_vars = HashMap::new();
@@ -346,11 +353,7 @@ impl SvgRenderContext {
                     ))
             });
 
-            let lib = lib_by_id
-                .get(sym.lib_id.as_str())
-                .copied()
-                .map(std::borrow::Cow::Borrowed)
-                .or_else(|| sheet.schematic.resolve_lib_symbol(sym));
+            let lib = sheet.schematic.resolve_lib_symbol(sym);
             if let Some(lib) = lib {
                 push_symbol_lib_graphics(
                     &mut elements,
@@ -377,6 +380,7 @@ impl SvgRenderContext {
                     (10.0 * xform.mm_to_unit) as f32,
                     (10.0 * xform.mm_to_unit) as f32,
                     SvgStyle {
+                        stroke_alpha: 1.0,
                         stroke_rgb: Some(palette.symbol_stroke),
                         fill_rgb: None,
                         stroke_width: (opts.schematic_defaults.symbol_line_mm(0.0)
@@ -504,6 +508,7 @@ impl SvgRenderContext {
                             let mut paint = Paint::default();
                             let (mr, mg, mb) = map_ink_mode((r, g, b), colour_mode, self.paper);
                             paint.set_color(rgb_to_color(mr, mg, mb));
+                            paint.shader.apply_opacity(style.stroke_alpha);
                             let stroke = Stroke {
                                 width: style.stroke_width.max(0.5),
                                 ..Stroke::default()
@@ -562,10 +567,15 @@ fn encode_svg_document(width: f32, height: f32, elements: &[SvgElement]) -> Stri
                     .fill_rgb
                     .map(rgb_css)
                     .unwrap_or_else(|| "none".to_string());
+                let opacity = if style.stroke_alpha < 1.0 {
+                    format!(" stroke-opacity=\"{}\"", style.stroke_alpha)
+                } else {
+                    String::new()
+                };
                 let _ = writeln!(
                     out,
-                    "  <path d=\"{}\" stroke=\"{}\" fill=\"{}\" stroke-width=\"{}\" stroke-linejoin=\"miter\" stroke-linecap=\"square\" />",
-                    d, stroke, fill, style.stroke_width
+                    "  <path d=\"{}\" stroke=\"{}\"{} fill=\"{}\" stroke-width=\"{}\" stroke-linejoin=\"miter\" stroke-linecap=\"square\" />",
+                    d, stroke, opacity, fill, style.stroke_width
                 );
             }
             SvgElement::Text {

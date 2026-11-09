@@ -35,6 +35,17 @@ pub(super) fn rgb(color: Color) -> (f32, f32, f32) {
     )
 }
 
+/// The colour `wire` strokes with: its own, else override, else class.
+fn wire_color(
+    wire: &Wire,
+    net_colors: &HashMap<Uuid, Color>,
+    classes: &HashMap<Uuid, NetClassStyle>,
+) -> Option<Color> {
+    wire.color
+        .or_else(|| net_colors.get(&wire.uuid).copied())
+        .or_else(|| classes.get(&wire.uuid).and_then(|style| style.color))
+}
+
 /// The stroke colour of `wire`: its own colour, else override, else class,
 /// else `palette`.
 pub(super) fn wire_rgb(
@@ -43,10 +54,17 @@ pub(super) fn wire_rgb(
     classes: &HashMap<Uuid, NetClassStyle>,
     palette: (f32, f32, f32),
 ) -> (f32, f32, f32) {
-    wire.color
-        .or_else(|| net_colors.get(&wire.uuid).copied())
-        .or_else(|| classes.get(&wire.uuid).and_then(|style| style.color))
-        .map_or(palette, rgb)
+    wire_color(wire, net_colors, classes).map_or(palette, rgb)
+}
+
+/// The stroke opacity of `wire` (0.0 to 1.0): the alpha of the colour
+/// `wire_rgb` picks, 1.0 for the palette colour.
+pub(super) fn wire_alpha(
+    wire: &Wire,
+    net_colors: &HashMap<Uuid, Color>,
+    classes: &HashMap<Uuid, NetClassStyle>,
+) -> f32 {
+    wire_color(wire, net_colors, classes).map_or(1.0, |c| f32::from(c.a) / 255.0)
 }
 
 /// The fill colour of `junction`. A junction is tinted only by its net's class

@@ -1,6 +1,6 @@
 //! The optional `color` column of `[sheets.wires]`: absent while no wire is
 //! coloured, `#rrggbbaa` on a coloured row, empty on the others, and an
-//! unreadable value is a read error that names the row.
+//! unreadable value is kept as a foreign cell and reported.
 
 use super::tests::empty_sheet;
 use super::*;
@@ -58,15 +58,24 @@ fn a_coloured_wire_round_trips_and_the_others_stay_uncoloured() {
 }
 
 #[test]
-fn an_unreadable_colour_is_a_read_error_naming_the_row_and_value() {
+fn an_unreadable_colour_loads_reports_and_round_trips() {
     let good = save(&sheet_of(vec![
         wire(1, None),
         wire(2, Some(Color::new(255, 0, 0, 255))),
     ]));
     let bad = good.replace("#ff0000ff", "#nothex");
     assert_ne!(bad, good);
-    let err = load(&bad).unwrap_err().to_string();
-    assert!(err.contains("sheets.wires"), "{err}");
-    assert!(err.contains("color"), "{err}");
-    assert!(err.contains("#nothex"), "{err}");
+    let mut sheet = load(&bad).expect("a cosmetic cell never fails the load");
+    assert!(sheet.wires.iter().all(|w| w.color.is_none()));
+
+    let repairs: Vec<_> = sheet
+        .take_load_repairs()
+        .iter()
+        .map(SheetLoadRepair::describe)
+        .collect();
+    assert_eq!(repairs.len(), 1, "{repairs:?}");
+    assert!(repairs[0].contains("wire #2"), "{repairs:?}");
+    assert!(repairs[0].contains("#nothex"), "{repairs:?}");
+
+    assert_eq!(save(&sheet), bad, "the original cell is written back");
 }

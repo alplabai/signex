@@ -188,6 +188,8 @@ impl Engine {
         fresh: impl Fn(&mut Self),
     ) -> DocumentPatch {
         const MAX_ROUNDS: usize = 6;
+        #[cfg(test)]
+        let _scan = crate::transform::rubber_band::scan_all_on(self.full_scan_follow);
         let guard = crate::Guard::with_base(
             before,
             plain_reference,
@@ -195,6 +197,12 @@ impl Engine {
             self.preset_before.clone(),
             self.preset_base.clone(),
         );
+        #[cfg(test)]
+        let guard = if self.full_scan_guard {
+            guard.without_local()
+        } else {
+            guard
+        };
         let mut policy = crate::Policy::default();
         for round in 0.. {
             fresh(self);
@@ -516,12 +524,13 @@ impl Engine {
                 Ok(CommandResult::changed(patch_pair))
             }
             Command::RegisterLibSymbol { lib_symbol } => {
-                if self.document.lib_symbols.contains_key(&lib_symbol.id) {
+                // The same version is a no-op; another body under this ref
+                // is a collision, never a silent merge.
+                let key = self.document.check_body(&lib_symbol)?;
+                if self.document.lib_symbols.contains_key(&key) {
                     return Ok(CommandResult::unchanged());
                 }
-                self.document
-                    .lib_symbols
-                    .insert(lib_symbol.id.clone(), lib_symbol);
+                self.document.lib_symbols.insert(key, lib_symbol);
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::ObjectPlaced,
@@ -535,7 +544,8 @@ impl Engine {
             Command::ReplaceLibSymbol {
                 lib_symbol,
                 library_versions,
-            } => self.replace_lib_symbol(before, lib_symbol, library_versions),
+                only,
+            } => self.replace_lib_symbol(before, lib_symbol, library_versions, only),
             Command::ChangeComponent {
                 symbol_id,
                 replacement,

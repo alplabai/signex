@@ -30,6 +30,9 @@ impl Signex {
         for engine in docs.engines.values_mut() {
             engine.set_undo_depth(depth);
         }
+        for engine in docs.board_engines_mut() {
+            engine.set_undo_depth(depth);
+        }
         for editor in docs.symbol_editors.values_mut() {
             editor.history.set_cap(depth);
         }
@@ -67,6 +70,21 @@ mod tests {
             sheet,
             signex_engine::Engine::new(SchematicSheet::default()).unwrap(),
         );
+        let board: signex_types::pcb::PcbBoard =
+            serde_json::from_value(serde_json::json!({"uuid": uuid::Uuid::nil()})).unwrap();
+        docs.parked_pcb_boards.insert(
+            PathBuf::from("/p/parked.snxpcb"),
+            signex_engine::pcb::BoardEngine::new(board.clone(), 1),
+        );
+        docs.tabs.push(crate::app::TabInfo {
+            title: "board".into(),
+            path: PathBuf::from("/p/open.snxpcb"),
+            cached_document: Some(crate::app::TabDocument::Pcb(
+                signex_engine::pcb::BoardEngine::new(board, 1),
+            )),
+            project_id: None,
+            kind: crate::app::TabKind::Pcb,
+        });
         let symbol = PathBuf::from("/p/a.snxsym");
         let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("S"));
         docs.symbol_editors
@@ -98,6 +116,14 @@ mod tests {
         let d = &app.document_state;
         let mut all = Vec::new();
         all.extend(d.engines.values().map(|e| e.undo_depth()));
+        all.extend(d.parked_pcb_boards.values().map(|e| e.undo_depth()));
+        all.extend(
+            d.tabs
+                .iter()
+                .filter_map(|tab| tab.cached_document.as_ref())
+                .filter_map(crate::app::TabDocument::as_pcb_engine)
+                .map(|e| e.undo_depth()),
+        );
         all.extend(d.symbol_editors.values().map(|e| e.history.cap()));
         all.extend(d.footprint_editors.values().map(|e| e.history.cap()));
         all.extend(d.net_class_history.values().map(|h| h.undo_depth()));
@@ -116,11 +142,11 @@ mod tests {
         let mut app = app_with_every_history();
         assert!(depths(&app).iter().all(|d| *d == 100), "{:?}", depths(&app));
         assert!(app.set_undo_depth(7));
-        assert_eq!(depths(&app), vec![7; 7]);
+        assert_eq!(depths(&app), vec![7; 9]);
         for bad in [0, 1001] {
             assert!(!app.set_undo_depth(bad));
         }
-        assert_eq!(depths(&app), vec![7; 7], "a refused depth changes nothing");
+        assert_eq!(depths(&app), vec![7; 9], "a refused depth changes nothing");
     }
 
     #[test]

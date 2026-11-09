@@ -15,7 +15,7 @@ use crate::signature::{NetSignature, net_signatures_at, query_node};
 use crate::uf::{Key, find};
 
 /// A later sheet against the base, element kind by element kind.
-struct Diffs {
+pub(super) struct Diffs {
     wires: Diff,
     junctions: Diff,
     labels: Diff,
@@ -50,11 +50,11 @@ impl NetBase {
         self.incremental(sheet, &[]).is_some()
     }
 
-    fn root_of(&self, key: Key) -> Key {
+    pub(super) fn root_of(&self, key: Key) -> Key {
         self.root.get(&key).copied().unwrap_or(key)
     }
 
-    fn diffs(&self, cand: &SchematicSheet) -> Diffs {
+    pub(super) fn diffs(&self, cand: &SchematicSheet) -> Diffs {
         let cand_pins = sheet_pin_list(cand);
         Diffs {
             wires: diff(
@@ -94,7 +94,7 @@ impl NetBase {
 
     /// The keys the change touches, and the wire segments it adds or drops
     /// (before and after). `at` keys are queried, so they count.
-    fn dirty(
+    pub(super) fn dirty(
         &self,
         d: &Diffs,
         cand: &SchematicSheet,
@@ -178,7 +178,7 @@ impl NetBase {
     /// dot or label there is anchored to one of them, and an endpoint there
     /// takes the anchor away). A label, dot or child-sheet pin lying on an
     /// added or dropped wire is reached through its own key the same way.
-    fn reach(&self, keys: Vec<Key>, segments: &[(Key, Key)]) -> HashSet<Key> {
+    pub(super) fn reach(&self, keys: Vec<Key>, segments: &[(Key, Key)]) -> HashSet<Key> {
         let mut work = keys;
         for &(a, b) in segments {
             work.extend(self.items.on_segment(a, b));
@@ -200,7 +200,7 @@ impl NetBase {
     /// The part of `cand` inside `region`, as a sheet of its own plus its
     /// child-sheet pins: the unchanged elements the region's buckets hold,
     /// and everything added or changed.
-    fn region_sheet(
+    pub(super) fn region_sheet(
         &self,
         region: &HashSet<Key>,
         d: &Diffs,
@@ -271,7 +271,7 @@ impl NetBase {
     /// of the node [`query_node`] picks (the wire's, for a point flagged as on
     /// a wire's interior), with nothing joined. Every queried key is dirty, so
     /// every wire through it is in the region's index.
-    fn locate(
+    pub(super) fn locate(
         at: &[(Key, bool)],
         parent: &mut HashMap<Key, Key>,
         index: &SegmentIndex,

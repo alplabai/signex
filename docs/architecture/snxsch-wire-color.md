@@ -11,8 +11,16 @@ An optional `color` column of `[sheets.wires]`. It is not a known column: like
 - Every other row of the block writes an empty cell, which reads as no colour.
 - The header appears only when at least one wire is coloured.
 - On read, `#RRGGBB` and `#RRGGBBAA` are accepted. Any other non-empty value is
-  a read error that names the block, the row and the value; it is not kept as a
-  foreign cell.
+  not an error: the colour is cosmetic, so the load succeeds, the wire draws
+  uncoloured, and the cell stays a foreign cell that a save writes back
+  unchanged. Each one is reported to Messages through the load-repairs path,
+  naming the file, the wire's row and the value.
+
+The format token was deliberately not bumped for this column. An older build
+does not know it either: it keeps the cell through the foreign-column path and
+writes it back, so a coloured wire survives a round trip through it (the wire
+draws uncoloured there). A later build may widen the colour syntax the same
+way without a bump, and this build then still opens the file.
 
 ## Which colour wins
 

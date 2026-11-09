@@ -900,7 +900,7 @@ fn restoring_a_newer_minor_schematic_leaves_it_clean_and_quit_does_not_prompt() 
     let current = signex_types::format::SnxSchematic::new(Default::default())
         .write_string()
         .expect("encode");
-    let newer = current.replacen("snxsch/1", "snxsch/1.7", 1);
+    let newer = current.replacen("snxsch/1.1", "snxsch/1.7", 1);
     assert!(newer.contains("snxsch/1.7"), "{newer}");
     let sha = commit_revision(dir.path(), &path, &newer);
     commit_revision(dir.path(), &path, &current);

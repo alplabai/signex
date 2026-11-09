@@ -65,12 +65,28 @@ pub enum SheetLoadRepair {
         old: f64,
         new: f64,
     },
+    /// A wire's `color` cell is not a colour this build reads. The cell is
+    /// kept as it was and written back; the wire draws uncoloured.
+    WireColorUnreadable {
+        object: RepairedObject,
+        value: String,
+    },
     /// Two pins of one symbol shared an id; the later pin got a new one.
     PinUuidReminted {
         symbol: String,
         pin: String,
         old: Uuid,
         new: Uuid,
+    },
+    /// A symbol named an embedded library symbol version the sheet does not
+    /// hold (#2209). `repointed` is the only version of that library symbol
+    /// on the sheet, which the symbol now draws with; `None` leaves the
+    /// symbol dangling, with `versions` other versions on the sheet.
+    BodyRefDangling {
+        object: RepairedObject,
+        missing: String,
+        repointed: Option<String>,
+        versions: usize,
     },
 }
 
@@ -122,12 +138,34 @@ impl SheetLoadRepair {
                 "{} had text size {old} mm; clamped to {new} mm",
                 object.label()
             ),
+            Self::WireColorUnreadable { object, value } => format!(
+                "{} has colour {value:?}, which is not #RRGGBB or #RRGGBBAA; drawn uncoloured, kept in the file",
+                object.label()
+            ),
             Self::PinUuidReminted {
                 symbol,
                 pin,
                 old,
                 new,
             } => format!("pin {pin} of symbol {symbol} repeated uuid {old}; new uuid {new}"),
+            Self::BodyRefDangling {
+                object,
+                missing,
+                repointed: Some(to),
+                ..
+            } => format!(
+                "{} drew with library symbol version {missing}, which the sheet does not                  hold; now draws with {to}, the only version of it here",
+                object.label()
+            ),
+            Self::BodyRefDangling {
+                object,
+                missing,
+                versions,
+                ..
+            } => format!(
+                "{} draws with library symbol version {missing}, which the sheet does not                  hold ({versions} other versions here); it draws without pins until                  updated from the library",
+                object.label()
+            ),
         }
     }
 }

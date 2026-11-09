@@ -360,7 +360,7 @@ impl SchematicSheet {
     /// built-in [`power_port_lib_symbol`] for an `is_power` symbol, else none.
     #[must_use]
     pub fn resolve_lib_symbol(&self, sym: &Symbol) -> Option<Cow<'_, LibSymbol>> {
-        match self.lib_symbols.get(&sym.lib_id) {
+        match self.body_of(sym) {
             Some(lib) => Some(Cow::Borrowed(lib)),
             None if sym.is_power => Some(Cow::Owned(power_port_lib_symbol(&sym.lib_id))),
             None => None,

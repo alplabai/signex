@@ -223,7 +223,16 @@ impl Signex {
             state.creating = Some(chosen.clone());
             state.create_error = None;
         }
-        self.start_new_project(chosen, plan)
+        match self.start_new_project(chosen, plan) {
+            Ok(task) => task,
+            Err(why) => {
+                if let Some(state) = self.ui_state.new_project.as_mut() {
+                    state.creating = None;
+                    state.create_error = Some(why);
+                }
+                Task::none()
+            }
+        }
     }
 
     /// The writes of the dialog's Create landed. `true` when they failed and

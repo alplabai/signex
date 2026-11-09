@@ -62,12 +62,12 @@ pub(super) fn assemble_footprints(
 
     check_unique_footprint_uuids(&footprints)?;
 
-    for prow in pad_rows {
+    for (index, prow) in pad_rows.into_iter().enumerate() {
         let extra = pad_extras
             .get(&prow.uuid.to_string())
             .cloned()
             .unwrap_or_default();
-        let pad = row_to_pad(prow.clone(), extra);
+        let pad = row_to_pad(prow.clone(), extra, "pads", index)?;
         let by_uuid = prow
             .footprint_ref
             .parse::<Uuid>()

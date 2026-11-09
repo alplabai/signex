@@ -26,38 +26,51 @@ impl Signex {
         &mut self,
         path: Option<PathBuf>,
     ) -> iced::Task<Message> {
-        let Some(path) = path else {
-            return iced::Task::none();
-        };
-
-        self.interaction_state.editing_text = None;
-        self.interaction_state.context_menu = None;
-
-        match self.open_document_path(path) {
-            Ok(task) => task,
-            Err(error) => {
-                crate::diagnostics::log_error("Failed to open document path", &error);
-                self.document_state.error_notice =
-                    Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
-                iced::Task::none()
-            }
+        match path {
+            Some(path) => self
+                .open_path_reported(path)
+                .unwrap_or_else(|_| iced::Task::none()),
+            None => iced::Task::none(),
         }
     }
 
-    pub(crate) fn handle_new_project_file(&mut self, path: Option<PathBuf>) -> iced::Task<Message> {
-        let Some(path) = path else {
-            return iced::Task::none();
-        };
-        self.start_new_project(path, NewProjectPlan::default())
+    /// Open `path` as the Open dialog's answer does. A refusal is logged and
+    /// raised as the Open Failed notice, and its reason is returned too.
+    pub(crate) fn open_path_reported(
+        &mut self,
+        path: PathBuf,
+    ) -> Result<iced::Task<Message>, String> {
+        self.interaction_state.editing_text = None;
+        self.interaction_state.context_menu = None;
+
+        self.open_document_path(path).map_err(|error| {
+            crate::diagnostics::log_error("Failed to open document path", &error);
+            let reason = format!("{error:#}");
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::open(reason.clone()));
+            reason
+        })
     }
 
-    /// Write a new project at `path` off the update thread, as `plan` says,
-    /// and open it when the writes land (`handle_new_project_written`).
+    pub(crate) fn handle_new_project_file(&mut self, path: Option<PathBuf>) -> iced::Task<Message> {
+        match path {
+            Some(path) => self
+                .start_new_project(path, NewProjectPlan::default())
+                .unwrap_or_else(|_| iced::Task::none()),
+            None => iced::Task::none(),
+        }
+    }
+
+    /// Create the project at `path` as `plan` says (the plain Save As pick,
+    /// or the New Project dialog's choices). A path that is not a project
+    /// file is logged, raised as the notice and returned. A second create for
+    /// a path still being written is returned only; one the worker refuses
+    /// comes back through `handle_new_project_written`.
     pub(crate) fn start_new_project(
         &mut self,
         path: PathBuf,
         plan: NewProjectPlan,
-    ) -> iced::Task<Message> {
+    ) -> Result<iced::Task<Message>, String> {
         self.interaction_state.editing_text = None;
         self.interaction_state.context_menu = None;
 
@@ -68,14 +81,14 @@ impl Signex {
                 // A second New Project for the same path while the first
                 // worker is pending would race it; ignore it.
                 if !self.document_state.pending_opens.insert(path.clone()) {
-                    return iced::Task::none();
+                    return Err(format!("{} is already being created", path.display()));
                 }
                 let seed = RuleSeed {
                     dir: crate::rule_profiles::profiles_dir(),
                     selected: self.ui_state.default_rule_profile.clone(),
                     pending: self.pending_profile_writes(),
                 };
-                iced::Task::perform(
+                Ok(iced::Task::perform(
                     super::super::dock::project_navigation::add_io::on_blocking_pool({
                         let path = path.clone();
                         move || {
@@ -84,11 +97,12 @@ impl Signex {
                         }
                     }),
                     move |result| Message::File(FileMsg::NewProjectWritten { path, result }),
-                )
+                ))
             }
             Err(error) => {
-                self.report_new_project_failure(&format!("{error:#}"));
-                iced::Task::none()
+                let reason = format!("{error:#}");
+                self.report_new_project_failure(&reason);
+                Err(reason)
             }
         }
     }

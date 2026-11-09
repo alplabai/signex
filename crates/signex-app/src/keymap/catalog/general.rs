@@ -696,6 +696,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "query_pins",
+        category: "file",
+        label: "Query pins",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::QUERY_PINS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "read_document",
         category: "file",
         label: "Read document",

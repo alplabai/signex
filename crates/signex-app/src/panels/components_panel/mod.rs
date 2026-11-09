@@ -530,6 +530,9 @@ fn thin_sep<'a, M: 'a>(border_c: Color) -> Element<'a, M> {
 }
 
 #[cfg(test)]
+mod order_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use signex_library::{
@@ -538,7 +541,7 @@ mod tests {
     };
     use uuid::Uuid;
 
-    fn fixture_row(pn: &str, mpn: &str, mfr: &str) -> ComponentRow {
+    pub(super) fn fixture_row(pn: &str, mpn: &str, mfr: &str) -> ComponentRow {
         let _ = (PinPadOverride::new("1", "1"),);
         ComponentRow {
             alternate_symbols: Vec::new(),
@@ -631,7 +634,7 @@ mod tests {
     }
 
     /// One library holding `rows`, its view caches current.
-    fn library_with(rows: Vec<ComponentRow>) -> LibraryState {
+    pub(super) fn library_with(rows: Vec<ComponentRow>) -> LibraryState {
         let mut state = LibraryState::default();
         state.open_libraries.push(OpenLibrary {
             root: PathBuf::from("/tmp/one.snxlib"),

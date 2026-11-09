@@ -54,7 +54,7 @@ fn a_placed_stock_ic_renders_its_pin_numbers_and_names() {
     let app = app_with_placed_stock_ic();
     let sheet = doc(&app);
     let sym = &sheet.symbols[0];
-    let lib = sheet.lib_symbols.get(&sym.lib_id).expect("embedded body");
+    let lib = sheet.body_of(sym).expect("embedded body");
     assert_eq!(lib.pins.len(), 8, "the generic IC has 8 pins");
 
     let transform = ScreenTransform {

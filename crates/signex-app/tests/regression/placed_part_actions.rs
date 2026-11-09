@@ -376,7 +376,7 @@ fn wire_pins(app: &mut Signex, numbers: &[&str]) {
         let tip = {
             let sheet = doc(app);
             let sym = &sheet.symbols[0];
-            let lib = &sheet.lib_symbols[&sym.lib_id];
+            let lib = &sheet.body_of(sym).expect("body");
             let pin = lib.pins.iter().find(|p| p.pin.number == *number).unwrap();
             SymbolTransform::from_symbol(sym).apply(pin.pin.position)
         };
@@ -557,7 +557,9 @@ fn confirming_swaps_the_part_keeps_the_designator_and_is_one_undo_step() {
         let sheet = doc(&app);
         let sym = &sheet.symbols[0];
         let x = SymbolTransform::from_symbol(sym);
-        sheet.lib_symbols[&sym.lib_id]
+        sheet
+            .body_of(sym)
+            .expect("body")
             .pins
             .iter()
             .filter(|p| p.unit == 0 || p.unit == sym.unit)
@@ -579,7 +581,7 @@ fn confirming_swaps_the_part_keeps_the_designator_and_is_one_undo_step() {
     assert_ne!(sym.row_id, old_row);
     assert_eq!(sym.library_id, Some(new.library_id));
     assert_eq!(sym.reference, "ZC5", "the designator stays");
-    assert!(doc(&app).lib_symbols.contains_key(&sym.lib_id));
+    assert!(doc(&app).body_of(sym).is_some());
     assert!(app.library.picker.is_none(), "the modal closes");
 
     let _ = app.update(Message::Edit(EditMsg::Undo));

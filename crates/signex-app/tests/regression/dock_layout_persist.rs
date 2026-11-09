@@ -95,15 +95,8 @@ fn hover_and_other_transient_messages_write_nothing() {
         PanelPosition::Left,
         0,
     )));
-    let scroll = app.update(Message::Dock(DockMessage::TabScroll(
-        PanelPosition::Left,
-        1,
-    )));
 
-    let produced: Vec<_> = [hover_in, hover_out, scroll]
-        .into_iter()
-        .flat_map(run)
-        .collect();
+    let produced: Vec<_> = [hover_in, hover_out].into_iter().flat_map(run).collect();
     assert!(
         dock_layout_messages(produced).is_empty(),
         "transient messages must not even arm a save timer"

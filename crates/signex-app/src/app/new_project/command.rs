@@ -67,5 +67,8 @@ pub(crate) fn new_project_with_profile(app: &mut Signex, args: &CommandArgs) -> 
         layout,
         setup: Some(setup),
     };
-    (CommandOutcome::Ran, app.start_new_project(chosen, plan))
+    match app.start_new_project(chosen, plan) {
+        Ok(task) => (CommandOutcome::Ran, task),
+        Err(reason) => refused(reason),
+    }
 }

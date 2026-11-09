@@ -398,6 +398,8 @@ mod library_symbol_delete_closed;
 mod library_symbol_drift;
 #[path = "regression/library_symbol_missing.rs"]
 mod library_symbol_missing;
+#[path = "regression/library_symbol_versions.rs"]
+mod library_symbol_versions;
 #[path = "regression/pin_text_on_sheet.rs"]
 mod pin_text_on_sheet;
 #[path = "regression/repeat_placement.rs"]
@@ -474,6 +476,8 @@ mod styled_power_port_not_flag;
 mod click_click_move;
 #[path = "regression/rubber_band_move.rs"]
 mod rubber_band_move;
+#[path = "regression/symbol_drag_entry_points.rs"]
+mod symbol_drag_entry_points;
 
 // #1057 - grid snapping lands on exact nm multiples (align / move).
 #[path = "regression/grid_snap_exact.rs"]

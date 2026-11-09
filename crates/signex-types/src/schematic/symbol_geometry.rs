@@ -79,6 +79,16 @@ pub fn instance_pins<'a>(lib: &'a LibSymbol, sym: &'a Symbol) -> impl Iterator<I
         .filter(move |lp| item_shown(lp.unit, lp.body_style, sym.unit, body))
 }
 
+/// The pins of [`instance_pins`] paired with their tip in world mm. Symbol
+/// lowering, ERC and the full netlist build read their tips through it.
+pub fn pin_tips<'a>(
+    lib: &'a LibSymbol,
+    sym: &'a Symbol,
+) -> impl Iterator<Item = (&'a LibPin, Point)> {
+    let xform = SymbolTransform::from_symbol(sym);
+    instance_pins(lib, sym).map(move |lp| (lp, xform.apply(lp.pin.position)))
+}
+
 /// Unit direction of a pin in library space (Y-up), from its rotation.
 pub fn pin_direction(rotation_deg: f64) -> (f64, f64) {
     match rotation_deg.rem_euclid(360.0).round() as i32 {
@@ -109,7 +119,7 @@ pub fn lower_symbol(
         }
     }
     let pin_width = defaults.symbol_stroke_mm(out.iter().filter_map(SymbolPrimitive::stroke_width));
-    for lp in instance_pins(lib, sym).filter(|lp| lp.pin.visible) {
+    for (lp, tip) in pin_tips(lib, sym).filter(|(lp, _)| lp.pin.visible) {
         let pin = &lp.pin;
         let (dx, dy) = pin_direction(pin.rotation);
         let len = if pin.length > 0.0 {
@@ -119,7 +129,7 @@ pub fn lower_symbol(
         };
         let body = Point::new(pin.position.x + dx * len, pin.position.y + dy * len);
         out.push(SymbolPrimitive::Pin {
-            tip: t.apply(pin.position),
+            tip,
             body: t.apply(body),
             width: pin_width,
         });

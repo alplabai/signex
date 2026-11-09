@@ -42,7 +42,7 @@ impl Engine {
         // Judge the switch on the pins the instance shows before and after,
         // so a lib symbol with no alternate (nothing changes on screen) and a
         // switch that only moves unwired pins both go through.
-        if let Some(lib) = self.document.lib_symbols.get(&sym.lib_id) {
+        if let Some(lib) = self.document.body_of(sym) {
             let mut proposed = sym.clone();
             proposed.body_style = body_style;
             let old = shown_pins(Some(lib), sym);

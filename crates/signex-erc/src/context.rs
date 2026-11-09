@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of, pt_key};
 use signex_types::schematic::{InstancePath, SchematicSheet};
-use signex_types::schematic::{LabelType, PinDirection, Point, SymbolTransform, instance_pins};
+use signex_types::schematic::{LabelType, PinDirection, Point, pin_tips};
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -470,24 +470,21 @@ impl ErcContext {
             .iter()
             .filter_map(|sym| {
                 let lib_sym = snapshot.resolve_lib_symbol(sym)?;
-                let pins = instance_pins(&lib_sym, sym)
-                    .map(|lp| {
-                        let world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
-                        ErcPin {
-                            world_pos: Point::new(world.x, world.y),
-                            local_pos: lp.pin.position,
-                            number: if lp.pin.number.is_empty() {
-                                lp.pin.name.clone()
-                            } else {
-                                lp.pin.number.clone()
-                            },
-                            electrical_type: lp.pin.direction,
-                            required: !matches!(
-                                lp.pin.direction,
-                                PinDirection::Unclassified | PinDirection::DoNotConnect
-                            ),
-                            connected: false,
-                        }
+                let pins = pin_tips(&lib_sym, sym)
+                    .map(|(lp, world)| ErcPin {
+                        world_pos: Point::new(world.x, world.y),
+                        local_pos: lp.pin.position,
+                        number: if lp.pin.number.is_empty() {
+                            lp.pin.name.clone()
+                        } else {
+                            lp.pin.number.clone()
+                        },
+                        electrical_type: lp.pin.direction,
+                        required: !matches!(
+                            lp.pin.direction,
+                            PinDirection::Unclassified | PinDirection::DoNotConnect
+                        ),
+                        connected: false,
                     })
                     .collect();
 

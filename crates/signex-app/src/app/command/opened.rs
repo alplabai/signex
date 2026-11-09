@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use iced::Task;
 use serde_json::json;
 
-use super::CommandOutcome;
+use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document_ids::{DocumentEntry, DocumentKind};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
@@ -30,13 +30,16 @@ pub(crate) struct OpenSnapshot {
 }
 
 impl Signex {
-    /// Taken before the command is dispatched: the dialog's `path` answer and
-    /// the documents that already exist.
-    pub(crate) fn open_snapshot(&self) -> OpenSnapshot {
+    /// Taken before the command is dispatched: the `path` operand, else the
+    /// dialog's `path` answer, and the documents that already exist.
+    pub(crate) fn open_snapshot(&self, args: &CommandArgs) -> OpenSnapshot {
+        let operand = match args.operand("path") {
+            Some(OperandValue::Path(path)) => Some(path.clone()),
+            _ => None,
+        };
         OpenSnapshot {
-            asked: self
-                .headless_answers()
-                .and_then(|answers| answers.peek("path"))
+            asked: operand
+                .or_else(|| self.headless_answers().and_then(|a| a.peek("path")))
                 .map(PathBuf::from),
             before: self
                 .document_entries()

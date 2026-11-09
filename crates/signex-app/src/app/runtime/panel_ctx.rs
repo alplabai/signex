@@ -655,6 +655,7 @@ impl Signex {
             symbol_lists_key,
             tokens: panel_tokens,
             theme_id: panel_theme_id,
+            i18n: std::sync::Arc::clone(&self.ui_state.i18n),
             canvas_colors: self.canvas_colors_for(panel_theme_id),
             device_px_per_logical_px: self.ui_state.main_device_px_per_logical_px(),
             unit: self.ui_state.unit,
