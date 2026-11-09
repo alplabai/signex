@@ -22,8 +22,8 @@ pub use binding::{
 #[cfg(test)]
 pub(crate) use catalog::OPERAND_CONVENTION;
 pub use catalog::{
-    CommandGroup, CommandMetadata, Operand, OperandKind, all_command_ids, fallback_label,
-    metadata_for, metadata_for_str, offered_in,
+    CommandGroup, CommandMetadata, HeadlessUse, Operand, OperandKind, all_command_ids,
+    fallback_label, metadata_for, metadata_for_str, offered_in,
 };
 pub use command::AppCommandId;
 pub use editor::{

@@ -124,21 +124,15 @@ fn a_command_whose_only_effect_was_a_dropped_window_is_refused() {
         json!({"id": "annotate_schematic"}),
     ]);
     let out = run_cli(
-        &[
-            "run",
-            fx.project.to_str().unwrap(),
-            "--keep-going",
-            "--allow",
-            "export",
-        ],
+        &["run", fx.project.to_str().unwrap(), "--keep-going"],
         commands,
     );
-    for index in [1, 2] {
-        let reason = refusal(&out, index);
-        assert!(
-            reason.contains("needs a window"),
-            "{reason}\n{}",
-            out.stdout
+    // The catalog says both open only a dialog (#2170), so the run refuses
+    // them before the app sees them.
+    for (index, id) in [(1, "report_manager_bom"), (2, "annotate_schematic")] {
+        assert_eq!(
+            refusal(&out, index),
+            format!("`{id}` only works in a window")
         );
     }
 }

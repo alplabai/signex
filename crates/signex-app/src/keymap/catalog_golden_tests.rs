@@ -45,6 +45,7 @@ fn flags(meta: &CommandMetadata) -> String {
     let f = meta.flags;
     let names: Vec<&str> = [
         (f.gui_only, "gui_only"),
+        (f.runs_headless, "runs_headless"),
         (f.mutates_doc, "mutates_doc"),
         (f.undoable, "undoable"),
         (f.hidden, "hidden"),
