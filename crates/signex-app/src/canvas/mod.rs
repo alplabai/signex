@@ -20,6 +20,8 @@ mod gpu_drag;
 pub(crate) mod gpu_mount;
 mod graphite;
 pub mod grid;
+mod halo_cache;
+mod hit_cache;
 mod input;
 mod move_pick;
 mod net_highlight;
@@ -156,6 +158,10 @@ pub struct CanvasSlot {
     /// The static layer and lifted items of a move-drag in flight (#1335);
     /// dropped when the drag ends, is cancelled, or the document changes.
     drag_layers: std::cell::RefCell<drag_layers::DragLayers>,
+    /// Hover hit index of the active snapshot (`hit_item_at`).
+    hit_cache: std::cell::RefCell<Option<hit_cache::HitCache>>,
+    /// Selection halos kept across the frames of a move-drag (`halo_cache`).
+    halo_cache: std::cell::RefCell<halo_cache::HaloCache>,
     /// Hotspots the current drag can snap to, built once per drag (#2077).
     hotspot_cache: std::cell::RefCell<drag_preview::HotspotCache>,
     /// The move-drag frame the GPU overlay's `update` last computed, for the
@@ -320,6 +326,8 @@ impl CanvasSlot {
             bg_tessellations: std::cell::Cell::new(0),
             content_scene: std::cell::RefCell::new(Default::default()),
             drag_layers: std::cell::RefCell::new(Default::default()),
+            hit_cache: std::cell::RefCell::new(None),
+            halo_cache: std::cell::RefCell::new(Default::default()),
             hotspot_cache: std::cell::RefCell::new(Default::default()),
             published_drag: Default::default(),
             camera: std::cell::RefCell::new(Camera::default()),
@@ -439,6 +447,8 @@ impl CanvasSlot {
         render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     ) {
         self.render_cache = render_cache;
+        *self.hit_cache.get_mut() = None;
+        self.halo_cache.get_mut().clear();
         self.content_scene.get_mut().invalidate();
         // A drag session and its static layer belong to the document that was
         // just replaced.
@@ -942,6 +952,10 @@ mod gpu_mount_drag_tests;
 mod gpu_mount_tests;
 #[cfg(test)]
 mod grid_order_tests;
+#[cfg(test)]
+mod halo_cache_tests;
+#[cfg(test)]
+mod hit_cache_tests;
 #[cfg(test)]
 pub(crate) mod overlay_camera_tests;
 #[cfg(test)]

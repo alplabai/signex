@@ -22,6 +22,9 @@ pub(super) struct SurfaceLayers {
     /// The retained content layer, when it is to be drawn translated:
     /// its index in `layers` and the translation.
     pub(super) content_shift: Option<(usize, Vector)>,
+    /// The cached selection halos of a drag frame, drawn translated by the
+    /// drag delta: their index in `layers` and the translation.
+    pub(super) selection_shift: Option<(usize, Vector)>,
     /// The translation of the background layer (index 0), when it is drawn
     /// moved from the camera it was built at.
     pub(super) background_shift: Option<Vector>,
@@ -43,6 +46,7 @@ impl SchematicCanvas<'_> {
         let _probe = crate::frame_probe::span("canvas");
         let mut layers = Vec::with_capacity(4);
         let mut content_shift = None;
+        let mut selection_shift = None;
         let mut background_shift = None;
 
         // Layer 1: background (grid + paper). A GPU-mounted sheet has the
@@ -112,6 +116,7 @@ impl SchematicCanvas<'_> {
             return SurfaceLayers {
                 layers,
                 content_shift,
+                selection_shift,
                 background_shift,
             };
         };
@@ -137,8 +142,15 @@ impl SchematicCanvas<'_> {
 
         // Layer 3: selection overlay
         let selection_probe = crate::frame_probe::span("canvas.drag_selection");
-        if let Some(selection) = self.draw_selection(renderer, bounds, moving, drag_offset) {
-            layers.push(selection);
+        if let Some(moving) = moving {
+            for (layer, shift) in
+                self.draw_drag_selection_layers(renderer, bounds, moving, drag_offset)
+            {
+                if let Some(shift) = shift {
+                    selection_shift = Some((layers.len(), shift));
+                }
+                layers.push(layer);
+            }
         }
         drop(selection_probe);
 
@@ -150,6 +162,7 @@ impl SchematicCanvas<'_> {
         SurfaceLayers {
             layers,
             content_shift,
+            selection_shift,
             background_shift,
         }
     }
@@ -274,14 +287,16 @@ fn draw_layers(renderer: &mut Renderer, bounds: Rectangle, frame: SurfaceLayers)
     let SurfaceLayers {
         layers,
         content_shift,
+        selection_shift,
         background_shift,
     } = frame;
     renderer.with_layer(bounds, |renderer| {
         renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
             for (index, layer) in layers.into_iter().enumerate() {
-                let shift = match (content_shift, background_shift) {
-                    (Some((content, shift)), _) if content == index => Some(shift),
-                    (_, Some(shift)) if index == 0 => Some(shift),
+                let shift = match (content_shift, selection_shift, background_shift) {
+                    (Some((content, shift)), _, _) if content == index => Some(shift),
+                    (_, Some((halos, shift)), _) if halos == index => Some(shift),
+                    (_, _, Some(shift)) if index == 0 => Some(shift),
                     _ => None,
                 };
                 match shift {
