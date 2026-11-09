@@ -223,6 +223,12 @@ impl Signex {
                     .clear_overlay_cache();
                 self.refresh_panel_ctx();
             }
+            crate::panels::PanelMsg::RunDrc => {
+                follow = self.update(Message::Pcb(PcbMsg::DrcRequested));
+            }
+            crate::panels::PanelMsg::DrcViolationPicked(index) => {
+                follow = self.update(Message::Pcb(PcbMsg::DrcViolationPicked(*index)));
+            }
             crate::panels::PanelMsg::FocusErcViolation(idx) => {
                 follow = self.handle_focus_erc_diagnostic_index(*idx);
             }

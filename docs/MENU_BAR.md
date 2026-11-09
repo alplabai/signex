@@ -84,6 +84,12 @@ own. Two rows point at an id other than the one their key suggests (#1991):
   dialog to choose the rules. `run_erc` (F8) runs ERC at once. The row shows no
   key, as `open_erc_dialog` has no default binding.
 
+## Tools ▸ Design Rule Check {#tools-drc}
+
+Tools ▸ Design Rule Check runs `run_drc` (#2222) on the PCB in view and is
+greyed while no PCB is open. The command is also in the command palette and
+as the Run DRC button of the Messages panel; no keymap preset binds it.
+
 ## File ▸ Library {#file-library}
 
 File ▸ Library carries only "Open Library..." (libraries outside the active
@@ -138,8 +144,9 @@ carries the tests. Only `native/macos.rs` calls `muda`. The state lives in
 points with `update`.
 
 **Build timing.** winit installs its own default NSMenu in
-`applicationDidFinishLaunching`, and iced_winit offers no way to turn that
-off. Installing from `Signex::new` would be overwritten, so the menu is
+`applicationDidFinishLaunching`. The fork's `Settings::default_menu` can turn
+that off since iced-signex-v0.15.0-alpha.5, but Signex does not use it yet.
+Installing from `Signex::new` would be overwritten, so the menu is
 installed once the main window has opened (`WindowMsg::MainWindowOpened` arms
 the state, the sync at the end of that `update` installs). `muda::Menu` panics
 off the main thread and `Task` futures do not run there, so every muda call

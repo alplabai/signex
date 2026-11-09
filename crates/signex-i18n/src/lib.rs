@@ -44,6 +44,26 @@ macro_rules! define_ids {
 
 define_ids! {
     DIALOG_AUTOSAVE_RECOVERY_AUTOSAVED_AGE = "dialog-autosave-recovery-autosaved-age";
+    DRC_RUN = "drc-run";
+    DRC_HEADING = "drc-heading";
+    DRC_DEFAULT_CLEARANCE = "drc-default-clearance";
+    DRC_IDLE = "drc-idle";
+    DRC_RUNNING = "drc-running";
+    DRC_CLEAN = "drc-clean";
+    DRC_STALE = "drc-stale";
+    DRC_SUMMARY = "drc-summary";
+    DRC_SKIPPED = "drc-skipped";
+    DRC_MORE = "drc-more";
+    DRC_KIND_CLEARANCE = "drc-kind-clearance";
+    DRC_KIND_SHORT = "drc-kind-short";
+    DRC_KIND_UNCONNECTED = "drc-kind-unconnected";
+    DRC_DETAIL_CLEARANCE = "drc-detail-clearance";
+    DRC_DETAIL_SHORT = "drc-detail-short";
+    DRC_DETAIL_UNCONNECTED = "drc-detail-unconnected";
+    DRC_LOCATION = "drc-location";
+    DRC_LAYER_TOP = "drc-layer-top";
+    DRC_LAYER_BOTTOM = "drc-layer-bottom";
+    DRC_LAYER_INNER = "drc-layer-inner";
     LANGUAGE_SYSTEM_DEFAULT = "language-system-default";
     MENU_FILE = "menu-file";
     OVERLAY_PLACEMENT_PAUSED_ESC_HINT = "overlay-placement-paused-esc-hint";

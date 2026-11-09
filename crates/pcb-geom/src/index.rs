@@ -173,6 +173,13 @@ impl BoardIndex {
         Ok(self.hit_point(p, mm_to_nm(tolerance_mm, "hit tolerance")?))
     }
 
+    /// The items whose bounding box meets `rect`, in no fixed order: the
+    /// broad phase of a pair search, before any shape test.
+    pub(crate) fn bounds_meeting(&self, rect: &RectNm) -> impl Iterator<Item = &IndexedItem> {
+        self.tree
+            .locate_in_envelope_intersecting(&envelope_of(rect))
+    }
+
     /// Every item `rect` selects under `mode`, sorted by [`ItemRef`].
     pub fn hit_rect(&self, rect: &RectNm, mode: RectSelect) -> Vec<ItemRef> {
         // Corners are capped at four times MAX_ABS_NM, like `hit_point`'s

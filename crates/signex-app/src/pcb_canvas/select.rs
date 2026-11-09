@@ -110,6 +110,13 @@ impl PcbSelectionState {
         self.selection.apply_marquee(&hits, mode)
     }
 
+    /// Select exactly `items` (a violation's items, #2222): whatever is not
+    /// on the board is dropped on the next index build, like any selection.
+    /// Whether the selection changed.
+    pub fn select_items(&mut self, items: &[ItemRef]) -> bool {
+        self.selection.apply_marquee(items, ClickMode::Replace)
+    }
+
     /// The copper to paint for the selection and the hover.
     pub fn highlight(&mut self, board: &PcbBoard) -> Highlight {
         if self.selection.is_empty() && self.hover.is_none() {

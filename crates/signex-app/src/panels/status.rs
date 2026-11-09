@@ -457,6 +457,9 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .boxed(),
     );
     col = col.push(rule());
+    if let Some(drc) = super::drc::section(ctx) {
+        col = col.push(drc);
+    }
 
     if ctx.diagnostics.is_empty() {
         col = col.push(

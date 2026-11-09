@@ -613,6 +613,10 @@ pub enum PanelMsg {
     /// footprint as a Component on the active PCB. Stubbed until
     /// the PCB integration lands; for now no-op + tracing-warn.
     FpLibraryPlaceInternal(usize),
+    /// Run the design-rule check of the board in view (#2222).
+    RunDrc,
+    /// A DRC violation row was clicked: select its items.
+    DrcViolationPicked(usize),
     /// Clear the current ERC violations list and canvas markers.
     ClearErc,
     /// Focus a specific ERC diagnostic row from the global flattened list.

@@ -68,16 +68,16 @@ pub(crate) mod view;
 
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, CommandPaletteMsg, ContextAction,
-    ContextMenuMsg, ContextMenuState, ContextSubmenu, DragTarget, EditMsg, EnableVersionControlMsg,
-    EnableVersionControlOutcome, EnableVersionControlState, ErcMsg, ExcludeDirtyChoice, ExportMsg,
-    FileMsg, GitCommitFailure, GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg,
-    LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, NetNavMsg, OverlayMsg,
-    ParameterManagerMsg, PasteIntent, PasteRequest, PcbMsg, PreferencesMsg, PrintPreviewMsg,
-    ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob, ProjectTreeAction,
-    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
-    RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
-    TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem, UiMsg,
-    VersionControlScope, WindowMsg,
+    ContextMenuMsg, ContextMenuState, ContextSubmenu, DragTarget, DrcRunResult, EditMsg,
+    EnableVersionControlMsg, EnableVersionControlOutcome, EnableVersionControlState, ErcMsg,
+    ExcludeDirtyChoice, ExportMsg, FileMsg, GitCommitFailure, GridPickerState, GridPropertiesMsg,
+    GridPropertiesState, InputMsg, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg,
+    NetNavMsg, OverlayMsg, ParameterManagerMsg, PasteIntent, PasteRequest, PcbMsg, PreferencesMsg,
+    PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob,
+    ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg,
+    RenameDialogState, RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest,
+    TabContextAction, TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem,
+    UiMsg, VersionControlScope, WindowMsg,
 };
 pub(crate) use document::{Document, DocumentKey};
 pub use documents::{

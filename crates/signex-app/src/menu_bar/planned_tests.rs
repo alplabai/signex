@@ -20,7 +20,6 @@ const EXPECTED_STUBS: &[&str] = &[
     "Number Schematic Sheets...",
     "Assign Footprints",
     "Library Editor",
-    "Design Rule Check",
     "Net Inspector",
     "Tile Horizontally",
     "Tile Vertically",

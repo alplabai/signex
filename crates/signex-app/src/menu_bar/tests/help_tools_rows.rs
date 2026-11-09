@@ -218,7 +218,6 @@ fn stub_rows_are_not_live() {
     for path in [
         "Tools/Assign Footprints",
         "Tools/Library Editor",
-        "Tools/Design Rule Check",
         "Tools/Net Inspector",
         "Window/Tile Horizontally",
         "Window/Tile Vertically",

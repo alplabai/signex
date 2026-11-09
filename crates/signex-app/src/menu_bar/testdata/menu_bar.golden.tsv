@@ -93,7 +93,7 @@ Tools/---	separator	-	-	-	-	-	-
 Tools/Assign Footprints	stub	Assign Footprints	-	-	-	00000000	never
 Tools/Library Editor	stub	Library Editor	-	-	-	00000000	never
 Tools/---	separator	-	-	-	-	-	-
-Tools/Design Rule Check	stub	Design Rule Check	-	-	-	00000000	never
+Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc
 Tools/Net Inspector	stub	Net Inspector	-	-	-	00000000	never
 Tools/---	separator	-	-	-	-	-	-
 Tools/Up Hierarchy	item	Up Hierarchy	-	-	AscendToParentSheet	01000000	cmd:navigate_up_hierarchy

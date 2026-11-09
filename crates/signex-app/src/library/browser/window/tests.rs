@@ -465,18 +465,31 @@ fn the_fixed_row_height_fits_the_tallest_cell() {
 
 // ── focus does not migrate ───────────────────────────────────────
 
-/// Visits every focusable widget under an element, tagging each with the
-/// index of the visual row it sits in (focusables are grouped by their
-/// vertical position, in tree order).
+/// Visits every text input (cell editor) under an element, tagging each with
+/// the index of the visual row it sits in (inputs are grouped by their
+/// vertical position, in tree order). Other focusables, such as buttons, are
+/// skipped.
 struct VisitInputs<'f> {
     f: &'f mut (dyn FnMut(usize, &mut dyn iced::advanced::widget::operation::Focusable) + Send),
     last_y: Option<f32>,
     row: usize,
+    /// A text input announces itself through `text_input` right before its
+    /// `focusable` call, with the same bounds; a button only calls `focusable`.
+    text_input: Option<iced::Rectangle>,
 }
 
 impl iced::advanced::widget::Operation for VisitInputs<'_> {
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn iced::advanced::widget::Operation)) {
         operate(self);
+    }
+
+    fn text_input(
+        &mut self,
+        _id: Option<&iced::advanced::widget::Id>,
+        bounds: iced::Rectangle,
+        _state: &mut dyn iced::advanced::widget::operation::TextInput,
+    ) {
+        self.text_input = Some(bounds);
     }
 
     fn focusable(
@@ -485,6 +498,9 @@ impl iced::advanced::widget::Operation for VisitInputs<'_> {
         bounds: iced::Rectangle,
         state: &mut dyn iced::advanced::widget::operation::Focusable,
     ) {
+        if self.text_input.take() != Some(bounds) {
+            return;
+        }
         match self.last_y {
             None => {}
             Some(y) if (bounds.y - y).abs() > H / 2.0 => self.row += 1,
@@ -495,7 +511,7 @@ impl iced::advanced::widget::Operation for VisitInputs<'_> {
     }
 }
 
-/// Apply `f` to every focusable under `element`, with its row offset.
+/// Apply `f` to every text input under `element`, with its row offset.
 fn each_input(
     element: &mut iced::Element<'_, crate::library::messages::LibraryMessage>,
     tree: &mut iced::advanced::widget::Tree,
@@ -513,6 +529,7 @@ fn each_input(
         f,
         last_y: None,
         row: 0,
+        text_input: None,
     };
     element.operate(
         tree,

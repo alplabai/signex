@@ -13,6 +13,15 @@ impl Signex {
                 }
                 Task::none()
             }
+            PcbMsg::DrcRequested => self.handle_pcb_drc_requested(),
+            PcbMsg::DrcFinished { generation, result } => {
+                self.handle_pcb_drc_finished(generation, &result);
+                Task::none()
+            }
+            PcbMsg::DrcViolationPicked(index) => {
+                self.handle_pcb_drc_violation_picked(index);
+                Task::none()
+            }
         }
     }
 }
