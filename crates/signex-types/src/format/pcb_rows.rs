@@ -294,14 +294,77 @@ crate::token_enum! {
     }
 }
 
-crate::token_enum! {
-    fn pad_shape_str / parse_pad_shape for PadShape, fallback Circle {
-        Circle => "circle",
-        Rect => "rect",
-        Oval => "oval",
-        Trapezoid => "trapezoid",
-        RoundRect => "roundrect",
-        Custom => "custom",
+fn pad_shape_str(shape: PadShape) -> &'static str {
+    match shape {
+        PadShape::Circle => "circle",
+        PadShape::Rect => "rect",
+        PadShape::Oval => "oval",
+        PadShape::RoundRect => "roundrect",
+    }
+}
+
+/// An unknown shape token is a load error naming the field and the value:
+/// reading it as some other shape would draw and hit-test the wrong copper.
+fn parse_pad_shape(text: &str, block: &str, row: usize) -> Result<PadShape, FormatError> {
+    Ok(match text {
+        "circle" => PadShape::Circle,
+        "rect" => PadShape::Rect,
+        "oval" => PadShape::Oval,
+        "roundrect" => PadShape::RoundRect,
+        other => {
+            return Err(pad_field_error(
+                block,
+                row,
+                "shape",
+                other,
+                "not a pad shape (circle, rect, oval, roundrect)",
+            ));
+        }
+    })
+}
+
+fn pad_field_error(block: &str, row: usize, field: &str, value: &str, why: &str) -> FormatError {
+    FormatError::TsvFieldParse {
+        block: block.to_string(),
+        row,
+        field: field.to_string(),
+        message: format!("value {value:?}: {why}"),
+    }
+}
+
+/// Header of the optional `rotation` pad column: the pad's own turn in
+/// degrees. Rides the foreign-column path like `net_locked`; written only
+/// when some pad is turned, so an unturned board re-saves unchanged.
+pub(in crate::format) const PAD_ROTATION_COLUMN: &str = "rotation";
+
+fn with_rotation_cell(
+    mut columns: UnknownColumns,
+    rotation: f64,
+) -> Result<UnknownColumns, NonFiniteField> {
+    if rotation != 0.0 {
+        columns.set(PAD_ROTATION_COLUMN, format_f64(rotation, "rotation")?);
+    }
+    Ok(columns)
+}
+
+fn take_rotation_cell(
+    columns: &mut UnknownColumns,
+    block: &str,
+    row: usize,
+) -> Result<f64, FormatError> {
+    match columns.take(PAD_ROTATION_COLUMN) {
+        None => Ok(0.0),
+        Some(cell) if cell.is_empty() => Ok(0.0),
+        Some(cell) => match cell.trim().parse::<f64>() {
+            Ok(degrees) if degrees.is_finite() => Ok(degrees),
+            _ => Err(pad_field_error(
+                block,
+                row,
+                PAD_ROTATION_COLUMN,
+                &cell,
+                "a pad rotation must be a finite number of degrees",
+            )),
+        },
     }
 }
 
@@ -572,11 +635,31 @@ pub(in crate::format) fn pad_to_row(
         net_number,
         net_name,
         roundrect_ratio: pad.roundrect_ratio,
-        unknown_columns: with_net_locked_cell(pad.unknown_columns.clone(), pad.net_locked),
+        unknown_columns: with_rotation_cell(
+            with_net_locked_cell(pad.unknown_columns.clone(), pad.net_locked),
+            pad.rotation,
+        )?,
     })
 }
 
-pub(in crate::format) fn row_to_pad(mut row: PcbPadRow, extras: PadExtras) -> Pad {
+pub(in crate::format) fn row_to_pad(
+    mut row: PcbPadRow,
+    extras: PadExtras,
+    block: &str,
+    index: usize,
+) -> Result<Pad, FormatError> {
+    let shape = parse_pad_shape(&row.shape, block, index)?;
+    let ratio = row.roundrect_ratio;
+    if shape == PadShape::RoundRect && !(0.0..=0.5).contains(&ratio) {
+        return Err(pad_field_error(
+            block,
+            index,
+            "roundrect_ratio",
+            &ratio.to_string(),
+            "a roundrect corner ratio must be within 0..=0.5",
+        ));
+    }
+    let rotation = take_rotation_cell(&mut row.unknown_columns, block, index)?;
     let net_locked = take_net_locked_cell(&mut row.unknown_columns);
     let drill = if row.drill > 0 {
         Some(DrillDef {
@@ -594,11 +677,11 @@ pub(in crate::format) fn row_to_pad(mut row: PcbPadRow, extras: PadExtras) -> Pa
     } else {
         None
     };
-    Pad {
+    Ok(Pad {
         uuid: row.uuid,
         number: row.pin,
         pad_type: parse_pad_type(&row.pad_type),
-        shape: parse_pad_shape(&row.shape),
+        shape,
         position: PcbPoint {
             x: nm_to_mm(row.pos_x),
             y: nm_to_mm(row.pos_y),
@@ -611,10 +694,11 @@ pub(in crate::format) fn row_to_pad(mut row: PcbPadRow, extras: PadExtras) -> Pa
         layers: split_layers(&row.layers),
         net,
         roundrect_ratio: row.roundrect_ratio,
+        rotation,
         net_locked,
         unknown: extras.unknown,
         unknown_columns: row.unknown_columns,
-    }
+    })
 }
 
 pub(in crate::format) fn track_to_row(s: &Segment) -> Result<PcbTrackRow, NonFiniteField> {

@@ -62,12 +62,11 @@ fn discs_overlap_by_radius_sum() {
 }
 
 #[test]
-fn an_ellipse_overlaps_a_disc_on_its_long_axis_only() {
-    let oval = Shape::Ellipse {
-        center: p(0, 0),
-        half_w: 3 * MM,
-        half_h: MM,
-        rotation_deg: 0.0,
+fn a_stadium_overlaps_a_disc_on_its_long_axis_only() {
+    let oval = Shape::Capsule {
+        a: p(-2, 0),
+        b: p(2, 0),
+        radius: MM,
     };
     let at = |x, y| Shape::Disc {
         center: p(x, y),

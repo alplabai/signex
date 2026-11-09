@@ -1,4 +1,4 @@
-format = "snxpcb/1.2"
+format = "snxpcb/1.3"
 pcb_id = "00000000-0000-0000-0000-000000000000"
 version = 1
 generator = "signex-test"

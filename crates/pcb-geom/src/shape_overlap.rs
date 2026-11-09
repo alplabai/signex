@@ -2,14 +2,13 @@
 //! ratsnest uses, so a track across a pad or two overlapping pads count.
 //!
 //! A disc and a track are a segment with a radius. A rectangle is a convex
-//! polygon; an ellipse is the polygon of its [`ELLIPSE_STEPS`] outline
-//! points, so an ellipse is under-read by less than its sagitta.
+//! polygon; a rounded rectangle is the polygon of its corner arcs
+//! ([`ROUND_STEPS`] points each), under-read by less than the sagitta.
 
-use crate::shape::{Shape, closest_on_segment, orientation, segments_intersect, within};
+use crate::shape::{
+    ROUND_STEPS, Shape, closest_on_segment, orientation, segments_intersect, within,
+};
 use crate::units::PointNm;
-
-/// Outline points standing in for an ellipse.
-const ELLIPSE_STEPS: usize = 32;
 
 /// A shape reduced to what the overlap test needs.
 enum Core {
@@ -44,7 +43,7 @@ impl Shape {
     /// The shape is a stadium or a convex polygon, so it meets `poly`
     /// exactly when an edge of `poly` reaches it, or it lies wholly inside
     /// `poly`, or `poly` lies wholly inside it. Integer nm; no floats
-    /// beyond `outline`'s ellipse.
+    /// beyond `outline`'s corner arcs.
     ///
     /// A `poly` with no area (fewer than 3 distinct corners, or all
     /// collinear) is a point or a zero-width segment, like a flat pad: it
@@ -85,8 +84,8 @@ impl Shape {
                 radius,
             },
             Shape::Capsule { a, b, radius } => Core::Stadium { a, b, radius },
-            Shape::Rect { .. } | Shape::Ellipse { .. } => {
-                flat_to_stadium(self.outline(ELLIPSE_STEPS))
+            Shape::Rect { .. } | Shape::RoundRect { .. } => {
+                flat_to_stadium(self.outline(ROUND_STEPS))
             }
         }
     }

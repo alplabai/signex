@@ -91,25 +91,22 @@ fn rotated_rect_hit_and_bounds() {
 }
 
 #[test]
-fn ellipse_hit_and_bounds() {
-    let oval = Shape::Ellipse {
+fn round_rect_hit_and_bounds() {
+    let rr = |rotation_deg| Shape::RoundRect {
         center: p(0, 0),
         half_w: 2 * MM,
         half_h: MM,
-        rotation_deg: 0.0,
+        radius: MM / 2,
+        rotation_deg,
     };
-    assert!(oval.contains(p(2 * MM, 0), 0));
-    assert!(oval.contains(p(0, MM), 0));
-    assert!(!oval.contains(p(1_500_000, 900_000), 0));
-    assert_eq!(oval.aabb(), r(-2 * MM, -MM, 2 * MM, MM));
-    let turned = Shape::Ellipse {
-        center: p(0, 0),
-        half_w: 2 * MM,
-        half_h: MM,
-        rotation_deg: 90.0,
-    };
-    assert_eq!(turned.aabb(), r(-MM, -2 * MM, MM, 2 * MM));
-    assert!(turned.contains(p(0, 2 * MM), 0));
+    assert!(rr(0.0).contains(p(2 * MM, 0), 0));
+    assert!(rr(0.0).contains(p(0, MM), 0));
+    // The square corner is cut off: inside the box, outside the arc.
+    assert!(!rr(0.0).contains(p(2 * MM - 10_000, MM - 10_000), 0));
+    assert_eq!(rr(0.0).aabb(), r(-2 * MM, -MM, 2 * MM, MM));
+    assert_eq!(rr(90.0).aabb(), r(-MM, -2 * MM, MM, 2 * MM));
+    assert!(rr(90.0).contains(p(0, 2 * MM), 0));
+    assert!(!rr(90.0).contains(p(2 * MM, 0), 0));
 }
 
 #[test]

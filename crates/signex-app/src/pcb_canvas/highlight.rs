@@ -119,7 +119,7 @@ fn paint(
                 .with_line_cap(LineCap::Round);
             frame.stroke(&path, stroke);
         }
-        Shape::Rect { .. } | Shape::Ellipse { .. } => {
+        Shape::Rect { .. } | Shape::RoundRect { .. } => {
             let points = shape.outline(ELLIPSE_STEPS);
             let path = Path::new(|b| {
                 let mut ring = points.iter().map(|p| screen(camera, *p));

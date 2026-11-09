@@ -29,6 +29,6 @@ pub use ratsnest::{RatLine, ratsnest};
 pub use rect::RectNm;
 pub use selection::{ClickMode, Selection, marquee_mode, marquee_select, pick};
 pub use shape::Shape;
-pub use transform::{Placement, Side, pad_shape, pad_world_center};
+pub use transform::{Placement, Side, pad_shape, pad_world_center, pad_world_rotation_deg};
 pub use union_find::UnionFind;
 pub use units::{GeomError, MAX_ABS_NM, NM_PER_MM, PointNm, mm_to_nm, nm_to_mm};
