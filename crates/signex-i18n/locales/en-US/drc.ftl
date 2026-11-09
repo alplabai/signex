@@ -28,10 +28,12 @@ drc-more = and { $count } more not shown
 drc-kind-clearance = Clearance
 drc-kind-short = Short
 drc-kind-unconnected = Unconnected
+drc-kind-keepout = Keepout
 
 drc-detail-clearance = { $a } to { $b }: { $measured } mm, needs { $required } mm
 drc-detail-short = { $a } shorted to { $b }
 drc-detail-unconnected = { $net }: link of { $length } mm not routed
+drc-detail-keepout = { $net }: inside a keepout that forbids it
 
 drc-location = { $x }, { $y } mm
 drc-layer-top = Top

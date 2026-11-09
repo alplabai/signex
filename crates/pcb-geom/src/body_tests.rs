@@ -142,6 +142,7 @@ fn a_non_finite_rotation_is_refused() {
 
 fn board(fp: Footprint) -> PcbBoard {
     PcbBoard {
+        sketch: None,
         uuid: Uuid::nil(),
         version: 1,
         generator: String::new(),

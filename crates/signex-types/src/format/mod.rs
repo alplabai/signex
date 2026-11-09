@@ -32,6 +32,7 @@ use uuid::Uuid;
 use crate::pcb::{PcbBoard, Zone};
 use crate::schematic::SchematicSheet;
 
+mod board_sketch;
 mod extras;
 mod finite_toml;
 mod header_id;
@@ -52,6 +53,8 @@ mod uuid_repair;
 mod version;
 mod wire_color_repair;
 
+#[cfg(test)]
+mod board_sketch_tests;
 #[cfg(test)]
 mod body_style_tests;
 #[cfg(test)]
@@ -853,6 +856,9 @@ impl SnxPcb {
             out.push_str(&toml::to_string_pretty(&wrapper)?);
         }
 
+        // The board sketch (#2234): absent for a board without one.
+        board_sketch::write(&mut out, &self.board)?;
+
         // Footprint extras / pad extras / board extras — wrap in a
         // single `[extras]` tree so toml's serializer produces the
         // correct nested-table headers.
@@ -954,6 +960,8 @@ impl SnxPcb {
             None => (Vec::new(), UnknownFields::default()),
         };
 
+        let (sketch, board_sketch_unknown) = board_sketch::read(raw.board_sketch)?;
+
         let mut board = PcbBoard {
             uuid: raw.pcb_id,
             version: raw.version,
@@ -969,6 +977,7 @@ impl SnxPcb {
             zones,
             graphics: board_extras.graphics,
             texts: board_extras.texts,
+            sketch,
             unknown: BoardUnknown {
                 manifest: raw.unknown,
                 stackup: stackup_unknown,
@@ -976,6 +985,7 @@ impl SnxPcb {
                 nets: nets_unknown,
                 extras: board_extras.unknown,
                 extras_root: extras.unknown,
+                board_sketch: board_sketch_unknown,
                 newer_minor_source: version::is_newer_minor(&raw.format, SNXPCB_FORMAT_V1)
                     .then(|| raw.format.clone()),
                 load_repairs: Vec::new(),
@@ -1031,6 +1041,8 @@ struct PcbRaw {
     zones: Option<Vec<Zone>>,
     #[serde(default)]
     extras: Option<PcbExtrasRaw>,
+    #[serde(default)]
+    board_sketch: Option<board_sketch::BoardSketchRaw>,
     /// Foreign manifest keys; carried onto the board so they survive
     /// the codec wrapper being discarded.
     #[serde(flatten)]

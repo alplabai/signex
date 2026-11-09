@@ -1,8 +1,10 @@
 use signex_net::board::BoardNetEdit;
 use signex_types::pcb::{Footprint, PcbBoard, Point, SymbolLink};
+use signex_types::pcb_sketch::BoardSketch;
 use uuid::Uuid;
 
 use super::batch;
+use super::board_sketch;
 use super::error::BoardCommandError;
 use super::footprint::{self, FootprintFace};
 use super::footprint_content::{self, FootprintText};
@@ -29,8 +31,18 @@ pub enum BoardCommand {
         footprint: Uuid,
         face: FootprintFace,
     },
-    /// Replace the board outline polygon.
+    /// Replace the board outline polygon. Refused while the board sketch
+    /// owns the outline: [`BoardCommand::SetBoardSketch`] writes it then.
     SetBoardOutline { outline: Vec<Point> },
+    /// Replace the board sketch and its baked keepouts, cutouts, holes and
+    /// V-scores (#2234), and the outline when `outline` is set: the only
+    /// way any of them changes. Build it with
+    /// [`BoardCommand::set_board_sketch`]. Its inverse is another one
+    /// holding what it replaced.
+    SetBoardSketch {
+        sketch: Option<Box<BoardSketch>>,
+        outline: Option<Vec<Point>>,
+    },
     /// Remove the named items.
     DeleteItems { items: Vec<BoardItemId> },
     /// Put removed items back at their recorded list indices; the inverse
@@ -105,6 +117,9 @@ pub enum BoardPatchKind {
     /// The net table, and pad and zone nets. The items are the footprints
     /// and zones written; a table-only change names none.
     NetsChanged,
+    /// The board sketch and its baked geometry, the outline included when
+    /// the command carried one. Names no items.
+    BoardSketchReplaced,
 }
 
 /// The result of applying a command: the command that undoes it and the
@@ -130,6 +145,7 @@ impl BoardCommand {
                 face,
             } => footprint::restore_face(board, id, face),
             Self::SetBoardOutline { outline } => set_outline(board, outline),
+            Self::SetBoardSketch { sketch, outline } => board_sketch::set(board, sketch, outline),
             Self::DeleteItems { items: ids } => items::delete(board, &ids),
             Self::RestoreItems { items: removed } => items::restore(board, removed),
             Self::AddItems { items: added } => items::add(board, added),
@@ -157,6 +173,9 @@ impl BoardCommand {
 }
 
 fn set_outline(board: &mut PcbBoard, outline: Vec<Point>) -> Result<Applied, BoardCommandError> {
+    if board.sketch.as_ref().is_some_and(BoardSketch::owns_outline) {
+        return Err(BoardCommandError::OutlineOwnedBySketch);
+    }
     if outline.iter().any(|p| !p.x.is_finite() || !p.y.is_finite()) {
         return Err(BoardCommandError::NonFinite { field: "outline" });
     }

@@ -28,6 +28,7 @@ fn track(n: u128, y: f64, net: u32) -> Segment {
 /// default 0.2 mm; a third 5 mm away.
 fn board() -> PcbBoard {
     PcbBoard {
+        sketch: None,
         uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),

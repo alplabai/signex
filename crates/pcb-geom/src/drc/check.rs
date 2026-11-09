@@ -1,4 +1,4 @@
-//! The three checks. Candidate pairs come from the board index, one
+//! The copper checks. Candidate pairs come from the board index, one
 //! bounding-box query per item, so the cost follows what is near each item,
 //! not the square of the item count.
 
@@ -19,6 +19,7 @@ pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
     let index = BoardIndex::build(board);
     let mut violations = copper_pairs(&items, &index, rules);
     violations.extend(unconnected(board, &items));
+    violations.extend(super::keepout::violations(board));
     violations.sort_unstable();
     DrcReport {
         rules: rules.clone(),
@@ -75,6 +76,7 @@ fn check_pair(a: &CopperItem, b: &CopperItem, rules: &DrcRules) -> Option<Violat
             at: shared_point(a, b),
             measured_nm: 0,
             required_nm: required,
+            keepout: None,
         });
     }
     let gap = a.shape.separation(&b.shape);
@@ -87,6 +89,7 @@ fn check_pair(a: &CopperItem, b: &CopperItem, rules: &DrcRules) -> Option<Violat
         // Rounding down can only land under the rule here, never on it.
         measured_nm: gap.distance_nm().min(required - 1),
         required_nm: required,
+        keepout: None,
     })
 }
 
@@ -140,6 +143,7 @@ fn unconnected(board: &PcbBoard, items: &[CopperItem]) -> Vec<Violation> {
                 ),
                 measured_nm: length,
                 required_nm: 0,
+                keepout: None,
             }
         })
         .collect()

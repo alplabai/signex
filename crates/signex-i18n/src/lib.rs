@@ -65,9 +65,11 @@ define_ids! {
     DRC_KIND_CLEARANCE = "drc-kind-clearance";
     DRC_KIND_SHORT = "drc-kind-short";
     DRC_KIND_UNCONNECTED = "drc-kind-unconnected";
+    DRC_KIND_KEEPOUT = "drc-kind-keepout";
     DRC_DETAIL_CLEARANCE = "drc-detail-clearance";
     DRC_DETAIL_SHORT = "drc-detail-short";
     DRC_DETAIL_UNCONNECTED = "drc-detail-unconnected";
+    DRC_DETAIL_KEEPOUT = "drc-detail-keepout";
     DRC_LOCATION = "drc-location";
     DRC_LAYER_TOP = "drc-layer-top";
     DRC_LAYER_BOTTOM = "drc-layer-bottom";

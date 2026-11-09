@@ -18,6 +18,7 @@ fn board() -> PcbBoard {
         display_name: String::new(),
     };
     PcbBoard {
+        sketch: None,
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),
         version: 1,

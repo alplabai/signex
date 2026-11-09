@@ -47,6 +47,7 @@ fn two_pad_board() -> PcbBoard {
         unknown_columns: Default::default(),
     };
     PcbBoard {
+        sketch: None,
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         version: 1,

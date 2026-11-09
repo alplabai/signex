@@ -50,6 +50,10 @@ pub enum BoardCommandError {
     TextMismatch(Uuid),
     #[error("{field} must be a finite number")]
     NonFinite { field: &'static str },
+    #[error("the board sketch holds a number that is not finite at {0}")]
+    NonFiniteSketch(String),
+    #[error("the board outline belongs to the board sketch; edit the sketch instead")]
+    OutlineOwnedBySketch,
     #[error(
         "the board changed since revision {expected} (it is at {current}); read it again and retry"
     )]

@@ -21,6 +21,7 @@ fn command(id: &str) -> AppCommandId {
 
 pub(super) fn board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
+        sketch: None,
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         version: 1,

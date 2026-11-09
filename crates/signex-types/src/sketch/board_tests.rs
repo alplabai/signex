@@ -32,6 +32,7 @@ fn the_board_attributes_round_trip() {
     entity.mounting_hole = Some(MountingHoleAttr {
         drill_expr: Some("3.2mm".into()),
         plated: true,
+        net: Some("GND".into()),
     });
     let text = toml::to_string(&entity).unwrap();
     assert_eq!(toml::from_str::<Entity>(&text).unwrap(), entity);

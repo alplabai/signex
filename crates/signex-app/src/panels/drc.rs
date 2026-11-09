@@ -68,6 +68,7 @@ fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
         ViolationKind::Clearance => t!(i18n, ids::DRC_KIND_CLEARANCE),
         ViolationKind::Short => t!(i18n, ids::DRC_KIND_SHORT),
         ViolationKind::Unconnected => t!(i18n, ids::DRC_KIND_UNCONNECTED),
+        ViolationKind::Keepout => t!(i18n, ids::DRC_KIND_KEEPOUT),
     };
     let detail = match row.kind {
         ViolationKind::Clearance => t!(
@@ -82,6 +83,7 @@ fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
             i18n, ids::DRC_DETAIL_UNCONNECTED,
             "net" => row.a.clone(), "length" => row.measured_mm.clone()
         ),
+        ViolationKind::Keepout => t!(i18n, ids::DRC_DETAIL_KEEPOUT, "net" => row.a.clone()),
     };
     let place = t!(i18n, ids::DRC_LOCATION, "x" => row.x_mm.clone(), "y" => row.y_mm.clone());
     (kind, detail, place)

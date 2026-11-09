@@ -147,6 +147,7 @@ fn link_footprints(pcb: &mut PcbBoard, netlist: &Netlist) {
 
 fn board(footprints: Vec<Footprint>) -> PcbBoard {
     PcbBoard {
+        sketch: None,
         uuid: Uuid::now_v7(),
         version: 0,
         generator: String::new(),
