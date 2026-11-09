@@ -91,6 +91,7 @@ altium	hint	-	HOME	center_view_at_cursor
 altium	hint	-	Ctrl+F4	close_active_document
 altium	hint	-	Ctrl+C	copy
 altium	hint	-	INS	copy_attributes_or_add_vertex
+altium	hint	-	-	cross_probe
 altium	hint	-	Ctrl+X	cut
 altium	hint	-	-	cycle_fast_grid
 altium	hint	-	Ctrl+Q	cycle_unit
@@ -397,6 +398,7 @@ classic	hint	-	-	center_view_at_cursor
 classic	hint	-	-	close_active_document
 classic	hint	-	Ctrl+C	copy
 classic	hint	-	-	copy_attributes_or_add_vertex
+classic	hint	-	-	cross_probe
 classic	hint	-	Ctrl+X	cut
 classic	hint	-	Alt+4	cycle_fast_grid
 classic	hint	-	Ctrl+Q	cycle_unit

@@ -137,6 +137,18 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    // #1312: shows the selection's counterpart on the other side (sheet or
+    // board), opening it when needed. No default key in any preset.
+    CommandMetadata {
+        id: "cross_probe",
+        category: "select",
+        label: "Cross probe the selection to the board or schematic",
+        menu_label: Some("Cross Probe"),
+        group: CommandGroup::General,
+        enable: Enablement::RequiresSelection,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "cut",
         category: "edit",
@@ -925,7 +937,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         id: "toggle_cross_select_mode",
         category: "select",
         label: "Toggle Cross Select Mode",
-        menu_label: None,
+        menu_label: Some("Cross Select Mode"),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,

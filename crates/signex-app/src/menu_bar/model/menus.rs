@@ -2,7 +2,8 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, item, item_if, panel_item, stub, submenu, unavailable,
+    cmd, cmd_item, cmd_item_gated, cmd_toggle, item, item_if, panel_item, stub, submenu,
+    unavailable,
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
@@ -339,6 +340,19 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         // Runs `run_drc` on the PCB in view; greyed with no PCB open.
         cmd_item_gated(ctx, cmd("run_drc", "Design Rule Check", "")),
         stub("Net Inspector"),
+        SEP,
+        // #1312: Cross Probe shows the selection on the other side; Cross
+        // Select Mode (checked while on) mirrors every selection there.
+        cmd_item_gated(ctx, cmd("cross_probe", "Cross Probe", "")),
+        cmd_toggle(
+            ctx,
+            cmd(
+                "toggle_cross_select_mode",
+                "Cross Select Mode",
+                "Ctrl+Shift+X",
+            ),
+            ctx.cross_select,
+        ),
         SEP,
         item_if(
             "Up Hierarchy",

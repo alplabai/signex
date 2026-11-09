@@ -68,16 +68,16 @@ pub(crate) mod view;
 
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, CommandPaletteMsg, ContextAction,
-    ContextMenuMsg, ContextMenuState, ContextSubmenu, DragTarget, DrcRunResult, EditMsg,
-    EnableVersionControlMsg, EnableVersionControlOutcome, EnableVersionControlState, ErcMsg,
-    ExcludeDirtyChoice, ExportMsg, FileMsg, GitCommitFailure, GridPickerState, GridPropertiesMsg,
-    GridPropertiesState, InputMsg, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg,
-    NetNavMsg, OverlayMsg, ParameterManagerMsg, PasteIntent, PasteRequest, PcbMsg, PreferencesMsg,
-    PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob,
-    ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg,
-    RenameDialogState, RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest,
-    TabContextAction, TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem,
-    UiMsg, VersionControlScope, WindowMsg,
+    ContextMenuMsg, ContextMenuState, ContextSubmenu, CrossProbeMsg, DragTarget, DrcRunResult,
+    EditMsg, EnableVersionControlMsg, EnableVersionControlOutcome, EnableVersionControlState,
+    ErcMsg, ExcludeDirtyChoice, ExportMsg, FileMsg, GitCommitFailure, GridPickerState,
+    GridPropertiesMsg, GridPropertiesState, InputMsg, LibraryRowRef, Message, MoveSelectionMsg,
+    NetColorMsg, NetNavMsg, OverlayMsg, ParameterManagerMsg, PasteIntent, PasteRequest, PcbMsg,
+    PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg,
+    ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
+    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
+    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
+    TextEditState, TextEditTarget, TrackItem, UiMsg, VersionControlScope, WindowMsg,
 };
 pub(crate) use document::{Document, DocumentKey};
 pub use documents::{
@@ -115,6 +115,9 @@ impl Signex {
         }
         let before = self.active_tab_path();
         let mut tasks = vec![self.dispatch_update(message)];
+        // Cross select follows whatever this message selected, and a Cross
+        // Probe asked for runs once its target is open (#1312).
+        tasks.push(self.sync_cross_select());
         self.sync_undo_depth();
         // A Save completed behind the quit prompt must not leave it listing
         // files that are no longer unsaved (#1833).

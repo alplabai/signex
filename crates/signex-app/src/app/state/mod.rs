@@ -8,6 +8,7 @@ use super::TabInfo;
 
 mod agent_edits;
 mod case_fold;
+pub(crate) mod cross_select;
 pub(crate) mod dir_case;
 mod dirty;
 #[cfg(test)]

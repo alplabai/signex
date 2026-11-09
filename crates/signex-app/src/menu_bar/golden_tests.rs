@@ -220,6 +220,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("next_grid", "CycleGrid"),
     ("open_erc_dialog", "OpenErcDialog"),
     ("run_drc", "RunDrc"),
+    ("cross_probe", "CrossProbe"),
+    ("toggle_cross_select_mode", "ToggleCrossSelectMode"),
     ("open_parameter_manager", "OpenParameterManager"),
     ("annotate_schematic_quietly", "AnnotateQuietly"),
     ("force_annotate_all_schematics", "AnnotateForceAll"),
@@ -354,8 +356,9 @@ fn model_shortcuts_follow_the_active_keymap() {
     for menu in &menu_bar_model(&ctx).menus {
         check_shortcuts(menu, &ctx, &mut checked);
     }
-    // Edit ▸ Move adds Move, Rotate, Rotate Clockwise, Mirror X and Mirror Y (#2240).
-    assert_eq!(checked, 35, "the Altium profile labels 35 menu rows");
+    // Edit ▸ Move adds Move, Rotate, Rotate Clockwise, Mirror X and Mirror Y (#2240);
+    // Tools ▸ Cross Select Mode adds Ctrl+Shift+X (#1312).
+    assert_eq!(checked, 36, "the Altium profile labels 36 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {

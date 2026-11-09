@@ -105,6 +105,9 @@ Tools/---	separator	-	-	-	-	-	-
 Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc
 Tools/Net Inspector	stub	Net Inspector	-	-	-	00000000	never
 Tools/---	separator	-	-	-	-	-	-
+Tools/Cross Probe	item	Cross Probe	-	-	CrossProbe	01100000	cmd:cross_probe
+Tools/Cross Select Mode	item	Cross Select Mode	toggle_cross_select_mode	Ctrl+Shift+X	ToggleCrossSelectMode	11111111	cmd:toggle_cross_select_mode
+Tools/---	separator	-	-	-	-	-	-
 Tools/Up Hierarchy	item	Up Hierarchy	-	-	AscendToParentSheet	01000000	cmd:navigate_up_hierarchy
 Tools/---	separator	-	-	-	-	-	-
 Tools/New Part	item	New Part	-	-	ToolsNewPart	00010000	newpart

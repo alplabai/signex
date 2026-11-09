@@ -262,6 +262,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "toggle_visible_grid" => Message::Ui(UiMsg::GridToggle),
         "toggle_auto_focus" => Message::Overlay(OverlayMsg::ToggleAutoFocus),
         "toggle_electrical_grid" => Message::Ui(UiMsg::ToggleSnapHotspots),
+        "cross_probe" => Message::CrossProbe(CrossProbeMsg::ProbeRequested),
+        "toggle_cross_select_mode" => Message::CrossProbe(CrossProbeMsg::CrossSelectModeToggled),
         "undo" => Message::Edit(EditMsg::Undo),
         "unselect_all" => Message::Selection(selection_request::SelectionRequest::ClearAll),
         // Tools > Up Hierarchy: the sheet that references the focused one.
@@ -503,7 +505,7 @@ mod tests {
         "refresh_view",
         "reset_local_coordinates", "select_expand_connection",
         "select_node_or_connection_item",
-        "switch_segment_posture", "toggle_cross_select_mode", "toggle_floating_panels",
+        "switch_segment_posture", "toggle_floating_panels",
         "toggle_search_panel",
         "undo_last_segment",
         // Forward annotation does not exist yet. Aliasing this to ERC made the

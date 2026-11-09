@@ -314,6 +314,10 @@ mod sync_sheet_pins;
 #[path = "regression/cross_sheet_multiple_names.rs"]
 mod cross_sheet_multiple_names;
 
+// #1312 — cross probe and Cross Select Mode between the sheet and the board.
+#[path = "regression/cross_probe.rs"]
+mod cross_probe;
+
 // #1836 — hierarchy mistakes the project ERC must report.
 #[path = "regression/hierarchy_checks.rs"]
 mod hierarchy_checks;

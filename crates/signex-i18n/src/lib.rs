@@ -43,6 +43,14 @@ macro_rules! define_ids {
 }
 
 define_ids! {
+    CROSS_PROBE_TITLE = "cross-probe-title";
+    CROSS_PROBE_NOTHING_SELECTED = "cross-probe-nothing-selected";
+    CROSS_PROBE_NO_BOARD = "cross-probe-no-board";
+    CROSS_PROBE_NO_MATCH_BOARD = "cross-probe-no-match-board";
+    CROSS_PROBE_NO_MATCH_SCHEMATIC = "cross-probe-no-match-schematic";
+    CROSS_PROBE_SHEET_UNKNOWN = "cross-probe-sheet-unknown";
+    CROSS_SELECT_ON = "cross-select-on";
+    CROSS_SELECT_OFF = "cross-select-off";
     DIALOG_AUTOSAVE_RECOVERY_AUTOSAVED_AGE = "dialog-autosave-recovery-autosaved-age";
     DRC_RUN = "drc-run";
     DRC_HEADING = "drc-heading";

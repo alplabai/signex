@@ -6,7 +6,8 @@ pub(crate) const EN_US: &str = "en-US";
 /// that are hardcoded or that overflow.
 pub(crate) const EN_XA: &str = "en-XA";
 
-pub(crate) const EN_US_SOURCES: [&str; 7] = [
+pub(crate) const EN_US_SOURCES: [&str; 8] = [
+    include_str!("../locales/en-US/cross_probe.ftl"),
     include_str!("../locales/en-US/drc.ftl"),
     include_str!("../locales/en-US/menu.ftl"),
     include_str!("../locales/en-US/language.ftl"),

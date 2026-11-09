@@ -90,6 +90,21 @@ Tools ▸ Design Rule Check runs `run_drc` (#2222) on the PCB in view and is
 greyed while no PCB is open. The command is also in the command palette and
 as the Run DRC button of the Messages panel; no keymap preset binds it.
 
+## Tools ▸ Cross Probe and Cross Select Mode {#tools-cross-probe}
+
+Tools ▸ Cross Probe runs `cross_probe` (#1312): the part or net selected on
+the sheet or the board in view is selected on the other side, which is brought
+forward (a hidden tab) or opened (the project's board, or the part's sheet)
+and framed. It is greyed with nothing selected. The same command is the Cross
+Probe row of the sheet canvas menu and of the board canvas menu, and is in the
+command palette; no keymap preset binds it.
+
+Tools ▸ Cross Select Mode runs `toggle_cross_select_mode` and shows a check
+mark while the mode is on, which it is by default. While on, a selection on
+one side is selected in every sheet or board window on screen on the other
+side; it never opens a document or takes focus. The Altium preset binds it to
+Ctrl+Shift+X. How parts and nets are matched: `DECISIONS.md`, 2026-11-09.
+
 ## File ▸ Library {#file-library}
 
 File ▸ Library carries only "Open Library..." (libraries outside the active

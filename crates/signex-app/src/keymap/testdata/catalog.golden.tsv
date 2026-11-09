@@ -12,6 +12,7 @@ center_view_at_cursor	view	Center/redraw view around cursor	-	General	-	-	Always
 close_active_document	file	Close active document	Close Document	General	-	-	Always	-	document:document
 copy	edit	Copy	-	General	-	-	RequiresSelection	runs_headless	-
 copy_attributes_or_add_vertex	interactive	Copy attributes from object under cursor or add vertex while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
+cross_probe	select	Cross probe the selection to the board or schematic	Cross Probe	General	-	-	RequiresSelection	gui_only	-
 cut	edit	Cut	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
 cycle_fast_grid	view	Cycle fast grid	-	General	-	-	Always	gui_only	-
 cycle_unit	view	Cycle display unit	-	General	-	-	Always	gui_only	-
@@ -89,7 +90,7 @@ show_current_command_hotkeys	help	Show graphical editing hotkey list for current
 show_current_command_shortcuts	help	Show valid shortcuts for the current interactive command	-	General	-	-	Always	gui_only	-
 smart_paste	edit	Smart Paste	Paste Special	General	-	-	Always	mutates_doc,undoable	-
 switch_segment_posture	interactive	Switch current segment posture	-	General	-	-	Always	gui_only	-
-toggle_cross_select_mode	select	Toggle Cross Select Mode	-	General	-	-	Always	gui_only	-
+toggle_cross_select_mode	select	Toggle Cross Select Mode	Cross Select Mode	General	-	-	Always	gui_only	-
 toggle_electrical_grid	view	Toggle electrical grid	-	General	-	-	Always	gui_only	-
 toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_only	-
 toggle_properties_panel	panels	Toggle Properties panel	-	General	-	-	Always	gui_only	-

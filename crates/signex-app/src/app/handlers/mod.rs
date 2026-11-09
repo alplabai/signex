@@ -8,6 +8,7 @@ pub mod autosave_row;
 pub mod canvas;
 pub mod clipboard_workflows;
 mod component_history;
+mod cross_probe;
 #[cfg(test)]
 mod detached_confirm_tests;
 #[cfg(test)]

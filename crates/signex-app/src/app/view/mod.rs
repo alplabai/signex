@@ -173,6 +173,7 @@ impl Signex {
             recent_projects: ui.recent_projects.entries(),
             open_panels: self.open_panels(),
             i18n: std::sync::Arc::clone(&ui.i18n),
+            cross_select: interaction.cross_select.enabled,
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {

@@ -45,6 +45,7 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "edit_selected_object_properties",
     "change_component",
     "open_project_options",
+    "cross_probe",
 ];
 
 /// Keyboard-shortcut hints for the canvas menu, keyed by command id and
@@ -267,11 +268,13 @@ pub(super) fn canvas_menu_entries(
         v.push(DropdownEntry::Separator);
     }
 
-    v.push(dd_planned(
-        Some(ic::icon_dd_cross_probe(tid)),
-        "Cross Probe",
-        None,
-    ));
+    // #1312: the selected part or net on the board, opened when needed.
+    let probe_icon = Some(ic::icon_dd_cross_probe(tid));
+    v.push(if has_selection {
+        dd_command(probe_icon, "cross_probe", sc.of("cross_probe"), None)
+    } else {
+        dd_cmd_disabled(probe_icon, "cross_probe", sc.of("cross_probe"))
+    });
     v.push(DropdownEntry::Separator);
     // Cut and Copy have nothing to act on without a selection: greyed, as
     // the Edit menu greys them and as the keys do nothing there.
@@ -391,7 +394,8 @@ pub(super) fn canvas_menu_entries(
 }
 
 /// The board canvas menu (#2240): the placement commands, greyed unless
-/// the selection names an unlocked footprint (Delete: anything deletable).
+/// the selection names an unlocked footprint (Delete: anything deletable),
+/// then Cross Probe, live with anything selected (#1312).
 /// Each row runs its catalog command like the keys and the Edit menu do.
 pub(super) fn pcb_canvas_menu_entries(
     tid: ThemeId,
@@ -418,6 +422,8 @@ pub(super) fn pcb_canvas_menu_entries(
         row(ic::icon_dd_flip_x(tid), "flip_selection", placeable),
         DropdownEntry::Separator,
         row(ic::icon_dd_delete(tid), "delete_selection", board.deletable),
+        DropdownEntry::Separator,
+        row(ic::icon_dd_cross_probe(tid), "cross_probe", board.any),
     ]
 }
 

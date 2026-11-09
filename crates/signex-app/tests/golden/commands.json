@@ -145,6 +145,11 @@
     "category": "design"
   },
   {
+    "id": "cross_probe",
+    "group": "General",
+    "category": "select"
+  },
+  {
     "id": "cut",
     "group": "General",
     "category": "edit"

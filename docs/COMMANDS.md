@@ -53,6 +53,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `close_active_document` | Close active document | file | `Ctrl+F4` | — |
 | `copy` | Copy | edit | `Ctrl+C` | `Ctrl+C` |
 | `copy_attributes_or_add_vertex` | Copy attributes from object under cursor or add vertex while drawing | interactive | `Insert` | — |
+| `cross_probe` | Cross probe the selection to the board or schematic | select | — | — |
 | `cut` | Cut | edit | `Ctrl+X` | `Ctrl+X` |
 | `cycle_fast_grid` | Cycle fast grid | view | — | `Alt+4` |
 | `cycle_selection_mode` | Cycle selection mode | select | — | — |

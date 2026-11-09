@@ -64,7 +64,6 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("References", "planned submenu stub"),
     ("Unions", "planned submenu stub"),
     ("Snippets", "planned submenu stub"),
-    ("Cross Probe", "planned, no behaviour"),
     ("Comment...", "planned, no behaviour"),
     ("Pin Mapping...", "planned, no behaviour"),
     ("Supplier Links...", "planned, no behaviour"),

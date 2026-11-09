@@ -40,6 +40,8 @@ pub(crate) enum Needs {
     MoveObject,
     /// Flip Selection: a board with an unlocked footprint selected.
     PcbPlacement,
+    /// Cross Probe: something selected on the board or sheet in view (#1312).
+    ProbeTarget,
 }
 
 impl Needs {
@@ -96,6 +98,8 @@ impl Needs {
             Self::MoveSelection => ctx.has_schematic && ctx.has_selection,
             Self::MoveObject => ctx.has_schematic || ctx.pcb.shown,
             Self::PcbPlacement => ctx.pcb.shown && ctx.pcb.placeable,
+            Self::ProbeTarget if ctx.pcb.shown => ctx.pcb.any,
+            Self::ProbeTarget => ctx.has_schematic && ctx.has_selection,
         }
     }
 
@@ -132,6 +136,7 @@ impl Needs {
             Self::MoveSelection => "Nothing is selected to move, or a selected footprint is locked",
             Self::MoveObject => "No schematic or PCB is open",
             Self::PcbPlacement => "No unlocked footprint is selected on a PCB",
+            Self::ProbeTarget => "Nothing is selected on the sheet or board to cross probe",
         }
     }
 }
@@ -207,6 +212,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "open_parameter_manager" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
         "run_drc" => Needs::Pcb,
+        "cross_probe" => Needs::ProbeTarget,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => Needs::FitTarget,

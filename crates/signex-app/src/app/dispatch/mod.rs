@@ -127,6 +127,7 @@ impl Signex {
             Message::ParameterManager(msg) => self.dispatch_parameter_manager_message(msg),
             Message::PcbCanvas(msg) => self.dispatch_pcb_canvas_message(msg),
             Message::Pcb(msg) => self.dispatch_pcb_message(msg),
+            Message::CrossProbe(msg) => self.dispatch_cross_probe_message(msg),
         }
     }
 

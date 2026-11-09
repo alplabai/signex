@@ -100,6 +100,8 @@ pub(crate) struct MenuInputs {
     open_panels: Vec<PanelKind>,
     keymap: Option<Arc<CompiledKeymap>>,
     i18n: Arc<signex_i18n::I18n>,
+    /// Cross Select Mode is on: its Tools row shows a check mark (#1312).
+    cross_select: bool,
 }
 
 impl PartialEq for MenuInputs {
@@ -108,6 +110,7 @@ impl PartialEq for MenuInputs {
             && self.recent == other.recent
             && self.locked == other.locked
             && self.open_panels == other.open_panels
+            && self.cross_select == other.cross_select
             && match (&self.keymap, &other.keymap) {
                 (Some(a), Some(b)) => Arc::ptr_eq(a, b),
                 (None, None) => true,
@@ -135,6 +138,7 @@ impl MenuInputs {
             open_panels,
             keymap: None,
             i18n,
+            cross_select: true,
         }
     }
 
@@ -142,6 +146,17 @@ impl MenuInputs {
     pub(crate) fn with_keymap(mut self, keymap: Arc<CompiledKeymap>) -> Self {
         self.keymap = Some(keymap);
         self
+    }
+
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // set by the macOS sync
+    pub(crate) fn with_cross_select(mut self, on: bool) -> Self {
+        self.cross_select = on;
+        self
+    }
+
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub(crate) fn cross_select(&self) -> bool {
+        self.cross_select
     }
 
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]

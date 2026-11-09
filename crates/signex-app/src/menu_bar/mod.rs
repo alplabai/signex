@@ -217,6 +217,9 @@ pub struct MenuContext<'a> {
     pub(crate) open_panels: Vec<crate::panels::PanelKind>,
     /// The locale the menu titles render in (#2055).
     pub i18n: std::sync::Arc<signex_i18n::I18n>,
+    /// Cross Select Mode is on: Tools ▸ Cross Select Mode shows a check
+    /// mark (#1312). On by default, like the mode.
+    pub cross_select: bool,
 }
 
 impl Default for MenuContext<'_> {
@@ -228,6 +231,7 @@ impl Default for MenuContext<'_> {
             recent_projects: &[],
             open_panels: Vec::new(),
             i18n: signex_i18n::I18n::en_us(),
+            cross_select: true,
         }
     }
 }

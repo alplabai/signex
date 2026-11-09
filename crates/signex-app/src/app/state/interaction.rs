@@ -41,6 +41,8 @@ pub struct InteractionState {
     pub pcb_ratsnest: super::pcb_ratsnest::PcbRatsnest,
     /// The board check the Messages panel lists (#2222).
     pub pcb_drc: super::pcb_drc::PcbDrc,
+    /// Cross Select Mode, what it last saw and a pending Cross Probe (#1312).
+    pub cross_select: super::cross_select::CrossSelectState,
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,

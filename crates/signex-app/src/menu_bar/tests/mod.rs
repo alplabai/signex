@@ -165,6 +165,7 @@ pub(super) fn menu_context_in(app: &Signex, window: Option<iced::window::Id>) ->
         recent_projects: app.ui_state.recent_projects.entries(),
         open_panels: app.open_panels(),
         i18n: std::sync::Arc::clone(&app.ui_state.i18n),
+        cross_select: app.interaction_state.cross_select.enabled,
     }
 }
 
