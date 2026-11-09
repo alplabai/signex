@@ -278,7 +278,8 @@ fn the_runs_policy_applies_before_anything_is_sent_and_the_apps_refusals_come_ba
     );
     // An edit inside apply_edits is held to the same policy.
     let edits = json!([{"id": "save_document"}]);
-    let nested = jsonl(&[json!({"id": "apply_edits", "args": {"edits": edits}})]);
+    let doc = w.fx.sheet.to_str().unwrap();
+    let nested = jsonl(&[json!({"id": "apply_edits", "args": {"document": doc, "edits": edits}})]);
     let nested = w.cli(&["run", w.project()], &nested);
     assert_eq!(nested.lines[0]["status"], "refused");
     assert!(
@@ -298,7 +299,18 @@ fn the_runs_policy_applies_before_anything_is_sent_and_the_apps_refusals_come_ba
         "reason": "saving the person's file is not available to agents yet",
         "messages": [], "changed": []});
     let app = w.app(&[refusal]);
-    let out = w.cli(&["run", w.project(), "save_document", "--save"], "");
+    let document = format!("document={}", w.fx.sheet.display());
+    let out = w.cli(
+        &[
+            "run",
+            w.project(),
+            "save_document",
+            "--arg",
+            &document,
+            "--save",
+        ],
+        "",
+    );
     let sent = app.finish();
     assert_eq!(out.code, Some(1));
     assert_eq!(out.lines[0]["status"], "refused");
@@ -370,6 +382,34 @@ fn a_document_of_another_open_project_is_refused_by_id_and_this_projects_is_not(
     assert_eq!(out.code, Some(0), "{}", out.stderr);
     assert_eq!(sent.len(), 2);
     assert_eq!(sent[1]["args"]["document"], SHEET_A);
+}
+
+/// Sent with no `document`, the app would act on the person's active
+/// document, which the run's folders were never checked against.
+#[test]
+fn a_command_that_acts_on_a_document_must_name_it_and_is_never_sent_without_one() {
+    let w = world();
+    let app = w.app(&[answered(json!({"documents": 0}), &[])]);
+    let edits = json!([{"id": "place_junction", "args": {"at": [1, 2]}}]);
+    let commands = jsonl(&[
+        json!({"id": "undo"}),
+        json!({"id": "color_net", "args": {"at": [0, 0], "color": "#336699"}}),
+        json!({"id": "apply_edits", "args": {"edits": edits}}),
+        json!({"id": "list_documents"}),
+    ]);
+    let out = w.cli(&["run", w.project(), "--keep-going"], &commands);
+    let sent = app.finish();
+
+    assert_eq!(out.lines.len(), 4, "{}", out.stdout);
+    for line in &out.lines[..3] {
+        assert_eq!(line["status"], "refused", "{line}");
+        let reason = line["reason"].as_str().unwrap();
+        assert!(reason.contains("name the document"), "{line}");
+    }
+    // A query that names no document is fine: it acts on none.
+    assert_eq!(out.lines[3]["status"], "answered");
+    assert_eq!(sent.len(), 1, "only the query was sent: {sent:?}");
+    assert_eq!(sent[0]["id"], "list_documents");
 }
 
 #[test]

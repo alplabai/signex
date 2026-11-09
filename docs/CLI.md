@@ -116,7 +116,10 @@ in the middle of continues.
   reason comes back as the result line's `reason` (`undo` and `redo`, which
   are the person's; `save_document`, `close_active_document` and
   `assign_net_class`, held back; a command with a file path; anything that
-  does not name its document). Every `document` operand, an id or a path, in
+  does not name its document). A command that acts on a document (it has a
+  `document` operand and is not a query) and is sent without one is refused
+  here with "name the document": the app would use the person's active
+  document, which is never checked against the run's folders. Every `document` operand, an id or a path, in
   the command and in each edit of `apply_edits`, is first resolved by the app
   (a `document_info` query on the same connection) to the file it holds, and
   that file is confined like a path operand: inside the project folder or

@@ -11,9 +11,11 @@ use std::path::{Path, PathBuf};
 
 use signex_app::headless::agent_client::{Connection, Reply};
 
-use crate::capability::capability_of;
+use signex_app::keymap::OperandKind;
+
+use crate::capability::{Capability, capability_of};
 use crate::edits::{authorize_edits, named_document_paths};
-use crate::policy::Policy;
+use crate::policy::{Approved, Policy};
 use crate::protocol::{Mode, Request, ResultLine, Status};
 use crate::roots::folder_and_roots;
 
@@ -76,6 +78,7 @@ impl Attached {
             .policy
             .authorize(request, &self.project_dir, &self.roots)
             .map_err(refused)?;
+        names_its_document(&approved).map_err(refused)?;
         let (policy, roots, connection) = (&self.policy, &self.roots, &mut self.connection);
         // Every `document` operand, an id or a path, in the command and in
         // each edit, is resolved by the app to the file it holds and confined
@@ -112,6 +115,31 @@ impl Attached {
             changed: Vec::new(),
         }
     }
+}
+
+/// A command that acts on a document and is not a query must name it: sent
+/// without one the app would use the person's active document, which is never
+/// resolved here and so never checked against this run's folders.
+fn names_its_document(approved: &Approved) -> Result<(), String> {
+    let acts_on_a_document = approved
+        .meta
+        .operands
+        .iter()
+        .any(|operand| operand.kind == OperandKind::Document);
+    let names_one = approved.operands.iter().any(|(name, _)| {
+        approved
+            .meta
+            .operands
+            .iter()
+            .any(|operand| operand.name == *name && operand.kind == OperandKind::Document)
+    });
+    if acts_on_a_document && !names_one && capability_of(approved.meta) != Capability::Read {
+        return Err(format!(
+            "`{}` needs an explicit `document`: name the document; an attached run never acts on the person's active one",
+            approved.command.as_str()
+        ));
+    }
+    Ok(())
 }
 
 /// The file the running app holds the document `text` (an id or a path) as,
