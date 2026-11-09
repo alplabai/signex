@@ -12,7 +12,7 @@ use super::wire::{self, Request};
 use super::{AgentCall, AgentMsg, Input, allow, listener, registry};
 use crate::app::command::queries::is_query;
 use crate::app::command::{CommandArgs, OperandValue};
-use crate::app::{DocumentKey, Message, Signex};
+use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
 /// What running one request came to: the status, its reason and its data.
@@ -271,8 +271,7 @@ impl Signex {
     }
 
     /// A command that is not a query acts on the document it names, one of an
-    /// open project's, and never on the person's active one. Closing it must
-    /// not move the person's tab either.
+    /// open project's, and never on the person's active one.
     fn check_agent_document(
         &mut self,
         command: &AppCommandId,
@@ -295,25 +294,6 @@ impl Signex {
                 "{} is not part of a project open in this app",
                 entry.name
             ));
-        }
-        if id == "close_active_document" {
-            let active = self
-                .document_state
-                .tabs
-                .get(self.document_state.active_tab)
-                .and_then(DocumentKey::of);
-            if entry.key.is_some() && entry.key == active {
-                return Err(format!(
-                    "{} is the person's active document; closing it would move their tab",
-                    entry.name
-                ));
-            }
-            if entry.open_in_window {
-                return Err(format!(
-                    "{} is open in a window of its own; closing it would close that window",
-                    entry.name
-                ));
-            }
         }
         Ok(())
     }

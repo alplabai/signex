@@ -64,24 +64,3 @@ fn every_request_is_logged_with_the_client_pid_the_command_and_the_outcome() {
     );
     assert_eq!(crate::diagnostics::logged_count(refused_line), refused + 1);
 }
-
-#[test]
-fn closing_a_document_that_is_not_the_active_tab_leaves_the_active_tab_alone() {
-    let mut app = app_at_work();
-    let tabs = app.document_state.tabs.len();
-    let person = snapshot(&app);
-    let closed = call(
-        &mut app,
-        "close_active_document",
-        json!({"document": doc("a.snxsch")}),
-    );
-    assert_eq!(closed["status"], "ran", "{closed}");
-    assert_eq!(app.document_state.tabs.len(), tabs - 1);
-    let after = snapshot(&app);
-    // Only the tab strip lost the closed tab; the active document, focus,
-    // selection and tool are as they were.
-    let active = format!("active_path=Some({:?})", path("b.snxsch"));
-    assert!(after.contains(&active), "{after}");
-    assert!(!after.contains("a.snxsch"), "{after}");
-    assert!(person.contains("a.snxsch"));
-}

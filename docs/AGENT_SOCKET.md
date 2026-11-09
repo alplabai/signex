@@ -61,9 +61,21 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
 - the #2172 queries: `list_documents`, `document_info`, `resolve`, `find_items`,
   `read_document`;
 - a command that names its document with the `document` operand and takes no
-  file path: today `apply_edits`, `revert`, `color_net`, `clear_all_net_colors`,
-  `assign_net_class`, `save_document` and `close_active_document`. A test pins
-  this set, so a catalog row that joins or leaves it is a visible decision.
+  file path, except the three held back below: today `apply_edits`, `revert`,
+  `color_net` and `clear_all_net_colors`. A test pins the final set, so a
+  catalog row that joins or leaves it is a visible decision.
+
+Held back (`NOT_YET_FOR_AGENTS`, each with the reason the agent is told). They
+pass the derivation and are refused until the maintainer opens them:
+
+- `save_document`: "saving the person's file is not available to agents yet".
+  It could write the person's half-done unsaved work on that sheet. Candidate to
+  open later behind PR B's `--save` gate.
+- `close_active_document`: it changes the person's tab strip.
+- `assign_net_class`: project-wide data, which #2178 also keeps out of
+  `apply_edits`.
+
+**Maintainer decision pending:** these three are the candidates to open later.
 
 Refused with a reason: `undo` and `redo` (`PERSON_ONLY`, the one hand-kept
 constant, checked against the catalog by a test; the agent takes back its own
@@ -72,11 +84,8 @@ step with `revert`), a command with a file path operand (`save_document_as`,
 #2170), and every tool, selection or view command, which names no document.
 
 `open_document` and `new_document` are refused on this channel: they take a
-path, and opening a tab changes what the person sees. `close_active_document`
-is refused when its document is the person's active tab, or is shown in a
-window of its own, since closing it would move their tab or close that window.
-A document that is not part of a project open in this app (a loose sheet) is
-refused too.
+path, and opening a tab changes what the person sees. A document that is not
+part of a project open in this app (a loose sheet) is refused too.
 
 ## Security
 
@@ -173,5 +182,5 @@ own `pid` and `boot_id`; a later run that rewrites an entry takes it over.
   version sweeps the folder.
 - A query on a project sheet that is not loaded reads it on the update thread,
   as the headless run does (#665 tracks synchronous reads).
-- `save_document` answers `ran` when the save has started; its result reaches
-  Messages when the write finishes.
+- An agent cannot save, close a tab or assign a net class yet (see "Held
+  back"); a person saves.
