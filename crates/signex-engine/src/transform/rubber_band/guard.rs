@@ -574,6 +574,8 @@ impl<'a> Guard<'a> {
                 }
                 return (equal, blamed, true);
             }
+            #[cfg(test)]
+            tally::fell_back();
         }
         let (equal, blamed) = self.check_all_nets(candidate, tips, policy, edited);
         (equal, blamed, false)
@@ -750,9 +752,10 @@ pub(crate) mod self_check {
     }
 }
 
-/// What the tests count of the guard's checks on this thread: how many ran on
-/// the nets the move reaches, how many over every net, how many blamed a tip,
-/// and what each decided.
+/// What the tests count on this thread: the guard's checks (how many ran on
+/// the nets the move reaches, how many over every net, how many fell back to
+/// every net, how many blamed a tip, what each decided), the follows the
+/// journal rewound and the reconciles that read fewer wires than the sheet.
 #[cfg(test)]
 pub(crate) mod tally {
     use std::cell::RefCell;
@@ -765,6 +768,12 @@ pub(crate) mod tally {
         pub(crate) local_checks: usize,
         pub(crate) full_checks: usize,
         pub(crate) blames: usize,
+        /// Checks of a guard built local that fell back to every net.
+        pub(crate) fallbacks: usize,
+        /// Failed follows whose journal put back at least one wire end.
+        pub(crate) rewinds: usize,
+        /// Reconciles that indexed only the wires near the touched ones.
+        pub(crate) reconciles_narrowed: usize,
         /// Each check's answer, in order.
         pub(crate) decisions: Vec<(bool, Option<Vec<Key>>)>,
     }
@@ -788,6 +797,18 @@ pub(crate) mod tally {
             t.blames += usize::from(blamed.is_some());
             t.decisions.push((equal, blamed.clone()));
         });
+    }
+
+    pub(crate) fn fell_back() {
+        TALLY.with(|t| t.borrow_mut().fallbacks += 1);
+    }
+
+    pub(crate) fn rewound() {
+        TALLY.with(|t| t.borrow_mut().rewinds += 1);
+    }
+
+    pub(crate) fn reconcile_narrowed() {
+        TALLY.with(|t| t.borrow_mut().reconciles_narrowed += 1);
     }
 
     /// The counts so far on this thread, starting again from zero.

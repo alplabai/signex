@@ -69,8 +69,9 @@ fn resistor_lib() -> LibSymbol {
     }
 }
 
-/// Ten resistors in two rows, each wired on both pins to a stub, the stubs
-/// of one column sharing a net label name.
+/// Ten resistors in two rows, each wired on both pins to a stub of its own:
+/// every pin is a net of its own. A part reaches from 10 mm left of its
+/// centre to 8 mm right of it; parts of a row are 30 mm apart.
 fn rig() -> (Signex, Vec<SelectedItem>) {
     let mut sheet = SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
@@ -80,9 +81,11 @@ fn rig() -> (Signex, Vec<SelectedItem>) {
     sheet.lib_symbols.insert("R".to_string(), resistor_lib());
     let mut symbols = Vec::new();
     for n in 0..10 {
-        // The second row is staggered, so a part moved along the first lands in the clear.
+        // Row one at x 30, 60 .. 150; row two 10 mm right of it, at x 40, 70
+        // .. 160, so a part moved 10 mm along its row lands between two parts
+        // with at least 2 mm clear on each side.
         let (x, y) = (
-            30.0 + 25.0 * (n % 5) as f64 + 12.5 * (n / 5) as f64,
+            30.0 + 30.0 * (n % 5) as f64 + 10.0 * (n / 5) as f64,
             40.0 + 30.0 * (n / 5) as f64,
         );
         let id = uuid::Uuid::now_v7();
@@ -242,7 +245,7 @@ fn a_box_select_then_a_drag_of_many_symbols_drops_what_the_ghost_shows() {
     // Box-select the first row: a real drag on empty canvas.
     let mut state = CanvasState::default();
     let from = screen_at(&app, 8.0, 25.0);
-    let to = screen_at(&app, 150.0, 52.0);
+    let to = screen_at(&app, 170.0, 52.0);
     let _ = canvas_event_placing(&mut app, &mut state, cursor(from), from);
     let _ = canvas_event_placing(&mut app, &mut state, left_press(), from);
     let _ = canvas_event_placing(&mut app, &mut state, cursor(to), to);
@@ -305,12 +308,26 @@ fn the_move_selection_dialog_commits_what_the_ghost_shows() {
     });
 }
 
-/// Run the Active Bar `action` on `selection` and hold the commit to the
-/// ghost of the very moves it made (each symbol by its own offset).
+/// The pins of each net, as sets: what a move must leave as it found it when
+/// the parts land clear.
+fn pins(
+    sheet: &SchematicSheet,
+) -> std::collections::BTreeSet<std::collections::BTreeSet<(uuid::Uuid, String)>> {
+    signex_net::net_signatures(sheet)
+        .iter()
+        .map(|n| n.terminals.clone())
+        .collect()
+}
+
+/// Run the Active Bar `action` on `selection`, check it made the `expected`
+/// moves (item, dx, dy) and nothing else, that the parts landed clear (the
+/// nets keep their pins, which only the netlist of the sheets decides), and
+/// hold the commit to the ghost of the very moves it made.
 fn assert_action_equals_ghost(
     app: &mut Signex,
     selection: &[SelectedItem],
     action: ActiveBarAction,
+    expected: &[(SelectedItem, f64, f64)],
 ) {
     app.interaction_state.active_canvas_mut().selected = selection.to_vec();
     let before = sheet(app);
@@ -334,14 +351,20 @@ fn assert_action_equals_ghost(
         moves.iter().any(|(_, dx, dy)| *dx != 0.0 || *dy != 0.0),
         "{action:?} moved nothing"
     );
+    let made: Vec<_> = moves
+        .iter()
+        .copied()
+        .filter(|(_, dx, dy)| *dx != 0.0 || *dy != 0.0)
+        .collect();
+    assert_eq!(made, expected, "{action:?}: not the moves the rig sets up");
+    // Every pin keeps its own net: nothing landed on a pin or a wire.
+    assert_eq!(
+        pins(&after),
+        pins(&before),
+        "{action:?}: the move changed the nets"
+    );
     // The commit and the ghost agree on the geometry and on the nets.
     let shown = ghost(&before, &moves);
-    let pins = |s: &SchematicSheet| {
-        signex_net::net_signatures(s)
-            .iter()
-            .map(|n| n.terminals.clone())
-            .collect::<std::collections::BTreeSet<_>>()
-    };
     assert_eq!(pins(&after), pins(&shown), "{action:?}: the nets differ");
     assert_eq!(
         geometry(&after),
@@ -353,15 +376,25 @@ fn assert_action_equals_ghost(
 #[test]
 fn align_commits_what_the_ghost_of_its_moves_shows() {
     let (mut app, symbols) = rig();
-    // Two symbols of different x and y: the lower one moves left, into the clear.
-    let chosen = vec![symbols[1], symbols[7]];
-    assert_action_equals_ghost(&mut app, &chosen, ActiveBarAction::AlignLeft);
+    // R3 (90, 40) and R8 (100, 70): R8 moves 10 mm left to x 90, between R7
+    // (reaching to x 78) and R9 (from x 120); R8 then spans x 80 to 98.
+    let chosen = vec![symbols[2], symbols[7]];
+    let expected = [(symbols[7], -10.0, 0.0)];
+    assert_action_equals_ghost(&mut app, &chosen, ActiveBarAction::AlignLeft, &expected);
 }
 
 #[test]
 fn distribute_commits_what_the_ghost_of_its_moves_shows() {
     let (mut app, symbols) = rig();
-    // The middle one (x 67.5) is off the even spacing between the outer two.
-    let chosen = vec![symbols[0], symbols[6], symbols[4]];
-    assert_action_equals_ghost(&mut app, &chosen, ActiveBarAction::DistributeHorizontally);
+    // R6 (x 40), R7 (x 70) and R4 (x 120): R7 moves 10 mm right to the even
+    // spacing at x 80, between R6 (reaching to x 48) and R8 (from x 90); R7
+    // then spans x 70 to 88.
+    let chosen = vec![symbols[5], symbols[6], symbols[3]];
+    let expected = [(symbols[6], 10.0, 0.0)];
+    assert_action_equals_ghost(
+        &mut app,
+        &chosen,
+        ActiveBarAction::DistributeHorizontally,
+        &expected,
+    );
 }

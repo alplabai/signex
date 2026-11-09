@@ -183,18 +183,25 @@ impl Engine {
             (Some(verdicts), Some(areas)) => verdicts.kept(junction, areas),
             _ => None,
         };
-        let to_judge = (self.document.junctions.iter())
-            .filter(|j| j.minted && kept(j).is_none())
-            .count();
+        // Each minted dot's kept verdict, worked out once: `None` is judged
+        // again. A dot minted below has a fresh id, so no verdict either.
+        let verdict: Vec<Option<bool>> = (self.document.junctions.iter())
+            .map(|j| if j.minted { kept(j) } else { None })
+            .collect();
+        let judged: Vec<signex_types::schematic::Point> = (self.document.junctions.iter())
+            .zip(&verdict)
+            .filter(|(j, v)| j.minted && v.is_none())
+            .map(|(j, _)| j.position)
+            .collect();
         // Wire geometry is fixed for this pass (only junctions change), so one
         // index serves every query. Minting for a wire takes about eight
         // lookups, judging a dot three. The queries are all near a touched
         // wire or a dot to judge, so the index holds only the wires near those.
-        let near = self.wires_near_reconcile(&touched, |j| j.minted && kept(j).is_none());
+        let near = self.wires_near_reconcile(&touched, &judged);
         let index = WireIndex::for_lookups(
             near.as_deref().unwrap_or(&self.document.wires),
             crate::JUNCTION_TOLERANCE_MM,
-            8 * touched.len() + 3 * to_judge,
+            8 * touched.len() + 3 * judged.len(),
         );
         let mut changed = false;
         for wire in touched {
@@ -211,13 +218,14 @@ impl Engine {
             .document
             .junctions
             .iter()
-            .filter(|junction| junction.minted)
-            .filter(|junction| {
-                !kept(junction).unwrap_or_else(|| {
+            .enumerate()
+            .filter(|(_, junction)| junction.minted)
+            .filter(|(at, junction)| {
+                !verdict.get(*at).copied().flatten().unwrap_or_else(|| {
                     autoplace::wire_meeting_justifies_junction(junction.position, &index)
                 })
             })
-            .map(|junction| junction.uuid)
+            .map(|(_, junction)| junction.uuid)
             .collect();
         if !stale.is_empty() {
             self.document
@@ -229,31 +237,25 @@ impl Engine {
     }
 
     /// The wires that can be near a place [`Self::reconcile_wire_junctions`]
-    /// reads: the touched wires' boxes and the dots it judges again, grown by
-    /// well over the junction tolerance (every test it makes is "within the
-    /// tolerance of a point that lies in one of these boxes"). `None` when the
-    /// boxes cannot be trusted (a coordinate that is not a number) or in the
-    /// test that asks every question of every wire.
+    /// reads: the touched wires' boxes and the dots it judges again (`judged`),
+    /// grown by [`region_wires::RECONCILE_MARGIN_MM`]. `None` when the boxes
+    /// cannot be trusted (a coordinate that is not a number) or in the test
+    /// that asks every question of every wire.
     fn wires_near_reconcile(
         &self,
         touched: &[signex_types::schematic::Wire],
-        judged: impl Fn(&signex_types::schematic::Junction) -> bool,
+        judged: &[signex_types::schematic::Point],
     ) -> Option<Vec<signex_types::schematic::Wire>> {
         #[cfg(test)]
         if self.full_scan_follow {
             return None;
         }
-        use region_wires::{Regions, boxed, grown};
-        let margin = 5.0 * crate::JUNCTION_TOLERANCE_MM;
+        use region_wires::{RECONCILE_MARGIN_MM, Regions, boxed, grown};
         let mut boxes: Vec<_> = touched
             .iter()
-            .map(|w| grown(boxed(w.start, w.end), margin))
+            .map(|w| grown(boxed(w.start, w.end), RECONCILE_MARGIN_MM))
             .collect();
-        boxes.extend(
-            (self.document.junctions.iter())
-                .filter(|j| judged(j))
-                .map(|j| grown(boxed(j.position, j.position), margin)),
-        );
+        boxes.extend((judged.iter()).map(|p| grown(boxed(*p, *p), RECONCILE_MARGIN_MM)));
         if boxes
             .iter()
             .any(|b| ![b.0, b.1, b.2, b.3].iter().all(|v| v.is_finite()))
@@ -261,12 +263,15 @@ impl Engine {
             return None;
         }
         let regions = Regions::new(boxes);
-        Some(
-            (self.document.wires.iter())
-                .filter(|w| regions.may_touch(w))
-                .cloned()
-                .collect(),
-        )
+        let near: Vec<_> = (self.document.wires.iter())
+            .filter(|w| regions.may_touch(w))
+            .cloned()
+            .collect();
+        #[cfg(test)]
+        if near.len() < self.document.wires.len() {
+            rubber_band::tally::reconcile_narrowed();
+        }
+        Some(near)
     }
 
     pub(super) fn move_selected_item(&mut self, item: &SelectedItem, dx: f64, dy: f64) -> bool {

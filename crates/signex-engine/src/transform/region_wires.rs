@@ -11,6 +11,17 @@ use std::collections::HashMap;
 
 use signex_types::schematic::{Point, Wire};
 
+/// How far past a touched wire or a judged dot a reconcile test can read a
+/// wire: each test reads wires within one tolerance of its query point, and
+/// each query point is within one tolerance of a touched wire or is a judged
+/// dot, so two tolerances reach every wire read. The third is headroom for
+/// float rounding in the grown boxes. Proof: docs/INCREMENTAL_NETS.md,
+/// "Reconcile margin".
+pub(crate) const RECONCILE_MARGIN_MM: f64 =
+    REACH_IN_TOLERANCES * crate::JUNCTION_TOLERANCE_MM + crate::JUNCTION_TOLERANCE_MM;
+/// Hops from a touched wire to a wire a test reads, one tolerance each.
+const REACH_IN_TOLERANCES: f64 = 2.0;
+
 /// Cell edge in mm.
 const CELL_MM: f64 = 4.0;
 /// A box covering more cells than this is checked for every wire.

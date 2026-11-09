@@ -55,6 +55,10 @@ struct Floors {
     named_nets_moved: usize,
     /// Cases where the pass rerouted, added or dropped a wire.
     rewired: usize,
+    /// Failed follows the journal rewound (the local side).
+    rewinds: usize,
+    /// Checks of a local guard that fell back to every net.
+    fallbacks: usize,
 }
 
 impl Floors {
@@ -109,6 +113,8 @@ fn step_both_ways(
     floors.nets_changed += usize::from(changed && counts.local_checks > 0);
     floors.warned += usize::from(!a.warnings.is_empty());
     floors.rewired += usize::from(rewired && counts.local_checks > 0);
+    floors.rewinds += counts.rewinds;
+    floors.fallbacks += counts.fallbacks;
     let symbols = (moves.iter())
         .filter(|(item, _, _)| item.kind == SelectedKind::Symbol)
         .count();
@@ -365,6 +371,8 @@ fn the_local_guard_equals_the_full_guard_on_the_corpus_and_the_sample_project() 
     assert!(floors.local_guards >= 15, "{floors:?}");
     assert!(floors.local_checks >= 20, "{floors:?}");
     assert!(floors.blamed >= 1, "{floors:?}");
+    // Cases where the pass changed a wire: the following itself was compared.
+    assert!(floors.rewired >= 3, "{floors:?}");
 }
 
 /// A move with a power port or a child-sheet pin among its tips is compared
@@ -487,4 +495,6 @@ fn a_follow_that_fails_on_its_second_wire_puts_the_first_back() {
         floors.local_checks >= 4 && floors.rewired >= 1,
         "{floors:?}"
     );
+    // The journal put a moved wire end back at least once.
+    assert!(floors.rewinds >= 1, "no follow was rewound: {floors:?}");
 }

@@ -105,6 +105,32 @@ every wire to each lookup instead (`WireIndex::for_lookups`): the answers are
 the same, as every predicate still runs on its candidates, and the grid is
 not built. This also speeds up the commit.
 
+### Reconcile margin
+
+Every command that changes wire geometry (the drop of a move, delete, rotate,
+mirror, place wire, break wire) reconciles the dots against only the wires
+whose bounding box meets a touched wire's box or a judged dot, each grown by
+`RECONCILE_MARGIN_MM` (`transform/region_wires.rs`), three junction
+tolerances. That gives the same answers as every wire, because no test reads
+a wire farther away:
+
+1. Each test reads a wire within one tolerance of its query point, per axis.
+   The endpoint test is `|d| < tol` on both axes; the interior test needs a
+   perpendicular distance of at most `tol` with the foot inside the segment;
+   the key-space test (`junction_is_honoured`) holds only within about 1 µm
+   of the segment, as `pt_key` rounds to 1 µm.
+2. Each query point is one of: a touched wire's end (inside its box); another
+   wire's end lying on a touched wire's interior (within `tol` of it, and
+   that wire's own box holds the point); a judged dot; a dot just minted,
+   which is one of the first two.
+3. So a wire any test reads has its box within `2 * tol` of a touched wire's
+   box, or within `tol` of a judged dot. The third tolerance is headroom for
+   the float rounding of the grown boxes, which is many orders below `tol`.
+
+The order of the wires is kept, so candidate lists, and with them the order
+in which dots are minted, are the same. `commit_local_tests.rs` holds every
+such command to the full scan on random, near-tolerance and corpus sheets.
+
 ## What it does not remove
 
 The guard still turns each derived list into sets to compare, level two walks

@@ -187,3 +187,121 @@ impl Drop for ScanAll {
         SCAN_ALL.with(|flag| flag.set(self.0));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Lcg(u64);
+
+    impl Lcg {
+        fn next(&mut self, bound: u64) -> u64 {
+            self.0 = self
+                .0
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            (self.0 >> 33) % bound
+        }
+    }
+
+    const CELL: i64 = 1 << CELL_SHIFT;
+
+    /// A coordinate on either side of zero, often on or next to a cell edge.
+    fn coordinate(rng: &mut Lcg) -> i64 {
+        let cells = rng.next(41) as i64 - 20;
+        match rng.next(4) {
+            0 => cells * CELL,
+            1 => cells * CELL - 1,
+            2 => cells * CELL + 1,
+            _ => cells * CELL + rng.next(CELL as u64) as i64,
+        }
+    }
+
+    /// A box: a point, a short segment, or one over more cells than are filed.
+    fn random_box(rng: &mut Lcg) -> (Key, Key) {
+        let a = (coordinate(rng), coordinate(rng));
+        let b = match rng.next(5) {
+            0 => a,
+            1 => (a.0 + rng.next(3 * CELL as u64) as i64, a.1),
+            2 => (a.0, a.1 - rng.next(3 * CELL as u64) as i64),
+            3 => (
+                a.0 - 20 * CELL - rng.next(CELL as u64) as i64,
+                a.1 + 20 * CELL,
+            ),
+            _ => (coordinate(rng), coordinate(rng)),
+        };
+        // Either end first.
+        if rng.next(2) == 0 { (a, b) } else { (b, a) }
+    }
+
+    fn meets((a, b): (Key, Key), (c, d): (Key, Key)) -> bool {
+        let ((lo0, hi0), (lo1, hi1)) = (bounds(a, b), bounds(c, d));
+        lo0.0 <= hi1.0 && lo1.0 <= hi0.0 && lo0.1 <= hi1.1 && lo1.1 <= hi0.1
+    }
+
+    /// Every index with a filed box that meets the question's box is a
+    /// candidate, for lists long and short, questions of any size, negative
+    /// keys, boxes on cell edges, zero-length boxes and an index filed twice.
+    #[test]
+    fn near_holds_every_box_that_meets_the_question() {
+        let (mut long_filed, mut long_asked, mut met) = (0, 0, 0);
+        for seed in 0..400u64 {
+            let mut rng = Lcg(seed + 11);
+            let count = match seed % 4 {
+                0 => 1 + rng.next(5) as usize,
+                1 => 40,
+                _ => 200 + rng.next(400) as usize,
+            };
+            let mut filed = Filed::default();
+            let mut grid = Grid::default();
+            let mut boxes: Vec<Vec<(Key, Key)>> = vec![Vec::new(); count];
+            for (index, of) in boxes.iter_mut().enumerate() {
+                for _ in 0..1 + rng.next(2) {
+                    let (a, b) = random_box(&mut rng);
+                    long_filed += usize::from(cells(bounds(a, b).0, bounds(a, b).1).is_none());
+                    filed.file(index, a, b);
+                    grid.file(Kind::Wire, index, a, b);
+                    of.push((a, b));
+                }
+            }
+            for _ in 0..60 {
+                let (a, b) = random_box(&mut rng);
+                long_asked += usize::from(cells(bounds(a, b).0, bounds(a, b).1).is_none());
+                let mut raw = Vec::new();
+                filed.near(a, b, &mut raw);
+                let len = count - rng.next(2) as usize;
+                let found = grid.near(Kind::Wire, a, b, len);
+                assert!(found.windows(2).all(|w| w[0] < w[1]), "sorted, once each");
+                assert!(found.iter().all(|&i| i < len));
+                for (index, of) in boxes.iter().enumerate() {
+                    if !of.iter().any(|&filed_box| meets(filed_box, (a, b))) {
+                        continue;
+                    }
+                    met += 1;
+                    assert!(
+                        raw.contains(&index),
+                        "seed {seed}: {index} {of:?} missed by {a:?}-{b:?}"
+                    );
+                    if index < len {
+                        assert!(found.contains(&index), "seed {seed}: {index} missed");
+                    }
+                }
+            }
+        }
+        assert!(
+            long_filed >= 1000 && long_asked >= 1000,
+            "{long_filed} {long_asked}"
+        );
+        assert!(met >= 50_000, "only {met} meetings");
+    }
+
+    /// The reference every question is held to sees everything.
+    #[test]
+    fn scan_all_sees_every_index() {
+        let mut grid = Grid::default();
+        grid.file(Kind::Label, 0, (0, 0), (0, 0));
+        grid.scan_all();
+        let far = (40 * CELL, -40 * CELL);
+        assert_eq!(grid.near(Kind::Label, far, far, 3), vec![0, 1, 2]);
+    }
+}

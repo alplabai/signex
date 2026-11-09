@@ -70,8 +70,8 @@ fn lattice(rng: &mut Lcg) -> (f64, f64) {
 }
 
 /// A sheet, its net colours set on it (`SchematicSheet::net_colors`).
-struct Rig {
-    sheet: SchematicSheet,
+pub(crate) struct Rig {
+    pub(crate) sheet: SchematicSheet,
 }
 
 const RED: Color = Color::new(255, 0, 0, 255);
@@ -139,7 +139,7 @@ fn add_child(sheet: &mut SchematicSheet, rng: &mut Lcg) {
 /// dots, no-connects, buses with entries, child sheets with pins; wires with
 /// their own colour, a net colour or foreign columns, zero-length wires and
 /// exact duplicates.
-fn random_rig(rng: &mut Lcg) -> Rig {
+pub(crate) fn random_rig(rng: &mut Lcg) -> Rig {
     let mut sheet = test_sheet();
     for n in 0..rng.next(4) {
         let at = Point::new(20.0 + 20.0 * n as f64, 20.0 + 10.0 * rng.next(3) as f64);
@@ -223,7 +223,7 @@ fn random_rig(rng: &mut Lcg) -> Rig {
 }
 
 /// Every selectable item of the sheet that moves.
-fn movable(sheet: &SchematicSheet) -> Vec<SelectedItem> {
+pub(crate) fn movable(sheet: &SchematicSheet) -> Vec<SelectedItem> {
     let item = SelectedItem::new;
     let mut items = Vec::new();
     items.extend(sheet.wires.iter().map(|w| item(w.uuid, SelectedKind::Wire)));

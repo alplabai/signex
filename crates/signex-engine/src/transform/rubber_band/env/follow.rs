@@ -52,7 +52,12 @@ impl Env {
 
     /// Put back the wire ends a failed follow moved and drop the wires it added.
     fn rewind(&mut self, len: usize) {
-        for (index, start, end) in self.undo.take().unwrap_or_default().into_iter().rev() {
+        let journal = self.undo.take().unwrap_or_default();
+        #[cfg(test)]
+        if !journal.is_empty() {
+            crate::transform::rubber_band::tally::rewound();
+        }
+        for (index, start, end) in journal.into_iter().rev() {
             self.wires[index].start = start;
             self.wires[index].end = end;
         }
