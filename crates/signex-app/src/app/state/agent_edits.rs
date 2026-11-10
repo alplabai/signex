@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use signex_engine::UndoGroupId;
 
 use super::DocumentState;
+use crate::app::agent::Origin;
 use crate::schematic_runtime::RenderInvalidation;
 
 /// The project's sheets as read for the first checked edit of a list: the
@@ -41,6 +42,34 @@ pub struct AgentEdits {
     pub(crate) owed: RenderInvalidation,
     /// The Undo label of each undo step an agent made ("Agent: ...").
     pub(crate) labels: HashMap<UndoGroupId, String>,
+    /// Who made each of those steps, for the steps an agent made.
+    pub(crate) origins: HashMap<UndoGroupId, Origin>,
+}
+
+impl AgentEdits {
+    /// Remember an agent's undo step: its label and who made it.
+    pub(crate) fn record_step(&mut self, group: UndoGroupId, label: String, origin: &Origin) {
+        self.labels.insert(group, label);
+        if origin.is_agent() {
+            self.origins.insert(group, origin.clone());
+        }
+    }
+
+    /// Forget a step that was taken back.
+    pub(crate) fn forget_step(&mut self, group: UndoGroupId) {
+        self.labels.remove(&group);
+        self.origins.remove(&group);
+    }
+
+    /// The label and origin of `group` as Messages says them, "Agent: x on
+    /// y (agent, pid 12)"; `None` when it is not an agent's step.
+    pub(crate) fn step_text(&self, group: UndoGroupId) -> Option<String> {
+        let label = self.labels.get(&group)?;
+        Some(match self.origins.get(&group).and_then(Origin::describe) {
+            Some(origin) => format!("{label} ({origin})"),
+            None => label.clone(),
+        })
+    }
 }
 
 impl DocumentState {
