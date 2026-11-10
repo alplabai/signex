@@ -171,8 +171,57 @@ fn layer_tokens_read_through_the_board_layer_model() {
 }
 
 #[test]
+fn the_stock_librarys_named_layer_tokens_map_to_board_layers() {
+    // The bundled stock footprints write their pad layers this way (#1312).
+    let smd = convert_one(pad(
+        "1",
+        PadKind::Smd,
+        PadShape::Rect,
+        &["Top Layer", "Top Solder", "Top Paste"],
+    ))
+    .unwrap();
+    assert_eq!(smd.layers, ["TopCopper", "TopSolderMask", "TopPaste"]);
+    let bottom = convert_one(pad(
+        "1",
+        PadKind::Smd,
+        PadShape::Rect,
+        &["Bottom Layer", "Bottom Solder", "Bottom Paste"],
+    ))
+    .unwrap();
+    assert_eq!(
+        bottom.layers,
+        ["BottomCopper", "BottomSolderMask", "BottomPaste"]
+    );
+    let through = convert_one(pad(
+        "1",
+        PadKind::Smd,
+        PadShape::Rect,
+        &["Multi-Layer", "Top Solder", "Bottom Solder"],
+    ))
+    .unwrap();
+    assert_eq!(
+        through.layers,
+        [
+            "TopCopper",
+            "BottomCopper",
+            "TopSolderMask",
+            "BottomSolderMask"
+        ]
+    );
+}
+
+#[test]
 fn an_unknown_layer_token_is_refused_never_guessed() {
-    for token in ["F.Copper", "In02.Cu", "In.Cu", "Dwgs.User", "topcopper", ""] {
+    for token in [
+        "F.Copper",
+        "In02.Cu",
+        "In.Cu",
+        "Dwgs.User",
+        "topcopper",
+        "top layer",
+        "Top Copper",
+        "",
+    ] {
         assert_eq!(
             convert_one(pad("1", PadKind::Smd, PadShape::Rect, &[token])),
             Err(FootprintResolveError::Unconvertible {

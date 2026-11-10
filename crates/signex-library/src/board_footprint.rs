@@ -215,7 +215,9 @@ fn board_layers(layers: &[LayerId]) -> Result<Vec<String>, FootprintResolveError
 
 /// The board layers one library layer token names. A board token
 /// (`TopCopper`) reads as itself; the library editor's tokens (`F.Cu`,
-/// `*.Mask`, `In2.Cu`) by the fixed table below; anything else is refused.
+/// `*.Mask`, `In2.Cu`) and the named tokens the stock library uses
+/// (`Top Layer`, `Top Solder`, `Top Paste`, ...) by the fixed table below;
+/// anything else is refused.
 fn pcb_layers(token: &str) -> Result<Vec<PcbLayer>, FootprintResolveError> {
     use TechnicalLayer as T;
     if let Some(layer) = parse_pcb_layer(token) {
@@ -243,6 +245,16 @@ fn pcb_layers(token: &str) -> Result<Vec<PcbLayer>, FootprintResolveError> {
         "F.Adhes" => one(T::AdhesiveTop),
         "B.Adhes" => one(T::AdhesiveBottom),
         "Edge.Cuts" => one(T::EdgeCuts),
+        // Named tokens the stock library is written with (#1312).
+        "Top Layer" => vec![copper(CopperLayer::Top)],
+        "Bottom Layer" => vec![copper(CopperLayer::Bottom)],
+        "Multi-Layer" => vec![copper(CopperLayer::Top), copper(CopperLayer::Bottom)],
+        "Top Solder" => one(T::SolderMaskTop),
+        "Bottom Solder" => one(T::SolderMaskBottom),
+        "Top Paste" => one(T::PasteTop),
+        "Bottom Paste" => one(T::PasteBottom),
+        "Top Overlay" => one(T::SilkscreenTop),
+        "Bottom Overlay" => one(T::SilkscreenBottom),
         _ => match inner_copper(token) {
             Some(inner) => vec![copper(CopperLayer::Inner(inner))],
             None => return Err(unconvertible("footprint layer", token)),
