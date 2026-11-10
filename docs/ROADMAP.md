@@ -1,7 +1,8 @@
 # Signex — Roadmap
 
 > **Status:** Living document. Updated quarterly. Last reconciled against
-> reality 2026-11-07 (AI Design moved first, §9).
+> reality 2026-11-07 (AI Design moved first, §9); Agent mode added to AI
+> Design 2026-11-09.
 > **Audience:** Anyone planning work, allocating engineering time, or
 > communicating timelines.
 > **Owns:** the release axis. The ordering, names and gates of every planned
@@ -314,18 +315,36 @@ Signex 365. The PCB Viewer gate is folded into the PCB Layout plan here: a
 viewer for boards that nothing in Signex can create is not a milestone
 worth stopping at.
 
-**Two modes, one tool layer.** Signex AI works as an assistant or as a
-generator. Both call the same undoable commands the menus and keys call
-(the Command Registry, #278, which moves here from Advanced Schematic),
-both act under the user's identity, and neither writes to disk without the
-user's save.
+**Three modes, one tool layer.** Signex AI works as an assistant, as an
+agent or as a generator. In the Pro build the mode is chosen per project
+when the project is created and can be switched in the AI panel; the
+Community New Project setup (#2232) has no AI choice.
+All three call the same undoable commands the menus and keys call (the
+Command Registry, #278, which moves here from Advanced Schematic), all act
+under the user's identity, and none writes the open design to disk without
+the user's save. A tool that reaches outside the design (a library write, an
+export) is governed by its approval prompt instead.
 
 - **Assistant:** the user drives. Chat with the open design as context;
   explanations, design reviews, and ERC / DRC fix suggestions. The AI edits
   only when asked, and every edit is shown as a preview and applied as one
   undoable step.
-- **Generator:** the AI drives from a written specification (function,
-  interfaces, power, size, cost, preferred parts), in stages. Each stage
+- **Agent** (Pro only; maintainer decision 2026-11-09 in `DECISIONS.md`,
+  modelled on the agent mode of code editors): the user gives a goal ("add a USB-C supply with 3.3 V and
+  5 V rails", "fix every ERC error on this sheet", "place and route the
+  power section"). The agent plans the steps, runs tools in a loop across
+  sheets and the board, runs ERC / DRC and the project's requirement checks
+  after each step, and repairs what it broke, until the checks pass or it
+  needs the user. The user watches progress live in the AI panel and stops
+  it at any time. When it finishes, its work is one change set, shown on
+  the canvas per sheet and board, that the user can keep or undo as a whole
+  or change by change (the full visual diff is #761), and every turn is a
+  checkpoint to go back to. Tools that reach outside the design
+  (distributor search, library writes, running an export) ask first, unless
+  the user allows that tool for the session.
+- **Generator** (Pro only): the agent runs a staged workflow and drives from a written
+  specification (function, interfaces, power, size, cost, preferred parts),
+  in stages. Each stage
   stops for the user's approval as a change list they can review entry by
   entry: (1) architecture, a block diagram and a power tree; (2) parts,
   from the user's libraries first and then distributors, as a BOM with
@@ -334,12 +353,25 @@ user's save.
   DRC-clean result. The user can stop at any stage and go on in Assistant
   mode or by hand.
 
+**Requirements the AI is checked against.** As agents take on more of the
+design, the designer's job moves to stating requirements and checking that
+they are met. So the checks have to be deterministic. A project holds a
+requirements list where each entry is a machine check: an ERC or DRC rule, a
+net class, a rail voltage and current budget, a board size, a BOM cost or
+an approved-parts rule. Agent and Generator work counts as done only when
+every check passes. The AI panel shows each requirement with pass or fail
+and the evidence, so the designer reviews results, not every primitive the
+agent placed. Added complexity has to pay for itself: the agent reports what
+it changed and why, and it prefers the simpler design when both pass.
+
 | Plan | Scope |
 |------|-------|
 | **PCB Layout** | One part identity across library, schematic and board (#663); a new `.snxpcb` in a project; board outline; Update PCB from schematic with a reviewable change list (#1312); component placement (move, rotate, flip); ratsnest; cross-probe in both directions; PCB rendering via `iced::widget::Shader` with 32 copper and the technical layers, and the layer panel (the former PCB Viewer scope) |
 | **PCB Routing** | As in the PCB Routing band below: single-trace routing, vias, net classes, live DRC with the 15 base rules |
 | **Router: Walkaround** | As below: obstacle-aware A* routing, which the Generator's board stage routes with |
 | **Chat & Context** | Signex AI panel (streaming chat, markdown rendering); design context (parts, nets, ERC / DRC results); local session history; the client for Signex's hosted AI service |
+| **Agent Mode** (Pro) | Built in the separate Pro repository; the Community repository holds none of it. The agent loop (plan, act through the tools, check, repair) runs in Signex's hosted service and the desktop executes its tool calls through the Command Registry; live step list in the AI panel with stop; the turn's work as one reviewable change set with keep or undo per change (the full visual diff is #761); checkpoints per turn; approval prompts for tools that reach outside the design, with allow-for-this-session |
+| **Requirements & Verification** | Community, not Pro: it can ship on its own, ahead of the rest of this gate, whose exit criteria are Pro. The checks run in Community like ERC and DRC; Pro's agent uses them as its done condition. The project requirements list (ERC / DRC rules, net classes, rail budgets, board size, BOM cost and approved parts) as deterministic checks; pass and fail with evidence in the AI panel; the done condition for Agent and Generator work |
 | **Edit & Analysis Tools** | Assistant mode: undoable tools over the Command Registry for schematic and board (place a part, wire, set a value, delete, place a footprint, route a net); check_erc and check_drc; fix suggestions applied as reviewable changes |
 | **Generator: Schematic** | Generator stages 1–3: specification to architecture, parts and an ERC-clean schematic, each stage a reviewable change list |
 | **Generator: Board** | Generator stage 4: the board created from the schematic, outline, placement, routing with the Walkaround router, DRC-clean |
@@ -352,13 +384,18 @@ user's save.
   cross-probe works in both directions.
 - Assistant: a user holds a productive design conversation about an open
   schematic and board, and every change the AI makes is undoable.
+- Agent: from a one-line goal on an open project (add a supply rail, fix
+  every ERC error, place a section), the agent finishes with every
+  requirement check passing, or stops and says which one it cannot meet;
+  the user keeps or undoes its work change by change.
 - Generator: from a written specification for a small board (an MCU, a
   USB-C supply and a few sensors, say), Signex produces an ERC-clean
   schematic and a placed, routed, DRC-clean board, with the user approving
   each stage.
-- No AI change reaches disk without the user's save.
+- No AI change to the open design reaches disk without the user's save;
+  tools outside the design write only after their approval prompt.
 
-Signex AI ships in Pro, built from the separate private workspace, and runs
+Signex AI ships in Pro, built from the separate private Pro repository, and runs
 through Signex's hosted service. Licensing and billing stay in the Pro
 Release; until it ships, AI Design builds go to internal and invited
 testers.
