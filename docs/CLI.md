@@ -457,7 +457,13 @@ nets. In a project that cannot be read completely (a sheet missing or
 unreadable), the names on the other sheets are unknown: a file whose sheets
 carry a global label or a power port is refused unless `allow_merge=true`,
 and one that carries neither is placed. A sheet symbol on a loose sheet (no
-project) is not judged for names.
+project) is not judged for names. A `file` that is a page of the project, or
+that a sheet symbol on another sheet of it already places, is refused unless
+`allow_merge=true`: placing it here changes its nets (its local names become
+this placement's). A `file` that cannot be read, or that places a sheet that
+cannot be read, is refused unless `allow_merge=true`, which passes both its
+unknown names and its unknown subtree (a loop through an unreadable sheet is
+not seen); a loop through sheets that read is refused with no escape.
 Creating the child file stays a window action
 (`create_sheet_from_sheet_symbol`, `gui_only`). The answer is `{"id", "name",
 "file", "at", "size"}`.

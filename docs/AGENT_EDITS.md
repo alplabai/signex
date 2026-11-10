@@ -172,8 +172,10 @@ nothing applied, the project is read, and the edit runs again on it.
   off"), turned off and on again (a new session token: "the session token is
   missing or wrong"), or its document left the agent's reach.
 - No read: a loose sheet, or a project whose sheets are all open, is checked
-  from memory and the edit runs at once. A `place_component` always reads its
-  library row, and a `place_sheet_symbol` its link check, so they always wait.
+  from memory and the edit runs at once. A `place_component` that names an
+  open library and one row of it reads that row, so it waits; one whose
+  library is not open, or whose part matches no row or several, runs at once
+  and is refused. A `place_sheet_symbol` always waits for its link check.
 - A check that needs a read the plan did not make refuses ("a file this edit's
   check needs was not read first; retry"); it never reads.
 - An agent edit never touches the cached designator scan a person's drop may
