@@ -28,7 +28,7 @@ Signex".
 | `--headless` | only run headless; fail (exit 2) if a running Signex has the project open |
 | `--keep-going` | run the rest after a refused or failed command (default: stop at the first) |
 | `--save` | allow commands that write files (capability `save`) |
-| `--dry-run` | run every command with `dry_run=true`: a wire or bus run reports and changes nothing. A read-only query and `open_document` run as given; any other command without that operand is refused, and so is `--dry-run` together with `--save` or `--allow save`. In an attached run a placement cannot be dry-run: placements reach a running Signex only through `apply_edits`, which has no `dry_run` operand |
+| `--dry-run` | run every command with `dry_run=true`: a wire or bus run reports and changes nothing. A read-only query and `open_document` run as given; any other command without that operand is refused, and so is `--dry-run` together with `--save` or `--allow save`. `--dry-run` cannot dry-run a placement in an attached run (placements reach a running Signex only through `apply_edits`, which has no `dry_run` operand); put `dry_run=true` on the edit inside `apply_edits` instead |
 | `--allow <caps>` | also allow capabilities (comma list) |
 | `--allow-path <dir>` | also allow paths inside `<dir>` (repeatable) |
 | `--max-line-bytes`, `--max-commands`, `--max-file-bytes` | tighten or raise the input limits |
@@ -217,7 +217,12 @@ it is a heuristic that catches what names can tell apart and leaves the rest
    were already behind a hierarchical label before the edit play no part on
    the parent (a sensor's internal `SDA_INT`). Names that the edit itself
    brings behind a port do count: a new hierarchical `GND` on a child net
-   labelled `VCC`, whose entry the parent wired to `GND`, is a short. So the
+   labelled `VCC`, whose entry the parent wired to `GND`, is a short; a
+   global `SDA_INT` placed in a child whose local `SDA_INT` is behind its
+   port is an own name the parent's net does not carry, so a rename unless
+   `allow_merge=true`. Where this project check runs (the sheet is in a
+   project and the net or bus run reaches another sheet), its name verdict
+   is the only one; the per-sheet one decides loose sheets and the rest. So the
    same final design reached by a different order of edits can get a
    different verdict; the check judges the edit, not the design.
 7. **Buses** follow the same rule with bus names (hierarchical bus labels are
