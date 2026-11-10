@@ -447,11 +447,17 @@ above it in the project hierarchy (a sheet cannot contain itself). Ancestors
 come from the project as the edit reads it (its closed sheets read off the UI
 thread first), and from the hierarchy a window already shows for the sheet;
 a `file` whose own sheet symbols place the edited sheet below it is refused
-too. The nets the file brings into the project are judged by the name rule
-of "Wire intent" ("Why `allow_merge`"): a file whose labels or power ports
-would short two project nets or rename one (a child wire carrying the
-globals `VBUS` and `VBAT`, each naming a net elsewhere) is refused unless
-`allow_merge=true`. A file that does not exist yet brings no nets.
+too, on a loose sheet as well (the file's subtree is read first). The nets
+the file brings into the project are judged by the name rule of "Wire
+intent" ("Why `allow_merge`"): a file whose labels or power ports would short
+two project nets or rename one (a child wire carrying the globals `VBUS` and
+`VBAT`, each naming a net elsewhere) is refused unless `allow_merge=true`,
+whether the file is open or closed. A file that does not exist yet brings no
+nets. In a project that cannot be read completely (a sheet missing or
+unreadable), the names on the other sheets are unknown: a file whose sheets
+carry a global label or a power port is refused unless `allow_merge=true`,
+and one that carries neither is placed. A sheet symbol on a loose sheet (no
+project) is not judged for names.
 Creating the child file stays a window action
 (`create_sheet_from_sheet_symbol`, `gui_only`). The answer is `{"id", "name",
 "file", "at", "size"}`.

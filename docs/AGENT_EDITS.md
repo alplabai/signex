@@ -166,6 +166,11 @@ nothing applied, the project is read, and the edit runs again on it.
   a check uses them.
 - A reader that fails (panics) is said in Messages and the edit is refused
   with the reason, not a retry.
+- A socket request waiting for its reads meets the gate again when they
+  land: it is refused, with nothing applied and the reason a new request
+  would get, when agent connections were turned off ("agent connections are
+  off"), turned off and on again (a new session token: "the session token is
+  missing or wrong"), or its document left the agent's reach.
 - No read: a loose sheet, or a project whose sheets are all open, is checked
   from memory and the edit runs at once. A `place_component` always reads its
   library row, and a `place_sheet_symbol` its link check, so they always wait.
