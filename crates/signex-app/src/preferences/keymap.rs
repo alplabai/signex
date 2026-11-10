@@ -14,6 +14,7 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 pub(super) fn content_keyboard_shortcuts<'a>(
+    i18n: &signex_i18n::I18n,
     editor: &'a crate::keymap::KeymapEditorModel,
     status: &'a str,
     load_error: Option<&'a str>,
@@ -220,7 +221,13 @@ pub(super) fn content_keyboard_shortcuts<'a>(
             .iter()
             .filter(|row_model| row_model.group == group)
             .map(|row_model| {
-                keymap_table_row(row_model, &conflicts, active_profile_is_custom, tokens)
+                keymap_table_row(
+                    i18n,
+                    row_model,
+                    &conflicts,
+                    active_profile_is_custom,
+                    tokens,
+                )
             })
             .collect();
         if group_rows.is_empty() {
@@ -240,6 +247,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
 /// keeps the shared muted / primary constants; the trigger chip and Edit
 /// button pull their colours from the active theme.
 fn keymap_table_row<'a>(
+    i18n: &signex_i18n::I18n,
     row_model: &crate::keymap::KeymapEditorRow,
     conflicts: &[crate::keymap::BindingConflict],
     active_profile_is_custom: bool,
@@ -327,7 +335,7 @@ fn keymap_table_row<'a>(
 
     row![
         container(
-            text(raw(title_case(&row_model.category)))
+            text(raw(title_case(i18n, &row_model.category)))
                 .size(TS.body)
                 .style(text_muted)
         )
@@ -648,15 +656,18 @@ fn context_label(context: crate::keymap::ShortcutContext) -> &'static str {
     }
 }
 
-fn title_case(value: &str) -> String {
+fn title_case(i18n: &signex_i18n::I18n, value: &str) -> String {
     value
         .split(['_', '-', ' '])
         .filter(|part| !part.is_empty())
         .map(|part| {
             let mut chars = part.chars();
             match chars.next() {
-                // user-visible: migrate to the #2063 casemap (inside format!, which the case lint cannot see)
-                Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
+                Some(first) => format!(
+                    "{}{}",
+                    i18n.upper_for_display(&first.to_string()),
+                    chars.as_str()
+                ),
                 None => String::new(),
             }
         })
