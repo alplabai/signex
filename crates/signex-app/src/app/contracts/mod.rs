@@ -180,7 +180,7 @@ pub use cross_probe::CrossProbeMsg;
 pub use dialogs::*;
 pub use messages::*;
 pub use net_nav::NetNavMsg;
-pub use pcb::{DrcRunResult, PcbMsg, PcbViewMsg};
+pub use pcb::{BoardSketchMsg, DrcRunResult, PcbMsg, PcbViewMsg};
 pub use state::*;
 
 #[cfg(test)]

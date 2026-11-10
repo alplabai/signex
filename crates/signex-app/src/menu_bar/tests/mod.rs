@@ -277,6 +277,8 @@ pub(super) struct Probe {
     pub pcb_carry: bool,
     /// Design ▸ Update PCB Document opens the Update PCB dialog (#1312).
     pub update_pcb: bool,
+    /// Design ▸ Board Sketch puts the board in sketch mode (#2234).
+    pub board_sketch: bool,
 }
 
 pub(super) fn probe(app: &Signex) -> Probe {
@@ -350,6 +352,7 @@ pub(super) fn probe(app: &Signex) -> Probe {
         move_pick: app.ui_state.move_pick.is_some(),
         pcb_carry: app.interaction_state.pcb_carry.is_some(),
         update_pcb: app.ui_state.update_pcb.is_some(),
+        board_sketch: app.interaction_state.board_sketch.is_some(),
     }
 }
 

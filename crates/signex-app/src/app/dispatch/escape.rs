@@ -193,6 +193,10 @@ impl Signex {
     /// primitive editor, cancel that editor's state; otherwise fall back
     /// to the schematic tool reset.
     fn escape_editor_or_tool_reset(&mut self) -> Task<Message> {
+        // A board in sketch mode: cancel the sketch tool, then leave (#2234).
+        if let Some(msg) = self.board_sketch_escape() {
+            return self.update(msg);
+        }
         let footprint_path = self
             .document_state
             .tabs

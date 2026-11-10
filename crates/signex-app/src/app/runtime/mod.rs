@@ -1,5 +1,6 @@
 use super::*;
 
+mod board_sketch_ctx;
 mod body_style_info;
 mod designators;
 #[cfg(test)]

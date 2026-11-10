@@ -6,8 +6,8 @@ attributes say what each part of it becomes on the board. The sketch is the
 source of truth; the bake turns it into board geometry, and one board
 command stores both.
 
-This page covers the domain half (storage, bake, engine command, DRC). The
-sketch-mode UI is a separate step of #2234.
+This page covers the domain half (storage, bake, engine command, DRC) and
+the sketch-mode UI ([Sketch mode](#sketch-mode)).
 
 ## What a board sketch defines
 
@@ -126,12 +126,61 @@ uuid  pos_x  pos_y  drill  plated  net
 `run_drc` reports a `Keepout` violation for each item inside a keepout that
 forbids it; see `docs/architecture/pcb-drc.md`, "Keepouts".
 
+## Sketch mode {#sketch-mode}
+
+One command, `board_sketch` (Design ▸ Board Sketch, the PCB Active Bar's
+Board Sketch button, the board canvas menu, the palette; no default key),
+enters sketch mode on the board in view, or leaves it when it is on. Only
+the main window's board can be in sketch mode, one board at a time;
+entering on another board leaves the first one (committing it) first.
+
+**The editor is the footprint editor's sketch tool.** The mode hosts a
+`FootprintDocument` that exists only in `BoardSketchSession`
+(`app/state/board_sketch.rs`): its one footprint holds a working copy of
+the board's sketch, keyed by the board's path. The footprint canvas,
+the sketch Active Bar (line, arc, circle, rectangle, dimension,
+constraints, construction toggle), the DOF chip and Properties row, the
+snap glyphs, the solver and its off-thread solve all run unchanged on it.
+What differs for a board (`FootprintEditorState::board_backdrop` is set):
+
+- the canvas draws the board (outline, tracks, vias) faint under the
+  sketch, on the dark board ground;
+- the Active Bar shows the sketch tools only, no pad, silk or 3D triggers;
+- the footprint bake is off: nothing is baked into the hosting footprint;
+- Properties adds a Board section: Board outline for an edge, Mounting
+  hole for a circle, and the hole's Drill (empty: the circle's diameter),
+  Plated and Net. Keepouts (layer and kinds) and cutouts use the Role
+  picker and its sub-forms, as in a footprint.
+
+**Nothing touches the board or the disk while editing.** Undo and Redo
+step the working copy while the mode is on. There is no auto-save.
+
+**Commit.** Leave (the bar's button, Esc with no tool armed, or
+`board_sketch` again) commits a changed copy, then ends the mode; Apply
+commits and stays; Discard ends the mode and drops the copy. A commit runs
+`bake_board` on the copy and, if it bakes, executes
+`BoardCommand::set_board_sketch` as one board step: undo, dirty and save
+are those of any board edit, and the working copy continues from what the
+board stored (with its `baked_kinds`). If the bake (or the board command)
+refuses, the error text is shown on the notice card, in Messages and in the
+mode's bar; the board is unchanged and the mode stays on.
+
+**Esc** first drops an armed sketch tool, a gesture in flight or an open
+menu (the footprint editor's `ToolEscape`), then leaves the mode.
+
+## Drawing the board {#drawing-the-board}
+
+Outside sketch mode the PCB canvas draws the board's outline (the board
+edge colour), its cutouts and mounting holes as openings (filled with the
+ground, rimmed in the edge colour) and its keepouts as outlines with a 45°
+hatch (`signex-renderer` `pcb::board_features`, in the overlay pass of both
+the CPU and the GPU path). V-scores are not drawn yet.
+
 ## Not done yet
 
-- The sketch-mode UI (enter and leave, Active Bar sketch tools, DOF row,
-  snap glyphs), and calling `bake_board` + `SetBoardSketch` on commit.
-- Drawing keepouts, cutouts, holes and V-scores on the board, and exporting
-  cutouts, holes and V-scores (Gerber edge cuts, drill file).
+- Exporting cutouts, holes and V-scores (Gerber edge cuts, drill file), and
+  drawing V-scores.
+- Sketch mode in an undocked board window.
 - DRC: `no_pours` keepouts, holes in `no_drilling` keepouts, and
   copper-to-edge and copper-to-cutout clearance (the rules have no edge
   clearance yet).

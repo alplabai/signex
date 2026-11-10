@@ -95,6 +95,8 @@ pub struct PcbSnapshot {
     pub rule_areas: Vec<ZonePolygonInput>,
     pub ratsnest_lines: Vec<RatsnestInput>,
     pub drc_markers: Vec<DrcMarkerInput>,
+    /// The outline, cutouts, mounting holes and keepouts (#2234).
+    pub board_features: BoardFeaturesInput,
 }
 
 impl PcbSnapshot {
@@ -113,9 +115,11 @@ impl PcbSnapshot {
     }
 }
 
+mod board_features;
 mod emit;
 mod layer_view;
 mod ratsnest;
+pub use board_features::{BoardFeaturesInput, HoleInput};
 use emit::*;
 pub use layer_view::{
     DIMMED_ALPHA, Emphasis, LayerGroup, LayerRow, PcbLayerView, board_copper_layers, layer_rows,

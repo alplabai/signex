@@ -33,6 +33,7 @@ impl Signex {
                 self.apply_pcb_view_event(Some(window), event);
                 Task::none()
             }
+            PcbMsg::Sketch(event) => self.handle_board_sketch(event),
         }
     }
 }

@@ -5,6 +5,7 @@ pub mod autosave_primitives;
 pub mod autosave_project;
 pub mod autosave_recovery;
 pub mod autosave_row;
+mod board_sketch;
 pub mod canvas;
 pub mod clipboard_workflows;
 mod component_history;

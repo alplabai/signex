@@ -640,6 +640,7 @@ impl Signex {
                 pcb_ratsnest: Default::default(),
                 pcb_drc: Default::default(),
                 cross_select: Default::default(),
+                board_sketch: None,
                 dragging: None,
                 drag_start_pos: None,
                 drag_start_size: 0.0,

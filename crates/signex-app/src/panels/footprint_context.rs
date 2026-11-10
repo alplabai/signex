@@ -178,6 +178,9 @@ pub struct FootprintEditorPanelContext {
     /// v0.21 — pad-role sub-form values for the selected sketch
     /// entity. `Some` when the entity carries a `PadAttr`.
     pub selected_sketch_pad: Option<SketchPadAttrSummary>,
+    /// The board attributes of the selected entity while a board is in
+    /// sketch mode (#2234); `None` in a footprint editor.
+    pub board: Option<BoardSketchProps>,
     /// v0.17.0 — empty-canvas Snap Options. Surfaced on the
     /// Properties panel default branch (no selection) so the user
     /// can toggle each priority chain step.
@@ -656,4 +659,31 @@ pub struct FootprintSketchEntitySummary {
     /// entity kinds whose DOF state is implicitly the min of their
     /// endpoints'. Drives the "DOF" row in the Properties panel.
     pub dof_state: Option<signex_sketch::solver::dof::DofColor>,
+}
+
+/// The Board section of the Properties panel in board sketch mode (#2234):
+/// what the selected entity becomes on the board. Keepouts and cutouts use
+/// the Role picker and its sub-forms, as in a footprint.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BoardSketchProps {
+    /// The selected entity, if any.
+    pub selected: Option<signex_sketch::id::SketchEntityId>,
+    /// It is a line, arc or circle: it can be part of the outline.
+    pub is_edge: bool,
+    /// It is a circle: it can be a mounting hole.
+    pub is_circle: bool,
+    /// It is tagged as part of the board outline.
+    pub outline: bool,
+    /// Its mounting hole attributes, when it is one.
+    pub hole: Option<MountingHoleProps>,
+}
+
+/// A mounting hole's fields as the Properties panel edits them.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct MountingHoleProps {
+    /// The drill expression; empty means the circle's diameter.
+    pub drill: String,
+    pub plated: bool,
+    /// The net name; empty means no net.
+    pub net: String,
 }

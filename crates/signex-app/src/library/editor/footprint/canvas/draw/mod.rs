@@ -26,6 +26,7 @@
 //!   preview for sketch drawing tools.
 
 mod background;
+mod board_backdrop;
 mod ghosts;
 mod graphite;
 mod grid;

@@ -43,6 +43,20 @@ macro_rules! define_ids {
 }
 
 define_ids! {
+    BOARD_SKETCH_TITLE = "board-sketch-title";
+    BOARD_SKETCH_TOOLTIP = "board-sketch-tooltip";
+    BOARD_SKETCH_APPLY = "board-sketch-apply";
+    BOARD_SKETCH_LEAVE = "board-sketch-leave";
+    BOARD_SKETCH_DISCARD = "board-sketch-discard";
+    BOARD_SKETCH_ENTERED = "board-sketch-entered";
+    BOARD_SKETCH_REFUSED = "board-sketch-refused";
+    BOARD_SKETCH_SECTION = "board-sketch-section";
+    BOARD_SKETCH_OUTLINE = "board-sketch-outline";
+    BOARD_SKETCH_HOLE = "board-sketch-hole";
+    BOARD_SKETCH_HOLE_DRILL = "board-sketch-hole-drill";
+    BOARD_SKETCH_HOLE_PLATED = "board-sketch-hole-plated";
+    BOARD_SKETCH_HOLE_NET = "board-sketch-hole-net";
+    BOARD_SKETCH_ROLES_HINT = "board-sketch-roles-hint";
     CROSS_PROBE_TITLE = "cross-probe-title";
     CROSS_PROBE_NOTHING_SELECTED = "cross-probe-nothing-selected";
     CROSS_PROBE_NO_BOARD = "cross-probe-no-board";

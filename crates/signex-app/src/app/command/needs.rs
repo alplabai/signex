@@ -241,6 +241,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => Needs::FitTarget,
         "cycle_snap_grid_forward" | "open_grid_picker" => Needs::FootprintEditor,
         "toggle_ratsnest"
+        | "board_sketch"
         | "next_layer"
         | "prev_layer"
         | "toggle_layer_visibility"

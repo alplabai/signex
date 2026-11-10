@@ -7,6 +7,7 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod agent_edits;
+mod board_sketch;
 mod case_fold;
 pub(crate) mod cross_select;
 pub(crate) mod dir_case;
@@ -53,6 +54,7 @@ mod window_sizes;
 mod window_tab;
 
 pub use agent_edits::AgentEdits;
+pub use board_sketch::BoardSketchSession;
 pub use case_fold::CaseFold;
 pub use error_notice::{ErrorNotice, NoticeAction};
 pub use interaction::{ClickedPin, InteractionState};

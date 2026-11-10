@@ -342,6 +342,7 @@ impl PcbSnapshot {
             rule_areas,
             ratsnest_lines: Vec::new(),
             drc_markers: Vec::new(),
+            board_features: super::BoardFeaturesInput::from_board(board),
         }
     }
 }

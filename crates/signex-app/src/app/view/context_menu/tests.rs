@@ -785,3 +785,21 @@ fn board_cross_probe_row_runs_the_command_with_a_selection() {
     let rows = super::menus::pcb_canvas_menu_entries(TID, empty, &sc);
     assert!(row_message(&rows, "Cross Probe").is_none());
 }
+
+/// #2234: the board menu's Board Sketch row runs `board_sketch`, with or
+/// without a selection.
+#[test]
+fn board_sketch_row_runs_the_command() {
+    use crate::app::handlers::pcb_placement::PcbTargets;
+    let sc = shortcuts();
+    let empty = PcbTargets {
+        shown: true,
+        ..PcbTargets::default()
+    };
+    let rows = super::menus::pcb_canvas_menu_entries(TID, empty, &sc);
+    assert!(matches!(
+        row_message(&rows, "Board Sketch"),
+        Some(Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, project: None })))
+            if id.as_str() == "board_sketch"
+    ));
+}

@@ -19,6 +19,8 @@ pub enum PanelMsg {
     /// footprint editor by tab and flips its `auto_fit_courtyard`
     /// flag via the existing `FootprintToggleAutoFit` path.
     FpEditorToggleAutoFitCourtyard,
+    /// The Board section of a board sketch entity was edited (#2234).
+    BoardSketch(BoardSketchAttrMsg),
     /// Layers panel — an eye toggle was pressed; carries the standard
     /// layer name (`F.Cu`, `B.SilkS`, ...).
     FpEditorLayerEyeClicked(String),

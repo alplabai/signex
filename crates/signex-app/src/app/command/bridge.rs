@@ -269,6 +269,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         "toggle_visible_grid" => Message::Ui(UiMsg::GridToggle),
         "toggle_ratsnest" => pcb_view(PcbViewMsg::RatsnestVisibilityToggled),
+        "board_sketch" => Message::Pcb(PcbMsg::Sketch(crate::app::BoardSketchMsg::ModeToggled)),
         "next_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: true }),
         "prev_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: false }),
         "toggle_layer_visibility" => pcb_view(PcbViewMsg::ActiveLayerVisibilityToggled),

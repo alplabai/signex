@@ -9,6 +9,7 @@ pub(crate) mod dialogs;
 /// of the private `overlays` module.
 pub(crate) mod overlay_id;
 
+mod board_sketch;
 mod canvas_region;
 mod chrome;
 mod context_menu;
@@ -658,6 +659,9 @@ impl Signex {
                 iced::widget::Space::new().boxed()
             };
             stack![base, badge].boxed()
+        } else if let Some(sketch) = self.board_sketch_view(window_id) {
+            // The board in sketch mode: the sketch over the board (#2234).
+            sketch
         } else if self.pcb_for_window(window_id).is_some() {
             // Each window reads its own PCB canvas, and an undocked
             // window's events carry its id, as for the schematic (#494).
@@ -702,9 +706,11 @@ impl Signex {
                 ))
                 .width(Length::Fill)
                 .height(Length::Fill);
-                pcb_strip::with_strip(stack![base, content_shader, highlight].boxed(), strip)
+                let bar = self.pcb_active_bar(is_main);
+                pcb_strip::with_strip(stack![base, content_shader, highlight, bar].boxed(), strip)
             } else {
-                pcb_strip::with_strip(stack![base, highlight].boxed(), strip)
+                let bar = self.pcb_active_bar(is_main);
+                pcb_strip::with_strip(stack![base, highlight, bar].boxed(), strip)
             }
         } else {
             // "Nothing loaded" gets the actionable start screen; "project

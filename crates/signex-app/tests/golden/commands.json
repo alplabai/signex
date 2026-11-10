@@ -60,6 +60,11 @@
     "category": "edit"
   },
   {
+    "id": "board_sketch",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "break_wire",
     "group": "General",
     "category": "modify"
