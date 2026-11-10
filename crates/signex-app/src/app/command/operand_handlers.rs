@@ -71,10 +71,6 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
 ];
 
-/// Commands whose operands name what a GUI run takes from the selection, so
-/// the selection gate does not apply to their operand form (#2199).
-const NAMES_ITS_SUBJECT: &[&str] = &["sync_sheet_pins"];
-
 /// The handler of `command`, if it runs its operands.
 pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> {
     HANDLERS
@@ -132,8 +128,8 @@ impl Signex {
         };
         if names_its_document(command) || args.operand("document").is_some() {
             self.reconcile_document_ids();
-        } else if !NAMES_ITS_SUBJECT.contains(&command.as_str())
-            && let Some(reason) = enablement::disabled_reason(command, &self.command_context(None))
+        } else if let Some(reason) =
+            enablement::disabled_reason(command, &self.command_context(None))
         {
             return refused(reason);
         }
