@@ -696,6 +696,7 @@ impl Engine {
             | Command::ReconcileChildSheetPins { .. }
             | Command::RenameChildSheetFile { .. }
             | Command::ModifyChildSheet { .. }
+            | Command::SetChildSheetInstances { .. }
             | Command::SetPaperSize { .. }
             | Command::SetSheetFrame { .. }
             | Command::SetSheetColor { .. }

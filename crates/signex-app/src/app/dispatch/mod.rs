@@ -154,6 +154,7 @@ impl Signex {
             WindowMsg::WindowGeometrySettled(id) => self.window_geometry_settled(id),
             WindowMsg::WindowGeometryRead(readout) => self.window_geometry_read(*readout),
             WindowMsg::WindowGeometrySaved(result) => self.window_geometry_saved(result),
+            WindowMsg::TileRequested(layout) => self.tile_windows(layout),
             WindowMsg::WindowScaleChanged(id, scale) => {
                 // The CPU canvas caches its geometry, which was drawn with the
                 // old scale; a move to another display keeps the logical

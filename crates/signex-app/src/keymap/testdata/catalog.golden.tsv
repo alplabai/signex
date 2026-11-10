@@ -92,6 +92,8 @@ show_current_command_hotkeys	help	Show graphical editing hotkey list for current
 show_current_command_shortcuts	help	Show valid shortcuts for the current interactive command	-	General	-	-	Always	gui_only	-
 smart_paste	edit	Smart Paste	Paste Special	General	-	-	Always	mutates_doc,undoable	-
 switch_segment_posture	interactive	Switch current segment posture	-	General	-	-	Always	gui_only	-
+tile_windows_horizontally	window	Tile windows one above the other	Tile Horizontally	General	-	-	Always	gui_only	-
+tile_windows_vertically	window	Tile windows side by side	Tile Vertically	General	-	-	Always	gui_only	-
 toggle_cross_select_mode	select	Toggle Cross Select Mode	-	General	-	-	Always	gui_only	-
 toggle_electrical_grid	view	Toggle electrical grid	-	General	-	-	Always	gui_only	-
 toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_only	-
@@ -147,6 +149,7 @@ previous_sheet	navigation	Previous sheet	-	Schematic	-	-	RequiresDocument(Schema
 run_erc	validation	Run electrical rules check	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	runs_headless	-
 open_erc_dialog	validation	Open electrical rules check dialog	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 open_parameter_manager	design	Open Parameter Manager	Parameter Manager...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+number_schematic_sheets	design	Number schematic sheets	Number Schematic Sheets...	Schematic	-	-	Always	gui_only	-
 reset_schematic_designators	design	Reset schematic designators	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 sheet_navigation_back	navigation	Sheet navigation back	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 sheet_navigation_forward	navigation	Sheet navigation forward	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
