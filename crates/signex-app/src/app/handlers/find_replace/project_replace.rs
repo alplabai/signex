@@ -265,7 +265,7 @@ impl Signex {
                 continue;
             }
             let tabless = !self.document_state.engines.contains_key(&path);
-            if tabless && !self.install_tabless_engine(&path, prep.loaded.get(&listed)) {
+            if tabless && !self.install_tabless_engine("Replace", &path, prep.loaded.get(&listed)) {
                 continue;
             }
             let Some(engine) = self.document_state.engines.get_mut(&path) else {
@@ -403,15 +403,17 @@ impl Signex {
 
     /// A closed sheet's engine: tabless, adopting its net colours, held until
     /// the user saves or discards. `false` (and a Messages line) when the sheet
-    /// is not usable.
-    fn install_tabless_engine(
+    /// is not usable; `label` names the run in that line. Shared by project
+    /// Replace and Number Schematic Sheets.
+    pub(crate) fn install_tabless_engine(
         &mut self,
+        label: &str,
         path: &Path,
         loaded: Option<&signex_types::schematic::SchematicSheet>,
     ) -> bool {
         let Some(sheet) = loaded else {
             crate::diagnostics::log_warning(format!(
-                "Replace: skipped, could not be read: {}",
+                "{label}: skipped, could not be read: {}",
                 path.display()
             ));
             return false;
@@ -426,7 +428,7 @@ impl Signex {
             }
             Err(error) => {
                 crate::diagnostics::log_error(
-                    &format!("Replace: sheet {} could not be loaded", path.display()),
+                    &format!("{label}: sheet {} could not be loaded", path.display()),
                     &anyhow::Error::new(error),
                 );
                 false
@@ -436,7 +438,7 @@ impl Signex {
 
     /// An engine loaded only to be edited, left clean and tabless, would own
     /// the path for the rest of the session and shadow a later open.
-    fn drop_unchanged_tabless(&mut self, path: &Path, tabless: bool) {
+    pub(crate) fn drop_unchanged_tabless(&mut self, path: &Path, tabless: bool) {
         if tabless {
             self.document_state.remove_engine(path);
         }

@@ -384,6 +384,8 @@ impl Signex {
                 grid_properties: None,
                 new_project: None,
                 update_pcb: None,
+                sheet_numbering: None,
+                sheet_numbering_reads: 0,
                 find_similar: None,
                 find_similar_generation: 0,
                 paste_array: None,

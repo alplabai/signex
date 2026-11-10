@@ -387,6 +387,19 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "number_schematic_sheets",
+        category: "design",
+        label: "Number schematic sheets",
+        menu_label: Some("Number Schematic Sheets..."),
+        group: CommandGroup::Schematic,
+        // A project sheet, not the active tab, is what it needs: the root
+        // sheet stands in with no document open, so the gate is
+        // `Needs::ProjectSheet` (`app/command/needs.rs`).
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "reset_schematic_designators",
         category: "design",
         label: "Reset schematic designators",

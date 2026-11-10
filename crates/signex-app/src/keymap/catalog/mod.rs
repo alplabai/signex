@@ -343,6 +343,8 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "print",
     "close_active_document",
     "close_all_documents",
+    "tile_windows_horizontally",
+    "tile_windows_vertically",
     "next_document_tab",
     "previous_document_tab",
     "undo",
@@ -369,6 +371,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "force_annotate_all_schematics",
     "run_erc",
     "open_erc_dialog",
+    "number_schematic_sheets",
     "update_pcb_from_schematic",
     "new_pcb_document",
 ];

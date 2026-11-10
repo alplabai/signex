@@ -377,7 +377,11 @@ fn annotation(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         SEP,
         stub("Back Annotate Schematics..."),
-        stub("Number Schematic Sheets..."),
+        // The editable numbering dialog: docs/MENU_BAR.md#number-schematic-sheets
+        cmd_item_gated(
+            ctx,
+            cmd("number_schematic_sheets", "Number Schematic Sheets...", ""),
+        ),
     ]
 }
 
@@ -385,12 +389,14 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         submenu("Annotation", annotation(ctx)),
         SEP,
+        // Planned: bulk footprint assignment needs its own design (#2248).
         stub("Assign Footprints"),
         // Opens or focuses a Library Browser tab: docs/MENU_BAR.md#tools-library-editor
         cmd_item_gated(ctx, cmd("open_library_browser", "Library Editor", "")),
         SEP,
         // Runs `run_drc` on the PCB in view; greyed with no PCB open.
         cmd_item_gated(ctx, cmd("run_drc", "Design Rule Check", "")),
+        // Planned: no schematic net list panel exists yet (#1269).
         stub("Net Inspector"),
         SEP,
         // #1312: Cross Probe shows the selection on the other side; Cross
@@ -443,8 +449,13 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 pub(super) fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        stub("Tile Horizontally"),
-        stub("Tile Vertically"),
+        // Main window plus undocked document windows; greyed with none
+        // undocked: docs/MENU_BAR.md#window-tile
+        cmd_item_gated(
+            ctx,
+            cmd("tile_windows_horizontally", "Tile Horizontally", ""),
+        ),
+        cmd_item_gated(ctx, cmd("tile_windows_vertically", "Tile Vertically", "")),
         SEP,
         cmd_item_gated(ctx, cmd("close_all_documents", "Close All Documents", "")),
     ]

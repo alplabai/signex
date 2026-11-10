@@ -35,6 +35,8 @@ pub(crate) use reprefix_confirm::ReprefixConfirm;
 pub(crate) use reprefix_job::ReprefixSheets;
 mod machine_rules;
 mod modals;
+#[cfg(test)]
+pub(crate) use modals::modal_min_size;
 pub(crate) use modals::{modal_is_fixed, modal_size, modal_window_settings};
 mod net_focus;
 mod net_waivers;

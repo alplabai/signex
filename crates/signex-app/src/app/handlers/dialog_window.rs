@@ -58,6 +58,18 @@ impl Signex {
         let size = self.dialog_window_size_of(modal, owner, borderless);
         let mut settings = crate::app::handlers::erc::modal_window_settings(modal, size);
         settings.decorations = !borderless;
+        // Same scale and title-bar allowance as the window size itself.
+        let bar = if borderless {
+            (DIALOG_TITLE_BAR_H.ceil() * self.ui_state.ui_scale).ceil()
+        } else {
+            0.0
+        };
+        settings.min_size = settings.min_size.map(|m| {
+            Size::new(
+                (m.width * self.ui_state.ui_scale).ceil(),
+                (m.height * self.ui_state.ui_scale).ceil() + bar,
+            )
+        });
         settings.icon = crate::app::bootstrap::bundled_window_icon();
         settings.position = self.new_window_position(
             size,

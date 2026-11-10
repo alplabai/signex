@@ -249,6 +249,15 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         )),
         // Tools ▸ Library Editor (#2247).
         "open_library_browser" => Message::Library(LibraryMessage::LibraryEditorRequested),
+        // Tools ▸ Annotation ▸ Number Schematic Sheets and Window ▸ Tile
+        // (#2247).
+        "number_schematic_sheets" => Message::from(crate::app::SheetNumberingMsg::Requested),
+        "tile_windows_horizontally" => {
+            Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::Stacked))
+        }
+        "tile_windows_vertically" => {
+            Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::SideBySide))
+        }
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),

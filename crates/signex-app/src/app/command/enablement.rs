@@ -95,6 +95,12 @@ pub(crate) struct CommandContext {
     /// A library is open or has a Library Browser tab, which Tools ▸ Library
     /// Editor opens or focuses.
     pub has_open_library: bool,
+    /// The active document, or the active project's root sheet, belongs to a
+    /// project, whose pages Number Schematic Sheets lists.
+    pub has_project_sheet: bool,
+    /// A document tab is undocked into its own window and the main window's
+    /// screen is known, so Window ▸ Tile has a plan.
+    pub can_tile_windows: bool,
     /// The active symbol editor's current part can be removed: a symbol
     /// keeps its first part, so Remove Part refuses part 1.
     pub can_remove_part: bool,
@@ -250,6 +256,8 @@ impl Signex {
             has_active_path: document.active_path.is_some(),
             has_library_editor: self.active_editor_library_root().is_some(),
             has_open_library: self.library_editor_target().is_some(),
+            has_project_sheet: self.sheet_numbering_project().is_some(),
+            can_tile_windows: self.tile_plan(crate::app::TileLayout::SideBySide).is_some(),
             can_remove_part: self.active_symbol_part_is_removable(),
             pcb: self.pcb_targets(window),
             turn_in_hand: self.interaction_state.placement.is_some()

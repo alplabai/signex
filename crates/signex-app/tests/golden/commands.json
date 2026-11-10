@@ -545,6 +545,11 @@
     "category": "navigation"
   },
   {
+    "id": "number_schematic_sheets",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "open_child_sheet",
     "group": "Schematic",
     "category": "navigation"
@@ -1018,6 +1023,16 @@
     "id": "sync_sheet_pins",
     "group": "Schematic",
     "category": "design"
+  },
+  {
+    "id": "tile_windows_horizontally",
+    "group": "General",
+    "category": "window"
+  },
+  {
+    "id": "tile_windows_vertically",
+    "group": "General",
+    "category": "window"
   },
   {
     "id": "toggle_auto_focus",

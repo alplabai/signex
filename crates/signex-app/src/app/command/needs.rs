@@ -48,6 +48,8 @@ pub(crate) enum Needs {
     /// New PCB: a project is open.
     OpenProject,
     Library,
+    ProjectSheet,
+    TileableWindows,
 }
 
 impl Needs {
@@ -118,6 +120,12 @@ impl Needs {
             // Library Editor focuses an open Library Browser tab, else opens the
             // first open library.
             Self::Library => ctx.has_open_library,
+            // Sheet numbers are the project's; a loose sheet has none.
+            Self::ProjectSheet => ctx.has_project_sheet,
+            // Tile arranges the main window with the undocked document
+            // windows; alone, or before the main window's screen is known,
+            // it has nothing to do.
+            Self::TileableWindows => ctx.can_tile_windows,
         }
     }
 
@@ -158,6 +166,8 @@ impl Needs {
             Self::PcbSync => "No schematic or PCB of an open project is in view",
             Self::OpenProject => "No project is open",
             Self::Library => "No library is open",
+            Self::ProjectSheet => "No sheet of a project is open",
+            Self::TileableWindows => "No document is in its own window",
         }
     }
 }
@@ -248,6 +258,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "toggle_layer_visibility"
         | "show_all_layers" => Needs::Pcb,
         "open_library_browser" => Needs::Library,
+        "number_schematic_sheets" => Needs::ProjectSheet,
+        "tile_windows_horizontally" | "tile_windows_vertically" => Needs::TileableWindows,
         _ => return None,
     })
 }

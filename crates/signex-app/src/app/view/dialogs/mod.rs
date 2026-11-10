@@ -21,6 +21,7 @@ mod header;
 pub(crate) mod new_project;
 mod project;
 mod rule_editor;
+mod sheet_numbering;
 mod sizes;
 mod title_bar;
 mod update_pcb;

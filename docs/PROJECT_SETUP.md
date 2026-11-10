@@ -37,7 +37,12 @@ through the `new_project_with_profile` command.
 - **Preview**: the stack-up on the board ground, the board line and the sheet
   line.
 
-Enter creates and Esc cancels.
+The dialog opens as its own native window ("New Project"), like the other
+dialogs (`docs/DETACHED_MODALS.md`), and locks the main window while it is
+open. Its title bar carries the title; the Cancel / Create project footer stays
+in view at any window size and only the body scrolls. Enter creates. Esc, the
+Cancel button and the window's close button cancel, except while Create is
+writing: then they wait (the Messages panel notes it) and the dialog stays.
 
 ## Rule templates
 

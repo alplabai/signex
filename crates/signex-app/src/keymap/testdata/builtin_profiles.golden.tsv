@@ -177,6 +177,8 @@ altium	hint	-	F1	show_current_command_hotkeys
 altium	hint	-	Shift+F1	show_current_command_shortcuts
 altium	hint	-	Ctrl+Shift+V	smart_paste
 altium	hint	-	-	switch_segment_posture
+altium	hint	-	-	tile_windows_horizontally
+altium	hint	-	-	tile_windows_vertically
 altium	hint	-	Ctrl+Shift+X	toggle_cross_select_mode
 altium	hint	-	Shift+E	toggle_electrical_grid
 altium	hint	-	F4	toggle_floating_panels
@@ -232,6 +234,7 @@ altium	hint	-	-	previous_sheet
 altium	hint	-	F8	run_erc
 altium	hint	-	-	open_erc_dialog
 altium	hint	-	-	open_parameter_manager
+altium	hint	-	-	number_schematic_sheets
 altium	hint	-	T A E	reset_schematic_designators
 altium	hint	-	-	sheet_navigation_back
 altium	hint	-	-	sheet_navigation_forward
@@ -500,6 +503,8 @@ classic	hint	-	-	show_current_command_hotkeys
 classic	hint	-	-	show_current_command_shortcuts
 classic	hint	-	-	smart_paste
 classic	hint	-	/	switch_segment_posture
+classic	hint	-	-	tile_windows_horizontally
+classic	hint	-	-	tile_windows_vertically
 classic	hint	-	-	toggle_cross_select_mode
 classic	hint	-	-	toggle_electrical_grid
 classic	hint	-	-	toggle_floating_panels
@@ -555,6 +560,7 @@ classic	hint	-	PGUP	previous_sheet
 classic	hint	-	F8	run_erc
 classic	hint	-	-	open_erc_dialog
 classic	hint	-	-	open_parameter_manager
+classic	hint	-	-	number_schematic_sheets
 classic	hint	-	-	reset_schematic_designators
 classic	hint	-	Alt+LEFT	sheet_navigation_back
 classic	hint	-	Alt+RIGHT	sheet_navigation_forward

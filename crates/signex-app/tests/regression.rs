@@ -377,6 +377,8 @@ mod new_project_fit;
 mod new_project_folder;
 #[path = "regression/newer_minor_read_only.rs"]
 mod newer_minor_read_only;
+#[path = "regression/number_schematic_sheets.rs"]
+mod number_schematic_sheets;
 #[path = "regression/primitive_container_merge.rs"]
 mod primitive_container_merge;
 #[path = "regression/primitive_save_cascade.rs"]
@@ -393,6 +395,8 @@ mod stable_addressing;
 mod symbol_body_style;
 #[path = "regression/text_extents_save.rs"]
 mod text_extents_save;
+#[path = "regression/window_tile_rows.rs"]
+mod window_tile_rows;
 
 #[path = "regression/place_sheet_tool.rs"]
 mod place_sheet_tool;

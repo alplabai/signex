@@ -16,6 +16,9 @@ pub enum SemanticPatch {
     SheetFileRenamed,
     /// A placed sheet symbol's name and / or file reference was edited.
     ChildSheetIdentityEdited,
+    /// A placed sheet symbol's per-placement entries (manual sheet numbers)
+    /// were replaced.
+    SheetNumbersEdited,
     /// MD-11: a `SchDrawing::*` (line/rect/circle/arc/polyline) was
     /// edited. Distinct from `TextUpdated` so consumers branching on
     /// "did the user change a TextProp" don't take the wrong reflow

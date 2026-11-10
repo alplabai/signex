@@ -109,7 +109,7 @@ Tools/Annotation/Annotate Schematics Quietly	item	Annotate Schematics Quietly	an
 Tools/Annotation/Force Annotate All Schematics	item	Force Annotate All Schematics	force_annotate_all_schematics	Shift+Alt+A	AnnotateForceAll	01000000	cmd:force_annotate_all_schematics
 Tools/Annotation/---	separator	-	-	-	-	-	-
 Tools/Annotation/Back Annotate Schematics...	stub	Back Annotate Schematics...	-	-	-	00000000	never
-Tools/Annotation/Number Schematic Sheets...	stub	Number Schematic Sheets...	-	-	-	00000000	never
+Tools/Annotation/Number Schematic Sheets...	item	Number Schematic Sheets...	-	-	NumberSchematicSheets	01001000	cmd:number_schematic_sheets
 Tools/---	separator	-	-	-	-	-	-
 Tools/Assign Footprints	stub	Assign Footprints	-	-	-	00000000	never
 Tools/Library Editor	item	Library Editor	-	-	OpenLibraryEditor	01000000	cmd:open_library_browser
@@ -135,8 +135,8 @@ Reports/Bill of Materials…	item	Bill of Materials…	-	-	ExportBom	01000000	sc
 Reports/Netlist (Protel .NET)...	item	Netlist (Protel .NET)...	-	-	ExportNetlist	01000000	sch
 Reports/ERC Report…	item	ERC Report…	-	-	ExportErcReport	01000000	sch
 Window	menu	Window	-	-	-	-	-
-Window/Tile Horizontally	stub	Tile Horizontally	-	-	-	00000000	never
-Window/Tile Vertically	stub	Tile Vertically	-	-	-	00000000	never
+Window/Tile Horizontally	item	Tile Horizontally	-	-	TileHorizontally	00000100	cmd:tile_windows_horizontally
+Window/Tile Vertically	item	Tile Vertically	-	-	TileVertically	00000100	cmd:tile_windows_vertically
 Window/---	separator	-	-	-	-	-	-
 Window/Close All Documents	item	Close All Documents	-	-	CloseAllDocuments	01110010	cmd:close_all_documents
 Help	menu	Help	-	-	-	-	-

@@ -10,6 +10,7 @@
 //! change with struct-update syntax, so every other field is pinned as
 //! unchanged.
 
+mod annotation_tile_rows;
 mod edit_rows;
 mod file_rows;
 mod help_tools_rows;

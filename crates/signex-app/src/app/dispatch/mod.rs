@@ -156,6 +156,7 @@ impl Signex {
             WindowMsg::WindowGeometrySettled(id) => self.window_geometry_settled(id),
             WindowMsg::WindowGeometryRead(readout) => self.window_geometry_read(*readout),
             WindowMsg::WindowGeometrySaved(result) => self.window_geometry_saved(result),
+            WindowMsg::TileRequested(layout) => self.tile_windows(layout),
             WindowMsg::WindowScaleChanged(id, scale) => {
                 // The CPU canvas caches its geometry, which was drawn with the
                 // old scale; a move to another display keeps the logical
@@ -269,6 +270,18 @@ impl Signex {
                             }
                             ModalId::SelectionFilterCustom => {
                                 self.ui_state.selection_filter_custom = None;
+                            }
+                            // A Cancel, unless Create is writing: then the
+                            // draft stays and the sync reopens the window.
+                            ModalId::NewProject => {
+                                if self
+                                    .ui_state
+                                    .new_project
+                                    .as_ref()
+                                    .is_some_and(|s| s.creating.is_none())
+                                {
+                                    self.ui_state.new_project = None;
+                                }
                             }
                             ModalId::About => self.ui_state.about_open = false,
                             ModalId::KeyboardShortcuts => {
@@ -412,6 +425,7 @@ impl Signex {
                 // modal, so the OS honours the request (unlike a
                 // foreground grab from a background process).
                 Task::batch([
+                    self.focus_new_project_name_once_open(modal),
                     crate::chrome::apply_rounded_corners::<Message>(id),
                     iced::window::gain_focus(id),
                     window_scale_task(id),

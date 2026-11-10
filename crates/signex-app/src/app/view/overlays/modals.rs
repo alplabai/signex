@@ -294,10 +294,16 @@ impl Signex {
     }
 
     pub(in crate::app::view) fn new_project_overlay(&self) -> Option<Element<'_, Message>> {
+        (self.ui_state.new_project.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::NewProject))
+        .then(|| self.view_new_project_dialog())
+    }
+
+    pub(in crate::app::view) fn sheet_numbering_overlay(&self) -> Option<Element<'_, Message>> {
         self.ui_state
-            .new_project
+            .sheet_numbering
             .is_some()
-            .then(|| self.view_new_project_dialog())
+            .then(|| self.view_sheet_numbering_dialog())
     }
 
     /// Update PCB from Schematic (#1312); a headless `apply=true` run has no

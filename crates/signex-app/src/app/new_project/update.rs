@@ -43,7 +43,12 @@ impl Signex {
         self.interaction_state.editing_text = None;
         self.interaction_state.context_menu = None;
         if self.ui_state.new_project.is_some() {
-            return operation::focus(NAME_INPUT_ID.clone());
+            // Already open: raise its window and focus the name field.
+            return Task::batch([
+                self.detached_window_of(crate::app::state::ModalId::NewProject)
+                    .map_or_else(Task::none, iced::window::gain_focus),
+                operation::focus(NAME_INPUT_ID.clone()),
+            ]);
         }
         let mut state = NewProjectState::new(self.default_project_location());
         state.name = SUGGESTED_NAME.to_string();
@@ -52,6 +57,21 @@ impl Signex {
             operation::focus(NAME_INPUT_ID.clone()),
             operation::text_input::select_all(NAME_INPUT_ID.clone()),
             self.recheck_new_project_target(),
+        ])
+    }
+
+    /// The name field has focus and its text selected once the dialog's own
+    /// window exists (the focus asked for at open time has no window yet).
+    pub(crate) fn focus_new_project_name_once_open(
+        &self,
+        modal: crate::app::state::ModalId,
+    ) -> Task<Message> {
+        if modal != crate::app::state::ModalId::NewProject || self.ui_state.new_project.is_none() {
+            return Task::none();
+        }
+        Task::batch([
+            operation::focus(NAME_INPUT_ID.clone()),
+            operation::text_input::select_all(NAME_INPUT_ID.clone()),
         ])
     }
 
@@ -129,6 +149,9 @@ impl Signex {
                     .as_ref()
                     .is_some_and(|s| s.creating.is_some()) =>
             {
+                crate::diagnostics::log_info(
+                    "New Project: cancel ignored, the project is still being created",
+                );
                 Task::none()
             }
             M::CancelRequested => {
