@@ -49,10 +49,18 @@ fn label<'a>(
 
 impl Signex {
     pub(in crate::app::view) fn view_new_project_dialog(&self) -> Element<'_, Message> {
-        self.wrap_centred_dialog(self.view_new_project_card(), sizes::NEW_PROJECT)
+        self.wrap_centred_dialog(self.view_new_project_card(false), sizes::NEW_PROJECT)
     }
 
-    fn view_new_project_card(&self) -> Element<'_, Message> {
+    /// The dialog in its own OS window: the window's title bar replaces the
+    /// header, and the card fills the window.
+    pub(in crate::app::view) fn view_new_project_window(&self) -> Element<'_, Message> {
+        self.view_new_project_card(true)
+    }
+
+    /// `windowed`: header slot empty, card and body `Fill` the window so the
+    /// header and footer stay put and only the body scrolls.
+    fn view_new_project_card(&self, windowed: bool) -> Element<'_, Message> {
         let Some(state) = self.ui_state.new_project.as_ref() else {
             return container(Space::new()).boxed();
         };
@@ -60,14 +68,18 @@ impl Signex {
         let i18n = self.ui_state.i18n.as_ref();
         let creating = state.creating.is_some();
         let cancel = (!creating).then(|| np(NewProjectMsg::CancelRequested));
-        let header = super::header::graphite_header_closing(
-            s(i18n, ids::DIALOG_NEW_PROJECT_TITLE),
-            None,
-            None,
-            cancel.clone(),
-            super::header::DIALOG_HEADER_H,
-            tokens,
-        );
+        let header = if windowed {
+            super::widgets::os_title_bar_slot()
+        } else {
+            super::header::graphite_header_closing(
+                s(i18n, ids::DIALOG_NEW_PROJECT_TITLE),
+                None,
+                None,
+                cancel.clone(),
+                super::header::DIALOG_HEADER_H,
+                tokens,
+            )
+        };
         let left = scrollable(
             container(
                 column![
@@ -80,7 +92,12 @@ impl Signex {
             .padding([SP.xl + SP.s, SP.xl + SP.m]),
         )
         .width(Length::Fill);
-        let body = row![left, preview::pane(state, i18n, tokens).map(np)].height(Length::Shrink);
+        let body_h = if windowed {
+            Length::Fill
+        } else {
+            Length::Shrink
+        };
+        let body = row![left, preview::pane(state, i18n, tokens).map(np)].height(body_h);
         let hint = text(t!(i18n, ids::DIALOG_NEW_PROJECT_FOOTER_HINT))
             .size(TS.body)
             .color(tokens::muted_text(tokens))
@@ -111,12 +128,19 @@ impl Signex {
                 ),
             ],
         );
-        container(column![header, body, footer].width(Length::Fixed(
-            super::widgets::modal_card_width(self.ui_state.window_size, sizes::NEW_PROJECT.0),
-        )))
-        .style(crate::styles::modal_card(tokens))
-        .clip(true)
-        .boxed()
+        let (width, height) = if windowed {
+            (Length::Fill, Length::Fill)
+        } else {
+            let w =
+                super::widgets::modal_card_width(self.ui_state.window_size, sizes::NEW_PROJECT.0);
+            (Length::Fixed(w), Length::Shrink)
+        };
+        container(column![header, body, footer].width(width).height(height))
+            .width(width)
+            .height(height)
+            .style(crate::styles::modal_card(tokens))
+            .clip(true)
+            .boxed()
     }
 }
 
