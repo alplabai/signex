@@ -372,7 +372,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 58] = [
+const ALL_KINDS: [CommandKind; 59] = [
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -419,6 +419,7 @@ const ALL_KINDS: [CommandKind; 58] = [
     CommandKind::ReconcileChildSheetPins,
     CommandKind::RenameChildSheetFile,
     CommandKind::ModifyChildSheet,
+    CommandKind::SetChildSheetInstances,
     CommandKind::SetPaperSize,
     CommandKind::SetSheetFrame,
     CommandKind::SetSheetColor,
@@ -484,6 +485,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::ReconcileChildSheetPins
         | CommandKind::RenameChildSheetFile
         | CommandKind::ModifyChildSheet
+        | CommandKind::SetChildSheetInstances
         | CommandKind::SetPaperSize
         | CommandKind::SetSheetFrame
         | CommandKind::SetSheetColor
@@ -1002,6 +1004,17 @@ fn samples() -> Vec<(String, Command)> {
             sheet_id: uid(CHILD, 1),
             name: Some("Renamed".into()),
             filename: Some("renamed.snxsch".into()),
+        },
+    );
+    add(
+        "SetChildSheetInstances",
+        Command::SetChildSheetInstances {
+            sheet_id: uid(CHILD, 1),
+            instances: vec![signex_types::schematic::SheetInstance {
+                project: "p".into(),
+                path: "/".into(),
+                page: "3".into(),
+            }],
         },
     );
     add(

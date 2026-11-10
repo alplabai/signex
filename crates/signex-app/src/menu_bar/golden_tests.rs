@@ -40,6 +40,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
             has_parent_sheet: true,
             has_active_path: true,
             has_open_library: true,
+            has_project_sheet: true,
             ..base
         }),
         with(CommandContext {
@@ -57,10 +58,12 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         with(CommandContext {
             has_sheets: true,
             has_open_project: true,
+            has_project_sheet: true,
             ..base
         }),
         with(CommandContext {
             undocked_has_canvas: true,
+            can_tile_windows: true,
             ..base
         }),
         with(CommandContext {
@@ -208,6 +211,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_sheet_entry", "PlaceSheetEntry"),
     ("open_library_browser", "OpenLibraryEditor"),
     ("close_all_documents", "CloseAllDocuments"),
+    ("number_schematic_sheets", "NumberSchematicSheets"),
+    ("tile_windows_horizontally", "TileHorizontally"),
+    ("tile_windows_vertically", "TileVertically"),
     ("next_grid", "CycleGrid"),
     ("open_erc_dialog", "OpenErcDialog"),
     ("run_drc", "RunDrc"),

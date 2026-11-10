@@ -124,6 +124,9 @@ pub enum WindowMsg {
     /// The monitor size was read after a resize; together with the mode it
     /// tells a real fullscreen window from winit's stale flag mid-exit.
     MainWindowMonitorSizeRead(Option<iced::Size>),
+    /// Window ▸ Tile Horizontally / Tile Vertically (#2247): arrange the main
+    /// window and the undocked document windows.
+    TileRequested(crate::app::TileLayout),
 }
 
 /// Command-palette message family (ADR-0001 D3). Namespaced under

@@ -57,3 +57,4 @@ pub mod selection_workflow;
 pub mod window_controls;
 pub mod window_geometry_events;
 pub mod window_placement;
+pub mod window_tiling;

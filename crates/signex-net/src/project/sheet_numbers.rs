@@ -5,8 +5,20 @@
 use std::collections::BTreeMap;
 
 use signex_types::schematic::{InstancePath, SheetInstance};
+use uuid::Uuid;
 
 use super::{ProjectGraph, SheetKey, walk_occurrences};
+
+/// The sheet symbol that places a page: where its manual number is stored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PagePlacement {
+    /// The sheet holding the sheet symbol.
+    pub parent: SheetKey,
+    /// The parent placement's path: the `path` of the symbol's number entry.
+    pub parent_path: InstancePath,
+    /// The sheet symbol's `ChildSheet.uuid`.
+    pub symbol: Uuid,
+}
 
 /// One numbered page: a sheet placement the project walk reaches.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,6 +33,9 @@ pub struct SheetPage {
     pub number: usize,
     /// Whether `number` came from a sheet-symbol entry.
     pub manual: bool,
+    /// The sheet symbol placing the page; `None` for a page the walk starts
+    /// at, which has no symbol and so is always numbered by position.
+    pub placed_by: Option<PagePlacement>,
 }
 
 impl SheetPage {
@@ -118,16 +133,92 @@ pub fn sheet_numbering(
             }
             number
         });
+        let placed_by = placed_by[index].and_then(|(parent, cs_index)| {
+            let symbol = occs[parent].sheet.child_sheets.get(cs_index)?;
+            Some(PagePlacement {
+                parent: occs[parent].key.clone(),
+                parent_path: occs[parent].path.clone(),
+                symbol: symbol.uuid,
+            })
+        });
         pages.push(SheetPage {
             key: occ.key.clone(),
             instance_path: occ.path.clone(),
             name_chain: occ.name_chain.clone(),
             number: manual.unwrap_or(index + 1),
             manual: manual.is_some(),
+            placed_by,
         });
     }
-    issues.extend(consistency_issues(&pages));
+    let numbers: Vec<usize> = pages.iter().map(|page| page.number).collect();
+    issues.extend(number_issues(&numbers));
     (SheetNumbering { pages }, issues)
+}
+
+/// `instances` (a sheet symbol's entries) with the manual number of the page
+/// it places inside parent placement `parent` set to `page`, or cleared with
+/// `None` so the page takes `position`, its automatic number.
+///
+/// Only entries scoped to `project_name` are edited or dropped. An entry with
+/// an empty `project` is shared by every project that uses the file, so it is
+/// left as it is; when one numbers this placement, the change is written as a
+/// new `project_name` entry ahead of it, which wins as the first match (a
+/// clear writes `position`). Entries for other placements or projects are
+/// kept as they are.
+pub fn with_page_number(
+    instances: &[SheetInstance],
+    parent: &InstancePath,
+    project_name: &str,
+    page: Option<usize>,
+    position: usize,
+) -> Vec<SheetInstance> {
+    let places_here =
+        |entry: &SheetInstance| InstancePath::parse(&entry.path).as_ref() == Some(parent);
+    let scoped = |entry: &SheetInstance| places_here(entry) && entry.project == project_name;
+    let shared = |entry: &SheetInstance| {
+        places_here(entry) && entry.project.is_empty() && !project_name.is_empty()
+    };
+    let mut out = instances.to_vec();
+    let first_scoped = out.iter().position(&scoped);
+    let first_shared = out.iter().position(&shared);
+    // A scoped entry ahead of every shared one is the one that numbers the
+    // page: edit it in place (or drop it, and any later scoped one, on clear).
+    let scoped_wins = match (first_scoped, first_shared) {
+        (Some(s), Some(h)) => s < h,
+        (Some(_), None) => true,
+        _ => false,
+    };
+    if scoped_wins {
+        match page {
+            Some(page) => {
+                if let Some(at) = first_scoped {
+                    out[at].page = page.to_string();
+                }
+            }
+            None => out.retain(|entry| !scoped(entry)),
+        }
+        if page.is_some() || first_shared.is_none() {
+            return out;
+        }
+    }
+    // No scoped entry numbers the page. With no shared one either, a clear
+    // has nothing to do; otherwise a scoped entry goes ahead of the shared one.
+    let number = match (page, first_shared) {
+        (Some(page), _) => page,
+        (None, Some(_)) => position,
+        (None, None) => return out,
+    };
+    out.retain(|entry| !scoped(entry));
+    let entry = SheetInstance {
+        project: project_name.to_string(),
+        path: parent.to_string(),
+        page: number.to_string(),
+    };
+    match out.iter().position(&shared) {
+        Some(at) => out.insert(at, entry),
+        None => out.push(entry),
+    }
+    out
 }
 
 /// The `page` text of the entry that numbers the placement made inside parent
@@ -150,8 +241,8 @@ fn manual_entry<'a>(
 
 /// A manual page number: plain digits for a number from 1 that fits a
 /// `usize`, spaces around them allowed. `usize::from_str` alone would also
-/// take a leading `+`.
-fn parse_page_number(text: &str) -> Option<usize> {
+/// take a leading `+`. The one rule for a typed sheet number too.
+pub fn parse_page_number(text: &str) -> Option<usize> {
     let digits = text.trim();
     if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
@@ -159,11 +250,14 @@ fn parse_page_number(text: &str) -> Option<usize> {
     digits.parse::<usize>().ok().filter(|number| *number > 0)
 }
 
-/// Clashes (by number), numbers above the count (by page), then the gap.
-fn consistency_issues(pages: &[SheetPage]) -> Vec<NumberingIssue> {
+/// What is wrong with page numbers `numbers` (walk order, one per page):
+/// clashes (by number), numbers above the count (by page), then the gap.
+/// The same check [`sheet_numbering`] reports, for numbers a user is still
+/// editing.
+pub fn number_issues(numbers: &[usize]) -> Vec<NumberingIssue> {
     let mut holders: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-    for (index, page) in pages.iter().enumerate() {
-        holders.entry(page.number).or_default().push(index);
+    for (index, number) in numbers.iter().enumerate() {
+        holders.entry(*number).or_default().push(index);
     }
     let mut issues: Vec<NumberingIssue> = holders
         .iter()
@@ -173,15 +267,15 @@ fn consistency_issues(pages: &[SheetPage]) -> Vec<NumberingIssue> {
             pages: holding.clone(),
         })
         .collect();
-    let count = pages.len();
+    let count = numbers.len();
     issues.extend(
-        pages
+        numbers
             .iter()
             .enumerate()
-            .filter(|(_, page)| page.number > count)
-            .map(|(index, page)| NumberingIssue::OutOfRange {
+            .filter(|(_, number)| **number > count)
+            .map(|(index, number)| NumberingIssue::OutOfRange {
                 page: index,
-                number: page.number,
+                number: *number,
             }),
     );
     let missing: Vec<usize> = (1..=count)

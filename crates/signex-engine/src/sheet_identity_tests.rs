@@ -117,3 +117,26 @@ fn an_unknown_sheet_is_a_no_op() {
         .unwrap();
     assert!(!result.changed);
 }
+
+/// `Command::SetChildSheetInstances` (#2247): the Number Schematic Sheets
+/// dialog's write of a sheet symbol's manual numbers.
+#[test]
+fn setting_sheet_instances_is_undoable_and_a_repeat_changes_nothing() {
+    let (mut engine, id) = engine_with_two_sheets();
+    let entries = vec![signex_types::schematic::SheetInstance {
+        project: "p".into(),
+        path: "/".into(),
+        page: "4".into(),
+    }];
+    let set = || Command::SetChildSheetInstances {
+        sheet_id: id,
+        instances: entries.clone(),
+    };
+    let result = engine.execute(set()).unwrap();
+    assert!(result.changed);
+    assert_eq!(engine.document().child_sheets[0].instances, entries);
+    assert!(engine.document().child_sheets[1].instances.is_empty());
+    assert!(!engine.execute(set()).unwrap().changed, "same entries");
+    engine.undo().unwrap();
+    assert!(engine.document().child_sheets[0].instances.is_empty());
+}

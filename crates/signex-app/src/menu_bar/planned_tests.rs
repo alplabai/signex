@@ -16,11 +16,8 @@
 /// row's label, or the command id the label is read from.
 const EXPECTED_STUBS: &[&str] = &[
     "Back Annotate Schematics...",
-    "Number Schematic Sheets...",
     "Assign Footprints",
     "Net Inspector",
-    "Tile Horizontally",
-    "Tile Vertically",
 ];
 
 /// Literal `unavailable` rows that are allowed to stay unexplained.
