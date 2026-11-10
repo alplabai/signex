@@ -13,6 +13,7 @@ close_active_document	file	Close active document	Close Document	General	-	-	Alwa
 close_all_documents	window	Close all documents	Close All Documents	General	-	-	Always	gui_only	-
 copy	edit	Copy	-	General	-	-	RequiresSelection	runs_headless	-
 copy_attributes_or_add_vertex	interactive	Copy attributes from object under cursor or add vertex while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
+cross_probe	select	Cross probe the selection to the board or schematic	Cross Probe	General	-	-	RequiresSelection	gui_only	-
 cut	edit	Cut	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
 cycle_fast_grid	view	Cycle fast grid	-	General	-	-	Always	gui_only	-
 cycle_unit	view	Cycle display unit	-	General	-	-	Always	gui_only	-
@@ -79,7 +80,7 @@ report_manager_bom	reports	Report Manager / BOM	-	General	-	-	Always	gui_only	-
 reset_local_coordinates	view	Reset local coordinates	-	General	-	-	Always	gui_only	-
 resolve	file	Resolve id	-	General	-	-	Always	-	id:text
 revert	edit	Revert an agent's edit step	-	General	-	-	Always	mutates_doc	document:document,group:text
-rotate_clockwise	modify	Rotate clockwise by 90 degrees	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
+rotate_clockwise	modify	Rotate clockwise by 90 degrees	Rotate Clockwise	General	-	-	RequiresSelection	mutates_doc,undoable	-
 rotate_counterclockwise	modify	Rotate counterclockwise by 90 degrees	Rotate	General	-	-	RequiresSelection	mutates_doc,undoable	-
 rubber_stamp_copy	edit	Rubber-stamp copy / repeated paste	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 save_document	file	Save document	Save	General	-	-	Always	-	document:document
@@ -94,7 +95,7 @@ smart_paste	edit	Smart Paste	Paste Special	General	-	-	Always	mutates_doc,undoab
 switch_segment_posture	interactive	Switch current segment posture	-	General	-	-	Always	gui_only	-
 tile_windows_horizontally	window	Tile windows one above the other	Tile Horizontally	General	-	-	Always	gui_only	-
 tile_windows_vertically	window	Tile windows side by side	Tile Vertically	General	-	-	Always	gui_only	-
-toggle_cross_select_mode	select	Toggle Cross Select Mode	-	General	-	-	Always	gui_only	-
+toggle_cross_select_mode	select	Toggle Cross Select Mode	Cross Select Mode	General	-	-	Always	gui_only	-
 toggle_electrical_grid	view	Toggle electrical grid	-	General	-	-	Always	gui_only	-
 toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_only	-
 toggle_properties_panel	panels	Toggle Properties panel	-	General	-	-	Always	gui_only	-
@@ -156,7 +157,7 @@ sheet_navigation_forward	navigation	Sheet navigation forward	-	Schematic	-	-	Req
 sync_sheet_pins	design	Sync the selected sheet symbol's pins with its child sheet	Sync Sheet Pins	Schematic	-	-	RequiresSelection	gui_only	-
 change_component	edit	Change the selected part's component	Change Component…	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 open_project_options	file	Open Project Options for the active project	Project Options...	Schematic	-	-	Always	gui_only	-
-update_pcb_from_schematic	pcb_sync	Update PCB from schematic	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc	-
+update_pcb_from_schematic	pcb_sync	Update PCB from schematic	-	Schematic	-	-	Always	mutates_doc,undoable	apply:bool
 tool_select	select	Tool select	-	Schematic	-	-	Always	gui_only	-
 lasso_select	select	Lasso select	Lasso Select	Schematic	-	-	Always	gui_only	-
 select_connection	select	Select connection	Connection	Schematic	-	-	Always	gui_only	-
@@ -215,6 +216,15 @@ clear_all_net_colors	view	Clear all net colors	Clear All Net Colors	Schematic	-	
 assign_net_class	design	Assign net to class	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,net_name:text,class:text?
 place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 run_drc	pcb	Run the design rule check on the board	Design Rule Check	PCB	-	-	RequiresDocument(Pcb)	runs_headless	-
+flip_selection	modify	Flip selection to the other board side	Flip Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	-
+toggle_ratsnest	view	Show or hide the ratsnest	Toggle Ratsnest	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+next_layer	view	Make the next copper layer active	Next Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+prev_layer	view	Make the previous copper layer active	Previous Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+toggle_layer_visibility	view	Show or hide the active layer	Toggle Layer Visibility	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+show_all_layers	view	Show every layer	Show All Layers	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+toggle_layers_panel	view	Show or hide the Layers panel	Layers	PCB	-	-	Always	gui_only	-
+new_pcb_document	file	New PCB in the project	PCB	PCB	-	-	Always	mutates_doc	-
+board_sketch	design	Enter or leave the board sketch	Board Sketch	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-

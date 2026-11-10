@@ -75,6 +75,13 @@ impl Signex {
         if let Some(path) = self.document_state.active_path.clone() {
             self.commit_title_block_drafts_where(|sheet| sheet == path);
         }
+        // A board in sketch mode takes its sketch before it is written; a
+        // refused bake holds the save (#2234).
+        if let Some(shown) = self.active_tab_path()
+            && !self.settle_board_sketch_of(Some(shown.as_path()))
+        {
+            return Ok(iced::Task::none());
+        }
         let key = match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) => {
                 // Refused before any branch below could ask for a Save As
@@ -145,7 +152,9 @@ impl Signex {
                 super::dir_case::SaveGuard::Waiting(probe) => saves.push(probe),
             }
         }
+        let mut board_project = None;
         if let Some(DocumentKey::Pcb(path)) = key {
+            board_project = self.project_naming_board(&path);
             match self.begin_pcb_save(path) {
                 Ok(task) => saves.extend(task),
                 Err(e) => self.report_save_failure("Failed to save PCB", &e),
@@ -154,6 +163,13 @@ impl Signex {
         // Best-effort: a failure saving the project file is logged but does
         // not block the document save.
         saves.push(self.save_active_project_if_dirty());
+        // A board of another project (a New PCB names it there) saves that
+        // project too.
+        if let Some(id) = board_project
+            && Some(id) != self.document_state.active_project
+        {
+            saves.push(self.save_project_if_dirty(id));
+        }
         // The project tree's red dirty dot reads the panel context, so it
         // must be refreshed to see the cleared dirty mark.
         self.refresh_panel_ctx();
@@ -172,6 +188,30 @@ impl Signex {
         let Some(project_id) = self.document_state.active_project else {
             return iced::Task::none();
         };
+        self.save_project_if_dirty(project_id)
+    }
+
+    /// The project whose `pcb_file` is the board at `path`.
+    fn project_naming_board(&self, path: &std::path::Path) -> Option<crate::app::state::ProjectId> {
+        self.document_state
+            .projects
+            .iter()
+            .find(|p| {
+                p.data
+                    .pcb_file
+                    .as_deref()
+                    .map(str::trim)
+                    .is_some_and(|file| !file.is_empty() && p.dir().join(file) == path)
+            })
+            .map(|p| p.id)
+    }
+
+    /// Save project `project_id`'s `.snxprj` when it is dirty; a failure is
+    /// reported, never blocking the document save beside it.
+    fn save_project_if_dirty(
+        &mut self,
+        project_id: crate::app::state::ProjectId,
+    ) -> iced::Task<Message> {
         match self.begin_project_save(project_id) {
             Ok(task) => task,
             Err(error) => {

@@ -97,6 +97,8 @@ pub(crate) enum OverlayId {
     AnnotateResetConfirm,
     ReprefixConfirm,
     ErcDialog,
+    /// Update PCB from schematic (#1312).
+    UpdatePcb,
 
     // Library modals.
     LibraryPicker,
@@ -130,7 +132,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 60] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 61] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -180,6 +182,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 60] = [
     OverlayId::AnnotateResetConfirm,
     OverlayId::ReprefixConfirm,
     OverlayId::ErcDialog,
+    OverlayId::UpdatePcb,
     OverlayId::LibraryPicker,
     OverlayId::EditRowModal,
     OverlayId::DeleteConfirm,
@@ -297,6 +300,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::AnnotateResetConfirm
         | OverlayId::ReprefixConfirm
         | OverlayId::ErcDialog
+        | OverlayId::UpdatePcb
         | OverlayId::LibraryPicker
         | OverlayId::EditRowModal
         | OverlayId::DeleteConfirm
@@ -369,6 +373,19 @@ pub(crate) fn scope_canvas_message(window_id: iced::window::Id, message: Message
         }
         bar @ Message::ActiveBar(_) => scope_overlay_message(window_id, bar),
         other => other,
+    }
+}
+
+/// Remap what an undocked window's PCB canvas emits: canvas events and the
+/// board's selection and drag messages carry the window, and a right-click
+/// opens the menu for that window's board (#2240).
+pub(crate) fn scope_pcb_canvas_message(window_id: iced::window::Id, message: Message) -> Message {
+    match message {
+        Message::PcbCanvas(msg) => Message::Pcb(crate::app::PcbMsg::CanvasInWindow {
+            window: window_id,
+            msg,
+        }),
+        other => scope_canvas_message(window_id, other),
     }
 }
 
@@ -477,6 +494,7 @@ impl Signex {
             OverlayId::AnnotateResetConfirm => layers.extend(self.annotate_reset_confirm_overlay()),
             OverlayId::ReprefixConfirm => layers.extend(self.reprefix_confirm_overlay()),
             OverlayId::ErcDialog => layers.extend(self.erc_dialog_overlay()),
+            OverlayId::UpdatePcb => layers.extend(self.update_pcb_overlay()),
             OverlayId::LibraryPicker => layers.extend(self.library_picker_overlay()),
             OverlayId::EditRowModal => layers.extend(self.edit_row_modal_overlay()),
             OverlayId::DeleteConfirm => layers.extend(self.delete_confirm_overlay()),

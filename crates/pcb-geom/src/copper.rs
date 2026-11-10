@@ -2,7 +2,7 @@
 //! the one list the ratsnest and the design-rule check both read.
 
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{Footprint, Pad, PadType, PcbBoard, ViaType};
+use signex_types::pcb::{Footprint, Pad, PadType, PcbBoard, Via, ViaType};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use crate::index::{ItemRef, track_shape, via_shape};
@@ -65,10 +65,7 @@ pub(crate) fn collect_copper(board: &PcbBoard) -> Vec<CopperItem> {
         if via.net == 0 {
             continue;
         }
-        let layers = match via.via_type {
-            ViaType::Through => u32::MAX,
-            ViaType::Blind | ViaType::Micro => span_mask(via.layers.iter().map(String::as_str)),
-        };
+        let layers = via_layers(via);
         if let (Ok(shape), true) = (via_shape(via), layers != 0) {
             nodes.push(CopperItem {
                 item: ItemRef::Via(via.uuid),
@@ -82,9 +79,18 @@ pub(crate) fn collect_copper(board: &PcbBoard) -> Vec<CopperItem> {
     nodes
 }
 
+/// A through via reaches every copper layer; a blind or micro via the span
+/// between the outermost layers it names.
+pub(crate) fn via_layers(via: &Via) -> u32 {
+    match via.via_type {
+        ViaType::Through => u32::MAX,
+        ViaType::Blind | ViaType::Micro => span_mask(via.layers.iter().map(String::as_str)),
+    }
+}
+
 /// A through-hole pad reaches every copper layer; a surface pad the copper
 /// layers it lists, or its footprint's side when it lists none.
-fn pad_layers(footprint: &Footprint, pad: &Pad) -> u32 {
+pub(crate) fn pad_layers(footprint: &Footprint, pad: &Pad) -> u32 {
     if pad.pad_type == PadType::Thru {
         return u32::MAX;
     }

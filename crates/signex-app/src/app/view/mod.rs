@@ -9,6 +9,7 @@ pub(crate) mod dialogs;
 /// of the private `overlays` module.
 pub(crate) mod overlay_id;
 
+mod board_sketch;
 mod canvas_region;
 mod chrome;
 mod context_menu;
@@ -174,6 +175,8 @@ impl Signex {
             recent_projects: ui.recent_projects.entries(),
             open_panels: self.open_panels(),
             i18n: std::sync::Arc::clone(&ui.i18n),
+            cross_select: interaction.cross_select.enabled,
+            pcb_sync: self.pcb_sync_label(Some(window_id)),
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {
@@ -268,9 +271,10 @@ impl Signex {
             document.inflight_git_commits.len(),
             altium_import_name.as_deref(),
             self.status_activity(window_id).as_deref(),
+            self.status_active_layer(window_id),
             &ui.i18n,
         )
-        .map(|req| Message::Ui(UiMsg::StatusBar(req)))
+        .map(move |req| Signex::status_bar_message(window_id, req))
         .boxed();
 
         // Partition tabs across windows: main owns every tab that isn't
@@ -655,6 +659,9 @@ impl Signex {
                 iced::widget::Space::new().boxed()
             };
             stack![base, badge].boxed()
+        } else if let Some(sketch) = self.board_sketch_view(window_id) {
+            // The board in sketch mode: the sketch over the board (#2234).
+            sketch
         } else if self.pcb_for_window(window_id).is_some() {
             // Each window reads its own PCB canvas, and an undocked
             // window's events carry its id, as for the schematic (#494).
@@ -666,17 +673,16 @@ impl Signex {
             let base = if is_main {
                 base
             } else {
-                base.map(move |msg| match msg {
-                    Message::CanvasEvent(event) => {
-                        Message::CanvasEventInWindow { window_id, event }
-                    }
-                    other => other,
-                })
-                .boxed()
+                base.map(move |msg| overlay_id::scope_pcb_canvas_message(window_id, msg))
+                    .boxed()
             };
             // The board's layers as a strip under the canvas.
             let strip = self.pcb_for_window(window_id).and_then(|board| {
-                pcb_strip::layer_strip(board, &self.document_state.panel_ctx.tokens)
+                pcb_strip::layer_strip(
+                    board,
+                    &self.ui_state.i18n,
+                    &self.document_state.panel_ctx.tokens,
+                )
             });
             // Selection, hover and marquee paint above the board and take no input.
             let highlight = canvas(pcb_canvas.highlight_layer())
@@ -704,9 +710,11 @@ impl Signex {
                 ))
                 .width(Length::Fill)
                 .height(Length::Fill);
-                pcb_strip::with_strip(stack![base, content_shader, highlight].boxed(), strip)
+                let bar = self.pcb_active_bar(is_main);
+                pcb_strip::with_strip(stack![base, content_shader, highlight, bar].boxed(), strip)
             } else {
-                pcb_strip::with_strip(stack![base, highlight].boxed(), strip)
+                let bar = self.pcb_active_bar(is_main);
+                pcb_strip::with_strip(stack![base, highlight, bar].boxed(), strip)
             }
         } else {
             // "Nothing loaded" gets the actionable start screen; "project

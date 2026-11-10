@@ -51,14 +51,15 @@ pub(super) fn assemble_footprints(
 ) -> Result<Vec<Footprint>, FormatError> {
     let mut footprints: Vec<Footprint> = footprint_rows
         .into_iter()
-        .map(|row| {
+        .enumerate()
+        .map(|(index, row)| {
             let extra = footprint_extras
                 .get(&row.uuid.to_string())
                 .cloned()
                 .unwrap_or_default();
-            row_to_footprint(row, extra)
+            row_to_footprint(row, extra, "footprints", index)
         })
-        .collect();
+        .collect::<Result<_, _>>()?;
 
     check_unique_footprint_uuids(&footprints)?;
 
@@ -99,6 +100,7 @@ pub(super) fn assemble_footprints(
                 graphics: Vec::new(),
                 properties: Vec::new(),
                 schematic_link: None,
+                library_ref: None,
                 // The placeholder is not in the file: it carries no
                 // foreign keys and must not inherit the orphan pad's.
                 unknown: UnknownFields::default(),

@@ -1,0 +1,25 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "mixed-tht-smd",
+  "net_classes": [
+    {
+      "clearance": 0.3,
+      "name": "Power",
+      "nets": [
+        "VIN",
+        "+12V",
+        "+5V",
+        "GND"
+      ],
+      "trace_width": 1.0
+    }
+  ],
+  "pcb_file": "mixed-tht-smd.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

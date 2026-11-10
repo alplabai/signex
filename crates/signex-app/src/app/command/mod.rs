@@ -221,8 +221,12 @@ impl Signex {
         if let Some(result) = self.window_document_command(command, &args, window) {
             return result;
         }
-        let unmet = enablement::disabled_reason(command, &self.command_context(window));
-        if unmet.is_some() && !enablement::explains_when_unavailable(command) {
+        let context = self.command_context(window);
+        let unmet = enablement::disabled_reason(command, &context);
+        if unmet.is_some()
+            && !enablement::explains_when_unavailable(command)
+            && !enablement::explains_refusal_in(command, &context)
+        {
             return (
                 CommandOutcome::disabled(unmet.unwrap_or_default()),
                 Task::none(),
@@ -253,6 +257,16 @@ impl Signex {
                 if self.interaction_state.canvases.contains_key(&window_id) =>
             {
                 self.dispatch_update(Message::CanvasEventInWindow { window_id, event })
+            }
+            // A board-view command typed in an undocked PCB window acts on
+            // the board that window shows (#2223).
+            (Some(Message::Pcb(PcbMsg::View(event))), Some(window_id))
+                if self.undocked_pcb_path(window_id).is_some() =>
+            {
+                self.dispatch_update(Message::Pcb(PcbMsg::ViewInWindow {
+                    window: window_id,
+                    event,
+                }))
             }
             // Any other command typed in an undocked document window acts on
             // the sheet that window shows (#1966).

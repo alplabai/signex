@@ -202,6 +202,7 @@ panels-kind-footprint-layers = Layers
 panels-kind-symbol-pins = Pins
 # The board's net list.
 panels-kind-pcb-nets = PCB
+panels-kind-layers = Layers
 # Version history.
 panels-kind-history = History
 

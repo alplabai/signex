@@ -241,3 +241,143 @@ fn a_press_closes_an_open_context_menu_even_if_it_never_releases() {
             .is_none()
     );
 }
+
+/// The canvas grabs a 2 mm disc around the board point under (100, 80).
+fn grabbing(rig: &mut Rig) {
+    let centre = pcb_geom::PointNm::from_mm(rig.world(100.0, 80.0), "test").unwrap();
+    rig.canvas.set_grab(vec![pcb_geom::Shape::Disc {
+        center: centre,
+        radius: 2_000_000,
+    }]);
+}
+
+#[test]
+fn a_press_on_a_grabbed_footprint_drags_it_instead_of_a_box() {
+    let mut rig = rig();
+    grabbing(&mut rig);
+    rig.press(100.0, 80.0);
+    let (from, to) = (rig.world(100.0, 80.0), rig.world(160.0, 140.0));
+    let msg = rig.move_to(160.0, 140.0);
+    assert_eq!(msg, Some(PcbCanvasMsg::FootprintDragged { from, to }));
+    assert!(rig.canvas.marquee.get().is_none(), "no box is drawn");
+    let msg = rig.release(160.0, 140.0);
+    assert_eq!(msg, Some(PcbCanvasMsg::FootprintDropped { from, to }));
+}
+
+#[test]
+fn a_footprint_drag_cancelled_by_escape_drops_nothing() {
+    let mut rig = rig();
+    grabbing(&mut rig);
+    rig.press(100.0, 80.0);
+    rig.move_to(160.0, 140.0);
+    rig.canvas.cancel_marquee();
+    assert_eq!(rig.release(160.0, 140.0), None);
+}
+
+#[test]
+fn a_footprint_drag_that_leaves_the_canvas_is_cancelled() {
+    let mut rig = rig();
+    grabbing(&mut rig);
+    rig.press(100.0, 80.0);
+    rig.move_to(160.0, 140.0);
+    let left = rig.send(Event::Mouse(mouse::Event::CursorLeft), at(160.0, 140.0));
+    assert_eq!(left, Some(PcbCanvasMsg::FootprintDragCancelled));
+}
+
+#[test]
+fn a_footprint_drag_whose_window_loses_focus_is_cancelled() {
+    let mut rig = rig();
+    grabbing(&mut rig);
+    rig.press(100.0, 80.0);
+    rig.move_to(160.0, 140.0);
+    let unfocused = Event::Window(iced::window::Event::Unfocused);
+    let msg = rig.send(unfocused, at(160.0, 140.0));
+    assert_eq!(msg, Some(PcbCanvasMsg::FootprintDragCancelled));
+    assert!(!rig.canvas.is_carrying());
+    assert_eq!(rig.release(160.0, 140.0), None, "the release drops nothing");
+}
+
+/// Press, drag, and no release: the next press finds the drag still live.
+fn a_drag_with_a_lost_release(rig: &mut Rig) {
+    grabbing(rig);
+    rig.press(100.0, 80.0);
+    rig.move_to(160.0, 140.0);
+    assert!(rig.canvas.is_carrying());
+}
+
+#[test]
+fn a_press_that_discards_a_live_drag_cancels_it() {
+    let mut inside = rig();
+    a_drag_with_a_lost_release(&mut inside);
+    let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+    let msg = inside.send(press.clone(), at(300.0, 200.0));
+    assert_eq!(msg, Some(PcbCanvasMsg::FootprintDragCancelled));
+    assert!(!inside.canvas.is_carrying());
+
+    // Outside the canvas too: the press is not taken, the drag still ends.
+    let mut outside = rig();
+    a_drag_with_a_lost_release(&mut outside);
+    let away = mouse::Cursor::Available(iced::Point::new(900.0, 900.0));
+    assert_eq!(
+        outside.send(press, away),
+        Some(PcbCanvasMsg::FootprintDragCancelled)
+    );
+}
+
+#[test]
+fn a_press_after_the_app_ended_the_drag_only_closes_the_menu() {
+    let mut rig = rig();
+    a_drag_with_a_lost_release(&mut rig);
+    // Esc or a focus loss in the app already ended it.
+    rig.canvas.cancel_marquee();
+    let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+    let action =
+        canvas::Program::update(&rig.canvas, &mut rig.state, &press, BOUNDS, at(10.0, 10.0))
+            .expect("a press inside the canvas is handled");
+    assert!(matches!(
+        action.into_inner().0,
+        Some(Message::ContextMenu(ContextMenuMsg::Close))
+    ));
+}
+
+#[test]
+fn a_click_on_a_grabbed_footprint_or_a_modified_press_still_selects() {
+    let mut rig = rig();
+    grabbing(&mut rig);
+    rig.press(100.0, 80.0);
+    let msg = rig.release(101.0, 80.0).expect("a click");
+    assert!(matches!(msg, PcbCanvasMsg::Clicked { .. }), "{msg:?}");
+
+    rig.mods(Modifiers::SHIFT);
+    rig.press(100.0, 80.0);
+    rig.move_to(160.0, 140.0);
+    assert!(rig.canvas.marquee.get().is_some(), "Shift starts a box");
+}
+
+#[test]
+fn a_right_click_that_does_not_pan_opens_the_board_menu() {
+    let mut rig = rig();
+    let right = |pressed: bool| {
+        Event::Mouse(if pressed {
+            mouse::Event::ButtonPressed(mouse::Button::Right)
+        } else {
+            mouse::Event::ButtonReleased(mouse::Button::Right)
+        })
+    };
+    let mut run = |event: Event, x: f32| {
+        canvas::Program::update(&rig.canvas, &mut rig.state, &event, BOUNDS, at(x, 50.0))
+            .and_then(|action| action.into_inner().0)
+    };
+    run(right(true), 40.0);
+    assert!(matches!(
+        run(right(false), 40.0),
+        Some(Message::ContextMenu(ContextMenuMsg::Show(x, y))) if x == 40.0 && y == 50.0
+    ));
+    // A right drag pans and opens nothing.
+    run(right(true), 40.0);
+    let moved = Event::Mouse(mouse::Event::CursorMoved {
+        position: iced::Point::new(90.0, 50.0),
+    });
+    run(moved, 90.0);
+    assert!(run(right(false), 90.0).is_none());
+}

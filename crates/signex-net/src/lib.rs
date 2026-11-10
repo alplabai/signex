@@ -13,6 +13,11 @@ pub mod uf;
 
 pub mod board;
 
+mod parts;
+pub use parts::{DesignPart, PartAnchor, design_parts};
+
+pub mod cross_probe;
+
 mod net_class;
 pub use net_class::{
     assign_net_classes, element_class_styles, element_net_names, placement_class_styles,

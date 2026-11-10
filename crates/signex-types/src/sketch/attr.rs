@@ -623,6 +623,11 @@ pub struct MountingHoleAttr {
     /// Whether the hole is plated.
     #[serde(default)]
     pub plated: bool,
+    /// Name of the board net a plated hole joins (for example `GND`).
+    /// `None`: an isolated or unplated hole. The bake turns the name into
+    /// the board's net number, so a renumbered net table keeps the link.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub net: Option<String>,
 }
 
 /// Line entity attribute: this line is a V-score path.

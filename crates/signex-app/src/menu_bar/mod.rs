@@ -113,6 +113,8 @@ pub enum MenuMessage {
     OpenErcPanel,
     OpenMessagesPanel,
     OpenSignexAiPanel,
+    /// View ▸ Layers: show the Layers panel (#2223).
+    OpenLayersPanel,
     /// Place ▸ Text — the text-note tool.
     PlaceText,
     /// Place ▸ No Connect — the no-connect tool.
@@ -189,6 +191,7 @@ impl MenuMessage {
                 | Self::OpenErcPanel
                 | Self::OpenMessagesPanel
                 | Self::OpenSignexAiPanel
+                | Self::OpenLayersPanel
         )
     }
 }
@@ -216,6 +219,12 @@ pub struct MenuContext<'a> {
     pub(crate) open_panels: Vec<crate::panels::PanelKind>,
     /// The locale the menu titles render in (#2055).
     pub i18n: std::sync::Arc<signex_i18n::I18n>,
+    /// Cross Select Mode is on: Tools ▸ Cross Select Mode shows a check
+    /// mark (#1312). On by default, like the mode.
+    pub cross_select: bool,
+    /// What Design ▸ Update PCB Document names: the board a schematic in
+    /// view updates, or the project a board imports from (#1312).
+    pub(crate) pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
 }
 
 impl Default for MenuContext<'_> {
@@ -227,6 +236,8 @@ impl Default for MenuContext<'_> {
             recent_projects: &[],
             open_panels: Vec::new(),
             i18n: signex_i18n::I18n::en_us(),
+            cross_select: true,
+            pcb_sync: None,
         }
     }
 }

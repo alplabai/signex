@@ -1,0 +1,33 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "mcu-breakout-tqfp32",
+  "net_classes": [
+    {
+      "clearance": 0.25,
+      "name": "Power",
+      "nets": [
+        "VCC",
+        "AVCC",
+        "GND"
+      ],
+      "trace_width": 0.3
+    },
+    {
+      "clearance": 0.25,
+      "name": "Clock",
+      "nets": [
+        "XTAL1",
+        "XTAL2"
+      ],
+      "trace_width": 0.25
+    }
+  ],
+  "pcb_file": "mcu-breakout-tqfp32.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

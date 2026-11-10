@@ -177,10 +177,11 @@ fn run_check(
 fn log_report(report: &pcb_geom::DrcReport, names: &std::collections::BTreeMap<u32, String>) {
     let count = |k| report.count(k);
     let summary = format!(
-        "DRC: {} clearance, {} short, {} unconnected (minimum clearance {} mm){}",
+        "DRC: {} clearance, {} short, {} unconnected, {} keepout (minimum clearance {} mm){}",
         count(ViolationKind::Clearance),
         count(ViolationKind::Short),
         count(ViolationKind::Unconnected),
+        count(ViolationKind::Keepout),
         pcb_geom::nm_to_mm(report.rules.clearance),
         if report.skipped.is_empty() {
             String::new()
@@ -217,6 +218,7 @@ fn log_report(report: &pcb_geom::DrcReport, names: &std::collections::BTreeMap<u
                 "link of {} mm not routed",
                 pcb_geom::nm_to_mm(v.measured_nm)
             ),
+            ViolationKind::Keepout => "inside a keepout that forbids it".to_string(),
         };
         crate::diagnostics::log_warning(format!(
             "DRC: {what}, {} / {} at ({}, {}) mm",

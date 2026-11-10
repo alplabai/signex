@@ -315,6 +315,12 @@ impl Signex {
             ProjectTreeAction::AddNewSchematic(_) => {
                 return self.add_new_schematic(tree_path);
             }
+            ProjectTreeAction::AddNewPcb(_) => {
+                return self.pcb_sync_from_tree(&tree_path, true);
+            }
+            ProjectTreeAction::UpdatePcb(_) => {
+                return self.pcb_sync_from_tree(&tree_path, false);
+            }
             ProjectTreeAction::AddProjectSymbolLibrary(_) => {
                 return self.add_project_symbol_library(tree_path);
             }

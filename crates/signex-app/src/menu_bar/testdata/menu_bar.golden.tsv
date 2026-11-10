@@ -1,6 +1,8 @@
 # path	kind	label	command_id	shortcut	action	enabled[default,full,pcb,symbol,sheets,undocked,footprint,dirty]	gate
 File	menu	File	-	-	-	-	-
 File/New Project	item	New Project	new_document	Ctrl+N	NewProject	11111111	always
+File/New	submenu	New	-	-	-	-	-
+File/New/PCB	item	PCB	-	-	NewPcb	01001001	cmd:new_pcb_document
 File/Open...	item	Open...	open_document	Ctrl+O	OpenProject	11111111	always
 File/Open Recent	submenu	Open Recent	-	-	-	-	-
 File/---	separator	-	-	-	-	-	-
@@ -31,7 +33,16 @@ Edit/Copy	item	Copy	copy	Ctrl+C	Copy	01000000	cmd:copy
 Edit/Paste	item	Paste	paste	Ctrl+V	Paste	01000000	cmd:paste
 Edit/Paste Special	item	Paste Special	smart_paste	Shift+Ctrl+V	SmartPaste	01000000	cmd:smart_paste
 Edit/Duplicate	item	Duplicate	duplicate	Ctrl+D	Duplicate	01000000	cmd:duplicate
-Edit/Delete	item	Delete	delete_selection	Del	Delete	01000010	cmd:delete_selection
+Edit/Delete	item	Delete	delete_selection	Del	Delete	01100010	cmd:delete_selection
+Edit/Move	submenu	Move	-	-	-	-	-
+Edit/Move/Move	item	Move	-	-	MoveObject	01100000	cmd:move_object
+Edit/Move/Move Selection	item	Move Selection	-	-	MoveSelection	01100000	cmd:move_selection
+Edit/Move/---	separator	-	-	-	-	-	-
+Edit/Move/Rotate	item	Rotate	rotate_counterclockwise	Space	Rotate	01100000	cmd:rotate_counterclockwise
+Edit/Move/Rotate Clockwise	item	Rotate Clockwise	rotate_clockwise	Shift+Space	RotateClockwise	01100000	cmd:rotate_clockwise
+Edit/Move/Mirror X	item	Mirror X	mirror_x	X	MirrorX	01100000	cmd:mirror_x
+Edit/Move/Mirror Y	item	Mirror Y	mirror_y	Y	MirrorY	01100000	cmd:mirror_y
+Edit/Move/Flip Selection	item	Flip Selection	-	-	FlipSelection	00100000	cmd:flip_selection
 Edit/Arrange	submenu	Arrange	-	-	-	-	-
 Edit/Arrange/Bring to Front	item	Bring to Front	-	-	BringDrawingsToFront	00000000	cmd:bring_drawings_to_front
 Edit/Arrange/Send to Back	item	Send to Back	-	-	SendDrawingsToBack	00000000	cmd:send_drawings_to_back
@@ -51,6 +62,12 @@ View/Toggle Grid	item	Toggle Grid	toggle_visible_grid	Shift+Ctrl+G	ToggleGrid	11
 View/Cycle Grid Size	item	Cycle Grid Size	-	-	CycleGrid	11111111	cmd:next_grid
 View/AutoFocus (dim unselected)	item	AutoFocus (dim unselected)	toggle_auto_focus	F9	ToggleAutoFocus	11111111	cmd:toggle_auto_focus
 View/---	separator	-	-	-	-	-	-
+View/Toggle Ratsnest	item	Toggle Ratsnest	-	-	ToggleRatsnest	01100000	cmd:toggle_ratsnest
+View/Next Layer	item	Next Layer	-	-	NextLayer	01100000	cmd:next_layer
+View/Previous Layer	item	Previous Layer	-	-	PreviousLayer	01100000	cmd:prev_layer
+View/Toggle Layer Visibility	item	Toggle Layer Visibility	-	-	ToggleLayerVisibility	01100000	cmd:toggle_layer_visibility
+View/Show All Layers	item	Show All Layers	-	-	ShowAllLayers	01100000	cmd:show_all_layers
+View/---	separator	-	-	-	-	-	-
 View/Projects	item	Projects	-	-	OpenProjectsPanel	11111111	always
 View/Components	item	Components	-	-	OpenComponentsPanel	11111111	always
 View/Navigator	item	Navigator	-	-	OpenNavigatorPanel	11111111	always
@@ -58,6 +75,7 @@ View/Properties	item	Properties	-	-	OpenPropertiesPanel	11111111	always
 View/ERC	item	ERC	-	-	OpenErcPanel	11111111	always
 View/Messages	item	Messages	-	-	OpenMessagesPanel	11111111	always
 View/Signex AI	item	Signex AI	-	-	OpenSignexAiPanel	11111111	always
+View/Layers	item	Layers	-	-	OpenLayersPanel	11111111	always
 Project	menu	Project	-	-	-	-	-
 Project/Electrical Rules Check	item	Electrical Rules Check	-	-	OpenErcDialog	01001000	cmd:open_erc_dialog
 Project/---	separator	-	-	-	-	-	-
@@ -77,6 +95,9 @@ Place/Text	item	Text	-	-	PlaceText	01000000	sch
 Place/No Connect	item	No Connect	-	-	PlaceNoConnect	01000000	sch
 Place/Sheet Entry	item	Sheet Entry	-	-	PlaceSheetEntry	01000000	cmd:place_sheet_entry
 Design	menu	Design	-	-	-	-	-
+Design/Update PCB Document	item	Update PCB Document	-	-	UpdatePcb	01000000	cmd:update_pcb_from_schematic
+Design/Board Sketch	item	Board Sketch	-	-	BoardSketch	01100000	cmd:board_sketch
+Design/---	separator	-	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
 Tools	menu	Tools	-	-	-	-	-
 Tools/Annotation	submenu	Annotation	-	-	-	-	-
@@ -95,6 +116,9 @@ Tools/Library Editor	item	Library Editor	-	-	OpenLibraryEditor	01000000	cmd:open
 Tools/---	separator	-	-	-	-	-	-
 Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc
 Tools/Net Inspector	stub	Net Inspector	-	-	-	00000000	never
+Tools/---	separator	-	-	-	-	-	-
+Tools/Cross Probe	item	Cross Probe	-	-	CrossProbe	01100000	cmd:cross_probe
+Tools/Cross Select Mode	item	Cross Select Mode	toggle_cross_select_mode	Ctrl+Shift+X	ToggleCrossSelectMode	11111111	cmd:toggle_cross_select_mode
 Tools/---	separator	-	-	-	-	-	-
 Tools/Up Hierarchy	item	Up Hierarchy	-	-	AscendToParentSheet	01000000	cmd:navigate_up_hierarchy
 Tools/---	separator	-	-	-	-	-	-

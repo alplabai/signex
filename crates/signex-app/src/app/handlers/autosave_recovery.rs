@@ -538,6 +538,7 @@ mod tests {
         let needle = "restore-board-needle-1886";
         let path = PathBuf::from("restore-1886.snxpcb");
         let mut board = signex_types::pcb::PcbBoard {
+            sketch: None,
             unknown: Default::default(),
             uuid: uuid::Uuid::now_v7(),
             version: 1,

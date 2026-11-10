@@ -13,8 +13,10 @@ use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 use signex_widgets::tree_view::TreeIcon;
 
+mod board_view_rows;
 mod new_project_row;
 mod row_effects;
+mod update_pcb_rows;
 
 const TID: ThemeId = ThemeId::GraphiteDark;
 
@@ -732,4 +734,73 @@ fn canvas_menu_offers_the_placed_part_actions_for_a_placed_part_only() {
     }
     // Nothing else moved: the rest of the menu is identical.
     assert_eq!(labels(&with).len(), labels(&without).len() + 3);
+}
+
+/// The message the row labelled `label` sends, `None` when greyed.
+fn row_message(entries: &[DropdownEntry<Message>], label: &str) -> Option<Message> {
+    entries
+        .iter()
+        .find_map(|e| match e {
+            DropdownEntry::Item(it) if it.label == label => Some(it.on_press.clone()),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("missing row {label:?}"))
+}
+
+fn runs_cross_probe(message: Option<Message>) -> bool {
+    matches!(
+        message,
+        Some(Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, project: None })))
+            if id.as_str() == "cross_probe"
+    )
+}
+
+/// #1312: Cross Probe on the sheet menu runs `cross_probe` with something
+/// selected and is greyed with nothing selected.
+#[test]
+fn canvas_cross_probe_row_runs_the_command_with_a_selection() {
+    let sc = shortcuts();
+    let with = canvas_menu_entries(TID, selected(), None, None, &sc);
+    let without = canvas_menu_entries(TID, CanvasSelection::default(), None, None, &sc);
+    assert!(runs_cross_probe(row_message(&with, "Cross Probe")));
+    assert!(row_message(&without, "Cross Probe").is_none());
+    assert!(disabled_of(&without, "Cross Probe"));
+}
+
+/// #1312: the board menu ends with Cross Probe, live with anything selected.
+#[test]
+fn board_cross_probe_row_runs_the_command_with_a_selection() {
+    use crate::app::handlers::pcb_placement::PcbTargets;
+    let sc = shortcuts();
+    let picked = PcbTargets {
+        shown: true,
+        any: true,
+        ..PcbTargets::default()
+    };
+    let rows = super::menus::pcb_canvas_menu_entries(TID, picked, &sc);
+    assert!(runs_cross_probe(row_message(&rows, "Cross Probe")));
+    let empty = PcbTargets {
+        shown: true,
+        ..PcbTargets::default()
+    };
+    let rows = super::menus::pcb_canvas_menu_entries(TID, empty, &sc);
+    assert!(row_message(&rows, "Cross Probe").is_none());
+}
+
+/// #2234: the board menu's Board Sketch row runs `board_sketch`, with or
+/// without a selection.
+#[test]
+fn board_sketch_row_runs_the_command() {
+    use crate::app::handlers::pcb_placement::PcbTargets;
+    let sc = shortcuts();
+    let empty = PcbTargets {
+        shown: true,
+        ..PcbTargets::default()
+    };
+    let rows = super::menus::pcb_canvas_menu_entries(TID, empty, &sc);
+    assert!(matches!(
+        row_message(&rows, "Board Sketch"),
+        Some(Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, project: None })))
+            if id.as_str() == "board_sketch"
+    ));
 }

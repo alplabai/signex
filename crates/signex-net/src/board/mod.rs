@@ -29,7 +29,7 @@ mod numbering;
 mod tests;
 
 pub use assign::{assign_pad_net, set_pad_net_lock};
-pub use edit::{BoardNetEdit, PadNetChange, ZoneNetName};
+pub use edit::{BoardNetEdit, NetEditRefusal, PadNetChange, ZoneNetName};
 pub use key::{PadLinkKey, SymbolPad, SymbolPadKey};
 pub use link_by_designator::{
     BoardLinkEdit, FootprintLinkChange, LinkByDesignatorReport, link_footprints_by_designator,

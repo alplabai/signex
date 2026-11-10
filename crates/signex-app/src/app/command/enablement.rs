@@ -18,6 +18,7 @@
 //! and `place_local_net_label`, …), so an alias cannot bypass the gate; a
 //! test checks every such pair in the catalog.
 
+pub(crate) use crate::app::handlers::pcb_placement::PcbTargets;
 use crate::keymap::AppCommandId;
 
 use super::super::*;
@@ -41,6 +42,9 @@ pub(crate) struct CommandContext {
     /// That document is a `.snxsym` or `.snxfpt` editor tab. Both fields are
     /// false in a Component Preview window, which has no file of its own.
     pub document_is_editor: bool,
+    /// The window's tab is a board with unsaved changes or a live sketch,
+    /// which Save writes (a new board is written only on Save).
+    pub document_is_dirty_board: bool,
     /// ERC and annotation have sheets to work on: a project is open, or
     /// some schematic is. They assemble the project's sheets, not only the
     /// active tab's.
@@ -100,6 +104,12 @@ pub(crate) struct CommandContext {
     /// The active symbol editor's current part can be removed: a symbol
     /// keeps its first part, so Remove Part refuses part 1.
     pub can_remove_part: bool,
+    /// The board the window shows and what its selection lets the
+    /// placement commands do (#2240).
+    pub pcb: PcbTargets,
+    /// Rotate and mirror have something on a sheet besides the selection:
+    /// a part on the cursor, or the Bus Entry tool's next entry.
+    pub turn_in_hand: bool,
 }
 
 /// Whether `command` can act in `ctx`. Unlisted commands are enabled.
@@ -144,6 +154,13 @@ pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
     ) || is_planned_command(command)
 }
 
+/// A board placement command greyed because a selected footprint is locked
+/// (#2240): the menu greys it, but its keystroke still reaches the handler,
+/// which says which footprint is locked instead of doing nothing silently.
+pub(crate) fn explains_refusal_in(command: &AppCommandId, ctx: &CommandContext) -> bool {
+    ctx.pcb.shown && ctx.pcb.any && super::needs::is_placement_command(command)
+}
+
 /// An Active Bar command whose tool is a planned placeholder (#1249). It is
 /// never enabled, but its keystroke still reaches the handler so the user
 /// is told it is not built yet instead of getting silence.
@@ -157,6 +174,7 @@ pub(crate) fn is_planned_command(command: &AppCommandId) -> bool {
 struct WindowDocumentKind {
     is_schematic: bool,
     is_editor: bool,
+    is_dirty_board: bool,
     /// The window holds a document with a file of its own, so Save has
     /// something to run against: false in a Component Preview and in a
     /// window whose tab is gone, which refuse Save whatever the project holds.
@@ -194,6 +212,10 @@ impl Signex {
             WindowDocumentKind {
                 is_schematic: main_has_schematic,
                 is_editor: has_symbol_editor || has_footprint_editor,
+                is_dirty_board: document
+                    .tabs
+                    .get(document.active_tab)
+                    .is_some_and(|t| self.board_has_unsaved_work(t)),
                 has_file: true,
             },
         );
@@ -206,10 +228,13 @@ impl Signex {
         };
         CommandContext {
             has_schematic,
-            has_pcb: self.has_active_pcb(),
+            // An undocked PCB window is enabled by the board it shows (#2223).
+            has_pcb: self.has_active_pcb()
+                || window.is_some_and(|id| self.undocked_pcb_path(id).is_some()),
             undocked_has_canvas: self.undocked_tab_has_canvas(window),
             document_is_schematic: own.is_schematic,
             document_is_editor: own.is_editor,
+            document_is_dirty_board: own.is_dirty_board,
             has_sheets: document.active_project.is_some() || !document.engines.is_empty(),
             has_symbol_editor,
             has_footprint_editor,
@@ -234,6 +259,9 @@ impl Signex {
             has_project_sheet: self.sheet_numbering_project().is_some(),
             can_tile_windows: self.tile_plan(crate::app::TileLayout::SideBySide).is_some(),
             can_remove_part: self.active_symbol_part_is_removable(),
+            pcb: self.pcb_targets(window),
+            turn_in_hand: self.interaction_state.placement.is_some()
+                || self.interaction_state.current_tool == Tool::BusEntry,
         }
     }
 
@@ -265,8 +293,17 @@ impl Signex {
                 tab.kind,
                 TabKind::SymbolEditor(_) | TabKind::FootprintEditor(_)
             ),
+            is_dirty_board: self.board_has_unsaved_work(tab),
             has_file: !tab.kind.is_component_editor(),
         }
+    }
+
+    /// `tab` is a board with something Save writes: unsaved changes, or a
+    /// live sketch not yet applied to it.
+    fn board_has_unsaved_work(&self, tab: &crate::app::documents::TabInfo) -> bool {
+        matches!(tab.kind, TabKind::Pcb)
+            && (self.document_state.is_document_dirty(&tab.path)
+                || self.board_sketch_owed().as_deref() == Some(tab.path.as_path()))
     }
 
     /// Whether the Navigator's hierarchy places the active tab's sheet
@@ -361,6 +398,13 @@ mod tests {
         app.document_state.active_tab = app.document_state.tabs.len() - 1;
     }
 
+    fn with_board() -> Signex {
+        let (mut app, _task) = Signex::new();
+        let path = PathBuf::from("enablement.snxpcb");
+        push_tab(&mut app, &path, TabKind::Pcb);
+        app
+    }
+
     fn with_schematic() -> Signex {
         let (mut app, _task) = Signex::new();
         let path = PathBuf::from("enablement.snxsch");
@@ -405,6 +449,18 @@ mod tests {
         assert!(enabled(&with_symbol_editor().0, "save_document"));
         assert!(enabled(&with_footprint_editor().0, "save_document"));
         assert!(enabled(&with_footprint_editor().0, "save_document_as"));
+        assert!(
+            !enabled(&with_board(), "save_document"),
+            "a clean board has nothing to save"
+        );
+        let mut board = with_board();
+        let path = board.document_state.tabs[0].path.clone();
+        board.document_state.mark_document_dirty(&path);
+        assert!(
+            enabled(&board, "save_document"),
+            "a board with changes saves"
+        );
+        assert!(!enabled(&board, "save_document_as"), "PCB has no Save As");
     }
 
     #[test]

@@ -68,7 +68,11 @@ Schematics..., and Number Schematic Sheets... (see
 - Netlist (Protel .NET)...
 - ERC Report...
 
-**Design** keeps Parameter Manager... only. **File ▸ Export** keeps PDF only.
+**Design** has Update PCB Document (see
+[Design ▸ Update PCB Document](#design-update-pcb)), Board Sketch (see
+[Design ▸ Board Sketch](#design-board-sketch)), a separator, then
+Parameter Manager.... **File ▸ New** has PCB (`new_pcb_document`). **File ▸
+Export** keeps PDF only.
 Project tree actions with no menu message or command id (add or remove a
 document, Enable Version Control, History, Validate Project) stay in the tree's
 context menu; the menu gets no stub for them.
@@ -90,6 +94,49 @@ own. Two rows point at an id other than the one their key suggests (#1991):
 Tools ▸ Design Rule Check runs `run_drc` (#2222) on the PCB in view and is
 greyed while no PCB is open. The command is also in the command palette and
 as the Run DRC button of the Messages panel; no keymap preset binds it.
+
+## Tools ▸ Cross Probe and Cross Select Mode {#tools-cross-probe}
+
+Tools ▸ Cross Probe runs `cross_probe` (#1312): the part or net selected on
+the sheet or the board in view is selected on the other side, which is brought
+forward (a hidden tab) or opened (the project's board, or the part's sheet)
+and framed. It is greyed with nothing selected. The same command is the Cross
+Probe row of the sheet canvas menu and of the board canvas menu, and is in the
+command palette; no keymap preset binds it.
+
+Tools ▸ Cross Select Mode runs `toggle_cross_select_mode` and shows a check
+mark while the mode is on, which it is by default. While on, a selection on
+one side is selected in every sheet or board window on screen on the other
+side; it never opens a document or takes focus. The Altium preset binds it to
+Ctrl+Shift+X. How parts and nets are matched: `DECISIONS.md`, 2026-11-09.
+
+## Design ▸ Update PCB Document, File ▸ New ▸ PCB {#design-update-pcb}
+
+Design ▸ Update PCB Document runs `update_pcb_from_schematic` (#1312) and
+opens the Update PCB dialog for the project of the document in view. Its
+label follows that document: on a schematic it is Update PCB Document
+`<board>` (the project's board file, or no name when the project has none), on
+a board Import Changes From `<project>`. It is greyed unless a schematic or a
+board is in view and a project is open. The undocked windows' menu bars word
+and gate it by the window's own document. The same command is in the command
+palette, and the Projects tree's project row has an Update PCB Document row
+for the clicked project. No keymap preset binds it. The dialog:
+[UPDATE_PCB.md](UPDATE_PCB.md).
+
+File ▸ New ▸ PCB runs `new_pcb_document`: the project in view gets its board,
+named after the project, from its project defaults. It is greyed with no
+project open. Projects ▸ Add New ▸ PCB does the same for the clicked project.
+The board opens as an unsaved tab; nothing is written until Save.
+
+## Design ▸ Board Sketch {#design-board-sketch}
+
+Design ▸ Board Sketch runs `board_sketch` (#2234): the board in view enters
+sketch mode, where the footprint editor's sketch tools draw its outline,
+keepouts, cutouts and mounting holes; run again, it leaves the mode and
+commits the changes as one undo step. It is greyed while no PCB is open.
+The same command is the PCB Active Bar's Board Sketch button, a row of the
+board canvas menu and a palette row; no keymap preset binds it. The mode:
+[PCB_SKETCH.md](PCB_SKETCH.md#sketch-mode).
 
 ## File ▸ Library {#file-library}
 
@@ -216,6 +263,45 @@ the whole monitor. The Messages panel names how many windows were arranged.
 Both are also enabled for a standalone symbol or footprint editor tab
 (`.snxsym` / `.snxfpt`), which `save_active_document` already handles, so the
 gate is the command's enablement, not "a schematic is open".
+
+## Edit ▸ Move {#edit-move}
+
+Edit ▸ Move (#2240) groups the commands that move, turn and mirror the
+selection: Move (`move_object`), Move Selection (`move_selection`), Rotate
+(`rotate_counterclockwise`), Rotate Clockwise (`rotate_clockwise`), Mirror X
+and Mirror Y (`mirror_x` / `mirror_y`) and Flip Selection (`flip_selection`).
+They run the same ids as the keys, the palette and the canvas menus, on a sheet
+and on a board alike.
+
+On a sheet a row is live when there is something to act on: a selection, or
+for Rotate and Mirror a part on the cursor or the Bus Entry tool. Move needs an
+open sheet or board. On a PCB tab the rows act on the selected footprints (a
+selected pad stands for its footprint). They are greyed with nothing selected
+and when a selected footprint is locked; the key for a greyed row on a locked
+footprint still reaches the handler, which names the locked footprint in the
+Messages panel and changes nothing. Mirror X (the `X` key) flips a footprint
+to the other board side, like Flip Selection; Mirror Y flips it and turns it
+half a turn, so it mirrors top to bottom. Only the footprint moves: tracks
+and vias that end on a moved, rotated, flipped or deleted footprint stay
+where they are. Flip Selection has no default key and
+is greyed outside a board.
+
+## View: board view {#view-board}
+
+Five View rows act on the board in view and are greyed without one (#2223):
+Toggle Ratsnest, Next Layer, Previous Layer, Toggle Layer Visibility (the
+active layer) and Show All Layers. Next and Previous Layer show the keys of
+the active keymap: `Shift++` and `-` in the Altium and Classic profiles, which
+bind `+`, `Shift++`, `*` and `Shift+*` to Next Layer and `-` to Previous Layer
+in the `pcb` context. The Layers panel row sits with the other panel rows and,
+like them, works without a document (the panel shows its empty state). In an
+undocked PCB window the keys and rows act on that window's board. What a row
+changes is the board view in `UiState::pcb_layer_views`: never the board,
+never its file. See `docs/DECISIONS.md` (2026-11-09).
+
+The board canvas menu ends with a View group holding the same Toggle
+Ratsnest row (#2240, #2223); the menu opens only on a board, so the row is
+always live there.
 
 ## Native macOS menu {#native-macos-menu}
 

@@ -475,6 +475,8 @@ impl Signex {
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
                 let repaired = crate::app::sheet_repairs::take_and_log_board(&path, &mut board);
                 document_repaired = repaired;
+                // A board read from disk ends its sketch mode (#2234).
+                self.end_board_sketch_of(&path);
                 self.document_state.set_pcb_board(idx, *board);
                 if idx == self.document_state.active_tab {
                     // Refresh canvas; preserve camera (don't fit-to-board).
@@ -665,6 +667,7 @@ impl Signex {
         why: &str,
         unreadable: bool,
     ) {
+        self.end_board_sketch_of(path);
         self.document_state.drop_pcb_board(active_idx);
         self.set_reloaded_dirty(path, false);
         if active_idx == self.document_state.active_tab {

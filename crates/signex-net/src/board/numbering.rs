@@ -54,10 +54,12 @@ pub(super) fn number_nets(
         .filter(|d| d.number != 0 && !claimed.contains(&d.number) && in_use.contains(&d.number))
         .collect();
 
-    // Claimed and in-use numbers are off limits; dropped old numbers are free.
+    // A new net never takes a number the board's table holds now: one
+    // dropped and reused in the same sync would read as a rename.
     let mut reserved: HashSet<u32> = claimed;
     reserved.extend(retained.iter().map(|d| d.number));
     reserved.extend(in_use);
+    reserved.extend(board.nets.iter().map(|d| d.number));
     let mut next = reserved
         .iter()
         .copied()
@@ -122,11 +124,15 @@ fn is_auto_name(name: &str, id: NetId) -> bool {
     name == format!("N${}", id.0)
 }
 
-/// Net numbers that tracks, vias and zones point at.
+/// Net numbers that tracks, vias, zones and the sketch's plated holes point
+/// at.
 fn copper_numbers(board: &PcbBoard) -> HashSet<u32> {
     let mut used: HashSet<u32> = board.segments.iter().map(|s| s.net).collect();
     used.extend(board.vias.iter().map(|v| v.net));
     used.extend(board.zones.iter().map(|z| z.net));
+    if let Some(sketch) = &board.sketch {
+        used.extend(sketch.holes.iter().filter_map(|h| h.net));
+    }
     used.remove(&0);
     used
 }

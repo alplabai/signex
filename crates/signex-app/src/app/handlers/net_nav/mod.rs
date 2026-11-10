@@ -17,6 +17,7 @@ mod hover;
 mod index_job;
 mod messages;
 mod navigate;
+mod selection_nets;
 mod target;
 
 #[cfg(test)]

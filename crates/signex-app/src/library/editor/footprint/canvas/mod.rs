@@ -343,6 +343,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // load-bearing and identical to the pre-split god-function.
             // Each layer's body lives in the `draw` submodule.
             self.draw_background_and_grid(frame, cstate, bounds);
+            // A board sketch draws over its board (#2234).
+            self.draw_board_backdrop(frame, cstate);
             self.draw_guides(frame, cstate, bounds);
             self.draw_origin_crosshair(frame, cstate);
             self.draw_silk_layers(frame, cstate);

@@ -10,19 +10,19 @@ use std::path::Path;
 use signex_engine::pcb::{BoardCommand, BoardPatch};
 
 use crate::app::Signex;
-use crate::app::state::pcb_edit::{AgentStep, BoardEditError};
+use crate::app::state::pcb_edit::{BoardEditError, CheckedStep};
 
 impl Signex {
     /// Run `commands` on the board at `path` as one undo step, all or
-    /// nothing. With `agent`, the step is labelled and refused when the board
-    /// moved past the revision the agent read.
+    /// nothing. With `checked`, the step is labelled and refused when the board
+    /// moved past the revision it was built from.
     pub fn execute_board_commands(
         &mut self,
         path: &Path,
         commands: Vec<BoardCommand>,
-        agent: Option<AgentStep<'_>>,
+        checked: Option<CheckedStep<'_>>,
     ) -> Result<Vec<BoardPatch>, BoardEditError> {
-        let patches = self.document_state.execute_board(path, commands, agent)?;
+        let patches = self.document_state.execute_board(path, commands, checked)?;
         if !patches.is_empty() {
             self.after_board_change(path);
         }
@@ -52,8 +52,9 @@ impl Signex {
 
     /// The board at `path` changed: repaint every window that shows it. The
     /// main window's canvas, ratsnest and pick index follow the revision when
-    /// it is the active tab; an undocked window keeps its own camera. This
-    /// repaints only: it does not touch the tool or the placement in progress.
+    /// it is the active tab; an undocked window keeps its own camera and
+    /// repaints its own selection. This repaints only: it does not touch the
+    /// tool or the placement in progress.
     fn after_board_change(&mut self, path: &Path) {
         let active = self.active_tab_path().as_deref() == Some(path);
         if active {
@@ -66,15 +67,17 @@ impl Signex {
         } else {
             self.repaint_undocked_boards(path);
         }
+        // The undocked windows' selections follow the new geometry too (#2240).
+        self.refresh_undocked_pcb_highlights(path);
     }
 
     /// Give each undocked window that shows the board at `path` its new
     /// geometry.
-    fn repaint_undocked_boards(&mut self, path: &Path) {
+    pub(crate) fn repaint_undocked_boards(&mut self, path: &Path) {
         let Some(board) = self.document_state.pcb_board(path) else {
             return;
         };
-        let snapshot = self.interaction_state.pcb_ratsnest.snapshot_of(path, board);
+        let snapshot = self.undocked_pcb_snapshot(path, board);
         for (id, canvas) in &mut self.interaction_state.pcb_canvases {
             let shows = matches!(
                 self.ui_state.windows.get(id),

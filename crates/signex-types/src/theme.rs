@@ -311,9 +311,59 @@ pub struct CanvasColors {
     pub bus: Color,
     pub grid: Color,
     pub cursor: Color,
+    /// PCB board edge (outline and the rim of openings); `None` uses the
+    /// cursor colour. Set on the Graphite Dark canvas, the one board
+    /// palette of both themes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_edge: Option<Color>,
+    /// PCB keepout regions (magenta, as the Altium Keep-Out layer); `None`
+    /// uses the DRC warning colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keepout: Option<Color>,
+    /// The PCB layer colours the Layers panel and layer strip list; `None`
+    /// uses the board palette's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_layers: Option<BoardLayerColors>,
+}
+
+/// The colour each PCB layer family is listed with. The board edge and
+/// keepouts are not here: they use [`CanvasColors::board_edge_color`] and
+/// [`CanvasColors::keepout_color`], the colours they are drawn with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BoardLayerColors {
+    pub top_copper: Color,
+    pub bottom_copper: Color,
+    /// Inner copper and mechanical layers, cycled by layer number.
+    pub layer_cycle: [Color; 6],
+    pub margin: Color,
+    pub silkscreen: Color,
+    pub solder_mask: Color,
+    pub paste: Color,
+    /// Dimensions, Notes, Drill Drawing and the ECO layers.
+    pub drawing: Color,
+    /// Every other technical layer (Fab, Assembly, Courtyard, ...).
+    pub other: Color,
 }
 
 impl CanvasColors {
+    /// The colours PCB layers are listed with.
+    #[must_use]
+    pub fn board_layer_colors(&self) -> BoardLayerColors {
+        self.board_layers.unwrap_or(GRAPHITE_BOARD_LAYERS)
+    }
+
+    /// The colour of the PCB board edge.
+    #[must_use]
+    pub fn board_edge_color(&self) -> Color {
+        self.board_edge.unwrap_or(self.cursor)
+    }
+
+    /// The colour of PCB keepout regions.
+    #[must_use]
+    pub fn keepout_color(&self) -> Color {
+        self.keepout.unwrap_or(self.drc_warning)
+    }
+
     /// The colour of PCB ratsnest lines.
     #[must_use]
     pub fn ratsnest_color(&self) -> Color {
@@ -402,6 +452,11 @@ const GRAPHITE_LIGHT_CANVAS: CanvasColors = CanvasColors {
     bus: c(0x5B, 0x5E, 0x66),
     grid: c(0xE2, 0xDF, 0xD8),
     cursor: c(0x15, 0x17, 0x1A),
+    // Board views draw with the Dark canvas in both themes, so the board
+    // colours live there only.
+    board_edge: None,
+    keepout: None,
+    board_layers: None,
 };
 
 const GRAPHITE_DARK_TOKENS: ThemeTokens = ThemeTokens {
@@ -466,6 +521,29 @@ const GRAPHITE_DARK_CANVAS: CanvasColors = CanvasColors {
     bus: c(0xA3, 0xA5, 0xAB),
     grid: c(0x26, 0x28, 0x2D),
     cursor: c(0xEC, 0xEA, 0xE5),
+    board_edge: s(0xE8, 0xC5, 0x47),
+    keepout: s(0xFF, 0x40, 0xFF),
+    board_layers: Some(GRAPHITE_BOARD_LAYERS),
+};
+
+/// Red top and blue bottom copper, as Altium lists them.
+const GRAPHITE_BOARD_LAYERS: BoardLayerColors = BoardLayerColors {
+    top_copper: c(0xD0, 0x40, 0x40),
+    bottom_copper: c(0x38, 0x6C, 0xD0),
+    layer_cycle: [
+        c(0xC8, 0xA0, 0x2C),
+        c(0x3C, 0xA8, 0x6A),
+        c(0xA0, 0x58, 0xC8),
+        c(0xC8, 0x6A, 0x2C),
+        c(0x2C, 0xA8, 0xB8),
+        c(0xB8, 0x4C, 0x8C),
+    ],
+    margin: c(0xE0, 0xD0, 0x40),
+    silkscreen: c(0xE8, 0xE8, 0xE8),
+    solder_mask: c(0x40, 0x9C, 0x58),
+    paste: c(0xA8, 0xA8, 0xB8),
+    drawing: c(0x88, 0x88, 0xA0),
+    other: c(0x70, 0x90, 0xB0),
 };
 
 // ---------------------------------------------------------------------------

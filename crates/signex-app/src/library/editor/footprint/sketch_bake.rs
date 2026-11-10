@@ -62,7 +62,10 @@ pub(super) fn bake_solution_with(
     // user adds sketch entities, the sketch becomes the
     // source of truth and a (possibly empty) bake result is
     // intentional.
-    if !sketch.entities.is_empty() {
+    // A board sketch bakes to the board with `bake_board` on commit, never
+    // into the editor's working footprint (#2234).
+    let footprint_bake = state.board_backdrop.is_none();
+    if footprint_bake && !sketch.entities.is_empty() {
         // Pads + array expansions.
         let mut baked: Vec<signex_library::primitive::footprint::Pad> = Vec::new();
         signex_bake::bake_pads(
@@ -159,7 +162,9 @@ pub(super) fn bake_solution_with(
             super::pad_to_sketch::mirror_solve_to_round_rect_geometry(state, sketch, resolved);
             super::pad_to_sketch::mirror_solve_to_oval_geometry(state, sketch, resolved);
         }
-    } else if !sketch.baked_kinds.is_empty() || signex_bake::has_baked_silk(footprint) {
+    } else if footprint_bake
+        && (!sketch.baked_kinds.is_empty() || signex_bake::has_baked_silk(footprint))
+    {
         // Every entity was deleted after the sketch baked: what it owned
         // goes with them. (A sketch that never baked owns nothing.)
         let remaps = BakedFields::clear_owned(footprint, &mut state.solve_warnings);

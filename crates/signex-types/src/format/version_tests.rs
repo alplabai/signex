@@ -74,6 +74,7 @@ fn pad(uuid: &str, number: &str) -> Pad {
 fn footprint(uuid: &str, reference: &str, pad: Pad) -> Footprint {
     Footprint {
         schematic_link: None,
+        library_ref: None,
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str(uuid).unwrap(),

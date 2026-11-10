@@ -194,6 +194,10 @@ impl Signex {
             UiMsg::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
                 self.handle_menu_message(MenuMessage::OpenPropertiesPanel)
             }
+            UiMsg::StatusBar(StatusBarRequest::ActiveLayerStepRequested) => self
+                .dispatch_pcb_message(PcbMsg::View(PcbViewMsg::ActiveLayerStepped {
+                    forward: true,
+                })),
             UiMsg::StatusBar(StatusBarRequest::CancelAltiumImport) => {
                 self.handle_altium_import_cancel();
                 Task::none()
@@ -434,6 +438,18 @@ impl Signex {
         })
     }
 
+    /// A click on the status bar of `window`. The layer pill steps the
+    /// board that window shows, the one it names (#2272).
+    pub fn status_bar_message(window: iced::window::Id, request: StatusBarRequest) -> Message {
+        match request {
+            StatusBarRequest::ActiveLayerStepRequested => Message::Pcb(PcbMsg::ViewInWindow {
+                window,
+                event: PcbViewMsg::ActiveLayerStepped { forward: true },
+            }),
+            request => Message::Ui(UiMsg::StatusBar(request)),
+        }
+    }
+
     /// Run `handler` with `window_id`'s canvas and document swapped into
     /// the main slots, as [`Self::handle_canvas_event_in_window`] describes.
     ///
@@ -514,6 +530,17 @@ impl Signex {
         if let Some(pcb) = swapped_pcb.as_mut() {
             std::mem::swap(&mut self.interaction_state.pcb_canvas, pcb);
         }
+        // Its board selection goes with it (#2240).
+        let mut swapped_pcb_selection = swapped_pcb.as_ref().map(|_| {
+            self.interaction_state
+                .pcb_selections
+                .remove(&window_id)
+                .unwrap_or_default()
+        });
+        if let Some(selection) = swapped_pcb_selection.as_mut() {
+            std::mem::swap(&mut self.interaction_state.pcb_selection, selection);
+        }
+        let board_revision_before = self.document_state.pcb_revisions.get(&target_path).copied();
         let retargeted_tab = pcb_tab.filter(|_| retarget_tab || swapped_pcb.is_some());
         if let Some(index) = retargeted_tab {
             self.document_state.active_tab = index;
@@ -589,6 +616,14 @@ impl Signex {
                 self.interaction_state.pcb_canvases.insert(window_id, pcb);
             }
         }
+        if let Some(mut selection) = swapped_pcb_selection {
+            std::mem::swap(&mut self.interaction_state.pcb_selection, &mut selection);
+            if window_alive {
+                self.interaction_state
+                    .pcb_selections
+                    .insert(window_id, selection);
+            }
+        }
         if retargeted_tab.is_some() {
             let tabs = &self.document_state.tabs;
             self.document_state.active_tab = saved_active_tab_path
@@ -619,6 +654,13 @@ impl Signex {
         self.document_state.active_path = saved_active_path;
         if main_shows_target && revision_before != revision_after {
             self.refresh_main_canvas_from_engine(&target_path);
+        }
+        // The main window showing the board the window just edited repaints
+        // its own selection over the new geometry.
+        let board_moved =
+            self.document_state.pcb_revisions.get(&target_path).copied() != board_revision_before;
+        if board_moved && self.active_tab_path().as_ref() == Some(&target_path) {
+            self.refresh_pcb_highlight();
         }
 
         match task_result {

@@ -1,0 +1,33 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "usb-c-power-input",
+  "net_classes": [
+    {
+      "clearance": 0.25,
+      "name": "Power",
+      "nets": [
+        "VBUS",
+        "+5V",
+        "GND"
+      ],
+      "trace_width": 0.8
+    },
+    {
+      "clearance": 0.2,
+      "name": "CC",
+      "nets": [
+        "CC1",
+        "CC2"
+      ],
+      "trace_width": 0.25
+    }
+  ],
+  "pcb_file": "usb-c-power-input.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

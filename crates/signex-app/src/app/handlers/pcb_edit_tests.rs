@@ -12,7 +12,7 @@ use uuid::Uuid;
 use super::document_files::save_async_tests::{begin_save, press_save};
 use crate::app::document::{Document, DocumentKey, UndoTarget};
 use crate::app::handlers::menu::export::tests::app_workspace;
-use crate::app::state::pcb_edit::{AgentStep, BoardEditError};
+use crate::app::state::pcb_edit::{BoardEditError, CheckedStep};
 use crate::app::{EditMsg, Message, Signex};
 
 const FP_A: u128 = 0xa;
@@ -328,7 +328,7 @@ fn an_agent_step_is_labelled_and_a_stale_revision_is_refused_whole() {
     run(&mut app, &path, move_to(FP_A, 7.0));
     let (before, current) = (live(&app, &path), revision(&app, &path));
 
-    let stale = AgentStep {
+    let stale = CheckedStep {
         label: "Agent: tidy",
         expected_revision: read,
     };
@@ -345,7 +345,7 @@ fn an_agent_step_is_labelled_and_a_stale_revision_is_refused_whole() {
         (before.clone(), current)
     );
 
-    let fresh = AgentStep {
+    let fresh = CheckedStep {
         label: "Agent: tidy",
         expected_revision: current,
     };
@@ -624,7 +624,7 @@ fn an_agent_edit_to_a_board_that_is_not_the_active_tab_repaints_its_window() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path, window) = board_undocked_behind_a_schematic(dir.path());
     let before = drawn(&app, window);
-    let step = AgentStep {
+    let step = CheckedStep {
         label: "Agent: nudge",
         expected_revision: revision(&app, &path),
     };
@@ -745,4 +745,97 @@ fn a_restore_over_board_edits_keeps_the_board_dirty_through_undo() {
     undo(&mut app);
     assert!(dirty(&app, &path));
     assert!(quit_prompts(&mut app));
+}
+
+/// A library footprint in its top-side form, for the #1312 commands.
+fn library_footprint(uuid: u128) -> signex_types::pcb::Footprint {
+    serde_json::from_value(serde_json::json!({
+        "uuid": id(uuid), "reference": "REF**", "footprint_id": "R0603",
+        "position": {"x": 0.0, "y": 0.0}, "layer": "TopCopper",
+        "pads": [{
+            "uuid": id(uuid + 1), "number": "1", "pad_type": "smd", "shape": "round_rect",
+            "position": {"x": -0.8, "y": 0.0}, "size": {"x": 0.9, "y": 0.95},
+            "drill": null, "layers": ["TopCopper"], "net": null
+        }],
+        "properties": [{"key": "Reference", "value": "REF**", "layer": "TopSilkscreen"}]
+    }))
+    .unwrap()
+}
+
+/// #1312: Update PCB from schematic executes an add, a footprint swap and a
+/// net edit as ONE step; one Undo puts the board back bit for bit and clean
+/// at its save point, and Redo reapplies the whole step.
+#[test]
+fn an_update_from_schematic_batch_is_one_undo_step() {
+    use signex_engine::pcb::BoardItem;
+    use signex_net::board::{BoardNetEdit, PadNetChange};
+    use signex_types::pcb::{NetDef, PadNet};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let before = live(&app, &path);
+    assert!(!dirty(&app, &path));
+    let gnd = PadNet {
+        number: 2,
+        name: "GND".into(),
+    };
+    let nets = BoardNetEdit {
+        nets: vec![NetDef {
+            number: 2,
+            name: "GND".into(),
+        }],
+        pads: vec![
+            PadNetChange {
+                footprint: id(FP_B),
+                pad: id(0xb1),
+                net: Some(gnd.clone()),
+                locked: false,
+            },
+            PadNetChange {
+                footprint: id(0xc),
+                pad: id(0xd),
+                net: Some(gnd),
+                locked: false,
+            },
+        ],
+        zones: Vec::new(),
+    };
+    let commands = vec![
+        BoardCommand::ReplaceFootprint {
+            footprint: id(FP_A),
+            with: Box::new(library_footprint(0xe)),
+        },
+        BoardCommand::AddItems {
+            items: vec![BoardItem::Footprint(library_footprint(0xc))],
+        },
+        BoardCommand::SetNets(nets),
+    ];
+    let step = CheckedStep {
+        label: "Update PCB from schematic",
+        expected_revision: revision(&app, &path),
+    };
+    let patches = app
+        .execute_board_commands(&path, commands, Some(step))
+        .expect("the update runs");
+    assert_eq!(patches.len(), 3);
+    let after = live(&app, &path);
+    assert_ne!(after, before);
+    let board = app.document_state.pcb_board(&path).unwrap();
+    assert_eq!(board.footprints.len(), 3);
+    assert_eq!(board.footprints[0].footprint_id, "R0603");
+    assert_eq!(
+        board.footprints[2].pads[0].net.as_ref().unwrap().name,
+        "GND"
+    );
+    assert!(dirty(&app, &path));
+
+    undo(&mut app);
+    assert_eq!(
+        live(&app, &path),
+        before,
+        "one undo takes back the whole update"
+    );
+    assert!(!dirty(&app, &path), "back at the save point");
+    redo(&mut app);
+    assert_eq!(live(&app, &path), after, "redo reapplies the whole update");
+    assert!(dirty(&app, &path));
 }
