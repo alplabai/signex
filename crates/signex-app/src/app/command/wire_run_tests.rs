@@ -1249,6 +1249,38 @@ fn a_hierarchical_bus_label_on_a_named_run_is_an_alias_not_a_rename() {
 }
 
 #[test]
+fn a_bus_run_joins_runs_by_the_name_rule() {
+    // 6761836527 point 7, by points 2-4: a run between a hierarchically
+    // labelled run (an alias) and a locally labelled run (an own name) joins
+    // freely; between two different own names it is a merge.
+    for (left, ty, merge) in [
+        ("D[0..7]", LabelType::Hierarchical, false),
+        ("A[0..15]", LabelType::Net, true),
+    ] {
+        let mut sheet = two_parts();
+        for (a, b) in [(0.0, 12.7), (25.4, 38.1)] {
+            sheet.buses.push(Bus {
+                uuid: Uuid::now_v7(),
+                start: Point::new(a, 50.8),
+                end: Point::new(b, 50.8),
+            });
+        }
+        let named = signex_types::schematic::Label::new(left, Point::new(0.0, 50.8), ty);
+        sheet.labels.push(named);
+        sheet
+            .labels
+            .push(label("DATA[0..7]", Point::new(38.1, 50.8)));
+        let mut app = app_with(sheet);
+        let ends = ["start=12.7,50.8", "end=25.4,50.8"];
+        if merge {
+            refused_with(&mut app, "place_bus", &ends, "allow_merge");
+        } else {
+            answered(run(&mut app, "place_bus", &ends));
+        }
+    }
+}
+
+#[test]
 fn a_bus_takes_no_pin_reference_and_keeps_the_geometry_rules() {
     let mut app = app_with(with_bus());
     refused_with(
