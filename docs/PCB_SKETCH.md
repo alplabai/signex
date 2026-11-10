@@ -168,6 +168,17 @@ mode's bar; the board is unchanged and the mode stays on.
 **Esc** first drops an armed sketch tool, a gesture in flight or an open
 menu (the footprint editor's `ToolEscape`), then leaves the mode.
 
+**The mode ends with its board.** Closing the board's tab (parked or not),
+a History restore or recovery copy read into it, or a failed reload ends
+the mode (`Signex::end_board_sketch_of`). Uncommitted changes are dropped
+and Messages names the board; the close prompt is not used, because it is
+about saving the file, which never holds an uncommitted sketch. A reopened
+board starts with a fresh copy. A session whose board is no longer open
+(Save As renamed it) is dropped the same way when sketch mode next starts.
+
+The DOF chip's second pill names the board (its file stem), with no pad
+count.
+
 ## Drawing the board {#drawing-the-board}
 
 Outside sketch mode the PCB canvas draws the board's outline (the board

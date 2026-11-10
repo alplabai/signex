@@ -15,6 +15,8 @@ impl Signex {
             return;
         };
         let path = tab.path.clone();
+        // Its sketch mode ends with the tab (#2234).
+        self.end_board_sketch_of(&path);
         let keep = park_dirty && self.document_state.is_document_dirty(&path);
         if keep
             && let Some(TabDocument::Pcb(engine)) =

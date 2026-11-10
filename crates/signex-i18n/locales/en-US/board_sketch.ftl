@@ -12,6 +12,9 @@ board-sketch-entered = Board sketch mode: draw with the sketch tools. Leave or E
 # Notice and Messages line when the board does not take the sketch; the
 # board is unchanged and the mode stays on.
 board-sketch-refused = The sketch was not applied to the board: { $reason }
+# Messages line when a board closes, or is read again from disk, while its
+# sketch has changes that were never applied.
+board-sketch-dropped = The board sketch changes of { $board } were not applied and are discarded: the board was closed or read again from disk.
 # The Board section of the Properties panel.
 board-sketch-section = Board
 board-sketch-outline = Board outline

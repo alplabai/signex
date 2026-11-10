@@ -79,12 +79,47 @@ impl Signex {
             .map(|session| &mut *session.editor)
     }
 
+    /// The board at `path` closes, is parked, or is replaced by a copy read
+    /// from disk: its sketch mode ends, so a later reopen starts fresh and no
+    /// old copy can be committed. Uncommitted changes are dropped and
+    /// Messages names the board (the close prompt is about saving the file,
+    /// which never holds an uncommitted sketch).
+    pub(crate) fn end_board_sketch_of(&mut self, path: &Path) {
+        let Some(session) = self.interaction_state.board_sketch.as_ref() else {
+            return;
+        };
+        if session.board_path != path {
+            return;
+        }
+        if session.has_changes() {
+            let board = path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            crate::diagnostics::log_warning(
+                t!(self.ui_state.i18n, ids::BOARD_SKETCH_DROPPED, "board" => board.as_str())
+                    .into_string(),
+            );
+        }
+        self.interaction_state.board_sketch = None;
+    }
+
     /// Start sketch mode on the board in view. Another board's sketch mode
-    /// is left first; if its commit is refused, this one does not start.
+    /// is left first; if its commit is refused, this one does not start. A
+    /// session whose board is no longer open (renamed by Save As) ends.
     fn enter_board_sketch(&mut self) {
         let Some(path) = self.active_tab_path() else {
             return;
         };
+        if let Some(stale) = self
+            .interaction_state
+            .board_sketch
+            .as_ref()
+            .map(|session| session.board_path.clone())
+            .filter(|other| self.document_state.pcb_board(other).is_none())
+        {
+            self.end_board_sketch_of(&stale);
+        }
         let other = self
             .interaction_state
             .board_sketch

@@ -4,7 +4,7 @@
 
 use signex_app::app::{
     BoardSketchMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg, EditMsg, FileMsg, InputMsg,
-    Message, PcbMsg, Signex, TabDocument, UiMsg,
+    Message, PcbMsg, Signex, TabContextAction, TabDocument, UiMsg,
 };
 use signex_app::dock::DockMessage;
 use signex_app::keymap::{
@@ -346,6 +346,46 @@ fn a_commit_is_one_undo_step_with_the_outline_hole_and_keepout() {
 
     send(&mut f, Message::Edit(EditMsg::Undo));
     assert_eq!(snapshot(&f), before, "one undo restores the old board");
+}
+
+/// Closing the board's tab ends its sketch mode and drops the uncommitted
+/// copy (Messages names the board); the reopened board starts fresh and
+/// nothing old is committed.
+#[test]
+fn closing_the_board_drops_the_sketch_and_a_reopen_starts_fresh() {
+    let mut f = open_board();
+    let before = snapshot(&f);
+    send(&mut f, menu_row("board_sketch"));
+    let drawn = rectangle(&mut f, (0.0, 0.0), (40.0, 30.0));
+    assert_eq!(drawn.len(), 4);
+
+    let idx = f.app.document_state.active_tab;
+    send(
+        &mut f,
+        Message::ContextMenu(ContextMenuMsg::TabAction(TabContextAction::Close(idx))),
+    );
+    assert!(!in_sketch(&f), "the mode ends with the tab");
+    assert!(
+        signex_app::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("board.snxpcb") && e.message.contains("discarded")),
+        "Messages names the board whose changes were dropped"
+    );
+
+    let path = f.path.clone();
+    send(&mut f, Message::File(FileMsg::Opened(Some(path))));
+    assert!(!in_sketch(&f), "reopening does not bring the mode back");
+    assert_eq!(snapshot(&f), before, "nothing old reached the board");
+
+    send(&mut f, menu_row("board_sketch"));
+    assert!(ids_of(&f, is_line).is_empty(), "a fresh, empty copy");
+    send(&mut f, menu_row("board_sketch"));
+    assert!(!in_sketch(&f));
+    assert_eq!(
+        snapshot(&f),
+        before,
+        "leaving the fresh copy commits nothing"
+    );
 }
 
 #[test]

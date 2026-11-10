@@ -50,6 +50,7 @@ define_ids! {
     BOARD_SKETCH_DISCARD = "board-sketch-discard";
     BOARD_SKETCH_ENTERED = "board-sketch-entered";
     BOARD_SKETCH_REFUSED = "board-sketch-refused";
+    BOARD_SKETCH_DROPPED = "board-sketch-dropped";
     BOARD_SKETCH_SECTION = "board-sketch-section";
     BOARD_SKETCH_OUTLINE = "board-sketch-outline";
     BOARD_SKETCH_HOLE = "board-sketch-hole";
