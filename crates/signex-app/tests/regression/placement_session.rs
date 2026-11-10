@@ -593,6 +593,7 @@ fn closing_the_project_mid_session_drops_it() {
             annotation: None,
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
+            agent_journal: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

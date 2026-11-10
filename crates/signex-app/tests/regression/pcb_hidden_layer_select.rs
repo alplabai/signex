@@ -341,6 +341,7 @@ fn add_project(app: &mut Signex, dir: &Path) {
             annotation: None,
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
+            agent_journal: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

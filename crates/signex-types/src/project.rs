@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::agent_journal::AgentJournalSettings;
 use crate::document_id::DocumentId;
 
 mod annotation;
@@ -247,6 +248,11 @@ pub struct ProjectData {
     /// nothing is set.
     #[serde(default, skip_serializing_if = "ProjectDefaults::is_empty")]
     pub project_defaults: ProjectDefaults,
+    /// What this project asks of its agent journals (#2253). Skipped on save
+    /// while untouched, so an old file re-saves byte-identical, and an old
+    /// build keeps the key in `unknown`. No format token changes.
+    #[serde(default, skip_serializing_if = "AgentJournalSettings::is_default")]
+    pub agent_journal: AgentJournalSettings,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -285,6 +291,8 @@ impl ProjectData {
     }
 }
 
+#[cfg(test)]
+mod agent_journal_tests;
 #[cfg(test)]
 mod description_tests;
 #[cfg(test)]
@@ -485,6 +493,7 @@ mod tests {
             annotation: None,
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
+            agent_journal: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         };
@@ -519,6 +528,7 @@ mod tests {
             annotation: None,
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
+            agent_journal: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         };
@@ -673,7 +683,13 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         let project_defaults = value
             .as_object_mut()
             .and_then(|map| map.remove(setup::PROJECT_DEFAULTS_KEY));
+        let journal = value
+            .as_object_mut()
+            .and_then(|map| map.remove(crate::agent_journal::AGENT_JOURNAL_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
+        if let Some(raw) = journal {
+            crate::agent_journal::take_agent_journal(&mut data, raw);
+        }
         if let Some(raw) = project_defaults {
             setup::take_project_defaults(&mut data, raw);
         }
@@ -739,6 +755,7 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         annotation: None,
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
+        agent_journal: Default::default(),
         parameters: Default::default(),
         unknown: UnknownJson::default(),
     })
@@ -799,6 +816,14 @@ pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> 
         stamped.insert(
             setup::PROJECT_DEFAULTS_KEY.into(),
             serde_json::to_value(&data.project_defaults)?,
+        );
+    }
+    // Settings chosen in this session replace an unreadable value kept; keys a
+    // newer build stored beside them stay.
+    if !data.agent_journal.is_default() {
+        stamped.insert(
+            crate::agent_journal::AGENT_JOURNAL_KEY.into(),
+            crate::agent_journal::merged_value(data)?,
         );
     }
     serde_json::to_vec_pretty(&Value::Object(stamped))

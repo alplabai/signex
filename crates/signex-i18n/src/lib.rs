@@ -605,6 +605,14 @@ define_ids! {
     PANELS_FOOTPRINT_LIBRARY_ADD = "panels-footprint-library-add";
     PANELS_FOOTPRINT_LIBRARY_DELETE = "panels-footprint-library-delete";
     PANELS_FOOTPRINT_LIBRARY_EDIT = "panels-footprint-library-edit";
+    PROJECT_AGENT_JOURNALS_TITLE = "project-agent-journals-title";
+    PROJECT_AGENT_JOURNALS_KEEP_IN_GIT = "project-agent-journals-keep-in-git";
+    PROJECT_AGENT_JOURNALS_KEEP_IN_GIT_HELP = "project-agent-journals-keep-in-git-help";
+    PROJECT_AGENT_JOURNALS_SUMMARISE = "project-agent-journals-summarise";
+    PROJECT_AGENT_JOURNALS_SUMMARISE_HELP = "project-agent-journals-summarise-help";
+    PROJECT_AGENT_JOURNALS_LINES = "project-agent-journals-lines";
+    PROJECT_AGENT_JOURNALS_LINES_HELP = "project-agent-journals-lines-help";
+    PROJECT_AGENT_JOURNALS_LINES_INVALID = "project-agent-journals-lines-invalid";
     UPDATE_PCB_MENU_UPDATE = "update-pcb-menu-update";
     UPDATE_PCB_MENU_UPDATE_BOARD = "update-pcb-menu-update-board";
     UPDATE_PCB_MENU_IMPORT = "update-pcb-menu-import";

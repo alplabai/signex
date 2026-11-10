@@ -11,7 +11,14 @@ the palette and the keymap. The GUI binary (`signex`) stays argument-free.
 signex-cli run <project> [options] < commands.jsonl
 signex-cli run <project> <command-id> [--arg key=value]... [options]
 signex-cli commands [--json]
+signex-cli agent-log <project> [--access]
 ```
+
+`agent-log` prints the project's agent journal as a table: the edits agents
+made (`.signex/agent-edits.jsonl`), or with `--access` who connected and with
+what rights (`.signex/agent-access.jsonl`). It only reads; what it skipped (a
+partial last line, a line of a newer version) goes to standard error. See
+`docs/AGENT_JOURNALS.md`.
 
 `<project>` is a `.snxprj` (or a loose `.snxsch`). The exit code is `0` when
 every command was ok, `1` when a command was refused or failed, `2` for a
@@ -527,7 +534,10 @@ is enforced before the app sees a command.
 - **No writes without `--save`.** `save_document`, `save_document_as` and
   `new_document` need the `save` capability, which only `--save` grants.
   Nothing is saved at exit. In a run without `--save`, the result lines and
-  the end-of-run log say what would change; no project file is written.
+  the end-of-run log say what would change; no project file is written, and
+  no agent journal (`.signex/`, #2253). A headless run with `--save` journals
+  its commands and its start and end; an attached run is journaled by the
+  running Signex, never by the CLI.
 - **Path confinement.** Every path argument is resolved first (symlinks
   followed, `..` removed) and must then sit inside the project folder, unless
   its folder is named with `--allow-path`. The folder is the one that holds

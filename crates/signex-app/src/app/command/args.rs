@@ -38,6 +38,9 @@ pub(crate) struct InvocationContext {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct Operands {
     pub(super) values: std::collections::BTreeMap<String, super::operands::OperandValue>,
+    /// Each operand as the text it was given, which the agent journal keeps
+    /// so a replay sends exactly what was sent (#2253).
+    pub(super) texts: std::collections::BTreeMap<String, String>,
 }
 
 #[cfg(test)]

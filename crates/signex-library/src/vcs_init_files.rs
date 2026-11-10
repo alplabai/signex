@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use signex_types::atomic_io::atomic_write;
 use signex_types::managed_block::append_missing_lines;
 use signex_types::project_vcs_files::{
-    GITIGNORE_BLOCK_BODY, ManagedFileError, MergedFile, merge_file, merge_gitattributes_file,
+    ManagedFileError, MergedFile, gitignore_block_body, merge_file, merge_gitattributes_file,
 };
 
 use crate::adapter::LibraryError;
@@ -42,6 +42,7 @@ impl VcsFilePlan {
         use_lfs: bool,
         project_scope: bool,
         rows: Option<&str>,
+        keep_agent_journals_in_git: bool,
     ) -> Result<Self, LibraryError> {
         let mut staged = Vec::new();
         // Project scope always carries a managed `.gitattributes` block, so a
@@ -51,7 +52,8 @@ impl VcsFilePlan {
             staged.push(stage(project_dir.join(".gitattributes"), file, None));
         }
         let path = project_dir.join(".gitignore");
-        let file = merge_file(&path, GITIGNORE_BLOCK_BODY).map_err(refuse)?;
+        let body = gitignore_block_body(keep_agent_journals_in_git);
+        let file = merge_file(&path, &body).map_err(refuse)?;
         staged.push(stage(path, file, rows));
         Ok(Self {
             staged,

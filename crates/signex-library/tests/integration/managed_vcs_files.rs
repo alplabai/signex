@@ -39,6 +39,21 @@ fn without_an_existing_gitignore_the_block_comes_first_then_the_unticked_rows() 
     assert!(text.contains(".DS_Store"));
 }
 
+/// #2253: a project that does not keep its agent journals in git gets the
+/// journal line in the block Enable Version Control writes; one that does not.
+#[test]
+fn enable_version_control_follows_keep_agent_journals_in_git() {
+    with_identity();
+    for (keep, listed) in [(false, true), (true, false)] {
+        let dir = project();
+        signex_library::enable_project_version_control_with(dir.path(), false, true, None, keep)
+            .unwrap();
+        let text = read(&dir, ".gitignore");
+        assert_eq!(text.contains(".signex/agent-*.jsonl"), listed, "{text}");
+        assert!(text.contains(".signex/agent-journal.lock"), "{text}");
+    }
+}
+
 #[test]
 fn with_no_unticked_rows_the_gitignore_is_exactly_the_block() {
     with_identity();

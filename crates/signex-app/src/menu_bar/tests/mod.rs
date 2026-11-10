@@ -442,6 +442,7 @@ pub(super) fn open_project(app: &mut Signex, file: &str) -> usize {
             annotation: None,
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
+            agent_journal: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

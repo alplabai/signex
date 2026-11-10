@@ -907,6 +907,7 @@ fn join_project_with_a_second_sheet(app: &mut Signex) -> PathBuf {
             annotation: None,
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
+            agent_journal: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

@@ -459,6 +459,7 @@ fn save_all_ignores_a_project_with_an_empty_dir() {
             annotation: None,
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
+            agent_journal: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

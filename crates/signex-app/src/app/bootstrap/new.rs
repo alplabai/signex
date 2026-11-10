@@ -15,6 +15,8 @@ impl Signex {
         // registry (#1924); an app made any other way (a test, a headless run)
         // does not.
         app.agent.lists_projects = true;
+        // And journals what agents do in its projects (#2253).
+        app.agent.journals_on = true;
         // A test run that boots the real window lists into a folder of its own,
         // as the config files go to a redirect (see `config_root`).
         if crate::config_root::is_test_redirect_active() {

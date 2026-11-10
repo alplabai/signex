@@ -27,7 +27,7 @@ fn a_git_dir_that_cannot_be_removed_is_reported() {
 }
 
 fn plan(dir: &Path) -> VcsFilePlan {
-    VcsFilePlan::new(dir, true, true, None).unwrap()
+    VcsFilePlan::new(dir, true, true, None, true).unwrap()
 }
 
 #[test]

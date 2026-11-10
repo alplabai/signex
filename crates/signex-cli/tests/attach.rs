@@ -286,9 +286,16 @@ fn a_run_with_the_project_open_in_a_running_app_runs_there_and_prints_the_headle
     // What the app received: the token, the id, the operands (the edit list as
     // JSON), and nothing was written to disk from here.
     assert_eq!(sent.len(), 2);
+    // And the run's name and rights, which the app records in its access
+    // journal (#2253): the CLI never writes a journal itself.
     assert_eq!(
         sent[0],
-        json!({"token": TOKEN, "id": "list_documents", "args": {}})
+        json!({"token": TOKEN, "id": "list_documents", "args": {},
+            "client": "signex-cli", "grants": ["read", "edit"]})
+    );
+    assert!(
+        !w.fx.dir.join(".signex").exists(),
+        "the CLI wrote a journal"
     );
     assert_eq!(sent[1]["id"], "apply_edits");
     assert_eq!(sent[1]["token"], TOKEN);
