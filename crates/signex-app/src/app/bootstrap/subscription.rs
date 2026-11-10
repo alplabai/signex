@@ -449,6 +449,7 @@ pub(crate) fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<Over
         ModalId::EnableVersionControl => Some(OverlayId::EnableVersionControl),
         ModalId::GridProperties => Some(OverlayId::GridProperties),
         ModalId::SelectionFilterCustom => Some(OverlayId::SelectionFilterCustom),
+        ModalId::NewProject => Some(OverlayId::NewProject),
         ModalId::About => Some(OverlayId::About),
         ModalId::KeyboardShortcuts => Some(OverlayId::KeyboardShortcuts),
         ModalId::PassiveCalculator => Some(OverlayId::PassiveCalculator),

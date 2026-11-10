@@ -236,6 +236,7 @@ impl Signex {
             ModalId::Preferences => Some(Message::Preferences(PreferencesMsg::Close)),
             ModalId::PrintPreview => Some(Message::PrintPreview(PrintPreviewMsg::Close)),
             ModalId::BomPreview => Some(Message::BomPreview(BomPreviewMsg::Close)),
+            ModalId::NewProject => Some(Message::from(NewProjectMsg::CancelRequested)),
             ModalId::FindReplace => Some(Message::FindReplaceMsg(
                 crate::find_replace::FindReplaceMsg::Close,
             )),
@@ -467,6 +468,7 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
         ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
         ModalId::Preferences => iced::Size::new(900.0, 620.0),
+        ModalId::NewProject => iced::Size::new(860.0, 700.0),
         ModalId::FindReplace => iced::Size::new(440.0, 320.0),
         ModalId::RenameDialog => iced::Size::new(420.0, 151.0),
         ModalId::RemoveDialog => iced::Size::new(520.0, 221.0),
@@ -539,6 +541,7 @@ pub(crate) fn modal_is_fixed(modal: ModalId) -> bool {
         | ModalId::FindReplace
         | ModalId::PrintPreview
         | ModalId::BomPreview
+        | ModalId::NewProject
         | ModalId::KeyboardShortcuts
         | ModalId::PassiveCalculator
         | ModalId::FirstRunTour

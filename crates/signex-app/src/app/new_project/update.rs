@@ -55,6 +55,21 @@ impl Signex {
         ])
     }
 
+    /// The name field has focus and its text selected once the dialog's own
+    /// window exists (the focus asked for at open time has no window yet).
+    pub(crate) fn focus_new_project_name_once_open(
+        &self,
+        modal: crate::app::state::ModalId,
+    ) -> Task<Message> {
+        if modal != crate::app::state::ModalId::NewProject || self.ui_state.new_project.is_none() {
+            return Task::none();
+        }
+        Task::batch([
+            operation::focus(NAME_INPUT_ID.clone()),
+            operation::text_input::select_all(NAME_INPUT_ID.clone()),
+        ])
+    }
+
     /// Ask the blocking pool whether the described project fits on disk.
     fn recheck_new_project_target(&mut self) -> Task<Message> {
         let Some(state) = self.ui_state.new_project.as_mut() else {
