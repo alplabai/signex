@@ -14,30 +14,35 @@ use signex_app::panels::{NetInspectorMsg, PanelKind, PanelMsg};
 use signex_types::schematic::{SelectedItem, SelectedKind};
 use tempfile::TempDir;
 
-use crate::library_symbol_drift::run_task;
+use signex_app::task_driver::TaskDriver;
+
 use crate::net_nav::flows::open_project;
 
 const COMMAND: &str = "open_net_inspector";
 
-/// Feed `message` and everything its tasks produce back through `update`,
-/// except the dock layout save: opening a panel would otherwise write the
-/// layout into the test run's shared config folder, and the next
-/// `Signex::new()` in this process would start with the panel open.
+/// `settle_support::settle`, except the dock layout save is dropped: opening
+/// a panel would otherwise write the layout into the test run's shared config
+/// folder, and the next `Signex::new()` in this process would start with the
+/// panel open. `settle_support` feeds every message back and has no way to
+/// skip one, so this thin wrapper runs the same `TaskDriver` one level at a
+/// time.
 fn settle(app: &mut Signex, message: Message) {
     let task = app.update(message);
     settle_task(app, task);
 }
 
 fn settle_task(app: &mut Signex, task: iced::Task<Message>) {
-    let mut queue = run_task(task);
+    let mut driver = TaskDriver::new();
+    let mut queue = std::collections::VecDeque::from([task]);
     let mut steps = 0;
-    while let Some(message) = queue.pop() {
-        steps += 1;
-        assert!(steps < 1_000, "the task chain settles");
-        if matches!(message, Message::DockLayout(_)) {
-            continue;
+    while let Some(task) = queue.pop_front() {
+        for message in driver.outputs(task).expect("the task chain settled") {
+            steps += 1;
+            assert!(steps < 1_000, "the task chain settles");
+            if !matches!(message, Message::DockLayout(_)) {
+                queue.push_back(app.update(message));
+            }
         }
-        queue.extend(run_task(app.update(message)));
     }
 }
 
@@ -187,5 +192,82 @@ fn a_loose_sheet_has_no_project_nets() {
     assert_eq!(
         app.document_state.panel_ctx.net_inspector.status,
         NetListStatus::NoProject
+    );
+}
+
+/// Open the panel, expand VCC and return its member on sheet `b`.
+fn member_on_b(app: &mut Signex) -> signex_app::panels::net_inspector::NetMemberRow {
+    settle(app, crate::menu_support::menu_row(COMMAND));
+    inspector(app, NetInspectorMsg::NetToggled("VCC".into()));
+    app.document_state.panel_ctx.net_inspector.nets[0]
+        .members
+        .iter()
+        .find(|m| m.sheet.contains('b'))
+        .expect("the label on b")
+        .clone()
+}
+
+/// A click on a member whose sheet is not open opens it (`go_to_member`
+/// reads it on a worker) and selects the member there.
+#[test]
+fn clicking_a_member_on_a_closed_sheet_opens_it() {
+    let tmp = TempDir::new().unwrap();
+    let (mut app, _a, b) = open_project(tmp.path());
+    let window = app.ui_state.main_window_id.expect("window");
+    let b_tab = app
+        .document_state
+        .tabs
+        .iter()
+        .position(|t| t.path == b)
+        .expect("b's tab");
+    settle(
+        &mut app,
+        Message::Tab {
+            window_id: window,
+            msg: signex_app::tab_bar::TabMessage::CloseClicked(b_tab),
+        },
+    );
+    assert!(!app.document_state.engines.contains_key(&b), "b is closed");
+
+    let on_b = member_on_b(&mut app);
+    inspector(
+        &mut app,
+        NetInspectorMsg::MemberClicked {
+            net: "VCC".into(),
+            anchor: on_b.anchor.clone(),
+        },
+    );
+
+    assert_eq!(app.document_state.active_path.as_deref(), Some(b.as_path()));
+    assert_eq!(
+        app.interaction_state.active_canvas().selected,
+        vec![SelectedItem::new(on_b.anchor.id, SelectedKind::Label)]
+    );
+}
+
+/// A member that is no longer on the net is said in Messages, and nothing
+/// moves or lights up.
+#[test]
+fn a_member_that_left_its_net_is_said_and_nothing_moves() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().unwrap();
+    let (mut app, a, _b) = open_project(tmp.path());
+    let mut gone = member_on_b(&mut app).anchor;
+    gone.id = uuid::Uuid::from_u128(0xDEAD);
+    inspector(
+        &mut app,
+        NetInspectorMsg::MemberClicked {
+            net: "VCC".into(),
+            anchor: gone,
+        },
+    );
+
+    assert_eq!(app.document_state.active_path.as_deref(), Some(a.as_path()));
+    assert!(app.document_state.net_nav.highlight.is_none());
+    assert!(
+        signex_app::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("no longer on net 'VCC'")),
+        "the Messages line names the net"
     );
 }

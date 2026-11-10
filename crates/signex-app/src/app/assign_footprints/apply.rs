@@ -37,6 +37,16 @@ impl Signex {
         if !state.can_apply() {
             return;
         }
+        if let Some(stale) = self.first_stale_part(state) {
+            crate::diagnostics::log_warning(format!("Assign Footprints: {}", stale.english()));
+            if let Some(state) = self.ui_state.assign_footprints.as_mut() {
+                state.error = Some(stale);
+            }
+            return;
+        }
+        let Some(state) = self.ui_state.assign_footprints.as_ref() else {
+            return;
+        };
         let changes = state.changes();
         let mut by_sheet: BTreeMap<PathBuf, Vec<Pick>> = BTreeMap::new();
         for (index, binding) in &changes {
@@ -63,6 +73,33 @@ impl Signex {
         }
     }
 
+    /// The first editable part whose footprint changed on its open sheet
+    /// since the read (Properties, an undo, a typed footprint): the dialog
+    /// would apply over a state it never showed, so Apply refuses. The
+    /// dialog is not a blocking modal, so the editor stays usable behind it.
+    fn first_stale_part(&self, state: &super::AssignFootprintsState) -> Option<AssignProblem> {
+        state
+            .parts()
+            .iter()
+            .filter(|part| part.access == super::PartAccess::Editable)
+            .find(|part| {
+                let Some(engine) = self.document_state.engines.get(&part.sheet) else {
+                    return false;
+                };
+                let Some(live) = engine
+                    .document()
+                    .symbols
+                    .iter()
+                    .find(|s| s.uuid == part.symbol_id)
+                else {
+                    return false;
+                };
+                live.footprint != part.current
+                    || self.footprint_offers(live).1 != part.current_binding
+            })
+            .map(|part| AssignProblem::Stale(part.designator.clone()))
+    }
+
     /// Change every sheet of `by_sheet`, all or nothing.
     fn assign_across_sheets(
         &mut self,
@@ -76,7 +113,7 @@ impl Signex {
                 return Err(AssignProblem::SheetClosed(path));
             };
             let doc = engine.document();
-            if doc.unknown.newer_minor_source.is_some() {
+            if doc.is_read_only() {
                 return Err(AssignProblem::ReadOnly(path));
             }
             let mut commands = Vec::new();
@@ -165,10 +202,19 @@ impl Signex {
         }
         let sheets = changed.len();
         self.set_undo_group_sheets(group, recorded);
-        if let Some(invalidation) = active_invalidation {
-            self.finish_schematic_mutation(invalidation, true, true);
+        if sheets == 0 {
+            crate::diagnostics::log_info(
+                "Assign Footprints: nothing changed; every part already had its footprint.",
+            );
+            return;
         }
-        self.document_state.note_sheet_edit();
+        match active_invalidation {
+            // Notes the sheet edit for ERC itself.
+            Some(invalidation) => {
+                self.finish_schematic_mutation(invalidation, true, true);
+            }
+            None => self.document_state.note_sheet_edit(),
+        }
         self.refresh_panel_ctx();
         crate::diagnostics::log_info(format!(
             "Assign Footprints: {parts} part{} on {sheets} sheet{} changed; save to keep them.",

@@ -171,14 +171,12 @@ impl Signex {
             let path = self.resolve_held_spelling(listed.clone());
             let (doc, access): (&SchematicSheet, SheetAccess) =
                 match self.document_state.engines.get(&path) {
-                    Some(engine) if engine.document().unknown.newer_minor_source.is_some() => {
+                    Some(engine) if engine.document().is_read_only() => {
                         (engine.document(), SheetAccess::ReadOnly)
                     }
                     Some(engine) => (engine.document(), SheetAccess::Open),
                     None => match read.closed.get(listed) {
-                        Some(sheet) if sheet.unknown.newer_minor_source.is_some() => {
-                            (sheet, SheetAccess::ReadOnly)
-                        }
+                        Some(sheet) if sheet.is_read_only() => (sheet, SheetAccess::ReadOnly),
                         Some(sheet) => (sheet, SheetAccess::Closed),
                         None => continue,
                     },
@@ -201,6 +199,35 @@ impl Signex {
                 .then_with(|| a.sheet.cmp(&b.sheet))
         });
         parts
+    }
+
+    /// The footprints `symbol`'s library row offers (the Properties list) and
+    /// the one it is built with now; `None` when its footprint text was typed
+    /// over or its binding is no longer offered. Apply asks again to tell a
+    /// part changed since the read.
+    pub(super) fn footprint_offers(
+        &self,
+        symbol: &Symbol,
+    ) -> (Vec<FootprintOffer>, Option<String>) {
+        let row = self.row_of_placed_symbol(symbol).map(|(_, _, row)| row);
+        // `footprint_choices_for` lists the row's footprints first, then at
+        // most one extra entry: "(edited)" or "(no longer offered)".
+        let offered = row.map_or(0, |row| row.footprint_bindings().len());
+        let choices = self.footprint_choices_for(symbol);
+        let offers = choices
+            .iter()
+            .take(offered)
+            .map(|c| FootprintOffer {
+                binding: c.binding.clone(),
+                label: c.label.clone(),
+            })
+            .collect();
+        let current = choices
+            .iter()
+            .take(offered)
+            .find(|c| c.selected)
+            .map(|c| c.binding.clone());
+        (offers, current)
     }
 
     /// One part's row: its library row's offers (the Properties list) and
@@ -239,23 +266,7 @@ impl Signex {
             })
             .collect();
         let row = self.row_of_placed_symbol(symbol).map(|(_, _, row)| row);
-        // `footprint_choices_for` lists the row's footprints first, then at
-        // most one extra entry: "(edited)" or "(no longer offered)".
-        let offered = row.map_or(0, |row| row.footprint_bindings().len());
-        let choices = self.footprint_choices_for(symbol);
-        let offers: Vec<FootprintOffer> = choices
-            .iter()
-            .take(offered)
-            .map(|c| FootprintOffer {
-                binding: c.binding.clone(),
-                label: c.label.clone(),
-            })
-            .collect();
-        let current_binding = choices
-            .iter()
-            .take(offered)
-            .find(|c| c.selected)
-            .map(|c| c.binding.clone());
+        let (offers, current_binding) = self.footprint_offers(symbol);
         let access = match sheet_access {
             SheetAccess::ReadOnly => PartAccess::ReadOnly,
             SheetAccess::Closed => PartAccess::SheetClosed,

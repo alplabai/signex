@@ -13,9 +13,11 @@ use signex_app::app::{
     AssignFootprintsMsg, AssignProblem, CommandPaletteMsg, EditMsg, LoadedProject, Message,
     PartAccess, Signex, TabInfo, TabKind, UiMsg,
 };
+use signex_app::dock::DockMessage;
 use signex_app::keymap::{
     AppCommandId, ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutTrigger,
 };
+use signex_app::panels::PanelMsg;
 use signex_library::primitive::PrimitiveRef;
 use signex_types::schematic::{SchematicSheet, Symbol};
 use tempfile::TempDir;
@@ -250,6 +252,14 @@ fn the_menu_row_sets_ticked_parts_on_two_sheets_as_one_undo_step_in_memory() {
         footprint_on(&rig.app, &rig.b),
         before,
         "one undo takes both back"
+    );
+
+    let _ = rig.app.update(Message::Edit(EditMsg::Redo));
+    assert_eq!(footprint_on(&rig.app, &rig.a), rig.alt.1);
+    assert_eq!(
+        footprint_on(&rig.app, &rig.b),
+        rig.alt.1,
+        "one redo brings both back"
     );
 }
 
@@ -505,6 +515,156 @@ fn a_part_deleted_after_the_read_is_named_in_the_refusal() {
         Some(AssignProblem::Refused { reference, .. }) => assert_eq!(reference, "R2"),
         other => panic!("expected a refusal naming R2, got {other:?}"),
     }
+}
+
+/// The dialog's row of the part on `sheet`.
+fn row_on(rig: &Rig, sheet: &Path) -> usize {
+    rig.app
+        .ui_state
+        .assign_footprints
+        .as_ref()
+        .expect("open")
+        .parts()
+        .iter()
+        .position(|p| p.sheet == sheet)
+        .expect("a part on that sheet")
+}
+
+/// #2284 review (hkngln): a footprint changed behind the dialog after the
+/// read refuses Apply as stale, instead of applying over a state the dialog
+/// never showed.
+#[test]
+fn apply_refuses_as_stale_when_a_listed_part_changed_after_the_read() {
+    let mut rig = rig();
+    let before = footprint_on(&rig.app, &rig.a);
+    settle(&mut rig.app, crate::menu_support::menu_row(COMMAND));
+    let (r1, r2) = (row_on(&rig, &rig.a), row_on(&rig, &rig.b));
+    let state = rig.app.ui_state.assign_footprints.as_ref().unwrap();
+    let (r1_id, r1_name) = (
+        state.parts()[r1].symbol_id,
+        state.parts()[r1].designator.clone(),
+    );
+    let default = state.parts()[r1].offers[0].binding.clone();
+
+    // Behind the dialog, Properties switches R1 to the alternate.
+    settle(
+        &mut rig.app,
+        Message::Dock(DockMessage::Panel(PanelMsg::SwitchFootprintChoice(
+            r1_id,
+            binding_key(&rig.alt.0),
+        ))),
+    );
+    assert_eq!(footprint_on(&rig.app, &rig.a), rig.alt.1);
+
+    send(
+        &mut rig.app,
+        AssignFootprintsMsg::FootprintPicked {
+            row: r1,
+            binding: default,
+        },
+    );
+    send(
+        &mut rig.app,
+        AssignFootprintsMsg::FootprintPicked {
+            row: r2,
+            binding: binding_key(&rig.alt.0),
+        },
+    );
+    send(&mut rig.app, AssignFootprintsMsg::ApplyRequested);
+
+    let state = rig
+        .app
+        .ui_state
+        .assign_footprints
+        .as_ref()
+        .expect("still open");
+    assert_eq!(state.problem(), Some(&AssignProblem::Stale(r1_name)));
+    assert_eq!(footprint_on(&rig.app, &rig.b), before, "R2 not changed");
+    assert_eq!(
+        footprint_on(&rig.app, &rig.a),
+        rig.alt.1,
+        "R1 keeps what Properties set"
+    );
+}
+
+/// An engine refusal on a later sheet puts the earlier sheets back and
+/// leaves no undo group: R2 on `b` is locked after the read.
+#[test]
+fn an_engine_refusal_part_way_puts_the_earlier_sheets_back() {
+    let mut rig = rig();
+    let before = footprint_on(&rig.app, &rig.a);
+    settle(&mut rig.app, crate::menu_support::menu_row(COMMAND));
+    let r2 = row_on(&rig, &rig.b);
+    let r2_id = rig.app.ui_state.assign_footprints.as_ref().unwrap().parts()[r2].symbol_id;
+    rig.app
+        .document_state
+        .engines
+        .get_mut(&rig.b)
+        .unwrap()
+        .execute(signex_engine::Command::SetSymbolLocked {
+            symbol_id: r2_id,
+            locked: true,
+        })
+        .expect("lock R2");
+    send(&mut rig.app, AssignFootprintsMsg::AllToggled(true));
+    send(
+        &mut rig.app,
+        AssignFootprintsMsg::TickedPicked(binding_key(&rig.alt.0)),
+    );
+    send(&mut rig.app, AssignFootprintsMsg::ApplyRequested);
+
+    let state = rig
+        .app
+        .ui_state
+        .assign_footprints
+        .as_ref()
+        .expect("still open");
+    assert_eq!(
+        state.problem(),
+        Some(&AssignProblem::NotChanged(rig.b.clone()))
+    );
+    assert_eq!(footprint_on(&rig.app, &rig.a), before, "a was put back");
+    assert_eq!(footprint_on(&rig.app, &rig.b), before);
+    assert!(
+        rig.app.document_state.engines[&rig.a]
+            .next_undo_group()
+            .is_none(),
+        "a's history holds no group entry"
+    );
+    assert!(
+        rig.app.document_state.undo_groups.is_empty(),
+        "no group left"
+    );
+}
+
+/// A sheet that became read-only after the read refuses Apply.
+#[test]
+fn apply_refuses_a_sheet_that_became_read_only() {
+    let mut rig = rig();
+    let before = footprint_on(&rig.app, &rig.a);
+    settle(&mut rig.app, crate::menu_support::menu_row(COMMAND));
+    let mut sheet = rig.app.document_state.engines[&rig.b].document().clone();
+    sheet.unknown.newer_minor_source = Some("1.99".to_string());
+    let engine = signex_engine::Engine::new_with_path(sheet, Some(rig.b.clone())).expect("engine");
+    rig.app.document_state.engines.insert(rig.b.clone(), engine);
+    send(&mut rig.app, AssignFootprintsMsg::AllToggled(true));
+    send(
+        &mut rig.app,
+        AssignFootprintsMsg::TickedPicked(binding_key(&rig.alt.0)),
+    );
+    send(&mut rig.app, AssignFootprintsMsg::ApplyRequested);
+
+    let state = rig
+        .app
+        .ui_state
+        .assign_footprints
+        .as_ref()
+        .expect("still open");
+    assert_eq!(
+        state.problem(),
+        Some(&AssignProblem::ReadOnly(rig.b.clone()))
+    );
+    assert_eq!(footprint_on(&rig.app, &rig.a), before, "nothing changed");
 }
 
 /// Give `command` the key `keys` in a custom copy of the active profile.

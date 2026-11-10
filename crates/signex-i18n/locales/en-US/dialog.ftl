@@ -50,5 +50,6 @@ dialog-assign-footprints-err-closed = { $path } was closed after the list was re
 dialog-assign-footprints-err-read-only = { $path } is read-only (written by a newer Signex). Nothing was changed.
 dialog-assign-footprints-err-refused = { $part } can no longer take the picked footprint. Nothing was changed; open the dialog again.
 dialog-assign-footprints-err-not-changed = { $path } refused the change. Nothing was changed.
+dialog-assign-footprints-err-stale = The footprint of { $part } changed after the list was read. Nothing was changed; open the dialog again.
 dialog-assign-footprints-cancel = Cancel
 dialog-assign-footprints-apply = Apply

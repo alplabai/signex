@@ -95,6 +95,10 @@ pub enum AssignProblem {
     Refused { reference: String, why: String },
     /// A sheet refused the change; the sheets already changed were put back.
     NotChanged(PathBuf),
+    /// A listed part's footprint changed on its sheet after the read (the
+    /// part's designator), so the list no longer shows what Apply would
+    /// change.
+    Stale(String),
 }
 
 impl AssignProblem {
@@ -116,6 +120,10 @@ impl AssignProblem {
             Self::NotChanged(path) => format!(
                 "{} refused the change; the sheets already changed were put back",
                 path.display()
+            ),
+            Self::Stale(part) => format!(
+                "{part}'s footprint changed after the list was read; nothing was changed. \
+                 Open the dialog again"
             ),
         }
     }

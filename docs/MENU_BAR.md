@@ -173,6 +173,11 @@ by designator. The project's sheets are read off the UI thread when it opens.
   sheet in one `update` as one undo group (`UndoGroupKind::Footprints`): one
   Ctrl+Z on any changed sheet takes all of them back. A refusal on any sheet
   changes nothing. Nothing is written to disk; the sheets are left unsaved.
+- The dialog does not block the editor, so a footprint can change behind it
+  (Properties, an undo). Apply first compares every listed editable part's
+  live footprint and binding with what the dialog read; if one differs, Apply
+  is refused as stale and nothing changes. When every pick turns out to be a
+  no-op, Messages says nothing changed.
 - A multi-unit part is one row, its units grouped across sheets by the same
   rule the engine uses within a sheet (`group_into_parts`: one designator, one
   library symbol, different unit numbers; an unannotated `U?` part is never

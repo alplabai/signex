@@ -565,6 +565,7 @@ define_ids! {
     DIALOG_ASSIGN_FOOTPRINTS_ERR_READ_ONLY = "dialog-assign-footprints-err-read-only";
     DIALOG_ASSIGN_FOOTPRINTS_ERR_REFUSED = "dialog-assign-footprints-err-refused";
     DIALOG_ASSIGN_FOOTPRINTS_ERR_NOT_CHANGED = "dialog-assign-footprints-err-not-changed";
+    DIALOG_ASSIGN_FOOTPRINTS_ERR_STALE = "dialog-assign-footprints-err-stale";
     DIALOG_ASSIGN_FOOTPRINTS_CANCEL = "dialog-assign-footprints-cancel";
     DIALOG_ASSIGN_FOOTPRINTS_APPLY = "dialog-assign-footprints-apply";
 }

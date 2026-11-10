@@ -178,6 +178,11 @@ fn problem_text(problem: &AssignProblem, i18n: &I18n) -> Localized {
             ids::DIALOG_ASSIGN_FOOTPRINTS_ERR_REFUSED,
             "part" => reference.as_str()
         ),
+        AssignProblem::Stale(part) => t!(
+            i18n,
+            ids::DIALOG_ASSIGN_FOOTPRINTS_ERR_STALE,
+            "part" => part.as_str()
+        ),
         AssignProblem::NotChanged(sheet) => t!(
             i18n,
             ids::DIALOG_ASSIGN_FOOTPRINTS_ERR_NOT_CHANGED,
