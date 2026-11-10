@@ -435,7 +435,7 @@ fn a_new_board_gets_every_footprint_and_its_nets_as_ratsnest_in_one_undo_step() 
     let active = &f.app.document_state.tabs[f.app.document_state.active_tab];
     assert_eq!(active.path, f.board, "the board comes forward");
     assert!(ratsnest_lines(&f) >= 1, "R1.2 to R2.1 is a ratsnest line");
-    assert_eq!(engine(&f).undo_depth(), 1, "one undo step");
+    assert_eq!(engine(&f).undo_len(), 1, "one undo step");
 
     send(&mut f.app, menu_row("undo"));
     assert!(
