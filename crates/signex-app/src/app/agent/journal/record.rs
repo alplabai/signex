@@ -79,15 +79,56 @@ pub(crate) fn rights_within(rights: &[String], project_dir: &Path) -> Vec<String
 
 /// `text` without the folder of any other open project: each is replaced, so
 /// one project's journal never names another's place.
-fn without_other_projects(text: &str, own_dir: &Path, all: &[PathBuf]) -> String {
+pub(crate) fn without_other_projects(text: &str, own_dir: &Path, all: &[PathBuf]) -> String {
+    let mut others: Vec<String> = all
+        .iter()
+        .filter_map(|file| file.parent())
+        .filter(|dir| *dir != own_dir && !own_dir.starts_with(dir))
+        .map(|dir| dir.display().to_string())
+        .collect();
+    // Longest first, so `/w/P2` is handled before `/w/P`.
+    others.sort_by_key(|dir| std::cmp::Reverse(dir.len()));
+    others.dedup();
     let mut out = text.to_string();
-    for file in all {
-        let Some(dir) = file.parent() else { continue };
-        if dir == own_dir || own_dir.starts_with(dir) {
-            continue;
-        }
-        out = out.replace(&dir.display().to_string(), "[another project]");
+    for dir in &others {
+        out = replace_whole_path(&out, dir, "[another project]");
     }
+    out
+}
+
+/// Does `after` (the text following a folder path) continue the folder's name?
+/// A letter or digit does (`/w/P2`); `.`, `-` and `_` do only when a further
+/// name character follows (`/w/P-old`), so a trailing `.`, `,`, `)` or quote
+/// ends the path. When in doubt the path is taken to end there (over-redact).
+fn continues_the_name(after: &str) -> bool {
+    let mut chars = after.chars();
+    match chars.next() {
+        Some(next) if next.is_alphanumeric() => true,
+        Some('.' | '-' | '_') => chars.next().is_some_and(char::is_alphanumeric),
+        _ => false,
+    }
+}
+
+/// `text` with each occurrence of `path` replaced by `with`, unless it is the
+/// start of a longer name: `/w/P` is replaced in `/w/P/a`, `/w/P.` and `/w/P"`,
+/// not in `/w/P2/a` or `/w/P-old/a`.
+fn replace_whole_path(text: &str, path: &str, with: &str) -> String {
+    if path.is_empty() {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find(path) {
+        let after = &rest[at + path.len()..];
+        out.push_str(&rest[..at]);
+        out.push_str(if continues_the_name(after) {
+            path
+        } else {
+            with
+        });
+        rest = after;
+    }
+    out.push_str(rest);
     out
 }
 
@@ -226,6 +267,11 @@ impl Signex {
             self.warn_unplaced_journal_line(command);
             return Task::none();
         };
+        let mut entry = entry;
+        if let Some(token) = self.agent.token_text() {
+            // Before the free fields are cut to length (see `scrub`).
+            entry.scrub(token);
+        }
         let line = entry.to_line();
         self.queue_journal_line(&project, Journal::Edits, line)
     }
@@ -267,11 +313,15 @@ impl Signex {
         }
         let ts = now();
         let all = self.open_project_files();
+        let token = self.agent.token_text().map(str::to_string);
         let tasks: Vec<_> = projects
             .iter()
             .filter_map(|project| {
                 let folder = project.parent()?;
                 let mut entry = build(ts.clone(), folder);
+                if let Some(token) = &token {
+                    entry.scrub(token);
+                }
                 entry.reason = entry
                     .reason
                     .map(|why| without_other_projects(&why, folder, &all));
@@ -288,11 +338,14 @@ impl Signex {
     /// the lines that had not started, then run `next`. A line queued at quit
     /// is on disk before the process goes.
     pub(crate) fn wait_for_journal_then(&mut self, next: Task<Message>) -> Task<Message> {
+        // Every connection still open ends with the app: its `closed` line is
+        // queued first, so the flush below writes it.
+        let closed = self.journal_connections_closed_at_quit();
         let flush = self.agent.journal.take_for_quit();
         if flush.is_idle() {
             return next;
         }
-        Task::perform(
+        let flushed = Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || flush.run())
                     .await
@@ -307,7 +360,32 @@ impl Signex {
                 })
             },
         )
-        .chain(next)
+        .chain(next);
+        Task::batch([closed, flushed])
+    }
+
+    /// A `closed` line (reason: app quit) for each connection still open, to
+    /// the projects that saw it open and are still open.
+    fn journal_connections_closed_at_quit(&mut self) -> Task<Message> {
+        let open = self.open_project_files();
+        let live = std::mem::take(&mut self.agent.connections);
+        self.agent.grants_seen.clear();
+        let mut tasks = Vec::new();
+        for (pid, opened) in live {
+            for seen_by in opened {
+                let still: Vec<PathBuf> = open
+                    .iter()
+                    .filter(|project| seen_by.contains(project))
+                    .cloned()
+                    .collect();
+                tasks.push(self.journal_access_to(&still, |ts, _| {
+                    AccessEntry::new(ts, "closed", "socket")
+                        .with_peer(pid, None)
+                        .with_reason("app quit")
+                }));
+            }
+        }
+        Task::batch(tasks)
     }
 
     /// Put `line` on the queue of the project whose file is `project_file`,

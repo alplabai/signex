@@ -476,25 +476,45 @@ fn syncing_the_journal_setting_adds_then_removes_the_line_and_keeps_user_lines()
 #[test]
 fn syncing_writes_nothing_for_a_project_without_version_control() {
     let dir = tempfile::tempdir().unwrap();
-    let outcome = sync_agent_journal_ignore(dir.path(), false).unwrap();
-    assert_eq!(outcome, JournalIgnoreSync::NoRepository);
+    sync_agent_journal_ignore(dir.path(), false).unwrap();
     assert!(!dir.path().join(".gitignore").exists());
 }
 
-/// A project inside a repository whose root is above it: the rule would have
-/// to go in the repository's own `.gitignore`, which Signex does not edit, so
-/// the outcome says it was not applied (the caller tells the person).
+/// Whether git, run in `dir`, ignores `.signex/agent-edits.jsonl`.
+fn git_ignores_the_journal(dir: &Path) -> bool {
+    let status = std::process::Command::new("git")
+        .args(["check-ignore", "-q", ".signex/agent-edits.jsonl"])
+        .current_dir(dir)
+        .status()
+        .expect("git runs");
+    match status.code() {
+        Some(0) => true,
+        Some(1) => false,
+        other => panic!("git check-ignore failed: {other:?}"),
+    }
+}
+
+/// A project in a subfolder of a repository whose root is above it: git reads
+/// the project's own `.gitignore`, so the block goes there and the rule works
+/// (a real repository, `git check-ignore`).
 #[test]
-fn a_project_below_the_repository_root_is_reported_not_changed() {
+fn a_project_below_the_repository_root_follows_keep_in_git_through_its_own_gitignore() {
     let repo = tempfile::tempdir().unwrap();
-    std::fs::create_dir(repo.path().join(".git")).unwrap();
+    let init = std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(repo.path())
+        .status()
+        .expect("git runs");
+    assert!(init.success());
     let project = repo.path().join("boards").join("p1");
     std::fs::create_dir_all(&project).unwrap();
 
-    let outcome = sync_agent_journal_ignore(&project, false).unwrap();
+    sync_agent_journal_ignore(&project, false).unwrap();
+    assert!(git_ignores_the_journal(&project), "keep in git off");
+    assert!(project.join(".gitignore").is_file());
 
-    assert_eq!(outcome, JournalIgnoreSync::RepositoryAbove);
-    assert!(!project.join(".gitignore").exists());
+    sync_agent_journal_ignore(&project, true).unwrap();
+    assert!(!git_ignores_the_journal(&project), "keep in git on");
 }
 
 #[cfg(unix)]

@@ -254,7 +254,7 @@ impl ProjectGeneralHistory {
                 }
             }
             ProjectGeneralCommand::SetAgentJournal { settings, .. } => {
-                data.agent_journal = settings.clamped();
+                data.set_agent_journal(settings);
             }
         }
         if GeneralSnapshot::of(data) == before {

@@ -134,6 +134,26 @@ impl EditEntry {
         Ok((self.command.as_str(), operands))
     }
 
+    /// Replace `secret` in every text of the entry. Done before the free fields
+    /// are cut to length, so a secret cut at the boundary cannot survive as a
+    /// prefix.
+    pub fn scrub(&mut self, secret: &str) {
+        self.operands
+            .values_mut()
+            .for_each(|text| redact(text, secret));
+        for text in [
+            &mut self.path,
+            &mut self.client,
+            &mut self.reason,
+            &mut self.document,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            redact(text, secret);
+        }
+    }
+
     /// Fix the version, the derived flag and the length of the free fields.
     fn settle(&mut self) {
         self.v = JOURNAL_VERSION;
@@ -178,6 +198,16 @@ impl AccessEntry {
         }
     }
 
+    /// Replace `secret` in every text of the entry, before any is cut to length.
+    pub fn scrub(&mut self, secret: &str) {
+        self.capabilities
+            .iter_mut()
+            .for_each(|text| redact(text, secret));
+        for text in [&mut self.client, &mut self.reason].into_iter().flatten() {
+            redact(text, secret);
+        }
+    }
+
     #[must_use]
     pub fn with_peer(mut self, pid: Option<u32>, client: Option<String>) -> Self {
         self.pid = pid;
@@ -218,6 +248,12 @@ impl AccessEntry {
         self.capabilities.clear();
         self.truncated = true;
         encode(&self)
+    }
+}
+
+fn redact(text: &mut String, secret: &str) {
+    if !secret.is_empty() && text.contains(secret) {
+        *text = text.replace(secret, "[redacted]");
     }
 }
 

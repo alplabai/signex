@@ -60,6 +60,10 @@ fn a_value_of_another_shape_reads_as_the_defaults_and_the_project_opens() {
         json!(3),
         json!([1]),
         json!({"keep_in_git": "no"}),
+        // A wrong-typed cap is the same refusal, not a silent default.
+        json!({"max_lines": "5000"}),
+        json!({"max_lines": -3, "keep_in_git": false}),
+        json!({"max_lines": 99_999_999_999_u64}),
     ] {
         let bad_text = bad.to_string();
         let mut body = bare();
@@ -81,7 +85,10 @@ fn editing_the_settings_replaces_an_unreadable_value() {
     body["agent_journal"] = json!("garbage");
     let path = write_raw(dir.path(), &body);
     let mut data = parse_project(&path).unwrap();
-    data.agent_journal.keep_in_git = false;
+    data.set_agent_journal(AgentJournalSettings {
+        keep_in_git: false,
+        ..AgentJournalSettings::default()
+    });
 
     write_project(&path, &data).unwrap();
 
@@ -90,4 +97,55 @@ fn editing_the_settings_replaces_an_unreadable_value() {
         json!(false)
     );
     assert!(!parse_project(&path).unwrap().has_unreadable_agent_journal());
+}
+
+/// Keys a newer build stored beside the settings survive a re-save, with the
+/// settings untouched and with them edited; and they are not "unreadable".
+#[test]
+fn unknown_keys_inside_the_object_are_kept_across_a_resave() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut body = bare();
+    body["agent_journal"] = json!({"max_lines": 250, "retention": {"days": 30}});
+    let path = write_raw(dir.path(), &body);
+
+    let mut data = parse_project(&path).unwrap();
+    assert_eq!(data.agent_journal.max_lines, 250);
+    assert!(!data.has_unreadable_agent_journal());
+    write_project(&path, &data).unwrap();
+    let kept = saved_json(&path);
+    assert_eq!(kept["agent_journal"]["max_lines"], json!(250));
+    assert_eq!(kept["agent_journal"]["retention"], json!({"days": 30}));
+
+    // Edited: the new settings, the unknown key still there.
+    data.set_agent_journal(AgentJournalSettings {
+        keep_in_git: false,
+        max_lines: 300,
+        ..AgentJournalSettings::default()
+    });
+    write_project(&path, &data).unwrap();
+    let saved = saved_json(&path);
+    assert_eq!(saved["agent_journal"]["max_lines"], json!(300));
+    assert_eq!(saved["agent_journal"]["keep_in_git"], json!(false));
+    assert_eq!(saved["agent_journal"]["retention"], json!({"days": 30}));
+
+    // Only unknown keys, settings left at their defaults: the object is kept.
+    let mut only = bare();
+    only["agent_journal"] = json!({"retention": 1});
+    let path = write_raw(dir.path(), &only);
+    let data = parse_project(&path).unwrap();
+    assert!(data.agent_journal.is_default());
+    write_project(&path, &data).unwrap();
+    assert_eq!(saved_json(&path)["agent_journal"], json!({"retention": 1}));
+}
+
+/// An in-range number is clamped; the cap is never stored out of range.
+#[test]
+fn the_line_cap_read_from_a_file_is_clamped_into_its_range() {
+    let dir = tempfile::tempdir().unwrap();
+    for (stored, want) in [(5_u64, 100_u32), (4_000_000_000, 1_000_000), (250, 250)] {
+        let mut body = bare();
+        body["agent_journal"] = json!({ "max_lines": stored });
+        let path = write_raw(dir.path(), &body);
+        assert_eq!(parse_project(&path).unwrap().agent_journal.max_lines, want);
+    }
 }

@@ -818,11 +818,12 @@ pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> 
             serde_json::to_value(&data.project_defaults)?,
         );
     }
-    // Settings chosen in this session replace an unreadable value kept.
+    // Settings chosen in this session replace an unreadable value kept; keys a
+    // newer build stored beside them stay.
     if !data.agent_journal.is_default() {
         stamped.insert(
             crate::agent_journal::AGENT_JOURNAL_KEY.into(),
-            serde_json::to_value(data.agent_journal)?,
+            crate::agent_journal::merged_value(data)?,
         );
     }
     serde_json::to_vec_pretty(&Value::Object(stamped))

@@ -27,7 +27,6 @@ fn a_journal_that_is_a_symlink_is_refused_and_its_target_untouched() {
 /// A hard link to a file that lives elsewhere is a plain file with another
 /// name: appending to it would write into the other file. Refused on the link
 /// count, the lock file included, and the target is untouched.
-#[cfg(unix)]
 #[test]
 fn a_journal_that_is_a_hard_link_is_refused_and_its_target_untouched() {
     let dir = tempfile::tempdir().unwrap();
@@ -43,7 +42,6 @@ fn a_journal_that_is_a_hard_link_is_refused_and_its_target_untouched() {
     assert_eq!(std::fs::read_to_string(&target).unwrap(), "keep me\n");
 }
 
-#[cfg(unix)]
 #[test]
 fn a_lock_file_that_is_a_hard_link_is_refused() {
     let dir = tempfile::tempdir().unwrap();
@@ -58,7 +56,6 @@ fn a_lock_file_that_is_a_hard_link_is_refused() {
 }
 
 /// The reader refuses a hard link too: the viewer never prints another file.
-#[cfg(unix)]
 #[test]
 fn a_hard_linked_journal_is_not_read() {
     let dir = tempfile::tempdir().unwrap();

@@ -55,9 +55,11 @@ A headless `--save` run journals its edits as `ran` when they ran in memory,
 even if the run never saves them: the journal records what the agent did, not
 what reached the disk (the run's end-of-run log names the unsaved documents).
 
-A session token never reaches a journal: it is replaced by `[redacted]` in each
-encoded line before it is queued, so no field of either journal can carry it,
-whether an echoed operand, a client name or a right.
+A session token never reaches a journal: it is replaced by `[redacted]` in every
+text of an entry before the free fields are cut to length (so a token cut at the
+boundary cannot survive as a prefix), and again in the encoded line before it is
+queued, so no field of either journal can carry it, whether an echoed operand, a
+client name or a right.
 
 ## Append
 
@@ -86,6 +88,13 @@ whether an echoed operand, a client name or a right.
    one link (`nlink`; Windows `nNumberOfLinks`), so a hard link to a file that
    lives elsewhere is not written through. The same check holds for the lock
    file and for the rotation's and the reader's open. The refusal is reported.
+   On Unix a new file is made by an exclusive create (`O_CREAT | O_EXCL`, an
+   existing file is fine) and then opened *without* `O_CREAT`: on macOS a plain
+   create-open raced by another creator of the same new name can fail with
+   ENOENT (reproduced with six threads appending to a fresh project), and this
+   form has no such race. On Windows the folder handle is also checked for
+   `FILE_ATTRIBUTE_DIRECTORY` and not `FILE_ATTRIBUTE_REPARSE_POINT` before any
+   file is created.
 4. If the file ends without a newline (a crash cut its last line), the write
    starts with one, so the new line is never fused with the cut one.
 5. The whole line and its newline are written by one `write`.
@@ -104,7 +113,8 @@ journal that was just rotated is not rewritten by the next append, only once it
 is past the cap again): two passes over the file in 64 KiB chunks, the first
 counting its lines, the second copying all but the oldest into a private
 temporary file (`agent-*.jsonl.<pid>-rot.tmp`, covered by the managed `*.tmp`
-rule) that is renamed over the journal. Memory stays constant, whatever the
+rule) that is renamed over the journal, and the folder is synced after the
+rename (as `atomic_write` does). Memory stays constant, whatever the
 size, and there is no size at which rotation gives up. A reader sees the old
 file or the new one. Lines a reader does not understand are kept as the bytes
 they are while they are within the newest lines. Lines dropped stay in git
@@ -157,7 +167,8 @@ answers as it would without a journal.
 At quit the queue is flushed like the preference writes (`wait_for_journal_then`
 in `flush_quit_writes_then`): the lines that had not started are taken, the
 writes in flight are waited for (at most 10 s, said if it ran out), and the
-taken lines are written, all before the process exits.
+taken lines are written, all before the process exits. A connection still open
+at quit gets its `closed` line (reason `app quit`) first.
 
 ## Settings
 
@@ -173,16 +184,22 @@ untouched, so an old project re-saves byte-identical and the format token
 
 The `.gitignore` block follows `keep_in_git` when the project is saved, not when
 the box is ticked: the setting is not saved until then, and the person may
-discard it. It applies where the project has a `.git`; Enable Version Control
-writes the same block from the setting. A project inside a repository whose root
-is above it is not changed (the rule would belong in that repository's own
-`.gitignore`): when the setting is off, Messages says so on save. Turning it off
-does not untrack journals already committed: Signex never runs `git rm`. Do that
-yourself if you want them gone from the index.
+discard it. It applies where the project is under a git repository: git reads a
+`.gitignore` in every folder and the rule is anchored, so the block goes into
+the project folder's own `.gitignore` whether the repository's root is that
+folder or any folder above it (a project in a subfolder of a repository, or
+under a dotfiles repository in `$HOME`, is handled the same way, with no
+warning). A project under no repository is not touched. Enable Version Control
+writes the same block from the setting. Turning it off does not untrack
+journals already committed: Signex never runs `git rm`. Do that yourself if you
+want them gone from the index.
 
-A stored `agent_journal` value this build cannot read is not silently reset:
-the defaults apply, Messages says so, and the raw value is written back
-untouched until the settings are edited.
+The keys of `agent_journal` are read strictly (`max_lines` must be a whole
+number, in range or clamped into 100 to 1,000,000). A stored value this build
+cannot read, a wrong type such as `"max_lines": "5000"` included, is not
+silently reset: the defaults apply, Messages says so, and the raw value is
+written back untouched until the settings are edited. Keys a newer build stored
+beside the known ones are kept across a re-save.
 
 ## Not covered
 

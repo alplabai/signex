@@ -48,42 +48,26 @@ pub fn gitignore_block_body(keep_agent_journals_in_git: bool) -> String {
     }
 }
 
-/// What [`sync_agent_journal_ignore`] did.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum JournalIgnoreSync {
-    /// The managed block of the project's `.gitignore` follows the setting.
-    Applied,
-    /// The project is under no repository: no version control files to keep.
-    NoRepository,
-    /// The repository's root is a folder above the project, so the project's
-    /// own `.gitignore` is not where git reads the rule from: not applied.
-    RepositoryAbove,
-}
-
 /// Bring the managed block of `<project_dir>/.gitignore` in line with the
-/// project's journal setting. A project with no `.git` has no version control
-/// files to keep current, so nothing is written for it; one inside a
-/// repository whose root is above it is reported, not changed.
+/// project's journal setting. Git reads a `.gitignore` in every folder, and the
+/// anchored `.signex/agent-*.jsonl` works from the project's own, so the block
+/// is written there whether the repository's root is the project folder or any
+/// folder above it. A project under no repository has no version control files
+/// to keep current, so nothing is written for it.
 pub fn sync_agent_journal_ignore(
     project_dir: &Path,
     keep_agent_journals_in_git: bool,
-) -> Result<JournalIgnoreSync, ManagedFileError> {
-    if std::fs::symlink_metadata(project_dir.join(".git")).is_err() {
-        let above = project_dir
-            .ancestors()
-            .skip(1)
-            .any(|dir| std::fs::symlink_metadata(dir.join(".git")).is_ok());
-        return Ok(if above {
-            JournalIgnoreSync::RepositoryAbove
-        } else {
-            JournalIgnoreSync::NoRepository
-        });
+) -> Result<(), ManagedFileError> {
+    let under_a_repository = project_dir
+        .ancestors()
+        .any(|dir| std::fs::symlink_metadata(dir.join(".git")).is_ok());
+    if !under_a_repository {
+        return Ok(());
     }
     ensure_managed_file(
         &project_dir.join(".gitignore"),
         &gitignore_block_body(keep_agent_journals_in_git),
-    )?;
-    Ok(JournalIgnoreSync::Applied)
+    )
 }
 
 /// Extensions Signex's native text formats use; kept LF so collaborators on

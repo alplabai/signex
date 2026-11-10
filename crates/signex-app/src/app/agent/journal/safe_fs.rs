@@ -190,39 +190,41 @@ mod imp {
 
     pub(super) fn open_file(dir: &SignexDir, name: &str, mode: Mode) -> Result<File, String> {
         let shown = dir.path.join(name);
-        let flags = match mode {
-            Mode::Append => libc::O_RDWR | libc::O_APPEND | libc::O_CREAT,
-            Mode::Lock => libc::O_WRONLY | libc::O_CREAT,
-            Mode::Read => libc::O_RDONLY,
-            Mode::Temp => libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
-        } | libc::O_NOFOLLOW
-            | libc::O_NONBLOCK
-            | libc::O_CLOEXEC;
-        let c = c_string(name).map_err(|error| error.to_string())?;
-        let private: libc::c_uint = 0o600;
-        let creates = flags & libc::O_CREAT != 0;
-        let mut attempts = 0;
-        let fd = loop {
-            // SAFETY: the folder handle is open, `c` is a valid NUL-terminated
-            // name, and the mode is passed as the unsigned int `openat` reads.
-            let fd = unsafe { libc::openat(dir.handle.as_raw_fd(), c.as_ptr(), flags, private) };
-            // Two writers creating the same file at once can see a transient
-            // ENOENT from a create-open on some systems: try again.
-            let transient = fd < 0
-                && creates
-                && std::io::Error::last_os_error().raw_os_error() == Some(libc::ENOENT);
-            attempts += 1;
-            if !transient || attempts >= 50 {
-                break fd;
-            }
-            std::thread::yield_now();
+        let fail = |error: std::io::Error| format!("cannot open {}: {error}", shown.display());
+        let c = c_string(name).map_err(fail)?;
+        let base = libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC;
+        // The file is made by an exclusive create (EEXIST is fine) and then
+        // opened without `O_CREAT`: a create-open raced by another creator of
+        // the same new name can fail with ENOENT on macOS (see
+        // `docs/AGENT_JOURNALS.md`, "Append").
+        let (flags, creates_first) = match mode {
+            Mode::Append => (libc::O_RDWR | libc::O_APPEND, true),
+            Mode::Lock => (libc::O_WRONLY, true),
+            Mode::Read => (libc::O_RDONLY, false),
+            Mode::Temp => (libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL, false),
         };
+        if creates_first {
+            match openat(
+                dir,
+                &c,
+                libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | base,
+            ) {
+                Ok(created) => drop(created),
+                Err(error) if error.raw_os_error() == Some(libc::EEXIST) => {}
+                Err(error) => return Err(fail(error)),
+            }
+        }
+        openat(dir, &c, flags | base).map_err(fail)
+    }
+
+    /// `openat` on the folder handle, with the private mode.
+    fn openat(dir: &SignexDir, name: &CString, flags: libc::c_int) -> std::io::Result<File> {
+        let private: libc::c_uint = 0o600;
+        // SAFETY: the folder handle is open, `name` is a valid NUL-terminated
+        // name, and the mode is passed as the unsigned int `openat` reads.
+        let fd = unsafe { libc::openat(dir.handle.as_raw_fd(), name.as_ptr(), flags, private) };
         if fd < 0 {
-            return Err(format!(
-                "cannot open {}: {}",
-                shown.display(),
-                std::io::Error::last_os_error()
-            ));
+            return Err(std::io::Error::last_os_error());
         }
         // SAFETY: `fd` was just returned by `openat` and is owned by nothing else.
         Ok(unsafe { File::from_raw_fd(fd) })
@@ -233,11 +235,14 @@ mod imp {
         let fd = dir.handle.as_raw_fd();
         // SAFETY: the folder handle is open and both names are valid C strings.
         let done = unsafe { libc::renameat(fd, from.as_ptr(), fd, to.as_ptr()) };
-        if done == 0 {
-            Ok(())
-        } else {
-            Err(std::io::Error::last_os_error())
+        if done != 0 {
+            return Err(std::io::Error::last_os_error());
         }
+        // Make the rename itself durable, as `atomic_write` does; the data was
+        // synced before. Best effort: the rename has happened.
+        // SAFETY: the folder handle is open.
+        unsafe { libc::fsync(fd) };
+        Ok(())
     }
 
     pub(super) fn remove(dir: &SignexDir, name: &str) -> std::io::Result<()> {
@@ -300,6 +305,9 @@ mod imp {
     /// Share modes: read and write, never delete.
     const FILE_SHARE_READ: u32 = 0x1;
     const FILE_SHARE_WRITE: u32 = 0x2;
+    /// File attributes of an opened handle.
+    const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
 
     pub(super) enum Mode {
         Append,
@@ -351,6 +359,20 @@ mod imp {
             .custom_flags(BACKUP_SEMANTICS | OPEN_REPARSE_POINT)
             .open(folder)
             .map_err(|error| format!("cannot open {}: {error}", folder.display()))?;
+        // The handle's own attributes: a folder, and not a reparse point (a
+        // junction or symlink swapped in after the check above). Before any
+        // file is created.
+        let attributes = information(&handle)
+            .map_err(|error| format!("cannot look at {}: {error}", folder.display()))?
+            .dwFileAttributes;
+        if attributes & FILE_ATTRIBUTE_DIRECTORY == 0
+            || attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0
+        {
+            return Err(format!(
+                "{} is a link or not a folder; no agent journal was written",
+                folder.display()
+            ));
+        }
         let resolved = final_path(&handle)
             .map_err(|error| format!("cannot resolve {}: {error}", folder.display()))?;
         Ok(Some(SignexDir {
@@ -387,7 +409,8 @@ mod imp {
         std::fs::symlink_metadata(dir.path.join(name)).is_ok()
     }
 
-    pub(super) fn link_count(file: &File, _meta: &std::fs::Metadata) -> std::io::Result<u64> {
+    /// What the system says about the opened handle itself.
+    fn information(file: &File) -> std::io::Result<BY_HANDLE_FILE_INFORMATION> {
         // SAFETY: a zeroed information struct is a valid out-parameter and the
         // handle is open.
         let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
@@ -396,8 +419,12 @@ mod imp {
         if done == 0 {
             Err(std::io::Error::last_os_error())
         } else {
-            Ok(u64::from(info.nNumberOfLinks))
+            Ok(info)
         }
+    }
+
+    pub(super) fn link_count(file: &File, _meta: &std::fs::Metadata) -> std::io::Result<u64> {
+        information(file).map(|info| u64::from(info.nNumberOfLinks))
     }
 
     /// The opened file must resolve to a path under the folder as it was

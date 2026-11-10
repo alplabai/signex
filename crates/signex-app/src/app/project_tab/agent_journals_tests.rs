@@ -54,28 +54,6 @@ fn save(app: &mut Signex) {
     TaskDriver::new().settle(app, task).unwrap();
 }
 
-/// "Keep in git" off cannot be applied to a project inside a repository whose
-/// root is above it: the person is told in Messages, not left to wonder.
-#[test]
-fn a_project_below_the_repository_root_says_the_setting_could_not_apply() {
-    let repo = tempfile::tempdir().unwrap();
-    std::fs::create_dir(repo.path().join(".git")).unwrap();
-    let project = repo.path().join("boards").join("p1");
-    std::fs::create_dir_all(&project).unwrap();
-
-    let notice = crate::persist::journal_ignore_notice(&project, false).expect("a notice");
-
-    assert!(
-        notice.contains("repository whose root is above"),
-        "{notice}"
-    );
-    assert!(notice.contains(".signex/agent-*.jsonl"), "{notice}");
-    // Nothing to say when it is on (nothing to add), or when it applied.
-    assert_eq!(crate::persist::journal_ignore_notice(&project, true), None);
-    std::fs::create_dir(project.join(".git")).unwrap();
-    assert_eq!(crate::persist::journal_ignore_notice(&project, false), None);
-}
-
 /// A malformed `agent_journal` value is not silently reset: Messages says so.
 #[test]
 fn a_malformed_agent_journal_value_is_said_in_messages() {

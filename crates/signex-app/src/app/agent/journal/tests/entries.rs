@@ -48,6 +48,27 @@ fn a_refused_command_is_never_replayable() {
     assert!(!back.replayable);
 }
 
+/// A secret is replaced before the free fields are cut, so one that would sit
+/// across the 1,024-character boundary cannot survive as a prefix.
+#[test]
+fn a_secret_across_the_length_boundary_leaves_no_prefix() {
+    let secret = "0123456789abcdef0123456789abcdef";
+    let mut long = edit("color_net", 3);
+    long.reason = Some(format!("{}{secret}", "z".repeat(1_016)));
+    long.client = Some(format!("{}{secret}", "z".repeat(1_016)));
+    long.operands
+        .insert("note".into(), format!("{}{secret}", "z".repeat(1_016)));
+    let mut seen = access("grants").with_reason(format!("{}{secret}", "z".repeat(1_016)));
+    seen.capabilities = vec![format!("{}{secret}", "z".repeat(1_016))];
+
+    long.scrub(secret);
+    seen.scrub(secret);
+
+    for line in [long.to_line(), seen.to_line()] {
+        assert!(!line.contains("01234567"), "a prefix of the secret: {line}");
+    }
+}
+
 #[test]
 fn the_free_text_fields_are_bounded() {
     let mut long = edit("color_net", 3);

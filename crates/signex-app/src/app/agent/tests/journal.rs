@@ -673,6 +673,78 @@ fn an_unplaceable_edit_line_names_the_command_and_both_projects() {
     assert!(line.contains("2 projects are open"), "{line}");
 }
 
+/// Another project's folder is replaced by component: `/w/P` goes from
+/// `/w/P/y`, not from `/w/P2/x`.
+#[test]
+fn another_projects_folder_is_replaced_by_path_component_not_by_prefix() {
+    use crate::app::agent::journal::record::without_other_projects;
+    let own = std::path::Path::new("/w/Own");
+    let all = [std::path::PathBuf::from("/w/P/P.snxprj")];
+
+    let out = without_other_projects("see /w/P2/x and /w/P/y and /w/P", own, &all);
+
+    assert_eq!(
+        out,
+        "see /w/P2/x and [another project]/y and [another project]"
+    );
+}
+
+/// A folder name does not hide behind punctuation: a trailing `.`, `,`, `)` or
+/// quote ends the path and it is redacted; `.`, `-` and `_` continue a name
+/// only when another name character follows.
+#[test]
+fn another_projects_folder_is_redacted_before_trailing_punctuation_only() {
+    use crate::app::agent::journal::record::without_other_projects;
+    let own = std::path::Path::new("/w/Own");
+    let all = [std::path::PathBuf::from("/w/P/P.snxprj")];
+    let redact = |text: &str| without_other_projects(text, own, &all);
+
+    assert_eq!(redact("it is in /w/P."), "it is in [another project].");
+    assert_eq!(redact(r#"said "/w/P""#), r#"said "[another project]""#);
+    assert_eq!(
+        redact("(/w/P), /w/P; /w/P_"),
+        "([another project]), [another project]; [another project]_"
+    );
+    // Kept: a longer name that merely starts with it.
+    assert_eq!(redact("/w/P2/x"), "/w/P2/x");
+    assert_eq!(
+        redact("/w/P-old/x and /w/P.bak/x and /w/P_v2"),
+        "/w/P-old/x and /w/P.bak/x and /w/P_v2"
+    );
+}
+
+/// Two open projects whose folders start alike: the longer is handled first.
+#[test]
+fn the_longer_folder_is_redacted_before_the_shorter_one() {
+    use crate::app::agent::journal::record::without_other_projects;
+    let own = std::path::Path::new("/w/Own");
+    let all = [
+        std::path::PathBuf::from("/w/P/P.snxprj"),
+        std::path::PathBuf::from("/w/P2/Q.snxprj"),
+    ];
+
+    let out = without_other_projects("/w/P2/x then /w/P/y", own, &all);
+
+    assert_eq!(out, "[another project]/x then [another project]/y");
+}
+
+/// A connection still open when the app quits ends with it: each project that
+/// saw it open gets its `closed` line, with the reason.
+#[test]
+fn a_connection_open_at_quit_gets_a_closed_line() {
+    let mut f = fixture();
+    f.send(AgentMsg::ConnectionOpened { pid: Some(9) });
+
+    let quit = f.app.flush_quit_writes_then(iced::exit());
+    f.driver.settle(&mut f.app, quit).unwrap();
+
+    let entries = f.access().entries;
+    let events: Vec<_> = entries.iter().map(|e| e.event.as_str()).collect();
+    assert_eq!(events, ["accepted", "closed"], "{entries:?}");
+    assert_eq!(entries[1].reason.as_deref(), Some("app quit"));
+    assert!(f.app.agent.connections.is_empty());
+}
+
 /// What a project may see of a client's rights.
 #[test]
 fn rights_within_keeps_inside_roots_and_counts_the_rest() {
