@@ -116,6 +116,7 @@ impl Signex {
             return;
         }
         let project_root = std::path::PathBuf::from(&project.data.dir);
+        let summarise_agent_edits = project.data.agent_journal.summarise_in_commit;
         let rel_path = match file_path.strip_prefix(&project_root) {
             Ok(p) => p.to_path_buf(),
             Err(_) => return,
@@ -192,6 +193,7 @@ impl Signex {
                 removed_rel_path,
                 message: default_message.to_string(),
                 content: content_bytes,
+                summarise_agent_edits,
             });
     }
 
@@ -250,6 +252,7 @@ impl Signex {
                 let removed_rel_path = pending.removed_rel_path.clone();
                 let message = pending.message.clone();
                 let content = pending.content.clone();
+                let summarise = pending.summarise_agent_edits;
                 let response_root = project_root.clone();
                 let response_rel = rel_path.clone();
                 iced::Task::perform(
@@ -267,6 +270,17 @@ impl Signex {
                                     project_root.display()
                                 )),
                             })?;
+                            // Agent edits in the body: docs/AGENT_JOURNALS.md, "Commit message summary".
+                            let message = if summarise {
+                                crate::app::agent::journal::summary::message_with_agent_summary(
+                                    &project_root,
+                                    &rel_path,
+                                    &message,
+                                    adapter.last_commit_time_for(&rel_path),
+                                )
+                            } else {
+                                message
+                            };
                             let committed = match (&removed_rel_path, &content) {
                                 (Some(removed), _) => {
                                     adapter.commit_rename(removed, &rel_path, &message)

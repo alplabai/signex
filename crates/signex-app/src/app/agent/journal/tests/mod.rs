@@ -6,6 +6,7 @@ mod entries;
 mod refusals;
 mod rotation;
 mod seam;
+mod summary;
 
 use std::collections::BTreeMap;
 use std::path::Path;

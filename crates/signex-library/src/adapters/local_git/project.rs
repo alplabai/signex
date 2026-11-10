@@ -226,6 +226,24 @@ impl LocalGitProjectAdapter {
         self.commit_path(rel, &final_message)
     }
 
+    /// When the newest commit that touched `rel_path` was made (`git log -1
+    /// -- <path>`). `None` when there is no repository, HEAD is unborn or the
+    /// path was never committed. Unbounded, unlike [`Self::file_history`]: a
+    /// cut-off would read as "never committed".
+    pub fn last_commit_time_for(
+        &self,
+        rel_path: &Path,
+    ) -> Result<Option<chrono::DateTime<chrono::Utc>>, LibraryError> {
+        if !self.project_root.join(".git").exists() {
+            return Ok(None);
+        }
+        let repo = git2::Repository::open(&self.project_root)
+            .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
+        let rel_str = rel_path.to_string_lossy().replace('\\', "/");
+        let newest = crate::git_history::path_history(&repo, &rel_str, 1)?;
+        Ok(newest.first().map(|entry| entry.time))
+    }
+
     /// Per-file commit history newest-first. Returns up to `limit`
     /// entries. Walks the repo's commit graph filtering on commits
     /// whose tree differs from at least one parent at `rel_path`.

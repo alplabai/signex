@@ -684,6 +684,9 @@ pub struct PendingGitCommit {
     /// restore read back. `None` commits the working file as it is when the
     /// worker runs (callers that hold no copy of what they wrote).
     pub content: Option<crate::persist::SharedBytes>,
+    /// The project's "Summarise agent changes in the commit message" as it was
+    /// when the commit was queued (#2253).
+    pub summarise_agent_edits: bool,
 }
 
 impl PendingGitCommit {
