@@ -238,10 +238,17 @@ it is a heuristic that catches what names can tell apart and leaves the rest
    labels `D[0..7]`) is not seen: `DATA[0..7]` placed on that child run is
    not refused.
 
-Limit: a sheet counts as part of a project for these checks only when an open
-sheet of that project references it as a child. A grandchild sheet opened
-without its parent sheet is judged on its own sheet only, as a loose sheet is;
-open its parent sheet too to have names judged across the project.
+Limit: a sheet counts as part of a project for these checks when the project
+file lists it or an open sheet of that project references it as a child. A
+sheet that is neither (for example a grandchild added only through its parent
+sheet, opened without that parent) is judged on its own sheet only, as a loose
+sheet is; open its parent sheet too to have names judged across the project.
+
+Limit: in a project with several root pages, every root page counts as an
+ancestor of the edited sheet, and a sheet placed both above and beside the
+edited sheet counts as above it. Both can only keep a local name visible that
+would otherwise be hidden, so the check errs towards refusing (pass
+`allow_merge=true`).
 
 A short or rename is refused unless `allow_merge=true`. The rule is one
 function (`signex_net::join_rule`), read by the per-sheet checks, the bus
