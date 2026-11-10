@@ -372,8 +372,10 @@ without operands is refused with the operand it needs.
 
 **The connection rule.** An edit from operands connects nothing it does not
 name. A placed part whose pin tip, or a sheet entry (placed or synced) whose
-connection point, lands on a wire (its end or its run), a junction, a label, a
-sheet entry or another pin tip is refused with no escape ("the part would land
+connection point, lands on a wire or a bus (its end or its run), a junction, a
+label, a sheet entry, a no-connect flag or another pin tip is refused with no
+escape (an entry on a bus would join the bus members to the child; a pin on a
+no-connect flag would be marked as left open) ("the part would land
 on another wire at 12.7,25.4 ..."); place it clear and wire it afterwards with
 `place_wire start=U1.1 ...`. The edit's real commands are applied to a copy of
 the sheet and the new connection points are read from it
@@ -391,7 +393,10 @@ place_component library=<id or path> part=<row id or part number> at=x,y
 ```
 
 - `library` names an open library by its id or by the path of its `.snxlib`
-  file or folder. A project's libraries open with the project (`open_document`
+  file or folder; a relative path is read from the sheet's project folder (a
+  loose sheet's folder), and paths are compared with `..` folded and the
+  project's case rule, without looking at the disk. A project's libraries open
+  with the project (`open_document`
   of the `.snxprj`), and the bundled stock library opens with the app; a
   library that is not open is refused ("library `...` is not open"). Nothing
   here mounts a library.
@@ -400,17 +405,19 @@ place_component library=<id or path> part=<row id or part number> at=x,y
   id"), is refused.
 - `at` is a coordinate where a click lands (the grid), never a pin reference.
 - `unit` (default 1) must be a unit of the part. `designator` is used as given;
-  without it the next free designator is used, as a click numbers it (the
-  project's closed sheets are read for this first). A `designator` already in
-  the project is accepted only for another unit of that same library row not
-  placed yet, so units of one part share it: `place_component ... unit=2
-  designator=U1`. Unit 2 of `U1` placed twice, another part's designator, or a
-  designator used only on a sheet that is not open is refused.
+  without it the next free designator is used, as a click numbers it, counting
+  the project's closed sheets. A `designator` already in the project is
+  accepted only for another unit of that same library row placed on no sheet
+  of the project yet (closed sheets included), so units of one part share it:
+  `place_component ... unit=2 designator=U1`. A unit placed twice, or another
+  part's designator, is refused.
 - `value` replaces the row's value; `rotation` is the stored rotation;
   `mirror=x` flips up/down (the X key), `mirror=y` left/right (the Y key).
 
-The row's symbol is read from the library while the command runs, so the
-edit can be one of an `apply_edits` list. The commit is the click's
+The row's symbol and the project's closed sheets are read off the UI thread
+before the edit runs, and the answer comes when it has run (see "Edits that
+read the disk" in `docs/AGENT_EDITS.md`); it can be one of an `apply_edits`
+list. The commit is the click's
 (`place_part_at`): one undo step, the same document a pick and click make.
 The answer is `{"designator", "unit", "lib_id", "at", "pins": [{"number",
 "name", "at"}]}`, the pins of the placed unit (shared pins included), so the
@@ -428,8 +435,10 @@ to the sheet's folder: a `.snxsch` inside the project folder (a link that
 leaves it included), checked as the Create Sheet dialog checks it. It is text,
 not a path operand: nothing is opened, created or written, so the CLI does not
 confine it, and the handler refuses any reference that leaves the project
-folder. A name another sheet symbol on the sheet has, or a file another one
-refers to, is refused. Creating the child file stays a window action
+folder (whether a link leaves it is read off the UI thread first). A name
+another sheet symbol on the sheet has, a file another one refers to, and the
+sheet itself or a sheet above it in the hierarchy (a loop) are refused.
+Creating the child file stays a window action
 (`create_sheet_from_sheet_symbol`, `gui_only`). The answer is `{"id", "name",
 "file", "at", "size"}`.
 
@@ -457,8 +466,10 @@ sync_sheet_pins sheet=Charger [document=..]
 Sync Sheet Pins for the sheet symbol named `sheet`, with no selection: its
 entries are matched to the hierarchical and global labels of its child file,
 as the menu action does (every symbol on the sheet that refers to that file
-follows). A child file that does not exist or cannot be read is refused with
-the reason. The answer is `{"sheet", "file", "added", "removed", "kept"}`
+follows). A closed child file is read off the UI thread before the sync runs;
+one that does not exist or cannot be read is refused with the reason. The
+menu action, run by a person, keeps its read in place. The answer is
+`{"sheet", "file", "added", "removed", "kept"}`
 (entry names); Messages reports it as the menu action does.
 
 ## Working through a running Signex
