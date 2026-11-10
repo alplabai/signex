@@ -5,8 +5,20 @@
 use std::collections::BTreeMap;
 
 use signex_types::schematic::{InstancePath, SheetInstance};
+use uuid::Uuid;
 
 use super::{ProjectGraph, SheetKey, walk_occurrences};
+
+/// The sheet symbol that places a page: where its manual number is stored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PagePlacement {
+    /// The sheet holding the sheet symbol.
+    pub parent: SheetKey,
+    /// The parent placement's path: the `path` of the symbol's number entry.
+    pub parent_path: InstancePath,
+    /// The sheet symbol's `ChildSheet.uuid`.
+    pub symbol: Uuid,
+}
 
 /// One numbered page: a sheet placement the project walk reaches.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,6 +33,9 @@ pub struct SheetPage {
     pub number: usize,
     /// Whether `number` came from a sheet-symbol entry.
     pub manual: bool,
+    /// The sheet symbol placing the page; `None` for a page the walk starts
+    /// at, which has no symbol and so is always numbered by position.
+    pub placed_by: Option<PagePlacement>,
 }
 
 impl SheetPage {
@@ -118,16 +133,62 @@ pub fn sheet_numbering(
             }
             number
         });
+        let placed_by = placed_by[index].and_then(|(parent, cs_index)| {
+            let symbol = occs[parent].sheet.child_sheets.get(cs_index)?;
+            Some(PagePlacement {
+                parent: occs[parent].key.clone(),
+                parent_path: occs[parent].path.clone(),
+                symbol: symbol.uuid,
+            })
+        });
         pages.push(SheetPage {
             key: occ.key.clone(),
             instance_path: occ.path.clone(),
             name_chain: occ.name_chain.clone(),
             number: manual.unwrap_or(index + 1),
             manual: manual.is_some(),
+            placed_by,
         });
     }
-    issues.extend(consistency_issues(&pages));
+    let numbers: Vec<usize> = pages.iter().map(|page| page.number).collect();
+    issues.extend(number_issues(&numbers));
     (SheetNumbering { pages }, issues)
+}
+
+/// `instances` (a sheet symbol's entries) with the manual number of the page
+/// it places inside parent placement `parent` set to `page`, or cleared with
+/// `None` so the page takes its position. The entry that numbers the page
+/// (see [`sheet_numbering`]) is edited in place; a new one is scoped to
+/// `project_name`. Clearing drops every matching entry, since a later one
+/// would otherwise take over. Entries for other placements or projects are
+/// kept as they are.
+pub fn with_page_number(
+    instances: &[SheetInstance],
+    parent: &InstancePath,
+    project_name: &str,
+    page: Option<usize>,
+) -> Vec<SheetInstance> {
+    let numbers_it = |entry: &SheetInstance| {
+        (entry.project.is_empty() || entry.project == project_name)
+            && InstancePath::parse(&entry.path).as_ref() == Some(parent)
+    };
+    let Some(page) = page else {
+        return instances
+            .iter()
+            .filter(|entry| !numbers_it(entry))
+            .cloned()
+            .collect();
+    };
+    let mut out = instances.to_vec();
+    match out.iter_mut().find(|entry| numbers_it(entry)) {
+        Some(entry) => entry.page = page.to_string(),
+        None => out.push(SheetInstance {
+            project: project_name.to_string(),
+            path: parent.to_string(),
+            page: page.to_string(),
+        }),
+    }
+    out
 }
 
 /// The `page` text of the entry that numbers the placement made inside parent
@@ -150,8 +211,8 @@ fn manual_entry<'a>(
 
 /// A manual page number: plain digits for a number from 1 that fits a
 /// `usize`, spaces around them allowed. `usize::from_str` alone would also
-/// take a leading `+`.
-fn parse_page_number(text: &str) -> Option<usize> {
+/// take a leading `+`. The one rule for a typed sheet number too.
+pub fn parse_page_number(text: &str) -> Option<usize> {
     let digits = text.trim();
     if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
@@ -159,11 +220,14 @@ fn parse_page_number(text: &str) -> Option<usize> {
     digits.parse::<usize>().ok().filter(|number| *number > 0)
 }
 
-/// Clashes (by number), numbers above the count (by page), then the gap.
-fn consistency_issues(pages: &[SheetPage]) -> Vec<NumberingIssue> {
+/// What is wrong with page numbers `numbers` (walk order, one per page):
+/// clashes (by number), numbers above the count (by page), then the gap.
+/// The same check [`sheet_numbering`] reports, for numbers a user is still
+/// editing.
+pub fn number_issues(numbers: &[usize]) -> Vec<NumberingIssue> {
     let mut holders: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-    for (index, page) in pages.iter().enumerate() {
-        holders.entry(page.number).or_default().push(index);
+    for (index, number) in numbers.iter().enumerate() {
+        holders.entry(*number).or_default().push(index);
     }
     let mut issues: Vec<NumberingIssue> = holders
         .iter()
@@ -173,15 +237,15 @@ fn consistency_issues(pages: &[SheetPage]) -> Vec<NumberingIssue> {
             pages: holding.clone(),
         })
         .collect();
-    let count = pages.len();
+    let count = numbers.len();
     issues.extend(
-        pages
+        numbers
             .iter()
             .enumerate()
-            .filter(|(_, page)| page.number > count)
-            .map(|(index, page)| NumberingIssue::OutOfRange {
+            .filter(|(_, number)| **number > count)
+            .map(|(index, number)| NumberingIssue::OutOfRange {
                 page: index,
-                number: page.number,
+                number: *number,
             }),
     );
     let missing: Vec<usize> = (1..=count)

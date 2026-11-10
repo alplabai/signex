@@ -135,6 +135,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |
 | `smart_paste` | Smart Paste | edit | `Ctrl+Shift+V` | — |
 | `switch_segment_posture` | Switch current segment posture | interactive | — | `/` |
+| `tile_windows_horizontally` | Tile windows side by side | window | — | — |
+| `tile_windows_vertically` | Tile windows one above the other | window | — | — |
 | `toggle_auto_focus` | Toggle AutoFocus | view | `F9` | `F9` |
 | `toggle_cross_select_mode` | Toggle Cross Select Mode | select | `Ctrl+Shift+X` | — |
 | `toggle_electrical_grid` | Toggle electrical grid | view | `Shift+E` | — |
@@ -206,6 +208,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `navigate_up_hierarchy` | Navigate up hierarchy | navigation | — | `Alt+Up` |
 | `next_highlighted_net_item` | Next item on highlighted net | select | — | `Tab` |
 | `next_sheet` | Next sheet | navigation | — | `PageDown` |
+| `number_schematic_sheets` | Number schematic sheets | design | — | — |
 | `open_child_sheet` | Open the selected sheet symbol's child sheet | navigation | — | — |
 | `open_components_panel` | Open Components panel / place components | panels | `P P` | — |
 | `open_erc_dialog` | Open electrical rules check dialog | validation | — | — |

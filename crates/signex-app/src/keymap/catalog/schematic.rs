@@ -387,6 +387,16 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "number_schematic_sheets",
+        category: "design",
+        label: "Number schematic sheets",
+        menu_label: Some("Number Schematic Sheets..."),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "reset_schematic_designators",
         category: "design",
         label: "Reset schematic designators",

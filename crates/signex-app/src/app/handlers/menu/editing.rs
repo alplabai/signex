@@ -36,12 +36,6 @@ impl Signex {
                 );
                 Some(Task::none())
             }
-            MenuMessage::AnnotateSheets => {
-                crate::diagnostics::log_info(
-                    "Number Schematic Sheets is an Advanced Schematic feature (hierarchical design)",
-                );
-                Some(Task::none())
-            }
             _ => None,
         }
     }

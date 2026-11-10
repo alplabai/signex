@@ -336,7 +336,80 @@ fn a_page_label_is_its_name_chain_or_its_sheet() {
         name_chain,
         number: 1,
         manual: false,
+        placed_by: None,
     };
     assert_eq!(page(Vec::new()).label(), "power.snxsch");
     assert_eq!(page(vec!["A".to_string(), "L".to_string()]).label(), "A/L");
+}
+
+#[test]
+fn a_placed_page_names_the_symbol_that_places_it() {
+    let (numbering, _) = number(&example(), &["root.snxsch"]);
+    let pages = numbering.pages();
+    assert_eq!(pages[0].placed_by, None, "the root has no symbol");
+    // `/B/L` is placed by symbol L inside Power's `/B` placement.
+    assert_eq!(
+        pages[4].placed_by,
+        Some(PagePlacement {
+            parent: SheetKey::new("power.snxsch"),
+            parent_path: path(&[B]),
+            symbol: Uuid::from_u128(L),
+        })
+    );
+}
+
+#[test]
+fn setting_a_page_number_edits_the_entry_that_numbers_it() {
+    let (a, b) = (path(&[A]).to_string(), path(&[B]).to_string());
+    let other = SheetInstance {
+        project: "other".to_string(),
+        ..entry(&b, "7")
+    };
+    let elsewhere = entry(&a, "3");
+    let mine = entry(&b, "9");
+    let parent = path(&[B]);
+    let set = with_page_number(
+        &[other.clone(), elsewhere.clone(), mine],
+        &parent,
+        "p",
+        Some(4),
+    );
+    assert_eq!(set, vec![other, elsewhere.clone(), entry(&b, "4")]);
+    // No entry yet: a new one, scoped to the project.
+    let added = with_page_number(std::slice::from_ref(&elsewhere), &parent, "p", Some(2));
+    assert_eq!(added[1].project, "p");
+    assert_eq!(InstancePath::parse(&added[1].path), Some(parent.clone()));
+    assert_eq!(added[1].page, "2");
+}
+
+#[test]
+fn clearing_a_page_number_drops_every_entry_that_could_number_it() {
+    let parent = path(&[B]);
+    let (a, b) = (path(&[A]).to_string(), path(&[B]).to_string());
+    let elsewhere = entry(&a, "3");
+    let cleared = with_page_number(
+        &[entry(&b, "9"), elsewhere.clone(), entry(&b, "5")],
+        &parent,
+        "p",
+        None,
+    );
+    assert_eq!(cleared, vec![elsewhere]);
+}
+
+#[test]
+fn number_issues_checks_numbers_being_edited() {
+    assert!(number_issues(&[1, 2, 3]).is_empty());
+    assert_eq!(
+        number_issues(&[1, 1, 4]),
+        vec![
+            NumberingIssue::Clash {
+                number: 1,
+                pages: vec![0, 1]
+            },
+            NumberingIssue::OutOfRange { page: 2, number: 4 },
+            NumberingIssue::Gap {
+                missing: vec![2, 3]
+            },
+        ]
+    );
 }

@@ -68,6 +68,13 @@ impl GeometryTracker {
         }
     }
 
+    /// The monitor `id` was last read on: its index and logical size.
+    #[must_use]
+    pub fn monitor_of(&self, id: iced::window::Id) -> Option<(usize, (f32, f32))> {
+        let index = self.readings.get(&id)?.monitor_index?;
+        Some((index, self.monitors.get(index)?.size))
+    }
+
     /// The last settled reading of `id` as a placement source.
     #[must_use]
     pub fn source(&self, id: iced::window::Id) -> Option<SourceWindow> {
