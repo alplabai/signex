@@ -136,8 +136,8 @@ the operands, and an `apply_edits` list plans the union of its edits; an edit
 that waits for those reads also reads the project's closed sheets. The
 project's closed sheets are otherwise asked for by the check that needs them
 (the name check of a wire, bus, label, power port or junction whose net
-reaches another sheet, the designators and units of `place_component`, the
-hierarchy-loop check of `place_sheet_symbol`): the edit is then refused with
+reaches another sheet, the designators and units of `place_component`): the
+edit is then refused with
 nothing applied, the project is read, and the edit runs again on it.
 
 - The command returns `CommandOutcome::Deferred { ticket }` and a `Task` that

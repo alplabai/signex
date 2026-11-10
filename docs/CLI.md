@@ -372,10 +372,9 @@ without operands is refused with the operand it needs.
 
 **The connection rule.** An edit from operands connects nothing it does not
 name. A placed part whose pin tip, or a sheet entry (placed or synced) whose
-connection point, lands on a wire or a bus (its end or its run), a junction, a
-label, a sheet entry, a no-connect flag or another pin tip is refused with no
-escape (an entry on a bus would join the bus members to the child; a pin on a
-no-connect flag would be marked as left open) ("the part would land
+connection point, lands on a wire (its end or its run), a junction, a label, a
+sheet entry or another pin tip is refused with no escape
+<!-- TODO(#2199): the bus and no-connect contacts (parallel branch) --> ("the part would land
 on another wire at 12.7,25.4 ..."); place it clear and wire it afterwards with
 `place_wire start=U1.1 ...`. The edit's real commands are applied to a copy of
 the sheet and the new connection points are read from it
@@ -436,8 +435,8 @@ leaves it included), checked as the Create Sheet dialog checks it. It is text,
 not a path operand: nothing is opened, created or written, so the CLI does not
 confine it, and the handler refuses any reference that leaves the project
 folder (whether a link leaves it is read off the UI thread first). A name
-another sheet symbol on the sheet has, a file another one refers to, and the
-sheet itself or a sheet above it in the hierarchy (a loop) are refused.
+another sheet symbol on the sheet has, or a file another one refers to, is
+refused. <!-- TODO(#2199): the hierarchy-loop refusal (parallel branch) -->
 Creating the child file stays a window action
 (`create_sheet_from_sheet_symbol`, `gui_only`). The answer is `{"id", "name",
 "file", "at", "size"}`.

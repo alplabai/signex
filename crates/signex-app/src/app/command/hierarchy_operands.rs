@@ -3,10 +3,9 @@
 //! undoable engine edit of the sheet; none writes or creates a file (a sheet
 //! symbol only refers to its child file). Rules and refusals: `docs/CLI.md`,
 //! "Placing parts and hierarchy". What their checks read from disk (a child
-//! file, a link out of the project, the project's closed sheets) is read off
-//! the UI thread before they run (`edit_reads`).
+//! file, a link out of the project) is read off the UI thread before they run
+//! (`edit_reads`).
 
-use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use iced::Task;
@@ -18,8 +17,6 @@ use super::placement_operands::{run_edit, text};
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::handlers::canvas::{reference_from, resolve_new_sheet_path};
 use crate::app::mutation_gateway::CommandOutcome as Applied;
-use crate::app::project_sheets::resolve_child_reference_quiet;
-use crate::app::state::scope::path_key_with;
 use crate::app::{Message, Signex};
 
 type Ran = (CommandOutcome, Task<Message>);
@@ -110,8 +107,7 @@ impl Signex {
 
     /// The child file reference `file`: [`Self::child_file_target`], not
     /// through a link that leaves the project folder (read before the edit
-    /// ran), and not the sheet itself or a sheet above it, which would make
-    /// the hierarchy a loop. Nothing is created or opened.
+    /// ran). Nothing is created or opened.
     fn child_file_reference(&self, file: &str) -> Result<String, String> {
         let (_, path, reference) = self.child_file_target(file)?;
         if self.prefetched_escape(&path)? {
@@ -120,54 +116,7 @@ impl Signex {
                     .to_string(),
             );
         }
-        let docs = &self.document_state;
-        let sheet = docs
-            .edit_path()
-            .ok_or("no schematic is open")?
-            .to_path_buf();
-        let fold = crate::app::state::project_case::fold_of(docs.document_project(&sheet));
-        let key = path_key_with(&path, fold);
-        if key == path_key_with(&sheet, fold) {
-            return Err(format!(
-                "`file`: {reference} is this sheet; a sheet cannot contain itself"
-            ));
-        }
-        if self.sheet_ancestors(&sheet)?.contains(&key) {
-            return Err(format!(
-                "`file`: {reference} is a sheet above this one; the hierarchy would loop"
-            ));
-        }
         Ok(reference)
-    }
-
-    /// The keys of every sheet whose hierarchy reaches `sheet` as a child,
-    /// from the project (the closed sheets as read); none for a loose sheet.
-    fn sheet_ancestors(&self, sheet: &Path) -> Result<HashSet<String>, String> {
-        if self.document_state.document_project(sheet).is_none() {
-            return Ok(HashSet::new());
-        }
-        let set = self.edit_project_set(sheet)?;
-        let fold = set.fold;
-        let mut parents: HashMap<String, Vec<String>> = HashMap::new();
-        for (path, content) in &set.sheets {
-            let dir = path.parent().unwrap_or_else(|| Path::new(""));
-            for child in &content.child_sheets {
-                if let Ok(resolved) = resolve_child_reference_quiet(dir, &child.filename) {
-                    let entry = parents.entry(path_key_with(&resolved, fold)).or_default();
-                    entry.push(path_key_with(path, fold));
-                }
-            }
-        }
-        let mut found = HashSet::new();
-        let mut queue = vec![path_key_with(sheet, fold)];
-        while let Some(key) = queue.pop() {
-            for parent in parents.get(&key).into_iter().flatten() {
-                if found.insert(parent.clone()) {
-                    queue.push(parent.clone());
-                }
-            }
-        }
-        Ok(found)
     }
 
     fn place_sheet_symbol_from_operands(

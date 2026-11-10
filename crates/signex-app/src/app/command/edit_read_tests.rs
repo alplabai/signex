@@ -115,23 +115,6 @@ fn an_edit_list_with_a_part_and_a_wire_is_read_once_and_lands_as_one_step() {
 }
 
 #[test]
-fn a_sheet_symbol_naming_its_own_sheet_or_a_sheet_above_it_is_refused() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut app = project_app(&dir);
-    app.open_or_focus_sheet_path(dir.path().join("child.snxsch"));
-    let place = |app: &mut Signex, file: &str| {
-        let file = format!("file={file}");
-        let (id, call) = args(
-            "place_sheet_symbol",
-            &["start=50,50", "end=70,70", "name=Loop", &file],
-        );
-        refusal(app.run_operands_settled(&id, &call).0)
-    };
-    assert!(place(&mut app, "child.snxsch").contains("cannot contain itself"));
-    assert!(place(&mut app, "top.snxsch").contains("a sheet above this one"));
-}
-
-#[test]
 fn an_edit_that_needs_no_disk_runs_at_once() {
     let (mut app, _task) = Signex::new();
     let path = std::env::temp_dir().join("snx-2199-loose.snxsch");
