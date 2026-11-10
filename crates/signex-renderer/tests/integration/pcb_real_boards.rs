@@ -11,7 +11,8 @@ use pcb_geom::ratsnest;
 use signex_gfx::pipeline::polygon::polygon_fill_triangles;
 use signex_gfx::scene::{DirtyFlags, Scene};
 use signex_renderer::pcb::{
-    PcbLayerView, PcbRenderer, PcbSnapshot, board_copper_layers, layer_rows, ratsnest_inputs,
+    BoardFeaturesInput, PcbLayerView, PcbRenderer, PcbSnapshot, board_copper_layers, layer_rows,
+    ratsnest_inputs,
 };
 use signex_renderer::schematic::ViewRenderer;
 use signex_renderer::theme::ResolvedTheme;
@@ -217,16 +218,27 @@ fn each_copper_layer_of_the_real_boards_renders_as_the_active_layer() {
     }
 }
 
+/// The overlay also carries the board outline, openings and keepouts, so the
+/// drawn overlay must be exactly what the board features alone draw.
 #[test]
 fn the_real_boards_draw_no_ratsnest_because_every_net_is_routed() {
     let theme = ResolvedTheme::builtin_default();
     for name in NAMES {
         let board = load(name);
         let lines = ratsnest(&board);
+        assert!(lines.is_empty(), "{name}: {lines:?}");
         let snapshot = PcbSnapshot::from_board(&board)
             .with_ratsnest_lines(ratsnest_inputs(&lines, &Default::default()));
         let mut scene = Scene::default();
         PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::OVERLAY, &mut scene);
-        assert!(scene.overlay_lines.is_empty(), "{name}: {lines:?}");
+
+        let features_only = PcbSnapshot {
+            board_features: BoardFeaturesInput::from_board(&board),
+            ..PcbSnapshot::default()
+        };
+        let mut expected = Scene::default();
+        PcbRenderer::build_scene(&features_only, &theme, DirtyFlags::OVERLAY, &mut expected);
+        assert!(!expected.overlay_lines.is_empty(), "{name}: the outline");
+        assert_eq!(scene.overlay_lines, expected.overlay_lines, "{name}");
     }
 }
