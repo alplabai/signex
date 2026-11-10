@@ -53,6 +53,76 @@ nanometres, so a save and reopen gives the same board back).
   order-of-magnitude regression (a quadratic pass, a per-track allocation
   storm); read the printed median for the baseline.
 
+## GPU frames
+
+The exit criterion "10k-track board at 60 fps", measured on a real GPU. The
+emit and cull numbers above are CPU only; this bench times whole frames.
+
+```text
+cargo test -p signex-app --release --lib pcb_frame_bench -- --ignored --nocapture --test-threads=1
+SIGNEX_BENCH_DPR=2  SIGNEX_BENCH_PATHS=cpu|gpu|cpu,gpu  SIGNEX_BENCH_AA=off|msaa4|off,msaa4
+```
+
+The harness is `crates/signex-app/src/pcb_canvas/frame_bench_tests.rs`, an
+`#[ignore]`d test built like the schematic one
+(`docs/architecture/schematic-render-bench.md`). It includes the board
+generator above by `#[path]`, so both benches draw the same board.
+
+- **Mount.** The stack `app/view/mod.rs` builds for a board: the `PcbCanvas`
+  canvas (background, grid and, with GPU render off, the board), the
+  `SceneShaderProgram<PcbSurface>` shader when GPU render is on, and the
+  highlight layer. The active bar and the layer strip are left out. `cpu` is
+  the default mount (GPU render off in Preferences), `gpu` the shader mount.
+- **Frame.** `UserInterface::build`, `update` with the frame's mouse events, a
+  second build when there were events (the app's `view` runs again after the
+  canvas's message), `draw`, then `iced_wgpu::Renderer::screenshot`, which
+  uploads, renders and reads back. GPU time is inside the frame; vsync and
+  surface present are not. Never tiny-skia.
+- **Window.** 1600 x 1300 logical, dpr 1 (`SIGNEX_BENCH_DPR` overrides).
+- **Snapshot.** `PcbSnapshot::from_board_with_view` with the default layer
+  view, no ratsnest and no DRC markers.
+
+Scenarios, each after three untimed warm-up frames:
+
+1. `idle`: the whole board fitted, 60 frames with no input.
+2. `pan`: a right-button drag from the window centre, 6, 3 px per frame over
+   60 frames. The press and release frames are not timed.
+3. `zoom`: 15 wheel notches in about the window centre, then 15 out (30
+   frames), from the board fitted.
+4. `zoom-pan`: a 20 x 20 mm patch in the middle of the board fitted (the zoom
+   limit, 48 px/mm, clamps it, so the window shows about 33 x 27 mm), then the
+   same 60-frame drag.
+
+Each line gives the frame count, median, p95 and max frame time, the fps the
+median and the p95 imply, and `ok` when p95 is at most 16.7 ms (`OVER`
+otherwise), then median/p95 per phase. The test does not assert the 60 fps
+bound, since machines differ. It asserts that the board has its counts, that
+each frame reads back a full window that is not a flat fill, that each
+scenario timed every frame, and that the drags and the zoom moved the camera
+as far as the input says.
+
+Results (fill in from a run; adapter name and backend from the
+`BENCH adapter` line):
+
+| Adapter (backend) | Mount | AA | Scenario | Median ms | p95 ms | Max ms | fps (median) | ok |
+|---|---|---|---|---|---|---|---|---|
+| | cpu | off | idle | | | | | |
+| | cpu | off | pan | | | | | |
+| | cpu | off | zoom | | | | | |
+| | cpu | off | zoom-pan | | | | | |
+| | gpu | off | idle | | | | | |
+| | gpu | off | pan | | | | | |
+| | gpu | off | zoom | | | | | |
+| | gpu | off | zoom-pan | | | | | |
+| | cpu | msaa4 | idle | | | | | |
+| | cpu | msaa4 | pan | | | | | |
+| | cpu | msaa4 | zoom | | | | | |
+| | cpu | msaa4 | zoom-pan | | | | | |
+| | gpu | msaa4 | idle | | | | | |
+| | gpu | msaa4 | pan | | | | | |
+| | gpu | msaa4 | zoom | | | | | |
+| | gpu | msaa4 | zoom-pan | | | | | |
+
 ## Realistic boards
 
 The 10,000-track board measures scale; it is not a design. Five complete

@@ -4,6 +4,9 @@
 //! every coordinate is a whole number of nanometres, so the board survives a
 //! `.snxpcb` save and reopen unchanged. Layout and how to run the benchmark:
 //! `docs/architecture/pcb-render-bench.md`.
+//!
+//! signex-app's GPU frame bench includes this file by `#[path]`: it may use
+//! only `signex_types` and `uuid`, which both crates depend on.
 
 use signex_types::pcb::{
     Footprint, LayerDef, NetDef, Pad, PadNet, PadShape, PadType, PcbBoard, Point, Segment, Via,

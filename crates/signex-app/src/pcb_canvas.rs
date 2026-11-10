@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 mod carry;
 mod cull;
+#[cfg(test)]
+mod frame_bench_tests;
 mod gesture;
 mod highlight;
 pub mod layer_style;
