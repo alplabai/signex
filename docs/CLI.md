@@ -28,7 +28,7 @@ Signex".
 | `--headless` | only run headless; fail (exit 2) if a running Signex has the project open |
 | `--keep-going` | run the rest after a refused or failed command (default: stop at the first) |
 | `--save` | allow commands that write files (capability `save`) |
-| `--dry-run` | run every command with `dry_run=true`: a wire or bus run reports and changes nothing. A read-only query and `open_document` run as given; any other command without that operand is refused, and so is `--dry-run` together with `--save` or `--allow save`. `--dry-run` cannot dry-run a placement in an attached run (placements reach a running Signex only through `apply_edits`, which has no `dry_run` operand); put `dry_run=true` on the edit inside `apply_edits` instead |
+| `--dry-run` | run every command with `dry_run=true`: a wire or bus run reports and changes nothing. A read-only query and `open_document` run as given; any other command without that operand is refused, and so is `--dry-run` together with `--save` or `--allow save`. `--dry-run` cannot dry-run a placement in an attached run (placements reach a running Signex only through `apply_edits`, which has no `dry_run` operand); put `dry_run=true` on a wire or bus edit inside `apply_edits` instead (the other placements take no `dry_run`) |
 | `--allow <caps>` | also allow capabilities (comma list) |
 | `--allow-path <dir>` | also allow paths inside `<dir>` (repeatable) |
 | `--max-line-bytes`, `--max-commands`, `--max-file-bytes` | tighten or raise the input limits |
