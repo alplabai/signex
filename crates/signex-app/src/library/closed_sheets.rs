@@ -60,7 +60,8 @@ pub struct FileStamp {
 }
 
 impl FileStamp {
-    fn of(path: &Path) -> Option<Self> {
+    /// Stat `path` now; `None` when it cannot be stated. Blocking.
+    pub(crate) fn of(path: &Path) -> Option<Self> {
         let meta = std::fs::metadata(path).ok()?;
         Some(Self {
             modified: meta.modified().ok(),

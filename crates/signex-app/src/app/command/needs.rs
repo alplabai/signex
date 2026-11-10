@@ -31,6 +31,8 @@ pub(crate) enum Needs {
     FootprintEditor,
     Pcb,
     Library,
+    ProjectSheet,
+    TileableWindows,
 }
 
 impl Needs {
@@ -80,6 +82,12 @@ impl Needs {
             // Library Editor focuses an open Library Browser tab, else opens the
             // first open library.
             Self::Library => ctx.has_open_library,
+            // Sheet numbers are the project's; a loose sheet has none.
+            Self::ProjectSheet => ctx.has_project_sheet,
+            // Tile arranges the main window with the undocked document
+            // windows; alone, or before the main window's screen is known,
+            // it has nothing to do.
+            Self::TileableWindows => ctx.can_tile_windows,
         }
     }
 
@@ -109,6 +117,8 @@ impl Needs {
             Self::FootprintEditor => "No footprint editor is open",
             Self::Pcb => "No PCB is open",
             Self::Library => "No library is open",
+            Self::ProjectSheet => "No sheet of a project is open",
+            Self::TileableWindows => "No document is in its own window",
         }
     }
 }
@@ -173,6 +183,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => Needs::FitTarget,
         "cycle_snap_grid_forward" | "open_grid_picker" => Needs::FootprintEditor,
         "open_library_browser" => Needs::Library,
+        "number_schematic_sheets" => Needs::ProjectSheet,
+        "tile_windows_horizontally" | "tile_windows_vertically" => Needs::TileableWindows,
         _ => return None,
     })
 }

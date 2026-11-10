@@ -38,6 +38,7 @@ pub mod path_op_jobs;
 pub mod path_ops;
 pub mod project_entry_disk;
 mod project_tab;
+pub(crate) mod sheet_numbering;
 pub(crate) mod sheet_repairs;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 pub(crate) mod designator_scan;
@@ -92,7 +93,10 @@ pub use documents::{
     TabDocument, TabInfo, TabKind, Tool,
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
+pub use handlers::window_geometry_events::GeometryReadout;
+pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, tiles};
 pub use new_project::{NewProjectMsg, NewProjectState};
+pub use sheet_numbering::{NumberingProblem, SheetNumberingMsg, SheetNumberingState};
 pub use signex_history::History;
 pub(crate) use signex_history::SavePoint;
 #[cfg(test)]

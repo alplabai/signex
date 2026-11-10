@@ -57,8 +57,9 @@ enablement; no command left the app.
 **Tools ▸ Annotation** (top of Tools, then a separator, as Altium's schematic
 Tools menu has it): Annotate Schematics..., Reset Schematic Designators...,
 Reset Duplicate Schematic Designators..., Annotate Schematics Quietly (Alt+A),
-Force Annotate All Schematics (Shift+Alt+A), and the planned Back Annotate
-Schematics... and Number Schematic Sheets....
+Force Annotate All Schematics (Shift+Alt+A), the planned Back Annotate
+Schematics..., and Number Schematic Sheets... (see
+[below](#number-schematic-sheets)).
 
 **Reports** (outputs of the open schematic, all greyed without one):
 
@@ -198,6 +199,60 @@ a project in view the panel says so.
   each with its sheet. Clicking a member highlights the net on every sheet and
   goes to the member through net navigation (`go_to_member`), opening its
   sheet when needed.
+
+## Tools ▸ Annotation ▸ Number Schematic Sheets {#number-schematic-sheets}
+
+Runs `number_schematic_sheets` (#2247; editable dialog, maintainer decision
+2026-11-09, `DECISIONS.md`). Greyed unless the active document (or, with no
+document open, the active project's root sheet) belongs to a project; a loose
+sheet has no project numbering. The dialog reads the active document's project off the UI
+thread and lists every page in hierarchy order (the order and numbers of
+`signex_net::sheet_numbering`, the ones PDF export prints), indented by depth,
+with its file and its number.
+
+- A page placed by a sheet symbol has a number field. A top-level page has no
+  symbol to hold a number and keeps its position; it is shown read-only.
+- Auto-number puts every page back at its position and clears the hand
+  numbers. A number that is not a whole number from 1 turns its field red and
+  greys Apply; a clash, a gap or a number above the page count is a warning
+  only, as it is for an export.
+- Apply writes each changed number into the `ChildSheet.instances` entry of
+  the parent sheet's sheet symbol (`Command::SetChildSheetInstances`), scoped
+  to the project name. A number equal to the page's position clears the entry
+  instead. An entry with no project is shared by every project that uses the
+  file, so it is never changed or dropped: the project's own entry is written
+  ahead of it (a clear writes the position there). Every parent sheet takes the change in one undo group, so one
+  Ctrl+Z on a changed sheet takes all of them back. A parent sheet that is not
+  open is loaded into a tabless engine and left unsaved, as project Replace
+  does; nothing is written to disk until the user saves.
+- Apply is refused, with the reason in the dialog and the Messages panel, when
+  a sheet was opened, closed or had a sheet symbol changed since the read, or
+  when a parent sheet is being saved or moved, or is read-only (an open one,
+  or a closed one written by a newer Signex), or when a closed parent's file
+  changed on disk after the read: the read stamps each closed parent's file
+  (modified time and length) just before reading it, and Apply states those
+  files again on a worker before it writes; the numbers are frozen while it
+  waits. These checks run before any
+  sheet changes; if a sheet still fails part-way, every sheet already changed
+  is put back and the sheets it loaded are dropped.
+
+## Window ▸ Tile Horizontally / Tile Vertically {#window-tile}
+
+Run `tile_windows_horizontally` and `tile_windows_vertically` (#2247). They
+arrange the main window and every undocked document window (main window
+first, then the undocked ones by file path) on the main window's monitor: Tile
+Horizontally stacks them in equal rows, one above the other, and Tile
+Vertically puts them side by side in equal columns (the Windows MDI
+convention, Caner 2026-11-10). Each window is un-maximized, resized and moved with `iced::window`
+tasks. Greyed while no document is undocked, and until the main window's
+monitor has been read (the settled geometry reading, shortly after start-up).
+iced reports the monitor's full size, not its work area, so the tiles cover
+the whole monitor. The Messages panel names how many windows were arranged.
+
+## Rows still planned {#rows-still-planned}
+
+- **Tools ▸ Annotation ▸ Back Annotate Schematics...** waits for PCB to
+  schematic sync (#2271).
 
 ## Save and Save As {#file-save}
 

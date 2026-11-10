@@ -55,6 +55,8 @@ pub enum UndoGroupKind {
     Replace,
     /// Tools ▸ Assign Footprints (#2248).
     Footprints,
+    /// Tools ▸ Annotation ▸ Number Schematic Sheets (#2247).
+    SheetNumbers,
 }
 
 impl UndoGroupSheets {
@@ -64,6 +66,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Reprefix => "re-prefix",
             UndoGroupKind::Replace => "replace",
             UndoGroupKind::Footprints => "footprint assignment",
+            UndoGroupKind::SheetNumbers => "sheet numbering",
         }
     }
 
@@ -73,6 +76,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Reprefix => "Re-prefix",
             UndoGroupKind::Replace => "Replace",
             UndoGroupKind::Footprints => "Assign Footprints",
+            UndoGroupKind::SheetNumbers => "Sheet numbering",
         }
     }
 
@@ -81,6 +85,7 @@ impl UndoGroupSheets {
         match self.kind {
             UndoGroupKind::Replace => "replaced text".to_string(),
             UndoGroupKind::Footprints => "assigned footprints".to_string(),
+            UndoGroupKind::SheetNumbers => "new sheet numbers".to_string(),
             _ => format!("{} designators", self.participle()),
         }
     }
@@ -91,6 +96,7 @@ impl UndoGroupSheets {
         match self.kind {
             UndoGroupKind::Replace => "text",
             UndoGroupKind::Footprints => "footprints",
+            UndoGroupKind::SheetNumbers => "sheet numbers",
             _ => "designators",
         }
     }
@@ -102,6 +108,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Reprefix => "re-prefixed",
             UndoGroupKind::Replace => "replaced",
             UndoGroupKind::Footprints => "assigned",
+            UndoGroupKind::SheetNumbers => "renumbered",
         }
     }
 }

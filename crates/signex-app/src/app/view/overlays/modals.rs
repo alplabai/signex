@@ -306,6 +306,13 @@ impl Signex {
             .then(|| self.view_assign_footprints_dialog())
     }
 
+    pub(in crate::app::view) fn sheet_numbering_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .sheet_numbering
+            .is_some()
+            .then(|| self.view_sheet_numbering_dialog())
+    }
+
     pub(in crate::app::view) fn selection_filter_custom_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {

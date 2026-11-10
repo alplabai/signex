@@ -23,6 +23,7 @@ use signex_types::schematic::SchematicSheet;
 
 use crate::app::state::DocumentState;
 use crate::app::state::scope::{CaseFold, path_key_with};
+use crate::library::closed_sheets::FileStamp;
 
 /// The sheets a project consists of, plus what could not be made sense of
 /// while assembling them.
@@ -359,7 +360,33 @@ impl ProjectSheetPlan {
     pub(crate) fn assemble(&self) -> ProjectSheetSet {
         assemble_project_sheets_from(&self.open, &self.pages, &self.root, self.fold)
     }
+
+    /// [`Self::assemble`], plus the stamp of every sheet read from disk,
+    /// taken just before it was read, so a later write can be told apart.
+    pub(crate) fn assemble_stamped(&self) -> (ProjectSheetSet, DiskStamps) {
+        let stamps = std::cell::RefCell::new(DiskStamps::new());
+        let set = assemble_project_sheets_with(
+            &|path| {
+                let open = self.open.get(path).cloned();
+                if open.is_none() {
+                    stamps
+                        .borrow_mut()
+                        .insert(path.to_path_buf(), FileStamp::of(path));
+                }
+                open
+            },
+            &self.pages,
+            &self.root,
+            self.fold,
+            true,
+        );
+        (set, stamps.into_inner())
+    }
 }
+
+/// The stamp of each sheet a read took from disk (`None`: it could not be
+/// stated).
+pub(crate) type DiskStamps = HashMap<PathBuf, Option<FileStamp>>;
 
 /// The plan for `source`'s project. Every open engine is snapshotted, so a
 /// sheet the hierarchy walk reaches that is open (declared or not, whoever

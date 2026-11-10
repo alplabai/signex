@@ -93,6 +93,8 @@ pub(crate) enum OverlayId {
     NewProject,
     /// Tools ▸ Assign Footprints (#2248).
     AssignFootprints,
+    /// Tools ▸ Annotation ▸ Number Schematic Sheets (#2247).
+    SheetNumbering,
     AnnotateDialog,
     AnnotateResetConfirm,
     ReprefixConfirm,
@@ -130,7 +132,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 60] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 61] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -176,6 +178,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 60] = [
     OverlayId::GridProperties,
     OverlayId::SelectionFilterCustom,
     OverlayId::AssignFootprints,
+    OverlayId::SheetNumbering,
     OverlayId::AnnotateDialog,
     OverlayId::AnnotateResetConfirm,
     OverlayId::ReprefixConfirm,
@@ -293,6 +296,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::SelectionFilterCustom
         | OverlayId::NewProject
         | OverlayId::AssignFootprints
+        | OverlayId::SheetNumbering
         | OverlayId::AnnotateDialog
         | OverlayId::AnnotateResetConfirm
         | OverlayId::ReprefixConfirm
@@ -473,6 +477,7 @@ impl Signex {
             }
             OverlayId::NewProject => layers.extend(self.new_project_overlay()),
             OverlayId::AssignFootprints => layers.extend(self.assign_footprints_overlay()),
+            OverlayId::SheetNumbering => layers.extend(self.sheet_numbering_overlay()),
             OverlayId::AnnotateDialog => layers.extend(self.annotate_dialog_overlay()),
             OverlayId::AnnotateResetConfirm => layers.extend(self.annotate_reset_confirm_overlay()),
             OverlayId::ReprefixConfirm => layers.extend(self.reprefix_confirm_overlay()),

@@ -415,6 +415,12 @@ pub struct UiState {
     /// The New Project setup dialog, while open (#2232). Nothing is on disk
     /// until its Create.
     pub new_project: Option<crate::app::NewProjectState>,
+    /// The Number Schematic Sheets dialog, while open (#2247). Apply writes
+    /// to memory only; the sheets are saved by the user.
+    pub sheet_numbering: Option<crate::app::SheetNumberingState>,
+    /// Generation of the newest Number Schematic Sheets read. Outside the
+    /// dialog's state so a reopened dialog never takes an older read.
+    pub sheet_numbering_reads: u64,
     /// The Find Similar Objects dialog, while open (#1257).
     pub find_similar: Option<crate::find_similar::FindSimilarState>,
     /// Token of the newest Find Similar project search. Lives outside the
