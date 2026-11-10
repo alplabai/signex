@@ -373,15 +373,19 @@ without operands is refused with the operand it needs.
 **The connection rule.** An edit from operands connects nothing it does not
 name. A placed part whose pin tip, or a sheet entry (placed or synced) whose
 connection point, lands on a wire (its end or its run), a junction, a label, a
-sheet entry or another pin tip is refused with no escape
-<!-- TODO(#2199): the bus and no-connect contacts (parallel branch) --> ("the part would land
+sheet entry or another pin tip is refused with no escape ("the part would land
 on another wire at 12.7,25.4 ..."); place it clear and wire it afterwards with
 `place_wire start=U1.1 ...`. The edit's real commands are applied to a copy of
 the sheet and the new connection points are read from it
 (`signex_net::placement_contacts`). A part body over a wire is not a
 connection and is not judged; pin to pin counts here, though the netlist joins
-nothing pin to pin, because the caller did not name it. None of these takes
-`allow_merge` or `dry_run`, so `--dry-run` refuses them.
+nothing pin to pin, because the caller did not name it. A bus-named sheet
+entry (`D[0..7]`) placed on a bus, at an end or mid-span, is refused: the
+netlist would join the bus to the child's bus. A part pin tip, or an entry
+with a plain name, on a bus connects nothing and is accepted. A pin tip or
+sheet entry placed on a no-connect marker is refused: it would mark the new
+point unconnected. None of these takes `allow_merge` or `dry_run`, so
+`--dry-run` refuses them.
 
 ### `place_component`
 
@@ -436,7 +440,10 @@ not a path operand: nothing is opened, created or written, so the CLI does not
 confine it, and the handler refuses any reference that leaves the project
 folder (whether a link leaves it is read off the UI thread first). A name
 another sheet symbol on the sheet has, or a file another one refers to, is
-refused. <!-- TODO(#2199): the hierarchy-loop refusal (parallel branch) -->
+refused. `place_sheet_symbol` refuses a `file` that is the edited sheet or one
+above it in the project hierarchy (a sheet cannot contain itself). Ancestors
+are read from the hierarchy already in memory; while the project is still
+being read, only the edited sheet itself is checked.
 Creating the child file stays a window action
 (`create_sheet_from_sheet_symbol`, `gui_only`). The answer is `{"id", "name",
 "file", "at", "size"}`.
