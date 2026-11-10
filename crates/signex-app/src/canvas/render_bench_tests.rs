@@ -32,7 +32,7 @@ use uuid::Uuid;
 use super::tests::test_prefs;
 use super::*;
 
-pub(super) const WINDOW: (f32, f32) = (1600.0, 1300.0);
+pub(crate) const WINDOW: (f32, f32) = (1600.0, 1300.0);
 const CELL_W: f64 = 60.0;
 const CELL_H: f64 = 40.0;
 const MARGIN: f64 = 20.0;
@@ -290,13 +290,13 @@ fn counts(sheet: &SchematicSheet) -> String {
 
 // --- the renderer ----------------------------------------------------------
 
-pub(super) struct Rig {
-    pub(super) renderer: iced::Renderer,
-    pub(super) adapter: String,
+pub(crate) struct Rig {
+    pub(crate) renderer: iced::Renderer,
+    pub(crate) adapter: String,
     dpr: f32,
 }
 
-pub(super) fn rig(aa: Option<Antialiasing>, dpr: f32) -> Rig {
+pub(crate) fn rig(aa: Option<Antialiasing>, dpr: f32) -> Rig {
     let instance = wgpu::Instance::default();
     let adapter =
         futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {

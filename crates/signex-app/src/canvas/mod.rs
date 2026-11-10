@@ -969,7 +969,7 @@ mod pan_reuse_pixel_tests;
 #[cfg(test)]
 mod pan_reuse_tests;
 #[cfg(test)]
-mod render_bench_tests;
+pub(crate) mod render_bench_tests;
 #[cfg(test)]
 mod rotated_label_pixel_tests;
 #[cfg(test)]
