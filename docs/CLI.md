@@ -217,8 +217,12 @@ it is a heuristic that catches what names can tell apart and leaves the rest
    were already behind a hierarchical label before the edit play no part on
    the parent (a sensor's internal `SDA_INT`). Names that the edit itself
    brings behind a port do count: a new hierarchical `GND` on a child net
-   labelled `VCC`, whose entry the parent wired to `GND`, is a short. On the
-   child itself its local names stay names: there, a wire from the
+   labelled `VCC`, whose entry the parent wired to `GND`, is a short. "The
+   parent" is seen from the edited sheet: only names below or beside it are
+   hidden. On the edited sheet and its ancestors local names stay names (a
+   parent's `PNET` behind its own port is a name of the child's net, so a
+   label `Y` on that net in the child is a rename). On the child itself,
+   a wire from the
    `SDA`/`SDA_INT` net to a net labelled `GND` is a short, and a label `FOO`
    on it a rename, as on a loose sheet (while a global `SDA_INT` there
    carries a name the net has). Where this project check runs (the sheet is
