@@ -955,7 +955,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "tile_windows_horizontally",
         category: "window",
-        label: "Tile windows side by side",
+        label: "Tile windows one above the other",
         menu_label: Some("Tile Horizontally"),
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -965,7 +965,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "tile_windows_vertically",
         category: "window",
-        label: "Tile windows one above the other",
+        label: "Tile windows side by side",
         menu_label: Some("Tile Vertically"),
         group: CommandGroup::General,
         enable: Enablement::Always,

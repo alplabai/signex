@@ -158,6 +158,7 @@ define_ids! {
     DIALOG_SHEET_NUMBERING_ERR_READ_ONLY = "dialog-sheet-numbering-err-read-only";
     DIALOG_SHEET_NUMBERING_ERR_NOT_LOADED = "dialog-sheet-numbering-err-not-loaded";
     DIALOG_SHEET_NUMBERING_ERR_NOT_CHANGED = "dialog-sheet-numbering-err-not-changed";
+    DIALOG_SHEET_NUMBERING_ERR_DISK_CHANGED = "dialog-sheet-numbering-err-disk-changed";
     DIALOG_SHEET_NUMBERING_AUTO = "dialog-sheet-numbering-auto";
     DIALOG_SHEET_NUMBERING_CANCEL = "dialog-sheet-numbering-cancel";
     DIALOG_SHEET_NUMBERING_APPLY = "dialog-sheet-numbering-apply";

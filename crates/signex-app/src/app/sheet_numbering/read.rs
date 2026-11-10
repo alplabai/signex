@@ -8,7 +8,7 @@ use signex_types::schematic::{InstancePath, SchematicSheet};
 use uuid::Uuid;
 
 use super::state::NumberingProblem;
-use crate::app::project_sheets::{self, ProjectSheetPlan};
+use crate::app::project_sheets::{self, DiskStamps, ProjectSheetPlan};
 
 /// Where a page's manual number is stored: a sheet symbol in its parent.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +46,9 @@ pub struct NumberingRead {
     pub(crate) rows: Vec<NumberingRow>,
     /// Parent sheets no engine held when the read started, for Apply to load.
     pub(crate) loaded: HashMap<PathBuf, SchematicSheet>,
+    /// The stamp of each `loaded` file, taken just before it was read: Apply
+    /// states the files again and refuses a copy the disk no longer holds.
+    pub(crate) stamps: DiskStamps,
     /// Sheets that exist but could not be parsed: `(path, why)`.
     pub(crate) unreadable: Vec<(PathBuf, String)>,
 }
@@ -58,7 +61,7 @@ pub(crate) fn read_numbering(
     project_name: &str,
     open: &HashSet<PathBuf>,
 ) -> Result<NumberingRead, NumberingProblem> {
-    let set = plan.assemble();
+    let (set, mut read_stamps) = plan.assemble_stamped();
     let fold = set.fold;
     let root = plan.root();
     let base_dir = project_dir
@@ -109,9 +112,16 @@ pub(crate) fn read_numbering(
             placement,
         });
     }
+    // A loaded copy with no stamp could not be stated; Apply refuses it
+    // rather than trust it (`disk_changed`).
+    let stamps = loaded
+        .keys()
+        .map(|path| (path.clone(), read_stamps.remove(path).flatten()))
+        .collect();
     Ok(NumberingRead {
         rows,
         loaded,
+        stamps,
         unreadable: set.unreadable,
     })
 }

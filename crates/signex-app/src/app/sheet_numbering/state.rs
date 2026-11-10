@@ -30,6 +30,9 @@ pub struct SheetNumberingState {
     /// Auto-number was pressed: a manual number equal to its position is
     /// cleared too, so the page follows its position from now on.
     pub(crate) clear_manual: bool,
+    /// Apply is waiting for the closed parent sheets to be stated again; the
+    /// numbers are frozen until it answers.
+    pub(crate) checking: bool,
     /// Why the read or Apply failed, shown in the dialog.
     pub(crate) error: Option<NumberingProblem>,
 }
@@ -52,6 +55,9 @@ pub enum NumberingProblem {
     NotLoaded(PathBuf),
     /// A parent sheet refused the change.
     NotChanged(PathBuf),
+    /// A closed parent sheet's file changed on disk after the read, so the
+    /// copy Apply would load is no longer what the file holds.
+    DiskChanged(PathBuf),
 }
 
 impl NumberingProblem {
@@ -75,6 +81,10 @@ impl NumberingProblem {
             }
             Self::NotLoaded(path) => format!("{} could not be loaded", path.display()),
             Self::NotChanged(path) => format!("{} could not be changed", path.display()),
+            Self::DiskChanged(path) => format!(
+                "{} changed on disk after the dialog read it; open the dialog again",
+                path.display()
+            ),
         }
     }
 }
@@ -112,6 +122,7 @@ impl SheetNumberingState {
             read: None,
             drafts: Vec::new(),
             clear_manual: false,
+            checking: false,
             error: None,
         }
     }
@@ -141,7 +152,8 @@ impl SheetNumberingState {
     /// Type `text` as the number of row `row`. A top-level page has no
     /// symbol to hold a number, so it cannot be edited.
     pub(crate) fn edit(&mut self, row: usize, text: String) {
-        let editable = self.rows().get(row).is_some_and(|r| r.placement.is_some());
+        let editable =
+            !self.checking && self.rows().get(row).is_some_and(|r| r.placement.is_some());
         if editable && let Some(draft) = self.drafts.get_mut(row) {
             *draft = text;
         }
@@ -149,6 +161,9 @@ impl SheetNumberingState {
 
     /// Every page back to its position in the hierarchy.
     pub(crate) fn auto_number(&mut self) {
+        if self.checking {
+            return;
+        }
         let positions: Vec<String> = self.rows().iter().map(|r| r.position.to_string()).collect();
         self.drafts = positions;
         self.clear_manual = true;
@@ -215,8 +230,9 @@ impl SheetNumberingState {
         edits
     }
 
-    /// Apply is offered: the read is in, every number is valid and one changes.
+    /// Apply is offered: the read is in, no Apply is waiting on the disk,
+    /// every number is valid and one changes.
     pub(crate) fn can_apply(&self) -> bool {
-        self.read.is_some() && !self.has_invalid() && !self.edits().is_empty()
+        self.read.is_some() && !self.checking && !self.has_invalid() && !self.edits().is_empty()
     }
 }

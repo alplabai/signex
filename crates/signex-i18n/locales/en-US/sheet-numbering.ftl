@@ -57,6 +57,10 @@ dialog-sheet-numbering-err-read-only = Nothing was changed: { $path } is read-on
 # Apply stopped: the closed sheet $path could not be loaded; every sheet was put back.
 dialog-sheet-numbering-err-not-loaded = Nothing was changed: { $path } could not be loaded.
 
+# Apply was refused: the closed sheet $path was written by something else
+# after the dialog read it, so the dialog's copy is out of date.
+dialog-sheet-numbering-err-disk-changed = Nothing was changed: { $path } changed on disk after this dialog read it. Close the dialog and open it again.
+
 # Apply stopped: $path refused the change; every sheet was put back.
 dialog-sheet-numbering-err-not-changed = Nothing was changed: { $path } could not be changed.
 

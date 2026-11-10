@@ -170,6 +170,11 @@ fn problem_text(problem: &NumberingProblem, i18n: &I18n) -> Localized {
             ids::DIALOG_SHEET_NUMBERING_ERR_NOT_CHANGED,
             "path" => path(sheet)
         ),
+        NumberingProblem::DiskChanged(sheet) => t!(
+            i18n,
+            ids::DIALOG_SHEET_NUMBERING_ERR_DISK_CHANGED,
+            "path" => path(sheet)
+        ),
     }
 }
 

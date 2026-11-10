@@ -15,9 +15,10 @@ use crate::app::{Message, Signex};
 /// How Tile arranges the windows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TileLayout {
-    /// Tile Horizontally: one column per window, left to right.
+    /// Tile Vertically: one column per window, left to right.
     SideBySide,
-    /// Tile Vertically: one row per window, top to bottom.
+    /// Tile Horizontally: one row per window, top to bottom (the Windows
+    /// MDI convention, Caner 2026-11-10).
     Stacked,
 }
 

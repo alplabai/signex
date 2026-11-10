@@ -251,10 +251,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         // (#2247).
         "number_schematic_sheets" => Message::from(crate::app::SheetNumberingMsg::Requested),
         "tile_windows_horizontally" => {
-            Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::SideBySide))
+            Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::Stacked))
         }
         "tile_windows_vertically" => {
-            Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::Stacked))
+            Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::SideBySide))
         }
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),

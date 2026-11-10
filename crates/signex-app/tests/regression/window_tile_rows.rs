@@ -74,7 +74,7 @@ fn logged(text: &str) -> bool {
 }
 
 #[test]
-fn tile_horizontally_puts_the_windows_side_by_side() {
+fn tile_vertically_puts_the_windows_side_by_side() {
     let app = app_with_an_undocked_tab((1920.0, 1080.0));
     assert_eq!(
         tiles_of(&app, TileLayout::SideBySide),
@@ -92,7 +92,7 @@ fn tile_horizontally_puts_the_windows_side_by_side() {
 }
 
 #[test]
-fn tile_vertically_stacks_the_windows() {
+fn tile_horizontally_stacks_the_windows() {
     let app = app_with_an_undocked_tab((1920.0, 1080.0));
     let tiles = tiles_of(&app, TileLayout::Stacked);
     assert_eq!(tiles[0].size, (1920.0, 540.0));
@@ -103,9 +103,9 @@ fn tile_vertically_stacks_the_windows() {
 fn the_menu_rows_run_the_tile() {
     let _ = signex_app::diagnostics::init_logging();
     let mut app = app_with_an_undocked_tab((2201.0, 1201.0));
-    let _ = app.update(crate::menu_support::menu_row("tile_windows_horizontally"));
-    assert!(logged("2 windows side by side on the 2201 x 1201 screen"));
     let _ = app.update(crate::menu_support::menu_row("tile_windows_vertically"));
+    assert!(logged("2 windows side by side on the 2201 x 1201 screen"));
+    let _ = app.update(crate::menu_support::menu_row("tile_windows_horizontally"));
     assert!(logged(
         "2 windows one above the other on the 2201 x 1201 screen"
     ));
@@ -129,11 +129,7 @@ fn the_palette_runs_the_tile() {
 fn a_user_key_binding_runs_the_tile() {
     let _ = signex_app::diagnostics::init_logging();
     let mut app = app_with_an_undocked_tab((2203.0, 1203.0));
-    crate::number_schematic_sheets::bind(
-        &mut app,
-        "tile_windows_horizontally",
-        "Ctrl+Alt+Shift+F12",
-    );
+    crate::number_schematic_sheets::bind(&mut app, "tile_windows_vertically", "Ctrl+Alt+Shift+F12");
     let ShortcutTrigger::KeySequence(mut strokes) =
         ShortcutTrigger::parse("Ctrl+Alt+Shift+F12").unwrap()
     else {

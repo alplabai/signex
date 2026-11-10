@@ -33,6 +33,9 @@ impl Signex {
                 Task::none()
             }
             M::ApplyRequested => self.apply_sheet_numbers(),
+            M::DiskChecked { generation, result } => {
+                self.sheet_numbers_disk_checked(generation, result)
+            }
             M::CancelRequested => {
                 self.ui_state.sheet_numbering = None;
                 Task::none()

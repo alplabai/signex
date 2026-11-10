@@ -179,7 +179,11 @@ with its file and its number.
 - Apply is refused, with the reason in the dialog and the Messages panel, when
   a sheet was opened, closed or had a sheet symbol changed since the read, or
   when a parent sheet is being saved or moved, or is read-only (an open one,
-  or a closed one written by a newer Signex). These checks run before any
+  or a closed one written by a newer Signex), or when a closed parent's file
+  changed on disk after the read: the read stamps each closed parent's file
+  (modified time and length) just before reading it, and Apply states those
+  files again on a worker before it writes; the numbers are frozen while it
+  waits. These checks run before any
   sheet changes; if a sheet still fails part-way, every sheet already changed
   is put back and the sheets it loaded are dropped.
 
@@ -188,8 +192,9 @@ with its file and its number.
 Run `tile_windows_horizontally` and `tile_windows_vertically` (#2247). They
 arrange the main window and every undocked document window (main window
 first, then the undocked ones by file path) on the main window's monitor: Tile
-Horizontally side by side in equal columns, Tile Vertically stacked in equal
-rows. Each window is un-maximized, resized and moved with `iced::window`
+Horizontally stacks them in equal rows, one above the other, and Tile
+Vertically puts them side by side in equal columns (the Windows MDI
+convention, Caner 2026-11-10). Each window is un-maximized, resized and moved with `iced::window`
 tasks. Greyed while no document is undocked, and until the main window's
 monitor has been read (the settled geometry reading, shortly after start-up).
 iced reports the monitor's full size, not its work area, so the tiles cover

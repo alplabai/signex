@@ -143,8 +143,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |
 | `smart_paste` | Smart Paste | edit | `Ctrl+Shift+V` | — |
 | `switch_segment_posture` | Switch current segment posture | interactive | — | `/` |
-| `tile_windows_horizontally` | Tile windows side by side | window | — | — |
-| `tile_windows_vertically` | Tile windows one above the other | window | — | — |
+| `tile_windows_horizontally` | Tile windows one above the other | window | — | — |
+| `tile_windows_vertically` | Tile windows side by side | window | — | — |
 | `toggle_auto_focus` | Toggle AutoFocus | view | `F9` | `F9` |
 | `toggle_cross_select_mode` | Toggle Cross Select Mode | select | `Ctrl+Shift+X` | — |
 | `toggle_electrical_grid` | Toggle electrical grid | view | `Shift+E` | — |

@@ -48,5 +48,12 @@ pub enum SheetNumberingMsg {
     /// Auto-number: every page back to its position in the hierarchy.
     AutoNumberRequested,
     ApplyRequested,
+    /// Apply's re-stat of the closed parent sheets finished: the files that
+    /// changed on disk since read `generation`, or why they could not be
+    /// stated.
+    DiskChecked {
+        generation: u64,
+        result: Result<Vec<std::path::PathBuf>, String>,
+    },
     CancelRequested,
 }
