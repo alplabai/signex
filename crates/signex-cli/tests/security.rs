@@ -893,4 +893,14 @@ fn new_project_with_profile_may_not_create_its_folder_outside_the_project() {
         before,
         "nothing was written"
     );
+    // The refusal came from the run's policy: the app never ran the command,
+    // so the edit journal has no line for it, and the access journal holds
+    // only the run's own start and end.
+    let edits = fx.dir.join(".signex/agent-edits.jsonl");
+    assert!(
+        std::fs::read_to_string(&edits).map_or(true, |text| text.is_empty()),
+        "an edit line for a refused command"
+    );
+    let access = std::fs::read_to_string(fx.dir.join(".signex/agent-access.jsonl")).unwrap();
+    assert_eq!(access.lines().count(), 2, "{access}");
 }

@@ -61,10 +61,33 @@ fn a_value_of_another_shape_reads_as_the_defaults_and_the_project_opens() {
         json!([1]),
         json!({"keep_in_git": "no"}),
     ] {
+        let bad_text = bad.to_string();
         let mut body = bare();
         body["agent_journal"] = bad;
         let path = write_raw(dir.path(), &body);
         let data = parse_project(&path).unwrap();
         assert!(data.agent_journal.is_default());
+        // Not silently reset: it is flagged, and a save keeps it as it was.
+        assert!(data.has_unreadable_agent_journal(), "{bad_text}");
+        write_project(&path, &data).unwrap();
+        assert_eq!(saved_json(&path)["agent_journal"], body["agent_journal"]);
     }
+}
+
+#[test]
+fn editing_the_settings_replaces_an_unreadable_value() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut body = bare();
+    body["agent_journal"] = json!("garbage");
+    let path = write_raw(dir.path(), &body);
+    let mut data = parse_project(&path).unwrap();
+    data.agent_journal.keep_in_git = false;
+
+    write_project(&path, &data).unwrap();
+
+    assert_eq!(
+        saved_json(&path)["agent_journal"]["keep_in_git"],
+        json!(false)
+    );
+    assert!(!parse_project(&path).unwrap().has_unreadable_agent_journal());
 }

@@ -20,12 +20,21 @@ pub const MIN_LINE_BYTES: usize = 64;
 /// The longest path, reason or client name an entry keeps, in characters.
 const FIELD_CHARS: usize = 1024;
 
+/// The most rights an access line lists.
+const MAX_CAPABILITIES: usize = 64;
+
 /// An agent command that ran, with what a replay needs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EditEntry {
     pub v: u64,
     /// When the command ran, UTC, to the millisecond.
     pub ts: String,
+    /// The session (one run of the app, or of a headless run) the revisions
+    /// and the undo group belong to: an engine's revision counter starts again
+    /// in every process, so a revision means something only within its
+    /// session. A line without one (an older build) is never replayable.
+    #[serde(default)]
+    pub session: String,
     pub pid: Option<u32>,
     pub client: Option<String>,
     /// The document's persistent id; `None` when the command names none.
@@ -63,25 +72,51 @@ pub struct AccessEntry {
     /// `allow-path` roots, as it reported or as the run was given them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub capabilities: Vec<String>,
+    /// Some of the text was shortened or dropped to keep the line within
+    /// [`MAX_ENTRY_BYTES`].
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub truncated: bool,
+}
+
+fn is_false(flag: &bool) -> bool {
+    !*flag
 }
 
 /// A command id and its `name`, `text` operands, as a request sends them.
 pub type ReplayRequest<'a> = (&'a str, Vec<(String, String)>);
 
 impl EditEntry {
-    /// Does the entry carry what a replay needs: it ran, it knows its
-    /// revision, and its operands were not dropped?
+    /// Does the entry carry what a replay needs: it ran, it knows its session
+    /// and revision, its operands were not dropped, and it is not a `revert`
+    /// (which names an undo group that exists only in its session)?
     fn replay_ready(&self) -> bool {
-        self.outcome == "ran" && self.revision_before.is_some() && !self.truncated
+        self.outcome == "ran"
+            && self.revision_before.is_some()
+            && !self.session.is_empty()
+            && !self.truncated
+            && self.command != "revert"
     }
 
-    /// The command and operands to send again, if the document is still at the
-    /// revision the entry ran at. A replay against another revision is
-    /// refused, as `expect_revision` refuses (#2178).
-    pub fn replay_request(&self, current_revision: u64) -> Result<ReplayRequest<'_>, String> {
+    /// The command and operands to send again, if the entry is of `session`
+    /// (the one that is running now) and the document is still at the
+    /// revision the entry ran at. A replay from another session is refused,
+    /// whatever the revision says, and so is one against another revision, as
+    /// `expect_revision` refuses (#2178). Nothing about the document's content
+    /// is compared (a later change).
+    pub fn replay_request(
+        &self,
+        session: &str,
+        current_revision: u64,
+    ) -> Result<ReplayRequest<'_>, String> {
         if !self.replayable || !self.replay_ready() {
             return Err(format!(
-                "the entry for `{}` at {} cannot be replayed (it did not run, or its operands were dropped)",
+                "the entry for `{}` at {} cannot be replayed (it did not run, it has no session, it is a revert, or its operands were dropped)",
+                self.command, self.ts
+            ));
+        }
+        if self.session != session {
+            return Err(format!(
+                "the entry for `{}` at {} was recorded in another session; its revision means nothing in this one. Nothing was applied",
                 self.command, self.ts
             ));
         }
@@ -106,23 +141,6 @@ impl EditEntry {
         self.client = self.client.take().map(|text| shorten(&text));
         self.reason = self.reason.take().map(|text| shorten(&text));
         self.replayable = self.replay_ready();
-    }
-
-    /// Replace every occurrence of `secret` in the operands and the reason.
-    pub fn redact(&mut self, secret: &str) {
-        if secret.is_empty() {
-            return;
-        }
-        for text in self.operands.values_mut() {
-            if text.contains(secret) {
-                *text = text.replace(secret, "[redacted]");
-            }
-        }
-        if let Some(reason) = &mut self.reason
-            && reason.contains(secret)
-        {
-            *reason = reason.replace(secret, "[redacted]");
-        }
     }
 
     /// The line, without its newline: within [`MAX_ENTRY_BYTES`] including
@@ -156,6 +174,7 @@ impl AccessEntry {
             client: None,
             reason: None,
             capabilities: Vec::new(),
+            truncated: false,
         }
     }
 
@@ -178,12 +197,26 @@ impl AccessEntry {
         self
     }
 
-    /// The line, without its newline.
+    /// The line, without its newline: within [`MAX_ENTRY_BYTES`] including the
+    /// newline, as an edit line is. A long list of rights is cut to its first
+    /// entries, each cut to a bounded length, and dropped altogether if the
+    /// line is still too long; `truncated` says so.
     pub fn to_line(mut self) -> String {
         self.v = JOURNAL_VERSION;
         self.client = self.client.take().map(|text| shorten(&text));
         self.reason = self.reason.take().map(|text| shorten(&text));
-        self.capabilities.truncate(64);
+        let before = self.capabilities.clone();
+        self.capabilities.truncate(MAX_CAPABILITIES);
+        for capability in &mut self.capabilities {
+            *capability = shorten(capability);
+        }
+        self.truncated = self.capabilities != before;
+        let line = encode(&self);
+        if line.len() < MAX_ENTRY_BYTES {
+            return line;
+        }
+        self.capabilities.clear();
+        self.truncated = true;
         encode(&self)
     }
 }

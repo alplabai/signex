@@ -111,8 +111,55 @@ fn an_agent_command_is_one_edit_line_that_replays_at_the_same_revision_only() {
     assert_eq!(entry.operands["color"], "#336699");
     assert!(entry.replayable && !entry.truncated);
 
-    assert!(entry.replay_request(before).is_ok());
-    assert!(entry.replay_request(before + 1).is_err());
+    let session = f.app.agent.session.clone();
+    assert_eq!(entry.session, session);
+    assert!(entry.replay_request(&session, before).is_ok());
+    assert!(entry.replay_request(&session, before + 1).is_err());
+}
+
+/// An engine's revision counter starts again in every process, so a line of
+/// one session must not be replayed in another even at the number it was
+/// recorded at (the reviewer's `a_later_session_does_not_reuse...`).
+#[test]
+fn a_line_of_session_one_is_refused_in_session_two_at_the_same_revision() {
+    let mut one = fixture();
+    let before = one.revision("b.snxsch");
+    one.ask("color_net", color(&one.doc("b.snxsch"), "#336699"));
+    let entry = one.edits().entries.remove(0);
+
+    // A second app is another session. Across processes the counter restarts,
+    // so the same number can come up again: offer exactly that number.
+    let two = fixture();
+    assert_ne!(one.app.agent.session, two.app.agent.session);
+
+    let refused = entry
+        .replay_request(&two.app.agent.session, before)
+        .unwrap_err();
+    assert!(refused.contains("another session"), "{refused}");
+    assert!(entry.replay_request(&one.app.agent.session, before).is_ok());
+}
+
+#[test]
+fn a_revert_line_is_journaled_and_not_replayable() {
+    let mut f = fixture();
+    let doc = f.doc("a.snxsch");
+    f.ask("color_net", color(&doc, "#336699"));
+    let group = f.edits().entries[0].group.expect("a group");
+
+    let reply = f.ask("revert", json!({"document": doc, "group": group}));
+
+    assert_eq!(reply["status"], "answered", "{reply}");
+    let lines = f.edits().entries;
+    let revert = lines
+        .iter()
+        .find(|e| e.command == "revert")
+        .expect("a revert line");
+    assert!(!revert.replayable);
+    assert!(
+        revert
+            .replay_request(&f.app.agent.session, revert.revision_before.unwrap())
+            .is_err()
+    );
 }
 
 #[test]
@@ -301,14 +348,15 @@ fn connections_are_recorded_accepted_refused_and_closed_with_their_rights() {
         pid: Some(99),
         reason: "the peer is another user".into(),
     });
+    let doc = f.doc("b.snxsch");
     let ok = |args: Value| {
-        json!({"token": token, "id": "list_documents", "args": args,
+        json!({"token": token, "id": "document_info", "args": args,
                "client": "signex-cli", "grants": ["read", "edit", "save"]})
         .to_string()
     };
-    // The same rights twice are recorded once.
-    f.ask_line(ok(json!({})));
-    f.ask_line(ok(json!({})));
+    // The same rights twice are recorded once, on the project the request names.
+    f.ask_line(ok(json!({"document": doc})));
+    f.ask_line(ok(json!({"document": doc})));
     f.ask_line(json!({"token": "nope", "id": "list_documents", "args": {}}).to_string());
     f.send(AgentMsg::ConnectionClosed { pid: Some(4242) });
 
@@ -389,5 +437,261 @@ fn the_projects_line_cap_is_the_cap_of_its_journals() {
         .lines()
         .count();
 
-    assert_eq!(lines, 100);
+    // Never past the cap; cut to 90 % when it passed it.
+    assert!((90..=100).contains(&lines), "{lines}");
+}
+
+/// A second open project, in a folder of its own, with one sheet loaded.
+fn open_second_project(f: &mut Fixture) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let mut data = f.app.document_state.projects[0].data.clone();
+    data.name = "Q".into();
+    data.dir = dir.path().to_string_lossy().into_owned();
+    data.document_id = Some(signex_types::document_id::DocumentId::new());
+    let id = f.app.document_state.mint_project_id();
+    f.app
+        .document_state
+        .projects
+        .push(crate::app::state::LoadedProject {
+            id,
+            path: dir.path().join("Q.snxprj"),
+            data,
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        });
+    dir
+}
+
+fn journals_text(dir: &std::path::Path) -> String {
+    let mut all = String::new();
+    for journal in [Journal::Edits, Journal::Access] {
+        let path = dir.join(".signex").join(journal.file_name());
+        all.push_str(&std::fs::read_to_string(path).unwrap_or_default());
+    }
+    all
+}
+
+/// The token is replaced once, on the encoded line, so no field of either
+/// journal can carry it: not a refused operand echoed in the reason, not the
+/// client's name, not a right.
+#[test]
+fn the_token_in_a_refused_operand_or_the_client_name_is_not_in_the_access_journal() {
+    let mut f = fixture();
+    let token = f.app.agent.token().unwrap().as_str().to_string();
+    let doc = f.doc("b.snxsch");
+
+    // `at` is not a point: the request is turned away and the reason echoes it.
+    let reply = f.ask_line(
+        json!({
+            "token": token, "id": "color_net",
+            "args": {"document": doc, "at": token, "color": "#336699"},
+            "client": token, "grants": [token, "read"],
+        })
+        .to_string(),
+    );
+
+    assert_eq!(reply["status"], "refused", "{reply}");
+    let access = f.access();
+    let refused = access
+        .entries
+        .iter()
+        .find(|e| e.event == "refused")
+        .expect("a refused line");
+    assert!(
+        refused
+            .reason
+            .as_deref()
+            .is_some_and(|why| why.contains("[redacted]")),
+        "{refused:?}"
+    );
+    assert!(
+        !f.journal_text().contains(&token),
+        "the token is in a journal"
+    );
+}
+
+/// Two open projects: an event that names one project, or carries a path,
+/// never reaches the other.
+#[test]
+fn one_projects_journal_never_names_another_projects_place() {
+    let mut f = fixture();
+    let b = open_second_project(&mut f);
+    let a_dir = f.dir.path().display().to_string();
+    let token = f.app.agent.token().unwrap().as_str().to_string();
+    let doc = f.doc("b.snxsch");
+    let inside = format!("allow-path:{a_dir}/exports");
+
+    f.send(AgentMsg::ConnectionOpened { pid: Some(4242) });
+    f.send(AgentMsg::PeerRefused {
+        pid: Some(99),
+        reason: format!("the peer at {a_dir}/sock is another user"),
+    });
+    f.ask_line(
+        json!({"token": token, "id": "document_info", "args": {"document": doc},
+            "client": "signex-cli",
+            "grants": ["read", "edit", inside, "allow-path:/somewhere/else"]})
+        .to_string(),
+    );
+    f.send(AgentMsg::ConnectionClosed { pid: Some(4242) });
+
+    // B saw the connection and nothing that is A's.
+    let b_text = journals_text(b.path());
+    assert!(!b_text.contains(&a_dir), "B names A's place: {b_text}");
+    assert!(b_text.contains(r#""event":"accepted""#));
+    assert!(b_text.contains(r#""event":"closed""#));
+    assert!(
+        !b_text.contains(r#""event":"grants""#),
+        "rights go to the project named only"
+    );
+    // A got the rights, with the roots inside it and a count of the others.
+    let grants = f
+        .access()
+        .entries
+        .into_iter()
+        .find(|e| e.event == "grants")
+        .expect("A's grants");
+    assert!(
+        grants.capabilities.contains(&inside),
+        "{:?}",
+        grants.capabilities
+    );
+    assert!(
+        !grants
+            .capabilities
+            .iter()
+            .any(|c| c.contains("/somewhere/else")),
+        "{:?}",
+        grants.capabilities
+    );
+    assert!(
+        grants
+            .capabilities
+            .iter()
+            .any(|c| c.contains("1 outside this project not recorded")),
+        "{:?}",
+        grants.capabilities
+    );
+    // The peer's reason names A's folder in A's own journal, scrubbed in B's.
+    assert!(journals_text(f.dir.path()).contains(&a_dir));
+    assert!(b_text.contains("[another project]"), "{b_text}");
+}
+
+/// A project opened while a connection lasts has no `accepted` for it, so it
+/// gets no orphan `closed`; one closed meanwhile is fine without its `closed`.
+#[test]
+fn a_project_opened_or_closed_during_a_connection_gets_no_orphan_line() {
+    let mut f = fixture();
+    f.send(AgentMsg::ConnectionOpened { pid: Some(7) });
+    let b = open_second_project(&mut f);
+    f.send(AgentMsg::ConnectionClosed { pid: Some(7) });
+
+    let b_text = journals_text(b.path());
+    assert!(
+        !b_text.contains(r#""event":"closed""#),
+        "an orphan closed: {b_text}"
+    );
+    let events: Vec<_> = f.access().entries.iter().map(|e| e.event.clone()).collect();
+    assert_eq!(events, ["accepted", "closed"]);
+
+    // Closed during the connection: the other still gets both, nothing breaks.
+    f.send(AgentMsg::ConnectionOpened { pid: Some(8) });
+    f.app.document_state.projects.pop();
+    f.send(AgentMsg::ConnectionClosed { pid: Some(8) });
+    let events: Vec<_> = f.access().entries.iter().map(|e| e.event.clone()).collect();
+    assert_eq!(events, ["accepted", "closed", "accepted", "closed"]);
+    assert!(
+        f.app.agent.connections.is_empty(),
+        "no connection left tracked"
+    );
+}
+
+/// A queued line is on disk when the app quits: the quit path writes what had
+/// not started and waits for what had. The exit drops every message after it,
+/// so a line left to the usual continuation would be lost.
+#[test]
+fn a_line_still_queued_at_quit_is_on_disk_after_it() {
+    let mut f = fixture();
+    let doc = f.doc("b.snxsch");
+    // The first request starts a write that has not run yet; the second waits
+    // behind it on the queue.
+    let mut tasks = Vec::new();
+    for rgb in ["#336699", "#336698"] {
+        let text = line(&f.app, "color_net", color(&doc, rgb));
+        let (reply, task) = ask_with_task(&mut f.app, Input::Line(text));
+        assert_eq!(reply["status"], "ran", "{reply}");
+        tasks.push(task);
+    }
+    assert_eq!(f.app.agent.journal.outstanding(), 1, "one waits");
+
+    tasks.push(f.app.flush_quit_writes_then(iced::exit()));
+    // One run for all of them, as the runtime does: once the exit lands, the
+    // messages still queued are dropped, so only the barrier can save a line.
+    f.driver
+        .settle(&mut f.app, iced::Task::batch(tasks))
+        .unwrap();
+
+    assert_eq!(f.edits().entries.len(), 2, "both lines are on disk");
+    assert_eq!(f.app.agent.journal.outstanding(), 0);
+}
+
+/// A command that names no document, with two projects open, has nowhere to
+/// go: said in Messages with the command and both projects.
+#[test]
+fn an_unplaceable_edit_line_names_the_command_and_both_projects() {
+    let mut f = fixture();
+    let b = open_second_project(&mut f);
+    let id = crate::keymap::AppCommandId::new("color_net").unwrap();
+    let mark = crate::diagnostics::newest_entry_id();
+
+    let (_outcome, task) = f
+        .app
+        .with_origin(crate::app::agent::Origin::agent(Some(5)), |app| {
+            app.journaled(&id, &crate::app::command::CommandArgs::none(), |_| {
+                (crate::app::command::CommandOutcome::Ran, iced::Task::none())
+            })
+        });
+    f.driver.settle(&mut f.app, task).unwrap();
+
+    let said: Vec<String> = crate::diagnostics::entries_since(mark)
+        .entries
+        .into_iter()
+        .map(|entry| entry.message)
+        .collect();
+    let line = said
+        .iter()
+        .find(|m| m.starts_with("Agent journal:") && m.contains("color_net"))
+        .unwrap_or_else(|| panic!("{said:?}"));
+    // Both projects by their file names (a whole path is longer than a
+    // Messages line keeps).
+    assert!(
+        line.contains("P.snxprj") && line.contains("Q.snxprj"),
+        "{line}"
+    );
+    drop(b);
+    assert!(line.contains("2 projects are open"), "{line}");
+}
+
+/// What a project may see of a client's rights.
+#[test]
+fn rights_within_keeps_inside_roots_and_counts_the_rest() {
+    use crate::app::agent::journal::record::rights_within;
+    let dir = std::path::Path::new("/work/P");
+    let rights = [
+        "read".to_string(),
+        "allow-path:/work/P/out".into(),
+        "allow-path:/etc".into(),
+        "allow-path:/home/x".into(),
+    ];
+    assert_eq!(
+        rights_within(&rights, dir),
+        [
+            "read",
+            "allow-path:/work/P/out",
+            "allow-path:(2 outside this project not recorded)"
+        ]
+    );
+    // Nothing dropped, nothing counted.
+    assert_eq!(rights_within(&["edit".to_string()], dir), ["edit"]);
 }

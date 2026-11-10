@@ -26,18 +26,23 @@ pub(super) fn apply_managed_rules(repo: &git2::Repository) -> Result<(), git2::E
     repo.add_ignore_rule(GITIGNORE_BLOCK_BODY)
 }
 
-/// Whether `rel` is clutter the managed block names. Every rule in the
-/// block has no slash, so it matches the file name in any directory.
+/// Whether `rel` is clutter the managed block names. A rule without a slash
+/// matches the file name in any directory; one with a slash
+/// (`.signex/agent-journal.lock`) is anchored at the root and matches the
+/// whole path.
 pub(super) fn is_managed_clutter(rel: &str) -> bool {
-    let rules = GITIGNORE_BLOCK_BODY
+    let name = rel.rsplit('/').next().unwrap_or(rel);
+    GITIGNORE_BLOCK_BODY
         .lines()
         .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with('#'));
-    let Ok(spec) = git2::Pathspec::new(rules) else {
-        return false;
-    };
-    let name = rel.rsplit('/').next().unwrap_or(rel);
-    spec.matches_path(Path::new(name), git2::PathspecFlags::DEFAULT)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .any(|rule| {
+            let Ok(spec) = git2::Pathspec::new([rule]) else {
+                return false;
+            };
+            let subject = if rule.contains('/') { rel } else { name };
+            spec.matches_path(Path::new(subject), git2::PathspecFlags::DEFAULT)
+        })
 }
 
 impl LocalGitAdapter {
@@ -70,5 +75,19 @@ impl LocalGitAdapter {
                 self.root_dir.join(GITIGNORE_FILE).display()
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_managed_clutter;
+
+    #[test]
+    fn a_rule_with_a_slash_matches_the_whole_path_and_one_without_the_name() {
+        assert!(is_managed_clutter(".signex/agent-journal.lock"));
+        assert!(is_managed_clutter("sub/dir/.DS_Store"));
+        // Anchored at the root: the same name elsewhere is not the lock.
+        assert!(!is_managed_clutter("sub/.signex/agent-journal.lock"));
+        assert!(!is_managed_clutter(".signex/agent-edits.jsonl"));
     }
 }

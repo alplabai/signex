@@ -144,10 +144,14 @@ impl Signex {
         self.agent.journals_on = true;
         self.agent.run_client = Some(client.to_string());
         let pid = Some(std::process::id());
-        self.journal_access(|ts| {
+        let open = self.open_project_files();
+        self.journal_access_to(&open, |ts, folder| {
             crate::app::agent::journal::AccessEntry::new(ts, "started", "headless")
                 .with_peer(pid, Some(client.to_string()))
-                .with_capabilities(capabilities.clone())
+                .with_capabilities(crate::app::agent::journal::record::rights_within(
+                    &capabilities,
+                    folder,
+                ))
         })
     }
 
@@ -156,7 +160,8 @@ impl Signex {
     pub fn end_agent_journals(&mut self) -> Task<Message> {
         let pid = Some(std::process::id());
         let client = self.agent.run_client.clone();
-        self.journal_access(|ts| {
+        let open = self.open_project_files();
+        self.journal_access_to(&open, |ts, _| {
             crate::app::agent::journal::AccessEntry::new(ts, "ended", "headless")
                 .with_peer(pid, client.clone())
         })

@@ -148,6 +148,9 @@ windows-sys = { version = "0.61", features = [
     "Win32_Security_Authorization",
     "Win32_System_Pipes",
     "Win32_System_Threading",
+    # The agent journals (#2253): the link count of a journal file and the
+    # final path of an opened handle, to refuse a hard link or a swapped folder.
+    "Win32_Storage_FileSystem",
 ] }
 
 # NOT `[lints] workspace = true` — cargo rejects mixing inheritance with

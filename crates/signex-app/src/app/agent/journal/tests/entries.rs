@@ -1,7 +1,7 @@
-//! The entry types: the size cap, redaction, the replay check, the version.
+//! The entry types: the size cap, the replay check, the version.
 
-use super::{access, edit};
-use crate::app::agent::journal::{EditEntry, MAX_ENTRY_BYTES};
+use super::{SESSION, access, edit};
+use crate::app::agent::journal::{AccessEntry, EditEntry, MAX_ENTRY_BYTES};
 
 #[test]
 fn every_line_carries_version_one_first() {
@@ -59,31 +59,52 @@ fn the_free_text_fields_are_bounded() {
 }
 
 #[test]
-fn a_secret_is_replaced_in_operands_and_reason() {
-    let mut leaky = edit("apply_edits", 1);
-    leaky
-        .operands
-        .insert("summary".into(), "use SECRET123 here".into());
-    leaky.reason = Some("bad SECRET123".into());
-    leaky.redact("SECRET123");
-    let line = leaky.to_line();
-    assert!(!line.contains("SECRET123"), "{line}");
-    assert!(line.contains("[redacted]"));
-}
-
-#[test]
-fn replay_works_at_the_recorded_revision_and_refuses_at_any_other() {
+fn replay_works_in_the_recorded_session_at_the_recorded_revision_and_refuses_at_any_other() {
     let back: EditEntry = serde_json::from_str(&edit("color_net", 12).to_line()).unwrap();
 
-    let (command, operands) = back.replay_request(12).unwrap();
+    let (command, operands) = back.replay_request(SESSION, 12).unwrap();
     assert_eq!(command, "color_net");
     assert_eq!(operands, [("at".to_string(), "5,0".to_string())]);
 
     for other in [0, 11, 13, 99] {
-        let refused = back.replay_request(other).unwrap_err();
+        let refused = back.replay_request(SESSION, other).unwrap_err();
         assert!(refused.contains("revision"), "{refused}");
         assert!(refused.contains("Nothing was applied"));
     }
+}
+
+/// A revision means something only within the session that recorded it: the
+/// engine's counter starts again in every process, so another session at the
+/// very same number is not the document the line ran on.
+#[test]
+fn a_line_is_refused_in_another_session_even_at_the_same_revision() {
+    let back: EditEntry = serde_json::from_str(&edit("color_net", 12).to_line()).unwrap();
+
+    let refused = back.replay_request("another-session", 12).unwrap_err();
+
+    assert!(refused.contains("another session"), "{refused}");
+    assert!(refused.contains("Nothing was applied"));
+}
+
+#[test]
+fn a_line_with_no_session_is_never_replayable() {
+    let mut old = edit("color_net", 12);
+    old.session = String::new();
+    let back: EditEntry = serde_json::from_str(&old.to_line()).unwrap();
+    assert!(!back.replayable);
+    assert!(back.replay_request("", 12).is_err());
+    // A line an older build wrote has no `session` key at all.
+    let line = r#"{"v":1,"ts":"t","pid":1,"client":null,"document":null,"path":null,"command":"color_net","operands":{},"revision_before":1,"revision_after":2,"group":1,"outcome":"ran","reason":null,"truncated":false,"replayable":true}"#;
+    let older: EditEntry = serde_json::from_str(line).unwrap();
+    assert!(older.replay_request("s", 1).is_err());
+}
+
+/// A `revert` names an undo group that exists only in its session.
+#[test]
+fn a_revert_line_is_not_replayable() {
+    let back: EditEntry = serde_json::from_str(&edit("revert", 4).to_line()).unwrap();
+    assert!(!back.replayable);
+    assert!(back.replay_request(SESSION, 4).is_err());
 }
 
 #[test]
@@ -92,5 +113,29 @@ fn a_truncated_or_refused_entry_cannot_be_replayed_at_all() {
     big.operands
         .insert("edits".into(), "e".repeat(MAX_ENTRY_BYTES));
     let truncated: EditEntry = serde_json::from_str(&big.to_line()).unwrap();
-    assert!(truncated.replay_request(5).is_err());
+    assert!(truncated.replay_request(SESSION, 5).is_err());
+}
+
+/// An access line is held to the same 64 KiB rule as an edit line: a long
+/// list of rights keeps its first entries, each bounded, and says so.
+#[test]
+fn an_access_line_over_the_cap_is_cut_and_says_so() {
+    let many: Vec<String> = (0..500)
+        .map(|n| format!("allow-path:/{n}/{}", "x".repeat(2_000)))
+        .collect();
+    let line = access("grants").with_capabilities(many).to_line();
+
+    assert!(line.len() < MAX_ENTRY_BYTES, "{}", line.len());
+    let back: AccessEntry = serde_json::from_str(&line).unwrap();
+    assert!(back.truncated);
+    assert!(back.capabilities.len() <= 64);
+    assert!(back.capabilities.iter().all(|c| c.chars().count() <= 1024));
+}
+
+#[test]
+fn a_short_access_line_is_not_marked_truncated() {
+    let line = access("grants")
+        .with_capabilities(vec!["read".into(), "edit".into()])
+        .to_line();
+    assert!(!line.contains("truncated"), "{line}");
 }

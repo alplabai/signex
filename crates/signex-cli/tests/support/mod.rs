@@ -294,10 +294,27 @@ pub fn snapshot(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     out
 }
 
-/// `snapshot` without the agent journals (#2253): a run that may save writes
-/// `.signex/agent-*.jsonl` and its lock, which is not what these tests ask about.
+/// The three files a run that may save writes under `.signex/` (#2253).
+pub const JOURNAL_FILES: [&str; 3] = [
+    "agent-edits.jsonl",
+    "agent-access.jsonl",
+    "agent-journal.lock",
+];
+
+/// `snapshot` without those three files: only they are ignored, so any other
+/// file a run leaves under `.signex/` (or anywhere) still shows.
 pub fn without_journals(mut files: BTreeMap<PathBuf, Vec<u8>>) -> BTreeMap<PathBuf, Vec<u8>> {
-    files.retain(|path, _| !path.components().any(|part| part.as_os_str() == ".signex"));
+    files.retain(|path, _| {
+        let in_signex = path
+            .parent()
+            .and_then(Path::file_name)
+            .is_some_and(|dir| dir == ".signex");
+        let known = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| JOURNAL_FILES.contains(&name));
+        !(in_signex && known)
+    });
     files
 }
 

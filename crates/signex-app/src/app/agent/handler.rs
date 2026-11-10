@@ -8,6 +8,7 @@ use iced::{Subscription, Task};
 use serde_json::Value;
 
 use super::journal::AccessEntry;
+use super::journal::record::rights_within;
 use super::reply::{Status, changed_between, messages_since, outcome_verdict};
 use super::wire::{self, Request};
 use super::{AgentCall, AgentMsg, Input, allow, listener, registry};
@@ -58,18 +59,53 @@ impl Signex {
                     "Agent connection refused ({}): {reason}",
                     pid_text(pid)
                 ));
-                self.journal_access(|ts| {
+                // A connection turned away names no project: every open one
+                // records it, with no path in the line.
+                let open = self.open_project_files();
+                self.journal_access_to(&open, |ts, _| {
                     AccessEntry::new(ts, "refused", "socket")
                         .with_peer(pid, None)
                         .with_reason(reason.clone())
                 })
             }
-            AgentMsg::ConnectionOpened { pid } => self.journal_access(|ts| {
-                AccessEntry::new(ts, "accepted", "socket").with_peer(pid, None)
-            }),
+            AgentMsg::ConnectionOpened { pid } => {
+                // Every open project records the connection, with no path; a
+                // project opened while it lasts has no `accepted` and so gets
+                // no `closed`.
+                let open = self.open_project_files();
+                self.agent
+                    .connections
+                    .entry(pid)
+                    .or_default()
+                    .push_back(open.clone());
+                self.journal_access_to(&open, |ts, _| {
+                    AccessEntry::new(ts, "accepted", "socket").with_peer(pid, None)
+                })
+            }
             AgentMsg::ConnectionClosed { pid } => {
-                self.agent.grants_seen.remove(&pid);
-                self.journal_access(|ts| {
+                // Only the projects that saw it open, and are still open (one
+                // closed meanwhile has nowhere to write it), get the line.
+                let opened_with = self
+                    .agent
+                    .connections
+                    .get_mut(&pid)
+                    .and_then(std::collections::VecDeque::pop_front)
+                    .unwrap_or_default();
+                if self
+                    .agent
+                    .connections
+                    .get(&pid)
+                    .is_some_and(|left| left.is_empty())
+                {
+                    self.agent.connections.remove(&pid);
+                    self.agent.grants_seen.retain(|(who, _), _| *who != pid);
+                }
+                let still_open: Vec<_> = self
+                    .open_project_files()
+                    .into_iter()
+                    .filter(|project| opened_with.contains(project))
+                    .collect();
+                self.journal_access_to(&still_open, |ts, _| {
                     AccessEntry::new(ts, "closed", "socket").with_peer(pid, None)
                 })
             }
@@ -421,7 +457,17 @@ impl Signex {
         // event; one the command's own handler refused is in the edit journal.
         let turned_away = if status == Status::Refused && !self.agent.reached_handler {
             let (pid, why) = (call.pid, reason.as_deref().map(printable));
-            self.journal_access(|ts| {
+            // The project the request names records it; a request that names
+            // none (a bad token, a malformed line) goes to every open project,
+            // each seeing only what is not another project's path.
+            let named = match &call.input {
+                Input::Line(line) => wire::parse_request(line)
+                    .ok()
+                    .and_then(|request| self.project_named_by(&request.operands)),
+                _ => None,
+            };
+            let to = named.map_or_else(|| self.open_project_files(), |project| vec![project]);
+            self.journal_access_to(&to, |ts, _| {
                 let entry = AccessEntry::new(ts, "refused", "socket").with_peer(pid, None);
                 match &why {
                     Some(why) => entry.with_reason(why.clone()),
@@ -515,16 +561,22 @@ impl Signex {
         if request.grants.is_empty() {
             return Task::none();
         }
+        // The rights go only to the project the request names, and only the
+        // paths inside it.
+        let Some(project) = self.project_named_by(&request.operands) else {
+            return Task::none();
+        };
         let seen = (client.clone(), request.grants.clone());
-        if self.agent.grants_seen.get(&pid) == Some(&seen) {
+        let key = (pid, project.clone());
+        if self.agent.grants_seen.get(&key) == Some(&seen) {
             return Task::none();
         }
-        self.agent.grants_seen.insert(pid, seen);
+        self.agent.grants_seen.insert(key, seen);
         let grants = request.grants.clone();
-        self.journal_access(|ts| {
+        self.journal_access_to(&[project], |ts, folder| {
             AccessEntry::new(ts, "grants", "socket")
                 .with_peer(pid, client.clone())
-                .with_capabilities(grants.clone())
+                .with_capabilities(rights_within(&grants, folder))
         })
     }
 

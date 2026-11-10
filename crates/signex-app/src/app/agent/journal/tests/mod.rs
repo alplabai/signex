@@ -5,6 +5,7 @@ mod concurrent;
 mod entries;
 mod refusals;
 mod rotation;
+mod seam;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -17,6 +18,7 @@ pub(super) fn edit(command: &str, revision: u64) -> EditEntry {
     EditEntry {
         v: JOURNAL_VERSION,
         ts: "2026-11-10T12:00:00.000Z".into(),
+        session: SESSION.into(),
         pid: Some(4242),
         client: Some("signex-cli".into()),
         document: Some("0193a2f0-7b1c-7cde-8123-456789abcdef".into()),
@@ -46,3 +48,6 @@ pub(super) fn read_edits(dir: &Path) -> super::Report<EditEntry> {
 }
 
 pub(super) const CAP: u32 = 10_000;
+
+/// The session of the entries `edit` makes.
+pub(super) const SESSION: &str = "0193a2f0-aaaa-7bbb-8ccc-000000000001";

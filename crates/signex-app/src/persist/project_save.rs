@@ -112,10 +112,24 @@ fn sync_journal_ignore(project_file: &std::path::Path, data: &ProjectData) {
     let Some(dir) = project_file.parent() else {
         return;
     };
-    let keep = data.agent_journal.keep_in_git;
-    if let Err(error) = signex_types::project_vcs_files::sync_agent_journal_ignore(dir, keep) {
-        crate::diagnostics::log_warning(format!(
+    if let Some(notice) = journal_ignore_notice(dir, data.agent_journal.keep_in_git) {
+        crate::diagnostics::log_warning(notice);
+    }
+}
+
+/// The sync of the managed block for `dir`, and what to tell the person when
+/// it failed or could not apply (`None` when it did, or there is nothing to do).
+pub(crate) fn journal_ignore_notice(dir: &std::path::Path, keep: bool) -> Option<String> {
+    use signex_types::project_vcs_files::{JournalIgnoreSync, sync_agent_journal_ignore};
+    match sync_agent_journal_ignore(dir, keep) {
+        Ok(JournalIgnoreSync::RepositoryAbove) if !keep => Some(format!(
+            "[save] {} is inside a repository whose root is above it, so \"Keep agent journals in git\" \
+             (off) was not applied: add .signex/agent-*.jsonl to that repository's .gitignore yourself",
+            dir.display()
+        )),
+        Ok(_) => None,
+        Err(error) => Some(format!(
             "[save] The project was saved, but its .gitignore could not be updated for the agent journal setting: {error}"
-        ));
+        )),
     }
 }

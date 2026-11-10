@@ -85,6 +85,7 @@ pub(super) fn view<'a>(
                 ..s
             },
         ),
+        note(t!(i18n, ids::PROJECT_AGENT_JOURNALS_SUMMARISE_HELP)),
         row![
             text(t!(i18n, ids::PROJECT_AGENT_JOURNALS_LINES))
                 .size(ts.body)

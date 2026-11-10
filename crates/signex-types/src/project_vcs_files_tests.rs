@@ -476,8 +476,25 @@ fn syncing_the_journal_setting_adds_then_removes_the_line_and_keeps_user_lines()
 #[test]
 fn syncing_writes_nothing_for_a_project_without_version_control() {
     let dir = tempfile::tempdir().unwrap();
-    sync_agent_journal_ignore(dir.path(), false).unwrap();
+    let outcome = sync_agent_journal_ignore(dir.path(), false).unwrap();
+    assert_eq!(outcome, JournalIgnoreSync::NoRepository);
     assert!(!dir.path().join(".gitignore").exists());
+}
+
+/// A project inside a repository whose root is above it: the rule would have
+/// to go in the repository's own `.gitignore`, which Signex does not edit, so
+/// the outcome says it was not applied (the caller tells the person).
+#[test]
+fn a_project_below_the_repository_root_is_reported_not_changed() {
+    let repo = tempfile::tempdir().unwrap();
+    std::fs::create_dir(repo.path().join(".git")).unwrap();
+    let project = repo.path().join("boards").join("p1");
+    std::fs::create_dir_all(&project).unwrap();
+
+    let outcome = sync_agent_journal_ignore(&project, false).unwrap();
+
+    assert_eq!(outcome, JournalIgnoreSync::RepositoryAbove);
+    assert!(!project.join(".gitignore").exists());
 }
 
 #[cfg(unix)]

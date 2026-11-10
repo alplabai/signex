@@ -24,6 +24,57 @@ fn a_journal_that_is_a_symlink_is_refused_and_its_target_untouched() {
     assert_eq!(std::fs::read_to_string(&target).unwrap(), "keep me\n");
 }
 
+/// A hard link to a file that lives elsewhere is a plain file with another
+/// name: appending to it would write into the other file. Refused on the link
+/// count, the lock file included, and the target is untouched.
+#[cfg(unix)]
+#[test]
+fn a_journal_that_is_a_hard_link_is_refused_and_its_target_untouched() {
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let target = outside.path().join("victim.txt");
+    std::fs::write(&target, "keep me\n").unwrap();
+    std::fs::create_dir(dir.path().join(".signex")).unwrap();
+    std::fs::hard_link(&target, dir.path().join(".signex/agent-edits.jsonl")).unwrap();
+
+    let refused = append(dir.path()).unwrap_err();
+
+    assert!(refused.contains("links"), "{refused}");
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), "keep me\n");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_lock_file_that_is_a_hard_link_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let target = outside.path().join("lock-target");
+    std::fs::write(&target, "x").unwrap();
+    std::fs::create_dir(dir.path().join(".signex")).unwrap();
+    std::fs::hard_link(&target, dir.path().join(".signex/agent-journal.lock")).unwrap();
+
+    assert!(append(dir.path()).unwrap_err().contains("links"));
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), "x");
+}
+
+/// The reader refuses a hard link too: the viewer never prints another file.
+#[cfg(unix)]
+#[test]
+fn a_hard_linked_journal_is_not_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let target = outside.path().join("secret.txt");
+    std::fs::write(&target, "not a journal\n").unwrap();
+    std::fs::create_dir(dir.path().join(".signex")).unwrap();
+    std::fs::hard_link(&target, dir.path().join(".signex/agent-edits.jsonl")).unwrap();
+
+    let read = crate::app::agent::journal::read_journal::<crate::app::agent::journal::EditEntry>(
+        &dir.path().join(".signex/agent-edits.jsonl"),
+    );
+
+    assert!(read.unwrap_err().contains("links"));
+}
+
 #[cfg(unix)]
 #[test]
 fn a_signex_folder_that_is_a_symlink_is_refused_and_nothing_is_created_through_it() {

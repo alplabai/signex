@@ -8,7 +8,7 @@ use std::path::Path;
 use serde::de::DeserializeOwned;
 
 use super::entry::JOURNAL_VERSION;
-use super::safe_fs::open_read;
+use super::safe_fs::SignexDir;
 
 /// The most a journal is read into memory.
 pub const MAX_READ_BYTES: u64 = 512 * 1024 * 1024;
@@ -65,7 +65,15 @@ impl<T> Report<T> {
 
 /// Read the journal at `path`; a missing file is an empty report.
 pub fn read_journal<T: DeserializeOwned>(path: &Path) -> Result<Report<T>, String> {
-    let Some(file) = open_read(path)? else {
+    let (Some(folder), Some(name)) = (path.parent(), path.file_name().and_then(|n| n.to_str()))
+    else {
+        return Err(format!("{} is not a journal path", path.display()));
+    };
+    let Some(file) = SignexDir::open_folder(folder)?
+        .map(|dir| dir.read_file(name))
+        .transpose()?
+        .flatten()
+    else {
         return Ok(Report::default());
     };
     let mut bytes = Vec::new();

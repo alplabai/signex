@@ -17,16 +17,14 @@ pub enum Which {
 
 /// The folder whose `.signex/` holds the journals: the project's folder, given
 /// as the `.snxprj` or as the folder itself.
-fn journal_dir(project: &Path) -> Result<PathBuf, String> {
+fn journal_dir(project: &Path) -> PathBuf {
     if project.is_dir() {
-        return Ok(project.to_path_buf());
+        return project.to_path_buf();
     }
     project
         .parent()
         .filter(|dir| !dir.as_os_str().is_empty())
-        .map(Path::to_path_buf)
-        .or_else(|| Some(PathBuf::from(".")))
-        .ok_or_else(|| format!("{} has no folder", project.display()))
+        .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
 }
 
 /// Print the journal to `out`; what the reader skipped goes to `problems`.
@@ -36,7 +34,7 @@ pub fn run(
     out: &mut impl Write,
     problems: &mut impl Write,
 ) -> Result<(), String> {
-    let dir = journal_dir(project)?;
+    let dir = journal_dir(project);
     let journal = match which {
         Which::Edits => Journal::Edits,
         Which::Access => Journal::Access,

@@ -1,13 +1,14 @@
 //! Appending one line to a journal (#2253), safely: under an exclusive
 //! advisory lock on a sibling file, as one `write` of the whole line, and
-//! rotated at the line cap while the lock is still held. See
+//! rotated at the line cap while the lock is still held. Every file is opened
+//! through the `.signex/` folder handle ([`SignexDir`]). See
 //! `docs/AGENT_JOURNALS.md`, "Append".
 
 use std::io::{Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::Path;
 
 use super::rotate::rotate_if_over;
-use super::safe_fs::{ensure_signex_dir, open_append, open_lock};
+use super::safe_fs::SignexDir;
 
 /// The lock both journals of a project share. It is a sibling, never the
 /// journal itself: rotation renames the journal, which would orphan a lock on
@@ -43,16 +44,32 @@ pub fn append_line(
     line: &str,
     max_lines: u32,
 ) -> Result<(), String> {
-    let dir = ensure_signex_dir(project_dir)?;
-    let lock_path = dir.join(LOCK_FILE);
-    let lock = open_lock(&lock_path)?;
-    lock.lock()
-        .map_err(|error| format!("cannot lock {}: {error}", lock_path.display()))?;
-    let path = dir.join(journal.file_name());
-    let mut file = open_append(&path)?;
+    let dir = SignexDir::create(project_dir)?;
+    append_line_in(&dir, journal, line, max_lines)
+}
+
+/// [`append_line`] into an already opened `.signex/` folder: the files are
+/// opened through its handle, so a folder swapped for a link after it was
+/// opened changes nothing.
+pub(crate) fn append_line_in(
+    dir: &SignexDir,
+    journal: Journal,
+    line: &str,
+    max_lines: u32,
+) -> Result<(), String> {
+    let lock = dir.lock_file(LOCK_FILE)?;
+    lock.lock().map_err(|error| {
+        format!(
+            "cannot lock {}: {error}",
+            dir.path().join(LOCK_FILE).display()
+        )
+    })?;
+    let name = journal.file_name();
+    let shown = dir.path().join(name);
+    let mut file = dir.append_file(name)?;
     let mut bytes = Vec::with_capacity(line.len() + 2);
     if ends_mid_line(&mut file)
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))?
+        .map_err(|error| format!("cannot read {}: {error}", shown.display()))?
     {
         bytes.push(b'\n');
     }
@@ -60,9 +77,9 @@ pub fn append_line(
     bytes.push(b'\n');
     // One syscall for a plain file: the line lands whole or not at all.
     file.write_all(&bytes)
-        .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+        .map_err(|error| format!("cannot write {}: {error}", shown.display()))?;
     drop(file);
-    rotate_if_over(&path, max_lines)
+    rotate_if_over(dir, name, max_lines)
     // `lock` is released when it drops, after the rotation.
 }
 

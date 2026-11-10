@@ -72,13 +72,30 @@ fn clamped_max_lines<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u32, 
         .clamp(MIN_JOURNAL_MAX_LINES, MAX_JOURNAL_MAX_LINES))
 }
 
-/// Reads a stored `agent_journal`; a value of another shape reads as the
-/// defaults, so a hand-edited key never makes the project unopenable.
-pub(crate) fn lenient_settings<'de, D: Deserializer<'de>>(
-    deserializer: D,
-) -> Result<AgentJournalSettings, D::Error> {
-    let value = Value::deserialize(deserializer)?;
-    Ok(serde_json::from_value(value).unwrap_or_default())
+/// Read a stored `agent_journal`. A value of another shape never makes the
+/// project unopenable: the defaults apply, a warning says so (Messages), and the
+/// raw value is kept in `unknown` so a save writes it back untouched until the
+/// settings are edited.
+pub(crate) fn take_agent_journal(data: &mut crate::project::ProjectData, raw: Value) {
+    match serde_json::from_value::<AgentJournalSettings>(raw.clone()) {
+        Ok(settings) => data.agent_journal = settings,
+        Err(why) => {
+            tracing::warn!(
+                target: "signex::project",
+                "The project's agent journal settings are not readable ({why}); the defaults \
+                 apply and the stored value is kept unchanged until you edit them."
+            );
+            data.unknown.insert(AGENT_JOURNAL_KEY.to_string(), raw);
+        }
+    }
+}
+
+impl crate::project::ProjectData {
+    /// The file has an `agent_journal` value this build could not read: kept
+    /// verbatim for re-save, the defaults apply.
+    pub fn has_unreadable_agent_journal(&self) -> bool {
+        self.agent_journal.is_default() && self.unknown.get(AGENT_JOURNAL_KEY).is_some()
+    }
 }
 
 #[cfg(test)]

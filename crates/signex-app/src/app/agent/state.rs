@@ -14,6 +14,9 @@ use super::token::{Token, boot_id};
 /// one); cleaning an id twice is harmless.
 pub(super) const MAX_TOUCHED: usize = 32;
 
+/// The client name and the rights it last reported.
+pub(super) type SeenGrants = (Option<String>, Vec<String>);
+
 pub(crate) struct AgentState {
     /// `None` when the system gave no randomness: the listener never starts.
     ids: Option<(String, Token)>,
@@ -46,9 +49,17 @@ pub(crate) struct AgentState {
     pub(super) reached_handler: bool,
     /// The journal lines waiting to be written, by project folder.
     pub(crate) journal: super::journal::queue::JournalQueue,
-    /// What each client process last said it may do, so a change is recorded
-    /// once and not at every request.
-    pub(super) grants_seen: std::collections::BTreeMap<Option<u32>, (Option<String>, Vec<String>)>,
+    /// What each client process last said it may do on each project, so a
+    /// change is recorded once and not at every request.
+    pub(super) grants_seen: std::collections::BTreeMap<(Option<u32>, PathBuf), SeenGrants>,
+    /// For each client process, the open connections in the order they opened,
+    /// each with the projects that were open when it did: only those get its
+    /// `closed` line (a project opened since has no `accepted` to match).
+    pub(super) connections:
+        std::collections::BTreeMap<Option<u32>, std::collections::VecDeque<Vec<PathBuf>>>,
+    /// This run of the app: the revisions and undo groups in the edit journal
+    /// belong to it, and a replay is refused in any other (#2253).
+    pub(crate) session: String,
     /// Whether the open projects are listed in the registry: the window the
     /// person works in (`Signex::boot`) does. An app made otherwise (a test, a
     /// headless run, which holds its project itself) does not.
@@ -101,6 +112,8 @@ impl AgentState {
             reached_handler: false,
             journal: super::journal::queue::JournalQueue::default(),
             grants_seen: std::collections::BTreeMap::new(),
+            connections: std::collections::BTreeMap::new(),
+            session: uuid::Uuid::now_v7().to_string(),
             lists_projects: false,
             registry_lock: Arc::default(),
             registry_seq: 0,
