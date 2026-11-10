@@ -11,23 +11,6 @@ use super::DocumentState;
 use crate::app::agent::Origin;
 use crate::schematic_runtime::RenderInvalidation;
 
-/// The project's sheets as read for the first checked edit of a list: the
-/// other sheets do not change while the list runs, so the next edits reuse them
-/// instead of reading the project again (the target sheet is replaced by its
-/// current state each time). `None` outside a list.
-#[derive(Default)]
-pub(crate) struct ProjectSetCache(pub(crate) Option<crate::app::project_sheets::ProjectSheetSet>);
-
-impl std::fmt::Debug for ProjectSetCache {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(if self.0.is_some() {
-            "ProjectSetCache(read)"
-        } else {
-            "ProjectSetCache(empty)"
-        })
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct AgentEdits {
     /// The sheet an edit list is running on. Set only for the length of one
@@ -36,8 +19,17 @@ pub struct AgentEdits {
     pub(crate) target: Option<PathBuf>,
     /// Whether an edit list (not one placement naming a `document`) is running.
     pub(crate) listing: bool,
-    /// The project read the list's checks share.
-    pub(crate) project_set: std::cell::RefCell<ProjectSetCache>,
+    /// What the running edit's checks read off the UI thread, set while it
+    /// runs on completion of those reads (#2199, `command::edit_reads`).
+    pub(crate) reads: Option<std::sync::Arc<crate::app::command::EditReads>>,
+    /// Set by a check that needed the project's closed sheets, not read yet:
+    /// the command is run again once they are (`run_operands`).
+    pub(crate) project_wanted: std::cell::Cell<bool>,
+    /// The last ticket handed to an edit waiting for its reads.
+    pub(crate) tickets: u64,
+    /// The outcome of each waiting edit that ran, by ticket, until the caller
+    /// that is not the agent socket (a headless run) takes it.
+    pub(crate) finished: HashMap<u64, crate::app::command::CommandOutcome>,
     /// The repaint the edits so far owe the target sheet.
     pub(crate) owed: RenderInvalidation,
     /// The Undo label of each undo step an agent made ("Agent: ...").

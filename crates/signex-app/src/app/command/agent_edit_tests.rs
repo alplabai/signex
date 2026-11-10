@@ -24,7 +24,7 @@ fn run(app: &mut Signex, name: &str, operands: &[String]) -> CommandOutcome {
     let command = id(name);
     let refs: Vec<&str> = operands.iter().map(String::as_str).collect();
     let args = CommandArgs::parse_operands(&command, &refs).expect("operands parse");
-    app.run_operands(&command, &args).0
+    app.run_operands_settled(&command, &args).0
 }
 
 fn revision(app: &Signex, file: &str) -> u64 {

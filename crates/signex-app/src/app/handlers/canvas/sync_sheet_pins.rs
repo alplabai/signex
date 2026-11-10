@@ -43,7 +43,12 @@ impl crate::app::Signex {
         // ONE batch so a single Ctrl+Z undoes the whole action (#533).
         let mut syncs: Vec<PendingFileSync> = Vec::new();
         for filename in filenames {
-            match self.prepare_child_file_sync(&filename) {
+            // The menu action keeps its read here; an edit from operands
+            // reads the child off the UI thread first (#2199).
+            let load = |path: &std::path::Path| {
+                crate::app::project_sheets::load_sheet(&self.document_state, path)
+            };
+            match self.prepare_child_file_sync(&filename, &load) {
                 Ok(sync) => syncs.push(sync),
                 Err(why) => crate::diagnostics::log_warning(format!("Sync Sheet Pins: {why}")),
             }
@@ -68,16 +73,20 @@ impl crate::app::Signex {
         }
     }
 
-    /// Resolve and load `filename`'s child schematic and derive its ports, on
-    /// the sheet an edit acts on; why not, when the file cannot be used.
+    /// Resolve and load (by `load`) `filename`'s child schematic and derive
+    /// its ports, on the sheet an edit acts on; why not, when the file cannot
+    /// be used.
     pub(crate) fn prepare_child_file_sync(
         &self,
         filename: &str,
+        load: &dyn Fn(
+            &std::path::Path,
+        ) -> Result<Option<signex_types::schematic::SchematicSheet>, String>,
     ) -> Result<PendingFileSync, String> {
         let Some(path) = self.resolve_child_sheet_path(filename) else {
             return Err(format!("sheet symbol references no file ('{filename}')"));
         };
-        let child = match crate::app::project_sheets::load_sheet(&self.document_state, &path) {
+        let child = match load(&path) {
             Ok(Some(child)) => child,
             Ok(None) => {
                 return Err(format!("child schematic not found: {}", path.display()));

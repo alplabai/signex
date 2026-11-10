@@ -13,8 +13,7 @@ use signex_types::schematic::{Point, SchematicSheet};
 
 use crate::app::Signex;
 use crate::app::project_sheets::{
-    ProjectSheetSet, assemble_project_sheets_quiet, project_graph_quiet, project_pages,
-    project_roots, resolve_netlist_root_for, sheet_key_with,
+    ProjectSheetSet, project_graph_quiet, project_roots, resolve_netlist_root_for, sheet_key_with,
 };
 use crate::app::state::scope::path_key_with;
 
@@ -63,17 +62,9 @@ impl Signex {
         };
         let fold = crate::app::state::project_case::fold_of(Some(project));
         let root = resolve_netlist_root_for(docs, &path);
-        let pages = project_pages(Some(project));
-        let assemble = || assemble_project_sheets_quiet(docs, &pages, &root, fold);
-        // Inside an edit list the other sheets are read once.
-        let mut cache = docs.agent_edits.project_set.borrow_mut();
-        let mut own;
-        let set = if docs.agent_edits.listing {
-            cache.0.get_or_insert_with(assemble)
-        } else {
-            own = assemble();
-            &mut own
-        };
+        // The closed sheets were read off the UI thread before the edit ran.
+        let mut own = self.edit_project_set(&path)?;
+        let set = &mut own;
         let complete = set.unreadable.is_empty()
             && set.absent.is_empty()
             && set.refused.is_empty()

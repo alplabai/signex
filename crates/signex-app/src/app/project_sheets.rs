@@ -26,6 +26,7 @@ use crate::app::state::scope::{CaseFold, path_key_with};
 
 /// The sheets a project consists of, plus what could not be made sense of
 /// while assembling them.
+#[derive(Clone)]
 pub(crate) struct ProjectSheetSet {
     /// `absolute path → sheet`: the declared page set *plus* everything
     /// reachable from those pages and from the root down the `child_sheets`
@@ -221,6 +222,11 @@ pub(crate) fn load_sheet(
     )
 }
 
+/// [`load_sheet`] from disk only, for a read off the UI thread (#2199).
+pub(crate) fn load_sheet_file(path: &Path) -> Result<Option<SchematicSheet>, String> {
+    load_sheet_with(&|_| None, path)
+}
+
 /// The identity of a sheet path under `fold`, the owning project's key rules.
 pub(crate) fn fold_key(path: &Path, fold: CaseFold) -> String {
     path_key_with(path, fold)
@@ -389,6 +395,17 @@ pub(crate) fn assemble_project_sheets_from(
     fold: CaseFold,
 ) -> ProjectSheetSet {
     assemble_project_sheets_with(&|p| open.get(p).cloned(), pages, root_path, fold, true)
+}
+
+/// [`assemble_project_sheets_from`] raising no Messages line: an edit's
+/// checks read off the UI thread (#2199).
+pub(crate) fn assemble_project_sheets_quiet_from(
+    open: &OpenSheets,
+    pages: &[PathBuf],
+    root_path: &Path,
+    fold: CaseFold,
+) -> ProjectSheetSet {
+    assemble_project_sheets_with(&|p| open.get(p).cloned(), pages, root_path, fold, false)
 }
 
 /// The one walk, started from `seeds` instead of a project's pages: every sheet

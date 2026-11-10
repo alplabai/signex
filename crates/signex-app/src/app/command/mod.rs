@@ -17,6 +17,9 @@ pub(crate) mod bridge;
 #[cfg(test)]
 mod document_operand_tests;
 mod document_operands;
+#[cfg(test)]
+mod edit_read_tests;
+mod edit_reads;
 pub(crate) mod enablement;
 #[cfg(test)]
 mod file_operand_tests;
@@ -60,6 +63,7 @@ pub use agent_edits::{
 pub use args::CommandArgs;
 pub(crate) use args::InvocationContext;
 use bridge::core_to_message;
+pub use edit_reads::{EditReads, ReadsLoaded};
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;
 pub(crate) use opened::answers_with_the_new_document;

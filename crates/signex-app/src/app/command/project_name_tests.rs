@@ -87,8 +87,9 @@ fn write(path: &Path, sheet: SchematicSheet) {
     std::fs::write(path, text).expect("write sheet");
 }
 
-/// An app with the project open and its parent sheet the edit target.
-fn project_app(dir: &tempfile::TempDir) -> Signex {
+/// An app with the project open and its parent sheet the edit target; the
+/// child sheet stays closed.
+pub(super) fn project_app(dir: &tempfile::TempDir) -> Signex {
     let _ = crate::diagnostics::init_logging();
     write(&dir.path().join("top.snxsch"), parent());
     write(&dir.path().join("child.snxsch"), child());
@@ -102,7 +103,7 @@ fn project_app(dir: &tempfile::TempDir) -> Signex {
 fn run(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
     let id = AppCommandId::new(id).expect("a catalog id");
     let args = CommandArgs::parse_operands(&id, operands).expect("operands parse");
-    app.run_operands(&id, &args).0
+    app.run_operands_settled(&id, &args).0
 }
 
 fn refusal(outcome: CommandOutcome) -> String {
@@ -988,6 +989,12 @@ fn a_dry_run_in_a_project_writes_nothing_to_messages() {
     write(&dir.path().join("top.snxsch"), top);
     write(&dir.path().join("child.snxsch"), child());
     let mut app = open_project(&dir);
+    // The edit runs in `update` once its read lands (#2199); the app's own
+    // hierarchy walk, which says so in Messages, runs to its end first.
+    let walk = app.update(crate::app::Message::noop());
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, walk)
+        .expect("the walk ends");
     let mark = crate::diagnostics::newest_entry_id();
     let outcome = run(
         &mut app,

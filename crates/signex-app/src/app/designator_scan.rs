@@ -68,12 +68,30 @@ pub(crate) fn scan(inputs: ScanInputs) -> DesignatorScan {
         &inputs.root,
         inputs.fold,
     );
+    scan_set(
+        inputs.project,
+        inputs.stamp,
+        &set,
+        &inputs.root,
+        inputs.fold,
+    )
+}
+
+/// [`scan`] of a project already assembled (an edit's prefetched read,
+/// #2199): no file is read.
+pub(crate) fn scan_set(
+    project: ProjectId,
+    stamp: u64,
+    set: &project_sheets::ProjectSheetSet,
+    root: &Path,
+    fold: CaseFold,
+) -> DesignatorScan {
     let hierarchy = build_sheet_hierarchy(
         &set.sheets,
         &set.unreadable,
-        &inputs.root,
+        root,
         &set.pages_outside_the_hierarchy,
-        inputs.fold,
+        fold,
     );
     let mut placements = HashMap::new();
     let mut designators = HashMap::new();
@@ -88,8 +106,8 @@ pub(crate) fn scan(inputs: ScanInputs) -> DesignatorScan {
         designators.insert(path.clone(), used);
     }
     DesignatorScan {
-        project: inputs.project,
-        stamp: inputs.stamp,
+        project,
+        stamp,
         placements,
         designators,
     }
@@ -155,16 +173,12 @@ impl Signex {
         )
     }
 
-    /// Run the scan on the calling thread and apply it, unless the cache is
-    /// current. An edit from operands numbers its part before any task could
-    /// land (`place_component`, #2199), so it reads the closed sheets here.
+    /// Run the scan on the calling thread and apply it - tests only.
+    #[cfg(test)]
     pub(crate) fn scan_designators_blocking(&mut self, sheet: &Path) {
         let Some(id) = self.document_state.document_project(sheet).map(|p| p.id) else {
             return;
         };
-        if self.designators_current(sheet) {
-            return;
-        }
         let stamp = self.designator_scan_stamp(id, sheet);
         let inputs = self.capture_designator_inputs(id, sheet, stamp);
         let cache = &mut self.document_state.designator_cache;
@@ -215,28 +229,53 @@ impl Signex {
     /// with no project yields only its own.
     pub(crate) fn used_designators(&self, sheet: &Path) -> Vec<&str> {
         let ds = &self.document_state;
+        let cache = &ds.designator_cache;
+        let known = ds
+            .document_project(sheet)
+            .is_some_and(|p| cache.project == Some(p.id));
+        let found = known.then_some((&cache.placements, &cache.designators));
+        self.used_designators_with(sheet, found)
+    }
+
+    /// [`Self::used_designators`] with the closed sheets' numbers from `scan`
+    /// (an edit's prefetched project, #2199) instead of the cache, which an
+    /// edit never touches: a drop may be waiting on the cache's scan.
+    pub(crate) fn used_designators_in<'a>(
+        &'a self,
+        sheet: &Path,
+        scan: &'a DesignatorScan,
+    ) -> Vec<&'a str> {
+        self.used_designators_with(sheet, Some((&scan.placements, &scan.designators)))
+    }
+
+    fn used_designators_with<'a>(
+        &'a self,
+        sheet: &Path,
+        found: Option<(
+            &'a HashMap<PathBuf, Vec<InstancePath>>,
+            &'a HashMap<PathBuf, Vec<String>>,
+        )>,
+    ) -> Vec<&'a str> {
+        let ds = &self.document_state;
         let Some(project) = ds.document_project(sheet) else {
             return live_designators(ds.engines.get(sheet), &[]);
         };
-        let cache = &ds.designator_cache;
-        let known = cache.project == Some(project.id);
         let mut used = Vec::new();
         for (path, engine) in &ds.engines {
             if ds
                 .document_project(path)
                 .is_some_and(|owner| owner.id == project.id)
             {
-                let at = known
-                    .then(|| cache.placements.get(path))
-                    .flatten()
+                let at = found
+                    .and_then(|(placements, _)| placements.get(path))
                     .map_or(&[][..], Vec::as_slice);
                 used.extend(live_designators(Some(engine), at));
             }
         }
-        if known {
-            for (path, found) in &cache.designators {
+        if let Some((_, designators)) = found {
+            for (path, names) in designators {
                 if !ds.engines.contains_key(path) {
-                    used.extend(found.iter().map(String::as_str));
+                    used.extend(names.iter().map(String::as_str));
                 }
             }
         }

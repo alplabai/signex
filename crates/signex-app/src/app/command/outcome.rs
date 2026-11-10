@@ -26,6 +26,11 @@ pub enum CommandOutcome {
     /// A query command ran and this is its answer (#2172). A query never
     /// reports a bare [`Self::Ran`]: what it found is the point of running it.
     Answered(serde_json::Value),
+    /// The edit's checks need files read off the UI thread first (#2199): the
+    /// returned task reads them and runs the edit on completion, and the
+    /// outcome is reported then (the socket reply, or the headless run that
+    /// drives the task and takes the outcome by `ticket`).
+    Deferred { ticket: u64 },
 }
 
 impl CommandOutcome {

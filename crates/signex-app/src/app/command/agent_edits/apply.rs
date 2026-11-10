@@ -91,6 +91,22 @@ fn prepare(
         .collect()
 }
 
+/// The edits of an `apply_edits` call, parsed as the call parses them, for
+/// planning their reads (#2199); `None` when the call is refused anyway (it
+/// then runs at once and says why).
+pub(in crate::app::command) fn listed_edits(
+    app: &Signex,
+    args: &CommandArgs,
+) -> Option<Vec<(AppCommandId, CommandArgs)>> {
+    let path = named_sheet(app, args, "`apply_edits`").ok()?;
+    let Some(OperandValue::Document(target)) = args.operand("document") else {
+        return None;
+    };
+    let specs = parse_edit_list(text(args, "edits").unwrap_or_default()).ok()?;
+    let edits = prepare(app, &specs, &target.to_string(), Some(path.as_path())).ok()?;
+    Some(edits.into_iter().map(|e| (e.id, e.args)).collect())
+}
+
 /// The undo label: "Agent: " and the summary, or the ids of the edits.
 fn label_for(summary: Option<&str>, specs: &[EditSpec]) -> String {
     let summary = summary.map_or_else(
@@ -207,7 +223,6 @@ fn run_listed(app: &mut Signex, path: &std::path::Path, edits: &[Prepared], labe
     let owed = std::mem::take(&mut app.document_state.agent_edits.owed);
     app.document_state.agent_edits.target = None;
     app.document_state.agent_edits.listing = false;
-    app.document_state.agent_edits.project_set.take();
     let Some(engine) = app.document_state.engines.get_mut(path) else {
         return refused(format!("{} is not loaded", path.display()));
     };

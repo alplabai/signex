@@ -5,11 +5,12 @@
 //! "Placing parts and hierarchy".
 //!
 //! The library must already be open (a project's libraries mount when the
-//! project opens). The row's symbol is read here, synchronously, so the edit
-//! can be one of an `apply_edits` list and still land before the list commits.
+//! project opens). The row's symbol and the project's closed sheets are read
+//! off the UI thread before the edit runs (`edit_reads`, decision comment
+//! 6771692137); nothing here reads a file.
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use iced::Task;
 use serde_json::{Value, json};
@@ -22,6 +23,8 @@ use super::queries::pin_id;
 use super::wire_runs::describe;
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::handlers::library_place::part_payload;
+use crate::app::project_sheets::lexically_normalize;
+use crate::app::state::scope::path_key_with;
 use crate::app::{Message, Signex};
 use crate::library::messages::ResolvedPlacement;
 use crate::library::state::OpenLibrary;
@@ -39,7 +42,7 @@ pub(super) fn place_component(app: &mut Signex, args: &CommandArgs) -> Ran {
 
 /// The library row `part` names in `library`: a row id, else a part number
 /// (internal or manufacturer) that exactly one row carries.
-fn library_row(library: &OpenLibrary, part: &str) -> Result<(String, Uuid), String> {
+pub(super) fn library_row(library: &OpenLibrary, part: &str) -> Result<(String, Uuid), String> {
     let part = part.trim();
     let rows = || {
         library
@@ -126,16 +129,30 @@ fn placed_answer(sheet: &signex_types::schematic::SchematicSheet, symbol: &Symbo
 
 impl Signex {
     /// The open library `named` names: its id, or the path of its `.snxlib`
-    /// file or folder.
-    fn open_library_named(&self, named: &str) -> Result<&OpenLibrary, String> {
+    /// file or folder, a relative one read from the edited sheet's project
+    /// folder. Paths are compared spelled out (`..` folded) under the
+    /// project's case rule; no file is looked at.
+    pub(super) fn open_library_named(&self, named: &str) -> Result<&OpenLibrary, String> {
         let named = named.trim();
         let id = Uuid::parse_str(named).ok();
-        let path = Path::new(named);
+        let docs = &self.document_state;
+        let project = docs.edit_path().and_then(|p| docs.document_project(p));
+        let fold = crate::app::state::project_case::fold_of(project);
+        let base = project
+            .map(|p| p.dir().to_path_buf())
+            .or_else(|| {
+                docs.edit_path()
+                    .and_then(Path::parent)
+                    .map(Path::to_path_buf)
+            })
+            .unwrap_or_default();
+        let wanted = path_key_with(&lexically_normalize(&base.join(named)), fold);
+        let same = |path: &Path| path_key_with(&lexically_normalize(path), fold) == wanted;
         self.library
             .open_libraries
             .iter()
             .find(|lib| {
-                Some(lib.library_id) == id || lib.root == path || lib.root.parent() == Some(path)
+                Some(lib.library_id) == id || same(&lib.root) || lib.root.parent().is_some_and(same)
             })
             .ok_or_else(|| {
                 format!(
@@ -147,40 +164,57 @@ impl Signex {
 
     /// The designator of the part: `designator`, else the next free one as a
     /// click numbers it. A `designator` already in the project is accepted
-    /// only for another unit of that very part (same library row) not placed
-    /// yet: units of one part share it.
+    /// only for another unit of that very part (same library row) placed on
+    /// no sheet of the project yet: units of one part share it.
     fn part_designator(
-        &mut self,
+        &self,
         sheet: &Path,
         args: &CommandArgs,
         resolved: &ResolvedPlacement,
         unit: u32,
     ) -> Result<String, String> {
-        self.scan_designators_blocking(sheet);
         let prefix = self.placement_prefix_for(sheet, resolved);
+        // The project's sheets, the closed ones as read before the edit ran;
+        // the cached scan a person's drop may wait on is left alone.
+        let docs = &self.document_state;
+        let project = match docs.document_project(sheet).map(|p| p.id) {
+            Some(id) => Some((id, self.edit_project_set(sheet)?)),
+            None => None,
+        };
+        let scan = project.as_ref().map(|(id, set)| {
+            let root = crate::app::project_sheets::resolve_netlist_root_for(docs, sheet);
+            crate::app::designator_scan::scan_set(*id, 0, set, &root, set.fold)
+        });
         let Ok(wanted) = text(args, "designator") else {
-            return Ok(self.next_designator_in_sheet(sheet, &prefix));
+            return Ok(match &scan {
+                Some(scan) => self.next_designator_in(sheet, &prefix, scan),
+                None => self.next_designator_in_sheet(sheet, &prefix),
+            });
         };
         let wanted = wanted.trim().to_string();
-        if !self.used_designators(sheet).contains(&wanted.as_str()) {
+        let used = match &scan {
+            Some(scan) => self.used_designators_in(sheet, scan),
+            None => self.used_designators(sheet),
+        };
+        if !used.contains(&wanted.as_str()) {
             return Ok(wanted);
         }
-        let docs = &self.document_state;
-        let project = docs.document_project(sheet).map(|p| p.id);
-        let placed: Vec<&Symbol> = docs
-            .engines
+        // Every part carrying it, on any sheet of the project, open or not.
+        let live = docs.engines.get(sheet).map(signex_engine::Engine::document);
+        let others = project
             .iter()
-            // A loose sheet numbers against itself only, as `used_designators`.
-            .filter(|(path, _)| {
-                path.as_path() == sheet
-                    || (project.is_some() && docs.document_project(path).map(|p| p.id) == project)
-            })
-            .flat_map(|(_, engine)| engine.document().symbols.iter())
+            .flat_map(|(_, set)| set.sheets.iter())
+            .filter(|(path, _)| path.as_path() != sheet)
+            .map(|(_, other)| other);
+        let placed: Vec<&Symbol> = live
+            .into_iter()
+            .chain(others)
+            .flat_map(|s| s.symbols.iter())
             .filter(|s| s.reference == wanted)
             .collect();
         if placed.is_empty() {
             return Err(format!(
-                "designator `{wanted}` is used on a sheet that is not open; open it to add a unit of that part, or leave `designator` out"
+                "designator `{wanted}` is in use through another placement of a sheet; leave `designator` out"
             ));
         }
         let same_part = |s: &&Symbol| {
@@ -241,20 +275,7 @@ impl Signex {
             .ok_or("no schematic is open")?;
         let library = self.open_library_named(&text(args, "library")?)?;
         let (table, row_id) = library_row(library, &text(args, "part")?)?;
-        let root = library.root.clone();
-        let open: Vec<(Uuid, PathBuf)> = self
-            .library
-            .open_libraries
-            .iter()
-            .map(|lib| (lib.library_id, lib.root.clone()))
-            .collect();
-        let resolved = crate::library::place::resolve_placement_with_footprint(
-            &root,
-            &table,
-            signex_library::RowId(row_id),
-            None,
-            &open,
-        )?;
+        let resolved = self.prefetched_part(&(library.root.clone(), table, row_id))?;
         let unit = unit_of(args, &resolved)?;
         let reference = self.part_designator(&sheet, args, &resolved, unit)?;
         let value = text(args, "value").ok();

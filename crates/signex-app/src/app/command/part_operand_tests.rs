@@ -25,10 +25,10 @@ use crate::library::LibraryMessage;
 /// A library on disk with one two-unit symbol (`U?`; pin 1 on unit 1, pin 2
 /// on unit 2, pin 3 shared) and two rows bound to it that share the
 /// manufacturer part number `TWO-1`.
-struct Library {
+pub(super) struct Library {
     _dir: tempfile::TempDir,
-    snxlib: PathBuf,
-    id: Uuid,
+    pub(super) snxlib: PathBuf,
+    pub(super) id: Uuid,
     row: Uuid,
 }
 
@@ -57,7 +57,7 @@ fn two_unit_symbol() -> LibrarySymbol {
     symbol
 }
 
-fn library() -> Library {
+pub(super) fn library() -> Library {
     signex_library::git_identity::test_identity::install();
     let dir = tempfile::tempdir().expect("tempdir");
     let snxlib = dir.path().join("lib").join("lib.snxlib");
@@ -135,7 +135,7 @@ fn run(app: &mut Signex, id: &str, operands: &[String]) -> CommandOutcome {
     let id = AppCommandId::new(id).expect("a catalog id");
     let refs: Vec<&str> = operands.iter().map(String::as_str).collect();
     let args = CommandArgs::parse_operands(&id, &refs).expect("operands");
-    app.run_operands(&id, &args).0
+    app.run_operands_settled(&id, &args).0
 }
 
 /// `place_component` of `lib`'s first row at `at`, plus `extra`.
@@ -427,4 +427,100 @@ fn a_part_and_a_wire_to_its_pin_are_one_edit_list() {
     let sheet = app.document_state.engines[&path].document();
     assert_eq!((sheet.symbols.len(), sheet.wires.len()), (1, 1));
     assert_eq!(sheet.wires[0].start, at, "the wire starts on U1.1");
+}
+
+/// A project whose open top sheet places the closed `child.snxsch`, which
+/// holds unit 1 of `U1` (row `SNX-TWO` of `lib`).
+fn project_with_u1_on_a_closed_sheet(lib: &Library, dir: &std::path::Path) -> Signex {
+    let child = SchematicSheet {
+        uuid: Uuid::now_v7(),
+        symbols: vec![signex_types::schematic::Symbol {
+            uuid: Uuid::now_v7(),
+            lib_id: "two".into(),
+            reference: "U1".into(),
+            unit: 1,
+            library_id: Some(lib.id),
+            row_id: Some(lib.row),
+            position: Point::new(25.4, 25.4),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let symbol = signex_engine::child_sheet_from_corners(
+        Point::new(100.0, 100.0),
+        Point::new(120.0, 120.0),
+        "child",
+    )
+    .expect("big enough");
+    let top = SchematicSheet {
+        uuid: Uuid::now_v7(),
+        child_sheets: vec![symbol],
+        ..Default::default()
+    };
+    for (name, sheet) in [("top.snxsch", top), ("child.snxsch", child)] {
+        signex_engine::Engine::new_with_path(sheet, Some(dir.join(name)))
+            .expect("engine")
+            .save()
+            .expect("write sheet");
+    }
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace(
+        &dir.to_string_lossy(),
+        &["top.snxsch"],
+    );
+    app.ui_state.snap_enabled = false;
+    app.open_or_focus_sheet_path(dir.join("top.snxsch"));
+    app.library
+        .open_library(lib.snxlib.clone())
+        .expect("mount library");
+    app
+}
+
+#[test]
+fn a_unit_placed_on_a_closed_sheet_is_not_placed_again() {
+    let lib = library();
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_with_u1_on_a_closed_sheet(&lib, dir.path());
+    let again = place(&mut app, &lib, Point::new(50.8, 50.8), &["designator=U1"]);
+    assert!(refusal(again).contains("unit 1 of `U1` is already placed"));
+    let second = place(
+        &mut app,
+        &lib,
+        Point::new(50.8, 50.8),
+        &["designator=U1", "unit=2"],
+    );
+    assert_eq!(answered(second)["designator"], "U1");
+    // Numbered past the closed sheet's U1.
+    let next = answered(place(&mut app, &lib, Point::new(101.6, 50.8), &[]));
+    assert_eq!(next["designator"], "U2");
+}
+
+#[test]
+fn a_library_named_by_a_relative_or_dotted_path_is_found() {
+    let lib = library();
+    let (mut app, _task) = Signex::new();
+    // A loose sheet beside the library's folder: a relative path is read
+    // from the sheet's folder.
+    let base = lib
+        .snxlib
+        .parent()
+        .and_then(std::path::Path::parent)
+        .unwrap();
+    add_sheet_with(
+        &mut app,
+        &base.join("loose.snxsch"),
+        SchematicSheet::default(),
+    );
+    app.ui_state.snap_enabled = false;
+    app.library
+        .open_library(lib.snxlib.clone())
+        .expect("mount library");
+    for named in [
+        "lib/lib.snxlib".to_string(),
+        "lib".to_string(),
+        format!("{}/../lib/lib.snxlib", base.join("lib").display()),
+    ] {
+        let found = app.open_library_named(&named).map(|l| l.library_id);
+        assert_eq!(found, Ok(lib.id), "{named}");
+    }
+    assert!(app.open_library_named("other/lib.snxlib").is_err());
 }

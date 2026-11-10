@@ -11,12 +11,12 @@ use super::reply::{Status, changed_between, messages_since, outcome_verdict};
 use super::wire::{self, Request};
 use super::{AgentCall, AgentMsg, Input, allow, listener, registry};
 use crate::app::command::queries::is_query;
-use crate::app::command::{CommandArgs, OperandValue};
+use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::{DocumentKey, Message, Signex};
 use crate::keymap::AppCommandId;
 
 /// What running one request came to: the status, its reason and its data.
-type Verdict = (Status, Option<String>, Option<Value>);
+pub(super) type Verdict = (Status, Option<String>, Option<Value>);
 
 /// The longest reason or command text the Messages line repeats.
 const LOGGED_TEXT_CHARS: usize = 200;
@@ -51,6 +51,7 @@ impl Signex {
     pub(crate) fn dispatch_agent_message(&mut self, message: AgentMsg) -> Task<Message> {
         match message {
             AgentMsg::Request(call) => self.handle_agent_request(call),
+            AgentMsg::EditReadsLoaded(loaded) => self.handle_edit_reads_loaded(*loaded),
             AgentMsg::PeerRefused { pid, reason } => {
                 crate::diagnostics::log_warning(format!(
                     "Agent connection refused ({}): {}",
@@ -394,12 +395,37 @@ impl Signex {
         let mark = crate::diagnostics::newest_entry_id();
         let before = self.change_snapshot();
         let origin = super::Origin::agent(call.pid);
-        let (id, (status, reason, data), task) =
-            self.with_origin(origin, |app| app.agent_verdict(&call.input));
-        let changed = changed_between(&before, &self.change_snapshot());
+        let (id, verdict, task) = self.with_origin(origin, |app| app.agent_verdict(&call.input));
+        // A command waiting for its reads answers when they land (#2199).
+        if let Some(ticket) = self.agent.deferred.take() {
+            let waiting = super::deferred::WaitingReply {
+                id,
+                pid: call.pid,
+                mark,
+                before,
+                reply: call.reply,
+            };
+            self.agent.waiting.insert(ticket, waiting);
+            return task;
+        }
+        self.send_agent_reply(id.as_deref(), call.pid, mark, &before, verdict, &call.reply);
+        task
+    }
+
+    /// Log one request and answer it on its connection with what it did.
+    pub(super) fn send_agent_reply(
+        &self,
+        id: Option<&str>,
+        pid: Option<u32>,
+        mark: Option<u64>,
+        before: &super::ChangeSnapshot,
+        (status, reason, data): Verdict,
+        reply: &super::AgentReply,
+    ) {
+        let changed = changed_between(before, &self.change_snapshot());
         // What the command logged, before this request's own line.
         let messages = messages_since(mark);
-        let named = id.as_deref().map_or_else(
+        let named = id.map_or_else(
             || "(no command)".to_string(),
             |id| format!("`{}`", printable(id)),
         );
@@ -409,7 +435,7 @@ impl Signex {
             .unwrap_or_default();
         let line = format!(
             "Agent request ({}): {named} -> {}{why}",
-            pid_text(call.pid),
+            pid_text(pid),
             status_text(status)
         );
         if status.is_ok() {
@@ -417,15 +443,14 @@ impl Signex {
         } else {
             crate::diagnostics::log_warning(line);
         }
-        call.reply.send(wire::reply_line(
-            id.as_deref(),
+        reply.send(wire::reply_line(
+            id,
             status,
             reason.as_deref(),
             data.as_ref(),
             &messages,
             &changed,
         ));
-        task
     }
 
     /// Read, check and run one request. The id is returned only once the
@@ -497,6 +522,10 @@ impl Signex {
         };
         self.agent.serving = false;
         match ran {
+            Some((CommandOutcome::Deferred { ticket }, task)) => {
+                self.agent.deferred = Some(ticket);
+                (refused("waiting for its reads"), task)
+            }
             Some((outcome, task)) => (outcome_verdict(command.as_str(), outcome, None), task),
             None => (refused("not a query"), none()),
         }

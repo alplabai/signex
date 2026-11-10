@@ -213,7 +213,7 @@ fn the_persons_own_command_makes_no_agent_label() {
     let refs: Vec<&str> = operands.iter().map(String::as_str).collect();
     let args = crate::app::command::CommandArgs::parse_operands(&id, &refs).unwrap();
 
-    let (outcome, _task) = app.run_operands(&id, &args);
+    let (outcome, _task) = app.run_operands_settled(&id, &args);
 
     assert_eq!(outcome, crate::app::command::CommandOutcome::Ran);
     assert!(net_colors(&app, "b.snxsch") > 0);
@@ -278,7 +278,7 @@ fn persons_refusal(app: &mut Signex, name: &str, operands: &[&str]) -> String {
     let mut texts: Vec<&str> = operands.to_vec();
     texts.push(&document);
     let args = crate::app::command::CommandArgs::parse_operands(&id, &texts).unwrap();
-    match app.run_operands(&id, &args).0 {
+    match app.run_operands_settled(&id, &args).0 {
         crate::app::command::CommandOutcome::Disabled { reason } => reason,
         other => panic!("{name} was not refused: {other:?}"),
     }

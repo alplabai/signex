@@ -12,6 +12,7 @@
 
 mod allow;
 pub mod client;
+mod deferred;
 mod files;
 mod handler;
 mod listener;
@@ -64,6 +65,9 @@ pub enum AgentMsg {
     /// The backoff after a failed listener is over: start a new one, unless
     /// `boot_id` is no longer the app's.
     RestartListener { boot_id: String },
+    /// The disk reads an agent's edit waited for landed (#2199): run it now
+    /// and answer its caller (the socket, or a headless run).
+    EditReadsLoaded(Box<crate::app::command::ReadsLoaded>),
 }
 
 /// What a connection read, before the app has looked at it.

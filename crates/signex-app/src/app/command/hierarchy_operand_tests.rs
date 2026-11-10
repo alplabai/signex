@@ -31,7 +31,7 @@ fn run(app: &mut Signex, id: &str, operands: &[String]) -> CommandOutcome {
     let id = AppCommandId::new(id).expect("a catalog id");
     let refs: Vec<&str> = operands.iter().map(String::as_str).collect();
     let args = CommandArgs::parse_operands(&id, &refs).expect("operands");
-    app.run_operands(&id, &args).0
+    app.run_operands_settled(&id, &args).0
 }
 
 fn answered(outcome: CommandOutcome) -> Value {

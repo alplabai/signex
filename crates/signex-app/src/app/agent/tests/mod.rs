@@ -4,6 +4,7 @@
 
 #[cfg(unix)]
 mod client;
+mod deferred;
 #[cfg(unix)]
 mod hold;
 #[cfg(unix)]
