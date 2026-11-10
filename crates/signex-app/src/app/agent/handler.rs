@@ -145,6 +145,8 @@ impl Signex {
                 if self.agent.registry_in_flight {
                     return Task::none();
                 }
+                // The locks that could not be made are tried again with it.
+                self.agent.lock_failed.clear();
                 self.agent.registered = None;
                 self.sync_agent_registry().unwrap_or_else(Task::none)
             }
@@ -161,7 +163,7 @@ impl Signex {
             self.agent
                 .listener_config(self.ui_state.agent_connections_enabled),
         );
-        let retry = if self.agent.endpoint.is_some() && self.agent.registry_retry {
+        let retry = if self.agent.registry_retry || !self.agent.lock_failed.is_empty() {
             iced::time::every(REGISTRY_RETRY).map(|_| Message::Agent(AgentMsg::RegistryRetryTick))
         } else {
             Subscription::none()
@@ -194,9 +196,15 @@ impl Signex {
     }
 
     /// Write the registry for the projects open now, if they changed since it
-    /// was last written and a listener is up. Called at the end of every
-    /// update; the write runs on a worker.
+    /// was last written, whether or not agent connections are on: an open
+    /// project is listed (with the endpoint once a listener is up, without one
+    /// before), so a headless run never works on a file open here. A headless
+    /// app lists nothing: it is the run. Called at the end of every update; the
+    /// write runs on a worker.
     pub(crate) fn sync_agent_registry(&mut self) -> Option<Task<Message>> {
+        if !self.agent.lists_projects {
+            return None;
+        }
         let owner = self.agent.owner()?;
         let dir = self.agent.runtime_dir().ok().cloned()?;
         let mut projects: Vec<_> = self
@@ -206,20 +214,62 @@ impl Signex {
             .map(|project| project.path.clone())
             .collect();
         projects.sort();
+        // A project that got open some way that did not claim it (the open
+        // handler does) is claimed now; a claim that failed is not tried again
+        // here before the retry tick.
+        for project in &projects {
+            if self.agent.project_locks.contains_key(project)
+                || self.agent.lock_failed.contains(project)
+            {
+                continue;
+            }
+            if let Err((pid, _)) = self.claim_project(project) {
+                // A run took the project after the window's claim failed to be
+                // made: said once, as its own warning.
+                if self.agent.lock_warned.insert(project.clone()) {
+                    // A run that has not written its entry yet has no pid.
+                    let run = if pid == 0 {
+                        "another signex-cli run".to_string()
+                    } else {
+                        format!("a signex-cli run (pid {pid})")
+                    };
+                    crate::diagnostics::log_warning(format!(
+                        "Agent registry: {run} now holds {}, which is open here. Save your work \
+                         and reopen the project after the run ends.",
+                        project.display()
+                    ));
+                }
+                self.agent.lock_failed.insert(project.clone());
+            }
+        }
+        // A project that closed lets go of its lock, unless a save of it is
+        // still being written: a run that took the lock then would read the
+        // old file and write over the save. The lock goes with the update that
+        // reports the save done.
+        let saving = self.document_state.document_saves.is_any_saving()
+            || !self.library.writes.busy_roots().is_empty();
+        self.agent
+            .project_locks
+            .retain(|path, _| saving || projects.contains(path));
+        self.agent
+            .lock_failed
+            .retain(|path| projects.contains(path));
+        self.agent
+            .lock_warned
+            .retain(|path| projects.contains(path));
         if self.agent.registered.as_ref() == Some(&projects) {
             return None;
         }
         self.agent.registered = Some(projects.clone());
         self.agent.registry_in_flight = true;
+        self.agent.registry_seq += 1;
+        let seq = self.agent.registry_seq;
         let lock = self.agent.registry_lock.clone();
         let boot_id = owner.boot_id.clone();
         Some(Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    let _held = lock
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    registry::sync(&dir, &owner, &projects)
+                    registry::sync_in_order(&dir, &owner, &projects, seq, &lock)
                 })
                 .await
                 .unwrap_or_else(|error| Err(format!("the registry write did not finish: {error}")))
@@ -237,12 +287,15 @@ impl Signex {
     /// so an exit that skips the subscription's own cleanup leaves none.
     ///
     /// It also cleans the boot ids a listener of this run reported, with the
-    /// setting off: an entry that outlived its listener goes too. A run that
-    /// never listened has nothing to clean and adds no task.
+    /// setting off, and removes this process's registry entries (the projects
+    /// are closing with it) and releases its locks. A headless app, which
+    /// listed nothing, adds no task.
     pub(crate) fn agent_cleanup_then(&mut self, next: Task<Message>) -> Task<Message> {
+        if !self.agent.lists_projects {
+            return next;
+        }
         let mut ids = std::mem::take(&mut self.agent.touched);
-        if self.ui_state.agent_connections_enabled
-            && let Some(current) = self.agent.boot_id()
+        if let Some(current) = self.agent.boot_id()
             && !ids.iter().any(|id| id == current)
         {
             ids.push(current.to_string());
@@ -254,13 +307,21 @@ impl Signex {
             return next;
         }
         self.agent.listener_closed();
+        // Nothing is listed again after the exit path: an update that runs
+        // before the process ends must not write the entries back.
+        self.agent.lists_projects = false;
+        // The locks go with this task, which runs after the document, autosave
+        // and library writes of the quit path: dropping them here would let a
+        // run read a project whose last save is still being written.
+        let locks = std::mem::take(&mut self.agent.project_locks);
         let lock = self.agent.registry_lock.clone();
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
                     for id in &ids {
-                        listener::cleanup(&dir, id, &lock);
+                        listener::cleanup(&dir, id, &lock, true);
                     }
+                    drop(locks);
                 })
                 .await
                 .ok();
@@ -268,6 +329,65 @@ impl Signex {
             |()| Message::noop(),
         )
         .chain(next)
+    }
+
+    /// The window claims the project it is about to open: it takes the shared
+    /// lock on the project's lock file, now, in the update that opens it, and
+    /// holds it for as long as the project stays open. Many windows can hold
+    /// it; a headless `signex-cli` run holds it exclusively, so while one runs
+    /// this fails with the run's process and its entry file, and the app does
+    /// not open a project an agent is editing without a window. The lock is
+    /// what `signex-cli` finds when it looks: nothing can slip in between this
+    /// and the registry entry, which is written later, on a worker. One small
+    /// file open and a non-blocking lock, the class of IO that reading the
+    /// project file here is. Only the window lists (and claims): an app made
+    /// for a test, and the headless run itself, do not. A lock that cannot be
+    /// made for another reason is said in Messages and the project opens.
+    pub(crate) fn claim_project(
+        &mut self,
+        project: &std::path::Path,
+    ) -> Result<(), (u32, std::path::PathBuf)> {
+        if !self.agent.lists_projects || self.agent.project_locks.contains_key(project) {
+            return Ok(());
+        }
+        let (Ok(dir), Ok(canonical)) = (
+            self.agent.runtime_dir().cloned(),
+            std::fs::canonicalize(project),
+        ) else {
+            return Ok(());
+        };
+        // The lock here first, then a look at the user's other runtime folders
+        // for a headless run holding the project (another environment): a run
+        // that locks its own folder meanwhile is then seen by one of the two.
+        let alternates = self.agent.alternate_dirs(&dir);
+        let claimed = registry::claim_checked(
+            &dir,
+            &canonical,
+            &alternates,
+            || registry::claim_shared(&dir, &canonical),
+            || {},
+        );
+        match claimed {
+            Ok(lock) => {
+                self.agent.lock_failed.remove(project);
+                self.agent.lock_warned.remove(project);
+                self.agent.project_locks.insert(project.to_path_buf(), lock);
+                Ok(())
+            }
+            Err(registry::ClaimFailure::Run(pid, entry)) => Err((pid, entry)),
+            Err(registry::ClaimFailure::Other(why)) => {
+                // Said once, and not tried again before the retry tick.
+                if self.agent.lock_warned.insert(project.to_path_buf()) {
+                    crate::diagnostics::log_warning(format!(
+                        "Agent registry: {} could not be locked: {why}; trying again every {} s",
+                        project.display(),
+                        REGISTRY_RETRY.as_secs()
+                    ));
+                }
+                self.agent.lock_failed.insert(project.to_path_buf());
+                Ok(())
+            }
+        }
     }
 
     fn handle_agent_request(&mut self, call: AgentCall) -> Task<Message> {

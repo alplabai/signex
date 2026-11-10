@@ -68,6 +68,28 @@ fn is_dirty(fx: &Fx) -> bool {
     fx.app.document_state.is_document_dirty(&fx.prj)
 }
 
+/// The agent channel says what saving a project writes besides its file (a
+/// client that confines writes checks them, #1924): the pending libraries.
+#[test]
+fn document_info_of_a_project_lists_the_libraries_its_save_would_write() {
+    use crate::app::command::queries::tests::answer;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    let operand = format!("document={}", fx.prj.display());
+
+    let info = answer(&mut fx.app, "document_info", &[&operand]);
+    assert_eq!(info["kind"], "project", "{info}");
+    assert_eq!(
+        info["save_writes"],
+        serde_json::json!([fx.lib.display().to_string()])
+    );
+
+    fx.app.document_state.projects[0].pending_libraries.clear();
+    let info = answer(&mut fx.app, "document_info", &[&operand]);
+    assert_eq!(info["save_writes"], serde_json::json!([]));
+}
+
 #[test]
 fn begin_creates_and_writes_nothing_until_the_task_runs() {
     let tmp = tempfile::tempdir().unwrap();
@@ -408,6 +430,35 @@ fn the_save_commit_records_the_written_bytes_not_a_later_edit_of_the_file() {
     assert_eq!(fx.app.document_state.pending_git_commits.len(), 1);
 
     std::fs::write(&fx.prj, b"someone else's edit").unwrap();
+    let commits = fx.app.drain_pending_git_commits();
+    run_task(&mut fx.app, commits);
+
+    let rel = fx.prj.file_name().unwrap().to_string_lossy().into_owned();
+    assert_eq!(head_blob(tmp.path(), &rel), written);
+}
+
+/// An agent's `save_document` of a project is the person's Save (#1924): it
+/// goes through the same save and queues the same commit of the written bytes
+/// (the identity is the person's; provenance is #2253).
+#[test]
+fn an_agents_project_save_queues_the_commit_the_persons_save_does() {
+    use super::restore_commit_tests::{commit_revision, run_task};
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    fx.app.document_state.projects[0].pending_libraries.clear();
+    commit_revision(tmp.path(), &fx.prj, "{}");
+    fx.app.document_state.projects[0].data.enable_git = true;
+    fx.app.document_state.projects[0].data.description = Some("saved".into());
+    fx.app.document_state.mark_document_dirty(&fx.prj);
+    // What `save_document` runs for a project file.
+    let task = fx.app.begin_document_path_save(&fx.prj).expect("planned");
+
+    let Message::Project(ProjectMsg::FileSaved(done)) = run(task) else {
+        panic!("a save completion");
+    };
+    let written = done.bytes.clone();
+    drop(fx.app.handle_project_file_saved(*done));
+    assert_eq!(fx.app.document_state.pending_git_commits.len(), 1);
     let commits = fx.app.drain_pending_git_commits();
     run_task(&mut fx.app, commits);
 

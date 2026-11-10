@@ -98,6 +98,18 @@ impl Signex {
         if let (Value::Object(map), Value::Object(extra)) = (&mut details, kind_details) {
             map.extend(extra);
         }
+        // What saving a project writes besides its file (the libraries it has
+        // pending), so a client that confines writes can check them (#1924).
+        if let (Value::Object(map), DocumentKind::Project, Some(path)) =
+            (&mut details, entry.kind, entry.path.as_deref())
+        {
+            let writes: Vec<String> = self
+                .save_side_writes(path, false)
+                .iter()
+                .map(|file| file.display().to_string())
+                .collect();
+            map.insert("save_writes".into(), json!(writes));
+        }
         details
     }
 

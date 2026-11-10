@@ -21,7 +21,8 @@ use iced::Task;
 use signex_types::project::RuleProfile;
 
 pub use crate::app::agent::{
-    ChangeSnapshot, MessageLine, Status, changed_between, messages_since, outcome_verdict,
+    ChangeSnapshot, MessageLine, Status, changed_between, client as agent_client, messages_since,
+    outcome_verdict,
 };
 pub use crate::app::command::queries::is_query;
 pub use crate::app::command::{
@@ -118,6 +119,8 @@ impl Signex {
         // A headless run never listens, whatever the config root says.
         app.ui_state.agent_connections_enabled = false;
         app.ui_state.preferences_draft_agent_connections_enabled = false;
+        // And lists no project: the run holds its own (`agent_client::hold`).
+        app.agent.lists_projects = false;
         let rules_applied = app.handle_user_default_loaded(&Ok(Some(rules.clone())));
         let opens = Self::startup_open_messages(paths)
             .into_iter()

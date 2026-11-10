@@ -110,6 +110,17 @@ fn untouched() {
     let (mut app, boot) = Signex::boot(vec![project.clone()]);
     driver.settle(&mut app, boot).expect("open settled");
     assert_eq!(app.document_state.projects.len(), 1, "the project opened");
+    // The window locks and lists what it opens (#1924): not in the user's real
+    // runtime folder, which a test run must never touch.
+    let real_runtime = signex_app::headless::agent_client::runtime_dir().expect("a folder");
+    let lock = signex_app::headless::agent_client::entry_path(&real_runtime, &project)
+        .expect("an entry path")
+        .with_extension("lock");
+    assert!(
+        !lock.exists(),
+        "the test window locked a project in the real runtime folder: {}",
+        lock.display()
+    );
     assert!(
         !app.ui_state
             .recent_projects
