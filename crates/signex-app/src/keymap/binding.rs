@@ -267,7 +267,19 @@ impl FromStr for KeyStroke {
 
         let mut modifiers = Modifiers::default();
         let mut key = None;
-        for part in source.split('+') {
+        // The plus key itself: `+` alone, or `Shift++` after the modifiers.
+        let (modifier_text, plus_key) = match source.strip_suffix("++") {
+            Some(modifiers) => (modifiers, true),
+            None if source == "+" => ("", true),
+            None => (source, false),
+        };
+        if plus_key {
+            key = Some(KeyToken::Character("+".to_owned()));
+        }
+        let parts = modifier_text
+            .split('+')
+            .filter(|_| !modifier_text.is_empty());
+        for part in parts {
             let part = part.trim();
             match part.to_ascii_lowercase().as_str() {
                 "ctrl" | "control" => modifiers.ctrl = true,

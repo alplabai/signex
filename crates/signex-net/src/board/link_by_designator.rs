@@ -6,8 +6,10 @@
 use std::collections::HashMap;
 
 use signex_types::pcb::{PcbBoard, SymbolLink};
-use signex_types::schematic::{InstancePath, PartKey, SchematicSheet, group_into_parts};
+use signex_types::schematic::{InstancePath, SchematicSheet};
 use uuid::Uuid;
+
+use crate::parts::{DesignPart, design_parts};
 
 /// One footprint's link before or after the edit.
 #[derive(Debug, Clone, PartialEq)]
@@ -57,13 +59,6 @@ pub struct LinkByDesignatorReport {
     pub unmatched: Vec<Uuid>,
 }
 
-/// A physical part on one sheet occurrence: its designator and unit uuids.
-struct Part {
-    sheet: InstancePath,
-    designator: String,
-    units: Vec<Uuid>,
-}
-
 /// Link each unlinked footprint to the one part its reference names.
 ///
 /// `sheets` are the placed sheets with their occurrence paths. Units are
@@ -75,7 +70,10 @@ pub fn link_footprints_by_designator(
     board: &PcbBoard,
     sheets: &[(InstancePath, &SchematicSheet)],
 ) -> (BoardLinkEdit, LinkByDesignatorReport) {
-    let parts = parts_of(sheets);
+    let parts: Vec<DesignPart> = design_parts(sheets)
+        .into_iter()
+        .filter(|p| !p.needs_annotation)
+        .collect();
     let mut by_designator: HashMap<&str, Vec<usize>> = HashMap::new();
     for (i, part) in parts.iter().enumerate() {
         by_designator
@@ -85,7 +83,7 @@ pub fn link_footprints_by_designator(
     }
 
     // A part a linked footprint already holds.
-    let held = |part: &Part| {
+    let held = |part: &DesignPart| {
         board.footprints.iter().any(|f| {
             f.schematic_link.as_ref().is_some_and(|l| {
                 l.sheet == part.sheet && l.units.iter().any(|u| part.units.contains(u))
@@ -143,30 +141,4 @@ pub fn link_footprints_by_designator(
         list.sort_by_key(|u| rank[u]);
     }
     (edit, report)
-}
-
-fn parts_of(sheets: &[(InstancePath, &SchematicSheet)]) -> Vec<Part> {
-    let mut parts = Vec::new();
-    for (path, sheet) in sheets {
-        let placed: Vec<_> = sheet.symbols.iter().filter(|s| !s.is_power).collect();
-        let keys: Vec<PartKey<'_>> = placed
-            .iter()
-            .map(|s| PartKey {
-                reference: s.designator_in(path).trim(),
-                ..s.part_key()
-            })
-            .collect();
-        for group in group_into_parts(keys.iter().copied()) {
-            let designator = keys[group[0]].reference;
-            if designator.is_empty() || designator.contains('?') {
-                continue;
-            }
-            parts.push(Part {
-                sheet: path.clone(),
-                designator: designator.to_string(),
-                units: group.iter().map(|&i| placed[i].uuid).collect(),
-            });
-        }
-    }
-    parts
 }

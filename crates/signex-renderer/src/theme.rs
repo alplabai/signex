@@ -44,6 +44,11 @@ impl ResolvedTheme {
         resolved.set_slot(ColorSlot::LassoStroke, to_rgba(canvas.selection));
         resolved.set_slot(ColorSlot::LassoFill, to_rgba(canvas.selection));
         resolved.set_slot(ColorSlot::Ratsnest, to_rgba(canvas.ratsnest_color()));
+        // The board edge is the canvas's strongest ink; an opening shows the
+        // canvas under the board; a keepout is where a DRC rule bites.
+        resolved.set_slot(ColorSlot::BoardEdge, to_rgba(canvas.board_edge_color()));
+        resolved.set_slot(ColorSlot::BoardOpening, to_rgba(canvas.background));
+        resolved.set_slot(ColorSlot::Keepout, to_rgba(canvas.keepout_color()));
 
         resolved
     }
@@ -116,6 +121,9 @@ fn load_builtin_theme() -> ResolvedTheme {
     resolved.set_slot(ColorSlot::Ghost, palette.slots.ghost);
     resolved.set_slot(ColorSlot::LassoStroke, palette.slots.lasso_stroke);
     resolved.set_slot(ColorSlot::LassoFill, palette.slots.lasso_fill);
+    resolved.set_slot(ColorSlot::BoardEdge, palette.slots.snap);
+    resolved.set_slot(ColorSlot::BoardOpening, palette.slots.pin);
+    resolved.set_slot(ColorSlot::Keepout, palette.slots.drc_warning);
 
     resolved
 }
@@ -163,6 +171,36 @@ mod tests {
         assert_eq!(
             ResolvedTheme::builtin_default().color(ColorSlot::Ratsnest),
             ResolvedTheme::builtin_default().color(ColorSlot::Selection)
+        );
+    }
+
+    #[test]
+    fn the_board_palette_has_its_own_edge_and_keepout_colours() {
+        // Board views draw with the Graphite Dark canvas in both themes.
+        let canvas = canvas_colors(ThemeId::GraphiteDark);
+        let theme = ResolvedTheme::from_canvas_colors(canvas);
+        let rgba = super::to_rgba;
+        let edge = canvas
+            .board_edge
+            .expect("the board palette sets an edge colour");
+        let keepout = canvas
+            .keepout
+            .expect("the board palette sets a keepout colour");
+        assert_eq!(theme.color(ColorSlot::BoardEdge), rgba(edge));
+        assert_eq!(theme.color(ColorSlot::Keepout), rgba(keepout));
+        assert_eq!(
+            theme.color(ColorSlot::BoardOpening),
+            rgba(canvas.background)
+        );
+        assert_ne!(
+            rgba(keepout),
+            rgba(canvas.drc_warning),
+            "a keepout is not a DRC marker"
+        );
+        assert_ne!(
+            rgba(edge),
+            rgba(canvas.background),
+            "the edge shows against an opening"
         );
     }
 

@@ -8,6 +8,7 @@ pub(super) fn trace_from_segment(segment: &Segment) -> TraceInput {
         p1: point_to_xy(segment.end),
         width_mm: mm_with_floor(segment.width, PCB_DEFAULT_TRACE_WIDTH_MM, PCB_TRACK_MIN_MM),
         net: segment.net,
+        dimmed: false,
     }
 }
 
@@ -21,6 +22,7 @@ pub(super) fn via_from_board_via(via: &Via) -> ViaInput {
         ),
         drill_mm: mm_with_floor(via.drill, PCB_DEFAULT_VIA_DRILL_MM, PCB_VIA_MIN_DRILL_MM),
         net: via.net,
+        dimmed: false,
     }
 }
 
@@ -50,6 +52,7 @@ pub(super) fn pad_from_footprint(footprint: &Footprint, pad: &Pad) -> Option<Pad
             .map(|p| point_to_xy(p.to_mm()))
             .collect(),
         pad_type: pad.pad_type,
+        dimmed: false,
     })
 }
 
@@ -92,6 +95,7 @@ pub(super) fn zone_from_board_zone(
         layer_rank,
         layer_name,
         source_order,
+        dimmed: false,
     })
 }
 
@@ -168,6 +172,15 @@ pub(super) fn pad_alpha_mul(pad_type: PadType) -> f32 {
     }
 }
 
+/// `color` faint when `dimmed`: copper off the active layer.
+pub(super) fn dim_if(color: [f32; 4], dimmed: bool) -> [f32; 4] {
+    if dimmed {
+        with_alpha_mul(color, DIMMED_ALPHA)
+    } else {
+        color
+    }
+}
+
 pub(super) fn with_alpha_mul(mut color: [f32; 4], alpha_mul: f32) -> [f32; 4] {
     color[3] = (color[3] * alpha_mul.clamp(0.0, 1.0)).clamp(0.0, 1.0);
     color
@@ -184,7 +197,7 @@ pub(super) fn emit_traces(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: 
             p0: trace.p0,
             p1: trace.p1,
             width: trace.width_mm,
-            color: trace_color,
+            color: dim_if(trace_color, trace.dimmed),
             // Bit 0 of `style` is the dash flag. A trace's net, if it is ever
             // encoded here, goes above bit 8 like the ratsnest's.
             style: 0,
@@ -209,7 +222,7 @@ pub(super) fn emit_vias(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &m
             center: via.center,
             radius: (outer + hole) * 0.5,
             stroke_width: outer - hole,
-            color: via_color,
+            color: dim_if(via_color, via.dimmed),
         });
     }
 }
@@ -236,7 +249,10 @@ pub(super) fn emit_static_polygons(
     let rule_area_stroke = theme.color(ColorSlot::LassoStroke);
 
     for pad in &snapshot.pads {
-        let fill_color = with_alpha_mul(base_fill, pad_alpha_mul(pad.pad_type));
+        let fill_color = dim_if(
+            with_alpha_mul(base_fill, pad_alpha_mul(pad.pad_type)),
+            pad.dimmed,
+        );
 
         let stroke_width = (pad.size_mm[0].min(pad.size_mm[1]) * 0.08).max(0.02);
 
@@ -244,7 +260,7 @@ pub(super) fn emit_static_polygons(
             holes: Vec::new(),
             vertices: pad.outline.clone(),
             fill_color,
-            stroke_color: Some(stroke_color),
+            stroke_color: Some(dim_if(stroke_color, pad.dimmed)),
             stroke_width,
         });
     }
@@ -253,8 +269,8 @@ pub(super) fn emit_static_polygons(
         scene.polygons.push(GpuPolygon {
             vertices: zone.vertices.clone(),
             holes: zone.holes.clone(),
-            fill_color: zone_fill,
-            stroke_color: Some(zone_stroke),
+            fill_color: dim_if(zone_fill, zone.dimmed),
+            stroke_color: Some(dim_if(zone_stroke, zone.dimmed)),
             stroke_width: 0.06,
         });
     }
@@ -398,6 +414,10 @@ pub(super) fn emit_overlays(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene
         .reserve(snapshot.ratsnest_lines.len() + snapshot.drc_markers.len());
     scene.overlay_circles.reserve(snapshot.drc_markers.len());
     scene.overlay_polygons.reserve(snapshot.drc_markers.len());
+
+    // The board's openings and keepouts first, so the ratsnest and DRC
+    // markers stay readable on top (#2234).
+    super::board_features::emit(&snapshot.board_features, theme, scene);
 
     let ratsnest_color = with_alpha_mul(theme.color(ColorSlot::Ratsnest), 0.72);
 

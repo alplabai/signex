@@ -560,6 +560,7 @@ impl Signex {
             PanelMsg::FpEditorSetCutoutThrough { id, value } => {
                 self.fp_editor_set_cutout_through(*id, *value)
             }
+            PanelMsg::BoardSketch(edit) => self.board_sketch_attr_edited(edit),
             PanelMsg::FpEditorEditArrayParam {
                 array_id,
                 field,

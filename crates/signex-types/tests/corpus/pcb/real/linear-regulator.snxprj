@@ -1,0 +1,24 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "linear-regulator",
+  "net_classes": [
+    {
+      "clearance": 0.25,
+      "name": "Power",
+      "nets": [
+        "+5V",
+        "+3V3",
+        "GND"
+      ],
+      "trace_width": 0.5
+    }
+  ],
+  "pcb_file": "linear-regulator.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

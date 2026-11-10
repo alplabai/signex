@@ -18,6 +18,7 @@ mod index_job;
 mod inspector;
 mod messages;
 mod navigate;
+mod selection_nets;
 mod target;
 
 #[cfg(test)]

@@ -65,6 +65,11 @@
     "category": "edit"
   },
   {
+    "id": "board_sketch",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "break_wire",
     "group": "General",
     "category": "modify"
@@ -153,6 +158,11 @@
     "id": "create_sheet_from_sheet_symbol",
     "group": "Schematic",
     "category": "design"
+  },
+  {
+    "id": "cross_probe",
+    "group": "General",
+    "category": "select"
   },
   {
     "id": "cut",
@@ -395,6 +405,11 @@
     "category": "modify"
   },
   {
+    "id": "flip_selection",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
     "id": "footprint_mode_pads",
     "group": "ThreeD",
     "category": "library"
@@ -500,6 +515,11 @@
     "category": "file"
   },
   {
+    "id": "new_pcb_document",
+    "group": "Pcb",
+    "category": "file"
+  },
+  {
     "id": "new_project_with_profile",
     "group": "General",
     "category": "file"
@@ -518,6 +538,11 @@
     "id": "next_highlighted_net_item",
     "group": "Schematic",
     "category": "select"
+  },
+  {
+    "id": "next_layer",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "next_sheet",
@@ -795,6 +820,11 @@
     "category": "interactive"
   },
   {
+    "id": "prev_layer",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "previous_document_tab",
     "group": "General",
     "category": "window"
@@ -975,6 +1005,11 @@
     "category": "view"
   },
   {
+    "id": "show_all_layers",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "show_current_command_hotkeys",
     "group": "General",
     "category": "help"
@@ -1030,9 +1065,24 @@
     "category": "window"
   },
   {
+    "id": "toggle_layer_visibility",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "toggle_layers_panel",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "toggle_properties_panel",
     "group": "General",
     "category": "panels"
+  },
+  {
+    "id": "toggle_ratsnest",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "toggle_schematic_filter_panel",

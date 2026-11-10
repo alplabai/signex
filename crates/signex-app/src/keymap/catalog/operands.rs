@@ -98,6 +98,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("make_folder", OperandKind::Bool),
     ("profile", OperandKind::Text),
     ("overrides", OperandKind::Text),
+    ("apply", OperandKind::Bool),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -198,6 +199,10 @@ pub const NEW_PROJECT: &[Operand] = &[
     optional("profile", OperandKind::Text),
     optional("overrides", OperandKind::Text),
 ];
+
+/// Update PCB without the dialog (#1312): `apply=true` executes the rows
+/// ticked by default.
+pub const APPLY: &[Operand] = &[required("apply", OperandKind::Bool)];
 
 /// Colour the net under a point of the named document's sheet.
 pub const COLOR_NET: &[Operand] = &[

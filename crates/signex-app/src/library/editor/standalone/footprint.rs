@@ -646,7 +646,7 @@ fn view_footprint_toolbar<'a>(
         .boxed()
 }
 
-fn view_footprint_canvas<'a>(
+pub(super) fn view_footprint_canvas<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     bg: iced::Color,

@@ -20,6 +20,17 @@ use crate::styles::Spacing;
 /// Default type / spacing scales; equal to the old literals at the default size.
 const SP: Spacing = Spacing::DEFAULT;
 
+// Per-side row labels: the layer names `pcb.ftl` gives (pinned by a test).
+const TOP_LAYER: &str = "Top Layer";
+const BOTTOM_LAYER: &str = "Bottom Layer";
+/// The row for every inner copper layer at once, Altium's Top-Middle-Bottom
+/// pad stack term; one inner layer is "Mid-Layer N" (`pcb.ftl`).
+const MID_LAYERS: &str = "Mid Layer";
+const TOP_SOLDER: &str = "Top Solder";
+const BOTTOM_SOLDER: &str = "Bottom Solder";
+const TOP_PASTE: &str = "Top Paste";
+const BOTTOM_PASTE: &str = "Bottom Paste";
+
 /// v0.20 — render the "Pad Stack" section: copper shape + size,
 /// hole, per-side paste / mask expansions, tented flags, thermal
 /// relief, corner radius. Mirrors the Altium PCB Library Pad Stack
@@ -91,11 +102,11 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
     ));
     let copper_rows: &[&str] = match values.pad_stack_tab {
         PadStackTab::Simple => &["All Layers"],
-        PadStackTab::TopMiddleBottom => &["Top Layer", "Mid Layer", "Bottom Layer"],
+        PadStackTab::TopMiddleBottom => &[TOP_LAYER, MID_LAYERS, BOTTOM_LAYER],
         PadStackTab::FullStack => match values.side {
-            PadSide::Top => &["F.Cu", "F.Mask", "F.Paste"],
-            PadSide::Bottom => &["B.Cu", "B.Mask", "B.Paste"],
-            PadSide::All => &["Top Layer", "Inner", "Bottom Layer"],
+            PadSide::Top => &[TOP_LAYER, TOP_SOLDER, TOP_PASTE],
+            PadSide::Bottom => &[BOTTOM_LAYER, BOTTOM_SOLDER, BOTTOM_PASTE],
+            PadSide::All => &[TOP_LAYER, MID_LAYERS, BOTTOM_LAYER],
         },
     };
     for (idx, row_label) in copper_rows.iter().enumerate() {
@@ -317,7 +328,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             ExpansionMode::Rule
         };
         col = col.push(pad_table_row(
-            "Top Paste",
+            TOP_PASTE,
             vec![
                 pad_table_input_cell(paste_top_buf, "(rule)", move |v| {
                     pad_paste_top_msg(target, v)
@@ -352,7 +363,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             ExpansionMode::Rule
         };
         col = col.push(pad_table_row(
-            "Bottom Paste",
+            BOTTOM_PASTE,
             vec![
                 pad_table_input_cell(paste_bot_buf, "(rule)", move |v| {
                     pad_paste_bottom_msg(target, v)
@@ -397,7 +408,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             ExpansionMode::Rule
         };
         col = col.push(pad_table_row(
-            "Top Solder Mask",
+            TOP_SOLDER,
             vec![
                 pad_table_input_cell(mask_top_buf, "(rule)", move |v| pad_mask_top_msg(target, v)),
                 pad_table_picklist_cell(
@@ -429,7 +440,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             ExpansionMode::Rule
         };
         col = col.push(pad_table_row(
-            "Bottom Solder Mask",
+            BOTTOM_SOLDER,
             vec![
                 pad_table_input_cell(mask_bot_buf, "(rule)", move |v| {
                     pad_mask_bottom_msg(target, v)
@@ -453,4 +464,37 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
     }
 
     col
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pcb_canvas::layer_style::layer_name;
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
+
+    /// The pad stack's per-side rows name layers as the Layers panel does.
+    #[test]
+    fn the_per_side_rows_use_the_layer_catalog_names() {
+        let i18n = signex_i18n::I18n::en_us();
+        let rows = [
+            (TOP_LAYER, PcbLayer::Copper(CopperLayer::Top)),
+            (BOTTOM_LAYER, PcbLayer::Copper(CopperLayer::Bottom)),
+            (
+                TOP_SOLDER,
+                PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
+            ),
+            (
+                BOTTOM_SOLDER,
+                PcbLayer::Technical(TechnicalLayer::SolderMaskBottom),
+            ),
+            (TOP_PASTE, PcbLayer::Technical(TechnicalLayer::PasteTop)),
+            (
+                BOTTOM_PASTE,
+                PcbLayer::Technical(TechnicalLayer::PasteBottom),
+            ),
+        ];
+        for (label, layer) in rows {
+            assert_eq!(label, layer_name(&i18n, layer).into_string(), "{layer:?}");
+        }
+    }
 }

@@ -93,6 +93,7 @@ fn pad(n: u128, number: &str) -> Pad {
 fn footprint(n: u128, reference: &str, pads: Vec<Pad>) -> Footprint {
     Footprint {
         schematic_link: None,
+        library_ref: None,
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: id(n),

@@ -199,6 +199,16 @@ impl Signex {
                     ContextSubmenu::AddNewToProject,
                     active_submenu == Some(ContextSubmenu::AddNewToProject),
                 ));
+                // #1312: the Update PCB dialog for the clicked project.
+                v.push(dd_msg(
+                    None,
+                    &signex_i18n::t!(self.ui_state.i18n, signex_i18n::ids::UPDATE_PCB_TREE_ROW)
+                        .into_string(),
+                    &self.keymap_shortcut_label("update_pcb_from_schematic"),
+                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::UpdatePcb(
+                        key.clone(),
+                    ))),
+                ));
                 v.push(dd_msg(
                     None,
                     "Add Existing to Project...",

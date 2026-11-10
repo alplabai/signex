@@ -155,6 +155,7 @@ impl PanelPosition {
             | PanelKind::SchList
             | PanelKind::Drc
             | PanelKind::LayerStack
+            | PanelKind::Layers
             | PanelKind::NetClasses
             | PanelKind::Variants
             | PanelKind::OutputJobs

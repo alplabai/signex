@@ -161,6 +161,7 @@ impl PcbDefaults {
             })
             .collect();
         PcbBoard {
+            sketch: None,
             uuid: uuid::Uuid::now_v7(),
             version: 1,
             generator: "signex".into(),

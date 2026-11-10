@@ -183,6 +183,37 @@ impl SheetHierarchy {
         out
     }
 
+    /// The sheets the walk shows at `placement`, the inverse of
+    /// [`placements_of`](Self::placements_of): one sheet for a child
+    /// placement, the root and the loose pages for the root chain.
+    pub fn paths_at(&self, placement: &InstancePath) -> Vec<&Path> {
+        fn walk<'a>(
+            node: &'a SheetNode,
+            chain: &mut Vec<Uuid>,
+            want: &[Uuid],
+            out: &mut Vec<&'a Path>,
+        ) {
+            chain.extend(node.placed_as);
+            let a_placement = !matches!(node.kind, SheetNodeKind::Cycle | SheetNodeKind::Rejected);
+            if a_placement && chain.as_slice() == want {
+                out.push(&node.path);
+            }
+            if want.starts_with(chain.as_slice()) {
+                for child in &node.children {
+                    walk(child, chain, want, out);
+                }
+            }
+            if node.placed_as.is_some() {
+                chain.pop();
+            }
+        }
+        let mut out = Vec::new();
+        for node in self.top_level() {
+            walk(node, &mut Vec::new(), placement.chain(), &mut out);
+        }
+        out
+    }
+
     /// Whether the walk saw the whole hierarchy: every node is a loaded
     /// sheet, none Missing, Unreadable, Rejected, a Cycle or Truncated. Only
     /// then is [`placements_of`](Self::placements_of) every placement there
@@ -604,6 +635,23 @@ mod tests {
         let entered = InstancePath::from_chain(vec![mcu_symbol, adc_symbol]);
         assert_eq!(h.parent_through(&entered, &p("adc.snxsch")), Some(step));
         assert!(h.parent_through(&entered, &p("power.snxsch")).is_none());
+    }
+
+    /// Cross Probe finds a part's sheet from its link's placement (#1312).
+    #[test]
+    fn paths_at_is_the_inverse_of_placements_of() {
+        let sheets = numbered(three_level());
+        let h = hierarchy_of(&sheets);
+        let mcu_symbol = sheets[&p("root.snxsch")].child_sheets[1].uuid;
+        let adc_symbol = sheets[&p("mcu.snxsch")].child_sheets[0].uuid;
+        let adc = p("adc.snxsch");
+        let at = InstancePath::from_chain(vec![mcu_symbol, adc_symbol]);
+        assert_eq!(h.paths_at(&at), vec![adc.as_path()]);
+        assert_eq!(h.placements_of(&adc), vec![at]);
+        let root = p("root.snxsch");
+        assert_eq!(h.paths_at(&InstancePath::root()), vec![root.as_path()]);
+        let nowhere = InstancePath::from_chain(vec![Uuid::from_u128(999)]);
+        assert!(h.paths_at(&nowhere).is_empty());
     }
 
     #[test]

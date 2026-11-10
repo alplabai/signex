@@ -21,6 +21,7 @@ fn command(id: &str) -> AppCommandId {
 
 pub(super) fn board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
+        sketch: None,
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         version: 1,
@@ -229,7 +230,9 @@ fn the_save_rows_enable_by_the_active_documents_kind() {
     // (kind, save, save as) with the project clean, then dirty.
     for (kind, clean, dirty) in [
         (Kind::Schematic, (true, true), (true, true)),
-        (Kind::Pcb, (false, false), (true, false)),
+        // A board with unsaved changes saves whatever the project holds
+        // (Caner, #2271).
+        (Kind::Pcb, (true, false), (true, false)),
         (Kind::Symbol, (true, true), (true, true)),
         (Kind::Footprint, (true, true), (true, true)),
         (Kind::Row, (false, false), (true, false)),
@@ -318,7 +321,7 @@ fn ctrl_s_in_window(f: &mut Fx) -> (Vec<String>, Vec<u8>) {
 fn ctrl_s_in_an_undocked_window_writes_that_windows_document_not_the_main_one() {
     for (kind, want) in [
         (Kind::Schematic, vec!["a.snxsch"]),
-        (Kind::Pcb, vec![]),
+        (Kind::Pcb, vec!["b.snxpcb"]),
         (Kind::Symbol, vec!["s.snxsym"]),
         (Kind::Footprint, vec!["f.snxfpt"]),
         (Kind::Project, vec!["p.snxprj"]),

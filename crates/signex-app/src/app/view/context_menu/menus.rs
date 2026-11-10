@@ -30,6 +30,9 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "paste",
     "smart_paste",
     "rotate_counterclockwise",
+    "rotate_clockwise",
+    "move_selection",
+    "flip_selection",
     "mirror_x",
     "mirror_y",
     "delete_selection",
@@ -42,6 +45,8 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "edit_selected_object_properties",
     "change_component",
     "open_project_options",
+    "cross_probe",
+    "board_sketch",
 ];
 
 /// Keyboard-shortcut hints for the canvas menu, keyed by command id and
@@ -115,14 +120,19 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> super::placement::MenuCard<'_> {
         let tid = self.ui_state.effective_theme_id();
-        let (selection, project_key) = self.canvas_menu_inputs(window_id);
-        let active_submenu = self.interaction_state.context_submenu;
         // Shortcut hints read from the active keymap profile; a command
         // it does not bind has none.
         let sc = CanvasShortcuts::resolve(|id| self.keymap_shortcut_label(id));
         let tokens = &self.document_state.panel_ctx.tokens;
-        let entries = canvas_menu_entries(tid, selection, active_submenu, project_key, &sc);
         let ui_font = &self.document_state.panel_ctx.ui_font_name;
+        let board = self.pcb_targets(Some(window_id));
+        if board.shown {
+            let entries = pcb_canvas_menu_entries(tid, board, &sc);
+            return super::placement::menu_card(entries, tokens, ui_font);
+        }
+        let (selection, project_key) = self.canvas_menu_inputs(window_id);
+        let active_submenu = self.interaction_state.context_submenu;
+        let entries = canvas_menu_entries(tid, selection, active_submenu, project_key, &sc);
         super::placement::menu_card(entries, tokens, ui_font)
     }
 
@@ -259,11 +269,13 @@ pub(super) fn canvas_menu_entries(
         v.push(DropdownEntry::Separator);
     }
 
-    v.push(dd_planned(
-        Some(ic::icon_dd_cross_probe(tid)),
-        "Cross Probe",
-        None,
-    ));
+    // #1312: the selected part or net on the board, opened when needed.
+    let probe_icon = Some(ic::icon_dd_cross_probe(tid));
+    v.push(if has_selection {
+        dd_command(probe_icon, "cross_probe", sc.of("cross_probe"), None)
+    } else {
+        dd_cmd_disabled(probe_icon, "cross_probe", sc.of("cross_probe"))
+    });
     v.push(DropdownEntry::Separator);
     // Cut and Copy have nothing to act on without a selection: greyed, as
     // the Edit menu greys them and as the keys do nothing there.
@@ -380,6 +392,47 @@ pub(super) fn canvas_menu_entries(
     }
 
     v
+}
+
+/// The board canvas menu (#2240): the placement commands, greyed unless
+/// the selection names an unlocked footprint (Delete: anything deletable),
+/// then Cross Probe, live with anything selected (#1312), then the View
+/// group's Toggle Ratsnest, always live on a board.
+/// Each row runs its catalog command like the keys and the Edit menu do.
+pub(super) fn pcb_canvas_menu_entries(
+    tid: ThemeId,
+    board: crate::app::handlers::pcb_placement::PcbTargets,
+    sc: &CanvasShortcuts,
+) -> Vec<DropdownEntry<Message>> {
+    let row = |icon, command_id: &'static str, enabled: bool| {
+        if enabled {
+            dd_command(Some(icon), command_id, sc.of(command_id), None)
+        } else {
+            dd_cmd_disabled(Some(icon), command_id, sc.of(command_id))
+        }
+    };
+    let placeable = board.placeable;
+    vec![
+        row(ic::icon_dd_move_sel(tid), "move_selection", placeable),
+        DropdownEntry::Separator,
+        row(
+            ic::icon_dd_rotate(tid),
+            "rotate_counterclockwise",
+            placeable,
+        ),
+        row(ic::icon_dd_rotate_cw(tid), "rotate_clockwise", placeable),
+        row(ic::icon_dd_flip_x(tid), "flip_selection", placeable),
+        DropdownEntry::Separator,
+        row(ic::icon_dd_delete(tid), "delete_selection", board.deletable),
+        DropdownEntry::Separator,
+        // Enter or leave the board's sketch mode (#2234).
+        row(ic::icon_dd_rect(tid), "board_sketch", true),
+        DropdownEntry::Separator,
+        row(ic::icon_dd_cross_probe(tid), "cross_probe", board.any),
+        DropdownEntry::Separator,
+        // View group (#2223): the View menu's board-view row.
+        dd_command(None, "toggle_ratsnest", sc.of("toggle_ratsnest"), None),
+    ]
 }
 
 /// Pure tab-menu data builder. The per-tab "Close [title]" row carries the

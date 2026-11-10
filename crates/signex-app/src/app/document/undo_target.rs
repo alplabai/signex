@@ -81,7 +81,10 @@ impl Signex {
                 DocumentKey::Row(address) => self.component_history_of(address),
                 DocumentKey::Project(id) => self.project_tab_history_available(*id),
                 DocumentKey::Schematic(path) => self.sheet_history_available(path),
-                DocumentKey::Pcb(path) => docs.board_history_available(path),
+                // In sketch mode Undo steps the sketch, not the board (#2234).
+                DocumentKey::Pcb(path) => self
+                    .board_sketch_history(path)
+                    .unwrap_or_else(|| docs.board_history_available(path)),
             },
         }
     }
@@ -130,7 +133,10 @@ impl Signex {
                 }
                 moved
             }
-            DocumentKey::Pcb(path) => self.step_board_history(path, undo),
+            DocumentKey::Pcb(path) => match self.step_board_sketch_history(path, undo) {
+                Some(moved) => moved,
+                None => self.step_board_history(path, undo),
+            },
             DocumentKey::Schematic(_) if undo => self.undo_active_sheet(),
             DocumentKey::Schematic(_) => self.redo_active_sheet(),
         }

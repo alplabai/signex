@@ -188,9 +188,10 @@ fn fixture() -> Fixture {
     let tmp = tempfile::TempDir::new().expect("tempdir");
     let sample = tmp.path().join("sample");
     copy_dir(&manifest("assets/sample-project"), &sample);
-    let pcb = tmp.path().join("routed_board.snxpcb");
+    // A realistic board with an outline, holes and a keepout.
+    let pcb = tmp.path().join("mixed-tht-smd.snxpcb");
     std::fs::copy(
-        manifest("../signex-types/tests/corpus/pcb/routed_board.snxpcb"),
+        manifest("../signex-types/tests/corpus/pcb/real/mixed-tht-smd.snxpcb"),
         &pcb,
     )
     .expect("copy pcb");
@@ -291,6 +292,9 @@ fn screens() -> Vec<(&'static str, Build)> {
         }),
         ("pcb", |app, r, fx| {
             settle_support::settle(app, Message::File(FileMsg::Opened(Some(fx.pcb.clone()))));
+            let _ = draw(r, app);
+            // The canvas knows its size after the first draw; fit the board to it.
+            app.interaction_state.pcb_canvas.fit_to_board();
             let _ = draw(r, app);
             Ok(())
         }),

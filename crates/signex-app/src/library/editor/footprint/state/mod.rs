@@ -23,6 +23,7 @@
 //! - [`snap_options`] — `SnapOptions`, `GridDef`, `Guide*`, `SnapSubTab`,
 //!   `SnappingMode`, `GridDisplay`.
 
+mod board_backdrop;
 pub mod conflict;
 pub mod context_menu;
 mod courtyard;
@@ -37,6 +38,7 @@ pub mod silk_selection;
 pub mod snap_options;
 pub mod tool;
 
+pub use board_backdrop::{BackdropTrack, BoardBackdrop};
 pub use context_menu::{
     FootprintContextAction, FootprintContextMenuState, FootprintContextSubmenu,
     FootprintContextTarget,
@@ -294,6 +296,10 @@ pub struct FootprintEditorState {
     pub context_menu: Option<FootprintContextMenuState>,
     /// v0.26-C — one-shot "fit canvas to content" request.
     pub fit_pending: bool,
+    /// Set when this editor edits a board sketch (#2234): the board drawn
+    /// under the sketch. The Active Bar then offers the sketch tools only,
+    /// and the footprint bake is off (the board bakes on commit).
+    pub board_backdrop: Option<std::sync::Arc<BoardBackdrop>>,
 }
 
 /// Pixels per mm at the canvas's "100%" zoom, picked so a 5x5 mm SOT-23
@@ -397,6 +403,7 @@ impl FootprintEditorState {
             numeric_buffers: std::collections::HashMap::new(),
             context_menu: None,
             fit_pending: false,
+            board_backdrop: None,
         }
     }
 
@@ -415,6 +422,13 @@ impl FootprintEditorState {
         }
         if let Some(c) = self.courtyard_mm {
             expand(c.min_x, c.min_y, c.max_x, c.max_y);
+        }
+        if let Some((x0, y0, x1, y1)) = self
+            .board_backdrop
+            .as_deref()
+            .and_then(BoardBackdrop::bbox_mm)
+        {
+            expand(x0, y0, x1, y1);
         }
         bbox
     }

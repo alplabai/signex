@@ -1,0 +1,1383 @@
+format = "snxpcb/1.3"
+pcb_id = "5ca1ab1e-0004-4000-8000-000000000001"
+version = 1
+generator = "signex"
+thickness = 1.6
+
+
+[stackup]
+layers = [
+    "TopCopper",
+    "Inner1Copper",
+    "Inner2Copper",
+    "BottomCopper",
+    "TopSilkscreen",
+    "BottomSilkscreen",
+    "TopSolderMask",
+    "BottomSolderMask",
+    "EdgeCuts",
+    "TopCourtyard",
+    "BottomCourtyard",
+    "TopFab",
+    "BottomFab",
+]
+layer_types = [
+    "copper",
+    "plane",
+    "plane",
+    "copper",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+]
+
+[stackup.display_names]
+Inner1Copper = "GND plane"
+Inner2Copper = "3V3 plane"
+
+[stackup.setup]
+grid_size = 0.05
+trace_width = 0.2
+via_diameter = 0.5
+via_drill = 0.25
+clearance = 0.15
+track_min_width = 0.15
+via_min_diameter = 0.45
+via_min_drill = 0.2
+
+[[nets.entries]]
+number = 1
+name = "VIN"
+
+[[nets.entries]]
+number = 2
+name = "GND"
+
+[[nets.entries]]
+number = 3
+name = "SDA"
+
+[[nets.entries]]
+number = 4
+name = "SCL"
+
+[[nets.entries]]
+number = 5
+name = "+3V3"
+
+[footprints]
+content = """
+uuid                                  ref  library                 pos_x     pos_y     rotation  layer      value
+5ca1ab1e-0004-4000-8000-000000000002  J1   PinHeader_1x04_P2.54mm  3000000   5190000   0         TopCopper  I2C
+5ca1ab1e-0004-4000-8000-000000000007  U2   SOT-23-5                9500000   4500000   0         TopCopper  AP2112K-3.3
+5ca1ab1e-0004-4000-8000-00000000000d  C1   C_0603                  6500000   6375000   90        TopCopper  1uF
+5ca1ab1e-0004-4000-8000-000000000010  C2   C_0603                  12600000  3600000   90        TopCopper  1uF
+5ca1ab1e-0004-4000-8000-000000000013  U1   LGA-8_2.5x2.5mm         18000000  9000000   0         TopCopper  BME280
+5ca1ab1e-0004-4000-8000-00000000001c  C3   C_0603                  22000000  11600000  0         TopCopper  100nF
+5ca1ab1e-0004-4000-8000-00000000001f  R1   R_0603                  8000000   9445000   90        TopCopper  4.7k
+5ca1ab1e-0004-4000-8000-000000000022  R2   R_0603                  10000000  11985000  90        TopCopper  4.7k
+"""
+
+[pads]
+content = """
+uuid                                  footprint_ref                         pin  pos_x     pos_y     size_x   size_y   pad_type  shape      layers                                                 drill    net_number  net_name  roundrect_ratio
+5ca1ab1e-0004-4000-8000-000000000003  5ca1ab1e-0004-4000-8000-000000000002  1    0         0         1700000  1700000  thru      rect       TopCopper,BottomCopper,TopSolderMask,BottomSolderMask  1000000  1           VIN       0
+5ca1ab1e-0004-4000-8000-000000000004  5ca1ab1e-0004-4000-8000-000000000002  2    0         2540000   1700000  1700000  thru      oval       TopCopper,BottomCopper,TopSolderMask,BottomSolderMask  1000000  2           GND       0
+5ca1ab1e-0004-4000-8000-000000000005  5ca1ab1e-0004-4000-8000-000000000002  3    0         5080000   1700000  1700000  thru      oval       TopCopper,BottomCopper,TopSolderMask,BottomSolderMask  1000000  3           SDA       0
+5ca1ab1e-0004-4000-8000-000000000006  5ca1ab1e-0004-4000-8000-000000000002  4    0         7620000   1700000  1700000  thru      oval       TopCopper,BottomCopper,TopSolderMask,BottomSolderMask  1000000  4           SCL       0
+5ca1ab1e-0004-4000-8000-000000000008  5ca1ab1e-0004-4000-8000-000000000007  1    -950000   1100000   600000   1100000  smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        1           VIN       0.25
+5ca1ab1e-0004-4000-8000-000000000009  5ca1ab1e-0004-4000-8000-000000000007  2    0         1100000   600000   1100000  smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        2           GND       0.25
+5ca1ab1e-0004-4000-8000-00000000000a  5ca1ab1e-0004-4000-8000-000000000007  3    950000    1100000   600000   1100000  smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        1           VIN       0.25
+5ca1ab1e-0004-4000-8000-00000000000b  5ca1ab1e-0004-4000-8000-000000000007  4    950000    -1100000  600000   1100000  smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        0           ""        0.25
+5ca1ab1e-0004-4000-8000-00000000000c  5ca1ab1e-0004-4000-8000-000000000007  5    -950000   -1100000  600000   1100000  smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        5           +3V3      0.25
+5ca1ab1e-0004-4000-8000-00000000000e  5ca1ab1e-0004-4000-8000-00000000000d  1    -775000   0         900000   950000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        1           VIN       0.25
+5ca1ab1e-0004-4000-8000-00000000000f  5ca1ab1e-0004-4000-8000-00000000000d  2    775000    0         900000   950000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        2           GND       0.25
+5ca1ab1e-0004-4000-8000-000000000011  5ca1ab1e-0004-4000-8000-000000000010  1    -775000   0         900000   950000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        5           +3V3      0.25
+5ca1ab1e-0004-4000-8000-000000000012  5ca1ab1e-0004-4000-8000-000000000010  2    775000    0         900000   950000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        2           GND       0.25
+5ca1ab1e-0004-4000-8000-000000000014  5ca1ab1e-0004-4000-8000-000000000013  1    -1000000  -975000   500000   350000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        2           GND       0.25
+5ca1ab1e-0004-4000-8000-000000000015  5ca1ab1e-0004-4000-8000-000000000013  2    -1000000  -325000   500000   350000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        5           +3V3      0.25
+5ca1ab1e-0004-4000-8000-000000000016  5ca1ab1e-0004-4000-8000-000000000013  3    -1000000  325000    500000   350000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        3           SDA       0.25
+5ca1ab1e-0004-4000-8000-000000000017  5ca1ab1e-0004-4000-8000-000000000013  4    -1000000  975000    500000   350000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        4           SCL       0.25
+5ca1ab1e-0004-4000-8000-000000000018  5ca1ab1e-0004-4000-8000-000000000013  5    1000000   975000    500000   350000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        2           GND       0.25
+5ca1ab1e-0004-4000-8000-000000000019  5ca1ab1e-0004-4000-8000-000000000013  6    1000000   325000    500000   350000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        5           +3V3      0.25
+5ca1ab1e-0004-4000-8000-00000000001a  5ca1ab1e-0004-4000-8000-000000000013  7    1000000   -325000   500000   350000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        2           GND       0.25
+5ca1ab1e-0004-4000-8000-00000000001b  5ca1ab1e-0004-4000-8000-000000000013  8    1000000   -975000   500000   350000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        5           +3V3      0.25
+5ca1ab1e-0004-4000-8000-00000000001d  5ca1ab1e-0004-4000-8000-00000000001c  1    -775000   0         900000   950000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        5           +3V3      0.25
+5ca1ab1e-0004-4000-8000-00000000001e  5ca1ab1e-0004-4000-8000-00000000001c  2    775000    0         900000   950000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        2           GND       0.25
+5ca1ab1e-0004-4000-8000-000000000020  5ca1ab1e-0004-4000-8000-00000000001f  1    -825000   0         800000   950000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        5           +3V3      0.25
+5ca1ab1e-0004-4000-8000-000000000021  5ca1ab1e-0004-4000-8000-00000000001f  2    825000    0         800000   950000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        3           SDA       0.25
+5ca1ab1e-0004-4000-8000-000000000023  5ca1ab1e-0004-4000-8000-000000000022  1    -825000   0         800000   950000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        5           +3V3      0.25
+5ca1ab1e-0004-4000-8000-000000000024  5ca1ab1e-0004-4000-8000-000000000022  2    825000    0         800000   950000   smd       roundrect  TopCopper,TopSolderMask,TopPaste                       0        4           SCL       0.25
+"""
+
+[tracks]
+content = """
+uuid                                  net  layer      width   start_x   start_y   end_x     end_y
+5ca1ab1e-0004-4000-8000-000000000025  1    TopCopper  400000  3000000   5190000   4000000   5190000
+5ca1ab1e-0004-4000-8000-000000000026  1    TopCopper  400000  4000000   5190000   4410000   5600000
+5ca1ab1e-0004-4000-8000-000000000027  1    TopCopper  400000  4410000   5600000   6500000   5600000
+5ca1ab1e-0004-4000-8000-000000000028  1    TopCopper  400000  6500000   5600000   8550000   5600000
+5ca1ab1e-0004-4000-8000-000000000029  1    TopCopper  400000  10450000  5600000   10450000  7000000
+5ca1ab1e-0004-4000-8000-00000000002a  1    TopCopper  400000  10450000  7000000   8550000   7000000
+5ca1ab1e-0004-4000-8000-00000000002b  1    TopCopper  400000  8550000   7000000   8550000   5600000
+5ca1ab1e-0004-4000-8000-00000000002c  3    TopCopper  200000  17000000  9325000   14000000  9325000
+5ca1ab1e-0004-4000-8000-00000000002d  3    TopCopper  200000  14000000  9325000   13055000  10270000
+5ca1ab1e-0004-4000-8000-00000000002e  3    TopCopper  200000  13055000  10270000  8000000   10270000
+5ca1ab1e-0004-4000-8000-00000000002f  3    TopCopper  200000  8000000   10270000  3000000   10270000
+5ca1ab1e-0004-4000-8000-000000000030  4    TopCopper  200000  17000000  9975000   14600000  9975000
+5ca1ab1e-0004-4000-8000-000000000031  4    TopCopper  200000  14600000  9975000   11765000  12810000
+5ca1ab1e-0004-4000-8000-000000000032  4    TopCopper  200000  11765000  12810000  10000000  12810000
+5ca1ab1e-0004-4000-8000-000000000033  4    TopCopper  200000  10000000  12810000  3000000   12810000
+5ca1ab1e-0004-4000-8000-000000000034  2    TopCopper  200000  9500000   5600000   9500000   4500000
+5ca1ab1e-0004-4000-8000-000000000036  5    TopCopper  200000  8550000   3400000   8550000   2000000
+5ca1ab1e-0004-4000-8000-000000000038  2    TopCopper  200000  6500000   7150000   6500000   8400000
+5ca1ab1e-0004-4000-8000-00000000003a  5    TopCopper  200000  12600000  2825000   12600000  1600000
+5ca1ab1e-0004-4000-8000-00000000003c  2    TopCopper  200000  12600000  4375000   12600000  5600000
+5ca1ab1e-0004-4000-8000-00000000003e  2    TopCopper  200000  17000000  8025000   16300000  7300000
+5ca1ab1e-0004-4000-8000-000000000040  5    TopCopper  200000  17000000  8675000   15800000  8675000
+5ca1ab1e-0004-4000-8000-000000000041  5    TopCopper  200000  15800000  8675000   15300000  8200000
+5ca1ab1e-0004-4000-8000-000000000043  5    TopCopper  200000  19000000  8025000   20000000  8025000
+5ca1ab1e-0004-4000-8000-000000000044  5    TopCopper  200000  20000000  8025000   20500000  7500000
+5ca1ab1e-0004-4000-8000-000000000046  2    TopCopper  200000  19000000  8675000   21300000  8675000
+5ca1ab1e-0004-4000-8000-000000000048  5    TopCopper  200000  19000000  9325000   20000000  9325000
+5ca1ab1e-0004-4000-8000-000000000049  5    TopCopper  200000  20000000  9325000   20500000  9850000
+5ca1ab1e-0004-4000-8000-00000000004b  2    TopCopper  200000  19000000  9975000   19600000  10600000
+5ca1ab1e-0004-4000-8000-00000000004c  2    TopCopper  200000  19600000  10600000  19600000  11100000
+5ca1ab1e-0004-4000-8000-00000000004e  5    TopCopper  200000  8000000   8620000   8000000   7600000
+5ca1ab1e-0004-4000-8000-000000000050  5    TopCopper  200000  10000000  11160000  11200000  11160000
+5ca1ab1e-0004-4000-8000-000000000052  5    TopCopper  200000  21225000  11600000  21225000  12800000
+5ca1ab1e-0004-4000-8000-000000000054  2    TopCopper  200000  22775000  11600000  22775000  12800000
+"""
+
+[vias]
+content = """
+uuid                                  net  pos_x     pos_y     drill   diameter  layers                  via_type
+5ca1ab1e-0004-4000-8000-000000000035  2    9500000   4500000   250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-000000000037  5    8550000   2000000   250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-000000000039  2    6500000   8400000   250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-00000000003b  5    12600000  1600000   250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-00000000003d  2    12600000  5600000   250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-00000000003f  2    16300000  7300000   250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-000000000042  5    15300000  8200000   250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-000000000045  5    20500000  7500000   250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-000000000047  2    21300000  8675000   250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-00000000004a  5    20500000  9850000   250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-00000000004d  2    19600000  11100000  250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-00000000004f  5    8000000   7600000   250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-000000000051  5    11200000  11160000  250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-000000000053  5    21225000  12800000  250000  500000    TopCopper,BottomCopper  through
+5ca1ab1e-0004-4000-8000-000000000055  2    22775000  12800000  250000  500000    TopCopper,BottomCopper  through
+"""
+
+[[zones]]
+uuid = "5ca1ab1e-0004-4000-8000-000000000056"
+net = 2
+net_name = "GND"
+layer = "Inner1Copper"
+holes = [
+    [
+    { x = 8.05, y = 1.5 },
+    { x = 9.05, y = 1.5 },
+    { x = 9.05, y = 2.5 },
+    { x = 8.05, y = 2.5 },
+],
+    [
+    { x = 12.1, y = 1.1 },
+    { x = 13.1, y = 1.1 },
+    { x = 13.1, y = 2.1 },
+    { x = 12.1, y = 2.1 },
+],
+    [
+    { x = 14.8, y = 7.699999999999999 },
+    { x = 15.8, y = 7.699999999999999 },
+    { x = 15.8, y = 8.7 },
+    { x = 14.8, y = 8.7 },
+],
+    [
+    { x = 20.0, y = 7.0 },
+    { x = 21.0, y = 7.0 },
+    { x = 21.0, y = 8.0 },
+    { x = 20.0, y = 8.0 },
+],
+    [
+    { x = 20.0, y = 9.35 },
+    { x = 21.0, y = 9.35 },
+    { x = 21.0, y = 10.35 },
+    { x = 20.0, y = 10.35 },
+],
+    [
+    { x = 7.5, y = 7.1 },
+    { x = 8.5, y = 7.1 },
+    { x = 8.5, y = 8.1 },
+    { x = 7.5, y = 8.1 },
+],
+    [
+    { x = 10.7, y = 10.66 },
+    { x = 11.7, y = 10.66 },
+    { x = 11.7, y = 11.66 },
+    { x = 10.7, y = 11.66 },
+],
+    [
+    { x = 20.725, y = 12.3 },
+    { x = 21.725, y = 12.3 },
+    { x = 21.725, y = 13.3 },
+    { x = 20.725, y = 13.3 },
+],
+    [
+    { x = 1.8, y = 3.99 },
+    { x = 4.2, y = 3.99 },
+    { x = 4.2, y = 6.390000000000001 },
+    { x = 1.8, y = 6.390000000000001 },
+],
+    [
+    { x = 1.8, y = 9.07 },
+    { x = 4.2, y = 9.07 },
+    { x = 4.2, y = 11.469999999999999 },
+    { x = 1.8, y = 11.469999999999999 },
+],
+    [
+    { x = 1.8, y = 11.610000000000001 },
+    { x = 4.2, y = 11.610000000000001 },
+    { x = 4.2, y = 14.01 },
+    { x = 1.8, y = 14.01 },
+],
+]
+priority = 0
+fill_type = "solid"
+thermal_relief = true
+thermal_gap = 0.5
+thermal_width = 0.3
+clearance = 0.3
+min_thickness = 0.254
+
+[[zones.outline]]
+x = 0.6
+y = 0.6
+
+[[zones.outline]]
+x = 25.4
+y = 0.6
+
+[[zones.outline]]
+x = 25.4
+y = 17.4
+
+[[zones.outline]]
+x = 0.6
+y = 17.4
+
+[[zones]]
+uuid = "5ca1ab1e-0004-4000-8000-000000000057"
+net = 5
+net_name = "+3V3"
+layer = "Inner2Copper"
+holes = [
+    [
+    { x = 9.0, y = 4.0 },
+    { x = 10.0, y = 4.0 },
+    { x = 10.0, y = 5.0 },
+    { x = 9.0, y = 5.0 },
+],
+    [
+    { x = 6.0, y = 7.9 },
+    { x = 7.0, y = 7.9 },
+    { x = 7.0, y = 8.9 },
+    { x = 6.0, y = 8.9 },
+],
+    [
+    { x = 12.1, y = 5.1 },
+    { x = 13.1, y = 5.1 },
+    { x = 13.1, y = 6.1 },
+    { x = 12.1, y = 6.1 },
+],
+    [
+    { x = 15.8, y = 6.8 },
+    { x = 16.8, y = 6.8 },
+    { x = 16.8, y = 7.8 },
+    { x = 15.8, y = 7.8 },
+],
+    [
+    { x = 20.8, y = 8.175 },
+    { x = 21.8, y = 8.175 },
+    { x = 21.8, y = 9.175 },
+    { x = 20.8, y = 9.175 },
+],
+    [
+    { x = 19.1, y = 10.6 },
+    { x = 20.1, y = 10.6 },
+    { x = 20.1, y = 11.6 },
+    { x = 19.1, y = 11.6 },
+],
+    [
+    { x = 22.275, y = 12.3 },
+    { x = 23.275, y = 12.3 },
+    { x = 23.275, y = 13.3 },
+    { x = 22.275, y = 13.3 },
+],
+    [
+    { x = 1.8, y = 3.99 },
+    { x = 4.2, y = 3.99 },
+    { x = 4.2, y = 6.390000000000001 },
+    { x = 1.8, y = 6.390000000000001 },
+],
+    [
+    { x = 1.8, y = 6.53 },
+    { x = 4.2, y = 6.53 },
+    { x = 4.2, y = 8.93 },
+    { x = 1.8, y = 8.93 },
+],
+    [
+    { x = 1.8, y = 9.07 },
+    { x = 4.2, y = 9.07 },
+    { x = 4.2, y = 11.469999999999999 },
+    { x = 1.8, y = 11.469999999999999 },
+],
+    [
+    { x = 1.8, y = 11.610000000000001 },
+    { x = 4.2, y = 11.610000000000001 },
+    { x = 4.2, y = 14.01 },
+    { x = 1.8, y = 14.01 },
+],
+]
+priority = 0
+fill_type = "solid"
+thermal_relief = true
+thermal_gap = 0.5
+thermal_width = 0.3
+clearance = 0.3
+min_thickness = 0.254
+
+[[zones.outline]]
+x = 0.6
+y = 0.6
+
+[[zones.outline]]
+x = 25.4
+y = 0.6
+
+[[zones.outline]]
+x = 25.4
+y = 17.4
+
+[[zones.outline]]
+x = 0.6
+y = 17.4
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002]
+footprint_id = "PinHeader_1x04_P2.54mm"
+locked = true
+properties = []
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics]]
+graphic_type = "rect"
+layer = "TopFab"
+width = 0.1
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.start]
+x = -1.27
+y = -1.27
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.end]
+x = 1.27
+y = 8.89
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics]]
+graphic_type = "poly"
+layer = "TopCourtyard"
+width = 0.05
+radius = 0.0
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.points]]
+x = -1.8
+y = -1.8
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.points]]
+x = 1.8
+y = -1.8
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.points]]
+x = 1.8
+y = 9.42
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.points]]
+x = -1.8
+y = 9.42
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.start]
+x = -1.33
+y = 1.27
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.end]
+x = -1.33
+y = 8.95
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.start]
+x = 1.33
+y = 1.27
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.end]
+x = 1.33
+y = 8.95
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.start]
+x = -1.33
+y = 8.95
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.end]
+x = 1.33
+y = 8.95
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.start]
+x = -1.33
+y = 0.0
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.end]
+x = -1.33
+y = -1.33
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.start]
+x = -1.33
+y = -1.33
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.end]
+x = 0.0
+y = -1.33
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics]]
+graphic_type = "text"
+layer = "TopSilkscreen"
+width = 0.15
+radius = 0.0
+points = []
+text = "J1"
+font_size = 1.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000002.graphics.position]
+x = 0.0
+y = -2.6
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007]
+footprint_id = "SOT-23-5"
+locked = false
+properties = []
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007.graphics]]
+graphic_type = "rect"
+layer = "TopFab"
+width = 0.1
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007.graphics.start]
+x = -0.8
+y = -1.45
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007.graphics.end]
+x = 0.8
+y = 1.45
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007.graphics]]
+graphic_type = "poly"
+layer = "TopCourtyard"
+width = 0.05
+radius = 0.0
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007.graphics.points]]
+x = -2.05
+y = -1.95
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007.graphics.points]]
+x = 2.05
+y = -1.95
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007.graphics.points]]
+x = 2.05
+y = 1.95
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007.graphics.points]]
+x = -2.05
+y = 1.95
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007.graphics.start]
+x = -0.4
+y = -1.56
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007.graphics.end]
+x = 0.4
+y = -1.56
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007.graphics]]
+graphic_type = "text"
+layer = "TopSilkscreen"
+width = 0.15
+radius = 0.0
+points = []
+text = "U2"
+font_size = 1.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000007.graphics.position]
+x = 0.0
+y = -2.8
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d]
+footprint_id = "C_0603"
+locked = false
+properties = []
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics]]
+graphic_type = "rect"
+layer = "TopFab"
+width = 0.1
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics.start]
+x = -0.8
+y = -0.4
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics.end]
+x = 0.8
+y = 0.4
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics]]
+graphic_type = "poly"
+layer = "TopCourtyard"
+width = 0.05
+radius = 0.0
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics.points]]
+x = -1.475
+y = -0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics.points]]
+x = 1.475
+y = -0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics.points]]
+x = 1.475
+y = 0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics.points]]
+x = -1.475
+y = 0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics.start]
+x = -0.125
+y = -0.625
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics.end]
+x = 0.125
+y = -0.625
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics.start]
+x = -0.125
+y = 0.625
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics.end]
+x = 0.125
+y = 0.625
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics]]
+graphic_type = "text"
+layer = "TopSilkscreen"
+width = 0.15
+radius = 0.0
+points = []
+text = "C1"
+font_size = 1.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000000d.graphics.position]
+x = 0.0
+y = -1.525
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010]
+footprint_id = "C_0603"
+locked = false
+properties = []
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics]]
+graphic_type = "rect"
+layer = "TopFab"
+width = 0.1
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics.start]
+x = -0.8
+y = -0.4
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics.end]
+x = 0.8
+y = 0.4
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics]]
+graphic_type = "poly"
+layer = "TopCourtyard"
+width = 0.05
+radius = 0.0
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics.points]]
+x = -1.475
+y = -0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics.points]]
+x = 1.475
+y = -0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics.points]]
+x = 1.475
+y = 0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics.points]]
+x = -1.475
+y = 0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics.start]
+x = -0.125
+y = -0.625
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics.end]
+x = 0.125
+y = -0.625
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics.start]
+x = -0.125
+y = 0.625
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics.end]
+x = 0.125
+y = 0.625
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics]]
+graphic_type = "text"
+layer = "TopSilkscreen"
+width = 0.15
+radius = 0.0
+points = []
+text = "C2"
+font_size = 1.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000010.graphics.position]
+x = 0.0
+y = -1.525
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000013]
+footprint_id = "LGA-8_2.5x2.5mm"
+locked = false
+properties = []
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000013.graphics]]
+graphic_type = "rect"
+layer = "TopFab"
+width = 0.1
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000013.graphics.start]
+x = -1.25
+y = -1.25
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000013.graphics.end]
+x = 1.25
+y = 1.25
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000013.graphics]]
+graphic_type = "poly"
+layer = "TopCourtyard"
+width = 0.05
+radius = 0.0
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000013.graphics.points]]
+x = -1.65
+y = -1.65
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000013.graphics.points]]
+x = 1.65
+y = -1.65
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000013.graphics.points]]
+x = 1.65
+y = 1.65
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000013.graphics.points]]
+x = -1.65
+y = 1.65
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000013.graphics]]
+graphic_type = "circle"
+layer = "TopSilkscreen"
+width = 0.2
+radius = 0.1
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000013.graphics.center]
+x = -1.6
+y = -1.5
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000013.graphics]]
+graphic_type = "text"
+layer = "TopSilkscreen"
+width = 0.15
+radius = 0.0
+points = []
+text = "U1"
+font_size = 1.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000013.graphics.position]
+x = 0.0
+y = -2.4
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c]
+footprint_id = "C_0603"
+locked = false
+properties = []
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics]]
+graphic_type = "rect"
+layer = "TopFab"
+width = 0.1
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics.start]
+x = -0.8
+y = -0.4
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics.end]
+x = 0.8
+y = 0.4
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics]]
+graphic_type = "poly"
+layer = "TopCourtyard"
+width = 0.05
+radius = 0.0
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics.points]]
+x = -1.475
+y = -0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics.points]]
+x = 1.475
+y = -0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics.points]]
+x = 1.475
+y = 0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics.points]]
+x = -1.475
+y = 0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics.start]
+x = -0.125
+y = -0.625
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics.end]
+x = 0.125
+y = -0.625
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics.start]
+x = -0.125
+y = 0.625
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics.end]
+x = 0.125
+y = 0.625
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics]]
+graphic_type = "text"
+layer = "TopSilkscreen"
+width = 0.15
+radius = 0.0
+points = []
+text = "C3"
+font_size = 1.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001c.graphics.position]
+x = 0.0
+y = -1.525
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f]
+footprint_id = "R_0603"
+locked = false
+properties = []
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics]]
+graphic_type = "rect"
+layer = "TopFab"
+width = 0.1
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics.start]
+x = -0.8
+y = -0.4
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics.end]
+x = 0.8
+y = 0.4
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics]]
+graphic_type = "poly"
+layer = "TopCourtyard"
+width = 0.05
+radius = 0.0
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics.points]]
+x = -1.475
+y = -0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics.points]]
+x = 1.475
+y = -0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics.points]]
+x = 1.475
+y = 0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics.points]]
+x = -1.475
+y = 0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics.start]
+x = -0.22499999999999992
+y = -0.625
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics.end]
+x = 0.22499999999999992
+y = -0.625
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics.start]
+x = -0.22499999999999992
+y = 0.625
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics.end]
+x = 0.22499999999999992
+y = 0.625
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics]]
+graphic_type = "text"
+layer = "TopSilkscreen"
+width = 0.15
+radius = 0.0
+points = []
+text = "R1"
+font_size = 1.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-00000000001f.graphics.position]
+x = 0.0
+y = -1.525
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022]
+footprint_id = "R_0603"
+locked = false
+properties = []
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics]]
+graphic_type = "rect"
+layer = "TopFab"
+width = 0.1
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics.start]
+x = -0.8
+y = -0.4
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics.end]
+x = 0.8
+y = 0.4
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics]]
+graphic_type = "poly"
+layer = "TopCourtyard"
+width = 0.05
+radius = 0.0
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics.points]]
+x = -1.475
+y = -0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics.points]]
+x = 1.475
+y = -0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics.points]]
+x = 1.475
+y = 0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics.points]]
+x = -1.475
+y = 0.725
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics.start]
+x = -0.22499999999999992
+y = -0.625
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics.end]
+x = 0.22499999999999992
+y = -0.625
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics]]
+graphic_type = "line"
+layer = "TopSilkscreen"
+width = 0.12
+radius = 0.0
+points = []
+text = ""
+font_size = 0.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics.start]
+x = -0.22499999999999992
+y = 0.625
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics.end]
+x = 0.22499999999999992
+y = 0.625
+
+[[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics]]
+graphic_type = "text"
+layer = "TopSilkscreen"
+width = 0.15
+radius = 0.0
+points = []
+text = "R2"
+font_size = 1.0
+rotation = 0.0
+fill = ""
+
+[extras.footprints.5ca1ab1e-0004-4000-8000-000000000022.graphics.position]
+x = 0.0
+y = -1.525
+
+[[extras.board.outline]]
+x = 1.0
+y = 0.0
+
+[[extras.board.outline]]
+x = 25.0
+y = 0.0
+
+[[extras.board.outline]]
+x = 26.0
+y = 1.0
+
+[[extras.board.outline]]
+x = 26.0
+y = 17.0
+
+[[extras.board.outline]]
+x = 25.0
+y = 18.0
+
+[[extras.board.outline]]
+x = 1.0
+y = 18.0
+
+[[extras.board.outline]]
+x = 0.0
+y = 17.0
+
+[[extras.board.outline]]
+x = 0.0
+y = 1.0
+
+[[extras.board.graphics]]
+graphic_type = "line"
+layer = "EdgeCuts"
+width = 0.05
+radius = 0.0
+points = []
+
+[extras.board.graphics.start]
+x = 1.0
+y = 0.0
+
+[extras.board.graphics.end]
+x = 25.0
+y = 0.0
+
+[[extras.board.graphics]]
+graphic_type = "line"
+layer = "EdgeCuts"
+width = 0.05
+radius = 0.0
+points = []
+
+[extras.board.graphics.start]
+x = 25.0
+y = 0.0
+
+[extras.board.graphics.end]
+x = 26.0
+y = 1.0
+
+[[extras.board.graphics]]
+graphic_type = "line"
+layer = "EdgeCuts"
+width = 0.05
+radius = 0.0
+points = []
+
+[extras.board.graphics.start]
+x = 26.0
+y = 1.0
+
+[extras.board.graphics.end]
+x = 26.0
+y = 17.0
+
+[[extras.board.graphics]]
+graphic_type = "line"
+layer = "EdgeCuts"
+width = 0.05
+radius = 0.0
+points = []
+
+[extras.board.graphics.start]
+x = 26.0
+y = 17.0
+
+[extras.board.graphics.end]
+x = 25.0
+y = 18.0
+
+[[extras.board.graphics]]
+graphic_type = "line"
+layer = "EdgeCuts"
+width = 0.05
+radius = 0.0
+points = []
+
+[extras.board.graphics.start]
+x = 25.0
+y = 18.0
+
+[extras.board.graphics.end]
+x = 1.0
+y = 18.0
+
+[[extras.board.graphics]]
+graphic_type = "line"
+layer = "EdgeCuts"
+width = 0.05
+radius = 0.0
+points = []
+
+[extras.board.graphics.start]
+x = 1.0
+y = 18.0
+
+[extras.board.graphics.end]
+x = 0.0
+y = 17.0
+
+[[extras.board.graphics]]
+graphic_type = "line"
+layer = "EdgeCuts"
+width = 0.05
+radius = 0.0
+points = []
+
+[extras.board.graphics.start]
+x = 0.0
+y = 17.0
+
+[extras.board.graphics.end]
+x = 0.0
+y = 1.0
+
+[[extras.board.graphics]]
+graphic_type = "line"
+layer = "EdgeCuts"
+width = 0.05
+radius = 0.0
+points = []
+
+[extras.board.graphics.start]
+x = 0.0
+y = 1.0
+
+[extras.board.graphics.end]
+x = 1.0
+y = 0.0
+
+[[extras.board.texts]]
+uuid = "5ca1ab1e-0004-4000-8000-000000000058"
+text = "BME280 I2C"
+layer = "TopSilkscreen"
+font_size = 1.0
+rotation = 0.0
+
+[extras.board.texts.position]
+x = 18.0
+y = 15.5
+
+[[extras.board.texts]]
+uuid = "5ca1ab1e-0004-4000-8000-000000000059"
+text = "VIN GND SDA SCL"
+layer = "TopSilkscreen"
+font_size = 0.7
+rotation = 90.0
+
+[extras.board.texts.position]
+x = 3.0
+y = 15.8

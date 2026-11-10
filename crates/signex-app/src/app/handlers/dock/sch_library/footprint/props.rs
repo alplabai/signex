@@ -22,10 +22,8 @@ impl Signex {
         // `FootprintToggleAutoFit` dispatch so the toggle
         // shares its dirty / panel-refresh behaviour with
         // the active-bar button.
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
-            && let Some(path) = active_tab.kind.as_footprint_editor()
-        {
-            let path = path.clone();
+        // The footprint tab in view, or a board's sketch editor (#2234).
+        if let Some(path) = self.active_footprint_editor().map(|e| e.path.clone()) {
             follow = self.update(Message::Library(
                 crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                     path,
@@ -54,10 +52,8 @@ impl Signex {
         msg: crate::library::messages::FootprintEditorMsg,
     ) -> Task<Message> {
         let mut follow = Task::none();
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
-            && let Some(path) = active_tab.kind.as_footprint_editor()
-        {
-            let path = path.clone();
+        // The footprint tab in view, or a board's sketch editor (#2234).
+        if let Some(path) = self.active_footprint_editor().map(|e| e.path.clone()) {
             follow = self.update(Message::Library(
                 crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                     path,
@@ -80,10 +76,8 @@ impl Signex {
         // the standard PrimitiveEditorEvent path so the role
         // mutation goes through `apply_sketch_role_with_warnings`
         // (clears all attrs, sets matching one, runs solve+bake).
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
-            && let Some(path) = active_tab.kind.as_footprint_editor()
-        {
-            let path = path.clone();
+        // The footprint tab in view, or a board's sketch editor (#2234).
+        if let Some(path) = self.active_footprint_editor().map(|e| e.path.clone()) {
             follow = self.update(Message::Library(
                 crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                     path,

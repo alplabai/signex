@@ -15,9 +15,10 @@ pub(super) fn build_footprint_editor_panel_ctx(
         FootprintEditorPanelContext, FootprintModeKind, FootprintPadSummary, FootprintSolveSummary,
     };
 
-    let active = app.document_state.tabs.get(app.document_state.active_tab)?;
-    let path = active.kind.as_footprint_editor()?.clone();
-    let editor = app.document_state.footprint_editors.get(&path)?;
+    // The footprint tab in view, or the sketch editor of a board in sketch
+    // mode (#2234).
+    let editor = app.active_footprint_editor()?;
+    let path = editor.path.clone();
 
     let mode_kind = match editor.state.mode {
         EditorMode::Normal => FootprintModeKind::Pads,
@@ -649,6 +650,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selected_keepout,
         selected_cutout,
         selected_sketch_pad,
+        board: super::board_sketch_ctx::board_sketch_props(editor),
         snap_options: editor.state.snap_options,
         selection_filter: editor.state.selection_filter,
         snap_subtab: editor.state.snap_subtab,

@@ -123,6 +123,24 @@ pub(crate) fn checkbox_style(theme: &Theme, status: checkbox::Status) -> checkbo
     }
 }
 
+/// `checkbox` style of a group box whose rows are partly ticked: drawn
+/// checked, on the soft accent with an accent hairline, so it reads as
+/// neither all nor none.
+pub(crate) fn mixed_checkbox_style(theme: &Theme, status: checkbox::Status) -> checkbox::Style {
+    let l = FormLook::of(theme);
+    checkbox::Style {
+        background: Background::Color(l.accent_soft),
+        icon_color: l.accent,
+        border: Border {
+            width: 1.0,
+            radius: CHECKBOX_RADIUS.into(),
+            color: l.accent,
+            ..Border::default()
+        },
+        ..checkbox_style(theme, status)
+    }
+}
+
 /// `scrollable` style of a dock panel: a thin neutral scroller.
 pub(in crate::panels) fn scrollbar_style(
     theme: &Theme,

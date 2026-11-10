@@ -15,6 +15,10 @@ use super::{
 pub const DEFAULT_BOTTOM_PANEL_HEIGHT: f32 = 220.0;
 
 pub struct UiState {
+    /// What each open board shows of its layers and ratsnest (#2223). Session
+    /// only: never written to the `.snxpcb`.
+    pub pcb_layer_views:
+        std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>,
     /// The file picker and the opener the returned tasks use (#1931).
     pub io: crate::io_ports::IoPorts,
     pub theme_id: ThemeId,
@@ -415,6 +419,9 @@ pub struct UiState {
     /// The New Project setup dialog, while open (#2232). Nothing is on disk
     /// until its Create.
     pub new_project: Option<crate::app::NewProjectState>,
+    /// The Update PCB dialog, while open, or a headless `apply=true` run
+    /// (#1312).
+    pub update_pcb: Option<crate::app::UpdatePcbState>,
     /// The Number Schematic Sheets dialog, while open (#2247). Apply writes
     /// to memory only; the sheets are saved by the user.
     pub sheet_numbering: Option<crate::app::SheetNumberingState>,

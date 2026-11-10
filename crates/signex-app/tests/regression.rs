@@ -107,6 +107,28 @@ mod pcb_drc;
 #[path = "regression/pcb_ratsnest.rs"]
 mod pcb_ratsnest;
 
+// #2223 - the board view: ratsnest, layer visibility, the active layer.
+#[path = "regression/pcb_view.rs"]
+mod pcb_view;
+
+// #2240 / #2223 - the board menu's View group: Toggle Ratsnest.
+#[path = "regression/pcb_board_menu_view.rs"]
+mod pcb_board_menu_view;
+
+// #2271 review - DRC pick and cross selection skip hidden layers; the
+// Properties panel counts the active tab's board selection only.
+#[path = "regression/pcb_hidden_layer_select.rs"]
+mod pcb_hidden_layer_select;
+
+// #2234 - board sketch mode: entry points, commit, refused bake, Esc.
+#[path = "regression/board_sketch.rs"]
+mod board_sketch;
+
+// #2271 review - a board sketch is applied before save, quit, close and
+// undock, or they wait; Undo in the mode steps the sketch.
+#[path = "regression/board_sketch_persist.rs"]
+mod board_sketch_persist;
+
 // #1245 - the Parameter Manager opens from a catalog command.
 #[path = "regression/parameter_manager_open.rs"]
 mod parameter_manager_open;
@@ -129,6 +151,10 @@ mod autosave;
 
 #[path = "regression/pcb_canvas_select.rs"]
 mod pcb_canvas_select;
+#[path = "regression/pcb_carry_windows.rs"]
+mod pcb_carry_windows;
+#[path = "regression/pcb_placement.rs"]
+mod pcb_placement;
 
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
@@ -311,6 +337,14 @@ mod sync_sheet_pins;
 // #1061 — a net named differently on two sheets is reported by an ERC run.
 #[path = "regression/cross_sheet_multiple_names.rs"]
 mod cross_sheet_multiple_names;
+
+// #1312 — cross probe and Cross Select Mode between the sheet and the board.
+#[path = "regression/cross_probe.rs"]
+mod cross_probe;
+
+// #1312 — Update PCB from schematic, its entry points and New PCB.
+#[path = "regression/update_pcb.rs"]
+mod update_pcb;
 
 // #1836 — hierarchy mistakes the project ERC must report.
 #[path = "regression/hierarchy_checks.rs"]

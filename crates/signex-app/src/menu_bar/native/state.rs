@@ -30,6 +30,10 @@ pub(crate) struct MenuInputs {
     open_panels: Vec<PanelKind>,
     keymap: Option<Arc<CompiledKeymap>>,
     i18n: Arc<signex_i18n::I18n>,
+    /// Cross Select Mode is on: its Tools row shows a check mark (#1312).
+    cross_select: bool,
+    /// What Design ▸ Update PCB Document names (#1312).
+    pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
 }
 
 impl PartialEq for MenuInputs {
@@ -38,6 +42,8 @@ impl PartialEq for MenuInputs {
             && self.recent == other.recent
             && self.locked == other.locked
             && self.open_panels == other.open_panels
+            && self.cross_select == other.cross_select
+            && self.pcb_sync == other.pcb_sync
             && match (&self.keymap, &other.keymap) {
                 (Some(a), Some(b)) => Arc::ptr_eq(a, b),
                 (None, None) => true,
@@ -64,7 +70,30 @@ impl MenuInputs {
             open_panels,
             keymap: None,
             i18n,
+            cross_select: true,
+            pcb_sync: None,
         }
+    }
+
+    pub(crate) fn with_pcb_sync(
+        mut self,
+        label: Option<crate::app::update_pcb::PcbSyncLabel>,
+    ) -> Self {
+        self.pcb_sync = label;
+        self
+    }
+
+    pub(crate) fn pcb_sync(&self) -> Option<crate::app::update_pcb::PcbSyncLabel> {
+        self.pcb_sync.clone()
+    }
+
+    pub(crate) fn with_cross_select(mut self, on: bool) -> Self {
+        self.cross_select = on;
+        self
+    }
+
+    pub(crate) fn cross_select(&self) -> bool {
+        self.cross_select
     }
 
     pub(crate) fn with_keymap(mut self, keymap: Arc<CompiledKeymap>) -> Self {

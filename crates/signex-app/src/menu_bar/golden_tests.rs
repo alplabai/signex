@@ -46,6 +46,13 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         with(CommandContext {
             has_pcb: true,
             has_document: true,
+            // An unlocked footprint selected, so the board's rows are live.
+            pcb: crate::app::command::enablement::PcbTargets {
+                shown: true,
+                any: true,
+                placeable: true,
+                deletable: true,
+            },
             ..base
         }),
         with(CommandContext {
@@ -180,6 +187,11 @@ use super::model::{ItemState, Menu, MenuEntry, menu_bar_model};
 /// pins which row runs which command.
 const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("new_document", "NewProject"),
+    // #1312: fixture names only, like #2247's.
+    ("new_pcb_document", "NewPcb"),
+    ("update_pcb_from_schematic", "UpdatePcb"),
+    // #2234: Design ▸ Board Sketch.
+    ("board_sketch", "BoardSketch"),
     ("open_document", "OpenProject"),
     ("close_active_document", "CloseDocument"),
     ("save_document", "Save"),
@@ -193,6 +205,13 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("smart_paste", "SmartPaste"),
     ("duplicate", "Duplicate"),
     ("delete_selection", "Delete"),
+    ("move_object", "MoveObject"),
+    ("move_selection", "MoveSelection"),
+    ("rotate_counterclockwise", "Rotate"),
+    ("rotate_clockwise", "RotateClockwise"),
+    ("mirror_x", "MirrorX"),
+    ("mirror_y", "MirrorY"),
+    ("flip_selection", "FlipSelection"),
     ("select_all", "SelectAll"),
     ("find", "Find"),
     ("find_and_replace", "Replace"),
@@ -201,6 +220,11 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("zoom_to_fit", "ZoomFit"),
     ("toggle_visible_grid", "ToggleGrid"),
     ("toggle_auto_focus", "ToggleAutoFocus"),
+    ("toggle_ratsnest", "ToggleRatsnest"),
+    ("next_layer", "NextLayer"),
+    ("prev_layer", "PreviousLayer"),
+    ("toggle_layer_visibility", "ToggleLayerVisibility"),
+    ("show_all_layers", "ShowAllLayers"),
     ("place_wire", "PlaceWire"),
     ("place_bus", "PlaceBus"),
     ("place_net_label", "PlaceLabel"),
@@ -217,6 +241,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("next_grid", "CycleGrid"),
     ("open_erc_dialog", "OpenErcDialog"),
     ("run_drc", "RunDrc"),
+    ("cross_probe", "CrossProbe"),
+    ("toggle_cross_select_mode", "ToggleCrossSelectMode"),
     ("open_parameter_manager", "OpenParameterManager"),
     // #2248 / #1269: fixture names only.
     ("assign_footprints", "AssignFootprints"),
@@ -354,7 +380,10 @@ fn model_shortcuts_follow_the_active_keymap() {
     for menu in &menu_bar_model(&ctx).menus {
         check_shortcuts(menu, &ctx, &mut checked);
     }
-    assert_eq!(checked, 30, "the Altium profile labels 30 menu rows");
+    // Edit ▸ Move adds Move, Rotate, Rotate Clockwise, Mirror X and Mirror Y (#2240).
+    // View ▸ Next Layer and Previous Layer add two more (#2223).
+    // Tools ▸ Cross Select Mode adds Ctrl+Shift+X (#1312).
+    assert_eq!(checked, 38, "the Altium profile labels 38 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
