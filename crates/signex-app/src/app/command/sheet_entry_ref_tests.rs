@@ -298,10 +298,9 @@ fn a_sheet_entry_end_names_only_that_pin_and_a_net_label_on_it_is_judged_across_
         "place_net_label",
         &["at=Charger.SDA", "text=OTHER"],
     ));
-    assert!(
-        said.contains("would add OTHER to the net {I2C_SDA}"),
-        "{said}"
-    );
+    // The net reaches the child, so the project check alone judges the name
+    // (6761836527); its refusal names the project's net.
+    assert!(said.contains("{I2C_SDA, OTHER, SDA}"), "{said}");
     let outcome = run(
         &mut app,
         "place_net_label",
