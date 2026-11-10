@@ -382,3 +382,41 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .width(Length::Fill)
         .boxed()
 }
+
+#[cfg(test)]
+mod filter_tests {
+    use super::*;
+
+    fn labels(nodes: &[TreeNode]) -> Vec<&str> {
+        nodes.iter().map(|n| n.label.as_str()).collect()
+    }
+
+    #[test]
+    fn a_turkish_filter_finds_dotted_and_dotless_i_labels() {
+        let tr = I18n::with_message_locale_for_test("tr");
+        let nodes = [
+            TreeNode::leaf("İSTANBUL.snxsch", TreeIcon::File),
+            TreeNode::leaf("ISPARTA.snxsch", TreeIcon::File),
+        ];
+        assert_eq!(
+            labels(&filtered(&tr, &nodes, &tr.fold_for_search("istanbul"))),
+            ["İSTANBUL.snxsch"]
+        );
+        assert_eq!(
+            labels(&filtered(&tr, &nodes, &tr.fold_for_search("ısparta"))),
+            ["ISPARTA.snxsch"]
+        );
+        assert!(filtered(&tr, &nodes, &tr.fold_for_search("isparta")).is_empty());
+    }
+
+    #[test]
+    fn en_us_is_unchanged() {
+        let en = I18n::en_us();
+        let nodes = [TreeNode::leaf("Main.snxsch", TreeIcon::File)];
+        assert_eq!(
+            labels(&filtered(&en, &nodes, &en.fold_for_search("MAIN"))).len(),
+            1
+        );
+        assert!(filtered(&en, &nodes, &en.fold_for_search("pcb")).is_empty());
+    }
+}

@@ -371,7 +371,7 @@ pub(super) fn row_matches_filter(
         r.footprint_ref.as_ref().and_then(|fp| names.footprint(fp)),
     ];
     let has = |text: &str| i18n.fold_for_search(text).contains(needle);
-    bound.into_iter().flatten().any(|n| has(n))
+    bound.into_iter().flatten().any(&has)
         || has(r.internal_pn.as_str())
         || has(&r.primary_mpn.manufacturer)
         || has(&r.primary_mpn.mpn)

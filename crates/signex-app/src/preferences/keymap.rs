@@ -13,16 +13,26 @@ use signex_widgets::{button, raw, text, text_input};
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+/// What the last keymap load, save or profile action left to tell the user.
+pub(super) struct KeymapFeedback<'a> {
+    pub status: &'a str,
+    pub load_error: Option<&'a str>,
+    pub backup: Option<&'a str>,
+}
+
 pub(super) fn content_keyboard_shortcuts<'a>(
     i18n: &signex_i18n::I18n,
     editor: &'a crate::keymap::KeymapEditorModel,
-    status: &'a str,
-    load_error: Option<&'a str>,
-    backup: Option<&'a str>,
+    feedback: KeymapFeedback<'a>,
     search: &'a str,
     recorder: Option<&'a crate::app::KeymapRecorderState>,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, PrefMsg> {
+    let KeymapFeedback {
+        status,
+        load_error,
+        backup,
+    } = feedback;
     let profiles = editor.profiles();
     let active = profiles.iter().find(|profile| profile.active);
     let active_option = active.map(KeymapProfileOption::from);

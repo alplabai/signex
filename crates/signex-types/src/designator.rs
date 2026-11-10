@@ -120,6 +120,23 @@ fn compare_runs(a: &str, b: &str, text: impl Fn(&[u8], &[u8]) -> Ordering) -> Or
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_custom_text_order_keeps_digit_runs_numeric() {
+        // Reverse alphabet for the text runs; `R2` still precedes `R10`.
+        let reversed = |a: &str, b: &str| b.cmp(a);
+        let mut items = vec!["A10", "B2", "A2"];
+        items.sort_by(|a, b| compare_references_with(a, b, reversed));
+        assert_eq!(items, ["B2", "A2", "A10"]);
+        assert_eq!(
+            compare_references_with("r1", "R1", compare_by_bytes),
+            Ordering::Greater
+        );
+    }
+
+    fn compare_by_bytes(a: &str, b: &str) -> Ordering {
+        a.cmp(b)
+    }
+
     fn sorted(mut items: Vec<&str>) -> Vec<&str> {
         items.sort_by(|a, b| compare_references(a, b));
         items
