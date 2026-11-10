@@ -52,3 +52,14 @@ nanometres, so a save and reopen gives the same board back).
 - Time: emit and cull each under 2 s. This bound only catches an
   order-of-magnitude regression (a quadratic pass, a per-track allocation
   storm); read the printed median for the baseline.
+
+## Realistic boards
+
+The 10,000-track board measures scale; it is not a design. Five complete
+small boards (a linear regulator, a USB-C power input, a TQFP-32 breakout, a
+four-layer sensor board with inner planes, a mixed through-hole board with a
+board sketch) live in `crates/signex-types/tests/corpus/pcb/real/`.
+`crates/signex-renderer/tests/integration/pcb_real_boards.rs` renders each and
+pins its drawn counts and a geometry hash; DRC and the ratsnest run on them in
+`crates/pcb-geom/tests/real_boards.rs`. What each board covers: the corpus
+README, "Realistic boards".

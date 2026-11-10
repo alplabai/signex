@@ -1,0 +1,33 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "sensor-4layer",
+  "net_classes": [
+    {
+      "clearance": 0.2,
+      "name": "Power",
+      "nets": [
+        "VIN",
+        "+3V3",
+        "GND"
+      ],
+      "trace_width": 0.4
+    },
+    {
+      "clearance": 0.15,
+      "name": "I2C",
+      "nets": [
+        "SDA",
+        "SCL"
+      ],
+      "trace_width": 0.2
+    }
+  ],
+  "pcb_file": "sensor-4layer.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}
