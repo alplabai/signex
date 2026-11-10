@@ -13,6 +13,10 @@ pub(crate) struct NetNames {
     pub own: BTreeSet<String>,
     /// Hierarchical label names.
     pub aliases: BTreeSet<String>,
+    /// A child's local names already behind its hierarchical label before the
+    /// edit: no part in a join, but carried, so repeating one is no rename
+    /// (6761836527 points 5 and 6). Empty on the per-sheet checks.
+    pub hidden: BTreeSet<String>,
 }
 
 impl NetNames {
@@ -26,7 +30,7 @@ impl NetNames {
     }
 
     fn carries(&self, name: &String) -> bool {
-        self.own.contains(name) || self.aliases.contains(name)
+        self.own.contains(name) || self.aliases.contains(name) || self.hidden.contains(name)
     }
 }
 
@@ -75,6 +79,7 @@ mod tests {
         NetNames {
             own: set(own),
             aliases: set(aliases),
+            hidden: BTreeSet::new(),
         }
     }
 

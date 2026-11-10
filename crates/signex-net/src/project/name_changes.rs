@@ -38,13 +38,22 @@ fn id_of(member: &NetMember) -> NamedId {
     (member.sheet.clone(), member.occurrence.clone(), member.id)
 }
 
-/// The local net labels of `nets` that sit on the same sheet placement as a
-/// hierarchical label of their net: names that stay inside the child.
+/// A local name on one sheet placement. Local labels of one text on one
+/// placement are one net, so a later copy of a hidden name is hidden too.
+type LocalName = (SheetKey, InstancePath, String);
+
+fn local_name_of(member: &NetMember) -> LocalName {
+    let (sheet, occurrence, _) = id_of(member);
+    (sheet, occurrence, member.text.clone())
+}
+
+/// The local net label names of `nets` that sit on the same sheet placement
+/// as a hierarchical label of their net: names that stay inside the child.
 // shortcut: per placement, not per sheet net; a placement whose second sheet
 // net reaches the net only through a global label would have its local labels
 // dropped too. Exact needs the sheet-net root on `NetMember`; upgrade if that
 // case matters.
-fn behind_port(nets: &[NetMembers]) -> HashSet<NamedId> {
+fn behind_port(nets: &[NetMembers]) -> HashSet<LocalName> {
     let mut out = HashSet::new();
     for net in nets {
         let ported: HashSet<(&SheetKey, &InstancePath)> = net
@@ -57,30 +66,33 @@ fn behind_port(nets: &[NetMembers]) -> HashSet<NamedId> {
             m.kind == NetMemberKind::Label(LabelType::Net)
                 && ported.contains(&(&m.sheet, &m.occurrence))
         });
-        out.extend(local.map(id_of));
+        out.extend(local.map(local_name_of));
     }
     out
 }
 
-/// The named nets of a stitch; the labels in `hidden` play no part.
-fn named_nets(nets: Vec<NetMembers>, hidden: &HashSet<NamedId>) -> Vec<NamedNet> {
+/// The named nets of a stitch; the local names in `hidden` play no part in a
+/// join but stay carried (`NetNames::hidden`).
+fn named_nets(nets: Vec<NetMembers>, hidden: &HashSet<LocalName>) -> Vec<NamedNet> {
     nets.into_iter()
         .filter_map(|net| {
             let mut out = NamedNet {
                 ids: Vec::new(),
                 names: NetNames::default(),
             };
-            for member in &net.members {
+            for member in net.members.iter().filter(|m| !m.text.is_empty()) {
                 let side = match member.kind {
                     NetMemberKind::Label(LabelType::Hierarchical) => &mut out.names.aliases,
+                    NetMemberKind::Label(LabelType::Net)
+                        if hidden.contains(&local_name_of(member)) =>
+                    {
+                        &mut out.names.hidden
+                    }
                     NetMemberKind::Label(_) | NetMemberKind::PowerPort => &mut out.names.own,
                     _ => continue,
                 };
-                let id = id_of(member);
-                if !member.text.is_empty() && !hidden.contains(&id) {
-                    side.insert(member.text.clone());
-                    out.ids.push(id);
-                }
+                side.insert(member.text.clone());
+                out.ids.push(id_of(member));
             }
             (!out.ids.is_empty()).then_some(out)
         })

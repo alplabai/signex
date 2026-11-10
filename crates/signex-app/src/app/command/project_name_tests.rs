@@ -375,6 +375,33 @@ fn a_hierarchical_label_whose_entry_the_parent_wired_to_another_rail_is_a_short(
 }
 
 #[test]
+fn a_hidden_local_name_is_still_carried_by_its_net() {
+    // SensorA: hierarchical SDA and the local SDA_INT on one net, behind the
+    // port before the edit; the parent wired I2C1_SDA to SensorA.SDA. On the
+    // child, SDA_INT again on that net, SDA_INT on an unnamed child wire
+    // (joining it by name) or a global SDA_INT is no rename: the net carries
+    // the name (6761836527 points 5 and 6).
+    for (id, at) in [
+        ("place_net_label", "at=5.08,0"),
+        ("place_net_label", "at=5.08,20.32"),
+        ("place_global_label", "at=5.08,0"),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut top = sensor_parent();
+        top.wires.push(wire((0.0, 0.0), (5.08, 0.0)));
+        top.labels.push(net_label("I2C1_SDA", (5.08, 0.0)));
+        let mut child = child_with(&["SDA"]);
+        child.labels.push(net_label("SDA_INT", (10.16, 0.0)));
+        child.wires.push(wire((0.0, 20.32), (10.16, 20.32)));
+        write(&dir.path().join("top.snxsch"), top);
+        write(&dir.path().join("c.snxsch"), child);
+        let mut app = open_child(&dir);
+        let outcome = run(&mut app, id, &[at, "text=SDA_INT"]);
+        assert_eq!(outcome, CommandOutcome::Ran, "{id} {at}");
+    }
+}
+
+#[test]
 fn a_childs_local_label_behind_its_port_plays_no_part_in_a_parent_join() {
     // SensorA's SDA is on the parent's net (named I2C1_SDA, or not named);
     // SensorB labels its SDA net SDA_INT locally. Wiring SensorB.SDA to that
