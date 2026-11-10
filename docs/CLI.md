@@ -276,7 +276,7 @@ netlist's own connectivity and by the bus analysis (`signex_net::placement_inten
   reads no project.
 - **Extra, by pin reference only (no escape).** Anything not on the pin's net
   before that ends up on it: another pin on the tip, a power port, a sheet pin,
-  a wire passing under the tip, a bus entry ("the label on R1.2 also touches
+  a wire passing under the tip ("the label on R1.2 also touches
   pin C1.1 ... would join them to the net"). This is the end rule of "Wire
   intent", applied to the tip. A coordinate has no extra check: it is the
   caller's own T.
