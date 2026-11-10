@@ -393,7 +393,9 @@ impl Signex {
     fn handle_agent_request(&mut self, call: AgentCall) -> Task<Message> {
         let mark = crate::diagnostics::newest_entry_id();
         let before = self.change_snapshot();
-        let (id, (status, reason, data), task) = self.agent_verdict(&call.input);
+        let origin = super::Origin::agent(call.pid);
+        let (id, (status, reason, data), task) =
+            self.with_origin(origin, |app| app.agent_verdict(&call.input));
         let changed = changed_between(&before, &self.change_snapshot());
         // What the command logged, before this request's own line.
         let messages = messages_since(mark);

@@ -75,14 +75,17 @@ pub(in crate::app::command) fn revert(app: &mut Signex, args: &CommandArgs) -> R
         Err(error) => return refused(error.to_string()),
     };
     let revision = engine.revision();
-    app.document_state.agent_edits.labels.remove(&group);
+    app.document_state.agent_edits.forget_step(group);
     // Undo can bring back an older embedded library symbol.
     app.library.drift.check_pending = true;
     app.after_sheet_change(&path, Signex::render_invalidation_for_patch(patch.document));
-    crate::diagnostics::log_info(format!(
-        "Reverted {label} on {name} (undo group {})",
-        group.get()
-    ));
+    // A single command's label already says its document.
+    let on = if label.ends_with(&format!(" on {name}")) {
+        String::new()
+    } else {
+        format!(" on {name}")
+    };
+    crate::diagnostics::log_info(format!("Reverted {label}{on} (undo group {})", group.get()));
     (
         CommandOutcome::Answered(
             json!({"reverted": true, "group": group.get(), "revision": revision}),

@@ -197,6 +197,16 @@ impl Signex {
         {
             return (CommandOutcome::NotHeadless, Task::none());
         }
+        self.run_headless_command(command, args)
+    }
+
+    /// [`Self::dispatch_command_headless`] past its check that the app was
+    /// booted headless.
+    pub(crate) fn run_headless_command(
+        &mut self,
+        command: &AppCommandId,
+        args: CommandArgs,
+    ) -> (CommandOutcome, Task<Message>) {
         // A command whose whole effect is window UI is refused, never `Ran`
         // (#2170). The GUI dispatch never reads this.
         if let Some(reason) =
@@ -211,20 +221,24 @@ impl Signex {
             .flatten();
         let opening = crate::app::command::answers_with_the_new_document(command)
             .then(|| self.open_snapshot(&args));
-        let result = if let Some(answered) = self.run_query_headless(command, &args) {
-            answered
-        } else if let Some(name) = missing {
-            (
-                CommandOutcome::Disabled {
-                    reason: format!("`{}` needs the operand `{name}`", command.as_str()),
-                },
-                Task::none(),
-            )
-        } else if args.has_operands() {
-            self.run_operands(command, &args)
-        } else {
-            self.dispatch_command_reporting(command, args, None)
-        };
+        // A headless run is an agent's: this process is its pid.
+        let origin = crate::app::agent::Origin::agent(Some(std::process::id()));
+        let result = self.with_origin(origin, |app| {
+            if let Some(answered) = app.run_query_headless(command, &args) {
+                answered
+            } else if let Some(name) = missing {
+                (
+                    CommandOutcome::Disabled {
+                        reason: format!("`{}` needs the operand `{name}`", command.as_str()),
+                    },
+                    Task::none(),
+                )
+            } else if args.has_operands() {
+                app.run_operands(command, &args)
+            } else {
+                app.dispatch_command_reporting(command, args, None)
+            }
+        });
         // Open and New answer with the document they made, once it exists.
         let result = match (opening, result) {
             (Some(snapshot), (CommandOutcome::Ran, task)) => {
