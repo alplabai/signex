@@ -6,11 +6,17 @@
 //! differently: a pad on a new net needs its Add; a Remove needs every pad
 //! row that empties the net; a Rename and the pad rows that only follow it
 //! need each other, and a pad moving onto the renamed net needs the Rename.
+//! A Remove also needs the Remove or Change footprint rows that took the
+//! net's pads.
 
 use std::collections::{HashMap, HashSet};
 
-use signex_net::board::{BoardNetAssignment, PadNetIssue, SymbolPadKey, assign_pad_nets};
-use signex_types::pcb::PcbBoard;
+use signex_net::board::{
+    BoardNetAssignment, PadLinkKey, PadNetIssue, SymbolPad, SymbolPadKey, assign_pad_nets,
+};
+use signex_types::net::Terminal;
+use signex_types::pcb::{Footprint, Pad, PcbBoard};
+use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
 use super::EcoInput;
@@ -31,12 +37,17 @@ pub fn refresh_nets(list: &mut EcoChangeList, input: &EcoInput) {
         let resolved = p.footprint.as_ref().ok()?;
         (!resolved.pin_map.is_empty()).then(|| (&p.part, resolved.pin_map.clone()))
     });
-    let key = SymbolPadKey::for_board(&projected).with_pin_maps(pin_maps);
+    let key = HeldBack::new(
+        SymbolPadKey::for_board(&projected).with_pin_maps(pin_maps),
+        &projected,
+        input.parts,
+    );
     let assignment = assign_pad_nets(input.netlist, &projected, &key);
 
     let table = TableChanges::of(&projected, &assignment);
     let mut table_rows = table.rows();
     let pad_rows = pad_rows(list, &projected, &assignment, &table, &mut table_rows);
+    removal_needs(list, input.board, &projected, &table, &mut table_rows);
 
     for row in table_rows.into_iter().chain(pad_rows) {
         let on = match previous.row(&row.key) {
@@ -49,9 +60,114 @@ pub fn refresh_nets(list: &mut EcoChangeList, input: &EcoInput) {
         assignment
             .issues
             .iter()
+            .filter(|issue| !key.covers(issue))
             .filter_map(|issue| issue_text(&projected, issue))
             .map(EcoNote::Net),
     );
+}
+
+/// The sync key with the footprints of parts whose pin map is unknown
+/// ([`super::EcoPart::pin_map_known`]) held back: they count as unlinked,
+/// so their pads keep their nets (following a rename) and are never set
+/// pin n on pad n.
+struct HeldBack {
+    key: SymbolPadKey,
+    /// The held parts' units, by sheet.
+    units: HashSet<(InstancePath, Uuid)>,
+    footprints: HashSet<Uuid>,
+}
+
+impl HeldBack {
+    fn new(key: SymbolPadKey, board: &PcbBoard, parts: &[super::EcoPart]) -> Self {
+        let units: HashSet<(InstancePath, Uuid)> = parts
+            .iter()
+            .filter(|p| !p.pin_map_known())
+            .flat_map(|p| p.part.units.iter().map(|u| (p.part.sheet.clone(), *u)))
+            .collect();
+        let footprints = board
+            .footprints
+            .iter()
+            .filter(|f| {
+                f.schematic_link.as_ref().is_some_and(|l| {
+                    l.units
+                        .iter()
+                        .any(|u| units.contains(&(l.sheet.clone(), *u)))
+                })
+            })
+            .map(|f| f.uuid)
+            .collect();
+        Self {
+            key,
+            units,
+            footprints,
+        }
+    }
+
+    /// Whether `issue` is about a held part, which its note already covers.
+    fn covers(&self, issue: &PadNetIssue) -> bool {
+        match issue {
+            PadNetIssue::TerminalWithoutPad { terminal, .. } => self
+                .units
+                .contains(&(terminal.occurrence.clone(), terminal.symbol)),
+            _ => false,
+        }
+    }
+}
+
+impl PadLinkKey for HeldBack {
+    type Key = SymbolPad;
+
+    fn terminal_key(&self, terminal: &Terminal) -> Option<SymbolPad> {
+        self.key.terminal_key(terminal)
+    }
+
+    fn pad_key(&self, footprint: &Footprint, pad: &Pad) -> Option<SymbolPad> {
+        if self.footprints.contains(&footprint.uuid) {
+            return None;
+        }
+        self.key.pad_key(footprint, pad)
+    }
+
+    fn footprint_unlinked(&self, footprint: &Footprint) -> bool {
+        self.footprints.contains(&footprint.uuid) || self.key.footprint_unlinked(footprint)
+    }
+}
+
+/// A net removed because a removed or replaced footprint took its pads
+/// needs that footprint row: with it unticked, those pads stay on the net.
+fn removal_needs(
+    list: &EcoChangeList,
+    board: &PcbBoard,
+    projected: &PcbBoard,
+    table: &TableChanges,
+    table_rows: &mut [EcoRow],
+) {
+    for row in list.rows.iter().filter(|r| list.applies(r)) {
+        let id = match &row.change {
+            EcoChange::RemoveFootprint { footprint, .. }
+            | EcoChange::ChangeFootprint { footprint, .. } => *footprint,
+            _ => continue,
+        };
+        let Some(old) = board.footprints.iter().find(|f| f.uuid == id) else {
+            continue;
+        };
+        let now = projected.footprints.iter().find(|f| f.uuid == id);
+        for pad in &old.pads {
+            let Some(net) = &pad.net else {
+                continue;
+            };
+            let stays = now.is_some_and(|f| f.pads.iter().any(|p| p.number == pad.number));
+            if stays || !table.removed.contains_key(&net.number) {
+                continue;
+            }
+            let remove = EcoKey::RemoveNet(net.number);
+            if let Some(r) = table_rows.iter_mut().find(|r| r.key == remove)
+                && !r.needs.contains(&row.key)
+            {
+                r.needs.push(row.key.clone());
+            }
+        }
+    }
 }
 
 /// How net sync changes the net table of the projected board.

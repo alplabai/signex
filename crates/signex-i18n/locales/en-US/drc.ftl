@@ -24,6 +24,12 @@ drc-skipped =
        *[other] { $count } items could not be checked.
     }
 drc-more = and { $count } more not shown
+# A violation row was clicked while some of its items sit on hidden layers.
+drc-pick-hidden =
+    { $count ->
+        [one] 1 item of this violation is on a hidden layer and was not selected.
+       *[other] { $count } items of this violation are on hidden layers and were not selected.
+    }
 
 drc-kind-clearance = Clearance
 drc-kind-short = Short
@@ -36,6 +42,3 @@ drc-detail-unconnected = { $net }: link of { $length } mm not routed
 drc-detail-keepout = { $net }: inside a keepout that forbids it
 
 drc-location = { $x }, { $y } mm
-drc-layer-top = Top
-drc-layer-bottom = Bottom
-drc-layer-inner = Inner { $index }

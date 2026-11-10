@@ -104,10 +104,11 @@ pub enum UpdatePcbMsg {
     /// `new_pcb_document`: a new board for the project in view (`None`), or
     /// for the project the Projects tree names.
     NewPcbRequested(Option<ProjectId>),
-    /// The disk check of the new board's path finished: `exists` refuses it.
+    /// The disk check of the new board's path finished: `Ok(true)` (a file
+    /// is there) and `Err` (the check failed) refuse it.
     NewPcbPathChecked {
         project: ProjectId,
         path: PathBuf,
-        exists: bool,
+        exists: Result<bool, String>,
     },
 }

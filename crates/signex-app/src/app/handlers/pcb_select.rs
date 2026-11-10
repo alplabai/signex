@@ -3,6 +3,7 @@
 //! index and the selection live in `InteractionState::pcb_selection`.
 
 use iced::Task;
+use signex_i18n::{ids, t};
 use signex_types::pcb::PcbBoard;
 
 use crate::app::{ContextMenuMsg, Message, Signex, TabDocument};
@@ -126,13 +127,19 @@ impl Signex {
     }
 
     /// Select exactly `items` on the board in view (a DRC violation's
-    /// items, #2222).
+    /// items, #2222); those on a hidden layer are left out and counted in
+    /// the Messages panel.
     pub(crate) fn select_pcb_items(&mut self, items: &[pcb_geom::ItemRef]) {
-        if self.with_pcb_selection(|sel, board| {
-            sel.build_index(board);
-            sel.select_items(items)
-        }) == Some(true)
-        {
+        let Some(done) = self.with_pcb_selection(|sel, board| sel.select_items(board, items))
+        else {
+            return;
+        };
+        if done.hidden > 0 {
+            crate::diagnostics::log_warning(
+                t!(self.ui_state.i18n, ids::DRC_PICK_HIDDEN, "count" => done.hidden).into_string(),
+            );
+        }
+        if done.changed {
             self.refresh_pcb_highlight();
         }
     }
@@ -150,14 +157,8 @@ impl Signex {
         let canvas = &mut self.interaction_state.pcb_canvas;
         canvas.set_highlight(highlight);
         canvas.set_grab(grab);
-        // The Properties panel switches between the board and the selection
-        // of the active tab's board.
-        let selection = &self.interaction_state.pcb_selection;
-        let selected = selection.selection().len();
-        let is_active = selection.document() == self.active_tab_path().as_deref();
-        if is_active && let Some(board) = self.document_state.panel_ctx.pcb_board.as_mut() {
-            board.selected = selected;
-        }
+        // The Properties panel switches between the board and the selection.
+        self.sync_pcb_board_summary();
     }
 
     /// Repaint the selection of every undocked window that shows the board

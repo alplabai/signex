@@ -346,6 +346,7 @@ impl Signex {
                             self.interaction_state.canvases.remove(&id);
                             self.interaction_state.pcb_canvases.remove(&id);
                             self.interaction_state.pcb_selections.remove(&id);
+                            self.forget_pcb_carry_of_window(id);
                         }
                         // Closing a detached panel reattaches it to the
                         // dock so the user doesn't lose access to the
@@ -495,6 +496,7 @@ impl Signex {
                 self.interaction_state.canvases.remove(&id);
                 self.interaction_state.pcb_canvases.remove(&id);
                 self.interaction_state.pcb_selections.remove(&id);
+                self.forget_pcb_carry_of_window(id);
                 iced::window::close(id)
             }
             WindowMsg::DetachFloatingPanel(idx) => self.handle_detach_floating_panel(idx),
@@ -548,7 +550,7 @@ impl Signex {
                 if self.ui_state.focused_window == Some(id) {
                     self.ui_state.focused_window = None;
                 }
-                Task::none()
+                self.end_pcb_drag_on_focus_loss(id)
             }
             WindowMsg::NativeMenuItemActivated(id) => self.handle_native_menu_activated(&id),
             WindowMsg::ControlsLayoutDetected(layout) => {

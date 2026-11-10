@@ -274,7 +274,7 @@ impl Signex {
             self.status_active_layer(window_id),
             &ui.i18n,
         )
-        .map(|req| Message::Ui(UiMsg::StatusBar(req)))
+        .map(move |req| Signex::status_bar_message(window_id, req))
         .boxed();
 
         // Partition tabs across windows: main owns every tab that isn't

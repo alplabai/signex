@@ -70,6 +70,7 @@ update-pcb-note-unreadable-sheet = A sheet could not be read; nothing linked und
 update-pcb-note-pad-loses-lock = { $designator }.{ $pad } is locked and not on the new footprint; its lock goes with it.
 update-pcb-note-pad-loses-net = { $designator }.{ $pad } is on net { $net } and not on the new footprint; the pad and its net go.
 update-pcb-note-part-not-read = Part { $designator } could not be read back from its sheet; its footprint is left as it is.
+update-pcb-note-footprint-unresolved = The footprint of { $designator } could not be resolved ({ $why }); its pads keep their nets.
 update-pcb-note-kept-unlinked = { $designator } is not linked to a part and is kept.
 update-pcb-note-net = { $text }
 
@@ -87,6 +88,7 @@ update-pcb-done = Update PCB: { $count ->
        *[other] { $count } changes applied to { $board }.
     }
 update-pcb-refused = Update PCB did not run: { $why }
+update-pcb-library-not-opened = Update PCB: library { $library } could not be opened ({ $why }); its parts have no footprint.
 update-pcb-report-saved = Update PCB report saved to { $path }.
 update-pcb-report-failed = The Update PCB report could not be written: { $why }
 
@@ -94,5 +96,6 @@ update-pcb-report-failed = The Update PCB report could not be written: { $why }
 new-pcb-title = New PCB
 new-pcb-has-board = The project already has a board, { $board }. A project holds one board.
 new-pcb-exists = A file named { $file } is already in the project folder.
+new-pcb-check-failed = Could not check whether { $file } is already in the project folder: { $why }
 new-pcb-no-project = Open a project to add a PCB to it.
 new-pcb-created = Created { $board } in { $project }. It is written when you save it.

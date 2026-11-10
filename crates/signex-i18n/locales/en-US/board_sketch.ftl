@@ -15,6 +15,11 @@ board-sketch-refused = The sketch was not applied to the board: { $reason }
 # Messages line when a board closes, or is read again from disk, while its
 # sketch has changes that were never applied.
 board-sketch-dropped = The board sketch changes of { $board } were not applied and are discarded: the board was closed or read again from disk.
+# Messages line and notice when a save, close, quit or undock waits because
+# the sketch could not be applied; the copy and the mode stay.
+board-sketch-held = { $board } was not saved, closed or undocked: its sketch could not be applied to the board. Fix the sketch or Discard it, then try again.
+# Messages line when the mode is asked for on a board shown in its own window.
+board-sketch-undocked = Board Sketch runs in the main window: dock the board tab first.
 # The Board section of the Properties panel.
 board-sketch-section = Board
 board-sketch-outline = Board outline

@@ -182,10 +182,7 @@ impl Signex {
             dialog_button(
                 &s(i18n, ids::UPDATE_PCB_REPORT),
                 DialogButtonKind::Secondary,
-                state
-                    .list
-                    .is_some()
-                    .then(|| up(UpdatePcbMsg::ReportRequested)),
+                ready.map(|_| up(UpdatePcbMsg::ReportRequested)),
                 tokens,
             ),
             dialog_button(

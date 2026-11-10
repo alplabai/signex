@@ -21,7 +21,8 @@ const FALLBACK_LAYERS: u8 = 4;
 
 impl Signex {
     /// New PCB for `project`, else the project in view: check the board's
-    /// path on the worker before anything is made.
+    /// path on the worker before anything is made. A board the project
+    /// names but that is neither open nor on disk is made at that path.
     pub(super) fn request_new_pcb(&mut self, project: Option<ProjectId>) -> Task<Message> {
         let Some(project) = project.or_else(|| self.project_in_view()) else {
             self.refuse_new_pcb(self.update_pcb_text(ids::NEW_PCB_NO_PROJECT));
@@ -30,22 +31,20 @@ impl Signex {
         let Some(loaded) = self.document_state.project_by_id(project) else {
             return Task::none();
         };
-        if let Some(board) = Self::project_board(loaded) {
-            let why = t!(self.ui_state.i18n, ids::NEW_PCB_HAS_BOARD, "board" => file_name(&board));
-            self.refuse_new_pcb(why.into_string());
-            return Task::none();
-        }
-        let path = new_board_path(&loaded.path);
-        if self.document_state.holds_pcb(&path) {
-            self.refuse_new_pcb_exists(&path);
+        let named = Self::project_board(loaded);
+        let path = named
+            .clone()
+            .unwrap_or_else(|| new_board_path(&loaded.path));
+        if self.document_state.holds_pcb(&path) || self.is_board_opening(&path) {
+            self.refuse_new_pcb_taken(&path, named.is_some());
             return Task::none();
         }
         let checked = path.clone();
         Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || checked.try_exists().unwrap_or(true))
+                tokio::task::spawn_blocking(move || checked.try_exists().map_err(|e| e.to_string()))
                     .await
-                    .unwrap_or(true)
+                    .unwrap_or_else(|e| Err(e.to_string()))
             },
             move |exists| {
                 Message::from(UpdatePcbMsg::NewPcbPathChecked {
@@ -59,24 +58,54 @@ impl Signex {
 
     /// The path check landed: open the new board as an unsaved tab and name
     /// it in the project (the project is then unsaved too).
-    pub(super) fn new_pcb_path_checked(&mut self, project: ProjectId, path: PathBuf, exists: bool) {
-        if exists || self.document_state.holds_pcb(&path) {
-            self.refuse_new_pcb_exists(&path);
+    pub(super) fn new_pcb_path_checked(
+        &mut self,
+        project: ProjectId,
+        path: PathBuf,
+        exists: Result<bool, String>,
+    ) {
+        let Some(loaded) = self.document_state.project_by_id(project) else {
             return;
+        };
+        let named = Self::project_board(loaded);
+        if named.as_ref().is_some_and(|named| *named != path) {
+            // The project names another board since the check started.
+            return;
+        }
+        let taken = self.document_state.holds_pcb(&path) || self.is_board_opening(&path);
+        match exists {
+            Err(why) => {
+                let why = t!(
+                    self.ui_state.i18n,
+                    ids::NEW_PCB_CHECK_FAILED,
+                    "file" => file_name(&path),
+                    "why" => why
+                );
+                self.refuse_new_pcb(why.into_string());
+                return;
+            }
+            Ok(true) => {
+                self.refuse_new_pcb_taken(&path, named.is_some());
+                return;
+            }
+            Ok(false) if taken => {
+                self.refuse_new_pcb_taken(&path, named.is_some());
+                return;
+            }
+            Ok(false) => {}
         }
         let Some(loaded) = self.document_state.project_by_id_mut(project) else {
             return;
         };
-        if loaded.data.pcb_file.is_some() {
-            return;
-        }
         let board = loaded
             .data
             .new_board()
             .unwrap_or_else(|| SetupProfile::Standard.pcb(FALLBACK_LAYERS).new_board());
-        loaded.data.pcb_file = Some(file_name(&path));
         let project_path = loaded.path.clone();
-        self.document_state.mark_document_dirty(&project_path);
+        if loaded.data.pcb_file.is_none() {
+            loaded.data.pcb_file = Some(file_name(&path));
+            self.document_state.mark_document_dirty(&project_path);
+        }
         self.open_new_pcb_tab(path.clone(), board);
         crate::diagnostics::log_info(
             t!(
@@ -88,10 +117,12 @@ impl Signex {
             .into_string(),
         );
         self.refresh_panel_ctx();
-        // The Update PCB dialog that offered Create PCB now has its board.
+        // The Update PCB dialog that offered Create PCB, or said the named
+        // board is missing, now has its board.
         if let Some(state) = self.ui_state.update_pcb.as_mut()
             && state.project == project
-            && matches!(state.phase, Phase::NoBoard)
+            && matches!(state.phase, Phase::NoBoard | Phase::Failed(_))
+            && state.board.as_ref().is_none_or(|board| *board == path)
         {
             state.board = Some(path);
             state.phase = Phase::Opening;
@@ -117,8 +148,14 @@ impl Signex {
         self.reconcile_document_ids();
     }
 
-    fn refuse_new_pcb_exists(&mut self, path: &Path) {
-        let why = t!(self.ui_state.i18n, ids::NEW_PCB_EXISTS, "file" => file_name(path));
+    /// `path` is open or on disk: the project's board (`named`) or a file
+    /// in the way of a new one.
+    fn refuse_new_pcb_taken(&mut self, path: &Path, named: bool) {
+        let why = if named {
+            t!(self.ui_state.i18n, ids::NEW_PCB_HAS_BOARD, "board" => file_name(path))
+        } else {
+            t!(self.ui_state.i18n, ids::NEW_PCB_EXISTS, "file" => file_name(path))
+        };
         self.refuse_new_pcb(why.into_string());
     }
 

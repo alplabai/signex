@@ -33,9 +33,13 @@ pub(crate) struct DesignSnapshot {
     pub parts: Vec<EcoPart>,
     pub netlist: Netlist,
     pub unreadable: Vec<InstancePath>,
-    /// Revision of each open sheet of the design when it was read; a sheet
-    /// edited since makes the list stale.
-    pub sheet_revisions: Vec<(PathBuf, u64)>,
+    /// Every sheet the read used, with its open engine's revision then
+    /// (`None`: read from disk). A different engine state now makes the
+    /// list stale.
+    pub sheet_revisions: Vec<(PathBuf, Option<u64>)>,
+    /// Libraries whose adapter did not open, with why: their parts resolve
+    /// to no footprint, and the update thread logs each to Messages.
+    pub library_errors: Vec<(PathBuf, String)>,
 }
 
 impl DesignSnapshot {
@@ -103,11 +107,11 @@ pub(crate) fn compute(request: DesignRequest) -> Result<Arc<Computed>, String> {
     let unreadable = unreadable_placements(&set, &graph, &occurrences);
     let resolver = Resolver::open(&request.libraries);
     let parts = design_eco_parts(&sheets, |_, symbol| resolver.resolve(symbol));
-    let read_paths: Vec<&PathBuf> = graph.paths.values().collect();
-    let sheet_revisions = request
-        .open_revisions
-        .into_iter()
-        .filter(|(path, _)| read_paths.contains(&path))
+    let open: HashMap<PathBuf, u64> = request.open_revisions.into_iter().collect();
+    let sheet_revisions = graph
+        .paths
+        .values()
+        .map(|path| (path.clone(), open.get(path).copied()))
         .collect();
     let snapshot = DesignSnapshot {
         board: request.board,
@@ -116,6 +120,7 @@ pub(crate) fn compute(request: DesignRequest) -> Result<Arc<Computed>, String> {
         netlist,
         unreadable,
         sheet_revisions,
+        library_errors: resolver.errors,
     };
     let mut list = diff_board(&snapshot.input());
     if let Some(previous) = &request.previous {
@@ -162,21 +167,26 @@ fn unreadable_placements(
 struct Resolver<'a> {
     libraries: &'a [LibraryRows],
     adapters: HashMap<Uuid, LocalGitAdapter>,
+    /// The libraries that did not open, with why.
+    errors: Vec<(PathBuf, String)>,
 }
 
 impl<'a> Resolver<'a> {
     fn open(libraries: &'a [LibraryRows]) -> Self {
-        let adapters = libraries
-            .iter()
-            .filter_map(|lib| {
-                LocalGitAdapter::open(&lib.root)
-                    .ok()
-                    .map(|adapter| (lib.id, adapter))
-            })
-            .collect();
+        let mut adapters = HashMap::new();
+        let mut errors = Vec::new();
+        for lib in libraries {
+            match LocalGitAdapter::open(&lib.root) {
+                Ok(adapter) => {
+                    adapters.insert(lib.id, adapter);
+                }
+                Err(e) => errors.push((lib.root.clone(), e.to_string())),
+            }
+        }
         Self {
             libraries,
             adapters,
+            errors,
         }
     }
 

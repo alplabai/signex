@@ -81,8 +81,9 @@ impl Signex {
     /// The board at `path` closes, is parked, or is replaced by a copy read
     /// from disk: its sketch mode ends, so a later reopen starts fresh and no
     /// old copy can be committed. Uncommitted changes are dropped and
-    /// Messages names the board (the close prompt is about saving the file,
-    /// which never holds an uncommitted sketch).
+    /// Messages names the board. A close, save or quit the user asked for
+    /// applies them first ([`Self::settle_board_sketch_of`]); what is left
+    /// is a discard or a read the user chose.
     pub(crate) fn end_board_sketch_of(&mut self, path: &Path) {
         let Some(session) = self.interaction_state.board_sketch.as_ref() else {
             return;
@@ -103,13 +104,111 @@ impl Signex {
         self.interaction_state.board_sketch = None;
     }
 
+    /// The board whose sketch has changes the board has not taken: unsaved
+    /// work of that board for the quit prompt and the title count.
+    pub(crate) fn board_sketch_owed(&self) -> Option<std::path::PathBuf> {
+        let session = self.interaction_state.board_sketch.as_ref()?;
+        session.has_changes().then(|| session.board_path.clone())
+    }
+
+    /// Apply the sketch's changes to its board before a save, close or quit
+    /// reads the board at `path` (any board: `None`), as title-block drafts
+    /// are committed. The mode stays on. `false`: the bake refused, the copy
+    /// is kept, the notice says why and the caller holds.
+    pub(crate) fn settle_board_sketch_of(&mut self, path: Option<&Path>) -> bool {
+        let Some(board) = self
+            .board_sketch_owed()
+            .filter(|board| path.is_none_or(|p| p == board))
+        else {
+            return true;
+        };
+        // No board left to take it (cannot be reached through the UI): a
+        // copy that can never commit must not hold every quit.
+        if self.document_state.pcb_board(&board).is_none() {
+            self.end_board_sketch_of(&board);
+            return true;
+        }
+        if self.commit_board_sketch() {
+            return true;
+        }
+        self.hold_for_board_sketch(&board);
+        false
+    }
+
+    /// Leave the sketch mode of the board at `path`, applying its changes,
+    /// before the board moves to its own window, where the mode is not
+    /// drawn. `false`: the bake refused and the caller holds.
+    pub(crate) fn leave_board_sketch_of(&mut self, path: &Path) -> bool {
+        let on = self
+            .interaction_state
+            .board_sketch
+            .as_ref()
+            .is_some_and(|session| session.board_path == path);
+        if !on || self.leave_board_sketch() {
+            return true;
+        }
+        self.hold_for_board_sketch(path);
+        false
+    }
+
+    /// The board's file moved from `from` to `to` (a rename): its sketch
+    /// mode follows it, so a later save or quit still commits the copy.
+    pub(crate) fn rekey_board_sketch(&mut self, from: &Path, to: &Path) {
+        if let Some(session) = self
+            .interaction_state
+            .board_sketch
+            .as_mut()
+            .filter(|session| session.board_path == from)
+        {
+            session.board_path = to.to_path_buf();
+            session.editor.path = to.to_path_buf();
+        }
+    }
+
+    /// A save, close, quit or undock waits for the sketch: say so in
+    /// Messages and on the notice card, with the bake's reason.
+    fn hold_for_board_sketch(&mut self, board: &Path) {
+        let i18n = &self.ui_state.i18n;
+        let name = board
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let held = t!(i18n, ids::BOARD_SKETCH_HELD, "board" => name.as_str()).into_string();
+        let title = t!(i18n, ids::BOARD_SKETCH_TITLE).into_string();
+        crate::diagnostics::log_warning(held.clone());
+        let refusal = self
+            .interaction_state
+            .board_sketch
+            .as_ref()
+            .and_then(|session| session.refusal.clone());
+        let detail = match refusal {
+            Some(refusal) => format!("{held}\n{refusal}"),
+            None => held,
+        };
+        self.document_state.error_notice = Some(ErrorNotice::new(title, detail));
+    }
+
+    /// Whether the board at `path` is shown in its own window.
+    fn board_is_undocked(&self, path: &Path) -> bool {
+        self.ui_state.windows.values().any(|kind| {
+            matches!(kind, crate::app::state::WindowKind::UndockedTab { path: p, .. } if p == path)
+        })
+    }
+
     /// Start sketch mode on the board in view. Another board's sketch mode
     /// is left first; if its commit is refused, this one does not start. A
-    /// session whose board is no longer open (renamed by Save As) ends.
+    /// session whose board is no longer open ends. A board in its own window
+    /// does not start it: the mode is drawn in the main window only.
     fn enter_board_sketch(&mut self) {
         let Some(path) = self.active_tab_path() else {
             return;
         };
+        if self.board_is_undocked(&path) {
+            crate::diagnostics::log_warning(
+                t!(self.ui_state.i18n, ids::BOARD_SKETCH_UNDOCKED).into_string(),
+            );
+            return;
+        }
         if let Some(stale) = self
             .interaction_state
             .board_sketch

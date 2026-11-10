@@ -73,6 +73,16 @@ impl Signex {
                 Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
             return Task::none();
         }
+        // A board of this project in sketch mode takes its sketch before the
+        // close reads what is unsaved; a refused bake holds the close.
+        let sketched = self.board_sketch_owed().is_some_and(|board| {
+            self.document_state
+                .document_project(&board)
+                .is_some_and(|project| project.id == project_id)
+        });
+        if sketched && !self.settle_board_sketch_of(None) {
+            return Task::none();
+        }
         self.spawn_close_refs_resolve(project_id)
     }
 
@@ -810,10 +820,14 @@ impl Signex {
     }
 
     /// What every quit does before it may exit, GUI or headless (#1932):
-    /// commit pending title-block drafts, and hold the quit while a rename,
-    /// delete or rewrite runs. `false`: held, and the user was told why.
+    /// commit pending title-block drafts and the board sketch, and hold the
+    /// quit while a rename, delete or rewrite runs, or when the sketch's bake
+    /// refuses. `false`: held, and the user was told why.
     pub(crate) fn prepare_quit(&mut self) -> bool {
         self.commit_pending_title_block_drafts();
+        if !self.settle_board_sketch_of(None) {
+            return false;
+        }
         !self.hold_quit_while_path_op()
     }
 
@@ -882,7 +896,13 @@ impl Signex {
             ProjectCloseChoice::SaveAll => {
                 // Start every dirty file's write off the UI thread; Signex
                 // closes once all of them completed, and stays open with a
-                // reason for anything still unsaved so nothing is lost.
+                // reason for anything still unsaved so nothing is lost. A
+                // sketch drawn behind the prompt is applied first, or the
+                // prompt stays up.
+                if !self.settle_board_sketch_of(None) {
+                    self.ui_state.app_quit_confirm = Some(state);
+                    return Task::none();
+                }
                 self.begin_save_all(
                     "Save All (exit)",
                     &state.dirty_paths,

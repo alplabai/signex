@@ -25,6 +25,8 @@
 //! - A pad whose net is locked gets no pad net row, except to follow a
 //!   rename of its own net.
 //! - A part that cannot be read back is never removed or changed.
+//! - A placed part whose footprint cannot be resolved gets a note, and the
+//!   pads of it and of an unread part are left out of net sync.
 
 mod change;
 mod diff;
@@ -46,6 +48,8 @@ mod fixture;
 mod group_tests;
 #[cfg(test)]
 mod net_tests;
+#[cfg(test)]
+mod sync_guard_tests;
 #[cfg(test)]
 mod tests;
 
@@ -72,6 +76,19 @@ pub struct EcoPart {
     /// its value and footprint are unknown, so its footprint is left as it
     /// is (never removed) and a part with none gets a blocked add row.
     pub read: bool,
+}
+
+impl EcoPart {
+    /// Whether the part's pin-to-pad map is known: read back, and either
+    /// resolved or binding no footprint at all (1:1). Net sync leaves the
+    /// pads of a part without one alone rather than guess pin n on pad n.
+    pub fn pin_map_known(&self) -> bool {
+        self.read
+            && matches!(
+                &self.footprint,
+                Ok(_) | Err(FootprintResolveError::NoFootprint)
+            )
+    }
 }
 
 /// What [`diff_board`] compares.

@@ -866,3 +866,9 @@ fn esc_closes_the_dialog() {
     );
     assert!(f.app.ui_state.update_pcb.is_none());
 }
+
+#[path = "update_pcb_review.rs"]
+mod review;
+
+#[path = "update_pcb_unresolved.rs"]
+mod unresolved;

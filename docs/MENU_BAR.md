@@ -238,6 +238,10 @@ undocked PCB window the keys and rows act on that window's board. What a row
 changes is the board view in `UiState::pcb_layer_views`: never the board,
 never its file. See `docs/DECISIONS.md` (2026-11-09).
 
+The board canvas menu ends with a View group holding the same Toggle
+Ratsnest row (#2240, #2223); the menu opens only on a board, so the row is
+always live there.
+
 ## Native macOS menu {#native-macos-menu}
 
 On macOS the main menu lives in the system menu bar (NSMenu), built with the

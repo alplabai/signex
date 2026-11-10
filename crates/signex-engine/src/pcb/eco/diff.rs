@@ -164,6 +164,15 @@ fn footprint_rows(
         });
         return;
     }
+    if let Err(error) = &part.footprint
+        && !part.pin_map_known()
+    {
+        list.notes.push(EcoNote::FootprintUnresolved {
+            footprint: id,
+            reference: fp.reference.clone(),
+            error: error.clone(),
+        });
+    }
     if !part.on_board {
         list.rows.push(remove_row(fp));
         return;

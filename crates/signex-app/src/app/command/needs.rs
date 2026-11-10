@@ -57,6 +57,7 @@ impl Needs {
             Self::SaveTarget => {
                 ctx.document_is_schematic
                     || ctx.document_is_editor
+                    || ctx.document_is_dirty_board
                     || (ctx.document_has_file && ctx.project_dirty)
             }
             Self::SaveAsTarget => ctx.document_is_schematic || ctx.document_is_editor,

@@ -7,13 +7,14 @@
 
 use std::collections::BTreeSet;
 
+use iced::Task;
 use pcb_geom::ItemRef;
 use signex_engine::pcb::placement::{self, PlacementRefusal, PlacementTransform};
 use signex_engine::pcb::{BoardCommand, BoardItemId};
 use signex_types::pcb::Point;
 use uuid::Uuid;
 
-use crate::app::Signex;
+use crate::app::{Message, Signex};
 use crate::pcb_canvas::{CarryKind, PcbCarry, carry_delta};
 
 impl Signex {
@@ -144,10 +145,20 @@ impl Signex {
             .live_carry(CarryKind::Drag)
             .is_some_and(|carry| carry.anchor == Some(from));
         if !same_press {
-            let footprints = self.pcb_selected_footprints();
+            let mut footprints = self.pcb_selected_footprints();
             let Some(path) = self.active_tab_path() else {
                 return;
             };
+            // A locked footprint refuses when the drag starts. The press
+            // then carries nothing, so its later moves neither repeat the
+            // notice nor paint a ghost, and its release moves nothing.
+            let refused = self
+                .active_pcb()
+                .and_then(|board| placement::editable_footprints(board, &footprints).err());
+            if let Some(refusal) = refused {
+                refuse("Move", &refusal);
+                footprints.clear();
+            }
             let window = self.interaction_state.acting_window;
             let mut carry = PcbCarry::new(CarryKind::Drag, path, window, footprints);
             carry.anchor = Some(from);
@@ -199,6 +210,55 @@ impl Signex {
         stale
     }
 
+    /// `window` lost focus: its release may never arrive, so a drag
+    /// started there ends with nothing moved. An armed Move waits for its
+    /// clicks across the focus change.
+    pub(crate) fn end_pcb_drag_on_focus_loss(&mut self, window: iced::window::Id) -> Task<Message> {
+        let owner = self.carry_window(window);
+        let is_drag_of = |app: &Self| {
+            app.interaction_state
+                .pcb_carry
+                .as_ref()
+                .is_some_and(|carry| carry.kind == CarryKind::Drag && carry.window == owner)
+        };
+        if !is_drag_of(self) {
+            return Task::none();
+        }
+        let task = match owner {
+            None => {
+                self.end_pcb_carry();
+                Task::none()
+            }
+            Some(id) => self.run_in_window(id, false, |app| {
+                app.end_pcb_carry();
+                Task::none()
+            }),
+        };
+        // A drag left on a board the window no longer shows goes too.
+        if is_drag_of(self) {
+            self.interaction_state.pcb_carry = None;
+        }
+        task
+    }
+
+    /// The undocked `window` closed: a drag or Move started there goes
+    /// with it.
+    pub(crate) fn forget_pcb_carry_of_window(&mut self, window: iced::window::Id) {
+        let owned = self
+            .interaction_state
+            .pcb_carry
+            .as_ref()
+            .is_some_and(|carry| carry.window == Some(window));
+        if owned {
+            self.interaction_state.pcb_carry = None;
+        }
+    }
+
+    /// How a carry names `window`: `None` for the main one.
+    fn carry_window(&self, window: iced::window::Id) -> Option<iced::window::Id> {
+        (self.ui_state.main_window_id != Some(window)).then_some(window)
+    }
+
     /// The carry of `kind`, if it belongs to the board in view in this
     /// window.
     pub(crate) fn live_carry(&self, kind: CarryKind) -> Option<PcbCarry> {
@@ -236,6 +296,11 @@ impl Signex {
         else {
             return;
         };
+        if carry.footprints.is_empty() {
+            // A drag refused at its start: the notice is already out.
+            self.end_pcb_carry();
+            return;
+        }
         let built = self.active_pcb().map(|board| {
             let delta = carry_delta(board, &carry.footprints, from, to);
             placement::move_commands(board, &carry.footprints, delta)

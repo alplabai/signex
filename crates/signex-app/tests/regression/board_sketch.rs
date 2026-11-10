@@ -33,7 +33,7 @@ fn layer(id: u8, name: &str) -> LayerDef {
 
 /// An empty two-layer board with one top track along y = 15. It carries a
 /// fixed id: a file with the nil id is given a new one on every open.
-fn board() -> PcbBoard {
+pub(crate) fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         uuid: Uuid::from_u128(0xB0A2D),
@@ -65,13 +65,13 @@ fn board() -> PcbBoard {
     }
 }
 
-struct Fixture {
-    app: Signex,
-    path: std::path::PathBuf,
+pub(crate) struct Fixture {
+    pub(crate) app: Signex,
+    pub(crate) path: std::path::PathBuf,
     _tmp: tempfile::TempDir,
 }
 
-fn open_board() -> Fixture {
+pub(crate) fn open_board() -> Fixture {
     let _ = signex_app::diagnostics::init_logging();
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("board.snxpcb");
@@ -87,7 +87,7 @@ fn open_board() -> Fixture {
     }
 }
 
-fn send(f: &mut Fixture, message: Message) {
+pub(crate) fn send(f: &mut Fixture, message: Message) {
     let task = f.app.update(message);
     drive(&mut f.app, task);
 }
@@ -96,11 +96,11 @@ fn command(id: &str) -> AppCommandId {
     AppCommandId::new(id).expect("a catalog id")
 }
 
-fn in_sketch(f: &Fixture) -> bool {
+pub(crate) fn in_sketch(f: &Fixture) -> bool {
     f.app.interaction_state.board_sketch.is_some()
 }
 
-fn live(f: &Fixture) -> PcbBoard {
+pub(crate) fn live(f: &Fixture) -> PcbBoard {
     let docs = &f.app.document_state;
     docs.tabs[docs.active_tab]
         .cached_document
@@ -110,11 +110,11 @@ fn live(f: &Fixture) -> PcbBoard {
         .clone()
 }
 
-fn snapshot(f: &Fixture) -> String {
+pub(crate) fn snapshot(f: &Fixture) -> String {
     serde_json::to_string(&live(f)).unwrap()
 }
 
-fn edit(f: &mut Fixture, msg: FootprintEditorMsg) {
+pub(crate) fn edit(f: &mut Fixture, msg: FootprintEditorMsg) {
     let path = f.path.clone();
     send(
         f,
@@ -125,7 +125,7 @@ fn edit(f: &mut Fixture, msg: FootprintEditorMsg) {
     );
 }
 
-fn click(f: &mut Fixture, x_mm: f64, y_mm: f64) {
+pub(crate) fn click(f: &mut Fixture, x_mm: f64, y_mm: f64) {
     edit(
         f,
         FootprintEditorMsg::SketchToolClick {
@@ -136,12 +136,12 @@ fn click(f: &mut Fixture, x_mm: f64, y_mm: f64) {
     );
 }
 
-fn panel(f: &mut Fixture, msg: PanelMsg) {
+pub(crate) fn panel(f: &mut Fixture, msg: PanelMsg) {
     send(f, Message::Dock(DockMessage::Panel(msg)));
 }
 
 /// The ids of the working sketch's entities of one kind.
-fn ids_of(f: &Fixture, kind: fn(&EntityKind) -> bool) -> Vec<SketchEntityId> {
+pub(crate) fn ids_of(f: &Fixture, kind: fn(&EntityKind) -> bool) -> Vec<SketchEntityId> {
     let session = f
         .app
         .interaction_state
@@ -157,7 +157,7 @@ fn ids_of(f: &Fixture, kind: fn(&EntityKind) -> bool) -> Vec<SketchEntityId> {
         .collect()
 }
 
-fn is_line(kind: &EntityKind) -> bool {
+pub(crate) fn is_line(kind: &EntityKind) -> bool {
     matches!(kind, EntityKind::Line { .. })
 }
 
@@ -166,7 +166,7 @@ fn is_circle(kind: &EntityKind) -> bool {
 }
 
 /// Draw a rectangle with the sketch tool; its four lines.
-fn rectangle(f: &mut Fixture, from: (f64, f64), to: (f64, f64)) -> Vec<SketchEntityId> {
+pub(crate) fn rectangle(f: &mut Fixture, from: (f64, f64), to: (f64, f64)) -> Vec<SketchEntityId> {
     let before = ids_of(f, is_line);
     edit(f, FootprintEditorMsg::SketchSetTool(SketchTool::Rectangle));
     click(f, from.0, from.1);
@@ -349,16 +349,24 @@ fn a_commit_is_one_undo_step_with_the_outline_hole_and_keepout() {
     assert_eq!(snapshot(&f), before, "one undo restores the old board");
 }
 
-/// Closing the board's tab ends its sketch mode and drops the uncommitted
-/// copy (Messages names the board); the reopened board starts fresh and
-/// nothing old is committed.
+/// Closing the board's tab applies the uncommitted sketch before the dirty
+/// check, so the board parks dirty with it and nothing is dropped (#2234
+/// review: the close used to discard it). The reopened board shows it, and
+/// the mode does not come back by itself.
 #[test]
-fn closing_the_board_drops_the_sketch_and_a_reopen_starts_fresh() {
+fn closing_the_board_applies_the_sketch_and_a_reopen_keeps_it() {
     let mut f = open_board();
     let before = snapshot(&f);
     send(&mut f, menu_row("board_sketch"));
     let drawn = rectangle(&mut f, (0.0, 0.0), (40.0, 30.0));
     assert_eq!(drawn.len(), 4);
+    panel(
+        &mut f,
+        PanelMsg::BoardSketch(BoardSketchAttrMsg::OutlineToggled {
+            id: drawn[0],
+            on: true,
+        }),
+    );
 
     let idx = f.app.document_state.active_tab;
     send(
@@ -366,26 +374,49 @@ fn closing_the_board_drops_the_sketch_and_a_reopen_starts_fresh() {
         Message::ContextMenu(ContextMenuMsg::TabAction(TabContextAction::Close(idx))),
     );
     assert!(!in_sketch(&f), "the mode ends with the tab");
+    let dropped = signex_i18n::t!(
+        f.app.ui_state.i18n,
+        signex_i18n::ids::BOARD_SKETCH_DROPPED,
+        "board" => "board.snxpcb"
+    )
+    .into_string();
     assert!(
-        signex_app::diagnostics::recent_entries()
+        !signex_app::diagnostics::recent_entries()
             .iter()
-            .any(|e| e.message.contains("board.snxpcb") && e.message.contains("discarded")),
-        "Messages names the board whose changes were dropped"
+            .any(|e| e.message.contains(&dropped)),
+        "no change was dropped"
+    );
+    assert!(
+        f.app
+            .document_state
+            .dirty_document_paths()
+            .contains(&f.path),
+        "the board parked dirty, with the sketch"
     );
 
     let path = f.path.clone();
     send(&mut f, Message::File(FileMsg::Opened(Some(path))));
     assert!(!in_sketch(&f), "reopening does not bring the mode back");
-    assert_eq!(snapshot(&f), before, "nothing old reached the board");
+    assert_ne!(snapshot(&f), before, "the sketch reached the board");
+    assert_eq!(
+        live(&f).outline.len(),
+        4,
+        "the parked board kept the outline"
+    );
 
     send(&mut f, menu_row("board_sketch"));
-    assert!(ids_of(&f, is_line).is_empty(), "a fresh, empty copy");
+    assert_eq!(
+        ids_of(&f, is_line).len(),
+        4,
+        "the copy starts from the board's sketch"
+    );
+    let kept = snapshot(&f);
     send(&mut f, menu_row("board_sketch"));
     assert!(!in_sketch(&f));
     assert_eq!(
         snapshot(&f),
-        before,
-        "leaving the fresh copy commits nothing"
+        kept,
+        "leaving an unchanged copy commits nothing"
     );
 }
 

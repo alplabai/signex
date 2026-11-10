@@ -31,6 +31,15 @@ pub struct PcbSelectionState {
     quiet_rebuild: bool,
 }
 
+/// What [`PcbSelectionState::select_items`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ItemsSelected {
+    /// Whether the selection changed.
+    pub changed: bool,
+    /// How many of the items were left out for sitting on a hidden layer.
+    pub hidden: usize,
+}
+
 impl PcbSelectionState {
     pub fn selection(&self) -> &Selection {
         &self.selection
@@ -135,11 +144,30 @@ impl PcbSelectionState {
         self.selection.apply_marquee(&hits, mode)
     }
 
-    /// Select exactly `items` (a violation's items, #2222): whatever is not
-    /// on the board is dropped on the next index build, like any selection.
-    /// Whether the selection changed.
-    pub fn select_items(&mut self, items: &[ItemRef]) -> bool {
-        self.selection.apply_marquee(items, ClickMode::Replace)
+    /// Select exactly those of `items` the view lets be picked (a
+    /// violation's items #2222, a cross selection #1312): an item on a
+    /// hidden layer, or not on the board, is left out (#2223).
+    pub fn select_items(&mut self, board: &PcbBoard, items: &[ItemRef]) -> ItemsSelected {
+        self.ensure_index(board);
+        let selectable: HashSet<ItemRef> = self
+            .index
+            .iter()
+            .flat_map(|index| index.items().map(|i| i.item))
+            .collect();
+        let (kept, left_out): (Vec<ItemRef>, Vec<ItemRef>) = items
+            .iter()
+            .copied()
+            .partition(|item| selectable.contains(item));
+        let hidden = if left_out.is_empty() {
+            0
+        } else {
+            let on_hidden = hidden_items(board, &self.view);
+            left_out.iter().filter(|i| on_hidden.contains(i)).count()
+        };
+        ItemsSelected {
+            changed: self.selection.apply_marquee(&kept, ClickMode::Replace),
+            hidden,
+        }
     }
 
     /// The copper to paint for the selection and the hover. A selected
@@ -485,6 +513,54 @@ mod tests {
         view.show_all();
         state.set_view(&view);
         assert!(state.click(&board, on_bottom, 0.1, ClickMode::Replace));
+    }
+
+    /// Review finding 4 / S1 on #2271: selecting a list of items (a DRC pick,
+    /// a cross selection) leaves out those on a hidden layer and counts them.
+    #[test]
+    fn select_items_leaves_out_and_counts_items_on_a_hidden_layer() {
+        use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+        let board = two_layer_board();
+        let top = ItemRef::Track(Uuid::from_u128(10));
+        let bottom = ItemRef::Track(Uuid::from_u128(11));
+        let gone = ItemRef::Track(Uuid::from_u128(99));
+        let mut state = PcbSelectionState::default();
+        state.sync(None, 1);
+        let mut view = PcbLayerView::default();
+        view.toggle_visibility(PcbLayer::Copper(CopperLayer::Bottom));
+        state.set_view(&view);
+
+        let done = state.select_items(&board, &[bottom]);
+        assert_eq!(
+            done,
+            ItemsSelected {
+                changed: false,
+                hidden: 1
+            }
+        );
+        assert!(state.selection().is_empty());
+
+        let done = state.select_items(&board, &[top, bottom, gone]);
+        assert_eq!(
+            done,
+            ItemsSelected {
+                changed: true,
+                hidden: 1
+            }
+        );
+        assert_eq!(state.selection().items().collect::<Vec<_>>(), vec![top]);
+
+        view.show_all();
+        state.set_view(&view);
+        let done = state.select_items(&board, &[top, bottom]);
+        assert_eq!(
+            done,
+            ItemsSelected {
+                changed: true,
+                hidden: 0
+            }
+        );
+        assert_eq!(state.selection().len(), 2);
     }
 
     /// A view change rebuilds the index but does not report a refused item twice.

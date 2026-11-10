@@ -183,6 +183,35 @@ impl Signex {
         crate::panels::PcbLayersPanel::new(&board.layers, &view, self.ui_state.i18n.clone())
     }
 
+    /// The Properties panel's board summary for the active tab. The selection
+    /// counts only once it is aligned with that tab: right after a tab
+    /// switch it may still hold another board's items.
+    fn pcb_board_summary(&self) -> Option<crate::panels::PcbBoardSummary> {
+        let board = self.active_pcb_snapshot()?;
+        let tab = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)?;
+        let selection = &self.interaction_state.pcb_selection;
+        let selected = if selection.document() == Some(tab.path.as_path()) {
+            selection.selection().len()
+        } else {
+            0
+        };
+        Some(crate::panels::PcbBoardSummary::of(
+            board,
+            tab.title.clone(),
+            selected,
+        ))
+    }
+
+    /// Bring the board summary in step with a selection change, without a
+    /// full rebuild. Inside an undocked window's event the window's context
+    /// and selection are the ones in the main slots (`run_in_window`).
+    pub(crate) fn sync_pcb_board_summary(&mut self) {
+        self.document_state.panel_ctx.pcb_board = self.pcb_board_summary();
+    }
+
     /// The Net Classes section's state: the panel's own selection and drafts
     /// carried over, the table and history flags read from the active project.
     fn net_class_panel_state(&self) -> crate::panels::NetClassPanel {
@@ -707,16 +736,7 @@ impl Signex {
             pcb_nets: self
                 .active_pcb_snapshot()
                 .map(crate::panels::PcbNetsSummary::of),
-            pcb_board: self.active_pcb_snapshot().map(|board| {
-                let name = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
-                    .map(|tab| tab.title.clone())
-                    .unwrap_or_default();
-                let selected = self.interaction_state.pcb_selection.selection().len();
-                crate::panels::PcbBoardSummary::of(board, name, selected)
-            }),
+            pcb_board: self.pcb_board_summary(),
             selection_count,
             selected_uuid,
             selected_kind,

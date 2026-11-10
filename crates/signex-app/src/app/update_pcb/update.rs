@@ -138,7 +138,7 @@ impl Signex {
         }
     }
 
-    fn is_board_opening(&self, board: &Path) -> bool {
+    pub(super) fn is_board_opening(&self, board: &Path) -> bool {
         self.document_state.pending_opens.contains(board)
             || self.ui_state.pending_sheet_opens.contains_key(board)
     }
@@ -248,6 +248,17 @@ impl Signex {
         }
         match result {
             Ok(computed) => {
+                for (library, why) in &computed.snapshot.library_errors {
+                    crate::diagnostics::log_warning(
+                        t!(
+                            self.ui_state.i18n,
+                            ids::UPDATE_PCB_LIBRARY_NOT_OPENED,
+                            "library" => library.display().to_string(),
+                            "why" => why.clone()
+                        )
+                        .into_string(),
+                    );
+                }
                 state.snapshot = Some(Arc::clone(&computed.snapshot));
                 state.list = Some(computed.list.clone());
                 state.phase = Phase::Ready;
@@ -305,17 +316,21 @@ impl Signex {
         )
     }
 
-    /// The read failed: the dialog says why; a headless run ends here.
+    /// The read failed: Messages and the dialog say why; a headless run
+    /// ends here.
     pub(super) fn fail_update_pcb(&mut self, why: String) {
+        if self.ui_state.update_pcb.is_none() {
+            return;
+        }
+        self.log_update_pcb_refused(&why);
         let Some(state) = self.ui_state.update_pcb.as_mut() else {
             return;
         };
         if state.apply {
             self.ui_state.update_pcb = None;
-            self.log_update_pcb_refused(&why);
-            return;
+        } else {
+            state.phase = Phase::Failed(why);
         }
-        state.phase = Phase::Failed(why);
     }
 
     pub(super) fn log_update_pcb_refused(&self, why: &str) {

@@ -147,6 +147,11 @@ fn note_text(note: &EcoNote) -> String {
         EcoNote::PartNotRead { designator } => format!(
             "part {designator} could not be read back from its sheet; its footprint is left as it is"
         ),
+        EcoNote::FootprintUnresolved {
+            reference, error, ..
+        } => format!(
+            "the footprint of {reference} could not be resolved ({error}); its pads keep their nets"
+        ),
         EcoNote::KeptUnlinked { reference, .. } => {
             format!("{reference} is not linked to a part and is kept")
         }

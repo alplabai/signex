@@ -31,7 +31,8 @@ impl Signex {
     }
 
     /// The list no longer describes the board or the design: the board moved
-    /// past its revision, or a sheet it read was edited since.
+    /// past its revision, or a sheet it read was edited, closed or opened
+    /// since (revisions are unique, so a reopened sheet reads as changed).
     pub fn update_pcb_stale(&self) -> bool {
         let Some(state) = self.ui_state.update_pcb.as_ref() else {
             return false;
@@ -47,11 +48,9 @@ impl Signex {
             .document_state
             .board_engine(board)
             .is_some_and(|engine| engine.revision() != list.revision);
-        let sheet_edited = snapshot.sheet_revisions.iter().any(|(path, revision)| {
-            self.document_state
-                .engines
-                .get(path)
-                .is_some_and(|engine| engine.revision() != *revision)
+        let sheet_edited = snapshot.sheet_revisions.iter().any(|(path, read)| {
+            let now = self.document_state.engines.get(path).map(|e| e.revision());
+            now != *read
         });
         board_moved || sheet_edited
     }
@@ -80,7 +79,7 @@ impl Signex {
     }
 
     /// Validate: would the ticked rows apply to the board as one step? Runs
-    /// them on a copy.
+    /// them on a copy. A stale list fails it, as Execute would.
     pub(super) fn validate_update_pcb(&mut self) {
         let Some(state) = self.ui_state.update_pcb.as_ref() else {
             return;
@@ -89,6 +88,9 @@ impl Signex {
             return;
         };
         let verdict = match self.document_state.board_engine(board) {
+            _ if self.update_pcb_stale() => {
+                Err(t!(self.ui_state.i18n, ids::UPDATE_PCB_STALE).into_string())
+            }
             Some(engine) => check(list, engine).map_err(|e| e.to_string()),
             None => Err(self.board_missing_text(&file_name(board))),
         };
@@ -152,12 +154,13 @@ impl Signex {
         }
     }
 
-    /// Report...: ask where to save the list as text.
+    /// Report...: ask where to save the list as text. Only a ready list:
+    /// while the net rows are recomputed they are out of date.
     pub(super) fn pick_update_pcb_report(&mut self) -> Task<Message> {
         let Some(state) = self.ui_state.update_pcb.as_ref() else {
             return Task::none();
         };
-        if state.list.is_none() {
+        if state.ready_list().is_none() {
             return Task::none();
         }
         let dir = state

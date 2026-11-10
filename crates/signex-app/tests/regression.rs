@@ -111,9 +111,23 @@ mod pcb_ratsnest;
 #[path = "regression/pcb_view.rs"]
 mod pcb_view;
 
+// #2240 / #2223 - the board menu's View group: Toggle Ratsnest.
+#[path = "regression/pcb_board_menu_view.rs"]
+mod pcb_board_menu_view;
+
+// #2271 review - DRC pick and cross selection skip hidden layers; the
+// Properties panel counts the active tab's board selection only.
+#[path = "regression/pcb_hidden_layer_select.rs"]
+mod pcb_hidden_layer_select;
+
 // #2234 - board sketch mode: entry points, commit, refused bake, Esc.
 #[path = "regression/board_sketch.rs"]
 mod board_sketch;
+
+// #2271 review - a board sketch is applied before save, quit, close and
+// undock, or they wait; Undo in the mode steps the sketch.
+#[path = "regression/board_sketch_persist.rs"]
+mod board_sketch_persist;
 
 // #1245 - the Parameter Manager opens from a catalog command.
 #[path = "regression/parameter_manager_open.rs"]
@@ -137,6 +151,8 @@ mod autosave;
 
 #[path = "regression/pcb_canvas_select.rs"]
 mod pcb_canvas_select;
+#[path = "regression/pcb_carry_windows.rs"]
+mod pcb_carry_windows;
 #[path = "regression/pcb_placement.rs"]
 mod pcb_placement;
 

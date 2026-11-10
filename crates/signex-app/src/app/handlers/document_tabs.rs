@@ -183,6 +183,11 @@ impl Signex {
                 // sheet's drafts stay pending.
                 self.commit_title_block_drafts_where(|sheet| sheet == path);
             }
+            // A board in sketch mode takes its sketch before the dirty
+            // check parks it; a refused bake keeps the tab open (#2234).
+            if park_dirty && !self.settle_board_sketch_of(Some(path.as_path())) {
+                return Task::none();
+            }
         }
         if idx >= self.document_state.tabs.len() {
             tracing::warn!(

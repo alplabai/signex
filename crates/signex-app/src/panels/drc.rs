@@ -55,10 +55,10 @@ pub struct DrcPanel {
 
 fn layer_label(i18n: &I18n, layer: Option<CopperLayer>) -> Option<Localized> {
     Some(match layer? {
-        CopperLayer::Top => t!(i18n, ids::DRC_LAYER_TOP),
-        CopperLayer::Bottom => t!(i18n, ids::DRC_LAYER_BOTTOM),
+        CopperLayer::Top => t!(i18n, ids::PCB_LAYER_TOP_COPPER),
+        CopperLayer::Bottom => t!(i18n, ids::PCB_LAYER_BOTTOM_COPPER),
         CopperLayer::Inner(inner) => {
-            t!(i18n, ids::DRC_LAYER_INNER, "index" => u32::from(inner.index()))
+            t!(i18n, ids::PCB_LAYER_INNER_COPPER, "index" => u32::from(inner.index()))
         }
     })
 }
@@ -273,5 +273,18 @@ mod tests {
         let busy = context(true);
         let busy_section = section(&busy).expect("section");
         assert!(messages_on_click(busy_section, window, "Run DRC").is_empty());
+    }
+
+    /// An inner layer's DRC row uses the Layers panel's name (Mid-Layer n).
+    #[test]
+    fn an_inner_layer_row_uses_the_layers_panel_name() {
+        let i18n = I18n::en_us();
+        let inner = CopperLayer::Inner(signex_types::pcb_layer::InnerCopper::new(2).expect("2"));
+        let label = layer_label(&i18n, Some(inner))
+            .expect("label")
+            .into_string();
+        let panel = crate::pcb_canvas::layer_style::copper_name(&i18n, inner).into_string();
+        assert_eq!(label, panel);
+        assert!(label.contains("Mid-Layer"), "{label}");
     }
 }

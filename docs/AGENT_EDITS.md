@@ -30,7 +30,10 @@ Two commands, both with capability `edit` in `signex-cli`:
   operand handler. Queries, `undo`, `redo`, `revert`, save, open, close and
   `apply_edits` itself are refused with the reason. `assign_net_class` is
   refused too: it writes the project's net classes, which no sheet's undo step
-  covers (a decision for a follow-up, see Known limits). A test pins the set.
+  covers (a decision for a follow-up, see Known limits).
+  `update_pcb_from_schematic` is refused as well: it edits the project's
+  board, which no sheet's undo step covers; it runs as its own command. A
+  test pins the set.
 - Every edit acts on the call's `document`; it never names another. Where a
   command takes a `document` operand (`color_net`), it is filled in; an edit
   that carries one is refused. Every edit is parsed before any runs, so a typo

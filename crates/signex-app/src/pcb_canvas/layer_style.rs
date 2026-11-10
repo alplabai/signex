@@ -1,7 +1,6 @@
 //! The names and colours the board view gives a board's layers (#2223).
 //! Names are catalog messages, except a mechanical layer the user named;
-//! colours are the one place a layer's colour is decided, so the Graphite
-//! board palette can plug in here.
+//! colours come from the board palette (`styles::board_canvas_colors`).
 
 use iced::Color;
 use signex_gfx::style::ColorSlot;
@@ -9,7 +8,7 @@ use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_renderer::pcb::{BOARD_OUTLINE, LayerRow};
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
-use signex_types::theme::ThemeTokens;
+use signex_types::theme::{BoardLayerColors, Color as ThemeColor, ThemeTokens};
 use signex_widgets::Label;
 
 /// The catalog name of `layer`.
@@ -78,45 +77,49 @@ fn technical_id(layer: TechnicalLayer) -> MessageId {
     }
 }
 
-/// The colour `layer` is listed with: red top, blue bottom, a cycle of hues
-/// for the inner and mechanical layers, one per technical family. Board
-/// Outline takes the board edge's own colour, so its swatch matches the
-/// drawn edge. `tokens` is unused until the Graphite board palette (#2229)
-/// decides the rest.
+/// The colour `layer` is listed with, from the board palette the canvas
+/// draws with. Board Outline and the keep-out layers take the slots their
+/// geometry is drawn in. Board views use one palette in both themes, so
+/// the chrome `tokens` do not change a swatch.
 pub fn layer_colour(layer: PcbLayer, _tokens: &ThemeTokens) -> Color {
-    if layer == BOARD_OUTLINE {
-        let [r, g, b, a] = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors())
-            .color(ColorSlot::BoardEdge);
+    let canvas = crate::styles::board_canvas_colors();
+    if let Some(slot) = drawn_slot(layer) {
+        let [r, g, b, a] = ResolvedTheme::from_canvas_colors(canvas).color(slot);
         return Color { r, g, b, a };
     }
-    const CYCLE: [[u8; 3]; 6] = [
-        [0xC8, 0xA0, 0x2C],
-        [0x3C, 0xA8, 0x6A],
-        [0xA0, 0x58, 0xC8],
-        [0xC8, 0x6A, 0x2C],
-        [0x2C, 0xA8, 0xB8],
-        [0xB8, 0x4C, 0x8C],
-    ];
-    let [r, g, b] = match layer {
-        PcbLayer::Copper(CopperLayer::Top) => [0xD0, 0x40, 0x40],
-        PcbLayer::Copper(CopperLayer::Bottom) => [0x38, 0x6C, 0xD0],
-        PcbLayer::Copper(CopperLayer::Inner(n)) => CYCLE[usize::from(n.index()) % CYCLE.len()],
-        PcbLayer::Mechanical(n) => CYCLE[usize::from(n.index()) % CYCLE.len()],
-        PcbLayer::Technical(t) => technical_colour(t),
+    let colors = canvas.board_layer_colors();
+    let cycle = |n: u8| colors.layer_cycle[usize::from(n) % colors.layer_cycle.len()];
+    let c = match layer {
+        PcbLayer::Copper(CopperLayer::Top) => colors.top_copper,
+        PcbLayer::Copper(CopperLayer::Bottom) => colors.bottom_copper,
+        PcbLayer::Copper(CopperLayer::Inner(n)) => cycle(n.index()),
+        PcbLayer::Mechanical(n) => cycle(n.index()),
+        PcbLayer::Technical(t) => technical_colour(&colors, t),
     };
-    Color::from_rgb8(r, g, b)
+    Color::from_rgba8(c.r, c.g, c.b, f32::from(c.a) / 255.0)
 }
 
-fn technical_colour(layer: TechnicalLayer) -> [u8; 3] {
+/// The canvas slot `layer`'s geometry is drawn in, for the layers whose
+/// swatch is that slot.
+fn drawn_slot(layer: PcbLayer) -> Option<ColorSlot> {
+    match layer {
+        _ if layer == BOARD_OUTLINE => Some(ColorSlot::BoardEdge),
+        PcbLayer::Technical(TechnicalLayer::KeepoutTop | TechnicalLayer::KeepoutBottom) => {
+            Some(ColorSlot::Keepout)
+        }
+        _ => None,
+    }
+}
+
+fn technical_colour(colors: &BoardLayerColors, layer: TechnicalLayer) -> ThemeColor {
     use TechnicalLayer as T;
     match layer {
-        T::Margin => [0xE0, 0xD0, 0x40],
-        T::SilkscreenTop | T::SilkscreenBottom => [0xE8, 0xE8, 0xE8],
-        T::SolderMaskTop | T::SolderMaskBottom => [0x40, 0x9C, 0x58],
-        T::PasteTop | T::PasteBottom => [0xA8, 0xA8, 0xB8],
-        T::KeepoutTop | T::KeepoutBottom => [0xE0, 0x50, 0x90],
-        T::Dimensions | T::Notes | T::DrillDrawing | T::Eco1 | T::Eco2 => [0x88, 0x88, 0xA0],
-        _ => [0x70, 0x90, 0xB0],
+        T::Margin => colors.margin,
+        T::SilkscreenTop | T::SilkscreenBottom => colors.silkscreen,
+        T::SolderMaskTop | T::SolderMaskBottom => colors.solder_mask,
+        T::PasteTop | T::PasteBottom => colors.paste,
+        T::Dimensions | T::Notes | T::DrillDrawing | T::Eco1 | T::Eco2 => colors.drawing,
+        _ => colors.other,
     }
 }
 
@@ -210,5 +213,71 @@ mod tests {
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         let swatch = layer_colour(BOARD_OUTLINE, &tokens);
         assert_eq!([swatch.r, swatch.g, swatch.b, swatch.a], edge);
+    }
+
+    fn rgba(c: Color) -> [u8; 4] {
+        c.into_rgba8()
+    }
+
+    fn palette_rgba(c: ThemeColor) -> [u8; 4] {
+        [c.r, c.g, c.b, c.a]
+    }
+
+    /// Every swatch is a board-palette colour: keep-out is the drawn
+    /// keepout slot, copper and the other families their palette entry,
+    /// and the light and dark chrome list the same colours.
+    #[test]
+    fn every_swatch_is_its_board_palette_colour() {
+        use signex_types::theme::{ThemeId, theme_tokens};
+        let canvas = crate::styles::board_canvas_colors();
+        let theme = ResolvedTheme::from_canvas_colors(canvas);
+        let colors = canvas.board_layer_colors();
+        let light = theme_tokens(ThemeId::GraphiteLight);
+        let dark = theme_tokens(ThemeId::GraphiteDark);
+        let keepout = theme.color(ColorSlot::Keepout);
+        for t in [TechnicalLayer::KeepoutTop, TechnicalLayer::KeepoutBottom] {
+            let s = layer_colour(PcbLayer::Technical(t), &light);
+            assert_eq!([s.r, s.g, s.b, s.a], keepout, "{t:?}");
+        }
+        let top = layer_colour(PcbLayer::Copper(CopperLayer::Top), &light);
+        assert_eq!(rgba(top), palette_rgba(colors.top_copper));
+        let bottom = layer_colour(PcbLayer::Copper(CopperLayer::Bottom), &light);
+        assert_eq!(rgba(bottom), palette_rgba(colors.bottom_copper));
+        let silk = layer_colour(PcbLayer::Technical(TechnicalLayer::SilkscreenTop), &light);
+        assert_eq!(rgba(silk), palette_rgba(colors.silkscreen));
+
+        let mut palette: Vec<[u8; 4]> = colors.layer_cycle.map(palette_rgba).to_vec();
+        palette.extend(
+            [
+                colors.top_copper,
+                colors.bottom_copper,
+                colors.margin,
+                colors.silkscreen,
+                colors.solder_mask,
+                colors.paste,
+                colors.drawing,
+                colors.other,
+                canvas.board_edge_color(),
+                canvas.keepout_color(),
+            ]
+            .map(palette_rgba),
+        );
+        for layer in PcbLayer::all() {
+            let swatch = layer_colour(layer, &light);
+            assert!(palette.contains(&rgba(swatch)), "{layer:?}: {swatch:?}");
+            assert_eq!(swatch, layer_colour(layer, &dark), "{layer:?}");
+        }
+    }
+
+    /// The board palette lives on the Graphite Dark canvas, the one both
+    /// themes draw boards with.
+    #[test]
+    fn the_board_layer_colours_are_set_on_the_dark_canvas() {
+        use signex_types::theme::{ThemeId, canvas_colors};
+        assert!(canvas_colors(ThemeId::GraphiteDark).board_layers.is_some());
+        assert_eq!(
+            crate::styles::board_canvas_colors().board_layer_colors(),
+            canvas_colors(ThemeId::GraphiteDark).board_layer_colors()
+        );
     }
 }

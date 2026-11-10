@@ -211,6 +211,19 @@ fn the_stock_librarys_named_layer_tokens_map_to_board_layers() {
 }
 
 #[test]
+fn the_named_overlay_tokens_map_to_the_silkscreen_layers() {
+    use signex_types::pcb_layer::{PcbLayer, TechnicalLayer as T};
+    assert_eq!(
+        pcb_layers("Top Overlay").unwrap(),
+        [PcbLayer::Technical(T::SilkscreenTop)]
+    );
+    assert_eq!(
+        pcb_layers("Bottom Overlay").unwrap(),
+        [PcbLayer::Technical(T::SilkscreenBottom)]
+    );
+}
+
+#[test]
 fn an_unknown_layer_token_is_refused_never_guessed() {
     for token in [
         "F.Copper",

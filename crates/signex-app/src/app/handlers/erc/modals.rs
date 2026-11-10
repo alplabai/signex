@@ -115,6 +115,12 @@ impl Signex {
             return Task::none();
         }
         let title = tab.title.clone();
+        // Sketch mode is drawn in the main window only, so the board leaves
+        // it, its changes applied, or stays docked (#2234).
+        if !self.leave_board_sketch_of(&path) {
+            self.ui_state.tab_dragging = None;
+            return Task::none();
+        }
 
         // Make the tab active so the duplicated view in the new window
         // lands on that tab's content. Main window's active_tab is

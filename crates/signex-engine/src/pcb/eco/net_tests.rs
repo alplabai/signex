@@ -7,14 +7,14 @@ use super::fixture::*;
 use super::*;
 use crate::pcb::BoardEngine;
 
-fn parts() -> Vec<EcoPart> {
+pub(super) fn parts() -> Vec<EcoPart> {
     vec![
         part("R1", &[0x101], "10k", Ok(r0603())),
         part("R2", &[0x102], "4k7", Ok(r0603())),
     ]
 }
 
-fn wired() -> signex_types::net::Netlist {
+pub(super) fn wired() -> signex_types::net::Netlist {
     netlist(&[
         ("VCC", &[(0x101, "R1", "1")]),
         ("SIG", &[(0x101, "R1", "2"), (0x102, "R2", "1")]),
@@ -22,14 +22,14 @@ fn wired() -> signex_types::net::Netlist {
     ])
 }
 
-fn placed() -> PcbBoard {
+pub(super) fn placed() -> PcbBoard {
     board(vec![
         board_fp(0xa1, "R1", "10k", &[0x101], &r0603(), (10.0, 10.0)),
         board_fp(0xa2, "R2", "4k7", &[0x102], &r0603(), (20.0, 10.0)),
     ])
 }
 
-fn execute(design: &mut Design, list: &EcoChangeList) {
+pub(super) fn execute(design: &mut Design, list: &EcoChangeList) {
     let mut engine = BoardEngine::new(design.board.clone(), design.revision);
     let commands = lower(list, engine.board());
     engine
@@ -39,7 +39,7 @@ fn execute(design: &mut Design, list: &EcoChangeList) {
     design.board = engine.into_board();
 }
 
-fn synced() -> Design {
+pub(super) fn synced() -> Design {
     let mut design = Design::new(placed(), parts(), wired());
     let list = design.diff();
     execute(&mut design, &list);
@@ -47,7 +47,7 @@ fn synced() -> Design {
     design
 }
 
-fn net_of<'a>(board: &'a PcbBoard, reference: &str, pad: &str) -> Option<&'a str> {
+pub(super) fn net_of<'a>(board: &'a PcbBoard, reference: &str, pad: &str) -> Option<&'a str> {
     board
         .footprints
         .iter()
@@ -267,7 +267,7 @@ Notes
 // ---- Review of #2265: no pad may be left naming a net the table lacks ----
 
 /// Every pad's net is in the board's net table under the same name.
-fn assert_consistent(board: &PcbBoard) {
+pub(super) fn assert_consistent(board: &PcbBoard) {
     for fp in &board.footprints {
         for pad in &fp.pads {
             if let Some(net) = &pad.net {
@@ -286,11 +286,11 @@ fn assert_consistent(board: &PcbBoard) {
     }
 }
 
-fn number_of(board: &PcbBoard, name: &str) -> u32 {
+pub(super) fn number_of(board: &PcbBoard, name: &str) -> u32 {
     board.nets.iter().find(|n| n.name == name).unwrap().number
 }
 
-fn pad_key(board: &PcbBoard, reference: &str, number: &str) -> EcoKey {
+pub(super) fn pad_key(board: &PcbBoard, reference: &str, number: &str) -> EcoKey {
     let fp = board
         .footprints
         .iter()

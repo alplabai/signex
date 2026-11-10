@@ -56,6 +56,7 @@ impl Signex {
             .get(path)
             .copied()
             .unwrap_or(0);
+        let view = self.pcb_layer_view(path);
         let Some(board) = self.document_state.pcb_board(path) else {
             return;
         };
@@ -65,11 +66,13 @@ impl Signex {
             Some(id) => interaction.pcb_selections.entry(id).or_default(),
         };
         state.sync(Some(path), revision);
+        // Items on a layer this board's view hides are left out (#2223).
+        state.set_view(&view);
         state.build_index(board);
         let changed = if items.is_empty() {
             state.clear_selection()
         } else {
-            state.select_items(items)
+            state.select_items(board, items).changed
         };
         for line in state.take_report() {
             crate::diagnostics::log_warning(line);

@@ -264,6 +264,7 @@ mod tests {
             ("open_document", "does not edit a document"),
             ("apply_edits", "its own edits"),
             ("assign_net_class", "net classes"),
+            ("update_pcb_from_schematic", "edits the project's board"),
             ("toggle_properties_panel", "not runnable headless"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));

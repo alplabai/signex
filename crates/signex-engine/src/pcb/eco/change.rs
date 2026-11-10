@@ -177,6 +177,14 @@ pub enum EcoNote {
     /// A part whose sheet or first unit could not be read back: its footprint
     /// is left as it is.
     PartNotRead { designator: String },
+    /// A placed part whose footprint could not be resolved (a library not
+    /// open, a missing row or footprint): its pin map is unknown, so its
+    /// pads are left out of net sync.
+    FootprintUnresolved {
+        footprint: Uuid,
+        reference: String,
+        error: FootprintResolveError,
+    },
     /// A footprint with no link and no part of its designator; it is kept.
     KeptUnlinked { footprint: Uuid, reference: String },
     /// Net sync left a pad or terminal as it was (from `assign_pad_nets`).
@@ -273,8 +281,8 @@ impl EcoChangeList {
         changed && row.group < EcoGroup::Nets
     }
 
-    /// Whether `row` takes effect: ticked, and every row it needs takes
-    /// effect in turn. Needs may form a cycle (a rename and the pad rows
+    /// Whether `row` takes effect: ticked, not blocked (`on` is public), and
+    /// every row it needs takes effect in turn. Needs may form a cycle (a rename and the pad rows
     /// that follow it need each other): a row met again on the way counts
     /// as taking effect if it is ticked.
     pub fn applies(&self, row: &EcoRow) -> bool {
@@ -283,7 +291,7 @@ impl EcoChangeList {
     }
 
     fn applies_within(&self, row: &EcoRow, seen: &mut BTreeSet<EcoKey>) -> bool {
-        if !row.on {
+        if !row.on || row.blocked.is_some() {
             return false;
         }
         if !seen.insert(row.key.clone()) {

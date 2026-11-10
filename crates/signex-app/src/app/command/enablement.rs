@@ -42,6 +42,10 @@ pub(crate) struct CommandContext {
     /// That document is a `.snxsym` or `.snxfpt` editor tab. Both fields are
     /// false in a Component Preview window, which has no file of its own.
     pub document_is_editor: bool,
+    /// The main window's active tab is a board with unsaved changes, which
+    /// Save writes (a new board is written only on Save). An undocked board
+    /// window leaves it false.
+    pub document_is_dirty_board: bool,
     /// ERC and annotation have sheets to work on: a project is open, or
     /// some schematic is. They assemble the project's sheets, not only the
     /// active tab's.
@@ -165,6 +169,7 @@ pub(crate) fn is_planned_command(command: &AppCommandId) -> bool {
 struct WindowDocumentKind {
     is_schematic: bool,
     is_editor: bool,
+    is_dirty_board: bool,
     /// The window holds a document with a file of its own, so Save has
     /// something to run against: false in a Component Preview and in a
     /// window whose tab is gone, which refuse Save whatever the project holds.
@@ -202,6 +207,11 @@ impl Signex {
             WindowDocumentKind {
                 is_schematic: main_has_schematic,
                 is_editor: has_symbol_editor || has_footprint_editor,
+                is_dirty_board: matches!(active_kind, Some(TabKind::Pcb))
+                    && document
+                        .tabs
+                        .get(document.active_tab)
+                        .is_some_and(|t| document.is_document_dirty(&t.path)),
                 has_file: true,
             },
         );
@@ -220,6 +230,7 @@ impl Signex {
             undocked_has_canvas: self.undocked_tab_has_canvas(window),
             document_is_schematic: own.is_schematic,
             document_is_editor: own.is_editor,
+            document_is_dirty_board: own.is_dirty_board,
             has_sheets: document.active_project.is_some() || !document.engines.is_empty(),
             has_symbol_editor,
             has_footprint_editor,
@@ -276,6 +287,7 @@ impl Signex {
                 tab.kind,
                 TabKind::SymbolEditor(_) | TabKind::FootprintEditor(_)
             ),
+            is_dirty_board: false,
             has_file: !tab.kind.is_component_editor(),
         }
     }
@@ -372,6 +384,13 @@ mod tests {
         app.document_state.active_tab = app.document_state.tabs.len() - 1;
     }
 
+    fn with_board() -> Signex {
+        let (mut app, _task) = Signex::new();
+        let path = PathBuf::from("enablement.snxpcb");
+        push_tab(&mut app, &path, TabKind::Pcb);
+        app
+    }
+
     fn with_schematic() -> Signex {
         let (mut app, _task) = Signex::new();
         let path = PathBuf::from("enablement.snxsch");
@@ -416,6 +435,18 @@ mod tests {
         assert!(enabled(&with_symbol_editor().0, "save_document"));
         assert!(enabled(&with_footprint_editor().0, "save_document"));
         assert!(enabled(&with_footprint_editor().0, "save_document_as"));
+        assert!(
+            !enabled(&with_board(), "save_document"),
+            "a clean board has nothing to save"
+        );
+        let mut board = with_board();
+        let path = board.document_state.tabs[0].path.clone();
+        board.document_state.mark_document_dirty(&path);
+        assert!(
+            enabled(&board, "save_document"),
+            "a board with changes saves"
+        );
+        assert!(!enabled(&board, "save_document_as"), "PCB has no Save As");
     }
 
     #[test]

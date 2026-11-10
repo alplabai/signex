@@ -44,22 +44,31 @@ impl Gesture {
                 None
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                // A release lost outside the window leaves a stale press.
+                // A release lost outside the window leaves a stale press;
+                // a drag it still carries ends with nothing moved.
+                let discarded = self.carrying && self.dragging && canvas.carry.get();
                 self.drop_press(canvas);
-                let pos = cursor.position_in(bounds)?;
+                let message = if discarded {
+                    Message::PcbCanvas(PcbCanvasMsg::FootprintDragCancelled)
+                } else {
+                    // The canvas captures the press, so the app-wide
+                    // listener never sees it: close an open context menu
+                    // here, whether or not the press ends in a release.
+                    Message::ContextMenu(ContextMenuMsg::Close)
+                };
+                let Some(pos) = cursor.position_in(bounds) else {
+                    return discarded.then(|| canvas::Action::publish(message));
+                };
                 self.press = Some(pos);
                 let at = canvas.screen_to_world(pos, bounds);
                 self.carrying =
                     self.modifiers.is_empty() && canvas.grabs(at, hover_reach_mm(canvas.scale()));
-                // The canvas captures the press, so the app-wide listener
-                // never sees it: close an open context menu here, whether
-                // or not the press later ends in a release.
-                Some(
-                    canvas::Action::publish(Message::ContextMenu(ContextMenuMsg::Close))
-                        .and_capture(),
-                )
+                Some(canvas::Action::publish(message).and_capture())
             }
-            Event::Mouse(mouse::Event::CursorLeft) => {
+            // The pointer or the focus left mid-gesture: its release may
+            // never arrive here.
+            Event::Mouse(mouse::Event::CursorLeft)
+            | Event::Window(iced::window::Event::Unfocused) => {
                 self.press?;
                 let carried = self.carrying && self.dragging;
                 self.drop_press(canvas);

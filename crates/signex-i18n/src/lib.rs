@@ -51,6 +51,8 @@ define_ids! {
     BOARD_SKETCH_ENTERED = "board-sketch-entered";
     BOARD_SKETCH_REFUSED = "board-sketch-refused";
     BOARD_SKETCH_DROPPED = "board-sketch-dropped";
+    BOARD_SKETCH_HELD = "board-sketch-held";
+    BOARD_SKETCH_UNDOCKED = "board-sketch-undocked";
     BOARD_SKETCH_SECTION = "board-sketch-section";
     BOARD_SKETCH_OUTLINE = "board-sketch-outline";
     BOARD_SKETCH_HOLE = "board-sketch-hole";
@@ -77,6 +79,7 @@ define_ids! {
     DRC_SUMMARY = "drc-summary";
     DRC_SKIPPED = "drc-skipped";
     DRC_MORE = "drc-more";
+    DRC_PICK_HIDDEN = "drc-pick-hidden";
     DRC_KIND_CLEARANCE = "drc-kind-clearance";
     DRC_KIND_SHORT = "drc-kind-short";
     DRC_KIND_UNCONNECTED = "drc-kind-unconnected";
@@ -86,9 +89,6 @@ define_ids! {
     DRC_DETAIL_UNCONNECTED = "drc-detail-unconnected";
     DRC_DETAIL_KEEPOUT = "drc-detail-keepout";
     DRC_LOCATION = "drc-location";
-    DRC_LAYER_TOP = "drc-layer-top";
-    DRC_LAYER_BOTTOM = "drc-layer-bottom";
-    DRC_LAYER_INNER = "drc-layer-inner";
     DIALOG_NEW_PROJECT_TITLE = "dialog-new-project-title";
     DIALOG_NEW_PROJECT_NAME_LABEL = "dialog-new-project-name-label";
     DIALOG_NEW_PROJECT_LOCATION_LABEL = "dialog-new-project-location-label";
@@ -638,6 +638,7 @@ define_ids! {
     UPDATE_PCB_NOTE_PAD_LOSES_LOCK = "update-pcb-note-pad-loses-lock";
     UPDATE_PCB_NOTE_PAD_LOSES_NET = "update-pcb-note-pad-loses-net";
     UPDATE_PCB_NOTE_PART_NOT_READ = "update-pcb-note-part-not-read";
+    UPDATE_PCB_NOTE_FOOTPRINT_UNRESOLVED = "update-pcb-note-footprint-unresolved";
     UPDATE_PCB_NOTE_KEPT_UNLINKED = "update-pcb-note-kept-unlinked";
     UPDATE_PCB_NOTE_NET = "update-pcb-note-net";
     UPDATE_PCB_VALID = "update-pcb-valid";
@@ -648,11 +649,13 @@ define_ids! {
     UPDATE_PCB_EXECUTE = "update-pcb-execute";
     UPDATE_PCB_DONE = "update-pcb-done";
     UPDATE_PCB_REFUSED = "update-pcb-refused";
+    UPDATE_PCB_LIBRARY_NOT_OPENED = "update-pcb-library-not-opened";
     UPDATE_PCB_REPORT_SAVED = "update-pcb-report-saved";
     UPDATE_PCB_REPORT_FAILED = "update-pcb-report-failed";
     NEW_PCB_TITLE = "new-pcb-title";
     NEW_PCB_HAS_BOARD = "new-pcb-has-board";
     NEW_PCB_EXISTS = "new-pcb-exists";
+    NEW_PCB_CHECK_FAILED = "new-pcb-check-failed";
     NEW_PCB_NO_PROJECT = "new-pcb-no-project";
     NEW_PCB_CREATED = "new-pcb-created";
 }

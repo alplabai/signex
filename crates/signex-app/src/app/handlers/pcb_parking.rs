@@ -15,7 +15,8 @@ impl Signex {
             return;
         };
         let path = tab.path.clone();
-        // Its sketch mode ends with the tab (#2234).
+        // Its sketch mode ends with the tab (#2234). A close the user asked
+        // for applied the sketch already (`close_tab`); a discard drops it.
         self.end_board_sketch_of(&path);
         let keep = park_dirty && self.document_state.is_document_dirty(&path);
         if keep

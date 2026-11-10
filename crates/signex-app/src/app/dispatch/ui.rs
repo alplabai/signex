@@ -438,6 +438,18 @@ impl Signex {
         })
     }
 
+    /// A click on the status bar of `window`. The layer pill steps the
+    /// board that window shows, the one it names (#2272).
+    pub fn status_bar_message(window: iced::window::Id, request: StatusBarRequest) -> Message {
+        match request {
+            StatusBarRequest::ActiveLayerStepRequested => Message::Pcb(PcbMsg::ViewInWindow {
+                window,
+                event: PcbViewMsg::ActiveLayerStepped { forward: true },
+            }),
+            request => Message::Ui(UiMsg::StatusBar(request)),
+        }
+    }
+
     /// Run `handler` with `window_id`'s canvas and document swapped into
     /// the main slots, as [`Self::handle_canvas_event_in_window`] describes.
     ///

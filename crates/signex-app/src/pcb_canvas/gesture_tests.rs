@@ -285,6 +285,62 @@ fn a_footprint_drag_that_leaves_the_canvas_is_cancelled() {
 }
 
 #[test]
+fn a_footprint_drag_whose_window_loses_focus_is_cancelled() {
+    let mut rig = rig();
+    grabbing(&mut rig);
+    rig.press(100.0, 80.0);
+    rig.move_to(160.0, 140.0);
+    let unfocused = Event::Window(iced::window::Event::Unfocused);
+    let msg = rig.send(unfocused, at(160.0, 140.0));
+    assert_eq!(msg, Some(PcbCanvasMsg::FootprintDragCancelled));
+    assert!(!rig.canvas.is_carrying());
+    assert_eq!(rig.release(160.0, 140.0), None, "the release drops nothing");
+}
+
+/// Press, drag, and no release: the next press finds the drag still live.
+fn a_drag_with_a_lost_release(rig: &mut Rig) {
+    grabbing(rig);
+    rig.press(100.0, 80.0);
+    rig.move_to(160.0, 140.0);
+    assert!(rig.canvas.is_carrying());
+}
+
+#[test]
+fn a_press_that_discards_a_live_drag_cancels_it() {
+    let mut inside = rig();
+    a_drag_with_a_lost_release(&mut inside);
+    let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+    let msg = inside.send(press.clone(), at(300.0, 200.0));
+    assert_eq!(msg, Some(PcbCanvasMsg::FootprintDragCancelled));
+    assert!(!inside.canvas.is_carrying());
+
+    // Outside the canvas too: the press is not taken, the drag still ends.
+    let mut outside = rig();
+    a_drag_with_a_lost_release(&mut outside);
+    let away = mouse::Cursor::Available(iced::Point::new(900.0, 900.0));
+    assert_eq!(
+        outside.send(press, away),
+        Some(PcbCanvasMsg::FootprintDragCancelled)
+    );
+}
+
+#[test]
+fn a_press_after_the_app_ended_the_drag_only_closes_the_menu() {
+    let mut rig = rig();
+    a_drag_with_a_lost_release(&mut rig);
+    // Esc or a focus loss in the app already ended it.
+    rig.canvas.cancel_marquee();
+    let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+    let action =
+        canvas::Program::update(&rig.canvas, &mut rig.state, &press, BOUNDS, at(10.0, 10.0))
+            .expect("a press inside the canvas is handled");
+    assert!(matches!(
+        action.into_inner().0,
+        Some(Message::ContextMenu(ContextMenuMsg::Close))
+    ));
+}
+
+#[test]
 fn a_click_on_a_grabbed_footprint_or_a_modified_press_still_selects() {
     let mut rig = rig();
     grabbing(&mut rig);

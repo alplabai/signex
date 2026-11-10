@@ -172,6 +172,14 @@ pub(super) fn note(i18n: &I18n, note: &EcoNote) -> Localized {
             ids::UPDATE_PCB_NOTE_PART_NOT_READ,
             "designator" => designator.clone()
         ),
+        EcoNote::FootprintUnresolved {
+            reference, error, ..
+        } => t!(
+            i18n,
+            ids::UPDATE_PCB_NOTE_FOOTPRINT_UNRESOLVED,
+            "designator" => reference.clone(),
+            "why" => error.to_string()
+        ),
         EcoNote::KeptUnlinked { reference, .. } => t!(
             i18n,
             ids::UPDATE_PCB_NOTE_KEPT_UNLINKED,
