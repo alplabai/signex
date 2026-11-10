@@ -6,7 +6,7 @@ use signex_i18n::LanguagePref;
 
 use super::*;
 use crate::app::UiMsg;
-use crate::menu_bar::native::{build, build_for};
+use crate::menu_bar::native::{build, probe::root_titles};
 
 const EN_US_FILE: &str = "File";
 
@@ -22,7 +22,7 @@ fn in_window_title(app: &Signex) -> String {
 fn native_title(app: &Signex) -> String {
     let model = menu_bar_model(&menu_context(app));
     // Menu 0 is the app menu; File follows it.
-    build(&model, false).spec.menus[1].title.clone()
+    root_titles(&build(&model, false))[1].clone()
 }
 
 #[test]
@@ -54,35 +54,16 @@ fn switching_to_the_language_in_force_keeps_the_same_instance() {
     assert!(std::sync::Arc::ptr_eq(&before, &app.ui_state.i18n));
 }
 
+/// The path the macOS bar takes: Model -> `Signex::native_menu`, which the
+/// iced runtime calls after every update.
 #[test]
-fn a_language_change_makes_the_native_menu_rebuild() {
+fn a_switched_language_reaches_the_native_menu_through_the_runtime_path() {
     let (mut app, _task) = Signex::new();
     switch(&mut app, "en-US");
-    let before = app.native_menu_inputs();
-    assert_eq!(
-        before,
-        app.native_menu_inputs(),
-        "the same locale is the same input"
-    );
+    assert_eq!(root_titles(&app.native_menu())[1], EN_US_FILE);
 
     switch(&mut app, "en-XA");
-    assert_ne!(before, app.native_menu_inputs());
-}
-
-/// The path the macOS sync takes: Model -> `native_menu_inputs` -> `build_for`.
-#[test]
-fn a_switched_language_reaches_the_native_spec_through_the_sync_path() {
-    let (mut app, _task) = Signex::new();
-    switch(&mut app, "en-US");
-    assert_eq!(
-        build_for(&app.native_menu_inputs()).spec.menus[1].title,
-        EN_US_FILE
-    );
-
-    switch(&mut app, "en-XA");
-    let title = build_for(&app.native_menu_inputs()).spec.menus[1]
-        .title
-        .clone();
+    let title = root_titles(&app.native_menu())[1].clone();
     assert_ne!(title, EN_US_FILE);
     assert_eq!(title, in_window_title(&app));
 }

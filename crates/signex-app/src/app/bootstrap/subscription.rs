@@ -913,7 +913,8 @@ impl Signex {
         Subscription::batch([
             agent_listener,
             window_subscriptions::window_focus(),
-            window_subscriptions::native_menu_activations(),
+            window_subscriptions::native_menu_failures(),
+            window_subscriptions::quit_requests(),
             chord_cancel,
             chord_timeout,
             kbd,

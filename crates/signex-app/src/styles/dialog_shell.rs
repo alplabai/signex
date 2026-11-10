@@ -98,7 +98,10 @@ pub fn dialog_icon_tile<'a, M: 'a>(icon: DialogIcon, tokens: &ThemeTokens) -> El
         svg(GLYPHS[icon.index()].clone())
             .width(Length::Fixed(glyph))
             .height(Length::Fixed(glyph))
-            .style(move |_: &Theme, _| svg::Style { color: Some(ink) }),
+            .style(move |_: &Theme, _| svg::Style {
+                color: Some(ink),
+                ..Default::default()
+            }),
     )
     .width(Length::Fixed(DIALOG_ICON_TILE))
     .height(Length::Fixed(DIALOG_ICON_TILE))

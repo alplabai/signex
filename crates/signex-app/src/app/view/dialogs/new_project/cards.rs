@@ -21,7 +21,10 @@ fn check_mark<'a>(tokens: &ThemeTokens) -> Element<'a, NewProjectMsg> {
     svg(svg::Handle::from_memory(CHECK))
         .width(Length::Fixed(TS.title))
         .height(Length::Fixed(TS.title))
-        .style(move |_: &Theme, _| svg::Style { color: Some(ink) })
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        })
         .boxed()
 }
 

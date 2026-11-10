@@ -160,7 +160,10 @@ impl Signex {
         ))
         .width(13)
         .height(13)
-        .style(move |_: &iced::Theme, _| svg::Style { color: Some(ink4) });
+        .style(move |_: &iced::Theme, _| svg::Style {
+            color: Some(ink4),
+            ..Default::default()
+        });
         let query: &'a str = if self.ui_state.command_palette.window.is_none() {
             &self.ui_state.command_palette.query
         } else {
@@ -278,7 +281,10 @@ fn theme_toggle(
     let glyph = svg(if dark_bar { SUN.clone() } else { MOON.clone() })
         .width(15)
         .height(15)
-        .style(move |_: &iced::Theme, _| svg::Style { color: Some(ink) });
+        .style(move |_: &iced::Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        });
     let btn = button(
         container(glyph)
             .width(Length::Fill)
