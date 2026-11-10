@@ -473,6 +473,43 @@ fn journals_text(dir: &std::path::Path) -> String {
     all
 }
 
+/// The client's name is cut to 1,024 characters in both journals: a token that
+/// straddles the cut must not survive as a prefix. The token is replaced before
+/// the cut (the replace on the encoded line no longer holds the whole token
+/// after it), whatever the padding puts at the boundary.
+#[test]
+fn a_token_straddling_the_length_cut_leaves_no_prefix_in_either_journal() {
+    let mut f = fixture();
+    let token = f.app.agent.token().unwrap().as_str().to_string();
+    let doc = f.doc("b.snxsch");
+
+    for pad in 990..1_030 {
+        let client = format!("{}{token}", "z".repeat(pad));
+        // An access line (the rights of this client) and an edit line.
+        for (id, args) in [
+            ("document_info", json!({"document": doc})),
+            // A new colour each time, so the command runs and is journaled.
+            ("color_net", color(&doc, &format!("#{:02x}6699", pad - 900))),
+        ] {
+            let reply = f.ask_line(
+                json!({
+                    "token": token, "id": id, "args": args,
+                    "client": client, "grants": ["read"],
+                })
+                .to_string(),
+            );
+            assert_ne!(reply["status"], "refused", "{reply}");
+        }
+    }
+
+    let text = f.journal_text();
+    assert!(text.contains("zzzzzzzz"), "the lines were written");
+    assert!(
+        !text.contains(&token[..8]),
+        "a prefix of the token is in a journal"
+    );
+}
+
 /// The token is replaced once, on the encoded line, so no field of either
 /// journal can carry it: not a refused operand echoed in the reason, not the
 /// client's name, not a right.

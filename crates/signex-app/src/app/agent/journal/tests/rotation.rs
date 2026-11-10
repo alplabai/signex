@@ -180,8 +180,8 @@ fn the_smallest_entries_are_longer_than_the_size_floor() {
 }
 
 /// Rotation holds the same lock as an append: with writers racing across the
-/// cap, every line is there at most once and whole, each writer's own lines in
-/// its order, and the last line of each survives.
+/// cap, every line is there at most once and whole, and each writer's surviving
+/// lines are one unbroken run in its order ending at its last line.
 #[test]
 fn appends_racing_a_rotation_lose_no_line() {
     let dir = tempfile::tempdir().unwrap();
@@ -209,6 +209,11 @@ fn appends_racing_a_rotation_lose_no_line() {
     for entry in &report.entries {
         assert!(seen.insert(entry.revision_before), "a line twice");
     }
+    // Rotation drops the oldest lines, so how many of a writer's lines survive
+    // depends on scheduling. What cannot depend on it: the lines that do survive
+    // are one unbroken run (a line lost inside the append would leave a gap),
+    // and the run ends at the writer's last line (its lines are written in
+    // order, so if the last one were rotated out, all its older ones were).
     for writer in 1..=4_u64 {
         let mine: Vec<u64> = report
             .entries
@@ -217,9 +222,18 @@ fn appends_racing_a_rotation_lose_no_line() {
             .filter(|r| r / 10_000 == writer)
             .collect();
         assert!(
-            mine.windows(2).all(|w| w[0] < w[1]),
-            "writer {writer} order"
+            mine.windows(2).all(|w| w[1] == w[0] + 1),
+            "writer {writer}: a gap or a reorder in {mine:?}"
         );
-        assert_eq!(mine.last().copied(), Some(writer * 10_000 + per_writer - 1));
+        if let Some(last) = mine.last() {
+            assert_eq!(*last, writer * 10_000 + per_writer - 1, "writer {writer}");
+        }
     }
+    // The newest line in the file is the last one some writer appended.
+    let newest = report
+        .entries
+        .last()
+        .and_then(|e| e.revision_before)
+        .expect("a line");
+    assert_eq!(newest % 10_000, per_writer - 1, "the newest line: {newest}");
 }
