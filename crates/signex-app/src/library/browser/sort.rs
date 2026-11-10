@@ -9,7 +9,7 @@ use std::cmp::Ordering;
 
 use signex_i18n::I18n;
 use signex_library::ParamValue;
-use signex_types::designator::compare_references_with;
+use signex_types::designator::{compare_references, compare_references_with};
 use signex_types::quantity::{Quantity, compare_for_sort};
 
 /// What a cell is, for ordering. The variants rank in this order.
@@ -46,22 +46,39 @@ pub(super) struct CellSortKey<'a> {
     kind: SortKind,
     /// The cell folded for ordering (case-insensitive ties).
     folded: String,
-    /// Orders the text runs in the formatting language's alphabet.
-    i18n: &'a I18n,
+    /// Orders the text runs in the formatting language's alphabet; `None`
+    /// for a synthetic key, which orders by bytes.
+    i18n: Option<&'a I18n>,
+}
+
+fn kind_of_cell(cell: &str) -> SortKind {
+    match cell.trim().parse::<f64>().ok().filter(|n| !n.is_nan()) {
+        Some(n) => SortKind::Number(n),
+        None => SortKind::Text,
+    }
 }
 
 impl<'a> CellSortKey<'a> {
     /// Key for a cell known only by its string (a column that is not a
-    /// parameter, or a price); text orders in `i18n`'s alphabet.
+    /// parameter); text orders in `i18n`'s alphabet.
     pub(super) fn from_cell_in(i18n: &'a I18n, cell: &str) -> Self {
-        let kind = match cell.trim().parse::<f64>().ok().filter(|n| !n.is_nan()) {
-            Some(n) => SortKind::Number(n),
-            None => SortKind::Text,
-        };
         Self {
-            kind,
+            kind: kind_of_cell(cell),
             folded: i18n.fold_for_search(cell),
-            i18n,
+            i18n: Some(i18n),
+        }
+    }
+
+    /// Key for a synthetic cell that is no UI text (the price column's
+    /// `~` unpriced marker and zero-padded amounts): bytes order it, so
+    /// the sentinel stays last in every language.
+    pub(super) fn from_cell(cell: &str) -> CellSortKey<'static> {
+        CellSortKey {
+            kind: kind_of_cell(cell),
+            // Synthetic key, not UI text.
+            // ast-grep-ignore: no-case-in-view
+            folded: cell.to_lowercase(),
+            i18n: None,
         }
     }
 
@@ -78,25 +95,20 @@ impl<'a> CellSortKey<'a> {
         Self {
             kind,
             folded: i18n.fold_for_search(&value.display()),
-            i18n,
+            i18n: Some(i18n),
         }
-    }
-
-    /// [`Self::from_cell_in`] under en-US.
-    #[cfg(test)]
-    pub(super) fn from_cell(cell: &str) -> CellSortKey<'static> {
-        CellSortKey::from_cell_in(I18n::en_us_ref(), cell)
     }
 
     fn compare(&self, other: &Self) -> Ordering {
         match (&self.kind, &other.kind) {
             (SortKind::Number(a), SortKind::Number(b)) => a.total_cmp(b),
             (SortKind::Measured(a), SortKind::Measured(b)) => compare_for_sort(a, b),
-            (SortKind::Text, SortKind::Text) => {
-                compare_references_with(&self.folded, &other.folded, |a, b| {
-                    self.i18n.compare_for_display(a, b)
-                })
-            }
+            (SortKind::Text, SortKind::Text) => match self.i18n {
+                Some(i18n) => compare_references_with(&self.folded, &other.folded, |a, b| {
+                    i18n.compare_for_display(a, b)
+                }),
+                None => compare_references(&self.folded, &other.folded),
+            },
             (a, b) => a.rank().cmp(&b.rank()),
         }
     }

@@ -143,6 +143,27 @@ fn renaming_a_library_refilters_without_a_data_change() {
     assert_eq!(shown(&s).len(), 2);
 }
 
+#[test]
+fn a_turkish_filter_finds_dotted_and_dotless_i_rows_and_a_language_change_refolds() {
+    let tr = signex_i18n::I18n::with_message_locale_for_test("tr");
+    let mut s = LibraryState::default();
+    let rows = vec![row("A", "İSTANBUL", "Mfr"), row("B", "ISPARTA", "Mfr")];
+    s.open_libraries.push(library("lib", vec![("t", rows)]));
+    s.touch_data();
+    for (query, expected) in [("istanbul", 0), ("ısparta", 1)] {
+        s.components_panel.filter = query.into();
+        s.sync_view_caches_in(&tr);
+        assert_eq!(shown(&s), vec![("t".to_owned(), expected)], "{query}");
+    }
+    // The same data under en-US: `İ` is no `i`, so the keys must refold.
+    s.components_panel.filter = "istanbul".into();
+    s.sync_view_caches();
+    assert!(shown(&s).is_empty());
+    s.components_panel.filter = "isparta".into();
+    s.sync_view_caches();
+    assert_eq!(shown(&s), vec![("t".to_owned(), 1)]);
+}
+
 /// #1895: an expanded library row lists every table, empty ones too, by
 /// name with each table's components under it.
 #[test]

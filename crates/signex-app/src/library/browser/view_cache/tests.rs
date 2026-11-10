@@ -166,6 +166,62 @@ fn a_filter_change_rebuilds_the_visible_rows() {
     assert_eq!(visible(&state, &root), [1]);
 }
 
+fn named_rows(state: &mut LibraryState, mpns: &[&str]) {
+    let table = state.open_libraries[0]
+        .tables
+        .get_mut(TABLE)
+        .expect("table");
+    *table = mpns
+        .iter()
+        .map(|mpn| {
+            let mut r = row("PN");
+            r.primary_mpn = ManufacturerPart::draft("Acme", *mpn);
+            r
+        })
+        .collect();
+    state.touch_data();
+}
+
+#[test]
+fn a_language_change_rebuilds_with_the_new_fold_and_alphabet() {
+    let (mut state, root) = fixture();
+    named_rows(&mut state, &["İSTANBUL", "ISPARTA", "ÇAY", "CAM", "DAL"]);
+    let tr = signex_i18n::I18n::with_message_locale_for_test("tr");
+    browser_mut(&mut state, &root).search = "istanbul".into();
+    state.sync_view_caches_in(&tr);
+    assert_eq!(visible(&state, &root), [0], "tr: `i` finds `İ`");
+
+    let before = builds();
+    state.sync_view_caches_in(&tr);
+    assert_eq!(builds(), before, "same language reuses the cache");
+    state.sync_view_caches();
+    assert_eq!(builds(), before + 1, "a language change rebuilds");
+    assert!(visible(&state, &root).is_empty(), "en-US: `İ` is no `i`");
+
+    browser_mut(&mut state, &root).search = "ıspa".into();
+    state.sync_view_caches_in(&tr);
+    assert_eq!(visible(&state, &root), [1], "tr: `ı` finds `I`");
+}
+
+#[test]
+fn the_text_sort_follows_the_format_alphabet() {
+    let (mut state, root) = fixture();
+    named_rows(&mut state, &["ÇAY", "CAM", "DAL"]);
+    browser_mut(&mut state, &root).sort_by = Some(BrowserSort {
+        key: "mpn".into(),
+        descending: false,
+    });
+    let tr = signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale("tr-TR".into()));
+    state.sync_view_caches_in(&tr);
+    assert_eq!(visible(&state, &root), [1, 0, 2], "CAM, ÇAY, DAL");
+    // `ı` sorts before `i` under tr-TR and after it under en-US.
+    named_rows(&mut state, &["ix", "ıx"]);
+    state.sync_view_caches_in(&tr);
+    assert_eq!(visible(&state, &root), [1, 0], "tr-TR");
+    state.sync_view_caches();
+    assert_eq!(visible(&state, &root), [0, 1], "en-US");
+}
+
 #[test]
 fn a_sort_change_rebuilds_and_orders_the_rows() {
     let (mut state, root) = fixture();

@@ -360,14 +360,14 @@ pub(super) fn view_sections<'a>(
                 muted,
                 input_bg,
                 "Sketch entities",
-                fp.sketch_entity_count.to_string(),
+                i18n.count(fp.sketch_entity_count as i64),
             );
             col = props_kv_row(
                 col,
                 muted,
                 input_bg,
                 "Constraints",
-                fp.sketch_constraint_count.to_string(),
+                i18n.count(fp.sketch_constraint_count as i64),
             );
             if let Some(s) = fp.last_solve.as_ref() {
                 col = props_kv_row(col, muted, input_bg, "Iterations", s.iterations.to_string());
@@ -390,9 +390,9 @@ pub(super) fn view_sections<'a>(
                     muted,
                     input_bg,
                     "Over-constrained",
-                    s.over_constraint_count.to_string(),
+                    i18n.count(s.over_constraint_count as i64),
                 );
-                col = super::redundant::push_redundant_rows(col, s, muted, input_bg);
+                col = super::redundant::push_redundant_rows(col, s, muted, input_bg, i18n);
             } else {
                 col = col.push(
                     container(text(raw("(no solve yet)")).size(TS.caption).color(muted))

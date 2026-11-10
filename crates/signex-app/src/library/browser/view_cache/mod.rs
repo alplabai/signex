@@ -149,9 +149,7 @@ impl BrowserViewCache {
             sort_by_cell_key(
                 &mut visible,
                 |&i| match column.kind {
-                    ColumnKind::Price => {
-                        CellSortKey::from_cell_in(i18n, &prices.sort_value(&rows[i]))
-                    }
+                    ColumnKind::Price => CellSortKey::from_cell(&prices.sort_value(&rows[i])),
                     _ => column.kind.sort_key_for_in(i18n, &rows[i], &names),
                 },
                 sort.descending,

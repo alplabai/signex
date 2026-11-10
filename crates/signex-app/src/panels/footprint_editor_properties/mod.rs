@@ -215,7 +215,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // pick_list; otherwise → footprint summary. Sketch-mode-only
     // sections (Parameters / DOF / Warnings) follow regardless of
     // selection, so the user can monitor solve state while authoring.
-    col = selection::view_selection(col, fp, mode_label, palette, collapsed_sections);
+    col = selection::view_selection(col, fp, mode_label, palette, collapsed_sections, i18n);
     // A board sketch's own attributes: outline and mounting hole (#2234).
     col = board::view_board_section(col, fp, palette, i18n);
     col = pad_stack_check::view_pad_stack_check(col, fp, palette, collapsed_sections);

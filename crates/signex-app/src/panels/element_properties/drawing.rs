@@ -345,7 +345,12 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     &ctx.collapsed_sections,
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(prop_kv_row("Vertices", &vert_count.to_string(), muted, ink));
+                        c = c.push(prop_kv_row(
+                            "Vertices",
+                            &ctx.i18n.count(vert_count as i64),
+                            muted,
+                            ink,
+                        ));
                         c = c.push(drawing_num_row(
                             "Border",
                             DrawingFieldId::PolyBorder,

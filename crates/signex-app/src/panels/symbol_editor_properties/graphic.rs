@@ -23,6 +23,7 @@ pub(super) fn view_graphic_selection<'a>(
     muted: Color,
     border_c: Color,
     fill_picker: Option<crate::app::GraphicFillPicker>,
+    i18n: &signex_i18n::I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     let g_idx = g.idx;
     // Per-shape numeric fields.
@@ -140,7 +141,7 @@ pub(super) fn view_graphic_selection<'a>(
                         .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(2)),
-                    text(raw(vertex_count.to_string()))
+                    text(raw(i18n.count(*vertex_count as i64)))
                         .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(3)),

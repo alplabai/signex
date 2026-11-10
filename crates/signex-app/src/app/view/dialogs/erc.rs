@@ -190,10 +190,14 @@ impl Signex {
                 };
                 counts[slot] += 1;
             }
-            container(super::graphite::severity_chips(tokens, counts))
-                .padding([SP.l, 14.0])
-                .width(Length::Fill)
-                .boxed()
+            container(super::graphite::severity_chips(
+                &self.ui_state.i18n,
+                tokens,
+                counts,
+            ))
+            .padding([SP.l, 14.0])
+            .width(Length::Fill)
+            .boxed()
         };
 
         // In-window: sized to the window-capped modal. Detached: the OS
