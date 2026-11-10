@@ -10,8 +10,7 @@ use std::collections::BTreeSet;
 pub(crate) struct NetNames {
     /// Net labels, global labels and power ports.
     pub own: BTreeSet<String>,
-    /// Names the net carries only through a hierarchical label (and, seen
-    /// from the parent, the child's local labels on that net).
+    /// Names the net carries only through a hierarchical label.
     pub aliases: BTreeSet<String>,
 }
 
@@ -31,24 +30,25 @@ impl NetNames {
 }
 
 /// Whether the edit that made `absorbed` (the named nets before it) one net
-/// carrying `after_names` (own and alias) needs `allow_merge`. True when
+/// whose own names are `after_own` needs `allow_merge`. True when
 /// * two absorbed nets that both have own names have different own names;
 /// * two absorbed nets with no own name have different aliases;
 /// * an own-named net that carries aliases meets a net with no own name whose
 ///   aliases it does not all carry (`I2C1_SDA` + alias `SDA` with alias `SCL`);
-/// * or the result carries a name that no absorbed net carried, own or alias,
-///   while one of them had own names (a rename, a new hierarchical label
-///   included).
+/// * or the result has an own name that no absorbed net carried, own or
+///   alias, while one of them had own names (a rename).
 ///
 /// Everything else joins freely: an own-named net with no alias meeting an
 /// alias-only one (the parent's `I2C1_SDA` wired to the entry `SDA`), a name
-/// the net already carries, and nets with no own name gaining one. Every
-/// clause is symmetric, so the verdict does not depend on the nets' order.
-pub(crate) fn needs_allow_merge(absorbed: &[&NetNames], after_names: &BTreeSet<String>) -> bool {
+/// the net already carries, a gained alias (a hierarchical label is a port,
+/// not a name: #2199 comment 6759998042), and nets with no own name gaining
+/// one. Every clause is symmetric, so the verdict does not depend on the
+/// nets' order.
+pub(crate) fn needs_allow_merge(absorbed: &[&NetNames], after_own: &BTreeSet<String>) -> bool {
     let named: Vec<&NetNames> = absorbed.iter().copied().filter(|n| n.is_named()).collect();
     let has_own = named.iter().any(|n| !n.own.is_empty());
     let renamed = has_own
-        && after_names
+        && after_own
             .iter()
             .any(|name| !named.iter().any(|n| n.carries(name)));
     renamed
@@ -89,7 +89,7 @@ mod tests {
 
     /// The verdict of joining `a` and `b`, asserted equal in both orders.
     fn join(a: &NetNames, b: &NetNames) -> bool {
-        let names = a.all().union(&b.all()).cloned().collect();
+        let names = a.own.union(&b.own).cloned().collect();
         let forward = needs_allow_merge(&[a, b], &names);
         let backward = needs_allow_merge(&[b, a], &names);
         assert_eq!(forward, backward, "order changed the verdict: {a:?} {b:?}");
@@ -121,10 +121,14 @@ mod tests {
 
     #[test]
     fn a_name_the_net_carries_is_no_rename_and_a_new_one_is() {
+        // The own names after a label `name` is placed on VCC + alias SIG.
         let one = net(&["VCC"], &["SIG"]);
-        let with = |name: &str| BTreeSet::from(["VCC".into(), "SIG".into(), name.to_string()]);
+        let with = |name: &str| BTreeSet::from(["VCC".into(), name.to_string()]);
         assert!(!needs_allow_merge(&[&one], &with("SIG")));
         assert!(needs_allow_merge(&[&one], &with("GND")));
+        // A gained alias (a hierarchical label) leaves the own names alone.
+        let vcc = BTreeSet::from(["VCC".to_string()]);
+        assert!(!needs_allow_merge(&[&net(&["VCC"], &[])], &vcc));
         // A net with no own name may gain one.
         assert!(!needs_allow_merge(
             &[&net(&[], &["SDA"])],

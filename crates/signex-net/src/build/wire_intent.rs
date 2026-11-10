@@ -74,7 +74,7 @@ impl WireIntent {
     /// the rule the project check uses (hierarchical labels are aliases).
     pub fn short(&self) -> bool {
         let [a, b] = &self.end_nets;
-        needs_allow_merge(&[a, b], &a.all().union(&b.all()).cloned().collect())
+        needs_allow_merge(&[a, b], &a.own.union(&b.own).cloned().collect())
     }
 
     /// Every name of the two ends, distinct, in order.

@@ -208,16 +208,10 @@ fn a_pin_reference_resolves_an_off_grid_tip_that_a_coordinate_is_refused_for() {
     assert_eq!(outcome, CommandOutcome::Ran);
 }
 
-const LABELS: [&str; 3] = [
-    "place_net_label",
-    "place_global_label",
-    "place_hierarchical_label",
-];
-
 #[test]
 fn a_label_that_would_rename_the_net_at_its_point_is_refused_unless_allowed() {
     // R1.2 is on the net VCC (a stub with a VCC label).
-    for id in LABELS {
+    for id in ["place_net_label", "place_global_label"] {
         let mut app = app_with(two_named_nets());
         // By pin reference and by coordinate (the stub's interior).
         for at in ["at=R1.2", "at=16.51,10.16"] {
@@ -225,8 +219,7 @@ fn a_label_that_would_rename_the_net_at_its_point_is_refused_unless_allowed() {
                 &mut app,
                 id,
                 &[at, "text=GND"],
-                // Joined by name for a net label, a plain rename for a
-                // hierarchical one: both shorts VCC with GND.
+                // Joined by name to the GND net: a short of VCC with GND.
                 "pass allow_merge=true to merge on purpose",
             );
         }
@@ -235,6 +228,16 @@ fn a_label_that_would_rename_the_net_at_its_point_is_refused_unless_allowed() {
         assert_eq!(outcome, CommandOutcome::Ran, "{id}");
         assert_ne!(sheet_shape(&app), before, "{id}");
     }
+    // A hierarchical label is a port, not a name of the net: on a loose sheet
+    // it renames nothing (#2199 comment 6759998042). Through a wired entry the
+    // project check sees the short (`project_name_tests`).
+    let mut app = app_with(two_named_nets());
+    let outcome = run(
+        &mut app,
+        "place_hierarchical_label",
+        &["at=R1.2", "text=GND"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
 }
 
 #[test]

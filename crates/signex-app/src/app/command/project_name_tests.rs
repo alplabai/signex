@@ -213,31 +213,180 @@ fn on_the_child_a_hierarchical_label_is_an_alias_for_the_short_check() {
     // The child: the hierarchical SDA on one wire, the net label I2C_SDA on
     // another. A wire between them is the same join the parent makes when it
     // wires I2C_SDA to the entry SDA: accepted on both sheets (6759237104).
-    let dir = tempfile::tempdir().unwrap();
+    // Whether I2C_SDA sits behind the port is judged on the design before and
+    // after together, so with the parent's I2C1_SDA already on the entry the
+    // child's join is accepted too, as the parent's is (6759998042).
+    for parent_named in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut top = sensor_parent();
+        if parent_named {
+            top.wires.push(wire((0.0, 0.0), (5.08, 0.0)));
+            top.labels.push(net_label("I2C1_SDA", (5.08, 0.0)));
+        }
+        write(&dir.path().join("top.snxsch"), top);
+        write(
+            &dir.path().join("c.snxsch"),
+            child_with_local("I2C_SDA", false),
+        );
+        let mut app = open_child(&dir);
+        let outcome = run(
+            &mut app,
+            "place_wire",
+            &["start=10.16,0", "end=10.16,20.32"],
+        );
+        let CommandOutcome::Answered(report) = outcome else {
+            panic!("not answered ({parent_named}): {outcome:?}");
+        };
+        assert_eq!(report["merged"], serde_json::json!([]));
+    }
+}
+
+fn net_label(text: &str, at: (f64, f64)) -> Label {
+    Label::new(text, Point::new(at.0, at.1), LabelType::Net)
+}
+
+/// A parent with the sheet symbol SensorA (`c.snxsch`), its entry SDA at 0,0.
+fn sensor_parent() -> SchematicSheet {
     let mut top = SchematicSheet::default();
     top.child_sheets
         .push(sheet_symbol("SensorA", "c.snxsch", &[("SDA", (0.0, 0.0))]));
-    let mut child = child_with(&["SDA"]);
-    child.wires.push(wire((0.0, 20.32), (10.16, 20.32)));
-    child.labels.push(Label::new(
-        "I2C_SDA",
-        Point::new(0.0, 20.32),
-        LabelType::Net,
-    ));
-    write(&dir.path().join("top.snxsch"), top);
-    write(&dir.path().join("c.snxsch"), child);
-    let mut app = open_project(&dir);
+    top
+}
+
+/// The project of `dir` open with `c.snxsch` the edit target.
+fn open_child(dir: &tempfile::TempDir) -> Signex {
+    let mut app = open_project(dir);
     app.open_or_focus_sheet_path(dir.path().join("c.snxsch"));
     app.refresh_panel_ctx();
+    app
+}
+
+/// The child: the hierarchical SDA on a wire at y = 0 and the net label
+/// `local` on a wire at y = 20.32, both from x = 0 to 10.16; `joined` adds the
+/// wire between their right ends.
+fn child_with_local(local: &str, joined: bool) -> SchematicSheet {
+    let mut child = child_with(&["SDA"]);
+    child.wires.push(wire((0.0, 20.32), (10.16, 20.32)));
+    child.labels.push(net_label(local, (0.0, 20.32)));
+    if joined {
+        child.wires.push(wire((10.16, 0.0), (10.16, 20.32)));
+    }
+    child
+}
+
+/// The parent: SensorA's entry stub (0,0)-(5.08,0), and I2C1_SDA on a wire
+/// of its own at y = 20.32: `place_wire 5.08,0 -> 5.08,20.32` joins them.
+fn parent_to_join() -> SchematicSheet {
+    let mut top = sensor_parent();
+    top.wires.push(wire((0.0, 0.0), (5.08, 0.0)));
+    top.wires.push(wire((0.0, 20.32), (5.08, 20.32)));
+    top.labels.push(net_label("I2C1_SDA", (0.0, 20.32)));
+    top
+}
+
+fn answered_ok(outcome: CommandOutcome) {
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+}
+
+#[test]
+fn the_parent_side_join_of_a_name_behind_a_port_is_accepted_as_the_child_side_one_is() {
+    // The child already joined I2C_SDA to its hierarchical SDA; the parent now
+    // wires its I2C1_SDA net to SensorA.SDA (6759998042).
+    let dir = tempfile::tempdir().unwrap();
+    write(&dir.path().join("top.snxsch"), parent_to_join());
+    write(
+        &dir.path().join("c.snxsch"),
+        child_with_local("I2C_SDA", true),
+    );
+    let mut app = open_project(&dir);
+    let ends = ["start=5.08,0", "end=5.08,20.32"];
+    answered_ok(run(&mut app, "place_wire", &ends));
+}
+
+#[test]
+fn a_hierarchical_label_placed_on_the_child_is_no_rename_in_either_order() {
+    // An alias never renames (6759998042). First the parent's wiring of
+    // I2C1_SDA to SensorA.SDA, then the hierarchical SDA on the child's
+    // unnamed net.
+    let dir = tempfile::tempdir().unwrap();
+    let mut top = sensor_parent();
+    top.wires.push(wire((0.0, 0.0), (5.08, 0.0)));
+    top.labels.push(net_label("I2C1_SDA", (5.08, 0.0)));
+    write(&dir.path().join("top.snxsch"), top);
+    let mut bare = SchematicSheet::default();
+    bare.wires.push(wire((0.0, 0.0), (10.16, 0.0)));
+    write(&dir.path().join("c.snxsch"), bare);
+    let mut app = open_child(&dir);
+    let label = ["at=0,0", "text=SDA"];
+    let outcome = run(&mut app, "place_hierarchical_label", &label);
+    assert_eq!(outcome, CommandOutcome::Ran);
+    // First the label, then the parent's wiring.
+    let dir = tempfile::tempdir().unwrap();
+    write(&dir.path().join("top.snxsch"), parent_to_join());
+    write(&dir.path().join("c.snxsch"), child_with(&["SDA"]));
+    let mut app = open_project(&dir);
+    let ends = ["start=5.08,0", "end=5.08,20.32"];
+    answered_ok(run(&mut app, "place_wire", &ends));
+}
+
+#[test]
+fn a_hierarchical_label_whose_entry_the_parent_wired_to_another_rail_is_a_short() {
+    // The child's wire carries the VCC port; the parent wired the entry GND to
+    // its GND rail. A hierarchical GND on the VCC wire joins VCC with GND
+    // through the entry: two own names (6759998042).
+    let dir = tempfile::tempdir().unwrap();
+    let mut top = SchematicSheet::default();
+    top.child_sheets
+        .push(sheet_symbol("U", "c.snxsch", &[("GND", (0.0, 0.0))]));
+    top.wires.push(wire((0.0, 0.0), (5.08, 0.0)));
+    top.labels.push(global("GND", (5.08, 0.0)));
+    let mut inner = child();
+    inner.labels.clear();
+    write(&dir.path().join("top.snxsch"), top);
+    write(&dir.path().join("c.snxsch"), inner);
+    let mut app = open_child(&dir);
+    let label = ["at=0,0", "text=GND"];
+    let reason = refusal(run(&mut app, "place_hierarchical_label", &label));
+    assert!(reason.contains("reach it from other sheets"), "{reason}");
     let outcome = run(
         &mut app,
-        "place_wire",
-        &["start=10.16,0", "end=10.16,20.32"],
+        "place_hierarchical_label",
+        &[label[0], label[1], "allow_merge=true"],
     );
-    let CommandOutcome::Answered(report) = outcome else {
-        panic!("not answered: {outcome:?}");
-    };
-    assert_eq!(report["merged"], serde_json::json!([]));
+    assert_eq!(outcome, CommandOutcome::Ran);
+}
+
+#[test]
+fn a_childs_local_label_behind_its_port_plays_no_part_in_a_parent_join() {
+    // SensorA's SDA is on the parent's net (named I2C1_SDA, or not named);
+    // SensorB labels its SDA net SDA_INT locally. Wiring SensorB.SDA to that
+    // net is a shared bus either way (6759998042).
+    for named in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut top = sensor_parent();
+        top.child_sheets.push(sheet_symbol(
+            "SensorB",
+            "b.snxsch",
+            &[("SDA", (5.08, 20.32))],
+        ));
+        top.wires.push(wire((0.0, 0.0), (5.08, 0.0)));
+        if named {
+            top.labels.push(net_label("I2C1_SDA", (5.08, 0.0)));
+        }
+        let mut b = child_with(&["SDA"]);
+        b.labels.push(net_label("SDA_INT", (10.16, 0.0)));
+        write(&dir.path().join("top.snxsch"), top);
+        write(&dir.path().join("c.snxsch"), child_with(&["SDA"]));
+        write(&dir.path().join("b.snxsch"), b);
+        let mut app = open_project(&dir);
+        // A sheet-entry reference needs the hierarchy read.
+        crate::app::runtime::sheet_tree_tests::settle(&mut app, true);
+        let ends = ["start=SensorB.SDA", "end=5.08,0"];
+        answered_ok(run(&mut app, "place_wire", &ends));
+    }
 }
 
 #[test]

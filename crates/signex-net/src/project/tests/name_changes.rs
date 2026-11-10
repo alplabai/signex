@@ -280,9 +280,10 @@ fn an_own_named_net_with_an_alias_joined_to_another_alias_is_refused_in_either_o
 }
 
 #[test]
-fn a_childs_local_label_behind_its_hierarchical_label_is_an_alias_on_the_parent() {
+fn a_childs_local_label_behind_its_hierarchical_label_plays_no_part_on_the_parent() {
     // SensorA: hierarchical SDA and the local label SDA_INT on one net. The
-    // parent's I2C1_SDA wired to SensorA.SDA joins freely (6759237104).
+    // parent's I2C1_SDA wired to SensorA.SDA joins freely, and SDA_INT stays
+    // inside the child (6759237104, 6759998042).
     let mut child = child_of(&["SDA"]);
     child
         .labels
@@ -296,7 +297,8 @@ fn a_childs_local_label_behind_its_hierarchical_label_is_an_alias_on_the_parent(
     let got = changes(&root, &joined(&root), &children);
     assert_eq!(got.len(), 1);
     assert!(!got[0].needs_allow_merge, "{got:?}");
-    assert_eq!(got[0].aliases, ["SDA", "SDA_INT"]);
+    assert_eq!(got[0].aliases, ["SDA"]);
+    assert_eq!(got[0].names, ["I2C1_SDA", "SDA"]);
 }
 
 #[test]

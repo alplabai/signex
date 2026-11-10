@@ -168,7 +168,7 @@ fn net_changes(before: &SchematicSheet, after: &SchematicSheet) -> Vec<NameChang
             .collect();
         let after_names = net_names_of_root(after, &mut a.parent, result);
         let refs: Vec<&NetNames> = nets.iter().collect();
-        if !needs_allow_merge(&refs, &after_names.all()) {
+        if !needs_allow_merge(&refs, &after_names.own) {
             continue;
         }
         let mut sets: Vec<Vec<String>> = Vec::new();
