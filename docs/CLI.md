@@ -170,9 +170,11 @@ sheet first and judge the result with the netlist derivation
    project rule below (every label text and power-port value of each net, not
    only the best name: `{DATA, P}` and `{DATA, Q}` are two nets that share a
    name); refused unless `allow_merge=true` ([Why `allow_merge`](#why-allow_merge)).
-   On every sheet a hierarchical label is an alias here, not an own name, so on
-   a child a wire from the hierarchical `SDA` net to the net labelled `I2C_SDA`
-   is accepted, as the same join made on the parent is.
+   On every sheet a hierarchical label is an alias here, not an own name: a
+   port, never a rename. So on a child a wire from the hierarchical `SDA` net
+   to the net labelled `I2C_SDA` is accepted, as the same join made on the
+   parent is, and a hierarchical label placed on a named net renames nothing
+   on its sheet (a short through its entry is the project check's).
 5. **Open end**: an end with no pin tip, wire, junction, label, sheet pin or
    bus entry (either end of it) under it; refused unless `allow_open=true`.
 6. The two ends must be on one net afterwards; a run that is not is refused
@@ -187,11 +189,13 @@ project-wide by name, hierarchical labels through the matching sheet pin, each
 placement of a child sheet with its own nets) before and after. A net's own
 names come from net labels, global labels and power ports (a power flag names
 nothing); a name that reaches it only through a child's hierarchical label is
-an alias, and so is a child's local net label on the net of its hierarchical
-label (it never reaches the parent). Global labels and power ports are own
-names on every sheet. A net's effective names are its own names if it has
-any, else its aliases. The edit needs `allow_merge` when a net after it
-absorbed
+an alias. A child's local net labels on the net of its hierarchical label
+never reach the parent and play no part at all; whether a label sits behind
+a port is judged on the design before and after the edit together, so a join
+made from the child gets the verdict the same join made from the parent
+gets. Global labels and power ports are own names on every sheet. A net's
+effective names are its own names if it has any, else its aliases. The edit
+needs `allow_merge` when a net after it absorbed
 - two nets that both have own names and those differ (`I2C1_SDA` and
   `I2C2_SDA`, `VCC` and `GND`);
 - two nets with no own name whose aliases differ (`SensorA.SDA` and
@@ -200,19 +204,23 @@ absorbed
   aliases it does not carry (`I2C1_SDA` with the alias `SDA`, joined to the
   alias-only `SCL`);
 
-or when a net that has own names gained an own name it did not carry, own or
-alias. Each clause compares a pair of nets both ways, so the verdict never
-depends on the order of the nets. Everything else joins freely: the same
-names (`U1/SDA` and `U2/SDA` of two placements of one child join on a shared
-bus), unnamed nets, a name the net already carries (an alias included: `SDA`
-placed on a net carrying `I2C1_SDA` and the alias `SDA`), a net with no own
-name gaining one (naming a parent net `I2C1_SDA` that reaches the entry
-`SDA`), and an own-named parent net with no alias joined to an entry whose
-child labels differ (`I2C1_SDA` to `SensorA.SDA`, even when SensorA labels
-that net locally `SDA_INT`). The rule is one function
-(`signex_net::join_rule`), read by the per-sheet and the project check
-(decisions: [#2199 comment 6750784216](https://github.com/alplabai/signex/issues/2199#issuecomment-6750784216)
-and [6759237104](https://github.com/alplabai/signex/issues/2199#issuecomment-6759237104)). A
+or when a net that has own names gained an own name it carried neither as an
+own name nor as an alias. Gaining an alias (a hierarchical label placed, or
+joined in through an entry) is never a rename: a real short through a new
+port shows as two own-named nets joined through the entry. Each clause
+compares a pair of nets both ways, so the verdict never depends on the order
+of the nets. Everything else joins freely: the same names (`U1/SDA` and
+`U2/SDA` of two placements of one child join on a shared bus, even when one
+sensor sheet labels its net `SDA_INT` locally), unnamed nets, a name the net
+already carries (an alias included: `SDA` placed on a net carrying `I2C1_SDA`
+and the alias `SDA`), a net with no own name gaining one (naming a parent net
+`I2C1_SDA` that reaches the entry `SDA`), and an own-named net with no alias
+joined to an alias-only entry (`I2C1_SDA` to `SensorA.SDA`, `+5V` to
+`Regulator.VIN`; a signal tied to a rail that way is ERC's to report). The
+rule is one function (`signex_net::join_rule`), read by the per-sheet and the
+project check (decisions: [#2199 comment 6750784216](https://github.com/alplabai/signex/issues/2199#issuecomment-6750784216),
+[6759237104](https://github.com/alplabai/signex/issues/2199#issuecomment-6759237104)
+and [6759998042](https://github.com/alplabai/signex/issues/2199#issuecomment-6759998042)). A
 run's answer lists the names the joined net carries only as aliases in
 `aliases`. The extra rule stays per sheet. A net that reaches no sheet pin,
 hierarchical or global label or power port, and a bus run that reaches no
@@ -262,9 +270,11 @@ applied to a copy of the sheet, and the copy is compared with the sheet by the
 netlist's own connectivity and by the bus analysis (`signex_net::placement_intent`).
 
 - **Name change.** Two nets whose effective names differ end up as one, or a
-  net with own names gains a name it did not carry (a label text or power
-  value not already among its names, aliases included), by the rule of "Wire
-  intent" (hierarchical labels are aliases); for bus runs, two runs with
+  net with own names gains an own name it did not carry (a net label, global
+  label or power value not already among its names, aliases included), by
+  the rule of "Wire intent"; a hierarchical label is an alias, a port, and
+  renames nothing (a short through its entry is the project check's); for
+  bus runs, two runs with
   different bus names end up as one, or a named run gains a name: refused ("a
   label at 12.7,25.4 would join the nets {VCC} and {GND}", "a label at
   57.15,38.1 would add D[0..7] to the bus {A[0..15]}"), unless
