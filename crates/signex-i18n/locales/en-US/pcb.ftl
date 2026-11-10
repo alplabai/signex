@@ -15,8 +15,8 @@ pcb-status-layer = Layer:
 
 # Layer names in the Layers panel and the status bar. A mechanical layer the
 # user named shows that name instead.
-pcb-layer-top-copper = Top Copper
-pcb-layer-bottom-copper = Bottom Copper
+pcb-layer-top-copper = Top Layer
+pcb-layer-bottom-copper = Bottom Layer
 # An inner copper layer; $index counts from the top, starting at 1.
 pcb-layer-inner-copper = Inner { $index }
 # A mechanical layer with no name of its own; $index is its number, 1 to 32.
@@ -53,3 +53,30 @@ pcb-layer-eco-2 = ECO 2
 # Tooltip of a layer's eye in the Layers panel.
 pcb-layers-hide = Hide layer
 pcb-layers-show = Show layer
+
+# Properties panel of a board with nothing selected. The title is followed by
+# the board's name.
+pcb-properties-title = Board
+# Section header over the board's rows.
+pcb-properties-section = Properties
+pcb-properties-size = Size
+# Outline extent; $width and $height are millimetre numbers.
+pcb-properties-size-value = { $width } × { $height } mm
+# Shown as the size when the board has no outline yet.
+pcb-properties-no-outline = No outline
+pcb-properties-layers = Layers
+pcb-properties-layers-value = { $count ->
+    [one] 1 copper layer
+   *[other] { $count } copper layers
+}
+pcb-properties-thickness = Thickness
+# $mm is a millimetre number.
+pcb-properties-thickness-value = { $mm } mm
+pcb-properties-nets = Nets
+# Properties panel while board items are selected; no per-item view exists yet.
+# $board is the board document's name.
+pcb-properties-selection = { $count ->
+    [one] 1 item selected on { $board }
+   *[other] { $count } items selected on { $board }
+}
+pcb-properties-selection-hint = Press Esc to clear the selection and see the board's properties.

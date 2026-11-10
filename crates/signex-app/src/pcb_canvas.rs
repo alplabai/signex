@@ -432,6 +432,26 @@ fn renderer_snapshot_bounds(snapshot: &PcbSnapshot) -> Option<Rectangle> {
         include_world_point(&mut bounds, line.p1[0], line.p1[1]);
     }
 
+    // The board itself: its outline, cutouts, keepouts and holes, so Fit
+    // shows the whole board and not only its copper.
+    let features = &snapshot.board_features;
+    for polygon in std::iter::once(&features.outline)
+        .chain(&features.cutouts)
+        .chain(&features.keepouts)
+    {
+        for vertex in polygon {
+            include_world_point(&mut bounds, vertex[0], vertex[1]);
+        }
+    }
+    for hole in &features.holes {
+        include_world_span(
+            &mut bounds,
+            hole.center[0],
+            hole.center[1],
+            (hole.drill_mm * 0.5).max(0.02),
+        );
+    }
+
     for marker in &snapshot.drc_markers {
         include_world_span(
             &mut bounds,
@@ -1110,5 +1130,27 @@ mod tests {
             "gpu_scene must keep the overlay polygon in its own bucket"
         );
         assert_eq!(gpu_scene.overlay_polygons[0].fill_color, overlay_fill_color);
+    }
+
+    /// Round 9 of #2262: Fit covers the board outline, keepouts and holes,
+    /// not only the copper, so a board with a few pads is shown whole.
+    #[test]
+    fn fit_bounds_cover_the_board_outline_keepouts_and_holes() {
+        use signex_renderer::pcb::{BoardFeaturesInput, HoleInput};
+        let snapshot = PcbSnapshot {
+            board_features: BoardFeaturesInput {
+                outline: vec![[0.0, 0.0], [50.0, 0.0], [50.0, 40.0], [0.0, 40.0]],
+                cutouts: vec![],
+                holes: vec![HoleInput {
+                    center: [55.0, 20.0],
+                    drill_mm: 4.0,
+                }],
+                keepouts: vec![vec![[-5.0, 10.0], [5.0, 10.0], [5.0, 45.0]]],
+            },
+            ..PcbSnapshot::default()
+        };
+        let bounds = renderer_snapshot_bounds(&snapshot).expect("bounds");
+        assert_eq!((bounds.x, bounds.y), (-5.0, 0.0));
+        assert_eq!((bounds.width, bounds.height), (62.0, 45.0));
     }
 }

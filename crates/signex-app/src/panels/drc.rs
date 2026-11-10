@@ -95,23 +95,49 @@ fn note<'a>(message: Localized, color: Color) -> Element<'a, PanelMsg> {
     text(message).size(TS.caption).color(color).boxed()
 }
 
-fn header<'a>(ctx: &'a PanelContext, col: Rows<'a>) -> Rows<'a> {
+/// The section header: its title and a Graphite Run DRC button, disabled
+/// while a check runs.
+fn header<'a>(ctx: &'a PanelContext, drc: &DrcPanel, col: Rows<'a>) -> Rows<'a> {
     let i18n = &*ctx.i18n;
     let primary = theme_ext::text_primary(&ctx.tokens);
+    let run = (!drc.running).then_some(PanelMsg::RunDrc);
     col.push(
-        row![
-            text(t!(i18n, ids::DRC_HEADING))
-                .size(TS.body)
-                .color(primary),
-            Space::new().width(Length::Fill).height(Length::Shrink),
-            signex_widgets::button(text(t!(i18n, ids::DRC_RUN)).size(TS.body).color(primary))
-                .padding([3, 10])
-                .on_press(PanelMsg::RunDrc)
-                .style(crate::styles::menu_item(&ctx.tokens)),
-        ]
-        .align_y(iced::Alignment::Center)
+        container(
+            row![
+                text(t!(i18n, ids::DRC_HEADING))
+                    .size(TS.label)
+                    .font(iced::Font {
+                        weight: iced::font::Weight::Semibold,
+                        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+                    })
+                    .color(primary),
+                Space::new().width(Length::Fill).height(Length::Shrink),
+                crate::styles::dialog_button(
+                    &t!(i18n, ids::DRC_RUN).into_string(),
+                    crate::styles::DialogButtonKind::Secondary,
+                    run,
+                    &ctx.tokens,
+                ),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .height(Length::Fixed(super::graphite::TABLE_ROW_HEIGHT + SP.m))
+        .align_y(iced::alignment::Vertical::Center)
         .boxed(),
     )
+}
+
+/// The hairline under the section, as between the Messages rows.
+fn rule<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
+    let line = crate::styles::tokens::resolve(&ctx.tokens).line_soft;
+    container(Space::new())
+        .height(Length::Fixed(1.0))
+        .width(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(line)),
+            ..container::Style::default()
+        })
+        .boxed()
 }
 
 /// The state line(s) above the rows: running, idle, or what the last run
@@ -197,8 +223,11 @@ fn violation_row<'a>(ctx: &'a PanelContext, violation: &DrcRow) -> Element<'a, P
 /// The section, or nothing when no PCB is in view.
 pub(super) fn section<'a>(ctx: &'a PanelContext) -> Option<Element<'a, PanelMsg>> {
     let drc = ctx.pcb_drc.as_ref()?;
-    let col: Rows<'a> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
-    let mut col = status(ctx, drc, header(ctx, col));
+    let col: Rows<'a> = Column::new()
+        .spacing(SP.xs)
+        .padding([SP.xs, 12.0])
+        .width(Length::Fill);
+    let mut col = status(ctx, drc, header(ctx, drc, col));
     if !drc.running {
         for violation in &drc.rows {
             col = col.push(violation_row(ctx, violation));
@@ -211,5 +240,38 @@ pub(super) fn section<'a>(ctx: &'a PanelContext) -> Option<Element<'a, PanelMsg>
             muted,
         ));
     }
-    Some(col.push(separator(&ctx.tokens).boxed()).boxed())
+    Some(Column::new().push(col.boxed()).push(rule(ctx)).boxed())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout_probe::messages_on_click;
+
+    fn context(running: bool) -> PanelContext {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.pcb_drc = Some(DrcPanel {
+            running,
+            ..DrcPanel::default()
+        });
+        ctx
+    }
+
+    /// Round 9 of #2262: Run DRC is the section header's button; it runs the
+    /// check, and does nothing while a check is already running.
+    #[test]
+    fn run_drc_is_a_header_button_disabled_while_running() {
+        let window = iced::Size::new(900.0, 300.0);
+        let idle = context(false);
+        let idle_section = section(&idle).expect("section");
+        let pressed = messages_on_click(idle_section, window, "Run DRC");
+        assert!(
+            matches!(pressed.as_slice(), [PanelMsg::RunDrc]),
+            "{pressed:?}"
+        );
+        let busy = context(true);
+        let busy_section = section(&busy).expect("section");
+        assert!(messages_on_click(busy_section, window, "Run DRC").is_empty());
+    }
 }

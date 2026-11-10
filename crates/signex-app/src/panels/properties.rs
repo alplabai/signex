@@ -246,6 +246,11 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         );
     }
 
+    if !ctx.has_schematic
+        && let Some(board) = ctx.pcb_board.as_ref()
+    {
+        return super::pcb_board_properties::view(ctx, board);
+    }
     if !ctx.has_schematic {
         // Don't mislead the user into thinking nothing is loaded when
         // they've just switched to a PCB tab — distinguish "no project

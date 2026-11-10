@@ -110,8 +110,8 @@ fn each_window_pill_names_its_own_boards_layer() {
         app.status_active_layer(window)
             .map(|(_, name)| name.into_string())
     };
-    assert_eq!(name(&app, main).as_deref(), Some("Top Copper"));
-    assert_eq!(name(&app, undocked).as_deref(), Some("Bottom Copper"));
+    assert_eq!(name(&app, main).as_deref(), Some("Top Layer"));
+    assert_eq!(name(&app, undocked).as_deref(), Some("Bottom Layer"));
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn hiding_the_active_layer_moves_the_pill_and_hiding_all_copper_removes_it() {
     hide(&mut app, CopperLayer::Top);
     assert_eq!(app.pcb_layer_view(&a).active(), CopperLayer::Bottom);
     let pill = app.status_active_layer(main).map(|(_, n)| n.into_string());
-    assert_eq!(pill.as_deref(), Some("Bottom Copper"));
+    assert_eq!(pill.as_deref(), Some("Bottom Layer"));
     hide(&mut app, CopperLayer::Bottom);
     assert!(
         app.status_active_layer(main).is_none(),
@@ -134,4 +134,21 @@ fn hiding_the_active_layer_moves_the_pill_and_hiding_all_copper_removes_it() {
     // `+` with every copper layer hidden leaves the active layer alone.
     press(&mut app, main, "+");
     assert_eq!(app.pcb_layer_view(&a).active(), CopperLayer::Bottom);
+}
+
+/// Round 9 of #2262: the status chip and the layer strip under the canvas
+/// name the active layer with one catalog message, so they always agree.
+#[test]
+fn the_status_chip_and_the_layer_strip_use_one_layer_name() {
+    let (app, _a, _b, main, _undocked) = two_windows();
+    let (_, chip) = app.status_active_layer(main).expect("pill");
+    let chip = chip.into_string();
+    let expected =
+        crate::pcb_canvas::layer_style::copper_name(&app.ui_state.i18n, CopperLayer::Top)
+            .into_string();
+    assert_eq!(chip, expected);
+    let texts = crate::layout_probe::lay_out_texts(app.view(main), iced::Size::new(1440.0, 900.0));
+    let strip_names = texts.iter().filter(|t| t.text == chip).count();
+    // One in the strip, one in the status chip.
+    assert!(strip_names >= 2, "{chip} drawn {strip_names} times");
 }

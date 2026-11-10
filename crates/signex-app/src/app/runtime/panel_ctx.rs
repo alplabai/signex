@@ -707,6 +707,16 @@ impl Signex {
             pcb_nets: self
                 .active_pcb_snapshot()
                 .map(crate::panels::PcbNetsSummary::of),
+            pcb_board: self.active_pcb_snapshot().map(|board| {
+                let name = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                    .map(|tab| tab.title.clone())
+                    .unwrap_or_default();
+                let selected = self.interaction_state.pcb_selection.selection().len();
+                crate::panels::PcbBoardSummary::of(board, name, selected)
+            }),
             selection_count,
             selected_uuid,
             selected_kind,

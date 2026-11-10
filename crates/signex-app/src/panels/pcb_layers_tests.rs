@@ -50,8 +50,8 @@ fn rows_show_the_names_of_copper_technical_and_mechanical_layers() {
         "COPPER",
         "TECHNICAL",
         "MECHANICAL",
-        "Top Copper",
-        "Bottom Copper",
+        "Top Layer",
+        "Bottom Layer",
         "Top Silkscreen",
         "Assembly notes",
     ] {
@@ -62,7 +62,7 @@ fn rows_show_the_names_of_copper_technical_and_mechanical_layers() {
 #[test]
 fn a_name_click_picks_the_copper_layer_and_an_eye_click_toggles_it() {
     let ctx = context(&PcbLayerView::default());
-    let picked = messages_on_click(view_panel_for_test(&ctx), WINDOW, "Bottom Copper");
+    let picked = messages_on_click(view_panel_for_test(&ctx), WINDOW, "Bottom Layer");
     assert!(
         matches!(
             picked.as_slice(),
@@ -74,7 +74,7 @@ fn a_name_click_picks_the_copper_layer_and_an_eye_click_toggles_it() {
     );
 
     let texts = lay_out_texts(view_panel_for_test(&ctx), WINDOW);
-    let label = find(&texts, "Bottom Copper").bounds;
+    let label = find(&texts, "Bottom Layer").bounds;
     // The eye sits left of the swatch: row spacing, name padding, swatch.
     let eye_x = label.x - SP.s - 12.0 - SP.s - SP.xs - (7.0 + SP.s);
     let toggled = messages_on_click_at(

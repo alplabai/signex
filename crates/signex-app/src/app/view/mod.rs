@@ -678,7 +678,11 @@ impl Signex {
             };
             // The board's layers as a strip under the canvas.
             let strip = self.pcb_for_window(window_id).and_then(|board| {
-                pcb_strip::layer_strip(board, &self.document_state.panel_ctx.tokens)
+                pcb_strip::layer_strip(
+                    board,
+                    &self.ui_state.i18n,
+                    &self.document_state.panel_ctx.tokens,
+                )
             });
             // Selection, hover and marquee paint above the board and take no input.
             let highlight = canvas(pcb_canvas.highlight_layer())

@@ -123,7 +123,7 @@ pub(in crate::app::view) fn pcb_bar_items(
         .ok()
         .map(|id| Message::Menu(crate::menu_bar::MenuMessage::Command(id)));
     vec![ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Svg(crate::icons::icon_dd_rect(tid)),
+        icon: ActiveBarIcon::Svg(crate::icons::icon_board_sketch(tid)),
         tooltip: t!(i18n, ids::BOARD_SKETCH_TOOLTIP).into_string(),
         enabled: run.is_some(),
         selected: false,
@@ -149,5 +149,26 @@ mod tests {
                 if id.as_str() == "board_sketch"
         ));
         assert!(button.enabled);
+    }
+
+    /// Round 9 of #2262: the button says what it is, in its tooltip and its
+    /// board glyph, not the generic rectangle.
+    #[test]
+    fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
+        let tid = ThemeId::GraphiteDark;
+        let items = pcb_bar_items(tid, &I18n::en_us());
+        let [ActiveBarItem::Button(button)] = items.as_slice() else {
+            panic!("one button");
+        };
+        assert!(
+            button.tooltip.starts_with("Board Sketch"),
+            "{}",
+            button.tooltip
+        );
+        let ActiveBarIcon::Svg(handle) = &button.icon else {
+            panic!("an SVG icon");
+        };
+        assert_eq!(handle, &crate::icons::icon_board_sketch(tid));
+        assert_ne!(handle, &crate::icons::icon_dd_rect(tid));
     }
 }

@@ -44,6 +44,7 @@ mod net_class_panel;
 mod numeric_draft;
 mod palette;
 mod paper;
+pub mod pcb_board_properties;
 pub mod pcb_nets;
 mod projects;
 mod projects_graphite;
@@ -119,6 +120,7 @@ pub use paper::{
     PageFormatMode, PageOrigin, SchematicSheetColor, SheetColor, paper_dimensions,
     paper_size_options,
 };
+pub use pcb_board_properties::PcbBoardSummary;
 pub use pcb_layers::PcbLayersPanel;
 pub use pcb_nets::PcbNetsSummary;
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};

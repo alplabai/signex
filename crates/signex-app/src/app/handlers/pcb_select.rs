@@ -150,6 +150,14 @@ impl Signex {
         let canvas = &mut self.interaction_state.pcb_canvas;
         canvas.set_highlight(highlight);
         canvas.set_grab(grab);
+        // The Properties panel switches between the board and the selection
+        // of the active tab's board.
+        let selection = &self.interaction_state.pcb_selection;
+        let selected = selection.selection().len();
+        let is_active = selection.document() == self.active_tab_path().as_deref();
+        if is_active && let Some(board) = self.document_state.panel_ctx.pcb_board.as_mut() {
+            board.selected = selected;
+        }
     }
 
     /// Repaint the selection of every undocked window that shows the board

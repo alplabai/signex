@@ -18,8 +18,22 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// Width of the command palette card in an undocked window.
 const WINDOW_PALETTE_WIDTH: f32 = 480.0;
 /// Width of the Graphite palette card under the chrome strip (the mock's
-/// 640 px); independent of the search field's own width.
-const GRAPHITE_PALETTE_WIDTH: f32 = 640.0;
+/// 372 px column); independent of the search field's own width.
+const GRAPHITE_PALETTE_WIDTH: f32 = 372.0;
+
+/// The Graphite palette card's width in a `window_w` px main window: the
+/// mock's column, narrowed only when the window cannot hold it.
+fn graphite_palette_width(window_w: f32) -> f32 {
+    GRAPHITE_PALETTE_WIDTH.min((window_w - 32.0).max(WINDOW_PALETTE_WIDTH))
+}
+
+#[cfg(test)]
+#[test]
+fn graphite_palette_card_is_the_mock_column() {
+    // Round 9 of #2262: the card had grown to 640 px; the mock is 372.
+    assert_eq!(graphite_palette_width(1440.0), 372.0);
+    assert_eq!(graphite_palette_width(2560.0), 372.0);
+}
 
 mod bars;
 mod modals;
@@ -269,7 +283,7 @@ impl Signex {
         } else {
             let (x, _) = self.chrome_search_bar_geometry();
             let window_w = self.ui_state.window_size.0;
-            let w = GRAPHITE_PALETTE_WIDTH.min((window_w - 32.0).max(WINDOW_PALETTE_WIDTH));
+            let w = graphite_palette_width(window_w);
             (x.min((window_w - w - 16.0).max(16.0)), w)
         };
         let ink4 = crate::styles::tokens::resolve(tokens).ink4;

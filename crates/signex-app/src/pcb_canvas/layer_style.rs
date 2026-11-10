@@ -125,7 +125,7 @@ mod tests {
         }
         assert_eq!(
             copper_name(&i18n, CopperLayer::Top).into_string(),
-            "Top Copper"
+            "Top Layer"
         );
     }
 }
