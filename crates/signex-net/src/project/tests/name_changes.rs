@@ -307,6 +307,41 @@ fn two_alias_only_nets_that_share_a_name_join_freely() {
 }
 
 #[test]
+fn a_copy_of_a_hidden_local_name_changes_nothing() {
+    // The child's SDA_INT sits behind its hierarchical SDA before the edit; a
+    // second SDA_INT label on that net is hidden too: no change at all
+    // (6761836527 points 5 and 6).
+    let mut child = child_of(&["SDA"]);
+    child
+        .labels
+        .push(label("SDA_INT", pt(10.0, 0.0), LabelType::Net));
+    let mut after_child = child.clone();
+    after_child
+        .labels
+        .push(label("SDA_INT", pt(5.0, 0.0), LabelType::Net));
+    let mut root = parent_with(&["SDA"]);
+    net_label(&mut root, "I2C1_SDA", (5.0, 0.0));
+    let (bs, br) = graph_of(&root, &HashMap::from([("c.sch".to_string(), child)]));
+    let (as_, ar) = graph_of(&root, &HashMap::from([("c.sch".to_string(), after_child)]));
+    let roots = [ProjectRoot {
+        key: SheetKey::new("root"),
+    }];
+    let got = project_name_changes(
+        &ProjectGraph {
+            sheets: &bs,
+            resolved: &br,
+            roots: &roots,
+        },
+        &ProjectGraph {
+            sheets: &as_,
+            resolved: &ar,
+            roots: &roots,
+        },
+    );
+    assert!(got.is_empty(), "{got:?}");
+}
+
+#[test]
 fn a_local_name_the_edit_brings_behind_a_port_counts() {
     // The child's net is labelled VCC locally; the parent wired the entry GND
     // to its global GND. A new hierarchical GND on the VCC net brings VCC
