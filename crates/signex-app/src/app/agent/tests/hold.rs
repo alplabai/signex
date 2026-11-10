@@ -274,6 +274,18 @@ fn the_quit_keeps_the_locks_until_its_writes_are_done() {
     assert!(client::hold(&fx.dir, &fx.project).is_ok());
 }
 
+/// The registry retry timer fires, and what it starts runs to its end (the
+/// write it asks for must report back, or the next tick is held off).
+fn tick(app: &mut Signex) {
+    let mut driver = TaskDriver::new();
+    driver
+        .send(
+            app,
+            Message::Agent(super::super::AgentMsg::RegistryRetryTick),
+        )
+        .expect("the tick ran");
+}
+
 fn locked_warnings(name: &str) -> usize {
     crate::diagnostics::logged_count(&format!("{name} could not be locked"))
 }
@@ -303,7 +315,7 @@ fn a_lock_that_cannot_be_made_is_said_once_and_retried_on_the_tick() {
     assert_eq!(locked_warnings(name), 1, "said at every update");
     assert!(app.agent.project_locks.is_empty());
     // A tick that fails again does not say it again.
-    let _task = app.update(Message::Agent(super::super::AgentMsg::RegistryRetryTick));
+    tick(&mut app);
     assert_eq!(locked_warnings(name), 1, "said again at the tick");
 
     // The folder is usable now; nothing is tried before the tick.
@@ -317,7 +329,7 @@ fn a_lock_that_cannot_be_made_is_said_once_and_retried_on_the_tick() {
         app.agent.project_locks.is_empty(),
         "a failed lock was tried again before the tick"
     );
-    let _task = app.update(Message::Agent(super::super::AgentMsg::RegistryRetryTick));
+    tick(&mut app);
     assert!(
         app.agent.project_locks.contains_key(&project),
         "the tick did not retry the lock"
