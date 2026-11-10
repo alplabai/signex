@@ -293,7 +293,7 @@ fn row_view<'a>(
             })
         });
     }
-    let mut col = Column::new().spacing(SP.xs).push(boxed);
+    let mut col = Column::new().spacing(SP.xs).push(boxed.boxed());
     if let Some(why) = &row.blocked {
         let mut fixes = row![line(texts::blocked(i18n, why), tokens::danger(tokens))]
             .spacing(SP.m)
@@ -310,7 +310,7 @@ fn row_view<'a>(
                 up(UpdatePcbMsg::CrossProbeRequested(row.key.clone())),
             ));
         }
-        col = col.push(fixes);
+        col = col.push(fixes.boxed());
     } else if row.on && !list.applies(row) {
         col = col.push(line(
             t!(i18n, ids::UPDATE_PCB_ROW_SKIPPED),

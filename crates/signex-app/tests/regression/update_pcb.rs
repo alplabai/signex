@@ -351,6 +351,7 @@ fn board_of(footprints: Vec<signex_types::pcb::Footprint>) -> PcbBoard {
         generator: "signex-test".into(),
         thickness: 1.6,
         outline: Vec::new(),
+        sketch: None,
         layers: Vec::new(),
         setup: None,
         nets: Vec::new(),

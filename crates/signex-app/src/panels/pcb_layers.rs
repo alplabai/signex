@@ -102,8 +102,8 @@ pub(super) fn view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
     if !panel.board_open {
         return empty_state_card(
             tokens,
-            &t!(i18n, ids::PCB_LAYERS_TITLE).into_string(),
-            &t!(i18n, ids::PCB_LAYERS_EMPTY).into_string(),
+            t!(i18n, ids::PCB_LAYERS_TITLE),
+            t!(i18n, ids::PCB_LAYERS_EMPTY),
             None,
         );
     }
