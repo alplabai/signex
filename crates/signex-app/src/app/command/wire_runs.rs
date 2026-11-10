@@ -200,7 +200,9 @@ impl Signex {
             self.end_spec(args, "start", start),
             self.end_spec(args, "end", end),
         );
-        let short = intent.short();
+        // On a project sheet whose net reaches other sheets the project check
+        // alone judges names; the per-sheet verdict only for the rest.
+        let short = intent.short() && !self.project_judges_names(&after, &[start, end]);
         let names = intent.merged_names();
         let end_names = intent.end_names.clone();
         let WireIntent {

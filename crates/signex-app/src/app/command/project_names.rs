@@ -19,6 +19,25 @@ use crate::app::project_sheets::{
 use crate::app::state::scope::path_key_with;
 
 impl Signex {
+    /// Whether the project check judges the names of the edit that turned the
+    /// edit target into `after` at `points`: the sheet is in a project and a
+    /// net or bus run there reaches another sheet. Then its verdict is the
+    /// only name verdict; the per-sheet one, blind to the other sheets and to
+    /// names hidden behind a port, decides only otherwise (#2199).
+    pub(super) fn project_judges_names(&self, after: &SchematicSheet, points: &[Point]) -> bool {
+        let docs = &self.document_state;
+        let in_project = docs
+            .edit_path()
+            .is_some_and(|path| docs.document_project(path).is_some());
+        // Edits only add: a net or bus run that reaches no other sheet after
+        // the edit reached none before, so no project name is in play.
+        in_project
+            && points.iter().any(|p| {
+                signex_net::net_reaches_other_sheets(after, *p)
+                    || signex_net::bus_reaches_other_sheets(after, *p)
+            })
+    }
+
     /// The nets of the project that the edit, which turned the edit target into
     /// `after` at `points`, merges or renames, with whether each needs
     /// `allow_merge` (empty for a loose sheet, and for an edit whose nets reach
@@ -31,6 +50,9 @@ impl Signex {
         points: &[Point],
         allow_merge: bool,
     ) -> Result<Vec<ProjectNetChange>, String> {
+        if !self.project_judges_names(after, points) {
+            return Ok(Vec::new());
+        }
         let docs = &self.document_state;
         let Some(path) = docs.edit_path().map(std::path::Path::to_path_buf) else {
             return Ok(Vec::new());
@@ -38,14 +60,6 @@ impl Signex {
         let Some(project) = docs.document_project(&path) else {
             return Ok(Vec::new());
         };
-        // Edits only add: a net or bus run that reaches no other sheet after
-        // the edit reached none before, so no project name is in play.
-        if !points.iter().any(|p| {
-            signex_net::net_reaches_other_sheets(after, *p)
-                || signex_net::bus_reaches_other_sheets(after, *p)
-        }) {
-            return Ok(Vec::new());
-        }
         let fold = crate::app::state::project_case::fold_of(Some(project));
         let root = resolve_netlist_root_for(docs, &path);
         let pages = project_pages(Some(project));

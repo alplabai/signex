@@ -314,7 +314,10 @@ impl Signex {
         {
             return Ok(());
         }
-        if let Some(change) = intent.changes.first() {
+        // Net names reaching other sheets are the project check's alone; the
+        // per-sheet verdict judges bus names and the rest.
+        let project_judges = self.project_judges_names(&after, &[at]);
+        if let Some(change) = intent.changes.iter().find(|c| c.bus || !project_judges) {
             return Err(name_change_refusal(what, at, change));
         }
         // Names that reach the net from other sheets.

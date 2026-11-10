@@ -295,7 +295,7 @@ fn answered_ok(outcome: CommandOutcome) {
 }
 
 #[test]
-fn the_parent_side_join_of_a_name_behind_a_port_is_accepted_as_the_child_side_one_is() {
+fn a_parent_join_to_an_entry_whose_child_name_was_already_behind_the_port_is_free() {
     // The child already joined I2C_SDA to its hierarchical SDA before this
     // edit, so I2C_SDA plays no part; the parent now wires its I2C1_SDA net to
     // SensorA.SDA: own with alias-only, free (6761836527 points 3 and 6).
@@ -405,6 +405,65 @@ fn a_copy_of_a_hidden_local_name_on_its_placement_is_no_rename() {
             assert_eq!(outcome, CommandOutcome::Ran, "{id} {at}");
         }
     }
+}
+
+/// The project of `dir`: the parent wires `parent_name` (a global label) to
+/// SensorA's entry `entry`; the child carries `entry` as a hierarchical label
+/// and `local` as a local label on one wire (y = 0), and a second wire at
+/// y = 20.32 with `other` as a global label, if any. The child is the target.
+fn behind_port_project(
+    dir: &tempfile::TempDir,
+    parent_name: &str,
+    entry: &str,
+    local: &str,
+    other: Option<&str>,
+) -> Signex {
+    let mut top = SchematicSheet::default();
+    top.child_sheets
+        .push(sheet_symbol("SensorA", "c.snxsch", &[(entry, (0.0, 0.0))]));
+    top.wires.push(wire((0.0, 0.0), (5.08, 0.0)));
+    top.labels.push(global(parent_name, (5.08, 0.0)));
+    let mut child = child_with(&[entry]);
+    child.labels.push(net_label(local, (10.16, 0.0)));
+    child.wires.push(wire((0.0, 20.32), (10.16, 20.32)));
+    if let Some(name) = other {
+        child.labels.push(global(name, (0.0, 20.32)));
+    }
+    write(&dir.path().join("top.snxsch"), top);
+    write(&dir.path().join("c.snxsch"), child);
+    open_child(dir)
+}
+
+#[test]
+fn on_a_project_sheet_the_project_check_alone_judges_names_that_reach_other_sheets() {
+    // The per-sheet check cannot see the parent and counts the child's hidden
+    // local names as own; where the project check runs, its verdict is the
+    // only one (6761836527 points 5 and 6).
+    // The parent's I2C1_SDA, placed again on the child's net: carried.
+    for id in ["place_net_label", "place_global_label"] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = behind_port_project(&dir, "I2C1_SDA", "SDA", "SDA_INT", None);
+        let outcome = run(&mut app, id, &["at=5.08,0", "text=I2C1_SDA"]);
+        assert_eq!(outcome, CommandOutcome::Ran, "{id}");
+    }
+    // The parent ties VIN to +5V; a +5V port on the child's VIN net.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = behind_port_project(&dir, "+5V", "VIN", "VCC_LOCAL", None);
+    let port = ["at=10.16,0", "net_name=+5V", "lib_id=power:+5V"];
+    assert_eq!(
+        run(&mut app, "place_power_symbol", &port),
+        CommandOutcome::Ran
+    );
+    // A child wire from the SDA net to a net with the global I2C1_SDA.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = behind_port_project(&dir, "I2C1_SDA", "SDA", "SDA_INT", Some("I2C1_SDA"));
+    let ends = ["start=10.16,0", "end=10.16,20.32"];
+    answered_ok(run(&mut app, "place_wire", &ends));
+    // A genuine short from the child is still refused, by the project check.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = behind_port_project(&dir, "I2C1_SDA", "SDA", "SDA_INT", Some("GND"));
+    let reason = refusal(run(&mut app, "place_wire", &ends));
+    assert!(reason.contains("reach it from other sheets"), "{reason}");
 }
 
 #[test]

@@ -97,12 +97,7 @@ impl<'a> Analysed<'a> {
     fn split_of(&self, g: usize) -> NetNames {
         let mut names = NetNames::default();
         for n in &self.analysis.groups[g].names {
-            let label = &self.sheet.labels[n.label];
-            let side = match label.label_type {
-                LabelType::Hierarchical => &mut names.aliases,
-                _ => &mut names.own,
-            };
-            side.insert(label.text.clone());
+            add_bus_name(&mut names, &self.sheet.labels[n.label]);
         }
         names
     }
@@ -122,6 +117,16 @@ impl<'a> Analysed<'a> {
             Point::new(e.position.x + e.size.0, e.position.y + e.size.1),
         ]
     }
+}
+
+/// Add a bus-name label's text to `names`: an alias when hierarchical, else
+/// an own name.
+fn add_bus_name(names: &mut NetNames, label: &signex_types::schematic::Label) {
+    let side = match label.label_type {
+        LabelType::Hierarchical => &mut names.aliases,
+        _ => &mut names.own,
+    };
+    side.insert(label.text.clone());
 }
 
 /// Whether a bus run through `p` on `sheet` can carry names from another
@@ -231,7 +236,22 @@ pub fn bus_intent(
             }
         }
     }
-    let splits: Vec<NetNames> = ordered.iter().map(|&g| b.split_of(g)).collect();
+    let mut splits: Vec<NetNames> = ordered.iter().map(|&g| b.split_of(g)).collect();
+    // A bus-name label at an end that sits on no run yet: the run gives it a
+    // run, so it takes part in the merge like a named run.
+    for (i, label) in before.labels.iter().enumerate() {
+        let lone = end_keys.contains(&pt_key(&label.position))
+            && b.group_of_label(i).is_none()
+            && a.group_of_label(i).is_some();
+        if lone {
+            let mut one = NetNames::default();
+            add_bus_name(&mut one, label);
+            splits.push(one);
+            if !names.contains(&label.text) {
+                names.push(label.text.clone());
+            }
+        }
+    }
     let refs: Vec<&NetNames> = splits.iter().collect();
     let own = splits.iter().flat_map(|s| s.own.iter().cloned()).collect();
     let merge = needs_allow_merge(&refs, &own);
@@ -419,6 +439,33 @@ mod tests {
         assert!(join_named(("D[0..7]", hier), ("A[0..15]", hier)).merge);
         assert!(!join_named(("D[0..7]", hier), ("D[0..7]", hier)).merge);
         assert!(join_named(("D[0..7]", net), ("A[0..15]", LabelType::Global)).merge);
+    }
+
+    #[test]
+    fn a_lone_bus_name_label_at_an_end_takes_part_in_the_merge() {
+        // 6761836527 point 7: a run from the run A[0..15] to the lone label
+        // D[0..7] (on no bus yet) joins two own bus names: a merge. To an
+        // unnamed run it only names the run.
+        for (run_name, merge) in [(Some("A[0..15]"), true), (None, false)] {
+            let mut before = empty_sheet();
+            before.buses.push(bus((12.7, 25.4), (25.4, 25.4)));
+            if let Some(name) = run_name {
+                before
+                    .labels
+                    .push(label(name, pt(12.7, 25.4), LabelType::Net));
+            }
+            before
+                .labels
+                .push(label("D[0..7]", pt(50.8, 25.4), LabelType::Net));
+            let got = judge(
+                &before,
+                &[((19.05, 25.4), (50.8, 25.4))],
+                (19.05, 25.4),
+                (50.8, 25.4),
+            );
+            assert_eq!(got.merge, merge, "{run_name:?}: {got:?}");
+            assert!(got.names.contains(&"D[0..7]".to_string()), "{got:?}");
+        }
     }
 
     #[test]
