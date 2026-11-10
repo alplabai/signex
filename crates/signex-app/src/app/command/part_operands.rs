@@ -170,8 +170,10 @@ impl Signex {
         let placed: Vec<&Symbol> = docs
             .engines
             .iter()
+            // A loose sheet numbers against itself only, as `used_designators`.
             .filter(|(path, _)| {
-                path.as_path() == sheet || docs.document_project(path).map(|p| p.id) == project
+                path.as_path() == sheet
+                    || (project.is_some() && docs.document_project(path).map(|p| p.id) == project)
             })
             .flat_map(|(_, engine)| engine.document().symbols.iter())
             .filter(|s| s.reference == wanted)

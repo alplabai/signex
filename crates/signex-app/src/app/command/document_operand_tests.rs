@@ -430,6 +430,10 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "draw_line",
         "draw_graphic_line",
         "draw_rectangle",
+        "place_component",
+        "place_sheet_symbol",
+        "place_sheet_entry",
+        "sync_sheet_pins",
     ];
     for name in all_command_ids() {
         let meta = metadata_for_str(name).expect("row");
