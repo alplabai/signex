@@ -85,6 +85,29 @@ fn sheet_entries(sheet: &SchematicSheet) -> impl Iterator<Item = (&SheetPin, Str
     })
 }
 
+/// The pin tips of `sheet` at `key`, as `designator.pin`.
+fn pins_at(sheet: &SchematicSheet, key: Key) -> Vec<ExtraItem> {
+    let mut found = Vec::new();
+    for sym in &sheet.symbols {
+        let Some(lib) = sheet.resolve_lib_symbol(sym) else {
+            continue;
+        };
+        for (lp, tip) in pin_tips(&lib, sym).filter(|(_, tip)| pt_key(tip) == key) {
+            let pin = if lp.pin.number.is_empty() {
+                &lp.pin.name
+            } else {
+                &lp.pin.number
+            };
+            found.push(ExtraItem {
+                kind: ExtraKind::Pin,
+                identity: format!("{}.{pin}", sym.reference),
+                position: tip,
+            });
+        }
+    }
+    found
+}
+
 /// What sits at `new.at` on `sheet`: what a connection point there would
 /// join. A wire or bus is reported at the point, where it is touched. A bus
 /// is joined only by a bus entry, at an end or mid-span; a pin tip on a bus
@@ -97,24 +120,7 @@ fn items_at(sheet: &SchematicSheet, new: &NewPoint) -> Vec<ExtraItem> {
         identity,
         position,
     };
-    let mut found = Vec::new();
-    for sym in &sheet.symbols {
-        let Some(lib) = sheet.resolve_lib_symbol(sym) else {
-            continue;
-        };
-        for (lp, tip) in pin_tips(&lib, sym).filter(|(_, tip)| pt_key(tip) == key) {
-            let pin = if lp.pin.number.is_empty() {
-                &lp.pin.name
-            } else {
-                &lp.pin.number
-            };
-            found.push(item(
-                ExtraKind::Pin,
-                format!("{}.{pin}", sym.reference),
-                tip,
-            ));
-        }
-    }
+    let mut found = pins_at(sheet, key);
     let on = |w: &&signex_types::schematic::Wire| {
         point_on_segment(key, pt_key(&w.start), pt_key(&w.end))
     };

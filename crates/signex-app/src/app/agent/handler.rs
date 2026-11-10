@@ -399,10 +399,12 @@ impl Signex {
         // A command waiting for its reads answers when they land (#2199), with
         // what its run then changed and logged.
         if let Some(ticket) = self.agent.deferred.take() {
+            // The token matched: the request was let in with this one.
             let waiting = super::deferred::WaitingReply {
                 id,
                 pid: call.pid,
                 reply: call.reply,
+                token: self.agent.token().map(|t| t.as_str().to_string()),
             };
             self.agent.waiting.insert(ticket, waiting);
             return task;

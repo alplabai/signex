@@ -12,13 +12,13 @@ use std::path::{Path, PathBuf};
 use iced::Task;
 use serde_json::json;
 use signex_engine::Command;
-use signex_types::schematic::{ChildSheet, normalize_port_name};
+use signex_types::schematic::{ChildSheet, LabelType, Point, normalize_port_name};
 
 use super::placement_operands::{run_edit, text};
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::handlers::canvas::{reference_from, resolve_new_sheet_path};
 use crate::app::mutation_gateway::CommandOutcome as Applied;
-use crate::app::project_sheets::resolve_child_reference_quiet;
+use crate::app::project_sheets::{ProjectSheetSet, resolve_child_reference_quiet};
 use crate::app::sheet_hierarchy::{
     CaseFold, SheetHierarchy, SheetNode, SheetNodeKind, normalised_key,
 };
@@ -84,6 +84,41 @@ fn sheets_above(hierarchy: &SheetHierarchy, path: &Path, fold: CaseFold) -> Hash
         walk(node, path, fold, &mut Vec::new(), &mut out);
     }
     out
+}
+
+/// Whether the sheet at `file`, or one it places, carries a name that can
+/// reach other sheets: a global label or a power port naming a net.
+fn subtree_names_reach_out(set: &ProjectSheetSet, file: &Path) -> bool {
+    let fold = set.fold;
+    let mut seen = HashSet::new();
+    let mut queue = vec![file.to_path_buf()];
+    while let Some(path) = queue.pop() {
+        if !seen.insert(normalised_key(&path, fold)) {
+            continue;
+        }
+        let Some(sheet) = set.sheets.get(&path) else {
+            continue;
+        };
+        let named = sheet
+            .labels
+            .iter()
+            .any(|l| matches!(l.label_type, LabelType::Global | LabelType::Power))
+            || sheet
+                .symbols
+                .iter()
+                .any(|s| s.is_power && !s.value.is_empty());
+        if named {
+            return true;
+        }
+        let dir = path.parent().unwrap_or_else(|| Path::new(""));
+        queue.extend(
+            sheet
+                .child_sheets
+                .iter()
+                .filter_map(|c| resolve_child_reference_quiet(dir, &c.filename).ok()),
+        );
+    }
+    false
 }
 
 /// The names of `list` that `keep` keeps, sorted.
@@ -196,18 +231,20 @@ impl Signex {
 
     /// Whether the file at `file` places `sheet` somewhere below it: the walk
     /// down its child references, over the open sheets and the project as the
-    /// edit read it (the file's subtree is read with it, `edit_reads`).
+    /// edit read it (the file's subtree is read with it, `edit_reads`); for a
+    /// loose sheet, over the file's subtree as read.
     fn file_reaches(&self, file: &Path, sheet: &Path, fold: CaseFold) -> Result<bool, String> {
         let docs = &self.document_state;
-        let set = match docs.document_project(sheet) {
+        let owned = match docs.document_project(sheet) {
             Some(_) => Some(self.edit_project_set(sheet)?),
             None => None,
         };
+        let set = owned.as_ref().or_else(|| self.prefetched_subtree());
         let content = |path: &Path| {
             docs.engines
                 .get(path)
                 .map(signex_engine::Engine::document)
-                .or_else(|| set.as_ref().and_then(|s| s.sheets.get(path)))
+                .or_else(|| set.and_then(|s| s.sheets.get(path)))
         };
         let wanted = normalised_key(sheet, fold);
         let mut seen = HashSet::new();
@@ -276,8 +313,12 @@ impl Signex {
 
     /// The name rule (#2199 comment 6761836527) for the nets a sheet symbol's
     /// file brings into the project: a short or a rename of a project net is
-    /// refused unless `allow_merge=true`. A file not there yet brings none.
-    fn refuse_child_names(&self, command: &Command, file: &str) -> Result<(), String> {
+    /// refused unless `allow_merge=true`. A file not there yet brings none. In
+    /// a project that cannot be read completely the names on other sheets are
+    /// unknown, so a file whose subtree carries a name that reaches other
+    /// sheets is refused; one that carries none is placed. A loose sheet is
+    /// not judged for names (`docs/CLI.md`).
+    fn refuse_child_names(&self, command: &Command, file: &str, at: Point) -> Result<(), String> {
         let docs = &self.document_state;
         let sheet = docs.edit_path().ok_or("no schematic is open")?;
         if docs.document_project(sheet).is_none() {
@@ -290,6 +331,20 @@ impl Signex {
         if set.absent.iter().any(|p| normalised_key(p, fold) == key) {
             return Ok(());
         }
+        let root = crate::app::project_sheets::resolve_netlist_root_for(docs, sheet);
+        let complete = set.unreadable.is_empty()
+            && set.absent.is_empty()
+            && set.refused.is_empty()
+            && set.sheets.contains_key(&root);
+        if !complete {
+            if !subtree_names_reach_out(&set, &path) {
+                return Ok(());
+            }
+            return Err(format!(
+                "the project cannot be read completely ({}), so the names on other sheets are unknown and the file's names reach them; fix the project, or pass allow_merge=true to place it anyway (see docs/CLI.md, \"Why allow_merge\")",
+                super::project_names::unreadable_reason(&set)
+            ));
+        }
         let engine = docs.edit_engine().ok_or("no schematic is open")?;
         let after = Self::sheet_after(engine.document(), std::slice::from_ref(command))?;
         let changes = self
@@ -297,10 +352,6 @@ impl Signex {
             .unwrap_or_default();
         let Some(change) = super::project_names::needing_merge(&changes) else {
             return Ok(());
-        };
-        let at = match command {
-            Command::PlaceChildSheet { child_sheet } => child_sheet.position,
-            _ => signex_types::schematic::Point::new(0.0, 0.0),
         };
         Err(super::project_names::project_change_refusal(
             "sheet symbol",
@@ -319,7 +370,7 @@ impl Signex {
         let command = Command::PlaceChildSheet { child_sheet };
         self.refuse_contacts(std::slice::from_ref(&command), "sheet symbol")?;
         if !matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true))) {
-            self.refuse_child_names(&command, &text(args, "file")?)?;
+            self.refuse_child_names(&command, &text(args, "file")?, at)?;
         }
         let (outcome, reason) = self.apply_engine_commands_reporting(vec![command], false, true);
         applied(outcome, reason)?;

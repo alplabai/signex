@@ -194,3 +194,123 @@ fn a_child_to_be_of_the_list_does_not_join_nets_for_an_earlier_edit() {
     assert!(reason.starts_with("edit 1"), "{reason}");
     assert!(reason.contains("allow_merge"), "{reason}");
 }
+
+/// The file is open too (an agent opened it to look): the project is read
+/// with it all the same.
+#[test]
+fn a_sheet_symbol_whose_open_file_shorts_two_project_nets_needs_allow_merge() {
+    let dir = tempfile::tempdir().unwrap();
+    shorting_child(dir.path());
+    let mut app = project(dir.path());
+    app.open_or_focus_sheet_path(dir.path().join("other.snxsch"));
+    app.open_or_focus_sheet_path(dir.path().join("charger.snxsch"));
+    let top = dir.path().join("top.snxsch");
+    let doc = format!("document={}", top.display());
+    let operands = [
+        "start=50,50",
+        "end=70,70",
+        "name=C",
+        "file=charger.snxsch",
+        &doc,
+    ];
+    let reason = refusal(run(&mut app, "place_sheet_symbol", &operands));
+    assert!(reason.contains("allow_merge"), "{reason}");
+    assert!(
+        app.document_state.engines[&top]
+            .document()
+            .child_sheets
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_loose_sheet_symbol_whose_closed_file_places_this_sheet_is_a_loop() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    save(d, "a.snxsch", sheet(Vec::new(), Vec::new()));
+    let up =
+        signex_engine::child_sheet_from_corners(Point::new(0.0, 0.0), Point::new(20.0, 20.0), "Up")
+            .unwrap();
+    save(
+        d,
+        "b.snxsch",
+        SchematicSheet {
+            uuid: Uuid::now_v7(),
+            child_sheets: vec![ChildSheet {
+                filename: "a.snxsch".into(),
+                ..up
+            }],
+            ..Default::default()
+        },
+    );
+    let (mut app, _task) = Signex::new();
+    app.ui_state.snap_enabled = false;
+    app.open_or_focus_sheet_path(d.join("a.snxsch"));
+    let operands = ["start=50,50", "end=70,70", "name=L", "file=b.snxsch"];
+    let reason = refusal(run(&mut app, "place_sheet_symbol", &operands));
+    assert!(reason.contains("contain itself"), "{reason}");
+}
+
+/// `top` places `new.snxsch`, which is not there yet: the project is
+/// incomplete.
+fn incomplete_project(dir: &Path) {
+    let pending = signex_engine::child_sheet_from_corners(
+        Point::new(0.0, 0.0),
+        Point::new(20.0, 20.0),
+        "New",
+    )
+    .unwrap();
+    save(
+        dir,
+        "top.snxsch",
+        SchematicSheet {
+            uuid: Uuid::now_v7(),
+            child_sheets: vec![ChildSheet {
+                filename: "new.snxsch".into(),
+                ..pending
+            }],
+            ..Default::default()
+        },
+    );
+    save(dir, "other.snxsch", sheet(Vec::new(), Vec::new()));
+}
+
+#[test]
+fn a_sheet_symbol_whose_file_brings_no_names_is_placed_in_a_project_with_a_missing_sheet() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    incomplete_project(d);
+    save(
+        d,
+        "plain.snxsch",
+        sheet(vec![wire((0.0, 0.0), (10.0, 0.0))], Vec::new()),
+    );
+    let mut app = project(d);
+    let operands = ["start=50,50", "end=70,70", "name=P", "file=plain.snxsch"];
+    let outcome = run(&mut app, "place_sheet_symbol", &operands);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+}
+
+#[test]
+fn a_sheet_symbol_whose_file_has_a_global_label_is_refused_in_a_project_with_a_missing_sheet() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    incomplete_project(d);
+    save(
+        d,
+        "named.snxsch",
+        sheet(
+            vec![wire((0.0, 0.0), (10.0, 0.0))],
+            vec![global("VBUS", (0.0, 0.0))],
+        ),
+    );
+    let mut app = project(d);
+    let operands = ["start=50,50", "end=70,70", "name=N", "file=named.snxsch"];
+    let reason = refusal(run(&mut app, "place_sheet_symbol", &operands));
+    assert!(reason.contains("new.snxsch is missing"), "{reason}");
+    assert!(reason.contains("allow_merge"), "{reason}");
+    assert!(!reason.contains("this net"), "{reason}");
+}

@@ -12,11 +12,13 @@ use super::reply::outcome_verdict;
 use crate::app::command::{CommandOutcome, ReadsLoaded};
 use crate::app::{Message, Signex};
 
-/// What the reply to a waiting request needs: the request's id and caller.
+/// What the reply to a waiting request needs: the request's id and caller,
+/// and the session token it was let in with.
 pub(crate) struct WaitingReply {
     pub(super) id: Option<String>,
     pub(super) pid: Option<u32>,
     pub(super) reply: AgentReply,
+    pub(super) token: Option<String>,
 }
 
 impl Signex {
@@ -58,15 +60,19 @@ impl Signex {
     }
 
     /// Why a socket request waiting on `ticket` may no longer run: the gate
-    /// a new request meets (agent connections on and listening, the document
-    /// one of an open project's), checked again when its reads land. `None`
-    /// for a headless run's edit, which has no socket.
+    /// a new request meets (agent connections on and listening, the session
+    /// token unchanged, the document one of an open project's), checked again
+    /// when its reads land. `None` for a headless run's edit, which has no
+    /// socket.
     fn agent_gate_closed(&mut self, ticket: u64, loaded: &ReadsLoaded) -> Option<String> {
-        if !self.agent.waiting.contains_key(&ticket) {
-            return None;
-        }
+        let waiting = self.agent.waiting.get(&ticket)?;
         if !self.ui_state.agent_connections_enabled || self.agent.endpoint.is_none() {
             return Some("agent connections are off".to_string());
+        }
+        // Connections turned off and on again meanwhile: a new token.
+        let current = self.agent.token().map(|t| t.as_str().to_string());
+        if waiting.token.is_none() || waiting.token != current {
+            return Some("the session token is missing or wrong".to_string());
         }
         self.check_agent_document(&loaded.command, &loaded.args)
             .err()

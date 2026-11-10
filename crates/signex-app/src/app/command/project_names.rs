@@ -164,7 +164,7 @@ pub(super) fn project_change_refusal(what: &str, at: Point, names: &[String]) ->
 }
 
 /// What kept the project from being read in full, for a refusal.
-fn unreadable_reason(set: &ProjectSheetSet) -> String {
+pub(super) fn unreadable_reason(set: &ProjectSheetSet) -> String {
     // File names only: an answer carries no path.
     let name = |path: &std::path::Path| {
         path.file_name()

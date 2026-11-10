@@ -51,6 +51,9 @@ pub struct EditReads {
     pub(crate) children: HashMap<PathBuf, Result<Option<SchematicSheet>, String>>,
     /// Whether a path leaves its project folder through a link.
     pub(crate) escapes: HashMap<PathBuf, bool>,
+    /// For a loose target, the files its sheet symbols refer to and what they
+    /// place, as read.
+    pub(crate) subtree: Option<ProjectSheetSet>,
     /// Why the reads did not run to their end (the reader panicked).
     pub(crate) failed: Option<String>,
 }
@@ -67,8 +70,9 @@ impl std::fmt::Debug for EditReads {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "EditReads {{ project: {}, parts: {}, children: {}, escapes: {} }}",
+            "EditReads {{ project: {}, subtree: {}, parts: {}, children: {}, escapes: {} }}",
             self.project.is_some(),
+            self.subtree.is_some(),
             self.parts.len(),
             self.children.len(),
             self.escapes.len()
@@ -83,6 +87,8 @@ struct ReadPlan {
     /// Closed files the list's `place_sheet_symbol` edits refer to: read
     /// with the project, as children-to-be, not as pages of their own.
     seeds: Vec<PathBuf>,
+    /// A loose target's seeds, walked down from (open sheets, seeds, fold).
+    subtree: Option<(OpenSheets, Vec<PathBuf>, CaseFold)>,
     parts: Vec<PartKey>,
     open_libraries: Vec<(Uuid, PathBuf)>,
     children: Vec<PathBuf>,
@@ -93,6 +99,7 @@ struct ReadPlan {
 impl ReadPlan {
     fn is_empty(&self) -> bool {
         self.project.is_none()
+            && self.subtree.is_none()
             && self.parts.is_empty()
             && self.children.is_empty()
             && self.links.is_empty()
@@ -109,6 +116,14 @@ impl ReadPlan {
             set.pages_outside_the_hierarchy
                 .retain(|page| !seeds.contains(page));
             set
+        });
+        let subtree = self.subtree.map(|(open, seeds, fold)| {
+            crate::app::project_sheets::assemble_from_seeds(
+                &|p| open.get(p).cloned(),
+                &seeds,
+                &[],
+                fold,
+            )
         });
         let parts = self
             .parts
@@ -142,6 +157,7 @@ impl ReadPlan {
             .collect();
         EditReads {
             project,
+            subtree,
             parts,
             children,
             escapes,
@@ -233,6 +249,12 @@ impl Signex {
         // `run_operands` reads the project and runs the command again.
         docs.agent_edits.project_wanted.set(true);
         Err(NOT_READ.to_string())
+    }
+
+    /// For a loose target, what its sheet symbols' files place, as read.
+    pub(super) fn prefetched_subtree(&self) -> Option<&ProjectSheetSet> {
+        let reads = self.document_state.agent_edits.reads.as_ref()?;
+        reads.subtree.as_ref()
     }
 
     /// The prefetched read of `key`.
@@ -329,7 +351,13 @@ impl Signex {
     fn plan_project_read(&self, target: &Path, plan: &mut ReadPlan) {
         let docs = &self.document_state;
         let Some(project) = docs.document_project(target) else {
-            plan.seeds.clear();
+            // A loose sheet: the files its sheet symbols refer to, and what
+            // they place, for the loop check.
+            let seeds = std::mem::take(&mut plan.seeds);
+            if !seeds.is_empty() {
+                let fold = crate::app::state::project_case::fold_of(None);
+                plan.subtree = Some((open_sheets_snapshot(docs), seeds, fold));
+            }
             return;
         };
         let fold = crate::app::state::project_case::fold_of(Some(project));
@@ -340,8 +368,9 @@ impl Signex {
         let page_keys: HashSet<String> = pages.iter().map(|p| path_key_with(p, fold)).collect();
         plan.seeds
             .retain(|seed| !page_keys.contains(&path_key_with(seed, fold)));
-        let walked: Vec<PathBuf> = pages.iter().chain(&plan.seeds).cloned().collect();
-        if !project_in_memory(self, &walked, &root, fold) {
+        // A child-to-be is assembled only by the read: memory walks the
+        // project's pages and root, not the files a list is about to place.
+        if !plan.seeds.is_empty() || !project_in_memory(self, &pages, &root, fold) {
             let open = open_sheets_snapshot(docs);
             plan.project = Some(ProjectRead {
                 open,
