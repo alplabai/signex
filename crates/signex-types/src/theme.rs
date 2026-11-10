@@ -312,7 +312,8 @@ pub struct CanvasColors {
     pub grid: Color,
     pub cursor: Color,
     /// PCB board edge (outline and the rim of openings); `None` uses the
-    /// cursor colour.
+    /// cursor colour. Set on the Graphite Dark canvas, the one board
+    /// palette of both themes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub board_edge: Option<Color>,
     /// PCB keepout regions (magenta, as the Altium Keep-Out layer); `None`
@@ -422,8 +423,10 @@ const GRAPHITE_LIGHT_CANVAS: CanvasColors = CanvasColors {
     bus: c(0x5B, 0x5E, 0x66),
     grid: c(0xE2, 0xDF, 0xD8),
     cursor: c(0x15, 0x17, 0x1A),
-    board_edge: s(0xA6, 0x7C, 0x00),
-    keepout: s(0xC0, 0x1C, 0xC0),
+    // Board views draw with the Dark canvas in both themes, so the board
+    // colours live there only.
+    board_edge: None,
+    keepout: None,
 };
 
 const GRAPHITE_DARK_TOKENS: ThemeTokens = ThemeTokens {

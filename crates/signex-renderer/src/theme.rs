@@ -175,34 +175,33 @@ mod tests {
     }
 
     #[test]
-    fn board_features_take_their_colours_from_each_graphite_canvas() {
-        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
-            let canvas = canvas_colors(id);
-            let theme = ResolvedTheme::from_canvas_colors(canvas);
-            let rgba = super::to_rgba;
-            assert_eq!(
-                theme.color(ColorSlot::BoardEdge),
-                rgba(canvas.board_edge_color())
-            );
-            assert_eq!(
-                theme.color(ColorSlot::BoardOpening),
-                rgba(canvas.background)
-            );
-            assert_eq!(
-                theme.color(ColorSlot::Keepout),
-                rgba(canvas.keepout_color())
-            );
-            assert_ne!(
-                theme.color(ColorSlot::Keepout),
-                rgba(canvas.drc_warning),
-                "{id:?}: a keepout is not a DRC marker"
-            );
-            assert_ne!(
-                theme.color(ColorSlot::BoardEdge),
-                theme.color(ColorSlot::BoardOpening),
-                "{id:?}: the board edge shows against an opening"
-            );
-        }
+    fn the_board_palette_has_its_own_edge_and_keepout_colours() {
+        // Board views draw with the Graphite Dark canvas in both themes.
+        let canvas = canvas_colors(ThemeId::GraphiteDark);
+        let theme = ResolvedTheme::from_canvas_colors(canvas);
+        let rgba = super::to_rgba;
+        let edge = canvas
+            .board_edge
+            .expect("the board palette sets an edge colour");
+        let keepout = canvas
+            .keepout
+            .expect("the board palette sets a keepout colour");
+        assert_eq!(theme.color(ColorSlot::BoardEdge), rgba(edge));
+        assert_eq!(theme.color(ColorSlot::Keepout), rgba(keepout));
+        assert_eq!(
+            theme.color(ColorSlot::BoardOpening),
+            rgba(canvas.background)
+        );
+        assert_ne!(
+            rgba(keepout),
+            rgba(canvas.drc_warning),
+            "a keepout is not a DRC marker"
+        );
+        assert_ne!(
+            rgba(edge),
+            rgba(canvas.background),
+            "the edge shows against an opening"
+        );
     }
 
     #[test]
