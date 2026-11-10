@@ -384,8 +384,9 @@ entry (`D[0..7]`) placed on a bus, at an end or mid-span, is refused: the
 netlist would join the bus to the child's bus. A part pin tip, or an entry
 with a plain name, on a bus connects nothing and is accepted. A pin tip or
 sheet entry placed on a no-connect marker is refused: it would mark the new
-point unconnected. None of these takes `allow_merge` or `dry_run`, so
-`--dry-run` refuses them.
+point unconnected. The connection rule has no escape; only
+`place_sheet_symbol` takes `allow_merge`, for the names its file brings in
+(below). None takes `dry_run`, so `--dry-run` refuses them.
 
 ### `place_component`
 
@@ -429,7 +430,8 @@ next edit can wire them.
 ### `place_sheet_symbol`
 
 ```text
-place_sheet_symbol start=x,y end=x,y name=Charger file=charger.snxsch [document=..]
+place_sheet_symbol start=x,y end=x,y name=Charger file=charger.snxsch
+                   [allow_merge=true] [document=..]
 ```
 
 `start` and `end` are the two corners (on the grid, each edge at least 5.08
@@ -443,7 +445,13 @@ another sheet symbol on the sheet has, or a file another one refers to, is
 refused. `place_sheet_symbol` refuses a `file` that is the edited sheet or one
 above it in the project hierarchy (a sheet cannot contain itself). Ancestors
 come from the project as the edit reads it (its closed sheets read off the UI
-thread first), and from the hierarchy a window already shows for the sheet.
+thread first), and from the hierarchy a window already shows for the sheet;
+a `file` whose own sheet symbols place the edited sheet below it is refused
+too. The nets the file brings into the project are judged by the name rule
+of "Wire intent" ("Why `allow_merge`"): a file whose labels or power ports
+would short two project nets or rename one (a child wire carrying the
+globals `VBUS` and `VBAT`, each naming a net elsewhere) is refused unless
+`allow_merge=true`. A file that does not exist yet brings no nets.
 Creating the child file stays a window action
 (`create_sheet_from_sheet_symbol`, `gui_only`). The answer is `{"id", "name",
 "file", "at", "size"}`.
