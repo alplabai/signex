@@ -79,23 +79,38 @@ struct HeldBack {
 
 impl HeldBack {
     fn new(key: SymbolPadKey, board: &PcbBoard, parts: &[super::EcoPart]) -> Self {
-        let units: HashSet<(InstancePath, Uuid)> = parts
-            .iter()
-            .filter(|p| !p.pin_map_known())
-            .flat_map(|p| p.part.units.iter().map(|u| (p.part.sheet.clone(), *u)))
-            .collect();
-        let footprints = board
-            .footprints
-            .iter()
-            .filter(|f| {
-                f.schematic_link.as_ref().is_some_and(|l| {
-                    l.units
-                        .iter()
-                        .any(|u| units.contains(&(l.sheet.clone(), *u)))
-                })
+        let part_units = |p: &super::EcoPart| -> Vec<(InstancePath, Uuid)> {
+            p.part
+                .units
+                .iter()
+                .map(|u| (p.part.sheet.clone(), *u))
+                .collect()
+        };
+        let linked = |f: &Footprint, p: &super::EcoPart| {
+            f.schematic_link.as_ref().is_some_and(|l| {
+                l.sheet == p.part.sheet && l.units.iter().any(|u| p.part.units.contains(u))
             })
-            .map(|f| f.uuid)
-            .collect();
+        };
+        let mut units: HashSet<(InstancePath, Uuid)> = HashSet::new();
+        let mut footprints: HashSet<Uuid> = HashSet::new();
+        for p in parts {
+            // A part with no placed footprint is held when its map is
+            // unknown on its own; a placed one is judged against it.
+            let placed: Vec<&Footprint> =
+                board.footprints.iter().filter(|f| linked(f, p)).collect();
+            if placed.is_empty() {
+                if !p.pin_map_known(None) {
+                    units.extend(part_units(p));
+                }
+                continue;
+            }
+            for f in placed {
+                if !p.pin_map_known(Some(f)) {
+                    units.extend(part_units(p));
+                    footprints.insert(f.uuid);
+                }
+            }
+        }
         Self {
             key,
             units,

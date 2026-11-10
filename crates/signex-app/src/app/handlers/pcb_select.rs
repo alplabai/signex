@@ -63,8 +63,9 @@ impl Signex {
                 Task::none()
             }
             PcbCanvasMsg::FootprintDragCancelled => {
+                // The press that discarded the drag also closes a menu.
                 self.end_pcb_carry();
-                Task::none()
+                self.close_context_menu_on_press()
             }
         }
     }

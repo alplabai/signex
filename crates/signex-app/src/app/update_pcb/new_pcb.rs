@@ -70,6 +70,10 @@ impl Signex {
         let named = Self::project_board(loaded);
         if named.as_ref().is_some_and(|named| *named != path) {
             // The project names another board since the check started.
+            crate::diagnostics::log_info(format!(
+                "New PCB: the project now names another board; {} was not created",
+                path.display()
+            ));
             return;
         }
         let taken = self.document_state.holds_pcb(&path) || self.is_board_opening(&path);

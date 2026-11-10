@@ -42,8 +42,8 @@ pub(crate) struct CommandContext {
     /// That document is a `.snxsym` or `.snxfpt` editor tab. Both fields are
     /// false in a Component Preview window, which has no file of its own.
     pub document_is_editor: bool,
-    /// The main window's active tab is a board with unsaved changes, which
-    /// Save writes (a new board is written only on Save).
+    /// The window's tab is a board with unsaved changes or a live sketch,
+    /// which Save writes (a new board is written only on Save).
     pub document_is_dirty_board: bool,
     /// ERC and annotation have sheets to work on: a project is open, or
     /// some schematic is. They assemble the project's sheets, not only the
@@ -206,11 +206,10 @@ impl Signex {
             WindowDocumentKind {
                 is_schematic: main_has_schematic,
                 is_editor: has_symbol_editor || has_footprint_editor,
-                is_dirty_board: matches!(active_kind, Some(TabKind::Pcb))
-                    && document
-                        .tabs
-                        .get(document.active_tab)
-                        .is_some_and(|t| document.is_document_dirty(&t.path)),
+                is_dirty_board: document
+                    .tabs
+                    .get(document.active_tab)
+                    .is_some_and(|t| self.board_has_unsaved_work(t)),
                 has_file: true,
             },
         );
@@ -286,9 +285,17 @@ impl Signex {
                 tab.kind,
                 TabKind::SymbolEditor(_) | TabKind::FootprintEditor(_)
             ),
-            is_dirty_board: false,
+            is_dirty_board: self.board_has_unsaved_work(tab),
             has_file: !tab.kind.is_component_editor(),
         }
+    }
+
+    /// `tab` is a board with something Save writes: unsaved changes, or a
+    /// live sketch not yet applied to it.
+    fn board_has_unsaved_work(&self, tab: &crate::app::documents::TabInfo) -> bool {
+        matches!(tab.kind, TabKind::Pcb)
+            && (self.document_state.is_document_dirty(&tab.path)
+                || self.board_sketch_owed().as_deref() == Some(tab.path.as_path()))
     }
 
     /// Whether the Navigator's hierarchy places the active tab's sheet

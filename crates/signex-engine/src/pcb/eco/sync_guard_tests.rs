@@ -67,11 +67,14 @@ fn an_unresolvable_footprint_keeps_its_pads_out_of_net_sync() {
     );
 }
 
-/// A part that binds no footprint at all has no pin map to lose: its pads
-/// still sync pin n on pad n.
+/// A part that binds no footprint, matched to a board footprint with no
+/// library link, has no pin map to lose: its pads still sync pin n on pad n.
 #[test]
 fn a_part_binding_no_footprint_still_syncs_one_to_one() {
     let mut design = synced();
+    for f in &mut design.board.footprints {
+        f.library_ref = None;
+    }
     design.parts[0].footprint = Err(FootprintResolveError::NoFootprint);
     design.netlist = swapped_r1();
     let list = design.diff();
@@ -206,4 +209,31 @@ fn a_sketch_hole_keeps_its_net() {
     );
     execute(&mut design, &list);
     assert!(design.board.nets.iter().any(|n| n.number == gnd));
+}
+
+/// Review N1: a part whose row no longer binds a footprint, matched to a
+/// placed footprint built from a library footprint, keeps that footprint's
+/// pads out of net sync: its pin map may differ from 1:1.
+#[test]
+fn a_part_binding_no_footprint_keeps_a_library_footprints_pads() {
+    let mut design = synced();
+    assert!(
+        design
+            .board
+            .footprints
+            .iter()
+            .all(|f| f.library_ref.is_some()),
+        "the synced footprints are built from the library"
+    );
+    design.parts[0].footprint = Err(FootprintResolveError::NoFootprint);
+    design.netlist = swapped_r1();
+    let list = design.diff();
+    assert_eq!(pad_rows_of(&list, 0xa1), 0, "{}", report_text(&list));
+    assert!(
+        list.notes.iter().any(
+            |n| matches!(n, EcoNote::FootprintUnresolved { footprint, .. } if *footprint == u(0xa1))
+        ),
+        "{}",
+        report_text(&list)
+    );
 }

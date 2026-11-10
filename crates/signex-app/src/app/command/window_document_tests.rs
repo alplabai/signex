@@ -329,10 +329,11 @@ fn main_shows_a_pcb(f: &mut Fixture) {
     f.app.document_state.clear_document_dirty(&f.main_path);
 }
 
-/// The undocked window shows a PCB; the main window keeps its sheet.
+/// The undocked window shows a clean PCB; the main window keeps its sheet.
 fn undocked_shows_a_pcb(f: &mut Fixture) {
     f.app.document_state.engines.remove(&f.undocked_path);
     f.app.document_state.tabs[1].kind = TabKind::Pcb;
+    f.app.document_state.clear_document_dirty(&f.undocked_path);
 }
 
 /// #1813: Save, Save As and Print in an undocked sheet's menu enable by
@@ -365,6 +366,19 @@ fn an_undocked_pcbs_sheet_rows_grey_with_a_sheet_in_the_main_window() {
     for id in ["save_document", "save_document_as", "print"] {
         assert!(!row_enabled(&f, Some(f.window), id), "{id} in the window");
         assert!(row_enabled(&f, None, id), "{id} in the main window");
+    }
+    // A board with unsaved changes saves from its own window, as Ctrl+S
+    // there does (PR #2271).
+    f.app.document_state.mark_document_dirty(&f.undocked_path);
+    assert!(
+        row_enabled(&f, Some(f.window), "save_document"),
+        "Save on a changed board"
+    );
+    for id in ["save_document_as", "print"] {
+        assert!(
+            !row_enabled(&f, Some(f.window), id),
+            "{id} stays greyed on a board"
+        );
     }
 }
 

@@ -79,15 +79,22 @@ pub struct EcoPart {
 }
 
 impl EcoPart {
-    /// Whether the part's pin-to-pad map is known: read back, and either
-    /// resolved or binding no footprint at all (1:1). Net sync leaves the
-    /// pads of a part without one alone rather than guess pin n on pad n.
-    pub fn pin_map_known(&self) -> bool {
+    /// Whether the part's pin-to-pad map is known against `placed`, the
+    /// board footprint matched to it: read back, and either resolved or
+    /// binding no footprint at all. Binding none means 1:1 only for a placed
+    /// footprint with no library link; one built from a library footprint
+    /// may carry a pin map the part no longer names. Net sync leaves the
+    /// pads of a part without a known map alone rather than guess pin n on
+    /// pad n.
+    pub fn pin_map_known(&self, placed: Option<&signex_types::pcb::Footprint>) -> bool {
         self.read
-            && matches!(
-                &self.footprint,
-                Ok(_) | Err(FootprintResolveError::NoFootprint)
-            )
+            && match &self.footprint {
+                Ok(_) => true,
+                Err(FootprintResolveError::NoFootprint) => {
+                    placed.is_none_or(|f| f.library_ref.is_none())
+                }
+                Err(_) => false,
+            }
     }
 }
 

@@ -23,6 +23,9 @@ const SP: Spacing = Spacing::DEFAULT;
 // Per-side row labels: the layer names `pcb.ftl` gives (pinned by a test).
 const TOP_LAYER: &str = "Top Layer";
 const BOTTOM_LAYER: &str = "Bottom Layer";
+/// The row for every inner copper layer at once, Altium's Top-Middle-Bottom
+/// pad stack term; one inner layer is "Mid-Layer N" (`pcb.ftl`).
+const MID_LAYERS: &str = "Mid Layer";
 const TOP_SOLDER: &str = "Top Solder";
 const BOTTOM_SOLDER: &str = "Bottom Solder";
 const TOP_PASTE: &str = "Top Paste";
@@ -99,11 +102,11 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
     ));
     let copper_rows: &[&str] = match values.pad_stack_tab {
         PadStackTab::Simple => &["All Layers"],
-        PadStackTab::TopMiddleBottom => &["Top Layer", "Mid Layer", "Bottom Layer"],
+        PadStackTab::TopMiddleBottom => &[TOP_LAYER, MID_LAYERS, BOTTOM_LAYER],
         PadStackTab::FullStack => match values.side {
             PadSide::Top => &[TOP_LAYER, TOP_SOLDER, TOP_PASTE],
             PadSide::Bottom => &[BOTTOM_LAYER, BOTTOM_SOLDER, BOTTOM_PASTE],
-            PadSide::All => &["Top Layer", "Inner", "Bottom Layer"],
+            PadSide::All => &[TOP_LAYER, MID_LAYERS, BOTTOM_LAYER],
         },
     };
     for (idx, row_label) in copper_rows.iter().enumerate() {

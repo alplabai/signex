@@ -132,6 +132,25 @@ fn ctrl_s_writes_the_sketch_and_keeps_the_mode() {
     assert!(!title(&f).contains("unsaved"), "{}", title(&f));
 }
 
+/// Review N2: on a board with no other change, the live sketch alone
+/// enables Save, so Ctrl+S and File ▸ Save write it.
+#[test]
+fn ctrl_s_and_the_save_row_write_a_sketch_on_a_clean_board() {
+    let mut f = open_board();
+    sketch_an_outline(&mut f);
+    assert!(
+        !f.app.document_state.is_document_dirty(&f.path),
+        "only the sketch is owed"
+    );
+    press(&mut f, None, "Ctrl+S");
+    assert!(on_disk(&f).sketch.is_some(), "Ctrl+S wrote the sketch");
+
+    let mut f = open_board();
+    sketch_an_outline(&mut f);
+    send(&mut f, crate::menu_support::menu_row("save_document"));
+    assert!(on_disk(&f).sketch.is_some(), "File ▸ Save wrote the sketch");
+}
+
 #[test]
 fn save_all_writes_the_sketch() {
     let mut f = open_board();

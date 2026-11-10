@@ -52,6 +52,9 @@ pub struct UpdatePcbState {
     pub(crate) list: Option<EcoChangeList>,
     /// The last Validate: `Ok` or why it refused.
     pub(crate) validation: Option<Result<(), String>>,
+    /// Libraries whose open failure was already logged: a recompute logs
+    /// each once per dialog.
+    pub(crate) logged_library_errors: std::collections::HashSet<PathBuf>,
 }
 
 impl UpdatePcbState {
@@ -73,6 +76,7 @@ impl UpdatePcbState {
             job: 0,
             apply,
             snapshot: None,
+            logged_library_errors: std::collections::HashSet::new(),
             list: None,
             validation: None,
         }

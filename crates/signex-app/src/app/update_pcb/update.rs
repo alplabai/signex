@@ -249,6 +249,9 @@ impl Signex {
         match result {
             Ok(computed) => {
                 for (library, why) in &computed.snapshot.library_errors {
+                    if !state.logged_library_errors.insert(library.clone()) {
+                        continue;
+                    }
                     crate::diagnostics::log_warning(
                         t!(
                             self.ui_state.i18n,

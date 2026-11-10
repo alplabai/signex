@@ -165,7 +165,7 @@ fn footprint_rows(
         return;
     }
     if let Err(error) = &part.footprint
-        && !part.pin_map_known()
+        && !part.pin_map_known(Some(fp))
     {
         list.notes.push(EcoNote::FootprintUnresolved {
             footprint: id,
