@@ -311,9 +311,29 @@ pub struct CanvasColors {
     pub bus: Color,
     pub grid: Color,
     pub cursor: Color,
+    /// PCB board edge (outline and the rim of openings); `None` uses the
+    /// cursor colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_edge: Option<Color>,
+    /// PCB keepout regions (magenta, as the Altium Keep-Out layer); `None`
+    /// uses the DRC warning colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keepout: Option<Color>,
 }
 
 impl CanvasColors {
+    /// The colour of the PCB board edge.
+    #[must_use]
+    pub fn board_edge_color(&self) -> Color {
+        self.board_edge.unwrap_or(self.cursor)
+    }
+
+    /// The colour of PCB keepout regions.
+    #[must_use]
+    pub fn keepout_color(&self) -> Color {
+        self.keepout.unwrap_or(self.drc_warning)
+    }
+
     /// The colour of PCB ratsnest lines.
     #[must_use]
     pub fn ratsnest_color(&self) -> Color {
@@ -402,6 +422,8 @@ const GRAPHITE_LIGHT_CANVAS: CanvasColors = CanvasColors {
     bus: c(0x5B, 0x5E, 0x66),
     grid: c(0xE2, 0xDF, 0xD8),
     cursor: c(0x15, 0x17, 0x1A),
+    board_edge: s(0xA6, 0x7C, 0x00),
+    keepout: s(0xC0, 0x1C, 0xC0),
 };
 
 const GRAPHITE_DARK_TOKENS: ThemeTokens = ThemeTokens {
@@ -466,6 +488,8 @@ const GRAPHITE_DARK_CANVAS: CanvasColors = CanvasColors {
     bus: c(0xA3, 0xA5, 0xAB),
     grid: c(0x26, 0x28, 0x2D),
     cursor: c(0xEC, 0xEA, 0xE5),
+    board_edge: s(0xE8, 0xC5, 0x47),
+    keepout: s(0xFF, 0x40, 0xFF),
 };
 
 // ---------------------------------------------------------------------------

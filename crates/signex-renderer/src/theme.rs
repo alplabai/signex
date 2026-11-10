@@ -46,9 +46,9 @@ impl ResolvedTheme {
         resolved.set_slot(ColorSlot::Ratsnest, to_rgba(canvas.ratsnest_color()));
         // The board edge is the canvas's strongest ink; an opening shows the
         // canvas under the board; a keepout is where a DRC rule bites.
-        resolved.set_slot(ColorSlot::BoardEdge, to_rgba(canvas.cursor));
+        resolved.set_slot(ColorSlot::BoardEdge, to_rgba(canvas.board_edge_color()));
         resolved.set_slot(ColorSlot::BoardOpening, to_rgba(canvas.background));
-        resolved.set_slot(ColorSlot::Keepout, to_rgba(canvas.drc_warning));
+        resolved.set_slot(ColorSlot::Keepout, to_rgba(canvas.keepout_color()));
 
         resolved
     }
@@ -180,12 +180,23 @@ mod tests {
             let canvas = canvas_colors(id);
             let theme = ResolvedTheme::from_canvas_colors(canvas);
             let rgba = super::to_rgba;
-            assert_eq!(theme.color(ColorSlot::BoardEdge), rgba(canvas.cursor));
+            assert_eq!(
+                theme.color(ColorSlot::BoardEdge),
+                rgba(canvas.board_edge_color())
+            );
             assert_eq!(
                 theme.color(ColorSlot::BoardOpening),
                 rgba(canvas.background)
             );
-            assert_eq!(theme.color(ColorSlot::Keepout), rgba(canvas.drc_warning));
+            assert_eq!(
+                theme.color(ColorSlot::Keepout),
+                rgba(canvas.keepout_color())
+            );
+            assert_ne!(
+                theme.color(ColorSlot::Keepout),
+                rgba(canvas.drc_warning),
+                "{id:?}: a keepout is not a DRC marker"
+            );
             assert_ne!(
                 theme.color(ColorSlot::BoardEdge),
                 theme.color(ColorSlot::BoardOpening),
