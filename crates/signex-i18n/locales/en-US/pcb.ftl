@@ -13,20 +13,21 @@ pcb-layers-mechanical = Mechanical
 # Status bar pill with the active copper layer; the layer's name follows it.
 pcb-status-layer = Layer:
 
-# Layer names in the Layers panel and the status bar. A mechanical layer the
-# user named shows that name instead.
+# Layer names in the Layers panel, the layer strip and the status bar, as
+# Altium names them. A mechanical layer the user named shows that name instead.
 pcb-layer-top-copper = Top Layer
 pcb-layer-bottom-copper = Bottom Layer
 # An inner copper layer; $index counts from the top, starting at 1.
-pcb-layer-inner-copper = Inner { $index }
+pcb-layer-inner-copper = Mid-Layer { $index }
 # A mechanical layer with no name of its own; $index is its number, 1 to 32.
 pcb-layer-mechanical = Mechanical { $index }
-pcb-layer-edge-cuts = Edge Cuts
+# The board edge: the outline and the rims of its openings.
+pcb-layer-board-outline = Board Outline
 pcb-layer-margin = Margin
-pcb-layer-silkscreen-top = Top Silkscreen
-pcb-layer-silkscreen-bottom = Bottom Silkscreen
-pcb-layer-solder-mask-top = Top Solder Mask
-pcb-layer-solder-mask-bottom = Bottom Solder Mask
+pcb-layer-silkscreen-top = Top Overlay
+pcb-layer-silkscreen-bottom = Bottom Overlay
+pcb-layer-solder-mask-top = Top Solder
+pcb-layer-solder-mask-bottom = Bottom Solder
 pcb-layer-paste-top = Top Paste
 pcb-layer-paste-bottom = Bottom Paste
 pcb-layer-adhesive-top = Top Adhesive
@@ -39,8 +40,8 @@ pcb-layer-courtyard-top = Top Courtyard
 pcb-layer-courtyard-bottom = Bottom Courtyard
 pcb-layer-body-3d-top = Top 3D Body
 pcb-layer-body-3d-bottom = Bottom 3D Body
-pcb-layer-keepout-top = Top Keepout
-pcb-layer-keepout-bottom = Bottom Keepout
+pcb-layer-keepout-top = Top Keep-Out Layer
+pcb-layer-keepout-bottom = Bottom Keep-Out Layer
 pcb-layer-fiducial-top = Top Fiducial
 pcb-layer-fiducial-bottom = Bottom Fiducial
 pcb-layer-designator-top = Top Designator

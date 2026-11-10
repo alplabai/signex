@@ -2,7 +2,7 @@
 //! active layer, driven through the menu-row message and the keyboard on a
 //! board opened from disk. None of it reaches the file.
 
-use signex_app::app::{FileMsg, Message, Signex, UiMsg};
+use signex_app::app::{FileMsg, Message, PcbMsg, PcbViewMsg, Signex, UiMsg};
 use signex_app::keymap::ShortcutTrigger;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{
@@ -122,9 +122,13 @@ struct Fixture {
 }
 
 fn open_board() -> Fixture {
+    open(board())
+}
+
+fn open(board: PcbBoard) -> Fixture {
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("board.snxpcb");
-    std::fs::write(&path, SnxPcb::new(board()).write_string().unwrap()).unwrap();
+    std::fs::write(&path, SnxPcb::new(board).write_string().unwrap()).unwrap();
     let saved = std::fs::read(&path).unwrap();
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
@@ -286,7 +290,7 @@ fn the_layers_panel_follows_the_view() {
     let panel = &f.app.document_state.panel_ctx.pcb_layers;
     assert_eq!(panel.active, Some(CopperLayer::Top));
     assert!(panel.hidden.is_empty());
-    // Hiding the active Top layer moves the active layer to Inner 1; the
+    // Hiding the active Top layer moves the active layer to Mid-Layer 1; the
     // next step skips the hidden Top and lands on Bottom.
     run(&mut f, "toggle_layer_visibility");
     let panel = &f.app.document_state.panel_ctx.pcb_layers;
@@ -310,4 +314,42 @@ fn the_board_view_commands_are_off_without_a_pcb() {
         drive(&mut app, task);
     }
     assert!(app.ui_state.pcb_layer_views.is_empty());
+}
+
+/// The Board Outline row's eye hides the drawn board edge and shows it
+/// again; the `.snxpcb` keeps its `EdgeCuts` token and is never written.
+#[test]
+fn the_board_outline_row_hides_and_shows_the_board_edge() {
+    let mut board = board();
+    board.outline = vec![
+        pt(-5.0, -5.0),
+        pt(20.0, -5.0),
+        pt(20.0, 15.0),
+        pt(-5.0, 15.0),
+    ];
+    let mut f = open(board);
+    let toggle = |f: &mut Fixture| {
+        let task = f.app.update(Message::Pcb(PcbMsg::View(
+            PcbViewMsg::LayerVisibilityToggled(signex_renderer::pcb::BOARD_OUTLINE),
+        )));
+        drive(&mut f.app, task);
+    };
+    assert!(!snapshot(&f).board_features.edge_hidden);
+    assert_eq!(snapshot(&f).board_features.outline.len(), 4);
+    toggle(&mut f);
+    assert!(
+        snapshot(&f).board_features.edge_hidden,
+        "the edge is hidden"
+    );
+    assert!(
+        f.app
+            .document_state
+            .panel_ctx
+            .pcb_layers
+            .hidden
+            .contains(&signex_renderer::pcb::BOARD_OUTLINE)
+    );
+    toggle(&mut f);
+    assert!(!snapshot(&f).board_features.edge_hidden, "the edge is back");
+    assert_eq!(std::fs::read(&f.path).unwrap(), f.saved);
 }

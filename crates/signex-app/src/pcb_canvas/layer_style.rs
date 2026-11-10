@@ -4,8 +4,10 @@
 //! board palette can plug in here.
 
 use iced::Color;
+use signex_gfx::style::ColorSlot;
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
-use signex_renderer::pcb::LayerRow;
+use signex_renderer::pcb::{BOARD_OUTLINE, LayerRow};
+use signex_renderer::theme::ResolvedTheme;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::Label;
@@ -44,7 +46,7 @@ pub fn row_label(i18n: &I18n, row: &LayerRow) -> Label<'static> {
 fn technical_id(layer: TechnicalLayer) -> MessageId {
     use TechnicalLayer as T;
     match layer {
-        T::EdgeCuts => ids::PCB_LAYER_EDGE_CUTS,
+        T::EdgeCuts => ids::PCB_LAYER_BOARD_OUTLINE,
         T::Margin => ids::PCB_LAYER_MARGIN,
         T::SilkscreenTop => ids::PCB_LAYER_SILKSCREEN_TOP,
         T::SilkscreenBottom => ids::PCB_LAYER_SILKSCREEN_BOTTOM,
@@ -77,9 +79,16 @@ fn technical_id(layer: TechnicalLayer) -> MessageId {
 }
 
 /// The colour `layer` is listed with: red top, blue bottom, a cycle of hues
-/// for the inner and mechanical layers, one per technical family. `tokens`
-/// is unused until the Graphite board palette (#2229) decides these.
+/// for the inner and mechanical layers, one per technical family. Board
+/// Outline takes the board edge's own colour, so its swatch matches the
+/// drawn edge. `tokens` is unused until the Graphite board palette (#2229)
+/// decides the rest.
 pub fn layer_colour(layer: PcbLayer, _tokens: &ThemeTokens) -> Color {
+    if layer == BOARD_OUTLINE {
+        let [r, g, b, a] = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors())
+            .color(ColorSlot::BoardEdge);
+        return Color { r, g, b, a };
+    }
     const CYCLE: [[u8; 3]; 6] = [
         [0xC8, 0xA0, 0x2C],
         [0x3C, 0xA8, 0x6A],
@@ -101,7 +110,7 @@ pub fn layer_colour(layer: PcbLayer, _tokens: &ThemeTokens) -> Color {
 fn technical_colour(layer: TechnicalLayer) -> [u8; 3] {
     use TechnicalLayer as T;
     match layer {
-        T::EdgeCuts | T::Margin => [0xE0, 0xD0, 0x40],
+        T::Margin => [0xE0, 0xD0, 0x40],
         T::SilkscreenTop | T::SilkscreenBottom => [0xE8, 0xE8, 0xE8],
         T::SolderMaskTop | T::SolderMaskBottom => [0x40, 0x9C, 0x58],
         T::PasteTop | T::PasteBottom => [0xA8, 0xA8, 0xB8],
@@ -127,5 +136,79 @@ mod tests {
             copper_name(&i18n, CopperLayer::Top).into_string(),
             "Top Layer"
         );
+    }
+
+    /// The Altium name of every layer kind (decided 2026-11-10). Courtyard,
+    /// Fab, Assembly, 3D Body, Fiducial and Designator keep descriptive
+    /// names; the edge is the Board Outline row.
+    fn altium_name(layer: PcbLayer) -> String {
+        use TechnicalLayer as T;
+        let technical = |t: TechnicalLayer| match t {
+            T::EdgeCuts => "Board Outline",
+            T::Margin => "Margin",
+            T::SilkscreenTop => "Top Overlay",
+            T::SilkscreenBottom => "Bottom Overlay",
+            T::SolderMaskTop => "Top Solder",
+            T::SolderMaskBottom => "Bottom Solder",
+            T::PasteTop => "Top Paste",
+            T::PasteBottom => "Bottom Paste",
+            T::AdhesiveTop => "Top Adhesive",
+            T::AdhesiveBottom => "Bottom Adhesive",
+            T::FabTop => "Top Fab",
+            T::FabBottom => "Bottom Fab",
+            T::AssemblyTop => "Top Assembly",
+            T::AssemblyBottom => "Bottom Assembly",
+            T::CourtyardTop => "Top Courtyard",
+            T::CourtyardBottom => "Bottom Courtyard",
+            T::Body3dTop => "Top 3D Body",
+            T::Body3dBottom => "Bottom 3D Body",
+            T::KeepoutTop => "Top Keep-Out Layer",
+            T::KeepoutBottom => "Bottom Keep-Out Layer",
+            T::FiducialTop => "Top Fiducial",
+            T::FiducialBottom => "Bottom Fiducial",
+            T::DesignatorTop => "Top Designator",
+            T::DesignatorBottom => "Bottom Designator",
+            T::Dimensions => "Dimensions",
+            T::Notes => "Notes",
+            T::DrillDrawing => "Drill Drawing",
+            T::Eco1 => "ECO 1",
+            T::Eco2 => "ECO 2",
+        };
+        match layer {
+            PcbLayer::Copper(CopperLayer::Top) => "Top Layer".to_owned(),
+            PcbLayer::Copper(CopperLayer::Bottom) => "Bottom Layer".to_owned(),
+            PcbLayer::Copper(CopperLayer::Inner(n)) => format!("Mid-Layer {}", n.index()),
+            PcbLayer::Mechanical(m) => format!("Mechanical {}", m.index()),
+            PcbLayer::Technical(t) => technical(t).to_owned(),
+        }
+    }
+
+    #[test]
+    fn every_layer_kind_has_its_altium_name() {
+        let i18n = I18n::en_us();
+        let mut seen = std::collections::HashSet::new();
+        for layer in PcbLayer::all() {
+            // Fluent wraps a placeable ($index) in bidi isolation marks.
+            let name: String = layer_name(&i18n, layer)
+                .into_string()
+                .chars()
+                .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
+                .collect();
+            assert_eq!(name, altium_name(layer), "{layer:?}");
+            assert!(seen.insert(name.clone()), "two layers named {name}");
+        }
+        assert_eq!(
+            layer_name(&i18n, BOARD_OUTLINE).into_string(),
+            "Board Outline"
+        );
+    }
+
+    #[test]
+    fn the_board_outline_swatch_is_the_drawn_board_edge_colour() {
+        let edge = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors())
+            .color(ColorSlot::BoardEdge);
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let swatch = layer_colour(BOARD_OUTLINE, &tokens);
+        assert_eq!([swatch.r, swatch.g, swatch.b, swatch.a], edge);
     }
 }

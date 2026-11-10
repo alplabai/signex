@@ -197,7 +197,7 @@ define_ids! {
     PCB_LAYER_BOTTOM_COPPER = "pcb-layer-bottom-copper";
     PCB_LAYER_INNER_COPPER = "pcb-layer-inner-copper";
     PCB_LAYER_MECHANICAL = "pcb-layer-mechanical";
-    PCB_LAYER_EDGE_CUTS = "pcb-layer-edge-cuts";
+    PCB_LAYER_BOARD_OUTLINE = "pcb-layer-board-outline";
     PCB_LAYER_MARGIN = "pcb-layer-margin";
     PCB_LAYER_SILKSCREEN_TOP = "pcb-layer-silkscreen-top";
     PCB_LAYER_SILKSCREEN_BOTTOM = "pcb-layer-silkscreen-bottom";

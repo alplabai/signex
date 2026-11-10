@@ -11,8 +11,8 @@ use pcb_geom::ratsnest;
 use signex_gfx::pipeline::polygon::polygon_fill_triangles;
 use signex_gfx::scene::{DirtyFlags, Scene};
 use signex_renderer::pcb::{
-    BoardFeaturesInput, PcbLayerView, PcbRenderer, PcbSnapshot, board_copper_layers, layer_rows,
-    ratsnest_inputs,
+    BOARD_OUTLINE, BoardFeaturesInput, PcbLayerView, PcbRenderer, PcbSnapshot, board_copper_layers,
+    layer_rows, ratsnest_inputs,
 };
 use signex_renderer::schematic::ViewRenderer;
 use signex_renderer::theme::ResolvedTheme;
@@ -240,5 +240,54 @@ fn the_real_boards_draw_no_ratsnest_because_every_net_is_routed() {
         PcbRenderer::build_scene(&features_only, &theme, DirtyFlags::OVERLAY, &mut expected);
         assert!(!expected.overlay_lines.is_empty(), "{name}: the outline");
         assert_eq!(scene.overlay_lines, expected.overlay_lines, "{name}");
+    }
+}
+
+/// Hiding the Board Outline row on a real board drops every board-edge
+/// stroke from the overlay, and the `.snxpcb` still writes back byte for
+/// byte with its `EdgeCuts` token: the row is view state, not a file change.
+#[test]
+fn the_board_outline_row_is_view_state_and_the_real_boards_round_trip() {
+    use signex_gfx::style::ColorSlot;
+    let theme = ResolvedTheme::builtin_default();
+    let edge = theme.color(ColorSlot::BoardEdge);
+    for name in NAMES {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../signex-types/tests/corpus/pcb/real")
+            .join(format!("{name}.snxpcb"));
+        let text = std::fs::read_to_string(path).expect("corpus file");
+        assert!(text.contains("EdgeCuts"), "{name}: stored token");
+        let doc = SnxPcb::parse(&text).expect("board parses");
+        let board = doc.board.clone();
+
+        let edge_strokes = |view: &PcbLayerView| {
+            let snapshot = PcbSnapshot::from_board_with_view(&board, view);
+            let mut scene = Scene::default();
+            PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::OVERLAY, &mut scene);
+            scene
+                .overlay_lines
+                .iter()
+                .filter(|l| l.color == edge)
+                .count()
+                + scene
+                    .overlay_circles
+                    .iter()
+                    .filter(|c| c.color == edge)
+                    .count()
+                + scene
+                    .overlay_polygons
+                    .iter()
+                    .filter(|p| p.stroke_color == Some(edge))
+                    .count()
+        };
+        let mut view = PcbLayerView::default();
+        assert!(edge_strokes(&view) > 0, "{name}: the edge is drawn");
+        view.toggle_visibility(BOARD_OUTLINE);
+        assert_eq!(edge_strokes(&view), 0, "{name}: the edge is hidden");
+        view.toggle_visibility(BOARD_OUTLINE);
+        assert!(edge_strokes(&view) > 0, "{name}: the edge is back");
+
+        let written = doc.write_string().expect("writes");
+        assert_eq!(written, text, "{name}: byte-identical round trip");
     }
 }

@@ -41,6 +41,9 @@ pub struct BoardFeaturesInput {
     pub cutouts: Vec<Vec<[f32; 2]>>,
     pub holes: Vec<HoleInput>,
     pub keepouts: Vec<Vec<[f32; 2]>>,
+    /// The Board Outline row is hidden: no edge stroke on the outline, the
+    /// cutouts or the hole rims. The openings still draw.
+    pub edge_hidden: bool,
 }
 
 impl BoardFeaturesInput {
@@ -82,13 +85,14 @@ pub(super) fn emit(features: &BoardFeaturesInput, theme: &ResolvedTheme, scene: 
     let opening = theme.color(ColorSlot::BoardOpening);
     let keepout_color = theme.color(ColorSlot::Keepout);
     let keepout_hatch = with_alpha_mul(keepout_color, KEEPOUT_HATCH_ALPHA);
+    let edge_shown = !features.edge_hidden;
     for cutout in features.cutouts.iter().filter(|c| c.len() >= 3) {
         scene.overlay_polygons.push(GpuPolygon {
             vertices: cutout.clone(),
             holes: Vec::new(),
             fill_color: opening,
-            stroke_color: Some(edge),
-            stroke_width: EDGE_WIDTH_MM,
+            stroke_color: edge_shown.then_some(edge),
+            stroke_width: if edge_shown { EDGE_WIDTH_MM } else { 0.0 },
         });
     }
     for hole in features.holes.iter().filter(|h| h.drill_mm > 0.0) {
@@ -100,6 +104,9 @@ pub(super) fn emit(features: &BoardFeaturesInput, theme: &ResolvedTheme, scene: 
             stroke_width: 0.0,
             color: opening,
         });
+        if !edge_shown {
+            continue;
+        }
         scene.overlay_circles.push(Circle {
             center: hole.center,
             radius: (radius - EDGE_WIDTH_MM * 0.5).max(EDGE_WIDTH_MM * 0.5),
@@ -115,7 +122,7 @@ pub(super) fn emit(features: &BoardFeaturesInput, theme: &ResolvedTheme, scene: 
                 .push(line(p0, p1, keepout_hatch, HATCH_WIDTH_MM));
         }
     }
-    if features.outline.len() >= 2 {
+    if edge_shown && features.outline.len() >= 2 {
         push_loop(scene, &features.outline, edge, EDGE_WIDTH_MM);
     }
 }
@@ -218,6 +225,7 @@ mod tests {
                 drill_mm: 3.2,
             }],
             keepouts: vec![square(10.0)],
+            edge_hidden: false,
         };
         let mut scene = Scene::default();
         emit(&features, &ResolvedTheme::builtin_default(), &mut scene);
@@ -226,5 +234,47 @@ mod tests {
         assert!(scene.overlay_circles[0].is_filled());
         // Four keepout edges, its hatch, and four outline edges.
         assert!(scene.overlay_lines.len() > 8);
+    }
+
+    #[test]
+    fn a_hidden_edge_drops_the_outline_cutout_rim_and_hole_rim() {
+        let theme = ResolvedTheme::builtin_default();
+        let edge = theme.color(ColorSlot::BoardEdge);
+        let mut features = BoardFeaturesInput {
+            outline: square(50.0),
+            cutouts: vec![square(5.0)],
+            holes: vec![HoleInput {
+                center: [4.0, 4.0],
+                drill_mm: 3.2,
+            }],
+            ..BoardFeaturesInput::default()
+        };
+        let draw = |features: &BoardFeaturesInput| {
+            let mut scene = Scene::default();
+            emit(features, &theme, &mut scene);
+            scene
+        };
+        let shown = draw(&features);
+        assert_eq!(
+            shown
+                .overlay_lines
+                .iter()
+                .filter(|l| l.color == edge)
+                .count(),
+            4
+        );
+        features.edge_hidden = true;
+        let hidden = draw(&features);
+        assert!(hidden.overlay_lines.iter().all(|l| l.color != edge));
+        assert!(hidden.overlay_circles.iter().all(|c| c.color != edge));
+        assert!(
+            hidden
+                .overlay_polygons
+                .iter()
+                .all(|p| p.stroke_color.is_none())
+        );
+        // The openings stay: the cutout fill and the hole disc.
+        assert_eq!(hidden.overlay_polygons.len(), 1);
+        assert_eq!(hidden.overlay_circles.len(), 1);
     }
 }

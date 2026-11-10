@@ -1148,6 +1148,7 @@ mod tests {
                     drill_mm: 4.0,
                 }],
                 keepouts: vec![vec![[-5.0, 10.0], [5.0, 10.0], [5.0, 45.0]]],
+                edge_hidden: false,
             },
             ..PcbSnapshot::default()
         };

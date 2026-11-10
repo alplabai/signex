@@ -52,7 +52,8 @@ fn rows_show_the_names_of_copper_technical_and_mechanical_layers() {
         "MECHANICAL",
         "Top Layer",
         "Bottom Layer",
-        "Top Silkscreen",
+        "Top Overlay",
+        "Board Outline",
         "Assembly notes",
     ] {
         find(&texts, label);
@@ -94,11 +95,36 @@ fn a_name_click_picks_the_copper_layer_and_an_eye_click_toggles_it() {
     );
 }
 
+/// The Board Outline row's eye toggles the layer that gates the drawn edge.
+#[test]
+fn the_board_outline_eye_toggles_the_board_edge() {
+    let ctx = context(&PcbLayerView::default());
+    let texts = lay_out_texts(view_panel_for_test(&ctx), WINDOW);
+    let label = find(&texts, "Board Outline").bounds;
+    // Same row geometry as a copper row.
+    let eye_x = label.x - SP.s - 12.0 - SP.s - SP.xs - (7.0 + SP.s);
+    let toggled = messages_on_click_at(
+        view_panel_for_test(&ctx),
+        WINDOW,
+        None,
+        iced::Point::new(eye_x, label.center_y()),
+    );
+    assert!(
+        matches!(
+            toggled.as_slice(),
+            [PanelMsg::PcbLayers(PcbViewMsg::LayerVisibilityToggled(
+                signex_renderer::pcb::BOARD_OUTLINE
+            ))]
+        ),
+        "{toggled:?}"
+    );
+}
+
 /// A technical layer has no active state: its name is not a button.
 #[test]
 fn a_technical_layer_name_is_not_clickable() {
     let ctx = context(&PcbLayerView::default());
-    let clicked = messages_on_click(view_panel_for_test(&ctx), WINDOW, "Top Silkscreen");
+    let clicked = messages_on_click(view_panel_for_test(&ctx), WINDOW, "Top Overlay");
     assert!(clicked.is_empty(), "{clicked:?}");
 }
 

@@ -261,3 +261,31 @@ fn a_via_spanning_the_active_layer_is_on_it() {
         Emphasis::Normal
     );
 }
+
+#[test]
+fn hiding_board_outline_removes_the_edge_overlay_and_showing_it_brings_it_back() {
+    let mut board = board();
+    board.outline = [(0.0, 0.0), (30.0, 0.0), (30.0, 20.0), (0.0, 20.0)]
+        .into_iter()
+        .map(|(x, y)| signex_types::pcb::Point { x, y })
+        .collect();
+    let theme = ResolvedTheme::builtin_default();
+    let edge = theme.color(signex_gfx::style::ColorSlot::BoardEdge);
+    let edge_lines = |view: &PcbLayerView| {
+        let snapshot = PcbSnapshot::from_board_with_view(&board, view);
+        let mut scene = Scene::default();
+        super::super::PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::OVERLAY, &mut scene);
+        scene
+            .overlay_lines
+            .iter()
+            .filter(|l| l.color == edge)
+            .count()
+    };
+    let mut view = PcbLayerView::default();
+    assert_eq!(edge_lines(&view), 4, "the outline's four edges");
+    view.toggle_visibility(BOARD_OUTLINE);
+    assert!(!view.is_visible(BOARD_OUTLINE));
+    assert_eq!(edge_lines(&view), 0, "a hidden Board Outline draws no edge");
+    view.toggle_visibility(BOARD_OUTLINE);
+    assert_eq!(edge_lines(&view), 4, "shown again, the edge is back");
+}

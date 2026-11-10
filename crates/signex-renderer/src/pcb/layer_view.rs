@@ -21,6 +21,11 @@ use super::emit::{
 /// layer's swatch in the Layers panel.
 pub const DIMMED_ALPHA: f32 = 0.35;
 
+/// The Board Outline row: the layer whose visibility shows or hides the
+/// drawn board edge (`PcbBoard::outline` and the rims of its openings). The
+/// `.snxpcb` keeps the `EdgeCuts` token for it.
+pub const BOARD_OUTLINE: PcbLayer = PcbLayer::Technical(TechnicalLayer::EdgeCuts);
+
 /// How an item stands against the active copper layer. Drawn in this order,
 /// so the active layer ends up on top.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -342,7 +347,10 @@ impl PcbSnapshot {
             rule_areas,
             ratsnest_lines: Vec::new(),
             drc_markers: Vec::new(),
-            board_features: super::BoardFeaturesInput::from_board(board),
+            board_features: super::BoardFeaturesInput {
+                edge_hidden: view.is_some_and(|v| !v.is_visible(BOARD_OUTLINE)),
+                ..super::BoardFeaturesInput::from_board(board)
+            },
         }
     }
 }

@@ -122,7 +122,8 @@ mod ratsnest;
 pub use board_features::{BoardFeaturesInput, HoleInput};
 use emit::*;
 pub use layer_view::{
-    DIMMED_ALPHA, Emphasis, LayerGroup, LayerRow, PcbLayerView, board_copper_layers, layer_rows,
+    BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, LayerGroup, LayerRow, PcbLayerView, board_copper_layers,
+    layer_rows,
 };
 pub use ratsnest::ratsnest_inputs;
 
