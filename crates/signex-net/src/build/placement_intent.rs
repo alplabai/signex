@@ -5,19 +5,17 @@
 //! `docs/CLI.md`, "Labels, power ports, junctions and no-connects".
 //!
 //! There is one rule, as for a wire run:
-//! * a name change: for nets, what `join_rule::needs_allow_merge` says (the
-//!   project's rule, with hierarchical labels as aliases); for bus runs, two
-//!   with different names end up as one, or a named run gains a name;
+//! * a name change: for nets and bus runs alike, what
+//!   `join_rule::needs_allow_merge` says (hierarchical labels are aliases);
 //! * for a pin reference only, extra: anything not on the pin's net before
 //!   ends up on it (the end rules of [`wire_intent`]).
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::hash::Hash;
+use std::collections::{BTreeMap, BTreeSet};
 
 use signex_types::schematic::{Point, SchematicSheet, pin_tips};
 
 use super::wire_intent::{
-    EndSpec, ExtraItem, ExtraKind, names_of_root, net_names_of_root, same_names, wire_intent,
+    EndSpec, ExtraItem, ExtraKind, names_of_root, net_names_of_root, wire_intent,
 };
 use super::{SegmentIndex, merged_connectivity, pt_key};
 use crate::join_rule::{NetNames, needs_allow_merge};
@@ -160,13 +158,40 @@ fn net_changes(before: &SchematicSheet, after: &SchematicSheet) -> Vec<NameChang
         .map(|p| (b.root_of(p), a.root_of(p)))
         .collect();
     // The rule the project check uses: hierarchical labels are aliases.
+    name_changes(
+        &pairs,
+        |input| net_names_of_root(before, &mut b.parent, input),
+        |result| {
+            let names = net_names_of_root(after, &mut a.parent, result);
+            (names, names_of_root(after, &mut a.parent, result))
+        },
+        false,
+    )
+}
+
+/// The before ids each after id absorbed.
+fn joined<K: Copy + Ord>(pairs: &[(K, K)]) -> BTreeMap<K, BTreeSet<K>> {
+    let mut joined: BTreeMap<K, BTreeSet<K>> = BTreeMap::new();
+    for &(b, a) in pairs {
+        joined.entry(a).or_default().insert(b);
+    }
+    joined
+}
+
+/// The name changes of `pairs` (a before id and the after id it became, a net
+/// root or a bus run): per result whose join the rule refuses
+/// (`join_rule::needs_allow_merge`), the named inputs' names and the names the
+/// result lists (`after` gives its split names and that list).
+pub(crate) fn name_changes<K: Copy + Ord>(
+    pairs: &[(K, K)],
+    mut before: impl FnMut(K) -> NetNames,
+    mut after: impl FnMut(K) -> (NetNames, Vec<String>),
+    bus: bool,
+) -> Vec<NameChange> {
     let mut out = Vec::new();
-    for (result, inputs) in joined(&pairs) {
-        let nets: Vec<NetNames> = inputs
-            .into_iter()
-            .map(|input| net_names_of_root(before, &mut b.parent, input))
-            .collect();
-        let after_names = net_names_of_root(after, &mut a.parent, result);
+    for (result, inputs) in joined(pairs) {
+        let nets: Vec<NetNames> = inputs.into_iter().map(&mut before).collect();
+        let (after_names, listed) = after(result);
         let refs: Vec<&NetNames> = nets.iter().collect();
         if !needs_allow_merge(&refs, &after_names.own) {
             continue;
@@ -180,54 +205,9 @@ fn net_changes(before: &SchematicSheet, after: &SchematicSheet) -> Vec<NameChang
         }
         out.push(NameChange {
             before: sets,
-            after: names_of_root(after, &mut a.parent, result),
-            bus: false,
+            after: listed,
+            bus,
         });
-    }
-    out
-}
-
-/// The before ids each after id absorbed.
-fn joined<K: Copy + Ord>(pairs: &[(K, K)]) -> BTreeMap<K, BTreeSet<K>> {
-    let mut joined: BTreeMap<K, BTreeSet<K>> = BTreeMap::new();
-    for &(b, a) in pairs {
-        joined.entry(a).or_default().insert(b);
-    }
-    joined
-}
-
-/// The name changes of `pairs` (a before id and the after id it became): per
-/// result, the named inputs when two carry different name sets, or the one
-/// named input when the result carries a name it did not. Bus runs only; a
-/// net's names follow the join rule (`net_changes`).
-pub(crate) fn name_changes<K: Copy + Eq + Hash + Ord>(
-    pairs: &[(K, K)],
-    before: &HashMap<K, Vec<String>>,
-    after: &HashMap<K, Vec<String>>,
-    bus: bool,
-) -> Vec<NameChange> {
-    let mut out = Vec::new();
-    for (result, inputs) in joined(pairs) {
-        let mut sets: Vec<Vec<String>> = Vec::new();
-        for input in inputs {
-            let names = before.get(&input).cloned().unwrap_or_default();
-            if !names.is_empty() && !sets.iter().any(|s| same_names(s, &names)) {
-                sets.push(names);
-            }
-        }
-        let names = after.get(&result).cloned().unwrap_or_default();
-        let changed = match sets.as_slice() {
-            [] => false,
-            [only] => names.iter().any(|n| !only.contains(n)),
-            _ => true,
-        };
-        if changed {
-            out.push(NameChange {
-                before: sets,
-                after: names,
-                bus,
-            });
-        }
     }
     out
 }

@@ -7,12 +7,14 @@
 //! are the stitcher's own groups; there is no second project connectivity
 //! model. Net scope: `docs/NET_NAMING.md`.
 //!
-//! A net's own names come from net labels, global labels and power ports. A
-//! name that reaches it only through a hierarchical label of a child (the
-//! sheet-entry link) is an alias: the same signal as seen from the child. A
-//! local net label on the same sheet placement as such a hierarchical label
-//! never reaches the parent and plays no part at all (#2199 comments
-//! 6759237104, 6759998042).
+//! The rule is #2199 comment 6761836527. A net's own names come from net
+//! labels, global labels and power ports; its aliases are hierarchical label
+//! names. Each edit is judged by what it changes: a child's local net labels
+//! that were already behind a hierarchical label before the edit play no
+//! part (a sensor's internal `SDA_INT`), while names the edit itself brings
+//! behind a port count. So the same final design reached by a different
+//! order of edits can get a different verdict: the check judges the edit,
+//! not the design.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -99,16 +101,13 @@ pub struct ProjectNetChange {
 /// The nets the edit turned into, for each net after it that absorbed two or
 /// more named nets, or gained a name it did not carry. Whether one
 /// `needs_allow_merge` is the shared rule (`join_rule::needs_allow_merge`):
-/// nets are compared by their effective names (own names, else aliases), and
 /// a name a net already carries, alias included, is no change. A local label
-/// behind a hierarchical label before or after the edit plays no part on
-/// either side, so a join made from the child gets the verdict the same join
-/// made from the parent gets (#2199 comment 6759998042).
+/// that was behind a hierarchical label BEFORE the edit plays no part on
+/// either side; one the edit itself brings behind a port still counts.
 pub fn project_name_changes(before: &ProjectGraph, after: &ProjectGraph) -> Vec<ProjectNetChange> {
     let before = stitch_project(before, Want::Members).members;
     let after = stitch_project(after, Want::Members).members;
-    let mut hidden = behind_port(&before);
-    hidden.extend(behind_port(&after));
+    let hidden = behind_port(&before);
     let before = named_nets(before, &hidden);
     let mut owner: HashMap<&NamedId, usize> = HashMap::new();
     for (index, net) in before.iter().enumerate() {

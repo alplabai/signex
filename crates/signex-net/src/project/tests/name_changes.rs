@@ -162,7 +162,8 @@ fn a_name_the_net_does_not_carry_is_a_rename() {
 fn a_name_the_net_already_carries_and_an_unrelated_net_are_no_change() {
     let (root, children) = project();
     for after in [
-        // SIG is the net's alias: a label of it is no rename (6759237104).
+        // SIG is the net's alias: a label of it is no rename (6761836527
+        // point 5).
         with_label(&root, "SIG", (5.0, 0.0)),
         with_label(&root, "VCC", (5.0, 0.0)),
         // A label on a wire of its own, with nothing from the child on it.
@@ -267,23 +268,87 @@ fn two_placements_of_one_child_join_freely_on_the_same_entry_and_not_on_differen
 }
 
 #[test]
-fn an_own_named_net_with_an_alias_joined_to_another_alias_is_refused_in_either_order() {
-    // I2C1_SDA (own) + SDA (alias) joined with the alias-only SCL: SDA with
-    // SCL, a short (6759237104). Either entry first, so the nets sort both ways.
+fn an_own_named_net_with_an_alias_joined_to_another_alias_is_free_in_either_order() {
+    // I2C1_SDA (own) + SDA (alias) joined with the alias-only SCL: an
+    // own-named net with an alias-only one joins freely (6761836527 point 3;
+    // an earlier round refused it). Either entry first, so the nets sort both
+    // ways.
     let children = HashMap::from([("c.sch".to_string(), child_of(&["SDA", "SCL"]))]);
     for (pins, labelled_y) in [(["SDA", "SCL"], 0.0), (["SCL", "SDA"], 20.0)] {
         let mut root = parent_with(&pins);
         net_label(&mut root, "I2C1_SDA", (5.0, labelled_y));
-        let got = refused(&root, &joined(&root), &children);
-        assert_eq!(got, [["I2C1_SDA", "SCL", "SDA"]], "{pins:?}");
+        let got = changes(&root, &joined(&root), &children);
+        assert_eq!(got.len(), 1, "{pins:?}");
+        assert!(!got[0].needs_allow_merge, "{pins:?}");
+        assert_eq!(got[0].aliases, ["SCL", "SDA"]);
     }
 }
 
 #[test]
+fn two_alias_only_nets_that_share_a_name_join_freely() {
+    // U1's net carries the aliases SDA and I2C_DATA, U2's the alias SDA: they
+    // share SDA, so the join is free (6761836527 point 4).
+    let mut wide = child_of(&["SDA"]);
+    wide.labels
+        .push(label("I2C_DATA", pt(10.0, 0.0), LabelType::Hierarchical));
+    let children = HashMap::from([
+        ("c.sch".to_string(), wide),
+        ("d.sch".to_string(), child_of(&["SDA"])),
+    ]);
+    let mut root = parent_with(&["SDA"]);
+    let mut second = child_sheet("U2", "d.sch", vec![sheet_pin("SDA", pt(0.0, 20.0))]);
+    second.uuid = Uuid::now_v7();
+    root.child_sheets.push(second);
+    root.wires.push(wire(pt(0.0, 20.0), pt(5.0, 20.0)));
+    let got = changes(&root, &joined(&root), &children);
+    assert_eq!(got.len(), 1);
+    assert!(!got[0].needs_allow_merge, "{got:?}");
+    assert_eq!(got[0].aliases, ["I2C_DATA", "SDA"]);
+}
+
+#[test]
+fn a_local_name_the_edit_brings_behind_a_port_counts() {
+    // The child's net is labelled VCC locally; the parent wired the entry GND
+    // to its global GND. A new hierarchical GND on the VCC net brings VCC
+    // behind the port by this very edit, so VCC counts: a short (6761836527
+    // point 6).
+    let mut child = empty_sheet();
+    child.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    child
+        .labels
+        .push(label("VCC", pt(10.0, 0.0), LabelType::Net));
+    let mut after_child = child.clone();
+    after_child
+        .labels
+        .push(label("GND", pt(0.0, 0.0), LabelType::Hierarchical));
+    let mut root = parent_with(&["GND"]);
+    root.labels
+        .push(label("GND", pt(5.0, 0.0), LabelType::Global));
+    let (bs, br) = graph_of(&root, &HashMap::from([("c.sch".to_string(), child)]));
+    let (as_, ar) = graph_of(&root, &HashMap::from([("c.sch".to_string(), after_child)]));
+    let roots = [ProjectRoot {
+        key: SheetKey::new("root"),
+    }];
+    let got = project_name_changes(
+        &ProjectGraph {
+            sheets: &bs,
+            resolved: &br,
+            roots: &roots,
+        },
+        &ProjectGraph {
+            sheets: &as_,
+            resolved: &ar,
+            roots: &roots,
+        },
+    );
+    assert!(got.iter().any(|c| c.needs_allow_merge), "{got:?}");
+}
+
+#[test]
 fn a_childs_local_label_behind_its_hierarchical_label_plays_no_part_on_the_parent() {
-    // SensorA: hierarchical SDA and the local label SDA_INT on one net. The
-    // parent's I2C1_SDA wired to SensorA.SDA joins freely, and SDA_INT stays
-    // inside the child (6759237104, 6759998042).
+    // SensorA: hierarchical SDA and the local label SDA_INT on one net, both
+    // there before the edit. The parent's I2C1_SDA wired to SensorA.SDA joins
+    // freely, and SDA_INT stays inside the child (6761836527 point 6).
     let mut child = child_of(&["SDA"]);
     child
         .labels

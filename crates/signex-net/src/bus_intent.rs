@@ -6,8 +6,9 @@
 
 use std::collections::HashSet;
 
-use signex_types::schematic::{Point, SchematicSheet};
+use signex_types::schematic::{LabelType, Point, SchematicSheet};
 
+use crate::join_rule::{NetNames, needs_allow_merge};
 use crate::{BusAnalysis, BusGeometry, analyse_buses, point_on_segment, pt_key};
 
 /// What kind of item a bus run pulled onto its own run.
@@ -31,8 +32,10 @@ pub struct BusExtra {
 pub struct BusIntent {
     /// Items pulled onto the run that the two ends did not name.
     pub extra: Vec<BusExtra>,
-    /// The distinct bus names of the runs the ends attach to; two are a merge.
+    /// The distinct bus names of the runs the ends attach to.
     pub names: Vec<String>,
+    /// Whether joining those runs needs `allow_merge` (the join rule).
+    pub merge: bool,
     /// The bus names the new run carries after the run.
     pub resulting: Vec<String>,
 }
@@ -89,6 +92,21 @@ impl<'a> Analysed<'a> {
             .collect()
     }
 
+    /// The bus names of run `g` split for the join rule: a hierarchical bus
+    /// label is an alias, every other bus-name label an own name.
+    fn split_of(&self, g: usize) -> NetNames {
+        let mut names = NetNames::default();
+        for n in &self.analysis.groups[g].names {
+            let label = &self.sheet.labels[n.label];
+            let side = match label.label_type {
+                LabelType::Hierarchical => &mut names.aliases,
+                _ => &mut names.own,
+            };
+            side.insert(label.text.clone());
+        }
+        names
+    }
+
     /// The run a label names, if it names one.
     fn group_of_label(&self, label: usize) -> Option<usize> {
         self.analysis
@@ -111,7 +129,6 @@ impl<'a> Analysed<'a> {
 /// label, or a sheet pin sits on one of its segments. The wire-side twin is
 /// `net_reaches_other_sheets`.
 pub fn bus_reaches_other_sheets(sheet: &SchematicSheet, p: Point) -> bool {
-    use signex_types::schematic::LabelType;
     let key = pt_key(&p);
     let analysed = Analysed::of(sheet);
     let on = |i: usize, k| {
@@ -161,12 +178,12 @@ pub(crate) fn bus_name_changes(
             Some((b.seg_group[i], a.seg_group[j]))
         })
         .collect();
-    let names = |side: &Analysed<'_>| -> std::collections::HashMap<usize, Vec<String>> {
-        (0..side.analysis.groups.len())
-            .map(|g| (g, side.names_of(g)))
-            .collect()
-    };
-    crate::build::name_changes(&pairs, &names(&b), &names(&a), true)
+    crate::build::name_changes(
+        &pairs,
+        |g| b.split_of(g),
+        |g| (a.split_of(g), a.names_of(g)),
+        true,
+    )
 }
 
 /// Judge the bus run from `start` to `end` that turned `before` into `after`
@@ -207,13 +224,17 @@ pub fn bus_intent(
     let mut ordered: Vec<usize> = intended.iter().copied().collect();
     ordered.sort_unstable();
     let mut names: Vec<String> = Vec::new();
-    for g in ordered {
+    for &g in &ordered {
         for name in b.names_of(g) {
             if !names.contains(&name) {
                 names.push(name);
             }
         }
     }
+    let splits: Vec<NetNames> = ordered.iter().map(|&g| b.split_of(g)).collect();
+    let refs: Vec<&NetNames> = splits.iter().collect();
+    let own = splits.iter().flat_map(|s| s.own.iter().cloned()).collect();
+    let merge = needs_allow_merge(&refs, &own);
 
     let before_ids: HashSet<_> = before.buses.iter().map(|x| x.uuid).collect();
     let new_group = after
@@ -225,6 +246,7 @@ pub fn bus_intent(
         return BusIntent {
             extra: Vec::new(),
             names,
+            merge,
             resulting: Vec::new(),
         };
     };
@@ -291,6 +313,7 @@ pub fn bus_intent(
     BusIntent {
         extra,
         names,
+        merge,
         resulting,
     }
 }
@@ -367,7 +390,55 @@ mod tests {
             (20.0, 0.0),
         );
         assert_eq!(got.names, ["D[0..7]", "A[0..15]"]);
+        assert!(got.merge);
         assert!(got.extra.is_empty());
+    }
+
+    /// The run between the two runs, the left one named `left`, the right one
+    /// `right`, each label of the given kind.
+    fn join_named(left: (&str, LabelType), right: (&str, LabelType)) -> BusIntent {
+        let mut before = two_runs();
+        before.labels.push(label(left.0, pt(-10.0, 0.0), left.1));
+        before.labels.push(label(right.0, pt(30.0, 0.0), right.1));
+        judge(
+            &before,
+            &[((0.0, 0.0), (20.0, 0.0))],
+            (0.0, 0.0),
+            (20.0, 0.0),
+        )
+    }
+
+    #[test]
+    fn bus_names_follow_the_net_rule_with_hierarchical_labels_as_aliases() {
+        // 6761836527 point 7, by points 2-4: an own-named run with an
+        // alias-only one joins freely; two alias-only runs short only when
+        // they share no name.
+        let (hier, net) = (LabelType::Hierarchical, LabelType::Net);
+        assert!(!join_named(("D[0..7]", hier), ("DATA[0..7]", net)).merge);
+        assert!(!join_named(("DATA[0..7]", net), ("D[0..7]", hier)).merge);
+        assert!(join_named(("D[0..7]", hier), ("A[0..15]", hier)).merge);
+        assert!(!join_named(("D[0..7]", hier), ("D[0..7]", hier)).merge);
+        assert!(join_named(("D[0..7]", net), ("A[0..15]", LabelType::Global)).merge);
+    }
+
+    #[test]
+    fn a_hierarchical_bus_label_on_a_named_run_renames_nothing() {
+        // A child's hierarchical D[0..7] on a run labelled DATA[0..7]: an
+        // alias, so no change; a second own name is a rename (6761836527).
+        let mut before = empty_sheet();
+        before.buses.push(bus((0.0, 0.0), (20.0, 0.0)));
+        before
+            .labels
+            .push(label("DATA[0..7]", pt(0.0, 0.0), LabelType::Net));
+        let with = |text: &str, ty: LabelType| {
+            let mut after = before.clone();
+            after.labels.push(label(text, pt(20.0, 0.0), ty));
+            after
+        };
+        let hier = with("D[0..7]", LabelType::Hierarchical);
+        assert!(bus_name_changes(&before, &hier).is_empty());
+        let own = with("D[0..7]", LabelType::Net);
+        assert_eq!(bus_name_changes(&before, &own).len(), 1);
     }
 
     #[test]

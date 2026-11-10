@@ -284,7 +284,7 @@ impl Signex {
         if !intent.extra.is_empty() {
             return Err(bus_extra_refusal(&intent.extra));
         }
-        let merge = intent.names.len() > 1;
+        let merge = intent.merge;
         if merge && !flag(args, "allow_merge") {
             let named: Vec<String> = intent.names.iter().map(|n| format!("`{n}`")).collect();
             return Err(format!(
@@ -302,7 +302,12 @@ impl Signex {
         }
         let open = dangling_bus_ends(sheet, start, end);
         if !open.is_empty() && !flag(args, "allow_open") {
-            return Err(open_refusal(&open, start, end, "a bus, bus entry or label"));
+            return Err(open_refusal(
+                &open,
+                start,
+                end,
+                "a bus, bus entry, label or sheet entry",
+            ));
         }
         let report = json!({
             "ends": ends_json(args, start, end),

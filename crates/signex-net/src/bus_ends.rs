@@ -17,7 +17,7 @@ pub(crate) fn entry_end_at(sheet: &SchematicSheet, key: crate::uf::Key) -> bool 
 }
 
 /// The ends of the run `start`..`end` with no existing bus (end or interior),
-/// bus entry or label at the point.
+/// bus entry, label or sheet entry at the point (#2199 comment 6761836527).
 pub fn dangling_bus_ends(sheet: &SchematicSheet, start: Point, end: Point) -> Vec<RunEnd> {
     let buses: Vec<(Point, Point)> = sheet.buses.iter().map(|b| (b.start, b.end)).collect();
     let index = SegmentIndex::new(&buses);
@@ -26,6 +26,11 @@ pub fn dangling_bus_ends(sheet: &SchematicSheet, start: Point, end: Point) -> Ve
         index.contains(key)
             || entry_end_at(sheet, key)
             || sheet.labels.iter().any(|l| pt_key(&l.position) == key)
+            || sheet
+                .child_sheets
+                .iter()
+                .flat_map(|c| &c.pins)
+                .any(|pin| pt_key(&pin.position) == key)
     };
     [(RunEnd::Start, start), (RunEnd::End, end)]
         .into_iter()
@@ -84,6 +89,37 @@ mod tests {
             dangling_bus_ends(&sheet, pt(22.54, 22.54), pt(20.0, 20.0)).len(),
             1
         );
+    }
+
+    #[test]
+    fn an_end_on_a_sheet_entry_is_attached() {
+        // 6761836527 point 7: a bus run ending on a sheet entry is connected.
+        use signex_types::schematic::{ChildSheet, FillType, SheetPin};
+        let mut sheet = empty_sheet();
+        sheet.child_sheets.push(ChildSheet {
+            uuid: Uuid::nil(),
+            name: "Mem".into(),
+            filename: "mem.snxsch".into(),
+            position: pt(40.0, 0.0),
+            size: (10.0, 10.0),
+            stroke_width: 0.0,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: vec![SheetPin {
+                uuid: Uuid::nil(),
+                name: "D[0..7]".into(),
+                direction: "input".into(),
+                position: pt(40.0, 5.0),
+                rotation: 0.0,
+                auto_generated: false,
+                user_moved: false,
+            }],
+            instances: Vec::new(),
+        });
+        let got = dangling_bus_ends(&sheet, pt(20.0, 5.0), pt(40.0, 5.0));
+        assert_eq!(got, [RunEnd::Start]);
     }
 
     #[test]

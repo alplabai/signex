@@ -229,7 +229,8 @@ fn a_label_that_would_rename_the_net_at_its_point_is_refused_unless_allowed() {
         assert_ne!(sheet_shape(&app), before, "{id}");
     }
     // A hierarchical label is a port, not a name of the net: on a loose sheet
-    // it renames nothing (#2199 comment 6759998042). Through a wired entry the
+    // it renames nothing (#2199 comment 6761836527 point 5). Through a wired
+    // entry the
     // project check sees the short (`project_name_tests`).
     let mut app = app_with(two_named_nets());
     let outcome = run(
@@ -1164,7 +1165,7 @@ fn a_bus_connects_to_a_bus_an_entry_or_a_label_or_is_refused_open() {
         &mut app,
         "place_bus",
         &["start=63.5,25.4", "end=63.5,38.1"],
-        "have nothing to connect to (a bus, bus entry or label)",
+        "have nothing to connect to (a bus, bus entry, label or sheet entry)",
     );
     let outcome = run(
         &mut app,
@@ -1174,6 +1175,76 @@ fn a_bus_connects_to_a_bus_an_entry_or_a_label_or_is_refused_open() {
     assert!(
         matches!(outcome, CommandOutcome::Answered(_)),
         "{outcome:?}"
+    );
+}
+
+#[test]
+fn a_bus_run_ending_on_a_sheet_entry_is_not_open() {
+    // 6761836527 point 7: a sheet entry is something a bus connects to.
+    let mut sheet = two_parts();
+    sheet.buses.push(Bus {
+        uuid: Uuid::now_v7(),
+        start: Point::new(12.7, 50.8),
+        end: Point::new(25.4, 50.8),
+    });
+    sheet
+        .child_sheets
+        .push(signex_types::schematic::ChildSheet {
+            uuid: Uuid::now_v7(),
+            name: "Mem".into(),
+            filename: "mem.snxsch".into(),
+            position: Point::new(63.5, 45.72),
+            size: (10.16, 10.16),
+            stroke_width: 0.0,
+            fill: signex_types::schematic::FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: vec![signex_types::schematic::SheetPin {
+                uuid: Uuid::now_v7(),
+                name: "D[0..7]".into(),
+                direction: "input".into(),
+                position: Point::new(63.5, 50.8),
+                rotation: 0.0,
+                auto_generated: false,
+                user_moved: false,
+            }],
+            instances: Vec::new(),
+        });
+    let mut app = app_with(sheet);
+    let outcome = run(&mut app, "place_bus", &["start=25.4,50.8", "end=63.5,50.8"]);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+}
+
+#[test]
+fn a_hierarchical_bus_label_on_a_named_run_is_an_alias_not_a_rename() {
+    // 6761836527 point 7: a hierarchical bus label is an alias, so it renames
+    // nothing; a second own name on the run still does.
+    let mut sheet = two_parts();
+    sheet.buses.push(Bus {
+        uuid: Uuid::now_v7(),
+        start: Point::new(12.7, 50.8),
+        end: Point::new(25.4, 50.8),
+    });
+    sheet
+        .labels
+        .push(label("DATA[0..7]", Point::new(12.7, 50.8)));
+    let mut app = app_with(sheet.clone());
+    let outcome = run(
+        &mut app,
+        "place_hierarchical_label",
+        &["at=25.4,50.8", "text=D[0..7]"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
+    let mut app = app_with(sheet);
+    refused_with(
+        &mut app,
+        "place_net_label",
+        &["at=25.4,50.8", "text=A[0..15]"],
+        "allow_merge",
     );
 }
 

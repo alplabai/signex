@@ -371,11 +371,6 @@ pub(super) fn net_names_of_root(
     names
 }
 
-/// Whether `a` and `b` carry the same set of names.
-pub(super) fn same_names(a: &[String], b: &[String]) -> bool {
-    a.iter().all(|n| b.contains(n)) && b.iter().all(|n| a.contains(n))
-}
-
 /// Whether a wire end, a junction or a label sits at `p`: what makes a pin tip
 /// there a connection (a no-connect flag does not).
 pub fn has_connection_anchor(sheet: &SchematicSheet, p: Point) -> bool {
