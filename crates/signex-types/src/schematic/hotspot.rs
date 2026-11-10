@@ -268,6 +268,7 @@ mod tests {
     fn sheet_with_wire(start: (f64, f64), end: (f64, f64)) -> SchematicSheet {
         let mut sheet = SchematicSheet::default();
         sheet.wires.push(Wire {
+            color: None,
             unknown_columns: Default::default(),
             uuid: uuid::Uuid::now_v7(),
             start: Point::new(start.0, start.1),
@@ -408,6 +409,7 @@ mod tests {
                 let y = f64::from(j) * 3.1;
                 let id = u128::try_from((i + 10) * 100 + j + 10).expect("positive id");
                 sheet.wires.push(Wire {
+                    color: None,
                     unknown_columns: Default::default(),
                     uuid: uuid::Uuid::from_u128(id),
                     start: Point::new(x, y),
@@ -417,6 +419,7 @@ mod tests {
                 });
                 // A second wire ending where the first starts: a tie.
                 sheet.wires.push(Wire {
+                    color: None,
                     unknown_columns: Default::default(),
                     uuid: uuid::Uuid::from_u128(id + 50_000),
                     start: Point::new(x - 1.27, y),

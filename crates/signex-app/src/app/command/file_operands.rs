@@ -50,5 +50,8 @@ pub(super) fn new_project(app: &mut Signex, args: &CommandArgs) -> Ran {
         crate::diagnostics::log_warning(format!("New project refused: {reason}"));
         return outcome(Err(reason));
     }
-    outcome(app.start_new_project(path))
+    outcome(app.start_new_project(
+        path,
+        crate::app::handlers::document_files::new_project::NewProjectPlan::default(),
+    ))
 }

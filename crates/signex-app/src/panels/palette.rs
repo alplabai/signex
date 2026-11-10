@@ -20,6 +20,37 @@ use signex_widgets::theme_ext;
 /// Brightens the accent colour without changing its alpha.
 const TAG_HOVER_BRIGHTEN: f32 = 1.3;
 
+/// Ink and soft fill of one DOF chip state.
+#[derive(Debug, Clone, Copy)]
+pub struct DofLook {
+    pub ink: Color,
+    pub fill: Color,
+}
+
+/// The DOF chip looks per solver state: under-constrained is `info`, fully
+/// constrained `ok`, over-constrained `err`.
+#[derive(Debug, Clone, Copy)]
+pub struct DofLooks {
+    pub under: DofLook,
+    pub full: DofLook,
+    pub over: DofLook,
+}
+
+impl DofLooks {
+    pub fn for_tokens(tokens: &ThemeTokens) -> Self {
+        use crate::styles::{PillTone, pill_colors};
+        let look = |tone| {
+            let (fill, ink) = pill_colors(tokens, tone);
+            DofLook { ink, fill }
+        };
+        Self {
+            under: look(PillTone::Info),
+            full: look(PillTone::Ok),
+            over: look(PillTone::Err),
+        }
+    }
+}
+
 /// Every theme colour the Properties panel and its sub-forms render with.
 ///
 /// Built once per frame by `panels::properties::view_properties` and
@@ -48,6 +79,8 @@ pub struct PanelPalette {
     /// Surface the panel is drawn on; text placed directly on it picks
     /// its colour against this, not against the iced palette.
     pub panel_bg: Color,
+    /// DOF chip looks of the sketch entity row.
+    pub dof: DofLooks,
 }
 
 impl PanelPalette {
@@ -72,6 +105,13 @@ impl PanelPalette {
             },
             seg_hover: crate::styles::ti(tokens.hover),
             panel_bg: crate::styles::ti(tokens.panel_bg),
+            dof: DofLooks::for_tokens(tokens),
         }
+    }
+
+    /// `(label, value)` widths of a footprint Properties field row: the 4:5
+    /// split every other form row uses.
+    pub fn field_widths(&self) -> (iced::Length, iced::Length) {
+        (iced::Length::FillPortion(4), iced::Length::FillPortion(5))
     }
 }

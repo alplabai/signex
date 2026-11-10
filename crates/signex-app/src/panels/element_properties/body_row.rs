@@ -52,9 +52,8 @@ pub(super) fn push_body_row<'a>(
     c: Column<Element<'a, PanelMsg>>,
     id: uuid::Uuid,
     state: &str,
-    muted: Color,
+    muted: impl Into<LabelInk>,
     input_bg: Color,
-    input_bdr: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     let pick = move |choice: BodyChoice| PanelMsg::SymbolBodyStylePicked(id, choice.style());
     match state {
@@ -85,7 +84,7 @@ pub(super) fn push_body_row<'a>(
             _,
             iced::Theme,
         >(
-            form_input_row("Body", "Normal", muted, input_bg, input_bdr),
+            form_input_row("Body", "Normal", muted, input_bg),
             signex_widgets::text::<iced::Theme>(signex_widgets::raw(
                 "This library symbol has no alternate (De Morgan) body",
             ))

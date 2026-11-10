@@ -40,6 +40,7 @@ pub fn fixture(root: &Path) -> Fixture {
     let (project, sheet) = (dir.join("demo.snxprj"), dir.join("main.snxsch"));
     let origin = Point::new(0.0, 0.0);
     let wire = Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: origin,
         end: Point::new(10.0, 0.0),
@@ -131,6 +132,7 @@ fn project_data(dir: &Path, libraries: Vec<LibraryEntry>) -> ProjectData {
         rules: None,
         annotation: None,
         schematic_defaults: Default::default(),
+        project_defaults: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     }

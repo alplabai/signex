@@ -22,6 +22,7 @@ use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
 
 mod drawings;
+pub mod hit_index;
 pub mod hit_test;
 pub mod label;
 pub mod lock_indicator;
@@ -135,10 +136,11 @@ impl SchematicSheetExt for SchematicSheet {
             .map(|t| (t.position.x, t.position.y))
     }
 
+    /// `None` for a power port, whose text does not move on its own.
     fn symbol_value_position(&self, uuid: uuid::Uuid) -> Option<(f64, f64)> {
         self.symbols
             .iter()
-            .find(|s| s.uuid == uuid)
+            .find(|s| s.uuid == uuid && !s.is_power)
             .and_then(|s| s.val_text.as_ref())
             .map(|t| (t.position.x, t.position.y))
     }
@@ -318,6 +320,23 @@ pub fn power_port_preview_snapshot(
             v_align: VAlign::Top,
             family: None,
         });
+    }
+
+    // The net name goes through the placed port's rule, so the ghost shows
+    // it where, and turned as, the click will commit it.
+    if !symbol.value.is_empty() {
+        let mut sheet = SchematicSheet::default();
+        sheet.symbols.push(symbol.clone());
+        if let Some(text) = snapshot::field_text_input(
+            symbol,
+            &symbol.value,
+            sheet.drawn_value_text(&sheet.symbols[0]).as_deref(),
+            snapshot::FieldSlot::Value,
+            to_rgba(color),
+            None,
+        ) {
+            parameter_texts.push(text);
+        }
     }
 
     // The body is the placed port's own lowering, so the ghost shows the
@@ -644,7 +663,12 @@ fn collect_item_bounds_with(
                 anchor: ref_text.position,
             });
         }
-        if let Some(val_text) = symbol.val_text.as_ref().filter(|p| !p.hidden) {
+        // A power port's text is boxed with its body above (`symbol_bounds`).
+        if let Some(val_text) = symbol
+            .val_text
+            .as_ref()
+            .filter(|p| !p.hidden && !symbol.is_power)
+        {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolValField),
                 bbox: text_prop_aabb_with(
@@ -813,19 +837,18 @@ fn selected_aabbs(
     widths: WireWidths<'_>,
 ) -> Vec<Option<Aabb>> {
     let symbols = std::cell::OnceCell::new();
+    let by_uuid = || symbol_index(&symbols, snapshot);
     let others = std::cell::OnceCell::new();
     selected
         .iter()
         .map(|item| {
-            if item.kind == SelectedKind::Symbol {
-                let index: &HashMap<uuid::Uuid, &Symbol> = symbols.get_or_init(|| {
-                    let mut index = HashMap::with_capacity(snapshot.symbols.len());
-                    for symbol in &snapshot.symbols {
-                        index.entry(symbol.uuid).or_insert(symbol);
-                    }
-                    index
-                });
-                return index
+            // A power port's field stands for the port, so it is boxed as one.
+            let is_port_field = matches!(
+                item.kind,
+                SelectedKind::SymbolRefField | SelectedKind::SymbolValField
+            ) && by_uuid().get(&item.uuid).is_some_and(|s| s.is_power);
+            if item.kind == SelectedKind::Symbol || is_port_field {
+                return by_uuid()
                     .get(&item.uuid)
                     .map(|symbol| symbol::symbol_bounds(snapshot, symbol));
             }
@@ -839,6 +862,20 @@ fn selected_aabbs(
             index.get(item).copied()
         })
         .collect()
+}
+
+/// `snapshot`'s symbols by uuid, built into `cell` on first use.
+fn symbol_index<'a>(
+    cell: &'a std::cell::OnceCell<HashMap<uuid::Uuid, &'a Symbol>>,
+    snapshot: &'a SchematicRenderSnapshot,
+) -> &'a HashMap<uuid::Uuid, &'a Symbol> {
+    cell.get_or_init(|| {
+        let mut index = HashMap::with_capacity(snapshot.symbols.len());
+        for symbol in &snapshot.symbols {
+            index.entry(symbol.uuid).or_insert(symbol);
+        }
+        index
+    })
 }
 
 fn label_color(label: &Label, colors: &CanvasColors) -> Color {
@@ -962,23 +999,41 @@ fn label_aabb_with(
     label: &Label,
     document_family: Option<&str>,
 ) -> Aabb {
-    if label::is_flag(label) {
-        let mut verts = label::marker_vertices_with(widths, label, document_family).into_iter();
-        let (x0, y0) = verts.next().expect("marker has vertices");
-        return verts.fold(Aabb::new(x0, y0, x0, y0), |b, (x, y)| {
-            b.union(&Aabb::new(x, y, x, y))
-        });
-    }
-    drawn_text_aabb(
+    let slot = || {
         text_width::slot(
             widths,
             label.uuid,
             TextField::Label,
             label.font_family.as_deref(),
             document_family,
-        ),
+        )
+    };
+    let family = resolve_family(label.font_family.as_deref(), document_family);
+    if label::is_flag(label) {
+        let mut verts = label::marker_vertices_with(widths, label, document_family).into_iter();
+        let (x0, y0) = verts.next().expect("marker has vertices");
+        let marker = verts.fold(Aabb::new(x0, y0, x0, y0), |b, (x, y)| {
+            b.union(&Aabb::new(x, y, x, y))
+        });
+        // The text is part of the port, so the box holds it even where a
+        // glyph reaches past the outline.
+        let (anchor, rotation, h_align) = label::flag_text_with(widths, label, document_family);
+        let text = drawn_text_aabb(
+            slot(),
+            &label.text,
+            family.as_deref(),
+            label.font_size,
+            anchor,
+            rotation,
+            h_align,
+            VAlign::Center,
+        );
+        return marker.union(&text);
+    }
+    drawn_text_aabb(
+        slot(),
         &label.text,
-        resolve_family(label.font_family.as_deref(), document_family).as_deref(),
+        family.as_deref(),
         label.font_size,
         (label.position.x, label.position.y),
         label.rotation,

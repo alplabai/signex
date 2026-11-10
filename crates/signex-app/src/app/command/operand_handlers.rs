@@ -30,6 +30,10 @@ pub(crate) type OperandHandler = fn(&mut Signex, &CommandArgs) -> Ran;
 /// `every_operand_command_has_a_handler_or_is_refused`
 /// keeps this table and the catalog in step.
 const HANDLERS: &[(&str, OperandHandler)] = &[
+    (
+        "new_project_with_profile",
+        crate::app::new_project::new_project_with_profile,
+    ),
     ("color_net", doc::color_net),
     ("clear_all_net_colors", doc::clear_all_net_colors),
     ("undo", doc::undo),

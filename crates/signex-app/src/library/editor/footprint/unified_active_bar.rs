@@ -64,7 +64,8 @@ fn menu_trigger_geometry(
     items: &[ActiveBarItem<LibraryMessage>],
     menu: FpActiveBarMenu,
 ) -> (Option<f32>, f32) {
-    let (offsets, total) = signex_widgets::active_bar::slot_offsets(items);
+    let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
+    let (offsets, total) = signex_widgets::active_bar::slot_offsets(items, &metrics);
     let opens = |item: &ActiveBarItem<LibraryMessage>| -> bool {
         let ActiveBarItem::Button(b) = item else {
             return false;
@@ -275,7 +276,7 @@ fn dropdown_trigger_items(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_widgets::active_bar::{BAR_PADDING, BTN_SIZE, ROW_SPACING};
+    use signex_widgets::active_bar::Metrics;
 
     fn editor_in(mode: crate::library::editor::footprint::state::EditorMode) -> FootprintDocument {
         use signex_library::{Footprint, FootprintFile};
@@ -293,21 +294,23 @@ mod tests {
     #[test]
     fn menu_triggers_are_located_by_message_not_by_index() {
         use crate::library::editor::footprint::state::EditorMode;
-        use signex_types::theme::{ThemeId, theme_tokens};
+        use signex_types::theme::ThemeId;
 
-        let tid = ThemeId::Signex;
-        let tokens = theme_tokens(tid);
+        // The Graphite metrics the padding / button / gap pins describe.
+        let tid = ThemeId::DEFAULT;
+        let tokens = signex_types::theme::theme_tokens(tid);
+        let m = Metrics::GRAPHITE;
 
         let sketch = editor_in(EditorMode::Sketch);
         let items = bar_items(&sketch, tid, &tokens);
         let at = |m| menu_trigger_geometry(&items, m).0;
 
         // The first shared trigger sits flush against the bar padding.
-        assert_eq!(at(FpActiveBarMenu::Filter), Some(BAR_PADDING));
+        assert_eq!(at(FpActiveBarMenu::Filter), Some(m.padding));
         // Later shared triggers advance one button-plus-spacing each.
         assert_eq!(
             at(FpActiveBarMenu::Snap),
-            Some(BAR_PADDING + BTN_SIZE + ROW_SPACING)
+            Some(m.padding + m.btn + m.spacing)
         );
         // Both sketch groups are present, Create left of Modify, and
         // both right of every shared trigger.
@@ -341,10 +344,12 @@ mod tests {
     fn bar_width_counts_every_slot_including_the_custom_one() {
         use crate::library::editor::footprint::sketch_mode::active_bar::DIM_INPUT_W;
         use crate::library::editor::footprint::state::EditorMode;
-        use signex_types::theme::{ThemeId, theme_tokens};
+        use signex_types::theme::ThemeId;
 
-        let tid = ThemeId::Signex;
-        let tokens = theme_tokens(tid);
+        // The Graphite metrics the padding / button / gap pins describe.
+        let tid = ThemeId::DEFAULT;
+        let tokens = signex_types::theme::theme_tokens(tid);
+        let m = Metrics::GRAPHITE;
         let editor = editor_in(EditorMode::Sketch);
         let items = bar_items(&editor, tid, &tokens);
 
@@ -354,9 +359,9 @@ mod tests {
             .count();
         assert_eq!(customs, 1, "sketch bar should carry the dimension input");
 
-        let expected: f32 = 2.0 * BAR_PADDING
-            + items.iter().map(|i| i.width()).sum::<f32>()
-            + ROW_SPACING * (items.len() - 1) as f32;
+        let expected: f32 = 2.0 * m.padding
+            + items.iter().map(|i| i.width(&m)).sum::<f32>()
+            + m.spacing * (items.len() - 1) as f32;
         let (_, measured) = menu_trigger_geometry(&items, FpActiveBarMenu::Filter);
         assert!(
             (measured - expected).abs() < 0.01,
@@ -369,6 +374,6 @@ mod tests {
         // while measuring a button, and the test would stop proving
         // anything. Checked in a `const` block so that regression breaks
         // the build rather than waiting for a test run.
-        const { assert!(DIM_INPUT_W > BTN_SIZE) };
+        const { assert!(DIM_INPUT_W > Metrics::GRAPHITE.btn) };
     }
 }

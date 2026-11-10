@@ -13,8 +13,8 @@ use signex_widgets::{button, raw, text};
 use super::widgets::modal_title_header;
 use crate::app::path_ops::PlacingSymbol;
 use crate::styles::{
-    DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_hint, dialog_list,
-    dialog_message,
+    DialogButtonKind, DialogIcon, dialog_body, dialog_button, dialog_footer, dialog_hint,
+    dialog_intro, dialog_list,
 };
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -144,8 +144,13 @@ impl Signex {
         }
         let remove_options: Element<'_, Message> = remove_options.boxed();
 
-        let mut prompt = column![dialog_message(
-            format!("Please choose how to remove file \"{}\"", st.display_name),
+        let mut prompt = column![dialog_intro(
+            DialogIcon::Warn,
+            format!("Remove \"{}\"?", st.display_name),
+            Some(format!(
+                "Please choose how to remove file \"{}\"",
+                st.display_name
+            )),
             tokens,
         )]
         .spacing(SP.s);
@@ -215,10 +220,12 @@ impl Signex {
         // one is affected. Sheets and PCBs get no extra line.
         if is_library {
             prompt = prompt.push(
-                text(raw(st.target_path.display().to_string()))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .boxed(),
+                text(signex_i18n::UserText::new(
+                    st.target_path.display().to_string(),
+                ))
+                .size(TS.caption)
+                .color(text_muted)
+                .boxed(),
             );
             if let Some(line) = self.library_usage_line(st) {
                 prompt = prompt.push(text(raw(line)).size(TS.caption).color(text_muted).boxed());
@@ -231,7 +238,7 @@ impl Signex {
                 dialog_body(column![prompt, remove_options].spacing(SP.m)),
                 dialog_footer(vec![dialog_button(
                     "Cancel",
-                    DialogButtonKind::Secondary,
+                    DialogButtonKind::Cancel,
                     Some(Message::Remove(RemoveMsg::Close)),
                     tokens,
                 )]),
@@ -258,7 +265,7 @@ impl Signex {
         // Discard is withheld when another open project shares the target.
         let mut buttons = vec![dialog_button(
             "Cancel",
-            DialogButtonKind::Secondary,
+            DialogButtonKind::Cancel,
             Some(Message::Remove(RemoveMsg::Close)),
             tokens,
         )];
@@ -283,7 +290,12 @@ impl Signex {
         container(
             column![
                 header,
-                dialog_body(dialog_message(body, tokens)),
+                dialog_body(dialog_intro(
+                    DialogIcon::Warn,
+                    "Save the unsaved edits first?",
+                    Some(body),
+                    tokens,
+                )),
                 dialog_footer(buttons),
             ]
             .width(width),
@@ -325,12 +337,14 @@ impl Signex {
         let discard_blocked = st.sheet_refs.discard_blocked_reason();
 
         let mut body = column![
-            dialog_message(
-                format!(
+            dialog_intro(
+                DialogIcon::Warn,
+                "Save changes before closing?",
+                Some(format!(
                     "'{}' has {}. What would you like to do?",
                     st.project_name,
                     unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len())
-                ),
+                )),
                 tokens,
             ),
             container(dialog_list(file_rows, tokens)).height(Length::Fit.max(
@@ -360,7 +374,7 @@ impl Signex {
 
         let mut buttons = vec![dialog_button(
             "Cancel",
-            DialogButtonKind::Secondary,
+            DialogButtonKind::Cancel,
             Some(Message::Project(ProjectMsg::CloseConfirm(
                 ProjectCloseChoice::Cancel,
             ))),
@@ -428,9 +442,13 @@ impl Signex {
         path_labels
             .chain(row_labels)
             .map(|name| {
-                container(text(raw(name)).size(TS.body).color(text_c))
-                    .padding([SP.s, SP.m])
-                    .boxed()
+                container(
+                    text(signex_i18n::UserText::new(name))
+                        .size(TS.body)
+                        .color(text_c),
+                )
+                .padding([SP.s, SP.m])
+                .boxed()
             })
             .collect()
     }
@@ -460,7 +478,21 @@ impl Signex {
         // Basenames only: full paths would overflow the modal.
         let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
 
-        let mut body: iced::widget::Column<Element<'_, Message>> = column![].spacing(SP.m);
+        let quitting = if cfg!(target_os = "macos") {
+            "quitting"
+        } else {
+            "exiting"
+        };
+        let mut body: iced::widget::Column<Element<'_, Message>> = column![dialog_intro(
+            DialogIcon::Warn,
+            format!("Save changes before {quitting}?"),
+            Some(format!(
+                "You have {}. Save before {quitting}?",
+                unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len()),
+            )),
+            tokens,
+        )]
+        .spacing(SP.m);
         if self.ui_state.quit_confirm_refreshed {
             body = body.push(
                 text(raw("The unsaved list changed; review and confirm again."))
@@ -469,33 +501,20 @@ impl Signex {
                     .boxed(),
             );
         }
-        body = body
-            .push(dialog_message(
-                format!(
-                    "You have {}. Save before {}?",
-                    unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len()),
-                    if cfg!(target_os = "macos") {
-                        "quitting"
-                    } else {
-                        "exiting"
-                    }
-                ),
-                tokens,
-            ))
-            .push(
-                container(dialog_list(file_rows, tokens))
-                    .height(Length::Fit.max(
-                        crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT
-                            + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,
-                    ))
-                    .boxed(),
-            );
+        body = body.push(
+            container(dialog_list(file_rows, tokens))
+                .height(Length::Fit.max(
+                    crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT
+                        + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,
+                ))
+                .boxed(),
+        );
 
         let choose = |choice| Message::Project(ProjectMsg::AppQuitConfirm(choice));
         let buttons = vec![
             dialog_button(
                 "Cancel",
-                DialogButtonKind::Secondary,
+                DialogButtonKind::Cancel,
                 Some(choose(ProjectCloseChoice::Cancel)),
                 tokens,
             ),

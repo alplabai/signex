@@ -37,10 +37,17 @@ fn undocked(kind: TabKind, path: &std::path::Path) -> (Signex, iced::window::Id)
     (app, window)
 }
 
+/// Whether the window shows `needle`. Fluent wraps each argument in
+/// invisible isolation marks (U+2068 / U+2069); they are not part of what
+/// the user reads, so they are dropped before matching.
 fn shows(app: &Signex, window: iced::window::Id, needle: &str) -> bool {
     lay_out_texts(app.view(window), iced::Size::new(1400.0, 900.0))
         .iter()
-        .any(|t| t.text.contains(needle))
+        .any(|t| {
+            t.text
+                .replace(['\u{2068}', '\u{2069}'], "")
+                .contains(needle)
+        })
 }
 
 #[test]

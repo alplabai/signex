@@ -50,6 +50,7 @@ mod unknown;
 mod unknown_columns;
 mod uuid_repair;
 mod version;
+mod wire_color_repair;
 
 #[cfg(test)]
 mod body_style_tests;
@@ -97,6 +98,8 @@ mod unknown_tests;
 mod unknown_value_type_tests;
 #[cfg(test)]
 mod version_tests;
+#[cfg(test)]
+mod wire_color_tests;
 
 // Public API re-exports — preserve the `format::…` import paths that
 // signex-app / signex-engine / signex-output rely on.
@@ -535,7 +538,7 @@ impl SnxSchematic {
                 row_to_symbol(row, extra)
             })
             .collect();
-        let wires = wire_rows.into_iter().map(row_to_wire).collect();
+        let wires = wire_rows.into_iter().map(row_to_wire).collect::<Vec<_>>();
         let junctions = junction_rows
             .into_iter()
             .map(|row| {
@@ -636,6 +639,10 @@ impl SnxSchematic {
         sheet.unknown.load_repairs.splice(0..0, body_repairs);
         let size_repairs = text_size_repair::clamp_oversize_text(&mut sheet);
         sheet.unknown.load_repairs.extend(size_repairs);
+        sheet
+            .unknown
+            .load_repairs
+            .extend(wire_color_repair::unreadable_wire_colors(&sheet));
 
         Ok(SnxSchematic {
             format: raw.format,

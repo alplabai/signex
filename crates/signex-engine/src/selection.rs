@@ -170,6 +170,9 @@ impl Engine {
 
         let mut info: Vec<(String, String)> = Vec::new();
 
+        // A power port's text is part of the port: a stale field item
+        // describes the port.
+        let item = &self.document.selection_unit(*item);
         match item.kind {
             SelectedKind::Symbol => {
                 let symbol = self.document.symbols.iter().find(|s| s.uuid == item.uuid)?;

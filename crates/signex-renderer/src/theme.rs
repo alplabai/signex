@@ -144,20 +144,18 @@ mod tests {
 
     #[test]
     fn theme_id_conversion_maps_canvas_colors() {
-        let from_theme_id = ResolvedTheme::from_theme_id(ThemeId::Signex);
+        let from_theme_id = ResolvedTheme::from_theme_id(ThemeId::GraphiteLight);
+        let px = |v: u8| f32::from(v) / 255.0;
 
         let wire = from_theme_id.color(ColorSlot::Wire);
-        assert_eq!(wire[0], 0.0);
-        assert_eq!(wire[1], 0.0);
-        assert!(wire[2] > 0.49);
-        assert_eq!(wire[3], 1.0);
+        assert_eq!(wire, [px(0x2B), px(0x2D), px(0x33), 1.0]);
     }
 
     #[test]
     fn the_ratsnest_has_its_own_slot_apart_from_the_selection() {
-        let theme = ResolvedTheme::from_theme_id(ThemeId::Signex);
+        let theme = ResolvedTheme::from_theme_id(ThemeId::GraphiteLight);
         let px = |v: u8| f32::from(v) / 255.0;
-        assert_eq!(theme.color(ColorSlot::Ratsnest)[2], px(0xD4));
+        assert_eq!(theme.color(ColorSlot::Ratsnest)[2], px(0xAE));
         assert_ne!(
             theme.color(ColorSlot::Ratsnest),
             theme.color(ColorSlot::Selection)
@@ -170,7 +168,7 @@ mod tests {
 
     #[test]
     fn markers_use_their_own_theme_slots() {
-        let mut canvas = canvas_colors(ThemeId::Signex);
+        let mut canvas = canvas_colors(ThemeId::GraphiteLight);
         canvas.erc_error = Color::new(1, 2, 3, 255);
         canvas.erc_warning = Color::new(4, 5, 6, 255);
         canvas.drc_error = Color::new(7, 8, 9, 255);

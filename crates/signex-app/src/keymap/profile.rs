@@ -291,6 +291,33 @@ impl CompiledKeymap {
             .unwrap_or_default()
     }
 
+    /// The label for `command_id`, but `preferred` when the profile binds the
+    /// command to exactly that sequence (and it is not unbound later); else
+    /// the usual label. The chrome search field uses this to show `Ctrl+K`
+    /// on presets that bind it and fall back to the bound chord otherwise.
+    pub fn shortcut_label_preferring(&self, command_id: &str, preferred: &str) -> String {
+        let Ok(command) = AppCommandId::new(command_id) else {
+            return String::new();
+        };
+        let bound = self.bindings.iter().enumerate().any(|(index, binding)| {
+            let ShortcutBindingAction::Command(c) = &binding.action else {
+                return false;
+            };
+            c == &command
+                && display_sequence(&binding.sequence) == preferred
+                && !self.bindings[index + 1..].iter().any(|later| {
+                    matches!(&later.action, ShortcutBindingAction::Unbind(u) if u == &command)
+                        && later.context == binding.context
+                        && later.sequence == binding.sequence
+                })
+        });
+        if bound {
+            preferred.to_string()
+        } else {
+            self.shortcut_label(&command).unwrap_or_default()
+        }
+    }
+
     /// A quadratic restatement of the label rule, kept so a test can prove
     /// the index agrees with it.
     #[cfg(test)]

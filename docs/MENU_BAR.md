@@ -38,6 +38,40 @@ greyed row's is `Disabled`. The golden fixture still names each such row by the
 message it used to send; `COMMAND_ROW_NAMES` in `menu_bar/golden_tests.rs` maps
 the id back to that name.
 
+## Root menus {#root-menus}
+
+Ten roots, left to right, as in the Graphite mock-up: File, Edit, View,
+Project, Place, Design, Tools, Reports, Window, Help (`ROOT_TITLES`). The model
+is shared, so every theme and the native macOS bar show all ten. Project and
+Reports were added on 2026-11-07 (maintainer decision, `DECISIONS.md`); they
+are built only from existing commands and messages, after the Altium
+convention (`UX_REFERENCE_ALTIUM.md`). Moved rows keep their shortcut hint and
+enablement; no command left the app.
+
+**Project** (project-wide actions):
+
+- Electrical Rules Check (`open_erc_dialog`; F8 `run_erc` runs at once)
+- Project Options... (greyed with no project, like Close Project)
+- Close Project
+
+**Tools ▸ Annotation** (top of Tools, then a separator, as Altium's schematic
+Tools menu has it): Annotate Schematics..., Reset Schematic Designators...,
+Reset Duplicate Schematic Designators..., Annotate Schematics Quietly (Alt+A),
+Force Annotate All Schematics (Shift+Alt+A), and the planned Back Annotate
+Schematics... and Number Schematic Sheets....
+
+**Reports** (outputs of the open schematic, all greyed without one):
+
+- Bill of Materials... (the one BOM dialog; the old Design ▸ Generate BOM row
+  was a second row for the same message and is folded in)
+- Netlist (Protel .NET)...
+- ERC Report...
+
+**Design** keeps Parameter Manager... only. **File ▸ Export** keeps PDF only.
+Project tree actions with no menu message or command id (add or remove a
+document, Enable Version Control, History, Validate Project) stay in the tree's
+context menu; the menu gets no stub for them.
+
 ## Rows that name a different command {#own-action}
 
 Every row that carries a command id runs that id; no row keeps an action of its
@@ -46,7 +80,7 @@ own. Two rows point at an id other than the one their key suggests (#1991):
 - View ▸ Cycle Grid Size runs `next_grid`, which steps the snap grid (the `N`
   key in the Classic profile). `cycle_snap_grid_forward` (`G` in the Altium
   profile) still opens the footprint editor's grid picker.
-- Design ▸ Electrical Rules Check runs `open_erc_dialog`, which opens the ERC
+- Project ▸ Electrical Rules Check runs `open_erc_dialog`, which opens the ERC
   dialog to choose the rules. `run_erc` (F8) runs ERC at once. The row shows no
   key, as `open_erc_dialog` has no default binding.
 
@@ -80,7 +114,7 @@ row always works.
 
 Close Document (the `close_active_document` command, Ctrl+F4 in the Altium
 profile, closes the active tab like the tab menu's Close and parks a dirty
-draft) is greyed when no tab is open. Close Project (the project tree's Close
+draft) is greyed when no tab is open. Project ▸ Close Project (the project tree's Close
 Project for the active project, behind its unsaved-changes gate) is greyed when
 no project is open. Save All writes every unsaved document and Component
 Preview row through the same Save All flow the close and quit prompts use
@@ -88,6 +122,33 @@ Preview row through the same Save All flow the close and quit prompts use
 nothing is unsaved (`CommandContext::has_dirty_documents`), has no shortcut
 (the catalog has no `save_all` command), and reports "Save All: saved N
 item(s)" or the failures in the Messages panel.
+
+## Place ▸ Sheet Entry, Tools ▸ Library Editor, Window ▸ Close All Documents {#tools-library-editor}
+
+These three rows were planned stubs until #2247; each now runs a catalog
+command, so the palette and a user key binding run the same id (none of the
+three has a default key).
+
+- **Place ▸ Sheet Entry** runs `place_sheet_entry`, the Active Bar's Sheet
+  Entry tool. Greyed without a schematic, like the other Place rows. The
+  Active Bar dropdown sends `ActiveBarAction::PlaceSheetEntry` directly and is
+  not gated. The canvas Place flyout sends `ContextAction::Command` with
+  `place_sheet_entry`, dispatched with `window = None`, so it is gated by the
+  same `Needs::Schematic`. A flyout in an undocked sheet window runs inside
+  that window's document swap, so the gate reads that sheet even while the
+  main window shows a PCB (`place_design_rows` pins both). Passing the menu's
+  own window instead of `None` is #2267.
+- **Tools ▸ Library Editor** runs `open_library_browser` (maintainer decision,
+  2026-11-09, `DECISIONS.md`). It focuses the active Library Browser tab, else
+  the library of the active symbol or footprint editor tab, else the last
+  Library Browser tab in the strip, else the first open library (the top row
+  of the Libraries panel); a library with no browser tab gets a new one. From
+  there the user picks a symbol or footprint to edit. Greyed when no library
+  is open.
+- **Window ▸ Close All Documents** runs `close_all_documents`, the project
+  tree's Close Project Documents: every tab closes, and an unsaved document is
+  parked as a draft exactly as the tab menu's Close All Documents does. Greyed
+  when no tab is open.
 
 ## Save and Save As {#file-save}
 

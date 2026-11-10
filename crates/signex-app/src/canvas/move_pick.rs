@@ -234,6 +234,7 @@ pub(in crate::canvas) mod tests {
             root_sheet_page: "1".to_string(),
             symbols: Vec::new(),
             wires: vec![signex_types::schematic::Wire {
+                color: None,
                 uuid: uuid::Uuid::now_v7(),
                 start: signex_types::schematic::Point::new(10.0, 10.0),
                 end: signex_types::schematic::Point::new(30.0, 10.0),

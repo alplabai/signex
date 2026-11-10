@@ -88,6 +88,9 @@ pub struct ProjectPanelInfo {
     /// written via `write_project`. Drives the red dirty indicator
     /// on the project root row so the user knows Save is pending.
     pub is_dirty: bool,
+    /// The project has local version control on (`.snxprj` `enable_git`).
+    /// Drives the "git" pill on the Graphite project card.
+    pub version_control: bool,
 }
 
 /// Per-library bundle for the project tree's `Libraries` group.
@@ -327,26 +330,7 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .width(Length::Fill)
         .boxed()
     } else {
-        // Render the persistent tree — toggle state is preserved.
-        // Wrap in a container with a small top inset so the tree's
-        // first row doesn't sit flush against the panel's tab-strip
-        // border (matches the breathing room Altium leaves below its
-        // panel tabs).
-        container({
-            let mut tree = TreeView::new(&ctx.project_tree, &ctx.tokens).text_size(TS.body);
-            if let Some(sel) = ctx.project_tree_selected.as_deref() {
-                tree = tree.selected(sel);
-            }
-            tree.view().map(PanelMsg::Tree)
-        })
-        .padding(iced::Padding {
-            top: 6.0,
-            right: 0.0,
-            bottom: 0.0,
-            left: 0.0,
-        })
-        .width(Length::Fill)
-        .boxed()
+        super::projects_graphite::view(ctx)
     }
 }
 
@@ -355,7 +339,7 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<Element<'a, PanelMsg>> =
         Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
-    col = col.push(section_title("Sheets", &ctx.tokens).boxed());
+    col = col.push(section_title("Sheets", &ctx.tokens, &ctx.i18n).boxed());
     col = col.push(separator(&ctx.tokens).boxed());
 
     // The tree is the whole project hierarchy, built from the project's root

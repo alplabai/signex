@@ -117,7 +117,7 @@ fn drawing_frames_with_a_synced_cache_computes_nothing() {
     let (mut state, root) = fixture();
     state.sync_view_caches();
     let after_sync = builds();
-    let tokens = theme_tokens(ThemeId::Signex);
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
 
     for _ in 0..3 {
         drop(crate::library::browser::view(
@@ -125,6 +125,7 @@ fn drawing_frames_with_a_synced_cache_computes_nothing() {
             &state,
             browser(&state, &root),
             &tokens,
+            &signex_i18n::I18n::en_us(),
         ));
     }
 
@@ -135,13 +136,14 @@ fn drawing_frames_with_a_synced_cache_computes_nothing() {
 fn a_view_without_a_current_cache_computes_for_that_frame_only() {
     let (state, root) = fixture();
     let before = builds();
-    let tokens = theme_tokens(ThemeId::Signex);
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
 
     drop(crate::library::browser::view(
         &root,
         &state,
         browser(&state, &root),
         &tokens,
+        &signex_i18n::I18n::en_us(),
     ));
 
     assert_eq!(builds(), before + 1, "a miss recomputes, and never panics");

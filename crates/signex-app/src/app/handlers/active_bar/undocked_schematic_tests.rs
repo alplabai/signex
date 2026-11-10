@@ -609,7 +609,9 @@ fn a_right_press_in_an_undocked_window_hits_the_button_drawn_for_its_width() {
         width: 600.0,
         height: 600.0,
     };
-    for (menu, centre) in crate::active_bar::drawn_trigger_centres(tool, 600.0) {
+    // The canvas draws for the app's own theme, so the centres do too.
+    let tid = f.app.ui_state.effective_theme_id();
+    for (menu, centre) in crate::active_bar::drawn_trigger_centres_for(tool, 600.0, tid) {
         let event = iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right));
         let at = iced::Point::new(centre, bounds.y + 20.0);
         let action = view

@@ -2,7 +2,7 @@
 //!
 //! The per-library row grid lives in the main-window Library Browser
 //! tab (see [`crate::library::browser`]). Here each open library is a
-//! row whose ▸ expands it to list its tables and, under each, its
+//! row whose chevron expands it to list its tables and, under each, its
 //! components (#1895): one click highlights a component, a double click opens it. `[Open]` opens the
 //! library's browser tab.
 //!
@@ -39,7 +39,11 @@ const LIB_PANEL_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
 const LIB_PANEL_ROW_PADDING: u16 = 4;
 
 /// Render the Library left-dock panel.
-pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
+pub fn view<'a>(
+    state: &'a LibraryState,
+    tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
@@ -52,7 +56,8 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
     let search = text_input(raw("Search libraries…"), &state.panel_search)
         .on_input(|s| LibraryMessage::Picker(PickerMsg::PanelSearchChanged(s)))
         .padding(LIB_PANEL_ROW_PADDING)
-        .size(LIB_PANEL_TEXT_SIZE);
+        .size(LIB_PANEL_TEXT_SIZE)
+        .style(crate::panels::form_look::text_input_style);
 
     let mut col: Column<Element<'a, LibraryMessage>> = column![]
         .spacing(SP.xs)
@@ -79,7 +84,7 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
             }
             let expanded = state.panel_expanded.contains(&lib.root);
             col = col.push(
-                container(library_row(lib, expanded, tokens))
+                container(library_row(lib, expanded, tokens, i18n))
                     .padding([SP.xs, SP.s])
                     .boxed(),
             );
@@ -125,25 +130,34 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
     .boxed()
 }
 
-/// One library row: the ▸ / ▾ toggle, the name and row count, and Open.
+/// One library row: the chevron toggle, the name and row-count pill, and Open.
 fn library_row<'a>(
     lib: &'a super::state::OpenLibrary,
     expanded: bool,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
+    let chevron = signex_widgets::chevron::chevron(
+        expanded,
+        LIB_PANEL_TEXT_SIZE,
+        crate::styles::tokens::resolve(tokens).ink3,
+    );
+    let rows_pill = crate::library::editor::kit::toned_pill(
+        format!("{} rows", lib.total_rows()),
+        crate::styles::PillTone::Neutral,
+        tokens,
+    );
     let toggle = button(
         row![
-            text(raw(if expanded { "▾" } else { "▸" }))
-                .size(LIB_PANEL_TEXT_SIZE)
-                .color(text_c),
-            text(raw(format!(
-                "{}.snxlib  ({} rows)",
-                lib.display_name,
-                lib.total_rows()
+            chevron,
+            text(signex_i18n::UserText::new(format!(
+                "{}.snxlib",
+                lib.display_name
             )))
             .size(LIB_PANEL_TEXT_SIZE)
             .color(text_c),
+            rows_pill,
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center),
@@ -155,13 +169,13 @@ fn library_row<'a>(
     )))
     .style(crate::styles::subtle_button(tokens));
     let open = button(
-        text(raw("Open"))
+        text(signex_i18n::t!(i18n, signex_i18n::ids::LIBRARY_PANEL_OPEN))
             .size(LIB_PANEL_TEXT_SIZE)
-            .color(crate::styles::tokens::on_accent(tokens)),
+            .color(text_c),
     )
     .padding([SP.xs, SP.m])
     .on_press(LibraryMessage::OpenLibraryBrowser(lib.root.clone()))
-    .style(crate::styles::accent_button(tokens));
+    .style(crate::panels::form_look::ghost_button);
     row![toggle, open]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
@@ -209,9 +223,11 @@ fn component_rows<'a>(
             let selected = state.panel_selected.as_ref() == Some(&key);
             list = list.push(
                 button(
-                    text(raw(r.internal_pn.as_str().to_owned()))
-                        .size(LIB_PANEL_TEXT_SIZE)
-                        .wrapping(iced::widget::text::Wrapping::None),
+                    text(signex_i18n::UserText::new(
+                        r.internal_pn.as_str().to_owned(),
+                    ))
+                    .size(LIB_PANEL_TEXT_SIZE)
+                    .wrapping(iced::widget::text::Wrapping::None),
                 )
                 .padding([SP.xs / 2.0, SP.xl * 2.0])
                 .width(Length::Fill)

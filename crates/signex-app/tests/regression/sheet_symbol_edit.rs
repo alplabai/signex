@@ -225,6 +225,7 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

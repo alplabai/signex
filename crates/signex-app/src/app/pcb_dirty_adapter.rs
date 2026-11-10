@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn theme_change_message_maps_to_theme_dirty_event() {
-        let message = Message::Ui(UiMsg::ThemeChanged(ThemeId::Signex));
+        let message = Message::Ui(UiMsg::ThemeChanged(ThemeId::GraphiteLight));
         let events = pcb_renderer_events_for_message(&message);
 
         assert_eq!(events, &[PcbAppEvent::ThemeChanged]);

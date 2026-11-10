@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::styles::{Spacing, TypeScale};
+use signex_i18n::{MessageId, UserText, ids, t};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -88,7 +89,8 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     col = col.push(
         row![
-            section_title("ERC", &ctx.tokens),
+            // The dock title already says "ERC".
+            Space::new().boxed(),
             Space::new().width(Length::Fill).height(Length::Shrink),
             signex_widgets::button(
                 text(raw("Run ERC (F8)"))
@@ -221,13 +223,13 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             ErcSeverityLite::Info => theme_ext::accent(&ctx.tokens),
         };
         let sev_label = match v.severity {
-            ErcSeverityLite::Error => "E",
-            ErcSeverityLite::Warning => "W",
-            ErcSeverityLite::Info => "I",
+            ErcSeverityLite::Error => ids::PANELS_ERC_SEVERITY_ERROR,
+            ErcSeverityLite::Warning => ids::PANELS_ERC_SEVERITY_WARNING,
+            ErcSeverityLite::Info => ids::PANELS_ERC_SEVERITY_INFO,
         };
         let is_focused = ctx.erc_focus_index == Some(v.global_index);
         let (label_c, detail_c) = erc_row_text(&ctx.tokens, is_focused);
-        let sev_color = erc_severity_text(&ctx.tokens, is_focused, sev_color);
+        let _sev_color = erc_severity_text(&ctx.tokens, is_focused, sev_color);
         let row_bg = if is_focused {
             Some(Background::Color(theme_ext::selection_color(&ctx.tokens)))
         } else {
@@ -248,7 +250,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             row![
                 signex_widgets::button(
                     row![
-                        text(raw(sev_label)).size(TS.body).color(sev_color),
+                        erc_severity_pill(&ctx.tokens, v.severity, t!(ctx.i18n, sev_label)),
                         Space::new().width(4).height(Length::Shrink),
                         text(raw(v.rule_label.clone())).size(TS.body).color(label_c),
                         Space::new().width(6).height(Length::Shrink),
@@ -260,7 +262,10 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(detail_c),
                             iced::widget::container(
-                                text(raw(v.sheet_path.display().to_string())).size(TS.caption),
+                                text(signex_i18n::UserText::new(
+                                    v.sheet_path.display().to_string()
+                                ))
+                                .size(TS.caption),
                             )
                             .padding([SP.xs, 6.0]),
                             iced::widget::tooltip::Position::Top,
@@ -396,141 +401,189 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
 // ─── Messages Panel ───────────────────────────────────────────
 
-pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let mut col: Column<Element<'a, PanelMsg>> =
-        Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
+/// Column widths of the Graphite Messages table; MESSAGE takes the rest.
+const MSG_CLASS_W: f32 = 84.0;
+const MSG_DOCUMENT_W: f32 = 150.0;
+const MSG_SOURCE_W: f32 = 160.0;
+const MSG_TIME_W: f32 = 84.0;
+
+/// The Graphite Messages table: CLASS / DOCUMENT / SOURCE / MESSAGE / TIME
+/// header, hairline rows, and a centred empty state. The log entries carry
+/// no document or time, so those cells read as an honest dash.
+fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    let tokens = &ctx.tokens;
+    let r = crate::styles::tokens::resolve(tokens);
+    let (sunken, line, ink3, ink4) = (r.sunken, r.line_soft, r.ink3, r.ink4);
+    let ink = theme_ext::text_primary(tokens);
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    let rule = move || -> Element<'a, PanelMsg> {
+        container(Space::new())
+            .height(Length::Fixed(1.0))
+            .width(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(line)),
+                ..container::Style::default()
+            })
+            .boxed()
+    };
+    let cell = |content: Element<'a, PanelMsg>, width: Length| -> Element<'a, PanelMsg> {
+        container(content)
+            .padding([0.0, 12.0])
+            .width(width)
+            .height(Length::Fill)
+            .align_y(iced::alignment::Vertical::Center)
+            .clip(true)
+            .boxed()
+    };
+    let i18n = &*ctx.i18n;
+    let caps = move |label: MessageId| -> Element<'a, PanelMsg> {
+        text(t!(i18n, label)).size(TS.section).color(ink3).boxed()
+    };
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill);
     col = col.push(
-        row![
-            section_title("Messages", &ctx.tokens),
-            Space::new().width(Length::Fill).height(Length::Shrink),
-            text(raw(format!("level {}", ctx.diagnostics_level)))
-                .size(TS.caption)
-                .color(theme_ext::text_secondary(&ctx.tokens)),
-        ]
-        .align_y(iced::Alignment::Center)
+        container(
+            row![
+                cell(
+                    caps(ids::PANELS_MESSAGES_COLUMN_CLASS),
+                    Length::Fixed(MSG_CLASS_W)
+                ),
+                cell(
+                    caps(ids::PANELS_MESSAGES_COLUMN_DOCUMENT),
+                    Length::Fixed(MSG_DOCUMENT_W)
+                ),
+                cell(
+                    caps(ids::PANELS_MESSAGES_COLUMN_SOURCE),
+                    Length::Fixed(MSG_SOURCE_W)
+                ),
+                cell(caps(ids::PANELS_MESSAGES_COLUMN_MESSAGE), Length::Fill),
+                cell(
+                    caps(ids::PANELS_MESSAGES_COLUMN_TIME),
+                    Length::Fixed(MSG_TIME_W)
+                ),
+            ]
+            .width(Length::Fill),
+        )
+        .height(Length::Fixed(super::graphite::TABLE_ROW_HEIGHT))
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(sunken)),
+            ..container::Style::default()
+        })
         .boxed(),
     );
-    col = col.push(separator(&ctx.tokens).boxed());
+    col = col.push(rule());
     if let Some(drc) = super::drc::section(ctx) {
         col = col.push(drc);
     }
 
     if ctx.diagnostics.is_empty() {
         col = col.push(
-            text(raw("No runtime messages yet"))
-                .size(TS.caption)
-                .color(theme_ext::success_color(&ctx.tokens))
-                .boxed(),
-        );
-        col = col.push(
-            text(raw(
-                "Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output",
-            ))
-            .size(TS.caption)
-            .color(theme_ext::text_secondary(&ctx.tokens))
+            container(
+                row![
+                    text(t!(i18n, ids::PANELS_MESSAGES_EMPTY))
+                        .size(TS.body)
+                        .color(ink3),
+                    text(t!(i18n, ids::PANELS_MESSAGES_VERBOSE_HINT))
+                        .size(TS.caption)
+                        .color(ink4),
+                ]
+                .spacing(SP.m)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([0.0, 12.0])
+            .height(Length::Fixed(super::graphite::TABLE_ROW_HEIGHT))
+            .align_y(iced::alignment::Vertical::Center)
+            .width(Length::Fill)
+            .clip(true)
             .boxed(),
         );
-    } else {
-        // Table header — mirrors Altium's Messages panel with fixed
-        // columns for id, level, source tag, and the message body.
-        let muted = theme_ext::text_secondary(&ctx.tokens);
-        let primary = theme_ext::text_primary(&ctx.tokens);
-        let border = theme_ext::border_color(&ctx.tokens);
-        let header_bg = theme_ext::to_color(&ctx.tokens.hover);
-        let row_bg = theme_ext::to_color(&ctx.tokens.panel_bg);
-        // Alt-row tint: pull a darker variant from the panel background
-        // by shifting alpha. iced::Color lets us blend cheaply.
-        let alt_bg = Color {
-            a: row_bg.a,
-            r: (row_bg.r - 0.02).max(0.0),
-            g: (row_bg.g - 0.02).max(0.0),
-            b: (row_bg.b - 0.02).max(0.0),
-        };
+        col = col.push(rule());
+        return container(col).width(Length::Fill).boxed();
+    }
 
-        let th = |label: &str| -> Element<'a, PanelMsg> {
-            container(text(raw(label.to_string())).size(TS.body).color(muted))
-                .padding([SP.s, SP.m])
-                .boxed()
-        };
-        // Header row — background fill, no border (separator line
-        // below sits in its own element so the table reads as a grid
-        // of horizontal rules instead of individually framed boxes).
+    let dash = move || -> Element<'a, PanelMsg> {
+        text(t!(i18n, ids::PANELS_MESSAGES_NO_VALUE))
+            .size(TS.body)
+            .color(ink4)
+            .boxed()
+    };
+    for entry in ctx.diagnostics.iter().rev() {
         col = col.push(
             container(
                 row![
-                    container(th("#")).width(Length::Fixed(48.0)),
-                    container(th("Level")).width(Length::Fixed(64.0)),
-                    container(th("Source")).width(Length::Fixed(180.0)),
-                    container(th("Message")).width(Length::Fill),
+                    cell(
+                        level_pill(tokens, i18n, entry.level),
+                        Length::Fixed(MSG_CLASS_W)
+                    ),
+                    cell(dash(), Length::Fixed(MSG_DOCUMENT_W)),
+                    cell(
+                        text(UserText::new(entry.code.as_str()))
+                            .size(TS.body)
+                            .font(mono)
+                            .color(ink3)
+                            .wrapping(iced::widget::text::Wrapping::None)
+                            .boxed(),
+                        Length::Fixed(MSG_SOURCE_W),
+                    ),
+                    cell(
+                        text(UserText::new(entry.message.as_str()))
+                            .size(TS.body)
+                            .color(ink)
+                            .wrapping(iced::widget::text::Wrapping::None)
+                            .boxed(),
+                        Length::Fill,
+                    ),
+                    cell(dash(), Length::Fixed(MSG_TIME_W)),
                 ]
-                .align_y(iced::Alignment::Center),
+                .width(Length::Fill),
             )
-            .style(move |_theme: &Theme| iced::widget::container::Style {
-                background: Some(Background::Color(header_bg)),
-                ..iced::widget::container::Style::default()
-            })
+            .height(Length::Fixed(super::graphite::TABLE_ROW_HEIGHT))
             .boxed(),
         );
-        let separator = |bg: Color| -> Element<'a, PanelMsg> {
-            container(Space::new())
-                .height(Length::Fixed(1.0))
-                .width(Length::Fill)
-                .style(move |_: &Theme| iced::widget::container::Style {
-                    background: Some(Background::Color(bg)),
-                    ..iced::widget::container::Style::default()
-                })
-                .boxed()
-        };
-        col = col.push(separator(border));
-        for (i, entry) in ctx.diagnostics.iter().rev().enumerate() {
-            let level_color = match entry.level {
-                crate::diagnostics::DiagnosticLevel::Error => theme_ext::error_color(&ctx.tokens),
-                crate::diagnostics::DiagnosticLevel::Warning => {
-                    theme_ext::warning_color(&ctx.tokens)
-                }
-                crate::diagnostics::DiagnosticLevel::Info => theme_ext::accent(&ctx.tokens),
-                crate::diagnostics::DiagnosticLevel::Debug
-                | crate::diagnostics::DiagnosticLevel::Trace => {
-                    theme_ext::text_secondary(&ctx.tokens)
-                }
-            };
-            let bg = if i % 2 == 0 { row_bg } else { alt_bg };
-            let cell = |label: String, color: Color, size: f32| -> Element<'a, PanelMsg> {
-                container(text(raw(label)).size(size).color(color))
-                    .padding([SP.s, SP.m])
-                    .boxed()
-            };
-            col = col.push(
-                container(
-                    row![
-                        container(cell(format!("#{}", entry.id), muted, TS.body))
-                            .width(Length::Fixed(48.0)),
-                        container(cell(entry.level.label().to_string(), level_color, TS.body))
-                            .width(Length::Fixed(64.0)),
-                        container(cell(entry.code.as_str().to_string(), muted, TS.body))
-                            .width(Length::Fixed(180.0)),
-                        container(cell(entry.message.as_str().to_string(), primary, TS.body))
-                            .width(Length::Fill),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                // No border on the row — the explicit separator line
-                // drawn below is the grid. Boxes around each entry
-                // (the previous look) were too heavy for a log table.
-                .style(move |_theme: &Theme| iced::widget::container::Style {
-                    background: Some(Background::Color(bg)),
-                    ..iced::widget::container::Style::default()
-                })
-                .boxed(),
-            );
-            // One-pixel horizontal rule between rows — no right / left
-            // borders so the table reads as a stack of records with
-            // shared separators, matching Altium's Messages panel.
-            col = col.push(separator(border));
-        }
+        col = col.push(rule());
     }
-
     container(col).width(Length::Fill).boxed()
+}
+
+pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    view_messages_graphite(ctx)
+}
+
+fn erc_severity_pill<'a>(
+    tokens: &ThemeTokens,
+    severity: ErcSeverityLite,
+    label: signex_i18n::Localized,
+) -> Element<'a, PanelMsg> {
+    use crate::styles::PillTone;
+    let tone = match severity {
+        ErcSeverityLite::Error => PillTone::Err,
+        ErcSeverityLite::Warning => PillTone::Warn,
+        ErcSeverityLite::Info => PillTone::Info,
+    };
+    container(text(label).size(TS.caption))
+        .padding([1.0, 7.0])
+        .style(crate::styles::pill(tokens, tone))
+        .boxed()
+}
+
+/// Severity pill of a Messages row (Graphite): error, warning, info tones.
+fn level_pill<'a>(
+    tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
+    level: crate::diagnostics::DiagnosticLevel,
+) -> Element<'a, PanelMsg> {
+    use crate::diagnostics::DiagnosticLevel as L;
+    use crate::styles::PillTone;
+    let (tone, label) = match level {
+        L::Error => (PillTone::Err, ids::PANELS_MESSAGES_LEVEL_ERROR),
+        L::Warning => (PillTone::Warn, ids::PANELS_MESSAGES_LEVEL_WARNING),
+        L::Info => (PillTone::Info, ids::PANELS_MESSAGES_LEVEL_INFO),
+        L::Debug => (PillTone::Neutral, ids::PANELS_MESSAGES_LEVEL_DEBUG),
+        L::Trace => (PillTone::Neutral, ids::PANELS_MESSAGES_LEVEL_TRACE),
+    };
+    container(text(t!(i18n, label)).size(TS.caption))
+        .padding([1.0, 7.0])
+        .style(crate::styles::pill(tokens, tone))
+        .boxed()
 }
 
 #[cfg(test)]

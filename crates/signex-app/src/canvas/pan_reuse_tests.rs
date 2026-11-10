@@ -65,7 +65,7 @@ impl Sheet {
             look: Look {
                 size: iced::Size::new(WIDTH as f32, HEIGHT as f32),
                 dpr,
-                theme: signex_types::theme::ThemeId::Signex,
+                theme: signex_types::theme::ThemeId::GraphiteLight,
                 auto_focus: false,
                 wire_overrides: Default::default(),
                 allow_shift: true,
@@ -177,12 +177,12 @@ fn an_edit_rebuilds_once() {
 fn a_theme_change_rebuilds_once() {
     let mut sheet = Sheet::new(1.0);
     sheet.frame();
-    sheet.look.theme = signex_types::theme::ThemeId::Nord;
+    sheet.look.theme = signex_types::theme::ThemeId::GraphiteDark;
     sheet.slot.clear_content_cache();
     assert_eq!(sheet.frame(), (1, None));
 
     // And on a pan frame, without the clear.
-    sheet.look.theme = signex_types::theme::ThemeId::Signex;
+    sheet.look.theme = signex_types::theme::ThemeId::GraphiteLight;
     sheet.pan(3.0, 0.0);
     assert_eq!(sheet.frame(), (1, None));
 }

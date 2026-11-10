@@ -41,7 +41,8 @@ impl Signex {
             }
             UiMsg::ThemeChanged(id) => {
                 self.ui_state.theme_id = id;
-                self.update_canvas_theme();
+                self.ui_state.preferences_draft_theme = id;
+                self.sync_theme();
                 let save = crate::fonts::background_pref_write("theme", move || {
                     crate::fonts::write_theme_pref(id)
                 });

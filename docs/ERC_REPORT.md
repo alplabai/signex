@@ -1,6 +1,6 @@
 # ERC report
 
-File > Export > ERC Report writes the results of the newest ERC run. It never
+Reports > ERC Report writes the results of the newest ERC run. It never
 runs ERC itself; the rows are the ERC panel's rows, in the same order, so a
 finding whose part, wire or label has since been deleted is left out, as it is
 in the panel. When the document changed after the run, every form says so

@@ -72,7 +72,6 @@ pub(super) fn push_focused_pin_section<'a>(
     col: Column<Element<'a, PanelMsg>>,
     ctx: &PanelContext,
     muted: Color,
-    border_c: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     let Some(pin) = pin_rows(&ctx.selection_info)
         .into_iter()
@@ -80,19 +79,13 @@ pub(super) fn push_focused_pin_section<'a>(
     else {
         return col;
     };
-    let PanelPalette {
-        input_bg,
-        input_bdr,
-        ..
-    } = PanelPalette::from_tokens(&ctx.tokens);
+    let PanelPalette { input_bg, .. } = PanelPalette::from_tokens(&ctx.tokens);
     let title = format!("Pin {}", pin.designator);
     col.push(
-        collapsible_section(
+        ctx.collapsible(
             FOCUSED_PIN_SECTION_KEY,
             &title,
             &ctx.collapsed_sections,
-            muted,
-            border_c,
             move || {
                 let mut c: Column<Element<'a, PanelMsg>> =
                     Column::new().spacing(0).width(Length::Fill);
@@ -105,7 +98,7 @@ pub(super) fn push_focused_pin_section<'a>(
                     ("Hidden", hidden),
                 ];
                 for (label, value) in rows {
-                    c = c.push(form_input_row(label, value, muted, input_bg, input_bdr));
+                    c = c.push(form_input_row(label, value, muted, input_bg));
                 }
                 c
             },
@@ -139,12 +132,10 @@ pub(super) fn push_pins_section<'a>(
     let title = format!("Pins ({pin_count})");
     let info = &ctx.selection_info;
     col.push(
-        collapsible_section(
+        ctx.collapsible(
             PINS_SECTION_KEY,
             &title,
             &ctx.collapsed_sections,
-            muted,
-            border_c,
             move || {
                 let rows = pin_rows(info);
                 // The Net column exists only once the project net index can answer.

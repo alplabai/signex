@@ -66,7 +66,12 @@ pub(super) fn shift_snapshot_for_selection(
         }
     }
     for sym in out.symbols.iter_mut() {
-        if is_selected(sym.uuid, SelectedKind::Symbol) {
+        // A power port's text is fixed to the port (docs/DECISIONS.md,
+        // 2026-11-07): a selected field of one drags the whole port.
+        let port_field = sym.is_power
+            && (is_selected(sym.uuid, SelectedKind::SymbolRefField)
+                || is_selected(sym.uuid, SelectedKind::SymbolValField));
+        if is_selected(sym.uuid, SelectedKind::Symbol) || port_field {
             // Whole-symbol drag: anchor + both fields travel together.
             sym.position = shift(sym.position);
             if let Some(rt) = &mut sym.ref_text {

@@ -7,5 +7,10 @@
 pub mod active_bar;
 pub mod canvas;
 pub mod context_menu;
+pub mod pins_panel;
 pub mod state;
 pub(crate) mod updates;
+
+/// Fit the symbol editor camera to a viewport; the document layer calls it
+/// when it opens a symbol.
+pub(crate) use updates::fit_to_viewport;

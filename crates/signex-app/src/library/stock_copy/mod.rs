@@ -24,6 +24,7 @@ mod view;
 mod tests;
 
 pub use view::view;
+pub(crate) use view::{intro_texts, previous_note};
 
 /// Which primitive kind a stock file holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

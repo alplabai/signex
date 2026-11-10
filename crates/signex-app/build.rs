@@ -36,8 +36,32 @@ fn main() {
         "assets/icons/chrome/window_restore.svg",
         "assets/icons/chrome/window_close.svg",
         "assets/icons/chrome/search.svg",
+        "assets/icons/chrome/theme_moon.svg",
+        "assets/icons/chrome/theme_sun.svg",
+        "assets/icons/chrome/signex_mark.svg",
     ] {
         println!("cargo:rerun-if-changed={svg}");
+    }
+
+    // Graphite Active Bar glyphs are `include_bytes!`-embedded too.
+    for name in [
+        "select",
+        "move",
+        "filter",
+        "align",
+        "wire",
+        "power",
+        "power_rail",
+        "harness",
+        "sheetsym",
+        "port",
+        "directives",
+        "text",
+        "shapes",
+        "netcolor",
+        "chevron",
+    ] {
+        println!("cargo:rerun-if-changed=assets/icons/active_bar/graphite/{name}.svg");
     }
 
     // Wordmark PNGs (1×/2×/3×) are rasterised from the logo SVGs by

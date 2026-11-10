@@ -32,22 +32,22 @@ use uuid::Uuid;
 use super::tests::test_prefs;
 use super::*;
 
-const WINDOW: (f32, f32) = (1600.0, 1300.0);
+pub(super) const WINDOW: (f32, f32) = (1600.0, 1300.0);
 const CELL_W: f64 = 60.0;
 const CELL_H: f64 = 40.0;
 const MARGIN: f64 = 20.0;
 /// The scale at which the sheet is worked on (about 148% of a 96 dpi mm).
-const WORK_SCALE: f32 = 5.6;
+pub(super) const WORK_SCALE: f32 = 5.6;
 
 // --- the sheet -------------------------------------------------------------
 
-struct Generated {
-    sheet: SchematicSheet,
-    paper: (f32, f32),
+pub(super) struct Generated {
+    pub(super) sheet: SchematicSheet,
+    pub(super) paper: (f32, f32),
     /// The middle of a wire inside the drag block: pressing there grabs it.
-    handle: (f64, f64),
+    pub(super) handle: (f64, f64),
     /// Everything in a block of cells around the middle of the sheet.
-    block: Vec<SelectedItem>,
+    pub(super) block: Vec<SelectedItem>,
 }
 
 fn id(n: &std::cell::Cell<u128>) -> Uuid {
@@ -104,13 +104,13 @@ fn text_prop(x: f64, y: f64, text: bool) -> TextProp {
 /// What the generated sheet carries. `SIGNEX_BENCH_VARIANT`: `full` (default),
 /// `norot` (no text turned 90 degrees) or `notext` (no text at all).
 #[derive(Clone, Copy)]
-struct Variant {
-    rotated: bool,
-    text: bool,
+pub(super) struct Variant {
+    pub(super) rotated: bool,
+    pub(super) text: bool,
 }
 
 impl Variant {
-    fn from_env() -> Self {
+    pub(super) fn from_env() -> Self {
         match std::env::var("SIGNEX_BENCH_VARIANT").as_deref() {
             Ok("norot") => Self {
                 rotated: false,
@@ -131,7 +131,7 @@ impl Variant {
 /// A grid of identical cells: one 8-pin IC, four resistors, 16 wires, 4 net
 /// labels (half of them turned 90 degrees), 4 junctions and a note each.
 /// Deterministic: the uuids count up.
-fn generate(cols: usize, rows: usize, v: Variant) -> Generated {
+pub(super) fn generate(cols: usize, rows: usize, v: Variant) -> Generated {
     let n = std::cell::Cell::new(0u128);
     let mut sheet = SchematicSheet::default();
     let ys = [-3.81, -1.27, 1.27, 3.81];
@@ -189,6 +189,7 @@ fn generate(cols: usize, rows: usize, v: Variant) -> Generated {
                     stroke_width: 0.25,
                     unknown_columns: Default::default(),
                     locked: false,
+                    color: None,
                 });
                 SelectedItem::new(uuid, SelectedKind::Wire)
             };
@@ -289,13 +290,13 @@ fn counts(sheet: &SchematicSheet) -> String {
 
 // --- the renderer ----------------------------------------------------------
 
-struct Rig {
-    renderer: iced::Renderer,
-    adapter: String,
+pub(super) struct Rig {
+    pub(super) renderer: iced::Renderer,
+    pub(super) adapter: String,
     dpr: f32,
 }
 
-fn rig(aa: Option<Antialiasing>, dpr: f32) -> Rig {
+pub(super) fn rig(aa: Option<Antialiasing>, dpr: f32) -> Rig {
     let instance = wgpu::Instance::default();
     let adapter =
         futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -386,7 +387,13 @@ fn footprint_mb() -> Option<(f64, f64)> {
     Some((total?, accel))
 }
 
-/// Peak resident set size of this process so far, MB.
+/// Peak resident set size of this process so far, MB (unix only: `libc`).
+#[cfg(not(unix))]
+fn peak_rss_mb() -> f64 {
+    0.0
+}
+
+#[cfg(unix)]
 fn peak_rss_mb() -> f64 {
     // SAFETY: `getrusage` fills the struct it is given and nothing else.
     let usage = unsafe {
@@ -409,10 +416,12 @@ fn peak_rss_mb() -> f64 {
     reason = "a bench measures its own process with a system tool"
 )]
 fn rss_mb() -> f64 {
-    let out = std::process::Command::new("ps")
+    let Ok(out) = std::process::Command::new("ps")
         .args(["-o", "rss=", "-p", &std::process::id().to_string()])
         .output()
-        .expect("ps");
+    else {
+        return 0.0;
+    };
     String::from_utf8_lossy(&out.stdout)
         .trim()
         .parse::<f64>()

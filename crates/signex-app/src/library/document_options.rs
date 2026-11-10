@@ -12,13 +12,14 @@
 use iced::widget::{column, container, pick_list, row};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{button, raw, text};
 
 use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{footer_strip, header_with_note, primary_btn, secondary_btn};
+use super::modal_chrome::{cancel_btn, footer_strip, header_with_note, primary_btn};
 use super::state::DocumentOptionsModalState;
 use crate::panels::SheetColor;
 
@@ -62,13 +63,14 @@ pub fn view<'a>(
         SheetColor::ALL.to_vec(),
         |c: &SheetColor| c.to_string(),
     )
+    .graphite()
     .on_select(LibraryMessage::DocumentOptionsSetSheetColor)
     .padding([sp.xs, sp.s])
-    .text_size(ts.body)
     .boxed();
 
     let grid_check: Element<'a, LibraryMessage> =
         signex_widgets::checkbox(state.draft.grid_visible)
+            .style(crate::panels::form_look::checkbox_style)
             .size(ts.heading)
             .on_toggle(|_| LibraryMessage::DocumentOptionsToggleGrid)
             .boxed();
@@ -100,7 +102,7 @@ pub fn view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            secondary_btn("Cancel", LibraryMessage::DocumentOptionsCancel, tokens),
+            cancel_btn("Cancel", LibraryMessage::DocumentOptionsCancel, tokens),
             primary_btn("Apply", LibraryMessage::DocumentOptionsApply, tokens),
         ],
         tokens,

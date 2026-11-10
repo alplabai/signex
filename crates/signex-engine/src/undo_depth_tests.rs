@@ -7,6 +7,7 @@ use crate::{Command, Engine};
 
 fn edit(engine: &mut Engine, i: usize) {
     let wire = Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(i as f64, 0.0),
         end: Point::new(i as f64, 5.0),

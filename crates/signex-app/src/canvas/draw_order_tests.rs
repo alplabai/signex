@@ -23,7 +23,7 @@ use super::*;
 use crate::library::editor::footprint::canvas::{
     FootprintCanvasState, LayerInput, PadLabels, draw_pads,
 };
-use crate::library::editor::footprint::layers::LayerVisibility;
+use crate::library::editor::footprint::layers::{LayerPalette, LayerVisibility};
 use crate::library::editor::footprint::state::EditorPad;
 
 /// The title-block text is drawn after the paper fill and after every line of
@@ -143,6 +143,7 @@ impl canvas::Program<crate::app::Message> for TwoPads {
             selected_pads_extra: &[],
             selected_silk_f: None,
             pad_labels: PadLabels::Editor,
+            palette: LayerPalette::Legacy,
         };
         draw_pads(&mut frame, &state, &input);
         vec![frame.into_geometry()]

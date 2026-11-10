@@ -242,6 +242,8 @@ fn footprint_msg_is_view_only(msg: &FootprintEditorMsg) -> bool {
             | F::SelectPads(_)
             | F::SelectSilkF(_)
             | F::ToggleLayer(_)
+            | F::LayersShowAllClicked
+            | F::LayersTopSideOnlyClicked
             | F::ToggleSelectionFilter(_)
             | F::ToggleActiveBarMenu(_)
             | F::CloseActiveBarMenu

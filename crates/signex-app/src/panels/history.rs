@@ -223,7 +223,7 @@ fn commit_card<'a>(
     bg: Option<iced::Background>,
 ) -> Element<'a, PanelMsg> {
     let header = iced::widget::row![
-        text(raw(entry.author_name.clone()))
+        text(signex_i18n::UserText::new(entry.author_name.clone()))
             .size(TS.label)
             .color(primary),
         iced::widget::Space::new().width(Length::Fill),
@@ -256,7 +256,9 @@ fn commit_card<'a>(
         });
 
     let mut footer = iced::widget::row![
-        text(raw(short_sha(&entry.sha))).size(TS.body).color(muted),
+        text(signex_i18n::UserText::new(short_sha(&entry.sha)))
+            .size(TS.body)
+            .color(muted),
         iced::widget::Space::new().width(Length::Fill),
     ]
     .align_y(iced::Alignment::Center)
@@ -284,7 +286,7 @@ fn commit_card<'a>(
 
     let card_inner = column![
         header,
-        text(raw(entry.subject.clone()))
+        text(signex_i18n::UserText::new(entry.subject.clone()))
             .size(TS.title)
             .color(primary),
         footer,

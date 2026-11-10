@@ -6,7 +6,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 use signex_library::primitive::footprint::FpGraphicKind;
 
-use super::super::super::layers::FpLayer;
+use super::super::super::layers::{FpLayer, LayerPalette};
 use super::super::FootprintCanvasState;
 
 /// v0.18.16 — render the silk-layer graphics list. Each `FpGraphic`
@@ -17,9 +17,10 @@ pub(super) fn draw_silk_graphics(
     graphics: &[signex_library::primitive::footprint::FpGraphic],
     layer: FpLayer,
     selected_idx: Option<usize>,
+    palette: LayerPalette,
 ) {
-    let base_colour = layer.color();
-    let highlight = Color::from_rgb(1.0, 1.0, 1.0);
+    let base_colour = layer.color_in(palette);
+    let highlight = palette.selection_ink();
     let stroke_default_px: f32 = 1.0;
     // Shapes first, text last: a Frame draws in call order (fork #18), so
     // silk text must follow every line, arc and fill it can overlap.

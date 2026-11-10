@@ -111,6 +111,8 @@ pub struct OverlayInputs {
     pub ghost_polygons: Vec<OverlayPolygonInput>,
     pub lasso_lines: Vec<OverlayLineInput>,
     pub snap_circles: Vec<OverlayCircleInput>,
+    /// Selection halos: padded rounded fill with a dashed outline.
+    pub halos: Vec<OverlayHaloInput>,
 }
 
 #[derive(Clone, Debug)]
@@ -144,6 +146,8 @@ pub struct SchematicSnapshot {
 
 mod emit;
 use emit::*;
+pub mod halo;
+pub use halo::OverlayHaloInput;
 
 /// Schematic renderer: builds a GPU `Scene` from a [`SchematicSnapshot`].
 pub struct SchematicRenderer;
@@ -393,6 +397,7 @@ mod tests {
                     [0.9, 0.9, 0.3, 1.0],
                 )],
                 snap_circles: vec![make_overlay_circle([2.0, 2.0], [0.2, 0.9, 0.9, 1.0])],
+                halos: Vec::new(),
             },
             erc_markers: vec![make_erc_marker([2.8, 2.8], 0.25, Severity::Warning)],
             drawings: Vec::new(),
@@ -637,6 +642,7 @@ mod tests {
                     make_overlay_line([3.0, 1.0], [3.0, 3.0], [0.9, 0.9, 0.4, 1.0]),
                 ],
                 snap_circles: vec![make_overlay_circle([2.0, 2.0], [0.2, 1.0, 0.9, 1.0])],
+                halos: Vec::new(),
             },
             erc_markers: Vec::new(),
             drawings: Vec::new(),

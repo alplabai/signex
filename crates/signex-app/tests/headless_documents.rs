@@ -148,6 +148,7 @@ fn wire_sheet(id: &str) -> SchematicSheet {
         uuid: id.parse().expect("uuid"),
         paper_size: "A4".into(),
         wires: vec![Wire {
+            color: None,
             uuid: uuid::Uuid::now_v7(),
             start: Point::new(0.0, 0.0),
             end: Point::new(10.0, 0.0),
@@ -219,6 +220,7 @@ fn write_project(dir: &Path) -> PathBuf {
         rules: None,
         annotation: None,
         schematic_defaults: Default::default(),
+        project_defaults: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };

@@ -220,6 +220,8 @@ impl Signex {
                     let prev_shape_width =
                         prev.map_or(defaults.shape_width_mm, |pp| pp.shape_width_mm);
                     let prev_shape_fill = prev.map_or(defaults.shape_fill, |pp| pp.shape_fill);
+                    let prev_wire_width = prev.map_or(defaults.wire_width, |pp| pp.wire_width);
+                    let prev_wire_color = prev.map_or(defaults.wire_color, |pp| pp.wire_color);
                     self.document_state.panel_ctx.pre_placement =
                         Some(crate::panels::PrePlacementData {
                             tool_name,
@@ -238,6 +240,8 @@ impl Signex {
                             cursor_y_mm: self.ui_state.cursor_y,
                             shape_width_mm: prev_shape_width,
                             shape_fill: prev_shape_fill,
+                            wire_width: prev_wire_width,
+                            wire_color: prev_wire_color,
                         });
                     // TAB opens the pre-placement form in Properties, so
                     // the panel has to end up in front. `add_panel`

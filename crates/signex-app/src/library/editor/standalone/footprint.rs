@@ -31,6 +31,7 @@ pub fn view_footprint<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     _theme_id: signex_types::theme::ThemeId,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     // v0.16.2.2 — footprint canvas uses Altium PCB-editor colours
@@ -41,8 +42,9 @@ pub fn view_footprint<'a>(
     // change rounds out the Altium look on the canvas chrome itself.
     // Symbol (schematic) canvas stays theme-driven — Altium's
     // schematic editor uses a different (cream-ish) palette.
-    let bg = crate::library::editor::footprint::canvas::BACKDROP_BG;
-    let grid = crate::library::editor::footprint::canvas::BACKDROP_GRID;
+    // The paper / charcoal ground is painted instead.
+    let graphite = crate::library::editor::footprint::canvas::graphite_look_for(tokens);
+    let (bg, grid) = (graphite.bg, graphite.dot);
 
     let canvas_area = view_footprint_canvas(editor, tokens, bg, grid);
     let footer = view_footprint_footer(editor, tokens);
@@ -83,6 +85,7 @@ pub fn view_footprint<'a>(
         EditorMode::Sketch | EditorMode::Normal => {
             let canvas_with_bar = iced::widget::Stack::new()
                 .push(canvas_area)
+                .push(super::dof_chip::overlay(editor, tokens, i18n))
                 .push(mode_switcher);
             column![canvas_with_bar, layers_strip, footer]
                 .spacing(0)
@@ -287,7 +290,7 @@ fn view_footprint_layers_strip<'a>(
 
     for layer in FpLayer::ORDER {
         let on = layers.get(*layer);
-        let swatch = layer.color();
+        let swatch = layer.color_in(editor.state.layer_palette);
         let label_color = if on { text_c } else { muted };
         let toggle_path = editor.path.clone();
         let layer_standard = layer.standard_name().to_string();
@@ -674,6 +677,7 @@ fn view_footprint_canvas<'a>(
         silk_b: editor.primitive().silk_b.as_slice(),
         zoom_step: editor.zoom_step,
         trackpad_pan: editor.trackpad_pan,
+        wheel_mode: editor.wheel_mode,
     };
     let canvas_widget: Element<'a, LibraryMessage> = iced::widget::canvas(prog)
         .width(Length::Fill)

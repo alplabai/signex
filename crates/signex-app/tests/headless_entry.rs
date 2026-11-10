@@ -103,6 +103,7 @@ fn net_colors() {
 
     let path = isolated.path().join("colours.snxsch");
     let wire = Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(0.0, 0.0),
         end: Point::new(10.0, 0.0),
@@ -416,6 +417,7 @@ fn undo_round_trip() {
 
     let path = isolated.path().join("round-trip.snxsch");
     let wire = Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(0.0, 0.0),
         end: Point::new(10.0, 0.0),
@@ -586,6 +588,7 @@ fn net_class_assign() {
     std::fs::create_dir_all(&dir).expect("project dir");
     let (prj, sheet_path) = (dir.join("demo.snxprj"), dir.join("main.snxsch"));
     let wire = Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(0.0, 0.0),
         end: Point::new(10.0, 0.0),
@@ -669,6 +672,7 @@ fn net_class_assign() {
         rules: None,
         annotation: None,
         schematic_defaults: Default::default(),
+        project_defaults: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };

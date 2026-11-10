@@ -446,6 +446,7 @@ fn a_late_mount_after_an_edit_lands_as_one_undo_step() {
     let mut sheet = saved_linked_sheet(&f);
     let wire = uuid::Uuid::now_v7();
     sheet.wires.push(Wire {
+        color: None,
         unknown_columns: Default::default(),
         uuid: wire,
         start: Point::new(10.0, 10.0),

@@ -895,17 +895,23 @@ where
 
         let theme_style = theme.style(&self.inner.menu_bar.global_parameters.class, Status::Active);
 
-        rec(
-            &self.inner.menu_bar.global_parameters,
-            active_tree,
-            active_root,
-            &mut menu_layouts,
-            cursor,
-            renderer,
-            theme,
-            style,
-            &theme_style,
-            &viewport,
-        );
+        // Signex patch: the first dropdown gets its own layer, like every
+        // nested one. The runtime draws overlays without opening a layer, so
+        // its background quad landed in the window's last layer, whose text,
+        // icons and canvas meshes draw after quads and showed through it.
+        renderer.with_layer(viewport, |r| {
+            rec(
+                &self.inner.menu_bar.global_parameters,
+                active_tree,
+                active_root,
+                &mut menu_layouts,
+                cursor,
+                r,
+                theme,
+                style,
+                &theme_style,
+                &viewport,
+            );
+        });
     }
 }

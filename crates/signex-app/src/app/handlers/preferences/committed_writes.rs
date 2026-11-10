@@ -16,6 +16,7 @@ impl Signex {
         let drag_direction = ui.drag_direction_select;
         let net_hover = ui.net_hover_enabled;
         let (trackpad_pan, remember_geometry) = (ui.trackpad_pan, ui.remember_window_geometry);
+        let wheel_mode = ui.wheel_mode;
         let (increment_step, paste_designators) = (ui.increment_step, ui.paste_designators);
         let antialiasing = ui.antialiasing;
         let agent_connections = ui.agent_connections_enabled;
@@ -54,6 +55,9 @@ impl Signex {
             }),
             write("trackpad_pan", move || {
                 crate::fonts::write_trackpad_pan_pref(trackpad_pan)
+            }),
+            write("mouse_wheel", move || {
+                crate::fonts::write_wheel_mode_pref(wheel_mode)
             }),
             write("remember_window_geometry", move || {
                 crate::fonts::write_remember_window_geometry_pref(remember_geometry)

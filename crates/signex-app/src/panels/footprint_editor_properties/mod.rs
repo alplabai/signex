@@ -30,6 +30,7 @@ mod managers;
 mod pad;
 mod pad_stack_check;
 mod redundant;
+mod rows;
 mod sections;
 mod selection;
 mod silk;
@@ -49,17 +50,15 @@ mod subforms;
 pub(super) fn view_footprint_editor_properties<'a>(
     fp: &'a FootprintEditorPanelContext,
     palette: PanelPalette,
-    custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
-    active_custom_filter_tab: usize,
     collapsed_sections: &'a CollapsedSections,
     unit: signex_types::coord::Unit,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     let PanelPalette {
         muted,
         primary,
         border: border_c,
         input_bg,
-        input_bdr,
         accent: accent_c,
         ..
     } = palette;
@@ -82,7 +81,9 @@ pub(super) fn view_footprint_editor_properties<'a>(
     };
 
     let mut header_row = row![
-        text(raw(&fp.footprint_name)).size(TS.label).color(primary),
+        text(signex_i18n::UserText::new(&fp.footprint_name))
+            .size(TS.label)
+            .color(primary),
         text(raw("·")).size(TS.label).color(muted),
         text(raw(mode_label)).size(TS.body).color(muted),
     ]
@@ -131,7 +132,6 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 col,
                 muted,
                 input_bg,
-                input_bdr,
                 "Position",
                 format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
             );
@@ -178,6 +178,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 left: 0.0,
             }))
             .width(Length::Fill)
+            .height(Length::Fill)
+            .style(crate::panels::form_look::scrollbar_style)
             .boxed();
         }
         if in_placement {
@@ -200,6 +202,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 left: 0.0,
             }))
             .width(Length::Fill)
+            .height(Length::Fill)
+            .style(crate::panels::form_look::scrollbar_style)
             .boxed();
         }
         // Empty canvas + idle → fall through to the original chrome.
@@ -210,17 +214,9 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // pick_list; otherwise → footprint summary. Sketch-mode-only
     // sections (Parameters / DOF / Warnings) follow regardless of
     // selection, so the user can monitor solve state while authoring.
-    col = selection::view_selection(
-        col,
-        fp,
-        mode_label,
-        palette,
-        custom_filter_presets,
-        active_custom_filter_tab,
-        collapsed_sections,
-    );
+    col = selection::view_selection(col, fp, mode_label, palette, collapsed_sections);
     col = pad_stack_check::view_pad_stack_check(col, fp, palette, collapsed_sections);
-    col = sections::view_sections(col, fp, palette, collapsed_sections, unit);
+    col = sections::view_sections(col, fp, palette, collapsed_sections, unit, i18n);
     col = render_fp_settings_and_hint(col, fp, muted, primary, border_c, collapsed_sections);
 
     // v0.25 polish — see early-return scrollable wrappers above for
@@ -232,6 +228,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
         left: 0.0,
     }))
     .width(Length::Fill)
+    .height(Length::Fill)
+    .style(crate::panels::form_look::scrollbar_style)
     .boxed()
 }
 
@@ -278,27 +276,6 @@ fn render_fp_settings_and_hint<'a>(
     col
 }
 
-/// Text-input style of every footprint Properties field: a faint plate, a
-/// 1 px border, and the panel's own text colours.
-pub(in crate::panels::footprint_editor_properties) fn fp_field_style(
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-) -> impl Fn(&iced::Theme, iced::widget::text_input::Status) -> iced::widget::text_input::Style {
-    move |_, _| iced::widget::text_input::Style {
-        background: iced::Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04)),
-        border: iced::Border {
-            width: 1.0,
-            radius: 2.0.into(),
-            color: border_c,
-            ..iced::Border::default()
-        },
-        placeholder: muted,
-        value: primary,
-        selection: Color::from_rgba(0.4, 0.6, 1.0, 0.4),
-    }
-}
-
 /// Read-only key-value row — delegates to the schematic Properties
 /// panel's `form_input_row` so the footprint editor uses identical
 /// chrome (orange-accent border, dark-blue selection-tinted background).
@@ -308,11 +285,8 @@ fn props_kv_row<'a>(
     col: Column<Element<'a, PanelMsg>>,
     label_c: Color,
     input_bg: Color,
-    input_bdr: Color,
     key: &str,
     value: String,
 ) -> Column<Element<'a, PanelMsg>> {
-    col.push(super::form_input_row(
-        key, &value, label_c, input_bg, input_bdr,
-    ))
+    col.push(rows::value_row(key, &value, label_c, input_bg))
 }

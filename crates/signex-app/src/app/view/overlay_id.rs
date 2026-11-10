@@ -49,6 +49,8 @@ pub(crate) enum OverlayId {
     // Editor-surface chrome.
     PlacementPaused,
     SchematicActiveBar,
+    /// The Graphite zoom pill over the schematic canvas.
+    CanvasZoomPill,
     FootprintActiveBar,
     FootprintContextMenu,
     FootprintMoveBy,
@@ -87,6 +89,8 @@ pub(crate) enum OverlayId {
     EnableVersionControl,
     GridProperties,
     SelectionFilterCustom,
+    /// File > New Project (#2232): the setup dialog.
+    NewProject,
     AnnotateDialog,
     AnnotateResetConfirm,
     ReprefixConfirm,
@@ -124,7 +128,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 57] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 59] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -132,6 +136,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 57] = [
     OverlayId::NetColorCustom,
     OverlayId::PlacementPaused,
     OverlayId::SchematicActiveBar,
+    OverlayId::CanvasZoomPill,
     OverlayId::FootprintActiveBar,
     OverlayId::FootprintContextMenu,
     OverlayId::FootprintMoveBy,
@@ -166,6 +171,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 57] = [
     OverlayId::EnableVersionControl,
     OverlayId::GridProperties,
     OverlayId::SelectionFilterCustom,
+    OverlayId::NewProject,
     OverlayId::AnnotateDialog,
     OverlayId::AnnotateResetConfirm,
     OverlayId::ReprefixConfirm,
@@ -217,7 +223,8 @@ pub(crate) const PAINT_ORDER: [OverlayId; 57] = [
 /// `dismiss_layer`) was necessary but not sufficient: most overlays build
 /// neither. Preferences, for one, renders its body directly. So the
 /// guard is applied in `collect_overlays` instead, where every overlay
-/// passes through exactly once no matter how its builder is written.
+/// passes through exactly once no matter how its builder is written, except
+/// the ids that guard their own hit areas (see the arm below).
 ///
 /// Exhaustive on purpose: a new overlay has to say whether the wheel
 /// stops at it.
@@ -227,6 +234,18 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         // user aims at. Capturing there would kill wheel-zoom over the
         // canvas whenever a tooltip happened to be showing.
         OverlayId::HoverTooltip | OverlayId::ComponentsRowDragLabel => false,
+        // Its layer is window-sized (the pill is placed by `Translate`), so a
+        // guard around the layer would swallow every wheel in the window:
+        // no panel would scroll. The pill guards its own bounds instead.
+        OverlayId::CanvasZoomPill => false,
+
+        // Their layers are window-sized positioners (a `Fill` column, the zoom
+        // pill's `Translate`): a guard there took the wheel over the whole
+        // canvas. The builders guard the bar, pill and dropdown themselves
+        // (`overlays::scroll_guard`).
+        OverlayId::SchematicActiveBar
+        | OverlayId::FootprintActiveBar
+        | OverlayId::SymbolEditorActiveBar => false,
 
         // Everything else paints a surface over the canvas. Scrolling on
         // it — or past the end of its own scrollable — must not reach
@@ -237,12 +256,9 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::BomPreview
         | OverlayId::NetColorCustom
         | OverlayId::PlacementPaused
-        | OverlayId::SchematicActiveBar
-        | OverlayId::FootprintActiveBar
         | OverlayId::FootprintContextMenu
         | OverlayId::FootprintMoveBy
         | OverlayId::FootprintAlign
-        | OverlayId::SymbolEditorActiveBar
         | OverlayId::SymbolContextMenu
         | OverlayId::TextEdit
         | OverlayId::ActiveBarMenu
@@ -271,6 +287,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::EnableVersionControl
         | OverlayId::GridProperties
         | OverlayId::SelectionFilterCustom
+        | OverlayId::NewProject
         | OverlayId::AnnotateDialog
         | OverlayId::AnnotateResetConfirm
         | OverlayId::ReprefixConfirm
@@ -287,6 +304,20 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::CommandPalette
         | OverlayId::LibraryUpdates => true,
     }
+}
+
+/// Whether this overlay, once painted, takes the cursor off the canvas, so
+/// the hover card must not show. Surfaces only: not the paused-placement
+/// banner, the text editor, the dock drop preview or floating panels.
+pub(crate) fn covers_canvas_hover(id: OverlayId) -> bool {
+    swallows_scroll(id)
+        && !matches!(
+            id,
+            OverlayId::PlacementPaused
+                | OverlayId::TextEdit
+                | OverlayId::DockDragZone
+                | OverlayId::FloatingPanels
+        )
 }
 
 /// Tag the Active Bar and context-menu messages of overlay `layers` painted
@@ -372,6 +403,10 @@ impl Signex {
                 self.schematic_active_bar_overlay(window_id),
                 self.overlay_owner(window_id),
             )),
+            OverlayId::CanvasZoomPill => layers.extend(scoped_to_window(
+                self.canvas_zoom_pill_overlay(window_id),
+                self.overlay_owner(window_id),
+            )),
             OverlayId::FootprintActiveBar => {
                 layers.extend(self.footprint_active_bar_overlay(window_id))
             }
@@ -403,7 +438,7 @@ impl Signex {
             OverlayId::ComponentsRowContextMenu => {
                 layers.extend(self.components_row_context_menu_overlay(window_id))
             }
-            OverlayId::GridPicker => layers.extend(self.grid_picker_overlay(window_id)),
+            OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
             OverlayId::ComponentsRowDragLabel => {
@@ -431,6 +466,7 @@ impl Signex {
             OverlayId::SelectionFilterCustom => {
                 layers.extend(self.selection_filter_custom_overlay())
             }
+            OverlayId::NewProject => layers.extend(self.new_project_overlay()),
             OverlayId::AnnotateDialog => layers.extend(self.annotate_dialog_overlay()),
             OverlayId::AnnotateResetConfirm => layers.extend(self.annotate_reset_confirm_overlay()),
             OverlayId::ReprefixConfirm => layers.extend(self.reprefix_confirm_overlay()),

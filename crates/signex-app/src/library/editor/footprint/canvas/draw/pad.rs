@@ -3,6 +3,7 @@
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Radians, Vector};
 
+use super::super::super::layers::LayerPalette;
 use super::super::super::state::{EditorPad, FootprintEditorState, PadsTool, PlaceArcPending};
 use super::super::FootprintCanvasState;
 
@@ -33,10 +34,11 @@ pub(super) fn draw_pad(
     cstate: &FootprintCanvasState,
     pad: &EditorPad,
     is_selected: bool,
+    palette: LayerPalette,
 ) {
     use signex_library::PadShape as PS;
     let layer = pad.primary_layer();
-    let color = layer.color();
+    let color = layer.color_in(palette);
     // Pad-local extents: the shape is built around the origin and the
     // whole path is placed by the saved transform below, so rotation
     // is applied once here rather than smeared through every vertex.
@@ -154,9 +156,9 @@ pub(super) fn draw_pad(
     };
 
     let outline_color = if is_selected {
-        Color::from_rgb(1.0, 1.0, 1.0)
+        palette.selection_ink()
     } else {
-        Color { a: 1.0, ..color }
+        palette.pad_edge(color)
     };
     // Place the whole copper shape with one saved transform. World and
     // screen share a handedness here — `world_to_screen` applies no Y
@@ -165,7 +167,13 @@ pub(super) fn draw_pad(
     frame.with_save(|inner| {
         inner.translate(Vector::new(screen_centre.x, screen_centre.y));
         inner.rotate(Radians(pad.rotation_deg.to_radians() as f32));
-        inner.fill(&shape_path, Color { a: 0.85, ..color });
+        inner.fill(
+            &shape_path,
+            Color {
+                a: palette.pad_fill_alpha(),
+                ..color
+            },
+        );
         inner.stroke(
             &shape_path,
             Stroke::default()

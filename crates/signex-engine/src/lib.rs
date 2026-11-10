@@ -39,9 +39,13 @@ mod annotation_tests;
 mod document_id_tests;
 
 #[cfg(test)]
+mod commit_local_tests;
+#[cfg(test)]
 mod field_follow_tests;
 #[cfg(test)]
 mod lock_tests;
+#[cfg(test)]
+mod move_fold_local_tests;
 #[cfg(test)]
 mod object_lock_tests;
 #[cfg(test)]
@@ -63,6 +67,8 @@ mod rubber_band_tests;
 mod rubber_band_turn_tests;
 #[cfg(test)]
 mod save_point_tests;
+#[cfg(test)]
+mod symbol_drag_local_tests;
 
 #[cfg(test)]
 mod sheet_identity_tests;
@@ -123,12 +129,13 @@ pub use sheet_placement::{
 };
 use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::schematic::{SchematicSheet, SelectedItem};
-pub(crate) use transform::TouchingPairs;
 pub use transform::place_fields_for_new_symbol;
 pub use transform::rubber_band::{
     BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, before_nets, follow_moved_pins,
     moved_pin_tips,
 };
+
+pub(crate) use transform::{PreWires, TouchingPairs};
 
 /// Whether `key` names one of the symbol's built-in fields (`reference`,
 /// `value`, `footprint`, any case). Those have their own commands, so
@@ -201,6 +208,24 @@ pub struct Engine {
     /// The pre-move sheet's minted dots and their verdicts, to revalidate only
     /// the dots near changed wires (drag previews).
     preset_dots: Option<std::sync::Arc<transform::DotVerdicts>>,
+    /// The pre-move sheet's wires, to fold only where a move changed them
+    /// (drag previews).
+    preset_wires: Option<std::sync::Arc<PreWires>>,
+    /// The pre-move sheet itself, which a drag preview's move reads in place
+    /// of a copy of the engine's document (drag previews).
+    preset_sheet: Option<std::sync::Arc<SchematicSheet>>,
+    /// Test switch: a move folds by weighing every wire, as it did before the
+    /// fold looked only where wires changed.
+    #[cfg(test)]
+    full_scan_moves: bool,
+    /// Test switch: the net guard compares over every net, as it did before it
+    /// compared only the nets a move reaches.
+    #[cfg(test)]
+    full_scan_guard: bool,
+    /// Test switch: the rubber-band pass asks every question of the whole
+    /// sheet, as it did before it asked only of what is near.
+    #[cfg(test)]
+    full_scan_follow: bool,
 }
 
 /// Process-wide revision source: values are never reused across engines.
@@ -215,10 +240,20 @@ pub(crate) fn next_revision() -> u64 {
 /// (`docs/INCREMENTAL_NETS.md`).
 #[derive(Debug)]
 pub struct MovePreview {
-    sheet: SchematicSheet,
+    sheet: std::sync::Arc<SchematicSheet>,
     before: BeforeNets,
     base: Option<std::sync::Arc<signex_net::NetBase>>,
     dots: Option<std::sync::Arc<transform::DotVerdicts>>,
+    wires: std::sync::Arc<PreWires>,
+    /// Test switch: fold the moved sheet by weighing every wire.
+    #[cfg(test)]
+    full_scan_moves: bool,
+    /// Test switch: the net guard compares over every net.
+    #[cfg(test)]
+    full_scan_guard: bool,
+    /// Test switch: the rubber-band pass scans the whole sheet.
+    #[cfg(test)]
+    full_scan_follow: bool,
 }
 
 impl MovePreview {
@@ -230,7 +265,14 @@ impl MovePreview {
             before: std::sync::Arc::new(base.derive(sheet)),
             base: Some(std::sync::Arc::new(base)),
             dots: transform::DotVerdicts::new(sheet).map(std::sync::Arc::new),
-            sheet: sheet.clone(),
+            wires: std::sync::Arc::new(PreWires::new(&sheet.wires)),
+            #[cfg(test)]
+            full_scan_moves: false,
+            #[cfg(test)]
+            full_scan_guard: false,
+            #[cfg(test)]
+            full_scan_follow: false,
+            sheet: std::sync::Arc::new(sheet.clone()),
         }
     }
 
@@ -264,12 +306,36 @@ impl MovePreview {
         moves: &[(SelectedItem, f64, f64)],
         keep_wires: bool,
     ) -> (SchematicSheet, Vec<String>) {
-        let Ok(mut engine) = Engine::new(self.sheet.clone()) else {
-            return (self.sheet.clone(), Vec::new());
+        let Some((mut engine, held, result)) = self.moved_engine(moves, keep_wires) else {
+            return (SchematicSheet::clone(&self.sheet), Vec::new());
         };
+        if !matches!(result, Some(Ok(_))) {
+            return (SchematicSheet::clone(&self.sheet), held);
+        }
+        // The engine is spent: hand its sheet over instead of copying it.
+        (std::mem::take(&mut engine.document), held)
+    }
+
+    /// The throwaway engine of [`Self::moved_with`] after the move, the
+    /// references the lock held back, and the move's result (`None` when the
+    /// lock held every item back).
+    fn moved_engine(
+        &self,
+        moves: &[(SelectedItem, f64, f64)],
+        keep_wires: bool,
+    ) -> Option<MovedEngine> {
+        let mut engine = Engine::new(SchematicSheet::clone(&self.sheet)).ok()?;
         engine.preset_before = Some(self.before.clone());
         engine.preset_base.clone_from(&self.base);
         engine.preset_dots.clone_from(&self.dots);
+        engine.preset_wires = Some(self.wires.clone());
+        engine.preset_sheet = Some(self.sheet.clone());
+        #[cfg(test)]
+        {
+            engine.full_scan_moves = self.full_scan_moves;
+            engine.full_scan_guard = self.full_scan_guard;
+            engine.full_scan_follow = self.full_scan_follow;
+        }
         // The commit skips locked symbols; the ghost must too, or it shows
         // nothing moving while the free items jump on release.
         let (command, held) = engine.without_locked_naming(
@@ -279,15 +345,28 @@ impl MovePreview {
             },
             &|symbol| format!("a wire on {symbol}'s pin ({symbol} is locked)"),
         );
-        let Some(command) = command else {
-            return (self.sheet.clone(), held);
-        };
-        if engine.execute(command).is_err() {
-            return (self.sheet.clone(), held);
-        }
-        (engine.document().clone(), held)
+        let result = command.map(|command| engine.execute(command));
+        Some((engine, held, result))
+    }
+
+    /// [`Self::moved_with`] with everything the move left on the engine.
+    #[cfg(test)]
+    pub(crate) fn moved_report(
+        &self,
+        moves: &[(SelectedItem, f64, f64)],
+        keep_wires: bool,
+    ) -> Option<MovedEngine> {
+        self.moved_engine(moves, keep_wires)
     }
 }
+
+/// A preview's throwaway engine, the references the lock held back and the
+/// move's result.
+type MovedEngine = (
+    Engine,
+    Vec<String>,
+    Option<Result<CommandResult, EngineError>>,
+);
 
 impl Engine {
     pub fn new(document: SchematicSheet) -> Result<Self, EngineError> {
@@ -316,6 +395,14 @@ impl Engine {
             preset_before: None,
             preset_base: None,
             preset_dots: None,
+            preset_wires: None,
+            preset_sheet: None,
+            #[cfg(test)]
+            full_scan_moves: false,
+            #[cfg(test)]
+            full_scan_guard: false,
+            #[cfg(test)]
+            full_scan_follow: false,
         })
     }
 
@@ -349,6 +436,14 @@ impl Engine {
             preset_before: None,
             preset_base: None,
             preset_dots: None,
+            preset_wires: None,
+            preset_sheet: None,
+            #[cfg(test)]
+            full_scan_moves: false,
+            #[cfg(test)]
+            full_scan_guard: false,
+            #[cfg(test)]
+            full_scan_follow: false,
         })
     }
 
@@ -559,6 +654,7 @@ impl Engine {
             | Command::SetSymbolDnp { .. }
             | Command::SetSymbolFlag { .. }
             | Command::SetWireWidth { .. }
+            | Command::SetWireColor { .. }
             | Command::SetSymbolBodyStyle { .. }
             | Command::UpdateSymbolTextSize { .. }
             | Command::UpdateSymbolLibId { .. }
@@ -625,6 +721,10 @@ impl Engine {
     /// placeholder that nothing reads.
     fn pre_image(&mut self, cmd: &Command) -> SchematicSheet {
         if self.history_suppressed && !cmd.reads_pre_image() {
+            return SchematicSheet::default();
+        }
+        // A preview's move reads the preview's sheet, and records nothing.
+        if self.preset_sheet.is_some() && matches!(cmd, Command::MoveEach { .. }) {
             return SchematicSheet::default();
         }
         #[cfg(test)]

@@ -47,7 +47,9 @@ use signex_widgets::{checkbox, radio, raw, text};
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{footer_strip, header_with_note, primary_btn_if, secondary_btn};
+use super::modal_chrome::{
+    cancel_btn, footer_strip, header_with_note, primary_btn_if, secondary_btn,
+};
 use super::part_sync::{Choice, Choices, ConflictView};
 use crate::styles::{dialog_body, dialog_list, dialog_message};
 
@@ -329,7 +331,7 @@ pub fn view<'a>(
             tokens,
         )],
         vec![
-            secondary_btn("Cancel", LibraryMessage::LibraryUpdatesCancel, tokens),
+            cancel_btn("Cancel", LibraryMessage::LibraryUpdatesCancel, tokens),
             primary_btn_if(
                 &update_label,
                 LibraryMessage::LibraryUpdatesApply,
@@ -369,6 +371,7 @@ fn render_entry_row<'a>(
 
     let symbol_uuid = entry.symbol_uuid;
     let cb: Element<'a, LibraryMessage> = checkbox(entry.selected)
+        .style(crate::panels::form_look::checkbox_style)
         .size(TS.heading)
         .on_toggle(move |_| LibraryMessage::LibraryUpdatesToggleSelection(symbol_uuid))
         .boxed();
@@ -389,8 +392,12 @@ fn render_entry_row<'a>(
                     .color(text_c)
             )
             .width(Length::Fixed(96.0)),
-            container(text(raw(&entry.library_name)).size(TS.body).color(muted))
-                .width(Length::Fixed(160.0)),
+            container(
+                text(signex_i18n::UserText::new(&entry.library_name))
+                    .size(TS.body)
+                    .color(muted)
+            )
+            .width(Length::Fixed(160.0)),
             container(
                 text(raw(format!(
                     "{} \u{2192} {}",

@@ -53,6 +53,47 @@ fn without_fields_of_selected_symbols(
         .collect()
 }
 
+/// `moves` with a power port's field item acting on the port, each item
+/// once: the port's text is fixed to it and never moves on its own
+/// (maintainer decision 2026-11-07, `docs/DECISIONS.md`).
+fn fold_port_text_moves(
+    document: &SchematicSheet,
+    moves: Vec<(SelectedItem, f64, f64)>,
+) -> Vec<(SelectedItem, f64, f64)> {
+    use signex_types::schematic::SelectedKind;
+    let ports: std::collections::HashSet<uuid::Uuid> = if moves.iter().any(|(item, _, _)| {
+        matches!(
+            item.kind,
+            SelectedKind::SymbolRefField | SelectedKind::SymbolValField
+        )
+    }) {
+        document
+            .symbols
+            .iter()
+            .filter(|s| s.is_power)
+            .map(|s| s.uuid)
+            .collect()
+    } else {
+        std::collections::HashSet::new()
+    };
+    let mut seen = std::collections::HashSet::with_capacity(moves.len());
+    moves
+        .into_iter()
+        .map(|(item, dx, dy)| {
+            let unit = match item.kind {
+                SelectedKind::SymbolRefField | SelectedKind::SymbolValField
+                    if ports.contains(&item.uuid) =>
+                {
+                    SelectedItem::new(item.uuid, SelectedKind::Symbol)
+                }
+                _ => item,
+            };
+            (unit, dx, dy)
+        })
+        .filter(|(item, _, _)| seen.insert(*item))
+        .collect()
+}
+
 impl Engine {
     /// Reconcile junction dots after a command mutated wire geometry (move /
     /// rotate / mirror), removed wires (delete), or added one (place), and
@@ -80,6 +121,23 @@ impl Engine {
         }
     }
 
+    /// The wires as they are now, ready to tell a later fold what changed: the
+    /// drag preview's, built once per drag, else built here.
+    fn pre_wires(&self) -> std::sync::Arc<crate::PreWires> {
+        (self.preset_wires.clone())
+            .unwrap_or_else(|| std::sync::Arc::new(crate::PreWires::new(&self.document.wires)))
+    }
+
+    /// [`Self::merge_after_edit`] for a move, weighing only the wires the
+    /// move changed (see `Engine::merge_collinear_wires_near`).
+    fn merge_after_move(&mut self, pre: &crate::PreWires) -> DocumentPatch {
+        if self.merge_collinear_wires_near(pre) {
+            DocumentPatch::WIRES
+        } else {
+            DocumentPatch::NONE
+        }
+    }
+
     /// Rubber-band the already moved `self.document` and reconcile junctions,
     /// then check the result against the nets the move asks for (the user's intent): any difference
     /// escalates the offending tips (new path, then plain move) and the pass
@@ -92,23 +150,62 @@ impl Engine {
         items: &[SelectedItem],
         followed: &[SelectedItem],
     ) -> DocumentPatch {
-        const MAX_ROUNDS: usize = 6;
-        let base = self.document.clone();
+        let plain_items = [items, followed].concat();
+        #[cfg(test)]
+        if self.full_scan_moves {
+            // The pass as it was: a copy of the moved sheet kept for every
+            // round, another for the plain reference.
+            let base = self.document.clone();
+            self.reconciled_patch(&plain_items);
+            let plain = std::mem::replace(&mut self.document, base.clone());
+            return self.guarded_rounds(before, tips, items, followed, &plain, |engine| {
+                engine.document = base.clone();
+            });
+        }
         // What a plain move leaves: the reference for the user's own edits.
-        let plain_reference = {
-            self.reconciled_patch(&[items, followed].concat());
-            std::mem::replace(&mut self.document, base.clone())
-        };
+        // Reconciling changes only the junctions, so the sheet every round
+        // starts from is the reference with the junctions it had before: one
+        // copy of the sheet serves both, not two.
+        let junctions = self.document.junctions.clone();
+        self.reconciled_patch(&plain_items);
+        let plain = std::mem::take(&mut self.document);
+        self.guarded_rounds(before, tips, items, followed, &plain, |engine| {
+            engine.document = plain.clone();
+            engine.document.junctions.clone_from(&junctions);
+        })
+    }
+
+    /// The escalation rounds of [`Self::rubber_band_guarded`]; `fresh` sets
+    /// `self.document` to the plain-moved sheet, junctions not yet reconciled,
+    /// that every round starts from.
+    fn guarded_rounds(
+        &mut self,
+        before: &SchematicSheet,
+        tips: &[crate::PinTip],
+        items: &[SelectedItem],
+        followed: &[SelectedItem],
+        plain_reference: &SchematicSheet,
+        fresh: impl Fn(&mut Self),
+    ) -> DocumentPatch {
+        const MAX_ROUNDS: usize = 6;
+        #[cfg(test)]
+        let _scan = crate::transform::rubber_band::scan_all_on(self.full_scan_follow);
         let guard = crate::Guard::with_base(
             before,
-            &plain_reference,
+            plain_reference,
             tips,
             self.preset_before.clone(),
             self.preset_base.clone(),
         );
+        #[cfg(test)]
+        let guard = if self.full_scan_guard {
+            guard.without_local()
+        } else {
+            guard
+        };
         let mut policy = crate::Policy::default();
         for round in 0.. {
-            self.document = base.clone();
+            fresh(self);
             let follow = crate::follow_moved_pins(&mut self.document, tips, items, &policy);
             let mut touched = [items, followed].concat();
             touched.extend(follow.touched);
@@ -174,9 +271,10 @@ impl Engine {
     fn exec_moves(
         &mut self,
         before: SchematicSheet,
-        mut moves: Vec<(SelectedItem, f64, f64)>,
+        moves: Vec<(SelectedItem, f64, f64)>,
         keep_wires: bool,
     ) -> Result<CommandResult, EngineError> {
+        let mut moves = fold_port_text_moves(&self.document, moves);
         drop_fields_of_moved_symbols(&mut moves);
         // A dragged bus carries the entries sitting on it (and, with
         // `keep_wires`, the wire ends on their far side).
@@ -185,8 +283,11 @@ impl Engine {
         let items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
         // Pin tips must be read before the symbols move.
         let tips = keep_wires.then(|| crate::moved_pin_tips(&self.document, &items));
-        // So must the wires already meeting end to end, which a merge leaves.
-        let adjacent = self.touching_wire_pairs();
+        // So must the wires, to tell the pairs already meeting end to end
+        // (which a merge leaves) and where the move changed any.
+        let pre_wires = self.pre_wires();
+        #[cfg(test)]
+        let adjacent = self.full_scan_moves.then(|| self.touching_wire_pairs());
 
         let mut changed = false;
         for (item, dx, dy) in &moves {
@@ -200,16 +301,31 @@ impl Engine {
         // and leave their pin end behind.
         let followed = self.follow_bus_entry_ends(&followers, &items);
 
+        // A drag preview's pre-move sheet is the preview's own, shared.
+        let preview_sheet = self.preset_sheet.clone();
+        let pre_move = preview_sheet.as_deref().unwrap_or(&before);
         let mut patch = match tips.filter(|tips| !tips.is_empty()) {
-            Some(tips) => self.rubber_band_guarded(&before, &tips, &items, &followed),
+            Some(tips) => self.rubber_band_guarded(pre_move, &tips, &items, &followed),
             None => self.reconciled_patch(&[items, followed].concat()),
         };
-        patch |= self.merge_after_edit(&adjacent);
+        #[cfg(test)]
+        if let Some(adjacent) = &adjacent {
+            patch |= self.merge_after_edit(adjacent);
+        } else {
+            patch |= self.merge_after_move(&pre_wires);
+        }
+        #[cfg(not(test))]
+        {
+            patch |= self.merge_after_move(&pre_wires);
+        }
         let patch_pair = PatchPair {
             semantic: SemanticPatch::SelectionMoved,
             document: patch,
         };
-        self.record_history(before, patch_pair);
+        // A preview's engine is thrown away, and so is its history.
+        if preview_sheet.is_none() {
+            self.record_history(before, patch_pair);
+        }
         Ok(CommandResult::changed(patch_pair))
     }
 
@@ -317,6 +433,7 @@ impl Engine {
                 angle_degrees,
                 keep_wires,
             } => {
+                let items = self.document.selection_units(&items);
                 let tips = self.pin_tips_if(keep_wires, &items);
                 let adjacent = self.touching_wire_pairs();
                 let mut changed = false;
@@ -338,6 +455,7 @@ impl Engine {
                 transform,
                 keep_wires,
             } => {
+                let items = self.document.selection_units(&items);
                 let tips = self.pin_tips_if(keep_wires, &items);
                 let adjacent = self.touching_wire_pairs();
                 let changed = self.transform_selection_about(&items, centre, transform)?;
@@ -352,6 +470,7 @@ impl Engine {
                 axis,
                 keep_wires,
             } => {
+                let items = self.document.selection_units(&items);
                 let tips = self.pin_tips_if(keep_wires, &items);
                 let adjacent = self.touching_wire_pairs();
                 let mut changed = false;

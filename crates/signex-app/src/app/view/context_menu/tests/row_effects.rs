@@ -136,8 +136,7 @@ fn canvas_rows(app: &Signex) -> Vec<DropdownEntry<Message>> {
             .expect("the app opens its main window"),
     );
     let sc = CanvasShortcuts::resolve(|id| app.keymap_shortcut_label(id));
-    let tokens = theme_tokens(TID);
-    canvas_menu_entries(TID, &tokens, selection, None, project_key, &sc)
+    canvas_menu_entries(TID, selection, None, project_key, &sc)
 }
 
 fn hint(app: &Signex) -> impl Fn(&str) -> String + '_ {
@@ -319,6 +318,7 @@ fn mirror_rows_flip_the_axes_the_keys_flip() {
 #[test]
 fn find_similar_row_opens_at_the_point_the_menu_was_opened_over() {
     let over = Wire {
+        color: None,
         uuid: Uuid::from_u128(77),
         start: Point::new(0.0, 20.0),
         end: Point::new(10.0, 20.0),
@@ -622,6 +622,7 @@ fn loaded_project(app: &mut Signex, file: &str, owns_sheet: bool) -> usize {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -879,33 +880,61 @@ fn properties_row_shows_the_properties_panel() {
 }
 
 /// Opened near the bottom edge, the project root's whole card stays inside
-/// the window: the clamp uses the height of the rows it really has (#2129).
+/// the window (#2129). The placement now measures the card it lays out, so
+/// this lays the overlay out and reads where the first and last rows land.
 #[test]
 fn the_tree_root_menu_opened_near_the_bottom_edge_stays_inside_the_window() {
     let mut app = one_symbol();
     let idx = loaded_project(&mut app, "P.snxprj", true);
-    app.ui_state.window_size = (1000.0, 700.0);
     let rows = tree_root_rows(&mut app, idx, true);
-    let height = super::super::placement::entries_height(&rows);
+    let metrics = signex_widgets::active_bar_dropdown::MenuMetrics::GRAPHITE;
+    let height = metrics.card_height(&rows).expect("plain rows");
+    let has_icons = rows
+        .iter()
+        .any(|e| matches!(e, DropdownEntry::Item(it) if it.icon.is_some()));
     assert!(
-        height > super::super::placement::menu_height(6, false),
+        height > 6.0 * metrics.item_height(false) + 2.0 * metrics.panel_pad,
         "the root menu is taller than the old six-row guess"
     );
+    let row_labels: Vec<String> = rows
+        .iter()
+        .filter_map(|e| match e {
+            DropdownEntry::Item(it) => Some(it.label.clone()),
+            _ => None,
+        })
+        .collect();
+    let (first, last) = (&row_labels[0], &row_labels[row_labels.len() - 1]);
+    let main = app
+        .ui_state
+        .main_window_id
+        .expect("the app opens its main window");
     let id = app.document_state.projects[idx].id.to_string();
     for anchor_y in [600.0_f32, 690.0] {
-        let ctx = crate::app::ProjectTreeContextMenuState {
-            x: 20.0,
-            y: anchor_y,
-            key: Some(vec![id.clone()]),
-            window: None,
-        };
-        let (_card, _width, origin) =
-            app.view_project_tree_context_menu(iced::window::Id::unique(), &ctx);
-        assert!(origin.1 >= 0.0, "opens above the window at {anchor_y}");
+        app.interaction_state.project_tree_context_menu =
+            Some(crate::app::ProjectTreeContextMenuState {
+                x: 20.0,
+                y: anchor_y,
+                key: Some(vec![id.clone()]),
+                window: None,
+            });
+        let texts = super::super::placement::tests::lay_out_layers(
+            app.project_tree_context_menu_overlay(main),
+            iced::Size::new(1000.0, 700.0),
+        );
+        let top = crate::layout_probe::find(&texts, first).bounds;
+        let bottom = crate::layout_probe::find(&texts, last).bounds;
+        // The card's bottom edge: the last row's lower edge plus the padding.
+        let card_bottom = bottom.y
+            + bottom.height / 2.0
+            + metrics.item_height(has_icons) / 2.0
+            + metrics.panel_pad;
         assert!(
-            origin.1 + height <= 700.0,
-            "the card runs past the bottom edge at {anchor_y}: top {} + {height}",
-            origin.1
+            top.y >= 0.0,
+            "opens above the window at {anchor_y}: {top:?}"
+        );
+        assert!(
+            card_bottom <= 700.0 - super::super::placement::EDGE_MARGIN,
+            "the card runs past the bottom edge at {anchor_y}: bottom {card_bottom}"
         );
     }
 }

@@ -57,7 +57,7 @@ fn editor_widths_px(symbol: &Symbol, scale: f32) -> (f32, f32) {
     SchematicRenderer::build_scene(
         &snapshot,
         &ResolvedTheme::from_canvas_colors(signex_types::theme::canvas_colors(
-            signex_types::theme::ThemeId::Signex,
+            signex_types::theme::ThemeId::GraphiteLight,
         )),
         DirtyFlags::LINES | DirtyFlags::POLYGONS,
         &mut scene,
@@ -91,7 +91,7 @@ fn schematic_widths_px(symbol: &Symbol, scale: f32) -> (f32, f32) {
         unit: 1,
         ..Default::default()
     });
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
     let transform = ScreenTransform {
         offset_x: 400.0,
         offset_y: 400.0,

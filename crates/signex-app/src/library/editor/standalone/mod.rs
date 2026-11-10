@@ -14,6 +14,7 @@
 //! (`save_primitive_tab_at`); the editor view only owns the widget
 //! tree.
 
+mod dof_chip;
 mod footprint;
 pub(crate) mod symbol;
 
