@@ -108,6 +108,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_grid_picker` | Open grid picker | view | — | — |
 | `open_grid_properties` | Open grid properties | view | — | — |
 | `open_library_browser` | Open library browser | library | — | — |
+| `open_net_inspector` | Open Net Inspector panel | panels | — | — |
 | `open_preferences` | Open preferences | preferences | `Ctrl+,` | `Ctrl+,` |
 | `open_schematic_preferences` | Open schematic preferences | preferences | `T P` | — |
 | `paste` | Paste | edit | `Ctrl+V` | `Ctrl+V` |
@@ -175,6 +176,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `align_vertical_centers` | Align vertical centers | modify | — | — |
 | `annotate_schematic` | Annotate schematic | design | `T A` | — |
 | `annotate_schematic_quietly` | Annotate schematic quietly | design | `Alt+A` | `Alt+A` |
+| `assign_footprints` | Assign footprints | design | — | — |
 | `assign_net_class` | Assign net to class | design | — | — |
 | `bring_to_front` | Bring to front | modify | — | — |
 | `bring_to_front_of` | Bring to front of | modify | — | — |

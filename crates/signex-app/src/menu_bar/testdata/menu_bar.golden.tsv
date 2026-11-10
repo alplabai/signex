@@ -90,11 +90,11 @@ Tools/Annotation/---	separator	-	-	-	-	-	-
 Tools/Annotation/Back Annotate Schematics...	stub	Back Annotate Schematics...	-	-	-	00000000	never
 Tools/Annotation/Number Schematic Sheets...	stub	Number Schematic Sheets...	-	-	-	00000000	never
 Tools/---	separator	-	-	-	-	-	-
-Tools/Assign Footprints	stub	Assign Footprints	-	-	-	00000000	never
+Tools/Assign Footprints	item	Assign Footprints	-	-	AssignFootprints	01000000	cmd:assign_footprints
 Tools/Library Editor	item	Library Editor	-	-	OpenLibraryEditor	01000000	cmd:open_library_browser
 Tools/---	separator	-	-	-	-	-	-
 Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc
-Tools/Net Inspector	stub	Net Inspector	-	-	-	00000000	never
+Tools/Net Inspector	item	Net Inspector	-	-	OpenNetInspector	11111111	cmd:open_net_inspector
 Tools/---	separator	-	-	-	-	-	-
 Tools/Up Hierarchy	item	Up Hierarchy	-	-	AscendToParentSheet	01000000	cmd:navigate_up_hierarchy
 Tools/---	separator	-	-	-	-	-	-

@@ -299,6 +299,13 @@ impl Signex {
         .then(|| self.view_new_project_dialog())
     }
 
+    pub(in crate::app::view) fn assign_footprints_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .assign_footprints
+            .is_some()
+            .then(|| self.view_assign_footprints_dialog())
+    }
+
     pub(in crate::app::view) fn selection_filter_custom_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {

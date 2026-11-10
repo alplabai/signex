@@ -329,7 +329,8 @@ impl Signex {
     pub(crate) fn refresh_net_nav(&mut self) -> Task<Message> {
         let build = self.refresh_net_index();
         self.sync_net_highlight_to_canvases();
-        build
+        let inspector = self.sync_net_inspector();
+        Task::batch([build, inspector])
     }
 
     fn refresh_net_index(&mut self) -> Task<Message> {

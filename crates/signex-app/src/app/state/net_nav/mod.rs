@@ -61,4 +61,11 @@ pub struct NetNavState {
     /// The stitch the net-class style job and the index job of one project
     /// share while both are in flight.
     pub stitch_share: crate::app::stitched_netlist::StitchShare,
+    /// The index and panel state the Net Inspector's rows were last built
+    /// from (#1269). Holding the index keeps its identity unique, so an
+    /// update that changed neither builds no rows.
+    pub inspector_source: Option<(
+        std::sync::Arc<ProjectNetData>,
+        crate::panels::NetInspectorState,
+    )>,
 }

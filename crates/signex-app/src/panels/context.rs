@@ -104,6 +104,9 @@ pub struct PanelContext {
     pub component_sheet: Option<super::ComponentSheet>,
     /// Nets of the active PCB tab, for the PCB panel.
     pub pcb_nets: Option<super::PcbNetsSummary>,
+    /// The active project's nets, for the Net Inspector panel; filled only
+    /// while that panel is open.
+    pub net_inspector: super::NetInspectorView,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,

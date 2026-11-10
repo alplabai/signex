@@ -212,6 +212,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("open_erc_dialog", "OpenErcDialog"),
     ("run_drc", "RunDrc"),
     ("open_parameter_manager", "OpenParameterManager"),
+    // #2248 / #1269: fixture names only.
+    ("assign_footprints", "AssignFootprints"),
+    ("open_net_inspector", "OpenNetInspector"),
     ("annotate_schematic_quietly", "AnnotateQuietly"),
     ("force_annotate_all_schematics", "AnnotateForceAll"),
     ("open_preferences", "OpenPreferences"),

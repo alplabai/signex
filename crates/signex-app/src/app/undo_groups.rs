@@ -53,6 +53,8 @@ pub enum UndoGroupKind {
     Annotate,
     Reprefix,
     Replace,
+    /// Tools ▸ Assign Footprints (#2248).
+    Footprints,
 }
 
 impl UndoGroupSheets {
@@ -61,6 +63,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Annotate => "annotate",
             UndoGroupKind::Reprefix => "re-prefix",
             UndoGroupKind::Replace => "replace",
+            UndoGroupKind::Footprints => "footprint assignment",
         }
     }
 
@@ -69,6 +72,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Annotate => "Annotate",
             UndoGroupKind::Reprefix => "Re-prefix",
             UndoGroupKind::Replace => "Replace",
+            UndoGroupKind::Footprints => "Assign Footprints",
         }
     }
 
@@ -76,6 +80,7 @@ impl UndoGroupSheets {
     fn kept(&self) -> String {
         match self.kind {
             UndoGroupKind::Replace => "replaced text".to_string(),
+            UndoGroupKind::Footprints => "assigned footprints".to_string(),
             _ => format!("{} designators", self.participle()),
         }
     }
@@ -85,6 +90,7 @@ impl UndoGroupSheets {
     fn holds(&self) -> &'static str {
         match self.kind {
             UndoGroupKind::Replace => "text",
+            UndoGroupKind::Footprints => "footprints",
             _ => "designators",
         }
     }
@@ -95,6 +101,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Annotate => "annotated",
             UndoGroupKind::Reprefix => "re-prefixed",
             UndoGroupKind::Replace => "replaced",
+            UndoGroupKind::Footprints => "assigned",
         }
     }
 }

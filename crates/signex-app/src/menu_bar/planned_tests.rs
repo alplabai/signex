@@ -17,8 +17,6 @@
 const EXPECTED_STUBS: &[&str] = &[
     "Back Annotate Schematics...",
     "Number Schematic Sheets...",
-    "Assign Footprints",
-    "Net Inspector",
     "Tile Horizontally",
     "Tile Vertically",
 ];

@@ -690,6 +690,8 @@ impl Signex {
             pcb_nets: self
                 .active_pcb_snapshot()
                 .map(crate::panels::PcbNetsSummary::of),
+            // Kept in step with the net index by `refresh_net_nav`.
+            net_inspector: self.document_state.panel_ctx.net_inspector.clone(),
             selection_count,
             selected_uuid,
             selected_kind,

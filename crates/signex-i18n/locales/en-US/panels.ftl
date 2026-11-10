@@ -380,3 +380,38 @@ panels-footprint-library-place = Place
 panels-footprint-library-add = Add
 panels-footprint-library-delete = Delete
 panels-footprint-library-edit = Edit
+
+## Net Inspector panel (#1269): every net of the active project. The column
+## headings are shown in capitals, so they are written in capitals here.
+
+panels-kind-net-inspector = Net Inspector
+# Placeholder of the box that filters the list by net or class name.
+panels-net-inspector-filter = Filter nets
+# Shown when the active document is not a schematic of a project.
+panels-net-inspector-no-project = Open a schematic to see its project's nets here.
+# Shown while the project's connectivity is being read.
+panels-net-inspector-reading = Reading the project's nets…
+# Shown when the project's connectivity could not be read.
+panels-net-inspector-unavailable = The project's nets could not be read; Messages says why.
+# Shown when no net matches the filter.
+panels-net-inspector-empty = No net matches the filter.
+panels-net-inspector-column-net = NET
+# The net class the net belongs to.
+panels-net-inspector-column-class = CLASS
+# How many component pins the net connects.
+panels-net-inspector-column-pins = PINS
+# Pins cell. $count is a whole number.
+panels-net-inspector-pins = { $count }
+# Class cell of a net in no net class.
+panels-net-inspector-no-class = —
+# What a member of an expanded net is.
+panels-net-inspector-kind-pin = Pin
+panels-net-inspector-kind-label = Label
+panels-net-inspector-kind-port = Power port
+panels-net-inspector-kind-sheet-entry = Sheet entry
+# Footer: how many nets the filter shows of the project's total. Whole numbers.
+panels-net-inspector-summary =
+    { $shown } of { $total ->
+        [one] { $total } net
+       *[other] { $total } nets
+    }

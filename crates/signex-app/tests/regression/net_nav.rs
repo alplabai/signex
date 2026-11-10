@@ -36,7 +36,7 @@ fn a_new_session_has_the_hover_on_and_no_highlight_and_clearing_changes_nothing(
 
 // ── update-level flows over real sheets ──────────────────────────────
 
-mod flows {
+pub(crate) mod flows {
     use super::*;
     use signex_app::app::{CaseFold, FileMsg, LoadedProject, Signex};
     use signex_app::tab_bar::TabMessage;
@@ -53,7 +53,7 @@ mod flows {
 
     /// Two sheets of one project, each a wire with the global label `VCC`,
     /// both open as tabs with `a` focused.
-    fn open_project(dir: &Path) -> (Signex, PathBuf, PathBuf) {
+    pub(crate) fn open_project(dir: &Path) -> (Signex, PathBuf, PathBuf) {
         let sheet = |label: u128, wire: u128| {
             let mut s = SchematicSheet {
                 uuid: Uuid::now_v7(),

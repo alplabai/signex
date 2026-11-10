@@ -313,13 +313,16 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         submenu("Annotation", annotation(ctx)),
         SEP,
-        stub("Assign Footprints"),
+        // The project's parts and their row's footprints:
+        // docs/MENU_BAR.md#tools-assign-footprints
+        cmd_item_gated(ctx, cmd("assign_footprints", "Assign Footprints", "")),
         // Opens or focuses a Library Browser tab: docs/MENU_BAR.md#tools-library-editor
         cmd_item_gated(ctx, cmd("open_library_browser", "Library Editor", "")),
         SEP,
         // Runs `run_drc` on the PCB in view; greyed with no PCB open.
         cmd_item_gated(ctx, cmd("run_drc", "Design Rule Check", "")),
-        stub("Net Inspector"),
+        // Opens the Net Inspector panel: docs/MENU_BAR.md#tools-net-inspector
+        cmd_item_gated(ctx, cmd("open_net_inspector", "Net Inspector", "")),
         SEP,
         item_if(
             "Up Hierarchy",

@@ -616,6 +616,16 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "open_net_inspector",
+        category: "panels",
+        label: "Open Net Inspector panel",
+        menu_label: Some("Net Inspector"),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "open_preferences",
         category: "preferences",
         label: "Open preferences",

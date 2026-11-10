@@ -250,6 +250,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
+        // Tools ▸ Assign Footprints (#2248) and Tools ▸ Net Inspector (#1269).
+        "assign_footprints" => Message::from(crate::app::AssignFootprintsMsg::Requested),
+        "open_net_inspector" => Message::Overlay(OverlayMsg::OpenPanel(
+            crate::panels::PanelKind::NetInspector,
+        )),
         // `ExportBom` reaches `handle_bom_preview_open`, the BOM dialog;
         // Reports > Bill of Materials opens the same one.
         "report_manager_bom" => Message::Menu(MenuMessage::ExportBom),

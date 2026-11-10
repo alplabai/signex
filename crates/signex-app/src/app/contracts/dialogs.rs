@@ -609,6 +609,9 @@ pub enum ProjectMsg {
     /// (Save All / Discard All / Cancel) shown when closing a
     /// project that still has dirty documents.
     CloseConfirm(ProjectCloseChoice),
+    /// The Tools ▸ Assign Footprints dialog (#2248); routed to
+    /// `dispatch_assign_footprints_message`.
+    AssignFootprints(crate::app::AssignFootprintsMsg),
     /// The off-thread child-sheet resolution that Close Project starts
     /// finished (#741). Carries the project by id, not index, because the
     /// project list can shift while the worker reads; `Err` is a worker that

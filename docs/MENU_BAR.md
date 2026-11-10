@@ -150,6 +150,55 @@ three has a default key).
   parked as a draft exactly as the tab menu's Close All Documents does. Greyed
   when no tab is open.
 
+## Tools ▸ Assign Footprints {#tools-assign-footprints}
+
+Runs `assign_footprints` (#2248; maintainer decision, Caner 2026-11-10 on
+#2248, `DECISIONS.md`). Greyed without a schematic. The dialog lists every
+placed part of the active schematic's project (a loose sheet lists its own
+parts) with its designator, value, library row and current footprint, sorted
+by designator. The project's sheets are read off the UI thread when it opens.
+
+- A part chooses only among the footprints its own library row offers: the
+  row's default and its alternates, the same list the Properties panel shows
+  (`footprint_choices_for`). Its link to the row does not change. A part with
+  no open library row, or whose row offers one footprint, shows its footprint
+  read-only and why.
+- Tick boxes select several parts; "Tick all from this row" ticks every part
+  of the same library row. "Set ticked parts to" lists the footprints every
+  ticked part's row offers, so a bulk pick never gives a part a footprint its
+  row does not offer.
+- Apply checks each change again against the part's live document and its row
+  (the Properties path, `footprint_binding_commands`), then changes every open
+  sheet in one `update` as one undo group (`UndoGroupKind::Footprints`): one
+  Ctrl+Z on any changed sheet takes all of them back. A refusal on any sheet
+  changes nothing. Nothing is written to disk; the sheets are left unsaved.
+- A sheet that is not open is listed read-only ("Sheet not open"): its parts
+  are shown for the overview and changed by opening the sheet. This is the
+  safer of the two existing patterns: unlike Replace and Number Schematic
+  Sheets it loads no tabless engine, so nothing outside the open tabs changes
+  and no closed file can drift between the read and Apply. A sheet written by
+  a newer Signex is listed read-only too.
+
+## Tools ▸ Net Inspector {#tools-net-inspector}
+
+Runs `open_net_inspector` (#1269), which opens (or reveals) the Net Inspector
+panel, docked on the right by default. Always available; with no schematic of
+a project in view the panel says so.
+
+- The list is every net of the active document's project, read from the
+  cached stitched project net index (`signex_net::NetIndex`, the one net
+  navigation and highlighting read; `handlers/net_nav/index_job.rs`), never
+  derived again. While the panel is open, a project with no current index has
+  one built off the UI thread; after an edit the last list stays shown until
+  the new index lands.
+- Each row shows the net's name, its first matching net class and how many
+  component pins it connects. Named nets come first, then auto-named ones. The
+  filter matches the net name or the class name.
+- Clicking a net expands it to its pins, labels, power ports and sheet entries,
+  each with its sheet. Clicking a member highlights the net on every sheet and
+  goes to the member through net navigation (`go_to_member`), opening its
+  sheet when needed.
+
 ## Save and Save As {#file-save}
 
 Both are also enabled for a standalone symbol or footprint editor tab

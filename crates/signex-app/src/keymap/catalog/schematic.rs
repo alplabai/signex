@@ -25,6 +25,16 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "assign_footprints",
+        category: "design",
+        label: "Assign footprints",
+        menu_label: Some("Assign Footprints"),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "clear_net_highlighting",
         category: "select",
         label: "Clear net highlighting",

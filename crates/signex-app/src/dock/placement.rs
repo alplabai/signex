@@ -165,7 +165,8 @@ impl PanelPosition {
             | PanelKind::Wiki
             | PanelKind::SchLibrary
             | PanelKind::FootprintLibrary
-            | PanelKind::History => PanelPosition::Right,
+            | PanelKind::History
+            | PanelKind::NetInspector => PanelPosition::Right,
         }
     }
 }
