@@ -236,14 +236,19 @@ The lock and the entries live in one runtime folder per user, and the window
 and the CLI must name the same one: `$XDG_RUNTIME_DIR/signex-agent`; on Linux,
 with that variable unset (a shell over ssh, cron), `/run/user/<uid>/signex-agent`
 when that folder of the user exists (a real folder of theirs, not a link), so a
-desktop Signex and such a shell agree; else `<temp>/signex-agent-<uid>`. macOS
-and Windows have one stable place (the per-user temporary folder, the local
-application data). A lookup or a hold also looks in the user's other possible
-folders (the temporary-folder one, `/tmp/signex-agent-<uid>`, the
-`/run/user/<uid>` one) and counts a lock held there, for a Signex started with
-another environment. Known limit: on macOS a window and a shell whose
-`TMPDIR` differs are only joined by the `/tmp` look; a lock is not taken in the
-other folders, only looked at.
+desktop Signex and such a shell agree; else `<user temp>/signex-agent-<uid>`.
+On macOS the user temp is the system's per-user folder (`confstr`,
+`_CS_DARWIN_USER_TEMP_DIR`), not `TMPDIR`, so a Finder launch and a shell
+without `TMPDIR` name the same one (if `confstr` fails, `TMPDIR`/`/tmp` is
+used). Windows uses the local application data. Both sides also look in the
+user's other possible folders (the `TMPDIR` one, `/tmp/signex-agent-<uid>`, the
+`/run/user/<uid>` one, `$XDG_RUNTIME_DIR`), through the same trust rule as the
+primary (a real folder of the user that nobody else can enter), and count a
+lock held there: a CLI `lookup` or `hold` sees a window or a run that keeps its
+folder in another place, and the window refuses to open a project a headless
+run holds exclusively in another one. Known limit: a lock is only looked at in
+those other folders, not taken, so two apps that name different folders and
+start at the same moment can still both pass.
 
 ## Security
 

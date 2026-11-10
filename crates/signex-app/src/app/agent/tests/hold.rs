@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use super::super::client::{self, Hold, Lookup, hold};
 use super::super::files;
-use super::super::registry::entry_file_name;
+use super::super::registry::{self, entry_file_name};
 use crate::app::{Message, Signex};
 use crate::task_driver::TaskDriver;
 
@@ -364,4 +364,129 @@ fn a_run_that_took_an_unlocked_open_project_is_said_once() {
         "not said exactly once"
     );
     assert!(fx.app.agent.project_locks.is_empty());
+}
+
+/// A run that has the lock and has not written its entry yet has no process id
+/// to name: the line says "another signex-cli run", never "pid 0".
+#[test]
+fn a_run_without_an_entry_yet_is_not_called_pid_0() {
+    let mut fx = fixture("RunNoEntry1924.snxprj");
+    fx.app.agent.lists_projects = false;
+    fx.open();
+    assert!(fx.opened());
+    let canonical = std::fs::canonicalize(&fx.project).unwrap();
+    files::prepare_dir(&fx.dir.join(files::REGISTRY_DIR)).expect("registry folder");
+    let _lock = registry::acquire_lock(&registry::lock_path(&fx.dir, &canonical)).expect("a lock");
+    fx.app.agent.lists_projects = true;
+    crate::diagnostics::logged_count("");
+
+    settle(&mut fx.app);
+    let said = format!("another signex-cli run now holds {}", fx.project.display());
+    assert_eq!(crate::diagnostics::logged_count(&said), 1);
+    assert_eq!(crate::diagnostics::logged_count("(pid 0)"), 0);
+}
+
+/// Another runtime folder of the same user (an app or a run started with
+/// another environment), prepared and private.
+fn other_runtime_dir(fx: &Fixture) -> PathBuf {
+    let other = fx._root.path().join("other-run");
+    files::prepare_dir(&other).expect("the other folder");
+    files::prepare_dir(&other.join(files::REGISTRY_DIR)).expect("its registry");
+    other
+}
+
+/// A run keeping its folder somewhere else holds the project as much as one
+/// here: the window does not open it.
+#[test]
+fn a_run_holding_the_project_in_another_runtime_folder_refuses_the_open() {
+    let mut fx = fixture("RunElsewhere1924.snxprj");
+    let other = other_runtime_dir(&fx);
+    let _run = hold(&other, &fx.project).expect("a run in the other folder");
+    fx.app.agent.alternates = Some(vec![other]);
+
+    fx.open();
+
+    assert!(!fx.opened(), "the project was opened over a run");
+    assert!(fx.app.agent.project_locks.is_empty());
+    assert!(fx.app.document_state.error_notice.is_some());
+}
+
+/// And the reverse: a window keeping its folder somewhere else holds it
+/// against a run here.
+#[test]
+fn a_window_holding_the_project_in_another_runtime_folder_refuses_a_run() {
+    let fx = fixture("WindowElsewhere1924.snxprj");
+    let other = other_runtime_dir(&fx);
+    let mut window = window_on(&other);
+    let _task = window.handle_document_file_opened(Some(fx.project.clone()));
+    assert!(opened_in(&window, &fx.project));
+
+    let refused = client::hold_with(&fx.dir, &fx.project, std::slice::from_ref(&other));
+    assert!(refused.is_err(), "a run took a project a window has open");
+}
+
+/// A folder that others can enter is not one whose lock is believed (the
+/// same rule as every reader): not by a run, a lookup or the window.
+#[test]
+fn a_lock_in_a_wide_other_runtime_folder_is_ignored() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let mut fx = fixture("WideElsewhere1924.snxprj");
+    let other = other_runtime_dir(&fx);
+    let _run = hold(&other, &fx.project).expect("a run in the other folder");
+    std::fs::set_permissions(&other, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let alternates = vec![other.clone()];
+
+    let taken = client::hold_with(&fx.dir, &fx.project, &alternates);
+    assert!(taken.is_ok(), "a wide folder's lock was believed by a run");
+    drop(taken);
+    assert!(matches!(
+        client::lookup_with(&fx.dir, &fx.project, &alternates),
+        Ok(Lookup::Free)
+    ));
+    fx.app.agent.alternates = Some(alternates);
+    fx.open();
+    assert!(
+        fx.opened(),
+        "a wide folder's lock was believed by the window"
+    );
+    std::fs::set_permissions(&other, std::fs::Permissions::from_mode(0o700)).unwrap();
+}
+
+/// Saves of a library row (#893) are writes too: a closed project's lock waits
+/// for them.
+#[test]
+fn a_closed_projects_lock_is_kept_while_a_library_write_is_running() {
+    let mut fx = fixture("LibraryWrite1924.snxprj");
+    fx.open();
+    assert!(fx.opened());
+    let turn = fx.app.library.writes.turn(std::path::Path::new("a.snxlib"));
+
+    let _kept = std::mem::take(&mut fx.app.document_state.projects);
+    settle(&mut fx.app);
+    assert!(
+        client::hold(&fx.dir, &fx.project).is_err(),
+        "a run took a project while a library write was running"
+    );
+
+    drop(turn);
+    settle(&mut fx.app);
+    assert!(client::hold(&fx.dir, &fx.project).is_ok());
+}
+
+/// A test app's runtime folder is its own temporary one and goes with it, so a
+/// test run leaves no `signex-agent-test-*` folders behind.
+#[test]
+fn a_test_apps_runtime_folder_is_removed_with_the_app() {
+    let (app, _boot) = Signex::new();
+    let dir = app.agent.runtime_dir().expect("a folder").clone();
+    let root = dir.parent().expect("its temporary folder").to_path_buf();
+    assert!(root.is_dir(), "{}", root.display());
+    assert!(
+        root.file_name()
+            .is_some_and(|name| name.to_string_lossy().starts_with("signex-agent-test-"))
+    );
+
+    drop(app);
+
+    assert!(!root.exists(), "{} was left behind", root.display());
 }

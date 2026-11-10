@@ -164,9 +164,15 @@ the profile's ACL; there is no mode or owner check there.
 The runtime directory is `$XDG_RUNTIME_DIR/signex-agent`; on Linux, with the
 variable unset (ssh, cron), `/run/user/<uid>/signex-agent` when `/run/user/<uid>`
 is the user's own real folder, so a desktop app and such a shell name one
-folder; else `<temp dir>/signex-agent-<uid>` (macOS: the per-user temp dir);
-on Windows `%LOCALAPPDATA%\Signex\agent`. A client (`lookup`, `hold`) also
-looks at the user's other possible folders and counts a lock held there.
+folder; else `<user temp>/signex-agent-<uid>` (macOS: the system's per-user
+temp dir from `confstr(_CS_DARWIN_USER_TEMP_DIR)`, which does not depend on
+`TMPDIR`, so a Finder launch and a shell without it agree; elsewhere
+`temp_dir()`); on Windows `%LOCALAPPDATA%\Signex\agent`. A client (`lookup`,
+`hold`) also looks at the user's other possible folders, and so does the
+window when it opens a project (for a headless run's exclusive lock), each only
+if it is a real folder of the user that nobody else can enter; a lock held
+there counts. The window's claim makes one non-blocking attempt (no sleep inside
+the update; the registry tick retries).
 
 ```
 <runtime dir>/                       0700
@@ -217,8 +223,8 @@ file open and a non-blocking lock) until it closes it; a headless run holds
 the lock EXCLUSIVELY. So many windows can have one project open, a headless
 run cannot take it while any window does, and a window cannot open a project a
 run holds (it refuses, as above). A closed project keeps its lock while any
-document write is still running (it goes with the update that reports the last
-one done), and on quit the locks go with the cleanup task, after the document,
+document write or library write (a queued or running write of any library) is
+still running (it goes with the update that reports it done), and on quit the locks go with the cleanup task, after the document,
 autosave and library writes, so a run never reads a file a save is still
 writing. A lock that cannot be made is said once in Messages and tried again at
 the registry retry tick (5 s), not at every update; a run that took the project

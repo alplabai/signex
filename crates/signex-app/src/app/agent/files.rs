@@ -14,14 +14,15 @@ pub(super) const REGISTRY_DIR: &str = "registry";
 /// system gives each user one; on Linux, with that variable unset (a shell over
 /// ssh, cron), the same place by the user's id (`/run/user/<uid>`) if it is
 /// there as the user's own folder, so a desktop app and such a shell agree;
-/// else a folder named for the user in the temporary directory (macOS: already
-/// per user); on Windows the user's local application data. Only reads the
-/// environment.
+/// else a folder named for the user in the user's temporary directory (macOS:
+/// the system's per-user one, `confstr`, whatever `TMPDIR` says, so a Finder
+/// launch and a shell without it agree; elsewhere `temp_dir()`); on Windows the
+/// user's local application data. Only reads the environment.
 pub(super) fn runtime_dir() -> Result<PathBuf, String> {
     // The app's own unit tests list their open projects here (a project open is
     // listed whether or not agents may connect): never in the user's folder.
     if cfg!(test) {
-        return Ok(test_runtime_dir());
+        return Ok(fallback_test_runtime_dir());
     }
     #[cfg(unix)]
     {
@@ -30,7 +31,7 @@ pub(super) fn runtime_dir() -> Result<PathBuf, String> {
         Ok(unix::resolve(
             xdg,
             run_user,
-            &std::env::temp_dir(),
+            &unix::user_temp_dir(),
             unix::own_uid(),
         ))
     }
@@ -42,8 +43,21 @@ pub(super) fn runtime_dir() -> Result<PathBuf, String> {
     }
 }
 
-/// The runtime directory of a test run: its own, never the user's.
-pub(super) fn test_runtime_dir() -> PathBuf {
+/// A runtime directory of a test run of its own, never the user's, and the
+/// temporary folder that holds it: removed when the app that owns it is
+/// dropped, so a test run leaves nothing behind. Only if no temporary folder
+/// can be made, a fixed name for the process (which is then left behind).
+pub(super) fn test_runtime_dir() -> (PathBuf, Option<tempfile::TempDir>) {
+    match tempfile::Builder::new()
+        .prefix("signex-agent-test-")
+        .tempdir()
+    {
+        Ok(root) => (root.path().join("run"), Some(root)),
+        Err(_) => (fallback_test_runtime_dir(), None),
+    }
+}
+
+fn fallback_test_runtime_dir() -> PathBuf {
     std::env::temp_dir().join(format!("signex-agent-test-{}", std::process::id()))
 }
 
@@ -216,6 +230,44 @@ mod unix {
             Some(dir) => dir.join("signex-agent"),
             None => temp.join(format!("signex-agent-{uid}")),
         }
+    }
+
+    /// The user's temporary directory: on macOS the system's per-user one
+    /// (`confstr(_CS_DARWIN_USER_TEMP_DIR)`), which does not depend on
+    /// `TMPDIR`; `temp_dir()` where `confstr` fails and on other systems.
+    pub(super) fn user_temp_dir() -> PathBuf {
+        pick_temp(darwin_user_temp_dir(), std::env::temp_dir())
+    }
+
+    /// `system` (the platform's own answer) when there is one, else `env`.
+    pub(super) fn pick_temp(system: Option<PathBuf>, env: PathBuf) -> PathBuf {
+        system.unwrap_or(env)
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) fn darwin_user_temp_dir() -> Option<PathBuf> {
+        use std::os::unix::ffi::OsStringExt as _;
+        let mut buf = vec![0_u8; 1024];
+        // SAFETY: `confstr` writes at most `buf.len()` bytes, NUL included, into
+        // the buffer it is given and returns the length it needs (0 on error).
+        let needed = unsafe {
+            libc::confstr(
+                libc::_CS_DARWIN_USER_TEMP_DIR,
+                buf.as_mut_ptr().cast(),
+                buf.len(),
+            )
+        };
+        if needed == 0 || needed > buf.len() {
+            return None;
+        }
+        buf.truncate(needed - 1);
+        let dir = PathBuf::from(std::ffi::OsString::from_vec(buf));
+        dir.is_absolute().then_some(dir)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub(super) fn darwin_user_temp_dir() -> Option<PathBuf> {
+        None
     }
 
     /// Where else an app or a run of the same user may have put its runtime
@@ -440,6 +492,33 @@ mod tests {
             vec![in_temp],
             "the primary and a repeat are left out"
         );
+    }
+
+    /// A Finder launch has `TMPDIR`, a shell over ssh or cron may not: the
+    /// system's per-user folder is what names the runtime folder, so both agree.
+    #[test]
+    fn the_user_temp_dir_is_the_systems_own_whatever_tmpdir_says() {
+        let system = PathBuf::from("/var/folders/ab/cd/T");
+        for env in ["/tmp", "/var/folders/xx/yy/T", ""] {
+            assert_eq!(
+                unix::pick_temp(Some(system.clone()), PathBuf::from(env)),
+                system,
+                "TMPDIR={env:?} changed the folder"
+            );
+        }
+        // Only when the system gives none does the environment's answer count.
+        assert_eq!(
+            unix::pick_temp(None, PathBuf::from("/tmp")),
+            PathBuf::from("/tmp")
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_gives_a_per_user_temp_dir_by_confstr() {
+        let dir = unix::darwin_user_temp_dir().expect("confstr answers");
+        assert!(dir.is_absolute(), "{}", dir.display());
+        assert!(std::fs::metadata(&dir).is_ok_and(|meta| meta.is_dir()));
     }
 
     #[test]

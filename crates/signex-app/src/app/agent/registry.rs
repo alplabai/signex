@@ -289,11 +289,14 @@ pub(super) enum LockError {
 pub(super) fn claim_shared(dir: &Path, canonical: &Path) -> Result<std::fs::File, LockError> {
     files::prepare_dir(dir).map_err(LockError::Other)?;
     files::prepare_dir(&dir.join(REGISTRY_DIR)).map_err(LockError::Other)?;
+    // One attempt, no pause: this runs inside the update (a pause there stalls
+    // the window), and it is retried at the registry tick. Only the CLI's
+    // `acquire_lock` waits out a reader's momentary lock.
     acquire_lock_with(
         &lock_path(dir, canonical),
         Lock::Shared,
-        LOCK_ATTEMPTS,
-        LOCK_PAUSE,
+        1,
+        std::time::Duration::ZERO,
         || {},
     )
 }
@@ -380,6 +383,25 @@ fn names_same_file(_file: &std::fs::File, _path: &Path) -> bool {
 /// every holder is gone (it is released at once); a file that is missing or not
 /// a plain file of ours holds nothing.
 pub(super) fn lock_is_held(path: &Path) -> bool {
+    open_plain_lock_file(path)
+        .is_some_and(|file| matches!(file.try_lock(), Err(std::fs::TryLockError::WouldBlock)))
+}
+
+/// Is the lock file at `path` held EXCLUSIVELY (by a headless run)? A shared
+/// holder (another window) does not count: a shared try fails only while an
+/// exclusive lock is held.
+pub(super) fn lock_is_held_exclusively(path: &Path) -> bool {
+    open_plain_lock_file(path).is_some_and(|file| {
+        matches!(
+            file.try_lock_shared(),
+            Err(std::fs::TryLockError::WouldBlock)
+        )
+    })
+}
+
+/// The lock file at `path`, opened without following a link or blocking, if it
+/// is a plain file of ours.
+fn open_plain_lock_file(path: &Path) -> Option<std::fs::File> {
     let mut options = std::fs::OpenOptions::new();
     options.read(true);
     #[cfg(unix)]
@@ -387,13 +409,25 @@ pub(super) fn lock_is_held(path: &Path) -> bool {
         use std::os::unix::fs::OpenOptionsExt as _;
         options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
-    let Ok(file) = options.open(path) else {
-        return false;
-    };
-    let plain = file
-        .metadata()
-        .is_ok_and(|meta| meta.is_file() && owned_by_us(&meta));
-    plain && matches!(file.try_lock(), Err(std::fs::TryLockError::WouldBlock))
+    let file = options.open(path).ok()?;
+    file.metadata()
+        .is_ok_and(|meta| meta.is_file() && owned_by_us(&meta))
+        .then_some(file)
+}
+
+/// A headless run holding `canonical` exclusively in one of the user's other
+/// runtime folders (`alternates`): its process (`0` while it has not written its
+/// entry) and entry file. A folder that is not ours and private is not looked
+/// at (the same rule as every reader).
+pub(super) fn held_by_headless_in(
+    alternates: &[PathBuf],
+    canonical: &Path,
+) -> Option<(u32, PathBuf)> {
+    alternates
+        .iter()
+        .filter(|dir| files::check_dir(dir).is_ok())
+        .find(|dir| lock_is_held_exclusively(&lock_path(dir, canonical)))
+        .map(|dir| headless_holder(dir, canonical))
 }
 
 /// Whether `meta` is a file of this user (where the system says who owns it).
@@ -1046,6 +1080,36 @@ mod tests {
         std::os::unix::fs::symlink(&target, &path).unwrap();
         assert!(acquire_lock(&path).is_err(), "a link was locked");
         assert!(!lock_is_held(&path));
+    }
+
+    /// The window's claim runs inside the update: one attempt, no waiting (the
+    /// CLI's `acquire_lock` is the one that waits out a reader's momentary lock).
+    #[cfg(unix)]
+    #[test]
+    fn the_windows_claim_does_not_wait_inside_the_update() {
+        let dir = scratch();
+        files::prepare_dir(&dir.path().join(REGISTRY_DIR)).unwrap();
+        let a = project(dir.path(), "a.snxprj");
+        let _run = hold_lock(dir.path(), &a);
+        let canonical = std::fs::canonicalize(&a).unwrap();
+        // The retries would sleep 4 x 20 ms; the quickest of a few tries is
+        // far under that unless the claim waits.
+        let quickest = (0..3)
+            .map(|_| {
+                let started = std::time::Instant::now();
+                assert!(matches!(
+                    claim_shared(dir.path(), &canonical),
+                    Err(LockError::Held)
+                ));
+                started.elapsed()
+            })
+            .min()
+            .unwrap();
+        assert!(quickest < LOCK_PAUSE * 3, "the claim waited: {quickest:?}");
+        // A reader's momentary lock does not make a shared claim fail for good:
+        // with nobody holding it, it is taken at once.
+        drop(_run);
+        assert!(claim_shared(dir.path(), &canonical).is_ok());
     }
 
     /// A lock on a file that was deleted or replaced is a lock on nothing: the

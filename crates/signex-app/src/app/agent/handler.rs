@@ -227,9 +227,15 @@ impl Signex {
                 // A run took the project after the window's claim failed to be
                 // made: said once, as its own warning.
                 if self.agent.lock_warned.insert(project.clone()) {
+                    // A run that has not written its entry yet has no pid.
+                    let run = if pid == 0 {
+                        "another signex-cli run".to_string()
+                    } else {
+                        format!("a signex-cli run (pid {pid})")
+                    };
                     crate::diagnostics::log_warning(format!(
-                        "Agent registry: a signex-cli run (pid {pid}) now holds {}, which is open \
-                         here. Save your work and reopen the project after the run ends.",
+                        "Agent registry: {run} now holds {}, which is open here. Save your work \
+                         and reopen the project after the run ends.",
                         project.display()
                     ));
                 }
@@ -240,7 +246,8 @@ impl Signex {
         // still being written: a run that took the lock then would read the
         // old file and write over the save. The lock goes with the update that
         // reports the save done.
-        let saving = self.document_state.document_saves.is_any_saving();
+        let saving = self.document_state.document_saves.is_any_saving()
+            || !self.library.writes.busy_roots().is_empty();
         self.agent
             .project_locks
             .retain(|path, _| saving || projects.contains(path));
@@ -349,6 +356,13 @@ impl Signex {
         ) else {
             return Ok(());
         };
+        // A headless run of this user that keeps its runtime folder somewhere
+        // else (another environment) holds the project as much as one here.
+        if let Some(holder) =
+            registry::held_by_headless_in(&self.agent.alternate_dirs(&dir), &canonical)
+        {
+            return Err(holder);
+        }
         match registry::claim_shared(&dir, &canonical) {
             Ok(lock) => {
                 self.agent.lock_failed.remove(project);
