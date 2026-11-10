@@ -133,11 +133,14 @@ What its checks need from disk (`command::edit_reads`): the library row of
 `place_component`, the closed child file of `sync_sheet_pins` and whether a
 `place_sheet_symbol` file leaves the project through a link are planned from
 the operands, and an `apply_edits` list plans the union of its edits; an edit
-that waits for those reads also reads the project's closed sheets. The
+that waits for those reads also reads the project's closed sheets, with each
+closed file a `place_sheet_symbol` of the list refers to (as a child-to-be,
+not a page of its own), so the later edits of the list are judged against
+it; a file that is missing or unreadable leaves the project incomplete. The
 project's closed sheets are otherwise asked for by the check that needs them
 (the name check of a wire, bus, label, power port or junction whose net
-reaches another sheet, the designators and units of `place_component`): the
-edit is then refused with
+reaches another sheet, the designators and units of `place_component`, the
+hierarchy-loop check of `place_sheet_symbol`): the edit is then refused with
 nothing applied, the project is read, and the edit runs again on it.
 
 - The command returns `CommandOutcome::Deferred { ticket }` and a `Task` that
@@ -149,13 +152,20 @@ nothing applied, the project is read, and the edit runs again on it.
   in one transaction, as one step.
 - The outcome is reported at completion: the socket keeps the request's reply
   (`agent.waiting`, by ticket) and answers when the edit has run, with what
-  changed since the request arrived; a headless run drives the task itself
-  and takes the outcome by ticket, so its result line is unchanged.
-- Staleness: the revision of the target sheet, and of every open sheet of the
-  project when the project is read, is recorded when the reads start. If one
-  differs at completion, the edit is refused ("the document changed while its
-  project and files were read; retry. Nothing was applied"). The open sheets
-  in the read are replaced by their live state before a check uses them.
+  that run changed and logged (not what other requests or the person did
+  while the reads ran); a headless run drives the task itself and takes the
+  outcome by ticket, so its result line is unchanged. Replies to requests
+  sent on the socket without waiting may therefore arrive in another order
+  than the requests: match a reply to its request by `id`.
+- Staleness: the revision of the target sheet and of every open sheet of its
+  project is recorded when the reads start. If one differs at completion, or
+  a sheet of the project was opened or closed meanwhile, the edit is refused
+  ("the document changed while its project and files were read; retry.
+  Nothing was applied"); a sheet of another project or of none does not
+  count. The open sheets in the read are replaced by their live state before
+  a check uses them.
+- A reader that fails (panics) is said in Messages and the edit is refused
+  with the reason, not a retry.
 - No read: a loose sheet, or a project whose sheets are all open, is checked
   from memory and the edit runs at once. A `place_component` always reads its
   library row, and a `place_sheet_symbol` its link check, so they always wait.

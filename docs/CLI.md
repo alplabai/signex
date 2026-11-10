@@ -442,8 +442,8 @@ folder (whether a link leaves it is read off the UI thread first). A name
 another sheet symbol on the sheet has, or a file another one refers to, is
 refused. `place_sheet_symbol` refuses a `file` that is the edited sheet or one
 above it in the project hierarchy (a sheet cannot contain itself). Ancestors
-are read from the hierarchy already in memory; while the project is still
-being read, only the edited sheet itself is checked.
+come from the project as the edit reads it (its closed sheets read off the UI
+thread first), and from the hierarchy a window already shows for the sheet.
 Creating the child file stays a window action
 (`create_sheet_from_sheet_symbol`, `gui_only`). The answer is `{"id", "name",
 "file", "at", "size"}`.
