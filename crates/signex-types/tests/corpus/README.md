@@ -82,6 +82,50 @@ at top level, per sheet and per library, plus the `format` token).
 `MIN_PROJECT_FIXTURES` guards the count. These are not blessable: edit by
 hand and keep keys alphabetical (the writer sorts them).
 
+## Realistic boards (`pcb/real/`)
+
+The single-feature `pcb/*.snxpcb` cases above test the format one column at
+a time. `pcb/real/` holds five complete small designs, the PCB Layout exit
+criterion "five real `.snxpcb` fixtures render". Each is a `.snxpcb` plus a
+`.snxprj` that names it and carries its net classes (the board rules live in
+`[stackup.setup]`, the per-net clearances and track widths in the project).
+
+| Board | What it is | Covers |
+|---|---|---|
+| `linear-regulator` | 5 V to 3.3 V LDO, the sample project's schematic (`crates/signex-app/assets/sample-project/linear-regulator.snxsch`) laid out: 2 headers, SOT-223, 0805 caps, 0603 R and LED, footprint names and values as the schematic gives them. 2 layers, 36 x 20 mm | every footprint linked to its schematic symbol (`sch_link`); locked connectors; GND vias into a bottom pour |
+| `usb-c-power-input` | USB-C power-only receptacle, 1206 polyfuse, SOD-123 TVS, bulk cap, power LED, output header. 2 layers, 30 x 22 mm, rounded corners | plated shell slots (oval drills); CC escapes through vias to bottom-side 5.1 k pull-downs; a footprint turned 270 degrees |
+| `mcu-breakout-tqfp32` | ATmega328P-AU pin-out on a TQFP-32, each side fanned out to its own 1x8 header; decoupling, AVCC / AREF caps, 16 MHz crystal and load caps on the bottom. 2 layers, 40 x 44 mm | 0.8 mm pitch fan-out (96 track segments), seven bottom-side parts, a net per pin |
+| `sensor-4layer` | BME280-style LGA-8 sensor, SOT-23-5 LDO, I2C pull-ups, 1x4 header. 4 layers, 26 x 18 mm, chamfered | inner GND and +3V3 planes as zones with 22 antipad holes; plane layer types and display names in the stackup; supply vias |
+| `mixed-tht-smd` | 12 V to 5 V supply: barrel jack, SOD-123 diode, TO-220 7805, radial electrolytics, screw terminal, 45-degree LED and resistor, bottom-side 0805 decoupling. 2 layers, 50 x 40 mm | outline with a 10 mm arc corner (an `arc` on `EdgeCuts`); oval slot drills; `[board_sketch]` with four M3 mounting holes (two plated to GND) and a top-copper keepout |
+
+The files are generated, never hand-edited: `../integration/real_boards/`
+builds them deterministically, and `real_boards_match_their_generator`
+fails when a committed file differs from what the generator writes. To
+change a board, edit its builder and run
+`SIGNEX_BLESS_CORPUS=1 cargo test -p signex-types --test integration real_boards_match`.
+
+What is checked, and where:
+
+- Format (`signex-types`, `real_boards`): each file reloads and re-saves
+  byte-identical, a save and reload leaves the board unchanged, the item
+  counts are pinned, every pad, track end, via, zone corner and text sits
+  inside the outline, courtyards on one side do not overlap, each `.snxprj`
+  round-trips, and the regulator's links resolve to the sample schematic.
+- Render (`signex-renderer`, `pcb_real_boards`): each board builds a
+  `PcbSnapshot` and a scene without panic, with every copper layer as the
+  active one too; drawn item counts, fill triangles and a hash of the drawn
+  geometry (colours excluded) are pinned.
+- DRC and ratsnest (`pcb-geom`, `real_boards`): run against each board's
+  own net classes, every board has zero shorts, clearance, unconnected and
+  keepout violations and an empty ratsnest; a positive control shows a
+  track moved to another net shorts on each board.
+
+Not covered by the format: a slot's length (a drill is one diameter and a
+shape token, so a slot is as long as its oval pad says) and the zone fill
+(a zone stores its outline and holes, not a filled polygon). The board
+sketch on `mixed-tht-smd` is written as a bake would store it; it is not
+re-baked in this test.
+
 ## Intentional format change
 
 Run the same bless command, review every fixture diff as the format
