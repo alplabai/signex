@@ -434,6 +434,7 @@ impl Signex {
                 if let Ok((dir, path, _)) =
                     text(args, "file").and_then(|f| self.child_file_target(&f))
                 {
+                    plan.seeds.push(path.clone());
                     plan.links.push((dir, path));
                 }
             }
