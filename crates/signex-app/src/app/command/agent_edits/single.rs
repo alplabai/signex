@@ -7,23 +7,21 @@ use iced::Task;
 use crate::app::command::document_operands::named_sheet;
 use crate::app::command::operand_handlers::OperandHandler;
 use crate::app::{Message, Signex};
-use crate::keymap::{AppCommandId, metadata_for};
+use crate::keymap::AppCommandId;
 use crate::schematic_runtime::RenderInvalidation;
+
+use super::wire::edit_refusal;
 
 use super::super::{CommandArgs, CommandOutcome};
 
 type Ran = (CommandOutcome, Task<Message>);
 
-/// Commands that change a document and are undoable but make their own step:
-/// `apply_edits` runs a transaction of its own, and `assign_net_class` edits
-/// the project's net classes, leaving only a pick marker (no group) on the
-/// sheet's timeline.
-const OWN_STEP: &[&str] = &["apply_edits", "assign_net_class"];
-
-/// Is `command` one an agent's run turns into a labelled undo step?
+/// Is `command` one an agent's run turns into a labelled undo step? Exactly
+/// the commands that may be an edit of `apply_edits` (`edit_refusal`): so not
+/// `apply_edits` itself, which runs a transaction of its own, nor the
+/// project-wide `assign_net_class`, which leaves only a pick marker (no group).
 pub(crate) fn runs_as_one_step(command: &AppCommandId) -> bool {
-    metadata_for(command).is_some_and(|meta| meta.flags.mutates_doc && meta.flags.undoable)
-        && !OWN_STEP.contains(&command.as_str())
+    edit_refusal(command).is_none()
 }
 
 /// Run `handler` for `command` inside one engine transaction on the sheet its
@@ -43,6 +41,11 @@ pub(crate) fn run_as_one_step(
         return handler(app, args);
     };
     if let Err(error) = engine.begin_transaction() {
+        // A read-only sheet: the handler's own check gives the person's
+        // reason and the once-per-sheet Messages warning.
+        if matches!(error, signex_engine::EngineError::ReadOnly) {
+            return handler(app, args);
+        }
         return (CommandOutcome::disabled(error.to_string()), Task::none());
     }
     let edits = &mut app.document_state.agent_edits;

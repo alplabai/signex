@@ -200,9 +200,19 @@ impl Signex {
         self.run_headless_command(command, args)
     }
 
+    /// A test's way past the headless check, for an app made by `Signex::new`.
+    #[cfg(test)]
+    pub(crate) fn run_headless_command_in_test(
+        &mut self,
+        command: &AppCommandId,
+        args: CommandArgs,
+    ) -> (CommandOutcome, Task<Message>) {
+        self.run_headless_command(command, args)
+    }
+
     /// [`Self::dispatch_command_headless`] past its check that the app was
     /// booted headless.
-    pub(crate) fn run_headless_command(
+    fn run_headless_command(
         &mut self,
         command: &AppCommandId,
         args: CommandArgs,

@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use super::{app_at_work, call, call_as, path};
 use crate::app::Signex;
 use crate::app::agent::Origin;
+use crate::app::handlers::editing_commands::net_color_driver as fixture;
 
 const PID: u32 = 7771;
 
@@ -234,7 +235,7 @@ fn a_headless_run_is_an_agent_with_this_process_as_its_pid() {
     let refs: Vec<&str> = operands.iter().map(String::as_str).collect();
     let args = crate::app::command::CommandArgs::parse_operands(&id, &refs).unwrap();
 
-    let (outcome, _task) = app.run_headless_command(&id, args);
+    let (outcome, _task) = app.run_headless_command_in_test(&id, args);
 
     assert!(matches!(
         outcome,
@@ -268,4 +269,70 @@ fn an_agents_net_class_pick_stays_a_pick_with_no_group_or_label() {
     assert_eq!(top_group(&app, "a.snxsch"), None);
     assert!(app.document_state.agent_edits.labels.is_empty());
     assert!(app.document_state.agent_edits.origins.is_empty());
+}
+
+/// The reason the person's own run of `name` on sheet `a` is refused with.
+fn persons_refusal(app: &mut Signex, name: &str, operands: &[&str]) -> String {
+    let id = crate::keymap::AppCommandId::new(name).unwrap();
+    let document = format!("document={}", doc("a.snxsch"));
+    let mut texts: Vec<&str> = operands.to_vec();
+    texts.push(&document);
+    let args = crate::app::command::CommandArgs::parse_operands(&id, &texts).unwrap();
+    match app.run_operands(&id, &args).0 {
+        crate::app::command::CommandOutcome::Disabled { reason } => reason,
+        other => panic!("{name} was not refused: {other:?}"),
+    }
+}
+
+/// A read-only sheet (written by a newer Signex) must refuse an agent exactly
+/// as it refuses the person, and say so once in Messages (#1402): the
+/// transaction must not hide the handler's own check.
+#[test]
+fn an_agent_gets_the_persons_read_only_reason_and_the_warning() {
+    for (name, operands, args) in [
+        (
+            "color_net",
+            vec!["at=5,0", "color=#336699"],
+            json!({"document": doc("a.snxsch"), "at": [5, 0], "color": "#336699"}),
+        ),
+        (
+            "clear_all_net_colors",
+            vec![],
+            json!({"document": doc("a.snxsch")}),
+        ),
+    ] {
+        let mut app = app_at_work();
+        let mut read_only = super::sheet(super::SHEET_A);
+        read_only.unknown.newer_minor_source = Some("snxsch/1.7".into());
+        fixture::add_sheet_with(&mut app, &path("a.snxsch"), read_only);
+
+        // The agent first: the warning is said once per sheet.
+        let reply = call(&mut app, name, args);
+        let person = persons_refusal(&mut app, name, &operands);
+
+        assert_eq!(reply["status"], "refused", "{reply}");
+        let reason = reply["reason"].as_str().expect("a reason");
+        assert_eq!(reason, person, "{name}");
+        assert!(reason.contains("snxsch/1.7"), "{reason}");
+        let said = reply["messages"].to_string();
+        assert!(said.contains("snxsch/1.7"), "{name}: the warning: {said}");
+        assert!(!app.document_state.engines[&path("a.snxsch")].in_transaction());
+    }
+}
+
+#[test]
+fn a_refused_command_leaves_no_transaction_open() {
+    let mut app = app_at_work();
+    // No net colours to clear: refused after the transaction began.
+    let refused = call(
+        &mut app,
+        "clear_all_net_colors",
+        json!({"document": doc("b.snxsch")}),
+    );
+    assert_eq!(refused["status"], "refused", "{refused}");
+    assert!(!app.document_state.engines[&path("b.snxsch")].in_transaction());
+
+    let ran = call(&mut app, "color_net", color_args("b.snxsch"));
+    assert_eq!(ran["status"], "ran", "{ran}");
+    assert!(top_group(&app, "b.snxsch").is_some());
 }
