@@ -101,27 +101,30 @@ each frame reads back a full window that is not a flat fill, that each
 scenario timed every frame, and that the drags and the zoom moved the camera
 as far as the input says.
 
-Results (fill in from a run; adapter name and backend from the
-`BENCH adapter` line):
+Results: release build, 2026-11-10, laptop with AMD Radeon 880M (Vulkan),
+1600x1300 at DPR 1, the 10,000-track board (snapshot 0.71 ms). Every row is
+within the 60 fps budget on p95; the slowest is the CPU mount with MSAAx4 while
+zooming (p95 14.12 ms, about 71 fps). The GPU mount stays at or under 7.34 ms
+p95 in every scenario.
 
 | Adapter (backend) | Mount | AA | Scenario | Median ms | p95 ms | Max ms | fps (median) | ok |
 |---|---|---|---|---|---|---|---|---|
-| | cpu | off | idle | | | | | |
-| | cpu | off | pan | | | | | |
-| | cpu | off | zoom | | | | | |
-| | cpu | off | zoom-pan | | | | | |
-| | gpu | off | idle | | | | | |
-| | gpu | off | pan | | | | | |
-| | gpu | off | zoom | | | | | |
-| | gpu | off | zoom-pan | | | | | |
-| | cpu | msaa4 | idle | | | | | |
-| | cpu | msaa4 | pan | | | | | |
-| | cpu | msaa4 | zoom | | | | | |
-| | cpu | msaa4 | zoom-pan | | | | | |
-| | gpu | msaa4 | idle | | | | | |
-| | gpu | msaa4 | pan | | | | | |
-| | gpu | msaa4 | zoom | | | | | |
-| | gpu | msaa4 | zoom-pan | | | | | |
+| AMD Radeon 880M (Vulkan) | cpu | off | idle | 3.56 | 4.98 | 5.50 | 281.3 | ok |
+| AMD Radeon 880M (Vulkan) | cpu | off | pan | 9.23 | 10.70 | 11.12 | 108.4 | ok |
+| AMD Radeon 880M (Vulkan) | cpu | off | zoom | 6.17 | 10.40 | 14.00 | 162.1 | ok |
+| AMD Radeon 880M (Vulkan) | cpu | off | zoom-pan | 3.97 | 5.09 | 5.57 | 252.1 | ok |
+| AMD Radeon 880M (Vulkan) | gpu | off | idle | 4.21 | 5.41 | 6.41 | 237.5 | ok |
+| AMD Radeon 880M (Vulkan) | gpu | off | pan | 3.76 | 5.41 | 6.19 | 266.1 | ok |
+| AMD Radeon 880M (Vulkan) | gpu | off | zoom | 4.12 | 5.88 | 6.64 | 242.4 | ok |
+| AMD Radeon 880M (Vulkan) | gpu | off | zoom-pan | 4.00 | 5.41 | 6.00 | 250.0 | ok |
+| AMD Radeon 880M (Vulkan) | cpu | msaa4 | idle | 6.52 | 7.70 | 7.87 | 153.4 | ok |
+| AMD Radeon 880M (Vulkan) | cpu | msaa4 | pan | 11.98 | 13.71 | 15.86 | 83.5 | ok |
+| AMD Radeon 880M (Vulkan) | cpu | msaa4 | zoom | 8.65 | 14.12 | 14.78 | 115.6 | ok |
+| AMD Radeon 880M (Vulkan) | cpu | msaa4 | zoom-pan | 6.62 | 7.79 | 9.01 | 151.1 | ok |
+| AMD Radeon 880M (Vulkan) | gpu | msaa4 | idle | 6.10 | 7.32 | 8.52 | 163.9 | ok |
+| AMD Radeon 880M (Vulkan) | gpu | msaa4 | pan | 6.03 | 6.70 | 7.49 | 165.9 | ok |
+| AMD Radeon 880M (Vulkan) | gpu | msaa4 | zoom | 5.81 | 7.34 | 7.41 | 172.0 | ok |
+| AMD Radeon 880M (Vulkan) | gpu | msaa4 | zoom-pan | 5.91 | 6.80 | 7.47 | 169.3 | ok |
 
 ## Realistic boards
 

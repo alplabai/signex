@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 use iced::advanced::graphics::Antialiasing;
 use iced::advanced::renderer::Style;
 use iced::widget::{canvas, shader, stack};
-use iced::{Color, Element, Event, Length, Point, Rectangle, Size, Theme, mouse};
+use iced::{Color, Element, Event, Length, Point, Rectangle, Size, Theme, Widget as _, mouse};
 use iced_runtime::UserInterface;
 use iced_runtime::user_interface::Cache;
 use signex_renderer::pcb::{PcbLayerView, PcbSnapshot};
@@ -60,7 +60,7 @@ fn view(pcb: &PcbCanvas) -> Element<'_, Message> {
         .width(Length::Fill)
         .height(Length::Fill);
     if !pcb.gpu_render {
-        return stack![base, highlight].into();
+        return stack![base, highlight].boxed();
     }
     let scene = pcb.gpu_scene().unwrap_or_default();
     let generation = pcb.scene_generation();
@@ -73,7 +73,7 @@ fn view(pcb: &PcbCanvas) -> Element<'_, Message> {
     ))
     .width(Length::Fill)
     .height(Length::Fill);
-    stack![base, content, highlight].into()
+    stack![base, content, highlight].boxed()
 }
 
 // --- one frame -------------------------------------------------------------
