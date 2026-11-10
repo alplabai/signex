@@ -238,8 +238,7 @@ fn run_listed(app: &mut Signex, path: &std::path::Path, edits: &[Prepared], labe
         };
         app.document_state
             .agent_edits
-            .labels
-            .insert(group, label.clone());
+            .record_step(group, label.clone(), &app.agent.origin);
         app.after_sheet_change(path, invalidation);
         crate::diagnostics::log_info(format!(
             "{label}: {count} edit(s) applied to {} (undo group {})",

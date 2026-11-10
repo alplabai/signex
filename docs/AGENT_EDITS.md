@@ -96,6 +96,35 @@ Two commands, both with capability `edit` in `signex-cli`:
 - The headless `undo document=..` of #2172 still exists; on an agent's step it
   now says to use `revert`.
 
+## Origin (#2253)
+
+The app knows, at dispatch, who a command comes from: `Origin::Person` (a
+click, key, menu or the palette) or `Origin::Agent { pid, client }`. It is
+app-side only: the engine's `HistoryEntry` has no field for it (#2178,
+ADR-0001 D4).
+
+- It is held for the length of one command, as `agent.serving` and
+  `agent_edits.target` are, by `Signex::with_origin`, which puts the previous
+  value back when the closure returns. No handler takes it as an argument.
+- The socket sets it for every request it reads, a refused one included, with
+  the pid of the client. `client` is the client's own name; the wire carries
+  none yet, so it stays empty rather than invented.
+- A headless run (`dispatch_command_headless`) sets it to an agent whose pid is
+  the process's own.
+- Messages: the "Agent request (pid N): ..." line is as before. An agent step
+  keeps its origin next to its label (`AgentEdits::origins`), so the person's
+  Ctrl+Z and Ctrl+Y say "Undone: Agent: color_net on main.snxsch (agent, pid
+  N)".
+
+Every command the agent runs on the socket that changes a document and lands
+on the undo stack (`mutates_doc` and `undoable`: `color_net`,
+`clear_all_net_colors`) is one engine transaction on the named sheet, stamped with a new undo group
+and labelled "Agent: <command id> on <file>", the same way `apply_edits` makes
+its step. The reply is unchanged (`ran`); the Messages line "Agent: color_net
+on b.snxsch (undo group 7)" tells the agent the group for `revert`, which
+works on these steps by the rules above. A command that makes no undo step
+(`save_document`, `close_active_document`), or is refused, gets no group.
+
 ## signex-cli
 
 `apply_edits` needs `edit`; each edit is authorized again as a command of its
@@ -110,7 +139,14 @@ the answer in `data` and the sheet in `changed`.
   replace does) are not offered. The placements take an optional `document`
   operand (#2199), but inside a list it can only repeat the list's own.
 - `assign_net_class`, annotation and other project-wide data are not edits;
-  that needs a decision on how project data joins a sheet's undo step.
+  that needs a decision on how project data joins a sheet's undo step. For the
+  same reason an agent's `assign_net_class` on the socket stays a net-class
+  pick (`HistoryStep::Pick`, no group): it gets no label and `revert` cannot
+  name it.
+- A headless run has an origin but its commands are not grouped: it has no
+  person, and its own `undo` refuses a grouped agent step. Grouping them waits
+  for the journals (#2253).
+- The origin's `client` is always empty until the wire carries a client name.
 - A click-click move that is already floating is widget-local state the app
   cannot see, so `revert` cannot refuse for it. A revert does not edit the
   selection for items other than wires, so a float over reverted agent items

@@ -33,6 +33,9 @@ pub(crate) struct AgentState {
     /// True while an agent request runs, so the code under it can tell an
     /// agent's call from a click.
     pub(crate) serving: bool,
+    /// Who the command running now comes from; the person outside
+    /// [`Signex::with_origin`].
+    pub(crate) origin: super::Origin,
     /// Whether the open projects are listed in the registry: the window the
     /// person works in (`Signex::boot`) does. An app made otherwise (a test, a
     /// headless run, which holds its project itself) does not.
@@ -79,6 +82,7 @@ impl AgentState {
             endpoint: None,
             registered: None,
             serving: false,
+            origin: super::Origin::Person,
             lists_projects: false,
             registry_lock: Arc::default(),
             registry_seq: 0,

@@ -46,6 +46,14 @@ when `update` has run the request. No window is created and nothing in
 - On Windows a client that connects and closes at once breaks the waiting pipe
   instance; it is replaced with a fresh one and is not counted as a failure.
 
+## Origin
+
+Every request the app reads runs with the origin `Agent { pid, client }` and
+the app puts the person's origin back when it has answered, a refusal included
+(`docs/AGENT_EDITS.md`, "Origin"). A command that changes a document is then
+one labelled undo step. The Messages line "Agent request (pid N): ..." is the
+same as ever.
+
 ## Wire format
 
 JSON Lines: one request object per line, one reply object per line, in order.
