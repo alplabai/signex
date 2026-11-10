@@ -464,6 +464,12 @@ fn open_second_project(f: &mut Fixture) -> tempfile::TempDir {
     dir
 }
 
+/// `text` as it is written inside a JSON string (backslashes doubled).
+fn json_escaped(text: &str) -> String {
+    let quoted = serde_json::to_string(text).expect("a string encodes");
+    quoted.trim_matches('"').to_string()
+}
+
 fn journals_text(dir: &std::path::Path) -> String {
     let mut all = String::new();
     for journal in [Journal::Edits, Journal::Access] {
@@ -575,7 +581,28 @@ fn one_projects_journal_never_names_another_projects_place() {
 
     // B saw the connection and nothing that is A's.
     let b_text = journals_text(b.path());
-    assert!(!b_text.contains(&a_dir), "B names A's place: {b_text}");
+    // A journal is JSON: on Windows a path is written with doubled backslashes,
+    // so look for the raw and the escaped form, and in the parsed entries too.
+    for form in [a_dir.clone(), json_escaped(&a_dir)] {
+        assert!(
+            !b_text.contains(&form),
+            "B names A's place ({form}): {b_text}"
+        );
+    }
+    let b_access: Report<AccessEntry> =
+        read_journal(&b.path().join(".signex").join(Journal::Access.file_name())).unwrap();
+    assert!(
+        b_access.entries.iter().all(|e| {
+            let texts = e
+                .reason
+                .iter()
+                .chain(e.client.iter())
+                .chain(&e.capabilities);
+            texts.into_iter().all(|text| !text.contains(&a_dir))
+        }),
+        "B's parsed entries name A's place: {:?}",
+        b_access.entries
+    );
     assert!(b_text.contains(r#""event":"accepted""#));
     assert!(b_text.contains(r#""event":"closed""#));
     assert!(
@@ -611,7 +638,13 @@ fn one_projects_journal_never_names_another_projects_place() {
         grants.capabilities
     );
     // The peer's reason names A's folder in A's own journal, scrubbed in B's.
-    assert!(journals_text(f.dir.path()).contains(&a_dir));
+    assert!(
+        f.access()
+            .entries
+            .iter()
+            .any(|e| e.reason.as_deref().is_some_and(|why| why.contains(&a_dir))),
+        "A's own journal lost the peer's reason"
+    );
     assert!(b_text.contains("[another project]"), "{b_text}");
 }
 
