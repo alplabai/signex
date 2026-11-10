@@ -238,6 +238,11 @@ it is a heuristic that catches what names can tell apart and leaves the rest
    labels `D[0..7]`) is not seen: `DATA[0..7]` placed on that child run is
    not refused.
 
+Limit: a sheet counts as part of a project for these checks only when an open
+sheet of that project references it as a child. A grandchild sheet opened
+without its parent sheet is judged on its own sheet only, as a loose sheet is;
+open its parent sheet too to have names judged across the project.
+
 A short or rename is refused unless `allow_merge=true`. The rule is one
 function (`signex_net::join_rule`), read by the per-sheet checks, the bus
 checks (bus names, on the edited sheet) and the project check (net names). A run's answer lists the names the joined net
