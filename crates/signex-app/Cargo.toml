@@ -125,15 +125,6 @@ winres = "0.1"
 # (`canvas/render_bench_tests.rs`, unix-only) also calls `getrusage`.
 libc = "0.2"
 
-[target.'cfg(target_os = "macos")'.dependencies]
-# The system menu bar (NSMenu), built from the declarative menu model; see
-# docs/MENU_BAR.md, "Native macOS menu". No default features: they only pull
-# the Linux gtk/libxdo backends.
-muda = { version = "0.20", default-features = false }
-# `MainThreadMarker`: AppKit is built only on the main thread. Already in
-# the graph through muda and winit.
-objc2 = "0.6"
-
 [target.'cfg(windows)'.dependencies]
 # DwmSetWindowAttribute for DWMWA_WINDOW_CORNER_PREFERENCE — used by
 # `src/chrome/mod.rs` to restore Windows 11 rounded corners on the borderless

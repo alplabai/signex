@@ -168,7 +168,10 @@ impl Signex {
         let glyph = iced::widget::svg(PAUSE_GLYPH.clone())
             .width(Length::Fixed(TS.title))
             .height(Length::Fixed(TS.title))
-            .style(move |_: &iced::Theme, _| iced::widget::svg::Style { color: Some(muted) });
+            .style(move |_: &iced::Theme, _| iced::widget::svg::Style {
+                color: Some(muted),
+                ..Default::default()
+            });
         let card = container(
             column![
                 row![

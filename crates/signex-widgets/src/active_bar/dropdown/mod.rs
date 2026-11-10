@@ -238,6 +238,7 @@ pub fn tooltip_style(
 fn icon_style(disabled: bool, muted: Color, ink: Color) -> svg::Style {
     svg::Style {
         color: Some(if disabled { muted } else { ink }),
+        ..Default::default()
     }
 }
 

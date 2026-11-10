@@ -43,7 +43,10 @@ fn glyph(bytes: &'static [u8], side: f32, ink: Color) -> iced::widget::Svg<'stat
     svg(svg::Handle::from_memory(bytes))
         .width(side)
         .height(side)
-        .style(move |_: &Theme, _| svg::Style { color: Some(ink) })
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        })
 }
 
 /// The filter field: a search glyph and a borderless input in a field frame.

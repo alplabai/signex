@@ -38,6 +38,16 @@ fn main() -> iced::Result {
         Signex::update,
         Signex::view,
     )
+    // macOS: the app installs its own menu bar (`.menu` below), so winit's
+    // default one is off, and Command+Q / Dock Quit / logout reach
+    // `system::quit_requests` for the unsaved-changes guard instead of
+    // quitting at once. See docs/MENU_BAR.md, "Native macOS menu".
+    .settings(iced::Settings {
+        default_menu: false,
+        exit_on_quit_request: false,
+        ..iced::Settings::default()
+    })
+    .menu(Signex::native_menu)
     .title(Signex::title)
     .theme(Signex::theme)
     .subscription(Signex::subscription)

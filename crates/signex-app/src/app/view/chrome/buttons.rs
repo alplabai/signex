@@ -172,7 +172,10 @@ fn icon(kind: WindowButton, pal: Palette, size: f32) -> Element<'static, Message
     svg(glyph(kind, pal.theme_id))
         .width(size)
         .height(size)
-        .style(move |_: &iced::Theme, _| svg::Style { color: Some(text) })
+        .style(move |_: &iced::Theme, _| svg::Style {
+            color: Some(text),
+            ..Default::default()
+        })
         .boxed()
 }
 
