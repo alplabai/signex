@@ -106,9 +106,7 @@ pub(crate) fn view<'a>(
     }
 
     // ── One flat list: Stock, Project, Installed, Global ─────────
-    // identifier/data folding, never shown
-    // ast-grep-ignore: no-case-in-view
-    let needle = panel.filter.trim().to_lowercase();
+    let needle = i18n.fold_for_search(panel.filter.trim());
     let mut shown = 0;
     for (source, lib) in &libraries {
         if selected.is_some_and(|s| s != *source) {

@@ -85,14 +85,29 @@ impl ColumnKind {
     /// The row's sort key for this column. A parameter orders by its
     /// `ParamValue` (a measurement by base-unit quantity); every other
     /// column orders by its cell text.
-    pub(super) fn sort_key_for(&self, r: &ComponentRow, names: &PrimitiveNames) -> CellSortKey {
+    pub(super) fn sort_key_for_in<'a>(
+        &self,
+        i18n: &'a signex_i18n::I18n,
+        r: &ComponentRow,
+        names: &PrimitiveNames,
+    ) -> CellSortKey<'a> {
         match self {
             ColumnKind::Parameter(key) => match r.parameters.get(key) {
-                Some(value) => CellSortKey::from_param(value),
-                None => CellSortKey::from_cell(""),
+                Some(value) => CellSortKey::from_param_in(i18n, value),
+                None => CellSortKey::from_cell_in(i18n, ""),
             },
-            _ => CellSortKey::from_cell(&self.cell_value_named(r, names)),
+            _ => CellSortKey::from_cell_in(i18n, &self.cell_value_named(r, names)),
         }
+    }
+
+    /// [`Self::sort_key_for_in`] under en-US.
+    #[cfg(test)]
+    pub(super) fn sort_key_for(
+        &self,
+        r: &ComponentRow,
+        names: &PrimitiveNames,
+    ) -> CellSortKey<'static> {
+        self.sort_key_for_in(signex_i18n::I18n::en_us_ref(), r, names)
     }
 
     /// What pressing this column's cell does for `r`: a measurement opens
@@ -342,36 +357,24 @@ fn shorten_label(key: &str) -> String {
     }
 }
 
-pub(super) fn row_matches_filter(r: &ComponentRow, needle: &str, names: &PrimitiveNames) -> bool {
+/// Whether `r` matches `needle`, already folded with `i18n.fold_for_search`:
+/// the bound symbol or footprint name, internal part number, manufacturer or
+/// MPN, each folded the same way.
+pub(super) fn row_matches_filter(
+    i18n: &signex_i18n::I18n,
+    r: &ComponentRow,
+    needle: &str,
+    names: &PrimitiveNames,
+) -> bool {
     let bound = [
         names.symbol(&r.symbol_ref),
         r.footprint_ref.as_ref().and_then(|fp| names.footprint(fp)),
     ];
-    if bound
-        .into_iter()
-        .flatten()
-        // identifier/data folding, never shown
-        // ast-grep-ignore: no-case-in-view
-        .any(|n| n.to_lowercase().contains(needle))
-    {
-        return true;
-    }
-    // identifier/data folding, never shown
-    // ast-grep-ignore: no-case-in-view
-    if r.internal_pn.as_str().to_lowercase().contains(needle) {
-        return true;
-    }
-    // identifier/data folding, never shown
-    // ast-grep-ignore: no-case-in-view
-    if r.primary_mpn.manufacturer.to_lowercase().contains(needle) {
-        return true;
-    }
-    // identifier/data folding, never shown
-    // ast-grep-ignore: no-case-in-view
-    if r.primary_mpn.mpn.to_lowercase().contains(needle) {
-        return true;
-    }
-    false
+    let has = |text: &str| i18n.fold_for_search(text).contains(needle);
+    bound.into_iter().flatten().any(|n| has(n))
+        || has(r.internal_pn.as_str())
+        || has(&r.primary_mpn.manufacturer)
+        || has(&r.primary_mpn.mpn)
 }
 
 #[cfg(test)]

@@ -114,7 +114,7 @@ impl Signex {
         library_path: &std::path::Path,
     ) -> Task<Message> {
         // Bring the filtered rows up to date: the row set just changed.
-        self.library.sync_view_caches();
+        self.library.sync_view_caches_in(&self.ui_state.i18n);
         let Some(index) = self.library.browser_row_position_of_selection(library_path) else {
             return Task::none();
         };

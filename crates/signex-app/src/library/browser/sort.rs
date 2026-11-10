@@ -1,13 +1,15 @@
 //! Row sorting for the library browser grid.
 //!
 //! Each row's sort key (the `ParamValue`'s quantity, or the numeric parse
-//! and lowercase form of a plain cell) is derived exactly once, then the rows are stably sorted on
+//! and case-folded form of a plain cell) is derived exactly once, then the rows are stably sorted on
 //! the cached keys. Deriving keys inside the comparator would repeat
 //! that allocation and parsing work O(n log n) times per sort.
 
 use std::cmp::Ordering;
 
+use signex_i18n::I18n;
 use signex_library::ParamValue;
+use signex_types::designator::compare_references_with;
 use signex_types::quantity::{Quantity, compare_for_sort};
 
 /// What a cell is, for ordering. The variants rank in this order.
@@ -40,47 +42,50 @@ impl SortKind {
 /// cells and a literal `NaN` rank last, in natural order
 /// (`R2` before `R10`), case-insensitively. Ranking by kind first is
 /// what keeps mixed columns transitive, which `slice::sort_by` requires.
-pub(super) struct CellSortKey {
+pub(super) struct CellSortKey<'a> {
     kind: SortKind,
-    lowercase: String,
+    /// The cell folded for ordering (case-insensitive ties).
+    folded: String,
+    /// Orders the text runs in the formatting language's alphabet.
+    i18n: &'a I18n,
 }
 
-impl CellSortKey {
+impl<'a> CellSortKey<'a> {
     /// Key for a cell known only by its string (a column that is not a
-    /// parameter, or a price).
-    pub(super) fn from_cell(cell: &str) -> Self {
+    /// parameter, or a price); text orders in `i18n`'s alphabet.
+    pub(super) fn from_cell_in(i18n: &'a I18n, cell: &str) -> Self {
         let kind = match cell.trim().parse::<f64>().ok().filter(|n| !n.is_nan()) {
             Some(n) => SortKind::Number(n),
             None => SortKind::Text,
         };
         Self {
             kind,
-            // identifier/data folding, never shown
-            // ast-grep-ignore: no-case-in-view
-            lowercase: cell.to_lowercase(),
+            folded: i18n.fold_for_search(cell),
+            i18n,
         }
     }
 
     /// Key for a parameter value. A measurement is ordered by its
     /// base-unit quantity, never by its display text.
-    pub(super) fn from_param(value: &ParamValue) -> Self {
-        match value.as_quantity() {
-            Some(q) => Self {
-                kind: SortKind::Measured(q),
-                // identifier/data folding, never shown
-                // ast-grep-ignore: no-case-in-view
-                lowercase: value.display().to_lowercase(),
-            },
+    pub(super) fn from_param_in(i18n: &'a I18n, value: &ParamValue) -> Self {
+        let kind = match value.as_quantity() {
+            Some(q) => SortKind::Measured(q),
             None => match value {
-                ParamValue::Number(n) if !n.is_nan() => Self {
-                    kind: SortKind::Number(*n),
-                    // identifier/data folding, never shown
-                    // ast-grep-ignore: no-case-in-view
-                    lowercase: value.display().to_lowercase(),
-                },
-                other => Self::from_cell(&other.display()),
+                ParamValue::Number(n) if !n.is_nan() => SortKind::Number(*n),
+                other => return Self::from_cell_in(i18n, &other.display()),
             },
+        };
+        Self {
+            kind,
+            folded: i18n.fold_for_search(&value.display()),
+            i18n,
         }
+    }
+
+    /// [`Self::from_cell_in`] under en-US.
+    #[cfg(test)]
+    pub(super) fn from_cell(cell: &str) -> CellSortKey<'static> {
+        CellSortKey::from_cell_in(I18n::en_us_ref(), cell)
     }
 
     fn compare(&self, other: &Self) -> Ordering {
@@ -88,7 +93,9 @@ impl CellSortKey {
             (SortKind::Number(a), SortKind::Number(b)) => a.total_cmp(b),
             (SortKind::Measured(a), SortKind::Measured(b)) => compare_for_sort(a, b),
             (SortKind::Text, SortKind::Text) => {
-                signex_types::designator::compare_references(&self.lowercase, &other.lowercase)
+                compare_references_with(&self.folded, &other.folded, |a, b| {
+                    self.i18n.compare_for_display(a, b)
+                })
             }
             (a, b) => a.rank().cmp(&b.rank()),
         }
@@ -97,12 +104,12 @@ impl CellSortKey {
 
 /// Stable-sort `items` by the key `key_of` yields, computing each item's
 /// key exactly once.
-pub(super) fn sort_by_cell_key<T>(
+pub(super) fn sort_by_cell_key<'k, T>(
     items: &mut Vec<T>,
-    mut key_of: impl FnMut(&T) -> CellSortKey,
+    mut key_of: impl FnMut(&T) -> CellSortKey<'k>,
     descending: bool,
 ) {
-    let mut keyed: Vec<(CellSortKey, T)> =
+    let mut keyed: Vec<(CellSortKey<'k>, T)> =
         items.drain(..).map(|item| (key_of(&item), item)).collect();
     keyed.sort_by(|(a, _), (b, _)| {
         let ord = a.compare(b);

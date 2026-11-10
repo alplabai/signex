@@ -13,16 +13,18 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Whether a row survives the filter: a case-insensitive substring of its
-/// reference, value or footprint. An empty filter keeps every row.
-fn row_matches_filter(filter: &str, sym: &signex_types::schematic::Symbol) -> bool {
-    // Match folding, never shown: the same fold on both sides of the compare.
-    // ast-grep-ignore: no-case-in-view
-    let needle = filter.trim().to_lowercase();
+/// reference, value or footprint, folded with `i18n.fold_for_search` on both
+/// sides. An empty filter keeps every row.
+fn row_matches_filter(
+    i18n: &signex_i18n::I18n,
+    filter: &str,
+    sym: &signex_types::schematic::Symbol,
+) -> bool {
+    let needle = i18n.fold_for_search(filter.trim());
     needle.is_empty()
         || [&sym.reference, &sym.value, &sym.footprint]
             .iter()
-            // ast-grep-ignore: no-case-in-view
-            .any(|field| field.to_lowercase().contains(&needle))
+            .any(|field| i18n.fold_for_search(field).contains(&needle))
 }
 
 impl Signex {
@@ -128,7 +130,7 @@ impl Signex {
         for sym in doc
             .symbols
             .iter()
-            .filter(|s| !s.is_power && row_matches_filter(&table.filter, s))
+            .filter(|s| !s.is_power && row_matches_filter(&self.ui_state.i18n, &table.filter, s))
         {
             let mut r = row![
                 text(signex_i18n::UserText::new(sym.reference.clone()))

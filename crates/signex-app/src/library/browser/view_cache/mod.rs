@@ -16,6 +16,7 @@ use super::sort::{CellSortKey, sort_by_cell_key};
 use super::*;
 use crate::library::range_filter::{FilterColumn, retain_in_range};
 use crate::library::state::{BrowserSort, OpenLibrary};
+use signex_i18n::I18n;
 use signex_library::RangeFilter;
 use std::collections::BTreeMap;
 
@@ -30,17 +31,24 @@ struct ViewKey {
     class_filter: Option<String>,
     sort_by: Option<BrowserSort>,
     range: Vec<(String, RangeFilter)>,
+    /// The search fold follows the message locale, the sort order the
+    /// formatting one: a language change rebuilds the cache.
+    message_locale: &'static str,
+    format_locale: String,
 }
 
 impl ViewKey {
     fn matches(
         &self,
+        i18n: &I18n,
         data_version: u64,
         clock: DateTime<Utc>,
         table: &str,
         browser: &LibraryBrowserState,
     ) -> bool {
-        self.data_version == data_version
+        self.message_locale == i18n.locale()
+            && self.format_locale == i18n.format_locale().to_string()
+            && self.data_version == data_version
             && self.clock == clock
             && self.table == table
             && self.search == browser.search
@@ -98,7 +106,8 @@ fn filter_columns(columns: &[GridColumn], rows: &[ComponentRow]) -> Vec<FilterCo
 }
 
 impl BrowserViewCache {
-    pub(super) fn build(
+    pub(super) fn build_in(
+        i18n: &I18n,
         lib: &OpenLibrary,
         registry: &signex_library::TemplateRegistry,
         clock: DateTime<Utc>,
@@ -111,9 +120,7 @@ impl BrowserViewCache {
         let rows: &[ComponentRow] = lib.tables.get(table).map(Vec::as_slice).unwrap_or(&[]);
 
         let names = PrimitiveNames::of(lib);
-        // identifier/data folding, never shown
-        // ast-grep-ignore: no-case-in-view
-        let needle = browser.search.trim().to_lowercase();
+        let needle = i18n.fold_for_search(browser.search.trim());
         let lifecycle_filter = browser.lifecycle_filter;
         let class_filter = browser.class_filter.as_deref();
         let mut visible: Vec<usize> = (0..rows.len())
@@ -121,7 +128,7 @@ impl BrowserViewCache {
                 let r = &rows[i];
                 lifecycle_filter.allows(r.state)
                     && class_filter.is_none_or(|cls| r.class.as_str() == cls)
-                    && (needle.is_empty() || row_matches_filter(r, &needle, &names))
+                    && (needle.is_empty() || row_matches_filter(i18n, r, &needle, &names))
             })
             .collect();
 
@@ -142,8 +149,10 @@ impl BrowserViewCache {
             sort_by_cell_key(
                 &mut visible,
                 |&i| match column.kind {
-                    ColumnKind::Price => CellSortKey::from_cell(&prices.sort_value(&rows[i])),
-                    _ => column.kind.sort_key_for(&rows[i], &names),
+                    ColumnKind::Price => {
+                        CellSortKey::from_cell_in(i18n, &prices.sort_value(&rows[i]))
+                    }
+                    _ => column.kind.sort_key_for_in(i18n, &rows[i], &names),
                 },
                 sort.descending,
             );
@@ -159,6 +168,8 @@ impl BrowserViewCache {
                 class_filter: browser.class_filter.clone(),
                 sort_by: browser.sort_by.clone(),
                 range,
+                message_locale: i18n.locale(),
+                format_locale: i18n.format_locale().to_string(),
             },
             visible,
             columns,
@@ -178,6 +189,38 @@ impl BrowserViewCache {
         &self.range_excluded
     }
 
+    pub(super) fn matches_in(
+        &self,
+        i18n: &I18n,
+        data_version: u64,
+        clock: DateTime<Utc>,
+        table: &str,
+        browser: &LibraryBrowserState,
+    ) -> bool {
+        self.key.matches(i18n, data_version, clock, table, browser)
+    }
+
+    /// [`Self::build_in`] under en-US.
+    #[cfg(test)]
+    pub(super) fn build(
+        lib: &OpenLibrary,
+        registry: &signex_library::TemplateRegistry,
+        clock: DateTime<Utc>,
+        data_version: u64,
+        browser: &LibraryBrowserState,
+    ) -> Self {
+        Self::build_in(
+            I18n::en_us_ref(),
+            lib,
+            registry,
+            clock,
+            data_version,
+            browser,
+        )
+    }
+
+    /// [`Self::matches_in`] under en-US.
+    #[cfg(test)]
     pub(super) fn matches(
         &self,
         data_version: u64,
@@ -185,7 +228,7 @@ impl BrowserViewCache {
         table: &str,
         browser: &LibraryBrowserState,
     ) -> bool {
-        self.key.matches(data_version, clock, table, browser)
+        self.matches_in(I18n::en_us_ref(), data_version, clock, table, browser)
     }
 }
 
@@ -212,7 +255,7 @@ impl LibraryState {
 
     /// Bring every browser tab's cache up to date; a tab rebuilds only when
     /// a key input changed.
-    pub(in crate::library) fn sync_browser_caches(&mut self) {
+    pub(in crate::library) fn sync_browser_caches(&mut self, i18n: &I18n) {
         let (version, clock) = (self.data_version, self.clock);
         for (path, browser) in self.library_browsers.iter_mut() {
             let Some(lib) = self.open_libraries.iter().find(|lib| lib.root == *path) else {
@@ -222,12 +265,18 @@ impl LibraryState {
             if browser
                 .view_cache
                 .as_ref()
-                .is_some_and(|c| c.matches(version, clock, table, browser))
+                .is_some_and(|c| c.matches_in(i18n, version, clock, table, browser))
             {
                 continue;
             }
-            let cache =
-                BrowserViewCache::build(lib, &self.template_registry, clock, version, browser);
+            let cache = BrowserViewCache::build_in(
+                i18n,
+                lib,
+                &self.template_registry,
+                clock,
+                version,
+                browser,
+            );
             browser.view_cache = Some(cache);
         }
     }

@@ -143,7 +143,8 @@ pub fn view<'a>(
     // recomputes for this frame only.
     let rebuilt;
     let cache = match browser.view_cache.as_ref().filter(|c| {
-        c.matches(
+        c.matches_in(
+            i18n,
             library_state.data_version,
             library_state.clock,
             active_table,
@@ -152,7 +153,8 @@ pub fn view<'a>(
     }) {
         Some(cache) => cache,
         None => {
-            rebuilt = BrowserViewCache::build(
+            rebuilt = BrowserViewCache::build_in(
+                i18n,
                 lib,
                 &library_state.template_registry,
                 library_state.clock,

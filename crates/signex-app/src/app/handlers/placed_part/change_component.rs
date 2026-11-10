@@ -40,7 +40,7 @@ impl Signex {
             mode: PickerMode::ChangeComponent(part.target),
             ..PickerState::default()
         });
-        self.library.sync_view_caches();
+        self.library.sync_view_caches_in(&self.ui_state.i18n);
         Task::none()
     }
 

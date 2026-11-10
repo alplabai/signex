@@ -66,7 +66,7 @@ impl ProjectsView {
 
 /// The group a document row belongs to.
 fn group_of(node: &TreeNode) -> &'static str {
-    // identifier/data folding, never shown
+    // File-extension match, not UI text: ASCII lowercase in every language.
     // ast-grep-ignore: no-case-in-view
     let label = node.label.to_ascii_lowercase();
     if label.contains(".snxbom") {
@@ -123,24 +123,20 @@ fn group_path(project: &str, group: &str) -> String {
     format!("{project}/{group}")
 }
 
-/// The rows whose label contains `needle` (lower case), each with the
-/// branches above it; a matching branch keeps all of its rows.
-fn filtered(nodes: &[TreeNode], needle: &str) -> Vec<TreeNode> {
+/// The rows whose label contains `needle` (folded by `i18n.fold_for_search`),
+/// each with the branches above it; a matching branch keeps all of its rows.
+fn filtered(i18n: &I18n, nodes: &[TreeNode], needle: &str) -> Vec<TreeNode> {
     nodes
         .iter()
         .filter_map(|node| {
-            // identifier/data folding, never shown
-            // ast-grep-ignore: no-case-in-view
-            if node.label.to_lowercase().contains(needle) && !node.children.is_empty() {
+            let label_matches = || i18n.fold_for_search(&node.label).contains(needle);
+            if label_matches() && !node.children.is_empty() {
                 return Some(node.clone());
             }
             if node.children.is_empty() {
-                // identifier/data folding, never shown
-                // ast-grep-ignore: no-case-in-view
-                return (!node.is_folder && node.label.to_lowercase().contains(needle))
-                    .then(|| node.clone());
+                return (!node.is_folder && label_matches()).then(|| node.clone());
             }
-            let kids = filtered(&node.children, needle);
+            let kids = filtered(i18n, &node.children, needle);
             (!kids.is_empty()).then(|| {
                 let mut out = node.clone();
                 out.children = kids;
@@ -352,12 +348,10 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             }
         });
 
-    // identifier/data folding, never shown
-    // ast-grep-ignore: no-case-in-view
-    let needle = ctx.projects_view.filter.trim().to_lowercase();
+    let needle = i18n.fold_for_search(ctx.projects_view.filter.trim());
     let mut roots = regroup(&ctx.project_tree, &ctx.projects_view);
     if !needle.is_empty() {
-        roots = filtered(&roots, &needle);
+        roots = filtered(i18n, &roots, &needle);
     }
     let body: Element<'a, PanelMsg> = if roots.is_empty() {
         text(t!(i18n, ids::PANELS_PROJECTS_NO_MATCH))

@@ -303,11 +303,11 @@ impl Signex {
             | PickerMsg::PanelComponentClicked(_) => {}
             PickerMsg::FilterChanged(s) => {
                 picker.filter = s;
-                self.library.sync_view_caches();
+                self.library.sync_view_caches_in(&self.ui_state.i18n);
             }
             PickerMsg::RangeFilter(msg) => {
                 picker.range_filters.apply(msg);
-                self.library.sync_view_caches();
+                self.library.sync_view_caches_in(&self.ui_state.i18n);
             }
             PickerMsg::SelectComponent(row_id) => {
                 // `ComponentSummary` carries `row_id` directly in the

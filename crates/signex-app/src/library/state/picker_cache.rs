@@ -175,8 +175,9 @@ impl LibraryState {
 
     /// Bring the caches `view` reads up to date. Called from `update`
     /// (`finish_update`, and the picker handlers); cheap when nothing
-    /// they depend on changed.
-    pub fn sync_view_caches(&mut self) {
+    /// they depend on changed. The search fold and the sort order follow
+    /// `i18n`, so a language change rebuilds what they produced.
+    pub fn sync_view_caches_in(&mut self, i18n: &signex_i18n::I18n) {
         let version = self.data_version;
         if let Some(picker) = self.picker.as_mut() {
             picker.rows.sync(
@@ -186,9 +187,15 @@ impl LibraryState {
                 &picker.range_filters,
             );
         }
-        self.sync_panel_rows();
-        self.sync_browser_caches();
+        self.sync_panel_rows(i18n);
+        self.sync_browser_caches(i18n);
         self.sync_uncommitted();
+    }
+
+    /// [`Self::sync_view_caches_in`] under en-US.
+    #[cfg(test)]
+    pub fn sync_view_caches(&mut self) {
+        self.sync_view_caches_in(signex_i18n::I18n::en_us_ref());
     }
 }
 

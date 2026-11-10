@@ -116,6 +116,13 @@ impl I18n {
         std::sync::Arc::clone(&EN_US_SHARED)
     }
 
+    /// [`Self::en_us`] by reference, for tests of other crates that hold a
+    /// borrowed `I18n`.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn en_us_ref() -> &'static Self {
+        &EN_US_SHARED
+    }
+
     /// The setting this instance stands for.
     pub fn pref(&self) -> &LanguagePref {
         &self.pref
