@@ -1,8 +1,9 @@
 //! The connection rule of a headless part, sheet symbol or sheet entry
 //! placement (#2199, decision comment 6769277106): an edit from operands never
 //! connects anything the caller did not name, so a new pin tip or entry point
-//! that lands on a wire (end or run), a junction, a label, a sheet entry or
-//! another pin tip is refused, and the caller wires it afterwards. Rules:
+//! that lands on a wire (end or run), a junction, a label, a sheet entry,
+//! a no-connect marker or another pin tip, or a bus entry that lands on a bus
+//! (end or run), is refused, and the caller wires it afterwards. Rules:
 //! `docs/CLI.md`, "Placing parts and hierarchy".
 //!
 //! The caller applies the placement's real engine commands to a copy of the
@@ -13,7 +14,9 @@
 
 use std::collections::HashSet;
 
-use signex_types::schematic::{Point, SchematicSheet, pin_tips};
+use signex_types::schematic::{
+    Bus, Point, SchematicSheet, SheetPin, normalize_port_name, parse_bus_name, pin_tips,
+};
 use uuid::Uuid;
 
 use super::wire_intent::{ExtraItem, ExtraKind};
@@ -25,46 +28,69 @@ use crate::uf::Key;
 pub fn placement_contacts(before: &SchematicSheet, after: &SchematicSheet) -> Vec<ExtraItem> {
     let mut found = Vec::new();
     for p in new_points(before, after) {
-        found.extend(items_at(before, p));
+        found.extend(items_at(before, &p));
     }
     found.sort_by(|x, y| (x.kind, &x.identity).cmp(&(y.kind, &y.identity)));
     found.dedup_by(|x, y| x.kind == y.kind && x.identity == y.identity);
     found
 }
 
+/// A connection point new in `after`.
+struct NewPoint {
+    at: Point,
+    /// Whether it is a bus-typed sheet entry, which joins a bus it lies on.
+    is_bus_entry: bool,
+}
+
 /// The pin tips and sheet entries `after` has and `before` does not, one per
 /// point: a symbol by uuid, an entry by uuid and position.
-fn new_points(before: &SchematicSheet, after: &SchematicSheet) -> Vec<Point> {
+fn new_points(before: &SchematicSheet, after: &SchematicSheet) -> Vec<NewPoint> {
     let symbols: HashSet<Uuid> = before.symbols.iter().map(|s| s.uuid).collect();
     let entries: HashSet<(Uuid, Key)> = sheet_entries(before)
-        .map(|(uuid, p, _)| (uuid, pt_key(&p)))
+        .map(|(sp, _)| (sp.uuid, pt_key(&sp.position)))
         .collect();
-    let mut points: Vec<Point> = sheet_entries(after)
-        .filter(|(uuid, p, _)| !entries.contains(&(*uuid, pt_key(p))))
-        .map(|(_, p, _)| p)
+    let mut points: Vec<NewPoint> = sheet_entries(after)
+        .filter(|(sp, _)| !entries.contains(&(sp.uuid, pt_key(&sp.position))))
+        .map(|(sp, _)| NewPoint {
+            at: sp.position,
+            is_bus_entry: is_bus_entry(sp),
+        })
         .collect();
+    // Entries come first, so the dedup below keeps a point's bus contact.
     for sym in after.symbols.iter().filter(|s| !symbols.contains(&s.uuid)) {
         if let Some(lib) = after.resolve_lib_symbol(sym) {
-            points.extend(pin_tips(&lib, sym).map(|(_, tip)| tip));
+            points.extend(pin_tips(&lib, sym).map(|(_, tip)| NewPoint {
+                at: tip,
+                is_bus_entry: false,
+            }));
         }
     }
     let mut seen = HashSet::new();
-    points.retain(|p| seen.insert(pt_key(p)));
+    points.retain(|p| seen.insert(pt_key(&p.at)));
     points
 }
 
-/// Every sheet entry of `sheet`: its uuid, position and `<entry> of <sheet>`.
-fn sheet_entries(sheet: &SchematicSheet) -> impl Iterator<Item = (Uuid, Point, String)> + '_ {
+/// Whether the netlist reads `sp` as a bus pin (`project/buses.rs`,
+/// `sheet_buses`): its name parses as a bus name.
+fn is_bus_entry(sp: &SheetPin) -> bool {
+    normalize_port_name(&sp.name).is_some_and(|name| parse_bus_name(name).is_ok())
+}
+
+/// Every sheet entry of `sheet` with its `<entry> of <sheet>` identity.
+fn sheet_entries(sheet: &SchematicSheet) -> impl Iterator<Item = (&SheetPin, String)> + '_ {
     sheet.child_sheets.iter().flat_map(|cs| {
         cs.pins
             .iter()
-            .map(move |sp| (sp.uuid, sp.position, format!("{} of {}", sp.name, cs.name)))
+            .map(move |sp| (sp, format!("{} of {}", sp.name, cs.name)))
     })
 }
 
-/// What sits at `at` on `sheet`: what a connection point there would join.
-/// A wire is reported at `at`, where it is touched.
-fn items_at(sheet: &SchematicSheet, at: Point) -> Vec<ExtraItem> {
+/// What sits at `new.at` on `sheet`: what a connection point there would
+/// join. A wire or bus is reported at the point, where it is touched. A bus
+/// is joined only by a bus entry, at an end or mid-span; a pin tip on a bus
+/// connects nothing (D5.4), so it is not reported.
+fn items_at(sheet: &SchematicSheet, new: &NewPoint) -> Vec<ExtraItem> {
+    let at = new.at;
     let key = pt_key(&at);
     let item = |kind, identity: String, position| ExtraItem {
         kind,
@@ -105,8 +131,21 @@ fn items_at(sheet: &SchematicSheet, at: Point) -> Vec<ExtraItem> {
     for l in sheet.labels.iter().filter(|l| pt_key(&l.position) == key) {
         found.push(item(ExtraKind::Label, l.text.clone(), l.position));
     }
-    for (_, p, name) in sheet_entries(sheet).filter(|(_, p, _)| pt_key(p) == key) {
-        found.push(item(ExtraKind::SheetPin, name, p));
+    for (sp, name) in sheet_entries(sheet).filter(|(sp, _)| pt_key(&sp.position) == key) {
+        found.push(item(ExtraKind::SheetPin, name, sp.position));
+    }
+    for n in sheet
+        .no_connects
+        .iter()
+        .filter(|n| pt_key(&n.position) == key)
+    {
+        found.push(item(ExtraKind::NoConnect, n.uuid.to_string(), n.position));
+    }
+    if new.is_bus_entry {
+        let on_bus = |b: &&Bus| point_on_segment(key, pt_key(&b.start), pt_key(&b.end));
+        for b in sheet.buses.iter().filter(on_bus) {
+            found.push(item(ExtraKind::Bus, b.uuid.to_string(), at));
+        }
     }
     found
 }

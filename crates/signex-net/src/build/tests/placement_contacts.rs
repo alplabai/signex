@@ -133,3 +133,72 @@ fn a_part_pin_on_a_sheet_entry_names_the_entry() {
         [(ExtraKind::SheetPin, "SDA of Charger".to_string())]
     );
 }
+
+fn bus(a: Point, b: Point) -> signex_types::schematic::Bus {
+    signex_types::schematic::Bus {
+        uuid: Uuid::now_v7(),
+        start: a,
+        end: b,
+    }
+}
+
+/// `before` plus a new entry `name` at `at` on the Charger symbol.
+fn with_entry(before: &SchematicSheet, name: &str, at: Point) -> SchematicSheet {
+    let mut after = before.clone();
+    after.child_sheets[0].pins.push(entry(name, at));
+    after
+}
+
+#[test]
+fn a_bus_entry_on_a_bus_end_or_run_is_reported() {
+    let mut before = with_lib();
+    before.buses.push(bus(pt(20.0, 20.0), pt(20.0, 40.0)));
+    before.child_sheets.push(symbol_with(Vec::new()));
+    for at in [pt(20.0, 20.0), pt(20.0, 30.0)] {
+        let found = placement_contacts(&before, &with_entry(&before, "D[0..7]", at));
+        assert_eq!(found.len(), 1, "at {at:?}");
+        assert_eq!(found[0].kind, ExtraKind::Bus);
+        assert_eq!(found[0].position, at, "touched where the entry is");
+    }
+}
+
+#[test]
+fn a_plain_entry_or_a_pin_tip_on_a_bus_joins_nothing_and_is_not_reported() {
+    // The netlist joins a bus only to a bus-named entry; a plain name on a
+    // bus is rejected (D5.4) and a pin tip never connects to a bus.
+    let mut before = with_lib();
+    before.buses.push(bus(pt(20.0, 20.0), pt(20.0, 40.0)));
+    before.child_sheets.push(symbol_with(Vec::new()));
+    let after = with_entry(&before, "SDA", pt(20.0, 20.0));
+    assert!(placement_contacts(&before, &after).is_empty());
+    assert!(placement_contacts(&before, &placed(&before, (20.0, 30.0))).is_empty());
+}
+
+#[test]
+fn a_bus_entry_and_a_pin_tip_on_one_bus_point_still_report_the_bus() {
+    let mut before = with_lib();
+    before.buses.push(bus(pt(20.0, 20.0), pt(20.0, 40.0)));
+    before.child_sheets.push(symbol_with(Vec::new()));
+    // U9's pin 1 lands where the new bus entry is.
+    let mut after = with_entry(&before, "D[0..7]", pt(20.0, 30.0));
+    place(&mut after, "U9", "P", pt(20.0, 30.0));
+    let found = placement_contacts(&before, &after);
+    assert_eq!(kinds(&found).len(), 1);
+    assert_eq!(found[0].kind, ExtraKind::Bus);
+}
+
+#[test]
+fn a_pin_tip_or_an_entry_on_a_no_connect_marker_is_reported() {
+    let mut before = with_lib();
+    let nc = signex_types::schematic::NoConnect {
+        uuid: Uuid::now_v7(),
+        position: pt(10.0, 0.0),
+    };
+    before.no_connects.push(nc.clone());
+    before.child_sheets.push(symbol_with(Vec::new()));
+    let want = [(ExtraKind::NoConnect, nc.uuid.to_string())];
+    let found = placement_contacts(&before, &placed(&before, (0.0, 0.0)));
+    assert_eq!(kinds(&found), want);
+    let found = placement_contacts(&before, &with_entry(&before, "SDA", pt(10.0, 0.0)));
+    assert_eq!(kinds(&found), want);
+}
