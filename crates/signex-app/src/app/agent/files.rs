@@ -436,6 +436,46 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "keep me");
     }
 
+    /// The runtime folder is named from `confstr`, not from `TMPDIR`: a child
+    /// of this test binary with `TMPDIR=/tmp` (where `temp_dir()` and `confstr`
+    /// disagree) must still answer the system's folder. The child is the same
+    /// test with the marker set.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test re-runs its own binary with another TMPDIR"
+    )]
+    fn macos_names_the_runtime_folder_from_confstr() {
+        const MARKER: &str = "SIGNEX_CONFSTR_CHILD";
+        if std::env::var_os(MARKER).is_some() {
+            assert_eq!(std::env::temp_dir(), PathBuf::from("/tmp"));
+            assert_eq!(
+                unix::user_temp_dir(),
+                unix::darwin_user_temp_dir().expect("confstr answers")
+            );
+            assert_ne!(unix::user_temp_dir(), std::env::temp_dir());
+            return;
+        }
+        let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .args([
+                "app::agent::files::tests::macos_names_the_runtime_folder_from_confstr",
+                "--exact",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(MARKER, "1")
+            .env("TMPDIR", "/tmp")
+            .output()
+            .expect("run the child");
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
     /// A desktop app (with `XDG_RUNTIME_DIR`) and a shell without it (ssh,
     /// cron) must name one folder, or the lock between them protects nothing.
     #[test]

@@ -368,6 +368,15 @@ impl Signex {
         // it here would be a second editor of one file (#1924). The claim is
         // the shared lock a window holds while the project is open.
         if let Err((pid, entry)) = self.claim_project(project_path) {
+            // A run that has the lock and has not written its entry yet has no
+            // process to name, and no entry to remove.
+            if pid == 0 {
+                anyhow::bail!(
+                    "{} is being edited by another signex-cli run, so it was not opened. \
+                     Open it again when that run has ended.",
+                    super::save::file_label(project_path)
+                );
+            }
             anyhow::bail!(
                 "{} is being edited by a headless signex-cli run (process {pid}), so it was \
                  not opened. Open it again when that run has ended; if none is running, \

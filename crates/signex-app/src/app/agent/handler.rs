@@ -356,22 +356,26 @@ impl Signex {
         ) else {
             return Ok(());
         };
-        // A headless run of this user that keeps its runtime folder somewhere
-        // else (another environment) holds the project as much as one here.
-        if let Some(holder) =
-            registry::held_by_headless_in(&self.agent.alternate_dirs(&dir), &canonical)
-        {
-            return Err(holder);
-        }
-        match registry::claim_shared(&dir, &canonical) {
+        // The lock here first, then a look at the user's other runtime folders
+        // for a headless run holding the project (another environment): a run
+        // that locks its own folder meanwhile is then seen by one of the two.
+        let alternates = self.agent.alternate_dirs(&dir);
+        let claimed = registry::claim_checked(
+            &dir,
+            &canonical,
+            &alternates,
+            || registry::claim_shared(&dir, &canonical),
+            || {},
+        );
+        match claimed {
             Ok(lock) => {
                 self.agent.lock_failed.remove(project);
                 self.agent.lock_warned.remove(project);
                 self.agent.project_locks.insert(project.to_path_buf(), lock);
                 Ok(())
             }
-            Err(registry::LockError::Held) => Err(registry::headless_holder(&dir, &canonical)),
-            Err(registry::LockError::Other(why)) => {
+            Err(registry::ClaimFailure::Run(pid, entry)) => Err((pid, entry)),
+            Err(registry::ClaimFailure::Other(why)) => {
                 // Said once, and not tried again before the retry tick.
                 if self.agent.lock_warned.insert(project.to_path_buf()) {
                     crate::diagnostics::log_warning(format!(

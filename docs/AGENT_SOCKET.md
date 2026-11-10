@@ -224,13 +224,17 @@ the lock EXCLUSIVELY. So many windows can have one project open, a headless
 run cannot take it while any window does, and a window cannot open a project a
 run holds (it refuses, as above). A closed project keeps its lock while any
 document write or library write (a queued or running write of any library) is
-still running (it goes with the update that reports it done), and on quit the locks go with the cleanup task, after the document,
-autosave and library writes, so a run never reads a file a save is still
-writing. A lock that cannot be made is said once in Messages and tried again at
-the registry retry tick (5 s), not at every update; a run that took the project
-after that is said once too, with its process id. A stale entry is removed only
-if the project is still unlocked when it is. The kernel drops a lock with its process, so
-a process killed by a signal is found stale at once and a reused process id
+still running (it goes with the update that reports it done), and on quit the
+locks go with the cleanup task, after the document, autosave and library
+writes, so a run never reads a file a save is still writing. A lock that cannot
+be made is said once in Messages and tried again at the registry retry tick
+(5 s), not at every update; a run that took the project after that is said
+once too, with its process id ("another signex-cli run" while it has no entry
+yet). A stale entry is removed only if the project is still unlocked when it
+is. Both sides take their own lock first and only then look at the user's other
+runtime folders (a window for an exclusive lock, a run for any lock there), so
+a run and a window that start together can both refuse but never both pass. The
+kernel drops a lock with its process, so a process killed by a signal is found stale at once and a reused process id
 means nothing. A reader asks for the lock exclusively without waiting: it
 fails while anyone holds it, and if it succeeds every holder is gone.
 

@@ -301,6 +301,55 @@ pub(super) fn claim_shared(dir: &Path, canonical: &Path) -> Result<std::fs::File
     )
 }
 
+/// Why a window's checked claim failed.
+pub(super) enum ClaimFailure {
+    /// A headless run holds the project: its process (`0` while it has not
+    /// written its entry) and entry file.
+    Run(u32, PathBuf),
+    Other(String),
+}
+
+/// A window's claim, with the other runtime folders looked at AFTER its own
+/// lock is taken: a run that locks its own folder meanwhile either sees this
+/// lock (and refuses) or is seen here (and this refuses), so the two can both
+/// refuse but never both pass. `claim` makes the one attempt (a seam for a
+/// test); a `Held` that is not an exclusive lock was a reader's momentary one,
+/// so it is tried once more. `between` runs after the lock and before the look
+/// (a test checks the order there).
+pub(super) fn claim_checked(
+    dir: &Path,
+    canonical: &Path,
+    alternates: &[PathBuf],
+    mut claim: impl FnMut() -> Result<std::fs::File, LockError>,
+    between: impl FnOnce(),
+) -> Result<std::fs::File, ClaimFailure> {
+    let held = || {
+        let (pid, entry) = headless_holder(dir, canonical);
+        ClaimFailure::Run(pid, entry)
+    };
+    let lock = match claim() {
+        Ok(lock) => lock,
+        Err(LockError::Other(why)) => return Err(ClaimFailure::Other(why)),
+        Err(LockError::Held) => {
+            if lock_is_held_exclusively(&lock_path(dir, canonical)) {
+                return Err(held());
+            }
+            match claim() {
+                Ok(lock) => lock,
+                Err(LockError::Held) => return Err(held()),
+                Err(LockError::Other(why)) => return Err(ClaimFailure::Other(why)),
+            }
+        }
+    };
+    between();
+    if let Some((pid, path)) = held_by_headless_in(alternates, canonical) {
+        // The lock goes with `lock`: the project is not claimed.
+        drop(lock);
+        return Err(ClaimFailure::Run(pid, path));
+    }
+    Ok(lock)
+}
+
 /// [`acquire_lock`] for either kind, with its attempts and pause; `before_verify`
 /// runs between the lock and the check that the path still names the file (a
 /// test swaps the file there).

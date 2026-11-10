@@ -490,3 +490,123 @@ fn a_test_apps_runtime_folder_is_removed_with_the_app() {
 
     assert!(!root.exists(), "{} was left behind", root.display());
 }
+
+/// A window of another environment that has the project open holds it shared:
+/// that is not a run, so this window may open it too.
+#[test]
+fn a_shared_holder_in_another_runtime_folder_is_not_a_run() {
+    let mut fx = fixture("SharedElsewhere1924.snxprj");
+    let other = other_runtime_dir(&fx);
+    let mut window = window_on(&other);
+    let _task = window.handle_document_file_opened(Some(fx.project.clone()));
+    assert!(opened_in(&window, &fx.project));
+    fx.app.agent.alternates = Some(vec![other]);
+
+    fx.open();
+
+    assert!(fx.opened(), "a window elsewhere was taken for a run");
+}
+
+/// The own lock is taken BEFORE the other folders are looked at, so a run and a
+/// window that start together cannot both pass: this is checked at the point
+/// between the two, where the own lock must already be held.
+#[test]
+fn the_windows_lock_is_taken_before_the_other_folders_are_looked_at() {
+    let fx = fixture("ClaimOrder1924.snxprj");
+    let other = other_runtime_dir(&fx);
+    let canonical = std::fs::canonicalize(&fx.project).unwrap();
+    let own = registry::lock_path(&fx.dir, &canonical);
+    let _run = hold(&other, &fx.project).expect("a run in the other folder");
+    let mut ordered = false;
+
+    let refused = registry::claim_checked(
+        &fx.dir,
+        &canonical,
+        std::slice::from_ref(&other),
+        || registry::claim_shared(&fx.dir, &canonical),
+        || ordered = registry::lock_is_held(&own),
+    );
+
+    assert!(
+        ordered,
+        "the other folders were looked at before the own lock"
+    );
+    assert!(matches!(refused, Err(registry::ClaimFailure::Run(..))));
+    assert!(
+        !registry::lock_is_held(&own),
+        "a refused claim kept its lock"
+    );
+}
+
+/// The same for a run: its own exclusive lock first, then the other folders.
+#[test]
+fn the_runs_lock_is_taken_before_the_other_folders_are_looked_at() {
+    let fx = fixture("HoldOrder1924.snxprj");
+    let other = other_runtime_dir(&fx);
+    let canonical = std::fs::canonicalize(&fx.project).unwrap();
+    let own = registry::lock_path(&fx.dir, &canonical);
+    let mut window = window_on(&other);
+    let _task = window.handle_document_file_opened(Some(fx.project.clone()));
+    let mut ordered = false;
+
+    let refused = client::hold_checked(&fx.dir, &fx.project, std::slice::from_ref(&other), || {
+        ordered = registry::lock_is_held(&own);
+    });
+
+    assert!(
+        ordered,
+        "the other folders were looked at before the own lock"
+    );
+    assert!(refused.is_err(), "a run took a project a window has open");
+    assert!(!registry::lock_is_held(&own), "a refused run kept its lock");
+}
+
+/// A shared claim that fails while nothing holds the lock exclusively was a
+/// reader's momentary lock: tried once more, not refused.
+#[test]
+fn a_claim_that_failed_without_a_run_is_tried_once_more() {
+    let fx = fixture("ClaimRetry1924.snxprj");
+    let canonical = std::fs::canonicalize(&fx.project).unwrap();
+    files::prepare_dir(&fx.dir).unwrap();
+    let mut attempts = 0;
+
+    let claimed = registry::claim_checked(
+        &fx.dir,
+        &canonical,
+        &[],
+        || {
+            attempts += 1;
+            if attempts == 1 {
+                Err(registry::LockError::Held)
+            } else {
+                registry::claim_shared(&fx.dir, &canonical)
+            }
+        },
+        || {},
+    );
+
+    assert!(claimed.is_ok(), "a momentary lock refused the open");
+    assert_eq!(attempts, 2);
+}
+
+/// A run that holds the lock and has no entry yet is named plainly: no
+/// "process 0", and no entry file to remove that does not exist.
+#[test]
+fn an_open_refused_for_a_run_without_an_entry_names_no_process_and_no_file() {
+    let mut fx = fixture("NoEntryOpen1924.snxprj");
+    let canonical = std::fs::canonicalize(&fx.project).unwrap();
+    files::prepare_dir(&fx.dir.join(files::REGISTRY_DIR)).unwrap();
+    let _lock = registry::acquire_lock(&registry::lock_path(&fx.dir, &canonical)).expect("a lock");
+
+    fx.open();
+
+    assert!(!fx.opened());
+    let notice = fx.app.document_state.error_notice.take().expect("a notice");
+    assert!(
+        notice.detail.contains("another signex-cli run"),
+        "{}",
+        notice.detail
+    );
+    assert!(!notice.detail.contains("process 0"), "{}", notice.detail);
+    assert!(!notice.detail.contains("remove"), "{}", notice.detail);
+}

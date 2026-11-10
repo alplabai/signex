@@ -208,21 +208,18 @@ pub(in crate::app::agent) fn hold_with(
     project: &Path,
     alternates: &[PathBuf],
 ) -> Result<Hold, String> {
+    hold_checked(dir, project, alternates, || {})
+}
+
+/// [`hold_with`]; `between` runs after the run's own lock is taken and before
+/// the other folders are looked at (a test checks the order there).
+pub(in crate::app::agent) fn hold_checked(
+    dir: &Path,
+    project: &Path,
+    alternates: &[PathBuf],
+    between: impl FnOnce(),
+) -> Result<Hold, String> {
     let canonical = canonical(project)?;
-    // A lock held in another runtime directory of this user (an app started
-    // with another environment) is as good as one here.
-    for other in alternates {
-        if files::check_dir(other).is_ok()
-            && registry::lock_is_held(&registry::lock_path(other, &canonical))
-        {
-            return Err(format!(
-                "{} is open in a Signex, or held by a signex-cli run, that keeps its runtime \
-                 folder in {}",
-                canonical.display(),
-                other.display()
-            ));
-        }
-    }
     files::prepare_dir(dir)?;
     let registry = dir.join(REGISTRY_DIR);
     files::prepare_dir(&registry)?;
@@ -247,6 +244,24 @@ pub(in crate::app::agent) fn hold_with(
             });
         }
     };
+    between();
+    // A lock held in another runtime directory of this user (an app started
+    // with another environment) is as good as one here. Looked at only now,
+    // with this run's own lock taken: a window that locks its own folder
+    // meanwhile sees this lock, or is seen here, so both can refuse but never
+    // both pass. The lock goes with `lock` on a refusal.
+    for other in alternates {
+        if files::check_dir(other).is_ok()
+            && registry::lock_is_held(&registry::lock_path(other, &canonical))
+        {
+            return Err(format!(
+                "{} is open in a Signex, or held by a signex-cli run, that keeps its runtime \
+                 folder in {}",
+                canonical.display(),
+                other.display()
+            ));
+        }
+    }
     // Holding the lock means no window has the project open, so whatever entry
     // is here is a dead one's, unless a newer Signex wrote it.
     if let Some(existing) = registry::read_entry(&entry_file)
