@@ -2,16 +2,14 @@
 //! window's own bar.
 
 use super::*;
-use crate::menu_bar::native::build;
+use crate::menu_bar::native::{build, probe::row_message};
 
-/// Press the native menu row `path` the way the macOS bar does: the action
-/// map of the bar as it stands, then the activation handler.
+/// Press the native menu row `path` the way the macOS bar does: the message
+/// the row of the bar, as it stands, sends.
 fn native_click(app: &mut Signex, path: &str) -> Task<Message> {
-    let model = menu_bar_model(&menu_context(app));
-    app.native_menu.actions = build(&model, false).actions;
-    app.update(Message::Window(
-        crate::app::WindowMsg::NativeMenuItemActivated(path.to_string()),
-    ))
+    let menu = build(&menu_bar_model(&menu_context(app)), false);
+    let message = row_message(&menu, path).unwrap_or_else(|| panic!("{path} is not live"));
+    app.update(message)
 }
 
 /// Every live row of the app's bar, as a path.

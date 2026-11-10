@@ -127,6 +127,11 @@ impl Signex {
         {
             return refused(reason);
         }
+        // The socket only: a headless run has no person, and its own `undo`
+        // refuses a grouped agent step (docs/AGENT_EDITS.md, "Origin").
+        if self.agent.serving && agent::runs_as_one_step(command) {
+            return agent::run_as_one_step(self, command, args, handler);
+        }
         handler(self, args)
     }
 }

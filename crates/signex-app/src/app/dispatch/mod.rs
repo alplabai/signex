@@ -178,10 +178,6 @@ impl Signex {
             WindowMsg::MainWindowOpened(id) => {
                 self.ui_state.main_window_id = Some(id);
                 self.ui_state.main_window_opened = true;
-                // winit's default menu exists now; ours replaces it on the
-                // sync that ends this update.
-                #[cfg(target_os = "macos")]
-                self.native_menu.arm();
                 // Pull the real initial size from winit — opening the
                 // window at Settings.size doesn't always land at
                 // exactly that size (OS DPI scaling, display clamps).
@@ -215,6 +211,7 @@ impl Signex {
                     self.ui_state.focused_window = None;
                 }
                 let mut layout_persist = Task::none();
+                let mut quit_answer = Task::none();
                 // Drop the entry and dismiss the backing modal state so
                 // closing the OS window fully exits the modal instead of
                 // reattaching a phantom copy to the main window on the
@@ -272,6 +269,18 @@ impl Signex {
                             ModalId::SelectionFilterCustom => {
                                 self.ui_state.selection_filter_custom = None;
                             }
+                            // A Cancel, unless Create is writing: then the
+                            // draft stays and the sync reopens the window.
+                            ModalId::NewProject => {
+                                if self
+                                    .ui_state
+                                    .new_project
+                                    .as_ref()
+                                    .is_some_and(|s| s.creating.is_none())
+                                {
+                                    self.ui_state.new_project = None;
+                                }
+                            }
                             ModalId::About => self.ui_state.about_open = false,
                             ModalId::KeyboardShortcuts => {
                                 self.ui_state.keyboard_shortcuts_open = false
@@ -293,7 +302,13 @@ impl Signex {
                             ModalId::ProjectCloseConfirm => {
                                 self.ui_state.project_close_confirm = None
                             }
-                            ModalId::AppQuitConfirm => self.ui_state.app_quit_confirm = None,
+                            // A prompt window that vanished is a Cancel: the
+                            // pending system quit request is answered too.
+                            ModalId::AppQuitConfirm => {
+                                if self.ui_state.app_quit_confirm.take().is_some() {
+                                    quit_answer = Self::decline_quit();
+                                }
+                            }
                             // A window that vanished without a close request
                             // is a Cancel: nothing is written or deleted.
                             ModalId::LibraryPicker => self.library.picker = None,
@@ -370,7 +385,7 @@ impl Signex {
                         WindowKind::ComponentEditor { .. } => {}
                     }
                 }
-                layout_persist
+                Task::batch([layout_persist, quit_answer])
             }
             WindowMsg::DetachModal(modal) => self.handle_detach_modal(modal),
             WindowMsg::DetachedModalOpened { modal, id } => {
@@ -406,6 +421,7 @@ impl Signex {
                 // modal, so the OS honours the request (unlike a
                 // foreground grab from a background process).
                 Task::batch([
+                    self.focus_new_project_name_once_open(modal),
                     crate::chrome::apply_rounded_corners::<Message>(id),
                     iced::window::gain_focus(id),
                     window_scale_task(id),
@@ -547,7 +563,12 @@ impl Signex {
                 }
                 Task::none()
             }
-            WindowMsg::NativeMenuItemActivated(id) => self.handle_native_menu_activated(&id),
+            WindowMsg::NativeMenuRowChosen(action) => self.handle_native_menu_row_chosen(action),
+            WindowMsg::NativeMenuFailed(reason) => self.handle_native_menu_failed(&reason),
+            WindowMsg::QuitRequested => {
+                crate::diagnostics::log_info("Quit: the system asked Signex to quit");
+                self.handle_app_quit_requested()
+            }
             WindowMsg::ControlsLayoutDetected(layout) => {
                 self.handle_controls_layout_detected(layout)
             }

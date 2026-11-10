@@ -51,7 +51,7 @@ interface scale), so the body keeps all of its height. Other themes, and
 Graphite with native controls, keep the OS frame and the in-dialog header
 slot stays empty as before.
 
-**Followed dialogs.** For Find / Replace, Rename, Remove, Enable Version
+**Followed dialogs.** For New Project, Find / Replace, Rename, Remove, Enable Version
 Control, Grid Properties, Custom Selection Filter, About, Keyboard Shortcuts,
 the Passive Calculator, Create Sheet, the error notice, the netlist-incomplete
 prompt, the autosave recovery prompt, and the project-close and app-quit confirms, `sync_detached_modals`
@@ -80,7 +80,7 @@ window.
   consequence of `resizable: false`. `modal_is_fixed` in `erc/modals.rs` is the
   one list.
 - **Tool windows** (Preferences, ERC, BOM, Print Preview, Annotate, Parameter
-  Manager, Find / Replace, shortcuts, calculator, edit row, updates) keep normal
+  Manager, New Project, Find / Replace, shortcuts, calculator, edit row, updates) keep normal
   window behaviour (resizable, zoom allowed) and open at a sensible default size.
 - **Sizing rule.** A fixed dialog's window is sized to its content
   (`modal_size`): width fits the text, height is the content plus the footer.
@@ -117,7 +117,7 @@ dialogs with a button footer, and that the window background is the surface toke
 
 Confirm and warning dialogs lock the main window; tool windows do not.
 
-- **Locking:** Rename, Remove, Create Sheet, the annotate-reset confirm and the
+- **Locking:** New Project, Rename, Remove, Create Sheet, the annotate-reset confirm and the
   Re-prefix confirm (detached), plus the in-window confirms (quit, project close, error notice,
   netlist prompt, recovery prompts, library confirms). The one predicate
   is `Signex::has_locking_confirm_modal` (read by the macOS menu bar), and
@@ -140,6 +140,7 @@ Confirm and warning dialogs lock the main window; tool windows do not.
 
 | Dialog | Class | OS close means | Tests |
 |---|---|---|---|
+| New Project (resizable, `ModalId::NewProject`) | locking | Cancel (writes nothing; waits while Create is writing, and the window returns if it vanishes then). Enter creates in the window; the name field is focused once the window opens; header slot empty, body scrolls, footer pinned | `detached_new_project_tests`, `detached_modals` generic loops |
 | Rename, Remove | locking | Cancel | `detached_modals` |
 | Annotate reset confirm | locking | Cancel | `detached_modal_os_close` |
 | Re-prefix confirm | locking | Cancel (`AnnotateMsg::ReprefixCancelled`; changes nothing) | `reprefix_standard` |

@@ -75,6 +75,8 @@ impl std::error::Error for DriveError {}
 struct Effects {
     clipboard: Option<Content>,
     has_exited: bool,
+    /// System quit requests the app answered with a cancel.
+    cancelled_quits: u64,
     /// Window actions that got no answer (see [`TaskDriver::dropped_window_actions`]).
     dropped_windows: u64,
 }
@@ -107,6 +109,13 @@ impl TaskDriver {
     /// Whether a task asked the app to exit. Once it has, nothing more runs.
     pub fn has_exited(&self) -> bool {
         self.effects.has_exited
+    }
+
+    /// How many system quit requests tasks have answered with a cancel
+    /// (`iced::system::cancel_quit`). There is no real request to cancel
+    /// here, so the driver only counts them.
+    pub fn cancelled_quits(&self) -> u64 {
+        self.effects.cancelled_quits
     }
 
     /// How many window actions (a window the command asked for that is not
@@ -226,6 +235,7 @@ impl Effects {
             Action::Clipboard(action) => self.clipboard(action),
             Action::Window(action) => return self.window(action),
             Action::Exit => self.has_exited = true,
+            Action::System(iced_runtime::system::Action::CancelQuit) => self.cancelled_quits += 1,
             other => dropped(action_kind(&other)),
         }
         None
@@ -298,6 +308,22 @@ fn action_kind(action: &Action<Message>) -> &'static str {
     }
 }
 
+/// Test helper: `task` must do exactly one thing, cancel the pending system
+/// quit request. No exit, no window close, no message.
+#[cfg(test)]
+pub(crate) fn assert_quit_declined(task: Task<Message>) {
+    let mut driver = TaskDriver::new();
+    let outputs = driver.outputs(task).expect("the task settles");
+    assert_eq!(driver.cancelled_quits(), 1, "the quit was not cancelled");
+    assert!(!driver.has_exited(), "the app exited over a declined quit");
+    assert!(outputs.is_empty(), "a declined quit did more: {outputs:?}");
+    assert_eq!(
+        driver.dropped_window_actions(),
+        0,
+        "a declined quit also ran a window action"
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -367,12 +393,12 @@ mod tests {
     /// delivers them: both of a batch, then their follow-ups in order.
     #[test]
     fn messages_run_first_in_first_out() {
-        let tag = |n: u32| Message::Window(WindowMsg::NativeMenuItemActivated(n.to_string()));
+        let tag = |n: u32| Message::Window(WindowMsg::NativeMenuFailed(n.to_string()));
         let mut seen = Vec::new();
         TaskDriver::new()
             .settle_with(
                 |message| {
-                    let Message::Window(WindowMsg::NativeMenuItemActivated(n)) = &message else {
+                    let Message::Window(WindowMsg::NativeMenuFailed(n)) = &message else {
                         return Task::none();
                     };
                     seen.push(n.clone());

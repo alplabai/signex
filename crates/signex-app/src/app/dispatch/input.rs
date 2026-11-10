@@ -448,7 +448,15 @@ impl Signex {
         let Some(state) = self.ui_state.new_project.as_ref() else {
             return Claim::Pass;
         };
-        if !target.paints_overlay_stack() {
+        // Its own window, or the main window while the dialog has none (the
+        // in-window fallback): never a main window that sits under the dialog.
+        let in_own_window =
+            target == InputTarget::DetachedModal(crate::app::state::ModalId::NewProject);
+        let in_main_fallback = target.paints_overlay_stack()
+            && self
+                .detached_window_of(crate::app::state::ModalId::NewProject)
+                .is_none();
+        if !in_own_window && !in_main_fallback {
             return Claim::Pass;
         }
         match event {

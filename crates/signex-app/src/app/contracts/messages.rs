@@ -106,9 +106,15 @@ pub enum WindowMsg {
     WindowFocused(iced::window::Id),
     /// A window lost keyboard focus.
     WindowUnfocused(iced::window::Id),
-    /// A row of the macOS system menu bar was chosen; carries the row's
-    /// stable id (`menu_bar::native`). Only the macOS subscription sends it.
-    NativeMenuItemActivated(String),
+    /// A model row of the macOS system menu bar was chosen
+    /// (`menu_bar::native`); only that bar sends it.
+    NativeMenuRowChosen(crate::menu_bar::MenuMessage),
+    /// The iced runtime could not build the macOS system menu bar; carries
+    /// the reason.
+    NativeMenuFailed(String),
+    /// The system asked the app to quit (macOS: Command+Q, Dock Quit,
+    /// logout). It stays unanswered until the app exits or cancels it.
+    QuitRequested,
     /// The Linux startup probe finished: the buttons the desktop lists, or
     /// `None` when it could not be read, or the probe's failure reason.
     ControlsLayoutDetected(Result<Option<crate::chrome::desktop::DesktopButtonLayout>, String>),

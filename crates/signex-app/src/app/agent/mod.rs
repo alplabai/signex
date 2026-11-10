@@ -15,6 +15,7 @@ pub mod client;
 mod files;
 mod handler;
 mod listener;
+mod origin;
 mod registry;
 mod reply;
 mod state;
@@ -30,6 +31,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use iced::futures::channel::oneshot;
 
+pub(crate) use origin::Origin;
 pub use reply::{
     ChangeSnapshot, MessageLine, Status, changed_between, messages_since, outcome_verdict,
 };

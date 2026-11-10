@@ -10,6 +10,13 @@ impl Signex {
     pub(crate) fn detached_modal_title(&self, modal: ModalId) -> String {
         let library = &self.library;
         match modal {
+            ModalId::NewProject => Some(
+                signex_i18n::t!(
+                    self.ui_state.i18n.as_ref(),
+                    signex_i18n::ids::DIALOG_NEW_PROJECT_TITLE
+                )
+                .into_string(),
+            ),
             ModalId::LibraryPicker => library
                 .picker
                 .as_ref()
@@ -73,6 +80,7 @@ pub(crate) fn detached_modal_title(modal: ModalId) -> &'static str {
         ModalId::EnableVersionControl => "Enable Version Control",
         ModalId::GridProperties => "Grid Properties",
         ModalId::SelectionFilterCustom => "Custom Selection Filter",
+        ModalId::NewProject => "New Project",
         ModalId::About => "About Signex",
         ModalId::KeyboardShortcuts => "Keyboard Shortcuts",
         ModalId::PassiveCalculator => "Passive Network Calculator",

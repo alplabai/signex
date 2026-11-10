@@ -219,68 +219,89 @@ gate is the command's enablement, not "a schematic is open".
 
 ## Native macOS menu {#native-macos-menu}
 
-On macOS the main menu lives in the system menu bar (NSMenu), built with the
-`muda` crate from the same `menu_bar_model` the in-window row renders, so a
-model edit shows up natively with no change to the native code. Windows and
-Linux keep the in-window row.
+On macOS the main menu lives in the system menu bar (NSMenu), described as
+data by `iced::menu::Menu` from the same `menu_bar_model` the in-window row
+renders, so a model edit shows up natively with no change to the native code.
+Windows and Linux keep the in-window row; the iced runtime never asks them
+for the native menu.
 
-**Layers.** `menu_bar/native/mod.rs` turns the model into a `NativeMenuSpec`
-(titles, labels, enabled flags, separators, submenus, stable ids) plus an
-id -> `MenuMessage` map of the live, enabled rows. It compiles on every OS and
-carries the tests. Only `native/macos.rs` calls `muda`. The state lives in
-`Signex::native_menu`; `app/handlers/native_menu.rs` holds the two touch
-points with `update`.
+**Layers.** `menu_bar/native/mod.rs` turns the model into an
+`iced::menu::Menu<Message>`: titles, labels, check marks, separators,
+submenus, and for each live row the message it sends. It compiles on every OS
+and carries the tests. `Signex::native_menu` (`app/handlers/native_menu.rs`)
+reads the Model and builds it; `main.rs` hands it to `iced::daemon(..).menu`,
+and the iced fork (alplabai/iced, `iced::menu`) syncs it to the NSMenu after
+every `update`: flags (enabled, checked) in place, rows rebuilt only when
+they changed, a stable id per row, a failed rebuild keeping the old menu.
+Signex has no AppKit or `muda` code of its own.
 
-**Build timing.** winit installs its own default NSMenu in
-`applicationDidFinishLaunching`. The fork's `Settings::default_menu` can turn
-that off since iced-signex-v0.15.0-alpha.5, but Signex does not use it yet.
-Installing from `Signex::new` would be overwritten, so the menu is
-installed once the main window has opened (`WindowMsg::MainWindowOpened` arms
-the state, the sync at the end of that `update` installs). `muda::Menu` panics
-off the main thread and `Task` futures do not run there, so every muda call
-happens inside `update`.
+**Build timing.** `main.rs` sets `Settings::default_menu: false`, so winit
+installs no default menu and Signex needs no "install after the main window
+opened" step: the iced runtime installs the menu once the application has
+launched, and the in-window row is already left out from the first frame.
 
-**App menu.** The first menu, titled by the process: About Signex,
-Preferences... (Command+comma), Hide / Hide Others / Show All (stock AppKit
-items), Quit Signex (Command+Q). Quit is a custom row routed to
-`MenuMessage::Exit`, which reaches `handle_app_quit_requested`, the
-unsaved-changes guard. The stock quit item sends `terminate:`, which exits
-without it. Dock ▸ Quit and logout still send `terminate:`; those two paths
-remain unguarded.
+**App menu.** The first menu, titled by the process: About Signex (a custom
+row, `MenuMessage::OpenAbout`), Preferences... (a custom row with the one real
+key equivalent, Command+comma), Hide / Hide Others / Show All and Quit (the
+stock items, `iced::menu::Predefined`).
+
+**Quit.** `Settings::exit_on_quit_request` is `false`, so every quit the
+system asks for reaches the app as `iced::system::quit_requests()`: Command+Q
+and the app menu's Quit, Dock ▸ Quit, and logout (#2224; the old custom Quit
+row guarded only the menu item and Command+Q, and the other two sent
+`terminate:` past the guard). The subscription (`QuitRequested`) is always
+running, since the runtime answers a request nobody listens to with "quit" at
+once. It runs `handle_app_quit_requested`, the same unsaved-changes guard File
+▸ Exit and the window close use: nothing unsaved closes the main window, which
+ends the process (the runtime answers the pending request when the app exits);
+otherwise the prompt opens. A request stays pending until it is answered, and
+macOS waits (at logout only for a limited time), so every path that keeps the
+app open answers it with `iced::system::cancel_quit()` (a no-op when nothing
+is pending): the prompt's Cancel, a quit held back by a running rename or
+delete, a Save All that left files unsaved, and the prompt closing itself
+because everything was saved behind it, and a prompt window that vanishes
+without a close request (treated as Cancel). Each decision is logged to the
+Messages panel ("Quit: the system asked Signex to quit", "Quit: not quitting,
+Signex stays open"). The second line is written on every OS whenever a quit
+is declined, a system request or not.
 
 **Check marks.** The View menu's panel rows carry `MenuItem::checked`, read
 from `MenuContext::open_panels` (`Signex::open_panels`, the same
-`is_panel_open` answer the status-bar panel list uses). Natively they are
-`CheckMenuItem`s; a moved mark refreshes in place. AppKit flips a check item
-itself on a click, so choosing one drops the applied spec and the next sync
-redraws every mark from the Model. A panel row opens or reveals its panel;
-the panel's shortcut toggles it.
+`is_panel_open` answer the status-bar panel list uses), and become check rows
+(`Item::checked`). AppKit flips a check item itself on a click; the fork
+writes the flags of a chosen row again on the next sync, so the mark is
+redrawn from the Model. A panel row opens or reveals its panel; the panel's
+shortcut toggles it.
 
 **Shortcuts on model rows are text, not key equivalents.** Each native row
 shows its keymap shortcut (`Shortcut::text`, from the active keymap, so a
-rebind shows up and the keymap change rebuilds the menu) as text after its
-label. It registers no AppKit key equivalent: one fires before iced sees the
+rebind shows up, and the changed label makes the fork rebuild the row) as
+text after its label, four spaces apart. It registers no AppKit key
+equivalent (no `Item::shortcut`): one fires before iced sees the
 key, which bypasses the widget-capture rule in `app/dispatch/input.rs` (a
 focused text input owns Ctrl/Command + C, V, X, A, Z), and the keymap treats
 `Ctrl` as the physical Control key on every OS (#1441), so a native Command
 key equivalent would disagree with the profile. Keys keep going through the
 keymap, so a key is never dispatched twice. The four app-menu key equivalents
-are the only registered ones, and none collides with editing.
+(Preferences' Command+comma and the stock Quit, Hide and Hide Others) are the
+only registered ones, and none collides with editing.
 
 **Exit.** The native File menu leaves out Exit and the separator above it:
-Quit Signex in the app menu replaces it. Windows and Linux keep Exit.
+Quit in the app menu replaces it. Windows and Linux keep Exit.
 
-**Ids.** `<title path>/<label>`, for example `File/Save` or
-`File/Export/PDF`. A recent project uses its full path instead of its file
-name (`File/Open Recent/<path>`), since file names repeat across folders. A
-repeated id within one build gets a `#2` suffix. Ids come from the row alone,
-never from an index, so an event that arrives after a rebuild cannot fire a
-different row.
+**Ids.** The fork derives a row's id from its label path, `File/Save` or
+`File/Export/PDF` (with the shortcut text, which is part of the label), never
+from an index, so an event that arrives after a rebuild cannot fire a
+different row; a repeated label within one menu gets a `#2` suffix, which
+matters for Open Recent, where two projects can share a file name. Each
+Open Recent row carries its own project path in its message.
 
-**Activation.** The muda event handler only forwards the id
-(`WindowMsg::NativeMenuItemActivated`). `update` looks it up in the current
-map, which holds live, enabled rows only, and dispatches `Message::Menu`. An
-unknown, stale or disabled id is ignored and logged to the Messages panel.
+**Activation.** A model row's message is
+`WindowMsg::NativeMenuRowChosen(MenuMessage)`; `update` refuses it while a
+confirm dialog is open (a backstop for a click on a row the bar had not yet
+greyed), routes it to the focused window as below and dispatches. A greyed row
+has no message, so a disabled row cannot fire. The app menu's About and
+Preferences send `Message::Menu` directly, so the lock never blocks them.
 
 **Focused window.** The bar acts on the focused window (`UiState::focused_window`,
 fed by window focus events), falling back to the main window. Enablement comes
@@ -297,15 +318,25 @@ greyed and refuse activation; About, Preferences and Quit stay live. Tool
 windows (ERC, BOM, Preferences, Annotate, Print Preview, calculator, find /
 replace, shortcuts) do not lock it.
 
-**Sync.** After every `update` (macOS only) the state compares the inputs the
-spec reads (`CommandContext` of the focused window, recent projects, the lock)
-with the last sync; only a difference builds a new spec. A spec that differs only in enablement flips the
-flags in place; any other difference rebuilds the NSMenu. The keymap is not an
-input because the spec has no shortcut text.
+**Sync.** The runtime calls `Signex::native_menu` after every `update`
+(macOS only), so the menu reads the Model like a view: `CommandContext` of the
+focused window, recent projects, the lock, open panels, the keymap and the
+language. The built menu is cached in `NativeMenuState` with the
+`MenuInputs` it came from and rebuilt only when one of them changed (the
+runtime asks after every update batch, canvas mouse moves included); the fork
+then decides what, if anything, to touch in AppKit.
 
-**Window strip.** With the native menu installed the in-window row and the
+**Window strip.** With the native menu in use the in-window row and the
 wordmark are not drawn from the first frame on (so they do not flash before the
 first install): the strip is the traffic lights, the drag zones and the centred
-search. If installing or rebuilding fails, the system menu is taken down, the
-action map is cleared, the in-window row comes back and the Messages panel says
-why.
+search.
+
+**Fallback.** The app subscribes to `iced::system::menu_failures()`, which
+fires once for each distinct menu the runtime could not build, with the error
+text. A failed first install leaves no menu bar at all (`default_menu` is
+off), so on a report `WindowMsg::NativeMenuFailed` sets a sticky flag
+(`NativeMenuState::fall_back`), logs the reason as a warning in the Messages
+panel, and `hides_in_window_menu()` turns false, so the in-window row and the
+wordmark come back. The flag is not cleared if a later menu builds, so the
+bar does not switch back mid-session. A failed rebuild of a later menu leaves
+the previous system menu in place, and the in-window row shows as well.

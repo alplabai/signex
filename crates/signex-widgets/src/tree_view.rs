@@ -565,6 +565,7 @@ fn render_node(
         let accent = theme_ext::accent(tokens);
         icon_w.style(move |_: &Theme, _| svg::Style {
             color: Some(accent),
+            ..Default::default()
         })
     } else {
         icon_w
