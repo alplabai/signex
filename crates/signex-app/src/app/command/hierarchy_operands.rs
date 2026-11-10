@@ -4,6 +4,7 @@
 //! symbol only refers to its child file). Rules and refusals: `docs/CLI.md`,
 //! "Placing parts and hierarchy".
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use iced::Task;
@@ -17,6 +18,9 @@ use crate::app::handlers::canvas::{
     escapes_through_symlink, reference_from, resolve_new_sheet_path,
 };
 use crate::app::mutation_gateway::CommandOutcome as Applied;
+use crate::app::sheet_hierarchy::{
+    CaseFold, SheetHierarchy, SheetNode, SheetNodeKind, normalised_key,
+};
 use crate::app::{Message, Signex};
 
 type Ran = (CommandOutcome, Task<Message>);
@@ -55,6 +59,31 @@ fn applied(outcome: Applied, reason: Option<String>) -> Result<(), String> {
     }
 }
 
+/// The keys of the sheets above any placement of the sheet at `path`.
+fn sheets_above(hierarchy: &SheetHierarchy, path: &Path, fold: CaseFold) -> HashSet<String> {
+    fn walk(
+        node: &SheetNode,
+        path: &Path,
+        fold: CaseFold,
+        chain: &mut Vec<String>,
+        out: &mut HashSet<String>,
+    ) {
+        if node.kind == SheetNodeKind::Present && node.is_at(path, fold) {
+            out.extend(chain.iter().cloned());
+        }
+        chain.push(normalised_key(&node.path, fold));
+        for child in &node.children {
+            walk(child, path, fold, chain, out);
+        }
+        chain.pop();
+    }
+    let mut out = HashSet::new();
+    for node in hierarchy.top_level() {
+        walk(node, path, fold, &mut Vec::new(), &mut out);
+    }
+    out
+}
+
 /// The names of `list` that `keep` keeps, sorted.
 fn names(list: &[String], keep: impl Fn(&String) -> bool) -> Vec<String> {
     let mut kept: Vec<String> = list.iter().filter(|n| keep(n)).cloned().collect();
@@ -87,7 +116,8 @@ impl Signex {
 
     /// The child file reference `file`, written from the sheet's folder:
     /// refused unless it is a `.snxsch` inside the project folder (a linked
-    /// folder that leaves it included). Nothing is created or opened.
+    /// folder that leaves it included) and is neither this sheet nor one
+    /// above it. Nothing is created or opened.
     fn child_file_reference(&self, file: &str) -> Result<String, String> {
         let docs = &self.document_state;
         let sheet = docs.edit_path().ok_or("no schematic is open")?;
@@ -102,6 +132,21 @@ impl Signex {
             return Err(
                 "`file`: the sheet must be inside the project folder (a linked folder leaves it)"
                     .to_string(),
+            );
+        }
+        let target = normalised_key(&path, fold);
+        let above = |h: &SheetHierarchy| sheets_above(h, sheet, fold).contains(&target);
+        if target == normalised_key(sheet, fold) {
+            return Err("`file` is this sheet: a sheet cannot contain itself".to_string());
+        }
+        // shortcut: only the hierarchy already in memory is read (no disk
+        // read in `update`), so an ancestor it does not hold yet is missed.
+        if self
+            .hierarchy_describing(sheet)
+            .is_some_and(|(h, _)| above(h))
+        {
+            return Err(
+                "`file` is an ancestor of this sheet: a sheet cannot contain itself".to_string(),
             );
         }
         Ok(reference_from(parent_dir, &path, fold))

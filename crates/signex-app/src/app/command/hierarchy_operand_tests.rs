@@ -12,6 +12,7 @@ use super::{CommandArgs, CommandOutcome};
 use crate::app::Signex;
 use crate::app::handlers::canvas::placement_tests::grid;
 use crate::app::handlers::editing_commands::net_color_driver::add_sheet_with;
+use crate::app::sheet_hierarchy::{SheetHierarchy, SheetNode, SheetNodeKind};
 use crate::keymap::AppCommandId;
 
 /// A grid-snapping app with `sheet` active as `main.snxsch` in `dir`.
@@ -141,6 +142,47 @@ fn a_sheet_symbol_file_outside_the_folder_or_off_grid_corners_are_refused() {
     assert_eq!(doc(&app).child_sheets.len(), 1);
 }
 
+fn node(dir: &Path, file: &str, children: Vec<SheetNode>) -> SheetNode {
+    SheetNode {
+        name: file.into(),
+        filename: file.into(),
+        placed_as: Some(Uuid::now_v7()),
+        path: dir.join(file),
+        kind: SheetNodeKind::Present,
+        detail: None,
+        children,
+    }
+}
+
+#[test]
+fn a_sheet_symbol_of_this_sheet_or_an_ancestor_is_refused_and_a_sibling_is_not() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut app = app_in(dir.path(), SchematicSheet::default());
+    // In memory: top places mid, mid places main (the edited sheet) and side.
+    let d = dir.path();
+    let main = node(d, "main.snxsch", Vec::new());
+    let mid = node(
+        d,
+        "mid.snxsch",
+        vec![main, node(d, "side.snxsch", Vec::new())],
+    );
+    app.document_state.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
+        root: Some(node(d, "top.snxsch", vec![mid])),
+        ..Default::default()
+    });
+    let itself = refusal(sheet_symbol(&mut app, "Self", "main.snxsch"));
+    assert!(itself.contains("`file` is this sheet"), "{itself}");
+    for file in ["mid.snxsch", "top.snxsch", "./sub/../top.snxsch"] {
+        let reason = refusal(sheet_symbol(&mut app, "Up", file));
+        assert!(
+            reason.contains("is an ancestor of this sheet"),
+            "{file}: {reason}"
+        );
+    }
+    assert!(doc(&app).child_sheets.is_empty());
+    answered(sheet_symbol(&mut app, "Side", "side.snxsch"));
+}
+
 #[test]
 fn an_entry_goes_on_the_border_and_a_pin_reference_finds_it_next() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -220,6 +262,35 @@ fn an_entry_on_an_ambiguous_sheet_name_or_a_wire_end_is_refused() {
     let mut app = app_in(dir.path(), wired);
     let reason = refusal(entry(&mut app, "Twin", left(4.0), "SDA"));
     assert!(reason.contains("would land on another wire"), "{reason}");
+}
+
+#[test]
+fn a_bus_entry_on_a_bus_or_an_entry_on_a_no_connect_is_refused() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let sheet = SchematicSheet {
+        // A vertical bus along Charger's left border, and a no-connect on it.
+        buses: vec![signex_types::schematic::Bus {
+            uuid: Uuid::now_v7(),
+            start: left(2.0),
+            end: left(10.0),
+        }],
+        no_connects: vec![signex_types::schematic::NoConnect {
+            uuid: Uuid::now_v7(),
+            position: left(12.0),
+        }],
+        ..Default::default()
+    };
+    let mut app = app_in(dir.path(), sheet);
+    answered(sheet_symbol(&mut app, "Charger", "charger.snxsch"));
+    let on_bus = refusal(entry(&mut app, "Charger", left(6.0), "D[0..7]"));
+    assert!(on_bus.contains("would land on a bus at"), "{on_bus}");
+    let on_nc = refusal(entry(&mut app, "Charger", left(12.0), "SDA"));
+    assert!(
+        on_nc.contains("would land on a no-connect marker"),
+        "{on_nc}"
+    );
+    // A plain-named entry on the bus joins nothing (D5.4).
+    answered(entry(&mut app, "Charger", left(6.0), "SDA"));
 }
 
 /// Write the child sheet `file` in `dir` with hierarchical labels `names`.
