@@ -108,6 +108,58 @@ pub fn fixture(root: &Path) -> Fixture {
     }
 }
 
+/// A project with one sheet and two bare parts, R1 at (12.7, 12.7) and C1 at
+/// (38.1, 12.7), each with pins 1 and 2 at x -3.81 and +3.81 and no wire,
+/// label or body.
+pub fn pins_fixture(root: &Path) -> Fixture {
+    let dir = root.join("proj");
+    std::fs::create_dir_all(&dir).expect("project dir");
+    let (project, sheet) = (dir.join("demo.snxprj"), dir.join("main.snxsch"));
+    let pin = |number: &str, x: f64| LibPin {
+        unit: 0,
+        body_style: 1,
+        pin: Pin {
+            direction: PinDirection::Passive,
+            shape_style: PinShapeStyle::Plain,
+            position: Point::new(x, 0.0),
+            rotation: 0.0,
+            length: 2.54,
+            name: String::new(),
+            number: number.into(),
+            visible: true,
+            name_visible: true,
+            number_visible: true,
+        },
+    };
+    let mut lib: LibSymbol =
+        serde_json::from_value(serde_json::json!({ "id": "Device:R" })).expect("a library symbol");
+    lib.pins = vec![pin("1", -3.81), pin("2", 3.81)];
+    let part = |reference: &str, x: f64| Symbol {
+        uuid: uuid::Uuid::now_v7(),
+        lib_id: "Device:R".into(),
+        reference: reference.into(),
+        position: Point::new(x, 12.7),
+        unit: 1,
+        ..Default::default()
+    };
+    let content = SchematicSheet {
+        uuid: uuid::Uuid::now_v7(),
+        symbols: vec![part("R1", 12.7), part("C1", 38.1)],
+        lib_symbols: [("Device:R".to_string(), lib)].into_iter().collect(),
+        ..Default::default()
+    };
+    signex_engine::Engine::new_with_path(content, Some(sheet.clone()))
+        .expect("engine")
+        .save()
+        .expect("seed sheet");
+    write_project(&project, &project_data(&dir, Vec::new())).expect("seed project");
+    Fixture {
+        dir,
+        project,
+        sheet,
+    }
+}
+
 fn project_data(dir: &Path, libraries: Vec<LibraryEntry>) -> ProjectData {
     ProjectData {
         document_id: None,
@@ -166,19 +218,39 @@ pub fn list_libraries(fx: &Fixture, paths: &[&Path]) {
 pub struct Live {
     child: std::process::Child,
     lines: std::io::BufReader<std::process::ChildStdout>,
+    /// The agent registry the run holds its project in, when `start` made
+    /// one: not the user's.
+    _runtime: Option<tempfile::TempDir>,
 }
 
 impl Live {
     pub fn start(args: &[&str]) -> Self {
+        let runtime = tempfile::tempdir().expect("runtime dir");
+        let mut live = Self::start_in(runtime.path(), args);
+        live._runtime = Some(runtime);
+        live
+    }
+
+    /// [`Live::start`] with the agent registry under `runtime`.
+    pub fn start_in(runtime: &Path, args: &[&str]) -> Self {
         let mut child = Command::new(env!("CARGO_BIN_EXE_signex-cli"))
             .args(args)
+            .env("XDG_RUNTIME_DIR", runtime)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
             .expect("spawn signex-cli");
         let lines = std::io::BufReader::new(child.stdout.take().expect("stdout"));
-        Self { child, lines }
+        Self {
+            child,
+            lines,
+            _runtime: None,
+        }
+    }
+
+    pub fn pid(&self) -> u32 {
+        self.child.id()
     }
 
     /// Send one command line and return its result line.
@@ -194,6 +266,12 @@ impl Live {
 
     pub fn finish(mut self) {
         drop(self.child.stdin.take());
+        self.child.wait().expect("signex-cli ends");
+    }
+
+    /// End the run the way a signal does: no cleanup runs.
+    pub fn kill(mut self) {
+        self.child.kill().expect("kill signex-cli");
         self.child.wait().expect("signex-cli ends");
     }
 }
@@ -227,10 +305,13 @@ pub fn run_cli(args: &[&str], stdin: impl AsRef<[u8]>) -> Output {
     run_cli_env(args, stdin, &[])
 }
 
-/// [`run_cli`] with environment variables set for the child.
+/// [`run_cli`] with environment variables set for the child. Unless `env`
+/// names `XDG_RUNTIME_DIR`, the child's agent registry is a folder of its own.
 pub fn run_cli_env(args: &[&str], stdin: impl AsRef<[u8]>, env: &[(&str, &Path)]) -> Output {
+    let runtime = tempfile::tempdir().expect("runtime dir");
     let mut child = Command::new(env!("CARGO_BIN_EXE_signex-cli"))
         .args(args)
+        .env("XDG_RUNTIME_DIR", runtime.path())
         .envs(env.iter().copied())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

@@ -85,7 +85,10 @@ fn close_button(tokens: &ThemeTokens, index: usize, ink: Color) -> Element<'stat
     let cross = svg(svg::Handle::from_memory(CLOSE_CROSS_SVG))
         .width(CLOSE_CROSS)
         .height(CLOSE_CROSS)
-        .style(move |_: &iced::Theme, _| svg::Style { color: Some(ink) });
+        .style(move |_: &iced::Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        });
     button(
         container(cross)
             .width(CLOSE_SIZE)

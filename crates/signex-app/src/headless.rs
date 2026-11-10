@@ -21,8 +21,10 @@ use iced::Task;
 use signex_types::project::RuleProfile;
 
 pub use crate::app::agent::{
-    ChangeSnapshot, MessageLine, Status, changed_between, messages_since, outcome_verdict,
+    ChangeSnapshot, MessageLine, Status, changed_between, client as agent_client, messages_since,
+    outcome_verdict,
 };
+pub use crate::app::command::queries::is_query;
 pub use crate::app::command::{
     CommandArgs, CommandOutcome, EditSpec, MAX_EDITS, OperandError, OperandValue, edit_list_text,
     edit_refusal, operand_text, parse_edit_list,
@@ -117,6 +119,8 @@ impl Signex {
         // A headless run never listens, whatever the config root says.
         app.ui_state.agent_connections_enabled = false;
         app.ui_state.preferences_draft_agent_connections_enabled = false;
+        // And lists no project: the run holds its own (`agent_client::hold`).
+        app.agent.lists_projects = false;
         let rules_applied = app.handle_user_default_loaded(&Ok(Some(rules.clone())));
         let opens = Self::startup_open_messages(paths)
             .into_iter()
@@ -193,6 +197,26 @@ impl Signex {
         {
             return (CommandOutcome::NotHeadless, Task::none());
         }
+        self.run_headless_command(command, args)
+    }
+
+    /// A test's way past the headless check, for an app made by `Signex::new`.
+    #[cfg(test)]
+    pub(crate) fn run_headless_command_in_test(
+        &mut self,
+        command: &AppCommandId,
+        args: CommandArgs,
+    ) -> (CommandOutcome, Task<Message>) {
+        self.run_headless_command(command, args)
+    }
+
+    /// [`Self::dispatch_command_headless`] past its check that the app was
+    /// booted headless.
+    fn run_headless_command(
+        &mut self,
+        command: &AppCommandId,
+        args: CommandArgs,
+    ) -> (CommandOutcome, Task<Message>) {
         // A command whose whole effect is window UI is refused, never `Ran`
         // (#2170). The GUI dispatch never reads this.
         if let Some(reason) =
@@ -207,20 +231,24 @@ impl Signex {
             .flatten();
         let opening = crate::app::command::answers_with_the_new_document(command)
             .then(|| self.open_snapshot(&args));
-        let result = if let Some(answered) = self.run_query_headless(command, &args) {
-            answered
-        } else if let Some(name) = missing {
-            (
-                CommandOutcome::Disabled {
-                    reason: format!("`{}` needs the operand `{name}`", command.as_str()),
-                },
-                Task::none(),
-            )
-        } else if args.has_operands() {
-            self.run_operands(command, &args)
-        } else {
-            self.dispatch_command_reporting(command, args, None)
-        };
+        // A headless run is an agent's: this process is its pid.
+        let origin = crate::app::agent::Origin::agent(Some(std::process::id()));
+        let result = self.with_origin(origin, |app| {
+            if let Some(answered) = app.run_query_headless(command, &args) {
+                answered
+            } else if let Some(name) = missing {
+                (
+                    CommandOutcome::Disabled {
+                        reason: format!("`{}` needs the operand `{name}`", command.as_str()),
+                    },
+                    Task::none(),
+                )
+            } else if args.has_operands() {
+                app.run_operands(command, &args)
+            } else {
+                app.dispatch_command_reporting(command, args, None)
+            }
+        });
         // Open and New answer with the document they made, once it exists.
         let result = match (opening, result) {
             (Some(snapshot), (CommandOutcome::Ran, task)) => {

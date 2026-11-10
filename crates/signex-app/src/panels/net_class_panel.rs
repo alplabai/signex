@@ -366,7 +366,10 @@ fn add_class_button<'a>(
     let glyph = svg(icons::icon_plus(theme_id))
         .width(12)
         .height(12)
-        .style(move |_: &Theme, _| svg::Style { color: Some(ink) });
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        });
     button(
         row![
             glyph,
@@ -398,7 +401,10 @@ fn history_button<'a>(
     let glyph = svg(handle)
         .width(14)
         .height(14)
-        .style(move |_: &Theme, _| svg::Style { color: Some(ink) });
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        });
     let btn = button(glyph)
         .padding([4.0, 6.0])
         .on_press_maybe(on_press)

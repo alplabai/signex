@@ -247,6 +247,7 @@ pub fn justification_grid(
                 .height(12.0)
                 .style(move |_: &Theme, _| iced::widget::svg::Style {
                     color: Some(if active { fg_active } else { fg_inactive }),
+                    ..Default::default()
                 });
         signex_widgets::button(
             container(svg_widget)
@@ -414,6 +415,7 @@ pub fn preplacement_justification_grid(
                 .height(12.0)
                 .style(move |_: &Theme, _| iced::widget::svg::Style {
                     color: Some(if active { fg_active } else { fg_inactive }),
+                    ..Default::default()
                 });
         signex_widgets::button(
             container(svg_widget)

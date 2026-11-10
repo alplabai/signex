@@ -43,8 +43,7 @@ pub(crate) struct CommandContext {
     /// false in a Component Preview window, which has no file of its own.
     pub document_is_editor: bool,
     /// The main window's active tab is a board with unsaved changes, which
-    /// Save writes (a new board is written only on Save). An undocked board
-    /// window leaves it false.
+    /// Save writes (a new board is written only on Save).
     pub document_is_dirty_board: bool,
     /// ERC and annotation have sheets to work on: a project is open, or
     /// some schematic is. They assemble the project's sheets, not only the

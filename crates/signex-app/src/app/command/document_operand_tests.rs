@@ -413,9 +413,36 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         assert!(document.required, "{name}: a headless call must name it");
     }
     // The converse: only commands that act on a document declare one, `find`
-    // (optional, a scope) apart.
+    // (optional, a scope) and the placements (optional, #2199) apart.
+    let placements = [
+        "place_net_label",
+        "place_local_net_label",
+        "place_global_label",
+        "place_hierarchical_label",
+        "place_power_symbol",
+        "place_no_connect",
+        "place_junction",
+        "place_no_erc",
+        "place_wire",
+        "draw_wire",
+        "place_bus",
+        "draw_bus",
+        "place_text",
+        "place_text_string",
+        "draw_line",
+        "draw_graphic_line",
+        "draw_rectangle",
+    ];
     for name in all_command_ids() {
         let meta = metadata_for_str(name).expect("row");
+        if placements.contains(&name) {
+            let document = meta.operands.iter().find(|op| op.name == "document");
+            assert!(
+                document.is_some_and(|op| !op.required),
+                "{name} takes an optional `document`"
+            );
+            continue;
+        }
         if meta.operands.iter().any(|op| op.name == "document") {
             assert!(
                 [

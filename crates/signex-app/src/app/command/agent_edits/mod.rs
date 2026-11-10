@@ -4,8 +4,10 @@
 
 mod apply;
 mod revert;
+mod single;
 mod wire;
 
 pub(super) use apply::apply_edits;
 pub(super) use revert::revert;
+pub(super) use single::{run_as_one_step, runs_as_one_step};
 pub use wire::{EditSpec, MAX_EDITS, edit_list_text, edit_refusal, operand_text, parse_edit_list};

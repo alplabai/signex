@@ -1,97 +1,27 @@
-//! The native menu's state in the Model, and the pure decision of how to
-//! bring an installed menu up to date.
+//! The native menu's state in the Model: whether the system menu bar could
+//! be built, and the last menu built with the inputs it was built from.
+//!
+//! The iced runtime asks for the menu after every `update` batch (every
+//! canvas mouse move too), so `NativeMenuState::menu` rebuilds it only when
+//! an input the menu reads changed.
 
+#[cfg(test)]
+use std::cell::Cell;
+use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::app::Message;
 use crate::app::command::CommandContext;
+use crate::diagnostics::log_warning;
 use crate::keymap::CompiledKeymap;
 use crate::panels::PanelKind;
 
-use super::{ActionMap, NativeMenu, NativeMenuSpec, NativeNode};
-
-/// What an installed native menu needs to match a new spec.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))] // only the macOS sync uses it
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Refresh {
-    Unchanged,
-    /// Same rows, only enablement moved: `(id, enabled)` for each that did.
-    Enablement(Vec<ItemChange>),
-    /// Rows, labels or accelerators changed: build the menu anew.
-    Rebuild,
-}
-
-/// One row whose enablement or check mark moved.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))] // only the macOS sync reads it
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ItemChange {
-    pub id: String,
-    pub enabled: bool,
-    pub checked: Option<bool>,
-}
-
-/// How `next` differs from the spec on screen. Pure.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))] // only the macOS sync uses it
-pub(crate) fn plan_refresh(applied: Option<&NativeMenuSpec>, next: &NativeMenuSpec) -> Refresh {
-    let Some(applied) = applied else {
-        return Refresh::Rebuild;
-    };
-    if applied == next {
-        return Refresh::Unchanged;
-    }
-    let mut changes = Vec::new();
-    if same_shape(&applied.menus, &next.menus, &mut changes) {
-        Refresh::Enablement(changes)
-    } else {
-        Refresh::Rebuild
-    }
-}
-
-fn same_shape(a: &[NativeMenu], b: &[NativeMenu], changes: &mut Vec<ItemChange>) -> bool {
-    a.len() == b.len()
-        && a.iter().zip(b).all(|(a, b)| {
-            a.title == b.title
-                && a.nodes.len() == b.nodes.len()
-                && a.nodes
-                    .iter()
-                    .zip(&b.nodes)
-                    .all(|(a, b)| same_node(a, b, changes))
-        })
-}
-
-fn same_node(a: &NativeNode, b: &NativeNode, changes: &mut Vec<ItemChange>) -> bool {
-    match (a, b) {
-        (NativeNode::Item(a), NativeNode::Item(b)) => {
-            let same = a.id == b.id
-                && a.label == b.label
-                && a.shortcut == b.shortcut
-                && a.accelerator == b.accelerator;
-            if same && (a.enabled != b.enabled || a.checked != b.checked) {
-                changes.push(ItemChange {
-                    id: b.id.clone(),
-                    enabled: b.enabled,
-                    checked: b.checked,
-                });
-            }
-            same
-        }
-        (NativeNode::Submenu(a), NativeNode::Submenu(b)) => {
-            same_shape(std::slice::from_ref(a), std::slice::from_ref(b), changes)
-        }
-        (NativeNode::Predefined(a), NativeNode::Predefined(b)) => a == b,
-        (NativeNode::Separator, NativeNode::Separator) => true,
-        (NativeNode::Item(_), _)
-        | (NativeNode::Submenu(_), _)
-        | (NativeNode::Predefined(_), _)
-        | (NativeNode::Separator, _) => false,
-    }
-}
-
-/// Everything the native spec is built from: the enablement facts of the
-/// focused window, the recent projects, and whether a confirm dialog locks
-/// the model rows, the keymap the shortcut text comes from, and the locale
-/// the titles render in. The keymap
-/// is replaced, never edited, so pointer identity says whether it changed.
+/// Everything the menu is built from: the enablement facts of the focused
+/// window, the recent projects, whether a confirm dialog locks the model
+/// rows, the open panels, the keymap the shortcut text comes from, and the
+/// locale the titles render in. The keymap and the locale are replaced,
+/// never edited, so pointer identity says whether they changed.
 #[derive(Debug, Clone)]
 pub(crate) struct MenuInputs {
     commands: CommandContext,
@@ -126,7 +56,6 @@ impl PartialEq for MenuInputs {
 impl Eq for MenuInputs {}
 
 impl MenuInputs {
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // built by the macOS sync
     pub(crate) fn new(
         commands: CommandContext,
         recent: &[PathBuf],
@@ -146,7 +75,6 @@ impl MenuInputs {
         }
     }
 
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // set by the macOS sync
     pub(crate) fn with_pcb_sync(
         mut self,
         label: Option<crate::app::update_pcb::PcbSyncLabel>,
@@ -155,139 +83,104 @@ impl MenuInputs {
         self
     }
 
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub(crate) fn pcb_sync(&self) -> Option<crate::app::update_pcb::PcbSyncLabel> {
         self.pcb_sync.clone()
     }
 
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // set by the macOS sync
-    pub(crate) fn with_keymap(mut self, keymap: Arc<CompiledKeymap>) -> Self {
-        self.keymap = Some(keymap);
-        self
-    }
-
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // set by the macOS sync
     pub(crate) fn with_cross_select(mut self, on: bool) -> Self {
         self.cross_select = on;
         self
     }
 
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub(crate) fn cross_select(&self) -> bool {
         self.cross_select
     }
 
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-    pub(crate) fn keymap(&self) -> Option<Arc<CompiledKeymap>> {
+    pub(crate) fn with_keymap(mut self, keymap: Arc<CompiledKeymap>) -> Self {
+        self.keymap = Some(keymap);
+        self
+    }
+
+    pub(super) fn keymap(&self) -> Option<Arc<CompiledKeymap>> {
         self.keymap.clone()
     }
 
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-    pub(crate) fn i18n(&self) -> Arc<signex_i18n::I18n> {
+    pub(super) fn i18n(&self) -> Arc<signex_i18n::I18n> {
         Arc::clone(&self.i18n)
     }
 
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-    pub(crate) fn locked(&self) -> bool {
+    pub(super) fn locked(&self) -> bool {
         self.locked
     }
 
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-    pub(crate) fn commands(&self) -> CommandContext {
+    pub(super) fn commands(&self) -> CommandContext {
         self.commands
     }
 
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-    pub(crate) fn open_panels(&self) -> &[PanelKind] {
+    pub(super) fn open_panels(&self) -> &[PanelKind] {
         &self.open_panels
     }
 
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-    pub(crate) fn recent(&self) -> &[PathBuf] {
+    pub(super) fn recent(&self) -> &[PathBuf] {
         &self.recent
     }
 }
 
-/// Model-owned state of the native menu. The muda objects are `!Send` and
-/// live inside `shell` (macOS only); everything else is plain data.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub(crate) struct NativeMenuState {
-    /// The main window has opened, so winit's own default menu exists and
-    /// ours may replace it (docs/MENU_BAR.md, "Native macOS menu").
-    pub(super) armed: bool,
-    /// Installing failed once; the in-window row stays and nothing retries.
-    pub(super) failed: bool,
-    /// Live rows of the menu on screen, by id.
-    pub(crate) actions: ActionMap,
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // read by the macOS sync
-    pub(super) applied: Option<NativeMenuSpec>,
-    /// Inputs of the spec in `applied`; equal inputs skip the rebuild.
-    pub(super) applied_inputs: Option<MenuInputs>,
-    #[cfg(target_os = "macos")]
-    pub(super) shell: Option<super::macos::Shell>,
+    /// The system menu bar could not be built; the in-window row stays.
+    /// Sticky: a later successful menu does not bring the system bar back
+    /// mid-session.
+    failed: bool,
+    /// The last menu built and the inputs it came from. A view-style cache
+    /// behind `&self`: the runtime asks for the menu through `&Signex`.
+    built: RefCell<Option<(MenuInputs, iced::menu::Menu<Message>)>>,
+    #[cfg(test)]
+    builds: Cell<usize>,
 }
 
 impl NativeMenuState {
-    /// The main window opened: the next sync installs the menu.
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // only the macOS window-open path arms it
-    pub(crate) fn arm(&mut self) {
-        self.armed = true;
+    /// The menu for `inputs`: the last one built when `inputs` are the same,
+    /// else a new one.
+    pub(crate) fn menu(&self, inputs: MenuInputs) -> iced::menu::Menu<Message> {
+        let mut built = self.built.borrow_mut();
+        if let Some((seen, menu)) = built.as_ref()
+            && *seen == inputs
+        {
+            return menu.clone();
+        }
+        let menu = super::build_for(&inputs);
+        #[cfg(test)]
+        self.builds.set(self.builds.get() + 1);
+        *built = Some((inputs, menu.clone()));
+        menu
     }
 
-    /// Pretend installing failed, so the in-window row shows (view tests).
+    /// How many times the menu was built, not served from the cache (tests).
     #[cfg(test)]
-    pub(crate) fn mark_failed_for_test(&mut self) {
+    pub(crate) fn builds(&self) -> usize {
+        self.builds.get()
+    }
+
+    /// The iced runtime reported that the system menu bar cannot be built:
+    /// let the in-window row come back, and say why in the Messages panel.
+    pub(crate) fn fall_back(&mut self, reason: &str) {
         self.failed = true;
-    }
-
-    /// A row with a check mark was chosen: the OS has already flipped it,
-    /// which may disagree with the panel (choosing an open panel that was
-    /// hidden only reveals it). Forget what is on screen so the next sync
-    /// redraws every mark from the Model.
-    pub(crate) fn invalidate(&mut self) {
-        self.applied = None;
-        self.applied_inputs = None;
-    }
-
-    /// Pretend a menu is on screen (activation tests).
-    #[cfg(test)]
-    pub(crate) fn seed_applied_for_test(&mut self) {
-        self.applied = Some(NativeMenuSpec::default());
-        self.applied_inputs = Some(MenuInputs::new(
-            CommandContext::default(),
-            &[],
-            false,
-            Vec::new(),
-            signex_i18n::I18n::en_us(),
+        log_warning(format!(
+            "Main menu: could not build the system menu bar ({reason}); using the in-window menu"
         ));
-    }
-
-    /// Whether any applied spec or inputs are remembered (tests).
-    #[cfg(test)]
-    pub(crate) fn is_applied_for_test(&self) -> bool {
-        self.applied.is_some() || self.applied_inputs.is_some()
-    }
-
-    /// Whether `inputs` differ from the last sync and the menu is live.
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-    pub(crate) fn needs_sync(&self, inputs: &MenuInputs) -> bool {
-        self.armed && !self.failed && self.applied_inputs.as_ref() != Some(inputs)
     }
 
     /// Whether the in-window menu row is left out: on macOS the system menu
     /// bar carries the menus from the first frame on (the row would flash
-    /// until the first install), unless installing failed.
+    /// until the first install), unless building it failed.
     pub(crate) fn hides_in_window_menu(&self) -> bool {
         cfg!(target_os = "macos") && !self.failed
     }
-}
 
-impl std::fmt::Debug for NativeMenuState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NativeMenuState")
-            .field("armed", &self.armed)
-            .field("failed", &self.failed)
-            .field("live_rows", &self.actions.len())
-            .finish()
+    /// Whether building the system menu bar was reported as failed (tests).
+    #[cfg(test)]
+    pub(crate) fn has_failed(&self) -> bool {
+        self.failed
     }
 }

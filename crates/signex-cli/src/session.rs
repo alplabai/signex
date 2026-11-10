@@ -3,25 +3,24 @@
 //! and the app's own task driver.
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde_json::Value;
 use signex_app::app::Signex;
 use signex_app::diagnostics;
 use signex_app::headless::{
-    ChangeSnapshot as Snapshot, CommandArgs, changed_between, edit_list_text, messages_since,
-    outcome_verdict as verdict, parse_edit_list,
+    ChangeSnapshot as Snapshot, CommandArgs, changed_between, messages_since,
+    outcome_verdict as verdict,
 };
 use signex_app::io_ports::HeadlessAnswers;
-use signex_app::keymap::OperandKind;
 use signex_app::task_driver::TaskDriver;
 use signex_types::project::{ErcRules, RuleProfile};
 
 use crate::capability::capability_of;
-use crate::confine::canonical;
+use crate::edits::{authorize_edits, named_document_paths};
 use crate::policy::{Approved, Policy};
-use crate::protocol::{Request, ResultLine, Status};
-use crate::roots::project_root;
+use crate::protocol::{Mode, Request, ResultLine, Status};
+use crate::roots::folder_and_roots;
 
 /// How much of a command line the audit log keeps.
 const AUDIT_LINE_CHARS: usize = 400;
@@ -41,12 +40,7 @@ impl Session {
     /// Boot the app with `project` open (a `.snxprj`, or a loose sheet), with
     /// an explicit ERC profile, and wait until it is loaded.
     pub fn start(project: PathBuf, policy: Policy, run_id: String) -> Result<Self, String> {
-        let project_dir = project
-            .parent()
-            .map(Path::to_path_buf)
-            .ok_or_else(|| format!("{} has no folder", project.display()))?;
-        let home = dirs::home_dir().and_then(|dir| canonical(&dir).ok());
-        let roots = project_root(&project_dir, home.as_deref())?;
+        let (project_dir, roots) = folder_and_roots(&project)?;
         let rules = RuleProfile::new("Signex headless default", "1", ErcRules::default());
         let (mut app, boot) = Signex::boot_headless(vec![project.clone()], &rules)
             .map_err(|error| error.to_string())?;
@@ -194,33 +188,14 @@ impl Session {
     /// confined, every `document` resolved and checked), then written back
     /// with the checked paths. Any other command has no edits.
     fn authorize_edits(&mut self, approved: &mut Approved) -> Result<(), String> {
-        if approved.command.as_str() != "apply_edits" {
-            return Ok(());
-        }
-        let Some(at) = approved
-            .operands
-            .iter()
-            .position(|(name, _)| name == "edits")
-        else {
-            return Ok(());
-        };
-        let mut edits = parse_edit_list(&approved.operands[at].1)?;
-        for (index, edit) in edits.iter_mut().enumerate() {
-            let why = |reason: String| format!("edit {} (`{}`): {reason}", index + 1, edit.id);
-            let request = Request {
-                id: edit.id.clone(),
-                operands: edit.operands.clone(),
-            };
-            let checked = self
-                .policy
-                .authorize(&request, &self.project_dir, &self.roots)
-                .map_err(&why)?;
-            self.policy.recheck(&checked, &self.roots).map_err(&why)?;
-            self.named_document_paths(&checked).map_err(&why)?;
-            edit.operands = checked.operands;
-        }
-        approved.operands[at].1 = edit_list_text(&edits);
-        Ok(())
+        let (policy, base, roots) = (
+            self.policy.clone(),
+            self.project_dir.clone(),
+            self.roots.clone(),
+        );
+        authorize_edits(&policy, &base, &roots, approved, |checked| {
+            self.named_document_paths(checked).map(drop)
+        })
     }
 
     /// The files the `document` operands of `approved` name, resolved by the
@@ -228,27 +203,9 @@ impl Session {
     /// no link out, within the size cap). An operand that names no document
     /// is refused with the app's reason.
     fn named_document_paths(&mut self, approved: &Approved) -> Result<Vec<PathBuf>, String> {
-        let writes = capability_of(approved.meta).writes_files();
-        let mut paths = Vec::new();
-        for (name, text) in &approved.operands {
-            let is_document = approved
-                .meta
-                .operands
-                .iter()
-                .any(|operand| operand.name == *name && operand.kind == OperandKind::Document);
-            if !is_document {
-                continue;
-            }
-            let path = self
-                .app
-                .document_path(text)
-                .map_err(|why| format!("operand `{name}`: {why}"))?;
-            self.policy
-                .check_resolved(&path, &self.roots, writes)
-                .map_err(|why| format!("operand `{name}`: {why}"))?;
-            paths.push(path);
-        }
-        Ok(paths)
+        named_document_paths(&self.policy, &self.roots, approved, false, |text| {
+            self.app.document_path(text)
+        })
     }
 
     /// The files saving the `named` documents writes besides them, each
@@ -312,6 +269,7 @@ impl Session {
         ResultLine {
             run: self.run_id.clone(),
             seq,
+            mode: Mode::Headless,
             id: None,
             status,
             reason: None,

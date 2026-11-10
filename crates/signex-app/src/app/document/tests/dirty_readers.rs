@@ -271,8 +271,10 @@ fn a_row_saved_behind_the_quit_prompt_is_pruned_and_the_prompt_closes() {
     let (mut app, _) = fixture(dir.path(), Kind::Row, true);
     open_quit_prompt(&mut app);
     set_every_row_dirty(&mut app, false);
-    app.prune_settled_quit_confirm();
+    let answer = app.prune_settled_quit_confirm();
     assert!(app.ui_state.app_quit_confirm.is_none());
+    // The app stays open, so the pending system quit request is cancelled.
+    crate::task_driver::assert_quit_declined(answer);
 }
 
 #[test]

@@ -64,12 +64,23 @@ fn operand_text(name: &str, value: &Value) -> Result<String, String> {
 /// channel (#1924) answers with the same ones.
 pub use signex_app::headless::{MessageLine, Status};
 
+/// Where a command ran: in this process with no window, or in a running
+/// Signex that has the project open (#1924).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    Headless,
+    Attached,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResultLine {
     /// The run this line belongs to (also in the audit log).
     pub run: String,
     /// 1-based position of the command line in the run.
     pub seq: u64,
+    /// Where the command ran.
+    pub mode: Mode,
     /// The command id; `null` when the line was not a command.
     pub id: Option<String>,
     pub status: Status,
@@ -167,6 +178,7 @@ mod tests {
         let line = ResultLine {
             run: "r".into(),
             seq: 2,
+            mode: Mode::Headless,
             id: Some("find".into()),
             status: Status::Answered,
             reason: None,
@@ -179,9 +191,14 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_value(&line).unwrap(),
-            json!({"run":"r","seq":2,"id":"find","status":"answered","data":{"n":1},
-                   "messages":[{"level":"INFO","message":"m"}],"changed":["a"]})
+            json!({"run":"r","seq":2,"mode":"headless","id":"find","status":"answered",
+                   "data":{"n":1},"messages":[{"level":"INFO","message":"m"}],"changed":["a"]})
         );
+        let attached = ResultLine {
+            mode: Mode::Attached,
+            ..line.clone()
+        };
+        assert_eq!(serde_json::to_value(&attached).unwrap()["mode"], "attached");
         let refused = ResultLine {
             id: None,
             status: Status::Refused,

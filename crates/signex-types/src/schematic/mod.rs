@@ -861,9 +861,9 @@ mod symbol_geometry;
 mod text_extents;
 mod text_widths;
 pub use symbol_geometry::{
-    SymbolPrimitive, arc_polyline, instance_pins, lower_placed_symbol, lower_symbol, pin_direction,
-    pin_tips, primitives_bounds, primitives_bounds_in, text_aabb, text_aabb_lines,
-    text_aabb_with_width, text_height_mm,
+    SymbolPrimitive, arc_polyline, body_bounds, instance_pins, lower_placed_symbol, lower_symbol,
+    pin_direction, pin_tips, primitives_bounds, primitives_bounds_in, segment_crosses_interior,
+    symbol_crossed_by, text_aabb, text_aabb_lines, text_aabb_with_width, text_height_mm,
 };
 pub use text_extents::{
     StoredTextExtent, TextExtents, TextProbe, decide_width_mm, face_is_available, probes, text_hash,

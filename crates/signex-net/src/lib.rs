@@ -26,12 +26,19 @@ pub use net_class::{
 
 mod build;
 mod bus;
+mod bus_ends;
+pub use bus_ends::dangling_bus_ends;
+mod bus_intent;
+pub use bus_intent::{BusExtra, BusExtraKind, BusIntent, bus_intent, bus_reaches_other_sheets};
 #[cfg(test)]
 mod fixtures;
+mod join_rule;
 pub use build::{
-    ConnectedPoints, FloodElements, NetExtent, SegmentIndex, SheetConnectivity, SheetPinContacts,
-    best_net_name_of, build_netlist, connected_net_items, connected_points, flood_net_elements,
-    is_power_flag, name_carrying_ports, net_extent_at, point_on_segment, pt_key,
+    ConnectedPoints, EndSpec, ExtraItem, ExtraKind, FloodElements, IntentNet, NameChange,
+    NetExtent, PlacementIntent, RunEnd, SegmentIndex, SheetConnectivity, SheetPinContacts,
+    WireIntent, best_net_name_of, build_netlist, connected_net_items, connected_points,
+    flood_net_elements, has_connection_anchor, is_power_flag, name_carrying_ports, net_extent_at,
+    net_reaches_other_sheets, placement_intent, point_on_segment, pt_key, wire_intent,
 };
 pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
 
@@ -44,8 +51,8 @@ pub use signature::{NetSignature, net_members, net_signatures, net_signatures_at
 mod project;
 pub use project::{
     HoverPin, MultiNamedNet, NetAnchor, NetHover, NetIndex, NetMember, NetMemberKind, NetMembers,
-    NetNameSource, NumberingIssue, ProjectGraph, ProjectNetlist, ProjectRoot, SheetKey,
-    SheetNumbering, SheetOccurrence, SheetPage, StitchIssue, build_project_netlist,
+    NetNameSource, NumberingIssue, ProjectGraph, ProjectNetChange, ProjectNetlist, ProjectRoot,
+    SheetKey, SheetNumbering, SheetOccurrence, SheetPage, StitchIssue, build_project_netlist,
     build_project_netlist_indexed, instance_entry_designators, is_auto_name, multi_named_nets,
-    project_occurrences, sheet_numbering,
+    project_name_changes, project_occurrences, sheet_numbering,
 };

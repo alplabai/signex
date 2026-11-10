@@ -380,7 +380,7 @@ impl Signex {
         {
             let stepped = self.apply_grouped_step(group, direction, update_selection_info);
             // An agent's step says what it was (docs/AGENT_EDITS.md, "Undo").
-            if stepped && let Some(label) = self.document_state.agent_edits.labels.get(&group) {
+            if stepped && let Some(label) = self.document_state.agent_edits.step_text(group) {
                 let verb = if direction == StepDirection::Undo {
                     "Undone"
                 } else {

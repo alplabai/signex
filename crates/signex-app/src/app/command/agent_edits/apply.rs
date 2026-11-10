@@ -38,9 +38,21 @@ fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
 }
 
 /// Every edit parsed against its descriptor, before any of them runs, so a
-/// typo in the last one changes nothing. An edit never names its document: it
-/// acts on the call's, which is filled in where the command takes one.
-fn prepare(specs: &[EditSpec], document: &str) -> Result<Vec<Prepared>, String> {
+/// typo in the last one changes nothing. An edit acts on the call's document,
+/// which is filled in where the command takes one; it may name that document
+/// again (an id or a path, compared as the resolved document), never another.
+fn prepare(
+    app: &Signex,
+    specs: &[EditSpec],
+    document: &str,
+    call_path: Option<&std::path::Path>,
+) -> Result<Vec<Prepared>, String> {
+    let names_the_call = |value: &str| {
+        crate::app::document_ids::DocumentTarget::parse(value)
+            .ok()
+            .and_then(|target| app.resolve_document_target(&target).ok())
+            .is_some_and(|entry| entry.path.as_deref() == call_path)
+    };
     specs
         .iter()
         .enumerate()
@@ -50,9 +62,14 @@ fn prepare(specs: &[EditSpec], document: &str) -> Result<Vec<Prepared>, String> 
             if let Some(reason) = edit_refusal(&id) {
                 return Err(at(reason));
             }
-            if spec.operands.iter().any(|(name, _)| name == "document") {
+            // A list is one transaction on one sheet.
+            if spec
+                .operands
+                .iter()
+                .any(|(name, value)| name == "document" && !names_the_call(value))
+            {
                 return Err(at(
-                    "an edit acts on the call's document; leave out its `document`".into(),
+                    "an edit names another document than the list; leave out its `document`".into(),
                 ));
             }
             let takes_document = metadata_for(&id)
@@ -60,6 +77,7 @@ fn prepare(specs: &[EditSpec], document: &str) -> Result<Vec<Prepared>, String> 
             let mut texts: Vec<String> = spec
                 .operands
                 .iter()
+                .filter(|(name, _)| name != "document")
                 .map(|(name, value)| format!("{name}={value}"))
                 .collect();
             if takes_document {
@@ -106,7 +124,7 @@ pub(in crate::app::command) fn apply_edits(app: &mut Signex, args: &CommandArgs)
         Ok(specs) => specs,
         Err(reason) => return refused(reason),
     };
-    let edits = match prepare(&specs, &target.to_string()) {
+    let edits = match prepare(app, &specs, &target.to_string(), Some(path.as_path())) {
         Ok(edits) => edits,
         Err(reason) => return refused(reason),
     };
@@ -125,7 +143,7 @@ pub(in crate::app::command) fn apply_edits(app: &mut Signex, args: &CommandArgs)
     if edits.is_empty() {
         return (
             CommandOutcome::Answered(
-                json!({"changed": false, "revision": engine.revision(), "group": null, "edits": 0}),
+                json!({"changed": false, "revision": engine.revision(), "group": null, "edits": 0, "results": []}),
             ),
             Task::none(),
         );
@@ -153,11 +171,21 @@ fn run_listed(app: &mut Signex, path: &std::path::Path, edits: &[Prepared], labe
     }
     app.document_state.agent_edits.target = Some(path.to_path_buf());
     app.document_state.agent_edits.owed = RenderInvalidation::NONE;
+    app.document_state.agent_edits.listing = true;
     let mut tasks = Vec::new();
+    // What each edit answered, by index; `null` for one that only ran.
+    let mut results = Vec::new();
     let mut failure = None;
     for (index, edit) in edits.iter().enumerate() {
         match (edit.handler)(app, &edit.args) {
-            (CommandOutcome::Ran, task) => tasks.push(task),
+            (CommandOutcome::Ran, task) => {
+                tasks.push(task);
+                results.push(serde_json::Value::Null);
+            }
+            (CommandOutcome::Answered(answer), task) => {
+                tasks.push(task);
+                results.push(answer);
+            }
             (CommandOutcome::Disabled { reason }, _) => {
                 failure = Some(format!(
                     "edit {} (`{}`): {reason}",
@@ -178,6 +206,8 @@ fn run_listed(app: &mut Signex, path: &std::path::Path, edits: &[Prepared], labe
     }
     let owed = std::mem::take(&mut app.document_state.agent_edits.owed);
     app.document_state.agent_edits.target = None;
+    app.document_state.agent_edits.listing = false;
+    app.document_state.agent_edits.project_set.take();
     let Some(engine) = app.document_state.engines.get_mut(path) else {
         return refused(format!("{} is not loaded", path.display()));
     };
@@ -208,8 +238,7 @@ fn run_listed(app: &mut Signex, path: &std::path::Path, edits: &[Prepared], labe
         };
         app.document_state
             .agent_edits
-            .labels
-            .insert(group, label.clone());
+            .record_step(group, label.clone(), &app.agent.origin);
         app.after_sheet_change(path, invalidation);
         crate::diagnostics::log_info(format!(
             "{label}: {count} edit(s) applied to {} (undo group {})",
@@ -217,9 +246,9 @@ fn run_listed(app: &mut Signex, path: &std::path::Path, edits: &[Prepared], labe
                 .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
             group.get()
         ));
-        json!({"changed": true, "revision": revision, "group": group.get(), "label": label, "edits": count})
+        json!({"changed": true, "revision": revision, "group": group.get(), "label": label, "edits": count, "results": results})
     } else {
-        json!({"changed": false, "revision": revision, "group": null, "edits": count})
+        json!({"changed": false, "revision": revision, "group": null, "edits": count, "results": results})
     };
     (CommandOutcome::Answered(answer), Task::batch(tasks))
 }

@@ -1,5 +1,5 @@
-//! Subscriptions about windows: which one has focus, and the macOS system
-//! menu bar's row activations.
+//! Subscriptions about windows and the app: which window has focus, the
+//! macOS system menu bar's build failures, and quit requests.
 
 use iced::Subscription;
 
@@ -18,18 +18,15 @@ pub(super) fn window_focus() -> Subscription<Message> {
     })
 }
 
-/// Row activations of the macOS system menu bar; empty elsewhere.
-#[cfg(target_os = "macos")]
-pub(super) fn native_menu_activations() -> Subscription<Message> {
-    use iced::futures::StreamExt;
-    fn stream() -> impl iced::futures::Stream<Item = Message> {
-        crate::menu_bar::native::activations()
-            .map(|id| Message::Window(WindowMsg::NativeMenuItemActivated(id)))
-    }
-    Subscription::run(stream)
+/// A system menu bar that could not be built, with the reason; never fires
+/// off macOS.
+pub(super) fn native_menu_failures() -> Subscription<Message> {
+    iced::system::menu_failures().map(|reason| Message::Window(WindowMsg::NativeMenuFailed(reason)))
 }
 
-#[cfg(not(target_os = "macos"))]
-pub(super) fn native_menu_activations() -> Subscription<Message> {
-    Subscription::none()
+/// Quit requests from the system (macOS only). Always subscribed: with no
+/// listener the runtime answers a request "quit" at once, which would skip
+/// the unsaved-changes guard.
+pub(super) fn quit_requests() -> Subscription<Message> {
+    iced::system::quit_requests().map(|()| Message::Window(WindowMsg::QuitRequested))
 }

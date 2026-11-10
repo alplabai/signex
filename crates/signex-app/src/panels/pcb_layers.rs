@@ -176,6 +176,7 @@ fn layer_row<'a>(
             .height(14)
             .style(move |_: &Theme, _| svg::Style {
                 color: Some(text_c),
+                ..Default::default()
             }),
     )
     .padding([SP.xs, SP.s])

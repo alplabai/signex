@@ -308,7 +308,10 @@ where
         ActiveBarIcon::Svg(handle) => svg(handle)
             .width(Length::Fixed(icon_size))
             .height(Length::Fixed(icon_size))
-            .style(move |_: &Theme, _| iced::widget::svg::Style { color: svg_tint })
+            .style(move |_: &Theme, _| iced::widget::svg::Style {
+                color: svg_tint,
+                ..Default::default()
+            })
             .boxed(),
         ActiveBarIcon::Raster(handle) => image::<image::Handle>(handle)
             .width(Length::Fixed(icon_size))
@@ -323,7 +326,10 @@ where
             ActiveBarIcon::Svg(handle) => svg(handle)
                 .width(Length::Fixed(chevron_size))
                 .height(Length::Fixed(chevron_size))
-                .style(move |_: &Theme, _| iced::widget::svg::Style { color: svg_tint })
+                .style(move |_: &Theme, _| iced::widget::svg::Style {
+                    color: svg_tint,
+                    ..Default::default()
+                })
                 .boxed(),
             ActiveBarIcon::Raster(handle) => image::<image::Handle>(handle)
                 .width(Length::Fixed(chevron_size))

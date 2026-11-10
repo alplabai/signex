@@ -20,9 +20,19 @@ run reads one JSON command per line from standard input
 ({\"id\": \"place_junction\", \"args\": {\"at\": [10.16, 5.08]}}) and prints one
 JSON result line per command. It stops at the first command that is not ok.
 
+If a running Signex has the project open (Preferences > Allow agent
+connections), run works through it and the person sees the change live; with
+no such Signex it runs headless and holds the project for the run.
+
 OPTIONS (run):
+    --attach                only work through a running Signex; fail if none
+                            has the project open
+    --headless              only run headless; fail if a running Signex has
+                            the project open
     --keep-going            run the rest after a refused or failed command
     --save                  allow commands that write files (capability `save`)
+    --dry-run               run every command with dry_run=true (a wire or bus run
+                            reports and changes nothing); not with --save
     --allow <caps>          also allow capabilities: read, edit, save, export,
                             delete, library-write (default: read,edit)
     --allow-path <dir>      also allow paths inside <dir> (repeatable)
@@ -40,12 +50,27 @@ pub enum Invocation {
     Run(RunOptions),
 }
 
+/// Where a run may work (#1924): through a running Signex that has the
+/// project open, or on its own with no window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Route {
+    /// Attach if a running Signex has the project open, else headless.
+    Auto,
+    /// `--attach`: attach, or fail.
+    Attach,
+    /// `--headless`: headless, or fail if a running Signex has the project.
+    Headless,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct RunOptions {
     pub project: PathBuf,
+    pub route: Route,
     /// A command id and its `key=value` arguments, instead of reading stdin.
     pub single: Option<(String, Vec<String>)>,
     pub keep_going: bool,
+    /// Every command runs with `dry_run=true` (#2199).
+    pub dry_run: bool,
     pub capabilities: BTreeSet<Capability>,
     pub allow_paths: Vec<PathBuf>,
     pub limits: Limits,
@@ -69,10 +94,13 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation, Strin
 fn parse_run(mut args: impl Iterator<Item = String>) -> Result<RunOptions, String> {
     let mut positional: Vec<String> = Vec::new();
     let mut operands: Vec<String> = Vec::new();
+    let (mut attach, mut headless) = (false, false);
     let mut options = RunOptions {
         project: PathBuf::new(),
+        route: Route::Auto,
         single: None,
         keep_going: false,
+        dry_run: false,
         capabilities: Capability::DEFAULT.into_iter().collect(),
         allow_paths: Vec::new(),
         limits: Limits::default(),
@@ -80,7 +108,10 @@ fn parse_run(mut args: impl Iterator<Item = String>) -> Result<RunOptions, Strin
     while let Some(arg) = args.next() {
         let mut value = |flag: &str| args.next().ok_or_else(|| format!("{flag} needs a value"));
         match arg.as_str() {
+            "--attach" => attach = true,
+            "--headless" => headless = true,
             "--keep-going" => options.keep_going = true,
+            "--dry-run" => options.dry_run = true,
             "--save" => {
                 options.capabilities.insert(Capability::Save);
             }
@@ -106,6 +137,15 @@ fn parse_run(mut args: impl Iterator<Item = String>) -> Result<RunOptions, Strin
             _ => positional.push(arg),
         }
     }
+    if options.dry_run && options.capabilities.contains(&Capability::Save) {
+        return Err("--dry-run changes nothing, so it cannot be combined with --save".into());
+    }
+    options.route = match (attach, headless) {
+        (true, true) => return Err("--attach and --headless exclude each other".into()),
+        (true, false) => Route::Attach,
+        (false, true) => Route::Headless,
+        (false, false) => Route::Auto,
+    };
     let mut positional = positional.into_iter();
     options.project = positional
         .next()
@@ -188,7 +228,8 @@ mod tests {
             Capability::Delete,
         ]);
         assert_eq!(more.capabilities, want);
-        assert!(more.keep_going);
+        assert!(more.keep_going && !more.dry_run);
+        assert!(run(&["run", "p.snxprj", "--dry-run"]).dry_run);
     }
 
     #[test]
@@ -229,6 +270,18 @@ mod tests {
     }
 
     #[test]
+    fn a_run_attaches_if_it_can_unless_a_flag_forces_one_way() {
+        assert_eq!(run(&["run", "p.snxprj"]).route, Route::Auto);
+        assert_eq!(run(&["run", "p.snxprj", "--attach"]).route, Route::Attach);
+        assert_eq!(
+            run(&["run", "--headless", "p.snxprj"]).route,
+            Route::Headless
+        );
+        let both = parse_args(&["run", "p", "--attach", "--headless"]).unwrap_err();
+        assert!(both.contains("exclude each other"), "{both}");
+    }
+
+    #[test]
     fn a_bad_run_line_says_what_is_wrong() {
         for (args, wanted) in [
             (&["run"][..], "needs a project path"),
@@ -237,6 +290,18 @@ mod tests {
             (&["run", "p", "--save2"], "unknown option `--save2`"),
             (&["run", "p", "--arg", "a=b"], "--arg needs a command id"),
             (&["run", "p", "id", "extra"], "unexpected argument `extra`"),
+            (
+                &["run", "p", "--dry-run", "--save"],
+                "--dry-run changes nothing",
+            ),
+            (
+                &["run", "p", "--save", "--dry-run"],
+                "--dry-run changes nothing",
+            ),
+            (
+                &["run", "p", "--allow", "save", "--dry-run"],
+                "--dry-run changes nothing",
+            ),
             (
                 &["run", "p", "--max-commands", "many"],
                 "needs a whole number",

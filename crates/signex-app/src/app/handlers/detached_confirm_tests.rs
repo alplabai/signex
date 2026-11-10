@@ -111,8 +111,22 @@ fn cancel_leaves_everything_open_and_discard_all_exits() {
         app.document_state
             .is_document_dirty(std::path::Path::new("/p/board.snxsch"))
     );
-    // The confirm window closes; nothing else runs.
-    assert!(task.units() <= 1);
+    // The confirm window closes and the pending system quit request is
+    // cancelled exactly once; the main window stays open and nothing exits.
+    let mut driver = crate::task_driver::TaskDriver::new();
+    let outputs = driver.outputs(task).expect("settles");
+    assert_eq!(
+        driver.cancelled_quits(),
+        1,
+        "Cancel did not answer the quit"
+    );
+    assert!(!driver.has_exited());
+    assert!(
+        !outputs.iter().any(
+            |m| matches!(m, Message::Window(WindowMsg::SecondaryWindowClosed(id)) if *id == main)
+        ),
+        "Cancel closed the main window"
+    );
 
     let (mut app, main) = quit_app();
     raise_quit_confirm(&mut app, main);
@@ -121,6 +135,35 @@ fn cancel_leaves_everything_open_and_discard_all_exits() {
     )));
     assert!(app.ui_state.app_quit_confirm.is_none());
     assert!(task.units() > 0, "Discard All closes the main window");
+}
+
+/// A prompt window that vanishes without a close request is a Cancel, and it
+/// answers the pending system quit request: macOS would wait forever otherwise.
+#[test]
+fn a_vanished_quit_prompt_window_declines_the_system_quit_request() {
+    let _ = crate::diagnostics::init_logging();
+    let needle = "Quit: not quitting, Signex stays open";
+    let logged_before = crate::diagnostics::logged_count(needle);
+    let (mut app, main) = quit_app();
+    let confirm = raise_quit_confirm(&mut app, main);
+
+    let task = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(confirm)));
+
+    assert!(app.ui_state.app_quit_confirm.is_none());
+    let mut driver = crate::task_driver::TaskDriver::new();
+    let outputs = driver.outputs(task).expect("settles");
+    assert_eq!(driver.cancelled_quits(), 1, "the quit was not answered");
+    assert!(!driver.has_exited());
+    assert!(
+        !outputs.iter().any(
+            |m| matches!(m, Message::Window(WindowMsg::SecondaryWindowClosed(id)) if *id == main)
+        ),
+        "the main window closed"
+    );
+    assert!(
+        crate::diagnostics::logged_count(needle) > logged_before,
+        "the decision was not logged"
+    );
 }
 
 #[test]

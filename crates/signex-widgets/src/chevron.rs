@@ -40,7 +40,10 @@ pub fn chevron(open: bool, font: f32, ink: Color) -> svg::Svg<'static> {
         .width(side)
         .height(side)
         .rotation(Rotation::Floating(turn(open)))
-        .style(move |_: &Theme, _| svg::Style { color: Some(ink) })
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        })
 }
 
 #[cfg(test)]

@@ -237,7 +237,10 @@ fn project_card<'a>(
     let icon = svg(TreeIcon::SnxProject.svg())
         .width(14)
         .height(14)
-        .style(move |_: &Theme, _| svg::Style { color: Some(tint) });
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(tint),
+            ..Default::default()
+        });
     let tile = container(icon)
         .width(CARD_ICON_TILE)
         .height(CARD_ICON_TILE)
