@@ -91,7 +91,7 @@ pub(crate) use handlers::selection_workflow::passes_filter;
 pub use handlers::window_geometry_events::GeometryReadout;
 pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, tiles};
 pub use new_project::{NewProjectMsg, NewProjectState};
-pub use sheet_numbering::{SheetNumberingMsg, SheetNumberingState};
+pub use sheet_numbering::{NumberingProblem, SheetNumberingMsg, SheetNumberingState};
 pub use signex_history::History;
 pub(crate) use signex_history::SavePoint;
 #[cfg(test)]

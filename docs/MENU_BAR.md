@@ -170,13 +170,18 @@ with its file and its number.
 - Apply writes each changed number into the `ChildSheet.instances` entry of
   the parent sheet's sheet symbol (`Command::SetChildSheetInstances`), scoped
   to the project name. A number equal to the page's position clears the entry
-  instead. Every parent sheet takes the change in one undo group, so one
+  instead. An entry with no project is shared by every project that uses the
+  file, so it is never changed or dropped: the project's own entry is written
+  ahead of it (a clear writes the position there). Every parent sheet takes the change in one undo group, so one
   Ctrl+Z on a changed sheet takes all of them back. A parent sheet that is not
   open is loaded into a tabless engine and left unsaved, as project Replace
   does; nothing is written to disk until the user saves.
 - Apply is refused, with the reason in the dialog and the Messages panel, when
   a sheet was opened, closed or had a sheet symbol changed since the read, or
-  when a parent sheet is being saved or moved, or is read-only.
+  when a parent sheet is being saved or moved, or is read-only (an open one,
+  or a closed one written by a newer Signex). These checks run before any
+  sheet changes; if a sheet still fails part-way, every sheet already changed
+  is put back and the sheets it loaded are dropped.
 
 ## Window ▸ Tile Horizontally / Tile Vertically {#window-tile}
 

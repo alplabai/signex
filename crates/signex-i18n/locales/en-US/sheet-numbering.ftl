@@ -41,8 +41,24 @@ dialog-sheet-numbering-gap = No page is numbered { $numbers }.
 # A page numbered above the page count $count.
 dialog-sheet-numbering-out-of-range = Page { $page } is numbered { $number }, above the page count { $count }.
 
-# Apply was refused; $why says why.
-dialog-sheet-numbering-apply-failed = Nothing was changed: { $why }
+# The project's root sheet is absent or does not parse; $path is its file.
+dialog-sheet-numbering-err-root-unreadable = The root sheet { $path } could not be read.
+
+# Apply was refused: a sheet was opened, closed or had a sheet symbol changed
+# while the dialog was open.
+dialog-sheet-numbering-err-stale = Nothing was changed: the sheets changed while this dialog was open. Close it and open it again.
+
+# Apply was refused: the closed sheet $path is being saved, renamed or moved.
+dialog-sheet-numbering-err-busy = Nothing was changed: { $path } is being saved or moved. Try again once it finishes.
+
+# Apply was refused: $path was written by a newer Signex and opens read-only.
+dialog-sheet-numbering-err-read-only = Nothing was changed: { $path } is read-only (written by a newer Signex).
+
+# Apply stopped: the closed sheet $path could not be loaded; every sheet was put back.
+dialog-sheet-numbering-err-not-loaded = Nothing was changed: { $path } could not be loaded.
+
+# Apply stopped: $path refused the change; every sheet was put back.
+dialog-sheet-numbering-err-not-changed = Nothing was changed: { $path } could not be changed.
 
 dialog-sheet-numbering-auto = Auto-number
 dialog-sheet-numbering-cancel = Cancel

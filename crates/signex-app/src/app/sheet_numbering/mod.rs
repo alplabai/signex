@@ -14,13 +14,15 @@ mod state;
 mod update;
 
 #[cfg(test)]
+mod apply_tests;
+#[cfg(test)]
 mod tests;
 
 use std::sync::Arc;
 
 pub(crate) use read::{NumberingRead, NumberingRow};
 pub(crate) use state::NumberedRow;
-pub use state::SheetNumberingState;
+pub use state::{NumberingProblem, SheetNumberingState};
 
 impl From<SheetNumberingMsg> for crate::app::Message {
     fn from(msg: SheetNumberingMsg) -> Self {
@@ -36,7 +38,7 @@ pub enum SheetNumberingMsg {
     /// Read `generation` of the project's pages finished.
     Read {
         generation: u64,
-        result: Result<Arc<NumberingRead>, String>,
+        result: Result<Arc<NumberingRead>, NumberingProblem>,
     },
     /// The number of row `row` was typed.
     NumberEdited {

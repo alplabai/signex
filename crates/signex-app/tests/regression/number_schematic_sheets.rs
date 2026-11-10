@@ -8,7 +8,8 @@
 
 use signex_app::app::command_palette::{CommandAction, build_catalog};
 use signex_app::app::{
-    CommandPaletteMsg, EditMsg, Message, SheetNumberingMsg, Signex, TabInfo, TabKind, UiMsg,
+    CommandPaletteMsg, EditMsg, Message, NumberingProblem, SheetNumberingMsg, Signex, TabInfo,
+    TabKind, UiMsg,
 };
 use signex_app::keymap::{
     AppCommandId, ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutTrigger,
@@ -308,6 +309,74 @@ fn a_loose_sheet_without_a_project_opens_nothing() {
     rig.app.document_state.tabs[0].project_id = None;
     crate::settle_support::settle(&mut rig.app, crate::menu_support::menu_row(COMMAND));
     assert!(rig.app.ui_state.sheet_numbering.is_none());
+}
+
+/// The dialog read, `/A/L` (stored in the closed power.snxsch) and `/C` (in
+/// the open root) typed, ready to Apply.
+fn typed(rig: &mut Rig) {
+    crate::settle_support::settle(&mut rig.app, crate::menu_support::menu_row(COMMAND));
+    assert_dialog_read(&rig.app);
+    type_number(&mut rig.app, 2, "6");
+    type_number(&mut rig.app, 3, "7");
+}
+
+/// Apply was refused with `problem`: the dialog is still open and says so,
+/// and no sheet changed.
+fn assert_refused(rig: &Rig, problem: &NumberingProblem) {
+    let state = rig
+        .app
+        .ui_state
+        .sheet_numbering
+        .as_ref()
+        .expect("still open");
+    assert_eq!(state.problem(), Some(problem));
+    assert!(entries(&rig.app, &rig.root, C).is_empty(), "root unchanged");
+    assert!(
+        !rig.app.document_state.engines.contains_key(&rig.power),
+        "the closed sheet was not loaded"
+    );
+}
+
+#[test]
+fn apply_refuses_when_a_sheet_was_opened_or_closed_since_the_read() {
+    let mut rig = rig();
+    typed(&mut rig);
+    // An engine came or went (`insert_engine` / `remove_engine` move it).
+    rig.app.document_state.documents_epoch += 1;
+    send(&mut rig.app, SheetNumberingMsg::ApplyRequested);
+    assert_refused(&rig, &NumberingProblem::Stale);
+}
+
+#[test]
+fn apply_refuses_when_a_sheet_symbol_changed_since_the_read() {
+    let mut rig = rig();
+    typed(&mut rig);
+    rig.app
+        .document_state
+        .engines
+        .get_mut(&rig.root)
+        .expect("root engine")
+        .execute(signex_engine::Command::ModifyChildSheet {
+            sheet_id: uuid::Uuid::from_u128(A),
+            name: Some("Power".into()),
+            filename: None,
+        })
+        .expect("rename the sheet symbol");
+    send(&mut rig.app, SheetNumberingMsg::ApplyRequested);
+    assert_refused(&rig, &NumberingProblem::Stale);
+}
+
+#[test]
+fn apply_refuses_while_a_closed_parent_sheet_is_being_moved() {
+    let mut rig = rig();
+    typed(&mut rig);
+    let _op = rig.app.document_state.pending_path_ops.begin(
+        signex_app::app::path_ops::PathOpKind::Rename,
+        vec![rig.power.clone()],
+        signex_app::app::CaseFold::default(),
+    );
+    send(&mut rig.app, SheetNumberingMsg::ApplyRequested);
+    assert_refused(&rig, &NumberingProblem::Busy(rig.power.clone()));
 }
 
 /// Give `command` the key `keys` in a custom copy of the active profile.

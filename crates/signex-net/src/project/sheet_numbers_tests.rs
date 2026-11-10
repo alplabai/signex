@@ -361,39 +361,78 @@ fn a_placed_page_names_the_symbol_that_places_it() {
 #[test]
 fn setting_a_page_number_edits_the_entry_that_numbers_it() {
     let (a, b) = (path(&[A]).to_string(), path(&[B]).to_string());
-    let other = SheetInstance {
-        project: "other".to_string(),
-        ..entry(&b, "7")
+    let scoped = |path: &str, page: &str, project: &str| SheetInstance {
+        project: project.to_string(),
+        ..entry(path, page)
     };
-    let elsewhere = entry(&a, "3");
-    let mine = entry(&b, "9");
+    let other = scoped(&b, "7", "other");
+    let elsewhere = scoped(&a, "3", "p");
+    let mine = scoped(&b, "9", "p");
     let parent = path(&[B]);
     let set = with_page_number(
         &[other.clone(), elsewhere.clone(), mine],
         &parent,
         "p",
         Some(4),
+        2,
     );
-    assert_eq!(set, vec![other, elsewhere.clone(), entry(&b, "4")]);
+    assert_eq!(set, vec![other, elsewhere.clone(), scoped(&b, "4", "p")]);
     // No entry yet: a new one, scoped to the project.
-    let added = with_page_number(std::slice::from_ref(&elsewhere), &parent, "p", Some(2));
+    let added = with_page_number(std::slice::from_ref(&elsewhere), &parent, "p", Some(2), 3);
     assert_eq!(added[1].project, "p");
     assert_eq!(InstancePath::parse(&added[1].path), Some(parent.clone()));
     assert_eq!(added[1].page, "2");
 }
 
 #[test]
-fn clearing_a_page_number_drops_every_entry_that_could_number_it() {
+fn clearing_a_page_number_drops_the_projects_own_entries() {
     let parent = path(&[B]);
     let (a, b) = (path(&[A]).to_string(), path(&[B]).to_string());
-    let elsewhere = entry(&a, "3");
+    let scoped = |path: &str, page: &str| SheetInstance {
+        project: "p".to_string(),
+        ..entry(path, page)
+    };
+    let elsewhere = scoped(&a, "3");
     let cleared = with_page_number(
-        &[entry(&b, "9"), elsewhere.clone(), entry(&b, "5")],
+        &[scoped(&b, "9"), elsewhere.clone(), scoped(&b, "5")],
         &parent,
         "p",
         None,
+        2,
     );
     assert_eq!(cleared, vec![elsewhere]);
+}
+
+/// An entry with no project is shared by every project using the file: one
+/// project's edit leaves it and writes its own entry ahead of it.
+#[test]
+fn a_shared_entry_is_kept_and_overridden_by_a_scoped_one() {
+    let parent = path(&[B]);
+    let b = path(&[B]).to_string();
+    let shared = entry(&b, "9");
+    let ours = |page: &str| SheetInstance {
+        project: "p".to_string(),
+        ..entry(&b, page)
+    };
+    let set = with_page_number(std::slice::from_ref(&shared), &parent, "p", Some(4), 2);
+    assert_eq!(set, vec![ours("4"), shared.clone()]);
+    // Clearing cannot drop the shared entry, so the position is written
+    // ahead of it.
+    let cleared = with_page_number(std::slice::from_ref(&shared), &parent, "p", None, 2);
+    assert_eq!(cleared, vec![ours("2"), shared.clone()]);
+    // A scoped entry behind the shared one did not number the page; it is
+    // replaced by one ahead of it.
+    let behind = with_page_number(&[shared.clone(), ours("7")], &parent, "p", Some(5), 2);
+    assert_eq!(behind, vec![ours("5"), shared.clone()]);
+    // What the project then prints: the scoped number, not the shared one.
+    let mut files = example();
+    with_entry(&mut files, "power.snxsch", 0, shared.clone());
+    let key = SheetKey::new("ldo.snxsch");
+    let (numbering, _) = number(&files, &["root.snxsch"]);
+    assert_eq!(numbering.number_of(&key, &path(&[B, L])), Some(9));
+    files.get_mut("power.snxsch").unwrap().child_sheets[0].instances = set;
+    let (numbering, _) = number(&files, &["root.snxsch"]);
+    assert_eq!(numbering.number_of(&key, &path(&[B, L])), Some(4));
 }
 
 #[test]

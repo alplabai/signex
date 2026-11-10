@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use signex_types::schematic::{InstancePath, SchematicSheet};
 use uuid::Uuid;
 
+use super::state::NumberingProblem;
 use crate::app::project_sheets::{self, ProjectSheetPlan};
 
 /// Where a page's manual number is stored: a sheet symbol in its parent.
@@ -56,7 +57,7 @@ pub(crate) fn read_numbering(
     project_dir: Option<&Path>,
     project_name: &str,
     open: &HashSet<PathBuf>,
-) -> Result<NumberingRead, String> {
+) -> Result<NumberingRead, NumberingProblem> {
     let set = plan.assemble();
     let fold = set.fold;
     let root = plan.root();
@@ -67,10 +68,7 @@ pub(crate) fn read_numbering(
     let graph = project_sheets::project_graph_with(&set.sheets, base, Some(root), fold);
     let root_key = project_sheets::sheet_key_with(root, base, fold);
     if !graph.sheets.contains_key(&root_key) {
-        return Err(format!(
-            "the root sheet {} could not be read",
-            root.display()
-        ));
+        return Err(NumberingProblem::RootUnreadable(root.to_path_buf()));
     }
     let roots = project_sheets::project_roots(root_key, &set, &graph, base, fold);
     let project = signex_net::ProjectGraph {

@@ -17,13 +17,14 @@ use signex_engine::Command;
 use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
-use super::state::PageEdit;
+use super::state::{NumberingProblem, PageEdit};
 use crate::app::{Message, Signex};
 
 const LABEL: &str = "Number Schematic Sheets";
 
-/// One sheet symbol's new number: which placement, and the page or `None`.
-type SymbolEdit = (Uuid, InstancePath, Option<usize>);
+/// One sheet symbol's new number: which placement, the page or `None`, and
+/// the page's position (its automatic number).
+type SymbolEdit = (Uuid, InstancePath, Option<usize>, usize);
 
 /// A parent sheet Apply changed, before the run is committed.
 struct Changed {
@@ -49,9 +50,7 @@ impl Signex {
         let stale = state.epoch != self.document_state.documents_epoch
             || state.child_sheets != self.child_sheet_signature();
         if stale {
-            return self.refuse_sheet_numbers(
-                "The sheets changed while this dialog was open. Close it and open it again.",
-            );
+            return self.refuse_sheet_numbers(NumberingProblem::Stale);
         }
         let edits = by_parent(&read.rows, &state.edits());
         match self.write_sheet_numbers(&read, &project_name, edits) {
@@ -61,15 +60,20 @@ impl Signex {
                 ));
                 self.ui_state.sheet_numbering = None;
             }
-            Err(why) => return self.refuse_sheet_numbers(&why),
+            Err(problem) => return self.refuse_sheet_numbers(problem),
         }
         Task::none()
     }
 
-    fn refuse_sheet_numbers(&mut self, why: &str) -> Task<Message> {
-        crate::diagnostics::log_warning(format!("{LABEL}: nothing was changed. {why}"));
+    /// Keep the dialog open with `problem` shown; the Messages panel gets the
+    /// English line.
+    fn refuse_sheet_numbers(&mut self, problem: NumberingProblem) -> Task<Message> {
+        crate::diagnostics::log_warning(format!(
+            "{LABEL}: nothing was changed: {}",
+            problem.english()
+        ));
         if let Some(state) = self.ui_state.sheet_numbering.as_mut() {
-            state.error = Some(why.to_string());
+            state.error = Some(problem);
         }
         Task::none()
     }
@@ -81,7 +85,7 @@ impl Signex {
         read: &super::NumberingRead,
         project_name: &str,
         edits: BTreeMap<PathBuf, Vec<SymbolEdit>>,
-    ) -> Result<usize, String> {
+    ) -> Result<usize, NumberingProblem> {
         // Every check before the first change: a refusal changes nothing.
         let mut targets = Vec::with_capacity(edits.len());
         for (listed, list) in edits {
@@ -91,15 +95,19 @@ impl Signex {
                 && (self.document_state.document_saves.is_saving(&path)
                     || self.refuse_while_path_op(&path, "renumbered").is_err())
             {
-                return Err(format!("{} is being saved or moved.", path.display()));
+                return Err(NumberingProblem::Busy(path));
             }
-            if let Some(engine) = self.document_state.engines.get(&path)
-                && engine.document().unknown.newer_minor_source.is_some()
-            {
-                return Err(format!(
-                    "{} is read-only (written by a newer Signex).",
-                    path.display()
-                ));
+            // An open sheet's live document, else the copy a closed one will
+            // be loaded from: either way the engine would refuse the edit.
+            let read_only = match self.document_state.engines.get(&path) {
+                Some(engine) => engine.document().is_read_only(),
+                None => read
+                    .loaded
+                    .get(&listed)
+                    .is_some_and(signex_types::schematic::SchematicSheet::is_read_only),
+            };
+            if read_only {
+                return Err(NumberingProblem::ReadOnly(path));
             }
             targets.push((listed, path, tabless, list));
         }
@@ -108,7 +116,7 @@ impl Signex {
         for (listed, path, tabless, list) in targets {
             if tabless && !self.install_tabless_engine(LABEL, &path, read.loaded.get(&listed)) {
                 self.roll_back_sheet_numbers(group, &changed);
-                return Err(format!("{} could not be loaded.", path.display()));
+                return Err(NumberingProblem::NotLoaded(path));
             }
             let Some(engine) = self.document_state.engines.get_mut(&path) else {
                 continue;
@@ -130,7 +138,7 @@ impl Signex {
                     );
                     self.drop_unchanged_tabless(&path, tabless);
                     self.roll_back_sheet_numbers(group, &changed);
-                    return Err(format!("{} could not be changed.", path.display()));
+                    return Err(NumberingProblem::NotChanged(path));
                 }
             }
         }
@@ -193,10 +201,12 @@ fn by_parent(
         let Some(placement) = rows.get(edit.row).and_then(|r| r.placement.as_ref()) else {
             continue;
         };
+        let position = rows[edit.row].position;
         grouped.entry(placement.parent.clone()).or_default().push((
             placement.symbol,
             placement.parent_path.clone(),
             edit.page,
+            position,
         ));
     }
     grouped
@@ -211,7 +221,7 @@ fn number_commands(
     list: &[SymbolEdit],
 ) -> Vec<Command> {
     let mut entries: BTreeMap<Uuid, Vec<signex_types::schematic::SheetInstance>> = BTreeMap::new();
-    for (symbol, parent_path, page) in list {
+    for (symbol, parent_path, page, position) in list {
         let current = match entries.get(symbol) {
             Some(edited) => edited.clone(),
             None => match document.child_sheets.iter().find(|cs| cs.uuid == *symbol) {
@@ -219,7 +229,8 @@ fn number_commands(
                 None => continue,
             },
         };
-        let next = signex_net::with_page_number(&current, parent_path, project_name, *page);
+        let next =
+            signex_net::with_page_number(&current, parent_path, project_name, *page, *position);
         entries.insert(*symbol, next);
     }
     entries

@@ -97,7 +97,10 @@ impl Signex {
             move |result| {
                 Message::from(SheetNumberingMsg::Read {
                     generation,
-                    result: result.and_then(|read| read).map(Arc::new),
+                    result: result
+                        .map_err(super::NumberingProblem::ReadFailed)
+                        .and_then(|read| read)
+                        .map(Arc::new),
                 })
             },
         )
@@ -108,7 +111,7 @@ impl Signex {
     fn sheet_numbering_read(
         &mut self,
         generation: u64,
-        result: &Result<Arc<super::NumberingRead>, String>,
+        result: &Result<Arc<super::NumberingRead>, super::NumberingProblem>,
     ) -> Task<Message> {
         let epoch = self.document_state.documents_epoch;
         let signature = self.child_sheet_signature();
@@ -135,9 +138,12 @@ impl Signex {
                 }
                 state.show(Arc::clone(read));
             }
-            Err(why) => {
-                crate::diagnostics::log_warning(format!("Number Schematic Sheets: {why}"));
-                state.error = Some(why.clone());
+            Err(problem) => {
+                crate::diagnostics::log_warning(format!(
+                    "Number Schematic Sheets: {}",
+                    problem.english()
+                ));
+                state.error = Some(problem.clone());
             }
         }
         Task::none()

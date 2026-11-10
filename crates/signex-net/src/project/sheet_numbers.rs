@@ -157,36 +157,66 @@ pub fn sheet_numbering(
 
 /// `instances` (a sheet symbol's entries) with the manual number of the page
 /// it places inside parent placement `parent` set to `page`, or cleared with
-/// `None` so the page takes its position. The entry that numbers the page
-/// (see [`sheet_numbering`]) is edited in place; a new one is scoped to
-/// `project_name`. Clearing drops every matching entry, since a later one
-/// would otherwise take over. Entries for other placements or projects are
+/// `None` so the page takes `position`, its automatic number.
+///
+/// Only entries scoped to `project_name` are edited or dropped. An entry with
+/// an empty `project` is shared by every project that uses the file, so it is
+/// left as it is; when one numbers this placement, the change is written as a
+/// new `project_name` entry ahead of it, which wins as the first match (a
+/// clear writes `position`). Entries for other placements or projects are
 /// kept as they are.
 pub fn with_page_number(
     instances: &[SheetInstance],
     parent: &InstancePath,
     project_name: &str,
     page: Option<usize>,
+    position: usize,
 ) -> Vec<SheetInstance> {
-    let numbers_it = |entry: &SheetInstance| {
-        (entry.project.is_empty() || entry.project == project_name)
-            && InstancePath::parse(&entry.path).as_ref() == Some(parent)
-    };
-    let Some(page) = page else {
-        return instances
-            .iter()
-            .filter(|entry| !numbers_it(entry))
-            .cloned()
-            .collect();
+    let places_here =
+        |entry: &SheetInstance| InstancePath::parse(&entry.path).as_ref() == Some(parent);
+    let scoped = |entry: &SheetInstance| places_here(entry) && entry.project == project_name;
+    let shared = |entry: &SheetInstance| {
+        places_here(entry) && entry.project.is_empty() && !project_name.is_empty()
     };
     let mut out = instances.to_vec();
-    match out.iter_mut().find(|entry| numbers_it(entry)) {
-        Some(entry) => entry.page = page.to_string(),
-        None => out.push(SheetInstance {
-            project: project_name.to_string(),
-            path: parent.to_string(),
-            page: page.to_string(),
-        }),
+    let first_scoped = out.iter().position(&scoped);
+    let first_shared = out.iter().position(&shared);
+    // A scoped entry ahead of every shared one is the one that numbers the
+    // page: edit it in place (or drop it, and any later scoped one, on clear).
+    let scoped_wins = match (first_scoped, first_shared) {
+        (Some(s), Some(h)) => s < h,
+        (Some(_), None) => true,
+        _ => false,
+    };
+    if scoped_wins {
+        match page {
+            Some(page) => {
+                if let Some(at) = first_scoped {
+                    out[at].page = page.to_string();
+                }
+            }
+            None => out.retain(|entry| !scoped(entry)),
+        }
+        if page.is_some() || first_shared.is_none() {
+            return out;
+        }
+    }
+    // No scoped entry numbers the page. With no shared one either, a clear
+    // has nothing to do; otherwise a scoped entry goes ahead of the shared one.
+    let number = match (page, first_shared) {
+        (Some(page), _) => page,
+        (None, Some(_)) => position,
+        (None, None) => return out,
+    };
+    out.retain(|entry| !scoped(entry));
+    let entry = SheetInstance {
+        project: project_name.to_string(),
+        path: parent.to_string(),
+        page: number.to_string(),
+    };
+    match out.iter().position(&shared) {
+        Some(at) => out.insert(at, entry),
+        None => out.push(entry),
     }
     out
 }

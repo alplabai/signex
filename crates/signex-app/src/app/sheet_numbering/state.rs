@@ -2,6 +2,7 @@
 //! data; the rules come from `signex_net` (`parse_page_number`,
 //! `number_issues`).
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use signex_net::NumberingIssue;
@@ -30,7 +31,52 @@ pub struct SheetNumberingState {
     /// cleared too, so the page follows its position from now on.
     pub(crate) clear_manual: bool,
     /// Why the read or Apply failed, shown in the dialog.
-    pub(crate) error: Option<String>,
+    pub(crate) error: Option<NumberingProblem>,
+}
+
+/// Why the dialog could not read the project or Apply refused. The dialog
+/// words it through the catalog; the Messages panel line is [`Self::english`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NumberingProblem {
+    /// The project's root sheet is absent or does not parse.
+    RootUnreadable(PathBuf),
+    /// The read worker itself failed; the text is the system's reason.
+    ReadFailed(String),
+    /// A sheet was opened or closed, or a sheet symbol changed, since the read.
+    Stale,
+    /// A parent sheet that is not open is being saved, renamed or moved.
+    Busy(PathBuf),
+    /// A parent sheet was written by a newer Signex and opens read-only.
+    ReadOnly(PathBuf),
+    /// A parent sheet that is not open could not be loaded.
+    NotLoaded(PathBuf),
+    /// A parent sheet refused the change.
+    NotChanged(PathBuf),
+}
+
+impl NumberingProblem {
+    /// The reason in English, for the Messages panel.
+    pub(crate) fn english(&self) -> String {
+        match self {
+            Self::RootUnreadable(path) => {
+                format!("the root sheet {} could not be read", path.display())
+            }
+            Self::ReadFailed(why) => format!("the sheets could not be read: {why}"),
+            Self::Stale => {
+                "the sheets changed while the dialog was open; close it and open it again"
+                    .to_string()
+            }
+            Self::Busy(path) => format!("{} is being saved or moved", path.display()),
+            Self::ReadOnly(path) => {
+                format!(
+                    "{} is read-only (written by a newer Signex)",
+                    path.display()
+                )
+            }
+            Self::NotLoaded(path) => format!("{} could not be loaded", path.display()),
+            Self::NotChanged(path) => format!("{} could not be changed", path.display()),
+        }
+    }
 }
 
 /// One change Apply makes: set the manual number of row `row`, or clear it
@@ -76,6 +122,11 @@ impl SheetNumberingState {
         self.read = Some(read);
         self.clear_manual = false;
         self.error = None;
+    }
+
+    /// Why the read failed or Apply refused, while the dialog shows it.
+    pub fn problem(&self) -> Option<&NumberingProblem> {
+        self.error.as_ref()
     }
 
     /// How many pages the project has; `None` while the read runs.

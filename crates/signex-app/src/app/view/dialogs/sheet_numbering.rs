@@ -10,7 +10,9 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{text, text_input};
 
 use super::sizes;
-use crate::app::sheet_numbering::{NumberedRow, SheetNumberingMsg, SheetNumberingState};
+use crate::app::sheet_numbering::{
+    NumberedRow, NumberingProblem, SheetNumberingMsg, SheetNumberingState,
+};
 use crate::app::{Message, Signex};
 use crate::styles::{
     DialogButtonKind, PillTone, Spacing, TypeScale, dialog_button, dialog_footer_split, ti, tokens,
@@ -114,11 +116,7 @@ fn body<'a>(
             .boxed(),
     );
     let status = match (&state.read, &state.error) {
-        (None, Some(why)) => Some(t!(
-            i18n,
-            ids::DIALOG_SHEET_NUMBERING_READ_FAILED,
-            "why" => why.as_str()
-        )),
+        (None, Some(problem)) => Some(problem_text(problem, i18n)),
         (None, None) => Some(t!(i18n, ids::DIALOG_SHEET_NUMBERING_READING)),
         (Some(read), _) if read.rows.is_empty() => {
             Some(t!(i18n, ids::DIALOG_SHEET_NUMBERING_NO_PAGES))
@@ -135,6 +133,44 @@ fn body<'a>(
         col = col.push(line.into_element(tokens));
     }
     col.boxed()
+}
+
+/// Why the read failed or Apply refused, in the dialog's language.
+fn problem_text(problem: &NumberingProblem, i18n: &I18n) -> Localized {
+    let path = |path: &std::path::Path| path.display().to_string();
+    match problem {
+        NumberingProblem::RootUnreadable(root) => t!(
+            i18n,
+            ids::DIALOG_SHEET_NUMBERING_ERR_ROOT_UNREADABLE,
+            "path" => path(root)
+        ),
+        NumberingProblem::ReadFailed(why) => t!(
+            i18n,
+            ids::DIALOG_SHEET_NUMBERING_READ_FAILED,
+            "why" => why.as_str()
+        ),
+        NumberingProblem::Stale => t!(i18n, ids::DIALOG_SHEET_NUMBERING_ERR_STALE),
+        NumberingProblem::Busy(sheet) => t!(
+            i18n,
+            ids::DIALOG_SHEET_NUMBERING_ERR_BUSY,
+            "path" => path(sheet)
+        ),
+        NumberingProblem::ReadOnly(sheet) => t!(
+            i18n,
+            ids::DIALOG_SHEET_NUMBERING_ERR_READ_ONLY,
+            "path" => path(sheet)
+        ),
+        NumberingProblem::NotLoaded(sheet) => t!(
+            i18n,
+            ids::DIALOG_SHEET_NUMBERING_ERR_NOT_LOADED,
+            "path" => path(sheet)
+        ),
+        NumberingProblem::NotChanged(sheet) => t!(
+            i18n,
+            ids::DIALOG_SHEET_NUMBERING_ERR_NOT_CHANGED,
+            "path" => path(sheet)
+        ),
+    }
 }
 
 /// One line under the table and how loud it is.
@@ -156,12 +192,8 @@ impl Note {
 /// Why Apply is off or refused, then the clashes, gaps and high numbers.
 fn notes(state: &SheetNumberingState, i18n: &I18n) -> Vec<Note> {
     let mut notes = Vec::new();
-    if let Some(why) = state.error.as_deref() {
-        notes.push(Note::Danger(t!(
-            i18n,
-            ids::DIALOG_SHEET_NUMBERING_APPLY_FAILED,
-            "why" => why
-        )));
+    if let Some(problem) = state.error.as_ref() {
+        notes.push(Note::Danger(problem_text(problem, i18n)));
     }
     if state.has_invalid() {
         notes.push(Note::Danger(t!(i18n, ids::DIALOG_SHEET_NUMBERING_INVALID)));
