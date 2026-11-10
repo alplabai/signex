@@ -375,16 +375,17 @@ fn a_hierarchical_label_whose_entry_the_parent_wired_to_another_rail_is_a_short(
 }
 
 #[test]
-fn a_hidden_local_name_is_still_carried_by_its_net() {
+fn a_copy_of_a_hidden_local_name_on_its_placement_is_no_rename() {
     // SensorA: hierarchical SDA and the local SDA_INT on one net, behind the
     // port before the edit; the parent wired I2C1_SDA to SensorA.SDA. On the
-    // child, SDA_INT again on that net, SDA_INT on an unnamed child wire
-    // (joining it by name) or a global SDA_INT is no rename: the net carries
-    // the name (6761836527 points 5 and 6).
-    for (id, at) in [
-        ("place_net_label", "at=5.08,0"),
-        ("place_net_label", "at=5.08,20.32"),
-        ("place_global_label", "at=5.08,0"),
+    // child, a local SDA_INT again on that net, or on an unnamed child wire
+    // (joining it by name), stays behind the port: no change. A global SDA_INT
+    // is an own name everywhere that the parent's net does not carry: a
+    // rename (6761836527 points 5 and 6).
+    for (id, at, refused) in [
+        ("place_net_label", "at=5.08,0", false),
+        ("place_net_label", "at=5.08,20.32", false),
+        ("place_global_label", "at=5.08,0", true),
     ] {
         let dir = tempfile::tempdir().unwrap();
         let mut top = sensor_parent();
@@ -397,8 +398,46 @@ fn a_hidden_local_name_is_still_carried_by_its_net() {
         write(&dir.path().join("c.snxsch"), child);
         let mut app = open_child(&dir);
         let outcome = run(&mut app, id, &[at, "text=SDA_INT"]);
-        assert_eq!(outcome, CommandOutcome::Ran, "{id} {at}");
+        if refused {
+            let reason = refusal(outcome);
+            assert!(reason.contains("reach it from other sheets"), "{reason}");
+        } else {
+            assert_eq!(outcome, CommandOutcome::Ran, "{id} {at}");
+        }
     }
+}
+
+#[test]
+fn a_parent_label_named_like_a_hidden_child_name_is_a_rename() {
+    // The parent wires SensorA.SDA to SensorB.SDA. SensorA's net carries the
+    // hierarchical SDA and the local SDA_INT, SensorB's the hierarchical SDA
+    // and the global I2C1_SDA. SDA_INT on the parent's wire is a new own name:
+    // the child's SDA_INT is hidden in SensorA only (6761836527 points 5, 6).
+    let dir = tempfile::tempdir().unwrap();
+    let mut top = sensor_parent();
+    top.child_sheets.push(sheet_symbol(
+        "SensorB",
+        "b.snxsch",
+        &[("SDA", (0.0, 20.32))],
+    ));
+    top.wires.push(wire((0.0, 0.0), (0.0, 20.32)));
+    let mut a = child_with(&["SDA"]);
+    a.labels.push(net_label("SDA_INT", (10.16, 0.0)));
+    let mut b = child_with(&["SDA"]);
+    b.labels.push(global("I2C1_SDA", (10.16, 0.0)));
+    write(&dir.path().join("top.snxsch"), top);
+    write(&dir.path().join("c.snxsch"), a);
+    write(&dir.path().join("b.snxsch"), b);
+    let mut app = open_project(&dir);
+    let label = ["at=0,10.16", "text=SDA_INT"];
+    let reason = refusal(run(&mut app, "place_net_label", &label));
+    assert!(reason.contains("reach it from other sheets"), "{reason}");
+    let outcome = run(
+        &mut app,
+        "place_net_label",
+        &[label[0], label[1], "allow_merge=true"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
 }
 
 #[test]

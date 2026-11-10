@@ -13,10 +13,6 @@ pub(crate) struct NetNames {
     pub own: BTreeSet<String>,
     /// Hierarchical label names.
     pub aliases: BTreeSet<String>,
-    /// A child's local names already behind its hierarchical label before the
-    /// edit: no part in a join, but carried, so repeating one is no rename
-    /// (6761836527 points 5 and 6). Empty on the per-sheet checks.
-    pub hidden: BTreeSet<String>,
 }
 
 impl NetNames {
@@ -30,23 +26,15 @@ impl NetNames {
     }
 
     fn carries(&self, name: &String) -> bool {
-        self.own.contains(name) || self.aliases.contains(name) || self.hidden.contains(name)
+        self.own.contains(name) || self.aliases.contains(name)
     }
 }
 
 /// Whether the edit that made `absorbed` (the named nets before it) one net
-/// whose own names are `after_own` needs `allow_merge`. True when
-/// * two absorbed nets that both have own names have different own-name sets
-///   (`VCC` + `GND`);
-/// * two absorbed alias-only nets share no alias (`SDA` + `SCL`);
-/// * or the result has an own name that no absorbed net carried, own or
-///   alias, while one of them had own names (a rename).
-///
-/// Everything else joins freely: an own-named net with an alias-only one
-/// (`+5V` to `Regulator.VIN`), alias-only nets sharing a name
-/// (`{SDA, I2C_DATA}` + `SDA`), a name the net already carries, a gained alias
-/// (a hierarchical label never renames), and a net with no own name gaining
-/// one. Every clause is symmetric, so the order of the nets does not matter.
+/// whose own names are `after_own` needs `allow_merge`: two own-named nets
+/// with different own sets, two alias-only nets sharing no alias, or a new
+/// own name on a net with own names (a rename). Symmetric, so the order of
+/// the nets does not matter. Rule: `docs/CLI.md`, "Wire intent", points 1-7.
 pub(crate) fn needs_allow_merge(absorbed: &[&NetNames], after_own: &BTreeSet<String>) -> bool {
     let named: Vec<&NetNames> = absorbed.iter().copied().filter(|n| n.is_named()).collect();
     let has_own = named.iter().any(|n| !n.own.is_empty());
@@ -79,7 +67,6 @@ mod tests {
         NetNames {
             own: set(own),
             aliases: set(aliases),
-            hidden: BTreeSet::new(),
         }
     }
 

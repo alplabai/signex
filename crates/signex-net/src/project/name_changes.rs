@@ -1,20 +1,9 @@
-//! What an edit does to the names of the project's nets (#2199): a name that
-//! reaches a net from another sheet is invisible to a one-sheet check, so the
-//! name side of the headless intent checks is judged on the stitched project.
-//! Nets are compared by identity, not by name text: the labels and power ports
-//! that name a net are tracked per placement of their sheet, so two nets that
-//! share a name set (a pair of globals elsewhere) are still two nets. The nets
-//! are the stitcher's own groups; there is no second project connectivity
-//! model. Net scope: `docs/NET_NAMING.md`.
-//!
-//! The rule is #2199 comment 6761836527. A net's own names come from net
-//! labels, global labels and power ports; its aliases are hierarchical label
-//! names. Each edit is judged by what it changes: a child's local net labels
-//! that were already behind a hierarchical label before the edit play no
-//! part (a sensor's internal `SDA_INT`), while names the edit itself brings
-//! behind a port count. So the same final design reached by a different
-//! order of edits can get a different verdict: the check judges the edit,
-//! not the design.
+//! What an edit does to the names of the project's nets (#2199), judged on
+//! the stitched project by net identity (the stitcher's own groups, tracked
+//! per sheet placement). Each edit is judged by what it changes: a child's
+//! local labels already behind a hierarchical label before it play no part.
+//! Rule (#2199 comment 6761836527): `docs/CLI.md`, "Wire intent"; net scope:
+//! `docs/NET_NAMING.md`.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -71,8 +60,8 @@ fn behind_port(nets: &[NetMembers]) -> HashSet<LocalName> {
     out
 }
 
-/// The named nets of a stitch; the local names in `hidden` play no part in a
-/// join but stay carried (`NetNames::hidden`).
+/// The named nets of a stitch; the local names in `hidden` play no part, a
+/// later copy on the same placement included.
 fn named_nets(nets: Vec<NetMembers>, hidden: &HashSet<LocalName>) -> Vec<NamedNet> {
     nets.into_iter()
         .filter_map(|net| {
@@ -86,7 +75,7 @@ fn named_nets(nets: Vec<NetMembers>, hidden: &HashSet<LocalName>) -> Vec<NamedNe
                     NetMemberKind::Label(LabelType::Net)
                         if hidden.contains(&local_name_of(member)) =>
                     {
-                        &mut out.names.hidden
+                        continue;
                     }
                     NetMemberKind::Label(_) | NetMemberKind::PowerPort => &mut out.names.own,
                     _ => continue,
