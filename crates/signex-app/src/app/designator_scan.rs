@@ -49,6 +49,12 @@ pub struct DesignatorScan {
     designators: HashMap<PathBuf, Vec<String>>,
 }
 
+/// A scan's placements and designators per sheet, borrowed.
+type ScanMaps<'a> = (
+    &'a HashMap<PathBuf, Vec<InstancePath>>,
+    &'a HashMap<PathBuf, Vec<String>>,
+);
+
 /// What a scan reads, captured in `update`.
 pub(crate) struct ScanInputs {
     project: ProjectId,
@@ -251,10 +257,7 @@ impl Signex {
     fn used_designators_with<'a>(
         &'a self,
         sheet: &Path,
-        found: Option<(
-            &'a HashMap<PathBuf, Vec<InstancePath>>,
-            &'a HashMap<PathBuf, Vec<String>>,
-        )>,
+        found: Option<ScanMaps<'a>>,
     ) -> Vec<&'a str> {
         let ds = &self.document_state;
         let Some(project) = ds.document_project(sheet) else {
