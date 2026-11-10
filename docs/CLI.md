@@ -28,7 +28,7 @@ Signex".
 | `--headless` | only run headless; fail (exit 2) if a running Signex has the project open |
 | `--keep-going` | run the rest after a refused or failed command (default: stop at the first) |
 | `--save` | allow commands that write files (capability `save`) |
-| `--dry-run` | run every command with `dry_run=true`: a wire or bus run reports and changes nothing. A read-only query and `open_document` run as given; any other command without that operand is refused, and so is `--save` together with it |
+| `--dry-run` | run every command with `dry_run=true`: a wire or bus run reports and changes nothing. A read-only query and `open_document` run as given; any other command without that operand is refused, and so is `--dry-run` together with `--save` or `--allow save`. In an attached run a placement cannot be dry-run: placements reach a running Signex only through `apply_edits`, which has no `dry_run` operand |
 | `--allow <caps>` | also allow capabilities (comma list) |
 | `--allow-path <dir>` | also allow paths inside `<dir>` (repeatable) |
 | `--max-line-bytes`, `--max-commands`, `--max-file-bytes` | tighten or raise the input limits |
@@ -411,7 +411,7 @@ in the middle of continues.
   person saving as, closing and reopening, adding a library) is the same
   residual race as above: what the save writes is what the person's app holds
   when it runs.
-- **Dry run.** Without `--save`, nothing is written to disk by the CLI when
+- **Without `--save`.** Nothing is written to disk by the CLI when
   attached. What a command changes stays in the person's open app as unsaved
   changes; the person saves, or undoes it. With `--save`, a `save_document` of a
   sheet asks the app to save that sheet, which writes the person's unsaved work
@@ -491,8 +491,8 @@ is enforced before the app sees a command.
 
 - **No writes without `--save`.** `save_document`, `save_document_as` and
   `new_document` need the `save` capability, which only `--save` grants.
-  Nothing is saved at exit. A run without it is a dry run: the result lines
-  and the end-of-run log say what would change; no project file is written.
+  Nothing is saved at exit. In a run without `--save`, the result lines and
+  the end-of-run log say what would change; no project file is written.
 - **Path confinement.** Every path argument is resolved first (symlinks
   followed, `..` removed) and must then sit inside the project folder, unless
   its folder is named with `--allow-path`. The folder is the one that holds
