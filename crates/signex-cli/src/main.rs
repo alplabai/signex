@@ -4,7 +4,7 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 use signex_cli::cli::{self, Invocation, USAGE};
-use signex_cli::{catalog, run};
+use signex_cli::{agent_log, catalog, run};
 
 /// A usage or boot error: the command line or the project is wrong.
 const EXIT_ERROR: u8 = 2;
@@ -22,6 +22,13 @@ fn main() -> ExitCode {
             match run(options, &mut stdin.lock(), &mut stdout.lock()) {
                 Ok(report) if report.not_ok == 0 => ExitCode::SUCCESS,
                 Ok(_) => ExitCode::from(EXIT_NOT_OK),
+                Err(error) => fail(&error),
+            }
+        }
+        Ok(Invocation::AgentLog(project, which)) => {
+            let mut out = io::stdout().lock();
+            match agent_log::run(&project, which, &mut out, &mut io::stderr().lock()) {
+                Ok(()) => ExitCode::SUCCESS,
                 Err(error) => fail(&error),
             }
         }

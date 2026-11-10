@@ -107,8 +107,9 @@ ADR-0001 D4).
   `agent_edits.target` are, by `Signex::with_origin`, which puts the previous
   value back when the closure returns. No handler takes it as an argument.
 - The socket sets it for every request it reads, a refused one included, with
-  the pid of the client. `client` is the client's own name; the wire carries
-  none yet, so it stays empty rather than invented.
+  the pid of the client. `client` is the client's own name, when its request
+  carries one (`signex-cli` sends its own); otherwise it stays empty rather
+  than invented.
 - A headless run (`dispatch_command_headless`) sets it to an agent whose pid is
   the process's own.
 - Messages: the "Agent request (pid N): ..." line is as before. An agent step
@@ -124,6 +125,13 @@ its step. The reply is unchanged (`ran`); the Messages line "Agent: color_net
 on b.snxsch (undo group 7)" tells the agent the group for `revert`, which
 works on these steps by the rules above. A command that makes no undo step
 (`save_document`, `close_active_document`), or is refused, gets no group.
+
+## Journal
+
+Every agent command that changes a document (or writes or closes one), and its outcome, is also a line
+of the project's `.signex/agent-edits.jsonl`, with the revision before and
+after and the undo group named here, so it can be replayed at the same
+revision. See `docs/AGENT_JOURNALS.md`.
 
 ## signex-cli
 

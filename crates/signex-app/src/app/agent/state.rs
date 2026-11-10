@@ -36,6 +36,19 @@ pub(crate) struct AgentState {
     /// Who the command running now comes from; the person outside
     /// [`Signex::with_origin`].
     pub(crate) origin: super::Origin,
+    /// Whether agent commands and connections are journaled (#2253): the
+    /// window always does; a headless run only when it may save.
+    pub(crate) journals_on: bool,
+    /// The name a headless run gave itself, for the lines of its commands.
+    pub(crate) run_client: Option<String>,
+    /// Whether the request being answered got as far as its command's
+    /// handler; a refusal before that is an access event.
+    pub(super) reached_handler: bool,
+    /// The journal lines waiting to be written, by project folder.
+    pub(crate) journal: super::journal::queue::JournalQueue,
+    /// What each client process last said it may do, so a change is recorded
+    /// once and not at every request.
+    pub(super) grants_seen: std::collections::BTreeMap<Option<u32>, (Option<String>, Vec<String>)>,
     /// Whether the open projects are listed in the registry: the window the
     /// person works in (`Signex::boot`) does. An app made otherwise (a test, a
     /// headless run, which holds its project itself) does not.
@@ -83,6 +96,11 @@ impl AgentState {
             registered: None,
             serving: false,
             origin: super::Origin::Person,
+            journals_on: false,
+            run_client: None,
+            reached_handler: false,
+            journal: super::journal::queue::JournalQueue::default(),
+            grants_seen: std::collections::BTreeMap::new(),
             lists_projects: false,
             registry_lock: Arc::default(),
             registry_seq: 0,
@@ -113,6 +131,12 @@ impl AgentState {
 
     pub(super) fn token(&self) -> Option<&Token> {
         self.ids.as_ref().map(|(_, token)| token)
+    }
+
+    /// The session token as text, for the one place that must keep it out of
+    /// a journal.
+    pub(super) fn token_text(&self) -> Option<&str> {
+        self.token().map(Token::as_str)
     }
 
     pub(super) fn runtime_dir(&self) -> Result<&PathBuf, &str> {

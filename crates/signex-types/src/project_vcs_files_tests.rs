@@ -433,6 +433,53 @@ fn merging_keeps_the_files_permissions() {
     assert_eq!(mode, 0o600);
 }
 
+#[test]
+fn the_block_always_ignores_the_journal_lock_and_the_rotation_temp_file() {
+    assert!(ignored(".signex/agent-journal.lock"));
+    // `atomic_write` stages a rotation at `<file>.<pid>-<n>.tmp`.
+    assert!(ignored(".signex/agent-edits.jsonl.4242-0.tmp"));
+    for keep in [true, false] {
+        assert!(gitignore_block_body(keep).contains(".signex/agent-journal.lock"));
+    }
+}
+
+#[test]
+fn the_journal_line_is_in_the_block_only_while_journals_stay_out_of_git() {
+    assert!(!gitignore_block_body(true).contains(".signex/agent-*.jsonl"));
+    assert!(gitignore_block_body(false).contains(".signex/agent-*.jsonl"));
+    assert!(glob_matches(
+        ".signex/agent-*.jsonl",
+        ".signex/agent-edits.jsonl"
+    ));
+    assert!(glob_matches(
+        ".signex/agent-*.jsonl",
+        ".signex/agent-access.jsonl"
+    ));
+}
+
+#[test]
+fn syncing_the_journal_setting_adds_then_removes_the_line_and_keeps_user_lines() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join(".git")).unwrap();
+    let path = dir.path().join(".gitignore");
+    std::fs::write(&path, "mine\n").unwrap();
+
+    sync_agent_journal_ignore(dir.path(), false).unwrap();
+    let off = std::fs::read_to_string(&path).unwrap();
+    assert!(off.contains(".signex/agent-*.jsonl") && off.contains("mine"));
+
+    sync_agent_journal_ignore(dir.path(), true).unwrap();
+    let on = std::fs::read_to_string(&path).unwrap();
+    assert!(!on.contains(".signex/agent-*.jsonl") && on.contains("mine"));
+}
+
+#[test]
+fn syncing_writes_nothing_for_a_project_without_version_control() {
+    let dir = tempfile::tempdir().unwrap();
+    sync_agent_journal_ignore(dir.path(), false).unwrap();
+    assert!(!dir.path().join(".gitignore").exists());
+}
+
 #[cfg(unix)]
 #[test]
 fn a_write_that_cannot_create_its_temp_file_is_a_write_error_and_changes_nothing() {

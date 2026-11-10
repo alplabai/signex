@@ -185,6 +185,7 @@ fn project_data(dir: &Path, libraries: Vec<LibraryEntry>) -> ProjectData {
         annotation: None,
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
+        agent_journal: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     }
@@ -291,6 +292,13 @@ pub fn snapshot(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
         }
     }
     out
+}
+
+/// `snapshot` without the agent journals (#2253): a run that may save writes
+/// `.signex/agent-*.jsonl` and its lock, which is not what these tests ask about.
+pub fn without_journals(mut files: BTreeMap<PathBuf, Vec<u8>>) -> BTreeMap<PathBuf, Vec<u8>> {
+    files.retain(|path, _| !path.components().any(|part| part.as_os_str() == ".signex"));
+    files
 }
 
 pub struct Output {

@@ -4,7 +4,9 @@
 mod support;
 
 use serde_json::{Value, json};
-use support::{Live, fixture, jsonl, list_libraries, run_cli, snapshot, temp_root};
+use support::{
+    Live, fixture, jsonl, list_libraries, run_cli, snapshot, temp_root, without_journals,
+};
 
 fn refusal(out: &support::Output, index: usize) -> &str {
     assert_eq!(out.lines[index]["status"], "refused", "{}", out.stdout);
@@ -885,5 +887,10 @@ fn new_project_with_profile_may_not_create_its_folder_outside_the_project() {
         "{}",
         out.stdout
     );
-    assert_eq!(snapshot(&root), before, "nothing was written");
+    // The `--save` run journals itself in `.signex/` (#2253); nothing else.
+    assert_eq!(
+        without_journals(snapshot(&root)),
+        before,
+        "nothing was written"
+    );
 }

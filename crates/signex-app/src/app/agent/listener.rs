@@ -206,11 +206,22 @@ pub(super) async fn serve(config: ListenerConfig, mut out: mpsc::Sender<Message>
                             return;
                         }
                     } else {
-                        connections.push(serve_connection(conn, pid, out.clone()));
+                        if !say(&mut out, AgentMsg::ConnectionOpened { pid }).await {
+                            return;
+                        }
+                        let served = out.clone();
+                        connections.push(async move {
+                            serve_connection(conn, pid, served).await;
+                            pid
+                        });
                     }
                 }
             },
-            Some(()) = connections.next(), if !connections.is_empty() => {}
+            Some(pid) = connections.next(), if !connections.is_empty() => {
+                if !say(&mut out, AgentMsg::ConnectionClosed { pid }).await {
+                    return;
+                }
+            }
         }
     }
 }

@@ -11,6 +11,7 @@
 //! per section (`general`); the shell (`view`) lays out the section list
 //! beside the selected section.
 
+mod agent_journals;
 mod general;
 mod open;
 mod parameters;
@@ -19,6 +20,8 @@ mod setup;
 mod update;
 mod view;
 
+#[cfg(test)]
+mod agent_journals_tests;
 #[cfg(test)]
 mod open_command_tests;
 #[cfg(test)]
@@ -85,6 +88,9 @@ pub struct ProjectTabState {
     /// The Project setup section as edited (#2232), until the next undo,
     /// redo or section switch shows the stored values again.
     pub setup_draft: Option<crate::app::NewProjectState>,
+    /// The agent journal line cap as typed (#2253), until the next undo, redo
+    /// or section switch shows the stored value again.
+    pub journal_lines_draft: Option<String>,
 }
 
 /// Messages of a Project tab, namespaced under `ProjectMsg::Tab`. Each
@@ -150,6 +156,17 @@ pub enum ProjectTabMsg {
     SetupEdited {
         project_id: ProjectId,
         msg: crate::app::NewProjectMsg,
+    },
+    /// A checkbox of the Agent journals group (#2253), with the settings it
+    /// leads to.
+    AgentJournalPicked {
+        project_id: ProjectId,
+        settings: signex_types::agent_journal::AgentJournalSettings,
+    },
+    /// The agent journal line cap as typed (#2253).
+    AgentJournalLinesEdited {
+        project_id: ProjectId,
+        text: String,
     },
     /// Rename… in the General section: the project-tree Rename flow.
     RenameRequested {

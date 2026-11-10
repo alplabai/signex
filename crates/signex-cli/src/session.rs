@@ -62,6 +62,14 @@ impl Session {
             rules.name,
             rules.version
         ));
+        // A run that may not write leaves the project folder as it found it:
+        // no `.signex/`, no journals. One that may save journals what it does.
+        if policy.may_save() {
+            let started = app.start_agent_journals("signex-cli", policy.grants());
+            driver
+                .settle(&mut app, started)
+                .map_err(|error| format!("journaling the start of the run: {error}"))?;
+        }
         Ok(Self {
             app,
             driver,
@@ -116,6 +124,12 @@ impl Session {
             .into_iter()
             .collect();
         unsaved.sort();
+        if self.policy.may_save() {
+            let ended = self.app.end_agent_journals();
+            self.driver
+                .settle(&mut self.app, ended)
+                .map_err(|error| format!("journaling the end of the run: {error}"))?;
+        }
         let end = self.app.end_headless_session();
         self.driver
             .settle(&mut self.app, end)

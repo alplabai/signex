@@ -459,6 +459,7 @@ fn open_readme_project(app: &mut Signex, dir: &std::path::Path) -> PathBuf {
         annotation: None,
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
+        agent_journal: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };

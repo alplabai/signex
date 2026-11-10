@@ -14,6 +14,7 @@ USAGE:
     signex-cli run <project> [OPTIONS] < commands.jsonl
     signex-cli run <project> <command-id> [--arg key=value]... [OPTIONS]
     signex-cli commands [--json]
+    signex-cli agent-log <project> [--access]
     signex-cli --help | --version
 
 run reads one JSON command per line from standard input
@@ -40,6 +41,9 @@ OPTIONS (run):
     --max-commands <n>      most commands per run (default 10000)
     --max-file-bytes <n>    largest file a command may read (default 67108864)
 
+agent-log prints the project's agent journal as a table (the edits agents made;
+with --access, who connected and with what rights). It only reads.
+
 Nothing is written without --save. See docs/CLI.md.";
 
 #[derive(Debug, PartialEq, Eq)]
@@ -48,6 +52,8 @@ pub enum Invocation {
     Version,
     Commands,
     Run(RunOptions),
+    /// `agent-log <project> [--access]`.
+    AgentLog(PathBuf, crate::agent_log::Which),
 }
 
 /// Where a run may work (#1924): through a running Signex that has the
@@ -87,8 +93,24 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation, Strin
             [other, ..] => Err(format!("`commands` takes only --json, not `{other}`")),
         },
         Some("run") => parse_run(args).map(Invocation::Run),
+        Some("agent-log") => parse_agent_log(args),
         Some(other) => Err(format!("unknown subcommand `{other}`")),
     }
+}
+
+fn parse_agent_log(args: impl Iterator<Item = String>) -> Result<Invocation, String> {
+    let mut which = crate::agent_log::Which::Edits;
+    let mut project = None;
+    for arg in args {
+        match arg.as_str() {
+            "--access" => which = crate::agent_log::Which::Access,
+            flag if flag.starts_with("--") => return Err(format!("unknown option `{flag}`")),
+            _ if project.is_none() => project = Some(PathBuf::from(arg)),
+            _ => return Err(format!("unexpected argument `{arg}`")),
+        }
+    }
+    let project = project.ok_or("`agent-log` needs a project path")?;
+    Ok(Invocation::AgentLog(project, which))
 }
 
 fn parse_run(mut args: impl Iterator<Item = String>) -> Result<RunOptions, String> {

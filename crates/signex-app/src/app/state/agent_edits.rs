@@ -44,12 +44,16 @@ pub struct AgentEdits {
     pub(crate) labels: HashMap<UndoGroupId, String>,
     /// Who made each of those steps, for the steps an agent made.
     pub(crate) origins: HashMap<UndoGroupId, Origin>,
+    /// The undo group the newest recorded step made; the journal reads it
+    /// after a command to name the step.
+    pub(crate) last_group: Option<UndoGroupId>,
 }
 
 impl AgentEdits {
     /// Remember an agent's undo step: its label and who made it.
     pub(crate) fn record_step(&mut self, group: UndoGroupId, label: String, origin: &Origin) {
         self.labels.insert(group, label);
+        self.last_group = Some(group);
         if origin.is_agent() {
             self.origins.insert(group, origin.clone());
         }

@@ -211,7 +211,8 @@ fn every_edit_is_authorized_as_a_command_of_its_own() {
             .contains("does not edit a document")
     );
     saver.live.finish();
-    assert_eq!(snapshot(&root), before);
+    // The `--save` run journals itself in `.signex/` (#2253); nothing else.
+    assert_eq!(support::without_journals(snapshot(&root)), before);
 }
 
 #[test]

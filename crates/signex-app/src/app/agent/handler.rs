@@ -7,6 +7,7 @@
 use iced::{Subscription, Task};
 use serde_json::Value;
 
+use super::journal::AccessEntry;
 use super::reply::{Status, changed_between, messages_since, outcome_verdict};
 use super::wire::{self, Request};
 use super::{AgentCall, AgentMsg, Input, allow, listener, registry};
@@ -52,12 +53,31 @@ impl Signex {
         match message {
             AgentMsg::Request(call) => self.handle_agent_request(call),
             AgentMsg::PeerRefused { pid, reason } => {
+                let reason = printable(&reason);
                 crate::diagnostics::log_warning(format!(
-                    "Agent connection refused ({}): {}",
-                    pid_text(pid),
-                    printable(&reason)
+                    "Agent connection refused ({}): {reason}",
+                    pid_text(pid)
                 ));
-                Task::none()
+                self.journal_access(|ts| {
+                    AccessEntry::new(ts, "refused", "socket")
+                        .with_peer(pid, None)
+                        .with_reason(reason.clone())
+                })
+            }
+            AgentMsg::ConnectionOpened { pid } => self.journal_access(|ts| {
+                AccessEntry::new(ts, "accepted", "socket").with_peer(pid, None)
+            }),
+            AgentMsg::ConnectionClosed { pid } => {
+                self.agent.grants_seen.remove(&pid);
+                self.journal_access(|ts| {
+                    AccessEntry::new(ts, "closed", "socket").with_peer(pid, None)
+                })
+            }
+            AgentMsg::JournalDrained { project, failures } => {
+                for failure in failures {
+                    crate::diagnostics::log_warning(format!("Agent journal: {failure}"));
+                }
+                self.agent.journal.drained(&project)
             }
             AgentMsg::ListenerStarted { boot_id, endpoint } => {
                 // A start that lands after the setting went off, or from a
@@ -394,8 +414,23 @@ impl Signex {
         let mark = crate::diagnostics::newest_entry_id();
         let before = self.change_snapshot();
         let origin = super::Origin::agent(call.pid);
+        self.agent.reached_handler = false;
         let (id, (status, reason, data), task) =
             self.with_origin(origin, |app| app.agent_verdict(&call.input));
+        // A request turned away before its command was looked at is an access
+        // event; one the command's own handler refused is in the edit journal.
+        let turned_away = if status == Status::Refused && !self.agent.reached_handler {
+            let (pid, why) = (call.pid, reason.as_deref().map(printable));
+            self.journal_access(|ts| {
+                let entry = AccessEntry::new(ts, "refused", "socket").with_peer(pid, None);
+                match &why {
+                    Some(why) => entry.with_reason(why.clone()),
+                    None => entry,
+                }
+            })
+        } else {
+            Task::none()
+        };
         let changed = changed_between(&before, &self.change_snapshot());
         // What the command logged, before this request's own line.
         let messages = messages_since(mark);
@@ -425,7 +460,7 @@ impl Signex {
             &messages,
             &changed,
         ));
-        task
+        Task::batch([task, turned_away])
     }
 
     /// Read, check and run one request. The id is returned only once the
@@ -464,8 +499,33 @@ impl Signex {
             );
         }
         let id = request.id.clone();
+        let identity = self.note_agent_identity(&request);
         let (verdict, task) = self.run_agent_command(request);
-        (Some(id), verdict, task)
+        (Some(id), verdict, Task::batch([task, identity]))
+    }
+
+    /// The client's name goes on the origin of this request; what it says it
+    /// may do is recorded when it first says it or changes it.
+    fn note_agent_identity(&mut self, request: &Request) -> Task<Message> {
+        let super::Origin::Agent { pid, client } = &mut self.agent.origin else {
+            return Task::none();
+        };
+        *client = request.client.clone();
+        let (pid, client) = (*pid, client.clone());
+        if request.grants.is_empty() {
+            return Task::none();
+        }
+        let seen = (client.clone(), request.grants.clone());
+        if self.agent.grants_seen.get(&pid) == Some(&seen) {
+            return Task::none();
+        }
+        self.agent.grants_seen.insert(pid, seen);
+        let grants = request.grants.clone();
+        self.journal_access(|ts| {
+            AccessEntry::new(ts, "grants", "socket")
+                .with_peer(pid, client.clone())
+                .with_capabilities(grants.clone())
+        })
     }
 
     fn run_agent_command(&mut self, request: Request) -> (Verdict, Task<Message>) {
@@ -490,10 +550,11 @@ impl Signex {
             return (refused(why), none());
         }
         self.agent.serving = true;
+        self.agent.reached_handler = true;
         let ran = if is_query(&command) {
             self.run_query_headless(&command, &args)
         } else {
-            Some(self.run_operands(&command, &args))
+            Some(self.journaled(&command, &args, |app| app.run_operands(&command, &args)))
         };
         self.agent.serving = false;
         match ran {

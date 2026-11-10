@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::agent_journal::AgentJournalSettings;
 use crate::document_id::DocumentId;
 
 mod annotation;
@@ -247,6 +248,15 @@ pub struct ProjectData {
     /// nothing is set.
     #[serde(default, skip_serializing_if = "ProjectDefaults::is_empty")]
     pub project_defaults: ProjectDefaults,
+    /// What this project asks of its agent journals (#2253). Skipped on save
+    /// while untouched, so an old file re-saves byte-identical, and an old
+    /// build keeps the key in `unknown`. No format token changes.
+    #[serde(
+        default,
+        skip_serializing_if = "AgentJournalSettings::is_default",
+        deserialize_with = "crate::agent_journal::lenient_settings"
+    )]
+    pub agent_journal: AgentJournalSettings,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -285,6 +295,8 @@ impl ProjectData {
     }
 }
 
+#[cfg(test)]
+mod agent_journal_tests;
 #[cfg(test)]
 mod description_tests;
 #[cfg(test)]
@@ -485,6 +497,7 @@ mod tests {
             annotation: None,
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
+            agent_journal: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         };
@@ -519,6 +532,7 @@ mod tests {
             annotation: None,
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
+            agent_journal: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         };
@@ -739,6 +753,7 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         annotation: None,
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
+        agent_journal: Default::default(),
         parameters: Default::default(),
         unknown: UnknownJson::default(),
     })

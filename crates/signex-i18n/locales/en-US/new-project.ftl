@@ -180,6 +180,15 @@ dialog-new-project-err-create-pending = This project is already being created.
 # Project Options, Project setup section: the stored section is not usable.
 dialog-new-project-setup-unreadable = The project's setup defaults are not readable by this version of Signex; they are kept unchanged and not applied. Editing a value here replaces that section when you save.
 
+# Project setup section, Agent journals group (#2253).
+project-agent-journals-title = Agent journals
+project-agent-journals-keep-in-git = Keep agent journals in git
+project-agent-journals-keep-in-git-help = Keeps .signex/agent-*.jsonl in git. Turned off, Signex lists them in its managed .gitignore block when the project is saved; a journal that is already committed stays tracked.
+project-agent-journals-summarise = Summarise agent changes in the commit message
+project-agent-journals-lines = Journal size (lines)
+project-agent-journals-lines-help = Lines kept per journal. Older lines are dropped from the file; they stay in git history only while the journals are kept in git, otherwise they are discarded.
+project-agent-journals-lines-invalid = Enter a whole number from { $min } to { $max }; the stored value is unchanged.
+
 # Placeholders of the name and location fields, shown while they are empty.
 dialog-new-project-name-placeholder = Project name
 dialog-new-project-location-placeholder = Folder the project goes in

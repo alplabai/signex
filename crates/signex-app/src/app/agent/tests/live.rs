@@ -858,8 +858,16 @@ fn the_listener_reports_healthy_once_after_its_first_connection() {
         };
         assert_eq!(boot_id, config.boot_id);
         let _second = UnixStream::connect(&socket).await.unwrap();
-        let again = tokio::time::timeout(Duration::from_millis(300), messages.next()).await;
-        assert!(again.is_err(), "reported once, not for every connection");
+        // Each connection is also reported as opened (#2253, the access
+        // journal); only the listener's health is reported once.
+        while let Ok(Some(message)) =
+            tokio::time::timeout(Duration::from_millis(300), messages.next()).await
+        {
+            assert!(
+                !matches!(message, Message::Agent(AgentMsg::ListenerHealthy { .. })),
+                "reported once, not for every connection"
+            );
+        }
         server.abort();
     });
 }

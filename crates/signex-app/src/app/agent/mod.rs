@@ -14,6 +14,7 @@ mod allow;
 pub mod client;
 mod files;
 mod handler;
+pub mod journal;
 mod listener;
 mod origin;
 mod registry;
@@ -64,6 +65,16 @@ pub enum AgentMsg {
     /// The backoff after a failed listener is over: start a new one, unless
     /// `boot_id` is no longer the app's.
     RestartListener { boot_id: String },
+    /// A client connected and passed the peer check (#2253).
+    ConnectionOpened { pid: Option<u32> },
+    /// A connection ended: the client left, idled out or was dropped.
+    ConnectionClosed { pid: Option<u32> },
+    /// The task that appended a project's queued journal lines is done;
+    /// `failures` is what could not be written, to be said in Messages.
+    JournalDrained {
+        project: std::path::PathBuf,
+        failures: Vec<String>,
+    },
 }
 
 /// What a connection read, before the app has looked at it.

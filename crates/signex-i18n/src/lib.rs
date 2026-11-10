@@ -147,6 +147,13 @@ define_ids! {
     DIALOG_NEW_PROJECT_CREATING = "dialog-new-project-creating";
     DIALOG_NEW_PROJECT_ERR_CREATE_PENDING = "dialog-new-project-err-create-pending";
     DIALOG_NEW_PROJECT_SETUP_UNREADABLE = "dialog-new-project-setup-unreadable";
+    PROJECT_AGENT_JOURNALS_TITLE = "project-agent-journals-title";
+    PROJECT_AGENT_JOURNALS_KEEP_IN_GIT = "project-agent-journals-keep-in-git";
+    PROJECT_AGENT_JOURNALS_KEEP_IN_GIT_HELP = "project-agent-journals-keep-in-git-help";
+    PROJECT_AGENT_JOURNALS_SUMMARISE = "project-agent-journals-summarise";
+    PROJECT_AGENT_JOURNALS_LINES = "project-agent-journals-lines";
+    PROJECT_AGENT_JOURNALS_LINES_HELP = "project-agent-journals-lines-help";
+    PROJECT_AGENT_JOURNALS_LINES_INVALID = "project-agent-journals-lines-invalid";
     DIALOG_NEW_PROJECT_NAME_PLACEHOLDER = "dialog-new-project-name-placeholder";
     DIALOG_NEW_PROJECT_LOCATION_PLACEHOLDER = "dialog-new-project-location-placeholder";
     LANGUAGE_SYSTEM_DEFAULT = "language-system-default";

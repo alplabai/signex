@@ -533,6 +533,7 @@ fn a_paste_into_a_sheet_of_another_project_brings_the_body() {
                 annotation: None,
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
+                agent_journal: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },
