@@ -15,10 +15,17 @@ signex-cli commands [--json]
 
 `<project>` is a `.snxprj` (or a loose `.snxsch`). The exit code is `0` when
 every command was ok, `1` when a command was refused or failed, `2` for a
-usage error or a project that cannot be opened.
+usage error, a project that cannot be opened or a run that cannot be placed
+(`--attach` or `--headless` below, an unsafe token file).
+
+A run works in one of two places (#1924): in a running Signex that has the
+project open, or headless, as described above. See "Working through a running
+Signex".
 
 | Option | Meaning |
 |---|---|
+| `--attach` | only work through a running Signex; fail (exit 2) if none has the project open |
+| `--headless` | only run headless; fail (exit 2) if a running Signex has the project open |
 | `--keep-going` | run the rest after a refused or failed command (default: stop at the first) |
 | `--save` | allow commands that write files (capability `save`) |
 | `--allow <caps>` | also allow capabilities (comma list) |
@@ -66,13 +73,14 @@ applies them to one sheet as one undo step, and `revert` takes that step back;
 both answer in `data`. See [AGENT_EDITS.md](AGENT_EDITS.md).
 
 ```
-{"run": "<uuid>", "seq": 2, "id": "color_net", "status": "ran",
+{"run": "<uuid>", "seq": 2, "mode": "headless", "id": "color_net", "status": "ran",
  "messages": [{"level": "INFO", "message": "..."}], "changed": ["<path>"]}
 ```
 
 | Field | Meaning |
 |---|---|
 | `run`, `seq` | the run id (also in the audit log) and the line's 1-based place in the run |
+| `mode` | where the command ran: `headless` (this process, no window) or `attached` (a running Signex, below) |
 | `id` | the command id, `null` when the line was not a command |
 | `status` | `ran`, `answered` (a query; the answer is in `data`), `refused` (nothing ran; `reason` says why) or `failed` (it ran and did not succeed; `reason`) |
 | `messages` | what the app logged to its Messages panel during the command |
@@ -86,6 +94,161 @@ already exists is `refused` without `overwrite: true`. `save_document_as` takes
 or new that makes nothing, with an error notice, is `failed` with that notice.
 A command with no operand that opens a dialog is `refused`, never `ran`, when
 the dialog cannot be answered.
+
+## Working through a running Signex
+
+When a person has the project open in Signex with Preferences > Editing >
+"Allow agent connections" on, `run` sends each command to that process
+instead of booting its own (#1924; the app's side, the registry and the
+security rules are in [AGENT_SOCKET.md](AGENT_SOCKET.md)). The command runs
+inside the app's update loop like a click, so the person sees the change at
+once and keeps their tab, selection, tool, panels and focus; a drag they are
+in the middle of continues.
+
+- **Finding it.** The CLI reads the registry entry of the project's canonical
+  path in the user's runtime folder. A live entry (the process runs, and the
+  endpoint its boot id names answers) is attached to. No entry, or a stale one
+  (dead process, a socket or boot id the app would not have written, another
+  project), means headless; a stale entry is removed, but only if it is the
+  user's own plain file (never a link). The CLI connects to the endpoint the
+  boot id gives and to nothing an entry names.
+- **Token.** The session token is read from the file beside the socket. It
+  must be a plain file of this user with no group or other permission; a link,
+  a wide mode, a file of another user or one that is not a token ends the run
+  with exit 2. It does not fall back to headless: the app has the project.
+- **Same result lines.** Each reply line has the headless shape, with `"mode":
+  "attached"`; `messages` is always empty (see below) and `changed` is the
+  documents whose content or unsaved state differ. Replies are matched to
+  requests by order, so after any failed request (a timeout above all: its reply
+  may still arrive) the connection is closed for good: every later command of
+  the run fails with "the connection ... failed earlier" and the run never falls
+  back to headless.
+- **Only this run's folders are shown.** The app answers a query across every
+  project it has open, so the CLI filters each answer before it prints it:
+  a document whose `path` lies outside the folders this run may use (the
+  project folder and `--allow-path`) is dropped, and so is an element whose
+  `document` is outside. Only the keys that name documents are judged (the
+  answer's `document`, `element` and `project`, and the lists `documents`,
+  `sheets`, `elements` and `not_loaded`); the rest of an answer, such as a
+  `read_document`'s instances and libraries, comes back whole, because a `path`
+  inside it is not a file. `count` is recomputed.
+  `resolve` of an id outside answers `{"found": false, "what": "unknown"}`,
+  the same as for an id that does not exist. `changed` keeps only files
+  inside. The app's log lines (`messages`) are shown for no command, queries
+  or edits: they are free text that may name any open project's files (the
+  app's own Messages panel keeps them all). The filter fails
+  closed: a document is shown only if it can be proven this run's, by its own
+  `path` or, for a sheet never saved (a null `path`), by its owning
+  `project.path`; a listed document or element that says neither is hidden.
+  So a never-saved sheet of this project shows in `list_documents`, but its
+  elements (their `document` names no project) are hidden from `find_items`
+  and `resolve` until the sheet is saved.
+- **Policy first, the app's allowlist on top.** Capabilities, `--save`,
+  `--allow-path` and the input limits are applied to every command, and to
+  every edit inside `apply_edits`, before anything is sent. The app then
+  applies its agent allowlist and refuses what an agent may not do, and its
+  reason comes back as the result line's `reason` (`undo` and `redo`, which
+  are the person's; a command with a file path; anything that does not name
+  its document; a close of the person's active tab or of a document with a
+  pending draft). A command that acts on a document (it has a
+  `document` operand and is not a query) and is sent without one is refused
+  here with "name the document": the app would use the person's active
+  document, which is never checked against the run's folders. Every `document` operand, an id or a path, in
+  the command and in each edit of `apply_edits`, is first resolved by the app
+  (a `document_info` query on the same connection) to the file it holds, and
+  that file is confined like a path operand: inside the project folder or
+  an `--allow-path`, no link out. A document of another project the same app has
+  open is refused, as in a headless run; an id the app does not know is refused
+  with the app's reason. `close_active_document` and `assign_net_class` name
+  their document and are confined the same way. `save_document` also needs
+  `--save`, and its named file is checked as a write target as in a headless
+  run. A save of a project file writes libraries besides it (the headless run
+  lists them with the app's `save_side_writes` and confines each); the running
+  app tells them in the `save_writes` of its `document_info` answer, and the
+  save is sent only when the project file and every file in `save_writes` are
+  inside the run's folders. Otherwise it is refused without naming the file
+  (it may belong to another project; `--allow-path` adds a folder); an answer
+  without the list is refused too. `save_writes` is never printed: the CLI
+  removes it from the `document_info` answer it shows (a headless run shows
+  its own project's, the pending libraries of the project it holds). A sheet's
+  plain save writes nothing else. The resolve, the `document_info` that lists
+  the writes, and the command are separate requests, so a document that is
+  re-pointed or a project that gets another pending library between them (a
+  person saving as, closing and reopening, adding a library) is the same
+  residual race as above: what the save writes is what the person's app holds
+  when it runs.
+- **Dry run.** Without `--save`, nothing is written to disk by the CLI when
+  attached. What a command changes stays in the person's open app as unsaved
+  changes; the person saves, or undoes it. With `--save`, a `save_document` of a
+  sheet asks the app to save that sheet, which writes the person's unsaved work
+  on it too.
+- **Audit.** The app lists every request, with the CLI's process id, in its
+  Messages panel. The CLI itself logs nothing when attached.
+- **`--attach`** fails with exit 2 and no output if no running Signex has the
+  project open. **`--headless`** fails with exit 2 if one does: the CLI does not
+  edit a file that is open in a window. Without either flag: attach if a
+  running Signex has it, else headless.
+
+### Holding the project
+
+A headless run holds its project for the run: it takes an exclusive lock on
+the project's lock file in the registry folder and writes an entry of kind
+`headless` for the project (no endpoint). It removes the entry when the run
+ends (an error, a panic, a refused command); the empty lock file stays, as
+deleting a locked file would let a second run lock the unlinked one. A run
+killed by a signal cannot clean
+up, but the kernel drops its lock with the process, so its entry is found stale
+at once, whatever process reuses its id; the next run or Signex removes it.
+A Signex that opens the project meanwhile refuses with a line in Messages and
+an Open Failed notice that names the entry file, and changes nothing; it
+opens once the run has ended.
+
+A headless run (default or `--headless`) that finds another headless run
+holding the project is refused with "the project is held by another
+signex-cli run (pid N)" and exit 2. A run never goes without its hold: if it
+cannot read the registry (a folder others can enter, a newer entry format), or
+cannot write its entry, it fails with exit 2. If a running Signex registered
+the project between the look and the hold, a default run attaches to it; a
+forced `--headless` fails.
+
+### A project open in Signex that does not listen
+
+A Signex window holds a shared lock on every project it has open, from the
+moment it opens it until it closes it (many windows can have one project open;
+a headless run holds the lock exclusively, so it cannot take a project any
+window has), and lists it in the registry, even while "Allow agent
+connections" is off; its entry then names no socket. A run that finds the
+project's lock held (and no entry it can attach to) does not run headless on
+the same files (two copies of the document would diverge). On any route
+(`--attach` too) it stops with exit 2 and no output:
+
+```
+<project> is open in Signex (pid N). To let an agent work on it, turn on Preferences > Allow agent connections.
+```
+
+(With the lock held and no entry yet, the message says the project is open in
+Signex or held by a run that is just starting, without a pid.) Once the person
+turns the setting on, the same entry names the socket and the run attaches. A
+Signex that crashed leaves its entry, but its lock is gone, so the entry is
+stale and the run goes on. An entry is never stale while its lock is held.
+
+The lock and the entries live in one runtime folder per user, and the window
+and the CLI must name the same one: `$XDG_RUNTIME_DIR/signex-agent`; on Linux,
+with that variable unset (a shell over ssh, cron), `/run/user/<uid>/signex-agent`
+when that folder of the user exists (a real folder of theirs, not a link), so a
+desktop Signex and such a shell agree; else `<user temp>/signex-agent-<uid>`.
+On macOS the user temp is the system's per-user folder (`confstr`,
+`_CS_DARWIN_USER_TEMP_DIR`), not `TMPDIR`, so a Finder launch and a shell
+without `TMPDIR` name the same one (if `confstr` fails, `TMPDIR`/`/tmp` is
+used). Windows uses the local application data. Both sides also look in the
+user's other possible folders (the `TMPDIR` one, `/tmp/signex-agent-<uid>`, the
+`/run/user/<uid>` one, `$XDG_RUNTIME_DIR`), through the same trust rule as the
+primary (a real folder of the user that nobody else can enter), and count a
+lock held there: a CLI `lookup` or `hold` sees a window or a run that keeps its
+folder in another place, and the window refuses to open a project a headless
+run holds exclusively in another one. Known limit: a lock is only looked at in
+those other folders, not taken, so two apps that name different folders and
+start at the same moment can still both pass.
 
 ## Security
 
@@ -121,11 +284,14 @@ is enforced before the app sees a command.
   a path that did not exist at the check can be created as a link before the
   write. A process of the same user racing symlinks inside the project folder
   is out of scope.
-- **No git.** The CLI does not commit to git: a headless run never opens,
-  creates or commits to a repository, whatever `enable_git` says and wherever
-  `.git` points (a `gitdir:` file, a link, config includes). A save logs
-  "commit skipped in a headless run"; commit yourself after the run. Vetted
-  git support is a follow-up.
+- **Git.** A headless run never opens, creates or commits to a repository,
+  whatever `enable_git` says and wherever `.git` points (a `gitdir:` file, a
+  link, config includes). A save logs "commit skipped in a headless run";
+  commit yourself after the run. An attached save is different: it runs in the
+  person's Signex, as their own Save does, so it commits with the person's git
+  identity exactly as their save would, including `git init` and the first
+  commit of a pending library that asks for `enable_git`. Who made the change
+  is not recorded in the commit (provenance is tracked in #2253).
 - **Capabilities.** Each catalog command needs exactly one group: `read`,
   `edit`, `save`, `export`, `delete` or `library-write`. A run holds
   `read,edit`; `--allow` adds groups. A refused command names the one it needs. `edit` is any command
@@ -154,4 +320,5 @@ is enforced before the app sees a command.
   `--max-file-bytes` (64 MiB) is refused. Malformed JSON, an unknown field or
   text that is not UTF-8 is a refused line, never a panic.
 - **Audit.** Every command line, its status and its reason go to the Messages
-  log and to standard error, tagged with the run id.
+  log and to standard error, tagged with the run id. (Attached, the app's
+  Messages panel keeps the audit: see above.)

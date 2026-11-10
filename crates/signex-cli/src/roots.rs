@@ -7,6 +7,17 @@ use std::path::{Path, PathBuf};
 
 use crate::confine::canonical;
 
+/// The folder of `project` and the roots a run on it may name paths in.
+pub fn folder_and_roots(project: &Path) -> Result<(PathBuf, Vec<PathBuf>), String> {
+    let project_dir = project
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| format!("{} has no folder", project.display()))?;
+    let home = dirs::home_dir().and_then(|dir| canonical(&dir).ok());
+    let roots = project_root(&project_dir, home.as_deref())?;
+    Ok((project_dir, roots))
+}
+
 /// `project_dir` as the root, unless it is a filesystem root, `home` or a
 /// folder above it: a project file kept loose in the home folder
 /// (`signex-cli run ~/x.snxsch`) or at the top of a drive would otherwise make

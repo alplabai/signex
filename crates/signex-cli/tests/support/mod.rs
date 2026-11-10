@@ -166,19 +166,39 @@ pub fn list_libraries(fx: &Fixture, paths: &[&Path]) {
 pub struct Live {
     child: std::process::Child,
     lines: std::io::BufReader<std::process::ChildStdout>,
+    /// The agent registry the run holds its project in, when `start` made
+    /// one: not the user's.
+    _runtime: Option<tempfile::TempDir>,
 }
 
 impl Live {
     pub fn start(args: &[&str]) -> Self {
+        let runtime = tempfile::tempdir().expect("runtime dir");
+        let mut live = Self::start_in(runtime.path(), args);
+        live._runtime = Some(runtime);
+        live
+    }
+
+    /// [`Live::start`] with the agent registry under `runtime`.
+    pub fn start_in(runtime: &Path, args: &[&str]) -> Self {
         let mut child = Command::new(env!("CARGO_BIN_EXE_signex-cli"))
             .args(args)
+            .env("XDG_RUNTIME_DIR", runtime)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
             .expect("spawn signex-cli");
         let lines = std::io::BufReader::new(child.stdout.take().expect("stdout"));
-        Self { child, lines }
+        Self {
+            child,
+            lines,
+            _runtime: None,
+        }
+    }
+
+    pub fn pid(&self) -> u32 {
+        self.child.id()
     }
 
     /// Send one command line and return its result line.
@@ -194,6 +214,12 @@ impl Live {
 
     pub fn finish(mut self) {
         drop(self.child.stdin.take());
+        self.child.wait().expect("signex-cli ends");
+    }
+
+    /// End the run the way a signal does: no cleanup runs.
+    pub fn kill(mut self) {
+        self.child.kill().expect("kill signex-cli");
         self.child.wait().expect("signex-cli ends");
     }
 }
@@ -227,10 +253,13 @@ pub fn run_cli(args: &[&str], stdin: impl AsRef<[u8]>) -> Output {
     run_cli_env(args, stdin, &[])
 }
 
-/// [`run_cli`] with environment variables set for the child.
+/// [`run_cli`] with environment variables set for the child. Unless `env`
+/// names `XDG_RUNTIME_DIR`, the child's agent registry is a folder of its own.
 pub fn run_cli_env(args: &[&str], stdin: impl AsRef<[u8]>, env: &[(&str, &Path)]) -> Output {
+    let runtime = tempfile::tempdir().expect("runtime dir");
     let mut child = Command::new(env!("CARGO_BIN_EXE_signex-cli"))
         .args(args)
+        .env("XDG_RUNTIME_DIR", runtime.path())
         .envs(env.iter().copied())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

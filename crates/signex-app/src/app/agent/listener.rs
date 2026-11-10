@@ -54,7 +54,7 @@ pub(super) struct ListenerConfig {
     pub(super) boot_id: String,
     pub(super) token: Token,
     /// Held while the registry is written or removed.
-    pub(super) registry_lock: Arc<Mutex<()>>,
+    pub(super) registry_lock: Arc<Mutex<u64>>,
 }
 
 impl Hash for ListenerConfig {
@@ -83,31 +83,41 @@ fn run(config: ListenerConfig) -> impl Stream<Item = Message> {
 struct Guard {
     dir: PathBuf,
     boot_id: String,
-    registry_lock: Arc<Mutex<()>>,
+    registry_lock: Arc<Mutex<u64>>,
 }
 
 impl Drop for Guard {
+    /// The entries stay: the app still has its projects open, and the next
+    /// registry write makes them the entries of an app that does not listen.
     fn drop(&mut self) {
-        cleanup(&self.dir, &self.boot_id, &self.registry_lock);
+        cleanup(&self.dir, &self.boot_id, &self.registry_lock, false);
     }
 }
 
-/// Remove the token, the socket and the registry entries of `boot_id`, under
-/// the registry lock so it does not interleave with a write. A write that
-/// runs after it can still land; the quit path cleans the id again. Safe to
-/// repeat; what cannot be removed is said in Messages.
-pub(super) fn cleanup(dir: &std::path::Path, boot_id: &str, registry_lock: &Mutex<()>) {
+/// Remove the token and the socket of `boot_id`, and with `entries` the
+/// registry entries of this process (the app is quitting), under
+/// the registry lock so it does not interleave with a write. A write that runs
+/// after it can still land; the quit path cleans again. Safe to repeat; what
+/// cannot be removed is said in Messages.
+pub(super) fn cleanup(
+    dir: &std::path::Path,
+    boot_id: &str,
+    registry_lock: &Mutex<u64>,
+    entries: bool,
+) {
     let owner = Owner {
         pid: std::process::id(),
         boot_id: boot_id.to_string(),
         endpoint: endpoint_name(dir, boot_id),
     };
     let _held = registry_lock.lock().unwrap_or_else(PoisonError::into_inner);
-    let results = [
+    let mut results = vec![
         files::remove_if_ours(&token_path(dir, boot_id)),
         Listener::remove(dir, boot_id),
-        registry::remove_all(dir, &owner),
     ];
+    if entries {
+        results.push(registry::remove_all(dir, &owner));
+    }
     for why in results.into_iter().filter_map(Result::err) {
         crate::diagnostics::log_warning(format!("Agent connections: cleanup: {why}"));
     }
