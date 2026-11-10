@@ -546,6 +546,54 @@ fn the_corpus_leaf_sheet_judges_its_own_local_names_like_a_loose_sheet() {
 }
 
 #[test]
+fn a_parents_local_name_behind_its_port_is_a_name_seen_from_the_child() {
+    // Three levels: the root places P through PP; in P one net carries the
+    // local PNET and the hierarchical PP and is wired to C's entry X; in C
+    // that net carries only the hierarchical X, and another net the local
+    // GND. Seen from C, P is the parent: PNET is a name of X's net there
+    // (6761836527 point 6, "on the parent"), so Y on it is a rename and a
+    // wire to GND a short.
+    let dir = tempfile::tempdir().unwrap();
+    let mut top = SchematicSheet::default();
+    top.child_sheets
+        .push(sheet_symbol("P", "p.snxsch", &[("PP", (0.0, 0.0))]));
+    let mut p = child_with(&["PP"]);
+    p.labels.push(net_label("PNET", (10.16, 0.0)));
+    p.child_sheets
+        .push(sheet_symbol("C", "c.snxsch", &[("X", (10.16, 0.0))]));
+    let mut c = child_with(&["X"]);
+    c.wires.push(wire((0.0, 20.32), (10.16, 20.32)));
+    c.labels.push(net_label("GND", (0.0, 20.32)));
+    write(&dir.path().join("top.snxsch"), top);
+    write(&dir.path().join("p.snxsch"), p);
+    write(&dir.path().join("c.snxsch"), c);
+    let mut app = open_project(&dir);
+    // The app knows a grandchild belongs to the project from its open parent.
+    app.open_or_focus_sheet_path(dir.path().join("p.snxsch"));
+    app.open_or_focus_sheet_path(dir.path().join("c.snxsch"));
+    app.refresh_panel_ctx();
+    let label = ["at=5.08,0", "text=Y"];
+    let ends = ["start=10.16,0", "end=10.16,20.32"];
+    let reason = refusal(run(&mut app, "place_wire", &ends));
+    assert!(reason.contains("reach it from other sheets"), "{reason}");
+    let reason = refusal(run(&mut app, "place_net_label", &label));
+    assert!(reason.contains("reach it from other sheets"), "{reason}");
+    let reason = refusal(run(&mut app, "place_wire", &ends));
+    assert!(reason.contains("reach it from other sheets"), "{reason}");
+    answered_ok(run(
+        &mut app,
+        "place_wire",
+        &[ends[0], ends[1], "allow_merge=true"],
+    ));
+    let outcome = run(
+        &mut app,
+        "place_net_label",
+        &[label[0], label[1], "allow_merge=true"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
+}
+
+#[test]
 fn an_incomplete_project_passed_with_allow_merge_reports_the_sheets_merged_names() {
     // The child is missing; allow_merge places the short anyway, and the
     // answer still lists what it merged, by the sheet's own check.

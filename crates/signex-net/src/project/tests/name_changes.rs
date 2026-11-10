@@ -383,6 +383,50 @@ fn a_local_name_the_edit_brings_behind_a_port_counts() {
 }
 
 #[test]
+fn a_parents_local_name_behind_its_port_counts_when_the_child_is_edited() {
+    // Root places P through PP; P's net carries the local PNET and the
+    // hierarchical PP and reaches C's entry X; C's X net has no own name. Seen
+    // from C, P is the parent: a label Y on X's net renames PNET (6761836527
+    // point 6, "on the parent").
+    let mut root = empty_sheet();
+    let mut p_symbol = child_sheet("P", "p.sch", vec![sheet_pin("PP", pt(0.0, 0.0))]);
+    p_symbol.uuid = Uuid::now_v7();
+    root.child_sheets.push(p_symbol);
+    let mut p = child_of(&["PP"]);
+    p.labels.push(label("PNET", pt(10.0, 0.0), LabelType::Net));
+    let mut c_symbol = child_sheet("C", "c.sch", vec![sheet_pin("X", pt(10.0, 0.0))]);
+    c_symbol.uuid = Uuid::now_v7();
+    p.child_sheets.push(c_symbol);
+    let c = child_of(&["X"]);
+    let mut c_after = c.clone();
+    c_after
+        .labels
+        .push(label("Y", pt(10.0, 0.0), LabelType::Net));
+    let sheets = |c: SchematicSheet| {
+        HashMap::from([("p.sch".to_string(), p.clone()), ("c.sch".to_string(), c)])
+    };
+    let (bs, br) = graph_of(&root, &sheets(c));
+    let (as_, ar) = graph_of(&root, &sheets(c_after));
+    let roots = [ProjectRoot {
+        key: SheetKey::new("root"),
+    }];
+    let got = project_name_changes(
+        &ProjectGraph {
+            sheets: &bs,
+            resolved: &br,
+            roots: &roots,
+        },
+        &ProjectGraph {
+            sheets: &as_,
+            resolved: &ar,
+            roots: &roots,
+        },
+        &SheetKey::new("c.sch"),
+    );
+    assert!(got.iter().any(|c| c.needs_allow_merge), "{got:?}");
+}
+
+#[test]
 fn a_childs_local_label_behind_its_hierarchical_label_plays_no_part_on_the_parent() {
     // SensorA: hierarchical SDA and the local label SDA_INT on one net, both
     // there before the edit. The parent's I2C1_SDA wired to SensorA.SDA joins

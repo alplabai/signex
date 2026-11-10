@@ -103,9 +103,10 @@ pub struct ProjectNetChange {
 /// more named nets, or gained a name it did not carry. Whether one
 /// `needs_allow_merge` is the shared rule (`join_rule::needs_allow_merge`):
 /// a name a net already carries, alias included, is no change. A local label
-/// of another sheet than `edited` that was behind a hierarchical label BEFORE
-/// the edit plays no part on either side; on the edited sheet it stays a name,
-/// and one the edit itself brings behind a port still counts.
+/// that was behind a hierarchical label BEFORE the edit plays no part when,
+/// seen from the edited sheet `edited`, it is below or beside it; on the
+/// edited sheet and its ancestors (its parents) it stays a name, and one the
+/// edit itself brings behind a port still counts.
 pub fn project_name_changes(
     before: &ProjectGraph,
     after: &ProjectGraph,
@@ -113,8 +114,20 @@ pub fn project_name_changes(
 ) -> Vec<ProjectNetChange> {
     let before = stitch_project(before, Want::Members).members;
     let after = stitch_project(after, Want::Members).members;
+    // The edited sheet's placements; an ancestor's placement path is a prefix.
+    let edited_paths: HashSet<&[Uuid]> = before
+        .iter()
+        .chain(&after)
+        .flat_map(|net| &net.members)
+        .filter(|m| &m.sheet == edited)
+        .map(|m| m.occurrence.chain())
+        .collect();
     let mut hidden = behind_port(&before);
-    hidden.retain(|(sheet, ..)| sheet != edited);
+    hidden.retain(|(_, occurrence, _)| {
+        !edited_paths
+            .iter()
+            .any(|path| path.starts_with(occurrence.chain()))
+    });
     let before = named_nets(before, &hidden);
     let mut owner: HashMap<&NamedId, usize> = HashMap::new();
     for (index, net) in before.iter().enumerate() {
