@@ -236,6 +236,7 @@ impl Signex {
             ModalId::Preferences => Some(Message::Preferences(PreferencesMsg::Close)),
             ModalId::PrintPreview => Some(Message::PrintPreview(PrintPreviewMsg::Close)),
             ModalId::BomPreview => Some(Message::BomPreview(BomPreviewMsg::Close)),
+            ModalId::NewProject => Some(Message::from(NewProjectMsg::CancelRequested)),
             ModalId::FindReplace => Some(Message::FindReplaceMsg(
                 crate::find_replace::FindReplaceMsg::Close,
             )),
@@ -467,6 +468,7 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
         ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
         ModalId::Preferences => iced::Size::new(900.0, 620.0),
+        ModalId::NewProject => iced::Size::new(860.0, 700.0),
         ModalId::FindReplace => iced::Size::new(440.0, 320.0),
         ModalId::RenameDialog => iced::Size::new(420.0, 151.0),
         ModalId::RemoveDialog => iced::Size::new(520.0, 221.0),
@@ -539,12 +541,19 @@ pub(crate) fn modal_is_fixed(modal: ModalId) -> bool {
         | ModalId::FindReplace
         | ModalId::PrintPreview
         | ModalId::BomPreview
+        | ModalId::NewProject
         | ModalId::KeyboardShortcuts
         | ModalId::PassiveCalculator
         | ModalId::FirstRunTour
         | ModalId::LibraryEditRow
         | ModalId::LibraryUpdates => false,
     }
+}
+
+/// The smallest a resizable dialog window may be dragged to, in the units of
+/// [`modal_size`]: room for the left column, the preview pane and the footer.
+pub(crate) fn modal_min_size(modal: ModalId) -> Option<iced::Size> {
+    (modal == ModalId::NewProject).then(|| iced::Size::new(760.0, 380.0))
 }
 
 /// The settings `modal`'s window opens with: its size, and fixed (not
@@ -554,6 +563,7 @@ pub(crate) fn modal_window_settings(modal: ModalId, size: iced::Size) -> iced::w
     iced::window::Settings {
         resizable: !fixed,
         minimizable: !fixed,
+        min_size: modal_min_size(modal),
         ..detached_modal_settings(size)
     }
 }

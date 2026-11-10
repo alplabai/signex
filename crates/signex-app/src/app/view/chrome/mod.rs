@@ -135,6 +135,7 @@ impl Signex {
             ModalId::EnableVersionControl => self.view_enable_version_control_dialog_body(),
             ModalId::GridProperties => self.view_grid_properties_dialog_body(),
             ModalId::SelectionFilterCustom => self.view_selection_filter_custom_body(),
+            ModalId::NewProject => self.view_new_project_window(),
             ModalId::About => {
                 crate::about_modal::window_view(&self.document_state.panel_ctx.tokens)
             }

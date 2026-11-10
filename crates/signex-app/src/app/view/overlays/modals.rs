@@ -294,10 +294,9 @@ impl Signex {
     }
 
     pub(in crate::app::view) fn new_project_overlay(&self) -> Option<Element<'_, Message>> {
-        self.ui_state
-            .new_project
-            .is_some()
-            .then(|| self.view_new_project_dialog())
+        (self.ui_state.new_project.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::NewProject))
+        .then(|| self.view_new_project_dialog())
     }
 
     pub(in crate::app::view) fn selection_filter_custom_overlay(
