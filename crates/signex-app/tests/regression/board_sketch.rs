@@ -10,7 +10,7 @@ use signex_app::dock::DockMessage;
 use signex_app::keymap::{
     AppCommandId, ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutTrigger,
 };
-use signex_app::library::editor::footprint::state::SketchTool;
+use signex_app::library::editor::footprint::SketchTool;
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit, RoleTag};
 use signex_app::panels::{BoardSketchAttrMsg, PanelMsg};
 use signex_sketch::entity::EntityKind;
@@ -31,11 +31,12 @@ fn layer(id: u8, name: &str) -> LayerDef {
     }
 }
 
-/// An empty two-layer board with one top track along y = 15.
+/// An empty two-layer board with one top track along y = 15. It carries a
+/// fixed id: a file with the nil id is given a new one on every open.
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
-        uuid: Uuid::nil(),
+        uuid: Uuid::from_u128(0xB0A2D),
         version: 1,
         generator: "signex-test".into(),
         thickness: 1.6,
