@@ -113,10 +113,16 @@ pub fn edit_list_text(edits: &[EditSpec]) -> String {
 
 /// Commands that edit a sheet and still may not be in the list, and why.
 /// Everything else is derived from the catalog (`edit_refusal`).
-const PROJECT_WIDE: &[(&str, &str)] = &[(
-    "assign_net_class",
-    "it writes the project's net classes, which no sheet's undo step covers",
-)];
+const PROJECT_WIDE: &[(&str, &str)] = &[
+    (
+        "assign_net_class",
+        "it writes the project's net classes, which no sheet's undo step covers",
+    ),
+    (
+        "update_pcb_from_schematic",
+        "it edits the project's board, which no sheet's undo step covers; run it as its own command",
+    ),
+];
 
 /// Why `command` may not be one of the edits, or `None` when it may: it must
 /// be an undoable edit of a document that runs headless through an operand
@@ -258,6 +264,7 @@ mod tests {
             ("open_document", "does not edit a document"),
             ("apply_edits", "its own edits"),
             ("assign_net_class", "net classes"),
+            ("update_pcb_from_schematic", "edits the project's board"),
             ("toggle_properties_panel", "not runnable headless"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));

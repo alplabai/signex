@@ -12,6 +12,7 @@
 //! or numerical-library source consulted.
 
 pub mod array;
+pub mod board;
 pub mod body3d;
 pub mod courtyard;
 pub mod cutout;
@@ -29,6 +30,7 @@ pub mod traced_loops;
 pub mod vscore;
 
 pub use array::bake_arrays;
+pub use board::{BoardBakeError, bake_board};
 pub use body3d::bake_body3d;
 pub use courtyard::bake_courtyard;
 pub use cutout::bake_cutouts;

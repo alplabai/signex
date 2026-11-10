@@ -21,6 +21,11 @@ const MIN_BAND_PX: f32 = 3.0;
 pub struct Highlight {
     pub selected: Vec<Shape>,
     pub hover: Option<Shape>,
+    /// Bodies of selected footprints, outlined with a faint fill.
+    pub bodies: Vec<Shape>,
+    pub hover_body: Option<Shape>,
+    /// Where a footprint drag or Move would put what it carries (#2240).
+    pub ghost: Vec<Shape>,
 }
 
 /// Paints [`PcbCanvas`]'s highlight and marquee; takes no input.
@@ -57,6 +62,15 @@ impl canvas::Program<Message> for HighlightLayer<'_> {
         }
         if let Some(shape) = &canvas.highlight.hover {
             paint(&mut frame, shape, &camera, view, accent, 0.2, 1.0);
+        }
+        for shape in &canvas.highlight.bodies {
+            paint(&mut frame, shape, &camera, view, accent, 0.08, 1.5);
+        }
+        if let Some(shape) = &canvas.highlight.hover_body {
+            paint(&mut frame, shape, &camera, view, accent, 0.04, 1.0);
+        }
+        for shape in &canvas.highlight.ghost {
+            paint(&mut frame, shape, &camera, view, accent, 0.3, 1.0);
         }
         if let Some((from, to)) = canvas.marquee.get() {
             let at = |p: signex_types::pcb::Point| Point::new(p.x as f32, p.y as f32);

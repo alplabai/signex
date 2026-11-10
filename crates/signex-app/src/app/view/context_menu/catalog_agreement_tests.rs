@@ -64,7 +64,6 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("References", "planned submenu stub"),
     ("Unions", "planned submenu stub"),
     ("Snippets", "planned submenu stub"),
-    ("Cross Probe", "planned, no behaviour"),
     ("Comment...", "planned, no behaviour"),
     ("Pin Mapping...", "planned, no behaviour"),
     ("Supplier Links...", "planned, no behaviour"),
@@ -75,6 +74,8 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
         "planned, tree-addressed",
     ),
     ("Validate Project", "tree-addressed"),
+    // #1312: runs for the clicked project, which the palette cannot name.
+    ("Update PCB Document", "tree-addressed"),
     ("Add Existing to Project...", "tree-addressed"),
     ("Rename...", "tree-addressed"),
     ("Close Project Documents", "tree-addressed"),

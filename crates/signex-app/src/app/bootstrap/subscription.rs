@@ -56,6 +56,7 @@ struct OpenOverlays {
     grid_properties_open: bool,
     selection_filter_custom_open: bool,
     new_project_open: bool,
+    update_pcb_open: bool,
     sheet_numbering_open: bool,
     library_picker_open: bool,
     library_document_options_open: bool,
@@ -341,6 +342,9 @@ impl OpenOverlays {
                     Message::Erc(ErcMsg::CloseDialog)
                 }
             }),
+            OverlayId::UpdatePcb => self
+                .update_pcb_open
+                .then(|| Message::from(crate::app::UpdatePcbMsg::CloseRequested)),
 
             // ── Library modals ──────────────────────────────────────
             OverlayId::LibraryPicker => self
@@ -610,6 +614,8 @@ impl Signex {
             selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some()
                 && !modal_detached(crate::app::state::ModalId::SelectionFilterCustom),
             new_project_open: self.ui_state.new_project.is_some(),
+            // A headless apply run has no dialog to close.
+            update_pcb_open: self.ui_state.update_pcb.as_ref().is_some_and(|s| !s.apply),
             sheet_numbering_open: self.ui_state.sheet_numbering.is_some(),
             library_picker_open: self.library.picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPicker),
@@ -1698,6 +1704,7 @@ mod tests {
             grid_properties_open,
             selection_filter_custom_open,
             new_project_open,
+            update_pcb_open,
             sheet_numbering_open,
             library_picker_open,
             library_document_options_open,
@@ -1760,6 +1767,7 @@ mod tests {
             }),
             ("grid_properties_open", |o| o.grid_properties_open = true),
             ("new_project_open", |o| o.new_project_open = true),
+            ("update_pcb_open", |o| o.update_pcb_open = true),
             ("sheet_numbering_open", |o| o.sheet_numbering_open = true),
             ("selection_filter_custom_open", |o| {
                 o.selection_filter_custom_open = true

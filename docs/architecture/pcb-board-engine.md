@@ -19,6 +19,10 @@ editing UI does not have to decide it.
   runs `DocumentState::execute_board` and repaints. No handler writes a
   `PcbBoard`: the one remaining direct write is a document-id repair, which
   is `BoardEngine::reassign_document_id` (not an edit, as for a sheet).
+- The board sketch and what it baked (keepouts, cutouts, mounting holes,
+  V-scores, and the outline when the sketch owns it) change only through
+  `BoardCommand::SetBoardSketch`, one step (#2234). `SetBoardOutline` is
+  refused while the sketch owns the outline. See `docs/PCB_SKETCH.md`.
 - The history is `History<Vec<BoardCommand>>` on `signex-history`. A step
   holds the inverse commands, last first, not a board: a 10k-track board
   makes per-step snapshots too expensive. Undoing a step runs it and stores
@@ -61,6 +65,51 @@ editing UI does not have to decide it.
 through operand handlers, and no board command has an id yet. When the first
 board editing command gets one, its handler calls `execute_board_commands`.
 `read_document` already reports the board's revision.
+
+## Forward annotation (#1312)
+
+Update PCB from schematic runs its change list as one `execute_labelled` step
+(through `CheckedStep`, the labelled and revision-checked form of
+`execute_board_commands`), so it is all or nothing, one undo step, and
+refused when the board moved since the list was built. The commands it uses,
+each with an exact inverse:
+
+- `AddItems` appends items to the end of their lists; refused with
+  `ItemAlreadyPresent`, `DuplicateItem`, `NonFinite` (a position or angle,
+  a footprint's pads' included, that is not a number) or `PadAlreadyPresent`
+  (a new pad uuid already used by the board, a footprint, pad, track, via,
+  zone or text, or by another new item: they share one id space, as in the
+  load repair) or `UuidAlreadyUsed` (a new item whose own uuid the board, a
+  pad or an item of another kind uses). Inverse: `DeleteItems`.
+- `ReplaceFootprint { footprint, with }` swaps in a library footprint given
+  in its top-side form. The board footprint keeps its uuid, position,
+  rotation, side, lock, schematic link, designator, value and preserved
+  unknown data; it takes the template's name, pads, graphics and
+  properties. The n-th new pad of a number takes the net and net lock of
+  the n-th old pad of that number (a number the old footprint lacks gets no
+  net), so a lock on one of several `EP` pads survives; when the new
+  footprint has fewer pads of a number and an old pad past the new count
+  holds a net or a lock, the replace is refused (`PadCountMismatch`). On the bottom side the
+  template is flipped with `pcb_geom::flip_footprint` first. Refused also for
+  a template not on a top-side layer this build reads (`TemplateNotTopSide`,
+  an empty or unknown layer included), with a pad that is not a number
+  (`NonFinite`), or with a pad uuid used on the board (`PadAlreadyPresent`). Inverse: `RestoreFootprint`, the whole old
+  footprint.
+- `SetFootprintText` sets the designator and value and the Reference and
+  Value property texts. Inverse: `RestoreFootprintText`, which puts back
+  every property text as it was.
+- `SetFootprintLink` sets or clears the `SymbolLink`. Its inverse is itself.
+- `SetNets(BoardNetEdit)` wraps `signex_net::board::BoardNetEdit::apply`;
+  refused whole (`BoardNetEdit::check`) when a change names a footprint,
+  pad or zone the board does not hold (`FootprintNotFound`, `PadNotFound`,
+  `ItemNotFound`) or names one twice, so a stale list is never a silent
+  no-op. The inverse is the edit `apply` returns, holding only what was
+  written, so undo is never refused.
+
+`BoardEngine::check_batch(commands)` runs the lease check and then the list
+on a copy of the board, for the dialog's Validate: `BatchRefusal { index, error }` names the first command
+that would be refused. The library identity of a footprint (`library_ref`)
+is not carried yet.
 
 ## Collab leases
 

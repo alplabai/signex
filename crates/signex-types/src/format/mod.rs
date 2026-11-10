@@ -32,6 +32,7 @@ use uuid::Uuid;
 use crate::pcb::{PcbBoard, Zone};
 use crate::schematic::SchematicSheet;
 
+mod board_sketch;
 mod extras;
 mod finite_toml;
 mod header_id;
@@ -52,6 +53,8 @@ mod uuid_repair;
 mod version;
 mod wire_color_repair;
 
+#[cfg(test)]
+mod board_sketch_tests;
 #[cfg(test)]
 mod body_style_tests;
 #[cfg(test)]
@@ -76,6 +79,8 @@ mod object_lock_tests;
 mod pcb_footprints_tests;
 #[cfg(test)]
 mod pcb_layer_tests;
+#[cfg(test)]
+mod pcb_lib_ref_tests;
 #[cfg(test)]
 mod pcb_lock_name_tests;
 #[cfg(test)]
@@ -252,6 +257,14 @@ pub enum FormatError {
         prefix: String,
         len: usize,
         max: usize,
+    },
+    #[error("block {block:?}: row {row} field {field:?} value {value:?} cannot be saved: {why}")]
+    UnwritableField {
+        block: String,
+        row: usize,
+        field: String,
+        value: String,
+        why: String,
     },
     #[error("TSV block {block:?}: row {row} field {field:?} parse error: {message}")]
     TsvFieldParse {
@@ -805,7 +818,13 @@ impl SnxPcb {
         }
 
         // TSV blocks: footprints, pads, tracks, vias.
-        let footprint_rows = build_rows("footprints", &self.board.footprints, footprint_to_row)?;
+        let footprint_rows = self
+            .board
+            .footprints
+            .iter()
+            .enumerate()
+            .map(|(row, fp)| footprint_to_row(fp).map_err(|e| e.at("footprints", row)))
+            .collect::<Result<Vec<_>, _>>()?;
         let mut pad_rows: Vec<PcbPadRow> = Vec::new();
         for fp in &self.board.footprints {
             for pad in &fp.pads {
@@ -836,6 +855,9 @@ impl SnxPcb {
             finite_toml::ensure_finite(&wrapper)?;
             out.push_str(&toml::to_string_pretty(&wrapper)?);
         }
+
+        // The board sketch (#2234): absent for a board without one.
+        board_sketch::write(&mut out, &self.board)?;
 
         // Footprint extras / pad extras / board extras — wrap in a
         // single `[extras]` tree so toml's serializer produces the
@@ -938,6 +960,8 @@ impl SnxPcb {
             None => (Vec::new(), UnknownFields::default()),
         };
 
+        let (sketch, board_sketch_unknown) = board_sketch::read(raw.board_sketch)?;
+
         let mut board = PcbBoard {
             uuid: raw.pcb_id,
             version: raw.version,
@@ -953,6 +977,7 @@ impl SnxPcb {
             zones,
             graphics: board_extras.graphics,
             texts: board_extras.texts,
+            sketch,
             unknown: BoardUnknown {
                 manifest: raw.unknown,
                 stackup: stackup_unknown,
@@ -960,6 +985,7 @@ impl SnxPcb {
                 nets: nets_unknown,
                 extras: board_extras.unknown,
                 extras_root: extras.unknown,
+                board_sketch: board_sketch_unknown,
                 newer_minor_source: version::is_newer_minor(&raw.format, SNXPCB_FORMAT_V1)
                     .then(|| raw.format.clone()),
                 load_repairs: Vec::new(),
@@ -1015,6 +1041,8 @@ struct PcbRaw {
     zones: Option<Vec<Zone>>,
     #[serde(default)]
     extras: Option<PcbExtrasRaw>,
+    #[serde(default)]
+    board_sketch: Option<board_sketch::BoardSketchRaw>,
     /// Foreign manifest keys; carried onto the board so they survive
     /// the codec wrapper being discarded.
     #[serde(flatten)]

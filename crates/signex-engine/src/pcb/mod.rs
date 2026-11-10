@@ -9,12 +9,21 @@
 //! deltas: `x + d - d` is not `x` in `f64`, and the inverse must restore the
 //! board bit for bit.
 
+mod batch;
+mod board_sketch;
 mod command;
+pub mod eco;
 mod engine;
 mod error;
 mod footprint;
+mod footprint_content;
 mod items;
+pub mod placement;
 
+#[cfg(test)]
+mod board_sketch_tests;
+#[cfg(test)]
+mod content_tests;
 #[cfg(test)]
 mod engine_tests;
 #[cfg(test)]
@@ -22,8 +31,10 @@ mod pad_shape_tests;
 #[cfg(test)]
 mod tests;
 
+pub use batch::BatchRefusal;
 pub use command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
 pub use engine::BoardEngine;
 pub use error::BoardCommandError;
 pub use footprint::FootprintFace;
+pub use footprint_content::FootprintText;
 pub use items::{BoardItem, BoardItemId, RemovedItem};

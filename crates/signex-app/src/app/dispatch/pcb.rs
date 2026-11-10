@@ -22,6 +22,18 @@ impl Signex {
                 self.handle_pcb_drc_violation_picked(index);
                 Task::none()
             }
+            PcbMsg::CanvasInWindow { window, msg } => {
+                self.run_in_window(window, false, |app| app.dispatch_pcb_canvas_message(msg))
+            }
+            PcbMsg::View(event) => {
+                self.apply_pcb_view_event(None, event);
+                Task::none()
+            }
+            PcbMsg::ViewInWindow { window, event } => {
+                self.apply_pcb_view_event(Some(window), event);
+                Task::none()
+            }
+            PcbMsg::Sketch(event) => self.handle_board_sketch(event),
         }
     }
 }

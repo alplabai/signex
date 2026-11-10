@@ -134,6 +134,12 @@ pub enum Message {
     /// PCB board-view events, e.g. showing or hiding a net's ratsnest
     /// (ADR-0001 D3). Routed to `dispatch_pcb_message`.
     Pcb(PcbMsg),
+    /// Cross Probe and Cross Select Mode between the schematic and the
+    /// board (#1312). Routed to `dispatch_cross_probe_message`.
+    CrossProbe(CrossProbeMsg),
+    /// Update PCB from schematic and New PCB (#1312). Routed to
+    /// `dispatch_update_pcb_message`.
+    UpdatePcb(crate::app::UpdatePcbMsg),
     /// Export subsystem message family — namespaced (ADR-0001 D3).
     /// PDF / netlist / BOM export lifecycle plus the export-error
     /// modal dismiss. Routed to `dispatch_export_message`.
@@ -163,16 +169,18 @@ impl Message {
     }
 }
 
+mod cross_probe;
 mod dialogs;
 mod messages;
 mod net_nav;
 mod pcb;
 mod state;
 
+pub use cross_probe::CrossProbeMsg;
 pub use dialogs::*;
 pub use messages::*;
 pub use net_nav::NetNavMsg;
-pub use pcb::{DrcRunResult, PcbMsg};
+pub use pcb::{BoardSketchMsg, DrcRunResult, PcbMsg, PcbViewMsg};
 pub use state::*;
 
 #[cfg(test)]

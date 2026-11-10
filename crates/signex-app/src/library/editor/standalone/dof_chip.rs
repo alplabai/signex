@@ -3,11 +3,11 @@
 
 use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Widget};
-use signex_i18n::{I18n, Localized, MessageId, ids, t};
+use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_sketch::solver::dof::DofColor;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::text;
 use signex_widgets::theme_ext;
+use signex_widgets::{Label, text};
 
 use crate::app::FootprintDocument;
 use crate::library::messages::LibraryMessage;
@@ -36,7 +36,7 @@ fn dof_state(editor: &FootprintDocument) -> (PillTone, MessageId) {
 }
 
 fn pill<'a>(
-    label: Localized,
+    label: Label<'static>,
     dot: Option<iced::Color>,
     fill: iced::Color,
     ink: iced::Color,
@@ -86,14 +86,20 @@ pub fn overlay<'a>(
     let (tone, label) = dof_state(editor);
     let (fill, ink) = pill_colors(tokens, tone);
     let dot = (tone != PillTone::Neutral).then_some(ink);
-    let dof = pill(t!(i18n, label), dot, fill, ink, line);
+    let dof = pill(t!(i18n, label).into(), dot, fill, ink, line);
 
-    let info = t!(
-        i18n,
-        ids::EDITORS_FOOTPRINT_NAME_PADS,
-        "name" => editor.primitive().name.as_str(),
-        "pads" => editor.state.pads.len()
-    );
+    // A board sketch has no pads: its pill names the board only (#2234).
+    let info: Label<'static> = if editor.state.board_backdrop.is_some() {
+        UserText::new(editor.primitive().name.as_str()).into()
+    } else {
+        t!(
+            i18n,
+            ids::EDITORS_FOOTPRINT_NAME_PADS,
+            "name" => editor.primitive().name.as_str(),
+            "pads" => editor.state.pads.len()
+        )
+        .into()
+    };
     let info = pill(
         info,
         None,

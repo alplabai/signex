@@ -241,6 +241,10 @@ impl Signex {
     /// Save All flow, with nothing to do afterwards.
     fn save_all_dirty(&mut self) -> Task<Message> {
         self.commit_pending_title_block_drafts();
+        // The board sketch goes to its board first; a refused bake holds it.
+        if !self.settle_board_sketch_of(None) {
+            return Task::none();
+        }
         let rows = self.library.dirty_editors();
         let mut paths: Vec<std::path::PathBuf> = self
             .document_state

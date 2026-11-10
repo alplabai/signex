@@ -169,7 +169,7 @@ impl BoardEngine {
     /// they run. Every execute, undo and redo passes through here before it
     /// touches the board, so the API does not change when leases arrive.
     /// Today every command is allowed.
-    fn check_lease(&self, _commands: &[BoardCommand]) -> Result<(), BoardCommandError> {
+    pub(super) fn check_lease(&self, _commands: &[BoardCommand]) -> Result<(), BoardCommandError> {
         Ok(())
     }
 

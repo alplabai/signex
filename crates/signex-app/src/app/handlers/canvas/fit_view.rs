@@ -26,7 +26,7 @@ pub(crate) fn fit_rect(bounds: [f64; 4]) -> iced::Rectangle {
 impl Signex {
     /// Frame the active sheet's selection. Nothing selected is a no-op that
     /// says so in the Messages panel.
-    pub(super) fn fit_selection(&mut self) {
+    pub(crate) fn fit_selection(&mut self) {
         if !self.has_active_schematic() {
             crate::diagnostics::log_info("Zoom to selection works on schematic sheets");
             return;

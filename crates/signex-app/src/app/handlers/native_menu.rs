@@ -27,6 +27,8 @@ impl Signex {
             Arc::clone(&self.ui_state.i18n),
         )
         .with_keymap(Arc::clone(&self.ui_state.active_keymap))
+        .with_cross_select(self.interaction_state.cross_select.enabled)
+        .with_pcb_sync(self.pcb_sync_label(self.native_menu_window()))
     }
 
     /// The menu bar as the Model stands now. The iced runtime calls it after

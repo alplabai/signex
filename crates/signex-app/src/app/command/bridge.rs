@@ -64,6 +64,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     // group's last tool, as the Active Bar button does.
     let active_bar = |action| Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(action));
     let text_edit = |target| Message::TextEdit(TextEditMsg::Requested(target));
+    let pcb_view = |event| Message::Pcb(PcbMsg::View(event));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -188,6 +189,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         // the KEY, and the arm names the AXIS it flips — hence the cross.
         "mirror_x" => Message::Edit(EditMsg::MirrorSelectedY),
         "mirror_y" => Message::Edit(EditMsg::MirrorSelectedX),
+        "flip_selection" => Message::Edit(EditMsg::FlipSelection),
         // No part in hand: choose one in the picker (#1767).
         "open_components_panel" | "place_symbol" => {
             Message::Library(crate::library::LibraryMessage::OpenPicker)
@@ -275,8 +277,23 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             Message::Menu(MenuMessage::OpenKeyboardShortcuts)
         }
         "toggle_visible_grid" => Message::Ui(UiMsg::GridToggle),
+        "toggle_ratsnest" => pcb_view(PcbViewMsg::RatsnestVisibilityToggled),
+        "board_sketch" => Message::Pcb(PcbMsg::Sketch(crate::app::BoardSketchMsg::ModeToggled)),
+        "next_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: true }),
+        "prev_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: false }),
+        "toggle_layer_visibility" => pcb_view(PcbViewMsg::ActiveLayerVisibilityToggled),
+        "show_all_layers" => pcb_view(PcbViewMsg::AllLayersShown),
+        "toggle_layers_panel" => {
+            Message::Overlay(OverlayMsg::PanelToggled(crate::panels::PanelKind::Layers))
+        }
         "toggle_auto_focus" => Message::Overlay(OverlayMsg::ToggleAutoFocus),
         "toggle_electrical_grid" => Message::Ui(UiMsg::ToggleSnapHotspots),
+        "cross_probe" => Message::CrossProbe(CrossProbeMsg::ProbeRequested),
+        "toggle_cross_select_mode" => Message::CrossProbe(CrossProbeMsg::CrossSelectModeToggled),
+        // #1312: the Update PCB dialog for the document in view. Its headless
+        // `apply=true` form runs through `run_operands`, not here.
+        "update_pcb_from_schematic" => Message::UpdatePcb(UpdatePcbMsg::Requested { apply: false }),
+        "new_pcb_document" => Message::UpdatePcb(UpdatePcbMsg::NewPcbRequested(None)),
         "undo" => Message::Edit(EditMsg::Undo),
         "unselect_all" => Message::Selection(selection_request::SelectionRequest::ClearAll),
         // Tools > Up Hierarchy: the sheet that references the focused one.
@@ -518,12 +535,9 @@ mod tests {
         "refresh_view",
         "reset_local_coordinates", "select_expand_connection",
         "select_node_or_connection_item",
-        "switch_segment_posture", "toggle_cross_select_mode", "toggle_floating_panels",
+        "switch_segment_posture", "toggle_floating_panels",
         "toggle_search_panel",
         "undo_last_segment",
-        // Forward annotation does not exist yet. Aliasing this to ERC made the
-        // update-PCB shortcut run a rule check under the wrong name (#1247).
-        "update_pcb_from_schematic",
     ];
 
     /// Coverage ratchet: the set of catalog ids with no dispatch arm may
@@ -890,15 +904,17 @@ mod tests {
         assert_eq!(app.interaction_state.active_canvas().selected.len(), 1);
     }
 
-    /// #1247 - the update-PCB shortcut must not be an alias for ERC. Until
-    /// forward annotation exists it has no arm, so it is unavailable like any
-    /// other unmapped command, while Run ERC keeps its own arm.
+    /// #1247 - the update-PCB shortcut must not be an alias for ERC. It opens
+    /// the Update PCB dialog (#1312), while Run ERC keeps its own arm.
     #[test]
     fn update_pcb_from_schematic_does_not_run_erc() {
         let update_pcb = AppCommandId::new("update_pcb_from_schematic").unwrap();
         let run_erc = AppCommandId::new("run_erc").unwrap();
 
-        assert!(!is_dispatchable(&update_pcb));
+        assert!(matches!(
+            resolve(&update_pcb, &CommandArgs::none()),
+            Some(Message::UpdatePcb(UpdatePcbMsg::Requested { apply: false }))
+        ));
         assert!(matches!(
             resolve(&run_erc, &CommandArgs::none()),
             Some(Message::Erc(ErcMsg::Run))

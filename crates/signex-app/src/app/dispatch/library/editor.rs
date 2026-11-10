@@ -304,6 +304,10 @@ impl Signex {
         path: std::path::PathBuf,
         msg: FootprintEditorMsg,
     ) -> Task<Message> {
+        // A board in sketch mode hosts the same sketch editor (#2234).
+        if self.board_sketch_takes(&path, &msg) {
+            return self.apply_board_sketch_edit(msg);
+        }
         // v0.26-E — clipboard ops need both `pad_clipboard` and the
         // editor mutable simultaneously, so split-borrow at the call
         // site instead of routing through `apply_footprint_primitive_edit`.

@@ -2,10 +2,12 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, item, item_if, panel_item, stub, submenu, unavailable,
+    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, item, item_if, panel_item, stub,
+    submenu, unavailable,
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
+use crate::app::update_pcb::PcbSyncLabel;
 use crate::menu_bar::{MenuContext, enabled};
 use crate::panels::PanelKind;
 
@@ -14,6 +16,11 @@ const SEP: MenuEntry = MenuEntry::Separator;
 pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         cmd_item(ctx, cmd("new_document", "New Project", "Ctrl+N")),
+        // A board for the open project (#1312); greyed with no project.
+        submenu(
+            "New",
+            vec![cmd_item_gated(ctx, cmd("new_pcb_document", "PCB", ""))],
+        ),
         cmd_item(ctx, cmd("open_document", "Open...", "Ctrl+O")),
         submenu("Open Recent", open_recent(ctx)),
         SEP,
@@ -105,12 +112,32 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("smart_paste", "Paste Special", "Shift+Ctrl+V")),
         cmd_item_gated(ctx, cmd("duplicate", "Duplicate", "Ctrl+D")),
         cmd_item_gated(ctx, cmd("delete_selection", "Delete", "Del")),
+        submenu("Move", move_menu(ctx)),
         submenu("Arrange", arrange(ctx)),
         SEP,
         cmd_item_gated(ctx, cmd("select_all", "Select All", "Ctrl+A")),
         SEP,
         cmd_item_gated(ctx, cmd("find", "Find", "Ctrl+F")),
         cmd_item_gated(ctx, cmd("find_and_replace", "Find and Replace", "Ctrl+H")),
+    ]
+}
+
+/// Edit ▸ Move: move, turn and mirror the selection, on a sheet and on a
+/// board (#2240). Flip Selection puts footprints on the other board side.
+/// Gated by the commands, so a locked footprint greys the board rows.
+fn move_menu(ctx: &MenuContext) -> Vec<MenuEntry> {
+    vec![
+        cmd_item_gated(ctx, cmd("move_object", "Move", "")),
+        cmd_item_gated(ctx, cmd("move_selection", "Move Selection", "")),
+        SEP,
+        cmd_item_gated(ctx, cmd("rotate_counterclockwise", "Rotate", "Space")),
+        cmd_item_gated(
+            ctx,
+            cmd("rotate_clockwise", "Rotate Clockwise", "Shift+Space"),
+        ),
+        cmd_item_gated(ctx, cmd("mirror_x", "Mirror X", "X")),
+        cmd_item_gated(ctx, cmd("mirror_y", "Mirror Y", "Y")),
+        cmd_item_gated(ctx, cmd("flip_selection", "Flip Selection", "")),
     ]
 }
 
@@ -162,6 +189,16 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             cmd("toggle_auto_focus", "AutoFocus (dim unselected)", "F9"),
         ),
         SEP,
+        // The board view: greyed unless a PCB is open.
+        cmd_item_gated(ctx, cmd("toggle_ratsnest", "Toggle Ratsnest", "")),
+        cmd_item_gated(ctx, cmd("next_layer", "Next Layer", "")),
+        cmd_item_gated(ctx, cmd("prev_layer", "Previous Layer", "")),
+        cmd_item_gated(
+            ctx,
+            cmd("toggle_layer_visibility", "Toggle Layer Visibility", ""),
+        ),
+        cmd_item_gated(ctx, cmd("show_all_layers", "Show All Layers", "")),
+        SEP,
         // Panels work without an active document (they show an empty
         // state), so these are always available.
         panel_item(
@@ -201,6 +238,12 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             PanelKind::SignexAi,
             MenuMessage::OpenSignexAiPanel,
         ),
+        panel_item(
+            ctx,
+            "Layers",
+            PanelKind::Layers,
+            MenuMessage::OpenLayersPanel,
+        ),
     ]
 }
 
@@ -225,10 +268,39 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
 }
 
 pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
-    vec![cmd_item_gated(
+    vec![
+        update_pcb_row(ctx),
+        // #2234: enter or leave the sketch of the board in view; greyed
+        // with no PCB.
+        cmd_item_gated(ctx, cmd("board_sketch", "Board Sketch", "")),
+        SEP,
+        cmd_item_gated(
+            ctx,
+            cmd("open_parameter_manager", "Parameter Manager...", ""),
+        ),
+    ]
+}
+
+/// Design ▸ Update PCB Document `<board>` on a schematic, Import Changes
+/// From `<project>` on a board (#1312): one command, worded for the
+/// document in view.
+fn update_pcb_row(ctx: &MenuContext) -> MenuEntry {
+    use signex_i18n::{ids, t};
+    let i18n = &ctx.i18n;
+    let label = match &ctx.pcb_sync {
+        Some(PcbSyncLabel::UpdateBoard(Some(board))) => {
+            t!(i18n, ids::UPDATE_PCB_MENU_UPDATE_BOARD, "board" => board.as_str())
+        }
+        Some(PcbSyncLabel::ImportFrom(project)) => {
+            t!(i18n, ids::UPDATE_PCB_MENU_IMPORT, "project" => project.as_str())
+        }
+        Some(PcbSyncLabel::UpdateBoard(None)) | None => t!(i18n, ids::UPDATE_PCB_MENU_UPDATE),
+    };
+    cmd_item_gated_as(
         ctx,
-        cmd("open_parameter_manager", "Parameter Manager...", ""),
-    )]
+        cmd("update_pcb_from_schematic", "Update PCB Document", ""),
+        label.into_string(),
+    )
 }
 
 pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
@@ -326,6 +398,19 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("run_drc", "Design Rule Check", "")),
         // Planned: no schematic net list panel exists yet (#1269).
         stub("Net Inspector"),
+        SEP,
+        // #1312: Cross Probe shows the selection on the other side; Cross
+        // Select Mode (checked while on) mirrors every selection there.
+        cmd_item_gated(ctx, cmd("cross_probe", "Cross Probe", "")),
+        cmd_toggle(
+            ctx,
+            cmd(
+                "toggle_cross_select_mode",
+                "Cross Select Mode",
+                "Ctrl+Shift+X",
+            ),
+            ctx.cross_select,
+        ),
         SEP,
         item_if(
             "Up Hierarchy",

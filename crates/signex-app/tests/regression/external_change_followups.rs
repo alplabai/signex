@@ -33,6 +33,7 @@ fn sheet_text(paper: &str) -> String {
 
 fn board(thickness: f64) -> PcbBoard {
     PcbBoard {
+        sketch: None,
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         version: 1,

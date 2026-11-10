@@ -14,9 +14,11 @@
 //! (`save_primitive_tab_at`); the editor view only owns the widget
 //! tree.
 
+mod board_sketch;
 mod dof_chip;
 mod footprint;
 pub(crate) mod symbol;
 
+pub use board_sketch::view_board_sketch;
 pub use footprint::view_footprint;
 pub use symbol::view_symbol;
