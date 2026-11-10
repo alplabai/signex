@@ -13,7 +13,7 @@ use signex_types::pcb::PcbBoard;
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
 use crate::library::editor::footprint::sketch_mode::SketchEdit;
-use crate::library::editor::footprint::state::{BoardBackdrop, EditorMode};
+use crate::library::editor::footprint::{BoardBackdrop, EditorMode};
 
 /// One board in sketch mode. The sketch is edited by the footprint
 /// editor's sketch tool, hosted on a footprint that exists only here: its
