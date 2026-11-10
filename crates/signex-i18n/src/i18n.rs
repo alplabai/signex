@@ -126,12 +126,22 @@ impl I18n {
         self.locale
     }
 
+    /// An instance whose message locale is `tag` although no catalog exists
+    /// for it, so tests of other crates can exercise the Turkic case rules
+    /// (`tr`) before a `tr` catalog lands. Messages render from en-US.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn with_message_locale_for_test(tag: &'static str) -> Self {
+        let mut i18n = Self::new(&LanguagePref::Locale(tag.to_owned()));
+        i18n.locale = tag;
+        i18n
+    }
+
     /// The locale numbers, dates, lists and order follow (case operations
-    /// follow [`Self::locale`] instead): the first
-    /// language requested (the OS list under System default) with its `-u-`
-    /// extensions (`th-TH-u-ca-buddhist`, `en-US-u-hc-h23`), even when this
-    /// build has no messages in it. A tag that does not parse, or a language
-    /// ICU has no data for (`und`, `xx-YY`, `tlh`), uses the message locale.
+    /// follow [`Self::locale`] instead): the first requested language that
+    /// parses and that ICU has data for (the OS list under System default is
+    /// walked in order), with its `-u-` extensions (`th-TH-u-ca-buddhist`,
+    /// `en-US-u-hc-h23`), even when this build has no messages in it. When
+    /// none does (`und`, `xx-YY`, `tlh`), the message locale is used.
     pub fn format_locale(&self) -> &Locale {
         &self.format_locale
     }

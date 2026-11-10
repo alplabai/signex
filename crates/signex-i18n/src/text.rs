@@ -19,6 +19,16 @@ pub(crate) fn fold_in(tag: &str, text: &str) -> String {
     }
 }
 
+/// `c` simple-folded (always one char) under the rules of the language in `tag`.
+pub(crate) fn fold_char_in(tag: &str, c: char) -> char {
+    let mapper = CaseMapper::new();
+    if matches!(tag.split('-').next(), Some("tr" | "az")) {
+        mapper.simple_fold_turkic(c)
+    } else {
+        mapper.simple_fold(c)
+    }
+}
+
 /// `text` in capitals under the rules of the language in `tag`.
 pub(crate) fn upper_in(tag: &str, text: &str) -> String {
     let lang = tag
@@ -49,6 +59,15 @@ impl I18n {
     /// folded the same way.
     pub fn fold_for_search(&self, text: &str) -> String {
         fold_in(self.locale(), text)
+    }
+
+    /// `c` simple-folded to exactly one char, for matching and highlighting
+    /// per char (`İ` and `I` become `i` and `ı` under `tr`/`az`). Unlike
+    /// [`Self::fold_for_search`] it never changes the length (`ß` stays
+    /// `ß`), so a match position maps back to the original text. Follows the
+    /// message locale like [`Self::fold_for_search`].
+    pub fn fold_char_for_search(&self, c: char) -> char {
+        fold_char_in(self.locale(), c)
     }
 
     /// `text` in capitals for display: `i` becomes `İ` when the message

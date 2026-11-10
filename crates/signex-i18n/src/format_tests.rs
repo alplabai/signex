@@ -282,3 +282,40 @@ fn collation_has_no_numeric_ordering() {
     i18n("en-US").sort_for_display(&mut rows, |s| s);
     assert_eq!(rows, ["R10", "R2", "R9"]);
 }
+
+#[test]
+fn a_per_char_fold_keeps_the_length_and_follows_the_language() {
+    use crate::text::fold_char_in;
+    assert_eq!(fold_char_in("tr-TR", 'İ'), 'i');
+    assert_eq!(fold_char_in("tr", 'I'), 'ı');
+    assert_eq!(fold_char_in("az", 'i'), 'i');
+    assert_eq!(fold_char_in("tr", 'ı'), 'ı');
+    assert_eq!(fold_char_in("en-US", 'I'), 'i');
+    assert_eq!(fold_char_in("en-US", 'Ć'), 'ć');
+    // `fold_for_search` turns `ß` into `ss`; the per-char fold must not.
+    assert_eq!(fold_char_in("en-US", 'ß'), 'ß');
+    let word = "Straße İI";
+    let folded: String = word.chars().map(|c| fold_char_in("tr", c)).collect();
+    assert_eq!(folded.chars().count(), word.chars().count());
+    assert_eq!(i18n("en-US").fold_char_for_search('Q'), 'q');
+}
+
+#[test]
+fn the_test_instance_folds_by_the_turkic_rules() {
+    let tr = I18n::with_message_locale_for_test("tr");
+    assert_eq!(tr.locale(), "tr");
+    assert_eq!(tr.fold_char_for_search('İ'), 'i');
+    assert_eq!(tr.fold_for_search("İSTANBUL"), "istanbul");
+}
+
+// Pins an icu_datetime 2.2.0 defect (#2063): a Long date under `sk` asserts
+// in debug builds and prints `M01` for the month in release builds. When an
+// upgrade fixes it this test fails: drop it, and the "avoid Long under sk"
+// caution with it.
+#[test]
+#[cfg_attr(debug_assertions, should_panic)]
+fn a_long_slovak_date_is_broken_in_icu_datetime() {
+    let at = wall(2025, 1, 15, 16, 9, 35);
+    let shown = i18n("sk").show(at, DateLength::Long, false);
+    assert!(shown.contains("M01"), "{shown}");
+}
