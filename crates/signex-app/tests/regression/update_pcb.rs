@@ -285,7 +285,7 @@ fn add_row(f: &Fixture, part: Uuid) -> &EcoRow {
         .expect("an add row")
 }
 
-fn engine<'a>(f: &'a Fixture) -> &'a BoardEngine {
+fn engine(f: &Fixture) -> &BoardEngine {
     f.app
         .document_state
         .tabs
