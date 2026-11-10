@@ -217,20 +217,26 @@ it is a heuristic that catches what names can tell apart and leaves the rest
    were already behind a hierarchical label before the edit play no part on
    the parent (a sensor's internal `SDA_INT`). Names that the edit itself
    brings behind a port do count: a new hierarchical `GND` on a child net
-   labelled `VCC`, whose entry the parent wired to `GND`, is a short; a
-   global `SDA_INT` placed in a child whose local `SDA_INT` is behind its
-   port is an own name the parent's net does not carry, so a rename unless
-   `allow_merge=true`. Where this project check runs (the sheet is in a
-   project and the net or bus run reaches another sheet), its name verdict
-   is the only one; the per-sheet one decides loose sheets and the rest. So the
+   labelled `VCC`, whose entry the parent wired to `GND`, is a short. On the
+   child itself its local names stay names: there, a wire from the
+   `SDA`/`SDA_INT` net to a net labelled `GND` is a short, and a label `FOO`
+   on it a rename, as on a loose sheet (while a global `SDA_INT` there
+   carries a name the net has). Where this project check runs (the sheet is
+   in a project and the net reaches another sheet), its net-name verdict is
+   the only one; the per-sheet one decides loose sheets and the rest. So the
    same final design reached by a different order of edits can get a
    different verdict; the check judges the edit, not the design.
 7. **Buses** follow the same rule with bus names (hierarchical bus labels are
    aliases), and a bus run ending on a sheet entry is connected, not open.
+   Limit: bus names are judged on the edited sheet only. The project check
+   compares member nets, not bus names, so a bus name that reaches the run
+   from another sheet (the parent's `ADDR[0..7]` on the entry the child
+   labels `D[0..7]`) is not seen: `DATA[0..7]` placed on that child run is
+   not refused.
 
 A short or rename is refused unless `allow_merge=true`. The rule is one
 function (`signex_net::join_rule`), read by the per-sheet checks, the bus
-checks and the project check. A run's answer lists the names the joined net
+checks (bus names, on the edited sheet) and the project check (net names). A run's answer lists the names the joined net
 carries only as aliases in `aliases`. The extra rule stays per sheet. A net that reaches no sheet pin,
 hierarchical or global label or power port, and a bus run that reaches no
 hierarchical or global bus-name label or sheet pin (by the bus analysis), is
@@ -279,7 +285,8 @@ applied to a copy of the sheet, and the copy is compared with the sheet by the
 netlist's own connectivity and by the bus analysis (`signex_net::placement_intent`).
 
 - **Name change.** A short or a rename by the name rule of "Wire intent"
-  (points 2 to 5), for nets and, with bus names, for bus runs: a hierarchical
+  (points 2 to 5), for nets and, with bus names (judged on the edited sheet
+  only, point 7), for bus runs: a hierarchical
   label is an alias and renames nothing on its sheet (a short it makes
   through a wired entry is the project check's, point 6): refused ("a
   label at 12.7,25.4 would join the nets {VCC} and {GND}", "a label at
@@ -321,12 +328,14 @@ to the sheet before and after the run (`signex_net::bus_intent`):
   interior along the path or at a bend, a bus entry, or a bus-name label that
   ends up on the new run and was not on a run an end attaches to ("the bus also
   touches bus D[0..7] at 12.7,38.1 ..."). What an end attaches to is the intent.
-- **Merge**: the runs the two ends attach to are a short by the name rule of
-  "Wire intent" with bus names (hierarchical bus labels are aliases): two
-  runs with different own bus names, or two alias-only runs that share no
-  name; refused unless `allow_merge=true` ([Why `allow_merge`](#why-allow_merge)).
+- **Merge**: the runs the two ends attach to, and a bus-name label at an end
+  that sits on no run yet, are a short by the name rule of "Wire intent"
+  with bus names (hierarchical bus labels are aliases): two runs with
+  different own bus names, or two alias-only runs that share no name;
+  refused unless `allow_merge=true` ([Why `allow_merge`](#why-allow_merge)).
   One name and one unnamed run, or an own-named run and an alias-only run,
-  is allowed.
+  is allowed. Bus names are judged on the edited sheet only (point 7 of the
+  name rule): a bus name from another sheet is not seen.
 
 There is no net diff: bus connectivity is the bus analysis, not the netlist.
 `dry_run` works as for a wire; the answer is `{"dry_run", "ends", "segments",
@@ -362,6 +371,11 @@ in the middle of continues.
   may still arrive) the connection is closed for good: every later command of
   the run fails with "the connection ... failed earlier" and the run never falls
   back to headless.
+- **Placements go through `apply_edits`.** The 17 placement commands are not
+  on the app's agent channel: sent on their own, with or without `document`,
+  the CLI refuses them ("reaches a running Signex only through
+  `apply_edits`") and sends nothing; send them as edits of an `apply_edits`
+  call.
 - **Only this run's folders are shown.** The app answers a query across every
   project it has open, so the CLI filters each answer before it prints it:
   a document whose `path` lies outside the folders this run may use (the
