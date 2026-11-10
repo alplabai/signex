@@ -304,7 +304,7 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::MUTATES,
-        operands: operands::SEGMENT,
+        operands: operands::WIRE,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -315,7 +315,7 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::MUTATES,
-        operands: operands::SEGMENT,
+        operands: operands::BUS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

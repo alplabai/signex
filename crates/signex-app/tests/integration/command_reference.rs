@@ -109,6 +109,14 @@ fn render() -> String {
          `query_pins document=<doc> designator=<ref>` lists the pins of a part on\n\
          one sheet: number, name, electrical type, hidden, unit, shared and the tip\n\
          in mm.\n\
+         \n\
+         A point operand (`at`, `start`, `end`) also takes a pin reference\n\
+         `<designator>.<pin>` (`R1.2`) or `<sheet name>.<entry name>` (`Charger.SDA`):\n\
+         the pin's tip, or the sheet entry's point, on the sheet the edit targets.\n\
+         `place_wire`, `draw_wire`, `place_bus` and `draw_bus` check a run before it\n\
+         lands and answer with a report (optional operands `allow_merge`,\n\
+         `allow_open`, `dry_run`); rules in [CLI.md](CLI.md), \"Wire intent\".\n\
+         \n\
          Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).\n",
     );
 

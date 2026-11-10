@@ -78,6 +78,9 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("project", OperandKind::Text),
     ("name", OperandKind::Text),
     ("dirty", OperandKind::Bool),
+    ("allow_merge", OperandKind::Bool),
+    ("allow_open", OperandKind::Bool),
+    ("dry_run", OperandKind::Bool),
     ("designator", OperandKind::Text),
     ("value", OperandKind::Text),
     ("net", OperandKind::Text),
@@ -113,29 +116,70 @@ const fn optional(name: &'static str, kind: OperandKind) -> Operand {
     }
 }
 
+// A placement takes an optional `document`: it then runs on that sheet and
+// never on the active tab (#2199); without it, on the sheet the edit targets.
+
 /// Place one object at a point.
-pub const AT: &[Operand] = &[required("at", OperandKind::Point)];
+pub const AT: &[Operand] = &[
+    required("at", OperandKind::Point),
+    optional("document", OperandKind::Document),
+];
 /// Draw from one point to another.
 pub const SEGMENT: &[Operand] = &[
     required("start", OperandKind::Point),
     required("end", OperandKind::Point),
+    optional("document", OperandKind::Document),
 ];
-/// A label: its text at a point.
+/// A wire run, checked against the sheet before it lands (#2199): `allow_merge`
+/// lets it join two differently named nets, `allow_open` leaves an end
+/// unconnected, `dry_run` reports without changing anything.
+pub const WIRE: &[Operand] = &[
+    required("start", OperandKind::Point),
+    required("end", OperandKind::Point),
+    optional("allow_merge", OperandKind::Bool),
+    optional("allow_open", OperandKind::Bool),
+    optional("dry_run", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
+/// A junction at a point: `allow_merge` lets it join two differently named
+/// nets (#2199).
+pub const JUNCTION: &[Operand] = &[
+    required("at", OperandKind::Point),
+    optional("allow_merge", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
+/// A bus run: as [`WIRE`]; `allow_merge` lets it join two differently named
+/// buses.
+pub const BUS: &[Operand] = &[
+    required("start", OperandKind::Point),
+    required("end", OperandKind::Point),
+    optional("allow_merge", OperandKind::Bool),
+    optional("allow_open", OperandKind::Bool),
+    optional("dry_run", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
+/// A label: its text at a point. `allow_merge` lets it name a net that already
+/// has another name (#2199).
 pub const LABEL: &[Operand] = &[
     required("at", OperandKind::Point),
     required("text", OperandKind::Text),
     optional("rotation", OperandKind::Angle),
+    optional("allow_merge", OperandKind::Bool),
+    optional("document", OperandKind::Document),
 ];
 /// A text note at a point.
 pub const TEXT: &[Operand] = &[
     required("at", OperandKind::Point),
     required("text", OperandKind::Text),
+    optional("document", OperandKind::Document),
 ];
 /// A power port: the net it names and its library symbol.
 pub const POWER: &[Operand] = &[
     required("at", OperandKind::Point),
     required("net_name", OperandKind::Text),
     required("lib_id", OperandKind::Text),
+    optional("allow_merge", OperandKind::Bool),
+    optional("document", OperandKind::Document),
 ];
 /// An open dialog's answer.
 pub const OPEN_PATH: &[Operand] = &[required("path", OperandKind::Path)];

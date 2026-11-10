@@ -161,6 +161,20 @@ impl Attached {
 /// without one the app would use the person's active document, which is never
 /// resolved here and so never checked against this run's folders.
 fn names_its_document(approved: &Approved) -> Result<(), String> {
+    // The placements (an optional `document`, and they change it) are not on
+    // the app's agent channel: they reach it only as edits of `apply_edits`.
+    let is_placement = approved.meta.flags.mutates_doc
+        && approved
+            .meta
+            .operands
+            .iter()
+            .any(|operand| operand.kind == OperandKind::Document && !operand.required);
+    if is_placement {
+        return Err(format!(
+            "`{}` reaches a running Signex only through `apply_edits`: send it as an edit of an `apply_edits` call",
+            approved.command.as_str()
+        ));
+    }
     let acts_on_a_document = approved
         .meta
         .operands

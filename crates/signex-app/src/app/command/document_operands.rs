@@ -65,6 +65,9 @@ fn file_name(path: &Path) -> String {
 /// `color_net at=x,y color=#rrggbb document=..`: colour the net whose wire is
 /// under the point, on that sheet, as a pen click does on the active one.
 pub(super) fn color_net(app: &mut Signex, args: &CommandArgs) -> Ran {
+    if matches!(args.operand("at"), Some(OperandValue::PinRef { .. })) {
+        return refused("`color_net` takes `at` as a coordinate, not a pin reference");
+    }
     let (Some(OperandValue::Point(x, y)), Some(OperandValue::Color(r, g, b))) =
         (args.operand("at"), args.operand("color"))
     else {

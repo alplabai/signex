@@ -10,12 +10,33 @@ use signex_engine::UndoGroupId;
 use super::DocumentState;
 use crate::schematic_runtime::RenderInvalidation;
 
+/// The project's sheets as read for the first checked edit of a list: the
+/// other sheets do not change while the list runs, so the next edits reuse them
+/// instead of reading the project again (the target sheet is replaced by its
+/// current state each time). `None` outside a list.
+#[derive(Default)]
+pub(crate) struct ProjectSetCache(pub(crate) Option<crate::app::project_sheets::ProjectSheetSet>);
+
+impl std::fmt::Debug for ProjectSetCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(if self.0.is_some() {
+            "ProjectSetCache(read)"
+        } else {
+            "ProjectSetCache(empty)"
+        })
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct AgentEdits {
     /// The sheet an edit list is running on. Set only for the length of one
     /// `apply_edits` call; a placement reads and writes this sheet's engine
     /// instead of the active one, and what it would refresh waits in `owed`.
     pub(crate) target: Option<PathBuf>,
+    /// Whether an edit list (not one placement naming a `document`) is running.
+    pub(crate) listing: bool,
+    /// The project read the list's checks share.
+    pub(crate) project_set: std::cell::RefCell<ProjectSetCache>,
     /// The repaint the edits so far owe the target sheet.
     pub(crate) owed: RenderInvalidation,
     /// The Undo label of each undo step an agent made ("Agent: ...").

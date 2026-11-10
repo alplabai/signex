@@ -35,10 +35,18 @@ mod outcome;
 #[cfg(test)]
 mod placement_operand_tests;
 mod placement_operands;
+#[cfg(test)]
+mod project_name_tests;
+mod project_names;
 pub(crate) mod queries;
+#[cfg(test)]
+mod sheet_entry_ref_tests;
 #[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;
+#[cfg(test)]
+mod wire_run_tests;
+mod wire_runs;
 
 pub use agent_edits::{
     EditSpec, MAX_EDITS, edit_list_text, edit_refusal, operand_text, parse_edit_list,

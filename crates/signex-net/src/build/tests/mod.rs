@@ -8,7 +8,9 @@ mod incremental;
 mod index_equivalence;
 mod multiple_names;
 mod pin_contact_and_power;
+mod placement_intent;
 mod versioned_bodies;
+mod wire_intent;
 mod wire_order;
 use signex_types::schematic::{
     Junction, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol, Wire,
