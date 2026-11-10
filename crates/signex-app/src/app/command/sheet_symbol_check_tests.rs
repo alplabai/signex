@@ -314,3 +314,125 @@ fn a_sheet_symbol_whose_file_has_a_global_label_is_refused_in_a_project_with_a_m
     assert!(reason.contains("allow_merge"), "{reason}");
     assert!(!reason.contains("this net"), "{reason}");
 }
+
+/// A sheet symbol for `child` on a sheet: a placement of that file.
+fn placing(child: &str) -> SchematicSheet {
+    let symbol = signex_engine::child_sheet_from_corners(
+        Point::new(0.0, 0.0),
+        Point::new(20.0, 20.0),
+        "Placed",
+    )
+    .unwrap();
+    SchematicSheet {
+        uuid: Uuid::now_v7(),
+        child_sheets: vec![ChildSheet {
+            filename: child.into(),
+            ..symbol
+        }],
+        ..Default::default()
+    }
+}
+
+#[test]
+fn a_sheet_symbol_whose_file_is_a_page_of_the_project_needs_allow_merge() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    let sda = |at| Label::new("SDA", Point::new(at, 0.0), LabelType::Net);
+    save(
+        d,
+        "top.snxsch",
+        sheet(vec![wire((0.0, 0.0), (10.0, 0.0))], vec![sda(0.0)]),
+    );
+    save(
+        d,
+        "other.snxsch",
+        sheet(vec![wire((0.0, 0.0), (10.0, 0.0))], vec![sda(0.0)]),
+    );
+    let mut app = project(d);
+    let operands = ["start=50,50", "end=70,70", "name=Sub", "file=other.snxsch"];
+    let reason = refusal(run(&mut app, "place_sheet_symbol", &operands));
+    assert!(reason.contains("is a page of the project"), "{reason}");
+    assert!(reason.contains("allow_merge"), "{reason}");
+    let with = [
+        "start=50,50",
+        "end=70,70",
+        "name=Sub",
+        "file=other.snxsch",
+        "allow_merge=true",
+    ];
+    let outcome = run(&mut app, "place_sheet_symbol", &with);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+}
+
+#[test]
+fn a_sheet_symbol_whose_file_another_sheet_places_needs_allow_merge() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    save(d, "top.snxsch", sheet(Vec::new(), Vec::new()));
+    save(d, "other.snxsch", placing("c.snxsch"));
+    save(
+        d,
+        "c.snxsch",
+        sheet(vec![wire((0.0, 0.0), (10.0, 0.0))], Vec::new()),
+    );
+    let mut app = project(d);
+    let operands = ["start=50,50", "end=70,70", "name=C", "file=c.snxsch"];
+    let reason = refusal(run(&mut app, "place_sheet_symbol", &operands));
+    assert!(
+        reason.contains("already placed on other.snxsch"),
+        "{reason}"
+    );
+    assert!(reason.contains("allow_merge"), "{reason}");
+}
+
+#[test]
+fn a_sheet_symbol_whose_file_is_unreadable_needs_allow_merge() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    save(
+        d,
+        "top.snxsch",
+        sheet(
+            vec![wire((0.0, 0.0), (10.0, 0.0))],
+            vec![global("VBUS", (0.0, 0.0))],
+        ),
+    );
+    save(d, "other.snxsch", sheet(Vec::new(), Vec::new()));
+    std::fs::write(d.join("broken.snxsch"), "not a sheet").unwrap();
+    let mut app = project(d);
+    let operands = ["start=50,50", "end=70,70", "name=B", "file=broken.snxsch"];
+    let reason = refusal(run(&mut app, "place_sheet_symbol", &operands));
+    assert!(reason.contains("broken.snxsch is unreadable"), "{reason}");
+    assert!(reason.contains("allow_merge"), "{reason}");
+}
+
+/// The file reads, a sheet it places does not: its names and what it places
+/// are unknown all the same; `allow_merge=true` places it.
+#[test]
+fn a_sheet_symbol_whose_file_places_an_unreadable_sheet_needs_allow_merge() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    save(d, "top.snxsch", sheet(Vec::new(), Vec::new()));
+    save(d, "other.snxsch", sheet(Vec::new(), Vec::new()));
+    save(d, "mid.snxsch", placing("broken.snxsch"));
+    std::fs::write(d.join("broken.snxsch"), "not a sheet").unwrap();
+    let mut app = project(d);
+    let operands = ["start=50,50", "end=70,70", "name=M", "file=mid.snxsch"];
+    let reason = refusal(run(&mut app, "place_sheet_symbol", &operands));
+    assert!(reason.contains("broken.snxsch is unreadable"), "{reason}");
+    let with = [
+        "start=50,50",
+        "end=70,70",
+        "name=M",
+        "file=mid.snxsch",
+        "allow_merge=true",
+    ];
+    let outcome = run(&mut app, "place_sheet_symbol", &with);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+}

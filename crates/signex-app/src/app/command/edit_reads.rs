@@ -125,20 +125,7 @@ impl ReadPlan {
                 fold,
             )
         });
-        let parts = self
-            .parts
-            .into_iter()
-            .map(|(root, table, row)| {
-                let read = crate::library::place::resolve_placement_with_footprint(
-                    &root,
-                    &table,
-                    signex_library::RowId(row),
-                    None,
-                    &self.open_libraries,
-                );
-                ((root, table, row), read)
-            })
-            .collect();
+        let parts = read_parts(self.parts, &self.open_libraries);
         let children = self
             .children
             .into_iter()
@@ -164,6 +151,26 @@ impl ReadPlan {
             failed: None,
         }
     }
+}
+
+/// Each library row of `parts`, read with its symbol and footprint.
+fn read_parts(
+    parts: Vec<PartKey>,
+    open_libraries: &[(Uuid, PathBuf)],
+) -> HashMap<PartKey, Result<ResolvedPlacement, String>> {
+    parts
+        .into_iter()
+        .map(|(root, table, row)| {
+            let read = crate::library::place::resolve_placement_with_footprint(
+                &root,
+                &table,
+                signex_library::RowId(row),
+                None,
+                open_libraries,
+            );
+            ((root, table, row), read)
+        })
+        .collect()
 }
 
 /// The project to read: a snapshot of its open sheets, its pages and root.
