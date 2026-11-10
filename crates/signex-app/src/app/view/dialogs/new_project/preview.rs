@@ -201,21 +201,22 @@ pub(super) fn pane<'a>(
     .color(ti(tokens.text));
     let fill = tokens::resolve(tokens).sunken;
     let line = ti(tokens.border);
-    container(
+    // The pane scrolls on a short window, so nothing in it is `Fill`.
+    container(scrollable(
         column![
             text(t!(i18n, ids::DIALOG_NEW_PROJECT_PREVIEW_HEADING))
                 .size(TS.section)
                 .color(tokens::resolve(tokens).ink4),
             board,
             column![board_line, sheet_line].spacing(SP.s),
-            Space::new().height(Length::Fill),
+            Space::new().height(SP.xl),
             text(t!(i18n, ids::DIALOG_NEW_PROJECT_PREVIEW_NOTE))
                 .size(TS.body)
                 .color(tokens::muted_text(tokens)),
         ]
         .spacing(SP.l)
-        .height(Length::Fill),
-    )
+        .width(Length::Fill),
+    ))
     .padding([SP.xl + SP.s, SP.xl])
     .width(Length::Fixed(PREVIEW_W))
     .height(Length::Fill)

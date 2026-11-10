@@ -7,7 +7,8 @@ use crate::app::Message;
 use crate::app::state::{ModalId, Signex, WindowKind};
 
 /// Dialogs whose window follows their open state, whatever code flips it.
-const FOLLOWED: [ModalId; 24] = [
+const FOLLOWED: [ModalId; 25] = [
+    ModalId::NewProject,
     ModalId::FindReplace,
     ModalId::RenameDialog,
     ModalId::RemoveDialog,
@@ -36,7 +37,8 @@ const FOLLOWED: [ModalId; 24] = [
 
 /// Confirm-class dialogs among the detached ones: while one is open the
 /// main window takes no input.
-const LOCKING: [ModalId; 13] = [
+const LOCKING: [ModalId; 14] = [
+    ModalId::NewProject,
     ModalId::RenameDialog,
     ModalId::RemoveDialog,
     ModalId::AnnotateResetConfirm,
@@ -65,6 +67,7 @@ impl Signex {
     fn followed_modal_open(&self, modal: ModalId) -> Option<bool> {
         let ui = &self.ui_state;
         Some(match modal {
+            ModalId::NewProject => ui.new_project.is_some(),
             ModalId::FindReplace => ui.find_replace.open,
             ModalId::RenameDialog => ui.rename_dialog.is_some(),
             ModalId::RemoveDialog => ui.remove_dialog.is_some(),

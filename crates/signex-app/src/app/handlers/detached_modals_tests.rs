@@ -26,6 +26,9 @@ fn window_size(app: &Signex, id: iced::window::Id, modal: ModalId) -> iced::Size
 fn open(app: &mut Signex, modal: ModalId) {
     let ui = &mut app.ui_state;
     match modal {
+        ModalId::NewProject => {
+            ui.new_project = Some(crate::app::NewProjectState::new(String::new()))
+        }
         ModalId::FindReplace => ui.find_replace.open = true,
         ModalId::RenameDialog => {
             ui.rename_dialog = Some(RenameDialogState {

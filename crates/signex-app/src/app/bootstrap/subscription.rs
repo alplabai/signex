@@ -171,6 +171,7 @@ impl OpenOverlays {
             || self.app_quit_confirm_open
             || self.project_close_confirm_open
             || self.create_child_sheet_confirm_open
+            || self.new_project_open
             || self.rename_open
             || self.remove_open
             || self.annotate_reset_confirm_open
@@ -449,6 +450,7 @@ pub(crate) fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<Over
         ModalId::EnableVersionControl => Some(OverlayId::EnableVersionControl),
         ModalId::GridProperties => Some(OverlayId::GridProperties),
         ModalId::SelectionFilterCustom => Some(OverlayId::SelectionFilterCustom),
+        ModalId::NewProject => Some(OverlayId::NewProject),
         ModalId::About => Some(OverlayId::About),
         ModalId::KeyboardShortcuts => Some(OverlayId::KeyboardShortcuts),
         ModalId::PassiveCalculator => Some(OverlayId::PassiveCalculator),
