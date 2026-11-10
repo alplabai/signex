@@ -359,6 +359,108 @@ There is no net diff: bus connectivity is the bus analysis, not the netlist.
 as for a wire (the member nets' names that reach them only through a child's
 hierarchical label).
 
+## Placing parts and hierarchy
+
+`place_component`, `place_sheet_symbol`, `place_sheet_entry` and
+`sync_sheet_pins` run from operands (#2199, decision
+https://github.com/alplabai/signex/issues/2199#issuecomment-6769277106). Each
+is one undoable edit of the sheet the edit targets (the named `document`, else
+the active sheet) and none writes a file. Without operands, in a window, they
+do what they always did: `place_component` opens the component picker, the
+sheet tools arm, and Sync Sheet Pins acts on the selection. A headless run
+without operands is refused with the operand it needs.
+
+**The connection rule.** An edit from operands connects nothing it does not
+name. A placed part whose pin tip, or a sheet entry (placed or synced) whose
+connection point, lands on a wire (its end or its run), a junction, a label, a
+sheet entry or another pin tip is refused with no escape ("the part would land
+on another wire at 12.7,25.4 ..."); place it clear and wire it afterwards with
+`place_wire start=U1.1 ...`. The edit's real commands are applied to a copy of
+the sheet and the new connection points are read from it
+(`signex_net::placement_contacts`). A part body over a wire is not a
+connection and is not judged; pin to pin counts here, though the netlist joins
+nothing pin to pin, because the caller did not name it. None of these takes
+`allow_merge` or `dry_run`, so `--dry-run` refuses them.
+
+### `place_component`
+
+```text
+place_component library=<id or path> part=<row id or part number> at=x,y
+                [unit=N] [designator=U1] [value=..] [rotation=0|90|180|270]
+                [mirror=x|y] [document=..]
+```
+
+- `library` names an open library by its id or by the path of its `.snxlib`
+  file or folder. A project's libraries open with the project (`open_document`
+  of the `.snxprj`), and the bundled stock library opens with the app; a
+  library that is not open is refused ("library `...` is not open"). Nothing
+  here mounts a library.
+- `part` is a row id, else a part number (internal or manufacturer) that
+  exactly one row carries. None, or several ("matches 2 rows ... give the row
+  id"), is refused.
+- `at` is a coordinate where a click lands (the grid), never a pin reference.
+- `unit` (default 1) must be a unit of the part. `designator` is used as given;
+  without it the next free designator is used, as a click numbers it (the
+  project's closed sheets are read for this first). A `designator` already in
+  the project is accepted only for another unit of that same library row not
+  placed yet, so units of one part share it: `place_component ... unit=2
+  designator=U1`. Unit 2 of `U1` placed twice, another part's designator, or a
+  designator used only on a sheet that is not open is refused.
+- `value` replaces the row's value; `rotation` is the stored rotation;
+  `mirror=x` flips up/down (the X key), `mirror=y` left/right (the Y key).
+
+The row's symbol is read from the library while the command runs, so the
+edit can be one of an `apply_edits` list. The commit is the click's
+(`place_part_at`): one undo step, the same document a pick and click make.
+The answer is `{"designator", "unit", "lib_id", "at", "pins": [{"number",
+"name", "at"}]}`, the pins of the placed unit (shared pins included), so the
+next edit can wire them.
+
+### `place_sheet_symbol`
+
+```text
+place_sheet_symbol start=x,y end=x,y name=Charger file=charger.snxsch [document=..]
+```
+
+`start` and `end` are the two corners (on the grid, each edge at least 5.08
+mm), as for `draw_rectangle`. `file` is the child sheet's reference, relative
+to the sheet's folder: a `.snxsch` inside the project folder (a link that
+leaves it included), checked as the Create Sheet dialog checks it. It is text,
+not a path operand: nothing is opened, created or written, so the CLI does not
+confine it, and the handler refuses any reference that leaves the project
+folder. A name another sheet symbol on the sheet has, or a file another one
+refers to, is refused. Creating the child file stays a window action
+(`create_sheet_from_sheet_symbol`, `gui_only`). The answer is `{"id", "name",
+"file", "at", "size"}`.
+
+### `place_sheet_entry`
+
+```text
+place_sheet_entry sheet=Charger at=x,y name=SDA [direction=input] [document=..]
+```
+
+`sheet` names one sheet symbol on the sheet (none or two of that name is
+refused). `at` must be on its border, away from the corners, on the grid; a
+point that is not is refused with the nearest border point. `name` must be
+new on that symbol. `direction` is `input`, `output`, `bidirectional`,
+`tri_state` or `passive`; without it the edge decides (input on the left,
+output on the right, bidirectional on top and bottom). The answer is
+`{"sheet", "name", "direction", "at"}`, and `Charger.SDA` names the entry in
+the next edit.
+
+### `sync_sheet_pins`
+
+```text
+sync_sheet_pins sheet=Charger [document=..]
+```
+
+Sync Sheet Pins for the sheet symbol named `sheet`, with no selection: its
+entries are matched to the hierarchical and global labels of its child file,
+as the menu action does (every symbol on the sheet that refers to that file
+follows). A child file that does not exist or cannot be read is refused with
+the reason. The answer is `{"sheet", "file", "added", "removed", "kept"}`
+(entry names); Messages reports it as the menu action does.
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > Editing >
