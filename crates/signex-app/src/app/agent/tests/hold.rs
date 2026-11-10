@@ -212,3 +212,144 @@ fn an_app_that_does_not_list_never_refuses_it_is_the_run_that_holds_the_project(
     fx.open();
     assert!(fx.opened());
 }
+
+fn settle(app: &mut Signex) {
+    let mut driver = TaskDriver::new();
+    let task = app.update(Message::noop());
+    driver.settle(app, task).expect("the update ran");
+}
+
+/// A run that took the lock while the person's last save was still being
+/// written would read the old file and write over that save.
+#[test]
+fn a_closed_projects_lock_is_kept_until_its_save_is_reported_done() {
+    let mut fx = fixture("SaveThenClose1924.snxprj");
+    fx.open();
+    assert!(fx.opened());
+    let _job = fx
+        .app
+        .document_state
+        .document_saves
+        .begin(fx.project.clone(), Vec::new());
+
+    // Close Project while the write is out.
+    let _kept = std::mem::take(&mut fx.app.document_state.projects);
+    settle(&mut fx.app);
+    assert!(fx.app.document_state.document_saves.is_saving(&fx.project));
+    assert!(
+        client::hold(&fx.dir, &fx.project).is_err(),
+        "a run took a project whose save is still being written"
+    );
+
+    // The save is reported done: the lock goes with that update.
+    fx.app.document_state.document_saves.finish(&fx.project);
+    settle(&mut fx.app);
+    assert!(
+        client::hold(&fx.dir, &fx.project).is_ok(),
+        "the lock outlived the save"
+    );
+}
+
+/// Quit: the locks go after the document, autosave and library writes, with
+/// the cleanup task, not when the quit starts.
+#[test]
+fn the_quit_keeps_the_locks_until_its_writes_are_done() {
+    let mut fx = fixture("SaveThenQuit1924.snxprj");
+    fx.open();
+    assert!(fx.opened());
+    let _job = fx
+        .app
+        .document_state
+        .document_saves
+        .begin(fx.project.clone(), Vec::new());
+
+    let task = fx.app.flush_quit_writes_then(iced::Task::none());
+    assert!(fx.app.document_state.document_saves.is_saving(&fx.project));
+    assert!(
+        client::hold(&fx.dir, &fx.project).is_err(),
+        "a run took a project at the start of the quit, before its save landed"
+    );
+    // Once the quit's task is done with, the lock is let go.
+    drop(task);
+    assert!(client::hold(&fx.dir, &fx.project).is_ok());
+}
+
+fn locked_warnings(name: &str) -> usize {
+    crate::diagnostics::logged_count(&format!("{name} could not be locked"))
+}
+
+/// A lock that cannot be made (here the runtime folder sits under a file) is
+/// said once and tried again at the registry retry tick, not at every update.
+#[test]
+fn a_lock_that_cannot_be_made_is_said_once_and_retried_on_the_tick() {
+    let root = tempfile::Builder::new()
+        .prefix("snx-1924h")
+        .tempdir()
+        .expect("temp dir");
+    let blocker = root.path().join("notadir");
+    std::fs::write(&blocker, b"").unwrap();
+    let dir = blocker.join("run");
+    let name = "NoLock1924.snxprj";
+    let project = root.path().join(name);
+    std::fs::write(&project, b"").unwrap();
+    let mut app = window_on(&dir);
+    crate::diagnostics::logged_count("");
+
+    let _task = app.handle_document_file_opened(Some(project.clone()));
+    assert!(opened_in(&app, &project), "the project opens anyway");
+    for _ in 0..5 {
+        settle(&mut app);
+    }
+    assert_eq!(locked_warnings(name), 1, "said at every update");
+    assert!(app.agent.project_locks.is_empty());
+    // A tick that fails again does not say it again.
+    let _task = app.update(Message::Agent(super::super::AgentMsg::RegistryRetryTick));
+    assert_eq!(locked_warnings(name), 1, "said again at the tick");
+
+    // The folder is usable now; nothing is tried before the tick.
+    std::fs::remove_file(&blocker).unwrap();
+    files::prepare_dir(&blocker).expect("the folder");
+    files::prepare_dir(&dir).expect("the runtime folder");
+    for _ in 0..3 {
+        settle(&mut app);
+    }
+    assert!(
+        app.agent.project_locks.is_empty(),
+        "a failed lock was tried again before the tick"
+    );
+    let _task = app.update(Message::Agent(super::super::AgentMsg::RegistryRetryTick));
+    assert!(
+        app.agent.project_locks.contains_key(&project),
+        "the tick did not retry the lock"
+    );
+    assert_eq!(locked_warnings(name), 1);
+}
+
+/// A run took the project after the window's claim had failed: not dropped
+/// silently, said once in Messages with the run's process, and not tried at
+/// every update.
+#[test]
+fn a_run_that_took_an_unlocked_open_project_is_said_once() {
+    let mut fx = fixture("RunTook1924.snxprj");
+    fx.app.agent.lists_projects = false;
+    let _run = fx.held_by_a_run();
+    fx.open();
+    assert!(fx.opened());
+    fx.app.agent.lists_projects = true;
+    crate::diagnostics::logged_count("");
+
+    for _ in 0..4 {
+        settle(&mut fx.app);
+    }
+    let pid = std::process::id();
+    let said = format!(
+        "a signex-cli run (pid {pid}) now holds {}",
+        fx.project.display()
+    );
+    assert_eq!(
+        crate::diagnostics::logged_count(&said),
+        1,
+        "not said exactly once"
+    );
+    assert!(fx.app.agent.project_locks.is_empty());
+}

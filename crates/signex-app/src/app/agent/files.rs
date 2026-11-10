@@ -11,30 +11,64 @@ use std::path::{Path, PathBuf};
 pub(super) const REGISTRY_DIR: &str = "registry";
 
 /// Where the runtime directory is: `$XDG_RUNTIME_DIR/signex-agent` where the
-/// system gives each user one, else a folder named for the user in the
-/// temporary directory (macOS: already per user), else the user's local
-/// application data (Windows). Only reads the environment.
+/// system gives each user one; on Linux, with that variable unset (a shell over
+/// ssh, cron), the same place by the user's id (`/run/user/<uid>`) if it is
+/// there as the user's own folder, so a desktop app and such a shell agree;
+/// else a folder named for the user in the temporary directory (macOS: already
+/// per user); on Windows the user's local application data. Only reads the
+/// environment.
 pub(super) fn runtime_dir() -> Result<PathBuf, String> {
     // The app's own unit tests list their open projects here (a project open is
     // listed whether or not agents may connect): never in the user's folder.
     if cfg!(test) {
-        return Ok(std::env::temp_dir().join(format!("signex-agent-test-{}", std::process::id())));
+        return Ok(test_runtime_dir());
     }
     #[cfg(unix)]
     {
-        let xdg = std::env::var_os("XDG_RUNTIME_DIR")
-            .map(PathBuf::from)
-            .filter(|dir| dir.is_absolute());
-        Ok(match xdg {
-            Some(dir) => dir.join("signex-agent"),
-            None => std::env::temp_dir().join(format!("signex-agent-{}", unix::own_uid())),
-        })
+        let xdg = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from);
+        let run_user = cfg!(target_os = "linux").then_some(Path::new("/run/user"));
+        Ok(unix::resolve(
+            xdg,
+            run_user,
+            &std::env::temp_dir(),
+            unix::own_uid(),
+        ))
     }
     #[cfg(not(unix))]
     {
         dirs::data_local_dir()
             .map(|dir| dir.join("Signex").join("agent"))
             .ok_or_else(|| "this user has no local application data folder".to_string())
+    }
+}
+
+/// The runtime directory of a test run: its own, never the user's.
+pub(super) fn test_runtime_dir() -> PathBuf {
+    std::env::temp_dir().join(format!("signex-agent-test-{}", std::process::id()))
+}
+
+/// The other places a runtime directory of this user may be (an app started
+/// with another environment than this process): a lock held there still counts
+/// (see `client::lookup` and `client::hold`). Only those that exist now.
+#[cfg_attr(not(all(unix, not(test))), allow(unused_variables))]
+pub(super) fn alternate_dirs(primary: &Path) -> Vec<PathBuf> {
+    // The unit tests never look outside their own folders.
+    #[cfg(all(unix, not(test)))]
+    {
+        let xdg = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from);
+        let run_user = cfg!(target_os = "linux").then_some(Path::new("/run/user"));
+        let temp = std::env::temp_dir();
+        unix::alternates(
+            primary,
+            xdg,
+            run_user,
+            &[temp.as_path(), Path::new("/tmp")],
+            unix::own_uid(),
+        )
+    }
+    #[cfg(not(all(unix, not(test))))]
+    {
+        Vec::new()
     }
 }
 
@@ -158,12 +192,65 @@ fn removal_verdict(
 #[cfg(unix)]
 mod unix {
     use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     /// The effective user id of this process.
     pub(in crate::app::agent) fn own_uid() -> u32 {
         // SAFETY: `geteuid` takes no arguments, cannot fail and touches no memory.
         unsafe { libc::geteuid() }
+    }
+
+    /// The runtime directory for the user `uid` (see `super::runtime_dir`),
+    /// from the environment and roots it is given.
+    pub(super) fn resolve(
+        xdg: Option<PathBuf>,
+        run_user: Option<&Path>,
+        temp: &Path,
+        uid: u32,
+    ) -> PathBuf {
+        if let Some(dir) = xdg.filter(|dir| dir.is_absolute()) {
+            return dir.join("signex-agent");
+        }
+        let own = run_user.map(|root| root.join(uid.to_string()));
+        match own.filter(|dir| is_own_folder(dir, uid)) {
+            Some(dir) => dir.join("signex-agent"),
+            None => temp.join(format!("signex-agent-{uid}")),
+        }
+    }
+
+    /// Where else an app or a run of the same user may have put its runtime
+    /// directory (another environment), that exist now and are not `primary`.
+    pub(super) fn alternates(
+        primary: &Path,
+        xdg: Option<PathBuf>,
+        run_user: Option<&Path>,
+        temps: &[&Path],
+        uid: u32,
+    ) -> Vec<PathBuf> {
+        let mut found: Vec<PathBuf> = Vec::new();
+        let mut candidates: Vec<PathBuf> = Vec::new();
+        candidates.extend(
+            xdg.filter(|dir| dir.is_absolute())
+                .map(|d| d.join("signex-agent")),
+        );
+        candidates.extend(run_user.map(|root| root.join(uid.to_string()).join("signex-agent")));
+        candidates.extend(
+            temps
+                .iter()
+                .map(|temp| temp.join(format!("signex-agent-{uid}"))),
+        );
+        for dir in candidates {
+            if dir != primary && !found.contains(&dir) && std::fs::symlink_metadata(&dir).is_ok() {
+                found.push(dir);
+            }
+        }
+        found
+    }
+
+    /// Whether `dir` is a real folder (not a link) owned by `uid`.
+    fn is_own_folder(dir: &Path, uid: u32) -> bool {
+        std::fs::symlink_metadata(dir)
+            .is_ok_and(|meta| meta.file_type().is_dir() && meta.uid() == uid)
     }
 
     /// The owner of `meta`'s file and the user running this process.
@@ -295,6 +382,64 @@ mod tests {
         assert!(why.contains("is a link"), "{why}");
         assert!(stale.symlink_metadata().unwrap().file_type().is_symlink());
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "keep me");
+    }
+
+    /// A desktop app (with `XDG_RUNTIME_DIR`) and a shell without it (ssh,
+    /// cron) must name one folder, or the lock between them protects nothing.
+    #[test]
+    fn the_runtime_dir_is_the_same_with_and_without_the_environment_variable() {
+        let root = scratch();
+        let uid = unix::own_uid();
+        let run_user = root.path().join("run").join("user");
+        let own = run_user.join(uid.to_string());
+        std::fs::create_dir_all(&own).unwrap();
+        let temp = root.path().join("tmp");
+        let want = own.join("signex-agent");
+
+        let with_env = unix::resolve(Some(own.clone()), Some(&run_user), &temp, uid);
+        let without = unix::resolve(None, Some(&run_user), &temp, uid);
+        assert_eq!(with_env, want);
+        assert_eq!(without, want);
+        // A relative variable is no folder.
+        assert_eq!(
+            unix::resolve(Some("rel".into()), Some(&run_user), &temp, uid),
+            want
+        );
+
+        // No `/run/user/<uid>`, or one that is a link or is another user's:
+        // the temporary directory.
+        let fallback = temp.join(format!("signex-agent-{uid}"));
+        assert_eq!(unix::resolve(None, None, &temp, uid), fallback);
+        // A folder named for another user id, though it is ours: not theirs.
+        let other = uid + 1;
+        std::fs::create_dir_all(run_user.join(other.to_string())).unwrap();
+        assert_eq!(
+            unix::resolve(None, Some(&run_user), &temp, other),
+            temp.join(format!("signex-agent-{other}"))
+        );
+        std::fs::remove_dir(&own).unwrap();
+        symlink(root.path(), &own).unwrap();
+        assert_eq!(unix::resolve(None, Some(&run_user), &temp, uid), fallback);
+    }
+
+    #[test]
+    fn the_other_places_a_runtime_dir_may_be_are_those_that_exist() {
+        let root = scratch();
+        let uid = unix::own_uid();
+        let run_user = root.path().join("run").join("user");
+        let primary = run_user.join(uid.to_string()).join("signex-agent");
+        let temp = root.path().join("tmp");
+        let in_temp = temp.join(format!("signex-agent-{uid}"));
+        let none = unix::alternates(&primary, None, Some(&run_user), &[&temp], uid);
+        assert!(none.is_empty(), "{none:?}");
+        std::fs::create_dir_all(&in_temp).unwrap();
+        std::fs::create_dir_all(&primary).unwrap();
+        let found = unix::alternates(&primary, None, Some(&run_user), &[&temp, &temp], uid);
+        assert_eq!(
+            found,
+            vec![in_temp],
+            "the primary and a repeat are left out"
+        );
     }
 
     #[test]

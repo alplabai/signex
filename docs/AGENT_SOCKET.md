@@ -85,6 +85,10 @@ The last three are open to agents by the maintainer's decision (#1924):
   document, `document_info` answers `save_writes`: the absolute paths a save
   would write besides the project file (its pending libraries), so a client
   that confines writes can check them before it asks; absent for a sheet.
+  The save runs in the person's app as their own Save does, so it commits to
+  git with the person's identity like their save, including `git init` and the
+  first commit of a pending library that asks for `enable_git`; the commit does
+  not say an agent asked for it (provenance is tracked in #2253).
 - `close_active_document` closes the named document's tab as its close button
   does; a document with unsaved edits is parked, never discarded. It is refused
   when the document is the person's active tab, or is shown in a window of its
@@ -157,9 +161,12 @@ the profile's ACL; there is no mode or owner check there.
 
 ## Files
 
-The runtime directory is `$XDG_RUNTIME_DIR/signex-agent`, else
-`<temp dir>/signex-agent-<uid>` (macOS: the per-user temp dir), else on Windows
-`%LOCALAPPDATA%\Signex\agent`.
+The runtime directory is `$XDG_RUNTIME_DIR/signex-agent`; on Linux, with the
+variable unset (ssh, cron), `/run/user/<uid>/signex-agent` when `/run/user/<uid>`
+is the user's own real folder, so a desktop app and such a shell name one
+folder; else `<temp dir>/signex-agent-<uid>` (macOS: the per-user temp dir);
+on Windows `%LOCALAPPDATA%\Signex\agent`. A client (`lookup`, `hold`) also
+looks at the user's other possible folders and counts a lock held there.
 
 ```
 <runtime dir>/                       0700
@@ -209,7 +216,14 @@ the moment it opens the project (in the update that opens it, with one small
 file open and a non-blocking lock) until it closes it; a headless run holds
 the lock EXCLUSIVELY. So many windows can have one project open, a headless
 run cannot take it while any window does, and a window cannot open a project a
-run holds (it refuses, as above). The kernel drops a lock with its process, so
+run holds (it refuses, as above). A closed project keeps its lock while any
+document write is still running (it goes with the update that reports the last
+one done), and on quit the locks go with the cleanup task, after the document,
+autosave and library writes, so a run never reads a file a save is still
+writing. A lock that cannot be made is said once in Messages and tried again at
+the registry retry tick (5 s), not at every update; a run that took the project
+after that is said once too, with its process id. A stale entry is removed only
+if the project is still unlocked when it is. The kernel drops a lock with its process, so
 a process killed by a signal is found stale at once and a reused process id
 means nothing. A reader asks for the lock exclusively without waiting: it
 fails while anyone holds it, and if it succeeds every holder is gone.

@@ -528,3 +528,53 @@ fn the_runtime_folder_of_a_client_is_made_private() {
     assert_eq!(mode(&dir), 0o700);
     assert_eq!(mode(&dir.join(REGISTRY_DIR)), 0o700);
 }
+
+/// A window opens the project between the lookup that found its entry stale
+/// and the removal: the lock is held again, so the entry stays.
+#[test]
+fn a_stale_entry_is_kept_when_a_window_locked_the_project_since() {
+    let fx = fixture();
+    fx.plant(&fx.entry(Kind::Gui, DEAD_PID, CC));
+    let Lookup::Stale(stale) = fx.lookup() else {
+        panic!("not stale");
+    };
+    // Only the lock changes: the entry is the one that was found.
+    fx.open_in_a_window();
+    stale.remove().expect("left alone");
+    assert!(
+        fx.entry_file().exists(),
+        "an entry of an open project was removed"
+    );
+}
+
+/// A runtime folder of the same user in another place (an app started with
+/// another environment): a lock held there counts, for a run and for a lookup.
+#[test]
+fn a_lock_held_in_another_runtime_folder_of_the_user_counts() {
+    let fx = fixture();
+    let other = fx._root.path().join("other-run");
+    files::prepare_dir(&other).expect("the other folder");
+    files::prepare_dir(&other.join(REGISTRY_DIR)).expect("its registry");
+    let canonical = std::fs::canonicalize(&fx.project).unwrap();
+    let alternates = [other.clone()];
+
+    assert!(matches!(
+        client::lookup_with(&fx.dir, &fx.project, &alternates),
+        Ok(Lookup::Free)
+    ));
+    let hold = client::hold_with(&fx.dir, &fx.project, &alternates).expect("nobody holds it");
+    drop(hold);
+
+    // A window of that other environment has the project open.
+    let Ok(_window) = registry::claim_shared(&other, &canonical) else {
+        panic!("a window could not claim the project");
+    };
+    assert!(matches!(
+        client::lookup_with(&fx.dir, &fx.project, &alternates),
+        Ok(Lookup::GuiNotListening { pid: None })
+    ));
+    let why = client::hold_with(&fx.dir, &fx.project, &alternates).unwrap_err();
+    assert!(why.contains(&other.display().to_string()), "{why}");
+    // Not seen when that folder is not among the alternates.
+    assert!(client::hold_with(&fx.dir, &fx.project, &[]).is_ok());
+}

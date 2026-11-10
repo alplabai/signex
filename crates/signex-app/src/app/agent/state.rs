@@ -38,6 +38,12 @@ pub(crate) struct AgentState {
     /// The shared lock this window holds on each project it has open, by the
     /// project's path, for as long as it stays open (see `claim_project`).
     pub(super) project_locks: std::collections::BTreeMap<PathBuf, std::fs::File>,
+    /// The open projects whose lock could not be made (it failed, or a run
+    /// took the project first): not tried again at every update, only at the
+    /// registry retry tick.
+    pub(super) lock_failed: std::collections::BTreeSet<PathBuf>,
+    /// Of those, the ones already said in Messages, so it is said once.
+    pub(super) lock_warned: std::collections::BTreeSet<PathBuf>,
     /// The boot ids whose files this app may have made, for the quit path.
     pub(super) touched: Vec<String>,
     /// The last registry write failed or left a project to another instance;
@@ -62,11 +68,19 @@ impl AgentState {
             registry_lock: Arc::default(),
             registry_seq: 0,
             project_locks: std::collections::BTreeMap::new(),
+            lock_failed: std::collections::BTreeSet::new(),
+            lock_warned: std::collections::BTreeSet::new(),
             touched: Vec::new(),
             registry_retry: false,
             registry_in_flight: false,
             restarts: 0,
         }
+    }
+
+    /// Use the runtime directory of a test run (an integration test boots the
+    /// real window): it must never list its projects in the user's registry.
+    pub(crate) fn use_test_runtime_dir(&mut self) {
+        self.runtime_dir = Ok(files::test_runtime_dir());
     }
 
     pub(super) fn token(&self) -> Option<&Token> {

@@ -145,6 +145,8 @@ impl Signex {
                 if self.agent.registry_in_flight {
                     return Task::none();
                 }
+                // The locks that could not be made are tried again with it.
+                self.agent.lock_failed.clear();
                 self.agent.registered = None;
                 self.sync_agent_registry().unwrap_or_else(Task::none)
             }
@@ -161,7 +163,7 @@ impl Signex {
             self.agent
                 .listener_config(self.ui_state.agent_connections_enabled),
         );
-        let retry = if self.agent.registry_retry {
+        let retry = if self.agent.registry_retry || !self.agent.lock_failed.is_empty() {
             iced::time::every(REGISTRY_RETRY).map(|_| Message::Agent(AgentMsg::RegistryRetryTick))
         } else {
             Subscription::none()
@@ -213,15 +215,41 @@ impl Signex {
             .collect();
         projects.sort();
         // A project that got open some way that did not claim it (the open
-        // handler does) is claimed now; a window that closed a project lets go
-        // of its lock at once, in step with the update (the entry follows on
-        // the worker).
+        // handler does) is claimed now; a claim that failed is not tried again
+        // here before the retry tick.
         for project in &projects {
-            self.claim_project(project).ok();
+            if self.agent.project_locks.contains_key(project)
+                || self.agent.lock_failed.contains(project)
+            {
+                continue;
+            }
+            if let Err((pid, _)) = self.claim_project(project) {
+                // A run took the project after the window's claim failed to be
+                // made: said once, as its own warning.
+                if self.agent.lock_warned.insert(project.clone()) {
+                    crate::diagnostics::log_warning(format!(
+                        "Agent registry: a signex-cli run (pid {pid}) now holds {}, which is open \
+                         here. Save your work and reopen the project after the run ends.",
+                        project.display()
+                    ));
+                }
+                self.agent.lock_failed.insert(project.clone());
+            }
         }
+        // A project that closed lets go of its lock, unless a save of it is
+        // still being written: a run that took the lock then would read the
+        // old file and write over the save. The lock goes with the update that
+        // reports the save done.
+        let saving = self.document_state.document_saves.is_any_saving();
         self.agent
             .project_locks
-            .retain(|path, _| projects.contains(path));
+            .retain(|path, _| saving || projects.contains(path));
+        self.agent
+            .lock_failed
+            .retain(|path| projects.contains(path));
+        self.agent
+            .lock_warned
+            .retain(|path| projects.contains(path));
         if self.agent.registered.as_ref() == Some(&projects) {
             return None;
         }
@@ -275,7 +303,10 @@ impl Signex {
         // Nothing is listed again after the exit path: an update that runs
         // before the process ends must not write the entries back.
         self.agent.lists_projects = false;
-        self.agent.project_locks.clear();
+        // The locks go with this task, which runs after the document, autosave
+        // and library writes of the quit path: dropping them here would let a
+        // run read a project whose last save is still being written.
+        let locks = std::mem::take(&mut self.agent.project_locks);
         let lock = self.agent.registry_lock.clone();
         Task::perform(
             async move {
@@ -283,6 +314,7 @@ impl Signex {
                     for id in &ids {
                         listener::cleanup(&dir, id, &lock, true);
                     }
+                    drop(locks);
                 })
                 .await
                 .ok();
@@ -319,15 +351,22 @@ impl Signex {
         };
         match registry::claim_shared(&dir, &canonical) {
             Ok(lock) => {
+                self.agent.lock_failed.remove(project);
+                self.agent.lock_warned.remove(project);
                 self.agent.project_locks.insert(project.to_path_buf(), lock);
                 Ok(())
             }
             Err(registry::LockError::Held) => Err(registry::headless_holder(&dir, &canonical)),
             Err(registry::LockError::Other(why)) => {
-                crate::diagnostics::log_warning(format!(
-                    "Agent registry: {} could not be locked: {why}",
-                    project.display()
-                ));
+                // Said once, and not tried again before the retry tick.
+                if self.agent.lock_warned.insert(project.to_path_buf()) {
+                    crate::diagnostics::log_warning(format!(
+                        "Agent registry: {} could not be locked: {why}; trying again every {} s",
+                        project.display(),
+                        REGISTRY_RETRY.as_secs()
+                    ));
+                }
+                self.agent.lock_failed.insert(project.to_path_buf());
                 Ok(())
             }
         }

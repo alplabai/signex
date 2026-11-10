@@ -235,8 +235,10 @@ fn check_side_writes(
                         })?;
                 }
             }
-            Some(_) => {}
-            None => {
+            // Kinds whose plain save writes nothing but the document; only
+            // these are let through without a list.
+            Some("schematic" | "pcb" | "symbol" | "footprint" | "component") => {}
+            _ => {
                 return Err(format!(
                     "`{}` of a document of unknown kind is not available to an attached run",
                     approved.command.as_str()

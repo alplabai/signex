@@ -61,13 +61,20 @@ pub enum Lookup {
 pub struct StaleEntry {
     path: PathBuf,
     entry: Entry,
+    /// The project's lock file: held again by now means a window opened it.
+    lock: PathBuf,
 }
 
 impl StaleEntry {
     /// Remove the entry, if it is still the one found stale and is this
     /// user's own plain file (never a link or another user's file). An entry
-    /// rewritten since is left alone.
+    /// rewritten since is left alone, and so is one whose project has been
+    /// locked since it was found stale (a window opening it writes its entry
+    /// after taking the lock).
     pub fn remove(self) -> Result<(), String> {
+        if registry::lock_is_held(&self.lock) {
+            return Ok(());
+        }
         if registry::read_entry(&self.path).as_ref() != Some(&self.entry) {
             return Ok(());
         }
@@ -99,7 +106,36 @@ pub fn entry_path(dir: &Path, project: &Path) -> Result<PathBuf, String> {
 /// the project's canonical path, and what it names is never trusted: the
 /// endpoint to connect to is the one its boot id gives, never its `socket`
 /// text.
+///
+/// An app started with another environment may keep its runtime directory
+/// elsewhere (see `files::alternate_dirs`): a project it holds there is found
+/// too, and wins over a free or stale answer here.
 pub fn lookup(dir: &Path, project: &Path) -> Result<Lookup, String> {
+    lookup_with(dir, project, &files::alternate_dirs(dir))
+}
+
+pub(in crate::app::agent) fn lookup_with(
+    dir: &Path,
+    project: &Path,
+    alternates: &[PathBuf],
+) -> Result<Lookup, String> {
+    let primary = lookup_in(dir, project)?;
+    if !matches!(primary, Lookup::Free | Lookup::Stale(_)) {
+        return Ok(primary);
+    }
+    for other in alternates {
+        // An unusable other folder is no reason to stop: it is not the one
+        // this process would use.
+        if let Ok(found) = lookup_in(other, project)
+            && !matches!(found, Lookup::Free | Lookup::Stale(_))
+        {
+            return Ok(found);
+        }
+    }
+    Ok(primary)
+}
+
+fn lookup_in(dir: &Path, project: &Path) -> Result<Lookup, String> {
     let canonical = canonical(project)?;
     match std::fs::symlink_metadata(dir) {
         Ok(_) => files::check_dir(dir)?,
@@ -127,7 +163,8 @@ pub fn lookup(dir: &Path, project: &Path) -> Result<Lookup, String> {
         ));
     }
     if !held {
-        return Ok(Lookup::Stale(StaleEntry { path, entry }));
+        let lock = registry::lock_path(dir, &canonical);
+        return Ok(Lookup::Stale(StaleEntry { path, entry, lock }));
     }
     let names_this_project = entry.project == canonical.to_string_lossy();
     Ok(match entry.kind {
@@ -163,7 +200,29 @@ pub struct Hold {
 /// Hold `project` for this process. Fails if another headless run holds it,
 /// a running app has it registered, or the entry cannot be written.
 pub fn hold(dir: &Path, project: &Path) -> Result<Hold, String> {
+    hold_with(dir, project, &files::alternate_dirs(dir))
+}
+
+pub(in crate::app::agent) fn hold_with(
+    dir: &Path,
+    project: &Path,
+    alternates: &[PathBuf],
+) -> Result<Hold, String> {
     let canonical = canonical(project)?;
+    // A lock held in another runtime directory of this user (an app started
+    // with another environment) is as good as one here.
+    for other in alternates {
+        if files::check_dir(other).is_ok()
+            && registry::lock_is_held(&registry::lock_path(other, &canonical))
+        {
+            return Err(format!(
+                "{} is open in a Signex, or held by a signex-cli run, that keeps its runtime \
+                 folder in {}",
+                canonical.display(),
+                other.display()
+            ));
+        }
+    }
     files::prepare_dir(dir)?;
     let registry = dir.join(REGISTRY_DIR);
     files::prepare_dir(&registry)?;

@@ -15,6 +15,11 @@ impl Signex {
         // registry (#1924); an app made any other way (a test, a headless run)
         // does not.
         app.agent.lists_projects = true;
+        // A test run that boots the real window lists into a folder of its own,
+        // as the config files go to a redirect (see `config_root`).
+        if crate::config_root::is_test_redirect_active() {
+            app.agent.use_test_runtime_dir();
+        }
         Self::boot_from(app, boot_task, startup_paths)
     }
 

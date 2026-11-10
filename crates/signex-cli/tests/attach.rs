@@ -132,6 +132,12 @@ impl World {
     /// [`Self::app`] whose project document says saving it writes `save_writes`
     /// besides its file (the libraries it has pending).
     fn app_saving(&self, replies: &[Value], save_writes: Vec<String>) -> FakeApp {
+        self.app_answering(replies, json!({ "save_writes": save_writes }))
+    }
+
+    /// [`Self::app`] whose `document_info` answer for the project document has
+    /// the keys of `patch` set, or removed where the value is null.
+    fn app_answering(&self, replies: &[Value], patch: Value) -> FakeApp {
         let socket = self.socket(CC);
         let listener = UnixListener::bind(&socket).unwrap();
         listener.set_nonblocking(true).unwrap();
@@ -144,7 +150,7 @@ impl World {
             (SHEET_B.into(), OTHER_PROJECT_SHEET.into()),
             (PROJECT_DOC.into(), self.project().to_string()),
         ];
-        let mut app = FakeApp::serve(listener, replies, docs, save_writes);
+        let mut app = FakeApp::serve(listener, replies, docs, patch);
         app.window = Some(self.window_lock());
         app
     }
@@ -168,7 +174,7 @@ impl FakeApp {
         listener: UnixListener,
         replies: &[Value],
         docs: Vec<(String, String)>,
-        save_writes: Vec<String>,
+        project_patch: Value,
     ) -> Self {
         let requests = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
@@ -194,7 +200,14 @@ impl FakeApp {
                                 let mut data = json!({"path": path, "kind": "schematic"});
                                 if asked == PROJECT_DOC {
                                     data["kind"] = json!("project");
-                                    data["save_writes"] = json!(save_writes);
+                                    data["save_writes"] = json!([]);
+                                    for (key, value) in project_patch.as_object().unwrap() {
+                                        if value.is_null() {
+                                            data.as_object_mut().unwrap().remove(key);
+                                        } else {
+                                            data[key] = value.clone();
+                                        }
+                                    }
                                 }
                                 json!({"id": "document_info", "status": "answered",
                                     "data": data, "messages": [], "changed": []})
@@ -758,6 +771,43 @@ fn an_attached_project_save_is_refused_when_a_pending_library_is_outside() {
     assert!(!Path::new(outside).exists());
 }
 
+/// An answer that does not say what a save writes is not trusted: a project
+/// with no `save_writes`, a document with no `kind`, and one of a kind this
+/// CLI does not know are each refused before anything is sent.
+#[test]
+fn an_attached_save_is_refused_when_the_app_does_not_say_what_it_writes() {
+    for (patch, why) in [
+        (
+            json!({"save_writes": null}),
+            "did not say what saving the project writes",
+        ),
+        (json!({"kind": null}), "unknown kind"),
+        (json!({"kind": "hologram"}), "unknown kind"),
+    ] {
+        let w = world();
+        let done = json!({"id": "save_document", "status": "ran", "messages": [], "changed": []});
+        let app = w.app_answering(&[done], patch.clone());
+        let out = w.cli(
+            &[
+                "run",
+                w.project(),
+                "save_document",
+                "--arg",
+                &format!("document={PROJECT_DOC}"),
+                "--save",
+            ],
+            "",
+        );
+        assert_eq!(out.lines[0]["status"], "refused", "{patch}: {}", out.stdout);
+        let reason = out.lines[0]["reason"].as_str().unwrap();
+        assert!(reason.contains(why), "{patch}: {reason}");
+        assert!(
+            app.finish().is_empty(),
+            "{patch}: the app was sent the save"
+        );
+    }
+}
+
 /// `query_pins` reads one named sheet: another open project's part cannot be
 /// asked about, and this project's answer comes through whole.
 #[test]
@@ -929,7 +979,7 @@ fn a_planted_entry_naming_another_socket_is_stale_and_that_socket_is_never_conne
         },
         &[],
         Vec::new(),
-        Vec::new(),
+        json!({}),
     );
     w.token(CC, 0o600);
     // A live process, and a socket that answers: not the one CC names.

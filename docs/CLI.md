@@ -169,9 +169,14 @@ in the middle of continues.
   inside the run's folders. Otherwise it is refused without naming the file
   (it may belong to another project; `--allow-path` adds a folder); an answer
   without the list is refused too. `save_writes` is never printed: the CLI
-  removes it from the `document_info` answer it shows. A sheet's plain save writes nothing else. The resolve and the command
-  are two requests, so a document that is re-pointed between them (a person
-  saving as, closing and reopening) is the same residual race as above.
+  removes it from the `document_info` answer it shows (a headless run shows
+  its own project's, the pending libraries of the project it holds). A sheet's
+  plain save writes nothing else. The resolve, the `document_info` that lists
+  the writes, and the command are separate requests, so a document that is
+  re-pointed or a project that gets another pending library between them (a
+  person saving as, closing and reopening, adding a library) is the same
+  residual race as above: what the save writes is what the person's app holds
+  when it runs.
 - **Dry run.** Without `--save`, nothing is written to disk by the CLI when
   attached. What a command changes stays in the person's open app as unsaved
   changes; the person saves, or undoes it. With `--save`, a `save_document` of a
@@ -227,6 +232,19 @@ turns the setting on, the same entry names the socket and the run attaches. A
 Signex that crashed leaves its entry, but its lock is gone, so the entry is
 stale and the run goes on. An entry is never stale while its lock is held.
 
+The lock and the entries live in one runtime folder per user, and the window
+and the CLI must name the same one: `$XDG_RUNTIME_DIR/signex-agent`; on Linux,
+with that variable unset (a shell over ssh, cron), `/run/user/<uid>/signex-agent`
+when that folder of the user exists (a real folder of theirs, not a link), so a
+desktop Signex and such a shell agree; else `<temp>/signex-agent-<uid>`. macOS
+and Windows have one stable place (the per-user temporary folder, the local
+application data). A lookup or a hold also looks in the user's other possible
+folders (the temporary-folder one, `/tmp/signex-agent-<uid>`, the
+`/run/user/<uid>` one) and counts a lock held there, for a Signex started with
+another environment. Known limit: on macOS a window and a shell whose
+`TMPDIR` differs are only joined by the `/tmp` look; a lock is not taken in the
+other folders, only looked at.
+
 ## Security
 
 The input may come from an agent that read untrusted text, so every rule below
@@ -261,11 +279,14 @@ is enforced before the app sees a command.
   a path that did not exist at the check can be created as a link before the
   write. A process of the same user racing symlinks inside the project folder
   is out of scope.
-- **No git.** The CLI does not commit to git: a headless run never opens,
-  creates or commits to a repository, whatever `enable_git` says and wherever
-  `.git` points (a `gitdir:` file, a link, config includes). A save logs
-  "commit skipped in a headless run"; commit yourself after the run. Vetted
-  git support is a follow-up.
+- **Git.** A headless run never opens, creates or commits to a repository,
+  whatever `enable_git` says and wherever `.git` points (a `gitdir:` file, a
+  link, config includes). A save logs "commit skipped in a headless run";
+  commit yourself after the run. An attached save is different: it runs in the
+  person's Signex, as their own Save does, so it commits with the person's git
+  identity exactly as their save would, including `git init` and the first
+  commit of a pending library that asks for `enable_git`. Who made the change
+  is not recorded in the commit (provenance is tracked in #2253).
 - **Capabilities.** Each catalog command needs exactly one group: `read`,
   `edit`, `save`, `export`, `delete` or `library-write`. A run holds
   `read,edit`; `--allow` adds groups. A refused command names the one it needs. `edit` is any command
