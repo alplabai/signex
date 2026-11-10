@@ -25,6 +25,7 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 // Submodule declarations (split from the original 4570-line file).
+mod board;
 mod conflicts;
 mod managers;
 mod pad;
@@ -215,6 +216,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // sections (Parameters / DOF / Warnings) follow regardless of
     // selection, so the user can monitor solve state while authoring.
     col = selection::view_selection(col, fp, mode_label, palette, collapsed_sections);
+    // A board sketch's own attributes: outline and mounting hole (#2234).
+    col = board::view_board_section(col, fp, palette, i18n);
     col = pad_stack_check::view_pad_stack_check(col, fp, palette, collapsed_sections);
     col = sections::view_sections(col, fp, palette, collapsed_sections, unit, i18n);
     col = render_fp_settings_and_hint(col, fp, muted, primary, border_c, collapsed_sections);

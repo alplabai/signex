@@ -270,6 +270,9 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
 pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         update_pcb_row(ctx),
+        // #2234: enter or leave the sketch of the board in view; greyed
+        // with no PCB.
+        cmd_item_gated(ctx, cmd("board_sketch", "Board Sketch", "")),
         SEP,
         cmd_item_gated(
             ctx,

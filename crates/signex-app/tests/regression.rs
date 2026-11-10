@@ -111,6 +111,10 @@ mod pcb_ratsnest;
 #[path = "regression/pcb_view.rs"]
 mod pcb_view;
 
+// #2234 - board sketch mode: entry points, commit, refused bake, Esc.
+#[path = "regression/board_sketch.rs"]
+mod board_sketch;
+
 // #1245 - the Parameter Manager opens from a catalog command.
 #[path = "regression/parameter_manager_open.rs"]
 mod parameter_manager_open;

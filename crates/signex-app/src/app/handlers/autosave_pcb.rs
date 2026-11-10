@@ -98,6 +98,7 @@ impl Signex {
         else {
             return false;
         };
+        self.end_board_sketch_of(path);
         self.document_state.set_unsaved_pcb_board(idx, board);
         self.document_state.mark_document_dirty(path);
         // Keep the camera: the user is looking at this board already.

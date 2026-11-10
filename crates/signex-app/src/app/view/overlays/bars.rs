@@ -219,6 +219,12 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Option<(&std::path::Path, &crate::app::FootprintDocument)> {
+        // A board in sketch mode shows its sketch editor (#2234).
+        if self.ui_state.main_window_id == Some(window_id)
+            && let Some(editor) = self.board_sketch_editor()
+        {
+            return Some((editor.path.as_path(), editor));
+        }
         let docs = &self.document_state;
         let path = docs
             .tab_shown_in_window(window_id, &self.ui_state)?

@@ -68,7 +68,8 @@ Schematics... and Number Schematic Sheets....
 - ERC Report...
 
 **Design** has Update PCB Document (see
-[Design ▸ Update PCB Document](#design-update-pcb)), a separator, then
+[Design ▸ Update PCB Document](#design-update-pcb)), Board Sketch (see
+[Design ▸ Board Sketch](#design-board-sketch)), a separator, then
 Parameter Manager.... **File ▸ New** has PCB (`new_pcb_document`). **File ▸
 Export** keeps PDF only.
 Project tree actions with no menu message or command id (add or remove a
@@ -125,6 +126,16 @@ File ▸ New ▸ PCB runs `new_pcb_document`: the project in view gets its board
 named after the project, from its project defaults. It is greyed with no
 project open. Projects ▸ Add New ▸ PCB does the same for the clicked project.
 The board opens as an unsaved tab; nothing is written until Save.
+
+## Design ▸ Board Sketch {#design-board-sketch}
+
+Design ▸ Board Sketch runs `board_sketch` (#2234): the board in view enters
+sketch mode, where the footprint editor's sketch tools draw its outline,
+keepouts, cutouts and mounting holes; run again, it leaves the mode and
+commits the changes as one undo step. It is greyed while no PCB is open.
+The same command is the PCB Active Bar's Board Sketch button, a row of the
+board canvas menu and a palette row; no keymap preset binds it. The mode:
+[PCB_SKETCH.md](PCB_SKETCH.md#sketch-mode).
 
 ## File ▸ Library {#file-library}
 

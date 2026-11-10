@@ -22,6 +22,8 @@ mod properties_parameters;
 mod symbol_editor_properties;
 
 // v0.14.x -- domain modules split out of the former single-file panels module.
+mod board_sketch_attr;
+pub use board_sketch_attr::BoardSketchAttrMsg;
 mod color_field;
 mod context;
 mod drafts;
@@ -94,12 +96,12 @@ pub use color_field::{ColorFieldProps, color_field};
 pub use context::{FootprintChoiceItem, PINS_SECTION_KEY, PanelContext, SymbolChoiceItem};
 pub use erc_waivers::{ErcViolationWaiverEntry, ErcWaiveDraft, ErcWaiverMsg, ErcWaiverStatus};
 pub use footprint_context::{
-    ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, CutoutSummary,
-    FootprintEditorPanelContext, FootprintLibInternalRow, FootprintLibSibling, FootprintModeKind,
-    FootprintPadSummary, FootprintSelectedSilkSummary, FootprintSketchEntitySummary,
-    FootprintSolveSummary, KeepoutKindFlag, KeepoutSummary, NumberingSchemeKindUi,
-    OverConstraintSummary, PadShapeParamSummary, PourSummary, RejectedConflictSummary,
-    SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
+    ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, BoardSketchProps,
+    CutoutSummary, FootprintEditorPanelContext, FootprintLibInternalRow, FootprintLibSibling,
+    FootprintModeKind, FootprintPadSummary, FootprintSelectedSilkSummary,
+    FootprintSketchEntitySummary, FootprintSolveSummary, KeepoutKindFlag, KeepoutSummary,
+    MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
+    PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
 pub use library::{ComponentSheet, LibraryRowDetail};
 pub(super) use library::{

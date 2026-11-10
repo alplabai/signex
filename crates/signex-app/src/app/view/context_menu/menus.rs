@@ -46,6 +46,7 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "change_component",
     "open_project_options",
     "cross_probe",
+    "board_sketch",
 ];
 
 /// Keyboard-shortcut hints for the canvas menu, keyed by command id and
@@ -422,6 +423,9 @@ pub(super) fn pcb_canvas_menu_entries(
         row(ic::icon_dd_flip_x(tid), "flip_selection", placeable),
         DropdownEntry::Separator,
         row(ic::icon_dd_delete(tid), "delete_selection", board.deletable),
+        DropdownEntry::Separator,
+        // Enter or leave the board's sketch mode (#2234).
+        row(ic::icon_dd_rect(tid), "board_sketch", true),
         DropdownEntry::Separator,
         row(ic::icon_dd_cross_probe(tid), "cross_probe", board.any),
     ]

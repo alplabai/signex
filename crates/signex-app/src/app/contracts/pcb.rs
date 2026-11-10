@@ -39,6 +39,23 @@ pub enum PcbMsg {
         window: iced::window::Id,
         event: PcbViewMsg,
     },
+    /// Board sketch mode of the main window's board (#2234).
+    Sketch(BoardSketchMsg),
+}
+
+/// What the user did about board sketch mode (#2234). The drawing itself
+/// arrives as the sketch editor's own messages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoardSketchMsg {
+    /// `board_sketch` ran: enter sketch mode, or leave it when on.
+    ModeToggled,
+    /// Leave (the bar's button or Esc): commit any change, then leave. A
+    /// refused commit keeps the mode on.
+    LeaveRequested,
+    /// Apply: commit the changes and stay in the mode.
+    ApplyRequested,
+    /// Discard: leave without committing; the board keeps what it had.
+    DiscardRequested,
 }
 
 /// What the user changed about what a board view shows (#2223): never the

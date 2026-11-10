@@ -1,5 +1,5 @@
-//! PCB-surface command metadata: placement, the design rule check and the
-//! board view (ratsnest, layers).
+//! PCB-surface command metadata: placement, the design rule check, the
+//! board view (ratsnest, layers) and board sketch mode.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
 
@@ -97,6 +97,18 @@ pub(super) const PCB: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2234: enter the board sketch of the board in view, or leave it
+    // (committing the changes as one undo step). No default key.
+    CommandMetadata {
+        id: "board_sketch",
+        category: "design",
+        label: "Enter or leave the board sketch",
+        menu_label: Some("Board Sketch"),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
 ];

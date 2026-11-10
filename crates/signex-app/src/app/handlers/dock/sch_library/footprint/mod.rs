@@ -7,6 +7,7 @@
 //! siblings so the shared `footprint` namespace lives in the folder, not
 //! in every filename (ADR-0001 §5 — group by folder, no redundant prefix).
 
+mod board;
 mod grid;
 mod library;
 mod pad;

@@ -18,6 +18,10 @@ impl Signex {
     /// v0.18.11 — used by the Grid Properties modal open handler
     /// to seed the dialog buffers from the live snap step.
     pub(crate) fn active_footprint_editor(&self) -> Option<&crate::app::FootprintDocument> {
+        // A board in sketch mode edits through the same editor (#2234).
+        if let Some(editor) = self.board_sketch_editor() {
+            return Some(editor);
+        }
         let path = self
             .document_state
             .tabs
@@ -32,6 +36,9 @@ impl Signex {
     pub(crate) fn active_footprint_editor_mut(
         &mut self,
     ) -> Option<&mut crate::app::FootprintDocument> {
+        if self.board_sketch_editor().is_some() {
+            return self.board_sketch_editor_mut();
+        }
         let path = self
             .document_state
             .tabs
