@@ -18,6 +18,12 @@ use super::args::Operands;
 pub enum OperandValue {
     /// `x`, `y` in mm.
     Point(f64, f64),
+    /// `<designator>.<pin>` in a point operand: resolved to the pin's tip on
+    /// the sheet the edit targets (#2199).
+    PinRef {
+        designator: String,
+        pin: String,
+    },
     /// Degrees.
     Angle(f64),
     Text(String),
@@ -148,6 +154,13 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
             .map(|n| n + 0.0)
     };
     match operand.kind {
+        // A lone number (`1.5`) is a mistyped coordinate, not a pin reference.
+        OperandKind::Point if !text.contains(',') && is_number_pair(text.trim()) => {
+            Err(invalid("x,y in mm"))
+        }
+        OperandKind::Point if !text.contains(',') => pin_ref(text).ok_or_else(|| {
+            invalid("x,y in mm, a pin reference like R1.2, or a sheet entry like Charger.SDA")
+        }),
         OperandKind::Point => {
             let (x, y) = text.split_once(',').ok_or_else(|| invalid("x,y in mm"))?;
             // A coordinate the document cannot store as nm would make it unsaveable.
@@ -189,6 +202,26 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
     }
 }
 
+/// Whether both sides of the first `.` are numbers (`1.5`, `10.16`).
+fn is_number_pair(text: &str) -> bool {
+    text.split_once('.')
+        .is_some_and(|(a, b)| a.parse::<f64>().is_ok() && b.parse::<f64>().is_ok())
+        || text.parse::<f64>().is_ok()
+}
+
+/// `<designator>.<pin>` or `<sheet name>.<entry name>`, split at the first `.`
+/// (an entry or pin name may contain a `.`, a designator or sheet name may
+/// not); neither side empty, no control characters. The value is trimmed; a
+/// space inside a name (`Power Stage.VIN`) stays.
+fn pin_ref(text: &str) -> Option<OperandValue> {
+    let (designator, pin) = text.trim().split_once('.')?;
+    let clean = |s: &str| !s.is_empty() && !s.chars().any(char::is_control);
+    (clean(designator) && clean(pin)).then(|| OperandValue::PinRef {
+        designator: designator.to_string(),
+        pin: pin.to_string(),
+    })
+}
+
 /// `#rrggbb` or `rrggbb`: six hex digits, nothing else.
 fn parse_color(text: &str) -> Option<OperandValue> {
     let digits = text.strip_prefix('#').unwrap_or(text);
@@ -221,6 +254,51 @@ mod tests {
             Some(&OperandValue::Text("VCC".into()))
         );
         assert_eq!(args.operand("rotation"), Some(&OperandValue::Angle(90.0)));
+    }
+
+    #[test]
+    fn a_point_operand_that_is_not_a_coordinate_is_a_pin_reference_split_at_the_first_dot() {
+        let pin = |designator: &str, pin: &str| OperandValue::PinRef {
+            designator: designator.into(),
+            pin: pin.into(),
+        };
+        for (text, want) in [
+            ("R1.2", pin("R1", "2")),
+            ("U1.VCC", pin("U1", "VCC")),
+            ("U1.A.B", pin("U1", "A.B")),
+            // A space inside a sheet name stays; the ends are trimmed.
+            ("Power Stage.VIN", pin("Power Stage", "VIN")),
+            (" R1.2 ", pin("R1", "2")),
+            // A designator with a space: a pin reference, refused later as
+            // no such part.
+            ("R 1.2", pin("R 1", "2")),
+        ] {
+            let args = parse("place_junction", &[&format!("at={text}")]).unwrap();
+            assert_eq!(args.operand("at"), Some(&want), "{text}");
+        }
+        // A value with a comma is a coordinate, whatever else it holds.
+        assert_eq!(
+            parse("place_junction", &["at=1.5,2"])
+                .unwrap()
+                .operand("at"),
+            Some(&OperandValue::Point(1.5, 2.0))
+        );
+        for bad in [
+            "R1", "R1.", ".2", "R1.\t2", "R1.2,", "1,a.b", "1.5", "10.16", "5",
+        ] {
+            let err = parse("place_junction", &[&format!("at={bad}")]).unwrap_err();
+            assert!(matches!(err, OperandError::Invalid { .. }), "{bad}: {err}");
+        }
+        // A bare JSON number reaches the parser as the same text.
+        let text = crate::app::command::operand_text("at", &serde_json::json!(1.5)).unwrap();
+        let err = parse("place_junction", &[&format!("at={text}")]).unwrap_err();
+        assert_eq!(err.to_string(), "operand `at` must be x,y in mm, got `1.5`");
+        // Spaces around a lone number do not make it a pin reference.
+        let err = parse("place_junction", &["at= 1.5 "]).unwrap_err();
+        assert!(
+            err.to_string().ends_with("must be x,y in mm, got ` 1.5 `"),
+            "{err}"
+        );
     }
 
     #[test]

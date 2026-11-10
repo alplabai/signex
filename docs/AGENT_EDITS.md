@@ -32,9 +32,11 @@ Two commands, both with capability `edit` in `signex-cli`:
   refused too: it writes the project's net classes, which no sheet's undo step
   covers (a decision for a follow-up, see Known limits). A test pins the set.
 - Every edit acts on the call's `document`; it never names another. Where a
-  command takes a `document` operand (`color_net`), it is filled in; an edit
-  that carries one is refused. Every edit is parsed before any runs, so a typo
-  in the last one changes nothing.
+  command takes a `document` operand (`color_net`, the placements), it is
+  filled in; an edit may repeat the list's own document (an id or a path,
+  compared as the resolved document), and one that names another is refused.
+  Every edit is parsed before any runs, so a typo in the last one changes
+  nothing.
 - Each edit runs through its own command handler, so it has its own
   validation, read-only refusal and (through the engine) dirty tracking. The
   handlers that read "the active sheet" read the target sheet while the list
@@ -46,8 +48,16 @@ Two commands, both with capability `edit` in `signex-cli`:
   history entry stamped with an `UndoGroupId` at the end. A refused or failing
   edit rolls the sheet, its history and its revisions back, so the dirty flag
   is what it was.
-- The answer is `{changed, revision, group, label, edits}`. `changed: false`
-  comes only from an empty list: it records no step and keeps the person's
+- The answer is `{changed, revision, group, label, edits, results}`; `results`
+  holds each edit's own answer by index (a wire or bus run answers its report,
+  see [CLI.md](CLI.md) "Wire intent"; its `ends` field holds each end's `ref`
+  and resolved `at`), `null` for an edit that only ran. A
+  wire edit sees the edits before it, and is judged against the sheet as it
+  stands, so a route sent as chained `place_wire` edits (A to B, then B to C)
+  needs `allow_open=true` on every edit but the last; names are judged across
+  the project, not only the sheet (the project is read once per list; a net
+  that reaches no other sheet costs no read). `changed: false`
+  comes only from an empty list or a list of dry runs: it records no step and keeps the person's
   redo. An edit that changes nothing (a junction already there, a net already
   that colour) is refused by its handler like any other, so it refuses the
   whole list; a refusal is `Disabled`, never a bare `Ran`.
@@ -97,7 +107,8 @@ the answer in `data` and the sheet in `changed`.
 ## Known limits
 
 - A call acts on one sheet. Edits across sheets under one group id (as project
-  replace does) are not offered; a placement has no `document` operand yet.
+  replace does) are not offered. The placements take an optional `document`
+  operand (#2199), but inside a list it can only repeat the list's own.
 - `assign_net_class`, annotation and other project-wide data are not edits;
   that needs a decision on how project data joins a sheet's undo step.
 - A click-click move that is already floating is widget-local state the app

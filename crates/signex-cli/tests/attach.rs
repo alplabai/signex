@@ -873,6 +873,30 @@ fn a_command_that_acts_on_a_document_must_name_it_and_is_never_sent_without_one(
     assert_eq!(sent[0]["id"], "list_documents");
 }
 
+#[test]
+fn an_attached_placement_is_refused_with_the_way_to_send_it() {
+    // The 17 placements reach a running Signex only as edits of
+    // `apply_edits`; named document or not, the CLI says so and sends nothing.
+    let w = world();
+    let app = w.app(&[answered(json!({"documents": 0}), &[])]);
+    let sheet = w.fx.sheet.to_str().unwrap();
+    let commands = jsonl(&[
+        json!({"id": "place_junction", "args": {"at": [1, 2]}}),
+        json!({"id": "place_wire", "args": {"start": [0, 0], "end": [2.54, 0], "document": sheet}}),
+        json!({"id": "list_documents"}),
+    ]);
+    let out = w.cli(&["run", w.project(), "--keep-going"], &commands);
+    let sent = app.finish();
+
+    assert_eq!(out.lines.len(), 3, "{}", out.stdout);
+    for line in &out.lines[..2] {
+        assert_eq!(line["status"], "refused", "{line}");
+        let reason = line["reason"].as_str().unwrap();
+        assert!(reason.contains("only through `apply_edits`"), "{line}");
+    }
+    assert_eq!(sent.len(), 1, "only the query was sent: {sent:?}");
+}
+
 /// With agent connections off the app lists its open project with no socket:
 /// nothing to attach to, and the same files are not edited behind it, whatever
 /// the route.

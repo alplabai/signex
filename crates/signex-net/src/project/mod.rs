@@ -54,12 +54,14 @@ use crate::uf::{Key, find as uf_find, union as uf_union};
 mod buses;
 mod designators;
 mod members;
+mod name_changes;
 mod names;
 mod net_index;
 mod root_order;
 mod sheet_numbers;
 
 pub use members::{NetMember, NetMemberKind, NetMembers};
+pub use name_changes::{ProjectNetChange, project_name_changes};
 pub use names::{MultiNamedNet, NetNameSource};
 pub use net_index::{HoverPin, NetAnchor, NetHover, NetIndex, is_auto_name};
 

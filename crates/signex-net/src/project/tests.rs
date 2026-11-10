@@ -1011,6 +1011,7 @@ mod buses;
 mod multi_named_report;
 mod multi_root;
 mod multiple_names;
+mod name_changes;
 mod scope;
 
 /// #537: duplicate-uuid detection covers the whole project graph, so a

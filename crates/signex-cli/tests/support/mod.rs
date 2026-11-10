@@ -108,6 +108,58 @@ pub fn fixture(root: &Path) -> Fixture {
     }
 }
 
+/// A project with one sheet and two bare parts, R1 at (12.7, 12.7) and C1 at
+/// (38.1, 12.7), each with pins 1 and 2 at x -3.81 and +3.81 and no wire,
+/// label or body.
+pub fn pins_fixture(root: &Path) -> Fixture {
+    let dir = root.join("proj");
+    std::fs::create_dir_all(&dir).expect("project dir");
+    let (project, sheet) = (dir.join("demo.snxprj"), dir.join("main.snxsch"));
+    let pin = |number: &str, x: f64| LibPin {
+        unit: 0,
+        body_style: 1,
+        pin: Pin {
+            direction: PinDirection::Passive,
+            shape_style: PinShapeStyle::Plain,
+            position: Point::new(x, 0.0),
+            rotation: 0.0,
+            length: 2.54,
+            name: String::new(),
+            number: number.into(),
+            visible: true,
+            name_visible: true,
+            number_visible: true,
+        },
+    };
+    let mut lib: LibSymbol =
+        serde_json::from_value(serde_json::json!({ "id": "Device:R" })).expect("a library symbol");
+    lib.pins = vec![pin("1", -3.81), pin("2", 3.81)];
+    let part = |reference: &str, x: f64| Symbol {
+        uuid: uuid::Uuid::now_v7(),
+        lib_id: "Device:R".into(),
+        reference: reference.into(),
+        position: Point::new(x, 12.7),
+        unit: 1,
+        ..Default::default()
+    };
+    let content = SchematicSheet {
+        uuid: uuid::Uuid::now_v7(),
+        symbols: vec![part("R1", 12.7), part("C1", 38.1)],
+        lib_symbols: [("Device:R".to_string(), lib)].into_iter().collect(),
+        ..Default::default()
+    };
+    signex_engine::Engine::new_with_path(content, Some(sheet.clone()))
+        .expect("engine")
+        .save()
+        .expect("seed sheet");
+    write_project(&project, &project_data(&dir, Vec::new())).expect("seed project");
+    Fixture {
+        dir,
+        project,
+        sheet,
+    }
+}
+
 fn project_data(dir: &Path, libraries: Vec<LibraryEntry>) -> ProjectData {
     ProjectData {
         document_id: None,

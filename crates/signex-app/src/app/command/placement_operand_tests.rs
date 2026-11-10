@@ -44,6 +44,8 @@ struct Case {
     form: Option<(&'static str, f64)>,
     /// The pending power port a click would place.
     power: Option<(&'static str, &'static str)>,
+    /// A wire or bus run answers with its report instead of a bare ran.
+    answers: bool,
 }
 
 fn cases() -> Vec<Case> {
@@ -61,6 +63,7 @@ fn cases() -> Vec<Case> {
         clicks: vec![a],
         form: Some(("VCC", 90.0)),
         power: None,
+        answers: false,
     };
     let point = |id| Case {
         id,
@@ -68,6 +71,7 @@ fn cases() -> Vec<Case> {
         clicks: vec![a],
         form: None,
         power: None,
+        answers: false,
     };
     let segment = |id| Case {
         id,
@@ -75,6 +79,13 @@ fn cases() -> Vec<Case> {
         clicks: vec![a, b],
         form: None,
         power: None,
+        answers: false,
+    };
+    // Both ends are open on an empty sheet, so the run says so.
+    let checked = |id| Case {
+        operands: [seg(), vec!["allow_open=true".to_string()]].concat(),
+        answers: true,
+        ..segment(id)
     };
     let text = |id| Case {
         id,
@@ -82,6 +93,7 @@ fn cases() -> Vec<Case> {
         clicks: vec![a],
         form: Some(("Hello", 0.0)),
         power: None,
+        answers: false,
     };
     vec![
         label("place_net_label"),
@@ -98,14 +110,15 @@ fn cases() -> Vec<Case> {
             clicks: vec![a],
             form: None,
             power: Some(("VCC", "power:VCC")),
+            answers: false,
         },
         point("place_junction"),
         point("place_no_connect"),
         point("place_no_erc"),
-        segment("place_wire"),
-        segment("draw_wire"),
-        segment("place_bus"),
-        segment("draw_bus"),
+        checked("place_wire"),
+        checked("draw_wire"),
+        checked("place_bus"),
+        checked("draw_bus"),
         text("place_text"),
         text("place_text_string"),
         segment("draw_line"),
@@ -163,7 +176,15 @@ fn every_placement_command_with_operands_makes_the_clicked_document() {
         let mut app = operand_app(&case);
         let empty = sheet_shape(&app);
         let outcome = run(&mut app, case.id, &operand_strs(&case));
-        assert_eq!(outcome, CommandOutcome::Ran, "{}", case.id);
+        if case.answers {
+            assert!(
+                matches!(outcome, CommandOutcome::Answered(_)),
+                "{}",
+                case.id
+            );
+        } else {
+            assert_eq!(outcome, CommandOutcome::Ran, "{}", case.id);
+        }
         assert_ne!(sheet_shape(&app), empty, "{} placed nothing", case.id);
         assert_eq!(sheet_shape(&app), sheet_shape(&clicked), "{}", case.id);
     }
@@ -312,9 +333,10 @@ fn a_wire_point_a_click_would_pull_onto_a_connection_is_refused() {
     assert_eq!(sheet_shape(&app), before, "the refused run changed nothing");
 
     let start = format!("start={}", pt(wire_end));
-    assert_eq!(
-        run(&mut app, "place_wire", &[&start, &end]),
-        CommandOutcome::Ran
+    let outcome = run(&mut app, "place_wire", &[&start, &end, "allow_open=true"]);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
     );
     let mut clicked = app_with_tool(crate::app::Tool::Select);
     with_wire(&mut clicked);
