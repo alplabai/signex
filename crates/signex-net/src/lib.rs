@@ -24,9 +24,10 @@ mod bus;
 mod bus_ends;
 pub use bus_ends::dangling_bus_ends;
 mod bus_intent;
-pub use bus_intent::{BusExtra, BusExtraKind, BusIntent, bus_intent};
+pub use bus_intent::{BusExtra, BusExtraKind, BusIntent, bus_intent, bus_reaches_other_sheets};
 #[cfg(test)]
 mod fixtures;
+mod join_rule;
 pub use build::{
     ConnectedPoints, EndSpec, ExtraItem, ExtraKind, FloodElements, IntentNet, NameChange,
     NetExtent, PlacementIntent, RunEnd, SegmentIndex, SheetConnectivity, SheetPinContacts,

@@ -855,6 +855,8 @@ fn a_pin_reference_that_cannot_be_resolved_is_refused_and_changes_nothing() {
         ("R9.1", "no part `R9`"),
         ("R1.7", "no pin `7`"),
         ("R?.1", "not annotated"),
+        // `R 1.2` is the designator `R 1`, not R1 and not a number.
+        ("R 1.2", "no part `R 1`"),
     ] {
         let start = format!("start={start}");
         refused_with(&mut app, "place_wire", &[&start, "end=C1.1"], fragment);

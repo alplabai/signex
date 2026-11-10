@@ -9,13 +9,14 @@
 
 use std::collections::{HashMap, HashSet};
 
-use signex_types::schematic::{InstancePath, Point, SchematicSheet, pin_tips};
+use signex_types::schematic::{InstancePath, LabelType, Point, SchematicSheet, pin_tips};
 use uuid::Uuid;
 
 use super::{
     SegmentIndex, best_net_name, build_netlist, collect_net_labels, collect_terminals_at,
     merged_connectivity, point_on_segment, power_name_carriers, pt_key,
 };
+use crate::join_rule::{NetNames, needs_allow_merge};
 use crate::uf::Key;
 
 /// One end of the run.
@@ -64,12 +65,16 @@ pub struct WireIntent {
     /// Whether the run's two ends are on one net after it.
     pub joined: bool,
     pub net: Option<IntentNet>,
+    /// The names at each end before the run, split as the join rule reads them.
+    end_nets: [NetNames; 2],
 }
 
 impl WireIntent {
-    /// Whether the run joins two named nets that carry different names.
+    /// Whether the run joins two named nets that carry different names, by
+    /// the rule the project check uses (hierarchical labels are aliases).
     pub fn short(&self) -> bool {
-        names_short(&self.end_names)
+        let [a, b] = &self.end_nets;
+        needs_allow_merge(&[a, b], &a.all().union(&b.all()).cloned().collect())
     }
 
     /// Every name of the two ends, distinct, in order.
@@ -165,6 +170,10 @@ pub fn wire_intent(
         names_at_point(before, &mut b.parent, &start),
         names_at_point(before, &mut b.parent, &end),
     ];
+    let end_nets = [start, end].map(|p| {
+        let root = crate::uf::find(&mut b.parent, pt_key(&p));
+        net_names_of_root(before, &mut b.parent, root)
+    });
     let before_terminal_root: HashMap<(Uuid, String), Key> =
         collect_terminals_at(before, &root, &mut b.parent)
             .into_iter()
@@ -291,6 +300,7 @@ pub fn wire_intent(
         open,
         joined,
         net: net_of_run(after, start),
+        end_nets,
     }
 }
 
@@ -336,18 +346,34 @@ pub(super) fn names_of_root(
     names
 }
 
+/// The names of the net `root` split for the join rule: on one sheet a
+/// hierarchical label is an alias, every other label and power port an own
+/// name (`docs/CLI.md`, "Why `allow_merge`").
+pub(super) fn net_names_of_root(
+    sheet: &SchematicSheet,
+    parent: &mut HashMap<Key, Key>,
+    root: Key,
+) -> NetNames {
+    let mut names = NetNames::default();
+    let labels = collect_net_labels(sheet, parent);
+    for label in labels.get(&root).into_iter().flatten() {
+        let side = match label.label_type {
+            LabelType::Hierarchical => &mut names.aliases,
+            _ => &mut names.own,
+        };
+        side.insert(label.text.clone());
+    }
+    let carriers = power_name_carriers(sheet, parent);
+    let power = carriers.into_iter().filter(|(r, ..)| *r == root);
+    names.own.extend(power.map(|(_, value, ..)| value));
+    names.own.remove("");
+    names.aliases.remove("");
+    names
+}
+
 /// Whether `a` and `b` carry the same set of names.
 pub(super) fn same_names(a: &[String], b: &[String]) -> bool {
     a.iter().all(|n| b.contains(n)) && b.iter().all(|n| a.contains(n))
-}
-
-/// Whether joining nets with these name sets shorts named nets: two that are
-/// both named and carry different sets of names.
-fn names_short(sets: &[Vec<String>]) -> bool {
-    let named: Vec<&Vec<String>> = sets.iter().filter(|s| !s.is_empty()).collect();
-    named
-        .iter()
-        .any(|s| named.iter().any(|t| !same_names(s, t)))
 }
 
 /// Whether a wire end, a junction or a label sits at `p`: what makes a pin tip

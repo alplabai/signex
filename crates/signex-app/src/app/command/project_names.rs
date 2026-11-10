@@ -38,12 +38,12 @@ impl Signex {
         let Some(project) = docs.document_project(&path) else {
             return Ok(Vec::new());
         };
-        // Edits only add: a net that reaches no other sheet after the edit
-        // reached none before, so no project name is in play.
-        if !points
-            .iter()
-            .any(|p| signex_net::net_reaches_other_sheets(after, *p))
-        {
+        // Edits only add: a net or bus run that reaches no other sheet after
+        // the edit reached none before, so no project name is in play.
+        if !points.iter().any(|p| {
+            signex_net::net_reaches_other_sheets(after, *p)
+                || signex_net::bus_reaches_other_sheets(after, *p)
+        }) {
             return Ok(Vec::new());
         }
         let fold = crate::app::state::project_case::fold_of(Some(project));

@@ -5,8 +5,9 @@
 //! `docs/CLI.md`, "Labels, power ports, junctions and no-connects".
 //!
 //! There is one rule, as for a wire run:
-//! * a name change: two nets (or bus runs) with different non-empty name sets
-//!   end up as one, or a named net or bus gains a name it did not carry;
+//! * a name change: for nets, what `join_rule::needs_allow_merge` says (the
+//!   project's rule, with hierarchical labels as aliases); for bus runs, two
+//!   with different names end up as one, or a named run gains a name;
 //! * for a pin reference only, extra: anything not on the pin's net before
 //!   ends up on it (the end rules of [`wire_intent`]).
 
@@ -15,8 +16,11 @@ use std::hash::Hash;
 
 use signex_types::schematic::{Point, SchematicSheet, pin_tips};
 
-use super::wire_intent::{EndSpec, ExtraItem, ExtraKind, names_of_root, same_names, wire_intent};
+use super::wire_intent::{
+    EndSpec, ExtraItem, ExtraKind, names_of_root, net_names_of_root, same_names, wire_intent,
+};
 use super::{SegmentIndex, merged_connectivity, pt_key};
+use crate::join_rule::{NetNames, needs_allow_merge};
 use crate::uf::Key;
 
 /// A net or bus run whose names change: the name sets of the named nets that
@@ -155,34 +159,55 @@ fn net_changes(before: &SchematicSheet, after: &SchematicSheet) -> Vec<NameChang
         .iter()
         .map(|p| (b.root_of(p), a.root_of(p)))
         .collect();
-    let mut before_names: HashMap<Key, Vec<String>> = HashMap::new();
-    let mut after_names: HashMap<Key, Vec<String>> = HashMap::new();
-    for &(br, ar) in &pairs {
-        before_names
-            .entry(br)
-            .or_insert_with(|| names_of_root(before, &mut b.parent, br));
-        after_names
-            .entry(ar)
-            .or_insert_with(|| names_of_root(after, &mut a.parent, ar));
+    // The rule the project check uses: hierarchical labels are aliases.
+    let mut out = Vec::new();
+    for (result, inputs) in joined(&pairs) {
+        let nets: Vec<NetNames> = inputs
+            .into_iter()
+            .map(|input| net_names_of_root(before, &mut b.parent, input))
+            .collect();
+        let after_names = net_names_of_root(after, &mut a.parent, result);
+        let refs: Vec<&NetNames> = nets.iter().collect();
+        if !needs_allow_merge(&refs, &after_names.all()) {
+            continue;
+        }
+        let mut sets: Vec<Vec<String>> = Vec::new();
+        let all = |n: &NetNames| n.all().into_iter().collect::<Vec<_>>();
+        for names in nets.iter().filter(|n| n.is_named()).map(all) {
+            if !sets.contains(&names) {
+                sets.push(names);
+            }
+        }
+        out.push(NameChange {
+            before: sets,
+            after: names_of_root(after, &mut a.parent, result),
+            bus: false,
+        });
     }
-    name_changes(&pairs, &before_names, &after_names, false)
+    out
+}
+
+/// The before ids each after id absorbed.
+fn joined<K: Copy + Ord>(pairs: &[(K, K)]) -> BTreeMap<K, BTreeSet<K>> {
+    let mut joined: BTreeMap<K, BTreeSet<K>> = BTreeMap::new();
+    for &(b, a) in pairs {
+        joined.entry(a).or_default().insert(b);
+    }
+    joined
 }
 
 /// The name changes of `pairs` (a before id and the after id it became): per
 /// result, the named inputs when two carry different name sets, or the one
-/// named input when the result carries a name it did not.
+/// named input when the result carries a name it did not. Bus runs only; a
+/// net's names follow the join rule (`net_changes`).
 pub(crate) fn name_changes<K: Copy + Eq + Hash + Ord>(
     pairs: &[(K, K)],
     before: &HashMap<K, Vec<String>>,
     after: &HashMap<K, Vec<String>>,
     bus: bool,
 ) -> Vec<NameChange> {
-    let mut joined: BTreeMap<K, BTreeSet<K>> = BTreeMap::new();
-    for &(b, a) in pairs {
-        joined.entry(a).or_default().insert(b);
-    }
     let mut out = Vec::new();
-    for (result, inputs) in joined {
+    for (result, inputs) in joined(pairs) {
         let mut sets: Vec<Vec<String>> = Vec::new();
         for input in inputs {
             let names = before.get(&input).cloned().unwrap_or_default();

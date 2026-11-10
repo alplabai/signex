@@ -150,20 +150,20 @@ fn net_label(sheet: &mut SchematicSheet, text: &str, at: (f64, f64)) {
 }
 
 #[test]
-fn an_own_name_that_differs_from_the_nets_own_names_is_a_rename() {
+fn a_name_the_net_does_not_carry_is_a_rename() {
     let (root, children) = project();
     // The net's own name is VCC (the child's port); SIG is its alias. A GND
-    // label is another own name; so is a SIG label, which is no alias then.
+    // label is a name it does not carry.
     let got = refused(&root, &with_label(&root, "GND", (5.0, 0.0)), &children);
     assert_eq!(got, [["GND", "SIG", "VCC"]]);
-    let got = refused(&root, &with_label(&root, "SIG", (5.0, 0.0)), &children);
-    assert_eq!(got, [["SIG", "VCC"]]);
 }
 
 #[test]
-fn the_nets_own_name_and_an_unrelated_net_are_no_change() {
+fn a_name_the_net_already_carries_and_an_unrelated_net_are_no_change() {
     let (root, children) = project();
     for after in [
+        // SIG is the net's alias: a label of it is no rename (6759237104).
+        with_label(&root, "SIG", (5.0, 0.0)),
         with_label(&root, "VCC", (5.0, 0.0)),
         // A label on a wire of its own, with nothing from the child on it.
         {
@@ -264,6 +264,39 @@ fn two_placements_of_one_child_join_freely_on_the_same_entry_and_not_on_differen
         let got = refused(&root, &joined(&root), &children);
         assert_eq!(!got.is_empty(), rename, "{second}");
     }
+}
+
+#[test]
+fn an_own_named_net_with_an_alias_joined_to_another_alias_is_refused_in_either_order() {
+    // I2C1_SDA (own) + SDA (alias) joined with the alias-only SCL: SDA with
+    // SCL, a short (6759237104). Either entry first, so the nets sort both ways.
+    let children = HashMap::from([("c.sch".to_string(), child_of(&["SDA", "SCL"]))]);
+    for (pins, labelled_y) in [(["SDA", "SCL"], 0.0), (["SCL", "SDA"], 20.0)] {
+        let mut root = parent_with(&pins);
+        net_label(&mut root, "I2C1_SDA", (5.0, labelled_y));
+        let got = refused(&root, &joined(&root), &children);
+        assert_eq!(got, [["I2C1_SDA", "SCL", "SDA"]], "{pins:?}");
+    }
+}
+
+#[test]
+fn a_childs_local_label_behind_its_hierarchical_label_is_an_alias_on_the_parent() {
+    // SensorA: hierarchical SDA and the local label SDA_INT on one net. The
+    // parent's I2C1_SDA wired to SensorA.SDA joins freely (6759237104).
+    let mut child = child_of(&["SDA"]);
+    child
+        .labels
+        .push(label("SDA_INT", pt(10.0, 0.0), LabelType::Net));
+    let children = HashMap::from([("c.sch".to_string(), child)]);
+    let mut root = parent_with(&["SDA", "UNUSED"]);
+    root.child_sheets[0].pins.truncate(1);
+    root.wires.truncate(1);
+    root.wires.push(wire(pt(0.0, 20.0), pt(5.0, 20.0)));
+    net_label(&mut root, "I2C1_SDA", (5.0, 20.0));
+    let got = changes(&root, &joined(&root), &children);
+    assert_eq!(got.len(), 1);
+    assert!(!got[0].needs_allow_merge, "{got:?}");
+    assert_eq!(got[0].aliases, ["SDA", "SDA_INT"]);
 }
 
 #[test]

@@ -9,15 +9,18 @@
 //!
 //! A net's own names come from net labels, global labels and power ports. A
 //! name that reaches it only through a hierarchical label of a child (the
-//! sheet-entry link) is an alias: the same signal as seen from the child.
+//! sheet-entry link) is an alias: the same signal as seen from the child. So
+//! is a local net label on the same sheet placement as such a hierarchical
+//! label: it never reaches the parent (decision 6759237104).
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use signex_types::schematic::{InstancePath, LabelType};
 use uuid::Uuid;
 
 use super::members::NetMemberKind;
 use super::{ProjectGraph, SheetKey, Want, stitch_project};
+use crate::join_rule::{NetNames, needs_allow_merge};
 
 /// One named element of a sheet placement: a label or a power port.
 type NamedId = (SheetKey, InstancePath, Uuid);
@@ -25,14 +28,7 @@ type NamedId = (SheetKey, InstancePath, Uuid);
 /// A net of the project that carries at least one name.
 struct NamedNet {
     ids: Vec<NamedId>,
-    own: BTreeSet<String>,
-    aliases: BTreeSet<String>,
-}
-
-impl NamedNet {
-    fn all_names(&self) -> BTreeSet<String> {
-        self.own.union(&self.aliases).cloned().collect()
-    }
+    names: NetNames,
 }
 
 fn named_nets(graph: &ProjectGraph) -> Vec<NamedNet> {
@@ -40,20 +36,36 @@ fn named_nets(graph: &ProjectGraph) -> Vec<NamedNet> {
         .members
         .into_iter()
         .filter_map(|net| {
+            // The placements whose hierarchical label is on this net.
+            // shortcut: per placement, not per sheet net; a placement whose
+            // second sheet net reaches this one only through a global label
+            // would count its local labels as aliases too. Exact needs the
+            // sheet-net root on `NetMember`; upgrade if that case matters.
+            let behind_port: HashSet<(&SheetKey, &InstancePath)> = net
+                .members
+                .iter()
+                .filter(|m| m.kind == NetMemberKind::Label(LabelType::Hierarchical))
+                .map(|m| (&m.sheet, &m.occurrence))
+                .collect();
             let mut out = NamedNet {
                 ids: Vec::new(),
-                own: BTreeSet::new(),
-                aliases: BTreeSet::new(),
+                names: NetNames::default(),
             };
-            for member in net.members {
+            for member in &net.members {
                 let side = match member.kind {
-                    NetMemberKind::Label(LabelType::Hierarchical) => Some(&mut out.aliases),
-                    NetMemberKind::Label(_) | NetMemberKind::PowerPort => Some(&mut out.own),
-                    _ => None,
+                    NetMemberKind::Label(LabelType::Hierarchical) => &mut out.names.aliases,
+                    NetMemberKind::Label(LabelType::Net)
+                        if behind_port.contains(&(&member.sheet, &member.occurrence)) =>
+                    {
+                        &mut out.names.aliases
+                    }
+                    NetMemberKind::Label(_) | NetMemberKind::PowerPort => &mut out.names.own,
+                    _ => continue,
                 };
-                if let Some(side) = side.filter(|_| !member.text.is_empty()) {
-                    side.insert(member.text);
-                    out.ids.push((member.sheet, member.occurrence, member.id));
+                if !member.text.is_empty() {
+                    side.insert(member.text.clone());
+                    let id = (member.sheet.clone(), member.occurrence.clone(), member.id);
+                    out.ids.push(id);
                 }
             }
             (!out.ids.is_empty()).then_some(out)
@@ -73,16 +85,10 @@ pub struct ProjectNetChange {
 }
 
 /// The nets the edit turned into, for each net after it that absorbed two or
-/// more named nets, or gained a name. It `needs_allow_merge` when
-/// * two absorbed nets have own names and those differ, or the net gained an
-///   own name that the absorbed nets' own names (all one set) did not carry; or
-/// * no absorbed net has an own name and two have different aliases (a
-///   sheet-entry net named `SDA` by one child and `SCL` by another).
-///
-/// Everything else joins freely: nets with the same names (two placements of
-/// one child sheet joined on the same entry share a bus), unnamed nets, a net
-/// with no own name gaining one or joining an own-named one (the parent's
-/// `I2C_SDA` wired to the entry whose child label is `SDA`).
+/// more named nets, or gained a name it did not carry. Whether one
+/// `needs_allow_merge` is the shared rule (`join_rule::needs_allow_merge`):
+/// nets are compared by their effective names (own names, else aliases), and
+/// a name a net already carries, alias included, is no change.
 pub fn project_name_changes(before: &ProjectGraph, after: &ProjectGraph) -> Vec<ProjectNetChange> {
     let before = named_nets(before);
     let mut owner: HashMap<&NamedId, usize> = HashMap::new();
@@ -98,39 +104,23 @@ pub fn project_name_changes(before: &ProjectGraph, after: &ProjectGraph) -> Vec<
                 .filter_map(|id| owner.get(id))
                 .copied()
                 .collect();
-            let nets: Vec<&NamedNet> = absorbed.iter().map(|&i| &before[i]).collect();
-            let unchanged = matches!(
-                nets.as_slice(),
-                [only] if only.own == net.own && only.aliases == net.aliases
-            );
+            let nets: Vec<&NetNames> = absorbed.iter().map(|&i| &before[i].names).collect();
+            let names = net.names.all();
+            // One net that gained no name it did not carry is no change.
+            let unchanged = matches!(nets.as_slice(), [only] if names.is_subset(&only.all()));
             if nets.is_empty() || unchanged {
                 return None;
             }
             Some(ProjectNetChange {
-                needs_allow_merge: needs_allow_merge(&nets, &net),
-                names: net.all_names().into_iter().collect(),
-                aliases: net.aliases.difference(&net.own).cloned().collect(),
+                needs_allow_merge: needs_allow_merge(&nets, &names),
+                names: names.into_iter().collect(),
+                aliases: net
+                    .names
+                    .aliases
+                    .difference(&net.names.own)
+                    .cloned()
+                    .collect(),
             })
         })
         .collect()
-}
-
-fn needs_allow_merge(absorbed: &[&NamedNet], after: &NamedNet) -> bool {
-    // Nets with own names are compared by those; when none has any, by their
-    // aliases (a net with no own name may gain one freely).
-    let owned: Vec<&BTreeSet<String>> = absorbed
-        .iter()
-        .map(|net| &net.own)
-        .filter(|own| !own.is_empty())
-        .collect();
-    // The net after carries every absorbed own name, so it is inside the first
-    // net's own names only when all the absorbed ones are the same set and
-    // nothing was gained.
-    if let [first, ..] = owned.as_slice() {
-        return !after.own.is_subset(first);
-    }
-    let mut aliased = absorbed.iter().map(|net| &net.aliases);
-    aliased
-        .next()
-        .is_some_and(|first| aliased.any(|other| other != first))
 }

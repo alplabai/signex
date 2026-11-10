@@ -155,7 +155,7 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
     };
     match operand.kind {
         // A lone number (`1.5`) is a mistyped coordinate, not a pin reference.
-        OperandKind::Point if !text.contains(',') && is_number_pair(text) => {
+        OperandKind::Point if !text.contains(',') && is_number_pair(text.trim()) => {
             Err(invalid("x,y in mm"))
         }
         OperandKind::Point if !text.contains(',') => pin_ref(text).ok_or_else(|| {
@@ -269,6 +269,9 @@ mod tests {
             // A space inside a sheet name stays; the ends are trimmed.
             ("Power Stage.VIN", pin("Power Stage", "VIN")),
             (" R1.2 ", pin("R1", "2")),
+            // A designator with a space: a pin reference, refused later as
+            // no such part.
+            ("R 1.2", pin("R 1", "2")),
         ] {
             let args = parse("place_junction", &[&format!("at={text}")]).unwrap();
             assert_eq!(args.operand("at"), Some(&want), "{text}");
@@ -290,6 +293,12 @@ mod tests {
         let text = crate::app::command::operand_text("at", &serde_json::json!(1.5)).unwrap();
         let err = parse("place_junction", &[&format!("at={text}")]).unwrap_err();
         assert_eq!(err.to_string(), "operand `at` must be x,y in mm, got `1.5`");
+        // Spaces around a lone number do not make it a pin reference.
+        let err = parse("place_junction", &["at= 1.5 "]).unwrap_err();
+        assert!(
+            err.to_string().ends_with("must be x,y in mm, got ` 1.5 `"),
+            "{err}"
+        );
     }
 
     #[test]

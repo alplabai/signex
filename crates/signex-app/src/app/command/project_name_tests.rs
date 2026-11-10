@@ -196,6 +196,51 @@ fn an_unreadable_project_refuses_what_reaches_other_sheets_and_allows_the_rest()
 }
 
 #[test]
+fn a_power_flag_is_never_refused_even_in_an_unreadable_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    std::fs::remove_file(dir.path().join("child.snxsch")).unwrap();
+    // On the net of the sheet pin: it reaches the missing child.
+    let flag = ["at=5.08,0", "net_name=PWR_FLAG", "lib_id=power:PWR_FLAG"];
+    assert_eq!(
+        run(&mut app, "place_power_symbol", &flag),
+        CommandOutcome::Ran
+    );
+}
+
+#[test]
+fn on_the_child_a_hierarchical_label_is_an_alias_for_the_short_check() {
+    // The child: the hierarchical SDA on one wire, the net label I2C_SDA on
+    // another. A wire between them is the same join the parent makes when it
+    // wires I2C_SDA to the entry SDA: accepted on both sheets (6759237104).
+    let dir = tempfile::tempdir().unwrap();
+    let mut top = SchematicSheet::default();
+    top.child_sheets
+        .push(sheet_symbol("SensorA", "c.snxsch", &[("SDA", (0.0, 0.0))]));
+    let mut child = child_with(&["SDA"]);
+    child.wires.push(wire((0.0, 20.32), (10.16, 20.32)));
+    child.labels.push(Label::new(
+        "I2C_SDA",
+        Point::new(0.0, 20.32),
+        LabelType::Net,
+    ));
+    write(&dir.path().join("top.snxsch"), top);
+    write(&dir.path().join("c.snxsch"), child);
+    let mut app = open_project(&dir);
+    app.open_or_focus_sheet_path(dir.path().join("c.snxsch"));
+    app.refresh_panel_ctx();
+    let outcome = run(
+        &mut app,
+        "place_wire",
+        &["start=10.16,0", "end=10.16,20.32"],
+    );
+    let CommandOutcome::Answered(report) = outcome else {
+        panic!("not answered: {outcome:?}");
+    };
+    assert_eq!(report["merged"], serde_json::json!([]));
+}
+
+#[test]
 fn a_sheet_opened_under_another_spelling_than_the_parent_writes_is_still_checked() {
     let dir = tempfile::tempdir().unwrap();
     // The parent writes `Child.snxsch`; the file and its tab are `child.snxsch`.
@@ -204,7 +249,8 @@ fn a_sheet_opened_under_another_spelling_than_the_parent_writes_is_still_checked
         .push(sheet_symbol("U", "Child.snxsch", &[]));
     // The child: a wire on the entry S of its own sheet symbol G (so, across
     // the project, named S and Q by g.snxsch, though unnamed on this sheet),
-    // and a wire named R.
+    // and a wire named R. Q is a global label, an own name on every sheet: a
+    // local one behind the hierarchical S would be an alias (6759237104).
     let mut inner = SchematicSheet::default();
     inner
         .child_sheets
@@ -217,7 +263,7 @@ fn a_sheet_opened_under_another_spelling_than_the_parent_writes_is_still_checked
     let mut grand = child_with(&["S"]);
     grand
         .labels
-        .push(Label::new("Q", Point::new(5.08, 0.0), LabelType::Net));
+        .push(Label::new("Q", Point::new(5.08, 0.0), LabelType::Global));
     write(&dir.path().join("top.snxsch"), top);
     write(&dir.path().join("child.snxsch"), inner);
     write(&dir.path().join("g.snxsch"), grand);
@@ -254,16 +300,17 @@ fn bus(a: (f64, f64), b: (f64, f64)) -> signex_types::schematic::Bus {
 #[test]
 fn a_bus_run_is_judged_on_the_project_like_a_wire() {
     // A bus run is judged on the project like a wire: from the end of a bus
-    // that a hierarchical label takes to another sheet, in a project that
-    // cannot be read (a join of member nets across sheets needs the same
-    // stitch; two member nets of one bus carry one name on a sheet, so the
-    // unreadable case is the observable one).
+    // whose hierarchical label, at its other end, takes it to another sheet,
+    // in a project that cannot be read (a join of member nets across sheets
+    // needs the same stitch; two member nets of one bus carry one name on a
+    // sheet, so the unreadable case is the observable one). The bus analysis,
+    // not the wire connectivity, says the run reaches the label.
     let dir = tempfile::tempdir().unwrap();
     let mut top = SchematicSheet::default();
     top.buses.push(bus((0.0, 0.0), (0.0, 20.32)));
     top.labels.push(Label::new(
         "D[0..3]",
-        Point::new(0.0, 20.32),
+        Point::new(0.0, 0.0),
         LabelType::Hierarchical,
     ));
     top.child_sheets.push(sheet_symbol("U", "gone.snxsch", &[]));

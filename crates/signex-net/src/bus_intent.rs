@@ -106,6 +106,44 @@ impl<'a> Analysed<'a> {
     }
 }
 
+/// Whether a bus run through `p` on `sheet` can carry names from another
+/// sheet: the run (by the bus analysis) has a hierarchical or global bus-name
+/// label, or a sheet pin sits on one of its segments. The wire-side twin is
+/// `net_reaches_other_sheets`.
+pub fn bus_reaches_other_sheets(sheet: &SchematicSheet, p: Point) -> bool {
+    use signex_types::schematic::LabelType;
+    let key = pt_key(&p);
+    let analysed = Analysed::of(sheet);
+    let on = |i: usize, k| {
+        point_on_segment(
+            k,
+            pt_key(&sheet.buses[i].start),
+            pt_key(&sheet.buses[i].end),
+        )
+    };
+    let groups: HashSet<usize> = (0..sheet.buses.len())
+        .filter(|&i| on(i, key))
+        .map(|i| analysed.seg_group[i])
+        .collect();
+    groups.into_iter().any(|g| {
+        let group = &analysed.analysis.groups[g];
+        let ported = group.names.iter().any(|n| {
+            matches!(
+                sheet.labels[n.label].label_type,
+                LabelType::Global | LabelType::Hierarchical
+            )
+        });
+        let pinned = || {
+            sheet
+                .child_sheets
+                .iter()
+                .flat_map(|c| &c.pins)
+                .any(|pin| group.segments.iter().any(|&s| on(s, pt_key(&pin.position))))
+        };
+        ported || pinned()
+    })
+}
+
 /// The bus runs whose names change from `before` to `after` (a label or a
 /// junction merging two differently named runs, or a named run gaining a
 /// name): the bus half of the point placement check.

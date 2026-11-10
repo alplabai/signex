@@ -305,8 +305,11 @@ impl Signex {
         if !intent.extra.is_empty() {
             return Err(super::wire_runs::extra_refusal(&subject, &intent.extra));
         }
-        // A no-connect never joins nets or adds a name: nothing to judge.
+        // A no-connect or a power flag never joins nets or adds a name:
+        // nothing to judge, and no project to read.
+        let power_flag = text(args, "lib_id").is_ok_and(|id| signex_net::is_power_flag(&id));
         if what == "no-connect"
+            || power_flag
             || matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true)))
         {
             return Ok(());
