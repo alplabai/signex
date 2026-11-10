@@ -181,9 +181,9 @@ fn caps_row<'a, M: 'a>(theme_tokens: &ThemeTokens, label: &str) -> Element<'a, M
     caps.boxed()
 }
 
-/// Characters of a result label that fit one row of the 372 px card beside the
+/// Characters of a result label that fit one row of the 640 px card beside the
 /// key caps; longer labels end in an ellipsis.
-const LABEL_BUDGET: usize = 38;
+const LABEL_BUDGET: usize = 58;
 
 /// `text` cut to `budget` characters, ending in an ellipsis when it was cut.
 fn ellipsize(text: &str, budget: usize) -> String {
