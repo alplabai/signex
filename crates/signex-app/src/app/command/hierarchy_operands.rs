@@ -6,6 +6,7 @@
 //! file, a link out of the project) is read off the UI thread before they run
 //! (`edit_reads`).
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use iced::Task;
@@ -17,6 +18,9 @@ use super::placement_operands::{run_edit, text};
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::handlers::canvas::{reference_from, resolve_new_sheet_path};
 use crate::app::mutation_gateway::CommandOutcome as Applied;
+use crate::app::sheet_hierarchy::{
+    CaseFold, SheetHierarchy, SheetNode, SheetNodeKind, normalised_key,
+};
 use crate::app::{Message, Signex};
 
 type Ran = (CommandOutcome, Task<Message>);
@@ -53,6 +57,31 @@ fn applied(outcome: Applied, reason: Option<String>) -> Result<(), String> {
         Applied::Unchanged => Err("nothing was placed".to_string()),
         Applied::Failed => Err(reason.unwrap_or_else(|| "the engine refused the edit".into())),
     }
+}
+
+/// The keys of the sheets above any placement of the sheet at `path`.
+fn sheets_above(hierarchy: &SheetHierarchy, path: &Path, fold: CaseFold) -> HashSet<String> {
+    fn walk(
+        node: &SheetNode,
+        path: &Path,
+        fold: CaseFold,
+        chain: &mut Vec<String>,
+        out: &mut HashSet<String>,
+    ) {
+        if node.kind == SheetNodeKind::Present && node.is_at(path, fold) {
+            out.extend(chain.iter().cloned());
+        }
+        chain.push(normalised_key(&node.path, fold));
+        for child in &node.children {
+            walk(child, path, fold, chain, out);
+        }
+        chain.pop();
+    }
+    let mut out = HashSet::new();
+    for node in hierarchy.top_level() {
+        walk(node, path, fold, &mut Vec::new(), &mut out);
+    }
+    out
 }
 
 /// The names of `list` that `keep` keeps, sorted.
@@ -107,13 +136,31 @@ impl Signex {
 
     /// The child file reference `file`: [`Self::child_file_target`], not
     /// through a link that leaves the project folder (read before the edit
-    /// ran). Nothing is created or opened.
+    /// ran), and neither this sheet nor one above it. Nothing is created or
+    /// opened.
     fn child_file_reference(&self, file: &str) -> Result<String, String> {
         let (_, path, reference) = self.child_file_target(file)?;
         if self.prefetched_escape(&path)? {
             return Err(
                 "`file`: the sheet must be inside the project folder (a linked folder leaves it)"
                     .to_string(),
+            );
+        }
+        let docs = &self.document_state;
+        let sheet = docs.edit_path().ok_or("no schematic is open")?;
+        let fold = crate::app::state::project_case::fold_of(docs.document_project(sheet));
+        let target = normalised_key(&path, fold);
+        if target == normalised_key(sheet, fold) {
+            return Err("`file` is this sheet: a sheet cannot contain itself".to_string());
+        }
+        // shortcut: only the hierarchy already in memory is read (no disk
+        // read in `update`), so an ancestor it does not hold yet is missed.
+        if self
+            .hierarchy_describing(sheet)
+            .is_some_and(|(h, _)| sheets_above(h, sheet, fold).contains(&target))
+        {
+            return Err(
+                "`file` is an ancestor of this sheet: a sheet cannot contain itself".to_string(),
             );
         }
         Ok(reference)
