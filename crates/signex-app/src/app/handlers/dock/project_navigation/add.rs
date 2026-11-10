@@ -239,12 +239,22 @@ impl Signex {
         // The blank sheet and its project entry are committed together off
         // the update thread; the project is looked up again by id when the
         // job lands.
+        let sheet_defaults = self
+            .document_state
+            .project_by_id(project_id)
+            .and_then(|p| p.data.project_defaults.sheet.clone());
         iced::Task::perform(
             {
                 let path = path.clone();
                 async move {
                     add_io::on_blocking_pool(move || {
-                        add_io::create_sheet_with_entry(&path, &project_path, &entry, fold)
+                        add_io::create_sheet_with_entry(
+                            &path,
+                            &project_path,
+                            &entry,
+                            fold,
+                            sheet_defaults.as_ref(),
+                        )
                     })
                     .await
                 }

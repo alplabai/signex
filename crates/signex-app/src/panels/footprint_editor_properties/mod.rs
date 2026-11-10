@@ -52,6 +52,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
     unit: signex_types::coord::Unit,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     let PanelPalette {
         muted,
@@ -215,7 +216,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // selection, so the user can monitor solve state while authoring.
     col = selection::view_selection(col, fp, mode_label, palette, collapsed_sections);
     col = pad_stack_check::view_pad_stack_check(col, fp, palette, collapsed_sections);
-    col = sections::view_sections(col, fp, palette, collapsed_sections, unit);
+    col = sections::view_sections(col, fp, palette, collapsed_sections, unit, i18n);
     col = render_fp_settings_and_hint(col, fp, muted, primary, border_c, collapsed_sections);
 
     // v0.25 polish — see early-return scrollable wrappers above for

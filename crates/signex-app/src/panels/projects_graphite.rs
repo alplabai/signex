@@ -9,6 +9,7 @@
 use std::collections::BTreeSet;
 
 use iced::widget::column;
+use signex_i18n::{I18n, UserText, ids, t};
 use signex_widgets::text_input;
 use signex_widgets::tree_view::TreeKey;
 
@@ -196,16 +197,12 @@ fn route(msg: TreeMsg) -> PanelMsg {
     }
 }
 
-fn plural(count: usize, one: &str, many: &str) -> String {
-    format!("{count} {}", if count == 1 { one } else { many })
-}
-
 fn count_sheets(sheets: &[SheetInfo]) -> usize {
     sheets.iter().map(|s| 1 + count_sheets(&s.children)).sum()
 }
 
 /// "3 sheets · 1 board · 2 libraries": the counts the project really has.
-fn card_summary(project: &ProjectPanelInfo) -> String {
+fn card_summary(i18n: &I18n, project: &ProjectPanelInfo) -> String {
     let sheets = if project.sheets.is_empty() {
         usize::from(project.project_file.is_some())
     } else {
@@ -213,20 +210,27 @@ fn card_summary(project: &ProjectPanelInfo) -> String {
     };
     let mut parts = Vec::new();
     if sheets > 0 {
-        parts.push(plural(sheets, "sheet", "sheets"));
+        parts.push(t!(i18n, ids::PANELS_PROJECTS_SHEETS, "count" => sheets).into_string());
     }
     if project.pcb_file.is_some() {
-        parts.push(plural(1, "board", "boards"));
+        parts.push(t!(i18n, ids::PANELS_PROJECTS_BOARDS, "count" => 1_usize).into_string());
     }
     if !project.libraries.is_empty() {
-        parts.push(plural(project.libraries.len(), "library", "libraries"));
+        parts.push(
+            t!(i18n, ids::PANELS_PROJECTS_LIBRARIES, "count" => project.libraries.len())
+                .into_string(),
+        );
     }
     parts.join(" · ")
 }
 
 /// Project card: icon tile, name, real counts, and a "git" pill when the
 /// project has version control on.
-fn project_card<'a>(project: &'a ProjectPanelInfo, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
+fn project_card<'a>(
+    project: &'a ProjectPanelInfo,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
     let r = resolve(tokens);
     let (tile_fill, ink, ink4) = (r.accent_soft, ti(tokens.text), r.ink4);
     let tint = r.accent_text;
@@ -258,7 +262,7 @@ fn project_card<'a>(project: &'a ProjectPanelInfo, tokens: &ThemeTokens) -> Elem
             ..iced::Font::DEFAULT
         })
         .wrapping(iced::widget::text::Wrapping::None);
-    let summary = text(raw(card_summary(project)))
+    let summary = text(UserText::new(card_summary(i18n, project)))
         .size(TS.caption)
         .color(ink4)
         .wrapping(iced::widget::text::Wrapping::None);
@@ -271,7 +275,7 @@ fn project_card<'a>(project: &'a ProjectPanelInfo, tokens: &ThemeTokens) -> Elem
         .push(titles.boxed());
     if project.version_control {
         let pill = container(
-            text(raw("git"))
+            text(t!(i18n, ids::PANELS_PROJECTS_GIT))
                 .size(TS.caption)
                 .font(iced::Font::MONOSPACE)
                 .wrapping(iced::widget::text::Wrapping::None),
@@ -288,10 +292,14 @@ fn project_card<'a>(project: &'a ProjectPanelInfo, tokens: &ThemeTokens) -> Elem
 }
 
 /// The Filter files field.
-fn filter_field<'a>(view: &'a ProjectsView, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
+fn filter_field<'a>(
+    view: &'a ProjectsView,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
     let r = resolve(tokens);
     let (ink, ink4) = (ti(tokens.text), r.ink4);
-    let input = text_input(raw("Filter files"), &view.filter)
+    let input = text_input(t!(i18n, ids::PANELS_PROJECTS_FILTER), &view.filter)
         .on_input(|s| PanelMsg::Projects(ProjectsMsg::FilterChanged(s)))
         .padding(iced::Padding::ZERO)
         .size(TS.body)
@@ -318,10 +326,11 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let r = resolve(tokens);
     let line = r.line_soft;
     let mut top: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.l).width(Length::Fill);
+    let i18n = &*ctx.i18n;
     for project in &ctx.projects {
-        top = top.push(project_card(project, tokens));
+        top = top.push(project_card(project, tokens, i18n));
     }
-    top = top.push(filter_field(&ctx.projects_view, tokens));
+    top = top.push(filter_field(&ctx.projects_view, tokens, i18n));
     let edge = iced::border::Side::default().width(1.0);
     let header = container(top)
         .padding(iced::Padding {
@@ -351,7 +360,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         roots = filtered(&roots, &needle);
     }
     let body: Element<'a, PanelMsg> = if roots.is_empty() {
-        text(raw("No files match"))
+        text(t!(i18n, ids::PANELS_PROJECTS_NO_MATCH))
             .size(TS.caption)
             .color(r.ink4)
             .boxed()

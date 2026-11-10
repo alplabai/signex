@@ -87,7 +87,7 @@ fn power_port_arms_the_gnd_port() {
 }
 
 #[test]
-fn place_rows_need_a_schematic_and_the_sheet_entry_stub_is_inert() {
+fn place_rows_need_a_schematic() {
     let app = bare_app();
     for path in [
         "Place/Wire",
@@ -98,10 +98,57 @@ fn place_rows_need_a_schematic_and_the_sheet_entry_stub_is_inert() {
         "Place/Junction",
         "Place/Text",
         "Place/No Connect",
+        "Place/Sheet Entry",
     ] {
         assert!(!row_is_live(&app, path), "{path} is live with no schematic");
     }
-    assert!(!row_is_live(&one_symbol_selected(), "Place/Sheet Entry"));
+    assert!(!row_is_live(&loaded_board_app(), "Place/Sheet Entry"));
+}
+
+/// The canvas Place flyout's Sheet Entry in an undocked sheet window, while
+/// the main window shows a PCB: the gate reads the window's sheet (#2247
+/// review), so the tool is armed, not refused with "No schematic is open".
+#[test]
+fn sheet_entry_from_an_undocked_sheets_flyout_is_gated_by_that_sheet() {
+    use crate::app::{ContextAction, ContextMenuMsg};
+    let pick = || {
+        ContextMenuMsg::Action(ContextAction::Command {
+            id: crate::keymap::AppCommandId::new("place_sheet_entry").expect("id"),
+            project: None,
+        })
+    };
+    // Control: the same pick from the main window's PCB is refused.
+    let (mut app, window) = super::window_native_rows::with_undocked_window(loaded_board_app());
+    assert!(app.has_active_pcb(), "the main window shows the board");
+    let _ = app.update(Message::ContextMenu(pick()));
+    assert_ne!(
+        format!("{:?}", app.interaction_state.current_tool),
+        "SheetEntry"
+    );
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ScopedToWindow(
+        window,
+        Box::new(pick()),
+    )));
+    assert_eq!(
+        format!("{:?}", app.interaction_state.current_tool),
+        "SheetEntry"
+    );
+}
+
+/// #2247: the row was a stub; it now arms the Active Bar's Sheet Entry tool.
+#[test]
+fn sheet_entry_arms_the_sheet_entry_tool_and_nothing_else() {
+    let mut app = one_symbol_selected();
+    assert!(row_is_live(&app, "Place/Sheet Entry"));
+    let before = probe(&app);
+    let _ = click(&mut app, "Place/Sheet Entry");
+    assert_eq!(
+        probe(&app),
+        Probe {
+            tool: "SheetEntry".to_string(),
+            ..before
+        }
+    );
 }
 
 fn unnumbered(refs: &[&str]) -> Signex {

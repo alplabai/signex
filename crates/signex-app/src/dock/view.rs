@@ -2,6 +2,7 @@
 
 use iced::widget::{Column, Space, Widget, canvas, column, container, mouse_area, row, svg};
 use iced::{Color, Element, Length, Rectangle, Renderer, Theme};
+use signex_i18n::{ids, t};
 use signex_widgets::{button, raw, text};
 
 use super::graphite;
@@ -90,7 +91,7 @@ impl DockArea {
         // A long strip scrolls.
         let (tab_size, tab_pad) = (TS.body, graphite::TAB_PAD);
         for (i, panel) in region.panels.iter().enumerate() {
-            let label = panel.label();
+            let label = t!(ctx.i18n, panel.message());
             let is_active = i == region.active;
             let is_last = i == last_panel_idx;
 
@@ -147,17 +148,21 @@ impl DockArea {
             // lines whenever the dock area squeezes the tab — which
             // happens any time the panel column is in its default
             // ~240 px width with several panels in the strip.
-            let label_text = text(raw(label))
+            let label_text = text(label)
                 .size(tab_size)
                 .color(text_c)
                 .wrapping(iced::widget::text::Wrapping::None);
             let tab_content: Element<'_, DockMessage> = match graphite::tab_badge(*panel, ctx) {
                 Some((count, tone)) => row![
                     label_text.boxed(),
-                    container(text(raw(count.to_string())).size(TS.caption).boxed())
-                        .padding([0.0, SP.s])
-                        .style(styles::pill(&ctx.tokens, tone))
-                        .boxed(),
+                    container(
+                        text(t!(ctx.i18n, ids::PANELS_DOCK_TAB_COUNT, "count" => count))
+                            .size(TS.caption)
+                            .boxed(),
+                    )
+                    .padding([0.0, SP.s])
+                    .style(styles::pill(&ctx.tokens, tone))
+                    .boxed(),
                 ]
                 .spacing(SP.s)
                 .align_y(iced::Alignment::Center)
@@ -197,12 +202,11 @@ impl DockArea {
         // Title of the currently active panel — drawn in the top bar
         // so the user can see the panel name without scanning the tab
         // row.
-        let active_title = region
-            .panels
-            .get(region.active)
-            .map(|p| p.label().to_string())
-            .unwrap_or_default();
-        let title_text = text(raw(active_title))
+        let active_title: signex_widgets::Label<'_> = match region.panels.get(region.active) {
+            Some(p) => t!(ctx.i18n, p.message()).into(),
+            None => signex_i18n::UserText::new(String::new()).into(),
+        };
+        let title_text = text(active_title)
             .size(graphite::TITLE_SIZE)
             .font(graphite::title_font())
             .color(styles::ti(ctx.tokens.text));
@@ -243,7 +247,7 @@ impl DockArea {
                         // library subsystem, not in `panels::view_panel`.
                         // Wrap the LibraryMessage in DockMessage::Library
                         // so the dispatcher can route it back out.
-                        crate::library::panel::view(library, &ctx.tokens)
+                        crate::library::panel::view(library, &ctx.tokens, &ctx.i18n)
                             .map(DockMessage::Library)
                             .boxed()
                     }
@@ -376,7 +380,7 @@ impl DockArea {
             let mut rail = row![].spacing(SP.xs);
 
             for (i, panel) in region.panels.iter().enumerate() {
-                let label = panel.label();
+                let label = t!(ctx.i18n, panel.message());
                 let is_active = i == region.active;
                 let text_c = if is_active {
                     styles::ti(ctx.tokens.text)
@@ -387,7 +391,7 @@ impl DockArea {
                 let tab_style: TabStyleFn =
                     Box::new(graphite::rail_tab(&ctx.tokens, position, is_active));
                 rail = rail.push(
-                    button(text(raw(label)).size(TS.caption).color(text_c))
+                    button(text(label).size(TS.caption).color(text_c))
                         .padding([SP.xs, SP.m])
                         .on_press(DockMessage::SelectTab(position, i))
                         .style(tab_style)
@@ -415,10 +419,10 @@ impl DockArea {
     ) -> Option<Element<'a, DockMessage>> {
         let fp = self.floating.get(idx)?;
         let kind = fp.kind;
-        let label = kind.label();
+        let label = t!(ctx.i18n, kind.message());
 
         let content: Element<'a, DockMessage> = match kind {
-            PanelKind::Library => crate::library::panel::view(library, &ctx.tokens)
+            PanelKind::Library => crate::library::panel::view(library, &ctx.tokens, &ctx.i18n)
                 .map(DockMessage::Library)
                 .boxed(),
             PanelKind::Components => {
@@ -435,7 +439,7 @@ impl DockArea {
         let bar = container(
             row![
                 container(
-                    text(raw(label))
+                    text(label)
                         .size(graphite::TITLE_SIZE)
                         .font(graphite::title_font())
                         .color(styles::ti(ctx.tokens.text)),

@@ -123,6 +123,33 @@ nothing is unsaved (`CommandContext::has_dirty_documents`), has no shortcut
 (the catalog has no `save_all` command), and reports "Save All: saved N
 item(s)" or the failures in the Messages panel.
 
+## Place ▸ Sheet Entry, Tools ▸ Library Editor, Window ▸ Close All Documents {#tools-library-editor}
+
+These three rows were planned stubs until #2247; each now runs a catalog
+command, so the palette and a user key binding run the same id (none of the
+three has a default key).
+
+- **Place ▸ Sheet Entry** runs `place_sheet_entry`, the Active Bar's Sheet
+  Entry tool. Greyed without a schematic, like the other Place rows. The
+  Active Bar dropdown sends `ActiveBarAction::PlaceSheetEntry` directly and is
+  not gated. The canvas Place flyout sends `ContextAction::Command` with
+  `place_sheet_entry`, dispatched with `window = None`, so it is gated by the
+  same `Needs::Schematic`. A flyout in an undocked sheet window runs inside
+  that window's document swap, so the gate reads that sheet even while the
+  main window shows a PCB (`place_design_rows` pins both). Passing the menu's
+  own window instead of `None` is #2267.
+- **Tools ▸ Library Editor** runs `open_library_browser` (maintainer decision,
+  2026-11-09, `DECISIONS.md`). It focuses the active Library Browser tab, else
+  the library of the active symbol or footprint editor tab, else the last
+  Library Browser tab in the strip, else the first open library (the top row
+  of the Libraries panel); a library with no browser tab gets a new one. From
+  there the user picks a symbol or footprint to edit. Greyed when no library
+  is open.
+- **Window ▸ Close All Documents** runs `close_all_documents`, the project
+  tree's Close Project Documents: every tab closes, and an unsaved document is
+  parked as a draft exactly as the tab menu's Close All Documents does. Greyed
+  when no tab is open.
+
 ## Save and Save As {#file-save}
 
 Both are also enabled for a standalone symbol or footprint editor tab

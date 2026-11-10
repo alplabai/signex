@@ -3,8 +3,14 @@
 //! listener reported as up; a request is run as `Signex::update` runs it.
 
 #[cfg(unix)]
+mod client;
+#[cfg(unix)]
+mod hold;
+#[cfg(unix)]
 mod live;
 mod opened;
+#[cfg(unix)]
+mod presence;
 mod refusals;
 mod round_trip;
 
@@ -71,6 +77,7 @@ pub(super) fn app_in(dir: &std::path::Path) -> Signex {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -80,6 +87,8 @@ pub(super) fn app_in(dir: &std::path::Path) -> Signex {
         case_decided: false,
     });
     app.ui_state.snap_enabled = false;
+    // As the window the person works in: it lists its open projects.
+    app.agent.lists_projects = true;
     fixture::activate(&mut app, &dir.join("b.snxsch"));
     let canvas = app.interaction_state.active_canvas_mut();
     canvas.selected = vec![SelectedItem::new(uid(WIRE_A), SelectedKind::Wire)];

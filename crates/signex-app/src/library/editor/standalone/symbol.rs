@@ -49,7 +49,7 @@ pub fn view_symbol<'a>(
     // bottom-left and the zoom pill at its bottom-right.
     let body: Element<'a, LibraryMessage> = {
         let path = editor.path.clone();
-        let card = container(graphite_toolbar(editor, &path, tokens))
+        let card = container(graphite_toolbar(editor, &path, tokens, &panel_ctx.i18n))
             .padding(SP.l)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -205,9 +205,11 @@ fn graphite_toolbar<'a>(
     editor: &SymbolDocument,
     path: &std::path::Path,
     tokens: &signex_types::theme::ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, LibraryMessage> {
     use crate::styles::tokens::resolve;
     use iced::widget::button::Status;
+    use signex_i18n::{Localized, ids, t};
     use signex_types::schematic::BodyStyle;
     let r = resolve(tokens);
     let ink = theme_ext::text_primary(tokens);
@@ -230,14 +232,14 @@ fn graphite_toolbar<'a>(
         },
         ..iced::widget::button::Style::default()
     };
-    let ghost = |label: &'static str, msg: LibraryMessage| {
-        button(text(raw(label)).size(TS.caption))
+    let ghost = |label: Localized, msg: LibraryMessage| {
+        button(text(label).size(TS.caption))
             .padding([SP.xs, SP.m])
             .on_press(msg)
             .style(ghost_style)
     };
-    let cell = |label: &'static str, active: bool, msg: LibraryMessage| {
-        button(text(raw(label)).size(TS.caption))
+    let cell = |label: Localized, active: bool, msg: LibraryMessage| {
+        button(text(label).size(TS.caption))
             .padding([SP.xs, SP.m])
             .on_press(msg)
             .style(
@@ -262,12 +264,12 @@ fn graphite_toolbar<'a>(
     let segmented = container(
         row![
             cell(
-                "Normal",
+                t!(i18n, ids::EDITORS_SYMBOL_BODY_NORMAL),
                 view.body == BodyStyle::Normal,
                 sym(SymbolEditorMsg::BodyStyleSelected(BodyStyle::Normal)),
             ),
             cell(
-                "Alternate",
+                t!(i18n, ids::EDITORS_SYMBOL_BODY_ALTERNATE),
                 view.body == BodyStyle::Alternate,
                 sym(SymbolEditorMsg::BodyStyleSelected(BodyStyle::Alternate)),
             ),
@@ -284,36 +286,59 @@ fn graphite_toolbar<'a>(
         ..iced::widget::container::Style::default()
     });
     let max_part = sym_state::max_part_number(editor.primitive());
-    let save_label = if editor.is_dirty() { "Save *" } else { "Save" };
-    let save = button(text(raw(save_label)).size(TS.caption))
+    let save_label = if editor.is_dirty() {
+        ids::EDITORS_SYMBOL_SAVE_DIRTY
+    } else {
+        ids::EDITORS_SYMBOL_SAVE
+    };
+    let save = button(text(t!(i18n, save_label)).size(TS.caption))
         .padding([SP.xs, SP.l])
         .on_press(send(PrimitiveEdit::Save))
         .style(crate::styles::primary_button(tokens));
 
     let body_row = row![
-        text(raw("Body")).size(TS.caption).color(ink3),
+        text(t!(i18n, ids::EDITORS_SYMBOL_BODY))
+            .size(TS.caption)
+            .color(ink3),
         segmented,
         ghost(
-            "Both",
+            t!(i18n, ids::EDITORS_SYMBOL_BODY_BOTH),
             sym(SymbolEditorMsg::SelectionBodyAssigned(
                 signex_library::BODY_COMMON
             )),
         ),
         ghost(
-            "This only",
+            t!(i18n, ids::EDITORS_SYMBOL_BODY_THIS_ONLY),
             sym(SymbolEditorMsg::SelectionBodyAssigned(view.body_tag())),
         ),
     ]
     .spacing(SP.s)
     .align_y(iced::Alignment::Center);
     let part_row = row![
-        ghost("\u{2190}", sym(SymbolEditorMsg::PrevPart)),
-        text(raw(format!("Part {} / {max_part}", editor.active_part)))
-            .size(TS.body)
-            .color(ink),
-        ghost("\u{2192}", sym(SymbolEditorMsg::NextPart)),
-        ghost("+", sym(SymbolEditorMsg::NewPart)),
-        ghost("\u{2212}", sym(SymbolEditorMsg::RemovePart)),
+        ghost(
+            t!(i18n, ids::EDITORS_SYMBOL_PREVIOUS_PART),
+            sym(SymbolEditorMsg::PrevPart)
+        ),
+        text(t!(
+            i18n,
+            ids::EDITORS_SYMBOL_PART_OF,
+            "part" => u32::from(editor.active_part),
+            "parts" => u32::from(max_part)
+        ))
+        .size(TS.body)
+        .color(ink),
+        ghost(
+            t!(i18n, ids::EDITORS_SYMBOL_NEXT_PART),
+            sym(SymbolEditorMsg::NextPart)
+        ),
+        ghost(
+            t!(i18n, ids::EDITORS_SYMBOL_ADD_PART),
+            sym(SymbolEditorMsg::NewPart)
+        ),
+        ghost(
+            t!(i18n, ids::EDITORS_SYMBOL_REMOVE_PART),
+            sym(SymbolEditorMsg::RemovePart)
+        ),
         Space::new().width(SP.m),
         save,
     ]

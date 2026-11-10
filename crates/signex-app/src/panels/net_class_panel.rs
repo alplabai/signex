@@ -8,6 +8,7 @@ use super::*;
 use crate::icons;
 use crate::styles::tokens::{hover_overlay, resolve};
 use crate::styles::{Spacing, TypeScale, ti};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::net_class::{NetClass, NetLineStyle, format_hex_color};
 use signex_types::theme::ThemeId;
 
@@ -177,6 +178,7 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
     let tokens = &ctx.tokens;
     let theme_id = ctx.theme_id;
     let hint_ink = resolve(tokens).ink3;
+    let i18n: &'a I18n = &ctx.i18n;
     ctx.collapsible(
         "prop_net_classes",
         "Net Classes",
@@ -201,17 +203,17 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             c = c.push(
                 container(
                     row![
-                        add_class_button(theme_id, tokens),
+                        add_class_button(theme_id, tokens, i18n),
                         Space::new().width(Length::Fill),
                         history_button(
                             icons::icon_undo(theme_id),
-                            "Undo",
+                            t!(i18n, ids::PANELS_NET_CLASSES_UNDO),
                             panel.can_undo.then(|| wrap(NetClassMsg::Undo)),
                             tokens,
                         ),
                         history_button(
                             icons::icon_redo(theme_id),
-                            "Redo",
+                            t!(i18n, ids::PANELS_NET_CLASSES_REDO),
                             panel.can_redo.then(|| wrap(NetClassMsg::Redo)),
                             tokens,
                         ),
@@ -260,13 +262,19 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             c = c.push(
                 container(
                     row![
-                        action_button("Move Up", (selected > 0).then(|| wrap(NetClassMsg::MoveUp))),
                         action_button(
-                            "Move Down",
+                            t!(i18n, ids::PANELS_NET_CLASSES_MOVE_UP),
+                            (selected > 0).then(|| wrap(NetClassMsg::MoveUp))
+                        ),
+                        action_button(
+                            t!(i18n, ids::PANELS_NET_CLASSES_MOVE_DOWN),
                             (selected + 1 < panel.classes.len())
                                 .then(|| wrap(NetClassMsg::MoveDown))
                         ),
-                        action_button("Delete", Some(wrap(NetClassMsg::RemoveSelected))),
+                        action_button(
+                            t!(i18n, ids::PANELS_NET_CLASSES_DELETE),
+                            Some(wrap(NetClassMsg::RemoveSelected))
+                        ),
                     ]
                     .spacing(SP.s),
                 )
@@ -340,8 +348,8 @@ fn ghost_style(theme: &Theme, status: button::Status) -> button::Style {
 }
 
 /// Text ghost button; disabled without a message.
-fn action_button<'a>(label: &str, on_press: Option<PanelMsg>) -> Element<'a, PanelMsg> {
-    button(text(raw(label.to_string())).size(TS.caption))
+fn action_button<'a>(label: Localized, on_press: Option<PanelMsg>) -> Element<'a, PanelMsg> {
+    button(text(label).size(TS.caption))
         .padding([3.0, SP.m])
         .on_press_maybe(on_press)
         .style(ghost_style)
@@ -349,7 +357,11 @@ fn action_button<'a>(label: &str, on_press: Option<PanelMsg>) -> Element<'a, Pan
 }
 
 /// "+ Add Class": ghost button with the plus icon.
-fn add_class_button<'a>(theme_id: ThemeId, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
+fn add_class_button<'a>(
+    theme_id: ThemeId,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
     let ink = ti(tokens.text);
     let glyph = svg(icons::icon_plus(theme_id))
         .width(12)
@@ -359,9 +371,12 @@ fn add_class_button<'a>(theme_id: ThemeId, tokens: &ThemeTokens) -> Element<'a, 
             ..Default::default()
         });
     button(
-        row![glyph, text(raw("Add Class")).size(TS.caption)]
-            .spacing(SP.xs)
-            .align_y(iced::Alignment::Center),
+        row![
+            glyph,
+            text(t!(i18n, ids::PANELS_NET_CLASSES_ADD)).size(TS.caption)
+        ]
+        .spacing(SP.xs)
+        .align_y(iced::Alignment::Center),
     )
     .padding([3.0, SP.m])
     .on_press(PanelMsg::NetClass(NetClassMsg::Add))
@@ -373,7 +388,7 @@ fn add_class_button<'a>(theme_id: ThemeId, tokens: &ThemeTokens) -> Element<'a, 
 /// `on_press` is `None`.
 fn history_button<'a>(
     handle: svg::Handle,
-    label: &str,
+    label: Localized,
     on_press: Option<PanelMsg>,
     tokens: &ThemeTokens,
 ) -> Element<'a, PanelMsg> {
@@ -394,16 +409,12 @@ fn history_button<'a>(
         .padding([4.0, 6.0])
         .on_press_maybe(on_press)
         .style(ghost_style);
-    let hint = container(
-        text(raw(label.to_string()))
-            .size(TS.caption)
-            .color(ti(tokens.text)),
-    )
-    .padding([3, 8])
-    .style(signex_widgets::active_bar_dropdown::tooltip_style(
-        hover_overlay(tokens),
-        ti(tokens.border),
-    ));
+    let hint = container(text(label).size(TS.caption).color(ti(tokens.text)))
+        .padding([3, 8])
+        .style(signex_widgets::active_bar_dropdown::tooltip_style(
+            hover_overlay(tokens),
+            ti(tokens.border),
+        ));
     signex_widgets::tooltip(btn, hint, iced::widget::tooltip::Position::Bottom)
         .gap(4)
         .boxed()

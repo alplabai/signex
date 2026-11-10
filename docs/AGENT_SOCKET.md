@@ -4,20 +4,25 @@ A person keeps Signex open; an agent works on the same project through the CLI.
 The agent is a component of Signex, not a user of its window: it names its
 document, uses the engine channel and never changes the person's active tab,
 focus, panels, selection or tool. This page is the design of the running app's
-side (PR A of #1924): the listener, its security and the registry. The CLI side
-(connect when a live entry exists, otherwise run headless; a GUI refusing a
-project a headless run holds) is PR B.
+side: the listener, its security and the registry. The CLI side (connect when a
+live entry exists, otherwise run headless and hold the project; a GUI refusing
+a project a headless run holds) is "Client" below and in [CLI.md](CLI.md).
 
-Code: `crates/signex-app/src/app/agent/`.
+Code: `crates/signex-app/src/app/agent/`; the client half is `client.rs`,
+which `signex-cli` uses through `signex_app::headless::agent_client`.
 
 ## Off by default
 
 Preferences > Editing > "Allow agent connections" (`agent_connections_enabled`
-in `prefs.json`, default `false`). While it is off no socket, token or registry
-file exists, and the app behaves as before. Turning it on at Save starts the
-listener; turning it off at Save ends it: the socket is closed, the connections
-are dropped and every file below is removed. A headless run never listens,
-whatever its config root says.
+in `prefs.json`, default `false`). While it is off no socket and no token
+exist and nothing listens or accepts a connection. The app still lists each
+open project in the registry (below) and holds its lock, so that a headless
+`signex-cli` run does not edit a file open in a window; those entries name no
+socket. Turning the setting on at Save starts the listener and the entries
+name its socket; turning it off at Save ends it: the socket is closed, the
+connections are dropped, the socket and token files are removed, and the
+entries lose their socket. A headless run never listens, whatever its config
+root says, and lists nothing.
 
 ## Transport
 
@@ -76,7 +81,14 @@ The last three are open to agents by the maintainer's decision (#1924):
 
 - `save_document` writes the named document only, as a person's Save of that
   document does; its side writes stay confined to what the headless run allows
-  (`save_side_writes`). It never saves another document.
+  (`save_side_writes`). It never saves another document. For a project
+  document, `document_info` answers `save_writes`: the absolute paths a save
+  would write besides the project file (its pending libraries), so a client
+  that confines writes can check them before it asks; absent for a sheet.
+  The save runs in the person's app as their own Save does, so it commits to
+  git with the person's identity like their save, including `git init` and the
+  first commit of a pending library that asks for `enable_git`; the commit does
+  not say an agent asked for it (provenance is tracked in #2253).
 - `close_active_document` closes the named document's tab as its close button
   does; a document with unsaved edits is parked, never discarded. It is refused
   when the document is the person's active tab, or is shown in a window of its
@@ -149,9 +161,18 @@ the profile's ACL; there is no mode or owner check there.
 
 ## Files
 
-The runtime directory is `$XDG_RUNTIME_DIR/signex-agent`, else
-`<temp dir>/signex-agent-<uid>` (macOS: the per-user temp dir), else on Windows
-`%LOCALAPPDATA%\Signex\agent`.
+The runtime directory is `$XDG_RUNTIME_DIR/signex-agent`; on Linux, with the
+variable unset (ssh, cron), `/run/user/<uid>/signex-agent` when `/run/user/<uid>`
+is the user's own real folder, so a desktop app and such a shell name one
+folder; else `<user temp>/signex-agent-<uid>` (macOS: the system's per-user
+temp dir from `confstr(_CS_DARWIN_USER_TEMP_DIR)`, which does not depend on
+`TMPDIR`, so a Finder launch and a shell without it agree; elsewhere
+`temp_dir()`); on Windows `%LOCALAPPDATA%\Signex\agent`. A client (`lookup`,
+`hold`) also looks at the user's other possible folders, and so does the
+window when it opens a project (for a headless run's exclusive lock), each only
+if it is a real folder of the user that nobody else can enter; a lock held
+there counts. The window's claim makes one non-blocking attempt (no sleep inside
+the update; the registry tick retries).
 
 ```
 <runtime dir>/                       0700
@@ -166,16 +187,19 @@ config-root override does not move this directory.
 
 ## Registry
 
-One entry per open project, written when the listener is up and a project is
-open, rewritten when the set of open projects changes, removed when its
-project closes, when the setting goes off and when the app exits. It is
-written for the canonical path of the project file; the file name is the first
-32 hex characters of the SHA-256 of that path, so two spellings of one path
-share an entry and the name holds no path text.
+One entry per open project, written whenever a project is open (listening or
+not), rewritten when the set of open projects or the listener changes, and
+removed when its project closes and when the app exits. The app holds the
+project's lock file (below) for as long as the project is open and releases
+it when it closes; the lock file itself is never deleted. It is written for
+the canonical path of the project file; the file name is the first 32 hex
+characters of the SHA-256 of that path, so two spellings of one path share an
+entry and the name holds no path text.
 
 ```json
 {
-  "format": 1,
+  "format": 3,
+  "kind": "gui",
   "project": "/canonical/path/Demo.snxprj",
   "pid": 4242,
   "socket": "/run/user/1000/signex-agent/3f9c0d1e5a7b2c44.sock",
@@ -183,11 +207,60 @@ share an entry and the name holds no path text.
 }
 ```
 
-A client finds its project's entry by the digest of the canonical path, opens
-`socket` and reads the token from `<boot_id>.token` in the same folder as the
-socket (the pipe's token is in the runtime directory). An entry whose `pid` is
-dead or whose socket refuses is stale: the client removes it, after the same
-owner and link check the app makes.
+`kind` is `gui` (a running app) or `headless` (a `signex-cli` run that holds
+the project and has no endpoint: `socket` is empty and `boot_id` is only its
+identity). A `gui` entry with an empty `socket` is an app that has the project
+open and does not listen (agent connections off): nothing to attach to, and
+the project is not to be edited behind it. Format 2 added `kind`; an entry
+without one is a format 1 entry and reads as `gui`. Format 3 added the
+`gui` entry without a socket, which a format 2 reader would misjudge as
+stale, so it reads a format 3 entry as one it does not know.
+
+**The lock decides who has the project open.** Every window that has a project
+open holds a SHARED lock on `registry/<digest>.lock`, beside the entry, from
+the moment it opens the project (in the update that opens it, with one small
+file open and a non-blocking lock) until it closes it; a headless run holds
+the lock EXCLUSIVELY. So many windows can have one project open, a headless
+run cannot take it while any window does, and a window cannot open a project a
+run holds (it refuses, as above). A closed project keeps its lock while any
+document write or library write (a queued or running write of any library) is
+still running (it goes with the update that reports it done), and on quit the
+locks go with the cleanup task, after the document, autosave and library
+writes, so a run never reads a file a save is still writing. A lock that cannot
+be made is said once in Messages and tried again at the registry retry tick
+(5 s), not at every update; a run that took the project after that is said
+once too, with its process id ("another signex-cli run" while it has no entry
+yet). A stale entry is removed only if the project is still unlocked when it
+is. Both sides take their own lock first and only then look at the user's other
+runtime folders (a window for an exclusive lock, a run for any lock there), so
+a run and a window that start together can both refuse but never both pass. The
+kernel drops a lock with its process, so a process killed by a signal is found stale at once and a reused process id
+means nothing. A reader asks for the lock exclusively without waiting: it
+fails while anyone holds it, and if it succeeds every holder is gone.
+
+A client finds its project's entry by the digest of the canonical path and
+reads the token from `<boot_id>.token` in the runtime directory, and judges it
+by the lock first. With nobody holding the lock the project is free, and an
+entry that remains is stale (removed after the same owner and link check the
+app makes). With the lock held an entry is never stale: if it names a live app
+whose boot id has the right form, whose `socket` is the endpoint that boot id
+names, whose process runs and whose endpoint answers, the client attaches;
+if it is a `headless` entry (no socket) it is a headless run; anything else
+(no socket, no entry yet, an entry that does not check out) is a project open
+where there is nothing to attach to. A client never connects to anything an
+entry names: it derives the endpoint from the boot id. The registry write
+makes the runtime folder first (with agent connections off no listener does).
+Registry writes run on worker threads and can reach the lock out of order, so
+each carries a number and one older than the last applied is dropped.
+
+Every reader opens an entry without following a link and without blocking (a
+FIFO put in its place is not opened for reading), and checks the descriptor it
+opened: a plain file of this user, no larger than 64 KiB. The GUI also checks
+the runtime folder first (a real folder of this user that nobody else can
+enter); one that is not holds nothing. An entry whose `format` is higher than
+the reader knows is not the reader's: it is neither live nor stale, and is
+never removed or replaced (`signex-cli` stops with a message; the app leaves it
+and logs).
 
 Two instances with the same project: an app removes only entries that carry
 its own `pid` and `boot_id`, and writes over an entry only if there is none,
@@ -228,10 +301,72 @@ connection earns the count back (a listener that binds and then fails again
 does not), and turning the setting on resets it. The boot ids of listeners
 that have ended stay in the quit path's list, which keeps the last 32.
 
+## Client
+
+`signex-cli run` (PR B of #1924, behaviour in [CLI.md](CLI.md)) uses
+`client.rs`:
+
+- `lookup` reads the entry of a project (the directory must pass the same
+  owner and mode check as the app's) and answers `Free`, `Stale`, `Gui` or
+  `Headless`. `StaleEntry::remove` re-reads the entry and removes it only if it
+  is unchanged and the user's own plain file.
+- `GuiPeer::connect` reads the token file, which must be a plain file of this
+  user with no group or other permission, opened without following a link
+  (`O_NOFOLLOW`); it checks the endpoint is a socket of this user and connects
+  to the endpoint the boot id names. On Windows the pipe is opened for
+  identification only.
+- `Connection::ask` sends one request line and reads one reply line, in the
+  wire format above. A reply that is not the documented shape is an error.
+  Replies are read by a thread of their own and awaited for at most 120 s on
+  every platform; a connect is bounded to 5 s (a full backlog blocks it).
+  Replies are matched to requests by order: after any failure, a timeout above
+  all, the connection is broken for good (a late reply must never be taken for
+  the next answer) and every later `ask` fails; a reply that names another
+  command than the one asked is a failure too.
+- `hold` takes the project's lock first (a few attempts, 5 x 20 ms: a reader's
+  momentary lock must not fail a starting run; and the path must still name the
+  locked file), then writes the `headless` entry (one format, the app's file
+  writer). It fails if another run holds the lock or a window has the project
+  open (its shared lock; its entry, when one is written, names it); a dead
+  run's entry is replaced. Dropping the `Hold`
+  removes the entry (only if it is still the run's own). The lock file is never
+  deleted: an empty 0600 file is harmless, and deleting a locked file would let
+  a second run lock the unlinked one.
+
+## The app refuses a held project
+
+When the window opens a project (any way: Open, a recent file, the command
+line) it takes the shared lock at once, and if a headless run holds it
+exclusively the window refuses: a line in Messages and an Open Failed notice
+(`<file> is being edited by a headless signex-cli run (process N), so it was
+not opened`), and nothing in the app changes. This needs no setting: the lock
+is taken whether or not agent connections are on. A project another window has
+open opens as before (the shared locks coexist; the later entry write logs
+that it is also open there). The lock is taken in the update that opens the
+project, so a run cannot slip in between the open and the registry write. A
+headless app (the CLI's own) and an app made for a test hold no lock and never
+refuse: the run holds the project (a second run is refused before it starts,
+by `signex-cli`).
+
+Recovery: the notice names the entry file. A hold is live only while its run
+holds the lock, so an entry that stays after its run was killed is stale and is
+ignored; if the notice appears with no run alive (it should not), delete the
+entry file it names.
+
 ## Known limits
 
-- The client (PR B) is not here: nothing yet connects, and nothing checks that
-  a headless run holds a project.
+- The lock keeps a window and a run apart (one or the other has it), but the
+  entry is a separate write: two windows with one project both want to write
+  its entry, the first keeps it and the other logs and retries every 5 s, so
+  after the first closes the project there can be no entry for a few seconds;
+  the lock still says it is open. A stale entry is removed after a re-read that
+  shows it unchanged; an app that rewrites it between that read and the removal
+  can lose its entry, which the app's retry timer restores.
+- The lock is a file lock (`flock`, `LockFileEx`): on a runtime folder on a
+  network file system whose locks are not honoured, a hold is not seen.
+- A sheet opened loose, without its project, is not listed and not refused.
+- On Windows the client has not been run against a real app here (it is
+  compiled and linted for `x86_64-pc-windows-msvc`).
 - The Windows code (`transport/windows.rs`) is compiled and linted for
   `x86_64-pc-windows-msvc` on its own, and has transport-level tests that run
   on the Windows CI job (a round trip, a hundred clients that connect and close

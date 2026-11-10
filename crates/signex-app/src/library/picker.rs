@@ -54,6 +54,7 @@ const PICKER_H: f32 = 480.0;
 pub fn view<'a>(
     picker: &'a PickerState,
     tokens: &'a ThemeTokens,
+    i18n: &'a signex_i18n::I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     // Change Component and Open Datasheet reuse this modal: their later
@@ -191,6 +192,7 @@ pub fn view<'a>(
         picker.rows.filter_columns(),
         picker.rows.range_excluded(),
         tokens,
+        i18n,
         |msg| LibraryMessage::Picker(PickerMsg::RangeFilter(msg)),
     );
     let mut top = column![container(search).padding([6.0, SP.l])].spacing(0);

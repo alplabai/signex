@@ -87,7 +87,12 @@ pub fn parse_list(text: &str) -> Result<BTreeSet<Capability>, String> {
 /// Commands that write a file or create a project. The catalog has no flag
 /// for it (a `file` command is not `mutates_doc`), so they are named; a test
 /// keeps the list in step with the catalog.
-const SAVES: &[&str] = &["save_document", "save_document_as", "new_document"];
+const SAVES: &[&str] = &[
+    "save_document",
+    "save_document_as",
+    "new_document",
+    "new_project_with_profile",
+];
 
 /// The one capability `command` needs, from its catalog flags.
 pub fn capability_of(command: &CommandMetadata) -> Capability {
@@ -159,6 +164,7 @@ mod tests {
             .collect();
         let pinned = BTreeSet::from([
             (Capability::Save, "new_document"),
+            (Capability::Save, "new_project_with_profile"),
             (Capability::Save, "save_document"),
             (Capability::Save, "save_document_as"),
             (Capability::Export, "print"),

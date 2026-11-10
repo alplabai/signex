@@ -42,6 +42,10 @@ impl Signex {
                 Some(self.handle_tab_context_action(crate::app::TabContextAction::Close(active)))
             }
             MenuMessage::CloseProject => Some(self.close_active_project()),
+            // The dialog; a headless run keeps the picker so its answers drive it.
+            MenuMessage::NewProject if self.headless_answers().is_none() => {
+                Some(self.open_new_project_dialog())
+            }
             MenuMessage::NewProject => {
                 let target = self.save_target(None);
                 let picker = self.ui_state.io.picker.clone();

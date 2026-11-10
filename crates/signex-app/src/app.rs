@@ -31,6 +31,7 @@ pub(crate) mod hierarchy_fixture;
 mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
+pub(crate) mod new_project;
 pub mod parent_reference_disk;
 pub mod path_op_jobs;
 pub mod path_ops;
@@ -86,6 +87,7 @@ pub use documents::{
     TabDocument, TabInfo, TabKind, Tool,
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
+pub use new_project::{NewProjectMsg, NewProjectState};
 pub use signex_history::History;
 pub(crate) use signex_history::SavePoint;
 #[cfg(test)]

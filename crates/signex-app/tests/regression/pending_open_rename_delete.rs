@@ -44,6 +44,7 @@ fn project_with_sheet(dir: &Path) -> (Signex, PathBuf) {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

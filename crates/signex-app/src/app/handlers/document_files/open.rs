@@ -5,7 +5,9 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 
 use super::super::super::*;
-use super::new_project::{RuleSeed, new_project_parts, write_new_project_files};
+use super::new_project::{
+    NewProjectPlan, RuleSeed, new_project_parts, write_new_project_files_with,
+};
 use super::spelling::OpenGate;
 
 impl Signex {
@@ -53,20 +55,21 @@ impl Signex {
     pub(crate) fn handle_new_project_file(&mut self, path: Option<PathBuf>) -> iced::Task<Message> {
         match path {
             Some(path) => self
-                .start_new_project(path)
+                .start_new_project(path, NewProjectPlan::default())
                 .unwrap_or_else(|_| iced::Task::none()),
             None => iced::Task::none(),
         }
     }
 
-    /// Create the project at `path` as the New Project dialog's answer does.
-    /// A path that is not a project file is logged, raised as the notice and
-    /// returned. A second create for a path still being written is returned
-    /// only; one the worker refuses comes back through
-    /// `handle_new_project_written`.
+    /// Create the project at `path` as `plan` says (the plain Save As pick,
+    /// or the New Project dialog's choices). A path that is not a project
+    /// file is logged, raised as the notice and returned. A second create for
+    /// a path still being written is returned only; one the worker refuses
+    /// comes back through `handle_new_project_written`.
     pub(crate) fn start_new_project(
         &mut self,
         path: PathBuf,
+        plan: NewProjectPlan,
     ) -> Result<iced::Task<Message>, String> {
         self.interaction_state.editing_text = None;
         self.interaction_state.context_menu = None;
@@ -88,7 +91,10 @@ impl Signex {
                 Ok(iced::Task::perform(
                     super::super::dock::project_navigation::add_io::on_blocking_pool({
                         let path = path.clone();
-                        move || write_new_project_files(&path, &seed).map_err(|e| format!("{e:#}"))
+                        move || {
+                            write_new_project_files_with(&path, &seed, &plan)
+                                .map_err(|e| format!("{e:#}"))
+                        }
                     }),
                     move |result| Message::File(FileMsg::NewProjectWritten { path, result }),
                 ))
@@ -121,6 +127,9 @@ impl Signex {
         self.document_state
             .pending_opens
             .remove_untracked(&project_path);
+        if self.finish_dialog_create(&project_path, &result) {
+            return iced::Task::none();
+        }
         let written = match result {
             Ok(written) => written,
             Err(error) => {
@@ -353,6 +362,27 @@ impl Signex {
                 "A save to that project file is still running, so it was not opened; \
                  try again once it finishes: {}",
                 super::save::file_label(project_path)
+            );
+        }
+        // A headless `signex-cli` run is editing it with no window: opening
+        // it here would be a second editor of one file (#1924). The claim is
+        // the shared lock a window holds while the project is open.
+        if let Err((pid, entry)) = self.claim_project(project_path) {
+            // A run that has the lock and has not written its entry yet has no
+            // process to name, and no entry to remove.
+            if pid == 0 {
+                anyhow::bail!(
+                    "{} is being edited by another signex-cli run, so it was not opened. \
+                     Open it again when that run has ended.",
+                    super::save::file_label(project_path)
+                );
+            }
+            anyhow::bail!(
+                "{} is being edited by a headless signex-cli run (process {pid}), so it was \
+                 not opened. Open it again when that run has ended; if none is running, \
+                 remove {}",
+                super::save::file_label(project_path),
+                entry.display()
             );
         }
         let mut data = signex_types::project::parse_project(project_path)

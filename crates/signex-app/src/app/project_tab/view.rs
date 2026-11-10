@@ -6,7 +6,7 @@ use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
-use super::{ProjectSection, ProjectTabMsg, general, parameters, schematic_defaults};
+use super::{ProjectSection, ProjectTabMsg, general, parameters, schematic_defaults, setup};
 use crate::app::state::ProjectId;
 use crate::app::{Message, ProjectMsg, Signex};
 use crate::styles::{Spacing, TypeScale};
@@ -89,6 +89,12 @@ impl Signex {
             ProjectSection::SchematicDefaults => {
                 schematic_defaults::view(project, tab.map(|tab| &tab.default_drafts), tokens)
             }
+            ProjectSection::Setup => setup::view(
+                project,
+                tab.and_then(|tab| tab.setup_draft.as_ref()),
+                self.ui_state.i18n.as_ref(),
+                tokens,
+            ),
         };
         row![
             section_list(project_id, selected, tokens),

@@ -20,7 +20,8 @@ use serde::{Deserialize, Serialize};
 use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::designator::DesignatorStandard;
 use signex_types::project::{
-    AnnotationState, ProjectData, SchematicDefaultField, SchematicDefaultOverrides,
+    AnnotationState, PcbField, ProjectData, ProjectDefaults, SchematicDefaultField,
+    SchematicDefaultOverrides,
 };
 
 /// How many undo steps are kept unless the `undo_depth` setting says
@@ -56,6 +57,15 @@ pub enum ProjectGeneralCommand {
     SetSchematicDefaultLineStyle(Option<signex_types::net_class::NetLineStyle>),
     /// The fill new shapes are placed with (#2026).
     SetSchematicDefaultShapeFill(Option<signex_types::schematic::FillType>),
+    /// The Project setup section (#2232): what new PCBs and sheets start
+    /// from, and the designator standard when it changed, as one step.
+    /// `typing` names the rule field being typed in: edits of the same field
+    /// join one undo step; a pick (`None`) is always a step of its own.
+    SetProjectDefaults {
+        defaults: ProjectDefaults,
+        designators: Option<DesignatorStandard>,
+        typing: Option<PcbField>,
+    },
 }
 
 /// The `title_block` keys a project parameter shares with a sheet: empty
@@ -82,6 +92,7 @@ struct GeneralSnapshot {
     parameters: BTreeMap<String, String>,
     annotation: AnnotationState,
     schematic_defaults: SchematicDefaultOverrides,
+    project_defaults: ProjectDefaults,
 }
 
 impl GeneralSnapshot {
@@ -91,6 +102,7 @@ impl GeneralSnapshot {
             parameters: data.parameters.clone(),
             annotation: data.annotation_state(),
             schematic_defaults: data.schematic_defaults.clone(),
+            project_defaults: data.project_defaults.clone(),
         }
     }
 
@@ -100,6 +112,7 @@ impl GeneralSnapshot {
         data.parameters = self.parameters;
         data.restore_annotation_state(self.annotation);
         data.schematic_defaults = self.schematic_defaults;
+        data.project_defaults = self.project_defaults;
     }
 }
 
@@ -120,6 +133,7 @@ enum RunField {
     General,
     SchematicDefault(SchematicDefaultField),
     SchematicDefaultFont,
+    ProjectRule(PcbField),
 }
 
 impl RunField {
@@ -129,6 +143,10 @@ impl RunField {
                 Self::SchematicDefault(*field)
             }
             ProjectGeneralCommand::SetSchematicDefaultFont(_) => Self::SchematicDefaultFont,
+            ProjectGeneralCommand::SetProjectDefaults {
+                typing: Some(field),
+                ..
+            } => Self::ProjectRule(*field),
             _ => Self::General,
         }
     }
@@ -171,6 +189,7 @@ impl ProjectGeneralHistory {
             ProjectGeneralCommand::SetDesignatorStandard(_)
                 | ProjectGeneralCommand::SetSchematicDefaultLineStyle(_)
                 | ProjectGeneralCommand::SetSchematicDefaultShapeFill(_)
+                | ProjectGeneralCommand::SetProjectDefaults { typing: None, .. }
         );
         let field = RunField::of(&command);
         if is_pick || self.run_field != Some(field) {
@@ -209,6 +228,16 @@ impl ProjectGeneralHistory {
             }
             ProjectGeneralCommand::SetSchematicDefaultShapeFill(fill) => {
                 data.schematic_defaults.set_shape_fill(fill);
+            }
+            ProjectGeneralCommand::SetProjectDefaults {
+                defaults,
+                designators,
+                ..
+            } => {
+                data.project_defaults = defaults;
+                if let Some(standard) = designators {
+                    data.set_designator_standard(Some(standard));
+                }
             }
         }
         if GeneralSnapshot::of(data) == before {

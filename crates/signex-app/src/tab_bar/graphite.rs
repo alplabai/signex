@@ -6,7 +6,7 @@ use iced::widget::{Widget, container, row, space, stack, svg};
 use iced::{Background, Border, Color, Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::{AccentPosition, TabPillStyle};
-use signex_widgets::{button, raw, text};
+use signex_widgets::{button, text};
 
 use super::TabMessage;
 use crate::app::TabKind;
@@ -36,15 +36,16 @@ pub fn strip_height() -> f32 {
 }
 
 /// Short mono label of a document kind.
-pub fn kind_glyph(kind: &TabKind) -> &'static str {
+pub fn kind_glyph(kind: &TabKind) -> signex_i18n::MessageId {
+    use signex_i18n::ids;
     match kind {
-        TabKind::Schematic => "SCH",
-        TabKind::Pcb => "PCB",
-        TabKind::SymbolEditor(_) => "SYM",
-        TabKind::FootprintEditor(_) => "FPT",
-        TabKind::LibraryBrowser(_) => "LIB",
-        TabKind::ComponentEditor(_) => "CMP",
-        TabKind::Project(_) => "PRJ",
+        TabKind::Schematic => ids::PANELS_TAB_KIND_SCHEMATIC,
+        TabKind::Pcb => ids::PANELS_TAB_KIND_PCB,
+        TabKind::SymbolEditor(_) => ids::PANELS_TAB_KIND_SYMBOL,
+        TabKind::FootprintEditor(_) => ids::PANELS_TAB_KIND_FOOTPRINT,
+        TabKind::LibraryBrowser(_) => ids::PANELS_TAB_KIND_LIBRARY,
+        TabKind::ComponentEditor(_) => ids::PANELS_TAB_KIND_COMPONENT,
+        TabKind::Project(_) => ids::PANELS_TAB_KIND_PROJECT,
     }
 }
 
@@ -144,7 +145,11 @@ pub struct TabFace<'t> {
 
 /// The inside of one tab: kind glyph, title, accent dirty dot, a read-only
 /// note, close button.
-pub fn tab_inner(face: TabFace<'_>, tokens: &ThemeTokens) -> Element<'static, TabMessage> {
+pub fn tab_inner(
+    face: TabFace<'_>,
+    tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> Element<'static, TabMessage> {
     let r = resolve(tokens);
     let title_ink = if face.is_active {
         ti(tokens.text)
@@ -157,7 +162,7 @@ pub fn tab_inner(face: TabFace<'_>, tokens: &ThemeTokens) -> Element<'static, Ta
         r.ink4
     };
     let mut content = row![
-        text(raw(kind_glyph(face.kind)))
+        text(signex_i18n::t!(i18n, kind_glyph(face.kind)))
             .size(TS.caption)
             .color(glyph_ink)
             .font(mono())
@@ -174,10 +179,13 @@ pub fn tab_inner(face: TabFace<'_>, tokens: &ThemeTokens) -> Element<'static, Ta
     }
     if face.read_only {
         content = content.push(
-            text(raw(super::READ_ONLY_LABEL))
-                .size(TS.caption)
-                .color(r.ink3)
-                .boxed(),
+            text(signex_i18n::t!(
+                i18n,
+                signex_i18n::ids::PANELS_TAB_READ_ONLY
+            ))
+            .size(TS.caption)
+            .color(r.ink3)
+            .boxed(),
         );
     }
     content = content.push(close_button(tokens, face.index, r.ink3));
@@ -249,8 +257,9 @@ mod tests {
             (TabKind::FootprintEditor(PathBuf::new()), "FPT"),
             (TabKind::LibraryBrowser(PathBuf::new()), "LIB"),
         ];
+        let en = signex_i18n::I18n::en_us();
         for (kind, want) in kinds {
-            assert_eq!(kind_glyph(&kind), want);
+            assert_eq!(signex_i18n::t!(en, kind_glyph(&kind)).into_string(), want);
         }
     }
 

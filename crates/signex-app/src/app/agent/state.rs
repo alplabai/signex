@@ -18,6 +18,13 @@ pub(crate) struct AgentState {
     /// `None` when the system gave no randomness: the listener never starts.
     ids: Option<(String, Token)>,
     pub(super) runtime_dir: Result<PathBuf, String>,
+    /// The temporary folder a test run's runtime directory is in, removed with
+    /// the app (see `files::test_runtime_dir`); `None` outside tests.
+    _test_dir: Option<tempfile::TempDir>,
+    /// The user's other possible runtime folders to look in for a headless
+    /// run's lock; `None` asks `files::alternate_dirs` each time (a test names
+    /// its own).
+    pub(super) alternates: Option<Vec<PathBuf>>,
     /// The socket (or pipe) the listener reported once it was up; `None`
     /// while it is not listening.
     pub(super) endpoint: Option<String>,
@@ -26,8 +33,24 @@ pub(crate) struct AgentState {
     /// True while an agent request runs, so the code under it can tell an
     /// agent's call from a click.
     pub(crate) serving: bool,
-    /// Serialises registry writes and removals, which run on worker threads.
-    pub(super) registry_lock: Arc<Mutex<()>>,
+    /// Whether the open projects are listed in the registry: the window the
+    /// person works in (`Signex::boot`) does. An app made otherwise (a test, a
+    /// headless run, which holds its project itself) does not.
+    pub(crate) lists_projects: bool,
+    /// Serialises registry writes and removals, which run on worker threads;
+    /// holds the number of the last write that ran (`registry::sync_in_order`).
+    pub(super) registry_lock: Arc<Mutex<u64>>,
+    /// The number of the last write started.
+    pub(super) registry_seq: u64,
+    /// The shared lock this window holds on each project it has open, by the
+    /// project's path, for as long as it stays open (see `claim_project`).
+    pub(super) project_locks: std::collections::BTreeMap<PathBuf, std::fs::File>,
+    /// The open projects whose lock could not be made (it failed, or a run
+    /// took the project first): not tried again at every update, only at the
+    /// registry retry tick.
+    pub(super) lock_failed: std::collections::BTreeSet<PathBuf>,
+    /// Of those, the ones already said in Messages, so it is said once.
+    pub(super) lock_warned: std::collections::BTreeSet<PathBuf>,
     /// The boot ids whose files this app may have made, for the quit path.
     pub(super) touched: Vec<String>,
     /// The last registry write failed or left a project to another instance;
@@ -42,18 +65,46 @@ pub(crate) struct AgentState {
 impl AgentState {
     pub(crate) fn new() -> Self {
         let ids = boot_id().zip(Token::generate());
+        let (runtime_dir, test_dir) = if cfg!(test) {
+            let (dir, root) = files::test_runtime_dir();
+            (Ok(dir), root)
+        } else {
+            (files::runtime_dir(), None)
+        };
         Self {
             ids,
-            runtime_dir: files::runtime_dir(),
+            runtime_dir,
+            _test_dir: test_dir,
+            alternates: None,
             endpoint: None,
             registered: None,
             serving: false,
+            lists_projects: false,
             registry_lock: Arc::default(),
+            registry_seq: 0,
+            project_locks: std::collections::BTreeMap::new(),
+            lock_failed: std::collections::BTreeSet::new(),
+            lock_warned: std::collections::BTreeSet::new(),
             touched: Vec::new(),
             registry_retry: false,
             registry_in_flight: false,
             restarts: 0,
         }
+    }
+
+    /// Use the runtime directory of a test run (an integration test boots the
+    /// real window): it must never list its projects in the user's registry.
+    pub(crate) fn use_test_runtime_dir(&mut self) {
+        let (dir, root) = files::test_runtime_dir();
+        self.runtime_dir = Ok(dir);
+        self._test_dir = root;
+    }
+
+    /// The other runtime folders to look in for a headless run's lock.
+    pub(super) fn alternate_dirs(&self, primary: &std::path::Path) -> Vec<PathBuf> {
+        self.alternates
+            .clone()
+            .unwrap_or_else(|| files::alternate_dirs(primary))
     }
 
     pub(super) fn token(&self) -> Option<&Token> {
@@ -79,13 +130,14 @@ impl AgentState {
         })
     }
 
-    /// This run as the registry entries name it, once the listener is up.
+    /// This run as the registry entries name it. Its endpoint is empty while no
+    /// listener is up: the entries then say the app has the project open and
+    /// does not listen.
     pub(super) fn owner(&self) -> Option<Owner> {
-        let endpoint = self.endpoint.clone()?;
         Some(Owner {
             pid: std::process::id(),
             boot_id: self.ids.as_ref()?.0.clone(),
-            endpoint,
+            endpoint: self.endpoint.clone().unwrap_or_default(),
         })
     }
 
