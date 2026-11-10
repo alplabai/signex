@@ -183,9 +183,12 @@ count.
 
 Outside sketch mode the PCB canvas draws the board's outline (the board
 edge colour), its cutouts and mounting holes as openings (filled with the
-ground, rimmed in the edge colour) and its keepouts as outlines with a 45°
-hatch (`signex-renderer` `pcb::board_features`, in the overlay pass of both
-the CPU and the GPU path). V-scores are not drawn yet.
+canvas background, rimmed in the edge colour) and its keepouts as outlines
+with a fainter 45° hatch (`signex-renderer` `pcb::board_features`, in the
+overlay pass of both the CPU and the GPU path). The colours are the theme
+slots `BoardEdge` (the canvas cursor ink), `BoardOpening` (the canvas
+background) and `Keepout` (the DRC warning colour), so both Graphite themes
+draw them in their own palette. V-scores are not drawn yet.
 
 ## Not done yet
 

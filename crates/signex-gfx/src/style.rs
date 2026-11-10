@@ -25,6 +25,12 @@ pub enum ColorSlot {
     DrcError = 14,
     DrcWarning = 15,
     Ratsnest = 16,
+    /// The board outline and the rim of every opening in it.
+    BoardEdge = 17,
+    /// A cutout or mounting hole: what shows through the board.
+    BoardOpening = 18,
+    /// A keepout's outline; its hatch is this colour, fainter.
+    Keepout = 19,
 }
 
 /// Compact style reference sent alongside primitive data.

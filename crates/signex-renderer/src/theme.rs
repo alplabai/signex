@@ -44,6 +44,11 @@ impl ResolvedTheme {
         resolved.set_slot(ColorSlot::LassoStroke, to_rgba(canvas.selection));
         resolved.set_slot(ColorSlot::LassoFill, to_rgba(canvas.selection));
         resolved.set_slot(ColorSlot::Ratsnest, to_rgba(canvas.ratsnest_color()));
+        // The board edge is the canvas's strongest ink; an opening shows the
+        // canvas under the board; a keepout is where a DRC rule bites.
+        resolved.set_slot(ColorSlot::BoardEdge, to_rgba(canvas.cursor));
+        resolved.set_slot(ColorSlot::BoardOpening, to_rgba(canvas.background));
+        resolved.set_slot(ColorSlot::Keepout, to_rgba(canvas.drc_warning));
 
         resolved
     }
@@ -116,6 +121,9 @@ fn load_builtin_theme() -> ResolvedTheme {
     resolved.set_slot(ColorSlot::Ghost, palette.slots.ghost);
     resolved.set_slot(ColorSlot::LassoStroke, palette.slots.lasso_stroke);
     resolved.set_slot(ColorSlot::LassoFill, palette.slots.lasso_fill);
+    resolved.set_slot(ColorSlot::BoardEdge, palette.slots.snap);
+    resolved.set_slot(ColorSlot::BoardOpening, palette.slots.pin);
+    resolved.set_slot(ColorSlot::Keepout, palette.slots.drc_warning);
 
     resolved
 }
@@ -164,6 +172,26 @@ mod tests {
             ResolvedTheme::builtin_default().color(ColorSlot::Ratsnest),
             ResolvedTheme::builtin_default().color(ColorSlot::Selection)
         );
+    }
+
+    #[test]
+    fn board_features_take_their_colours_from_each_graphite_canvas() {
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let canvas = canvas_colors(id);
+            let theme = ResolvedTheme::from_canvas_colors(canvas);
+            let rgba = super::to_rgba;
+            assert_eq!(theme.color(ColorSlot::BoardEdge), rgba(canvas.cursor));
+            assert_eq!(
+                theme.color(ColorSlot::BoardOpening),
+                rgba(canvas.background)
+            );
+            assert_eq!(theme.color(ColorSlot::Keepout), rgba(canvas.drc_warning));
+            assert_ne!(
+                theme.color(ColorSlot::BoardEdge),
+                theme.color(ColorSlot::BoardOpening),
+                "{id:?}: the board edge shows against an opening"
+            );
+        }
     }
 
     #[test]

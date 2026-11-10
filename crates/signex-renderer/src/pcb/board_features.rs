@@ -10,17 +10,14 @@ use signex_gfx::primitive::circle::Circle;
 use signex_gfx::primitive::line::LineSegment;
 use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::scene::Scene;
+use signex_gfx::style::ColorSlot;
 use signex_types::pcb::PcbBoard;
 
-use super::emit::point_to_xy;
+use super::emit::{point_to_xy, with_alpha_mul};
+use crate::theme::ResolvedTheme;
 
-/// The board edge: the outline and the rim of every opening.
-const EDGE: [f32; 4] = [0.93, 0.80, 0.27, 1.0];
-/// An opening shows the ground under the board.
-const OPENING: [f32; 4] = [0.0, 0.0, 0.0, 0.92];
-/// A keepout's outline; its hatch is the same colour, fainter.
-const KEEPOUT: [f32; 4] = [0.90, 0.30, 0.45, 0.95];
-const KEEPOUT_HATCH: [f32; 4] = [0.90, 0.30, 0.45, 0.45];
+/// How much fainter a keepout's hatch is than its outline.
+const KEEPOUT_HATCH_ALPHA: f32 = 0.5;
 /// Stroke widths in board mm.
 const EDGE_WIDTH_MM: f32 = 0.15;
 const HATCH_WIDTH_MM: f32 = 0.08;
@@ -80,13 +77,17 @@ impl BoardFeaturesInput {
 }
 
 /// Append the board features to the overlay buckets of `scene`.
-pub(super) fn emit(features: &BoardFeaturesInput, scene: &mut Scene) {
+pub(super) fn emit(features: &BoardFeaturesInput, theme: &ResolvedTheme, scene: &mut Scene) {
+    let edge = theme.color(ColorSlot::BoardEdge);
+    let opening = theme.color(ColorSlot::BoardOpening);
+    let keepout_color = theme.color(ColorSlot::Keepout);
+    let keepout_hatch = with_alpha_mul(keepout_color, KEEPOUT_HATCH_ALPHA);
     for cutout in features.cutouts.iter().filter(|c| c.len() >= 3) {
         scene.overlay_polygons.push(GpuPolygon {
             vertices: cutout.clone(),
             holes: Vec::new(),
-            fill_color: OPENING,
-            stroke_color: Some(EDGE),
+            fill_color: opening,
+            stroke_color: Some(edge),
             stroke_width: EDGE_WIDTH_MM,
         });
     }
@@ -97,25 +98,25 @@ pub(super) fn emit(features: &BoardFeaturesInput, scene: &mut Scene) {
             center: hole.center,
             radius,
             stroke_width: 0.0,
-            color: OPENING,
+            color: opening,
         });
         scene.overlay_circles.push(Circle {
             center: hole.center,
             radius: (radius - EDGE_WIDTH_MM * 0.5).max(EDGE_WIDTH_MM * 0.5),
             stroke_width: EDGE_WIDTH_MM,
-            color: EDGE,
+            color: edge,
         });
     }
     for keepout in features.keepouts.iter().filter(|k| k.len() >= 3) {
-        push_loop(scene, keepout, KEEPOUT, EDGE_WIDTH_MM);
+        push_loop(scene, keepout, keepout_color, EDGE_WIDTH_MM);
         for (p0, p1) in hatch(keepout) {
             scene
                 .overlay_lines
-                .push(line(p0, p1, KEEPOUT_HATCH, HATCH_WIDTH_MM));
+                .push(line(p0, p1, keepout_hatch, HATCH_WIDTH_MM));
         }
     }
     if features.outline.len() >= 2 {
-        push_loop(scene, &features.outline, EDGE, EDGE_WIDTH_MM);
+        push_loop(scene, &features.outline, edge, EDGE_WIDTH_MM);
     }
 }
 
@@ -219,7 +220,7 @@ mod tests {
             keepouts: vec![square(10.0)],
         };
         let mut scene = Scene::default();
-        emit(&features, &mut scene);
+        emit(&features, &ResolvedTheme::builtin_default(), &mut scene);
         assert_eq!(scene.overlay_polygons.len(), 1, "the cutout");
         assert_eq!(scene.overlay_circles.len(), 2, "the hole and its rim");
         assert!(scene.overlay_circles[0].is_filled());

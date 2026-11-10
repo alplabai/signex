@@ -417,7 +417,7 @@ pub(super) fn emit_overlays(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene
 
     // The board's openings and keepouts first, so the ratsnest and DRC
     // markers stay readable on top (#2234).
-    super::board_features::emit(&snapshot.board_features, scene);
+    super::board_features::emit(&snapshot.board_features, theme, scene);
 
     let ratsnest_color = with_alpha_mul(theme.color(ColorSlot::Ratsnest), 0.72);
 
