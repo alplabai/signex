@@ -321,7 +321,9 @@ impl Signex {
             return Err(name_change_refusal(what, at, change));
         }
         // Names that reach the net from other sheets.
-        let project = self.project_name_changes(&after, &[at], false)?;
+        let project = self
+            .project_name_changes(&after, &[at], false)?
+            .unwrap_or_default();
         match super::project_names::needing_merge(&project) {
             Some(change) => Err(super::project_names::project_change_refusal(
                 what,

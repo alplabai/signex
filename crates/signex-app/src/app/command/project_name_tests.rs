@@ -376,16 +376,17 @@ fn a_hierarchical_label_whose_entry_the_parent_wired_to_another_rail_is_a_short(
 
 #[test]
 fn a_copy_of_a_hidden_local_name_on_its_placement_is_no_rename() {
-    // SensorA: hierarchical SDA and the local SDA_INT on one net, behind the
-    // port before the edit; the parent wired I2C1_SDA to SensorA.SDA. On the
-    // child, a local SDA_INT again on that net, or on an unnamed child wire
-    // (joining it by name), stays behind the port: no change. A global SDA_INT
-    // is an own name everywhere that the parent's net does not carry: a
-    // rename (6761836527 points 5 and 6).
-    for (id, at, refused) in [
-        ("place_net_label", "at=5.08,0", false),
-        ("place_net_label", "at=5.08,20.32", false),
-        ("place_global_label", "at=5.08,0", true),
+    // SensorA: hierarchical SDA and the local SDA_INT on one net; the parent
+    // wired I2C1_SDA to SensorA.SDA. Edited on the child, SDA_INT is a name
+    // of the net there (hidden names play no part only on the parent,
+    // 6761836527 point 6), so a local SDA_INT again on that net, on an unnamed
+    // child wire (joining it by name), or as a global label carries a name
+    // the net has: no rename (point 5). An earlier round refused the global
+    // one; on the edited sheet the local SDA_INT now counts.
+    for (id, at) in [
+        ("place_net_label", "at=5.08,0"),
+        ("place_net_label", "at=5.08,20.32"),
+        ("place_global_label", "at=5.08,0"),
     ] {
         let dir = tempfile::tempdir().unwrap();
         let mut top = sensor_parent();
@@ -398,12 +399,7 @@ fn a_copy_of_a_hidden_local_name_on_its_placement_is_no_rename() {
         write(&dir.path().join("c.snxsch"), child);
         let mut app = open_child(&dir);
         let outcome = run(&mut app, id, &[at, "text=SDA_INT"]);
-        if refused {
-            let reason = refusal(outcome);
-            assert!(reason.contains("reach it from other sheets"), "{reason}");
-        } else {
-            assert_eq!(outcome, CommandOutcome::Ran, "{id} {at}");
-        }
+        assert_eq!(outcome, CommandOutcome::Ran, "{id} {at}");
     }
 }
 
@@ -464,6 +460,107 @@ fn on_a_project_sheet_the_project_check_alone_judges_names_that_reach_other_shee
     let mut app = behind_port_project(&dir, "I2C1_SDA", "SDA", "SDA_INT", Some("GND"));
     let reason = refusal(run(&mut app, "place_wire", &ends));
     assert!(reason.contains("reach it from other sheets"), "{reason}");
+}
+
+#[test]
+fn on_the_child_its_own_local_names_behind_a_port_stay_names() {
+    // Child net A carries the hierarchical SDA and the local SDA_INT, net B
+    // the local GND; the parent leaves SensorA.SDA unwired. Edited on the
+    // child, SDA_INT is an own name there ("play no part on the parent" only,
+    // 6761836527 point 6): A to B is a short, FOO on A a rename.
+    let dir = tempfile::tempdir().unwrap();
+    write(&dir.path().join("top.snxsch"), sensor_parent());
+    let mut child = child_with(&["SDA"]);
+    child.labels.push(net_label("SDA_INT", (10.16, 0.0)));
+    child.wires.push(wire((0.0, 20.32), (10.16, 20.32)));
+    child.labels.push(net_label("GND", (0.0, 20.32)));
+    write(&dir.path().join("c.snxsch"), child);
+    let mut app = open_child(&dir);
+    let ends = ["start=10.16,0", "end=10.16,20.32"];
+    let reason = refusal(run(&mut app, "place_wire", &ends));
+    assert!(reason.contains("reach it from other sheets"), "{reason}");
+    let label = ["at=5.08,0", "text=FOO"];
+    let reason = refusal(run(&mut app, "place_net_label", &label));
+    assert!(reason.contains("reach it from other sheets"), "{reason}");
+    answered_ok(run(
+        &mut app,
+        "place_wire",
+        &[ends[0], ends[1], "allow_merge=true"],
+    ));
+    let outcome = run(
+        &mut app,
+        "place_net_label",
+        &[label[0], label[1], "allow_merge=true"],
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
+}
+
+#[test]
+fn the_corpus_leaf_sheet_judges_its_own_local_names_like_a_loose_sheet() {
+    // The regression review's repro on the corpus project: on the leaf, VIN_INT
+    // beside the hierarchical VIN and OTHER on a second wire; joining the two,
+    // or naming the VIN net NEWNAME, is refused as on a loose sheet.
+    let corpus =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../signex-types/tests/corpus/schematic");
+    let pages = [
+        "hierarchy-root-two-children.snxsch",
+        "hierarchy-nested-middle.snxsch",
+        "hierarchy-child-leaf.snxsch",
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    for page in pages {
+        std::fs::copy(corpus.join(page), dir.path().join(page)).unwrap();
+    }
+    let _ = crate::diagnostics::init_logging();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &pages);
+    app.ui_state.snap_enabled = false;
+    app.open_or_focus_sheet_path(dir.path().join(pages[2]));
+    app.refresh_panel_ctx();
+    for (id, operands) in [
+        (
+            "place_wire",
+            ["start=12.7,12.7", "end=25.4,12.7", "allow_open=true"],
+        ),
+        (
+            "place_wire",
+            ["start=12.7,25.4", "end=25.4,25.4", "allow_open=true"],
+        ),
+    ] {
+        answered_ok(run(&mut app, id, &operands));
+    }
+    for label in [
+        ["at=20.32,12.7", "text=VIN_INT"],
+        ["at=20.32,25.4", "text=OTHER"],
+    ] {
+        assert_eq!(
+            run(&mut app, "place_net_label", &label),
+            CommandOutcome::Ran
+        );
+    }
+    let join = ["start=25.4,12.7", "end=25.4,25.4", "dry_run=true"];
+    let reason = refusal(run(&mut app, "place_wire", &join));
+    assert!(reason.contains("allow_merge"), "{reason}");
+    let rename = ["at=20.32,12.7", "text=NEWNAME"];
+    let reason = refusal(run(&mut app, "place_net_label", &rename));
+    assert!(reason.contains("allow_merge"), "{reason}");
+}
+
+#[test]
+fn an_incomplete_project_passed_with_allow_merge_reports_the_sheets_merged_names() {
+    // The child is missing; allow_merge places the short anyway, and the
+    // answer still lists what it merged, by the sheet's own check.
+    let dir = tempfile::tempdir().unwrap();
+    let mut top = parent();
+    top.labels.push(net_label("Y", (5.08, 0.0)));
+    write(&dir.path().join("top.snxsch"), top);
+    let mut app = open_project(&dir);
+    let ends = ["start=5.08,0", "end=10.16,0", "allow_merge=true"];
+    let CommandOutcome::Answered(report) = run(&mut app, "place_wire", &ends) else {
+        panic!("not answered");
+    };
+    let merged = report["merged"].as_array().cloned().unwrap_or_default();
+    assert!(merged.contains(&serde_json::json!("X")), "{report}");
+    assert!(merged.contains(&serde_json::json!("Y")), "{report}");
 }
 
 #[test]

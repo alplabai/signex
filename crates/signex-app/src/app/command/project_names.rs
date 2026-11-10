@@ -40,25 +40,26 @@ impl Signex {
 
     /// The nets of the project that the edit, which turned the edit target into
     /// `after` at `points`, merges or renames, with whether each needs
-    /// `allow_merge` (empty for a loose sheet, and for an edit whose nets reach
-    /// no other sheet: nothing there can carry a name from elsewhere). When the
-    /// project cannot be read completely and a net of the edit reaches another
-    /// sheet, its names are unknown: refused, unless `allow_merge`.
+    /// `allow_merge`; `None` when the project did not judge (a loose sheet, an
+    /// edit whose nets reach no other sheet, or an incomplete project passed
+    /// with `allow_merge`). When the project cannot be read completely and a
+    /// net of the edit reaches another sheet, its names are unknown: refused,
+    /// unless `allow_merge`.
     pub(super) fn project_name_changes(
         &self,
         after: &SchematicSheet,
         points: &[Point],
         allow_merge: bool,
-    ) -> Result<Vec<ProjectNetChange>, String> {
+    ) -> Result<Option<Vec<ProjectNetChange>>, String> {
         if !self.project_judges_names(after, points) {
-            return Ok(Vec::new());
+            return Ok(None);
         }
         let docs = &self.document_state;
         let Some(path) = docs.edit_path().map(std::path::Path::to_path_buf) else {
-            return Ok(Vec::new());
+            return Ok(None);
         };
         let Some(project) = docs.document_project(&path) else {
-            return Ok(Vec::new());
+            return Ok(None);
         };
         let fold = crate::app::state::project_case::fold_of(Some(project));
         let root = resolve_netlist_root_for(docs, &path);
@@ -79,7 +80,7 @@ impl Signex {
             && set.sheets.contains_key(&root);
         if !complete {
             return if allow_merge {
-                Ok(Vec::new())
+                Ok(None)
             } else {
                 Err(format!(
                     "the project cannot be read completely ({}), so the names on other sheets are unknown and this net reaches them; fix the project, or pass allow_merge=true to place it anyway (see docs/CLI.md, \"Why allow_merge\")",
@@ -88,7 +89,7 @@ impl Signex {
             };
         }
         let Some(current) = docs.edit_engine().map(|e| e.document().clone()) else {
-            return Ok(Vec::new());
+            return Ok(None);
         };
         // The walk keys a sheet by the spelling it first met (`Child.snxsch`
         // for a tab opened as `child.snxsch`): find it as the walk dedupes.
@@ -100,12 +101,14 @@ impl Signex {
             .cloned()
         else {
             return if allow_merge {
-                Ok(Vec::new())
+                Ok(None)
             } else {
                 Err("this sheet is not among the sheets the project reads, so the names on its net are unknown; pass allow_merge=true to place it anyway (see docs/CLI.md, \"Why allow_merge\")".to_string())
             };
         };
         let base = project.dir().to_path_buf();
+        // A child's names behind its port stay names on the edited sheet.
+        let edited = sheet_key_with(&spelled, Some(&base), fold);
         set.sheets.insert(spelled.clone(), current);
         let before = project_graph_quiet(&set.sheets, Some(&base), Some(&root), fold);
         set.sheets.insert(spelled, after.clone());
@@ -127,10 +130,11 @@ impl Signex {
             resolved: &after_graph.resolved,
             roots: &roots,
         };
-        Ok(signex_net::project_name_changes(
+        Ok(Some(signex_net::project_name_changes(
             &project_before,
             &project_after,
-        ))
+            &edited,
+        )))
     }
 }
 

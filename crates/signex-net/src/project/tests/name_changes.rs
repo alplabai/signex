@@ -59,6 +59,7 @@ fn changes(
             resolved: &ar,
             roots: &roots,
         },
+        &SheetKey::new("root"),
     )
 }
 
@@ -337,6 +338,7 @@ fn a_copy_of_a_hidden_local_name_changes_nothing() {
             resolved: &ar,
             roots: &roots,
         },
+        &SheetKey::new("c.sch"),
     );
     assert!(got.is_empty(), "{got:?}");
 }
@@ -375,6 +377,7 @@ fn a_local_name_the_edit_brings_behind_a_port_counts() {
             resolved: &ar,
             roots: &roots,
         },
+        &SheetKey::new("c.sch"),
     );
     assert!(got.iter().any(|c| c.needs_allow_merge), "{got:?}");
 }

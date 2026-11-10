@@ -103,12 +103,18 @@ pub struct ProjectNetChange {
 /// more named nets, or gained a name it did not carry. Whether one
 /// `needs_allow_merge` is the shared rule (`join_rule::needs_allow_merge`):
 /// a name a net already carries, alias included, is no change. A local label
-/// that was behind a hierarchical label BEFORE the edit plays no part on
-/// either side; one the edit itself brings behind a port still counts.
-pub fn project_name_changes(before: &ProjectGraph, after: &ProjectGraph) -> Vec<ProjectNetChange> {
+/// of another sheet than `edited` that was behind a hierarchical label BEFORE
+/// the edit plays no part on either side; on the edited sheet it stays a name,
+/// and one the edit itself brings behind a port still counts.
+pub fn project_name_changes(
+    before: &ProjectGraph,
+    after: &ProjectGraph,
+    edited: &SheetKey,
+) -> Vec<ProjectNetChange> {
     let before = stitch_project(before, Want::Members).members;
     let after = stitch_project(after, Want::Members).members;
-    let hidden = behind_port(&before);
+    let mut hidden = behind_port(&before);
+    hidden.retain(|(sheet, ..)| sheet != edited);
     let before = named_nets(before, &hidden);
     let mut owner: HashMap<&NamedId, usize> = HashMap::new();
     for (index, net) in before.iter().enumerate() {

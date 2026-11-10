@@ -202,7 +202,8 @@ impl Signex {
         );
         // On a project sheet whose net reaches other sheets the project check
         // alone judges names; the per-sheet verdict only for the rest.
-        let short = intent.short() && !self.project_judges_names(&after, &[start, end]);
+        let sheet_short = intent.short();
+        let short = sheet_short && !self.project_judges_names(&after, &[start, end]);
         let names = intent.merged_names();
         let end_names = intent.end_names.clone();
         let WireIntent {
@@ -233,8 +234,9 @@ impl Signex {
             ));
         }
         // Names on other sheets: a name that reaches the net from there counts.
-        let project =
-            self.project_name_changes(&after, &[start, end], flag(args, "allow_merge"))?;
+        let judged = self.project_name_changes(&after, &[start, end], flag(args, "allow_merge"))?;
+        let project_judged = judged.is_some();
+        let project = judged.unwrap_or_default();
         let rename = needing_merge(&project);
         if let Some(change) = rename
             && !flag(args, "allow_merge")
@@ -249,12 +251,13 @@ impl Signex {
                 "a pin, wire, junction or label",
             ));
         }
-        let merged = if short {
-            names
-        } else {
-            rename
-                .map(|change| change.names.clone())
-                .unwrap_or_default()
+        // The project's verdict when it judged; else (a loose sheet, a net
+        // reaching no other sheet, an incomplete project passed with
+        // allow_merge) the sheet's own.
+        let merged = match (project_judged, rename) {
+            (true, Some(change)) => change.names.clone(),
+            (false, _) if sheet_short => names,
+            _ => Vec::new(),
         };
         let report = json!({
             "ends": ends_json(args, start, end),
@@ -295,8 +298,9 @@ impl Signex {
             ));
         }
         // Member nets joined across sheets by the run, with names that differ.
-        let project =
-            self.project_name_changes(&after, &[start, end], flag(args, "allow_merge"))?;
+        let project = self
+            .project_name_changes(&after, &[start, end], flag(args, "allow_merge"))?
+            .unwrap_or_default();
         if let Some(change) = needing_merge(&project)
             && !flag(args, "allow_merge")
         {
