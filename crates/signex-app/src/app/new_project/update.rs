@@ -43,7 +43,12 @@ impl Signex {
         self.interaction_state.editing_text = None;
         self.interaction_state.context_menu = None;
         if self.ui_state.new_project.is_some() {
-            return operation::focus(NAME_INPUT_ID.clone());
+            // Already open: raise its window and focus the name field.
+            return Task::batch([
+                self.detached_window_of(crate::app::state::ModalId::NewProject)
+                    .map_or_else(Task::none, iced::window::gain_focus),
+                operation::focus(NAME_INPUT_ID.clone()),
+            ]);
         }
         let mut state = NewProjectState::new(self.default_project_location());
         state.name = SUGGESTED_NAME.to_string();
@@ -144,6 +149,9 @@ impl Signex {
                     .as_ref()
                     .is_some_and(|s| s.creating.is_some()) =>
             {
+                crate::diagnostics::log_info(
+                    "New Project: cancel ignored, the project is still being created",
+                );
                 Task::none()
             }
             M::CancelRequested => {

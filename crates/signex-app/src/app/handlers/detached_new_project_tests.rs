@@ -73,8 +73,16 @@ fn file_new_project_opens_a_native_modal_window_and_not_the_overlay() {
         Some(window),
         "the main window is locked while the dialog is open"
     );
-    // A second File > New Project raises the same window, it opens no second.
-    let _ = app.update(Message::Menu(MenuMessage::NewProject));
+    // The native menu locks too: a model row chosen now is refused.
+    assert!(app.has_locking_confirm_modal());
+    let _ = app.handle_native_menu_row_chosen(MenuMessage::command("show_current_command_hotkeys"));
+    assert!(!app.ui_state.keyboard_shortcuts_open, "the row is refused");
+    // A second File > New Project raises the same window (a gain-focus
+    // action, which the headless driver counts as dropped), opens no second.
+    let task = app.update(Message::Menu(MenuMessage::NewProject));
+    let mut driver = crate::task_driver::TaskDriver::new();
+    driver.settle(&mut app, task).expect("settled");
+    assert_eq!(driver.dropped_window_actions(), 1, "one gain_focus");
     let _ = app.sync_detached_modals();
     assert_eq!(app.ui_state.windows.len(), 1);
     // The main window takes no ordinary key while locked.
@@ -132,6 +140,58 @@ fn closing_the_window_while_create_writes_keeps_the_draft_and_the_window_returns
     assert!(app.detached_window_of(ModalId::NewProject).is_some());
 }
 
+#[test]
+fn a_window_close_or_esc_while_create_writes_is_refused_and_logged_once() {
+    for via_esc in [false, true] {
+        let (mut app, _main) = app_with_dialog();
+        let window = app.detached_window_of(ModalId::NewProject).expect("window");
+        app.ui_state.new_project.as_mut().expect("draft").creating = Some("/p/x.snxprj".into());
+        let needle = "New Project: cancel ignored";
+        let before = crate::diagnostics::logged_count(needle);
+        let _ = app.update(if via_esc {
+            Message::Input(InputMsg::EscapePressed {
+                window: Some(window),
+            })
+        } else {
+            Message::Window(WindowMsg::WindowCloseRequested(window))
+        });
+        let _ = app.sync_detached_modals();
+        let draft = app.ui_state.new_project.as_ref().expect("draft kept");
+        assert!(draft.creating.is_some(), "esc: {via_esc}");
+        assert_eq!(app.detached_window_of(ModalId::NewProject), Some(window));
+        assert_eq!(app.ui_state.windows.len(), 1, "no second window");
+        assert_eq!(
+            crate::diagnostics::logged_count(needle),
+            before + 1,
+            "the refusal is logged, esc: {via_esc}"
+        );
+    }
+}
+
+#[test]
+fn a_quit_prompt_outranks_new_project_for_the_lock_and_for_esc() {
+    let (mut app, main) = app_with_dialog();
+    let dialog = app.detached_window_of(ModalId::NewProject).expect("window");
+    app.document_state
+        .mark_document_dirty(std::path::Path::new("/p/board.snxsch"));
+    let _ = app.update(Message::Window(WindowMsg::WindowCloseRequested(main)));
+    let _ = app.sync_detached_modals();
+    let quit = app
+        .detached_window_of(ModalId::AppQuitConfirm)
+        .expect("quit prompt window");
+    assert_eq!(app.locking_confirm_window(), Some(quit));
+    // Esc from the main window answers the quit prompt, not New Project.
+    let _ = app.update(Message::Input(InputMsg::EscapePressed {
+        window: Some(main),
+    }));
+    assert!(
+        app.ui_state.app_quit_confirm.is_none(),
+        "quit prompt cancelled"
+    );
+    assert!(app.ui_state.new_project.is_some(), "New Project untouched");
+    assert_eq!(app.detached_window_of(ModalId::NewProject), Some(dialog));
+}
+
 /// With Customize open and a tall stack-up, the header-less card still has
 /// its Cancel / Create project footer inside the window at any size.
 #[test]
@@ -141,10 +201,14 @@ fn the_footer_stays_inside_the_window_at_any_size() {
     state.customize_open = true;
     state.step_layers(30);
     let window = app.detached_window_of(ModalId::NewProject).expect("window");
+    // A drag below the minimum is stopped by the window's `min_size`, so the
+    // narrowest and shortest windows are that minimum.
+    let min = super::erc::modal_min_size(ModalId::NewProject).expect("a min size");
     for (w, h) in [
         (860.0, 700.0),
         (860.0, 420.0),
-        (700.0, 300.0),
+        (min.width, min.height),
+        (min.width, 700.0),
         (1400.0, 900.0),
     ] {
         let size = iced::Size::new(w, h);

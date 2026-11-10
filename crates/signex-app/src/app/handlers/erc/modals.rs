@@ -550,6 +550,12 @@ pub(crate) fn modal_is_fixed(modal: ModalId) -> bool {
     }
 }
 
+/// The smallest a resizable dialog window may be dragged to, in the units of
+/// [`modal_size`]: room for the left column, the preview pane and the footer.
+pub(crate) fn modal_min_size(modal: ModalId) -> Option<iced::Size> {
+    (modal == ModalId::NewProject).then(|| iced::Size::new(760.0, 380.0))
+}
+
 /// The settings `modal`'s window opens with: its size, and fixed (not
 /// resizable, not minimisable) when [`modal_is_fixed`].
 pub(crate) fn modal_window_settings(modal: ModalId, size: iced::Size) -> iced::window::Settings {
@@ -557,6 +563,7 @@ pub(crate) fn modal_window_settings(modal: ModalId, size: iced::Size) -> iced::w
     iced::window::Settings {
         resizable: !fixed,
         minimizable: !fixed,
+        min_size: modal_min_size(modal),
         ..detached_modal_settings(size)
     }
 }

@@ -171,6 +171,7 @@ impl OpenOverlays {
             || self.app_quit_confirm_open
             || self.project_close_confirm_open
             || self.create_child_sheet_confirm_open
+            || self.new_project_open
             || self.rename_open
             || self.remove_open
             || self.annotate_reset_confirm_open

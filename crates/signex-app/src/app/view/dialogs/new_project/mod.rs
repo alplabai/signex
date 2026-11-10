@@ -58,8 +58,9 @@ impl Signex {
         self.view_new_project_card(true)
     }
 
-    /// `windowed`: header slot empty, card and body `Fill` the window so the
-    /// header and footer stay put and only the body scrolls.
+    /// The body always `Fill`s between the header and the footer, so only it
+    /// scrolls. `windowed`: header slot empty and the card fills the window;
+    /// otherwise a fixed-size card in the main window.
     fn view_new_project_card(&self, windowed: bool) -> Element<'_, Message> {
         let Some(state) = self.ui_state.new_project.as_ref() else {
             return container(Space::new()).boxed();
@@ -92,12 +93,7 @@ impl Signex {
             .padding([SP.xl + SP.s, SP.xl + SP.m]),
         )
         .width(Length::Fill);
-        let body_h = if windowed {
-            Length::Fill
-        } else {
-            Length::Shrink
-        };
-        let body = row![left, preview::pane(state, i18n, tokens).map(np)].height(body_h);
+        let body = row![left, preview::pane(state, i18n, tokens).map(np)].height(Length::Fill);
         let hint = text(t!(i18n, ids::DIALOG_NEW_PROJECT_FOOTER_HINT))
             .size(TS.body)
             .color(tokens::muted_text(tokens))
@@ -131,9 +127,11 @@ impl Signex {
         let (width, height) = if windowed {
             (Length::Fill, Length::Fill)
         } else {
-            let w =
-                super::widgets::modal_card_width(self.ui_state.window_size, sizes::NEW_PROJECT.0);
-            (Length::Fixed(w), Length::Shrink)
+            // The fallback card has the height the wrapper centres on, so the
+            // body scrolls inside it and the footer stays on the card.
+            let (w, h) =
+                super::widgets::fit_modal_size(self.ui_state.window_size, sizes::NEW_PROJECT);
+            (Length::Fixed(w), Length::Fixed(h))
         };
         container(column![header, body, footer].width(width).height(height))
             .width(width)
