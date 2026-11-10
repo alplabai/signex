@@ -53,6 +53,16 @@ impl Signex {
         if !self.project_judges_names(after, points) {
             return Ok(None);
         }
+        self.project_name_changes_of(after, allow_merge)
+    }
+
+    /// [`Self::project_name_changes`] for any edit of the target, wherever on
+    /// the sheet: a sheet symbol brings its file's nets in (#2199).
+    pub(super) fn project_name_changes_of(
+        &self,
+        after: &SchematicSheet,
+        allow_merge: bool,
+    ) -> Result<Option<Vec<ProjectNetChange>>, String> {
         let docs = &self.document_state;
         let Some(path) = docs.edit_path().map(std::path::Path::to_path_buf) else {
             return Ok(None);

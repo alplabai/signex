@@ -203,12 +203,14 @@ pub const PART: &[Operand] = &[
     optional("document", OperandKind::Document),
 ];
 /// A sheet symbol between two corners, referring to its child `file` (relative
-/// to the sheet, inside the project folder; never written).
+/// to the sheet, inside the project folder; never written). `allow_merge` lets
+/// the nets the file brings in short or rename project nets (#2199).
 pub const SHEET_SYMBOL: &[Operand] = &[
     required("start", OperandKind::Point),
     required("end", OperandKind::Point),
     required("name", OperandKind::Text),
     required("file", OperandKind::Text),
+    optional("allow_merge", OperandKind::Bool),
     optional("document", OperandKind::Document),
 ];
 /// An entry on the border of the sheet symbol named `sheet`.

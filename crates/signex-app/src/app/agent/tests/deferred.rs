@@ -113,6 +113,41 @@ fn a_waiting_reply_reports_only_what_its_own_edit_did() {
     assert!(!lines.contains("pid 42990"), "{lines}");
 }
 
+/// Turning agent connections off while a request waits for its reads stops
+/// it: the reply is refused, as a new request would be, and nothing applies.
+#[test]
+fn a_waiting_request_is_refused_once_agent_connections_are_turned_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_in(dir.path());
+    let file = "b.snxsch";
+    let doc = dir.path().join(file).display().to_string();
+    let started = revision_in(&app, dir.path(), file);
+    let edits = json!([{"id": "place_sheet_symbol", "args": {
+        "start": "100,100", "end": "120,120", "name": "Child", "file": "child.snxsch"
+    }}]);
+    let text = line(
+        &app,
+        "apply_edits",
+        json!({"document": doc, "expect_revision": started, "edits": edits}),
+    );
+    let (reply, mut answer) = AgentReply::channel();
+    let call = AgentCall {
+        pid: Some(4245),
+        input: Input::Line(text),
+        reply,
+    };
+    let task = app.update(Message::Agent(AgentMsg::Request(call)));
+    app.ui_state.agent_connections_enabled = false;
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the reads land");
+    let reply = answer.try_recv().unwrap().expect("answered");
+    let reply: serde_json::Value = serde_json::from_str(&reply).expect("JSON");
+    assert_eq!(reply["status"], "refused", "{reply}");
+    assert_eq!(reply["reason"], "agent connections are off", "{reply}");
+    assert_eq!(revision_in(&app, dir.path(), file), started);
+}
+
 fn revision_in(app: &crate::app::Signex, dir: &std::path::Path, file: &str) -> u64 {
     app.document_state.engines[&dir.join(file)].revision()
 }

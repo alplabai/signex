@@ -31,7 +31,10 @@ impl Signex {
         // (its first pass was refused with nothing applied).
         let mark = crate::diagnostics::newest_entry_id();
         let before = self.change_snapshot();
-        let (outcome, task) = self.run_with_reads(loaded);
+        let (outcome, task) = match self.agent_gate_closed(ticket, &loaded) {
+            Some(reason) => (CommandOutcome::Disabled { reason }, Task::none()),
+            None => self.run_with_reads(loaded),
+        };
         match self.agent.waiting.remove(&ticket) {
             Some(waiting) => {
                 let verdict = outcome_verdict(&id, outcome, None);
@@ -52,6 +55,21 @@ impl Signex {
             }
         }
         task
+    }
+
+    /// Why a socket request waiting on `ticket` may no longer run: the gate
+    /// a new request meets (agent connections on and listening, the document
+    /// one of an open project's), checked again when its reads land. `None`
+    /// for a headless run's edit, which has no socket.
+    fn agent_gate_closed(&mut self, ticket: u64, loaded: &ReadsLoaded) -> Option<String> {
+        if !self.agent.waiting.contains_key(&ticket) {
+            return None;
+        }
+        if !self.ui_state.agent_connections_enabled || self.agent.endpoint.is_none() {
+            return Some("agent connections are off".to_string());
+        }
+        self.check_agent_document(&loaded.command, &loaded.args)
+            .err()
     }
 
     /// The outcome of the edit waiting on `ticket`, once it ran.

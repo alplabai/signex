@@ -533,7 +533,7 @@ impl Signex {
     /// A command that is not a query acts on the document it names, one of an
     /// open project's, and never on the person's active one. Closing it must
     /// not move the person's tab either.
-    fn check_agent_document(
+    pub(super) fn check_agent_document(
         &mut self,
         command: &AppCommandId,
         args: &CommandArgs,

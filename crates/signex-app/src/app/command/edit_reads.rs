@@ -67,7 +67,7 @@ impl std::fmt::Debug for EditReads {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "EditReads {{ project: {}, parts: {}, children: {}, links: {} }}",
+            "EditReads {{ project: {}, parts: {}, children: {}, escapes: {} }}",
             self.project.is_some(),
             self.parts.len(),
             self.children.len(),
@@ -411,25 +411,8 @@ impl Signex {
         target: &Path,
         plan: &mut ReadPlan,
     ) {
-        let docs = &self.document_state;
         match id {
-            "place_component" => {
-                let named = text(args, "library").ok().zip(text(args, "part").ok());
-                let Some((library, part)) = named else { return };
-                let Ok(found) = self.open_library_named(&library) else {
-                    return;
-                };
-                let Ok((table, row)) = super::part_operands::library_row(found, &part) else {
-                    return;
-                };
-                plan.parts.push((found.root.clone(), table, row));
-                plan.open_libraries = self
-                    .library
-                    .open_libraries
-                    .iter()
-                    .map(|lib| (lib.library_id, lib.root.clone()))
-                    .collect();
-            }
+            "place_component" => self.plan_part_read(args, plan),
             "place_sheet_symbol" => {
                 if let Ok((dir, path, _)) =
                     text(args, "file").and_then(|f| self.child_file_target(&f))
@@ -438,21 +421,49 @@ impl Signex {
                     plan.links.push((dir, path));
                 }
             }
-            "sync_sheet_pins" => {
-                let Ok(name) = text(args, "sheet") else {
-                    return;
-                };
-                let Some(file) = self.planned_child_file(&name, list) else {
-                    return;
-                };
-                let dir = target.parent().unwrap_or_else(|| Path::new(""));
-                if let Ok(path) = resolve_child_reference_quiet(dir, &file)
-                    && !docs.engines.contains_key(&path)
-                {
-                    plan.children.push(path);
-                }
-            }
+            "sync_sheet_pins" => self.plan_child_read(args, list, target, plan),
             _ => {}
+        }
+    }
+
+    /// The library row a `place_component` names, when it names one.
+    fn plan_part_read(&self, args: &CommandArgs, plan: &mut ReadPlan) {
+        let named = text(args, "library").ok().zip(text(args, "part").ok());
+        let Some((library, part)) = named else { return };
+        let Ok(found) = self.open_library_named(&library) else {
+            return;
+        };
+        let Ok((table, row)) = super::part_operands::library_row(found, &part) else {
+            return;
+        };
+        plan.parts.push((found.root.clone(), table, row));
+        plan.open_libraries = self
+            .library
+            .open_libraries
+            .iter()
+            .map(|lib| (lib.library_id, lib.root.clone()))
+            .collect();
+    }
+
+    /// The closed child file a `sync_sheet_pins` reads.
+    fn plan_child_read(
+        &self,
+        args: &CommandArgs,
+        list: &[(AppCommandId, CommandArgs)],
+        target: &Path,
+        plan: &mut ReadPlan,
+    ) {
+        let Ok(name) = text(args, "sheet") else {
+            return;
+        };
+        let Some(file) = self.planned_child_file(&name, list) else {
+            return;
+        };
+        let dir = target.parent().unwrap_or_else(|| Path::new(""));
+        if let Ok(path) = resolve_child_reference_quiet(dir, &file)
+            && !self.document_state.engines.contains_key(&path)
+        {
+            plan.children.push(path);
         }
     }
 

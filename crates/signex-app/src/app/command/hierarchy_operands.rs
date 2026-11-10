@@ -18,6 +18,7 @@ use super::placement_operands::{run_edit, text};
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::handlers::canvas::{reference_from, resolve_new_sheet_path};
 use crate::app::mutation_gateway::CommandOutcome as Applied;
+use crate::app::project_sheets::resolve_child_reference_quiet;
 use crate::app::sheet_hierarchy::{
     CaseFold, SheetHierarchy, SheetNode, SheetNodeKind, normalised_key,
 };
@@ -25,7 +26,8 @@ use crate::app::{Message, Signex};
 
 type Ran = (CommandOutcome, Task<Message>);
 
-/// `place_sheet_symbol start=x,y end=x,y name=.. file=.. [document=..]`.
+/// `place_sheet_symbol start=x,y end=x,y name=.. file=.. [allow_merge=..]
+/// [document=..]`.
 pub(super) fn place_sheet_symbol(app: &mut Signex, args: &CommandArgs) -> Ran {
     run_edit(app, args, |app| app.place_sheet_symbol_from_operands(args))
 }
@@ -158,6 +160,11 @@ impl Signex {
                 "`file` is an ancestor of this sheet: a sheet cannot contain itself".to_string(),
             );
         }
+        if self.file_reaches(&path, sheet, fold)? {
+            return Err(
+                "`file` places this sheet below it: a sheet cannot contain itself".to_string(),
+            );
+        }
         Ok(reference)
     }
 
@@ -187,10 +194,48 @@ impl Signex {
         Ok(above)
     }
 
-    fn place_sheet_symbol_from_operands(
-        &mut self,
-        args: &CommandArgs,
-    ) -> Result<CommandOutcome, String> {
+    /// Whether the file at `file` places `sheet` somewhere below it: the walk
+    /// down its child references, over the open sheets and the project as the
+    /// edit read it (the file's subtree is read with it, `edit_reads`).
+    fn file_reaches(&self, file: &Path, sheet: &Path, fold: CaseFold) -> Result<bool, String> {
+        let docs = &self.document_state;
+        let set = match docs.document_project(sheet) {
+            Some(_) => Some(self.edit_project_set(sheet)?),
+            None => None,
+        };
+        let content = |path: &Path| {
+            docs.engines
+                .get(path)
+                .map(signex_engine::Engine::document)
+                .or_else(|| set.as_ref().and_then(|s| s.sheets.get(path)))
+        };
+        let wanted = normalised_key(sheet, fold);
+        let mut seen = HashSet::new();
+        let mut queue = vec![file.to_path_buf()];
+        while let Some(path) = queue.pop() {
+            if !seen.insert(normalised_key(&path, fold)) {
+                continue;
+            }
+            let Some(content) = content(&path) else {
+                continue;
+            };
+            let dir = path.parent().unwrap_or_else(|| Path::new(""));
+            for child in &content.child_sheets {
+                let Ok(next) = resolve_child_reference_quiet(dir, &child.filename) else {
+                    continue;
+                };
+                if normalised_key(&next, fold) == wanted {
+                    return Ok(true);
+                }
+                queue.push(next);
+            }
+        }
+        Ok(false)
+    }
+
+    /// The sheet symbol the operands describe, checked: corners, name and
+    /// file, none taken on this sheet.
+    fn new_sheet_symbol(&self, args: &CommandArgs) -> Result<ChildSheet, String> {
         refuse_pin_ref(args, "start")?;
         refuse_pin_ref(args, "end")?;
         let (start, end) = (
@@ -223,13 +268,59 @@ impl Signex {
                 signex_engine::MIN_CHILD_SHEET_EDGE_MM
             ));
         };
-        let child_sheet = ChildSheet {
-            filename: filename.clone(),
+        Ok(ChildSheet {
+            filename,
             ..child_sheet
+        })
+    }
+
+    /// The name rule (#2199 comment 6761836527) for the nets a sheet symbol's
+    /// file brings into the project: a short or a rename of a project net is
+    /// refused unless `allow_merge=true`. A file not there yet brings none.
+    fn refuse_child_names(&self, command: &Command, file: &str) -> Result<(), String> {
+        let docs = &self.document_state;
+        let sheet = docs.edit_path().ok_or("no schematic is open")?;
+        if docs.document_project(sheet).is_none() {
+            return Ok(());
+        }
+        let (_, path, _) = self.child_file_target(file)?;
+        let set = self.edit_project_set(sheet)?;
+        let fold = set.fold;
+        let key = normalised_key(&path, fold);
+        if set.absent.iter().any(|p| normalised_key(p, fold) == key) {
+            return Ok(());
+        }
+        let engine = docs.edit_engine().ok_or("no schematic is open")?;
+        let after = Self::sheet_after(engine.document(), std::slice::from_ref(command))?;
+        let changes = self
+            .project_name_changes_of(&after, false)?
+            .unwrap_or_default();
+        let Some(change) = super::project_names::needing_merge(&changes) else {
+            return Ok(());
         };
+        let at = match command {
+            Command::PlaceChildSheet { child_sheet } => child_sheet.position,
+            _ => signex_types::schematic::Point::new(0.0, 0.0),
+        };
+        Err(super::project_names::project_change_refusal(
+            "sheet symbol",
+            at,
+            &change.names,
+        ))
+    }
+
+    fn place_sheet_symbol_from_operands(
+        &mut self,
+        args: &CommandArgs,
+    ) -> Result<CommandOutcome, String> {
+        let child_sheet = self.new_sheet_symbol(args)?;
         let (id, at, size) = (child_sheet.uuid, child_sheet.position, child_sheet.size);
+        let (name, filename) = (child_sheet.name.clone(), child_sheet.filename.clone());
         let command = Command::PlaceChildSheet { child_sheet };
         self.refuse_contacts(std::slice::from_ref(&command), "sheet symbol")?;
+        if !matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true))) {
+            self.refuse_child_names(&command, &text(args, "file")?)?;
+        }
         let (outcome, reason) = self.apply_engine_commands_reporting(vec![command], false, true);
         applied(outcome, reason)?;
         Ok(CommandOutcome::Answered(json!({

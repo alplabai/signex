@@ -53,6 +53,8 @@ pub(crate) mod queries;
 #[cfg(test)]
 mod sheet_entry_ref_tests;
 #[cfg(test)]
+mod sheet_symbol_check_tests;
+#[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;
 #[cfg(test)]
