@@ -34,10 +34,12 @@ pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
             "`{id}` takes a file path; the agent channel does not read or write a path it names"
         ));
     }
+    // A required `document`: a placement's optional one does not open it, so a
+    // placement stays reachable only through `apply_edits` (#2199).
     let names_document = meta
         .operands
         .iter()
-        .any(|op| op.name == "document" && op.kind == OperandKind::Document);
+        .any(|op| op.name == "document" && op.kind == OperandKind::Document && op.required);
     if !names_document {
         return Some(format!(
             "`{id}` does not name a document, so it is not on the agent channel"
@@ -97,6 +99,41 @@ mod tests {
                 "`{name}` names no document, so it needs no entry here"
             );
             assert!(meta.headless_refusal().is_none(), "`{name}` is window-only");
+        }
+    }
+
+    /// A placement takes an optional `document` (#2199); that does not put it
+    /// on the agent channel, where it stays reachable through `apply_edits`.
+    #[test]
+    fn the_placements_stay_off_the_channel_though_they_take_a_document() {
+        for name in [
+            "place_net_label",
+            "place_local_net_label",
+            "place_global_label",
+            "place_hierarchical_label",
+            "place_power_symbol",
+            "place_no_connect",
+            "place_junction",
+            "place_no_erc",
+            "place_wire",
+            "draw_wire",
+            "place_bus",
+            "draw_bus",
+            "place_text",
+            "place_text_string",
+            "draw_line",
+            "draw_graphic_line",
+            "draw_rectangle",
+        ] {
+            let meta = metadata_for(&id(name)).expect("in the catalog");
+            assert!(
+                meta.operands
+                    .iter()
+                    .any(|op| op.name == "document" && !op.required),
+                "`{name}` takes an optional document"
+            );
+            let why = refusal(&id(name)).unwrap_or_else(|| panic!("`{name}` was accepted"));
+            assert!(why.contains("does not name a document"), "{name}: {why}");
         }
     }
 

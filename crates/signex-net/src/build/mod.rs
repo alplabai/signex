@@ -33,6 +33,16 @@ use gate::touching_port_conflicts;
 pub use pin_contacts::SheetPinContacts;
 mod segment_index;
 pub use segment_index::SegmentIndex;
+mod wire_intent;
+pub use wire_intent::{
+    EndSpec, ExtraItem, ExtraKind, IntentNet, RunEnd, WireIntent, has_connection_anchor,
+    wire_intent,
+};
+mod placement_intent;
+pub(crate) use placement_intent::name_changes;
+pub use placement_intent::{
+    NameChange, PlacementIntent, net_reaches_other_sheets, placement_intent,
+};
 
 use crate::uf::{Key, find as uf_find, union as uf_union};
 

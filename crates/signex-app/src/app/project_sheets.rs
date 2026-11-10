@@ -281,6 +281,25 @@ pub(crate) fn assemble_project_sheets(
         pages,
         root_path,
         fold,
+        true,
+    )
+}
+
+/// [`assemble_project_sheets`] for a check that only asks: a refused child
+/// reference is in [`ProjectSheetSet::refused`] but raises no Messages line.
+/// Only the sheets the walk reaches are cloned out of the open engines.
+pub(crate) fn assemble_project_sheets_quiet(
+    document_state: &DocumentState,
+    pages: &[PathBuf],
+    root_path: &Path,
+    fold: CaseFold,
+) -> ProjectSheetSet {
+    assemble_project_sheets_with(
+        &|p| document_state.engines.get(p).map(|e| e.document().clone()),
+        pages,
+        root_path,
+        fold,
+        false,
     )
 }
 
@@ -369,7 +388,7 @@ pub(crate) fn assemble_project_sheets_from(
     root_path: &Path,
     fold: CaseFold,
 ) -> ProjectSheetSet {
-    assemble_project_sheets_with(&|p| open.get(p).cloned(), pages, root_path, fold)
+    assemble_project_sheets_with(&|p| open.get(p).cloned(), pages, root_path, fold, true)
 }
 
 /// The one walk, started from `seeds` instead of a project's pages: every sheet
@@ -386,7 +405,7 @@ pub(crate) fn assemble_from_seeds(
     let mut set = ProjectSheetSet::empty();
     set.fold = fold;
     let mut visited: HashSet<String> = skip.iter().map(|p| path_key_with(p, fold)).collect();
-    walk(open, seeds, &mut visited, &mut set, fold);
+    walk(open, seeds, &mut visited, &mut set, fold, true);
     set
 }
 
@@ -395,6 +414,7 @@ fn assemble_project_sheets_with(
     pages: &[PathBuf],
     root_path: &Path,
     fold: CaseFold,
+    log_refusals: bool,
 ) -> ProjectSheetSet {
     let mut set = ProjectSheetSet {
         sheets: HashMap::new(),
@@ -416,10 +436,11 @@ fn assemble_project_sheets_with(
         &mut visited,
         &mut set,
         fold,
+        log_refusals,
     );
     // Then the declared pages and their own subtrees, so ERC and the children
     // map see the whole project even where the hierarchy does not connect it.
-    walk(open, pages, &mut visited, &mut set, fold);
+    walk(open, pages, &mut visited, &mut set, fold, log_refusals);
 
     set.pages_outside_the_hierarchy = pages
         .iter()
@@ -438,6 +459,7 @@ fn walk(
     visited: &mut HashSet<String>,
     set: &mut ProjectSheetSet,
     fold: CaseFold,
+    log_refusals: bool,
 ) -> HashSet<String> {
     let mut loaded: HashSet<String> = HashSet::new();
     let mut queue: Vec<PathBuf> = seeds.to_vec();
@@ -474,7 +496,9 @@ fn walk(
                 Ok(resolved) => queue.push(resolved),
                 Err(ChildReferenceRefusal::Empty) => {}
                 Err(refusal) => {
-                    log_refusal(&refusal);
+                    if log_refusals {
+                        log_refusal(&refusal);
+                    }
                     if let ChildReferenceRefusal::Escapes { reference, .. } = refusal {
                         set.refused.push(RefusedChild {
                             parent: path.clone(),
@@ -655,6 +679,27 @@ pub(crate) fn project_graph_with(
     root: Option<&Path>,
     fold: CaseFold,
 ) -> AssembledGraph {
+    project_graph_inner(sheets, base_dir, root, fold, true)
+}
+
+/// [`project_graph_with`] for a check that only asks: a refused child
+/// reference raises no Messages line.
+pub(crate) fn project_graph_quiet(
+    sheets: &HashMap<PathBuf, SchematicSheet>,
+    base_dir: Option<&Path>,
+    root: Option<&Path>,
+    fold: CaseFold,
+) -> AssembledGraph {
+    project_graph_inner(sheets, base_dir, root, fold, false)
+}
+
+fn project_graph_inner(
+    sheets: &HashMap<PathBuf, SchematicSheet>,
+    base_dir: Option<&Path>,
+    root: Option<&Path>,
+    fold: CaseFold,
+    log_refusals: bool,
+) -> AssembledGraph {
     let mut keyed_sheets: HashMap<signex_net::SheetKey, SchematicSheet> = HashMap::new();
     let mut key_to_path: HashMap<signex_net::SheetKey, PathBuf> = HashMap::new();
     let mut issues: Vec<signex_net::StitchIssue> = Vec::new();
@@ -695,7 +740,12 @@ pub(crate) fn project_graph_with(
         let dir = parent_path.parent().unwrap_or_else(|| Path::new(""));
         let mut submap: HashMap<String, signex_net::SheetKey> = HashMap::new();
         for cs in &sheet.child_sheets {
-            let Some(child_path) = resolve_child_reference(dir, &cs.filename) else {
+            let child_path = if log_refusals {
+                resolve_child_reference(dir, &cs.filename)
+            } else {
+                resolve_child_reference_quiet(dir, &cs.filename).ok()
+            };
+            let Some(child_path) = child_path else {
                 continue;
             };
             let child_key = sheet_key_with(&child_path, base_dir, fold);

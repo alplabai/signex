@@ -28,6 +28,7 @@ Signex".
 | `--headless` | only run headless; fail (exit 2) if a running Signex has the project open |
 | `--keep-going` | run the rest after a refused or failed command (default: stop at the first) |
 | `--save` | allow commands that write files (capability `save`) |
+| `--dry-run` | run every command with `dry_run=true`: a wire or bus run reports and changes nothing. A read-only query and `open_document` run as given; any other command without that operand is refused, and so is `--dry-run` together with `--save` or `--allow save`. `--dry-run` cannot dry-run a placement in an attached run (placements reach a running Signex only through `apply_edits`, which has no `dry_run` operand); put `dry_run=true` on a wire or bus edit inside `apply_edits` instead (the other placements take no `dry_run`) |
 | `--allow <caps>` | also allow capabilities (comma list) |
 | `--allow-path <dir>` | also allow paths inside `<dir>` (repeatable) |
 | `--max-line-bytes`, `--max-commands`, `--max-file-bytes` | tighten or raise the input limits |
@@ -66,7 +67,8 @@ one the netlist prints, matched exactly. An unknown or ambiguous designator, a
 power port, a document that is not a schematic or one that cannot be read, or
 a project whose sheet hierarchy is not read yet, is refused with the reason.
 `open_document` and `new_document` answer with the new document's
-`{id, path, kind}`.
+`{id, path, kind}`. A wire or bus run from operands also answers (see "Wire
+intent").
 
 `apply_edits` takes a list of edit commands as its `edits` argument and
 applies them to one sheet as one undo step, and `revert` takes that step back;
@@ -82,7 +84,7 @@ both answer in `data`. See [AGENT_EDITS.md](AGENT_EDITS.md).
 | `run`, `seq` | the run id (also in the audit log) and the line's 1-based place in the run |
 | `mode` | where the command ran: `headless` (this process, no window) or `attached` (a running Signex, below) |
 | `id` | the command id, `null` when the line was not a command |
-| `status` | `ran`, `answered` (a query; the answer is in `data`), `refused` (nothing ran; `reason` says why) or `failed` (it ran and did not succeed; `reason`) |
+| `status` | `ran`, `answered` (a query, or a wire or bus run; the answer is in `data`), `refused` (nothing ran; `reason` says why) or `failed` (it ran and did not succeed; `reason`) |
 | `messages` | what the app logged to its Messages panel during the command |
 | `changed` | documents whose content or unsaved state differs after the command |
 
@@ -94,6 +96,268 @@ already exists is `refused` without `overwrite: true`. `save_document_as` takes
 or new that makes nothing, with an error notice, is `failed` with that notice.
 A command with no operand that opens a dialog is `refused`, never `ran`, when
 the dialog cannot be answered.
+
+## Naming the sheet of a placement
+
+The placements (`place_net_label` and the other labels, `place_power_symbol`,
+`place_junction`, `place_no_connect`, `place_no_erc`, `place_wire`, `draw_wire`,
+`place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
+`draw_graphic_line`, `draw_rectangle`) take an optional `document`, an id or a
+path as for `apply_edits`. Given, the command runs on that sheet and never on
+the active tab: pin references, the intent checks and their scratch copies, the
+commit, undo and the dirty flag all go to it, and no tab or focus changes. An
+unknown, unloaded, non-schematic or read-only document is refused with its
+reason. Without it, the command acts on the sheet the edit targets (the
+`apply_edits` document, else the session's own active sheet). Inside
+`apply_edits` an edit may repeat the call's `document` but not name another
+("an edit names another document than the list"). The optional `document` does
+not put the placements on the agent channel: they stay reachable through
+`apply_edits` only. When the run works through a running Signex (see "Working
+through a running Signex"), a placement without `document` is refused there,
+as every command that takes one is, so it never acts on the person's active tab.
+
+## Pin references
+
+A point operand (`at`, `start`, `end`) also takes `<designator>.<pin>`, split at
+the first `.`: `R1.2`, `U1.VCC`. The pin is its number first, else a pin name
+only one pin has (a pin with no number is known by its name, as in the
+netlist). A multi-unit part is named by its bare designator (there is no `U1A.3`
+form). The reference is the pin's tip on the sheet the edit targets (the
+`document` of `apply_edits`, else the active sheet), never on whichever tab is
+showing, and is accepted off the grid; the grid check stays for coordinates.
+Coordinates keep working: a value with a comma is a coordinate. `color_net`
+takes a coordinate only, and a bus no pin reference ("a bus does not connect to
+pins").
+
+The same position also takes `<sheet name>.<entry name>`: `Charger.SDA` is the
+connection point of the entry (sheet pin) `SDA` of the sheet symbol `Charger`
+placed on the target sheet, accepted off the grid like a pin tip. The sheet name
+is the symbol's name as `read_document` reports it (`name` of the `sheet_entry`
+element), the entry the sheet pin's `name`, both exact. The value is split at the
+FIRST `.`, so an entry or pin name may contain a `.` (`U1.A.B` is pin `A.B`) but
+a sheet name or designator may not; a space inside a name is kept
+(`Power Stage.VIN`), the ends of the value are trimmed, and a value with a comma
+is a coordinate. An end given so names exactly that sheet pin: another item on its point
+(a part pin, another entry) is extra, and the project name check applies as for
+any end. `ends` in an answer carries the reference as given. It is refused for a
+sheet or entry that is not on the sheet, two sheet symbols with that name, two
+entries with that name, and a name that a part designator and a sheet symbol
+both carry (ambiguous); a bus takes none. Placing sheet symbols and entries
+from operands is not part of this.
+
+A reference is refused, with the reason, for a designator that is not on the
+sheet, not annotated (`R?`), ambiguous or a power port; a pin that does not
+exist, whose name matches several pins, that is hidden, or whose unit is not
+placed on the sheet; a pin shared by every unit of a part that has several
+units placed (it has several tips, which are named); a project whose sheet
+hierarchy is not read yet or is being re-read ("ask again"). `query_pins`
+refuses only a hierarchy that is not read yet.
+
+## Wire intent
+
+A person clicking a wire sees what its path touches; a CLI or an agent does not.
+So `place_wire` and `draw_wire` from operands apply the run to a copy of the
+sheet first and judge the result with the netlist derivation
+(`signex_net::wire_intent`; there is no second connectivity model):
+
+1. Only horizontal and vertical segments: the draw mode bends a run as it does a
+   click run, and a segment that is still diagonal (Angle45, FreeAngle) is
+   refused.
+2. No segment crosses the open interior of a symbol body, a power port
+   included; running along a body edge or ending on one does not count.
+3. **Extra connection** (never allowed): the run pulls another pin, label,
+   junction or wire into the net, wherever on its path or bend ("the wire also
+   touches R5.1 at 20.32,5.08"). "Touches" is what the netlist joins: a pin
+   the run only passes over, with no wire end or junction at its tip, is not
+   connected and not named. What an end intends is what is connected there
+   before the run (wire ends, junctions, labels, connected pins, sheet pins) and
+   what the caller named: a pin reference names only that pin (another pin on
+   the same tip is extra), a coordinate names the pins at the point. A start
+   or end on a wire's interior is a T the caller asked for only for a
+   coordinate with no pin tip there; for a pin reference, or any end on a pin
+   tip, a wire passing under the tip is not intended, so its net is extra.
+4. **Short**: the two nets the run joins are a short by the name rule below
+   (every label text and power-port value of each net counts, not only the
+   best name: own names `{DATA, P}` and `{DATA, Q}` differ); refused unless
+   `allow_merge=true` ([Why `allow_merge`](#why-allow_merge)). On every sheet
+   a hierarchical label is an alias, not an own name, so on a child a wire
+   from the hierarchical `SDA` net to the net labelled `I2C_SDA` is accepted
+   on that sheet; the project check may still refuse it (rule 6 below).
+5. **Open end**: an end with no pin tip, wire, junction, label, sheet pin or
+   bus entry (either end of it) under it; refused unless `allow_open=true`.
+6. The two ends must be on one net afterwards; a run that is not is refused
+   whatever the flags (it cannot happen for a connected run, so it signals a
+   bug rather than a choice).
+
+Names are judged across the project, by net identity, not by name text. When
+the sheet belongs to a project, rule 4 (and a placement's name change) compares
+the project's stitched nets (`signex_net::project_name_changes`; net scope is
+`docs/NET_NAMING.md`: net labels local, global labels and power ports joined
+project-wide by name, hierarchical labels through the matching sheet pin, each
+placement of a child sheet with its own nets) before and after. The name rule
+is frozen by [#2199 comment 6761836527](https://github.com/alplabai/signex/issues/2199#issuecomment-6761836527);
+it is a heuristic that catches what names can tell apart and leaves the rest
+(a signal tied to a rail through an entry, two outputs tied together) to ERC:
+
+1. **Own names and aliases.** A net's own names are its net labels, global
+   labels/ports and power ports (power flags name nothing). Its aliases are
+   the names of hierarchical labels.
+2. **Two own-named nets** joined whose own-name sets differ are a short
+   (`VCC` + `GND`, `I2C1_SDA` + `I2C2_SDA`); the same own names join freely.
+3. **An own-named net joined to an alias-only net** joins freely, and the
+   answer lists the aliases (`+5V` to `Regulator.VIN`; `I2C1_SDA` to
+   `SensorA.SDA` and `SensorB.SDA`).
+4. **Two alias-only nets** joined that share no name are a short (`SDA` +
+   `SCL`); sharing a name they join freely (`SDA` + `SDA`, `{SDA, I2C_DATA}` +
+   `SDA`).
+5. **Rename:** a label or power port that adds an own name to a net that
+   already has own names and does not carry that name (own or alias). A
+   hierarchical label never renames.
+6. **Each edit is judged by what it changes.** A child's local names that
+   were already behind a hierarchical label before the edit play no part on
+   the parent (a sensor's internal `SDA_INT`). Names that the edit itself
+   brings behind a port do count: a new hierarchical `GND` on a child net
+   labelled `VCC`, whose entry the parent wired to `GND`, is a short. "The
+   parent" is seen from the edited sheet: only names below or beside it are
+   hidden. On the edited sheet and its ancestors local names stay names (a
+   parent's `PNET` behind its own port is a name of the child's net, so a
+   label `Y` on that net in the child is a rename). On the child itself,
+   a wire from the
+   `SDA`/`SDA_INT` net to a net labelled `GND` is a short, and a label `FOO`
+   on it a rename, as on a loose sheet (while a global `SDA_INT` there
+   carries a name the net has). Where this project check runs (the sheet is
+   in a project and the net reaches another sheet), its net-name verdict is
+   the only one; the per-sheet one decides loose sheets and the rest. So the
+   same final design reached by a different order of edits can get a
+   different verdict; the check judges the edit, not the design.
+7. **Buses** follow the same rule with bus names (hierarchical bus labels are
+   aliases), and a bus run ending on a sheet entry is connected, not open.
+   Limit: bus names are judged on the edited sheet only. The project check
+   compares member nets, not bus names, so a bus name that reaches the run
+   from another sheet (the parent's `ADDR[0..7]` on the entry the child
+   labels `D[0..7]`) is not seen: `DATA[0..7]` placed on that child run is
+   not refused.
+
+Limit: a sheet counts as part of a project for these checks when the project
+file lists it or an open sheet of that project references it as a child. A
+sheet that is neither (for example a grandchild added only through its parent
+sheet, opened without that parent) is judged on its own sheet only, as a loose
+sheet is; open its parent sheet too to have names judged across the project.
+
+Limit: in a project with several root pages, every root page counts as an
+ancestor of the edited sheet, and a sheet placed both above and beside the
+edited sheet counts as above it. Both can only keep a local name visible that
+would otherwise be hidden, so the check errs towards refusing (pass
+`allow_merge=true`).
+
+A short or rename is refused unless `allow_merge=true`. The rule is one
+function (`signex_net::join_rule`), read by the per-sheet checks, the bus
+checks (bus names, on the edited sheet) and the project check (net names). A run's answer lists the names the joined net
+carries only as aliases in `aliases`. The extra rule stays per sheet. A net that reaches no sheet pin,
+hierarchical or global label or power port, and a bus run that reaches no
+hierarchical or global bus-name label or sheet pin (by the bus analysis), is
+judged on its sheet only and costs no project read. A no-connect and a power
+flag are not judged. A bus run is judged like a wire. When the project cannot be read
+completely (a sheet missing or unreadable, a child reference leaving its
+folder, or the edited sheet not among the project's sheets) and the net reaches
+another sheet, the edit is refused with the reason, and `allow_merge=true`
+places it anyway. A route sent
+as chained `place_wire` edits (A to B, then B to C) is judged per edit against
+the sheet as it stands, so every edit but the last needs `allow_open=true`.
+
+`dry_run=true` (`--dry-run`) answers the report and changes nothing: no undo
+step, no dirty flag, and no Messages line from the run or its checks (reading a
+closed sheet of the project may still show that sheet's own load warnings). A
+run that lands answers
+`{"dry_run": false, "ends": [{"ref": "R1.2", "at": [x, y]}, {"at": [x, y]}],
+"segments": [[x1,y1,x2,y2],...], "net": {"name": "N$3", "pins":
+["C1.1","R1.2"]} | null, "merged": [names], "aliases": [names]}`; `net` is
+`null` when no pin is on the run's net; `aliases` are the names the joined net
+carries only through a child sheet's hierarchical label. `ends` records both ends as given: the pin reference (`ref`,
+only for an end given as one) and the point it resolved to (`at`), so a
+journal of the run holds both; it carries no file path. `dry_run` is in every
+answer, dry or not. A bus answers the same with `"bus": [names]` for `net`.
+`place_wire`, `draw_wire`, `place_bus` and `draw_bus` answer `answered`, not
+`ran`; the point placements (label, power port, junction, no-connect) still
+answer `ran`.
+
+## Why `allow_merge`
+
+Merging two named nets or buses on purpose does happen: giving a signal a
+second name, or tying AGND to GND at a single point. An agent must never do it
+silently, so the caller states it: `allow_merge=true` is the explicit "yes, join
+them". Without it a wire, a bus, a junction, a label or a power port that would
+short differently named nets is refused with the names it would join. It is
+not an escape for the other refusals: touching things the run was not drawn to
+(extra connections) has no escape.
+
+## Labels, power ports, junctions and no-connects
+
+`place_net_label`, `place_local_net_label`, `place_global_label`,
+`place_hierarchical_label`, `place_power_symbol`, `place_junction` and
+`place_no_connect` from operands, at a coordinate or a pin reference, are all
+checked by one rule, the way a wire is: the placement's real engine command is
+applied to a copy of the sheet, and the copy is compared with the sheet by the
+netlist's own connectivity and by the bus analysis (`signex_net::placement_intent`).
+
+- **Name change.** A short or a rename by the name rule of "Wire intent"
+  (points 2 to 5), for nets and, with bus names (judged on the edited sheet
+  only, point 7), for bus runs: a hierarchical
+  label is an alias and renames nothing on its sheet (a short it makes
+  through a wired entry is the project check's, point 6): refused ("a
+  label at 12.7,25.4 would join the nets {VCC} and {GND}", "a label at
+  57.15,38.1 would add D[0..7] to the bus {A[0..15]}"), unless
+  `allow_merge=true` ([Why `allow_merge`](#why-allow_merge)). A name the net
+  already carries (an alias included), an unnamed net, nothing at `at`, and
+  unnamed nets tied by a junction stay allowed. A power flag
+  (`power:PWR_FLAG`) never names a net and is never refused for names, so it
+  reads no project.
+- **Extra, by pin reference only (no escape).** Anything not on the pin's net
+  before that ends up on it: another pin on the tip, a power port, a sheet pin,
+  a wire passing under the tip ("the label on R1.2 also touches
+  pin C1.1 ... would join them to the net"). This is the end rule of "Wire
+  intent", applied to the tip. A coordinate has no extra check: it is the
+  caller's own T.
+
+There is no `dry_run` for these commands, and they answer `ran`. The
+pin-reference placements that are join-checked are the wire, the label, the
+power port, the junction and the no-connect.
+
+One more refusal is for a power port by pin reference:
+- A power port on a pin whose tip has no wire end, junction or label is refused
+  ("would touch the pin without connecting"): pin to pin is no connection, so
+  draw a wire to it first or place a label. A no-connect flag does not count as
+  a connection.
+
+## Bus geometry
+
+`place_bus` and `draw_bus` from operands follow the geometry rules of a wire
+(orthogonal segments, no body crossing, no pin references) and refuse a
+dangling end: an end must sit on an existing bus (an end or its interior), a
+bus entry (either end), a bus-name label or a sheet entry, unless
+`allow_open=true`.
+
+They are intent-checked too, with the one bus analysis (`analyse_buses`) applied
+to the sheet before and after the run (`signex_net::bus_intent`):
+
+- **Extra connection** (never allowed): another bus run touched by its end or
+  interior along the path or at a bend, a bus entry, or a bus-name label that
+  ends up on the new run and was not on a run an end attaches to ("the bus also
+  touches bus D[0..7] at 12.7,38.1 ..."). What an end attaches to is the intent.
+- **Merge**: the runs the two ends attach to, and a bus-name label at an end
+  that sits on no run yet, are a short by the name rule of "Wire intent"
+  with bus names (hierarchical bus labels are aliases): two runs with
+  different own bus names, or two alias-only runs that share no name;
+  refused unless `allow_merge=true` ([Why `allow_merge`](#why-allow_merge)).
+  One name and one unnamed run, or an own-named run and an alias-only run,
+  is allowed. Bus names are judged on the edited sheet only (point 7 of the
+  name rule): a bus name from another sheet is not seen.
+
+There is no net diff: bus connectivity is the bus analysis, not the netlist.
+`dry_run` works as for a wire; the answer is `{"dry_run", "ends", "segments",
+"bus": [names of the run], "merged": [names], "aliases": [names]}`, `aliases`
+as for a wire (the member nets' names that reach them only through a child's
+hierarchical label).
 
 ## Working through a running Signex
 
@@ -123,6 +387,11 @@ in the middle of continues.
   may still arrive) the connection is closed for good: every later command of
   the run fails with "the connection ... failed earlier" and the run never falls
   back to headless.
+- **Placements go through `apply_edits`.** The 17 placement commands are not
+  on the app's agent channel: sent on their own, with or without `document`,
+  the CLI refuses them ("reaches a running Signex only through
+  `apply_edits`") and sends nothing; send them as edits of an `apply_edits`
+  call.
 - **Only this run's folders are shown.** The app answers a query across every
   project it has open, so the CLI filters each answer before it prints it:
   a document whose `path` lies outside the folders this run may use (the
@@ -177,7 +446,7 @@ in the middle of continues.
   person saving as, closing and reopening, adding a library) is the same
   residual race as above: what the save writes is what the person's app holds
   when it runs.
-- **Dry run.** Without `--save`, nothing is written to disk by the CLI when
+- **Without `--save`.** Nothing is written to disk by the CLI when
   attached. What a command changes stays in the person's open app as unsaved
   changes; the person saves, or undoes it. With `--save`, a `save_document` of a
   sheet asks the app to save that sheet, which writes the person's unsaved work
@@ -257,8 +526,8 @@ is enforced before the app sees a command.
 
 - **No writes without `--save`.** `save_document`, `save_document_as` and
   `new_document` need the `save` capability, which only `--save` grants.
-  Nothing is saved at exit. A run without it is a dry run: the result lines
-  and the end-of-run log say what would change; no project file is written.
+  Nothing is saved at exit. In a run without `--save`, the result lines and
+  the end-of-run log say what would change; no project file is written.
 - **Path confinement.** Every path argument is resolved first (symlinks
   followed, `..` removed) and must then sit inside the project folder, unless
   its folder is named with `--allow-path`. The folder is the one that holds

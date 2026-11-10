@@ -24,6 +24,7 @@ pub use crate::app::agent::{
     ChangeSnapshot, MessageLine, Status, changed_between, client as agent_client, messages_since,
     outcome_verdict,
 };
+pub use crate::app::command::queries::is_query;
 pub use crate::app::command::{
     CommandArgs, CommandOutcome, EditSpec, MAX_EDITS, OperandError, OperandValue, edit_list_text,
     edit_refusal, operand_text, parse_edit_list,

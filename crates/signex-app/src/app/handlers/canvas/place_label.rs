@@ -74,15 +74,21 @@ impl Signex {
 
     /// Place the label `spec` at `at`, already snapped. Whether it was placed.
     pub(crate) fn place_label_at(&mut self, at: Point, spec: LabelSpec) -> bool {
-        let label = Label {
-            rotation: spec.rotation,
-            shape: spec.shape,
-            font_size: spec.font_size_mm,
-            justify: spec.justify_h,
-            justify_v: spec.justify_v,
-            font_family: spec.font_family,
-            ..Label::new(spec.text, at, spec.label_type)
-        };
-        self.apply_engine_command(signex_engine::Command::PlaceLabel { label }, false, false)
+        self.apply_engine_command(label_command(at, spec), false, false)
     }
+}
+
+/// The command that places the label `spec` at `at`; the point check applies
+/// it to a copy first.
+pub(crate) fn label_command(at: Point, spec: LabelSpec) -> signex_engine::Command {
+    let label = Label {
+        rotation: spec.rotation,
+        shape: spec.shape,
+        font_size: spec.font_size_mm,
+        justify: spec.justify_h,
+        justify_v: spec.justify_v,
+        font_family: spec.font_family,
+        ..Label::new(spec.text, at, spec.label_type)
+    };
+    signex_engine::Command::PlaceLabel { label }
 }

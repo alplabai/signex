@@ -155,6 +155,156 @@ fn app_idle() -> Signex {
     app
 }
 
+/// A sheet holding R1 at `x`, 10: pins 1 and 2 at x - 3.81 and x + 3.81.
+fn r1_sheet(id: u128, x: f64) -> signex_types::schematic::SchematicSheet {
+    use signex_types::schematic::{LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol};
+    let pin = |number: &str, dx: f64| LibPin {
+        unit: 0,
+        body_style: 1,
+        pin: Pin {
+            direction: PinDirection::Passive,
+            shape_style: PinShapeStyle::Plain,
+            position: Point::new(dx, 0.0),
+            rotation: 0.0,
+            length: 2.54,
+            name: String::new(),
+            number: number.into(),
+            visible: true,
+            name_visible: true,
+            number_visible: true,
+        },
+    };
+    let mut lib: LibSymbol = serde_json::from_value(json!({ "id": "R" })).unwrap();
+    lib.pins = vec![pin("1", -3.81), pin("2", 3.81)];
+    let mut sheet = signex_types::schematic::SchematicSheet {
+        uuid: uuid::Uuid::from_u128(id),
+        ..Default::default()
+    };
+    sheet.lib_symbols.insert("R".into(), lib);
+    sheet.symbols.push(Symbol {
+        uuid: uuid::Uuid::now_v7(),
+        lib_id: "R".into(),
+        reference: "R1".into(),
+        position: Point::new(x, 10.0),
+        unit: 1,
+        ..Default::default()
+    });
+    sheet
+}
+
+/// #2199: an edit may repeat the call's document, never name another.
+#[test]
+fn an_edit_naming_another_document_than_the_list_is_refused() {
+    let mut app = app_idle();
+    let before = state(&app, "b.snxsch");
+    let reason = refusal(apply(
+        &mut app,
+        "b.snxsch",
+        json!([{"id": "place_junction", "args": {"at": [20, 20], "document": path("a.snxsch").display().to_string()}}]),
+    ));
+    assert!(
+        reason.contains("names another document than the list"),
+        "{reason}"
+    );
+    assert_eq!(state(&app, "b.snxsch"), before);
+    // The same document repeated is fine.
+    let own = path("b.snxsch").display().to_string();
+    let answer = applied(
+        &mut app,
+        "b.snxsch",
+        json!([{"id": "place_junction", "args": {"at": [20, 20], "document": own}}]),
+    );
+    assert_eq!(answer["changed"], true);
+    // The call names the sheet by path; an edit may name it by id.
+    let id = uuid::Uuid::from_u128(B).to_string();
+    let answer = applied(
+        &mut app,
+        "b.snxsch",
+        json!([{"id": "place_junction", "args": {"at": [24, 24], "document": id}}]),
+    );
+    assert_eq!(answer["changed"], true);
+}
+
+/// #2199: a pin reference in an edit resolves on the call's `document`, not on
+/// the sheet that is active.
+#[test]
+fn a_pin_reference_in_an_edit_resolves_on_the_target_sheet_not_the_active_one() {
+    let mut app = app_with(&[]);
+    fixture::add_sheet_with(&mut app, &path("pa.snxsch"), r1_sheet(300, 20.0));
+    fixture::add_sheet_with(&mut app, &path("pb.snxsch"), r1_sheet(301, 60.0));
+    app.document_state.mark_document_clean(&path("pa.snxsch"));
+    app.document_state.mark_document_clean(&path("pb.snxsch"));
+    fixture::activate(&mut app, &path("pa.snxsch"));
+    let answer = applied(
+        &mut app,
+        "pb.snxsch",
+        json!([{"id": "place_junction", "args": {"at": "R1.2"}}]),
+    );
+    assert_eq!(answer["changed"], true);
+    let junctions = |file: &str| {
+        app.document_state.engines[&path(file)]
+            .document()
+            .junctions
+            .iter()
+            .map(|j| j.position)
+            .collect::<Vec<_>>()
+    };
+    assert!(
+        junctions("pa.snxsch").is_empty(),
+        "the active sheet is untouched"
+    );
+    let [tip] = junctions("pb.snxsch")[..] else {
+        panic!("one junction on the target");
+    };
+    assert!(
+        (tip.x - 63.81).abs() < 1e-9 && (tip.y - 10.0).abs() < 1e-9,
+        "{tip:?}"
+    );
+}
+
+/// #2199: a wire edit answers its report, which `apply_edits` carries in
+/// `results` by edit index (`null` for an edit that only ran); a dry run among
+/// the edits changes nothing, and a refused wire refuses the whole list.
+#[test]
+fn a_wire_edit_answers_its_report_in_results_and_a_refused_one_rolls_the_list_back() {
+    let mut app = app_idle();
+    // A no-connect first: its undo label differs from the rolled-back list's.
+    let edits = json!([
+        {"id": "place_no_connect", "args": {"at": [20, 20]}},
+        {"id": "place_wire", "args": {"start": [26, 26], "end": [28, 26], "allow_open": true}},
+        {"id": "place_wire", "args": {"start": [26, 40], "end": [28, 40], "allow_open": true, "dry_run": true}},
+    ]);
+    let before = shape(&app, "b.snxsch");
+    let answer = applied(&mut app, "b.snxsch", edits);
+    let results = answer["results"].as_array().expect("results");
+    assert_eq!(results.len(), 3);
+    assert_eq!(results[0], Value::Null);
+    assert_eq!(results[1]["dry_run"], false);
+    assert_eq!(results[1]["segments"], json!([[26.0, 26.0, 28.0, 26.0]]));
+    assert_eq!(results[2]["dry_run"], true);
+    let after = shape(&app, "b.snxsch");
+    assert!(after.contains("W 26.000,26.000 28.000,26.000"), "{after}");
+    assert!(
+        !after.contains("W 26.000,40.000"),
+        "the dry run placed nothing: {after}"
+    );
+    assert_ne!(before, after);
+
+    // An open end without `allow_open` refuses the list; nothing of it stays.
+    let kept = state(&app, "b.snxsch");
+    let refused = refusal(apply(
+        &mut app,
+        "b.snxsch",
+        json!([
+            {"id": "place_junction", "args": {"at": [30, 30]}},
+            {"id": "place_wire", "args": {"start": [34, 34], "end": [36, 34]}},
+        ]),
+    ));
+    assert!(refused.contains("edit 2 (`place_wire`)"), "{refused}");
+    assert!(refused.contains("nothing to connect to"), "{refused}");
+    assert_eq!(state(&app, "b.snxsch"), kept);
+}
+
 #[test]
 fn one_undo_reverts_exactly_the_batch() {
     let mut app = app_at_work();
@@ -429,8 +579,8 @@ fn an_agent_deleting_the_selected_wire_drops_it_from_the_selection() {
         &mut app,
         "b.snxsch",
         json!([
-            {"id": "place_wire", "args": {"start": [20, 20], "end": [30, 20]}},
-            {"id": "place_wire", "args": {"start": [40, 20], "end": [50, 20]}},
+            {"id": "place_wire", "args": {"start": [20, 20], "end": [30, 20], "allow_open": true}},
+            {"id": "place_wire", "args": {"start": [40, 20], "end": [50, 20], "allow_open": true}},
         ]),
     );
     let newer = {
@@ -599,7 +749,7 @@ fn the_agent_gets_no_undo_through_the_headless_undo_of_its_own_step() {
 fn a_batch_equals_the_same_edits_made_one_by_one_through_the_same_ids() {
     let edits = json!([
         {"id": "place_junction", "args": {"at": [20, 20]}},
-        {"id": "place_wire", "args": {"start": [20, 20], "end": [30, 20]}},
+        {"id": "place_wire", "args": {"start": [20, 20], "end": [30, 20], "allow_open": true}},
         {"id": "place_net_label", "args": {"at": [24, 24], "text": "AGENT", "rotation": 90}},
         {"id": "place_power_symbol", "args": {"at": [26, 26], "net_name": "VCC", "lib_id": "power:VCC"}},
         {"id": "draw_rectangle", "args": {"start": [40, 40], "end": [50, 45]}},
@@ -624,10 +774,12 @@ fn a_batch_equals_the_same_edits_made_one_by_one_through_the_same_ids() {
             })
             .collect();
         let name = edit["id"].as_str().unwrap();
-        assert_eq!(
-            run(&mut one_by_one, name, &operands),
-            CommandOutcome::Ran,
-            "{name}"
+        // A wire run answers its report; every other edit here only runs.
+        let outcome = run(&mut one_by_one, name, &operands);
+        assert!(
+            outcome == CommandOutcome::Ran
+                || (name == "place_wire" && matches!(outcome, CommandOutcome::Answered(_))),
+            "{name}: {outcome:?}"
         );
     }
     assert_eq!(shape(&batch, "a.snxsch"), shape(&one_by_one, "a.snxsch"));
@@ -777,7 +929,7 @@ fn a_wire_edit_snaps_to_the_target_sheets_hotspots() {
         apply(
             &mut app,
             "a.snxsch",
-            json!([{"id": "place_wire", "args": {"start": [50, 50], "end": [60, 50]}}])
+            json!([{"id": "place_wire", "args": {"start": [50, 50], "end": [60, 50], "allow_open": true}}])
         ),
         CommandOutcome::Answered(_)
     ));

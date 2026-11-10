@@ -27,10 +27,12 @@ mod measure_tool;
 mod move_pick;
 mod place_drawing;
 mod place_label;
-pub(crate) use place_label::GLOBAL_PORT_SHAPE;
+pub(crate) use place_label::{GLOBAL_PORT_SHAPE, label_command};
 mod place_point;
+pub(crate) use place_point::{junction_command, no_connect_command, power_commands};
 mod place_text;
 mod place_wire;
+pub(crate) use place_wire::{bus_commands, wire_commands};
 mod shape_tool;
 #[cfg(test)]
 mod shape_tool_tests;

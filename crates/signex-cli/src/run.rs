@@ -19,6 +19,32 @@ use crate::protocol::{Request, ResultLine, parse_request, request_from_args};
 use crate::route::{Placement, place};
 use crate::session::Session;
 
+/// `--dry-run`: `request` with `dry_run=true`, or why it cannot be one: only a
+/// command with a `dry_run` operand can promise to change nothing. A read-only
+/// query and `open_document` (it opens a sheet, changes none) run as given.
+fn with_dry_run(mut request: Request, dry_run: bool) -> Result<Request, String> {
+    if !dry_run {
+        return Ok(request);
+    }
+    let harmless = request.id == "open_document"
+        || signex_app::keymap::AppCommandId::new(request.id.as_str())
+            .is_ok_and(|id| signex_app::headless::is_query(&id));
+    if harmless {
+        return Ok(request);
+    }
+    let takes_it = signex_app::keymap::metadata_for_str(&request.id)
+        .is_some_and(|meta| meta.operands.iter().any(|op| op.name == "dry_run"));
+    if !takes_it {
+        return Err(format!(
+            "--dry-run needs a command with a `dry_run` operand; `{}` has none, so it would change the document",
+            request.id
+        ));
+    }
+    request.operands.retain(|(name, _)| name != "dry_run");
+    request.operands.push(("dry_run".into(), "true".into()));
+    Ok(request)
+}
+
 /// What a finished run did.
 #[derive(Debug)]
 pub struct RunReport {
@@ -165,7 +191,8 @@ fn drive(
     };
 
     if let Some((id, args)) = &options.single {
-        let line = match request_from_args(id, args) {
+        let line = match request_from_args(id, args).and_then(|r| with_dry_run(r, options.dry_run))
+        {
             Ok(request) => runner.execute(1, &request, id),
             Err(reason) => runner.reject(1, id, reason),
         };
@@ -196,7 +223,10 @@ fn drive(
                 );
                 runner.reject(seq, &raw, reason)
             } else {
-                match text.and_then(|text| parse_request(&text)) {
+                match text
+                    .and_then(|text| parse_request(&text))
+                    .and_then(|request| with_dry_run(request, options.dry_run))
+                {
                     Ok(request) => runner.execute(seq, &request, &raw),
                     Err(reason) => runner.reject(seq, &raw, reason),
                 }

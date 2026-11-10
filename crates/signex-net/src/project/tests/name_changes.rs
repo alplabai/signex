@@ -1,0 +1,461 @@
+//! #2199 — the names an edit gives a project's nets, seen across sheets.
+
+use super::*;
+
+/// A label with its own uuid: nets are told apart by the elements that name
+/// them, so two labels of one sheet must not share one.
+fn label(text: &str, pos: Point, ty: LabelType) -> Label {
+    Label {
+        uuid: Uuid::now_v7(),
+        ..super::label(text, pos, ty)
+    }
+}
+
+/// The project of `root` (key `root`) and `children` (keyed by filename).
+fn graph_of(
+    root: &SchematicSheet,
+    children: &HashMap<String, SchematicSheet>,
+) -> (
+    HashMap<SheetKey, SchematicSheet>,
+    HashMap<SheetKey, HashMap<String, SheetKey>>,
+) {
+    let mut sheets: HashMap<SheetKey, SchematicSheet> = children
+        .iter()
+        .map(|(k, v)| (SheetKey::new(k.clone()), v.clone()))
+        .collect();
+    sheets.insert(SheetKey::new("root"), root.clone());
+    let resolved = sheets
+        .iter()
+        .map(|(key, sheet)| {
+            let submap = sheet
+                .child_sheets
+                .iter()
+                .map(|cs| (cs.filename.clone(), SheetKey::new(cs.filename.clone())))
+                .collect();
+            (key.clone(), submap)
+        })
+        .collect();
+    (sheets, resolved)
+}
+
+fn changes(
+    before: &SchematicSheet,
+    after: &SchematicSheet,
+    children: &HashMap<String, SchematicSheet>,
+) -> Vec<ProjectNetChange> {
+    let (bs, br) = graph_of(before, children);
+    let (as_, ar) = graph_of(after, children);
+    let roots = [ProjectRoot {
+        key: SheetKey::new("root"),
+    }];
+    project_name_changes(
+        &ProjectGraph {
+            sheets: &bs,
+            resolved: &br,
+            roots: &roots,
+        },
+        &ProjectGraph {
+            sheets: &as_,
+            resolved: &ar,
+            roots: &roots,
+        },
+        &SheetKey::new("root"),
+    )
+}
+
+/// The names of the nets the edit needs `allow_merge` for.
+fn refused(
+    before: &SchematicSheet,
+    after: &SchematicSheet,
+    children: &HashMap<String, SchematicSheet>,
+) -> Vec<Vec<String>> {
+    changes(before, after, children)
+        .into_iter()
+        .filter(|change| change.needs_allow_merge)
+        .map(|change| change.names)
+        .collect()
+}
+
+/// A parent wire from the sheet pin `SIG` at (0,0) to (5,0); the child names
+/// that net `SIG` too (a hierarchical label: an alias) and carries a `VCC`
+/// power port on the same wire (its own name).
+fn project() -> (SchematicSheet, HashMap<String, SchematicSheet>) {
+    let mut root = empty_sheet();
+    root.child_sheets.push(child_sheet(
+        "U",
+        "c.sch",
+        vec![sheet_pin("SIG", pt(0.0, 0.0))],
+    ));
+    root.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    let mut child = empty_sheet();
+    child.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    child
+        .labels
+        .push(label("SIG", pt(0.0, 0.0), LabelType::Hierarchical));
+    add_lib(&mut child, "PWR");
+    place_power(&mut child, "#PWR1", "PWR", "VCC", pt(10.0, 0.0));
+    (root, HashMap::from([("c.sch".to_string(), child)]))
+}
+
+fn with_label(sheet: &SchematicSheet, text: &str, at: (f64, f64)) -> SchematicSheet {
+    let mut after = sheet.clone();
+    after
+        .labels
+        .push(label(text, pt(at.0, at.1), LabelType::Global));
+    after
+}
+
+/// A child with each of `names` as a hierarchical label on a wire of its own
+/// at y = 20 * index.
+fn child_of(names: &[&str]) -> SchematicSheet {
+    let mut child = empty_sheet();
+    for (i, name) in names.iter().enumerate() {
+        let y = 20.0 * i as f64;
+        child.wires.push(wire(pt(0.0, y), pt(10.0, y)));
+        child
+            .labels
+            .push(label(name, pt(0.0, y), LabelType::Hierarchical));
+    }
+    child
+}
+
+/// A parent with the sheet `U` (file `c.sch`) whose entries `pins` are at
+/// y = 20 * index, each on a stub wire ending at (5, y).
+fn parent_with(pins: &[&str]) -> SchematicSheet {
+    let mut root = empty_sheet();
+    let entries = pins
+        .iter()
+        .enumerate()
+        .map(|(i, name)| sheet_pin(name, pt(0.0, 20.0 * i as f64)))
+        .collect();
+    root.child_sheets.push(child_sheet("U", "c.sch", entries));
+    for i in 0..pins.len() {
+        let y = 20.0 * i as f64;
+        root.wires.push(wire(pt(0.0, y), pt(5.0, y)));
+    }
+    root
+}
+
+/// `sheet` with a wire from (5, 0) down to (5, 20): the stubs of its first two
+/// entries joined.
+fn joined(sheet: &SchematicSheet) -> SchematicSheet {
+    let mut after = sheet.clone();
+    after.wires.push(wire(pt(5.0, 0.0), pt(5.0, 20.0)));
+    after
+}
+
+fn net_label(sheet: &mut SchematicSheet, text: &str, at: (f64, f64)) {
+    sheet
+        .labels
+        .push(label(text, pt(at.0, at.1), LabelType::Net));
+}
+
+#[test]
+fn a_name_the_net_does_not_carry_is_a_rename() {
+    let (root, children) = project();
+    // The net's own name is VCC (the child's port); SIG is its alias. A GND
+    // label is a name it does not carry.
+    let got = refused(&root, &with_label(&root, "GND", (5.0, 0.0)), &children);
+    assert_eq!(got, [["GND", "SIG", "VCC"]]);
+}
+
+#[test]
+fn a_name_the_net_already_carries_and_an_unrelated_net_are_no_change() {
+    let (root, children) = project();
+    for after in [
+        // SIG is the net's alias: a label of it is no rename (6761836527
+        // point 5).
+        with_label(&root, "SIG", (5.0, 0.0)),
+        with_label(&root, "VCC", (5.0, 0.0)),
+        // A label on a wire of its own, with nothing from the child on it.
+        {
+            let mut sheet = root.clone();
+            sheet.wires.push(wire(pt(0.0, 20.0), pt(5.0, 20.0)));
+            with_label(&sheet, "X", (5.0, 20.0))
+        },
+    ] {
+        assert!(changes(&root, &after, &children).is_empty());
+    }
+}
+
+#[test]
+fn a_wire_that_joins_two_nets_with_different_own_names_is_a_rename() {
+    let (mut root, children) = project();
+    // A second named net on the parent, then a wire between the two.
+    root.wires.push(wire(pt(0.0, 20.0), pt(5.0, 20.0)));
+    root.labels
+        .push(label("OTHER", pt(5.0, 20.0), LabelType::Global));
+    let got = refused(&root, &joined(&root), &children);
+    assert_eq!(got, [["OTHER", "SIG", "VCC"]]);
+}
+
+#[test]
+fn two_nets_named_by_the_child_only_with_different_names_are_a_rename() {
+    // The entries SDA and SCL, each net named only by the child's hierarchical
+    // label (an alias): joined, they are two signals made one.
+    let root = parent_with(&["SDA", "SCL"]);
+    let children = HashMap::from([("c.sch".to_string(), child_of(&["SDA", "SCL"]))]);
+    let got = changes(&root, &joined(&root), &children);
+    assert_eq!(got.len(), 1);
+    assert!(got[0].needs_allow_merge);
+    assert_eq!(got[0].names, ["SCL", "SDA"]);
+}
+
+#[test]
+fn nets_with_own_names_that_differ_are_a_rename_and_the_same_own_name_is_free() {
+    let children = HashMap::from([("c.sch".to_string(), child_of(&["A", "B"]))]);
+    for (second, rename) in [("NA", false), ("NB", true)] {
+        let mut root = parent_with(&["A", "B"]);
+        net_label(&mut root, "NA", (5.0, 0.0));
+        net_label(&mut root, second, (5.0, 20.0));
+        // With one label name on both stubs the two labels already join them
+        // on the sheet, so give the second net its own wire.
+        let after = if rename { joined(&root) } else { root.clone() };
+        let got = refused(&root, &after, &children);
+        assert_eq!(!got.is_empty(), rename, "{second}");
+    }
+}
+
+#[test]
+fn a_parents_name_wired_to_an_entry_whose_child_label_differs_is_an_alias() {
+    // I2C_SDA on a parent net, wired to the entry SDA: the child's SDA is an
+    // alias, so the join is free and the answer reports it.
+    let mut root = parent_with(&["SDA", "UNUSED"]);
+    root.child_sheets[0].pins.truncate(1);
+    root.wires.truncate(1);
+    root.wires.push(wire(pt(0.0, 20.0), pt(5.0, 20.0)));
+    net_label(&mut root, "I2C_SDA", (5.0, 20.0));
+    let children = HashMap::from([("c.sch".to_string(), child_of(&["SDA"]))]);
+    let got = changes(&root, &joined(&root), &children);
+    assert_eq!(got.len(), 1);
+    assert!(!got[0].needs_allow_merge);
+    assert_eq!(got[0].aliases, ["SDA"]);
+    assert_eq!(got[0].names, ["I2C_SDA", "SDA"]);
+    // The same name on both sides adds no alias.
+    let mut same = root.clone();
+    same.labels.pop();
+    net_label(&mut same, "SDA", (5.0, 20.0));
+    let mut after = same.clone();
+    after.wires.push(wire(pt(5.0, 0.0), pt(5.0, 20.0)));
+    let got = changes(&same, &after, &children);
+    assert!(
+        got.iter()
+            .all(|c| !c.needs_allow_merge && c.aliases.is_empty())
+    );
+    // A local label on a net that only reaches the entry is no rename either.
+    let mut bare = parent_with(&["SDA"]);
+    let mut labelled = bare.clone();
+    net_label(&mut labelled, "I2C_SDA", (5.0, 0.0));
+    bare.wires.truncate(1);
+    assert!(refused(&bare, &labelled, &children).is_empty());
+}
+
+#[test]
+fn two_placements_of_one_child_join_freely_on_the_same_entry_and_not_on_different_ones() {
+    let children = HashMap::from([("c.sch".to_string(), child_of(&["SIG", "SCL"]))]);
+    for (second, rename) in [("SIG", false), ("SCL", true)] {
+        let mut root = empty_sheet();
+        for (name, entry, y) in [("U1", "SIG", 0.0), ("U2", second, 20.0)] {
+            let pins = vec![sheet_pin(entry, pt(0.0, y))];
+            let mut placed = child_sheet(name, "c.sch", pins);
+            placed.uuid = Uuid::now_v7();
+            root.child_sheets.push(placed);
+            root.wires.push(wire(pt(0.0, y), pt(5.0, y)));
+        }
+        // The same entry of both placements is a shared bus: no rename.
+        let got = refused(&root, &joined(&root), &children);
+        assert_eq!(!got.is_empty(), rename, "{second}");
+    }
+}
+
+#[test]
+fn an_own_named_net_with_an_alias_joined_to_another_alias_is_free_in_either_order() {
+    // I2C1_SDA (own) + SDA (alias) joined with the alias-only SCL: an
+    // own-named net with an alias-only one joins freely (6761836527 point 3;
+    // an earlier round refused it). Either entry first, so the nets sort both
+    // ways.
+    let children = HashMap::from([("c.sch".to_string(), child_of(&["SDA", "SCL"]))]);
+    for (pins, labelled_y) in [(["SDA", "SCL"], 0.0), (["SCL", "SDA"], 20.0)] {
+        let mut root = parent_with(&pins);
+        net_label(&mut root, "I2C1_SDA", (5.0, labelled_y));
+        let got = changes(&root, &joined(&root), &children);
+        assert_eq!(got.len(), 1, "{pins:?}");
+        assert!(!got[0].needs_allow_merge, "{pins:?}");
+        assert_eq!(got[0].aliases, ["SCL", "SDA"]);
+    }
+}
+
+#[test]
+fn two_alias_only_nets_that_share_a_name_join_freely() {
+    // U1's net carries the aliases SDA and I2C_DATA, U2's the alias SDA: they
+    // share SDA, so the join is free (6761836527 point 4).
+    let mut wide = child_of(&["SDA"]);
+    wide.labels
+        .push(label("I2C_DATA", pt(10.0, 0.0), LabelType::Hierarchical));
+    let children = HashMap::from([
+        ("c.sch".to_string(), wide),
+        ("d.sch".to_string(), child_of(&["SDA"])),
+    ]);
+    let mut root = parent_with(&["SDA"]);
+    let mut second = child_sheet("U2", "d.sch", vec![sheet_pin("SDA", pt(0.0, 20.0))]);
+    second.uuid = Uuid::now_v7();
+    root.child_sheets.push(second);
+    root.wires.push(wire(pt(0.0, 20.0), pt(5.0, 20.0)));
+    let got = changes(&root, &joined(&root), &children);
+    assert_eq!(got.len(), 1);
+    assert!(!got[0].needs_allow_merge, "{got:?}");
+    assert_eq!(got[0].aliases, ["I2C_DATA", "SDA"]);
+}
+
+#[test]
+fn a_copy_of_a_hidden_local_name_changes_nothing() {
+    // The child's SDA_INT sits behind its hierarchical SDA before the edit; a
+    // second SDA_INT label on that net is hidden too: no change at all
+    // (6761836527 points 5 and 6).
+    let mut child = child_of(&["SDA"]);
+    child
+        .labels
+        .push(label("SDA_INT", pt(10.0, 0.0), LabelType::Net));
+    let mut after_child = child.clone();
+    after_child
+        .labels
+        .push(label("SDA_INT", pt(5.0, 0.0), LabelType::Net));
+    let mut root = parent_with(&["SDA"]);
+    net_label(&mut root, "I2C1_SDA", (5.0, 0.0));
+    let (bs, br) = graph_of(&root, &HashMap::from([("c.sch".to_string(), child)]));
+    let (as_, ar) = graph_of(&root, &HashMap::from([("c.sch".to_string(), after_child)]));
+    let roots = [ProjectRoot {
+        key: SheetKey::new("root"),
+    }];
+    let got = project_name_changes(
+        &ProjectGraph {
+            sheets: &bs,
+            resolved: &br,
+            roots: &roots,
+        },
+        &ProjectGraph {
+            sheets: &as_,
+            resolved: &ar,
+            roots: &roots,
+        },
+        &SheetKey::new("c.sch"),
+    );
+    assert!(got.is_empty(), "{got:?}");
+}
+
+#[test]
+fn a_local_name_the_edit_brings_behind_a_port_counts() {
+    // The child's net is labelled VCC locally; the parent wired the entry GND
+    // to its global GND. A new hierarchical GND on the VCC net brings VCC
+    // behind the port by this very edit, so VCC counts: a short (6761836527
+    // point 6).
+    let mut child = empty_sheet();
+    child.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    child
+        .labels
+        .push(label("VCC", pt(10.0, 0.0), LabelType::Net));
+    let mut after_child = child.clone();
+    after_child
+        .labels
+        .push(label("GND", pt(0.0, 0.0), LabelType::Hierarchical));
+    let mut root = parent_with(&["GND"]);
+    root.labels
+        .push(label("GND", pt(5.0, 0.0), LabelType::Global));
+    let (bs, br) = graph_of(&root, &HashMap::from([("c.sch".to_string(), child)]));
+    let (as_, ar) = graph_of(&root, &HashMap::from([("c.sch".to_string(), after_child)]));
+    let roots = [ProjectRoot {
+        key: SheetKey::new("root"),
+    }];
+    let got = project_name_changes(
+        &ProjectGraph {
+            sheets: &bs,
+            resolved: &br,
+            roots: &roots,
+        },
+        &ProjectGraph {
+            sheets: &as_,
+            resolved: &ar,
+            roots: &roots,
+        },
+        &SheetKey::new("c.sch"),
+    );
+    assert!(got.iter().any(|c| c.needs_allow_merge), "{got:?}");
+}
+
+#[test]
+fn a_parents_local_name_behind_its_port_counts_when_the_child_is_edited() {
+    // Root places P through PP; P's net carries the local PNET and the
+    // hierarchical PP and reaches C's entry X; C's X net has no own name. Seen
+    // from C, P is the parent: a label Y on X's net renames PNET (6761836527
+    // point 6, "on the parent").
+    let mut root = empty_sheet();
+    let mut p_symbol = child_sheet("P", "p.sch", vec![sheet_pin("PP", pt(0.0, 0.0))]);
+    p_symbol.uuid = Uuid::now_v7();
+    root.child_sheets.push(p_symbol);
+    let mut p = child_of(&["PP"]);
+    p.labels.push(label("PNET", pt(10.0, 0.0), LabelType::Net));
+    let mut c_symbol = child_sheet("C", "c.sch", vec![sheet_pin("X", pt(10.0, 0.0))]);
+    c_symbol.uuid = Uuid::now_v7();
+    p.child_sheets.push(c_symbol);
+    let c = child_of(&["X"]);
+    let mut c_after = c.clone();
+    c_after
+        .labels
+        .push(label("Y", pt(10.0, 0.0), LabelType::Net));
+    let sheets = |c: SchematicSheet| {
+        HashMap::from([("p.sch".to_string(), p.clone()), ("c.sch".to_string(), c)])
+    };
+    let (bs, br) = graph_of(&root, &sheets(c));
+    let (as_, ar) = graph_of(&root, &sheets(c_after));
+    let roots = [ProjectRoot {
+        key: SheetKey::new("root"),
+    }];
+    let got = project_name_changes(
+        &ProjectGraph {
+            sheets: &bs,
+            resolved: &br,
+            roots: &roots,
+        },
+        &ProjectGraph {
+            sheets: &as_,
+            resolved: &ar,
+            roots: &roots,
+        },
+        &SheetKey::new("c.sch"),
+    );
+    assert!(got.iter().any(|c| c.needs_allow_merge), "{got:?}");
+}
+
+#[test]
+fn a_childs_local_label_behind_its_hierarchical_label_plays_no_part_on_the_parent() {
+    // SensorA: hierarchical SDA and the local label SDA_INT on one net, both
+    // there before the edit. The parent's I2C1_SDA wired to SensorA.SDA joins
+    // freely, and SDA_INT stays inside the child (6761836527 point 6).
+    let mut child = child_of(&["SDA"]);
+    child
+        .labels
+        .push(label("SDA_INT", pt(10.0, 0.0), LabelType::Net));
+    let children = HashMap::from([("c.sch".to_string(), child)]);
+    let mut root = parent_with(&["SDA", "UNUSED"]);
+    root.child_sheets[0].pins.truncate(1);
+    root.wires.truncate(1);
+    root.wires.push(wire(pt(0.0, 20.0), pt(5.0, 20.0)));
+    net_label(&mut root, "I2C1_SDA", (5.0, 20.0));
+    let got = changes(&root, &joined(&root), &children);
+    assert_eq!(got.len(), 1);
+    assert!(!got[0].needs_allow_merge, "{got:?}");
+    assert_eq!(got[0].aliases, ["SDA"]);
+    assert_eq!(got[0].names, ["I2C1_SDA", "SDA"]);
+}
+
+#[test]
+fn an_unnamed_net_may_gain_a_name_or_join_a_named_one() {
+    let (mut root, children) = project();
+    root.wires.push(wire(pt(0.0, 20.0), pt(5.0, 20.0)));
+    let named = with_label(&root, "GND", (5.0, 20.0));
+    assert!(refused(&root, &named, &children).is_empty());
+    // The free wire joins the SIG net: the only named net it meets.
+    let mut joined = root.clone();
+    joined.wires.push(wire(pt(5.0, 0.0), pt(5.0, 20.0)));
+    assert!(refused(&root, &joined, &children).is_empty());
+}
