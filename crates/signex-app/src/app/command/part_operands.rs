@@ -23,7 +23,7 @@ use super::queries::pin_id;
 use super::wire_runs::describe;
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::handlers::library_place::part_payload;
-use crate::app::project_sheets::lexically_normalize;
+use crate::app::project_sheets::{ProjectSheetSet, lexically_normalize};
 use crate::app::state::scope::path_key_with;
 use crate::app::{Message, Signex};
 use crate::library::messages::ResolvedPlacement;
@@ -104,6 +104,33 @@ fn unit_of(args: &CommandArgs, resolved: &ResolvedPlacement) -> Result<u32, Stri
                 resolved.internal_pn
             )
         })
+}
+
+/// Whether `wanted`, already carried by `placed`, may name another unit of
+/// the part `resolved`: only the same library row, and only a unit not placed.
+fn shared_designator(
+    wanted: &str,
+    placed: &[&Symbol],
+    resolved: &ResolvedPlacement,
+    unit: u32,
+) -> Result<(), String> {
+    if placed.is_empty() {
+        return Err(format!(
+            "designator `{wanted}` is in use through another placement of a sheet; leave `designator` out"
+        ));
+    }
+    let same_part = |s: &&Symbol| {
+        s.row_id == Some(resolved.row_id) && s.library_id == Some(resolved.library_id)
+    };
+    if !placed.iter().all(same_part) {
+        return Err(format!(
+            "designator `{wanted}` is another part; leave `designator` out for the next free one"
+        ));
+    }
+    if placed.iter().any(|s| s.unit == unit) {
+        return Err(format!("unit {unit} of `{wanted}` is already placed"));
+    }
+    Ok(())
 }
 
 /// The answer: what was placed and each pin's tip, so it can be wired next.
@@ -199,36 +226,34 @@ impl Signex {
         if !used.contains(&wanted.as_str()) {
             return Ok(wanted);
         }
-        // Every part carrying it, on any sheet of the project, open or not.
-        let live = docs.engines.get(sheet).map(signex_engine::Engine::document);
+        let placed = self.parts_carrying(sheet, project.as_ref().map(|(_, set)| set), &wanted);
+        shared_designator(&wanted, &placed, resolved, unit)?;
+        Ok(wanted)
+    }
+
+    /// Every part carrying `designator`: on `sheet` as it stands, and on the
+    /// other sheets of its project, open or not.
+    fn parts_carrying<'a>(
+        &'a self,
+        sheet: &Path,
+        project: Option<&'a ProjectSheetSet>,
+        designator: &str,
+    ) -> Vec<&'a Symbol> {
+        let live = self
+            .document_state
+            .engines
+            .get(sheet)
+            .map(signex_engine::Engine::document);
         let others = project
-            .iter()
-            .flat_map(|(_, set)| set.sheets.iter())
+            .into_iter()
+            .flat_map(|set| set.sheets.iter())
             .filter(|(path, _)| path.as_path() != sheet)
             .map(|(_, other)| other);
-        let placed: Vec<&Symbol> = live
-            .into_iter()
+        live.into_iter()
             .chain(others)
             .flat_map(|s| s.symbols.iter())
-            .filter(|s| s.reference == wanted)
-            .collect();
-        if placed.is_empty() {
-            return Err(format!(
-                "designator `{wanted}` is in use through another placement of a sheet; leave `designator` out"
-            ));
-        }
-        let same_part = |s: &&Symbol| {
-            s.row_id == Some(resolved.row_id) && s.library_id == Some(resolved.library_id)
-        };
-        if !placed.iter().all(same_part) {
-            return Err(format!(
-                "designator `{wanted}` is another part; leave `designator` out for the next free one"
-            ));
-        }
-        if placed.iter().any(|s| s.unit == unit) {
-            return Err(format!("unit {unit} of `{wanted}` is already placed"));
-        }
-        Ok(wanted)
+            .filter(|s| s.reference == designator)
+            .collect()
     }
 
     /// Why the edit `commands` (a part, sheet symbol or entry) is refused

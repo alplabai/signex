@@ -2,15 +2,17 @@
 //! https://github.com/alplabai/signex/issues/2199#issuecomment-6771692137): a
 //! headless or agent edit does no file IO inside `update` (epic #665). What
 //! its checks read from disk (the project's closed sheets for the name check,
-//! the designators and the cycle check; a library row for `place_component`;
-//! the child file of `sync_sheet_pins`; whether a child reference leaves the
-//! project through a link) is planned from the operands, read by a `Task` off
-//! the UI thread, and the edit runs when the reads land, with its outcome
-//! reported then. An `apply_edits` list plans the union of its edits once.
-//! The target's and the project's open sheets' revisions are recorded at the
-//! start; if one changed by completion, the edit is refused, nothing applied.
-//! An edit that needs no disk (a loose sheet, a project whose sheets are all
-//! open) runs at once. Rules: `docs/AGENT_EDITS.md`, "Edits that read the disk".
+//! the designators and the hierarchy-loop check; a library row for
+//! `place_component`; the child file of `sync_sheet_pins`; whether a child
+//! reference leaves the project through a link) is read by a `Task` off the
+//! UI thread, and the edit runs when the reads land, with its outcome reported
+//! then. An `apply_edits` list plans the union of its edits once; a closed
+//! file a `place_sheet_symbol` of the list refers to is read with the project.
+//! The revisions of the target and of its project's open sheets are recorded
+//! at the start; if one changed, or a project sheet was opened or closed, by
+//! completion, the edit is refused, nothing applied. An edit that needs no
+//! disk (a loose sheet, a project whose sheets are all open) runs at once.
+//! Rules: `docs/AGENT_EDITS.md`, "Edits that read the disk".
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -49,6 +51,16 @@ pub struct EditReads {
     pub(crate) children: HashMap<PathBuf, Result<Option<SchematicSheet>, String>>,
     /// Whether a path leaves its project folder through a link.
     pub(crate) escapes: HashMap<PathBuf, bool>,
+    /// Why the reads did not run to their end (the reader panicked).
+    pub(crate) failed: Option<String>,
+}
+
+/// The reads as they landed: a reader that panicked leaves none and says so.
+pub(super) fn landed(result: Result<EditReads, tokio::task::JoinError>) -> EditReads {
+    result.unwrap_or_else(|error| EditReads {
+        failed: Some(error.to_string()),
+        ..EditReads::default()
+    })
 }
 
 impl std::fmt::Debug for EditReads {
@@ -67,7 +79,10 @@ impl std::fmt::Debug for EditReads {
 /// The reads an edit needs, captured in `update`.
 #[derive(Default)]
 struct ReadPlan {
-    project: Option<(OpenSheets, Vec<PathBuf>, PathBuf, CaseFold)>,
+    project: Option<ProjectRead>,
+    /// Closed files the list's `place_sheet_symbol` edits refer to: read
+    /// with the project, as children-to-be, not as pages of their own.
+    seeds: Vec<PathBuf>,
     parts: Vec<PartKey>,
     open_libraries: Vec<(Uuid, PathBuf)>,
     children: Vec<PathBuf>,
@@ -85,8 +100,15 @@ impl ReadPlan {
 
     /// Read everything. Blocking: run it off the UI thread.
     fn read(self) -> EditReads {
-        let project = self.project.map(|(open, pages, root, fold)| {
-            assemble_project_sheets_quiet_from(&open, &pages, &root, fold)
+        let seeds = self.seeds;
+        let project = self.project.map(|read| {
+            let walked: Vec<PathBuf> = read.pages.iter().chain(&seeds).cloned().collect();
+            let mut set =
+                assemble_project_sheets_quiet_from(&read.open, &walked, &read.root, read.fold);
+            // A child-to-be is no top-level page: the edit places it.
+            set.pages_outside_the_hierarchy
+                .retain(|page| !seeds.contains(page));
+            set
         });
         let parts = self
             .parts
@@ -123,8 +145,17 @@ impl ReadPlan {
             parts,
             children,
             escapes,
+            failed: None,
         }
     }
+}
+
+/// The project to read: a snapshot of its open sheets, its pages and root.
+struct ProjectRead {
+    open: OpenSheets,
+    pages: Vec<PathBuf>,
+    root: PathBuf,
+    fold: CaseFold,
 }
 
 /// The completion of an edit's reads: the reads and the request they are for.
@@ -133,7 +164,9 @@ pub struct ReadsLoaded {
     pub(crate) ticket: u64,
     pub(crate) command: AppCommandId,
     pub(crate) args: CommandArgs,
-    /// The revision of every sheet whose state the reads depend on.
+    /// The sheet the edit acts on.
+    pub(crate) target: PathBuf,
+    /// The revision of the target and of each open sheet of its project.
     pub(crate) revisions: BTreeMap<PathBuf, u64>,
     pub(crate) origin: Origin,
     pub(crate) serving: bool,
@@ -291,10 +324,12 @@ impl Signex {
         (!plan.is_empty()).then_some((target, plan))
     }
 
-    /// Add the project of `target` to `plan` when it has a closed sheet.
+    /// Add the project of `target` to `plan` when it, or a file the list's
+    /// sheet symbols refer to, has a closed sheet.
     fn plan_project_read(&self, target: &Path, plan: &mut ReadPlan) {
         let docs = &self.document_state;
         let Some(project) = docs.document_project(target) else {
+            plan.seeds.clear();
             return;
         };
         let fold = crate::app::state::project_case::fold_of(Some(project));
@@ -302,9 +337,34 @@ impl Signex {
             project_pages(Some(project)),
             resolve_netlist_root_for(docs, target),
         );
-        if !project_in_memory(self, &pages, &root, fold) {
-            plan.project = Some((open_sheets_snapshot(docs), pages, root, fold));
+        let page_keys: HashSet<String> = pages.iter().map(|p| path_key_with(p, fold)).collect();
+        plan.seeds
+            .retain(|seed| !page_keys.contains(&path_key_with(seed, fold)));
+        let walked: Vec<PathBuf> = pages.iter().chain(&plan.seeds).cloned().collect();
+        if !project_in_memory(self, &walked, &root, fold) {
+            let open = open_sheets_snapshot(docs);
+            plan.project = Some(ProjectRead {
+                open,
+                pages,
+                root,
+                fold,
+            });
         }
+    }
+
+    /// The revision of `target` and of each open sheet of its project: what
+    /// an edit's reads depend on.
+    pub(super) fn watched_revisions(&self, target: &Path) -> BTreeMap<PathBuf, u64> {
+        let docs = &self.document_state;
+        let project = docs.document_project(target).map(|p| p.id);
+        docs.engines
+            .iter()
+            .filter(|(path, _)| {
+                path.as_path() == target
+                    || (project.is_some() && docs.document_project(path).map(|p| p.id) == project)
+            })
+            .map(|(path, engine)| (path.clone(), engine.revision()))
+            .collect()
     }
 
     fn start_reads(
@@ -314,18 +374,7 @@ impl Signex {
         target: &Path,
         plan: ReadPlan,
     ) -> Ran {
-        let docs = &self.document_state;
-        let mut revisions: BTreeMap<PathBuf, u64> = BTreeMap::new();
-        if let Some((open, ..)) = &plan.project {
-            for path in open.keys() {
-                if let Some(engine) = docs.engines.get(path) {
-                    revisions.insert(path.clone(), engine.revision());
-                }
-            }
-        }
-        if let Some(engine) = docs.engines.get(target) {
-            revisions.insert(target.to_path_buf(), engine.revision());
-        }
+        let revisions = self.watched_revisions(target);
         let edits = &mut self.document_state.agent_edits;
         edits.tickets += 1;
         let ticket = edits.tickets;
@@ -333,17 +382,14 @@ impl Signex {
             ticket,
             command: command.clone(),
             args: args.clone(),
+            target: target.to_path_buf(),
             revisions,
             origin: self.agent.origin.clone(),
             serving: self.agent.serving,
             reads: Arc::new(EditReads::default()),
         };
         let task = Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || plan.read())
-                    .await
-                    .unwrap_or_default()
-            },
+            async move { landed(tokio::task::spawn_blocking(move || plan.read()).await) },
             move |reads| {
                 let loaded = ReadsLoaded {
                     reads: Arc::new(reads),
@@ -435,14 +481,20 @@ impl Signex {
     /// Run the edit `loaded` waited for, on its reads, as it would have run;
     /// refused when a sheet it depends on changed meanwhile.
     pub(crate) fn run_with_reads(&mut self, loaded: ReadsLoaded) -> Ran {
-        let changed = loaded.revisions.iter().any(|(path, revision)| {
-            self.document_state
-                .engines
-                .get(path)
-                .map(signex_engine::Engine::revision)
-                != Some(*revision)
-        });
-        if changed {
+        if let Some(why) = &loaded.reads.failed {
+            crate::diagnostics::log_warning(format!(
+                "Reading the files `{}` needs failed: {why}",
+                loaded.command.as_str()
+            ));
+            return (
+                CommandOutcome::disabled(format!(
+                    "reading the files this edit needs failed ({why}); nothing was applied"
+                )),
+                Task::none(),
+            );
+        }
+        // A revision that moved, or a project sheet opened or closed.
+        if self.watched_revisions(&loaded.target) != loaded.revisions {
             return (
                 CommandOutcome::disabled(
                     "the document changed while its project and files were read; retry. Nothing was applied",

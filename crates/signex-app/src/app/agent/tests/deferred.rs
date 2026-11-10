@@ -54,6 +54,65 @@ fn a_request_that_reads_the_disk_is_answered_after_its_edit_ran() {
     assert!(revision_in(&app, dir.path(), file) > started);
 }
 
+/// What happens while a request waits for its reads is not in its reply:
+/// neither a document changed meanwhile nor a Messages line logged meanwhile.
+#[test]
+fn a_waiting_reply_reports_only_what_its_own_edit_did() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_in(dir.path());
+    let b = dir.path().join("b.snxsch");
+    let edits = json!([{"id": "place_sheet_symbol", "args": {
+        "start": "100,100", "end": "120,120", "name": "Child", "file": "child.snxsch"
+    }}]);
+    let text = line(
+        &app,
+        "apply_edits",
+        json!({"document": b.display().to_string(), "expect_revision": revision_in(&app, dir.path(), "b.snxsch"), "edits": edits}),
+    );
+    let (reply, mut answer) = AgentReply::channel();
+    let call = AgentCall {
+        pid: Some(4244),
+        input: Input::Line(text),
+        reply,
+    };
+    let waiting = app.update(Message::Agent(AgentMsg::Request(call)));
+
+    // While the first one's reads run, a sheet of no project changes and
+    // Messages gets a line that is not the waiting edit's.
+    let loose = dir.path().join("elsewhere").join("loose.snxsch");
+    crate::app::handlers::editing_commands::net_color_driver::add_sheet_with(
+        &mut app,
+        &loose,
+        signex_types::schematic::SchematicSheet::default(),
+    );
+    let junction = signex_types::schematic::Junction {
+        uuid: uuid::Uuid::now_v7(),
+        position: signex_types::schematic::Point::new(1.0, 1.0),
+        ..Default::default()
+    };
+    app.document_state
+        .engines
+        .get_mut(&loose)
+        .unwrap()
+        .execute(signex_engine::Command::PlaceJunction { junction })
+        .expect("an edit elsewhere");
+    crate::diagnostics::log_info("meanwhile, pid 42990 did something else");
+
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, waiting)
+        .expect("the reads land");
+    let reply = answer.try_recv().unwrap().expect("answered");
+    let reply: serde_json::Value = serde_json::from_str(&reply).expect("JSON");
+    assert_eq!(reply["status"], "answered", "{reply}");
+    assert_eq!(
+        reply["changed"],
+        json!([b.display().to_string()]),
+        "{reply}"
+    );
+    let lines = reply["messages"].to_string();
+    assert!(!lines.contains("pid 42990"), "{lines}");
+}
+
 fn revision_in(app: &crate::app::Signex, dir: &std::path::Path, file: &str) -> u64 {
     app.document_state.engines[&dir.join(file)].revision()
 }

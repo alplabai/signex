@@ -7,18 +7,15 @@
 
 use iced::Task;
 
+use super::AgentReply;
 use super::reply::outcome_verdict;
-use super::{AgentReply, ChangeSnapshot};
 use crate::app::command::{CommandOutcome, ReadsLoaded};
 use crate::app::{Message, Signex};
 
-/// What the reply to a waiting request needs: the request's id and caller,
-/// and what the app looked like when it arrived.
+/// What the reply to a waiting request needs: the request's id and caller.
 pub(crate) struct WaitingReply {
     pub(super) id: Option<String>,
     pub(super) pid: Option<u32>,
-    pub(super) mark: Option<u64>,
-    pub(super) before: ChangeSnapshot,
     pub(super) reply: AgentReply,
 }
 
@@ -29,6 +26,11 @@ impl Signex {
     pub(crate) fn handle_edit_reads_loaded(&mut self, loaded: ReadsLoaded) -> Task<Message> {
         let ticket = loaded.ticket;
         let id = loaded.command.as_str().to_string();
+        // The reply reports what this run does: what other requests or the
+        // person changed and logged while the reads ran is not the agent's
+        // (its first pass was refused with nothing applied).
+        let mark = crate::diagnostics::newest_entry_id();
+        let before = self.change_snapshot();
         let (outcome, task) = self.run_with_reads(loaded);
         match self.agent.waiting.remove(&ticket) {
             Some(waiting) => {
@@ -36,8 +38,8 @@ impl Signex {
                 self.send_agent_reply(
                     waiting.id.as_deref(),
                     waiting.pid,
-                    waiting.mark,
-                    &waiting.before,
+                    mark,
+                    &before,
                     verdict,
                     &waiting.reply,
                 );

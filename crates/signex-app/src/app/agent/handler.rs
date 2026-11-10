@@ -396,13 +396,12 @@ impl Signex {
         let before = self.change_snapshot();
         let origin = super::Origin::agent(call.pid);
         let (id, verdict, task) = self.with_origin(origin, |app| app.agent_verdict(&call.input));
-        // A command waiting for its reads answers when they land (#2199).
+        // A command waiting for its reads answers when they land (#2199), with
+        // what its run then changed and logged.
         if let Some(ticket) = self.agent.deferred.take() {
             let waiting = super::deferred::WaitingReply {
                 id,
                 pid: call.pid,
-                mark,
-                before,
                 reply: call.reply,
             };
             self.agent.waiting.insert(ticket, waiting);

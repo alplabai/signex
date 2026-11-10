@@ -153,17 +153,38 @@ impl Signex {
         if target == normalised_key(sheet, fold) {
             return Err("`file` is this sheet: a sheet cannot contain itself".to_string());
         }
-        // shortcut: only the hierarchy already in memory is read (no disk
-        // read in `update`), so an ancestor it does not hold yet is missed.
-        if self
-            .hierarchy_describing(sheet)
-            .is_some_and(|(h, _)| sheets_above(h, sheet, fold).contains(&target))
-        {
+        if self.sheets_above_edited(sheet, fold)?.contains(&target) {
             return Err(
                 "`file` is an ancestor of this sheet: a sheet cannot contain itself".to_string(),
             );
         }
         Ok(reference)
+    }
+
+    /// The keys of the sheets above `sheet`: in its project's hierarchy built
+    /// from the project as the edit's checks read it (the closed sheets read
+    /// before the edit ran, `edit_reads`), and in the hierarchy a window
+    /// already holds for it (a sheet the project does not own yet).
+    fn sheets_above_edited(&self, sheet: &Path, fold: CaseFold) -> Result<HashSet<String>, String> {
+        let mut above = self
+            .hierarchy_describing(sheet)
+            .map(|(h, _)| sheets_above(h, sheet, fold))
+            .unwrap_or_default();
+        if self.document_state.document_project(sheet).is_none() {
+            return Ok(above);
+        }
+        let set = self.edit_project_set(sheet)?;
+        let docs = &self.document_state;
+        let root = crate::app::project_sheets::resolve_netlist_root_for(docs, sheet);
+        let hierarchy = crate::app::sheet_hierarchy::build_sheet_hierarchy(
+            &set.sheets,
+            &set.unreadable,
+            &root,
+            &set.pages_outside_the_hierarchy,
+            set.fold,
+        );
+        above.extend(sheets_above(&hierarchy, sheet, fold));
+        Ok(above)
     }
 
     fn place_sheet_symbol_from_operands(

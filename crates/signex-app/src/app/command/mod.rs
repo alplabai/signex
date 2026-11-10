@@ -18,6 +18,8 @@ pub(crate) mod bridge;
 mod document_operand_tests;
 mod document_operands;
 #[cfg(test)]
+mod edit_read_list_tests;
+#[cfg(test)]
 mod edit_read_tests;
 mod edit_reads;
 pub(crate) mod enablement;
