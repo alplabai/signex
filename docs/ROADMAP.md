@@ -321,7 +321,9 @@ when the project is created and can be switched in the AI panel; the
 Community New Project setup (#2232) has no AI choice.
 All three call the same undoable commands the menus and keys call (the
 Command Registry, #278, which moves here from Advanced Schematic), all act
-under the user's identity, and none writes to disk without the user's save.
+under the user's identity, and none writes the open design to disk without
+the user's save. A tool that reaches outside the design (a library write, an
+export) is governed by its approval prompt instead.
 
 - **Assistant:** the user drives. Chat with the open design as context;
   explanations, design reviews, and ERC / DRC fix suggestions. The AI edits
@@ -340,7 +342,7 @@ under the user's identity, and none writes to disk without the user's save.
   checkpoint to go back to. Tools that reach outside the design
   (distributor search, library writes, running an export) ask first, unless
   the user allows that tool for the session.
-- **Generator:** the agent runs a staged workflow and drives from a written
+- **Generator** (Pro only): the agent runs a staged workflow and drives from a written
   specification (function, interfaces, power, size, cost, preferred parts),
   in stages. Each stage
   stops for the user's approval as a change list they can review entry by
@@ -390,7 +392,8 @@ it changed and why, and it prefers the simpler design when both pass.
   USB-C supply and a few sensors, say), Signex produces an ERC-clean
   schematic and a placed, routed, DRC-clean board, with the user approving
   each stage.
-- No AI change reaches disk without the user's save.
+- No AI change to the open design reaches disk without the user's save;
+  tools outside the design write only after their approval prompt.
 
 Signex AI ships in Pro, built from the separate private Pro repository, and runs
 through Signex's hosted service. Licensing and billing stay in the Pro
