@@ -122,6 +122,37 @@ fn a_new_entry_on_a_wire_end_is_reported_and_an_old_one_is_not() {
 }
 
 #[test]
+fn a_new_entry_on_a_bus_run_and_a_pin_on_a_no_connect_are_reported() {
+    let mut before = with_lib();
+    before.buses.push(signex_types::schematic::Bus {
+        uuid: Uuid::now_v7(),
+        start: pt(20.0, 10.0),
+        end: pt(20.0, 40.0),
+    });
+    before.child_sheets.push(symbol_with(Vec::new()));
+    let mut after = before.clone();
+    // On the bus's run, not its end.
+    after.child_sheets[0]
+        .pins
+        .push(entry("D[0..7]", pt(20.0, 25.0)));
+    let found = placement_contacts(&before, &after);
+    assert_eq!(found.len(), 1);
+    assert_eq!(
+        (found[0].kind, found[0].position),
+        (ExtraKind::Bus, pt(20.0, 25.0))
+    );
+
+    let mut before = with_lib();
+    before.no_connects.push(signex_types::schematic::NoConnect {
+        uuid: Uuid::now_v7(),
+        position: pt(10.0, 0.0),
+    });
+    let found = placement_contacts(&before, &placed(&before, (0.0, 0.0)));
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].kind, ExtraKind::NoConnect);
+}
+
+#[test]
 fn a_part_pin_on_a_sheet_entry_names_the_entry() {
     let mut before = with_lib();
     before

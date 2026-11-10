@@ -1,8 +1,9 @@
 //! The connection rule of a headless part, sheet symbol or sheet entry
 //! placement (#2199, decision comment 6769277106): an edit from operands never
 //! connects anything the caller did not name, so a new pin tip or entry point
-//! that lands on a wire (end or run), a junction, a label, a sheet entry or
-//! another pin tip is refused, and the caller wires it afterwards. Rules:
+//! that lands on a wire or bus (end or run), a junction, a label, a sheet
+//! entry, a no-connect flag or another pin tip is refused, and the caller wires
+//! it afterwards. Rules:
 //! `docs/CLI.md`, "Placing parts and hierarchy".
 //!
 //! The caller applies the placement's real engine commands to a copy of the
@@ -107,6 +108,22 @@ fn items_at(sheet: &SchematicSheet, at: Point) -> Vec<ExtraItem> {
     }
     for (_, p, name) in sheet_entries(sheet).filter(|(_, p, _)| pt_key(p) == key) {
         found.push(item(ExtraKind::SheetPin, name, p));
+    }
+    // A sheet entry on a bus is a bus port: it joins the bus's members.
+    for b in sheet
+        .buses
+        .iter()
+        .filter(|b| point_on_segment(key, pt_key(&b.start), pt_key(&b.end)))
+    {
+        found.push(item(ExtraKind::Bus, b.uuid.to_string(), at));
+    }
+    // A pin or entry on a no-connect flag would be marked as left open.
+    for n in sheet
+        .no_connects
+        .iter()
+        .filter(|n| pt_key(&n.position) == key)
+    {
+        found.push(item(ExtraKind::NoConnect, n.uuid.to_string(), n.position));
     }
     found
 }

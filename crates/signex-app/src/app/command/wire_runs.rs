@@ -37,6 +37,8 @@ pub(super) fn describe(item: &ExtraItem) -> String {
         ExtraKind::Junction => "a junction".to_string(),
         ExtraKind::Wire => "another wire".to_string(),
         ExtraKind::SheetPin => format!("sheet pin {}", item.identity),
+        ExtraKind::Bus => "a bus".to_string(),
+        ExtraKind::NoConnect => "a no-connect flag".to_string(),
     };
     format!("{what} at {}", at(item.position))
 }

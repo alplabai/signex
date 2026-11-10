@@ -35,6 +35,10 @@ pub enum ExtraKind {
     Wire,
     /// A child-sheet pin; the identity is `<pin> of <sheet name>`.
     SheetPin,
+    /// A bus segment (placement contacts only); the identity is its uuid.
+    Bus,
+    /// A no-connect flag (placement contacts only); the identity is its uuid.
+    NoConnect,
 }
 
 /// An item that was on another net before and is on the run's net now.
