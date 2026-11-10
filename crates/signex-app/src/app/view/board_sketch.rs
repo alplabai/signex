@@ -35,7 +35,7 @@ impl Signex {
             &self.ui_state.i18n,
         )
         .map(Message::Library);
-        Some(stack![canvas, self.board_sketch_bar(session)].into())
+        Some(stack![canvas, self.board_sketch_bar(session)].boxed())
     }
 
     /// The mode's bar: its name, the last refusal, Apply, Leave and Discard.
@@ -54,7 +54,8 @@ impl Signex {
             bar = bar.push(
                 text(signex_i18n::UserText::new(refusal))
                     .size(TS.caption)
-                    .color(theme_ext::error_color(tokens)),
+                    .color(theme_ext::error_color(tokens))
+                    .boxed(),
             );
         }
         let apply = session

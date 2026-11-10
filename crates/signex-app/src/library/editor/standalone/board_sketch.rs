@@ -2,8 +2,8 @@
 //! sketch canvas over the board, with its DOF chip. The board's own bar
 //! (Apply, Leave, Discard) is the app's, layered on top.
 
-use iced::Element;
 use iced::widget::Stack;
+use iced::{Element, Widget as _};
 use signex_i18n::I18n;
 use signex_types::theme::ThemeTokens;
 
@@ -23,5 +23,5 @@ pub fn view_board_sketch<'a>(
             editor, tokens, look.bg, look.dot,
         ))
         .push(super::dof_chip::overlay(editor, tokens, i18n))
-        .into()
+        .boxed()
 }
