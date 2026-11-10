@@ -184,6 +184,7 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::ReconcileChildSheetPins { .. }
         | Command::RenameChildSheetFile { .. }
         | Command::ModifyChildSheet { .. }
+        | Command::SetChildSheetInstances { .. }
         | Command::SetPaperSize { .. }
         | Command::SetSheetFrame { .. }
         | Command::SetSheetColor { .. }

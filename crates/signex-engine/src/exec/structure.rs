@@ -360,6 +360,24 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::SetChildSheetInstances {
+                sheet_id,
+                instances,
+            } => {
+                let Some(sheet) = (self.document.child_sheets.iter_mut())
+                    .find(|cs| cs.uuid == sheet_id)
+                    .filter(|cs| cs.instances != instances)
+                else {
+                    return Ok(CommandResult::unchanged());
+                };
+                sheet.instances = instances;
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SheetNumbersEdited,
+                    document: DocumentPatch::CHILD_SHEETS,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
             Command::SetPaperSize { paper_size } => {
                 if self.document.paper_size == paper_size {
                     return Ok(CommandResult::unchanged());

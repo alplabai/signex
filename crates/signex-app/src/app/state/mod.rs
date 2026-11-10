@@ -185,6 +185,8 @@ pub enum ModalId {
     /// v0.18.14.1 — Custom Selection Filter modal (8-row checkbox
     /// table; opens from the Properties `Custom…` button).
     SelectionFilterCustom,
+    /// File ▸ New Project: the setup dialog (#2277).
+    NewProject,
     /// Help ▸ About Signex.
     About,
     /// The keyboard-shortcuts reference sheet (F1).

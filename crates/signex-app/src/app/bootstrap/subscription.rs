@@ -56,6 +56,7 @@ struct OpenOverlays {
     grid_properties_open: bool,
     selection_filter_custom_open: bool,
     new_project_open: bool,
+    sheet_numbering_open: bool,
     library_picker_open: bool,
     library_document_options_open: bool,
     library_updates_open: bool,
@@ -171,6 +172,7 @@ impl OpenOverlays {
             || self.app_quit_confirm_open
             || self.project_close_confirm_open
             || self.create_child_sheet_confirm_open
+            || self.new_project_open
             || self.rename_open
             || self.remove_open
             || self.annotate_reset_confirm_open
@@ -310,6 +312,9 @@ impl OpenOverlays {
             OverlayId::NewProject => self
                 .new_project_open
                 .then(|| Message::from(crate::app::NewProjectMsg::CancelRequested)),
+            OverlayId::SheetNumbering => self
+                .sheet_numbering_open
+                .then(|| Message::from(crate::app::SheetNumberingMsg::CancelRequested)),
             OverlayId::AnnotateDialog => self
                 .annotate_open
                 .then(|| Message::Annotate(AnnotateMsg::CloseDialog)),
@@ -449,6 +454,7 @@ pub(crate) fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<Over
         ModalId::EnableVersionControl => Some(OverlayId::EnableVersionControl),
         ModalId::GridProperties => Some(OverlayId::GridProperties),
         ModalId::SelectionFilterCustom => Some(OverlayId::SelectionFilterCustom),
+        ModalId::NewProject => Some(OverlayId::NewProject),
         ModalId::About => Some(OverlayId::About),
         ModalId::KeyboardShortcuts => Some(OverlayId::KeyboardShortcuts),
         ModalId::PassiveCalculator => Some(OverlayId::PassiveCalculator),
@@ -604,6 +610,7 @@ impl Signex {
             selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some()
                 && !modal_detached(crate::app::state::ModalId::SelectionFilterCustom),
             new_project_open: self.ui_state.new_project.is_some(),
+            sheet_numbering_open: self.ui_state.sheet_numbering.is_some(),
             library_picker_open: self.library.picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPicker),
             library_document_options_open: self.library.document_options.is_some()
@@ -1691,6 +1698,7 @@ mod tests {
             grid_properties_open,
             selection_filter_custom_open,
             new_project_open,
+            sheet_numbering_open,
             library_picker_open,
             library_document_options_open,
             library_updates_open,
@@ -1752,6 +1760,7 @@ mod tests {
             }),
             ("grid_properties_open", |o| o.grid_properties_open = true),
             ("new_project_open", |o| o.new_project_open = true),
+            ("sheet_numbering_open", |o| o.sheet_numbering_open = true),
             ("selection_filter_custom_open", |o| {
                 o.selection_filter_custom_open = true
             }),

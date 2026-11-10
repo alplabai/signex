@@ -101,6 +101,7 @@ pub enum CommandKind {
     ReconcileChildSheetPins,
     RenameChildSheetFile,
     ModifyChildSheet,
+    SetChildSheetInstances,
     SetPaperSize,
     SetSheetFrame,
     SetSheetColor,
@@ -450,6 +451,12 @@ pub enum Command {
         name: Option<String>,
         filename: Option<String>,
     },
+    /// Replace one placed sheet symbol's per-placement entries (its manual
+    /// sheet numbers, #2247), by `sheet_id`. Undoable like any other edit.
+    SetChildSheetInstances {
+        sheet_id: Uuid,
+        instances: Vec<signex_types::schematic::SheetInstance>,
+    },
     /// Set the sheet's paper size (a named format like "A4"/"A3" — the
     /// Page Options panel is the producer). Persists through
     /// `SchematicSheet.paper_size` and is undoable like any other edit.
@@ -643,6 +650,7 @@ impl Command {
             Command::ReconcileChildSheetPins { .. } => CommandKind::ReconcileChildSheetPins,
             Command::RenameChildSheetFile { .. } => CommandKind::RenameChildSheetFile,
             Command::ModifyChildSheet { .. } => CommandKind::ModifyChildSheet,
+            Command::SetChildSheetInstances { .. } => CommandKind::SetChildSheetInstances,
             Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
             Command::SetSheetFrame { .. } => CommandKind::SetSheetFrame,
             Command::SetSheetColor { .. } => CommandKind::SetSheetColor,

@@ -66,7 +66,10 @@ pub use names::{MultiNamedNet, NetNameSource};
 pub use net_index::{HoverPin, NetAnchor, NetHover, NetIndex, is_auto_name};
 
 pub use designators::instance_entry_designators;
-pub use sheet_numbers::{NumberingIssue, SheetNumbering, SheetPage, sheet_numbering};
+pub use sheet_numbers::{
+    NumberingIssue, PagePlacement, SheetNumbering, SheetPage, number_issues, parse_page_number,
+    sheet_numbering, with_page_number,
+};
 
 /// Opaque, host-neutral identifier for one sheet within a [`ProjectGraph`] —
 /// a resolved path made relative to a fixed base and normalized by the

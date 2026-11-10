@@ -953,6 +953,26 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "tile_windows_horizontally",
+        category: "window",
+        label: "Tile windows one above the other",
+        menu_label: Some("Tile Horizontally"),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "tile_windows_vertically",
+        category: "window",
+        label: "Tile windows side by side",
+        menu_label: Some("Tile Vertically"),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "toggle_cross_select_mode",
         category: "select",
         label: "Toggle Cross Select Mode",

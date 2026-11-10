@@ -14,6 +14,8 @@ mod detached_confirm_tests;
 mod detached_library_tests;
 pub mod detached_modals;
 #[cfg(test)]
+mod detached_new_project_tests;
+#[cfg(test)]
 mod detached_wrap_tests;
 mod dialog_window;
 pub mod dock;
@@ -55,3 +57,4 @@ pub mod selection_workflow;
 pub mod window_controls;
 pub mod window_geometry_events;
 pub mod window_placement;
+pub mod window_tiling;
