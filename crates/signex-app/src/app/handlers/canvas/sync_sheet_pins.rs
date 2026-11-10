@@ -11,12 +11,22 @@ use crate::app::mutation_gateway::CommandOutcome;
 
 /// One child file validated and ready to reconcile, with the state needed to
 /// report its result after the batch runs.
-struct PendingFileSync {
-    filename: String,
+pub(crate) struct PendingFileSync {
+    pub(crate) filename: String,
     ports: Vec<signex_engine::SheetPort>,
     blank_labels: usize,
     before: Vec<String>,
-    names_before: Vec<String>,
+    pub(crate) names_before: Vec<String>,
+}
+
+impl PendingFileSync {
+    /// The reconcile this file's sync applies.
+    pub(crate) fn command(&self) -> signex_engine::Command {
+        signex_engine::Command::ReconcileChildSheetPins {
+            child_filename: self.filename.clone(),
+            ports: self.ports.clone(),
+        }
+    }
 }
 
 impl crate::app::Signex {
@@ -33,20 +43,15 @@ impl crate::app::Signex {
         // ONE batch so a single Ctrl+Z undoes the whole action (#533).
         let mut syncs: Vec<PendingFileSync> = Vec::new();
         for filename in filenames {
-            if let Some(sync) = self.prepare_child_file_sync(&filename) {
-                syncs.push(sync);
+            match self.prepare_child_file_sync(&filename) {
+                Ok(sync) => syncs.push(sync),
+                Err(why) => crate::diagnostics::log_warning(format!("Sync Sheet Pins: {why}")),
             }
         }
         if syncs.is_empty() {
             return;
         }
-        let commands = syncs
-            .iter()
-            .map(|sync| signex_engine::Command::ReconcileChildSheetPins {
-                child_filename: sync.filename.clone(),
-                ports: sync.ports.clone(),
-            })
-            .collect();
+        let commands = syncs.iter().map(PendingFileSync::command).collect();
         let (outcome, reason) = self.apply_engine_commands_reporting(commands, true, true);
         if outcome == CommandOutcome::Failed {
             let reason = reason.unwrap_or_else(|| "the engine refused the batch".to_string());
@@ -63,37 +68,26 @@ impl crate::app::Signex {
         }
     }
 
-    /// Resolve and load `filename`'s child schematic and derive its ports.
-    /// Reports and returns `None` when the file cannot be used.
-    fn prepare_child_file_sync(&self, filename: &str) -> Option<PendingFileSync> {
+    /// Resolve and load `filename`'s child schematic and derive its ports, on
+    /// the sheet an edit acts on; why not, when the file cannot be used.
+    pub(crate) fn prepare_child_file_sync(
+        &self,
+        filename: &str,
+    ) -> Result<PendingFileSync, String> {
         let Some(path) = self.resolve_child_sheet_path(filename) else {
-            crate::diagnostics::log_warning(format!(
-                "Sync Sheet Pins: sheet symbol references no file ('{filename}')"
-            ));
-            return None;
+            return Err(format!("sheet symbol references no file ('{filename}')"));
         };
         let child = match crate::app::project_sheets::load_sheet(&self.document_state, &path) {
             Ok(Some(child)) => child,
             Ok(None) => {
-                crate::diagnostics::log_warning(format!(
-                    "Sync Sheet Pins: child schematic not found: {}",
-                    path.display()
-                ));
-                return None;
+                return Err(format!("child schematic not found: {}", path.display()));
             }
-            Err(why) => {
-                crate::diagnostics::log_warning(format!(
-                    "Sync Sheet Pins: child schematic {} {why}",
-                    path.display()
-                ));
-                return None;
-            }
+            Err(why) => return Err(format!("child schematic {} {why}", path.display())),
         };
-        let Some(parent) = self.document_state.active_engine().map(|e| e.document()) else {
-            crate::diagnostics::log_warning("Sync Sheet Pins: no active schematic to sync");
-            return None;
+        let Some(parent) = self.document_state.edit_engine().map(|e| e.document()) else {
+            return Err("no active schematic to sync".to_string());
         };
-        Some(PendingFileSync {
+        Ok(PendingFileSync {
             filename: filename.to_string(),
             ports: signex_engine::ports_for_pin_sync(&child, parent, filename),
             blank_labels: signex_engine::blank_port_label_count(&child),
@@ -104,7 +98,7 @@ impl crate::app::Signex {
 
     /// Report what the batch did for one file, comparing its pins before and
     /// after so each file is reported on its own.
-    fn report_file_sync(&self, sync: &PendingFileSync) {
+    pub(crate) fn report_file_sync(&self, sync: &PendingFileSync) {
         let filename = sync.filename.as_str();
         let changed = self.pin_snapshot_for(filename) != sync.before;
         self.report_unplaced_ports(filename, &sync.ports);
@@ -142,7 +136,7 @@ impl crate::app::Signex {
     /// Full state of every sheet pin on the active sheet's symbols of
     /// `filename`, for before/after comparison.
     fn pin_snapshot_for(&self, filename: &str) -> Vec<String> {
-        let Some(engine) = self.document_state.active_engine() else {
+        let Some(engine) = self.document_state.edit_engine() else {
             return Vec::new();
         };
         engine
@@ -157,7 +151,7 @@ impl crate::app::Signex {
     /// The engine leaves a port unplaced when the symbol's edge has no free
     /// slot (stacking pins on one point would short their nets).
     fn report_unplaced_ports(&self, filename: &str, ports: &[signex_engine::SheetPort]) {
-        let Some(parent) = self.document_state.active_engine().map(|e| e.document()) else {
+        let Some(parent) = self.document_state.edit_engine().map(|e| e.document()) else {
             return;
         };
         for (symbol, names) in signex_engine::unplaced_sheet_ports(parent, filename, ports) {
@@ -169,8 +163,8 @@ impl crate::app::Signex {
     }
 
     /// Every sheet pin name on the active sheet's symbols of `filename`.
-    fn pin_names_for(&self, filename: &str) -> Vec<String> {
-        let Some(engine) = self.document_state.active_engine() else {
+    pub(crate) fn pin_names_for(&self, filename: &str) -> Vec<String> {
+        let Some(engine) = self.document_state.edit_engine() else {
             return Vec::new();
         };
         engine

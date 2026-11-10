@@ -60,7 +60,6 @@ const VIEW: &[&str] = &[
 const TOOLS: &[&str] = &[
     "clear_net_color",
     "draw_arc",
-    "place_component",
     "lasso_select",
     "cancel_current_tool",
     "measure_distance",

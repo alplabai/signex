@@ -209,14 +209,26 @@ impl Signex {
                 .map_symbols(|s| s.reference = reference.clone()),
             None => self.paste_numbering(&target).apply(&session.payload),
         };
-        let placed = payload.place_commands(Point::new(x, y));
-        let commands = match placed {
-            Ok(commands) => commands,
-            Err(error) => {
-                self.report_place_failure(&format!("It could not be placed: {error}"));
-                return Task::none();
-            }
-        };
+        if let Err(detail) = self.place_part_at(&payload, Point::new(x, y)) {
+            self.report_place_failure(&detail);
+            return Task::none();
+        }
+        self.after_placement_commit(reference.as_deref());
+        Task::none()
+    }
+
+    /// Commit `payload` with its origin at `at` on the sheet an edit acts on,
+    /// as ONE undo step: the commit a click and `place_component` from
+    /// operands share (#2199). Returns the placed symbols' uuids, or why
+    /// nothing was placed.
+    pub(crate) fn place_part_at(
+        &mut self,
+        payload: &PlacementPayload,
+        at: Point,
+    ) -> Result<std::collections::HashSet<uuid::Uuid>, String> {
+        let commands = payload
+            .place_commands(at)
+            .map_err(|error| format!("It could not be placed: {error}"))?;
         let placed_ids: std::collections::HashSet<uuid::Uuid> = commands
             .iter()
             .filter_map(|c| match c {
@@ -227,14 +239,12 @@ impl Signex {
         // `false` covers an engine error (logged by the gateway) or an
         // unchanged result; either way nothing was placed.
         if !self.apply_engine_commands(commands, false, false) {
-            self.report_place_failure("Nothing was placed; see the log for details.");
-            return Task::none();
+            return Err("Nothing was placed; see the log for details.".to_string());
         }
-        if let Some(path) = self.document_state.active_path.clone() {
-            self.warn_mixed_version_parts(&[(path, placed_ids)].into());
+        if let Some(path) = self.document_state.edit_path().map(Path::to_path_buf) {
+            self.warn_mixed_version_parts(&[(path, placed_ids.clone())].into());
         }
-        self.after_placement_commit(reference.as_deref());
-        Task::none()
+        Ok(placed_ids)
     }
 
     /// Step a typed designator and redraw the ghost with the next one; a

@@ -24,6 +24,9 @@ mod file_operands;
 #[cfg(test)]
 mod headless_gui_only_tests;
 #[cfg(test)]
+mod hierarchy_operand_tests;
+mod hierarchy_operands;
+#[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
 mod needs;
 mod opened;
@@ -32,6 +35,9 @@ mod operand_handler_tests;
 mod operand_handlers;
 mod operands;
 mod outcome;
+#[cfg(test)]
+mod part_operand_tests;
+mod part_operands;
 #[cfg(test)]
 mod placement_operand_tests;
 mod placement_operands;

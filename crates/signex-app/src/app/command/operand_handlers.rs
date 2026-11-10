@@ -14,6 +14,8 @@ use iced::Task;
 use super::agent_edits as agent;
 use super::document_operands as doc;
 use super::file_operands as file;
+use super::hierarchy_operands as hierarchy;
+use super::part_operands as part;
 use super::placement_operands as place;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::{Message, Signex};
@@ -63,7 +65,15 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("draw_line", place::line),
     ("draw_graphic_line", place::line),
     ("draw_rectangle", place::rectangle),
+    ("place_component", part::place_component),
+    ("place_sheet_symbol", hierarchy::place_sheet_symbol),
+    ("place_sheet_entry", hierarchy::place_sheet_entry),
+    ("sync_sheet_pins", hierarchy::sync_sheet_pins),
 ];
+
+/// Commands whose operands name what a GUI run takes from the selection, so
+/// the selection gate does not apply to their operand form (#2199).
+const NAMES_ITS_SUBJECT: &[&str] = &["sync_sheet_pins"];
 
 /// The handler of `command`, if it runs its operands.
 pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> {
@@ -122,8 +132,8 @@ impl Signex {
         };
         if names_its_document(command) || args.operand("document").is_some() {
             self.reconcile_document_ids();
-        } else if let Some(reason) =
-            enablement::disabled_reason(command, &self.command_context(None))
+        } else if !NAMES_ITS_SUBJECT.contains(&command.as_str())
+            && let Some(reason) = enablement::disabled_reason(command, &self.command_context(None))
         {
             return refused(reason);
         }

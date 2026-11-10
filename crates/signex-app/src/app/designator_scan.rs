@@ -155,12 +155,16 @@ impl Signex {
         )
     }
 
-    /// Run the scan on the calling thread and apply it - tests only.
-    #[cfg(test)]
+    /// Run the scan on the calling thread and apply it, unless the cache is
+    /// current. An edit from operands numbers its part before any task could
+    /// land (`place_component`, #2199), so it reads the closed sheets here.
     pub(crate) fn scan_designators_blocking(&mut self, sheet: &Path) {
         let Some(id) = self.document_state.document_project(sheet).map(|p| p.id) else {
             return;
         };
+        if self.designators_current(sheet) {
+            return;
+        }
         let stamp = self.designator_scan_stamp(id, sheet);
         let inputs = self.capture_designator_inputs(id, sheet, stamp);
         let cache = &mut self.document_state.designator_cache;

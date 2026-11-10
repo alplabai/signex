@@ -229,6 +229,7 @@ mod tests {
             "draw_rectangle",
             "draw_wire",
             "place_bus",
+            "place_component",
             "place_global_label",
             "place_hierarchical_label",
             "place_junction",
@@ -237,9 +238,12 @@ mod tests {
             "place_no_connect",
             "place_no_erc",
             "place_power_symbol",
+            "place_sheet_entry",
+            "place_sheet_symbol",
             "place_text",
             "place_text_string",
             "place_wire",
+            "sync_sheet_pins",
         ];
         let mut found = editable_ids();
         found.sort_unstable();

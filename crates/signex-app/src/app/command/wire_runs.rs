@@ -30,7 +30,7 @@ fn at(p: Point) -> String {
     format!("{},{}", p.x, p.y)
 }
 
-fn describe(item: &ExtraItem) -> String {
+pub(super) fn describe(item: &ExtraItem) -> String {
     let what = match item.kind {
         ExtraKind::Pin => format!("pin {}", item.identity),
         ExtraKind::Label => format!("label `{}`", item.identity),
