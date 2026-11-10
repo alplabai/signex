@@ -64,6 +64,11 @@ pub struct NetNavState {
     /// The index and panel state the Net Inspector's rows were last built
     /// from (#1269). Holding the index keeps its identity unique, so an
     /// update that changed neither builds no rows.
+    /// What the Net Inspector's last sync saw (connectivity, projects, the
+    /// active document and the panel state), so an update that changed none
+    /// of them, such as a cursor move, does no planning. Cleared when an
+    /// index lands.
+    pub inspector_stamp: Option<u64>,
     pub inspector_source: Option<(
         std::sync::Arc<ProjectNetData>,
         crate::panels::NetInspectorState,

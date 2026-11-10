@@ -207,6 +207,8 @@ impl Signex {
 
     /// Store a finished build and re-run what waited for it.
     pub(super) fn apply_net_index(&mut self, outcome: &IndexOutcome) -> Task<Message> {
+        // The Net Inspector lists what the cache holds: look again.
+        self.document_state.net_nav.inspector_stamp = None;
         match self.document_state.net_nav.index.apply(outcome) {
             // A newer key arrived while this one ran: build it now, once.
             Stored::Stale => match self.net_index_lookup(outcome.project) {
@@ -369,7 +371,7 @@ impl Signex {
 
     /// A stamp over what the net index depends on: the open sheets'
     /// connectivity, and each project's root and sheet list.
-    fn net_nav_stamp(&self) -> u64 {
+    pub(super) fn net_nav_stamp(&self) -> u64 {
         use std::hash::{Hash, Hasher};
         let document = &self.document_state;
         let mut hasher = std::collections::hash_map::DefaultHasher::new();

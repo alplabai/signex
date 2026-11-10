@@ -28,7 +28,7 @@ const PINS_W: f32 = TS.body * 3.5;
 
 /// The panel's own state: the filter text and the nets shown expanded, by
 /// name. Kept in `UiState`; the panel context carries a copy.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct NetInspectorState {
     pub filter: String,
     pub expanded: BTreeSet<String>,

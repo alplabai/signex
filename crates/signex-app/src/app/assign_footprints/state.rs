@@ -34,10 +34,17 @@ pub enum PartAccess {
 /// One placed part, as the table lists it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FootprintPart {
+    /// The sheet of the part's first unit.
     pub sheet: PathBuf,
-    /// The sheet as the user knows it (relative to the project folder).
+    /// The sheets the part's units sit on, as the user knows them (relative
+    /// to the project folder), joined.
     pub sheet_label: String,
+    /// The part's first unit.
     pub symbol_id: Uuid,
+    /// One unit per sheet the part sits on: Apply changes every unit of the
+    /// part on that sheet through it (`placed_unit_ids`), so a multi-unit
+    /// part spread over several sheets keeps one footprint.
+    pub units: Vec<(PathBuf, Uuid)>,
     pub designator: String,
     pub value: String,
     /// The library row's part number; `None` with no open row.

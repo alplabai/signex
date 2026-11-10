@@ -1,10 +1,11 @@
 //! Apply: every picked footprint, on every open sheet, as one undo group.
 //!
 //! Each change is checked again against the part's live document and its own
-//! library row (`footprint_binding_commands`, the Properties path). All sheets
-//! change in one `update`; a sheet that refuses puts every earlier one back,
-//! so nothing is left half applied. Only open sheets are changed and nothing
-//! is written to disk; the user saves.
+//! library row (`footprint_binding_commands`, the Properties path). A part
+//! with units on several sheets is changed on each of them. All sheets change
+//! in one `update`; a sheet that refuses puts every earlier one back, so
+//! nothing is left half applied. Only open sheets are changed and nothing is
+//! written to disk; the user saves.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -12,10 +13,17 @@ use std::path::PathBuf;
 use super::state::AssignProblem;
 use crate::app::Signex;
 
+/// One pick on one sheet: the unit that carries it there, the footprint, and
+/// the part's designator as the dialog lists it.
+struct Pick {
+    symbol_id: uuid::Uuid,
+    binding: String,
+    designator: String,
+}
+
 /// One sheet Apply changed, before the whole run is committed.
 struct Changed {
     path: PathBuf,
-    parts: usize,
     invalidation: Option<crate::schematic_runtime::RenderInvalidation>,
 }
 
@@ -29,15 +37,19 @@ impl Signex {
         if !state.can_apply() {
             return;
         }
-        let mut by_sheet: BTreeMap<PathBuf, Vec<(uuid::Uuid, String)>> = BTreeMap::new();
-        for (index, binding) in state.changes() {
-            let part = &state.parts()[index];
-            by_sheet
-                .entry(part.sheet.clone())
-                .or_default()
-                .push((part.symbol_id, binding));
+        let changes = state.changes();
+        let mut by_sheet: BTreeMap<PathBuf, Vec<Pick>> = BTreeMap::new();
+        for (index, binding) in &changes {
+            let part = &state.parts()[*index];
+            for (sheet, symbol_id) in &part.units {
+                by_sheet.entry(sheet.clone()).or_default().push(Pick {
+                    symbol_id: *symbol_id,
+                    binding: binding.clone(),
+                    designator: part.designator.clone(),
+                });
+            }
         }
-        match self.assign_across_sheets(by_sheet) {
+        match self.assign_across_sheets(by_sheet, changes.len()) {
             Ok(()) => self.ui_state.assign_footprints = None,
             Err(problem) => {
                 crate::diagnostics::log_warning(format!(
@@ -54,7 +66,8 @@ impl Signex {
     /// Change every sheet of `by_sheet`, all or nothing.
     fn assign_across_sheets(
         &mut self,
-        by_sheet: BTreeMap<PathBuf, Vec<(uuid::Uuid, String)>>,
+        by_sheet: BTreeMap<PathBuf, Vec<Pick>>,
+        parts: usize,
     ) -> Result<(), AssignProblem> {
         // Build every sheet's commands before any sheet changes.
         let mut planned = Vec::new();
@@ -67,21 +80,21 @@ impl Signex {
                 return Err(AssignProblem::ReadOnly(path));
             }
             let mut commands = Vec::new();
-            for (symbol_id, binding) in &picks {
+            for pick in &picks {
                 let mine = self
-                    .footprint_binding_commands(doc, *symbol_id, binding)
+                    .footprint_binding_commands(doc, pick.symbol_id, &pick.binding)
                     .map_err(|refusal| AssignProblem::Refused {
-                        reference: refusal.reference,
+                        reference: refused_part(&refusal.reference, &pick.designator),
                         why: refusal.why.to_string(),
                     })?;
                 commands.extend(mine);
             }
-            planned.push((path, picks.len(), commands));
+            planned.push((path, commands));
         }
 
         let group = self.mint_undo_group();
         let mut changed: Vec<Changed> = Vec::new();
-        for (path, parts, commands) in planned {
+        for (path, commands) in planned {
             let Some(engine) = self.document_state.engines.get_mut(&path) else {
                 continue;
             };
@@ -92,7 +105,6 @@ impl Signex {
             match outcome {
                 Ok(result) if result.changed => changed.push(Changed {
                     path,
-                    parts,
                     invalidation: result
                         .patch_pair
                         .map(|pair| Self::render_invalidation_for_patch(pair.document)),
@@ -108,7 +120,7 @@ impl Signex {
                 }
             }
         }
-        self.commit_assignments(group, changed);
+        self.commit_assignments(group, changed, parts);
         Ok(())
     }
 
@@ -131,16 +143,19 @@ impl Signex {
 
     /// Every sheet changed: mark them unsaved, register the group, redraw
     /// and say what happened.
-    fn commit_assignments(&mut self, group: signex_engine::UndoGroupId, changed: Vec<Changed>) {
+    fn commit_assignments(
+        &mut self,
+        group: signex_engine::UndoGroupId,
+        changed: Vec<Changed>,
+        parts: usize,
+    ) {
         let active = self.document_state.active_path.clone();
         let mut recorded = crate::app::UndoGroupSheets {
             kind: crate::app::UndoGroupKind::Footprints,
             ..Default::default()
         };
         let mut active_invalidation = None;
-        let mut parts = 0usize;
         for done in &changed {
-            parts += done.parts;
             recorded.live.push(done.path.clone());
             if active.as_deref() == Some(done.path.as_path()) {
                 active_invalidation = done.invalidation;
@@ -160,5 +175,15 @@ impl Signex {
             if parts == 1 { "" } else { "s" },
             if sheets == 1 { "" } else { "s" },
         ));
+    }
+}
+
+/// The part a refusal names: the engine's designator, else (a part no
+/// longer on its sheet has none) the one the dialog listed.
+fn refused_part(reference: &str, listed: &str) -> String {
+    if reference.trim().is_empty() {
+        listed.to_string()
+    } else {
+        reference.to_string()
     }
 }

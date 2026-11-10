@@ -145,6 +145,18 @@ impl Signex {
         }
     }
 
+    /// What the panel's list depends on besides the index cache (whose
+    /// landings clear the stored stamp): connectivity and the project list,
+    /// the active document, and the filter and expanded nets.
+    fn net_inspector_stamp(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.net_nav_stamp().hash(&mut hasher);
+        self.document_state.active_path.hash(&mut hasher);
+        self.ui_state.net_inspector.hash(&mut hasher);
+        hasher.finish()
+    }
+
     /// Keep the panel's list in step with the index, and start a build of the
     /// active project's index while the panel is open and has none current.
     /// Runs from every `finish_update`; does nothing while the panel is
@@ -152,12 +164,18 @@ impl Signex {
     pub(super) fn sync_net_inspector(&mut self) -> Task<Message> {
         if !self.is_panel_open(PanelKind::NetInspector) {
             self.document_state.net_nav.inspector_source = None;
+            self.document_state.net_nav.inspector_stamp = None;
             let held = &mut self.document_state.panel_ctx.net_inspector;
             if *held != NetInspectorView::default() {
                 *held = NetInspectorView::default();
             }
             return Task::none();
         }
+        let stamp = self.net_inspector_stamp();
+        if self.document_state.net_nav.inspector_stamp == Some(stamp) {
+            return Task::none();
+        }
+        self.document_state.net_nav.inspector_stamp = Some(stamp);
         let warm = self.warm_net_index_for_pin_rows();
         let (status, data) = self.net_inspector_source();
         let state = self.ui_state.net_inspector.clone();

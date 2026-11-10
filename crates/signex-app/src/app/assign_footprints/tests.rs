@@ -19,6 +19,7 @@ fn part(designator: &str, row: u128, offers: &[&str], access: PartAccess) -> Foo
         sheet: PathBuf::from("a.snxsch"),
         sheet_label: "a.snxsch".to_string(),
         symbol_id: Uuid::now_v7(),
+        units: Vec::new(),
         designator: designator.to_string(),
         value: "10k".to_string(),
         row_label: Some(format!("ROW-{row}")),

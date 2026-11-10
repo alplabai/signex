@@ -1,7 +1,7 @@
 //! Opening the dialog, building its table, its edits and Cancel. Apply is in
 //! `apply.rs`.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::Task;
@@ -21,6 +21,14 @@ enum SheetAccess {
     Open,
     Closed,
     ReadOnly,
+}
+
+/// One sheet of the project as the table reads it.
+struct ListedSheet<'a> {
+    path: PathBuf,
+    label: String,
+    doc: &'a SchematicSheet,
+    access: SheetAccess,
 }
 
 impl Signex {
@@ -66,8 +74,20 @@ impl Signex {
             );
             return Task::none();
         };
+        // Only this project's open sheets are copied for the worker (another
+        // project's are never read), and a loose sheet's own.
+        let project = ds.active_document_project().map(|p| p.id);
+        let open_paths: Vec<PathBuf> = ds
+            .engines
+            .keys()
+            .filter(|path| {
+                ds.active_path.as_ref() == Some(*path)
+                    || (project.is_some() && ds.document_project(path).map(|p| p.id) == project)
+            })
+            .cloned()
+            .collect();
         let inputs = ReadInputs {
-            open: project_sheets::open_sheets_snapshot(ds),
+            open: project_sheets::open_sheets_snapshot_of(ds, &open_paths),
             pages: project_sheets::declared_pages(ds),
             root,
             active: ds.active_path.clone(),
@@ -146,7 +166,7 @@ impl Signex {
             .document_state
             .active_document_project()
             .map(|p| p.dir().to_path_buf());
-        let mut parts = Vec::new();
+        let mut sheets: Vec<ListedSheet<'_>> = Vec::new();
         for listed in &read.sheets {
             let path = self.resolve_held_spelling(listed.clone());
             let (doc, access): (&SchematicSheet, SheetAccess) =
@@ -164,10 +184,18 @@ impl Signex {
                     },
                 };
             let label = shown(project_dir.as_deref(), &path);
-            for symbol in listed_parts(doc) {
-                parts.push(self.footprint_part(&path, &label, symbol, access));
-            }
+            sheets.push(ListedSheet {
+                path,
+                label,
+                doc,
+                access,
+            });
         }
+        let docs: Vec<&SchematicSheet> = sheets.iter().map(|s| s.doc).collect();
+        let mut parts: Vec<FootprintPart> = listed_parts(&docs)
+            .iter()
+            .map(|units| self.footprint_part(&sheets, units))
+            .collect();
         parts.sort_by(|a, b| {
             signex_types::designator::compare_references(&a.designator, &b.designator)
                 .then_with(|| a.sheet.cmp(&b.sheet))
@@ -176,14 +204,40 @@ impl Signex {
     }
 
     /// One part's row: its library row's offers (the Properties list) and
-    /// which of them it is built with.
+    /// which of them it is built with, read from its first unit. A part with
+    /// a unit on a sheet that is not open, or read-only, is read-only whole:
+    /// changing only some of its units would give one designator two
+    /// footprints.
     fn footprint_part(
         &self,
-        sheet: &Path,
-        sheet_label: &str,
-        symbol: &Symbol,
-        sheet_access: SheetAccess,
+        sheets: &[ListedSheet<'_>],
+        units: &[(usize, &Symbol)],
     ) -> FootprintPart {
+        let (first_sheet, symbol) = units[0];
+        let mut on_sheets: Vec<usize> = units.iter().map(|(sheet, _)| *sheet).collect();
+        on_sheets.dedup();
+        let sheet_access = on_sheets
+            .iter()
+            .map(|&i| sheets[i].access)
+            .max_by_key(|access| match access {
+                SheetAccess::Open => 0,
+                SheetAccess::Closed => 1,
+                SheetAccess::ReadOnly => 2,
+            })
+            .unwrap_or(SheetAccess::Open);
+        let sheet_label = on_sheets
+            .iter()
+            .map(|&i| sheets[i].label.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        // One unit per sheet: `placed_unit_ids` reaches the rest on that sheet.
+        let part_units: Vec<(PathBuf, uuid::Uuid)> = on_sheets
+            .iter()
+            .filter_map(|&i| {
+                let unit = units.iter().find(|(sheet, _)| *sheet == i)?;
+                Some((sheets[i].path.clone(), unit.1.uuid))
+            })
+            .collect();
         let row = self.row_of_placed_symbol(symbol).map(|(_, _, row)| row);
         // `footprint_choices_for` lists the row's footprints first, then at
         // most one extra entry: "(edited)" or "(no longer offered)".
@@ -210,9 +264,10 @@ impl Signex {
             SheetAccess::Open => PartAccess::Editable,
         };
         FootprintPart {
-            sheet: sheet.to_path_buf(),
-            sheet_label: sheet_label.to_string(),
+            sheet: sheets[first_sheet].path.clone(),
+            sheet_label,
             symbol_id: symbol.uuid,
+            units: part_units,
             designator: symbol.reference.clone(),
             value: symbol.value.clone(),
             row_label: row.map(|row| row.internal_pn.as_str().to_string()),

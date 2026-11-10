@@ -377,6 +377,136 @@ fn with_no_schematic_open_nothing_opens() {
     assert!(app.ui_state.assign_footprints.is_none());
 }
 
+/// The rig with one two-unit part `U1` instead: unit 1 on the open `a`, unit
+/// 2 on the open `b`, or on the closed `c` when `second_closed`.
+fn multi_unit_rig(second_closed: bool) -> Rig {
+    let mut rig = rig();
+    let placed = rig.app.document_state.engines[&rig.a].document().symbols[0].clone();
+    let unit = |n: u32| Symbol {
+        unit: n,
+        ..copy_of(&placed, "U1")
+    };
+    let sheet_with = |symbols: Vec<Symbol>| SchematicSheet {
+        symbols,
+        ..empty_sheet()
+    };
+    let engine = |path: &Path, sheet: SchematicSheet| {
+        signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf())).expect("engine")
+    };
+    let a = engine(&rig.a, sheet_with(vec![unit(1)]));
+    rig.app.document_state.engines.insert(rig.a.clone(), a);
+    let on_b = if second_closed {
+        Vec::new()
+    } else {
+        vec![unit(2)]
+    };
+    let b = engine(&rig.b, sheet_with(on_b));
+    rig.app.document_state.engines.insert(rig.b.clone(), b);
+    let on_c = if second_closed {
+        vec![unit(2)]
+    } else {
+        Vec::new()
+    };
+    write_sheet(&rig.c, &sheet_with(on_c));
+    rig
+}
+
+/// #2284 review: a part's units on two sheets are one row, and one pick
+/// gives every unit the footprint in one undo step.
+#[test]
+fn a_part_with_units_on_two_sheets_is_one_row_and_one_pick_changes_both() {
+    let mut rig = multi_unit_rig(false);
+    let before = footprint_on(&rig.app, &rig.a);
+    settle(&mut rig.app, crate::menu_support::menu_row(COMMAND));
+    let state = rig.app.ui_state.assign_footprints.as_ref().expect("open");
+    assert_eq!(state.parts().len(), 1, "{:?}", state.parts());
+    let part = &state.parts()[0];
+    assert_eq!(part.designator, "U1");
+    assert_eq!(part.units.len(), 2, "a unit on a and on b");
+    assert_eq!(part.access, PartAccess::Editable);
+
+    send(
+        &mut rig.app,
+        AssignFootprintsMsg::FootprintPicked {
+            row: 0,
+            binding: binding_key(&rig.alt.0),
+        },
+    );
+    send(&mut rig.app, AssignFootprintsMsg::ApplyRequested);
+    assert!(rig.app.ui_state.assign_footprints.is_none());
+    assert_eq!(footprint_on(&rig.app, &rig.a), rig.alt.1);
+    assert_eq!(footprint_on(&rig.app, &rig.b), rig.alt.1, "unit B follows");
+
+    let _ = rig.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(footprint_on(&rig.app, &rig.a), before);
+    assert_eq!(footprint_on(&rig.app, &rig.b), before, "one undo step");
+}
+
+/// A part with a unit on a closed sheet cannot be changed here: changing the
+/// open unit alone would give one designator two footprints.
+#[test]
+fn a_part_with_a_unit_on_a_closed_sheet_is_read_only() {
+    let mut rig = multi_unit_rig(true);
+    settle(&mut rig.app, crate::menu_support::menu_row(COMMAND));
+    let state = rig.app.ui_state.assign_footprints.as_ref().expect("open");
+    assert_eq!(state.parts().len(), 1, "{:?}", state.parts());
+    assert_eq!(state.parts()[0].access, PartAccess::SheetClosed);
+    send(
+        &mut rig.app,
+        AssignFootprintsMsg::FootprintPicked {
+            row: 0,
+            binding: binding_key(&rig.alt.0),
+        },
+    );
+    let state = rig.app.ui_state.assign_footprints.as_ref().unwrap();
+    assert!(!state.can_apply(), "the pick is not taken");
+}
+
+/// #2284 review: a part deleted after the read is named by the designator the
+/// dialog listed, since the engine has none for it any more.
+#[test]
+fn a_part_deleted_after_the_read_is_named_in_the_refusal() {
+    let mut rig = rig();
+    settle(&mut rig.app, crate::menu_support::menu_row(COMMAND));
+    let state = rig.app.ui_state.assign_footprints.as_ref().unwrap();
+    let row = state
+        .parts()
+        .iter()
+        .position(|p| p.sheet == rig.b)
+        .expect("R2 is listed");
+    let id = state.parts()[row].symbol_id;
+    send(
+        &mut rig.app,
+        AssignFootprintsMsg::FootprintPicked {
+            row,
+            binding: binding_key(&rig.alt.0),
+        },
+    );
+    rig.app
+        .document_state
+        .engines
+        .get_mut(&rig.b)
+        .expect("b open")
+        .execute(signex_engine::Command::DeleteSelection {
+            items: vec![signex_types::schematic::SelectedItem::new(
+                id,
+                signex_types::schematic::SelectedKind::Symbol,
+            )],
+        })
+        .expect("delete R2");
+    send(&mut rig.app, AssignFootprintsMsg::ApplyRequested);
+    let state = rig
+        .app
+        .ui_state
+        .assign_footprints
+        .as_ref()
+        .expect("still open");
+    match state.problem() {
+        Some(AssignProblem::Refused { reference, .. }) => assert_eq!(reference, "R2"),
+        other => panic!("expected a refusal naming R2, got {other:?}"),
+    }
+}
+
 /// Give `command` the key `keys` in a custom copy of the active profile.
 pub fn bind(app: &mut Signex, command: &str, keys: &str) {
     let profiles = &mut app.ui_state.keymap_profiles;

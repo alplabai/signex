@@ -173,6 +173,12 @@ by designator. The project's sheets are read off the UI thread when it opens.
   sheet in one `update` as one undo group (`UndoGroupKind::Footprints`): one
   Ctrl+Z on any changed sheet takes all of them back. A refusal on any sheet
   changes nothing. Nothing is written to disk; the sheets are left unsaved.
+- A multi-unit part is one row, its units grouped across sheets by the same
+  rule the engine uses within a sheet (`group_into_parts`: one designator, one
+  library symbol, different unit numbers; an unannotated `U?` part is never
+  grouped). Apply changes every unit on every sheet, so one designator never
+  gets two footprints; a part with any unit on a sheet that is not open, or
+  read-only, is read-only whole.
 - A sheet that is not open is listed read-only ("Sheet not open"): its parts
   are shown for the overview and changed by opening the sheet. This is the
   safer of the two existing patterns: unlike Replace and Number Schematic

@@ -51,18 +51,32 @@ pub(crate) fn read_parts(inputs: &ReadInputs) -> FootprintRead {
     }
 }
 
-/// The parts of `doc` the table lists: no power ports, and one row per part
-/// (a multi-unit part's later units take the first unit's footprint).
-pub(crate) fn listed_parts(doc: &SchematicSheet) -> Vec<&Symbol> {
-    let mut seen = std::collections::HashSet::new();
+/// The parts of `sheets` the table lists, one per physical part: no power
+/// ports, and the units of a multi-unit part grouped across every sheet
+/// (`group_into_parts`, the rule the engine's `placed_unit_ids` uses within
+/// one sheet), so a part spread over two sheets is one row with one
+/// footprint. Each unit is `(index into sheets, symbol)`, in sheet order. An
+/// unannotated part (`U?`) is never grouped, as the engine does.
+pub(crate) fn listed_parts<'a>(sheets: &[&'a SchematicSheet]) -> Vec<Vec<(usize, &'a Symbol)>> {
+    let mut annotated = Vec::new();
     let mut parts = Vec::new();
-    for symbol in doc.symbols.iter().filter(|s| !s.is_power) {
-        if seen.contains(&symbol.uuid) {
-            continue;
+    for (index, doc) in sheets.iter().enumerate() {
+        for symbol in doc.symbols.iter().filter(|s| !s.is_power) {
+            let reference = symbol.reference.trim();
+            if reference.is_empty() || reference.ends_with('?') {
+                parts.push(vec![(index, symbol)]);
+            } else {
+                annotated.push((index, symbol));
+            }
         }
-        seen.insert(symbol.uuid);
-        seen.extend(signex_engine::placed_unit_ids(doc, symbol.uuid));
-        parts.push(symbol);
     }
+    let groups = signex_types::schematic::group_into_parts(
+        annotated.iter().map(|(_, symbol)| symbol.part_key()),
+    );
+    parts.extend(
+        groups
+            .into_iter()
+            .map(|group| group.into_iter().map(|at| annotated[at]).collect()),
+    );
     parts
 }
