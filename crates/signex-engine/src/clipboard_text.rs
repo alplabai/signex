@@ -78,6 +78,7 @@ mod tests {
             ..Default::default()
         };
         let wire = Wire {
+            color: None,
             uuid: Uuid::now_v7(),
             start: Point::new(25.4, 25.4),
             end: Point::new(38.1, 25.4),

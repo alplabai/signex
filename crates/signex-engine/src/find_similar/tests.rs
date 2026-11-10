@@ -40,6 +40,7 @@ fn sheet() -> (SchematicSheet, [Symbol; 4]) {
     let mut s = test_sheet();
     s.symbols = parts.to_vec();
     s.wires.push(Wire {
+        color: None,
         uuid: Uuid::now_v7(),
         start: Point::new(0.0, 0.0),
         end: Point::new(1.0, 0.0),

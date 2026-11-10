@@ -9,7 +9,7 @@ use iced::widget::canvas;
 
 impl SymbolCanvas<'_> {
     /// Handle a scroll-wheel tick: publish a cursor-anchored `Zoom`, or a
-    /// `Pan` for a trackpad scroll when "Two-finger scroll pans" is on.
+    /// `Pan` (see [`crate::canvas::wheel_intent`] for the preferences).
     pub(in crate::library::editor::symbol::canvas) fn on_wheel_scrolled(
         &self,
         state: &CanvasState,
@@ -18,11 +18,15 @@ impl SymbolCanvas<'_> {
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<CanvasAction>> {
         let pos = cursor.position_in(bounds)?;
-        let intent = crate::canvas::Camera::scroll_intent(
+        let intent = crate::canvas::wheel_intent(
             delta,
             30.0,
             self.trackpad_pan,
-            state.zoom_modifier,
+            self.wheel_mode,
+            crate::canvas::WheelKeys {
+                zoom: state.zoom_modifier,
+                shift: state.shift_held,
+            },
         );
         match intent {
             crate::canvas::ScrollIntent::Zoom { notches } => {

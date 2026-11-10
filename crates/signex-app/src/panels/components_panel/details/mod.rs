@@ -4,11 +4,17 @@
 //! `ComponentsPanelState::details`, keyed by the row it was read for.
 
 pub(crate) mod footprint_canvas;
+mod graphite;
 pub mod load;
 pub(crate) mod symbol_canvas;
 
-use iced::widget::{Column, Space, column, container, pick_list, row, scrollable};
+#[cfg(test)]
+#[path = "pan_app_tests.rs"]
+mod pan_app_tests;
+
+use iced::widget::{Column, Space, column, container, pick_list, scrollable};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{raw, text};
 
 use crate::library::editor::footprint::canvas::PreviewFootprint;
@@ -17,7 +23,7 @@ use signex_types::schematic::LibSymbol;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
-use super::{HINT_TEXT_SIZE, PANEL_TEXT_SIZE, ROW_TEXT_SIZE, SECTION_HEADER_TEXT_SIZE, SP};
+use super::{HINT_TEXT_SIZE, ROW_TEXT_SIZE, SP};
 use crate::library::messages::LibraryMessage;
 use crate::library::state::{ComponentsPanelRowKey, ComponentsPanelState};
 
@@ -30,6 +36,8 @@ pub struct ComponentDetails {
     pub internal_pn: String,
     pub class: String,
     pub lifecycle: String,
+    /// The row's lifecycle state, for the Graphite lifecycle pill.
+    pub state: signex_library::LifecycleState,
     pub manufacturer: String,
     pub mpn: String,
     pub description: String,
@@ -191,13 +199,14 @@ pub(crate) fn view<'a>(
     canvas_colors: &signex_types::theme::CanvasColors,
     grid: symbol_canvas::SheetGrid,
     device_px_per_logical_px: f32,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-    let primary = theme_ext::text_primary(tokens);
+    use signex_i18n::{ids, t};
+    let muted = crate::styles::tokens::resolve(tokens).ink4;
 
     let empty = |message: &'a str, color: Color| -> Element<'a, LibraryMessage> {
         container(text(raw(message)).size(HINT_TEXT_SIZE).color(color))
-            .padding([SP.l, SP.m])
+            .padding([SP.s, 10.0])
             .width(Length::Fill)
             .boxed()
     };
@@ -220,39 +229,16 @@ pub(crate) fn view<'a>(
                 .boxed(),
         );
     }
-    col = col.push(
-        text(raw(d.internal_pn.as_str()))
-            .size(SECTION_HEADER_TEXT_SIZE)
-            .color(primary)
-            .boxed(),
-    );
-    let mut facts = vec![d.class.as_str(), d.lifecycle.as_str()];
-    facts.retain(|f| !f.is_empty());
-    col = col.push(
-        text(raw(facts.join("  ·  ")))
-            .size(HINT_TEXT_SIZE)
-            .color(muted)
-            .boxed(),
-    );
     let maker = match (d.manufacturer.trim(), d.mpn.trim()) {
         ("", "") => String::new(),
         (m, "") => m.to_owned(),
         ("", p) => p.to_owned(),
         (m, p) => format!("{m} — {p}"),
     };
-    if !maker.is_empty() {
-        col = col.push(text(raw(maker)).size(ROW_TEXT_SIZE).color(primary).boxed());
-    }
-    if !d.description.trim().is_empty() {
-        col = col.push(
-            text(raw(d.description.as_str()))
-                .size(HINT_TEXT_SIZE)
-                .color(muted)
-                .boxed(),
-        );
-    }
+    col = col.push(graphite::header_card(d, maker, tokens));
+    let title = |label| graphite::section_label(t!(i18n, label), tokens);
 
-    col = col.push(section_title("Symbol", primary));
+    col = col.push(title(ids::PANELS_COMPONENTS_DETAILS_SYMBOL));
     col = col.push(match &d.symbol {
         Some(symbol) => preview_box(
             symbol_canvas::symbol_preview(
@@ -270,7 +256,7 @@ pub(crate) fn view<'a>(
         None => empty("No symbol.", muted),
     });
 
-    col = col.push(section_title("Footprint", primary));
+    col = col.push(title(ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT));
     // The pick belongs to the selected row only (#1234).
     let pick = panel
         .footprint_pick
@@ -284,16 +270,16 @@ pub(crate) fn view<'a>(
             pick_list(shown.clone(), choices, |choice: &FootprintChoice| {
                 choice.to_string()
             })
+            .graphite()
             .on_select(|choice: FootprintChoice| {
                 LibraryMessage::ComponentsPanelFootprintPicked(choice.reference)
             })
-            .text_size(ROW_TEXT_SIZE)
             .width(Length::Fill)
             .boxed(),
         );
     } else if let Some(fp) = &d.footprint {
         col = col.push(
-            text(raw(fp.name.as_str()))
+            text(signex_i18n::UserText::new(fp.name.as_str()))
                 .size(ROW_TEXT_SIZE)
                 .color(muted)
                 .boxed(),
@@ -302,7 +288,7 @@ pub(crate) fn view<'a>(
     let preview = d.footprint_preview(shown.as_ref().map(|c| &c.reference));
     col = col.push(match preview {
         Some(fp) => {
-            let program = footprint_canvas::FootprintPreview::new(fp);
+            let program = footprint_canvas::FootprintPreview::new(fp).with_theme_tokens(tokens);
             let canvas = iced::widget::canvas(program)
                 .width(Length::Fill)
                 .height(PREVIEW_HEIGHT);
@@ -320,7 +306,7 @@ pub(crate) fn view<'a>(
         );
     }
 
-    col = col.push(section_title("Parameters", primary));
+    col = col.push(title(ids::PANELS_COMPONENTS_DETAILS_PARAMETERS));
     if d.parameters.is_empty() {
         col = col.push(
             text(raw("No parameters."))
@@ -330,33 +316,14 @@ pub(crate) fn view<'a>(
         );
     }
     for (name, value) in &d.parameters {
-        col = col.push(
-            row![
-                text(raw(name.as_str()))
-                    .size(ROW_TEXT_SIZE)
-                    .color(muted)
-                    .width(Length::FillPortion(2))
-                    .wrapping(iced::widget::text::Wrapping::None),
-                text(raw(value.as_str()))
-                    .size(ROW_TEXT_SIZE)
-                    .color(primary)
-                    .width(Length::FillPortion(3)),
-            ]
-            .spacing(SP.s)
-            .boxed(),
-        );
+        col = col.push(graphite::parameter_row(name, value, tokens));
     }
     col = col.push(Space::new().height(SP.m).boxed());
 
-    scrollable(container(col).padding([SP.s, SP.m]).width(Length::Fill))
+    scrollable(container(col).padding([SP.s, 10.0]).width(Length::Fill))
         .width(Length::Fill)
         .height(Length::Fill)
-        .boxed()
-}
-
-fn section_title<'a>(label: &'a str, color: Color) -> Element<'a, LibraryMessage> {
-    container(text(raw(label)).size(PANEL_TEXT_SIZE).color(color))
-        .padding([SP.s, 0.0])
+        .style(crate::panels::form_look::scrollbar_style)
         .boxed()
 }
 
@@ -370,6 +337,7 @@ fn preview_box<'a>(
 ) -> Element<'a, LibraryMessage> {
     let bg = crate::styles::ti(tokens.panel_bg);
     let border_c = theme_ext::border_color(tokens);
+    let radius = crate::styles::Radii::GRAPHITE.control;
     container(inner)
         .width(Length::Fill)
         // Inset by the border so a preview's own fill leaves the stroke and
@@ -379,7 +347,7 @@ fn preview_box<'a>(
             background: Some(Background::Color(bg)),
             border: Border {
                 width: PREVIEW_BORDER_WIDTH,
-                radius: SP.xs.into(),
+                radius: radius.into(),
                 color: border_c,
                 ..Border::default()
             },

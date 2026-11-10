@@ -202,6 +202,7 @@ fn label(text: &str, x: f64, y: f64, rotation: f64) -> Label {
 pub(super) fn fixture() -> SchematicSheet {
     let mut sheet = SchematicSheet::default();
     sheet.wires.push(Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(5.0, 5.0),
         end: Point::new(20.0, 5.0),
@@ -211,6 +212,7 @@ pub(super) fn fixture() -> SchematicSheet {
     });
     // A second wire a drag leaves alone.
     sheet.wires.push(Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(5.0, 8.0),
         end: Point::new(20.0, 8.0),
@@ -495,7 +497,8 @@ fn gpu_stack_draws_the_sheet_and_matches_the_cpu_replay() {
     // Wire: exact colour only where the rasteriser is the reference one.
     let (wx, wy) = world(12.5, 5.0);
     if gpu.is_lavapipe {
-        let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+        let colors =
+            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
         let got = stack.px(wx, wy);
         let want = to_u8(colors.wire);
         assert!(
@@ -589,7 +592,7 @@ fn layers_split_the_work_with_no_overlap() {
     let clear_rgb = [CLEAR.r, CLEAR.g, CLEAR.b].map(|c| (c * 255.0).round() as u8);
 
     // The backdrop paints paper everywhere and no content.
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
     let paper = to_u8(colors.paper);
     for (x, y) in [
         (wx(12.5), wy(5.0)),
@@ -858,9 +861,10 @@ fn the_selection_highlight_draws_above_the_gpu_content() {
     };
     let selected = frame_with(&mut gpu, Layer::Stack, &sheet, &look);
     let changed = selected.changed_vs(&plain, (0, 0, WIDTH, HEIGHT));
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
-    let want = to_u8(colors.selection);
-    // An outline pixel reads the theme's selection colour (edge pixels blend
+    let want = to_u8(
+        signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight).accent,
+    );
+    // An outline pixel reads the Graphite halo's accent colour (edge pixels blend
     // with the sheet, so the best of them is the one to compare).
     let best = changed
         .iter()
@@ -871,7 +875,7 @@ fn the_selection_highlight_draws_above_the_gpu_content() {
         .min();
     assert!(
         best.is_some_and(|d| d <= 40),
-        "no outline pixel reads the selection colour {want:?} ({} changed, closest off by {best:?})",
+        "no outline pixel reads the halo accent {want:?} ({} changed, closest off by {best:?})",
         changed.len()
     );
 }
@@ -941,7 +945,8 @@ fn a_hidpi_window_puts_the_wire_at_twice_the_pixel() {
         "wire spans {min_x}..{max_x}, not 2x {start}..{end}"
     );
     if gpu.is_lavapipe {
-        let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+        let colors =
+            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
         let got = stack.px(wx * 2, wy * 2);
         let want = to_u8(colors.wire);
         assert!(

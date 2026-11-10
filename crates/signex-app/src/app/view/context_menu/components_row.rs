@@ -33,24 +33,16 @@ impl Signex {
         if !self.overlay_belongs_to(menu_ctx.window, window_id) {
             return Vec::new();
         }
-        let entries = components_row_menu_entries();
-        let entries_len = entries.len();
-        let tokens = &self.document_state.panel_ctx.tokens;
-        // The menu fits its labels; the clamp uses the shared width as an
-        // upper bound so the menu never runs off the window.
-        let width = signex_widgets::active_bar_dropdown::fitted_width(
-            &entries,
-            Self::CONTEXT_MENU_WIDTH,
-            &self.document_state.panel_ctx.ui_font_name,
+        let panel_ctx = &self.document_state.panel_ctx;
+        let menu = super::placement::menu_card(
+            components_row_menu_entries(),
+            &panel_ctx.tokens,
+            &panel_ctx.ui_font_name,
         );
-        let menu = signex_widgets::active_bar_dropdown::view(entries, tokens, Some(width));
-        let layers = self.menu_overlay(
-            window_id,
+        let layers = Self::menu_overlay(
             Message::Library(LibraryMessage::ComponentsPanelRowMenuDismissed),
-            menu,
+            menu.element,
             (menu_ctx.x, menu_ctx.y),
-            Self::CONTEXT_MENU_WIDTH,
-            entries_len,
         );
         match menu_ctx.window {
             None => layers,
@@ -175,7 +167,7 @@ mod tests {
             let alone = natural::<()>(
                 // The size the dropdown draws its labels at.
                 signex_widgets::text(signex_widgets::raw(label))
-                    .size(signex_widgets::active_bar::dropdown::LABEL_SIZE)
+                    .size(signex_widgets::active_bar::dropdown::MENU_LABEL_SIZE)
                     .wrapping(iced::widget::text::Wrapping::None)
                     .boxed(),
                 label,

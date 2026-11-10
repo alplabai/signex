@@ -101,7 +101,7 @@ fn a_pan_after_a_theme_change_rebuilds_the_gpu_text_layer() {
         .static_text_layer(&renderer, bounds());
     let mut themed = prefs;
     themed.canvas_colors =
-        signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+        signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteDark);
     pan(&slot, 3.0, 2.0);
     let layer = SchematicCanvas::new(&slot, themed)
         .gpu_overlay()

@@ -9,6 +9,7 @@
 
 use iced::widget::{Column, Space, Widget, column, container, row, scrollable};
 use iced::{Element, Length};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_library::ComponentRow;
 use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
@@ -27,6 +28,10 @@ const PREVIEW_PANE_HEIGHT: f32 = TS.body * 20.0;
 const NOT_SET: &str = "Not set";
 const NO_DESCRIPTION: &str = "No description";
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the editor views take the language handle beside their existing seven inputs (#2225)"
+)]
 pub(crate) fn view<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
@@ -35,30 +40,23 @@ pub(crate) fn view<'a>(
     grid: SheetGrid,
     device_px_per_logical_px: f32,
     address: EditorAddress,
+    i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let read_only = library_state.is_read_only(&state.library_path);
-    let veil = super::read_only_veil(tokens);
+    let panes = render_panes(
+        state,
+        library_state,
+        tokens,
+        i18n,
+        canvas_colors,
+        (grid, device_px_per_logical_px),
+        &address,
+        read_only,
+    );
+    // The pin map and the alternates sit on their own tabs.
     let body = column![
         header_row(&state.row, tokens),
-        render_panes(
-            state,
-            library_state,
-            tokens,
-            canvas_colors,
-            (grid, device_px_per_logical_px),
-            &address,
-            read_only,
-        ),
-        super::inert::unless_read_only_veiled(
-            read_only,
-            veil,
-            pin_map_subsection(state, tokens, &address),
-        ),
-        super::inert::unless_read_only_veiled(
-            read_only,
-            veil,
-            super::alternate_symbols::view(state, tokens, &address),
-        ),
+        panes,
         where_used_footer(state, library_state, tokens),
     ]
     .spacing(SP.l)
@@ -69,6 +67,52 @@ pub(crate) fn view<'a>(
         .width(Length::Fill)
         .height(Length::Fill)
         .boxed()
+}
+
+/// The Graphite Pin Map tab: the pin-to-pad table on its own.
+pub(crate) fn pin_map_tab<'a>(
+    state: &'a ComponentPreviewState,
+    tokens: &'a ThemeTokens,
+    i18n: &I18n,
+    address: &EditorAddress,
+    read_only: bool,
+) -> Element<'a, LibraryMessage> {
+    let veil = super::read_only_veil(tokens);
+    scrollable(super::inert::unless_read_only_veiled(
+        read_only,
+        veil,
+        pin_map_subsection(state, tokens, i18n, address),
+    ))
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .boxed()
+}
+
+/// (pins with a pad, pins) of the symbol; `None` before the symbol loads
+/// or when it has no pins. A pin has a pad when it is overridden or the
+/// footprint carries a pad of its number.
+pub(crate) fn pin_map_counts(state: &ComponentPreviewState) -> Option<(usize, usize)> {
+    let sym = state.symbol.as_ref()?;
+    if sym.pins.is_empty() {
+        return None;
+    }
+    let lines = pin_lines(
+        sym.pins
+            .iter()
+            .map(|p| (p.number.as_str(), p.name.as_str())),
+        &state.row.pin_map_overrides,
+    );
+    let mapped = lines
+        .iter()
+        .filter(|l| {
+            l.is_override
+                || state
+                    .footprint
+                    .as_ref()
+                    .is_some_and(|f| f.pads.iter().any(|p| p.number == l.pad))
+        })
+        .count();
+    Some((mapped, lines.len()))
 }
 
 /// Manufacturer and MPN as shown in the header; a blank one reads "Not set".
@@ -120,7 +164,7 @@ fn header_row<'a>(row_data: &'a ComponentRow, tokens: &ThemeTokens) -> Element<'
     };
 
     let identity = column![
-        text(raw(description))
+        text(signex_i18n::UserText::new(description))
             .size(TS.body)
             .color(description_color)
             .boxed()
@@ -180,10 +224,15 @@ fn editor_event(address: &EditorAddress, msg: EditorMsg) -> LibraryMessage {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the editor views take the language handle beside their existing seven inputs (#2225)"
+)]
 fn render_panes<'a>(
     state: &'a ComponentPreviewState,
     library_state: &LibraryState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     canvas_colors: &CanvasColors,
     (grid, device_px_per_logical_px): (SheetGrid, f32),
     address: &EditorAddress,
@@ -254,7 +303,7 @@ fn render_panes<'a>(
             .boxed()
         });
     let symbol_pane = render_pane(
-        "Symbol",
+        t!(i18n, ids::EDITORS_COMPONENT_SYMBOL_HEADING),
         symbol_drawing,
         pane_message(PaneKind::Symbol, symbol_unbound),
         symbol_msg,
@@ -269,14 +318,15 @@ fn render_panes<'a>(
             let program =
                 crate::panels::components_panel::details::footprint_canvas::FootprintPreview::new(
                     model,
-                );
+                )
+                .with_theme_tokens(tokens);
             iced::widget::canvas(program)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .boxed()
         });
     let footprint_pane = render_pane(
-        "Footprint",
+        t!(i18n, ids::EDITORS_COMPONENT_FOOTPRINT_HEADING),
         footprint_drawing,
         pane_message(PaneKind::Footprint, footprint_unbound),
         footprint_msg,
@@ -294,7 +344,7 @@ fn render_panes<'a>(
 }
 
 fn render_pane<'a>(
-    label: &'a str,
+    label: Localized,
     drawing: Option<Element<'a, LibraryMessage>>,
     empty_message: &'static str,
     open_msg: Option<LibraryMessage>,
@@ -370,12 +420,51 @@ fn pin_lines<'p>(
     .collect()
 }
 
+/// Graphite Match cell: how the pin's pad was found.
+fn match_pill<'a>(
+    state: &ComponentPreviewState,
+    line: &PinLine,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    use crate::styles::PillTone;
+    if line.is_override {
+        return kit::toned_pill("Override".to_string(), PillTone::Info, tokens);
+    }
+    let Some(footprint) = state.footprint.as_ref() else {
+        return text(t!(i18n, ids::EDITORS_COMPONENT_NO_MATCH))
+            .size(TS.body)
+            .boxed();
+    };
+    if footprint.pads.iter().any(|p| p.number == line.pad) {
+        kit::toned_pill("By number".to_string(), PillTone::Ok, tokens)
+    } else {
+        kit::toned_pill(format!("No pad '{}'", line.pad), PillTone::Warn, tokens)
+    }
+}
+
 fn pin_map_subsection<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let header = kit::section_header("Pin Map", None, tokens);
+    let summary = pin_map_counts(state).map(|(mapped, total)| {
+        kit::toned_pill(
+            format!("{mapped} of {total} mapped"),
+            if mapped == total {
+                crate::styles::PillTone::Ok
+            } else {
+                crate::styles::PillTone::Warn
+            },
+            tokens,
+        )
+    });
+    let header = kit::section_header(
+        t!(i18n, ids::EDITORS_COMPONENT_PIN_TO_PAD_HEADING),
+        summary,
+        tokens,
+    );
 
     let Some(sym) = state.symbol.as_ref() else {
         return column![
@@ -404,16 +493,20 @@ fn pin_map_subsection<'a>(
         Length::FillPortion(2),
         Length::FillPortion(2),
     ];
-    let mut table: Column<Element<'a, LibraryMessage>> = column![kit::table_header(
+    let table_header = kit::table_header(
         &[
-            ("Symbol pin", widths[0]),
-            ("Symbol name", widths[1]),
-            ("Pad", widths[2]),
-            ("", widths[3]),
+            (Some(ids::EDITORS_COMPONENT_COLUMN_PIN), widths[0]),
+            (Some(ids::EDITORS_COMPONENT_COLUMN_NAME), widths[1]),
+            (Some(ids::EDITORS_COMPONENT_COLUMN_TYPE), widths[1]),
+            (Some(ids::EDITORS_COMPONENT_COLUMN_PAD), widths[0]),
+            (Some(ids::EDITORS_COMPONENT_COLUMN_MATCH), widths[2]),
+            (None, widths[3]),
         ],
+        i18n,
         tokens,
-    )]
-    .width(Length::Fill);
+    );
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    let mut table: Column<Element<'a, LibraryMessage>> = column![table_header].width(Length::Fill);
 
     for (index, line) in pin_lines(
         sym.pins
@@ -424,23 +517,6 @@ fn pin_map_subsection<'a>(
     .into_iter()
     .enumerate()
     {
-        let pad_cell: Element<'a, LibraryMessage> = if line.is_override {
-            row![
-                text(raw(line.pad.clone()))
-                    .size(TS.body)
-                    .color(text_c)
-                    .boxed(),
-                text(raw("override")).size(TS.caption).color(muted).boxed(),
-            ]
-            .spacing(SP.m)
-            .align_y(iced::Alignment::Center)
-            .boxed()
-        } else {
-            text(raw(line.pad.clone()))
-                .size(TS.body)
-                .color(text_c)
-                .boxed()
-        };
         let label = if line.is_override {
             "Edit override"
         } else {
@@ -454,29 +530,49 @@ fn pin_map_subsection<'a>(
             )),
             tokens,
         );
-        table = table.push(kit::table_row(
-            vec![
-                (
-                    text(raw(line.number.clone()))
+        let direction: Element<'a, LibraryMessage> = sym
+            .pins
+            .iter()
+            .find(|p| p.number == line.number)
+            .map_or_else(
+                || Space::new().boxed(),
+                |p| {
+                    text(t!(i18n, super::pin_labels::direction_message(p.electrical)))
                         .size(TS.body)
-                        .color(text_c)
-                        .boxed(),
-                    widths[0],
-                ),
-                (
-                    text(raw(line.name.clone()))
-                        .size(TS.body)
-                        .color(text_c)
-                        .boxed(),
-                    widths[1],
-                ),
-                (pad_cell, widths[2]),
-                (action, widths[3]),
-            ],
-            index,
-            None,
-            tokens,
-        ));
+                        .color(muted)
+                        .boxed()
+                },
+            );
+        let cells = vec![
+            (
+                text(signex_i18n::UserText::new(line.number.clone()))
+                    .size(TS.body)
+                    .font(mono)
+                    .color(text_c)
+                    .boxed(),
+                widths[0],
+            ),
+            (
+                text(signex_i18n::UserText::new(line.name.clone()))
+                    .size(TS.body)
+                    .font(mono)
+                    .color(text_c)
+                    .boxed(),
+                widths[1],
+            ),
+            (direction, widths[1]),
+            (
+                text(signex_i18n::UserText::new(line.pad.clone()))
+                    .size(TS.body)
+                    .font(mono)
+                    .color(text_c)
+                    .boxed(),
+                widths[0],
+            ),
+            (match_pill(state, &line, tokens, i18n), widths[2]),
+            (action, widths[3]),
+        ];
+        table = table.push(kit::table_row(cells, index, None, tokens));
 
         // Inline override editor for the expanded row.
         if state.pin_map_state.expanded_row.as_deref() == Some(line.number.as_str()) {

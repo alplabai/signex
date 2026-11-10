@@ -428,7 +428,7 @@ fn build_scope(
     // hierarchical subtrees; root reachability alone drops flat pages.
     //
     // A project-wide export roots at the *project's* root sheet. Rooting at
-    // `active_path` made one File > Export Netlist yield either the project
+    // `active_path` made one Reports > Netlist yield either the project
     // netlist or a subtree-only netlist depending on which sheet the user
     // happened to be looking at — same intent, two different .net files, no
     // way to tell them apart. Active-path rooting stays on the loose-document

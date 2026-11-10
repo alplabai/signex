@@ -37,7 +37,7 @@ mod tests;
 use draw::draw_pads_tool_preview;
 pub(crate) use draw::{
     BACKDROP_BG, BACKDROP_GRID, BackdropLook, draw_back_layers, draw_backdrop, draw_courtyard,
-    draw_fab, draw_origin, draw_pads, draw_silk,
+    draw_fab, draw_origin, draw_pads, draw_silk, graphite_look_for,
 };
 #[cfg(test)]
 pub(crate) use draw::{LayerInput, PadLabels};
@@ -269,6 +269,8 @@ pub struct FootprintCanvas<'a> {
     pub zoom_step: f32,
     /// "Two-finger scroll pans" preference (pixel-delta scroll pans, not zooms).
     pub trackpad_pan: bool,
+    /// Preferences "Mouse wheel", synced with `trackpad_pan`.
+    pub wheel_mode: crate::canvas::WheelMode,
 }
 
 impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {

@@ -8,6 +8,7 @@
 use iced::widget::pick_list;
 use iced::{Element, Widget as _};
 use signex_types::quantity::{SiPrefix, Unit};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 /// One picker entry. Shown with the unit glyph (`kΩ`, `µF`) so the picker
 /// also says which unit the number is in.
@@ -55,7 +56,6 @@ pub(crate) fn effective_prefix(unit: &Unit, prefix: SiPrefix) -> SiPrefix {
 pub(crate) fn prefix_picker<'a, M: Clone + 'a>(
     unit: &Unit,
     selected: SiPrefix,
-    text_size: f32,
     on_pick: impl Fn(SiPrefix) -> M + 'a,
 ) -> Option<Element<'a, M>> {
     let choices = prefix_choices(unit);
@@ -65,8 +65,8 @@ pub(crate) fn prefix_picker<'a, M: Clone + 'a>(
     let current = choice(effective_prefix(unit, selected), unit);
     Some(
         pick_list(Some(current), choices, |c: &PrefixChoice| c.to_string())
+            .graphite()
             .on_select(move |c: PrefixChoice| on_pick(c.prefix))
-            .text_size(text_size)
             .padding([3, 6])
             .boxed(),
     )
@@ -80,7 +80,7 @@ mod tests {
     fn percent_and_ppm_have_no_picker() {
         for unit in [Unit::Percent, Unit::PpmPerKelvin, Unit::Awg] {
             assert!(prefix_choices(&unit).is_empty(), "{unit:?}");
-            assert!(prefix_picker(&unit, SiPrefix::One, 11.0, |p| p).is_none());
+            assert!(prefix_picker(&unit, SiPrefix::One, |p| p).is_none());
         }
     }
 
@@ -91,7 +91,7 @@ mod tests {
             .map(|c| c.to_string())
             .collect();
         assert_eq!(labels, ["mΩ", "Ω", "kΩ", "MΩ", "GΩ"]);
-        assert!(prefix_picker(&Unit::Ohm, SiPrefix::Kilo, 11.0, |p| p).is_some());
+        assert!(prefix_picker(&Unit::Ohm, SiPrefix::Kilo, |p| p).is_some());
     }
 
     #[test]

@@ -38,7 +38,6 @@ pub fn view_symbol<'a>(
     device_px_per_logical_px: f32,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
-    let toolbar = view_symbol_toolbar(editor, panel_ctx);
     // Active bar moved to the app-view layer (view_main_for) so it
     // shares the schematic's window-absolute coordinate system — see
     // symbol::active_bar::{bar_items, dropdown_overlay}. The body here
@@ -46,10 +45,27 @@ pub fn view_symbol<'a>(
     // which is also where the theme id for its icons is resolved.
     let canvas_widget = view_symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
 
-    let body = column![toolbar, canvas_widget]
-        .spacing(SP.s)
-        .width(Length::Fill)
-        .height(Length::Fill);
+    // No header strip. The canvas carries the body / part card at its
+    // bottom-left and the zoom pill at its bottom-right.
+    let body: Element<'a, LibraryMessage> = {
+        let path = editor.path.clone();
+        let card = container(graphite_toolbar(editor, &path, tokens, &panel_ctx.i18n))
+            .padding(SP.l)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Left)
+            .align_y(iced::alignment::Vertical::Bottom);
+        let pill = container(graphite_zoom_pill(editor, &path, tokens))
+            .padding(SP.l)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Right)
+            .align_y(iced::alignment::Vertical::Bottom);
+        iced::widget::stack![canvas_widget, card.boxed(), pill.boxed()]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .boxed()
+    };
 
     let status_line = view_symbol_status(editor, panel_ctx, display, path);
 
@@ -182,109 +198,197 @@ fn format_coord(x_mm: f64, y_mm: f64, unit: Unit) -> String {
     }
 }
 
-fn view_symbol_toolbar<'a>(
-    editor: &'a SymbolDocument,
-    panel_ctx: &'a PanelContext,
-) -> Element<'a, LibraryMessage> {
-    let tokens = &panel_ctx.tokens;
-    let text_c = theme_ext::text_primary(tokens);
-    let path = editor.path.clone();
-
-    // Helper: create a small toolbar button that emits a PrimitiveEditorEvent.
-    let btn = |label: &'static str, msg: PrimitiveEdit| {
-        button(text(raw(label)).size(TS.body).color(text_c))
-            .padding([SP.s, SP.l])
-            .on_press(LibraryMessage::PrimitiveEditorEvent {
-                path: path.clone(),
-                msg,
-            })
-            .style(symbol_tool_button_style(false, tokens))
-    };
-
-    let max_part = crate::library::editor::symbol::state::max_part_number(editor.primitive());
-    let active_part = editor.active_part;
-
-    let save_label = if editor.is_dirty() { "Save *" } else { "Save" };
-    let body_controls = body_toolbar(editor, &path, text_c, tokens);
-
-    container(
-        row![
-            btn("Fit", PrimitiveEdit::Symbol(SymbolEditorMsg::Fit)),
-            Space::new().width(Length::Fill),
-            body_controls,
-            Space::new().width(SP.l),
-            btn("\u{2190}", PrimitiveEdit::Symbol(SymbolEditorMsg::PrevPart)),
-            text(raw(format!("Part {active_part} / {max_part}")))
-                .size(TS.body)
-                .color(text_c),
-            btn("\u{2192}", PrimitiveEdit::Symbol(SymbolEditorMsg::NextPart)),
-            Space::new().width(SP.s),
-            // Add-unit (+) / remove-unit (−), wired to NewPart /
-            // RemovePart, which add a part and call `delete_unit`
-            // (real delete, refusing to remove the only part).
-            btn("+", PrimitiveEdit::Symbol(SymbolEditorMsg::NewPart)),
-            btn(
-                "\u{2212}",
-                PrimitiveEdit::Symbol(SymbolEditorMsg::RemovePart)
-            ),
-            Space::new().width(SP.m),
-            btn(save_label, PrimitiveEdit::Save),
-        ]
-        .spacing(SP.m)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([SP.m, SP.l])
-    .style(crate::styles::tab_bar_strip(tokens))
-    .boxed()
-}
-
-/// The De Morgan body controls: which body to show (Normal / Alternate) and
-/// whether the selection belongs to both bodies or only the shown one.
-fn body_toolbar<'a>(
+/// Graphite body / part card over the canvas: a segmented Normal / Alternate
+/// control, the body assignment buttons, the part stepper and an accent Save.
+/// Fit lives on the zoom pill.
+fn graphite_toolbar<'a>(
     editor: &SymbolDocument,
     path: &std::path::Path,
-    text_c: iced::Color,
     tokens: &signex_types::theme::ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, LibraryMessage> {
+    use crate::styles::tokens::resolve;
+    use iced::widget::button::Status;
+    use signex_i18n::{Localized, ids, t};
     use signex_types::schematic::BodyStyle;
-    let send = |msg: SymbolEditorMsg| LibraryMessage::PrimitiveEditorEvent {
+    let r = resolve(tokens);
+    let ink = theme_ext::text_primary(tokens);
+    let (ink3, raised, sunken, line, hover) =
+        (r.ink3, r.raised, r.sunken, r.line_strong, r.accent_soft);
+    let send = |msg: PrimitiveEdit| LibraryMessage::PrimitiveEditorEvent {
         path: path.to_path_buf(),
-        msg: PrimitiveEdit::Symbol(msg),
+        msg,
     };
-    let button_for = |label: &'static str, active: bool, msg: SymbolEditorMsg| {
-        button(text(raw(label)).size(TS.body).color(text_c))
-            .padding([SP.s, SP.m])
-            .on_press(send(msg))
-            .style(symbol_tool_button_style(active, tokens))
+    let sym = |m: SymbolEditorMsg| send(PrimitiveEdit::Symbol(m));
+    let ghost_style = move |_: &Theme, status: Status| iced::widget::button::Style {
+        background: matches!(status, Status::Hovered | Status::Pressed)
+            .then_some(iced::Background::Color(hover)),
+        text_color: ink,
+        border: Border {
+            width: crate::styles::HAIRLINE,
+            radius: 7.0.into(),
+            color: line,
+            ..Border::default()
+        },
+        ..iced::widget::button::Style::default()
+    };
+    let ghost = |label: Localized, msg: LibraryMessage| {
+        button(text(label).size(TS.caption))
+            .padding([SP.xs, SP.m])
+            .on_press(msg)
+            .style(ghost_style)
+    };
+    let cell = |label: Localized, active: bool, msg: LibraryMessage| {
+        button(text(label).size(TS.caption))
+            .padding([SP.xs, SP.m])
+            .on_press(msg)
+            .style(
+                move |_: &Theme, status: Status| iced::widget::button::Style {
+                    background: if active {
+                        Some(iced::Background::Color(raised))
+                    } else if matches!(status, Status::Hovered) {
+                        Some(iced::Background::Color(hover))
+                    } else {
+                        None
+                    },
+                    text_color: if active { ink } else { ink3 },
+                    border: Border {
+                        radius: 6.0.into(),
+                        ..Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                },
+            )
     };
     let view = editor.view();
-    row![
-        text(raw("Body")).size(TS.body).color(text_c),
-        button_for(
-            "Normal",
-            view.body == BodyStyle::Normal,
-            SymbolEditorMsg::BodyStyleSelected(BodyStyle::Normal),
+    let segmented = container(
+        row![
+            cell(
+                t!(i18n, ids::EDITORS_SYMBOL_BODY_NORMAL),
+                view.body == BodyStyle::Normal,
+                sym(SymbolEditorMsg::BodyStyleSelected(BodyStyle::Normal)),
+            ),
+            cell(
+                t!(i18n, ids::EDITORS_SYMBOL_BODY_ALTERNATE),
+                view.body == BodyStyle::Alternate,
+                sym(SymbolEditorMsg::BodyStyleSelected(BodyStyle::Alternate)),
+            ),
+        ]
+        .spacing(crate::styles::Spacing::DEFAULT.xs),
+    )
+    .padding(crate::styles::Spacing::DEFAULT.xs)
+    .style(move |_: &Theme| iced::widget::container::Style {
+        background: Some(iced::Background::Color(sunken)),
+        border: Border {
+            radius: 8.0.into(),
+            ..Border::default()
+        },
+        ..iced::widget::container::Style::default()
+    });
+    let max_part = sym_state::max_part_number(editor.primitive());
+    let save_label = if editor.is_dirty() {
+        ids::EDITORS_SYMBOL_SAVE_DIRTY
+    } else {
+        ids::EDITORS_SYMBOL_SAVE
+    };
+    let save = button(text(t!(i18n, save_label)).size(TS.caption))
+        .padding([SP.xs, SP.l])
+        .on_press(send(PrimitiveEdit::Save))
+        .style(crate::styles::primary_button(tokens));
+
+    let body_row = row![
+        text(t!(i18n, ids::EDITORS_SYMBOL_BODY))
+            .size(TS.caption)
+            .color(ink3),
+        segmented,
+        ghost(
+            t!(i18n, ids::EDITORS_SYMBOL_BODY_BOTH),
+            sym(SymbolEditorMsg::SelectionBodyAssigned(
+                signex_library::BODY_COMMON
+            )),
         ),
-        button_for(
-            "Alternate",
-            view.body == BodyStyle::Alternate,
-            SymbolEditorMsg::BodyStyleSelected(BodyStyle::Alternate),
-        ),
-        button_for(
-            "Both bodies",
-            false,
-            SymbolEditorMsg::SelectionBodyAssigned(signex_library::BODY_COMMON),
-        ),
-        button_for(
-            "This body only",
-            false,
-            SymbolEditorMsg::SelectionBodyAssigned(view.body_tag()),
+        ghost(
+            t!(i18n, ids::EDITORS_SYMBOL_BODY_THIS_ONLY),
+            sym(SymbolEditorMsg::SelectionBodyAssigned(view.body_tag())),
         ),
     ]
     .spacing(SP.s)
-    .align_y(iced::Alignment::Center)
-    .boxed()
+    .align_y(iced::Alignment::Center);
+    let part_row = row![
+        ghost(
+            t!(i18n, ids::EDITORS_SYMBOL_PREVIOUS_PART),
+            sym(SymbolEditorMsg::PrevPart)
+        ),
+        text(t!(
+            i18n,
+            ids::EDITORS_SYMBOL_PART_OF,
+            "part" => u32::from(editor.active_part),
+            "parts" => u32::from(max_part)
+        ))
+        .size(TS.body)
+        .color(ink),
+        ghost(
+            t!(i18n, ids::EDITORS_SYMBOL_NEXT_PART),
+            sym(SymbolEditorMsg::NextPart)
+        ),
+        ghost(
+            t!(i18n, ids::EDITORS_SYMBOL_ADD_PART),
+            sym(SymbolEditorMsg::NewPart)
+        ),
+        ghost(
+            t!(i18n, ids::EDITORS_SYMBOL_REMOVE_PART),
+            sym(SymbolEditorMsg::RemovePart)
+        ),
+        Space::new().width(SP.m),
+        save,
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center);
+    container(column![body_row, part_row].spacing(SP.s))
+        .padding(SP.m)
+        .style(move |_: &Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(raised)),
+            border: Border {
+                width: crate::styles::HAIRLINE,
+                radius: crate::styles::Radii::GRAPHITE.card.into(),
+                color: line,
+                ..Border::default()
+            },
+            ..iced::widget::container::Style::default()
+        })
+        .boxed()
 }
+
+/// Graphite zoom pill of the symbol editor. It zooms about the symbol origin
+/// (the canvas size is only known to the canvas) and Fit queues a fit.
+fn graphite_zoom_pill<'a>(
+    editor: &SymbolDocument,
+    path: &std::path::Path,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let anchor = editor.camera.offset;
+    let sym = |m: SymbolEditorMsg| LibraryMessage::PrimitiveEditorEvent {
+        path: path.to_path_buf(),
+        msg: PrimitiveEdit::Symbol(m),
+    };
+    let zoom = |factor: f32| {
+        sym(SymbolEditorMsg::ZoomFactor {
+            sx: anchor.x,
+            sy: anchor.y,
+            factor,
+        })
+    };
+    crate::canvas::zoom_pill::view(
+        tokens,
+        editor.camera.zoom_percent(),
+        zoom(1.0 / ZOOM_BUTTON_STEP),
+        zoom(ZOOM_BUTTON_STEP),
+        sym(SymbolEditorMsg::Fit),
+    )
+}
+
+/// Scale factor of one zoom-pill click.
+const ZOOM_BUTTON_STEP: f32 = 1.25;
 
 fn symbol_tool_button_style(
     active: bool,
@@ -348,9 +452,11 @@ fn symbol_canvas<'a>(
             ..crate::styles::ti(tokens.text_secondary)
         },
     )
+    .with_graphite(tokens)
     .with_selection_filter(editor.selection_filter)
     .with_view_pending(editor.pending_view.is_some())
     .with_trackpad_pan(editor.trackpad_pan)
+    .with_wheel_mode(editor.wheel_mode)
     .with_device_px_per_logical_px(device_px_per_logical_px)
 }
 

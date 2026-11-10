@@ -95,6 +95,7 @@ pub(crate) fn frame_elements(
         y: xform.px_y(y),
     };
     let stroke = |width_mm: f64| SvgStyle {
+        stroke_alpha: 1.0,
         stroke_rgb: Some(rgb),
         fill_rgb: None,
         stroke_width: u(width_mm),

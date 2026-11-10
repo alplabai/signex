@@ -44,6 +44,10 @@ pub struct PrePlacementData {
     pub shape_width_mm: f64,
     /// Fill style for shapes that support it (Rect / Circle / Polygon).
     pub shape_fill: signex_types::schematic::FillType,
+    /// Width of the wires the Wire tool routes (Tab form).
+    pub wire_width: signex_types::schematic::WireWidthPreset,
+    /// Colour of those wires; `None` = the theme's wire colour.
+    pub wire_color: Option<signex_types::theme::Color>,
 }
 
 /// The look of the text a pre-placement form configures; what Repeat last
@@ -84,6 +88,8 @@ impl PrePlacementData {
             cursor_y_mm,
             shape_width_mm: 0.0,
             shape_fill: signex_types::schematic::FillType::None,
+            wire_width: Default::default(),
+            wire_color: None,
         }
     }
 
@@ -196,6 +202,9 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // instead." Takes precedence over the schematic / pre-placement /
     // symbol-editor branches so when a Library Browser tab is active
     // the panel stays focused on it.
+    if let Some(sheet) = ctx.component_sheet.as_ref() {
+        return super::view_component_sheet(sheet, &ctx.tokens, &ctx.i18n);
+    }
     if let Some(detail) = ctx.library_row_detail.as_ref() {
         return view_library_row_properties(
             detail,
@@ -218,6 +227,8 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             muted,
             primary,
             border_c,
+            &ctx.tokens,
+            &ctx.i18n,
         );
     }
 
@@ -229,10 +240,9 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return view_footprint_editor_properties(
             fp,
             palette,
-            ctx.custom_filter_presets.clone(),
-            ctx.active_custom_filter_tab,
             &ctx.collapsed_sections,
             ctx.unit,
+            &ctx.i18n,
         );
     }
 
@@ -279,15 +289,21 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
     col = col.push(
-        container(text(raw("Document Options")).size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
+        container(
+            text(signex_i18n::t!(
+                ctx.i18n,
+                signex_i18n::ids::PANELS_PROPERTIES_DOCUMENT_OPTIONS
+            ))
+            .size(TS.title)
+            .color(primary),
+        )
+        .padding([10.0, 12.0])
+        .width(Length::Fill)
+        .boxed(),
     );
 
     // ── General | Parameters tab bar ──
     let tab = ctx.properties_tab;
-    let tab_hover = crate::styles::ti(ctx.tokens.hover);
     let text_inactive = crate::styles::ti(ctx.tokens.text_secondary);
     col = col.push(
         container(
@@ -297,39 +313,32 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     tab == 0,
                     PanelMsg::PropertiesTab(0),
                     primary,
-                    text_inactive,
-                    tab_hover,
-                    border_c
+                    text_inactive
                 ),
                 props_tab_btn(
                     "Parameters",
                     tab == 1,
                     PanelMsg::PropertiesTab(1),
                     primary,
-                    text_inactive,
-                    tab_hover,
-                    border_c
+                    text_inactive
                 ),
             ]
             .spacing(SP.xs),
         )
-        .padding([SP.s, SP.m])
+        .padding([SP.s, 12.0])
         .boxed(),
     );
-    col = col.push(thin_sep(border_c));
-
     // ── Tab content ──
     if tab == 0 {
-        col = col.push(view_properties_general(ctx, muted, primary, border_c).boxed());
+        col = col.push(view_properties_general(ctx, primary).boxed());
     } else {
         col = col.push(
             view_properties_parameters(
+                &ctx.tokens,
                 muted,
                 primary,
-                border_c,
                 crate::styles::ti(ctx.tokens.selection),
-                crate::styles::ti(ctx.tokens.accent),
-                crate::styles::ti(ctx.tokens.hover),
+                &ctx.i18n,
             )
             .boxed(),
         );
@@ -337,15 +346,18 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // ── Status: Nothing selected ──
     col = col.push(Space::new().height(8.0).boxed());
-    col = col.push(thin_sep(border_c));
     col = col.push(
         container(text(raw("Nothing selected")).size(TS.caption).color(muted))
-            .padding([6.0, SP.m])
+            .padding([6.0, 12.0])
             .width(Length::Fill)
             .boxed(),
     );
 
-    scrollable(col).width(Length::Fill).boxed()
+    scrollable(col)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(super::form_look::scrollbar_style)
+        .boxed()
 }
 
 /// The pre-placement X/Y readout: Y from the active sheet's page origin
@@ -365,6 +377,7 @@ fn view_pre_placement<'a>(
     input_bg: Color,
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
+    let i18n: &'a signex_i18n::I18n = &ctx.i18n;
     let label_text = pp.label_text.clone();
     let designator = pp.designator.clone();
     let rotation = pp.rotation;
@@ -384,10 +397,12 @@ fn view_pre_placement<'a>(
             row![
                 text(raw(tool_name.clone())).size(TS.label).color(primary),
                 Space::new().width(Length::Fill),
-                signex_widgets::button(text(raw("OK")).size(TS.caption).color(Color::WHITE))
-                    .padding([SP.xs, 10.0])
-                    .on_press(PanelMsg::ConfirmPrePlacement)
-                    .style(iced::widget::button::primary),
+                crate::styles::dialog_button(
+                    "OK",
+                    crate::styles::DialogButtonKind::Primary,
+                    Some(PanelMsg::ConfirmPrePlacement),
+                    &ctx.tokens,
+                ),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -409,17 +424,13 @@ fn view_pre_placement<'a>(
 
     // ── Location ──
     col = col.push(
-        collapsible_section(
+        ctx.collapsible(
             "preplace_location",
             "Location",
             &ctx.collapsed_sections,
-            primary,
-            border_c,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row(
-                    "(X/Y)", &pos_str, muted, input_bg, input_bdr,
-                ));
+                c = c.push(form_input_row("(X/Y)", &pos_str, muted, input_bg));
                 let rotation_opts: Vec<String> = vec![
                     "0 Degrees".into(),
                     "90 Degrees".into(),
@@ -471,12 +482,10 @@ fn view_pre_placement<'a>(
 
     if show_text_field || show_text_styling {
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "preplace_props",
                 "Properties",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     if show_text_field {
@@ -517,7 +526,10 @@ fn view_pre_placement<'a>(
                             muted,
                         ));
                         c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
-                        c = c.push(form_label("Justification", muted));
+                        c = c.push(form_label(signex_i18n::t!(
+                            i18n,
+                            signex_i18n::ids::PANELS_PROPERTIES_JUSTIFICATION
+                        )));
                         c = c.push(
                             container(preplacement_justification_grid(
                                 justify_h,
@@ -550,12 +562,10 @@ fn view_pre_placement<'a>(
         let show_fill = !matches!(kind, PrePlacementKind::Line | PrePlacementKind::Arc);
         let numeric_draft = ctx.numeric_draft.as_ref();
         col = col.push(
-            collapsible_section(
+            ctx.collapsible(
                 "preplace_shape",
                 "Properties",
                 &ctx.collapsed_sections,
-                primary,
-                border_c,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
                     c = c.push(form_edit_row_f64(
@@ -573,6 +583,33 @@ fn view_pre_placement<'a>(
             )
             .boxed(),
         );
+    } else if kind == PrePlacementKind::Wire {
+        let (width, color, picker) = (pp.wire_width, pp.wire_color, ctx.wire_color_picker);
+        col = col.push(
+            ctx.collapsible(
+                "preplace_wire",
+                "Properties",
+                &ctx.collapsed_sections,
+                move || {
+                    Column::new()
+                        .spacing(0)
+                        .width(Length::Fill)
+                        .push(super::wire_width_row(
+                            width,
+                            PanelMsg::SetPrePlacementWireWidth,
+                            muted,
+                        ))
+                        .push(super::wire_color_row(
+                            color,
+                            picker,
+                            std::rc::Rc::new(PanelMsg::SetPrePlacementWireColor),
+                            muted,
+                            border_c,
+                        ))
+                },
+            )
+            .boxed(),
+        );
     } else {
         col = col.push(
             container(
@@ -585,7 +622,12 @@ fn view_pre_placement<'a>(
         );
     }
 
-    container(scrollable(col).width(Length::Fill))
-        .width(Length::Fill)
-        .boxed()
+    container(
+        scrollable(col)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(super::form_look::scrollbar_style),
+    )
+    .width(Length::Fill)
+    .boxed()
 }

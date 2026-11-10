@@ -4,6 +4,7 @@ use super::*;
 use crate::annotate_undo::AnnotateUndo;
 use iced::widget::{Space, Widget, column, pick_list, row};
 use iced::{Element, Length};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{raw, text};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -27,8 +28,8 @@ pub(super) fn content_annotation<'a>(draft: AnnotateUndo) -> Element<'a, PrefMsg
         Space::new().width(Length::Fill),
         pick_list(Some(draft), AnnotateUndo::ALL, |v: &AnnotateUndo| v
             .to_string())
-        .on_select(PrefMsg::DraftAnnotateUndo)
-        .text_size(12),
+        .graphite()
+        .on_select(PrefMsg::DraftAnnotateUndo),
     ]
     .align_y(iced::Alignment::Center);
 

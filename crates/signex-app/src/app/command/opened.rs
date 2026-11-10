@@ -17,7 +17,10 @@ use crate::keymap::AppCommandId;
 
 /// The commands that make a document and so answer with it.
 pub(crate) fn answers_with_the_new_document(command: &AppCommandId) -> bool {
-    matches!(command.as_str(), "open_document" | "new_document")
+    matches!(
+        command.as_str(),
+        "open_document" | "new_document" | "new_project_with_profile"
+    )
 }
 
 /// What was asked for and what existed before the command ran.

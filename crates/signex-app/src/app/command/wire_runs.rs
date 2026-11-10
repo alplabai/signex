@@ -192,7 +192,7 @@ impl Signex {
             .ok_or("no schematic is open")?
             .document();
         let segments = self.checked_segments(before, start, end, "wire")?;
-        let commands = wire_commands(&segments);
+        let commands = wire_commands(&segments, self.wire_placement_style());
         let after = Self::sheet_after(before, &commands)?;
         let intent = wire_intent(
             before,

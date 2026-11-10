@@ -62,6 +62,7 @@ impl DockArea {
             hovered_tab: None,
             drop_preview: None,
             tab_menu: None,
+            editor_seeds: EditorSeeds::default(),
         }
     }
 
@@ -135,7 +136,7 @@ impl DockArea {
     /// Make the tab at `idx` the active one in `position` and expand
     /// the region if the user had collapsed it. Opening a panel that
     /// is docked behind another tab has to do this — otherwise "open
-    /// Signal" looks like it did nothing.
+    /// Signex AI" looks like it did nothing.
     fn reveal_tab(&mut self, position: PanelPosition, idx: usize) {
         let region = self.region_mut(position);
         if idx < region.panels.len() {
@@ -205,16 +206,6 @@ impl DockArea {
                     region.active = idx;
                     region.collapsed = false;
                 }
-            }
-            DockMessage::TabScroll(pos, delta) => {
-                let region = match pos {
-                    PanelPosition::Left => &mut self.left,
-                    PanelPosition::Right => &mut self.right,
-                    PanelPosition::Bottom => &mut self.bottom,
-                };
-                let new_off = region.tab_offset as i32 + delta;
-                let max_off = region.panels.len().saturating_sub(1) as i32;
-                region.tab_offset = new_off.clamp(0, max_off) as usize;
             }
             DockMessage::ToggleCollapse(pos) => {
                 let region = match pos {
@@ -444,12 +435,12 @@ mod tests {
     #[test]
     fn a_kind_docked_in_one_region_is_not_added_to_another() {
         let mut dock = DockArea::new();
-        dock.add_panel(PanelPosition::Left, PanelKind::Signal);
+        dock.add_panel(PanelPosition::Left, PanelKind::SignexAi);
 
-        dock.add_panel(PanelPosition::Bottom, PanelKind::Signal);
-        dock.add_panel(PanelPosition::Right, PanelKind::Signal);
+        dock.add_panel(PanelPosition::Bottom, PanelKind::SignexAi);
+        dock.add_panel(PanelPosition::Right, PanelKind::SignexAi);
 
-        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::Signal]);
+        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::SignexAi]);
         assert!(dock.panel_kinds(PanelPosition::Bottom).is_empty());
         assert!(dock.panel_kinds(PanelPosition::Right).is_empty());
     }
@@ -461,16 +452,16 @@ mod tests {
     fn replaying_a_duplicated_saved_layout_keeps_only_the_first_copy() {
         let mut dock = DockArea::new();
         for (pos, kind) in [
-            (PanelPosition::Left, PanelKind::Signal),
-            (PanelPosition::Right, PanelKind::Signal),
+            (PanelPosition::Left, PanelKind::SignexAi),
+            (PanelPosition::Right, PanelKind::SignexAi),
             (PanelPosition::Right, PanelKind::Messages),
-            (PanelPosition::Bottom, PanelKind::Signal),
+            (PanelPosition::Bottom, PanelKind::SignexAi),
             (PanelPosition::Bottom, PanelKind::Messages),
         ] {
             dock.add_panel(pos, kind);
         }
 
-        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::Signal]);
+        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::SignexAi]);
         assert_eq!(
             dock.panel_kinds(PanelPosition::Right),
             [PanelKind::Messages]
@@ -481,7 +472,7 @@ mod tests {
     fn three_tab_dock() -> DockArea {
         let mut dock = DockArea::new();
         dock.add_panel(PanelPosition::Left, PanelKind::Projects);
-        dock.add_panel(PanelPosition::Left, PanelKind::Signal);
+        dock.add_panel(PanelPosition::Left, PanelKind::SignexAi);
         dock.add_panel(PanelPosition::Left, PanelKind::Messages);
         dock
     }
@@ -496,7 +487,10 @@ mod tests {
         dock.update(DockMessage::ClosePanel(PanelPosition::Left, 0));
 
         assert_eq!(dock.active_tab(PanelPosition::Left), 0);
-        assert_eq!(dock.panel_kinds(PanelPosition::Left)[0], PanelKind::Signal);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Left)[0],
+            PanelKind::SignexAi
+        );
     }
 
     #[test]
@@ -507,7 +501,10 @@ mod tests {
         dock.update(DockMessage::UndockPanel(PanelPosition::Left, 0));
 
         assert_eq!(dock.active_tab(PanelPosition::Left), 0);
-        assert_eq!(dock.panel_kinds(PanelPosition::Left)[0], PanelKind::Signal);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Left)[0],
+            PanelKind::SignexAi
+        );
     }
 
     #[test]
@@ -526,11 +523,11 @@ mod tests {
     fn add_panel_leaves_an_existing_panel_where_it_is() {
         let mut dock = DockArea::new();
         dock.add_panel(PanelPosition::Left, PanelKind::Projects);
-        dock.add_panel(PanelPosition::Left, PanelKind::Signal);
+        dock.add_panel(PanelPosition::Left, PanelKind::SignexAi);
         dock.update(DockMessage::SelectTab(PanelPosition::Left, 0));
 
         // Replay must not steal the active tab — only `show_panel` reveals.
-        dock.add_panel(PanelPosition::Bottom, PanelKind::Signal);
+        dock.add_panel(PanelPosition::Bottom, PanelKind::SignexAi);
 
         assert_eq!(dock.active_tab(PanelPosition::Left), 0);
     }
@@ -540,11 +537,11 @@ mod tests {
         let mut dock = DockArea::new();
         dock.add_panel(PanelPosition::Left, PanelKind::Projects);
 
-        dock.show_panel(PanelKind::Signal);
+        dock.show_panel(PanelKind::SignexAi);
 
         assert_eq!(
             dock.panel_kinds(PanelPosition::Left),
-            [PanelKind::Projects, PanelKind::Signal]
+            [PanelKind::Projects, PanelKind::SignexAi]
         );
         assert_eq!(dock.active_tab(PanelPosition::Left), 1);
     }
@@ -554,16 +551,16 @@ mod tests {
     #[test]
     fn show_panel_reveals_a_panel_hidden_behind_another_tab() {
         let mut dock = DockArea::new();
-        dock.add_panel(PanelPosition::Left, PanelKind::Signal);
+        dock.add_panel(PanelPosition::Left, PanelKind::SignexAi);
         dock.add_panel(PanelPosition::Left, PanelKind::Projects);
         dock.update(DockMessage::SelectTab(PanelPosition::Left, 1));
         dock.update(DockMessage::ToggleCollapse(PanelPosition::Left));
 
-        dock.show_panel(PanelKind::Signal);
+        dock.show_panel(PanelKind::SignexAi);
 
         assert_eq!(
             dock.panel_kinds(PanelPosition::Left),
-            [PanelKind::Signal, PanelKind::Projects]
+            [PanelKind::SignexAi, PanelKind::Projects]
         );
         assert_eq!(dock.active_tab(PanelPosition::Left), 0);
         assert!(!dock.is_collapsed(PanelPosition::Left));
@@ -573,21 +570,27 @@ mod tests {
     fn show_panel_at_honours_an_explicit_drop_target_for_a_new_kind() {
         let mut dock = DockArea::new();
 
-        dock.show_panel_at(PanelPosition::Bottom, PanelKind::Signal);
+        dock.show_panel_at(PanelPosition::Bottom, PanelKind::SignexAi);
 
-        assert_eq!(dock.panel_kinds(PanelPosition::Bottom), [PanelKind::Signal]);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Bottom),
+            [PanelKind::SignexAi]
+        );
         assert!(dock.panel_kinds(PanelPosition::Left).is_empty());
     }
 
     #[test]
     fn a_floating_panel_blocks_a_second_docked_copy() {
         let mut dock = DockArea::new();
-        dock.floating.push(floating(PanelKind::Signal));
+        dock.floating.push(floating(PanelKind::SignexAi));
 
-        dock.show_panel(PanelKind::Signal);
-        dock.add_panel(PanelPosition::Bottom, PanelKind::Signal);
+        dock.show_panel(PanelKind::SignexAi);
+        dock.add_panel(PanelPosition::Bottom, PanelKind::SignexAi);
 
-        assert_eq!(dock.locate(PanelKind::Signal), Some(PanelSite::Floating(0)));
+        assert_eq!(
+            dock.locate(PanelKind::SignexAi),
+            Some(PanelSite::Floating(0))
+        );
         assert!(dock.panel_kinds(PanelPosition::Left).is_empty());
         assert!(dock.panel_kinds(PanelPosition::Bottom).is_empty());
         assert_eq!(dock.floating.len(), 1);
@@ -597,10 +600,10 @@ mod tests {
     fn locate_finds_a_docked_panel_by_region_and_index() {
         let mut dock = DockArea::new();
         dock.add_panel(PanelPosition::Left, PanelKind::Projects);
-        dock.add_panel(PanelPosition::Left, PanelKind::Signal);
+        dock.add_panel(PanelPosition::Left, PanelKind::SignexAi);
 
         assert_eq!(
-            dock.locate(PanelKind::Signal),
+            dock.locate(PanelKind::SignexAi),
             Some(PanelSite::Docked(PanelPosition::Left, 1))
         );
         assert_eq!(dock.locate(PanelKind::Drc), None);
@@ -610,10 +613,10 @@ mod tests {
     #[test]
     fn undocking_then_reopening_does_not_produce_a_second_copy() {
         let mut dock = DockArea::new();
-        dock.add_panel(PanelPosition::Left, PanelKind::Signal);
+        dock.add_panel(PanelPosition::Left, PanelKind::SignexAi);
         dock.update(DockMessage::UndockPanel(PanelPosition::Left, 0));
 
-        dock.show_panel(PanelKind::Signal);
+        dock.show_panel(PanelKind::SignexAi);
 
         assert!(dock.panel_kinds(PanelPosition::Left).is_empty());
         assert_eq!(dock.floating.len(), 1);
@@ -624,22 +627,25 @@ mod tests {
     #[test]
     fn re_docking_a_floating_panel_sends_it_to_its_home_region() {
         let mut dock = DockArea::new();
-        dock.floating.push(floating(PanelKind::Signal));
+        dock.floating.push(floating(PanelKind::SignexAi));
 
         dock.update(DockMessage::DockFloating(0));
 
-        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::Signal]);
+        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::SignexAi]);
         assert!(dock.floating.is_empty());
     }
 
     #[test]
     fn dropping_a_floating_panel_on_a_zone_docks_it_there() {
         let mut dock = DockArea::new();
-        dock.floating.push(floating(PanelKind::Signal));
+        dock.floating.push(floating(PanelKind::SignexAi));
 
         dock.update(DockMessage::DockFloatingTo(0, PanelPosition::Bottom));
 
-        assert_eq!(dock.panel_kinds(PanelPosition::Bottom), [PanelKind::Signal]);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Bottom),
+            [PanelKind::SignexAi]
+        );
         assert_eq!(dock.active_tab(PanelPosition::Bottom), 0);
         assert!(dock.floating.is_empty());
     }

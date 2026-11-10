@@ -139,6 +139,12 @@ pub enum FootprintEditorMsg {
     /// name string; the dispatcher maps to `FpLayer`.
     ToggleLayer(String),
 
+    /// Layers panel — the "Show all" button was pressed.
+    LayersShowAllClicked,
+
+    /// Layers panel — the "Top side only" button was pressed.
+    LayersTopSideOnlyClicked,
+
     /// Toolbar — toggle the auto-fit-courtyard flag.
     ToggleAutoFit,
 

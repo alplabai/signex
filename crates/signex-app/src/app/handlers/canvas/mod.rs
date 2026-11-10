@@ -40,6 +40,8 @@ mod sheet_tool;
 pub use sheet_tool::SheetPlaceJobs;
 #[cfg(test)]
 pub(crate) mod placement_tests;
+#[cfg(test)]
+mod power_ghost_text_tests;
 mod status_activity;
 mod status_readout;
 mod sync_sheet_pins;
@@ -219,6 +221,7 @@ impl Signex {
                     },
                 );
             }
+            CanvasEvent::CursorLeft => self.clear_canvas_hover(),
             CanvasEvent::CursorMoved | CanvasEvent::ViewMoved => {
                 // The sheet background (paper, grid, frame) follows the camera
                 // alone, so a hover keeps its cache; a pan or zoom drops it

@@ -18,7 +18,12 @@ impl Env {
         out: &mut Follow,
     ) -> Vec<Key> {
         let mut translated = Vec::new();
-        for index in 0..self.wires.len() {
+        // Only a wire with an end on a moving pin's old tip can translate.
+        let mut candidates: Vec<usize> =
+            by_tip.keys().flat_map(|k| self.grid_wires_at(*k)).collect();
+        candidates.sort_unstable();
+        candidates.dedup();
+        for index in candidates {
             let wire = &self.wires[index];
             if self.removed.contains(&index) || self.selected.contains(&wire.uuid) {
                 continue;
@@ -61,6 +66,7 @@ impl Env {
             self.edited.insert(index);
             out.touched
                 .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
+            self.refile_wire(index);
             translated.extend([ks, ke]);
         }
         translated
@@ -106,12 +112,15 @@ impl Env {
         probe: &mut super::Probe,
         out: &mut Follow,
     ) {
-        for (uuid, position) in &mut self.no_connects {
+        for index in self.no_connects_near(at) {
+            let (uuid, position) = &mut self.no_connects[index];
             if key(position) == at && !self.selected.contains(uuid) {
                 *position = new;
                 out.touched
                     .push(SelectedItem::new(*uuid, SelectedKind::NoConnect));
                 probe.no_connect = false;
+                self.moved_no_connects.push(index);
+                self.file_no_connect(index);
             }
         }
     }
@@ -132,6 +141,8 @@ impl Env {
     fn carry_dots(&mut self, dots: &[usize], new: Point, out: &mut Follow) {
         for &index in dots {
             self.junctions[index].1 = new;
+            self.moved_junctions.push(index);
+            self.file_junction(index);
             out.touched.push(SelectedItem::new(
                 self.junctions[index].0,
                 SelectedKind::Junction,
@@ -199,6 +210,7 @@ impl Env {
             }
             for (a, b) in segs {
                 let mut wire = template.cloned().unwrap_or_else(|| Wire {
+                    color: None,
                     uuid: Uuid::nil(),
                     start: a,
                     end: b,
@@ -215,6 +227,7 @@ impl Env {
                     .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
                 self.wires.push(wire);
                 let index = self.wires.len() - 1;
+                self.refile_wire(index);
                 self.placed.insert((index, true));
                 self.placed.insert((index, false));
                 self.edited.insert(index);

@@ -15,8 +15,10 @@
 
 use iced::widget::{Column, Widget, column, pick_list, scrollable};
 use iced::{Element, Length};
+use signex_i18n::{I18n, ids, t};
 use signex_library::{AlternateStatus, DistributorSource, ManufacturerPart};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
 use signex_widgets::{raw, text, text_input};
 
@@ -92,20 +94,44 @@ pub(crate) fn distributor_source_to_string(s: DistributorSource) -> String {
     distributor_label(s).to_string()
 }
 
-const PART_COLS: [(&str, Length); 6] = [
-    ("Role", Length::FillPortion(2)),
-    ("Manufacturer", Length::FillPortion(4)),
-    ("MPN", Length::FillPortion(4)),
-    ("Status", Length::FillPortion(3)),
-    ("Notes", Length::FillPortion(4)),
-    ("", Length::FillPortion(2)),
+const PART_COLS: [kit::TableColumn; 6] = [
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_ROLE),
+        Length::FillPortion(2),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_MANUFACTURER),
+        Length::FillPortion(4),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_MPN),
+        Length::FillPortion(4),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_STATUS),
+        Length::FillPortion(3),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_NOTES),
+        Length::FillPortion(4),
+    ),
+    (None, Length::FillPortion(2)),
 ];
 
-const LISTING_COLS: [(&str, Length); 4] = [
-    ("Distributor", Length::FillPortion(3)),
-    ("SKU", Length::FillPortion(4)),
-    ("Link", Length::FillPortion(6)),
-    ("", Length::FillPortion(2)),
+const LISTING_COLS: [kit::TableColumn; 4] = [
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_DISTRIBUTOR),
+        Length::FillPortion(3),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_SKU),
+        Length::FillPortion(4),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_LINK),
+        Length::FillPortion(6),
+    ),
+    (None, Length::FillPortion(2)),
 ];
 
 /// Role cell text: the primary part, or `Alt n` (1-based) for an alternate.
@@ -128,11 +154,12 @@ fn empty_text(listings: bool) -> &'static str {
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let body = column![
-        parts_section(state, tokens, &address),
-        listings_section(state, tokens, &address),
+        parts_section(state, tokens, i18n, &address),
+        listings_section(state, tokens, i18n, &address),
     ]
     .spacing(SP.xl)
     .width(Length::Fill)
@@ -167,8 +194,8 @@ fn status_picker<'a>(
 ) -> Element<'a, LibraryMessage> {
     let address = address.clone();
     pick_list(Some(current), STATUS_OPTS, status_label)
+        .graphite()
         .on_select(move |s| editor_event(&address, make(s)))
-        .text_size(TS.label)
         .padding([SP.s, SP.m])
         .width(Length::Fill)
         .boxed()
@@ -196,6 +223,7 @@ fn blank<'a>() -> Element<'a, LibraryMessage> {
 fn parts_section<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let add = kit::primary_button(
@@ -248,7 +276,7 @@ fn parts_section<'a>(
     );
 
     let mut grid: Column<Element<'a, LibraryMessage>> =
-        column![kit::table_header(&PART_COLS, tokens), primary_row];
+        column![kit::table_header(&PART_COLS, i18n, tokens), primary_row];
     for (idx, alt) in state.row.alternates.iter().enumerate() {
         grid = grid.push(alternate_row(idx, alt, tokens, address));
     }
@@ -257,7 +285,11 @@ fn parts_section<'a>(
     }
 
     column![
-        kit::section_header("Manufacturer parts", Some(add), tokens),
+        kit::section_header(
+            t!(i18n, ids::EDITORS_COMPONENT_PARTS_HEADING),
+            Some(add),
+            tokens
+        ),
         kit::card(grid.boxed(), tokens),
     ]
     .spacing(SP.m)
@@ -324,6 +356,7 @@ fn alternate_row<'a>(
 fn listings_section<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let add = kit::primary_button(
@@ -332,7 +365,7 @@ fn listings_section<'a>(
         tokens,
     );
     let mut grid: Column<Element<'a, LibraryMessage>> =
-        column![kit::table_header(&LISTING_COLS, tokens)];
+        column![kit::table_header(&LISTING_COLS, i18n, tokens)];
     for (idx, listing) in state.row.supply.iter().enumerate() {
         grid = grid.push(listing_row(
             idx,
@@ -347,7 +380,11 @@ fn listings_section<'a>(
         grid = grid.push(kit::empty_state(empty_text(true), None, tokens));
     }
     column![
-        kit::section_header("Distributor listings", Some(add), tokens),
+        kit::section_header(
+            t!(i18n, ids::EDITORS_COMPONENT_LISTINGS_HEADING),
+            Some(add),
+            tokens
+        ),
         kit::card(grid.boxed(), tokens),
     ]
     .spacing(SP.m)
@@ -369,13 +406,13 @@ fn listing_row<'a>(
         DISTRIBUTOR_OPTS,
         distributor_pick_label,
     )
+    .graphite()
     .on_select(move |value| {
         editor_event(
             &picker_address,
             EditorMsg::SupplyListingSetDistributor { idx, value },
         )
     })
-    .text_size(TS.label)
     .padding([SP.s, SP.m])
     .width(Length::Fill);
 
@@ -436,14 +473,18 @@ mod tests {
 
     #[test]
     fn grids_have_issue_columns_and_a_trailing_action() {
-        let titles: Vec<&str> = PART_COLS.iter().map(|c| c.0).collect();
+        let en = I18n::en_us();
+        let render =
+            |c: &kit::TableColumn| c.0.map_or_else(String::new, |id| t!(en, id).into_string());
+        let titles: Vec<String> = PART_COLS.iter().map(render).collect();
         assert_eq!(
             &titles[..5],
-            ["Role", "Manufacturer", "MPN", "Status", "Notes"]
+            ["ROLE", "MANUFACTURER", "MPN", "STATUS", "NOTES"]
         );
         assert_eq!(titles[5], "");
-        let titles: Vec<&str> = LISTING_COLS.iter().map(|c| c.0).collect();
-        assert_eq!(&titles[..3], ["Distributor", "SKU", "Link"]);
+        let titles: Vec<String> = LISTING_COLS.iter().map(render).collect();
+        assert_eq!(&titles[..3], ["DISTRIBUTOR", "SKU", "LINK"]);
+        assert_eq!(titles[3], "");
     }
 
     #[test]

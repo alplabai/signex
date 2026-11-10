@@ -64,7 +64,7 @@ fn a_placed_stock_ic_renders_its_pin_numbers_and_names() {
         device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let bounds = Rectangle::new(Point::ORIGIN, Size::new(4000.0, 4000.0));
-    let colors = canvas_colors(ThemeId::CatppuccinMocha);
+    let colors = canvas_colors(ThemeId::GraphiteDark);
     let snap =
         build_renderer_snapshot(sheet, &transform, &colors, bounds, None, Default::default());
 

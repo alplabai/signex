@@ -40,13 +40,12 @@ impl Signex {
         let Some(menu) = self.document_state.dock.tab_menu else {
             return iced::widget::Space::new().boxed();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let entries = dock_tab_menu_entries(menu.position);
-        let width = signex_widgets::active_bar_dropdown::fitted_width(
-            &entries,
-            Self::CONTEXT_MENU_WIDTH,
-            &self.document_state.panel_ctx.ui_font_name,
-        );
-        signex_widgets::active_bar_dropdown::view(entries, tokens, Some(width))
+        let panel_ctx = &self.document_state.panel_ctx;
+        super::placement::menu_card(
+            dock_tab_menu_entries(menu.position),
+            &panel_ctx.tokens,
+            &panel_ctx.ui_font_name,
+        )
+        .element
     }
 }

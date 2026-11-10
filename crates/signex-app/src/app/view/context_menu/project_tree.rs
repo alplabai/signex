@@ -98,49 +98,30 @@ impl Signex {
     /// Build the Projects-panel tree-view right-click menu. The item set
     /// is derived from the clicked node's [`TreeNodeRole`] — project root
     /// vs library leaf vs openable leaf vs container branch — so the menu
-    /// matches what Altium shows in each context. Empty-area clicks are
-    /// filtered upstream (no menu shown), so `path` is `Some` whenever
-    /// this runs.
+    /// matches what Altium shows in each context. An empty-area click gets
+    /// the one New Project row.
     ///
-    /// Returns the card, its width and the origin it opens at in `window_id`,
-    /// clamped with the height of the entries it really builds.
+    /// Returns the card fitted to its labels; an empty placeholder when the
+    /// click names no live row. The overlay places it at the click.
     pub(in crate::app::view) fn view_project_tree_context_menu(
         &self,
-        window_id: iced::window::Id,
         ctx: &crate::app::ProjectTreeContextMenuState,
-    ) -> (Element<'_, Message>, f32, (f32, f32)) {
-        let tokens = &self.document_state.panel_ctx.tokens;
+    ) -> super::placement::MenuCard<'_> {
+        let panel_ctx = &self.document_state.panel_ctx;
         // No entries (an empty-area click, or a row that no longer exists)
         // renders an empty placeholder so the overlay layer above has
         // something to render into.
         let Some(v) = self.project_tree_entries(ctx) else {
-            return (
-                container(iced::widget::Space::new()).boxed(),
-                Self::CONTEXT_MENU_WIDTH,
-                (ctx.x, ctx.y),
-            );
+            return super::placement::MenuCard {
+                element: container(iced::widget::Space::new()).boxed(),
+                flyout_offset: None,
+            };
         };
-        // The width is fitted to the labels, at most the shared context-menu
-        // width. The submenu flyout opens at this edge.
-        let width = signex_widgets::active_bar_dropdown::fitted_width(
-            &v,
-            Self::CONTEXT_MENU_WIDTH,
-            &self.document_state.panel_ctx.ui_font_name,
-        );
-        let origin = super::placement::clamp_menu_origin(
-            (ctx.x, ctx.y),
-            (width, super::placement::entries_height(&v)),
-            self.ui_state.size_of_window(window_id),
-        );
-        (
-            signex_widgets::active_bar_dropdown::view(v, tokens, Some(width)),
-            width,
-            origin,
-        )
+        super::placement::menu_card(v, &panel_ctx.tokens, &panel_ctx.ui_font_name)
     }
 
     /// The pure row data behind [`Self::view_project_tree_context_menu`]:
-    /// `None` when the click names no live tree row.
+    /// `None` when the click names a tree row that no longer exists.
     pub(super) fn project_tree_entries(
         &self,
         ctx: &crate::app::ProjectTreeContextMenuState,
@@ -153,12 +134,23 @@ impl Signex {
         let panel_ctx = ctx
             .window
             .map_or(&self.document_state.panel_ctx, |w| self.panel_ctx_for(w));
-        let tokens = &panel_ctx.tokens;
         let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(18);
 
-        // Background (empty-area) clicks currently produce no menu —
-        // Altium shows a "New Project..." flow there which we do not ship yet.
-        let key = ctx.key.as_ref()?;
+        // An empty-area click offers New Project (#2232), the dialog every
+        // other New Project entry opens.
+        let Some(key) = ctx.key.as_ref() else {
+            v.push(dd_msg(
+                None,
+                &signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::DIALOG_NEW_PROJECT_ENTRY_ROW
+                )
+                .into_string(),
+                &self.keymap_shortcut_label("new_document"),
+                Message::Menu(crate::menu_bar::MenuMessage::NewProject),
+            ));
+            return Some(v);
+        };
         // Resolve the stored key against the tree as it is NOW, so the
         // actions below carry indices of the row the user right-clicked
         // even if the tree was rebuilt since. A row that no longer exists
@@ -202,7 +194,6 @@ impl Signex {
                     ))),
                 ));
                 v.push(submenu_launcher(
-                    tokens,
                     None,
                     "Add New to Project",
                     ContextSubmenu::AddNewToProject,

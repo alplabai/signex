@@ -162,7 +162,7 @@ fn prefs_theme_round_trip_through_json() {
     // Default when missing.
     assert_eq!(
         signex_app::fonts::read_theme_pref_at(&path),
-        ThemeId::Signex
+        ThemeId::DEFAULT
     );
 
     // Each builtin theme survives a write→read cycle.
@@ -236,7 +236,7 @@ fn prefs_writes_dont_clobber_neighboring_keys() {
     let (_tmp, path) = temp_prefs_path();
 
     // Seed multiple keys.
-    signex_app::fonts::write_theme_pref_at(&path, ThemeId::Signex);
+    signex_app::fonts::write_theme_pref_at(&path, ThemeId::GraphiteDark);
     signex_app::fonts::write_unit_pref_at(&path, Unit::Mil);
     signex_app::fonts::write_grid_visible_pref_at(&path, false);
 
@@ -245,11 +245,80 @@ fn prefs_writes_dont_clobber_neighboring_keys() {
 
     assert_eq!(
         signex_app::fonts::read_theme_pref_at(&path),
-        ThemeId::Signex
+        ThemeId::GraphiteDark
     );
     assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mil);
     assert!(!signex_app::fonts::read_grid_visible_pref_at(&path));
     assert!(!signex_app::fonts::read_snap_enabled_pref_at(&path));
+}
+
+/// Downgrade safety: a theme name this build does not know (written by a
+/// newer build) falls back to the default theme and costs no other pref.
+#[test]
+fn prefs_unknown_theme_falls_back_to_default_and_keeps_the_other_prefs() {
+    let (_tmp, path) = temp_prefs_path();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, br#"{"theme":"some_future_theme","unit":"mil"}"#).unwrap();
+
+    assert_eq!(
+        signex_app::fonts::read_theme_pref_at(&path),
+        ThemeId::DEFAULT
+    );
+    assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mil);
+
+    // Writing another key leaves the unknown theme and the rest untouched.
+    signex_app::fonts::write_snap_enabled_pref_at(&path, false);
+    let json: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(json["theme"], "some_future_theme");
+    assert_eq!(json["unit"], "mil");
+}
+
+/// The Graphite names are the stored form of the new themes.
+#[test]
+fn prefs_graphite_themes_use_snake_case_names() {
+    let (_tmp, path) = temp_prefs_path();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    for (name, want) in [
+        ("graphite_light", ThemeId::GraphiteLight),
+        ("graphite_dark", ThemeId::GraphiteDark),
+    ] {
+        fs::write(&path, format!(r#"{{"theme":"{name}"}}"#)).unwrap();
+        assert_eq!(signex_app::fonts::read_theme_pref_at(&path), want, "{name}");
+    }
+}
+
+/// Graphite-only themes (docs/DECISIONS.md): a theme id saved by an older
+/// build loads as the Graphite twin of its lightness, through the real
+/// prefs loader, and reading it never rewrites the file or the other keys.
+#[test]
+fn prefs_a_retired_theme_id_loads_as_its_graphite_twin_and_the_file_is_kept() {
+    let (_tmp, path) = temp_prefs_path();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    for (name, want) in [
+        ("solarized_light", ThemeId::GraphiteLight),
+        ("signex", ThemeId::GraphiteDark),
+        ("alplab", ThemeId::GraphiteDark),
+        ("vs_code_dark", ThemeId::GraphiteDark),
+        ("catppuccin_mocha", ThemeId::GraphiteDark),
+        ("git_hub_dark", ThemeId::GraphiteDark),
+        ("nord", ThemeId::GraphiteDark),
+        ("custom", ThemeId::GraphiteDark),
+        ("no_such_theme", ThemeId::DEFAULT),
+    ] {
+        let stored = format!(r#"{{"theme":"{name}","unit":"mil"}}"#);
+        fs::write(&path, &stored).unwrap();
+        assert_eq!(signex_app::fonts::read_theme_pref_at(&path), want, "{name}");
+        assert_eq!(
+            signex_app::fonts::read_unit_pref_at(&path),
+            Unit::Mil,
+            "{name}"
+        );
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            stored,
+            "{name}: file untouched"
+        );
+    }
 }
 
 #[test]
@@ -261,7 +330,7 @@ fn prefs_garbage_json_falls_back_to_defaults() {
     // Each read returns its default rather than panicking on parse error.
     assert_eq!(
         signex_app::fonts::read_theme_pref_at(&path),
-        ThemeId::Signex
+        ThemeId::DEFAULT
     );
     assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mm);
     assert!(signex_app::fonts::read_grid_visible_pref_at(&path));
@@ -272,8 +341,8 @@ fn prefs_garbage_json_falls_back_to_defaults() {
 #[test]
 fn prefs_ui_font_round_trip_through_json() {
     let (_tmp, path) = temp_prefs_path();
-    // Default when missing.
-    assert_eq!(signex_app::fonts::read_ui_font_pref_at(&path), "Roboto");
+    // Default when missing: Inter on every theme (maintainer decision 2026-11-07).
+    assert_eq!(signex_app::fonts::read_ui_font_pref_at(&path), "Inter");
 
     for font in ["Iosevka", "Helvetica Neue", "Inter", "Source Code Pro"] {
         signex_app::fonts::write_ui_font_pref_at(&path, font);
@@ -381,7 +450,7 @@ fn prefs_cross_pref_independence() {
 
     // Write each pref in a different "session" (sequential writes,
     // each through update_prefs_json which does read-modify-write).
-    signex_app::fonts::write_theme_pref_at(&path, ThemeId::Signex);
+    signex_app::fonts::write_theme_pref_at(&path, ThemeId::GraphiteDark);
     signex_app::fonts::write_grid_size_mm_pref_at(&path, 2.54);
     signex_app::fonts::write_unit_pref_at(&path, Unit::Mil);
     signex_app::fonts::write_grid_visible_pref_at(&path, false);
@@ -390,7 +459,7 @@ fn prefs_cross_pref_independence() {
     // Read everything back — none should have been clobbered.
     assert_eq!(
         signex_app::fonts::read_theme_pref_at(&path),
-        ThemeId::Signex
+        ThemeId::GraphiteDark
     );
     assert!((signex_app::fonts::read_grid_size_mm_pref_at(&path).unwrap() - 2.54).abs() < 1e-5);
     assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mil);

@@ -1,169 +1,65 @@
 //! Small read-only form controls used by the Annotate modal — the inline
 //! checkbox pip, the order-of-processing radio pill, the 2×2 order-preview
-//! legend, and the shared bordered-container style.
-//!
-//! Moved verbatim out of `dialogs/annotate.rs` (ADR-0001, issue #164) as
-//! pure code motion — no behaviour change. These are free helper fns local
-//! to the annotate concern; kept `pub(super)` so only `annotate/mod.rs`
-//! reaches them.
+//! legend, and the shared bordered-container style. On Graphite each one
+//! delegates to `graphite_annotate`; other themes keep the original look.
 
 use super::super::*;
-use iced::widget::{Space, column, container, row};
-use iced::{Background, Border, Color, Element, Theme};
+use iced::widget::{container, scrollable};
+use iced::{Background, Border, Element, Theme};
+use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
+use super::super::graphite_annotate as ga;
 use crate::app::state::AnnotateOrder;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-/// Tiny inline checkbox pip — read-only indicator used inside the Annotate
-/// dialog's parameter list and sheet table.
-pub(super) fn check_pip(on: bool, border: Color) -> Element<'static, Message> {
-    let inner = if on {
-        text(raw("✓")).size(TS.caption).color(Color::WHITE)
-    } else {
-        text(raw(" ")).size(TS.caption).color(Color::WHITE)
-    };
-    let bg = if on {
-        Color::from_rgb(0.00, 0.47, 0.84)
-    } else {
-        Color::from_rgba(1.0, 1.0, 1.0, 0.04)
-    };
-    container(inner)
-        .width(12)
-        .height(12)
-        .align_x(iced::alignment::Horizontal::Center)
-        .align_y(iced::alignment::Vertical::Center)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(bg)),
-            border: Border {
-                width: 1.0,
-                radius: 2.0.into(),
-                color: border,
+/// Scroll-rail style of the modal's lists: a quiet pill thumb (the
+/// form-look rail).
+pub(super) fn scroll_style(
+    theme_tokens: &ThemeTokens,
+) -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style + 'static {
+    let r = crate::styles::tokens::resolve(theme_tokens);
+    let (thumb, thumb_hot) = (r.line_strong, r.ink4);
+    move |theme: &Theme, status: scrollable::Status| {
+        let mut style = scrollable::default(theme, status);
+        let idle = matches!(status, scrollable::Status::Active { .. });
+        for rail in [&mut style.vertical_rail, &mut style.horizontal_rail] {
+            rail.background = None;
+            rail.border = Border::default();
+            rail.scroller.background = Background::Color(if idle { thumb } else { thumb_hot });
+            rail.scroller.border = Border {
+                radius: 999.0.into(),
                 ..Border::default()
-            },
-            ..container::Style::default()
-        })
-        .boxed()
-}
-
-/// Compact visual *legend* of the annotate order — this is intentionally a
-/// static R1..R4 diagram that illustrates how four parts arranged in a 2×2
-/// grid would be numbered under the selected traversal. It does NOT reflect
-/// the user's actual components; it's the same convention Altium uses.
-pub(super) fn order_preview(
-    order: AnnotateOrder,
-    text_c: Color,
-    text_muted: Color,
-    border: Color,
-) -> Element<'static, Message> {
-    // Pick labels for each of the four slots (top-left, top-right, bottom-left,
-    // bottom-right) matching the selected order.
-    // Slot layout:
-    //   (0,0) tl   (0,1) tr
-    //   (1,0) bl   (1,1) br
-    let slots = match order {
-        // Column-major, bottom to top within the column (y decreasing):
-        //  2 4
-        //  1 3
-        AnnotateOrder::UpThenAcross => ("R2", "R4", "R1", "R3"),
-        // Column-major, top to bottom within the column (y increasing):
-        //  1 3
-        //  2 4
-        AnnotateOrder::DownThenAcross => ("R1", "R3", "R2", "R4"),
-        // Row-major, top row first (y increasing):
-        //  1 2
-        //  3 4
-        AnnotateOrder::AcrossThenDown => ("R1", "R2", "R3", "R4"),
-        // Row-major, bottom row first (y decreasing):
-        //  3 4
-        //  1 2
-        AnnotateOrder::AcrossThenUp => ("R3", "R4", "R1", "R2"),
-    };
-    let cell = |label: &'static str| -> Element<'static, Message> {
-        container(text(raw(label.to_string())).size(TS.caption).color(text_c))
-            .width(34)
-            .height(20)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: border,
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            })
-            .boxed()
-    };
-    let arrow = match order {
-        AnnotateOrder::UpThenAcross => "↑→",
-        AnnotateOrder::DownThenAcross => "↓→",
-        AnnotateOrder::AcrossThenDown => "→↓",
-        AnnotateOrder::AcrossThenUp => "→↑",
-    };
-    container(
-        column![
-            text(raw("Preview")).size(TS.caption).color(text_muted),
-            Space::new().height(2),
-            row![cell(slots.0), Space::new().width(4), cell(slots.1),].spacing(0),
-            Space::new().height(4),
-            row![cell(slots.2), Space::new().width(4), cell(slots.3),].spacing(0),
-            Space::new().height(2),
-            text(raw(arrow)).size(TS.body).color(text_muted),
-        ]
-        .spacing(0)
-        .align_x(iced::Alignment::Center),
-    )
-    .padding(6)
-    .style(bordered_style(border))
-    .boxed()
-}
-
-pub(super) fn bordered_style(border: Color) -> impl Fn(&Theme) -> container::Style + 'static {
-    move |_: &Theme| container::Style {
-        border: Border {
-            width: 1.0,
-            radius: 3.0.into(),
-            color: border,
-            ..Border::default()
-        },
-        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.02))),
-        ..container::Style::default()
+            };
+        }
+        style
     }
 }
 
-pub(super) fn order_radio(
-    label: &str,
+/// Tiny inline checkbox pip — read-only indicator used inside the Annotate
+/// dialog's parameter list and sheet table.
+pub(super) fn check_pip(on: bool, theme_tokens: &ThemeTokens) -> Element<'static, Message> {
+    ga::checkbox_pip(theme_tokens, on)
+}
+
+pub(super) fn bordered_style(
+    theme_tokens: &ThemeTokens,
+) -> Box<dyn Fn(&Theme) -> container::Style + 'static> {
+    Box::new(ga::field_box(theme_tokens))
+}
+
+pub(super) fn order_radio<'a>(
+    label: &'a str,
     value: AnnotateOrder,
     current: AnnotateOrder,
-    text_c: Color,
-    border: Color,
-) -> Element<'_, Message> {
-    let selected = value == current;
-    let bg = if selected {
-        Color::from_rgb(0.00, 0.47, 0.84)
-    } else {
-        Color::from_rgba(1.0, 1.0, 1.0, 0.04)
-    };
-    let fg = if selected { Color::WHITE } else { text_c };
-    button(container(text(raw(label.to_string())).size(TS.body).color(fg)).padding([SP.s, 10.0]))
+    theme_tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    button(container(text(raw(label.to_string())).size(TS.body)).padding([SP.s, 10.0]))
         .on_press(Message::Annotate(AnnotateMsg::OrderChanged(value)))
-        .style(move |_: &Theme, _| button::Style {
-            background: Some(Background::Color(bg)),
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-                ..Border::default()
-            },
-            text_color: fg,
-            ..button::Style::default()
-        })
+        .style(ga::toggle_style(theme_tokens, value == current))
         .boxed()
 }
 

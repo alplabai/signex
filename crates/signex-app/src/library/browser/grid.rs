@@ -4,12 +4,12 @@
 //! visible `ComponentRow`, with the per-row lifecycle dot + tint.
 //! Extracted verbatim from the former single-file `browser` module.
 
-use super::columns::{ColumnKind, GridColumn, lifecycle_dot_color};
+use super::columns::{ColumnKind, GridColumn};
 use super::keyed::keyed;
+use super::layout::{self, Slot};
+use super::look;
 use super::size_sensor::sense_height;
-use super::window::{
-    BROWSER_HEADER_HEIGHT, BROWSER_ROW_HEIGHT, grid_scroll_id, library_key, visible_rows,
-};
+use super::window::{BROWSER_ROW_HEIGHT, grid_scroll_id, library_key, visible_rows};
 use super::*;
 use crate::library::dangling::DanglingSweep;
 use iced::widget::column;
@@ -37,6 +37,7 @@ pub(super) fn view_grid<'a>(
     browser: &'a LibraryBrowserState,
     caches: GridCaches<'_>,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let GridCaches {
@@ -51,21 +52,53 @@ pub(super) fn view_grid<'a>(
     // Hoisted owned path — see comment in `view_table_sidebar`.
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
+    // One slot list drives header and rows, so widths and order agree.
+    let compact = layout::graphite_columns(columns);
+    let columns = compact.as_slice();
+    let slots = layout::slots(columns, true);
+    let fit = |s: String, w: f32| layout::ellipsize(s, w, BROWSER_TEXT_SIZE);
+    let header_ink = look::header_ink(tokens);
+    let header_fill = look::header_fill(tokens);
     let header_row = {
         // 16-px gutter aligns with the per-row lifecycle dot below.
         let mut r = row![Space::new().width(Length::Fixed(LIFECYCLE_DOT_GUTTER))].spacing(0);
         let active_sort = browser.sort_by.as_ref();
-        for c in columns {
+        for slot in &slots {
+            let c = match slot {
+                Slot::Column(c) => *c,
+                Slot::Lifecycle => {
+                    // Lifecycle pills: not sortable, so a plain label.
+                    r = r.push(
+                        container(
+                            text(t!(i18n, ids::LIBRARY_BROWSER_LIFECYCLE))
+                                .size(BROWSER_HEADER_SIZE)
+                                .wrapping(iced::widget::text::Wrapping::None)
+                                .color(header_ink),
+                        )
+                        .padding([SP.s, layout::CELL_PAD_X])
+                        .width(Length::Fixed(slot.width()))
+                        .clip(true)
+                        .boxed(),
+                    );
+                    continue;
+                }
+            };
             // Indicate the active sort column with a "▲" / "▼" glyph
             // appended to the label. Other columns render plain so the
             // user can spot the sort target at a glance.
             let column_key = c.kind.sort_key();
+            let caption = match &c.kind {
+                ColumnKind::Parameter(_) => {
+                    crate::library::range_filter::parameter_caption(i18n, &c.label)
+                }
+                _ => c.label.clone(),
+            };
             let label_text = match active_sort {
                 Some(s) if s.key == column_key => {
                     let arrow = if s.descending { "▼" } else { "▲" };
-                    format!("{}  {arrow}", c.label)
+                    format!("{caption}  {arrow}")
                 }
-                _ => c.label.clone(),
+                _ => caption,
             };
             // Wrap the header label in a borderless button so a click
             // toggles the sort. Stage 8 of `v0.9-snxlib-as-file-plan.md`.
@@ -81,9 +114,9 @@ pub(super) fn view_grid<'a>(
                 library_path: library_for_sort,
                 column_key,
             })
-            .style(|_: &Theme, _| iced::widget::button::Style {
+            .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: None,
-                text_color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.65),
+                text_color: header_ink,
                 border: Border {
                     width: 0.0,
                     radius: 0.0.into(),
@@ -92,16 +125,19 @@ pub(super) fn view_grid<'a>(
                 },
                 ..iced::widget::button::Style::default()
             });
-            r = r.push(container(header_btn).width(Length::Fixed(c.width)).boxed());
+            r = r.push(
+                container(header_btn)
+                    .width(Length::Fixed(slot.width()))
+                    .clip(true)
+                    .boxed(),
+            );
         }
         r = r.push(Space::new().width(Length::Fixed(ROW_DELETE_GUTTER)).boxed());
         container(r)
             .padding([SP.xs, SP.s])
-            .height(Length::Fixed(BROWSER_HEADER_HEIGHT))
+            .height(Length::Fixed(look::header_height()))
             .style(move |_: &Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
+                background: Some(iced::Background::Color(header_fill)),
                 border: Border {
                     width: 0.0,
                     radius: 2.0.into(),
@@ -148,18 +184,16 @@ pub(super) fn view_grid<'a>(
             // they're shown alongside released rows under the
             // `IncludeDeprecated` filter (plan §6).
             let lifecycle_tint = matches!(r.state, LifecycleState::Deprecated)
-                .then(|| iced::Background::Color(iced::Color::from_rgba(0.96, 0.80, 0.10, 0.10)));
+                .then(|| iced::Background::Color(look::deprecated_fill(tokens)));
             let bg_color = if is_selected {
-                Some(iced::Background::Color(iced::Color::from_rgba(
-                    0.30, 0.55, 0.85, 0.25,
-                )))
+                Some(iced::Background::Color(look::selected_fill(tokens)))
             } else {
                 lifecycle_tint
             };
 
             // Lifecycle indicator dot — Stage 18. Sits in the
             // 16-px gutter mirrored on the header row.
-            let dot_color = lifecycle_dot_color(r.state);
+            let dot_color = crate::styles::pill_colors(tokens, look::lifecycle_tone(r.state)).1;
             let lifecycle_dot = container(Space::new())
                 .width(Length::Fixed(LIFECYCLE_DOT_SIZE))
                 .height(Length::Fixed(LIFECYCLE_DOT_SIZE))
@@ -180,7 +214,25 @@ pub(super) fn view_grid<'a>(
                 .padding([0.0, SP.s]);
 
             let mut data_row = row![lifecycle_cell].spacing(0);
-            for c in columns {
+            for slot in &slots {
+                let c = match slot {
+                    Slot::Column(c) => *c,
+                    Slot::Lifecycle => {
+                        data_row = data_row.push(
+                            container(super::super::editor::kit::toned_pill(
+                                look::lifecycle_label(r.state).to_string(),
+                                look::lifecycle_tone(r.state),
+                                tokens,
+                            ))
+                            .width(Length::Fixed(slot.width()))
+                            .padding([0.0, layout::CELL_PAD_X])
+                            .center_y(Length::Fill)
+                            .clip(true)
+                            .boxed(),
+                        );
+                        continue;
+                    }
+                };
                 let column_key = c.kind.sort_key();
                 let row_value = c.kind.cell_value_named(r, &names);
 
@@ -188,28 +240,39 @@ pub(super) fn view_grid<'a>(
                 // released. Stage 14 of v0.9-snxlib-as-file. Edit
                 // path is the bump dialog (Team mode) or auto-bump
                 // on save (Personal mode), not inline grid editing.
+                if matches!(c.kind, ColumnKind::Description | ColumnKind::Updated) {
+                    data_row = data_row.push(
+                        container(
+                            text(UserText::new(fit(row_value, c.width)))
+                                .size(BROWSER_TEXT_SIZE)
+                                .wrapping(iced::widget::text::Wrapping::None)
+                                .color(theme_ext::text_secondary(tokens)),
+                        )
+                        .padding([SP.s, 6.0])
+                        .width(Length::Fixed(c.width))
+                        .clip(true)
+                        .boxed(),
+                    );
+                    continue;
+                }
+
                 if matches!(c.kind, ColumnKind::Rev) {
                     let label = if r.released {
                         format!("🔒 {row_value}")
                     } else {
                         row_value.clone()
                     };
-                    let color = if r.released {
-                        // Released rows lock-icon-amber so the gate
-                        // stands out at a glance.
-                        iced::Color::from_rgb(0.96, 0.78, 0.10)
-                    } else {
-                        theme_ext::text_secondary(tokens)
-                    };
+                    let color = theme_ext::text_secondary(tokens);
                     data_row = data_row.push(
                         container(
-                            text(raw(label))
+                            text(UserText::new(fit(label, c.width)))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(color),
                         )
                         .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width))
+                        .clip(true)
                         .boxed(),
                     );
                     continue;
@@ -220,13 +283,14 @@ pub(super) fn view_grid<'a>(
                 if matches!(c.kind, ColumnKind::Price) {
                     data_row = data_row.push(
                         container(
-                            text(raw(prices.text(r)))
+                            text(UserText::new(fit(prices.text(r), c.width)))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
                         .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width))
+                        .clip(true)
                         .boxed(),
                     );
                     continue;
@@ -239,13 +303,14 @@ pub(super) fn view_grid<'a>(
                 if matches!(c.kind, ColumnKind::Tags) {
                     data_row = data_row.push(
                         container(
-                            text(raw(row_value))
+                            text(UserText::new(fit(row_value, c.width)))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
                         .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width))
+                        .clip(true)
                         .boxed(),
                     );
                     continue;
@@ -281,6 +346,7 @@ pub(super) fn view_grid<'a>(
                             container(unbound_pick_button(label, kind, address, tokens))
                                 .padding([SP.xs, SP.xs])
                                 .width(Length::Fixed(c.width))
+                                .clip(true)
                                 .boxed(),
                         );
                         continue;
@@ -299,13 +365,14 @@ pub(super) fn view_grid<'a>(
                     };
                     data_row = data_row.push(
                         container(
-                            text(raw(row_value))
+                            text(UserText::new(fit(row_value, c.width)))
                                 .size(BROWSER_TEXT_SIZE)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(color),
                         )
                         .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width))
+                        .clip(true)
                         .boxed(),
                     );
                     continue;
@@ -317,13 +384,15 @@ pub(super) fn view_grid<'a>(
                 if read_only {
                     data_row = data_row.push(
                         container(
-                            text(raw(row_value))
+                            text(UserText::new(fit(row_value, c.width)))
                                 .size(BROWSER_TEXT_SIZE)
+                                .font(look::cell_font(&c.kind))
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(theme_ext::text_secondary(tokens)),
                         )
                         .padding([SP.s, 6.0])
                         .width(Length::Fixed(c.width))
+                        .clip(true)
                         .boxed(),
                     );
                     continue;
@@ -336,7 +405,7 @@ pub(super) fn view_grid<'a>(
                 // has both, instead of taking raw text.
                 if let Some(open) = c.kind.measurement_press(r, &lib_pb, table) {
                     let text_c = theme_ext::text_primary(tokens);
-                    let hover = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06);
+                    let hover = look::hover_fill(tokens);
                     let cell = signex_widgets::button(
                         text(raw(row_value))
                             .size(BROWSER_TEXT_SIZE)
@@ -358,6 +427,7 @@ pub(super) fn view_grid<'a>(
                         container(cell)
                             .padding([2, 2])
                             .width(Length::Fixed(c.width))
+                            .clip(true)
                             .boxed(),
                     );
                     continue;
@@ -390,11 +460,14 @@ pub(super) fn view_grid<'a>(
                         column: column_for_submit,
                     })
                     .padding([SP.xs, 6.0])
+                    .font(look::cell_font(&c.kind))
                     .size(BROWSER_TEXT_SIZE);
+                let input = input.style(look::plain_cell_input(tokens));
                 data_row = data_row.push(
                     container(input)
                         .padding([SP.xs, SP.xs])
                         .width(Length::Fixed(c.width))
+                        .clip(true)
                         .boxed(),
                 );
             }
@@ -403,18 +476,14 @@ pub(super) fn view_grid<'a>(
 
             let library_for_msg = lib_pb.clone();
             let table_for_msg = table.to_string();
+            let row_border = look::row_border(tokens);
             let row_container = container(data_row)
                 .padding([0, 0])
                 .width(Length::Fill)
                 .height(Length::Fixed(BROWSER_ROW_HEIGHT))
                 .style(move |_: &Theme| iced::widget::container::Style {
                     background: bg_color,
-                    border: Border {
-                        width: 0.0,
-                        radius: 0.0.into(),
-                        color: iced::Color::TRANSPARENT,
-                        ..Default::default()
-                    },
+                    border: row_border,
                     ..Default::default()
                 });
 

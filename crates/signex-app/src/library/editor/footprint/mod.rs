@@ -15,6 +15,7 @@ pub mod canvas;
 pub mod context_menu;
 pub mod filter_presets;
 pub mod layers;
+pub mod layers_panel;
 pub(crate) mod legacy_silk;
 pub mod move_by_modal;
 pub mod pad_stack_check;
@@ -48,6 +49,12 @@ mod swallowed_input_tests;
 pub mod text_frame;
 pub mod unified_active_bar;
 pub(crate) mod updates;
+
+// The footprint preview the rest of the app draws (component details and
+// the Properties footprint card), named here so callers outside the slice do
+// not reach into `canvas`.
+pub use canvas::PreviewFootprint;
+pub(crate) use canvas::graphite_look_for;
 
 #[cfg(test)]
 mod tests;

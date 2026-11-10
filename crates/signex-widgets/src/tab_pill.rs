@@ -62,6 +62,8 @@ const TOP_RADIUS: f32 = 4.0;
 const ACCENT_HEIGHT: f32 = 2.0;
 const BORDER_WIDTH: f32 = 1.0;
 
+mod square;
+
 /// Bounds of the bordered quad for a pill laid out in `bounds`.
 ///
 /// A non-last pill extends one border width to the right so its right
@@ -150,6 +152,7 @@ where
 {
     content: Element<'a, Message, Theme, Renderer>,
     style: TabPillStyle,
+    square: bool,
 }
 
 impl<'a, Message, Theme, Renderer> TabPill<'a, Message, Theme, Renderer>
@@ -163,7 +166,16 @@ where
         Self {
             content: content.into(),
             style,
+            square: false,
         }
+    }
+
+    /// Opt in to the square variant: no rounding, no bottom border, a 2 px
+    /// accent on top, and `style.fill` as the (caller-chosen) active fill.
+    /// `style.accent_position` is ignored. Off by default.
+    pub fn square(mut self, square: bool) -> Self {
+        self.square = square;
+        self
     }
 }
 
@@ -260,7 +272,12 @@ where
         // Pill quads (bg + outline, then the accent strip on the active
         // tab) come from `pill_quads` so the geometry is testable
         // without a renderer.
-        for (quad, background) in pill_quads(layout.bounds(), &self.style) {
+        let quads = if self.square {
+            square::square_pill_quads(layout.bounds(), &self.style)
+        } else {
+            pill_quads(layout.bounds(), &self.style)
+        };
+        for (quad, background) in quads {
             renderer.fill_quad(quad, background);
         }
 

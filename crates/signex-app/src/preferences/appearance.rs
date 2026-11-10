@@ -1,5 +1,5 @@
-//! Appearance section — theme picker cards, custom-theme import/export,
-//! UI font, and the schematic / symbol-editor render-style pick-lists.
+//! Appearance section — theme picker cards, UI font, and the
+//! schematic / symbol-editor render-style pick-lists.
 //!
 //! Moved verbatim from the former single-file `preferences` module —
 //! pure view code, zero behaviour change.
@@ -7,10 +7,10 @@
 use super::*;
 use crate::fonts;
 use crate::render_config::{GridStyle, PinSelectionMode};
-use iced::widget::{Space, column, container, row};
-use iced::{Background, Border, Element, Length, Theme, Widget};
-use signex_types::theme::ThemeId;
-use signex_widgets::{button, raw, text};
+use iced::widget::{Space, column, row};
+use iced::{Element, Length, Widget};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::{raw, text};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -32,117 +32,23 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_symbol_pin_selection,
         draft_zoom_step_percent,
         draft_trackpad_pan,
+        draft_wheel_mode,
         draft_remember_window_geometry,
         draft_ui_scale_percent,
         draft_window_controls_placement,
         window_controls_restart_note,
-        custom_name,
-        theme_status,
         ..
     } = v;
     let mut col: iced::widget::Column<Element<'a, PrefMsg>> =
         column![].spacing(0).padding([SP.xl, 20.0]);
 
     // ── Section: Theme ──
-    col = col.push(section_title("Theme"));
+    col = col.push(super::theme_cards::theme_section(
+        draft_theme,
+        v.panel_tokens,
+        v.i18n,
+    ));
     col = col.push(Space::new().height(10).boxed());
-
-    // Built-in theme data: (id, display name, description)
-    let builtins: &[(ThemeId, &str, &str)] = &[
-        (
-            ThemeId::Signex,
-            "Signex",
-            "Default Signex schematic palette",
-        ),
-        (
-            ThemeId::Alplab,
-            "Alp Lab",
-            "Alp Lab brand cyan accent on the Signex chrome",
-        ),
-        (
-            ThemeId::VsCodeDark,
-            "VS Code Dark",
-            "VS Code inspired dark theme",
-        ),
-        (
-            ThemeId::CatppuccinMocha,
-            "Catppuccin Mocha",
-            "Warm soft dark with pastels",
-        ),
-        (
-            ThemeId::GitHubDark,
-            "GitHub Dark",
-            "GitHub's dark mode colors",
-        ),
-        (
-            ThemeId::SolarizedLight,
-            "Solarized Light",
-            "Warm light tone-on-tone",
-        ),
-        (ThemeId::Nord, "Nord", "Arctic blue cool dark theme"),
-    ];
-
-    // Build list of all theme entries including optional custom
-    let mut entries: Vec<(ThemeId, String, &'static str)> = builtins
-        .iter()
-        .map(|&(id, name, desc)| (id, name.to_string(), desc))
-        .collect();
-    if let Some(name) = custom_name {
-        entries.push((
-            ThemeId::Custom,
-            format!("\u{2728} {name}"),
-            "Custom imported theme",
-        ));
-    }
-
-    // Rows of 2
-    let mut i = 0;
-    while i < entries.len() {
-        let (id_a, ref name_a, desc_a) = entries[i];
-        let card_a = theme_card(id_a, name_a, desc_a, draft_theme);
-        let row_elem: Element<'_, PrefMsg> = if i + 1 < entries.len() {
-            let (id_b, ref name_b, desc_b) = entries[i + 1];
-            let card_b = theme_card(id_b, name_b, desc_b, draft_theme);
-            row![card_a, Space::new().width(12), card_b]
-                .width(Length::Fill)
-                .boxed()
-        } else {
-            row![card_a, Space::new().width(Length::Fill)]
-                .width(Length::Fill)
-                .boxed()
-        };
-        col = col.push(row_elem);
-        col = col.push(Space::new().height(10).boxed());
-        i += 2;
-    }
-
-    // ── Custom theme import/export ──
-    col = col.push(Space::new().height(4).boxed());
-    col = col.push(
-        row![
-            import_btn(),
-            Space::new().width(8),
-            export_btn(),
-            Space::new().width(Length::Fill),
-        ]
-        .align_y(iced::Alignment::Center)
-        .boxed(),
-    );
-
-    // Export writes a file the user picked in a save dialog; the write
-    // can fail (read-only volume, full disk, a path that vanished
-    // between pick and write). Report it here rather than letting the
-    // user assume the theme was saved (#533). Empty = nothing painted,
-    // so the row keeps its old height until there is something to say.
-    if !theme_status.is_empty() {
-        col = col.push(Space::new().height(6).boxed());
-        col = col.push(
-            text(raw(theme_status))
-                .size(TS.caption)
-                .style(text_muted)
-                .boxed(),
-        );
-    }
 
     // ── Divider ──
     col = col.push(Space::new().height(16).boxed());
@@ -166,12 +72,11 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             {
                 let families = fonts::system_font_families();
                 let current_owned = draft_font.to_string();
-                iced::widget::pick_list(Some(current_owned), families.as_slice(), |s: &String| {
-                    s.clone()
-                })
-                .on_select(PrefMsg::DraftFont)
-                .text_size(12)
-                .width(200)
+                super::graphite_fields::font_pick_list(
+                    current_owned,
+                    families.as_slice(),
+                    v.panel_tokens,
+                )
             },
         ]
         .align_y(iced::Alignment::Center)
@@ -209,8 +114,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             iced::widget::pick_list(Some(draft_grid_style), GridStyle::ALL, |v: &GridStyle| {
                 v.to_string()
             })
+            .graphite()
             .on_select(PrefMsg::DraftGridStyle)
-            .text_size(12)
             .width(200),
         ]
         .align_y(iced::Alignment::Center)
@@ -308,6 +213,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 crate::canvas::grid::GRID_SIZE_LABELS,
                 |lbl: &&'static str| lbl.to_string(),
             )
+            .graphite()
             .on_select(|lbl: &'static str| {
                 let mm = crate::canvas::grid::GRID_SIZES_MM
                     .iter()
@@ -317,7 +223,6 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                     .unwrap_or(1.27);
                 PrefMsg::DraftSymbolGridSize(mm)
             })
-            .text_size(12)
             .width(200),
         ]
         .align_y(iced::Alignment::Center)
@@ -342,8 +247,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 GridStyle::ALL,
                 |v: &GridStyle| v.to_string(),
             )
+            .graphite()
             .on_select(PrefMsg::DraftSymbolGridStyle)
-            .text_size(12)
             .width(200),
         ]
         .align_y(iced::Alignment::Center)
@@ -365,9 +270,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 Some(draft_symbol_pin_selection),
                 PinSelectionMode::ALL,
                 |v: &PinSelectionMode| v.to_string(),
-            )
+            ).graphite()
             .on_select(PrefMsg::DraftSymbolPinSelection)
-            .text_size(12)
             .width(200),
         ]
         .align_y(iced::Alignment::Center)
@@ -468,6 +372,38 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         .align_y(iced::Alignment::Center)
         .boxed(),
     );
+    col = col.push(Space::new().height(14).boxed());
+    col = col.push(
+        row![
+            column![
+                text(signex_i18n::t!(
+                    v.i18n,
+                    signex_i18n::ids::PREFERENCES_WHEEL_MODE_LABEL
+                ))
+                .size(TS.label)
+                .style(text_primary),
+                text(signex_i18n::t!(
+                    v.i18n,
+                    signex_i18n::ids::PREFERENCES_WHEEL_MODE_HELP
+                ))
+                .size(TS.caption)
+                .style(text_muted),
+            ]
+            .spacing(3)
+            .width(320),
+            Space::new().width(Length::Fill),
+            iced::widget::pick_list(
+                Some(draft_wheel_mode),
+                crate::canvas::WheelMode::ALL,
+                |v: &crate::canvas::WheelMode| v.to_string(),
+            )
+            .graphite()
+            .on_select(PrefMsg::DraftWheelMode)
+            .width(120),
+        ]
+        .align_y(iced::Alignment::Center)
+        .boxed(),
+    );
     col = col.push(Space::new().height(20).boxed());
 
     // ── Section: Window ──
@@ -496,97 +432,6 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(Space::new().height(20).boxed());
 
     col.boxed()
-}
-
-fn theme_card<'a>(
-    id: ThemeId,
-    name: &str,
-    desc: &'static str,
-    current: ThemeId,
-) -> Element<'a, PrefMsg> {
-    let is_active = id == current;
-    let label = format!("{}{name}", if is_active { "✓ " } else { "" });
-    let msg = PrefMsg::DraftTheme(id);
-
-    // Card title / description resolve their colour against the card's own
-    // (active vs inactive) background so they stay legible when the theme
-    // flips light — active cards sit on a primary tint, inactive cards on
-    // the weak background surface.
-    let title_style = move |theme: &Theme| text::Style {
-        color: Some(if is_active {
-            theme.palette().primary.weak.text
-        } else {
-            theme.palette().background.base.text
-        }),
-        ..text::Style::default()
-    };
-    let desc_style = move |theme: &Theme| text::Style {
-        color: Some(if is_active {
-            theme.palette().primary.weak.text
-        } else {
-            theme.palette().secondary.base.color
-        }),
-        ..text::Style::default()
-    };
-
-    button(
-        container(
-            column![
-                text(raw(label)).size(TS.label).style(title_style),
-                text(raw(desc))
-                    .size(TS.caption)
-                    .style(desc_style)
-                    .wrapping(iced::widget::text::Wrapping::None),
-            ]
-            .spacing(SP.s),
-        )
-        .padding([10.0, SP.l])
-        .width(Length::Fill),
-    )
-    .padding(0)
-    .width(Length::Fill)
-    .on_press(msg)
-    .style(move |theme: &Theme, status: button::Status| {
-        let palette = theme.palette();
-        let bg = if is_active {
-            palette.primary.weak.color
-        } else if matches!(status, button::Status::Hovered | button::Status::Pressed) {
-            palette.background.strong.color
-        } else {
-            palette.background.weak.color
-        };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            border: Border {
-                width: 1.0,
-                radius: 4.0.into(),
-                color: if is_active {
-                    palette.primary.base.color
-                } else {
-                    palette.background.strong.color
-                },
-                ..Border::default()
-            },
-            ..button::Style::default()
-        }
-    })
-    .boxed()
-}
-
-fn import_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text(raw("⬆ Import Theme…")).size(TS.body))
-        .padding([5.0, SP.l])
-        .on_press(PrefMsg::ImportTheme)
-        .style(primary_button_style)
-        .boxed()
-}
-
-fn export_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text(raw("⬇ Export Theme…")).size(TS.body))
-        .padding([5.0, SP.l])
-        .on_press(PrefMsg::ExportTheme)
-        .style(primary_button_style)
-        .boxed()
 }
 
 /// Where the minimize / maximize / close buttons go, with a restart note
@@ -623,8 +468,8 @@ fn window_controls_row<'a>(
             crate::chrome::controls::WindowControlsPlacement::ALL,
             |v: &crate::chrome::controls::WindowControlsPlacement| v.to_string(),
         )
+        .graphite()
         .on_select(PrefMsg::DraftWindowControlsPlacement)
-        .text_size(12)
         .width(200),
     ]
     .align_y(iced::Alignment::Center)

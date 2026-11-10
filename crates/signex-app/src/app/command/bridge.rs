@@ -192,7 +192,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_components_panel" | "place_symbol" => {
             Message::Library(crate::library::LibraryMessage::OpenPicker)
         }
-        "new_document" => Message::Menu(MenuMessage::NewProject),
+        "new_document" | "new_project_with_profile" => Message::Menu(MenuMessage::NewProject),
         "open_command_palette" => Message::CommandPalette(CommandPaletteMsg::Open),
         "open_document" => Message::Menu(MenuMessage::OpenProject),
         "open_grid_properties" => Message::GridProperties(GridPropertiesMsg::Open),
@@ -240,11 +240,18 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "placement_properties" => Message::Tool(ToolMessage::PrePlacementTab),
         // The same message File > Close Document sends.
         "close_active_document" => Message::Menu(MenuMessage::CloseDocument),
+        // The project tree's Close Project Documents and the tab menu's Close
+        // All Documents close every tab the same way, parking dirty drafts.
+        "close_all_documents" => Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            crate::app::ProjectTreeAction::CloseAllDocuments,
+        )),
+        // Tools ▸ Library Editor (#2247).
+        "open_library_browser" => Message::Library(LibraryMessage::LibraryEditorRequested),
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
         // `ExportBom` reaches `handle_bom_preview_open`, the BOM dialog;
-        // Design > Generate BOM opens the same one.
+        // Reports > Bill of Materials opens the same one.
         "report_manager_bom" => Message::Menu(MenuMessage::ExportBom),
         "reset_schematic_designators" => Message::Annotate(AnnotateMsg::OpenResetConfirm),
         "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
@@ -889,7 +896,7 @@ mod tests {
         ));
     }
 
-    /// #1991 - Design > Electrical Rules Check opens the ERC dialog through
+    /// #1991 - Project > Electrical Rules Check opens the ERC dialog through
     /// its own id; `run_erc` (F8) keeps running ERC.
     #[test]
     fn open_erc_dialog_opens_the_dialog_and_run_erc_runs() {

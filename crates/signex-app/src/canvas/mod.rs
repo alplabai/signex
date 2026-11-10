@@ -6,7 +6,8 @@
 //! - content (`content_surface`): retained across pans and moved by a
 //!   translation; cleared when the document changes (see `draw::retained`);
 //! - autofocus dim: drawn over the content when autofocus is active;
-//! - selection overlay (`overlay_cache`): cached, cleared on input events;
+//! - selection overlay (`overlay_cache`): cached, cleared on input events and
+//!   whenever the camera differs from `overlay_cache_camera`;
 //! - HUD / previews (cursor, wire and placement previews): uncached, redrawn
 //!   every frame.
 
@@ -15,10 +16,14 @@ mod drag_layers;
 pub(crate) mod drag_preview;
 mod draw;
 mod erc_marker;
+mod ghost_split;
 mod gpu_drag;
 pub(crate) mod gpu_mount;
 mod gpu_text_layer;
+mod graphite;
 pub mod grid;
+mod halo_cache;
+mod hit_cache;
 mod input;
 mod move_pick;
 mod net_highlight;
@@ -31,6 +36,8 @@ mod special_strings;
 mod surface;
 #[cfg(test)]
 mod tool_click_tests;
+mod wheel;
+pub mod zoom_pill;
 
 use gpu_mount::ContentMode;
 use shift_selection::shift_snapshot_for_selection;
@@ -42,6 +49,8 @@ use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::{Camera, ScrollIntent};
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
+pub use graphite::{GraphiteCanvasInk, HALO_FILL_ALPHA};
+pub use wheel::{WheelKeys, WheelMode, wheel_intent};
 mod move_connections;
 pub use move_connections::{FLIP_WIRES_MODIFIER, MoveConnections};
 pub use move_pick::MovePick;
@@ -71,6 +80,8 @@ pub struct CanvasState {
     pub zoom_modifier: bool,
     /// Whether Shift is currently held (for multi-select add).
     pub shift_held: bool,
+    /// The last cursor move landed on this canvas (not covered, not elsewhere).
+    pointer_inside: bool,
     /// Whether Alt is held (flips wire behaviour for a drag, #1266).
     pub alt_held: bool,
     /// Drag-to-select: start position in world coordinates.
@@ -130,6 +141,12 @@ pub struct CanvasSlot {
     /// inputs, so `bg_cache` clears do not reach it.
     background_surface: std::cell::RefCell<draw::RetainedBackground>,
     pub overlay_cache: canvas::Cache,
+    /// Camera `overlay_cache` was last drawn at: the halo, ERC markers and lock
+    /// badges follow every zoom and pan, whichever message moved the camera.
+    pub overlay_cache_camera: std::cell::Cell<Option<(f32, f32, f32)>>,
+    /// Test-only: how often the selection layer was tessellated.
+    #[cfg(test)]
+    pub overlay_tessellations: std::cell::Cell<u32>,
     /// Camera and paper colour `bg_cache` was last built at; `draw_background`
     /// drops the cache when either differs, so the paper and grid follow every
     /// camera move and sheet-colour change whatever event announced it (#1993,
@@ -145,6 +162,10 @@ pub struct CanvasSlot {
     /// The static layer and lifted items of a move-drag in flight (#1335);
     /// dropped when the drag ends, is cancelled, or the document changes.
     drag_layers: std::cell::RefCell<drag_layers::DragLayers>,
+    /// Hover hit index of the active snapshot (`hit_item_at`).
+    hit_cache: std::cell::RefCell<Option<hit_cache::HitCache>>,
+    /// Selection halos kept across the frames of a move-drag (`halo_cache`).
+    halo_cache: std::cell::RefCell<halo_cache::HaloCache>,
     /// Hotspots the current drag can snap to, built once per drag (#2077).
     hotspot_cache: std::cell::RefCell<drag_preview::HotspotCache>,
     /// The move-drag frame the GPU overlay's `update` last computed, for the
@@ -301,11 +322,16 @@ impl CanvasSlot {
             gpu_text_surface: std::cell::RefCell::new(Default::default()),
             background_surface: std::cell::RefCell::new(Default::default()),
             overlay_cache: canvas::Cache::default(),
+            overlay_cache_camera: std::cell::Cell::new(None),
+            #[cfg(test)]
+            overlay_tessellations: std::cell::Cell::new(0),
             bg_cache_camera: std::cell::Cell::new(None),
             #[cfg(test)]
             bg_tessellations: std::cell::Cell::new(0),
             content_scene: std::cell::RefCell::new(Default::default()),
             drag_layers: std::cell::RefCell::new(Default::default()),
+            hit_cache: std::cell::RefCell::new(None),
+            halo_cache: std::cell::RefCell::new(Default::default()),
             hotspot_cache: std::cell::RefCell::new(Default::default()),
             published_drag: Default::default(),
             camera: std::cell::RefCell::new(Camera::default()),
@@ -426,6 +452,8 @@ impl CanvasSlot {
         render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     ) {
         self.render_cache = render_cache;
+        *self.hit_cache.get_mut() = None;
+        self.halo_cache.get_mut().clear();
         self.content_scene.get_mut().invalidate();
         // A drag session and its static layer belong to the document that was
         // just replaced.
@@ -540,6 +568,8 @@ pub struct CanvasViewPrefs<'a> {
     pub theme_grid: Color,
     pub theme_paper: Color,
     pub canvas_colors: signex_types::theme::CanvasColors,
+    /// Graphite canvas inks (frame, halo, ERC).
+    pub graphite: GraphiteCanvasInk,
     pub snap_enabled: bool,
     pub snap_grid_mm: f64,
     /// Wire clicks jump to the nearest pin end, wire end or junction (Shift+E).
@@ -556,6 +586,8 @@ pub struct CanvasViewPrefs<'a> {
     pub zoom_step: f32,
     /// "Two-finger scroll pans": a pixel-delta scroll pans instead of zooming.
     pub trackpad_pan: bool,
+    /// Preferences "Mouse wheel": zoom (default) or scroll the view.
+    pub wheel_mode: WheelMode,
     /// Preview rubber-banded wires while a selection floats (mirrors the
     /// "Keep wires connected when moving" preference).
     pub move_keeps_wires: bool,
@@ -851,6 +883,8 @@ pub enum CanvasEvent {
         zoom_pct: f64,
     },
     CursorMoved,
+    /// The pointer left the canvas, or an overlay now covers it: drop the hover.
+    CursorLeft,
     /// The user moved the view with the pointer: a wheel zoom or a pan drag.
     /// Handled like [`Self::CursorMoved`]; a separate event so the app can
     /// tell a deliberate gesture from a hover or a queued fit landing.
@@ -905,9 +939,13 @@ mod gesture;
 #[cfg(test)]
 mod active_bar_hit;
 #[cfg(test)]
+mod app_loop_bench_tests;
+#[cfg(test)]
 mod background_reuse_tests;
 #[cfg(test)]
 mod draw_order_tests;
+#[cfg(test)]
+mod ghost_split_tests;
 #[cfg(test)]
 mod ghost_tests;
 #[cfg(test)]
@@ -919,13 +957,18 @@ mod gpu_text_reuse_tests;
 #[cfg(test)]
 mod grid_order_tests;
 #[cfg(test)]
+mod halo_cache_tests;
+#[cfg(test)]
+mod hit_cache_tests;
+#[cfg(test)]
+pub(crate) mod overlay_camera_tests;
+#[cfg(test)]
 mod pan_bench_tests;
 #[cfg(test)]
 mod pan_reuse_pixel_tests;
 #[cfg(test)]
 mod pan_reuse_tests;
-// `libc` (peak RSS) is a unix-only dependency.
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod render_bench_tests;
 #[cfg(test)]
 mod rotated_label_pixel_tests;
@@ -959,13 +1002,17 @@ mod tests {
         filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
         class_styles: &'a crate::schematic_runtime::WireClassStyles,
     ) -> CanvasViewPrefs<'a> {
-        let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+        let colors =
+            signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight);
         CanvasViewPrefs {
             grid_visible: true,
             theme_bg: crate::render_config::to_iced(&colors.background),
             theme_grid: crate::render_config::to_iced(&colors.grid),
             theme_paper: crate::render_config::to_iced(&colors.paper),
             canvas_colors: colors,
+            graphite: GraphiteCanvasInk::from_tokens(&signex_types::theme::theme_tokens(
+                signex_types::theme::ThemeId::GraphiteLight,
+            )),
             snap_enabled: true,
             snap_grid_mm: 1.27,
             snap_hotspots: false,
@@ -976,6 +1023,7 @@ mod tests {
             auto_focus: false,
             zoom_step: 1.1,
             trackpad_pan: false,
+            wheel_mode: WheelMode::Zoom,
             move_keeps_wires: true,
             draw_mode: crate::app::DrawMode::Ortho90,
             current_tool: crate::app::Tool::Select,

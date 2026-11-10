@@ -38,19 +38,7 @@ pub(super) fn view<'a>(
                 .padding([SP.xs, SP.l])
         )
         .on_press(send.clone()(BrowserEditMsg::AddParam))
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: text_c,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-                ..Border::default()
-            },
-            ..iced::widget::button::Style::default()
-        }),
+        .style(crate::panels::form_look::option_tile(false)),
     ]
     .align_y(iced::Alignment::Center);
 
@@ -79,9 +67,9 @@ pub(super) fn view<'a>(
         .padding([SP.xs, 6.0]),
     )
     .style(move |_: &Theme| iced::widget::container::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgba(
-            1.0, 1.0, 1.0, 0.04,
-        ))),
+        background: Some(iced::Background::Color(
+            crate::styles::tokens::resolve(tokens).field,
+        )),
         border: Border {
             width: 0.0,
             radius: 2.0.into(),
@@ -231,7 +219,7 @@ fn param_row<'a>(
         let selected = edit.param_prefix.get(key).copied().unwrap_or(SiPrefix::One);
         let send_p = send.clone();
         let key_p = key_owned.clone();
-        prefix_picker(&u, selected, TS.body, move |prefix| {
+        prefix_picker(&u, selected, move |prefix| {
             send_p(BrowserEditMsg::ParamPrefixPicked {
                 key: key_p.clone(),
                 prefix,
@@ -270,7 +258,7 @@ fn param_row<'a>(
         (None, Ok(selected)) => {
             let send_u = send.clone();
             let key_for_u = key_owned.clone();
-            unit_picker(selected, true, TS.body, move |unit| {
+            unit_picker(selected, true, move |unit| {
                 send_u(BrowserEditMsg::SetParamUnit {
                     key: key_for_u.clone(),
                     unit,
@@ -293,9 +281,9 @@ fn param_row<'a>(
                 })
             })
             .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
+                background: Some(iced::Background::Color(
+                    crate::styles::tokens::resolve(tokens).field,
+                )),
                 text_color: muted,
                 border: Border {
                     width: 1.0,

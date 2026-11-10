@@ -27,8 +27,10 @@ const COLUMNS: [Length; 3] = [
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
+    use signex_i18n::{ids, t};
     let warning = theme_ext::warning_color(tokens);
 
     let add = kit::secondary_button(
@@ -39,10 +41,13 @@ pub fn view<'a>(
         }),
         tokens,
     );
-    let mut col: Column<Element<'a, LibraryMessage>> =
-        column![kit::section_header("Alternate symbols", Some(add), tokens)]
-            .spacing(SP.s)
-            .width(Length::Fill);
+    let mut col: Column<Element<'a, LibraryMessage>> = column![kit::section_header(
+        t!(i18n, ids::EDITORS_COMPONENT_ALTERNATES_HEADING),
+        Some(add),
+        tokens
+    )]
+    .spacing(SP.s)
+    .width(Length::Fill);
 
     let count = state.row.alternate_symbols.len();
     if count == 0 {
@@ -50,10 +55,11 @@ pub fn view<'a>(
     } else {
         let mut table: Column<Element<'a, LibraryMessage>> = column![kit::table_header(
             &[
-                ("Label", COLUMNS[0]),
-                ("Symbol", COLUMNS[1]),
-                ("", COLUMNS[2])
+                (Some(ids::EDITORS_COMPONENT_COLUMN_LABEL), COLUMNS[0]),
+                (Some(ids::EDITORS_COMPONENT_COLUMN_SYMBOL), COLUMNS[1]),
+                (None, COLUMNS[2])
             ],
+            i18n,
             tokens,
         )]
         .width(Length::Fill);

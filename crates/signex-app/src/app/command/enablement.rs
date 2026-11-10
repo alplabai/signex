@@ -88,6 +88,9 @@ pub(crate) struct CommandContext {
     /// The active tab is a symbol or footprint editor inside an open library,
     /// which Tools ▸ Document Options opens the options of.
     pub has_library_editor: bool,
+    /// A library is open or has a Library Browser tab, which Tools ▸ Library
+    /// Editor opens or focuses.
+    pub has_open_library: bool,
     /// The active symbol editor's current part can be removed: a symbol
     /// keeps its first part, so Remove Part refuses part 1.
     pub can_remove_part: bool,
@@ -221,6 +224,7 @@ impl Signex {
             has_parent_sheet: self.active_sheet_has_parent(),
             has_active_path: document.active_path.is_some(),
             has_library_editor: self.active_editor_library_root().is_some(),
+            has_open_library: self.library_editor_target().is_some(),
             can_remove_part: self.active_symbol_part_is_removable(),
         }
     }
@@ -471,6 +475,7 @@ mod tests {
                 rules: None,
                 annotation: None,
                 schematic_defaults: Default::default(),
+                project_defaults: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

@@ -133,6 +133,8 @@ pub struct AlignModal {
 pub struct FootprintEditorState {
     pub pads: Vec<EditorPad>,
     pub layer_visibility: LayerVisibility,
+    /// Colour set of the layers; the app sets it from the active theme.
+    pub layer_palette: super::layers::LayerPalette,
     /// `Some(idx)` while a pad is selected. With multi-select, this
     /// is the **primary** selection — the pad whose properties drive
     /// the right-dock Properties panel form. Extra rubber-band /
@@ -337,6 +339,7 @@ impl FootprintEditorState {
         Self {
             pads,
             layer_visibility: LayerVisibility::default(),
+            layer_palette: super::layers::LayerPalette::default(),
             selected_pad: None,
             selected_pads_extra: Vec::new(),
             lasso_mode_active: false,

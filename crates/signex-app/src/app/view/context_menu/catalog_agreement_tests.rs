@@ -27,11 +27,11 @@ use std::collections::BTreeSet;
 
 use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries};
 use super::submenu::{align_entries, arrange_entries, place_entries};
-use signex_types::theme::{ThemeId, theme_tokens};
+use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::{TreeIcon, TreeNode, key_of};
 
-const TID: ThemeId = ThemeId::CatppuccinMocha;
+const TID: ThemeId = ThemeId::GraphiteDark;
 
 /// Rows that run no catalog command, with the reason each stays local.
 /// A row not listed here and carrying no command id fails the walk.
@@ -211,6 +211,11 @@ fn check_rows(
         let DropdownEntry::Item(item) = entry else {
             continue;
         };
+        // A live submenu launcher opens a flyout and runs no command (it was
+        // a `Custom` row, skipped above, until it became an item row).
+        if item.submenu && item.on_hover.is_some() {
+            continue;
+        }
         match item.command_id {
             Some(id) => {
                 walk.seen += 1;
@@ -280,7 +285,6 @@ fn check_live_row(
 
 #[test]
 fn command_rows_read_label_and_shortcut_from_the_catalog() {
-    let tokens = theme_tokens(TID);
     let mut walk = Walk::default();
     for profile in ["altium", "classic"] {
         let app = app_with_keymap(profile);
@@ -291,7 +295,7 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
             let (app, selection, derived_key) = app_in_selection(profile, bits);
             let ctx = app.command_context(None);
             for project_key in [derived_key, Some(vec!["proj".to_string()])] {
-                let rows = canvas_menu_entries(TID, &tokens, selection, None, project_key, &sc);
+                let rows = canvas_menu_entries(TID, selection, None, project_key, &sc);
                 check_rows(
                     &format!("canvas {profile} {selection:?}"),
                     &rows,

@@ -8,6 +8,7 @@ use crate::{Command, Engine};
 
 fn wire(i: usize) -> Wire {
     Wire {
+        color: None,
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(i as f64, 0.0),
         end: Point::new(i as f64, 5.0),

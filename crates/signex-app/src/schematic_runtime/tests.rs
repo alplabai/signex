@@ -296,7 +296,7 @@ fn dragged_reference_field_draw_and_hit_test_follow_new_position() {
         scale: 1.0,
         device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteDark);
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
     let snap =
         build_renderer_snapshot(moved, &transform, &colors, bounds, None, Default::default());
@@ -507,6 +507,39 @@ fn flag_text_runs_away_from_the_connection_point() {
     }
 }
 
+/// A sheet or hierarchical port is selected with its text: the hit and halo
+/// box holds every drawn glyph, at any size and turn (2026-11-07 decision).
+#[test]
+fn a_flag_box_holds_its_drawn_text() {
+    for label_type in [LabelType::Global, LabelType::Hierarchical] {
+        for rotation in [0.0_f64, 90.0, 180.0, 270.0] {
+            for font_size in [1.27, 2.54, 5.0] {
+                let label = Label {
+                    font_size,
+                    ..anchored_label(label_type, rotation)
+                };
+                let (anchor, text_rotation, h_align) = label::flag_text(&label, None);
+                let text = drawn_text_aabb(
+                    None,
+                    &label.text,
+                    None,
+                    label.font_size,
+                    anchor,
+                    text_rotation,
+                    h_align,
+                    VAlign::Center,
+                );
+                let bbox = label_aabb(&label, None);
+                assert_eq!(
+                    bbox.union(&text),
+                    bbox,
+                    "{label_type:?} @ {rotation}, {font_size} mm: {text:?} outside {bbox:?}"
+                );
+            }
+        }
+    }
+}
+
 /// Unit vector along which `h_align` text at `rotation_deg` runs from its
 /// anchor: forward for left-aligned text, backward for right-aligned.
 fn text_run(rotation_deg: f64, h_align: HAlign) -> (f64, f64) {
@@ -557,7 +590,7 @@ fn canvas_draws_flag_text_with_the_readable_frame() {
         scale: 1.0,
         device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
-    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteDark);
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
     let snap = build_renderer_snapshot(
         &sheet,

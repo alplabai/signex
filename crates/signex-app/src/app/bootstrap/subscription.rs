@@ -55,6 +55,7 @@ struct OpenOverlays {
     create_child_sheet_confirm_open: bool,
     grid_properties_open: bool,
     selection_filter_custom_open: bool,
+    new_project_open: bool,
     library_picker_open: bool,
     library_document_options_open: bool,
     library_updates_open: bool,
@@ -230,6 +231,7 @@ impl OpenOverlays {
             // top — but a behaviour change, and part 2 is a derivation.
             OverlayId::PlacementPaused
             | OverlayId::SchematicActiveBar
+            | OverlayId::CanvasZoomPill
             | OverlayId::FootprintActiveBar
             | OverlayId::FootprintContextMenu
             | OverlayId::FootprintMoveBy
@@ -305,6 +307,9 @@ impl OpenOverlays {
             OverlayId::SelectionFilterCustom => self
                 .selection_filter_custom_open
                 .then(|| Message::SelectionFilter(SelectionFilterMsg::CloseCustom)),
+            OverlayId::NewProject => self
+                .new_project_open
+                .then(|| Message::from(crate::app::NewProjectMsg::CancelRequested)),
             OverlayId::AnnotateDialog => self
                 .annotate_open
                 .then(|| Message::Annotate(AnnotateMsg::CloseDialog)),
@@ -598,6 +603,7 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::GridProperties),
             selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some()
                 && !modal_detached(crate::app::state::ModalId::SelectionFilterCustom),
+            new_project_open: self.ui_state.new_project.is_some(),
             library_picker_open: self.library.picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPicker),
             library_document_options_open: self.library.document_options.is_some()
@@ -1683,6 +1689,7 @@ mod tests {
             create_child_sheet_confirm_open,
             grid_properties_open,
             selection_filter_custom_open,
+            new_project_open,
             library_picker_open,
             library_document_options_open,
             library_updates_open,
@@ -1743,6 +1750,7 @@ mod tests {
                 o.create_child_sheet_confirm_open = true
             }),
             ("grid_properties_open", |o| o.grid_properties_open = true),
+            ("new_project_open", |o| o.new_project_open = true),
             ("selection_filter_custom_open", |o| {
                 o.selection_filter_custom_open = true
             }),

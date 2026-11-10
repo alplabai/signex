@@ -91,6 +91,24 @@ impl Signex {
                 follow = self.handle_fp_editor_toggle_auto_fit_courtyard();
                 true
             }
+            PanelMsg::FpEditorLayerEyeClicked(name) => {
+                follow = self.handle_fp_editor_layer_msg(
+                    crate::library::messages::FootprintEditorMsg::ToggleLayer(name.clone()),
+                );
+                true
+            }
+            PanelMsg::FpEditorLayersShowAllClicked => {
+                follow = self.handle_fp_editor_layer_msg(
+                    crate::library::messages::FootprintEditorMsg::LayersShowAllClicked,
+                );
+                true
+            }
+            PanelMsg::FpEditorLayersTopSideOnlyClicked => {
+                follow = self.handle_fp_editor_layer_msg(
+                    crate::library::messages::FootprintEditorMsg::LayersTopSideOnlyClicked,
+                );
+                true
+            }
             PanelMsg::FpEditorSetRole { id, role } => {
                 follow = self.handle_fp_editor_set_role(id, role);
                 true

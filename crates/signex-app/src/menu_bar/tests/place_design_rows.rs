@@ -87,7 +87,7 @@ fn power_port_arms_the_gnd_port() {
 }
 
 #[test]
-fn place_rows_need_a_schematic_and_the_sheet_entry_stub_is_inert() {
+fn place_rows_need_a_schematic() {
     let app = bare_app();
     for path in [
         "Place/Wire",
@@ -98,10 +98,57 @@ fn place_rows_need_a_schematic_and_the_sheet_entry_stub_is_inert() {
         "Place/Junction",
         "Place/Text",
         "Place/No Connect",
+        "Place/Sheet Entry",
     ] {
         assert!(!row_is_live(&app, path), "{path} is live with no schematic");
     }
-    assert!(!row_is_live(&one_symbol_selected(), "Place/Sheet Entry"));
+    assert!(!row_is_live(&loaded_board_app(), "Place/Sheet Entry"));
+}
+
+/// The canvas Place flyout's Sheet Entry in an undocked sheet window, while
+/// the main window shows a PCB: the gate reads the window's sheet (#2247
+/// review), so the tool is armed, not refused with "No schematic is open".
+#[test]
+fn sheet_entry_from_an_undocked_sheets_flyout_is_gated_by_that_sheet() {
+    use crate::app::{ContextAction, ContextMenuMsg};
+    let pick = || {
+        ContextMenuMsg::Action(ContextAction::Command {
+            id: crate::keymap::AppCommandId::new("place_sheet_entry").expect("id"),
+            project: None,
+        })
+    };
+    // Control: the same pick from the main window's PCB is refused.
+    let (mut app, window) = super::window_native_rows::with_undocked_window(loaded_board_app());
+    assert!(app.has_active_pcb(), "the main window shows the board");
+    let _ = app.update(Message::ContextMenu(pick()));
+    assert_ne!(
+        format!("{:?}", app.interaction_state.current_tool),
+        "SheetEntry"
+    );
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ScopedToWindow(
+        window,
+        Box::new(pick()),
+    )));
+    assert_eq!(
+        format!("{:?}", app.interaction_state.current_tool),
+        "SheetEntry"
+    );
+}
+
+/// #2247: the row was a stub; it now arms the Active Bar's Sheet Entry tool.
+#[test]
+fn sheet_entry_arms_the_sheet_entry_tool_and_nothing_else() {
+    let mut app = one_symbol_selected();
+    assert!(row_is_live(&app, "Place/Sheet Entry"));
+    let before = probe(&app);
+    let _ = click(&mut app, "Place/Sheet Entry");
+    assert_eq!(
+        probe(&app),
+        Probe {
+            tool: "SheetEntry".to_string(),
+            ..before
+        }
+    );
 }
 
 fn unnumbered(refs: &[&str]) -> Signex {
@@ -117,7 +164,7 @@ fn unnumbered(refs: &[&str]) -> Signex {
 fn annotate_opens_its_dialog_and_reset_asks_to_confirm() {
     let mut app = one_symbol_selected();
     let before = probe(&app);
-    let _ = click(&mut app, "Design/Annotation/Annotate Schematics...");
+    let _ = click(&mut app, "Tools/Annotation/Annotate Schematics...");
     assert_eq!(
         probe(&app),
         Probe {
@@ -127,7 +174,7 @@ fn annotate_opens_its_dialog_and_reset_asks_to_confirm() {
     );
 
     let mut app = one_symbol_selected();
-    let _ = click(&mut app, "Design/Annotation/Reset Schematic Designators...");
+    let _ = click(&mut app, "Tools/Annotation/Reset Schematic Designators...");
     assert_eq!(
         probe(&app),
         Probe {
@@ -141,7 +188,7 @@ fn annotate_opens_its_dialog_and_reset_asks_to_confirm() {
 fn annotate_quietly_numbers_the_unnumbered_symbols_without_a_dialog() {
     let mut app = unnumbered(&["R?", "R?"]);
     let before = probe(&app);
-    let task = click(&mut app, "Design/Annotation/Annotate Schematics Quietly");
+    let task = click(&mut app, "Tools/Annotation/Annotate Schematics Quietly");
     settle_task(&mut app, task);
     let after = probe(&app);
     assert_eq!(after.refs, ["R1", "R2"]);
@@ -161,7 +208,7 @@ fn annotate_quietly_numbers_the_unnumbered_symbols_without_a_dialog() {
 fn force_annotate_renumbers_every_symbol_from_one() {
     let mut app = unnumbered(&["R5", "R9"]);
     let before = probe(&app);
-    let task = click(&mut app, "Design/Annotation/Force Annotate All Schematics");
+    let task = click(&mut app, "Tools/Annotation/Force Annotate All Schematics");
     settle_task(&mut app, task);
     let after = probe(&app);
     assert_eq!(after.refs, ["R1", "R2"]);
@@ -181,7 +228,7 @@ fn reset_duplicates_resets_only_the_repeated_designators() {
     let mut app = unnumbered(&["R1", "R1", "C7"]);
     let task = click(
         &mut app,
-        "Design/Annotation/Reset Duplicate Schematic Designators...",
+        "Tools/Annotation/Reset Duplicate Schematic Designators...",
     );
     settle_task(&mut app, task);
     assert_eq!(probe(&app).refs, ["R?", "R?", "C7"]);
@@ -191,7 +238,7 @@ fn reset_duplicates_resets_only_the_repeated_designators() {
 fn electrical_rules_check_opens_the_erc_dialog() {
     let mut app = one_symbol_selected();
     let before = probe(&app);
-    let _ = click(&mut app, "Design/Electrical Rules Check");
+    let _ = click(&mut app, "Project/Electrical Rules Check");
     assert_eq!(
         probe(&app),
         Probe {
@@ -216,31 +263,17 @@ fn parameter_manager_opens_its_table() {
 }
 
 #[test]
-fn generate_bom_opens_the_bom_preview() {
-    let mut app = one_symbol_selected();
-    let before = probe(&app);
-    let _ = click(&mut app, "Design/Generate BOM");
-    assert_eq!(
-        probe(&app),
-        Probe {
-            bom_preview: true,
-            ..before
-        }
-    );
-}
-
-#[test]
 fn design_rows_without_a_schematic_are_greyed() {
     let app = bare_app();
     for path in [
-        "Design/Annotation/Annotate Schematics...",
-        "Design/Annotation/Reset Schematic Designators...",
-        "Design/Annotation/Reset Duplicate Schematic Designators...",
-        "Design/Annotation/Annotate Schematics Quietly",
-        "Design/Annotation/Force Annotate All Schematics",
-        "Design/Electrical Rules Check",
+        "Tools/Annotation/Annotate Schematics...",
+        "Tools/Annotation/Reset Schematic Designators...",
+        "Tools/Annotation/Reset Duplicate Schematic Designators...",
+        "Tools/Annotation/Annotate Schematics Quietly",
+        "Tools/Annotation/Force Annotate All Schematics",
+        "Project/Electrical Rules Check",
         "Design/Parameter Manager...",
-        "Design/Generate BOM",
+        "Reports/Bill of Materials…",
     ] {
         assert!(!row_is_live(&app, path), "{path}");
     }
@@ -253,16 +286,16 @@ fn quiet_annotate_rows_are_greyed_with_a_project_but_no_sheet() {
     let mut app = bare_app();
     open_project(&mut app, "P.snxprj");
     for path in [
-        "Design/Annotation/Annotate Schematics Quietly",
-        "Design/Annotation/Force Annotate All Schematics",
+        "Tools/Annotation/Annotate Schematics Quietly",
+        "Tools/Annotation/Force Annotate All Schematics",
     ] {
         assert!(!row_is_live(&app, path), "{path}");
     }
     // Electrical Rules Check still works from a project alone.
-    assert!(row_is_live(&app, "Design/Electrical Rules Check"));
+    assert!(row_is_live(&app, "Project/Electrical Rules Check"));
     assert!(row_is_live(
         &one_symbol_selected(),
-        "Design/Annotation/Annotate Schematics Quietly"
+        "Tools/Annotation/Annotate Schematics Quietly"
     ));
 }
 

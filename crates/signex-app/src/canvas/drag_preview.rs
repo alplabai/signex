@@ -3,7 +3,8 @@
 //! connected when moving" is on, the attached wires rubber-banded exactly as
 //! the engine will commit them (#963).
 
-use super::drag_layers::{DragFrame, moved_item_ids, split_ghost};
+use super::drag_layers::{DragFrame, moved_item_ids};
+use super::ghost_split::{BaseIds, split_ghost_walk};
 use crate::schematic_runtime::SchematicRenderSnapshot;
 use signex_types::schematic::SelectedItem;
 
@@ -184,6 +185,19 @@ fn primary_anchor_world(
     item: &signex_types::schematic::SelectedItem,
 ) -> Option<(f64, f64)> {
     use signex_types::schematic::SelectedKind;
+    // A power port's text is part of the port (maintainer decision
+    // 2026-11-07): a stale field item anchors at the port.
+    let item = match item.kind {
+        SelectedKind::SymbolRefField | SelectedKind::SymbolValField
+            if snap
+                .symbols
+                .iter()
+                .any(|s| s.uuid == item.uuid && s.is_power) =>
+        {
+            signex_types::schematic::SelectedItem::new(item.uuid, SelectedKind::Symbol)
+        }
+        _ => *item,
+    };
     match item.kind {
         SelectedKind::Label => snap
             .labels
@@ -301,6 +315,9 @@ struct DragGhost {
 #[derive(Debug, Default)]
 pub struct GhostState {
     session: Option<(u64, Rc<signex_engine::MovePreview>)>,
+    /// The ids of the pre-move sheet, indexed once per drag so each ghost step
+    /// is split by a walk, not by indexing both sheets again.
+    base_ids: Option<(u64, Rc<BaseIds>)>,
     ghost: Option<DragGhost>,
     /// The held references already reported for this drag, so the Messages
     /// panel hears each set once, not on every cursor step.
@@ -384,7 +401,9 @@ impl GhostState {
             return ready.snapshot.clone();
         }
         let session = match &self.session {
-            Some((rev, session)) if *rev == revision => session.clone(),
+            Some((rev, session)) if super::drag_layers::is_known(revision) && *rev == revision => {
+                session.clone()
+            }
             _ => {
                 let fresh = Rc::new(signex_engine::MovePreview::new(snap));
                 self.session = Some((revision, fresh.clone()));
@@ -396,7 +415,17 @@ impl GhostState {
         let moves: Vec<_> = selection.iter().map(|item| (*item, dx, dy)).collect();
         let (moved, held) = session.moved_with(&moves, true);
         let snapshot = Rc::new(moved);
-        let frame = split_ghost(snap, &snapshot, &moved_item_ids(snap, selection));
+        let ids = match &self.base_ids {
+            Some((rev, ids)) if super::drag_layers::is_known(revision) && *rev == revision => {
+                ids.clone()
+            }
+            _ => {
+                let fresh = Rc::new(BaseIds::of(snap));
+                self.base_ids = Some((revision, fresh.clone()));
+                fresh
+            }
+        };
+        let frame = split_ghost_walk(snap, &snapshot, &moved_item_ids(snap, selection), &ids);
         self.ghost = Some(DragGhost {
             key,
             snapshot: snapshot.clone(),
@@ -658,6 +687,28 @@ mod tests {
         assert!(!Rc::ptr_eq(&first, &second));
         assert_eq!(second.symbols[0].position, Point::new(50.0, 70.0));
         assert_eq!(first.symbols[0].position, Point::new(50.0, 60.0));
+    }
+
+    /// Revision 0 is "unknown" and matches nothing: a preview and its id index
+    /// built for one sheet at revision 0 must not answer for another sheet
+    /// shown at revision 0.
+    #[test]
+    fn an_unknown_revision_never_reuses_the_preview_or_the_id_index() {
+        let (sheet, item) = sheet_with_wired_resistor();
+        let mut state = GhostState::default();
+        let first = state.refresh_with(&sheet, 0, &[item], 0.0, 10.0);
+        let mut other = sheet.clone();
+        other.symbols[0].position = Point::new(50.0, 60.0);
+        other.wires.push(other.wires[0].clone());
+        other.wires[1].uuid = uuid::Uuid::now_v7();
+        let second = state.refresh_with(&other, 0, &[item], 0.0, 12.5);
+        assert_eq!(first.symbols[0].position, Point::new(50.0, 60.0));
+        assert_eq!(second.symbols[0].position, Point::new(50.0, 72.5));
+        assert_eq!(
+            second.wires.len(),
+            other.wires.len(),
+            "the other sheet's wires"
+        );
     }
 
     /// The review's probe, with the real render cache: build a ghost, commit

@@ -159,15 +159,16 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     for entry in &sym.symbols_in_file {
         let is_active = entry.idx == sym.active_idx;
         let label_color = if is_active { primary } else { muted };
-        let bg_active = crate::styles::ti(ctx.tokens.selection);
+        let bg_active = super::graphite::active_fill(&ctx.tokens);
         let row_msg = PanelMsg::SchLibrarySelectSymbol(entry.idx);
+        let wash = super::graphite::wash_fn(&ctx.tokens);
         let row_btn = signex_widgets::button(
             row![
-                text(raw(entry.name.clone()))
+                text(signex_i18n::UserText::new(entry.name.clone()))
                     .size(TS.body)
                     .color(label_color)
                     .width(Length::FillPortion(3)),
-                text(raw(entry.description.clone()))
+                text(signex_i18n::UserText::new(entry.description.clone()))
                     .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(4)),
@@ -184,9 +185,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     background: if is_active {
                         Some(iced::Background::Color(bg_active))
                     } else if matches!(status, iced::widget::button::Status::Hovered) {
-                        Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        )))
+                        Some(iced::Background::Color(wash(0.04)))
                     } else {
                         None
                     },
@@ -233,6 +232,8 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(thin_sep(border_c));
 
     // ── Action row: Place / Add / Delete / Edit (Altium parity) ──
+    let wash = super::graphite::wash_fn(&ctx.tokens);
+    let corner = super::graphite::button_radius(&ctx.tokens);
     let action_btn_style = move |is_primary: bool, enabled: bool| {
         let text_color = if enabled { primary } else { muted };
         move |_: &iced::Theme, status: iced::widget::button::Status| {
@@ -250,12 +251,10 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 0.03
             };
             iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, bg_alpha,
-                ))),
+                background: Some(iced::Background::Color(wash(bg_alpha))),
                 border: iced::Border {
                     width: 1.0,
-                    radius: 3.0.into(),
+                    radius: corner.into(),
                     color: border_c,
                     ..Default::default()
                 },
@@ -371,7 +370,7 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
     let muted = theme_ext::text_secondary(&ctx.tokens);
     let primary = theme_ext::text_primary(&ctx.tokens);
     let border_c = theme_ext::border_color(&ctx.tokens);
-    let bg_active = crate::styles::ti(ctx.tokens.selection);
+    let bg_active = super::graphite::active_fill(&ctx.tokens);
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
@@ -401,12 +400,16 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
     };
 
     // Breadcrumb — file name + footprint count.
-    let file_name = fp
-        .path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("<unknown>")
-        .to_string();
+    // Show the footprint's display name; the file stem is a uuid.
+    let file_name = if !fp.footprint_name.is_empty() {
+        fp.footprint_name.clone()
+    } else {
+        fp.path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("<unknown>")
+            .to_string()
+    };
     let breadcrumb = format!(
         "{}  ({} footprint{})",
         file_name,
@@ -467,7 +470,7 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
         };
         let row_btn = signex_widgets::button(
             row![
-                text(raw(footprint_row.name.clone()))
+                text(signex_i18n::UserText::new(footprint_row.name.clone()))
                     .size(TS.body)
                     .color(label_color)
                     .width(Length::Fill),
@@ -519,56 +522,67 @@ fn view_footprint_library_button_row<'a>(
     let primary = theme_ext::text_primary(&ctx.tokens);
     let border_c = theme_ext::border_color(&ctx.tokens);
 
-    let mk_btn = |label: &'static str, on_press: Option<PanelMsg>| -> Element<'a, PanelMsg> {
-        let enabled = on_press.is_some();
-        let label_color = if enabled { primary } else { muted };
-        let mut btn = signex_widgets::button(
-            text(raw(label))
-                .size(TS.body)
-                .color(label_color)
-                .align_x(iced::alignment::Horizontal::Center),
-        )
-        .padding([SP.s, SP.l])
-        .width(Length::Fixed(64.0))
-        .style(move |_: &Theme, status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered if enabled => {
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+    let wash = super::graphite::wash_fn(&ctx.tokens);
+    let corner = super::graphite::button_radius(&ctx.tokens);
+    let mk_btn =
+        |label: signex_i18n::MessageId, on_press: Option<PanelMsg>| -> Element<'a, PanelMsg> {
+            let enabled = on_press.is_some();
+            let label_color = if enabled { primary } else { muted };
+            let mut btn = signex_widgets::button(
+                text(signex_i18n::t!(ctx.i18n, label))
+                    .size(TS.body)
+                    .color(label_color)
+                    .align_x(iced::alignment::Horizontal::Center),
+            )
+            .padding([SP.s, SP.m])
+            .width(Length::Fill)
+            .style(move |_: &Theme, status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered if enabled => wash(0.06),
+                    _ => wash(0.02),
+                };
+                iced::widget::button::Style {
+                    background: Some(iced::Background::Color(bg)),
+                    border: iced::Border {
+                        width: 1.0,
+                        radius: corner.into(),
+                        color: border_c,
+                        ..Default::default()
+                    },
+                    ..iced::widget::button::Style::default()
                 }
-                _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.02),
-            };
-            iced::widget::button::Style {
-                background: Some(iced::Background::Color(bg)),
-                border: iced::Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border_c,
-                    ..Default::default()
-                },
-                ..iced::widget::button::Style::default()
+            });
+            if let Some(msg) = on_press {
+                btn = btn.on_press(msg);
             }
-        });
-        if let Some(msg) = on_press {
-            btn = btn.on_press(msg);
-        }
-        btn.boxed()
-    };
+            btn.boxed()
+        };
 
     let place = mk_btn(
-        "Place",
+        signex_i18n::ids::PANELS_FOOTPRINT_LIBRARY_PLACE,
         // PCB integration not wired yet — keep the button visible
         // but disabled to advertise the intended affordance.
         selected
             .map(PanelMsg::FpLibraryPlaceInternal)
             .filter(|_| false),
     );
-    let add = mk_btn("Add", Some(PanelMsg::FpLibraryAddInternal));
-    let delete = mk_btn("Delete", selected.map(PanelMsg::FpLibraryDeleteInternal));
-    let edit = mk_btn("Edit", selected.map(PanelMsg::FpLibraryEditInternal));
+    let add = mk_btn(
+        signex_i18n::ids::PANELS_FOOTPRINT_LIBRARY_ADD,
+        Some(PanelMsg::FpLibraryAddInternal),
+    );
+    let delete = mk_btn(
+        signex_i18n::ids::PANELS_FOOTPRINT_LIBRARY_DELETE,
+        selected.map(PanelMsg::FpLibraryDeleteInternal),
+    );
+    let edit = mk_btn(
+        signex_i18n::ids::PANELS_FOOTPRINT_LIBRARY_EDIT,
+        selected.map(PanelMsg::FpLibraryEditInternal),
+    );
 
     container(
         row![place, add, delete, edit]
             .spacing(SP.s)
+            .width(Length::Fill)
             .align_y(iced::Alignment::Center),
     )
     .padding([6.0, SP.m])
@@ -596,17 +610,17 @@ pub fn view_library_row_properties<'a>(
         d.internal_pn.clone()
     };
 
+    let wash = |alpha: f32| iced::Color::from_rgba(1.0, 1.0, 1.0, alpha);
+    let corner = 3.0_f32;
     let pick_symbol_btn = button(text(raw("Pick Symbol…")).size(TS.body).color(primary))
         .padding([SP.s, 10.0])
         .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickSymbol))
         .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
+            background: Some(iced::Background::Color(wash(0.04))),
             text_color: primary,
             border: Border {
                 width: 1.0,
-                radius: 3.0.into(),
+                radius: corner.into(),
                 color: border_c,
                 ..Default::default()
             },
@@ -617,13 +631,11 @@ pub fn view_library_row_properties<'a>(
         .padding([SP.s, 10.0])
         .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickFootprint))
         .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
+            background: Some(iced::Background::Color(wash(0.04))),
             text_color: primary,
             border: Border {
                 width: 1.0,
-                radius: 3.0.into(),
+                radius: corner.into(),
                 color: border_c,
                 ..Default::default()
             },
@@ -652,7 +664,7 @@ pub fn view_library_row_properties<'a>(
         Space::new().height(14),
         text(raw("Footprint")).size(TS.body).color(muted),
         Space::new().height(4),
-        text(raw(d.footprint_summary.clone()))
+        text(signex_i18n::UserText::new(d.footprint_summary.clone()))
             .size(TS.body)
             .color(if d.footprint_unbound {
                 warning
@@ -666,4 +678,91 @@ pub fn view_library_row_properties<'a>(
     .padding(10);
 
     container(body).width(Length::Fill).boxed()
+}
+
+/// What the Graphite Properties dock shows for the active Component editor tab:
+/// the row's own data, nothing invented.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ComponentSheet {
+    pub internal_pn: String,
+    pub manufacturer: String,
+    pub mpn: String,
+    pub lifecycle: String,
+    pub version: String,
+    pub library: String,
+    pub table: String,
+    pub updated: String,
+}
+
+/// The Graphite Component sheet: COMPONENT and STORAGE sections of label and
+/// value rows.
+pub fn view_component_sheet<'a>(
+    sheet: &'a ComponentSheet,
+    tokens: &signex_types::theme::ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, PanelMsg> {
+    let r = crate::styles::tokens::resolve(tokens);
+    let ink = crate::styles::ti(tokens.text);
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    use signex_i18n::{ids, t};
+    let line =
+        |label: signex_i18n::MessageId, value: &'a str, is_mono: bool| -> Element<'a, PanelMsg> {
+            let shown: signex_widgets::Label<'a> = if value.trim().is_empty() {
+                t!(i18n, ids::PANELS_COMPONENT_SHEET_NO_VALUE).into()
+            } else {
+                signex_i18n::UserText::new(value).into()
+            };
+            let mut v = text(shown).size(TS.body).color(ink);
+            if is_mono {
+                v = v.font(mono);
+            }
+            container(
+                iced::widget::row![
+                    text(t!(i18n, label))
+                        .size(TS.body)
+                        .color(r.ink3)
+                        .width(Length::FillPortion(2))
+                        .boxed(),
+                    container(v)
+                        .width(Length::FillPortion(3))
+                        .clip(true)
+                        .boxed(),
+                ]
+                .spacing(SP.m)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([SP.s, 12.0])
+            .width(Length::Fill)
+            .boxed()
+        };
+    let body: Column<Element<'a, PanelMsg>> = column![
+        super::form_look::section_label("Component", tokens, i18n),
+        line(
+            ids::PANELS_COMPONENT_SHEET_INTERNAL_PN,
+            &sheet.internal_pn,
+            true
+        ),
+        line(ids::PANELS_COMPONENT_SHEET_MPN, &sheet.mpn, true),
+        line(
+            ids::PANELS_COMPONENT_SHEET_MANUFACTURER,
+            &sheet.manufacturer,
+            false
+        ),
+        line(
+            ids::PANELS_COMPONENT_SHEET_LIFECYCLE,
+            &sheet.lifecycle,
+            false
+        ),
+        line(ids::PANELS_COMPONENT_SHEET_VERSION, &sheet.version, true),
+        super::form_look::section_label("Storage", tokens, i18n),
+        line(ids::PANELS_COMPONENT_SHEET_LIBRARY, &sheet.library, true),
+        line(ids::PANELS_COMPONENT_SHEET_TABLE, &sheet.table, true),
+        line(ids::PANELS_COMPONENT_SHEET_UPDATED, &sheet.updated, false),
+    ]
+    .width(Length::Fill);
+    iced::widget::scrollable(body)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(super::form_look::scrollbar_style)
+        .boxed()
 }

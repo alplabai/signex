@@ -51,6 +51,7 @@ fn app_focused_on(focused: &str) -> Signex {
             rules: None,
             annotation: None,
             schematic_defaults: Default::default(),
+            project_defaults: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -192,6 +193,7 @@ fn dragging_a_bus_on_the_canvas_carries_entry_and_wire() {
             size: (2.54, 2.54),
         }],
         wires: vec![Wire {
+            color: None,
             uuid: wire_id,
             start: Point::new(2.54, 12.54),
             end: Point::new(12.54, 12.54),

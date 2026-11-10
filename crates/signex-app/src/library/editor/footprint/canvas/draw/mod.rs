@@ -7,6 +7,7 @@
 //!
 //! Layer-method modules (`impl FootprintCanvas`):
 //! - [`background`] — background fill + grid, guides, origin crosshair.
+//! - [`graphite`] — Graphite paper / charcoal ground and dot grid.
 //! - [`scene`] — editor wrappers over [`layers`], array badges.
 //! - [`ghosts`] — PlacePad / PlaceVia placement ghosts.
 //! - [`overlays`] — sketch reticle, select cursor mark, touching-line
@@ -26,6 +27,7 @@
 
 mod background;
 mod ghosts;
+mod graphite;
 mod grid;
 mod layers;
 mod overlays;
@@ -41,6 +43,7 @@ mod sketch;
 // deeper, re-exported here so consumers name `draw::<item>` rather than
 // reaching into the private renderer submodules.
 pub(crate) use background::{BACKDROP_BG, BACKDROP_GRID, BackdropLook, draw_backdrop, draw_origin};
+pub(crate) use graphite::look_for as graphite_look_for;
 pub(crate) use layers::{
     LayerInput, draw_back_layers, draw_courtyard, draw_fab, draw_pads, draw_silk,
 };

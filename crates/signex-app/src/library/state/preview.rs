@@ -52,9 +52,40 @@ pub enum PreviewTab {
     Supply,
     Datasheet,
     Simulation,
+    /// Graphite only: the pin-to-pad table, which the legacy look keeps
+    /// inline on `Preview`.
+    PinMap,
+    /// Graphite only: the alternate symbols, inline on `Preview` in the
+    /// legacy look.
+    Alternates,
 }
 
 impl PreviewTab {
+    /// The Graphite tab strip, in display order.
+    pub const GRAPHITE_ORDER: &'static [PreviewTab] = &[
+        PreviewTab::Preview,
+        PreviewTab::Datasheet,
+        PreviewTab::PinMap,
+        PreviewTab::Parameters,
+        PreviewTab::Supply,
+        PreviewTab::Simulation,
+        PreviewTab::Alternates,
+    ];
+
+    /// The label the Graphite tab strip shows.
+    pub fn graphite_label(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
+        match self {
+            PreviewTab::Preview => ids::EDITORS_COMPONENT_TAB_GENERAL,
+            PreviewTab::Parameters => ids::EDITORS_COMPONENT_TAB_PARAMETERS,
+            PreviewTab::Supply => ids::EDITORS_COMPONENT_TAB_SUPPLY,
+            PreviewTab::Datasheet => ids::EDITORS_COMPONENT_TAB_DATASHEET,
+            PreviewTab::Simulation => ids::EDITORS_COMPONENT_TAB_SIMULATION,
+            PreviewTab::PinMap => ids::EDITORS_COMPONENT_TAB_PIN_MAP,
+            PreviewTab::Alternates => ids::EDITORS_COMPONENT_TAB_ALTERNATES,
+        }
+    }
+
     pub const ORDER: &'static [PreviewTab] = &[
         PreviewTab::Preview,
         PreviewTab::Parameters,
@@ -70,6 +101,8 @@ impl PreviewTab {
             PreviewTab::Supply => "Supply",
             PreviewTab::Datasheet => "Datasheet",
             PreviewTab::Simulation => "Simulation",
+            PreviewTab::PinMap => "Pin Map",
+            PreviewTab::Alternates => "Alternates",
         }
     }
 }

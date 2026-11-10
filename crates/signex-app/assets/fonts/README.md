@@ -39,6 +39,23 @@ are full faces (3391 glyphs, hinted, OpenType layout kept). Roboto is licensed
 under the SIL Open Font License 1.1, as each file's name table states; see
 `OFL-Roboto.md`.
 
+## Inter (UI chrome default)
+
+`Inter-Regular.ttf`, `Inter-Medium.ttf` and `Inter-SemiBold.ttf` are the
+unmodified static faces of Inter 4.x, <https://github.com/rsms/inter>. They are
+full faces (not subset, layout features kept) so chrome text keeps kerning and
+tabular figures. Inter is licensed under the SIL Open Font License 1.1; see
+`OFL-Inter.md`. Inter is the UI font for anyone who never picked one; a stored
+choice is kept.
+
+## JetBrains Mono (chrome-only monospace)
+
+`JetBrainsMono-Regular.ttf` and `JetBrainsMono-Medium.ttf` are the unmodified
+static faces of the 2.304 release, <https://github.com/JetBrains/JetBrainsMono>, used for chrome
+mono text (shortcuts, values, badges) through `fonts::CHROME_MONO_FONT`. They
+are not a canvas font: canvas text and its extents stay on Iosevka. Licensed
+under the SIL Open Font License 1.1; see `OFL-JetBrainsMono.md`.
+
 ## Licenses in release builds
 
 Every font here ships with its license text: each `OFL-*.md` in this folder is

@@ -7,8 +7,12 @@ use signex_types::schematic::{Bus, BusEntry, Point, Wire};
 use super::super::super::helpers::constrain_segments;
 use super::super::super::*;
 
-/// The commands that place `segments` as wires: one per segment.
-pub(crate) fn wire_commands(segments: &[(Point, Point)]) -> Vec<signex_engine::Command> {
+/// The commands that place `segments` as wires of `style` (width, colour):
+/// one per segment.
+pub(crate) fn wire_commands(
+    segments: &[(Point, Point)],
+    (stroke_width, color): (f64, Option<signex_types::theme::Color>),
+) -> Vec<signex_engine::Command> {
     segments
         .iter()
         .map(|seg| signex_engine::Command::PlaceWireSegment {
@@ -17,7 +21,8 @@ pub(crate) fn wire_commands(segments: &[(Point, Point)]) -> Vec<signex_engine::C
                 uuid: uuid::Uuid::now_v7(),
                 start: seg.0,
                 end: seg.1,
-                stroke_width: 0.0,
+                stroke_width,
+                color,
                 locked: false,
             },
         })
@@ -49,9 +54,20 @@ impl Signex {
         mode: DrawMode,
     ) -> (Point, bool) {
         let segments = constrain_segments(start, end, mode);
-        let commands = wire_commands(&segments);
+        let commands = wire_commands(&segments, self.wire_placement_style());
         let changed = !commands.is_empty() && self.apply_engine_commands(commands, false, false);
         (segments.last().map(|s| s.1).unwrap_or(end), changed)
+    }
+
+    /// The width and colour the next wire is placed with: what the Tab form
+    /// of the Wire tool holds, else the default width and no colour.
+    pub(crate) fn wire_placement_style(&self) -> (f64, Option<signex_types::theme::Color>) {
+        match &self.document_state.panel_ctx.pre_placement {
+            Some(pp) if pp.kind == crate::panels::PrePlacementKind::Wire => {
+                (pp.wire_width.stroke_mm(), pp.wire_color)
+            }
+            _ => (0.0, None),
+        }
     }
 
     /// [`Self::place_wire_at`] for a bus.

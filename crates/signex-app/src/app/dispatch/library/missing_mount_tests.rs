@@ -40,6 +40,7 @@ fn add_project(app: &mut Signex, libs: &[&std::path::Path]) -> crate::app::Proje
                 rules: None,
                 annotation: None,
                 schematic_defaults: Default::default(),
+                project_defaults: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

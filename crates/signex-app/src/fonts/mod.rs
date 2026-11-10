@@ -27,7 +27,11 @@ use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
 
 /// Default UI font family name. Used when no preference file is found.
-pub const DEFAULT_UI_FONT: &str = "Roboto";
+pub const DEFAULT_UI_FONT: &str = "Inter";
+
+/// Bundled monospace family for chrome-only mono text (shortcuts, values).
+/// Not a canvas font: `signex_types::font::BUNDLED_DEFAULT_FAMILY` stays Iosevka.
+pub const CHROME_MONO_FONT: &str = "JetBrains Mono";
 
 /// MD-32: persist `bytes` to `path` atomically (tmp + rename via
 /// `signex_types::atomic_io`) and report on failure, instead of the
@@ -465,7 +469,9 @@ fn read_prefs_json(path: &Path) -> Option<serde_json::Value> {
 // Theme
 // ──────────────────────────────────────────────────────────────────────
 
-/// Read the last-applied theme. Defaults to `ThemeId::Signex`.
+/// Read the last-applied theme. Defaults to [`ThemeId::DEFAULT`] when none
+/// is stored or the stored name is unknown (e.g. written by a newer build);
+/// the other preferences are read separately and stay intact.
 pub fn read_theme_pref() -> ThemeId {
     read_theme_pref_at(&prefs_path())
 }
@@ -479,7 +485,7 @@ pub fn read_theme_pref_at(path: &Path) -> ThemeId {
 pub fn read_theme_pref_from(json: Option<&serde_json::Value>) -> ThemeId {
     json.and_then(|json| json.get("theme").cloned())
         .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or(ThemeId::Signex)
+        .unwrap_or(ThemeId::DEFAULT)
 }
 
 /// Persist theme without clobbering other preference keys.
@@ -933,5 +939,18 @@ mod designator_standard_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod chrome_mono_tests {
+    /// The menu card draws its shortcuts in the widgets crate's family; the
+    /// chrome font is the same face.
+    #[test]
+    fn the_menu_card_mono_family_is_the_chrome_mono_font() {
+        assert_eq!(
+            signex_widgets::active_bar_dropdown::MONO_FAMILY,
+            super::CHROME_MONO_FONT
+        );
     }
 }

@@ -13,3 +13,4 @@ pub(super) const RENAME: (f32, f32) = (420.0, 200.0);
 pub(super) const ENABLE_VERSION_CONTROL: (f32, f32) = (520.0, 320.0);
 pub(super) const GRID_PROPERTIES: (f32, f32) = (480.0, 280.0);
 pub(super) const SELECTION_FILTER_CUSTOM: (f32, f32) = (440.0, 380.0);
+pub(super) const NEW_PROJECT: (f32, f32) = (860.0, 700.0);

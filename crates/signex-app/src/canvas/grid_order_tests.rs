@@ -98,7 +98,10 @@ fn background_vertices(
 #[test]
 fn the_grid_is_painted_after_the_paper_fill() {
     let (overrides, filters) = Default::default();
-    let prefs = test_prefs(&overrides, &filters);
+    let mut prefs = test_prefs(&overrides, &filters);
+    // Graphite's workspace is the paper colour (one sheet), so give the
+    // workspace its own colour to tell the paper fill apart.
+    prefs.theme_bg = iced::Color::from_rgb(0.5, 0.5, 0.5);
     assert!(prefs.grid_visible);
     let (bg, paper) = (
         pack(prefs.theme_bg).components(),
@@ -245,6 +248,7 @@ fn drawn_grid_vertices(style: GridStyle, dpr: f32) -> Vec<[f32; 2]> {
         210.0,
         style,
         dpr,
+        false,
     );
     let Geometry::Live { sections } = frame.into_geometry() else {
         panic!("a fresh frame is live geometry");

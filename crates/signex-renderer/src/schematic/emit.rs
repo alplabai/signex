@@ -204,6 +204,7 @@ pub(super) fn emit_overlays(snapshot: &SchematicSnapshot, scene: &mut Scene) {
     );
     emit_overlay_line_bucket(&snapshot.overlays.lasso_lines, &mut scene.overlay_lines);
     emit_overlay_circle_bucket(&snapshot.overlays.snap_circles, &mut scene.overlay_circles);
+    super::halo::emit_halos(&snapshot.overlays.halos, scene);
 }
 
 pub(super) fn erc_style_ref(severity: Severity) -> StyleRef {

@@ -6,6 +6,7 @@
 use super::*;
 use iced::widget::{Column, Space, Widget, column, container, row};
 use iced::{Background, Border, Element, Length, Theme};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{button, raw, text, text_input};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -19,6 +20,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     backup: Option<&'a str>,
     search: &'a str,
     recorder: Option<&'a crate::app::KeymapRecorderState>,
+    tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, PrefMsg> {
     let profiles = editor.profiles();
     let active = profiles.iter().find(|profile| profile.active);
@@ -124,8 +126,8 @@ pub(super) fn content_keyboard_shortcuts<'a>(
             profile_options,
             |profile: &KeymapProfileOption| { profile.to_string() }
         )
+        .graphite()
         .on_select(|profile: KeymapProfileOption| PrefMsg::KeymapProfileSelected(profile.id))
-        .text_size(12)
         .width(180),
         button(container(text(raw("Create")).size(TS.body)).padding([5.0, SP.l]))
             .on_press(PrefMsg::KeymapCreateCustomProfile)
@@ -217,7 +219,9 @@ pub(super) fn content_keyboard_shortcuts<'a>(
         let group_rows: Vec<Element<'a, PrefMsg>> = filtered
             .iter()
             .filter(|row_model| row_model.group == group)
-            .map(|row_model| keymap_table_row(row_model, &conflicts, active_profile_is_custom))
+            .map(|row_model| {
+                keymap_table_row(row_model, &conflicts, active_profile_is_custom, tokens)
+            })
             .collect();
         if group_rows.is_empty() {
             continue;
@@ -239,6 +243,7 @@ fn keymap_table_row<'a>(
     row_model: &crate::keymap::KeymapEditorRow,
     conflicts: &[crate::keymap::BindingConflict],
     active_profile_is_custom: bool,
+    tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, PrefMsg> {
     let has_conflict = conflicts.iter().any(|conflict| {
         conflict.context == row_model.context
@@ -296,7 +301,7 @@ fn keymap_table_row<'a>(
                     ChipTone::Neutral
                 };
                 row![
-                    shortcut_chip(&row_model.trigger, tone),
+                    trigger_display(&row_model.trigger, tone, tokens),
                     button(container(text(raw("Edit")).size(TS.caption)).padding([3.0, SP.m]))
                         .on_press(PrefMsg::KeymapRecorderOpen {
                             slot: row_model.slot,
@@ -317,7 +322,7 @@ fn keymap_table_row<'a>(
                     .boxed()
             }
         } else {
-            shortcut_chip(&row_model.trigger, ChipTone::Neutral)
+            trigger_display(&row_model.trigger, ChipTone::Neutral, tokens)
         };
 
     row![
@@ -357,6 +362,21 @@ enum ChipTone {
     Neutral,
     /// Invalid / conflicting / transient-modifier trigger.
     Warning,
+}
+
+/// A table row's trigger: key caps for a plain neutral stroke, the
+/// chip otherwise (warnings, sequences, gestures).
+fn trigger_display<'a>(
+    label: &str,
+    tone: ChipTone,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Element<'a, PrefMsg> {
+    if matches!(tone, ChipTone::Neutral)
+        && let Some(caps) = keycaps::key_caps(label, tokens)
+    {
+        return caps;
+    }
+    shortcut_chip(label, tone)
 }
 
 fn shortcut_chip<'a>(label: &str, tone: ChipTone) -> Element<'a, PrefMsg> {

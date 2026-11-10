@@ -89,6 +89,7 @@ altium	hint	-	ESC	cancel_current_tool
 altium	hint	-	-	center_on_cursor
 altium	hint	-	HOME	center_view_at_cursor
 altium	hint	-	Ctrl+F4	close_active_document
+altium	hint	-	-	close_all_documents
 altium	hint	-	Ctrl+C	copy
 altium	hint	-	INS	copy_attributes_or_add_vertex
 altium	hint	-	Ctrl+X	cut
@@ -128,6 +129,7 @@ altium	hint	-	Y	mirror_y
 altium	hint	-	M M	move_object
 altium	hint	-	-	move_selection
 altium	hint	-	Ctrl+N	new_document
+altium	hint	-	-	new_project_with_profile
 altium	hint	-	Ctrl+TAB	next_document_tab
 altium	hint	-	-	next_grid
 altium	hint	-	Ctrl+Shift+P	open_command_palette
@@ -135,6 +137,7 @@ altium	hint	-	-	open_datasheet
 altium	hint	-	Ctrl+O	open_document
 altium	hint	-	-	open_grid_picker
 altium	hint	-	-	open_grid_properties
+altium	hint	-	-	open_library_browser
 altium	hint	-	Ctrl+,	open_preferences
 altium	hint	-	T P	open_schematic_preferences
 altium	hint	-	Ctrl+V	paste
@@ -315,6 +318,7 @@ classic	bind	Global	Ctrl+F	command:find
 classic	bind	Global	Ctrl+F5	command:zoom_to_selection_area
 classic	bind	Global	Ctrl+G	command:toggle_search_panel
 classic	bind	Global	Ctrl+HOME	command:zoom_to_all_objects
+classic	bind	Global	Ctrl+K	command:open_command_palette
 classic	bind	Global	Ctrl+L	command:place_global_label
 classic	bind	Global	Ctrl+N	command:new_document
 classic	bind	Global	Ctrl+O	command:open_document
@@ -393,6 +397,7 @@ classic	hint	-	ESC	cancel_current_tool
 classic	hint	-	F4	center_on_cursor
 classic	hint	-	-	center_view_at_cursor
 classic	hint	-	-	close_active_document
+classic	hint	-	-	close_all_documents
 classic	hint	-	Ctrl+C	copy
 classic	hint	-	-	copy_attributes_or_add_vertex
 classic	hint	-	Ctrl+X	cut
@@ -432,6 +437,7 @@ classic	hint	-	Y	mirror_y
 classic	hint	-	-	move_object
 classic	hint	-	M	move_selection
 classic	hint	-	Ctrl+N	new_document
+classic	hint	-	-	new_project_with_profile
 classic	hint	-	-	next_document_tab
 classic	hint	-	N	next_grid
 classic	hint	-	Ctrl+Shift+P	open_command_palette
@@ -439,6 +445,7 @@ classic	hint	-	D	open_datasheet
 classic	hint	-	Ctrl+O	open_document
 classic	hint	-	-	open_grid_picker
 classic	hint	-	-	open_grid_properties
+classic	hint	-	-	open_library_browser
 classic	hint	-	Ctrl+,	open_preferences
 classic	hint	-	-	open_schematic_preferences
 classic	hint	-	Ctrl+V	paste

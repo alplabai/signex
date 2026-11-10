@@ -335,6 +335,18 @@ impl Signex {
         self.ui_state.net_class_styles.styles_in(placement.as_ref())
     }
 
+    /// [`Self::active_class_styles`]'s revision: moves when they change.
+    pub(crate) fn active_class_revision(&self) -> u64 {
+        let placement = self
+            .document_state
+            .active_path
+            .as_deref()
+            .and_then(|path| self.shown_placement(path));
+        self.ui_state
+            .net_class_styles
+            .revision_in(placement.as_ref())
+    }
+
     /// The widths wires and buses of the active sheet are drawn, and so hit
     /// and boxed, at: its net classes and its project defaults (#2026).
     pub(crate) fn active_wire_widths(&self) -> crate::schematic_runtime::WireWidths<'_> {

@@ -8,6 +8,14 @@ workspace dependency table in the root `Cargo.toml`.
 | `iced_aw` | https://github.com/iced-rs/iced_aw | MIT (see `iced_aw/LICENSE`) |
 | `iced_fonts` | https://github.com/Redhawk18/iced_fonts | MIT (see `iced_fonts/LICENSE`) |
 
+## Patches to the sources
+
+- `iced_aw/src/widget/menu/menu_bar_overlay.rs`, `draw`: the first dropdown of the menu bar
+  is drawn inside its own `with_layer`, as its nested submenus already were. The runtime
+  draws overlays without opening a layer, so the dropdown's background quad joined the
+  window's last layer, and that layer's text, icons and canvas meshes (drawn after its
+  quads) showed through the open menu. Pinned by `menu_bar::layer_tests` in `signex-app`.
+
 ## Scope of the checks
 
 `vendor/` sits outside the `license-guard` clean-room grep and the file-size gate; both only

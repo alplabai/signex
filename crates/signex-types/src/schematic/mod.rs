@@ -828,11 +828,13 @@ pub use sheet_page::{PageOrigin, SheetPageSettings, paper_height_mm};
 mod defaults;
 mod sheet_size;
 mod stroke;
+mod wire_width;
 pub use defaults::{
     SCHEMATIC_DEFAULT_FONT, SCHEMATIC_DEFAULT_TEXT_SIZE_PT, SchematicDefaults, is_set_width,
 };
 pub use sheet_size::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM, SheetOrientation, SheetSize};
 pub use stroke::*;
+pub use wire_width::WireWidthPreset;
 mod hotspot;
 pub use hotspot::{
     MoveHotspots, SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_move_to_hotspot,
@@ -843,6 +845,8 @@ pub use power_port_symbol::{
     PowerPortStyle, power_port_graphics, power_port_lib_symbol, power_port_value_field,
     power_port_value_field_for,
 };
+mod power_port_text;
+pub use power_port_text::power_port_value_text;
 mod pin_pick;
 pub use pin_pick::{
     PickedPin, PinLine, SCHEMATIC_PIN_PICK_TOLERANCE_MM, SCHEMATIC_PIN_PICK_TOLERANCE_PX,

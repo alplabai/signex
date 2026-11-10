@@ -116,6 +116,37 @@ pub enum CommandSource {
     File,
 }
 
+impl CommandSource {
+    /// Position of the source's group in the Graphite palette.
+    pub fn group_rank(self) -> u8 {
+        match self {
+            Self::Command => 0,
+            Self::Symbol => 1,
+            Self::Net => 2,
+            Self::Sheet => 3,
+            Self::File => 4,
+        }
+    }
+
+    /// Header of the source's group in the Graphite palette.
+    pub fn group_title(self) -> &'static str {
+        match self {
+            Self::Command => "COMMANDS",
+            Self::Symbol => "COMPONENTS",
+            Self::Net => "NETS",
+            Self::Sheet => "SHEETS",
+            Self::File => "FILES",
+        }
+    }
+}
+
+/// Order `results` group by group (stable, so rank order holds inside a
+/// group). The Graphite palette draws group headers, so the flat order that
+/// `selected_index` and the arrow keys walk must be the order drawn.
+pub fn group_for_display(results: &mut [CommandEntry]) {
+    results.sort_by_key(|e| e.source.group_rank());
+}
+
 #[derive(Debug, Clone)]
 pub struct CommandEntry {
     pub source: CommandSource,
@@ -542,6 +573,25 @@ pub fn fuzzy_score(query: &str, target: &str) -> Option<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn grouping_is_stable_and_follows_group_rank() {
+        let entry = |source, label: &str| CommandEntry {
+            source,
+            label: label.to_string(),
+            detail: String::new(),
+            action: CommandAction::OpenFile(PathBuf::new()),
+        };
+        let mut rows = vec![
+            entry(CommandSource::Sheet, "s1"),
+            entry(CommandSource::Command, "c1"),
+            entry(CommandSource::Net, "n1"),
+            entry(CommandSource::Command, "c2"),
+        ];
+        group_for_display(&mut rows);
+        let labels: Vec<_> = rows.iter().map(|e| e.label.as_str()).collect();
+        assert_eq!(labels, ["c1", "c2", "n1", "s1"]);
+    }
 
     #[test]
     fn fuzzy_score_survives_lowercase_expansion() {

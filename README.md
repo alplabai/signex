@@ -100,7 +100,8 @@ designs are never used for AI training unless the customer opts in.
 - Copy/paste, undo/redo (100 levels), save to the native `.snxsch` /
   `.snxprj` formats (`.snxsch`: TOML envelope + TSV bulk blocks, line-diffable
   in git; `.snxprj`: JSON, see [why](docs/architecture/snxprj-format.md))
-- 7 built-in themes with customizable theme editor
+- Two themes: Graphite Light (the default) and Graphite Dark, switchable from
+  Preferences ▸ Theme or the title-bar light/dark toggle
 - Altium-style docking panels with drag-to-undock/dock
 - Active Bar — 13-button floating toolbar with dropdown menus
 - Context menu, in-place text editing (F2), selection filter
@@ -113,7 +114,7 @@ designs are never used for AI training unless the customer opts in.
   net-label conflicts, bus checks and completeness checks (part without
   footprint / value / MPN, unannotated designator, single-pin net, net with no
   driver, off-grid, ...); per-finding waivers that carry a reason and an
-  author; File ▸ Export ▸ ERC Report as `.txt`, `.csv`, `.json`, `.html` or
+  author; Reports ▸ ERC Report as `.txt`, `.csv`, `.json`, `.html` or
   `.pdf` ([docs/ERC_RULES.md](docs/ERC_RULES.md),
   [docs/ERC_REPORT.md](docs/ERC_REPORT.md))
 - **Annotation (v0.7)** — four modes, review-and-confirm dialog,
@@ -178,20 +179,6 @@ designs are never used for AI training unless the customer opts in.
   <br>
   <em>Active Bar, project tree with native <code>.snxsch</code> / <code>.snxprj</code> files, and the Properties panel for the selected symbol</em>
 </p>
-
-<details>
-<summary><strong>More themes</strong></summary>
-
-<p align="center">
-  <img src="assets/screenshots/catppuccin-theme.png" alt="Catppuccin Mocha theme" width="400">
-  <img src="assets/screenshots/github-dark-theme.png" alt="GitHub Dark theme" width="400">
-  <br>
-  <img src="assets/screenshots/solarized-theme.png" alt="Solarized Light theme" width="400">
-  <br>
-  <em>Catppuccin Mocha, GitHub Dark, Solarized Light — 7 themes built in, fully customizable</em>
-</p>
-
-</details>
 
 ### Graphite: the next interface (design preview)
 

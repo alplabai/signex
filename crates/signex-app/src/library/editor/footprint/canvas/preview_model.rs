@@ -6,7 +6,7 @@ use signex_library::primitive::Footprint;
 use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
 
 use super::draw::{LayerInput, PadLabels};
-use crate::library::editor::footprint::layers::LayerVisibility;
+use crate::library::editor::footprint::layers::{LayerPalette, LayerVisibility};
 use crate::library::editor::footprint::state::{CourtyardRect, EditorPad, FootprintEditorState};
 
 /// A preview labels a pad once it is this wide on screen.
@@ -118,6 +118,7 @@ impl PreviewFootprint {
             selected_pads_extra: &[],
             selected_silk_f: None,
             pad_labels: PadLabels::MinPadPx(MIN_LABELLED_PAD_PX),
+            palette: LayerPalette::Legacy,
         }
     }
 }
