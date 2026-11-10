@@ -652,6 +652,9 @@ pub struct DeferredGitCommit {
     pub message: String,
     pub replace_message: bool,
     pub removed_path: Option<PathBuf>,
+    /// Whether the commit may carry the agent edit summary (#2253); a restore
+    /// never does.
+    pub with_summary: bool,
 }
 
 /// An Altium import on the blocking pool (#1123).

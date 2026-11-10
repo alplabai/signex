@@ -6,11 +6,13 @@
 
 use std::fmt::Display;
 use std::path::Path;
+use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 
 use super::append::Journal;
 use super::entry::EditEntry;
+use super::queue::JournalMark;
 use super::read::read_journal;
 
 /// The most edits one body lists; the rest are counted in a last line.
@@ -24,27 +26,43 @@ const HEADER: &str = "Agent edits since the previous commit:";
 /// Commands whose change lands in the project file, whatever sheet they name.
 const PROJECT_WIDE: [&str; 1] = ["assign_net_class"];
 
-/// `text` as one safe line fragment: control characters (a newline included)
-/// become spaces and it is cut to length, so no field can start a line, a
-/// trailer or a second paragraph.
+/// How long a commit worker waits for the journal lines still queued.
+const JOURNAL_WAIT: Duration = Duration::from_secs(5);
+
+/// A character that could start a line, a paragraph or a reordered run of text:
+/// a control character (a newline included), a Unicode line or paragraph
+/// separator, or a bidirectional control.
+fn is_unsafe(c: char) -> bool {
+    c.is_control()
+        || matches!(
+            c,
+            '\u{2028}' | '\u{2029}' | '\u{200E}' | '\u{200F}' | '\u{202A}'
+                ..='\u{202E}' | '\u{2066}'..='\u{2069}'
+        )
+}
+
+/// `text` as one safe line fragment: such characters become spaces and it is
+/// cut to length, so no field can start a line, a trailer or a paragraph.
 fn clean(text: &str) -> String {
     let spaced: String = text
         .chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
+        .map(|c| if is_unsafe(c) { ' ' } else { c })
         .take(TEXT_CHARS)
         .collect();
     spaced.trim().to_string()
 }
 
 /// Is `entry` an edit of `file` (an absolute path)? A project-wide command, or
-/// one that names no document, belongs to the project file's commit.
+/// one that names no document at all, belongs to the project file's commit. A
+/// document with an id and no path (not saved yet) belongs to no commit.
 fn is_edit_of(entry: &EditEntry, file: &Path) -> bool {
     let is_project_file = file.extension().is_some_and(|ext| ext == "snxprj");
     let project_wide = PROJECT_WIDE.contains(&entry.command.as_str());
     match entry.path.as_deref().map(Path::new) {
         Some(path) if !project_wide => path == file,
-        Some(path) => is_project_file && file.parent().is_some_and(|dir| path.starts_with(dir)),
-        None => is_project_file,
+        Some(_) => is_project_file,
+        None if project_wide || entry.document.is_none() => is_project_file,
+        None => false,
     }
 }
 
@@ -54,14 +72,13 @@ fn line(entry: &EditEntry, project_root: &Path) -> String {
         (None, Some(pid)) => format!("pid={pid}"),
         (None, None) => "unknown".to_string(),
     };
-    let what = match (&entry.path, &entry.document) {
-        (Some(path), _) => {
+    let what = match &entry.path {
+        Some(path) => {
             let path = Path::new(path);
             let shown = path.strip_prefix(project_root).unwrap_or(path);
             clean(&shown.display().to_string())
         }
-        (None, Some(document)) => clean(document),
-        (None, None) => "project".to_string(),
+        None => "project".to_string(),
     };
     let reason = entry
         .reason
@@ -126,7 +143,17 @@ pub fn message_with_agent_summary<E: Display>(
     rel_path: &Path,
     message: &str,
     last_commit: Result<Option<DateTime<Utc>>, E>,
+    queued: &JournalMark,
 ) -> String {
+    // Lines the journal queue still holds are not on disk to be read.
+    if !queued.wait(JOURNAL_WAIT) {
+        warn(format!(
+            "The commit of {} was made without the agent edit summary: the journal was still being written after {} s",
+            rel_path.display(),
+            JOURNAL_WAIT.as_secs()
+        ));
+        return message.to_string();
+    }
     let since = match last_commit {
         Ok(at) => at.map(|at| at.timestamp()),
         Err(error) => {

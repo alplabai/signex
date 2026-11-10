@@ -41,6 +41,10 @@ use std::sync::Mutex;
 use crate::adapter::{HistoryEntry, LibraryError};
 use crate::git_identity::identity_for_repo;
 
+/// The most commits [`LocalGitProjectAdapter::last_commit_time_for`] looks
+/// back through; a file last touched further back reads as never committed.
+pub const LAST_COMMIT_WALK: usize = 2_000;
+
 /// Project-scoped git adapter.
 ///
 /// Construct via [`LocalGitProjectAdapter::open_or_init`]; the
@@ -227,12 +231,21 @@ impl LocalGitProjectAdapter {
     }
 
     /// When the newest commit that touched `rel_path` was made (`git log -1
-    /// -- <path>`). `None` when there is no repository, HEAD is unborn or the
-    /// path was never committed. Unbounded, unlike [`Self::file_history`]: a
-    /// cut-off would read as "never committed".
+    /// -- <path>`, the committer time). `None` when there is no repository,
+    /// HEAD is unborn, or the path was not touched in the last
+    /// [`LAST_COMMIT_WALK`] commits (it then reads as never committed).
     pub fn last_commit_time_for(
         &self,
         rel_path: &Path,
+    ) -> Result<Option<chrono::DateTime<chrono::Utc>>, LibraryError> {
+        self.last_commit_time_within(rel_path, LAST_COMMIT_WALK)
+    }
+
+    /// [`Self::last_commit_time_for`] with the walk bound given.
+    pub fn last_commit_time_within(
+        &self,
+        rel_path: &Path,
+        max_commits: usize,
     ) -> Result<Option<chrono::DateTime<chrono::Utc>>, LibraryError> {
         if !self.project_root.join(".git").exists() {
             return Ok(None);
@@ -240,8 +253,8 @@ impl LocalGitProjectAdapter {
         let repo = git2::Repository::open(&self.project_root)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
         let rel_str = rel_path.to_string_lossy().replace('\\', "/");
-        let newest = crate::git_history::path_history(&repo, &rel_str, 1)?;
-        Ok(newest.first().map(|entry| entry.time))
+        let seconds = crate::git_history::last_touch_seconds(&repo, &rel_str, max_commits)?;
+        Ok(seconds.and_then(|seconds| chrono::DateTime::from_timestamp(seconds, 0)))
     }
 
     /// Per-file commit history newest-first. Returns up to `limit`

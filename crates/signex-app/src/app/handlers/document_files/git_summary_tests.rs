@@ -56,12 +56,20 @@ fn save(app: &mut Signex, dir: &Path, file: &str, message: &str) {
     save_bytes(app, dir, file, message, file);
 }
 
-fn save_bytes(app: &mut Signex, dir: &Path, file: &str, message: &str, text: &str) {
+/// A save's commit carries the sequence of its write (never 0: that is a
+/// History restore); later saves of a file have later sequences.
+static NEXT_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn queue_save(app: &mut Signex, dir: &Path, file: &str, message: &str, text: &str) {
     let content = CommitBytes {
         bytes: Arc::new(text.as_bytes().to_vec()),
-        sequence: 0,
+        sequence: NEXT_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
     };
     app.commit_bytes_to_project_git(&dir.join(file), message, content);
+}
+
+fn save_bytes(app: &mut Signex, dir: &Path, file: &str, message: &str, text: &str) {
+    queue_save(app, dir, file, message, text);
     let task = app.drain_pending_git_commits();
     crate::app::handlers::menu::export::settle(app, task);
 }
@@ -167,6 +175,83 @@ fn the_project_file_commit_carries_assign_net_class() {
     assert_eq!(commits[0], "Save A");
     assert!(commits[1].starts_with("Save project\n\nAgent edits"));
     assert!(commits[1].contains("command=assign_net_class"));
+}
+
+/// Save 2 merges into the still-queued Save 1 and takes its message; the
+/// summary goes with the message, so the setting as it is at Save 2 rules.
+#[test]
+fn a_save_merged_into_a_queued_one_follows_the_setting_as_it_is_now() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = git_app(dir.path(), true);
+    write_journal(
+        dir.path(),
+        &[edit_line(dir.path(), "a.snxsch", "color_net")],
+    );
+
+    queue_save(&mut app, dir.path(), "a.snxsch", "Save 1", "one");
+    app.document_state.projects[0]
+        .data
+        .agent_journal
+        .summarise_in_commit = false;
+    queue_save(&mut app, dir.path(), "a.snxsch", "Save 2", "two");
+    assert_eq!(app.document_state.pending_git_commits.len(), 1, "merged");
+    let task = app.drain_pending_git_commits();
+    crate::app::handlers::menu::export::settle(&mut app, task);
+
+    assert_eq!(messages(dir.path()), ["Save 2"]);
+}
+
+/// A History restore records an old revision, not what an agent did since the
+/// last commit: its message is never summarised.
+#[test]
+fn a_restore_commit_has_no_summary() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = git_app(dir.path(), true);
+    write_journal(
+        dir.path(),
+        &[edit_line(dir.path(), "a.snxsch", "color_net")],
+    );
+    let content = CommitBytes {
+        bytes: Arc::new(b"old".to_vec()),
+        sequence: 0,
+    };
+
+    app.commit_restore_to_project_git(
+        &dir.path().join("a.snxsch"),
+        "Restore a.snxsch",
+        Some(content),
+    );
+    let task = app.drain_pending_git_commits();
+    crate::app::handlers::menu::export::settle(&mut app, task);
+
+    assert_eq!(messages(dir.path()), ["Restore a.snxsch"]);
+}
+
+/// The agent's last edit is still on the journal queue when the save's commit
+/// runs: the worker waits for it.
+#[test]
+fn an_edit_still_on_the_journal_queue_is_in_the_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = git_app(dir.path(), true);
+    let line = edit_line(dir.path(), "a.snxsch", "color_net");
+    let write = app.agent.journal.push(
+        dir.path(),
+        crate::app::agent::journal::queue::Queued {
+            journal: Journal::Edits,
+            line: line.trim_end().to_string(),
+            max_lines: 10_000,
+        },
+    );
+    queue_save(&mut app, dir.path(), "a.snxsch", "Save A", "one");
+    let commit = app.drain_pending_git_commits();
+
+    crate::app::handlers::menu::export::settle(&mut app, iced::Task::batch([write, commit]));
+
+    let commits = messages(dir.path());
+    assert!(
+        commits[0].contains("command=color_net doc=a.snxsch"),
+        "{commits:?}"
+    );
 }
 
 /// The "since" is the file's own last commit, read from the repository.

@@ -5,6 +5,7 @@ use std::path::Path;
 
 use chrono::{DateTime, Utc};
 
+use super::super::queue::{JournalMark, Queued};
 use super::super::summary::{MAX_LISTED, message_with_agent_summary};
 use super::super::{EditEntry, Journal};
 use super::edit;
@@ -40,6 +41,7 @@ fn message(root: &Path, file: &str, since: Option<&str>) -> String {
         Path::new(file),
         "Save it",
         Ok::<_, Infallible>(since.map(time)),
+        &JournalMark::settled(),
     )
 }
 
@@ -217,6 +219,7 @@ fn an_unreadable_last_commit_keeps_the_plain_message_and_says_why() {
         Path::new("unique_last_commit_error.snxsch"),
         "Save it",
         Err::<Option<DateTime<Utc>>, _>("git open: boom"),
+        &JournalMark::settled(),
     );
 
     assert_eq!(text, "Save it");
@@ -257,4 +260,133 @@ fn no_text_of_an_entry_can_start_a_line_or_a_trailer() {
         assert!(!looks_like_a_trailer(line), "{line}");
     }
     assert!(!text.contains(['\r', '\u{1b}', '\u{7}']), "{text:?}");
+}
+
+/// Line and paragraph separators and bidirectional controls are not control
+/// characters, but a reader (or a tool) can still break a line at them or
+/// reorder the text.
+#[test]
+fn separators_and_bidi_controls_are_replaced_too() {
+    let root = tempfile::tempdir().unwrap();
+    let mut entry = of(root.path(), "a.snxsch", "color_net", NEW);
+    entry.client = Some("bot\u{2028}Signed-off-by: x\u{2029}\u{202e}evil".into());
+    entry.reason = Some(
+        "\u{200e}\u{200f}\u{202a}\u{202b}\u{202c}\u{202d}\u{2066}\u{2067}\u{2068}\u{2069}r".into(),
+    );
+    journal(root.path(), vec![entry]);
+
+    let text = message(root.path(), "a.snxsch", None);
+
+    for c in [
+        '\u{2028}', '\u{2029}', '\u{200e}', '\u{200f}', '\u{202a}', '\u{202b}', '\u{202c}',
+        '\u{202d}', '\u{202e}', '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}',
+    ] {
+        assert!(!text.contains(c), "{c:?} survived: {text:?}");
+    }
+    assert!(text.contains("client=bot Signed-off-by: x  evil"), "{text}");
+}
+
+#[test]
+fn a_long_client_is_cut_so_no_121_character_run_survives() {
+    let root = tempfile::tempdir().unwrap();
+    let mut entry = of(root.path(), "a.snxsch", "color_net", NEW);
+    entry.client = Some("x".repeat(500));
+    journal(root.path(), vec![entry]);
+
+    let text = message(root.path(), "a.snxsch", None);
+
+    assert!(text.contains(&"x".repeat(120)), "{text}");
+    assert!(!text.contains(&"x".repeat(121)), "{text}");
+}
+
+/// Whole seconds, strictly after the last commit's second: an edit in the
+/// same second as the commit is not listed again (documented gap).
+#[test]
+fn an_edit_in_the_same_second_as_the_last_commit_is_not_listed() {
+    let root = tempfile::tempdir().unwrap();
+    journal(
+        root.path(),
+        vec![
+            of(
+                root.path(),
+                "a.snxsch",
+                "color_net",
+                "2026-01-01T00:00:00.500Z",
+            ),
+            of(
+                root.path(),
+                "a.snxsch",
+                "apply_edits",
+                "2026-01-01T00:00:01.000Z",
+            ),
+        ],
+    );
+
+    let text = message(root.path(), "a.snxsch", Some("2026-01-01T00:00:00Z"));
+
+    assert!(!text.contains("command=color_net"), "{text}");
+    assert!(text.contains("command=apply_edits"), "{text}");
+}
+
+#[test]
+fn a_project_wide_edit_naming_a_sheet_outside_the_folder_is_in_the_project_file_commit() {
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let mut entry = of(root.path(), "x.snxsch", "assign_net_class", NEW);
+    entry.path = Some(outside.path().join("x.snxsch").display().to_string());
+    journal(root.path(), vec![entry]);
+
+    let text = message(root.path(), "p.snxprj", None);
+
+    assert!(text.contains("command=assign_net_class"), "{text}");
+    assert_eq!(message(root.path(), "x.snxsch", None), "Save it");
+}
+
+/// A document that has not been saved has no path: its edits are in no
+/// commit (documented gap), and not in the project file's.
+#[test]
+fn an_edit_of_a_document_never_saved_is_in_no_commit() {
+    let root = tempfile::tempdir().unwrap();
+    let mut entry = of(root.path(), "a.snxsch", "color_net", NEW);
+    entry.path = None;
+    assert!(entry.document.is_some());
+    journal(root.path(), vec![entry]);
+
+    assert_eq!(message(root.path(), "p.snxprj", None), "Save it");
+    assert_eq!(message(root.path(), "a.snxsch", None), "Save it");
+}
+
+/// A line the journal queue still holds is not on disk yet: the worker waits
+/// for it, so the edit of an agent that has just run is listed.
+#[test]
+fn an_edit_still_on_the_journal_queue_is_listed() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut app, _task) = crate::app::Signex::new();
+    let line = of(root.path(), "a.snxsch", "color_net", NEW).to_line();
+    let write = app.agent.journal.push(
+        root.path(),
+        Queued {
+            journal: Journal::Edits,
+            line,
+            max_lines: 10_000,
+        },
+    );
+    let mark = app.agent.journal.mark();
+    let dir = root.path().to_path_buf();
+    let worker = std::thread::spawn(move || {
+        message_with_agent_summary(
+            &dir,
+            Path::new("a.snxsch"),
+            "Save it",
+            Ok::<_, Infallible>(None),
+            &mark,
+        )
+    });
+    // The write has not run: a worker that does not wait reads nothing.
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    crate::app::handlers::menu::export::settle(&mut app, write);
+
+    let text = worker.join().unwrap();
+
+    assert!(text.contains("command=color_net"), "{text}");
 }

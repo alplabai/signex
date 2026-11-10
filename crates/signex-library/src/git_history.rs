@@ -111,6 +111,30 @@ pub(crate) fn path_history(
     Ok(entries)
 }
 
+/// The committer time, in seconds, of the newest of the last `max_commits`
+/// commits from HEAD that touched `rel_path` (forward slashes). `None` for an
+/// unborn HEAD, or when none of them did: a path last touched further back is
+/// reported as never committed.
+pub(crate) fn last_touch_seconds(
+    repo: &git2::Repository,
+    rel_path: &str,
+    max_commits: usize,
+) -> Result<Option<i64>, LibraryError> {
+    let Some(walk) = head_walk(repo)? else {
+        return Ok(None);
+    };
+    for oid_res in walk.take(max_commits) {
+        let oid = oid_res.map_err(|e| LibraryError::Backend(format!("git revwalk oid: {e}")))?;
+        let commit = repo
+            .find_commit(oid)
+            .map_err(|e| LibraryError::Backend(format!("git find commit: {e}")))?;
+        if commit_touches_path(repo, &commit, rel_path)? {
+            return Ok(Some(commit.committer().when().seconds()));
+        }
+    }
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

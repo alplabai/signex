@@ -21,7 +21,7 @@ pub mod read;
 pub(crate) mod record;
 mod rotate;
 mod safe_fs;
-pub mod summary;
+pub(crate) mod summary;
 
 pub use append::{Journal, LOCK_FILE, append_line};
 pub use entry::{AccessEntry, EditEntry, JOURNAL_VERSION, MAX_ENTRY_BYTES, MIN_LINE_BYTES};
