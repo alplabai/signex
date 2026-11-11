@@ -59,12 +59,15 @@ pub fn split_waived(
     (kept, hidden)
 }
 
+/// Findings a net waiver hid, each with that (rule id, net) waiver.
+pub type HiddenByNet = Vec<(Violation, (String, String))>;
+
 /// [`split_waived`] keeping the hidden findings, in their order, each with
 /// the (rule id, net) waiver that hid it.
 pub fn partition_waived(
     violations: Vec<Violation>,
     waivers: &NetWaivers,
-) -> (Vec<Violation>, Vec<(Violation, (String, String))>) {
+) -> (Vec<Violation>, HiddenByNet) {
     if waivers.is_empty() {
         return (violations, Vec::new());
     }
