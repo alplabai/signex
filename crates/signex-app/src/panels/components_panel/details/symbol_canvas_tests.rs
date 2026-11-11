@@ -346,8 +346,13 @@ fn a_drag_in_a_scrolled_pane_pans_one_to_one() {
 
 fn hold_ctrl(state: &mut PreviewState, p: &SymbolSheetPreview) {
     over(
+        // The platform modifier: Cmd on macOS, Ctrl elsewhere.
         iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
-            iced::keyboard::Modifiers::CTRL,
+            if cfg!(target_os = "macos") {
+                iced::keyboard::Modifiers::LOGO
+            } else {
+                iced::keyboard::Modifiers::CTRL
+            },
         )),
         state,
         p,

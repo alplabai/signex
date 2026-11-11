@@ -21,7 +21,11 @@ pub(super) fn stroke_keys(label: &str) -> Option<Vec<&str>> {
 
 /// `label` as a row of key caps, or `None` when it needs the legacy chip.
 pub(super) fn key_caps<'a>(label: &str, tokens: &ThemeTokens) -> Option<Element<'a, PrefMsg>> {
-    let keys = stroke_keys(label)?;
+    // macOS labels (`⇧⌘S`) have no `+`: each symbol is its own cap.
+    let keys: Vec<String> = match crate::keymap::mac_stroke_caps(label.trim()) {
+        Some(caps) if !label.trim().contains(char::is_whitespace) => caps,
+        _ => stroke_keys(label)?.into_iter().map(String::from).collect(),
+    };
     let mut line = row![].spacing(crate::styles::Spacing::DEFAULT.s);
     for key in keys {
         line = line.push(

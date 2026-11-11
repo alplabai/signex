@@ -391,11 +391,10 @@ impl Signex {
                         "Record at least one keystroke before applying.".to_string();
                     return Task::none();
                 }
-                let trigger = recorder.trigger_text();
                 match self
                     .ui_state
                     .preferences_keymap_editor
-                    .edit_active_trigger(recorder.slot, trigger)
+                    .edit_active_trigger_parsed(recorder.slot, recorder.trigger())
                 {
                     Ok(()) => {
                         self.ui_state.preferences_keymap_status.clear();

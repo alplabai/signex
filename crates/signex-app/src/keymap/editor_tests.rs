@@ -1,6 +1,6 @@
 use super::{
-    AppCommandId, BindingSlot, CommandGroup, KeyStroke, KeymapEditorModel, ShortcutContext,
-    ShortcutProfileSet, metadata_for,
+    AppCommandId, BindingSlot, CommandGroup, KeyStroke, KeymapEditorModel, Platform,
+    ShortcutContext, ShortcutProfileSet, metadata_for,
 };
 use std::str::FromStr;
 
@@ -19,7 +19,9 @@ fn slot_of(editor: &KeymapEditorModel, command: &str, trigger: &str) -> BindingS
 
 #[test]
 fn custom_profile_creation_copies_active_profile() {
-    let mut editor = KeymapEditorModel::built_ins().unwrap();
+    let mut editor = KeymapEditorModel::built_ins()
+        .unwrap()
+        .with_platform(Platform::Windows);
     editor
         .create_custom_from_active("custom-altium", "Custom Altium")
         .unwrap();
@@ -35,7 +37,9 @@ fn custom_profile_creation_copies_active_profile() {
 
 #[test]
 fn editor_rows_mark_pointer_gestures_as_not_keyboard_editable() {
-    let editor = KeymapEditorModel::built_ins().unwrap();
+    let editor = KeymapEditorModel::built_ins()
+        .unwrap()
+        .with_platform(Platform::Windows);
     let rows = editor.rows();
     let double_click = rows
         .iter()
@@ -46,7 +50,9 @@ fn editor_rows_mark_pointer_gestures_as_not_keyboard_editable() {
 
 #[test]
 fn custom_profile_trigger_edit_updates_compiled_keymap() {
-    let mut editor = KeymapEditorModel::built_ins().unwrap();
+    let mut editor = KeymapEditorModel::built_ins()
+        .unwrap()
+        .with_platform(Platform::Windows);
     editor
         .create_custom_from_active("custom-altium", "Custom Altium")
         .unwrap();
@@ -67,7 +73,9 @@ fn custom_profile_trigger_edit_updates_compiled_keymap() {
 
 #[test]
 fn empty_search_query_returns_every_row() {
-    let editor = KeymapEditorModel::built_ins().unwrap();
+    let editor = KeymapEditorModel::built_ins()
+        .unwrap()
+        .with_platform(Platform::Windows);
     assert_eq!(editor.filtered_rows("").len(), editor.rows().len());
     // Whitespace-only queries behave like an empty query and never panic.
     assert_eq!(editor.filtered_rows("   ").len(), editor.rows().len());
@@ -75,7 +83,9 @@ fn empty_search_query_returns_every_row() {
 
 #[test]
 fn search_filters_rows_by_label_command_or_trigger() {
-    let editor = KeymapEditorModel::built_ins().unwrap();
+    let editor = KeymapEditorModel::built_ins()
+        .unwrap()
+        .with_platform(Platform::Windows);
     let matches = editor.filtered_rows("save");
 
     assert!(
@@ -120,7 +130,9 @@ fn key_names_fold_without_turkic_rules() {
 
 #[test]
 fn rows_carry_the_command_group_from_metadata() {
-    let editor = KeymapEditorModel::built_ins().unwrap();
+    let editor = KeymapEditorModel::built_ins()
+        .unwrap()
+        .with_platform(Platform::Windows);
     let rows = editor.rows();
     assert!(!rows.is_empty());
 
@@ -139,7 +151,9 @@ fn rows_carry_the_command_group_from_metadata() {
 
 #[test]
 fn built_in_profile_trigger_edit_is_rejected() {
-    let mut editor = KeymapEditorModel::built_ins().unwrap();
+    let mut editor = KeymapEditorModel::built_ins()
+        .unwrap()
+        .with_platform(Platform::Windows);
     let slot = slot_of(&editor, "save_document", "Ctrl+S");
 
     let error = editor
@@ -154,14 +168,14 @@ fn built_in_profile_trigger_edit_is_rejected() {
 #[test]
 fn fresh_editor_does_not_differ_from_its_live_set() {
     let live = ShortcutProfileSet::built_ins().unwrap();
-    let editor = KeymapEditorModel::new(live.clone());
+    let editor = KeymapEditorModel::new(live.clone()).with_platform(Platform::Windows);
     assert!(!editor.differs_from(&live));
 }
 
 #[test]
 fn valid_trigger_edit_marks_editor_as_differing() {
     let live = ShortcutProfileSet::built_ins().unwrap();
-    let mut editor = KeymapEditorModel::new(live.clone());
+    let mut editor = KeymapEditorModel::new(live.clone()).with_platform(Platform::Windows);
     editor
         .create_custom_from_active("custom-altium", "Custom Altium")
         .unwrap();
@@ -179,7 +193,7 @@ fn rejected_built_in_edit_still_counts_as_differing() {
     // draft is pending user input — closing now would silently drop it, so
     // the comparator must report dirty.
     let live = ShortcutProfileSet::built_ins().unwrap();
-    let mut editor = KeymapEditorModel::new(live.clone());
+    let mut editor = KeymapEditorModel::new(live.clone()).with_platform(Platform::Windows);
     let slot = slot_of(&editor, "save_document", "Ctrl+S");
     let _ = editor.edit_active_trigger(slot, "Ctrl+Alt+S".into());
 
@@ -190,7 +204,7 @@ fn rejected_built_in_edit_still_counts_as_differing() {
 #[test]
 fn switching_active_profile_marks_editor_as_differing() {
     let live = ShortcutProfileSet::built_ins().unwrap();
-    let mut editor = KeymapEditorModel::new(live.clone());
+    let mut editor = KeymapEditorModel::new(live.clone()).with_platform(Platform::Windows);
     let inactive = editor
         .profiles()
         .into_iter()
@@ -206,7 +220,9 @@ fn switching_active_profile_marks_editor_as_differing() {
 // for the command+context, and the drafts were shared between the rows.
 #[test]
 fn editing_one_of_two_bindings_for_a_command_edits_only_that_one() {
-    let mut editor = KeymapEditorModel::built_ins().unwrap();
+    let mut editor = KeymapEditorModel::built_ins()
+        .unwrap()
+        .with_platform(Platform::Windows);
     editor
         .create_custom_from_active("custom-altium", "Custom Altium")
         .unwrap();
@@ -233,7 +249,9 @@ fn editing_one_of_two_bindings_for_a_command_edits_only_that_one() {
 
 #[test]
 fn an_invalid_draft_marks_only_its_own_row() {
-    let mut editor = KeymapEditorModel::built_ins().unwrap();
+    let mut editor = KeymapEditorModel::built_ins()
+        .unwrap()
+        .with_platform(Platform::Windows);
     editor
         .create_custom_from_active("custom-altium", "Custom Altium")
         .unwrap();
@@ -256,7 +274,9 @@ fn an_invalid_draft_marks_only_its_own_row() {
 
 #[test]
 fn editing_a_slot_that_no_longer_exists_is_an_error() {
-    let mut editor = KeymapEditorModel::built_ins().unwrap();
+    let mut editor = KeymapEditorModel::built_ins()
+        .unwrap()
+        .with_platform(Platform::Windows);
     editor
         .create_custom_from_active("custom-altium", "Custom Altium")
         .unwrap();
@@ -293,15 +313,17 @@ fn an_unbind_with_no_matching_row_stays_listed_as_unbound() {
                 action: ShortcutBindingAction::Unbind(command.clone()),
                 context: ShortcutContext::Global,
                 triggers: vec![ShortcutTrigger::parse("Ctrl+S").unwrap()],
+                platform: None,
             },
             ShortcutBinding {
                 action: ShortcutBindingAction::Command(command),
                 context: ShortcutContext::Global,
                 triggers: vec![ShortcutTrigger::parse("F2").unwrap()],
+                platform: None,
             },
         ],
     };
-    let editor = KeymapEditorModel::from(profile);
+    let editor = KeymapEditorModel::from(profile).with_platform(Platform::Windows);
     let rows = editor.rows();
     assert_eq!(rows.len(), 2, "{rows:?}");
     assert_eq!(rows[0].trigger, "Ctrl+S");
@@ -326,6 +348,7 @@ fn a_command_row_shadowed_by_a_later_unbind_is_flagged_unbound() {
         action,
         context: ShortcutContext::Global,
         triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+        platform: None,
     };
     let profile = ShortcutProfile {
         id: "t".to_string(),
@@ -340,7 +363,9 @@ fn a_command_row_shadowed_by_a_later_unbind_is_flagged_unbound() {
             binding(ShortcutBindingAction::Unbind(command), "Ctrl+P"),
         ],
     };
-    let rows = KeymapEditorModel::from(profile).rows();
+    let rows = KeymapEditorModel::from(profile)
+        .with_platform(Platform::Windows)
+        .rows();
     assert_eq!(rows.len(), 2, "{rows:?}");
     assert!(rows[0].unbound, "Ctrl+P is shadowed: {rows:?}");
     assert!(!rows[1].unbound, "F7 is live: {rows:?}");
@@ -359,6 +384,7 @@ fn an_unbind_that_cancels_a_listed_row_is_not_a_row_of_its_own() {
         action,
         context: ShortcutContext::Global,
         triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+        platform: None,
     };
     let profile = ShortcutProfile {
         id: "t".to_string(),
@@ -372,7 +398,9 @@ fn an_unbind_that_cancels_a_listed_row_is_not_a_row_of_its_own() {
             binding(ShortcutBindingAction::Unbind(command), "Ctrl+S"),
         ],
     };
-    let rows = KeymapEditorModel::from(profile).rows();
+    let rows = KeymapEditorModel::from(profile)
+        .with_platform(Platform::Windows)
+        .rows();
     assert_eq!(rows.len(), 1, "{rows:?}");
     assert!(rows[0].unbound);
 }

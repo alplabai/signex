@@ -9,6 +9,8 @@ mod binding;
 mod catalog;
 mod command;
 mod editor;
+mod physical;
+mod platform;
 mod profile;
 
 pub use backup::{
@@ -17,7 +19,7 @@ pub use backup::{
 };
 pub use binding::{
     KeyBindingSource, KeyParseError, KeyStroke, KeyToken, Modifiers, ShortcutBinding,
-    ShortcutBindingAction, ShortcutContext, ShortcutTrigger,
+    ShortcutBindingAction, ShortcutContext, ShortcutTrigger, mac_stroke_caps,
 };
 #[cfg(test)]
 pub(crate) use catalog::OPERAND_CONVENTION;
@@ -30,6 +32,7 @@ pub use editor::{
     BindingSlot, KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource,
     category_title_case,
 };
+pub use platform::Platform;
 pub use profile::{
     BindingConflict, BuiltInProfile, CompiledKeymap, KeyLookup, ProfileLoadError, RestoredProfiles,
     ShortcutProfile, ShortcutProfileKind, ShortcutProfileSet, TomlShortcutProfile, config_path,
@@ -46,5 +49,7 @@ mod catalog_golden_tests;
 mod editor_tests;
 #[cfg(test)]
 mod menu_command_tests;
+#[cfg(test)]
+mod mod_token_tests;
 #[cfg(test)]
 mod profile_tests;

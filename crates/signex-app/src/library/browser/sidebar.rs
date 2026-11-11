@@ -136,16 +136,19 @@ pub(super) fn view_table_sidebar<'a>(
             let library_for_input = lib_pb.clone();
             let library_for_confirm = lib_pb.clone();
             let library_for_cancel = lib_pb.clone();
-            let name_input = text_input(raw("table_name"), buffer)
-                .on_input(move |s| LibraryMessage::BrowserSetRenameName {
-                    library_path: library_for_input.clone(),
-                    value: s,
-                })
-                .on_submit(LibraryMessage::BrowserConfirmRenameTable {
-                    library_path: library_for_confirm.clone(),
-                })
-                .padding(SP.s)
-                .size(BROWSER_TEXT_SIZE);
+            let name_input = text_input(
+                t!(i18n, ids::LIBRARY_BROWSER_TABLE_NAME_PLACEHOLDER),
+                buffer,
+            )
+            .on_input(move |s| LibraryMessage::BrowserSetRenameName {
+                library_path: library_for_input.clone(),
+                value: s,
+            })
+            .on_submit(LibraryMessage::BrowserConfirmRenameTable {
+                library_path: library_for_confirm.clone(),
+            })
+            .padding(SP.s)
+            .size(BROWSER_TEXT_SIZE);
             let confirm =
                 button(text(t!(i18n, ids::LIBRARY_BROWSER_RENAME_CONFIRM)).size(BROWSER_TEXT_SIZE))
                     .padding([SP.s, SP.m])
@@ -316,16 +319,19 @@ pub(super) fn view_table_sidebar<'a>(
             let library_for_input = lib_pb.clone();
             let library_for_confirm = lib_pb.clone();
             let library_for_cancel = lib_pb.clone();
-            let name_input = text_input(raw("new_table_name"), &draft.name)
-                .on_input(move |s| LibraryMessage::BrowserSetNewTableName {
-                    library_path: library_for_input.clone(),
-                    value: s,
-                })
-                .on_submit(LibraryMessage::BrowserConfirmAddTable {
-                    library_path: library_for_confirm.clone(),
-                })
-                .padding(SP.s)
-                .size(BROWSER_TEXT_SIZE);
+            let name_input = text_input(
+                t!(i18n, ids::LIBRARY_BROWSER_NEW_TABLE_NAME_PLACEHOLDER),
+                &draft.name,
+            )
+            .on_input(move |s| LibraryMessage::BrowserSetNewTableName {
+                library_path: library_for_input.clone(),
+                value: s,
+            })
+            .on_submit(LibraryMessage::BrowserConfirmAddTable {
+                library_path: library_for_confirm.clone(),
+            })
+            .padding(SP.s)
+            .size(BROWSER_TEXT_SIZE);
             let confirm =
                 button(text(t!(i18n, ids::LIBRARY_BROWSER_CREATE_TABLE)).size(BROWSER_TEXT_SIZE))
                     .padding([SP.s, 10.0])
@@ -373,7 +379,7 @@ pub(super) fn view_table_sidebar<'a>(
             let library_for_begin = lib_pb.clone();
             container(
                 button(
-                    text(raw("+ Class"))
+                    text(t!(i18n, ids::LIBRARY_BROWSER_ADD_CLASS))
                         .size(BROWSER_TEXT_SIZE)
                         .color(if read_only { muted } else { text_c }),
                 )

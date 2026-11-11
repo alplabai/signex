@@ -7,7 +7,9 @@ use crate::preferences::PrefMsg;
 
 fn app_recording_a_custom_profile_row() -> Signex {
     let (mut app, _boot) = Signex::new();
-    let mut editor = KeymapEditorModel::built_ins().unwrap();
+    let mut editor = KeymapEditorModel::built_ins()
+        .unwrap()
+        .with_platform(crate::keymap::Platform::Windows);
     editor
         .create_custom_from_active("custom-1", "Custom 1")
         .unwrap();

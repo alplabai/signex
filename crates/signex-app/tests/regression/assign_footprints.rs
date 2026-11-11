@@ -679,6 +679,7 @@ pub fn bind(app: &mut Signex, command: &str, keys: &str) {
         action: ShortcutBindingAction::Command(AppCommandId::new(command).expect("id")),
         context: ShortcutContext::Global,
         triggers: vec![ShortcutTrigger::parse(keys).expect("trigger")],
+        platform: None,
     });
     profiles.insert_custom_profile(custom).expect("insert");
     profiles.set_active_profile("user-2248").expect("activate");

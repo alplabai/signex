@@ -302,9 +302,11 @@ fn the_native_menu_carries_the_check_mark() {
 }
 
 fn built_in_keymap_context() -> MenuContext<'static> {
-    let keymap = crate::keymap::ShortcutProfileSet::built_ins()
-        .expect("built-in profiles")
-        .compile_active();
+    let set = crate::keymap::ShortcutProfileSet::built_ins().expect("built-in profiles");
+    let keymap = crate::keymap::CompiledKeymap::compile_for(
+        set.active_profile(),
+        crate::keymap::Platform::Windows,
+    );
     MenuContext {
         active_keymap: Some(std::sync::Arc::new(keymap)),
         ..MenuContext::default()

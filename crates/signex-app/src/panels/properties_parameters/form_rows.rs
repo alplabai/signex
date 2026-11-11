@@ -11,6 +11,7 @@ use iced::widget::column;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 use crate::panels::form_look;
+use signex_i18n::{ids, t};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -375,9 +376,14 @@ pub fn canvas_font_popup<'a>(
     bold: bool,
     italic: bool,
     label_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
+    palette: PanelPalette,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
+    let PanelPalette {
+        input_bg,
+        input_bdr,
+        ..
+    } = palette;
     let families = crate::fonts::system_font_families();
     let family_pick = iced::widget::pick_list(
         Some(current_family.to_string()),
@@ -396,35 +402,46 @@ pub fn canvas_font_popup<'a>(
     container(
         column![
             row![
-                text(raw("Canvas Font Settings"))
+                text(t!(i18n, ids::PANELS_CANVAS_FONT_TITLE))
                     .size(TS.body)
                     .color(label_c),
                 Space::new().width(Length::Fill),
-                signex_widgets::button(text(raw("Close")).size(TS.body))
+                signex_widgets::button(text(t!(i18n, ids::PANELS_CANVAS_FONT_CLOSE)).size(TS.body))
                     .on_press(PanelMsg::CloseCanvasFontPopup)
                     .padding([SP.xs, 6.0])
             ]
             .align_y(iced::Alignment::Center),
             row![
-                text(raw("Family")).size(TS.body).color(label_c).width(56),
+                text(t!(i18n, ids::PANELS_CANVAS_FONT_FAMILY))
+                    .size(TS.body)
+                    .color(label_c)
+                    .width(56),
                 family_pick,
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
             row![
-                text(raw("Size")).size(TS.body).color(label_c).width(56),
+                text(t!(i18n, ids::PANELS_CANVAS_FONT_SIZE))
+                    .size(TS.body)
+                    .color(label_c)
+                    .width(56),
                 size_input,
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
             row![
-                text(raw("Style")).size(TS.body).color(label_c).width(56),
+                text(t!(i18n, ids::PANELS_CANVAS_FONT_STYLE))
+                    .size(TS.body)
+                    .color(label_c)
+                    .width(56),
                 row![
                     signex_widgets::checkbox(bold)
                         .on_toggle(PanelMsg::SetCanvasFontBold)
                         .size(TS.label)
                         .spacing(SP.s),
-                    text(raw("Bold")).size(TS.body).color(label_c),
+                    text(t!(i18n, ids::PANELS_CANVAS_FONT_BOLD))
+                        .size(TS.body)
+                        .color(label_c),
                 ]
                 .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
@@ -433,14 +450,16 @@ pub fn canvas_font_popup<'a>(
                         .on_toggle(PanelMsg::SetCanvasFontItalic)
                         .size(TS.label)
                         .spacing(SP.s),
-                    text(raw("Italic")).size(TS.body).color(label_c),
+                    text(t!(i18n, ids::PANELS_CANVAS_FONT_ITALIC))
+                        .size(TS.body)
+                        .color(label_c),
                 ]
                 .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
             ]
             .spacing(SP.l)
             .align_y(iced::Alignment::Center),
-            text(raw("Applies immediately to canvas text rendering."))
+            text(t!(i18n, ids::PANELS_CANVAS_FONT_HINT))
                 .size(TS.caption)
                 .color(label_c),
         ]
