@@ -25,7 +25,6 @@ use super::kit::{self, SP, TS};
 const PREVIEW_PANE_HEIGHT: f32 = TS.body * 20.0;
 
 /// Shown in the header for a manufacturer / MPN the row does not carry.
-const NOT_SET: &str = "Not set";
 const NO_DESCRIPTION: &str = "No description";
 
 #[expect(
@@ -115,13 +114,11 @@ pub(crate) fn pin_map_counts(state: &ComponentPreviewState) -> Option<(usize, us
     Some((mapped, lines.len()))
 }
 
-/// Manufacturer and MPN as shown in the header; a blank one reads "Not set".
+/// Manufacturer and MPN as shown in the header, trimmed; an empty one is
+/// shown as the catalog's "Not set", so a part really named "Not set" keeps
+/// its own text.
 fn mpn_fields(manufacturer: &str, mpn: &str) -> (String, String) {
-    let or_not_set = |v: &str| {
-        let v = v.trim();
-        if v.is_empty() { NOT_SET } else { v }.to_string()
-    };
-    (or_not_set(manufacturer), or_not_set(mpn))
+    (manufacturer.trim().to_string(), mpn.trim().to_string())
 }
 
 fn description_text(description: &str) -> &str {
@@ -178,7 +175,7 @@ fn header_row<'a>(
     .boxed();
 
     let labelled = |label: Localized, value: String| {
-        let (value, value_color): (Label<'a>, _) = if value == NOT_SET {
+        let (value, value_color): (Label<'a>, _) = if value.is_empty() {
             (t!(i18n, ids::LIBRARY_PREVIEW_NOT_SET).into(), muted)
         } else {
             (raw(value), text_c)
@@ -734,14 +731,8 @@ mod tests {
 
     #[test]
     fn blank_manufacturer_and_mpn_read_not_set() {
-        assert_eq!(
-            mpn_fields("", "  "),
-            (NOT_SET.to_string(), NOT_SET.to_string())
-        );
-        assert_eq!(
-            mpn_fields("TI", ""),
-            ("TI".to_string(), NOT_SET.to_string())
-        );
+        assert_eq!(mpn_fields("", "  "), (String::new(), String::new()));
+        assert_eq!(mpn_fields("TI", ""), ("TI".to_string(), String::new()));
         assert_eq!(
             mpn_fields(" TI ", "LM358"),
             ("TI".to_string(), "LM358".to_string())

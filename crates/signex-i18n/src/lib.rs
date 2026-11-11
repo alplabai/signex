@@ -376,6 +376,7 @@ define_ids! {
     PREFERENCES_APPEARANCE_WINDOW_BUTTONS_HELP = "preferences-appearance-window-buttons-help";
     PREFERENCES_APPEARANCE_RESTART_NOTE = "preferences-appearance-restart-note";
     PANELS_STATUS_BAR_GRID = "panels-status-bar-grid";
+    PANELS_STATUS_BAR_GRID_OFF = "panels-status-bar-grid-off";
     PANELS_STATUS_BAR_SNAP_ON = "panels-status-bar-snap-on";
     PANELS_STATUS_BAR_SNAP_OFF = "panels-status-bar-snap-off";
     PANELS_STATUS_BAR_TOOL = "panels-status-bar-tool";

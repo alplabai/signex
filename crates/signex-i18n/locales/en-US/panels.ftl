@@ -432,6 +432,7 @@ panels-messages-source-system = System
 
 ## Graphite views (#2225)
 panels-status-bar-grid = Grid { $grid }
+panels-status-bar-grid-off = Grid OFF
 panels-status-bar-snap-on = Snap on
 panels-status-bar-snap-off = Snap off
 panels-status-bar-tool = Tool: { $tool }

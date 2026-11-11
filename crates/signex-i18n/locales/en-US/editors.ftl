@@ -248,5 +248,5 @@ editors-symbol-copy-again = Copy Again
 
 ## Graphite views (#2225)
 editors-component-read-only-footer = Read-only library - this component cannot be changed.
-editors-component-unsaved-marker = • unsaved` (U+2022)
+editors-component-unsaved-marker = • unsaved
 editors-component-reload-confirm = Discard your edits and reload?

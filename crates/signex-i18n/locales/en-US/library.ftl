@@ -128,10 +128,10 @@ library-range-filter-add = Add range filter…
 library-range-filter-and = and
 library-range-filter-number-placeholder = number
 library-range-filter-enter-number = Enter a number to apply the filter.
-library-range-filter-excluded = { $count } excluded: not a measurement in { $unit }.` (args: `count` = usize, `unit` = unit glyph &str)
+library-range-filter-excluded = { $count } excluded: not a measurement in { $unit }.
 library-preview-header-manufacturer = Manufacturer
 library-preview-not-set = Not set
 library-preview-no-description = No description
 library-preview-pad-placeholder = pad number…
-library-preview-override-pin = Override pin { $pin } →` (arg: `pin` = &str)
+library-preview-override-pin = Override pin { $pin } →
 library-stock-copy-no-writable = No writable library is open. Create a new one to copy into.

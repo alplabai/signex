@@ -232,7 +232,14 @@ pub(super) fn view<'a>(
         mono_text(format!("X {xs} {unit}"), muted).boxed(),
         mono_text(format!("Y {ys} {unit}"), muted).boxed(),
         mono_button(
-            mono_message(t!(i18n, ids::PANELS_STATUS_BAR_GRID, "grid" => grid), muted),
+            mono_message(
+                if r.grid_visible {
+                    t!(i18n, ids::PANELS_STATUS_BAR_GRID, "grid" => grid)
+                } else {
+                    t!(i18n, ids::PANELS_STATUS_BAR_GRID_OFF)
+                },
+                muted,
+            ),
             StatusBarRequest::ToggleGrid,
         )
         .boxed(),
