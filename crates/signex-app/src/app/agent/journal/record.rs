@@ -14,8 +14,8 @@ use signex_types::agent_journal::AgentJournalSettings;
 use super::append::Journal;
 use super::entry::{AccessEntry, EditEntry, JOURNAL_VERSION};
 use super::queue::Queued;
-use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
-use crate::app::document_ids::DocumentTarget;
+use crate::app::command::{CommandArgs, CommandOutcome, OperandValue, parse_edit_list};
+use crate::app::document_ids::{DocumentEntry, DocumentTarget};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -144,18 +144,82 @@ impl Signex {
         if !self.agent.journals_on || !self.agent.origin.is_agent() || !changes_documents(command) {
             return run(self);
         }
-        let started = self.journal_started(args);
+        let started = self.journal_started(command, args);
         self.document_state.agent_edits.last_group = None;
         let (outcome, task) = run(self);
-        let write = self.journal_edit(started, command, args, &outcome);
-        (outcome, Task::batch([task, write]))
+        let started = self.sheets_with_a_step(started);
+        // One line per sheet that got a step, each with its own revisions.
+        let writes: Vec<Task<Message>> = started
+            .into_iter()
+            .map(|started| self.journal_edit(started, command, args, &outcome))
+            .collect();
+        (outcome, Task::batch(std::iter::once(task).chain(writes)))
     }
 
-    fn journal_started(&self, args: &CommandArgs) -> Started {
+    /// Of the sheets a call might touch, those that got the step it made. A
+    /// call that made none (refused, or nothing changed) keeps the first, the
+    /// document it names, as one line has always been written for it.
+    fn sheets_with_a_step(&self, mut started: Vec<Started>) -> Vec<Started> {
+        if started.len() < 2 {
+            return started;
+        }
+        let Some(group) = self.document_state.agent_edits.last_group else {
+            started.truncate(1);
+            return started;
+        };
+        started.retain(|sheet| {
+            sheet
+                .path
+                .as_deref()
+                .and_then(|path| self.document_state.engines.get(path))
+                .is_some_and(|engine| engine.has_undo_group(group))
+        });
+        started
+    }
+
+    /// What is known before the command runs, for each sheet it may touch: the
+    /// document it names, and for `apply_edits` the other sheets its edits name
+    /// (#2178).
+    fn journal_started(&self, command: &AppCommandId, args: &CommandArgs) -> Vec<Started> {
         let entry = match args.operand("document") {
             Some(OperandValue::Document(target)) => self.resolve_document_target(target).ok(),
             _ => None,
         };
+        let mut seen: Vec<PathBuf> = entry.iter().filter_map(|e| e.path.clone()).collect();
+        let mut started = vec![self.started_for(entry)];
+        if command.as_str() == "apply_edits" {
+            for other in self.documents_named_by_edits(args) {
+                let Some(path) = other.path.clone() else {
+                    continue;
+                };
+                if !seen.contains(&path) {
+                    seen.push(path);
+                    started.push(self.started_for(Some(other)));
+                }
+            }
+        }
+        started
+    }
+
+    /// The documents the edits of an `apply_edits` call name in their own
+    /// `document` operands; a list that does not parse names none.
+    fn documents_named_by_edits(&self, args: &CommandArgs) -> Vec<DocumentEntry> {
+        let Some(OperandValue::Text(list)) = args.operand("edits") else {
+            return Vec::new();
+        };
+        let Ok(specs) = parse_edit_list(list) else {
+            return Vec::new();
+        };
+        specs
+            .iter()
+            .flat_map(|spec| &spec.operands)
+            .filter(|(name, _)| name == "document")
+            .filter_map(|(_, value)| DocumentTarget::parse(value).ok())
+            .filter_map(|target| self.resolve_document_target(&target).ok())
+            .collect()
+    }
+
+    fn started_for(&self, entry: Option<DocumentEntry>) -> Started {
         let path = entry.as_ref().and_then(|entry| entry.path.clone());
         let project = entry
             .as_ref()

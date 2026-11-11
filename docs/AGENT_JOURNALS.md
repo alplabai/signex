@@ -27,6 +27,13 @@ them), `revision_before`, `revision_after`, `group` (the undo group of the step,
 when it made one), `outcome` (`ran`, `refused` or `failed`), `reason`,
 `truncated` and `replayable`.
 
+An `apply_edits` call that edits several sheets (#2178) is one line per sheet that got a
+step, in order of first use (a sheet the call named but did not change has none): each has its own `document`, `path`,
+`revision_before` and `revision_after`, and all share the `group`. The
+operands are the whole call's. A multi-sheet group is recorded but not
+replayable line by line (`replayable: false`: one line alone cannot replay the
+all-or-nothing group); group replay is future work.
+
 An access line: `ts`, `event` (`accepted`, `refused`, `closed`, `grants`,
 `started`, `ended`), `mode` (`socket` or `headless`), `pid`, `client`, `reason`,
 `capabilities` (`read`, `edit`, `save`, ..., `allow-path:<dir>`) and, when

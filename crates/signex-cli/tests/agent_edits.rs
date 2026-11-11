@@ -215,6 +215,37 @@ fn every_edit_is_authorized_as_a_command_of_its_own() {
     assert_eq!(support::without_journals(snapshot(&root)), before);
 }
 
+/// #2178: the documents a cross-sheet call names in `expect_revisions` are
+/// confined like a `document` operand, so the revision of a sheet outside the
+/// allowed folders is never compared (and never leaked by a refusal).
+#[test]
+fn a_document_named_in_expect_revisions_is_confined_like_a_document_operand() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    let (_other_guard, other) = temp_root();
+    let outside = other.join("outside.snxsch");
+    std::fs::copy(&fx.sheet, &outside).expect("copy");
+    let before = snapshot(&root);
+    let mut agent = Agent::start(&fx, &[]);
+    let revision = agent.revision();
+    let refused = agent.live.send(&json!({"id": "apply_edits", "args": {
+        "document": "main.snxsch",
+        "expect_revision": revision,
+        "expect_revisions": {outside.display().to_string(): 1},
+        "edits": edits()}}));
+    assert_eq!(refused["status"], "refused", "{refused}");
+    assert!(
+        refused["reason"]
+            .as_str()
+            .unwrap()
+            .contains("operand `expect_revisions`"),
+        "{refused}"
+    );
+    assert_eq!(refused["changed"], json!([]));
+    agent.live.finish();
+    assert_eq!(support::without_journals(snapshot(&root)), before);
+}
+
 #[test]
 fn a_saved_batch_reaches_the_file_only_through_save_document() {
     let (_guard, root) = temp_root();
@@ -245,9 +276,16 @@ fn the_catalog_lists_both_commands_with_the_edit_capability() {
     for (id, operands) in [
         (
             "apply_edits",
-            ["document", "expect_revision", "edits", "summary"].as_slice(),
+            [
+                "document",
+                "expect_revision",
+                "edits",
+                "summary",
+                "expect_revisions",
+            ]
+            .as_slice(),
         ),
-        ("revert", ["document", "group"].as_slice()),
+        ("revert", ["document", "group", "documents"].as_slice()),
     ] {
         let entry = commands
             .iter()
