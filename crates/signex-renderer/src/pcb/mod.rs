@@ -16,6 +16,7 @@ use signex_types::pcb::{
     PCB_DEFAULT_VIA_DRILL_MM, PCB_TRACK_MIN_MM, PCB_VIA_MIN_DIAMETER_MM, PCB_VIA_MIN_DRILL_MM, Pad,
     PadType, PcbBoard, Segment, Via, Zone,
 };
+use signex_types::pcb_layer::CopperLayer;
 use signex_types::schematic::Point;
 use signex_types::violation::{DrcViolationType, Severity};
 use std::collections::HashMap;
@@ -23,6 +24,8 @@ use std::collections::HashMap;
 /// Points per quarter turn of a round pad part.
 const PAD_ARC_STEPS: usize = 5;
 const MARKER_POLYGON_SEGMENTS: usize = 14;
+/// Points around a pad's drill opening.
+const DRILL_SEGMENTS: usize = 4 * PAD_ARC_STEPS;
 const RATSNEST_STYLE_DASHED: u32 = 1;
 
 #[derive(Clone, Debug)]
@@ -33,6 +36,8 @@ pub struct TraceInput {
     pub net: u32,
     /// Copper off the active layer, drawn faint.
     pub dimmed: bool,
+    /// Whose colour it is drawn in.
+    pub ink: CopperInk,
 }
 
 #[derive(Clone, Debug)]
@@ -43,6 +48,7 @@ pub struct ViaInput {
     pub net: u32,
     /// Copper off the active layer, drawn faint.
     pub dimmed: bool,
+    pub ink: CopperInk,
 }
 
 #[derive(Clone, Debug)]
@@ -52,8 +58,12 @@ pub struct PadInput {
     /// The copper outline in board mm, counter-clockwise, from `pcb-geom`.
     pub outline: Vec<[f32; 2]>,
     pub pad_type: PadType,
+    /// The drilled hole's diameter, drawn as an opening at `center`; 0 for
+    /// a pad with no hole.
+    pub drill_mm: f32,
     /// Copper off the active layer, drawn faint.
     pub dimmed: bool,
+    pub ink: CopperInk,
 }
 
 #[derive(Clone, Debug)]
@@ -69,6 +79,43 @@ pub struct ZonePolygonInput {
     pub source_order: usize,
     /// Copper off the active layer, drawn faint.
     pub dimmed: bool,
+    pub ink: CopperInk,
+}
+
+/// Whose colour copper is drawn in: the colour the Layers panel lists that
+/// row with.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CopperInk {
+    /// Copper on one copper layer (its topmost, for a blind item).
+    Layer(CopperLayer),
+    /// A via or a through-hole pad: the Multi-Layer row.
+    MultiLayer,
+    /// On no copper layer this build knows; it keeps its kind's slot.
+    #[default]
+    Unknown,
+}
+
+impl CopperInk {
+    /// The slot this ink draws in, `fallback` for [`CopperInk::Unknown`].
+    pub fn slot(self, fallback: ColorSlot) -> ColorSlot {
+        match self {
+            Self::Layer(layer) => copper_slot(layer),
+            Self::MultiLayer => ColorSlot::MultiLayer,
+            Self::Unknown => fallback,
+        }
+    }
+}
+
+/// The slot copper on `layer` is drawn in: the colour the Layers panel
+/// lists the layer with.
+pub fn copper_slot(layer: CopperLayer) -> ColorSlot {
+    match layer {
+        CopperLayer::Top => ColorSlot::TopCopper,
+        CopperLayer::Bottom => ColorSlot::BottomCopper,
+        CopperLayer::Inner(n) => {
+            ColorSlot::LAYER_CYCLE[usize::from(n.index()) % ColorSlot::LAYER_CYCLE.len()]
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -254,11 +301,14 @@ impl ViewRenderer for PcbRenderer {
 mod holes_tests;
 
 #[cfg(test)]
+mod copper_ink_tests;
+
+#[cfg(test)]
 mod tests {
     use super::{
-        DrcMarkerInput, PcbAppEvent, PcbRenderer, PcbSliceFamily, PcbSnapshot, RatsnestInput,
-        TraceInput, ViaInput, ZonePolygonInput, dirty_flags_for_event, dirty_flags_for_events,
-        dirty_flags_for_families, sort_zone_stack,
+        CopperInk, DrcMarkerInput, PcbAppEvent, PcbRenderer, PcbSliceFamily, PcbSnapshot,
+        RatsnestInput, TraceInput, ViaInput, ZonePolygonInput, dirty_flags_for_event,
+        dirty_flags_for_events, dirty_flags_for_families, sort_zone_stack,
     };
     use crate::schematic::ViewRenderer;
     use crate::theme::ResolvedTheme;
@@ -430,12 +480,12 @@ mod tests {
 
         PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::CIRCLES, &mut scene);
         assert_eq!(scene.lines.len(), 1);
-        assert_eq!(scene.circles.len(), 1);
+        assert_eq!(scene.circles.len(), 2, "the via ring and its drill");
         assert_eq!(scene.polygons.len(), 0);
 
         PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::POLYGONS, &mut scene);
         assert_eq!(scene.lines.len(), 1);
-        assert_eq!(scene.circles.len(), 1);
+        assert_eq!(scene.circles.len(), 2);
         assert_eq!(scene.polygons.len() + scene.top_polygons.len(), 4);
     }
 
@@ -450,6 +500,7 @@ mod tests {
                     width_mm: 0.25,
                     net,
                     dimmed: false,
+                    ink: CopperInk::Unknown,
                 })
                 .collect(),
             ..PcbSnapshot::default()
@@ -476,6 +527,7 @@ mod tests {
                     drill_mm,
                     net: 1,
                     dimmed: false,
+                    ink: CopperInk::Unknown,
                 }],
                 ..PcbSnapshot::default()
             };
@@ -510,6 +562,7 @@ mod tests {
                     drill_mm,
                     net: 1,
                     dimmed: false,
+                    ink: CopperInk::Unknown,
                 }],
                 ..PcbSnapshot::default()
             };
@@ -614,6 +667,7 @@ mod tests {
                 layer_name: "f.cu".to_string(),
                 source_order: 2,
                 dimmed: false,
+                ink: CopperInk::Unknown,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -625,6 +679,7 @@ mod tests {
                 layer_name: "f.cu".to_string(),
                 source_order: 1,
                 dimmed: false,
+                ink: CopperInk::Unknown,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -636,6 +691,7 @@ mod tests {
                 layer_name: "f.cu".to_string(),
                 source_order: 0,
                 dimmed: false,
+                ink: CopperInk::Unknown,
             },
         ];
 

@@ -5,7 +5,7 @@
 use iced::Color;
 use signex_gfx::style::ColorSlot;
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
-use signex_renderer::pcb::{BOARD_OUTLINE, LayerRow};
+use signex_renderer::pcb::{BOARD_OUTLINE, LayerRow, copper_slot};
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 use signex_types::theme::{BoardLayerColors, Color as ThemeColor, ThemeTokens};
@@ -78,25 +78,34 @@ fn technical_id(layer: TechnicalLayer) -> MessageId {
 }
 
 /// The colour `layer` is listed with, from the board palette the canvas
-/// draws with. Board Outline and the keep-out layers take the slots their
-/// geometry is drawn in. Board views use one palette in both themes, so
-/// the chrome `tokens` do not change a swatch.
+/// draws with. Copper, Board Outline and the keep-out layers take the slots
+/// their geometry is drawn in. Board views use one palette in both themes,
+/// so the chrome `tokens` do not change a swatch.
 pub fn layer_colour(layer: PcbLayer, _tokens: &ThemeTokens) -> Color {
     let canvas = crate::styles::board_canvas_colors();
-    if let Some(slot) = drawn_slot(layer) {
+    let slot_colour = |slot: ColorSlot| {
         let [r, g, b, a] = ResolvedTheme::from_canvas_colors(canvas).color(slot);
-        return Color { r, g, b, a };
+        Color { r, g, b, a }
+    };
+    if let Some(slot) = drawn_slot(layer) {
+        return slot_colour(slot);
     }
     let colors = canvas.board_layer_colors();
     let cycle = |n: u8| colors.layer_cycle[usize::from(n) % colors.layer_cycle.len()];
     let c = match layer {
-        PcbLayer::Copper(CopperLayer::Top) => colors.top_copper,
-        PcbLayer::Copper(CopperLayer::Bottom) => colors.bottom_copper,
-        PcbLayer::Copper(CopperLayer::Inner(n)) => cycle(n.index()),
+        PcbLayer::Copper(copper) => return slot_colour(copper_slot(copper)),
         PcbLayer::Mechanical(n) => cycle(n.index()),
         PcbLayer::Technical(t) => technical_colour(&colors, t),
     };
     Color::from_rgba8(c.r, c.g, c.b, f32::from(c.a) / 255.0)
+}
+
+/// The colour the Multi-Layer row is listed with: the slot vias and
+/// through-hole pads are drawn in.
+pub fn multi_layer_colour() -> Color {
+    let [r, g, b, a] = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors())
+        .color(ColorSlot::MultiLayer);
+    Color { r, g, b, a }
 }
 
 /// The canvas slot `layer`'s geometry is drawn in, for the layers whose
@@ -213,6 +222,125 @@ mod tests {
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         let swatch = layer_colour(BOARD_OUTLINE, &tokens);
         assert_eq!([swatch.r, swatch.g, swatch.b, swatch.a], edge);
+    }
+
+    /// Copper on the canvas is the colour its layer is listed with, on every
+    /// copper layer and in both themes.
+    #[test]
+    fn copper_draws_in_its_swatch_colour() {
+        use signex_types::theme::{ThemeId, theme_tokens};
+        let theme = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors());
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = theme_tokens(id);
+            for copper in CopperLayer::all() {
+                let swatch = layer_colour(PcbLayer::Copper(copper), &tokens);
+                let drawn = theme.color(copper_slot(copper));
+                assert_eq!(
+                    [swatch.r, swatch.g, swatch.b, swatch.a],
+                    drawn,
+                    "{copper:?}"
+                );
+            }
+        }
+    }
+
+    /// A top track and pad and a bottom pad, as the canvas scene draws them,
+    /// are their layers' swatch colours.
+    #[test]
+    fn drawn_track_and_pads_match_the_layers_panel_swatches() {
+        use signex_gfx::scene::{DirtyFlags, Scene};
+        use signex_renderer::pcb::{CopperInk, PadInput, PcbRenderer, PcbSnapshot, TraceInput};
+        use signex_renderer::schematic::ViewRenderer;
+        use signex_types::pcb::PadType;
+        use signex_types::theme::{ThemeId, theme_tokens};
+
+        let square = vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        let pad = |ink| PadInput {
+            center: [0.5, 0.5],
+            size_mm: [1.0, 1.0],
+            outline: square.clone(),
+            pad_type: PadType::Smd,
+            drill_mm: 0.0,
+            dimmed: false,
+            ink: CopperInk::Layer(ink),
+        };
+        let snapshot = PcbSnapshot {
+            traces: vec![TraceInput {
+                p0: [0.0, 0.0],
+                p1: [5.0, 0.0],
+                width_mm: 0.25,
+                net: 1,
+                dimmed: false,
+                ink: CopperInk::Layer(CopperLayer::Top),
+            }],
+            pads: vec![pad(CopperLayer::Top), pad(CopperLayer::Bottom)],
+            ..PcbSnapshot::default()
+        };
+        let theme = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors());
+        let mut scene = Scene::default();
+        PcbRenderer::build_scene(
+            &snapshot,
+            &theme,
+            DirtyFlags::LINES | DirtyFlags::POLYGONS,
+            &mut scene,
+        );
+        let swatch = |copper| {
+            let c = layer_colour(
+                PcbLayer::Copper(copper),
+                &theme_tokens(ThemeId::GraphiteDark),
+            );
+            [c.r, c.g, c.b, c.a]
+        };
+        assert_eq!(scene.lines[0].color, swatch(CopperLayer::Top));
+        assert_eq!(scene.top_polygons[0].fill_color, swatch(CopperLayer::Top));
+        assert_eq!(
+            scene.top_polygons[1].fill_color,
+            swatch(CopperLayer::Bottom)
+        );
+    }
+
+    /// A via and a through-hole pad as drawn are the Multi-Layer swatch.
+    #[test]
+    fn through_items_match_the_multi_layer_swatch() {
+        use signex_gfx::scene::{DirtyFlags, Scene};
+        use signex_renderer::pcb::{CopperInk, PadInput, PcbRenderer, PcbSnapshot, ViaInput};
+        use signex_renderer::schematic::ViewRenderer;
+        use signex_types::pcb::PadType;
+
+        let snapshot = PcbSnapshot {
+            vias: vec![ViaInput {
+                center: [0.0, 0.0],
+                diameter_mm: 0.8,
+                drill_mm: 0.4,
+                net: 1,
+                dimmed: false,
+                ink: CopperInk::MultiLayer,
+            }],
+            pads: vec![PadInput {
+                center: [0.5, 0.5],
+                size_mm: [1.0, 1.0],
+                outline: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+                pad_type: PadType::Thru,
+                drill_mm: 0.5,
+                dimmed: false,
+                ink: CopperInk::MultiLayer,
+            }],
+            ..PcbSnapshot::default()
+        };
+        let theme = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors());
+        let mut scene = Scene::default();
+        PcbRenderer::build_scene(
+            &snapshot,
+            &theme,
+            DirtyFlags::CIRCLES | DirtyFlags::POLYGONS,
+            &mut scene,
+        );
+        let c = multi_layer_colour();
+        let swatch = [c.r, c.g, c.b, c.a];
+        assert_eq!(scene.circles[0].color, swatch, "via ring");
+        assert_eq!(scene.top_polygons[0].fill_color, swatch, "THT pad");
+        let palette = crate::styles::board_canvas_colors().board_layer_colors();
+        assert_eq!(rgba(c), palette_rgba(palette.multi_layer));
     }
 
     fn rgba(c: Color) -> [u8; 4] {

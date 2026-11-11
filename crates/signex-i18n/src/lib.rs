@@ -250,6 +250,7 @@ define_ids! {
     PCB_LAYER_DRILL_DRAWING = "pcb-layer-drill-drawing";
     PCB_LAYER_ECO_1 = "pcb-layer-eco-1";
     PCB_LAYER_ECO_2 = "pcb-layer-eco-2";
+    PCB_LAYER_MULTI_LAYER = "pcb-layer-multi-layer";
     PCB_LAYERS_HIDE = "pcb-layers-hide";
     PCB_LAYERS_SHOW = "pcb-layers-show";
     PCB_PROPERTIES_TITLE = "pcb-properties-title";

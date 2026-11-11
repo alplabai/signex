@@ -44,8 +44,9 @@ nanometres, so a save and reopen gives the same board back).
 
 ## What the tests hold
 
-- Counts: 10,000 lines, 1,000 circles, 400 top polygons (pads), 2 polygons
-  (pours).
+- Counts: 10,000 lines, 2,000 circles (each via is its copper ring and its
+  drill opening), 400 top polygons (pads), 3 polygons (the board area and
+  the two pours).
 - Draw calls: 4 (pours, traces, vias, pads). The GPU path instances one draw per
   non-empty bucket, so the count does not grow with the board.
 - Culling: a 20 x 20 mm window keeps between 100 and 400 of the tracks.

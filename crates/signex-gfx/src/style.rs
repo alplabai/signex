@@ -31,6 +31,34 @@ pub enum ColorSlot {
     BoardOpening = 18,
     /// A keepout's outline; its hatch is this colour, fainter.
     Keepout = 19,
+    /// Top Layer copper.
+    TopCopper = 20,
+    /// Bottom Layer copper.
+    BottomCopper = 21,
+    /// The board palette's layer cycle, entry 0..=5: Mid-Layer `n` copper
+    /// is entry `n % 6`.
+    LayerCycle0 = 22,
+    LayerCycle1 = 23,
+    LayerCycle2 = 24,
+    LayerCycle3 = 25,
+    LayerCycle4 = 26,
+    LayerCycle5 = 27,
+    /// Through-hole pads and vias (the Multi-Layer).
+    MultiLayer = 28,
+    /// The board area inside the outline, under the copper.
+    BoardArea = 29,
+}
+
+impl ColorSlot {
+    /// The layer-cycle slots, in palette order.
+    pub const LAYER_CYCLE: [ColorSlot; 6] = [
+        ColorSlot::LayerCycle0,
+        ColorSlot::LayerCycle1,
+        ColorSlot::LayerCycle2,
+        ColorSlot::LayerCycle3,
+        ColorSlot::LayerCycle4,
+        ColorSlot::LayerCycle5,
+    ];
 }
 
 /// Compact style reference sent alongside primitive data.
