@@ -94,6 +94,7 @@ define_ids! {
     DIALOG_NEW_PROJECT_LOCATION_LABEL = "dialog-new-project-location-label";
     DIALOG_NEW_PROJECT_BROWSE = "dialog-new-project-browse";
     DIALOG_NEW_PROJECT_MAKE_FOLDER = "dialog-new-project-make-folder";
+    DIALOG_NEW_PROJECT_MAKE_FOLDER_UNNAMED = "dialog-new-project-make-folder-unnamed";
     DIALOG_NEW_PROJECT_PROFILE_HEADING = "dialog-new-project-profile-heading";
     DIALOG_NEW_PROJECT_PROFILE_HINT = "dialog-new-project-profile-hint";
     DIALOG_NEW_PROJECT_PROFILE_HOBBY_NAME = "dialog-new-project-profile-hobby-name";
