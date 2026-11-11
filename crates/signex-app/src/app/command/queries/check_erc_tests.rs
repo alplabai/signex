@@ -13,6 +13,7 @@ use uuid::Uuid;
 use crate::app::Signex;
 use crate::app::command::project_name_tests::{child, parent, project_app};
 use crate::app::command::{CommandArgs, CommandOutcome};
+use crate::diagnostics::DiagnosticLevel;
 use crate::keymap::AppCommandId;
 
 fn top(dir: &tempfile::TempDir) -> PathBuf {
@@ -425,16 +426,7 @@ fn a_check_leaves_the_erc_results_and_the_panel_alone() {
 #[test]
 fn the_run_of_a_check_says_nothing_in_messages() {
     let dir = tempfile::tempdir().unwrap();
-    let mut app = project_app(&dir);
-    // A child reference out of the folder: Run ERC's run says so in Messages.
-    let reference = format!("../escape-{}.snxsch", Uuid::now_v7().simple());
-    let mut escaping = parent().child_sheets[0].clone();
-    escaping.uuid = Uuid::now_v7();
-    escaping.filename = reference.clone();
-    escaping.pins.clear();
-    let mut kid = child();
-    kid.child_sheets.push(escaping);
-    write(&child_path(&dir), kid);
+    let (mut app, reference) = escaping_project(&dir);
 
     // The job a `check_erc` runs off the UI thread, run here.
     let mark = crate::diagnostics::newest_entry_id();
@@ -443,16 +435,160 @@ fn the_run_of_a_check_says_nothing_in_messages() {
     assert!(!checked.findings.is_empty());
     let said = logged(mark, &reference);
     assert!(said.is_empty(), "{said:?}");
-    // What Run ERC says in Messages is in the report instead.
-    assert!(
-        checked.warnings.iter().any(|w| w.contains(&reference)),
-        "{:?}",
-        checked.warnings
-    );
+    // What Run ERC says in Messages is in the report instead, once, in its
+    // words, though two sheet symbols make the reference.
+    let named: Vec<&String> = checked
+        .warnings
+        .iter()
+        .filter(|w| w.contains(&reference))
+        .collect();
+    assert_eq!(named, [&refusal_line(dir.path(), &reference)]);
 
     let mark = crate::diagnostics::newest_entry_id();
     app.run_erc_blocking();
     assert!(!logged(mark, &reference).is_empty(), "Run ERC says it");
+}
+
+/// The project of [`project_app`] whose closed child holds two sheet symbols
+/// referring to a file out of the folder; that (unique) reference.
+fn escaping_project(dir: &tempfile::TempDir) -> (Signex, String) {
+    let app = project_app(dir);
+    let reference = format!("../escape-{}.snxsch", Uuid::now_v7().simple());
+    let mut kid = child();
+    for _ in 0..2 {
+        let mut escaping = parent().child_sheets[0].clone();
+        escaping.uuid = Uuid::now_v7();
+        escaping.filename = reference.clone();
+        escaping.pins.clear();
+        kid.child_sheets.push(escaping);
+    }
+    write(&child_path(dir), kid);
+    (app, reference)
+}
+
+/// What Run ERC says for `reference`, made on the child sheet in `dir`.
+fn refusal_line(dir: &Path, reference: &str) -> String {
+    let file = reference.trim_start_matches("../");
+    let resolved = dir.parent().expect("a parent").join(file);
+    format!(
+        "Rejected child-sheet reference outside its resolution root: '{reference}' resolves to {} which escapes {}",
+        resolved.display(),
+        dir.display()
+    )
+}
+
+/// The level and stored text of each line logged after `mark` containing
+/// `text`.
+fn logged_lines(mark: Option<u64>, text: &str) -> Vec<(DiagnosticLevel, String)> {
+    crate::diagnostics::entries_since(mark)
+        .entries
+        .into_iter()
+        .filter(|entry| entry.message.contains(text))
+        .map(|entry| (entry.level, entry.message))
+        .collect()
+}
+
+/// Whether `stored` is how Messages keeps `line`: whole, or its first bytes
+/// and `...` when it is longer than the log keeps.
+fn kept_as(stored: &str, line: &str) -> bool {
+    match stored.strip_suffix("...") {
+        Some(head) if line.len() > 160 => head.len() >= 150 && line.starts_with(head),
+        _ => stored == line,
+    }
+}
+
+/// Run ERC's own Messages lines, pinned: a child reference out of the
+/// folder is an error, said by the project walk and again by the stitch, for
+/// each sheet symbol that holds it.
+#[test]
+fn run_erc_says_a_reference_out_of_the_folder_as_before() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, reference) = escaping_project(&dir);
+    let line = refusal_line(dir.path(), &reference);
+    let mark = crate::diagnostics::newest_entry_id();
+    app.run_erc_blocking();
+    let said = logged_lines(mark, &reference);
+    assert_eq!(said.len(), RUN_ERC_REFUSAL_LINES, "{said:?}");
+    for (level, stored) in &said {
+        assert_eq!(*level, DiagnosticLevel::Error, "{stored}");
+        assert!(kept_as(stored, &line), "{stored}\n{line}");
+    }
+}
+
+/// How many times Run ERC says one refused reference held by two sheet
+/// symbols of a closed child: the walk and the stitch, two symbols each.
+const RUN_ERC_REFUSAL_LINES: usize = 4;
+
+#[test]
+fn run_erc_says_an_unreadable_rule_set_as_before() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    let project = &mut app.document_state.projects[0].data;
+    project.rules = None;
+    project.unknown = serde_json::from_value(serde_json::json!({
+        "rules": {"schema": 2, "erc": {}}
+    }))
+    .expect("unknown keys");
+    let line = "This project's rule set cannot be read by this version of Signex; it is kept unchanged, and this machine's ERC rules (the User Default profile) are used.";
+    let mark = crate::diagnostics::newest_entry_id();
+    app.run_erc_blocking();
+    // The text is the same in every test, so another test's run may add
+    // lines to the shared log meanwhile: at least this run's one.
+    let said = logged_lines(mark, "rule set cannot be read by this version");
+    assert!(!said.is_empty(), "{said:?}");
+    for (level, stored) in &said {
+        assert_eq!(*level, DiagnosticLevel::Warning, "{stored}");
+        assert!(kept_as(stored, line), "{stored}");
+    }
+}
+
+#[test]
+fn run_erc_says_an_unrecognised_rule_entry_as_before() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    let id = format!("future_{}", Uuid::now_v7().simple());
+    let mut rules = ProjectRules::default();
+    rules.erc.severity.insert(id.clone(), "error".into());
+    set_rules(&mut app, rules);
+    let mark = crate::diagnostics::newest_entry_id();
+    app.run_erc_blocking();
+    let said = logged_lines(mark, &id);
+    let line = format!("Project ERC rules: ignoring unrecognised entry (severity {id} = error)");
+    assert_eq!(said, [(DiagnosticLevel::Warning, line)]);
+}
+
+#[test]
+fn an_agent_check_does_not_read_a_page_outside_the_project_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    let name = format!("outside-{}.snxsch", Uuid::now_v7().simple());
+    let outside = dir.path().parent().unwrap().join(&name);
+    write(&outside, child());
+    app.document_state.projects[0]
+        .data
+        .sheets
+        .push(signex_types::project::SheetEntry {
+            name: "Outside".into(),
+            filename: format!("../{name}"),
+            symbols_count: 0,
+            wires_count: 0,
+            labels_count: 0,
+            unknown: Default::default(),
+        });
+    app.agent.serving = true;
+    let job = app.erc_check_job(&top(&dir), app.document_state.projects.first());
+    app.agent.serving = false;
+    let checked = job();
+    std::fs::remove_file(&outside).ok();
+    assert!(
+        checked
+            .warnings
+            .iter()
+            .any(|w| w.contains(&name) && w.contains("outside the project folder")),
+        "{:?}",
+        checked.warnings
+    );
+    assert!(checked.findings.iter().all(|f| !f.sheet.ends_with(&name)));
 }
 
 #[test]
