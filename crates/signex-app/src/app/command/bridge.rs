@@ -299,6 +299,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         // #1312: the Update PCB dialog for the document in view. Its headless
         // `apply=true` form runs through `run_operands`, not here.
         "update_pcb_from_schematic" => Message::UpdatePcb(UpdatePcbMsg::Requested { apply: false }),
+        "back_annotate_schematics" => Message::from(crate::app::BackAnnotateMsg::Requested),
         "new_pcb_document" => Message::UpdatePcb(UpdatePcbMsg::NewPcbRequested(None)),
         "undo" => Message::Edit(EditMsg::Undo),
         "unselect_all" => Message::Selection(selection_request::SelectionRequest::ClearAll),

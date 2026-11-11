@@ -20,6 +20,7 @@ use uuid::Uuid;
 
 use super::SheetNumberingMsg;
 use super::state::{NumberingProblem, PageEdit};
+use crate::app::sheet_write::{SheetWrite, SheetWriteRefusal, disk_changed};
 use crate::app::{Message, Signex};
 use crate::library::closed_sheets::FileStamp;
 
@@ -28,13 +29,6 @@ const LABEL: &str = "Number Schematic Sheets";
 /// One sheet symbol's new number: which placement, the page or `None`, and
 /// the page's position (its automatic number).
 type SymbolEdit = (Uuid, InstancePath, Option<usize>, usize);
-
-/// A parent sheet Apply changed, before the run is committed.
-struct Changed {
-    path: PathBuf,
-    tabless: bool,
-    invalidation: Option<crate::schematic_runtime::RenderInvalidation>,
-}
 
 impl Signex {
     /// Apply pressed. A closed parent sheet is installed from the copy the
@@ -151,127 +145,31 @@ impl Signex {
         Task::none()
     }
 
-    /// Write `edits` (per parent sheet), all or nothing. The number of sheets
-    /// changed, or why nothing was.
+    /// Write `edits` (per parent sheet), all or nothing, as one undo group
+    /// (`app/sheet_write.rs`). The number of sheets changed, or why nothing
+    /// was.
     fn write_sheet_numbers(
         &mut self,
         read: &super::NumberingRead,
         project_name: &str,
         edits: BTreeMap<PathBuf, Vec<SymbolEdit>>,
     ) -> Result<usize, NumberingProblem> {
-        // Every check before the first change: a refusal changes nothing.
-        let mut targets = Vec::with_capacity(edits.len());
-        for (listed, list) in edits {
-            let path = self.resolve_held_spelling(listed.clone());
-            let tabless = !self.document_state.engines.contains_key(&path);
-            if tabless
-                && (self.document_state.document_saves.is_saving(&path)
-                    || self.refuse_while_path_op(&path, "renumbered").is_err())
-            {
-                return Err(NumberingProblem::Busy(path));
-            }
-            // An open sheet's live document, else the copy a closed one will
-            // be loaded from: either way the engine would refuse the edit.
-            let read_only = match self.document_state.engines.get(&path) {
-                Some(engine) => engine.document().is_read_only(),
-                None => read
-                    .loaded
-                    .get(&listed)
-                    .is_some_and(signex_types::schematic::SchematicSheet::is_read_only),
-            };
-            if read_only {
-                return Err(NumberingProblem::ReadOnly(path));
-            }
-            targets.push((listed, path, tabless, list));
-        }
-        let group = self.mint_undo_group();
-        let mut changed: Vec<Changed> = Vec::new();
-        for (listed, path, tabless, list) in targets {
-            if tabless && !self.install_tabless_engine(LABEL, &path, read.loaded.get(&listed)) {
-                self.roll_back_sheet_numbers(group, &changed);
-                return Err(NumberingProblem::NotLoaded(path));
-            }
-            let Some(engine) = self.document_state.engines.get_mut(&path) else {
-                continue;
-            };
-            let commands = number_commands(engine.document(), project_name, &list);
-            match engine.execute_batch_grouped(commands, Some(group)) {
-                Ok(result) if result.changed => changed.push(Changed {
-                    path,
-                    tabless,
-                    invalidation: result
-                        .patch_pair
-                        .map(|pair| Self::render_invalidation_for_patch(pair.document)),
-                }),
-                Ok(_) => self.drop_unchanged_tabless(&path, tabless),
-                Err(error) => {
-                    crate::diagnostics::log_error(
-                        &format!("{LABEL} failed on '{}'", path.display()),
-                        &anyhow::Error::new(error),
-                    );
-                    self.drop_unchanged_tabless(&path, tabless);
-                    self.roll_back_sheet_numbers(group, &changed);
-                    return Err(NumberingProblem::NotChanged(path));
-                }
-            }
-        }
-        let count = changed.len();
-        self.commit_sheet_numbers(group, changed);
-        Ok(count)
-    }
-
-    /// Put back every sheet already changed: pop the group's entry and drop
-    /// the engines this run loaded.
-    fn roll_back_sheet_numbers(&mut self, group: signex_engine::UndoGroupId, changed: &[Changed]) {
-        for done in changed {
-            if let Some(engine) = self.document_state.engines.get_mut(&done.path)
-                && let Err(error) = engine.discard_undo_group_top(group)
-            {
-                crate::diagnostics::log_error(
-                    &format!("{LABEL}: could not put back '{}'", done.path.display()),
-                    &anyhow::Error::new(error),
-                );
-            }
-            self.drop_unchanged_tabless(&done.path, done.tabless);
-        }
-    }
-
-    /// Every sheet changed: mark them unsaved, register the group and
-    /// refresh the canvas.
-    fn commit_sheet_numbers(&mut self, group: signex_engine::UndoGroupId, changed: Vec<Changed>) {
-        let active = self.document_state.active_path.clone();
-        let mut recorded = crate::app::UndoGroupSheets {
+        let write = SheetWrite {
+            label: LABEL,
+            outcome: "renumbered",
             kind: crate::app::UndoGroupKind::SheetNumbers,
-            ..Default::default()
+            loaded: &read.loaded,
         };
-        let mut active_invalidation = None;
-        for done in &changed {
-            recorded.live.push(done.path.clone());
-            if done.tabless {
-                recorded.parked.push(done.path.clone());
-            }
-            if active.as_deref() == Some(done.path.as_path()) {
-                active_invalidation = done.invalidation;
-            } else {
-                self.document_state.mark_history_edit_dirty(&done.path);
-            }
-        }
-        self.set_undo_group_sheets(group, recorded);
-        if let Some(invalidation) = active_invalidation {
-            self.finish_schematic_mutation(invalidation, true, true);
-        }
-        self.refresh_panel_ctx();
+        self.write_sheets_as_group(&write, edits, |document, list| {
+            number_commands(document, project_name, list)
+        })
+        .map_err(|refusal| match refusal {
+            SheetWriteRefusal::Busy(path) => NumberingProblem::Busy(path),
+            SheetWriteRefusal::ReadOnly(path) => NumberingProblem::ReadOnly(path),
+            SheetWriteRefusal::NotLoaded(path) => NumberingProblem::NotLoaded(path),
+            SheetWriteRefusal::NotChanged(path) => NumberingProblem::NotChanged(path),
+        })
     }
-}
-
-/// The files of `stamps` that differ now from their stamp at read time; a
-/// file that could not be stated then counts as changed. Blocking.
-fn disk_changed(stamps: &[(PathBuf, Option<FileStamp>)]) -> Vec<PathBuf> {
-    stamps
-        .iter()
-        .filter(|(path, then)| then.is_none() || FileStamp::of(path) != *then)
-        .map(|(path, _)| path.clone())
-        .collect()
 }
 
 /// The edits grouped by the parent sheet that stores them, in path order.

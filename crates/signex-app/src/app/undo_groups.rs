@@ -57,6 +57,8 @@ pub enum UndoGroupKind {
     Footprints,
     /// Tools ▸ Annotation ▸ Number Schematic Sheets (#2247).
     SheetNumbers,
+    /// Tools ▸ Annotation ▸ Back Annotate Schematics (#1312).
+    BackAnnotate,
     /// An agent's `apply_edits` call that edited several sheets (#2178).
     AgentEdit,
 }
@@ -69,6 +71,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Replace => "replace",
             UndoGroupKind::Footprints => "footprint assignment",
             UndoGroupKind::SheetNumbers => "sheet numbering",
+            UndoGroupKind::BackAnnotate => "back annotate",
             UndoGroupKind::AgentEdit => "agent edit",
         }
     }
@@ -89,6 +92,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Replace => "Replace",
             UndoGroupKind::Footprints => "Assign Footprints",
             UndoGroupKind::SheetNumbers => "Sheet numbering",
+            UndoGroupKind::BackAnnotate => "Back annotate",
             UndoGroupKind::AgentEdit => "Agent edit",
         }
     }
@@ -99,6 +103,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Replace => "replaced text".to_string(),
             UndoGroupKind::Footprints => "assigned footprints".to_string(),
             UndoGroupKind::SheetNumbers => "new sheet numbers".to_string(),
+            UndoGroupKind::BackAnnotate => "back-annotated designators and values".to_string(),
             UndoGroupKind::AgentEdit => "agent edits".to_string(),
             _ => format!("{} designators", self.participle()),
         }
@@ -111,6 +116,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Replace => "text",
             UndoGroupKind::Footprints => "footprints",
             UndoGroupKind::SheetNumbers => "sheet numbers",
+            UndoGroupKind::BackAnnotate => "designators and values",
             UndoGroupKind::AgentEdit => "contents",
             _ => "designators",
         }
@@ -124,6 +130,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Replace => "replaced",
             UndoGroupKind::Footprints => "assigned",
             UndoGroupKind::SheetNumbers => "renumbered",
+            UndoGroupKind::BackAnnotate => "back-annotated",
             UndoGroupKind::AgentEdit => "edited",
         }
     }

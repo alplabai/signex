@@ -34,12 +34,12 @@ fn s(i18n: &I18n, id: signex_i18n::MessageId) -> String {
 }
 
 /// A line of text in `color`.
-fn line<'a>(label: impl Into<Label<'a>>, color: iced::Color) -> Element<'a, Message> {
+pub(super) fn line<'a>(label: impl Into<Label<'a>>, color: iced::Color) -> Element<'a, Message> {
     text(label).size(TS.body).color(color).boxed()
 }
 
 /// A small link-like button.
-fn link<'a>(label: Localized, msg: Message) -> Element<'a, Message> {
+pub(super) fn link<'a>(label: Localized, msg: Message) -> Element<'a, Message> {
     signex_widgets::button(text(label).size(TS.body))
         .padding([SP.xs, SP.m])
         .on_press(msg)
@@ -202,7 +202,7 @@ impl Signex {
 }
 
 /// A banner line with its action button on the right.
-fn banner<'a>(
+pub(super) fn banner<'a>(
     message: Element<'a, Message>,
     action: Option<Element<'a, Message>>,
 ) -> Element<'a, Message> {

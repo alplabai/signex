@@ -160,6 +160,7 @@ sync_sheet_pins	design	Sync the selected sheet symbol's pins with its child shee
 change_component	edit	Change the selected part's component	Change Component…	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 open_project_options	file	Open Project Options for the active project	Project Options...	Schematic	-	-	Always	gui_only	-
 update_pcb_from_schematic	pcb_sync	Update PCB from schematic	-	Schematic	-	-	Always	mutates_doc,undoable	apply:bool
+back_annotate_schematics	pcb_sync	Back-annotate the board's designators and values to the schematic	Back Annotate Schematics...	Schematic	-	-	Always	gui_only	-
 tool_select	select	Tool select	-	Schematic	-	-	Always	gui_only	-
 lasso_select	select	Lasso select	Lasso Select	Schematic	-	-	Always	gui_only	-
 select_connection	select	Select connection	Connection	Schematic	-	-	Always	gui_only	-

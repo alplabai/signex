@@ -57,8 +57,8 @@ enablement; no command left the app.
 **Tools ▸ Annotation** (top of Tools, then a separator, as Altium's schematic
 Tools menu has it): Annotate Schematics..., Reset Schematic Designators...,
 Reset Duplicate Schematic Designators..., Annotate Schematics Quietly (Alt+A),
-Force Annotate All Schematics (Shift+Alt+A), the planned Back Annotate
-Schematics..., and Number Schematic Sheets... (see
+Force Annotate All Schematics (Shift+Alt+A), Back Annotate Schematics... (see
+[below](#back-annotate)), and Number Schematic Sheets... (see
 [below](#number-schematic-sheets)).
 
 **Reports** (outputs of the open schematic, all greyed without one):
@@ -69,7 +69,8 @@ Schematics..., and Number Schematic Sheets... (see
 - ERC Report...
 
 **Design** has Update PCB Document (see
-[Design ▸ Update PCB Document](#design-update-pcb)), Board Sketch (see
+[Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
+[Back Annotate](#back-annotate)), Board Sketch (see
 [Design ▸ Board Sketch](#design-board-sketch)), a separator, then
 Parameter Manager.... **File ▸ New** has PCB (`new_pcb_document`). **File ▸
 Export** keeps PDF only.
@@ -128,9 +129,52 @@ same command is in the command palette; no keymap preset binds it.
 or in Properties, is not carried to the schematic: the next Update PCB lists
 a rename back to the schematic's designator, ticked like every other row,
 because the command picks the direction (`DECISIONS.md`, 2026-11-10). Use
-Back Annotate (Tools ▸ Annotation ▸ Back Annotate Schematics..., #1312 PR 2)
-to keep them. The dialog and the Properties section say so under their
-fields.
+[Back Annotate](#back-annotate) to keep them. The dialog and the Properties
+section say so under their fields.
+
+## Back Annotate {#back-annotate}
+
+Tools ▸ Annotation ▸ Back Annotate Schematics... and Design ▸ Update
+Schematics run `back_annotate_schematics` (#1312). The Design row reads
+Update Schematics in `<project>` on a board of a project. Both are greyed
+unless a schematic or a board of an open project is in view; the command is
+also in the palette, and no keymap preset binds it. It opens the Back
+Annotate dialog for the project of the document in view, opening the
+project's board first when it is not open.
+
+The dialog has the Update PCB dialog's look with the board as the source:
+
+- **Matching**: a board footprint matches its part only by its stored link
+  (sheet placement + unit UUID), never by designator. An unlinked footprint
+  or one whose part is gone is a note, and so is a second footprint linked
+  to a part already matched (only the first is carried back). Surrounding
+  spaces on the board designator are ignored.
+- **Rows**: Designators (the board's designator for the part at that
+  placement), Values (the board's value for every unit of the part) and
+  Footprints. The board wins on every ticked row; rows start ticked.
+- **Blocked rows**: a designator row while the part's schematic designator
+  is not annotated or is on another part (as in Update PCB), or while the
+  board's designator is empty or holds `?`; a value row on a sheet placed
+  more than once, or on a sheet another open project reaches, since the
+  value is stored once for every placement and project (the shared-sheet
+  rule); a value row of a part that is not annotated; every footprint row,
+  until #2248. Pin and gate swaps have no board model and are
+  not listed.
+- **Notes**: a designator the ticked rows would leave on several parts is
+  noted, following the ticks; nothing blocks it.
+- **Validate** runs the ticked rows on copies of the sheets.
+- **Execute** writes every changed sheet as one undo group: a designator row
+  writes that placement only (the symbol's reference on a sheet placed once
+  in this project and reached by no other open project, a per-placement
+  entry otherwise). Execute plans the writes from the ticks when pressed,
+  states the closed sheets of that plan again, and writes exactly that
+  plan; the ticks, Refresh and Validate wait while the check runs. A sheet
+  that is not open is loaded into memory from the copy the read took, after
+  its file is stated again, and is left unsaved. Nothing is written to disk until the sheets are saved.
+  A list the board or a sheet has moved past since the read is refused
+  until Refresh; so is a closed sheet whose file changed on disk.
+- Opening the board for the read brings its tab to the front, as Update
+  PCB does.
 
 ## Board Properties: designator and value {#board-properties}
 
@@ -364,9 +408,7 @@ the whole monitor. The Messages panel names how many windows were arranged.
 
 ## Rows still planned {#rows-still-planned}
 
-- **Tools ▸ Annotation ▸ Back Annotate Schematics...** waits for Back
-  Annotate (#1312 PR 2); the board-side edits it carries landed first (see
-  [Tools ▸ Re-Annotate Board](#tools-reannotate-board)).
+None: every menu row runs a command (#2247).
 
 ## Save and Save As {#file-save}
 
