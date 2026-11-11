@@ -13,7 +13,7 @@ use signex_i18n::{I18n, Localized, ids, t};
 use signex_library::ComponentRow;
 use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
-use signex_widgets::{raw, text};
+use signex_widgets::{Label, raw, text};
 
 use crate::panels::components_panel::details::symbol_canvas::SheetGrid;
 
@@ -55,7 +55,7 @@ pub(crate) fn view<'a>(
     );
     // The pin map and the alternates sit on their own tabs.
     let body = column![
-        header_row(&state.row, tokens),
+        header_row(&state.row, tokens, i18n),
         panes,
         where_used_footer(state, library_state, tokens),
     ]
@@ -149,7 +149,11 @@ fn header_texts(row_data: &ComponentRow) -> HeaderTexts {
     }
 }
 
-fn header_row<'a>(row_data: &'a ComponentRow, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
+fn header_row<'a>(
+    row_data: &'a ComponentRow,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let HeaderTexts {
@@ -157,14 +161,15 @@ fn header_row<'a>(row_data: &'a ComponentRow, tokens: &ThemeTokens) -> Element<'
         manufacturer,
         mpn,
     } = header_texts(row_data);
-    let description_color = if row_data.description.trim().is_empty() {
-        muted
+    let description_blank = row_data.description.trim().is_empty();
+    let (description, description_color): (Label<'a>, _) = if description_blank {
+        (t!(i18n, ids::LIBRARY_PREVIEW_NO_DESCRIPTION).into(), muted)
     } else {
-        text_c
+        (signex_i18n::UserText::new(description).into(), text_c)
     };
 
     let identity = column![
-        text(signex_i18n::UserText::new(description))
+        text(description)
             .size(TS.body)
             .color(description_color)
             .boxed()
@@ -172,19 +177,29 @@ fn header_row<'a>(row_data: &'a ComponentRow, tokens: &ThemeTokens) -> Element<'
     .width(Length::FillPortion(3))
     .boxed();
 
-    let labelled = |label: &'static str, value: String| {
-        let value_color = if value == NOT_SET { muted } else { text_c };
+    let labelled = |label: Localized, value: String| {
+        let (value, value_color): (Label<'a>, _) = if value == NOT_SET {
+            (t!(i18n, ids::LIBRARY_PREVIEW_NOT_SET).into(), muted)
+        } else {
+            (raw(value), text_c)
+        };
         row![
-            text(raw(label)).size(TS.body).color(muted).boxed(),
-            text(raw(value)).size(TS.body).color(value_color).boxed(),
+            text(label).size(TS.body).color(muted).boxed(),
+            text(value).size(TS.body).color(value_color).boxed(),
         ]
         .spacing(SP.m)
         .boxed()
     };
-    let supplier = column![labelled("Manufacturer", manufacturer), labelled("MPN", mpn)]
-        .spacing(SP.xs)
-        .width(Length::FillPortion(2))
-        .boxed();
+    let supplier = column![
+        labelled(
+            t!(i18n, ids::LIBRARY_PREVIEW_HEADER_MANUFACTURER),
+            manufacturer
+        ),
+        labelled(t!(i18n, ids::LIBRARY_PREVIEW_MPN), mpn),
+    ]
+    .spacing(SP.xs)
+    .width(Length::FillPortion(2))
+    .boxed();
 
     kit::card(
         row![identity, supplier]
@@ -580,6 +595,7 @@ fn pin_map_subsection<'a>(
                 &line.number,
                 &state.pin_map_state.override_buf,
                 tokens,
+                i18n,
                 address,
             ));
         }
@@ -592,13 +608,14 @@ fn override_editor_row<'a>(
     pin_number: &str,
     buf: &'a str,
     tokens: &ThemeTokens,
+    i18n: &I18n,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
 
     let pin_for_input = pin_number.to_string();
     let address_for_input = address.clone();
-    let input = signex_widgets::text_input(signex_widgets::raw("pad number…"), buf)
+    let input = signex_widgets::text_input(t!(i18n, ids::LIBRARY_PREVIEW_PAD_PLACEHOLDER), buf)
         .on_input(move |s| {
             editor_event(
                 &address_for_input,
@@ -642,7 +659,7 @@ fn override_editor_row<'a>(
 
     container(
         row![
-            text(raw(format!("Override pin {pin_number} →")))
+            text(t!(i18n, ids::LIBRARY_PREVIEW_OVERRIDE_PIN, "pin" => pin_number))
                 .size(TS.body)
                 .color(muted)
                 .boxed(),

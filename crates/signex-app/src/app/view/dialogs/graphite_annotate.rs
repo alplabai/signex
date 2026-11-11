@@ -3,6 +3,7 @@
 
 use iced::widget::{Column, Row, Space, canvas, container};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
@@ -267,8 +268,9 @@ pub(super) struct SheetRow {
 /// Suffix), then one ruled row per sheet with a checkbox and a mono name.
 pub(super) fn sheet_table<'a, M: 'a>(
     theme_tokens: &ThemeTokens,
+    i18n: &I18n,
     rows: Vec<SheetRow>,
-    empty: &'static str,
+    empty: Localized,
 ) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
     let ink = crate::styles::ti(theme_tokens.text);
@@ -285,18 +287,26 @@ pub(super) fn sheet_table<'a, M: 'a>(
             .spacing(SP.m)
             .align_y(iced::Alignment::Center)
     };
-    let cell = |s: &'static str, color: iced::Color, width: Length| -> Element<'a, M> {
-        text(raw(s))
-            .size(TS.caption)
-            .color(color)
-            .width(width)
-            .boxed()
+    let cell = |s: Localized, color: iced::Color, width: Length| -> Element<'a, M> {
+        text(s).size(TS.caption).color(color).width(width).boxed()
     };
     let head = cols(
         Space::new().width(Length::Fixed(TS.body + 2.0)).boxed(),
-        cell("Schematic Sheet", r.ink4, Length::Fill),
-        cell("Start", r.ink4, Length::Fixed(70.0)),
-        cell("Add Suffix", r.ink4, Length::Fixed(70.0)),
+        cell(
+            t!(i18n, ids::DIALOG_ANNOTATE_SHEETS_COL_SHEET),
+            r.ink4,
+            Length::Fill,
+        ),
+        cell(
+            t!(i18n, ids::DIALOG_ANNOTATE_SHEETS_COL_START),
+            r.ink4,
+            Length::Fixed(70.0),
+        ),
+        cell(
+            t!(i18n, ids::DIALOG_ANNOTATE_SHEETS_COL_SUFFIX),
+            r.ink4,
+            Length::Fixed(70.0),
+        ),
     );
     let sunken = r.sunken;
     let mut body: Column<Element<'a, M>> = Column::new().width(Length::Fill);
@@ -322,7 +332,7 @@ pub(super) fn sheet_table<'a, M: 'a>(
     if rows.is_empty() {
         body = body.push(rule());
         body = body.push(
-            container(text(raw(empty)).size(TS.body).color(r.ink3))
+            container(text(empty).size(TS.body).color(r.ink3))
                 .padding([SP.m, SP.m])
                 .boxed(),
         );
