@@ -17,6 +17,8 @@ pub(crate) use external_change::ReloadedFile;
 mod dir_case_tests;
 mod git;
 #[cfg(test)]
+mod git_summary_tests;
+#[cfg(test)]
 mod git_tests;
 mod history;
 mod instance_note;

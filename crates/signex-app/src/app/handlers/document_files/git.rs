@@ -33,7 +33,7 @@ impl Signex {
         file_path: &std::path::Path,
         default_message: &str,
     ) {
-        self.queue_project_git_commit(file_path, default_message, true, None, None);
+        self.queue_project_git_commit(file_path, default_message, true, None, None, true);
     }
 
     /// Like [`Self::commit_save_to_project_git`], but the commit records
@@ -46,7 +46,7 @@ impl Signex {
         default_message: &str,
         content: crate::app::state::CommitBytes,
     ) {
-        self.queue_project_git_commit(file_path, default_message, true, None, Some(content));
+        self.queue_project_git_commit(file_path, default_message, true, None, Some(content), true);
     }
 
     /// Queue one commit that records `old_path` moving to `new_path`: the
@@ -61,7 +61,19 @@ impl Signex {
         new_path: &std::path::Path,
         message: &str,
     ) {
-        self.queue_project_git_commit(new_path, message, true, Some(old_path), None);
+        self.queue_project_git_commit(new_path, message, true, Some(old_path), None, true);
+    }
+
+    /// Queue the commit of a History restore. It never carries the agent edit
+    /// summary: it records an old revision, not what an agent did since the
+    /// last commit (docs/AGENT_JOURNALS.md, "Commit message summary").
+    pub fn commit_restore_to_project_git(
+        &mut self,
+        file_path: &std::path::Path,
+        message: &str,
+        content: Option<crate::app::state::CommitBytes>,
+    ) {
+        self.queue_project_git_commit(file_path, message, true, None, content, false);
     }
 
     /// Like [`Self::commit_save_to_project_git`], but never replaces the
@@ -74,7 +86,7 @@ impl Signex {
         file_path: &std::path::Path,
         default_message: &str,
     ) {
-        self.queue_project_git_commit(file_path, default_message, false, None, None);
+        self.queue_project_git_commit(file_path, default_message, false, None, None, true);
     }
 
     pub(crate) fn queue_project_git_commit(
@@ -84,6 +96,7 @@ impl Signex {
         replace_message: bool,
         removed_path: Option<&std::path::Path>,
         content: Option<crate::app::state::CommitBytes>,
+        with_summary: bool,
     ) {
         let Some(project) = self.git_project_for(file_path) else {
             return;
@@ -112,10 +125,12 @@ impl Signex {
                     message: default_message.to_string(),
                     replace_message,
                     removed_path: removed_path.map(std::path::Path::to_path_buf),
+                    with_summary,
                 });
             return;
         }
         let project_root = std::path::PathBuf::from(&project.data.dir);
+        let summarise_agent_edits = with_summary && project.data.agent_journal.summarise_in_commit;
         let rel_path = match file_path.strip_prefix(&project_root) {
             Ok(p) => p.to_path_buf(),
             Err(_) => return,
@@ -170,6 +185,8 @@ impl Signex {
         {
             if replace_message {
                 queued.message = default_message.to_string();
+                // The message and its summary go together.
+                queued.summarise_agent_edits = summarise_agent_edits;
             }
             queued.content = content_bytes;
             if removed_rel_path.is_some() {
@@ -192,6 +209,7 @@ impl Signex {
                 removed_rel_path,
                 message: default_message.to_string(),
                 content: content_bytes,
+                summarise_agent_edits,
             });
     }
 
@@ -250,6 +268,8 @@ impl Signex {
                 let removed_rel_path = pending.removed_rel_path.clone();
                 let message = pending.message.clone();
                 let content = pending.content.clone();
+                let summarise = pending.summarise_agent_edits;
+                let journal = self.agent.journal.mark(&project_root);
                 let response_root = project_root.clone();
                 let response_rel = rel_path.clone();
                 iced::Task::perform(
@@ -267,6 +287,18 @@ impl Signex {
                                     project_root.display()
                                 )),
                             })?;
+                            // Agent edits in the body: docs/AGENT_JOURNALS.md, "Commit message summary".
+                            let message = if summarise {
+                                crate::app::agent::journal::summary::message_with_agent_summary(
+                                    &project_root,
+                                    &rel_path,
+                                    &message,
+                                    adapter.last_commit_time_for(&rel_path),
+                                    &journal,
+                                )
+                            } else {
+                                message
+                            };
                             let committed = match (&removed_rel_path, &content) {
                                 (Some(removed), _) => {
                                     adapter.commit_rename(removed, &rel_path, &message)

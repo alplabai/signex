@@ -616,14 +616,8 @@ impl Signex {
             .map(|f| f.to_string_lossy().into_owned())
             .unwrap_or_else(|| path.display().to_string());
         let message = format!("Restore {label}");
-        match restored {
-            Some(bytes) => self.commit_bytes_to_project_git(
-                path,
-                &message,
-                crate::app::state::CommitBytes { bytes, sequence: 0 },
-            ),
-            None => self.commit_save_to_project_git(path, &message),
-        }
+        let content = restored.map(|bytes| crate::app::state::CommitBytes { bytes, sequence: 0 });
+        self.commit_restore_to_project_git(path, &message, content);
     }
 
     /// A restored footprint/symbol could not be loaded into its editor. The
