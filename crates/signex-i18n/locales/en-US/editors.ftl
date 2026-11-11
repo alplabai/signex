@@ -245,3 +245,8 @@ editors-symbol-status-items-selected = { $count } selected
 editors-symbol-status-hint-selected = Del removes · drag to move
 editors-symbol-status-hint-idle = Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits
 editors-symbol-copy-again = Copy Again
+
+## Graphite views (#2225)
+editors-component-read-only-footer = Read-only library - this component cannot be changed.
+editors-component-unsaved-marker = • unsaved
+editors-component-reload-confirm = Discard your edits and reload?

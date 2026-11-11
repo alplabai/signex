@@ -154,7 +154,7 @@ pub(super) fn view_grid<'a>(
     if rows.is_empty() {
         col = col.push(
             container(
-                text(raw("No matching rows."))
+                text(t!(i18n, ids::LIBRARY_BROWSER_NO_MATCHING_ROWS))
                     .size(BROWSER_TEXT_SIZE)
                     .wrapping(iced::widget::text::Wrapping::None)
                     .color(muted),
@@ -330,11 +330,14 @@ pub(super) fn view_grid<'a>(
                     };
                     if unbound {
                         let (kind, label) = if is_symbol {
-                            (signex_library::PrimitiveKind::Symbol, "No symbol bound")
+                            (
+                                signex_library::PrimitiveKind::Symbol,
+                                t!(i18n, ids::LIBRARY_BROWSER_NO_SYMBOL_BOUND),
+                            )
                         } else {
                             (
                                 signex_library::PrimitiveKind::Footprint,
-                                "No footprint bound",
+                                t!(i18n, ids::LIBRARY_BROWSER_NO_FOOTPRINT_BOUND),
                             )
                         };
                         let address = crate::library::state::EditorAddress::new(
@@ -588,14 +591,14 @@ fn row_delete_cell<'a>(
 /// Warning-coloured cell button for an unbound symbol / footprint that
 /// opens the existing primitive picker against this row.
 fn unbound_pick_button<'a>(
-    label: &'static str,
+    label: signex_i18n::Localized,
     kind: signex_library::PrimitiveKind,
     address: crate::library::state::EditorAddress,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let warning = theme_ext::warning_color(tokens);
     signex_widgets::button(
-        text(raw(label))
+        text(label)
             .size(BROWSER_TEXT_SIZE)
             .wrapping(iced::widget::text::Wrapping::None)
             .color(warning),

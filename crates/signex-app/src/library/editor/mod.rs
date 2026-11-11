@@ -39,8 +39,8 @@ use iced::{Color, Element, Length};
 use signex_i18n::{I18n, ids, t};
 use signex_library::TemplateViolation;
 use signex_types::theme::{CanvasColors, ThemeTokens};
+use signex_widgets::text;
 use signex_widgets::theme_ext;
-use signex_widgets::{raw, text};
 
 use crate::panels::components_panel::details::symbol_canvas::SheetGrid;
 
@@ -81,7 +81,7 @@ pub(crate) fn view<'a>(
         address.clone(),
         i18n,
     );
-    let footer = view_footer(state, tokens, address, read_only);
+    let footer = view_footer(state, tokens, i18n, address, read_only);
 
     column![header, tabs, body, footer]
         .spacing(0)
@@ -404,6 +404,7 @@ fn view_active_tab<'a>(
 fn view_footer<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: EditorAddress,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
@@ -411,7 +412,7 @@ fn view_footer<'a>(
 
     if read_only {
         return container(
-            text(raw("Read-only library - this component cannot be changed."))
+            text(t!(i18n, ids::EDITORS_COMPONENT_READ_ONLY_FOOTER))
                 .size(TS.body)
                 .color(muted),
         )
@@ -436,7 +437,7 @@ fn view_footer<'a>(
         })
     };
     let dirty_marker: Element<'_, LibraryMessage> = if state.has_unsaved_edits() {
-        text(raw("\u{2022} unsaved"))
+        text(t!(i18n, ids::EDITORS_COMPONENT_UNSAVED_MARKER))
             .size(TS.body)
             .color(muted)
             .boxed()
@@ -451,7 +452,7 @@ fn view_footer<'a>(
     } else if state.reload_confirming {
         row![
             Space::new().width(SP.l),
-            text(raw("Discard your edits and reload?"))
+            text(t!(i18n, ids::EDITORS_COMPONENT_RELOAD_CONFIRM))
                 .size(TS.body)
                 .color(muted),
             Space::new().width(SP.m),

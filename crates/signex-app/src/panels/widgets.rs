@@ -278,27 +278,37 @@ pub fn shape_fill_row<'a>(
     current: signex_types::schematic::FillType,
     muted: Color,
     _border_c: Color,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     use iced::widget::row;
+    use signex_i18n::{MessageId, ids, t};
     use signex_types::schematic::FillType;
-    use signex_widgets::{button, raw, text};
-    let tile = |label: &'static str, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
-        button(text(raw(label)).size(TS.body))
+    use signex_widgets::{button, text};
+    let tile = |label: MessageId, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
+        button(text(t!(i18n, label)).size(TS.body))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::SetPrePlacementShapeFill(ft))
             .style(super::form_look::option_tile(active))
             .boxed()
     };
     row![
-        text(raw("Fill"))
+        text(t!(i18n, ids::PANELS_SHAPE_FILL))
             .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
         row![
-            tile("None", FillType::None, current == FillType::None),
-            tile("Outline", FillType::Outline, current == FillType::Outline),
             tile(
-                "Background",
+                ids::PANELS_SHAPE_FILL_NONE,
+                FillType::None,
+                current == FillType::None
+            ),
+            tile(
+                ids::PANELS_SHAPE_FILL_OUTLINE,
+                FillType::Outline,
+                current == FillType::Outline
+            ),
+            tile(
+                ids::PANELS_SHAPE_FILL_BACKGROUND,
                 FillType::Background,
                 current == FillType::Background
             ),

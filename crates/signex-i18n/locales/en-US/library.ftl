@@ -116,3 +116,22 @@ library-panel-open = Open
 # Note when the library the last copy went to cannot take this one. $path is
 # that library's folder.
 library-stock-copy-previous-gone = The library used before ({ $path }) is no longer open or writable.
+
+## Graphite views (#2225)
+library-browser-table-name-placeholder = table_name
+library-browser-new-table-name-placeholder = new_table_name
+library-browser-add-class = + Class
+library-browser-no-matching-rows = No matching rows.
+library-browser-no-symbol-bound = No symbol bound
+library-browser-no-footprint-bound = No footprint bound
+library-range-filter-add = Add range filter…
+library-range-filter-and = and
+library-range-filter-number-placeholder = number
+library-range-filter-enter-number = Enter a number to apply the filter.
+library-range-filter-excluded = { $count } excluded: not a measurement in { $unit }.
+library-preview-header-manufacturer = Manufacturer
+library-preview-not-set = Not set
+library-preview-no-description = No description
+library-preview-pad-placeholder = pad number…
+library-preview-override-pin = Override pin { $pin } →
+library-stock-copy-no-writable = No writable library is open. Create a new one to copy into.
