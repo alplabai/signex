@@ -82,8 +82,11 @@ compares the resolved strokes. The spelling is kept on save, so a profile
 reads `Mod+S` on every OS.
 
 A section may carry `platform = "macos"` (also `"windows"`, `"linux"`); it is
-skipped on every other OS. A custom profile copied from a built-in keeps the
-sections that applied on the OS it was copied on, without the tag.
+not compiled, listed or edited on every other OS. Such a section is still
+kept in the profile and written back with its tag, so saving on one OS never
+deletes another OS's bindings, and a copy of a profile keeps it too. Every
+section is parsed on every OS, so a typo in a `macos` section fails to load on
+Windows and Linux as well. `Mod+Ctrl` is just Ctrl off macOS (both set Ctrl).
 
 On macOS a stroke is shown with Apple symbols in Apple order and no `+`
 (`⇧⌘S`, `⌃Q`, `⌥⌘F`); elsewhere it stays text (`Ctrl+Shift+S`). Menus, the F1
@@ -93,9 +96,13 @@ portable; other OSes record exactly what was pressed. On macOS the conflict
 check also flags a binding on ⌘Q, ⌘H, ⌘M, ⌘Space, ⌘Tab, ⌘` or ⌘, (unless it is
 Preferences) as reserved by the system.
 
-Layouts: a live key press uses the logical key when it is ASCII (AZERTY `z`
-stays `z`). Otherwise (Turkish `ö`, Cyrillic) the physical key's US-QWERTY
-character stands in, so `Mod+,` fires on the key that types `ö`.
+Layouts: a key press is matched by the logical key first, exactly as before
+(AZERTY `z` stays `z`; a binding on `Ctrl+ö` still fires). Only when that
+matches nothing, and Ctrl, Cmd or Alt is held, is the physical key's
+US-QWERTY character tried: on a Turkish keyboard `⌘ö` fires `Mod+,`. A bare or
+Shift-only key is never remapped. The macOS label (`⇧⌘S`) is display only and
+is never parsed back; the Preferences recorder and editor carry the profile-file
+spelling or the parsed stroke.
 
 Existing user profiles are not rewritten: their `Ctrl+…` and `Cmd+…` keep
 their physical meaning.
