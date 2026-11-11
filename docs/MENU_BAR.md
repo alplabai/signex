@@ -146,24 +146,31 @@ The dialog has the Update PCB dialog's look with the board as the source:
 
 - **Matching**: a board footprint matches its part only by its stored link
   (sheet placement + unit UUID), never by designator. An unlinked footprint
-  or one whose part is gone is a note.
+  or one whose part is gone is a note, and so is a second footprint linked
+  to a part already matched (only the first is carried back). Surrounding
+  spaces on the board designator are ignored.
 - **Rows**: Designators (the board's designator for the part at that
   placement), Values (the board's value for every unit of the part) and
   Footprints. The board wins on every ticked row; rows start ticked.
 - **Blocked rows**: a designator row while the part's schematic designator
   is not annotated or is on another part (as in Update PCB), or while the
   board's designator is empty or holds `?`; a value row on a sheet placed
-  more than once, since the value is stored once for every placement; every
-  footprint row, until #2248. Pin and gate swaps have no board model and are
+  more than once, or on a sheet another open project reaches, since the
+  value is stored once for every placement and project (the shared-sheet
+  rule); a value row of a part that is not annotated; every footprint row,
+  until #2248. Pin and gate swaps have no board model and are
   not listed.
 - **Notes**: a designator the ticked rows would leave on several parts is
-  noted; nothing blocks it.
+  noted, following the ticks; nothing blocks it.
 - **Validate** runs the ticked rows on copies of the sheets.
 - **Execute** writes every changed sheet as one undo group: a designator row
-  writes that placement only (the symbol's reference on a sheet placed once,
-  a per-placement entry otherwise). A sheet that is not open is loaded into
-  memory from the copy the read took, after its file is stated again, and
-  is left unsaved. Nothing is written to disk until the sheets are saved.
+  writes that placement only (the symbol's reference on a sheet placed once
+  in this project and reached by no other open project, a per-placement
+  entry otherwise). Execute plans the writes from the ticks when pressed,
+  states the closed sheets of that plan again, and writes exactly that
+  plan; the ticks, Refresh and Validate wait while the check runs. A sheet
+  that is not open is loaded into memory from the copy the read took, after
+  its file is stated again, and is left unsaved. Nothing is written to disk until the sheets are saved.
   A list the board or a sheet has moved past since the read is refused
   until Refresh; so is a closed sheet whose file changed on disk.
 - Opening the board for the read brings its tab to the front, as Update

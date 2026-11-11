@@ -39,6 +39,8 @@ back-annotate-note-unlinked = { $reference } is not linked to a schematic part.
 back-annotate-note-part-gone = { $reference } is linked to a part that is no longer in the schematic.
 back-annotate-note-part-not-read = { $designator } could not be read back and is left alone.
 back-annotate-note-shared = After this, { $designator } is on { $count } parts.
+# $reference is a second board footprint linked to the part $designator.
+back-annotate-note-extra-link = { $reference } is linked to { $designator } too; only the first footprint linked to a part is carried back.
 back-annotate-stale = The board or a sheet changed since the list was made. Refresh it.
 back-annotate-refresh = Refresh
 back-annotate-valid = Every ticked change applies.

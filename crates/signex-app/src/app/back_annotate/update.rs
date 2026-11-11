@@ -1,11 +1,14 @@
 //! Opening the dialog, opening the board when it is not, the read on the
 //! worker and the ticks. Validate and Execute: `apply.rs`.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use iced::Task;
 use signex_engine::pcb::eco::BackChangeList;
 use signex_i18n::{MessageId, ids, t};
+use signex_types::schematic::InstancePath;
+use uuid::Uuid;
 
 use super::read::{BackRequest, compute};
 use super::{BackAnnotateMsg, BackAnnotateState};
@@ -17,6 +20,25 @@ use crate::app::{Message, Signex};
 impl Signex {
     pub(crate) fn dispatch_back_annotate_message(&mut self, msg: BackAnnotateMsg) -> Task<Message> {
         use BackAnnotateMsg as M;
+        // While Execute states the closed sheets, its plan is fixed: no
+        // tick, Refresh, Validate or second Execute until the check lands.
+        let checking = self
+            .ui_state
+            .back_annotate
+            .as_ref()
+            .is_some_and(|s| s.checking);
+        if checking
+            && matches!(
+                msg,
+                M::RowToggled { .. }
+                    | M::GroupToggled { .. }
+                    | M::RefreshRequested
+                    | M::ValidateRequested
+                    | M::ExecuteRequested
+            )
+        {
+            return Task::none();
+        }
         match msg {
             M::Requested => self.open_back_annotate(),
             M::Read { job, result } => {
@@ -145,6 +167,9 @@ impl Signex {
         let job = state.next_job();
         state.phase = Phase::Computing;
         state.validation = None;
+        // A check of the old list can no longer land (its job is stale).
+        state.checking = false;
+        state.pending = None;
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || compute(request))
@@ -161,10 +186,12 @@ impl Signex {
     }
 
     fn back_annotate_read(&mut self, job: u64, result: Result<Arc<super::BackRead>, String>) {
-        let Some(state) = self.ui_state.back_annotate.as_mut() else {
-            return;
-        };
-        if state.job != job {
+        if self
+            .ui_state
+            .back_annotate
+            .as_ref()
+            .is_none_or(|state| state.job != job)
+        {
             return;
         }
         match result {
@@ -175,7 +202,22 @@ impl Signex {
                         library.display()
                     ));
                 }
-                state.list = Some(read.list.clone());
+                // A sheet file another open project reaches holds that
+                // project's part too: its values are not carried (#1224).
+                let shared: HashSet<(InstancePath, Vec<Uuid>)> = read
+                    .files
+                    .iter()
+                    .filter(|(_, part)| self.shared_with_another_open_project(&part.file))
+                    .map(|(key, _)| key.clone())
+                    .collect();
+                let mut list = read.list.clone();
+                list.block_shared_values(|sheet, units| {
+                    shared.contains(&(sheet.clone(), units.to_vec()))
+                });
+                let Some(state) = self.ui_state.back_annotate.as_mut() else {
+                    return;
+                };
+                state.list = Some(list);
                 state.read = Some(read);
                 state.phase = Phase::Ready;
             }

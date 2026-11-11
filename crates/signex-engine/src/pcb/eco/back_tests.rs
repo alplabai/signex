@@ -286,3 +286,83 @@ fn on_a_sheet_placed_twice_the_designator_goes_to_that_placement_only() {
     assert_eq!(r.reference, "R1", "the file's reference stays");
     assert_eq!(r.designator_in(&placement), "R31");
 }
+
+/// #1312 review: the note on a designator two parts would share follows the
+/// ticks: R1 and R2 swapped on the board share nothing with both rows
+/// ticked, and share R2 with only one.
+#[test]
+fn the_shared_designator_note_follows_the_ticks() {
+    let mut board = in_step();
+    fp_mut(&mut board, 0xa1).reference = "R2".into();
+    fp_mut(&mut board, 0xa2).reference = "R1".into();
+    let mut list = diff(&board, &parts());
+    let shared = |list: &BackChangeList| {
+        list.notes
+            .iter()
+            .filter(|n| matches!(n, BackNote::SharedDesignator { .. }))
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert!(shared(&list).is_empty(), "a clean swap shares nothing");
+    list.set_on(&BackKey::Designator(u(0xa2)), false);
+    assert_eq!(
+        shared(&list),
+        vec![BackNote::SharedDesignator {
+            designator: "R2".into(),
+            count: 2
+        }]
+    );
+    list.set_group_on(BackGroup::Designators, true);
+    assert!(shared(&list).is_empty());
+}
+
+#[test]
+fn a_value_of_an_unannotated_part_is_not_carried() {
+    let mut parts = parts();
+    parts[1] = back(part("R?", &[0x102], "4k7", Ok(r0603())));
+    let mut board = in_step();
+    fp_mut(&mut board, 0xa2).value = "1k".into();
+    let list = diff(&board, &parts);
+    let value = list.row(&BackKey::Value(u(0xa2))).unwrap();
+    assert_eq!(value.blocked, Some(BackBlock::NeedsAnnotation));
+}
+
+#[test]
+fn a_second_footprint_linked_to_a_part_is_a_note_not_a_merge() {
+    let mut board = in_step();
+    board
+        .footprints
+        .push(board_fp(0xa9, "R9", "1M", &[0x101], &r0603(), (40.0, 10.0)));
+    let list = diff(&board, &parts());
+    assert!(list.rows.is_empty(), "{:?}", list.rows);
+    assert!(list.notes.contains(&BackNote::ExtraLink {
+        reference: "R9".into(),
+        designator: "R1".into()
+    }));
+}
+
+#[test]
+fn surrounding_spaces_on_the_board_designator_are_not_a_change() {
+    let mut board = in_step();
+    fp_mut(&mut board, 0xa1).reference = " R1 ".into();
+    fp_mut(&mut board, 0xa2).reference = " R7".into();
+    let list = diff(&board, &parts());
+    assert_eq!(list.rows.len(), 1);
+    assert!(matches!(
+        &list.rows[0].change,
+        BackChange::Designator { to, .. } if to == "R7"
+    ));
+}
+
+#[test]
+fn values_shared_with_another_project_are_blocked_on_request() {
+    let mut board = in_step();
+    fp_mut(&mut board, 0xa1).value = "1k".into();
+    fp_mut(&mut board, 0xa1).reference = "R8".into();
+    let mut list = diff(&board, &parts());
+    list.block_shared_values(|_, units| units == [u(0x101)]);
+    let value = list.row(&BackKey::Value(u(0xa1))).unwrap();
+    assert_eq!(value.blocked, Some(BackBlock::SharedSheet));
+    assert!(!value.on);
+    assert!(list.row(&BackKey::Designator(u(0xa1))).unwrap().applies());
+}

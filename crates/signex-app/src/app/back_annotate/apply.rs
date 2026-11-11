@@ -11,7 +11,7 @@ use iced::Task;
 use signex_engine::pcb::eco::{BackChangeList, SheetEdit, sheet_commands};
 use signex_i18n::{ids, t};
 
-use super::{BackAnnotateMsg, BackRead};
+use super::{BackAnnotateMsg, BackRead, PendingWrite};
 use crate::app::sheet_write::{SheetWrite, SheetWriteRefusal, disk_changed};
 use crate::app::{Message, Signex, UndoGroupKind};
 
@@ -74,10 +74,12 @@ impl Signex {
         }
     }
 
-    /// Execute: state the closed sheets again, then write.
+    /// Execute: plan the writes from the ticks now, state the closed sheets
+    /// they reach again, then write exactly that plan. The ticks and Refresh
+    /// are off while the check runs.
     pub(super) fn execute_back_annotate(&mut self) -> Task<Message> {
-        let (read, edits) = match self.back_annotate_plan() {
-            Ok((_, read, edits)) => (read, edits),
+        let (list, read, edits) = match self.back_annotate_plan() {
+            Ok(plan) => plan,
             Err(why) => return self.refuse_back_annotate_execute(why),
         };
         let to_check: Vec<_> = edits
@@ -85,13 +87,19 @@ impl Signex {
             .filter(|file| !self.document_state.engines.contains_key(*file))
             .map(|file| (file.clone(), read.stamps.get(file).copied().flatten()))
             .collect();
+        let pending = PendingWrite {
+            checked: to_check.iter().map(|(file, _)| file.clone()).collect(),
+            rows: list.rows.iter().filter(|r| r.applies()).count(),
+            edits,
+        };
         if to_check.is_empty() {
-            return self.write_back_annotate();
+            return self.write_back_annotate(pending);
         }
         let Some(state) = self.ui_state.back_annotate.as_mut() else {
             return Task::none();
         };
         state.checking = true;
+        state.pending = Some(pending);
         state.validation = None;
         let job = state.job;
         Task::perform(
@@ -100,8 +108,8 @@ impl Signex {
         )
     }
 
-    /// The closed sheets were stated again: write, or refuse when one of
-    /// them changed on disk since the read.
+    /// The closed sheets were stated again: write the plan Execute made, or
+    /// refuse when one of them changed on disk since the read.
     pub(super) fn back_annotate_disk_checked(
         &mut self,
         job: u64,
@@ -114,42 +122,59 @@ impl Signex {
             return Task::none();
         }
         state.checking = false;
-        match result {
-            Err(why) => self.refuse_back_annotate_execute(why),
-            Ok(changed) => match changed.first() {
-                Some(path) => {
-                    let why = self.back_annotate_text_path(ids::BACK_ANNOTATE_DISK_CHANGED, path);
-                    self.refuse_back_annotate_execute(why)
-                }
-                None => self.write_back_annotate(),
-            },
+        let pending = state.pending.take();
+        match (result, pending) {
+            (Err(why), _) => self.refuse_back_annotate_execute(why),
+            (Ok(changed), _) if !changed.is_empty() => {
+                let why =
+                    self.back_annotate_text_path(ids::BACK_ANNOTATE_DISK_CHANGED, &changed[0]);
+                self.refuse_back_annotate_execute(why)
+            }
+            (Ok(_), Some(pending)) => self.write_back_annotate(pending),
+            (Ok(_), None) => Task::none(),
         }
     }
 
-    /// Check again what can have moved meanwhile, then write every sheet as
-    /// one undo group. On success the dialog closes.
-    fn write_back_annotate(&mut self) -> Task<Message> {
-        let (list, read, edits) = match self.back_annotate_plan() {
-            Ok(plan) => plan,
-            Err(why) => return self.refuse_back_annotate_execute(why),
+    /// Write `pending` as one undo group, after checking again what can have
+    /// moved: a stale list, or a sheet no engine holds that the plan did not
+    /// state again, refuses it. On success the dialog closes.
+    fn write_back_annotate(&mut self, pending: PendingWrite) -> Task<Message> {
+        let Some(read) = self
+            .ui_state
+            .back_annotate
+            .as_ref()
+            .and_then(|s| s.read.clone())
+        else {
+            return Task::none();
         };
-        let rows = list.rows.iter().filter(|r| r.applies()).count();
+        if self.back_annotate_stale() {
+            let why = t!(self.ui_state.i18n, ids::BACK_ANNOTATE_STALE).into_string();
+            return self.refuse_back_annotate_execute(why);
+        }
+        let unchecked = pending.edits.keys().find(|file| {
+            !self.document_state.engines.contains_key(*file) && !pending.checked.contains(*file)
+        });
+        if let Some(file) = unchecked {
+            let why = self.back_annotate_text_path(ids::BACK_ANNOTATE_DISK_CHANGED, file);
+            return self.refuse_back_annotate_execute(why);
+        }
         let write = SheetWrite {
             label: LABEL,
             outcome: "back-annotated",
             kind: UndoGroupKind::BackAnnotate,
             loaded: &read.loaded,
         };
-        let result = self.write_sheets_as_group(&write, edits, |document, (single, edits)| {
-            sheet_commands(document, edits, *single)
-        });
+        let result =
+            self.write_sheets_as_group(&write, pending.edits, |document, (single, edits)| {
+                sheet_commands(document, edits, *single)
+            });
         match result {
             Ok(sheets) => {
                 crate::diagnostics::log_info(
                     t!(
                         self.ui_state.i18n,
                         ids::BACK_ANNOTATE_DONE,
-                        "count" => rows,
+                        "count" => pending.rows,
                         "sheets" => sheets
                     )
                     .into_string(),
@@ -219,6 +244,7 @@ impl Signex {
         if let Some(state) = self.ui_state.back_annotate.as_mut() {
             state.validation = Some(Err(why));
             state.checking = false;
+            state.pending = None;
         }
         Task::none()
     }

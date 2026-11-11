@@ -131,6 +131,12 @@ pub enum BackNote {
         designator: String,
         count: usize,
     },
+    /// A second footprint linked to the part `designator`: only the first is
+    /// carried back.
+    ExtraLink {
+        reference: String,
+        designator: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -166,6 +172,9 @@ pub struct BackChangeList {
     pub revision: u64,
     pub rows: Vec<BackRow>,
     pub notes: Vec<BackNote>,
+    /// Every annotated part's placement, units and schematic designator,
+    /// for the notes on designators the ticked rows would share.
+    pub designators: Vec<(InstancePath, Vec<Uuid>, String)>,
 }
 
 impl BackChangeList {
@@ -178,12 +187,62 @@ impl BackChangeList {
         if let Some(row) = self.rows.iter_mut().find(|r| &r.key == key) {
             row.on = on && row.blocked.is_none();
         }
+        self.refresh_shared_notes();
     }
 
     pub fn set_group_on(&mut self, group: BackGroup, on: bool) {
         for row in self.rows.iter_mut().filter(|r| r.group == group) {
             row.on = on && row.blocked.is_none();
         }
+        self.refresh_shared_notes();
+    }
+
+    /// Block the value rows of the parts `shared` names (their sheet file is
+    /// reached by another project too, so a value would change that
+    /// project's part), as for a sheet placed more than once.
+    pub fn block_shared_values(&mut self, shared: impl Fn(&InstancePath, &[Uuid]) -> bool) {
+        for row in &mut self.rows {
+            if let BackChange::Value { sheet, units, .. } = &row.change
+                && row.blocked.is_none()
+                && shared(sheet, units)
+            {
+                row.blocked = Some(BackBlock::SharedSheet);
+                row.on = false;
+            }
+        }
+        self.refresh_shared_notes();
+    }
+
+    /// The notes on designators the rows that apply now would leave on
+    /// several parts, recomputed from the current ticks.
+    fn refresh_shared_notes(&mut self) {
+        self.notes
+            .retain(|n| !matches!(n, BackNote::SharedDesignator { .. }));
+        let mut after: BTreeMap<String, usize> = BTreeMap::new();
+        let renamed: HashMap<(&InstancePath, &[Uuid]), &str> = self
+            .rows
+            .iter()
+            .filter(|r| r.applies())
+            .filter_map(|r| match &r.change {
+                BackChange::Designator {
+                    sheet, units, to, ..
+                } => Some(((sheet, units.as_slice()), to.as_str())),
+                _ => None,
+            })
+            .collect();
+        for (sheet, units, designator) in &self.designators {
+            let key = (sheet, units.as_slice());
+            let now = renamed.get(&key).copied().unwrap_or(designator.as_str());
+            *after.entry(now.to_string()).or_default() += 1;
+        }
+        let targets: HashSet<&str> = renamed.values().copied().collect();
+        let mut notes = Vec::new();
+        for (designator, count) in after {
+            if count > 1 && targets.contains(designator.as_str()) {
+                notes.push(BackNote::SharedDesignator { designator, count });
+            }
+        }
+        self.notes.extend(notes);
     }
 
     pub fn group_ticks(&self, group: BackGroup) -> GroupTicks {
@@ -205,6 +264,7 @@ impl BackChangeList {
                 row.on = old.on && row.blocked.is_none();
             }
         }
+        self.refresh_shared_notes();
     }
 
     /// The edits of the rows that apply, one per part placement.
@@ -259,8 +319,23 @@ pub fn diff_schematic(input: &BackInput) -> BackChangeList {
             .cloned()
             .map(BackNote::UnreadableSheet)
             .collect(),
+        designators: input
+            .parts
+            .iter()
+            .filter(|p| !p.eco.part.needs_annotation)
+            .map(|p| {
+                let part = &p.eco.part;
+                (
+                    part.sheet.clone(),
+                    part.units.clone(),
+                    part.designator.clone(),
+                )
+            })
+            .collect(),
     };
     let duplicates = schematic_duplicates(input.parts);
+    // A part carried back once: a second footprint linked to it is a note.
+    let mut matched: HashSet<usize> = HashSet::new();
     for fp in &input.board.footprints {
         let Some(link) = &fp.schematic_link else {
             list.notes.push(BackNote::Unlinked {
@@ -268,11 +343,20 @@ pub fn diff_schematic(input: &BackInput) -> BackChangeList {
             });
             continue;
         };
-        let part = input.parts.iter().find(|p| {
+        let found = input.parts.iter().position(|p| {
             p.eco.part.sheet == link.sheet
                 && link.units.iter().any(|u| p.eco.part.units.contains(u))
         });
-        match part {
+        if let Some(index) = found
+            && !matched.insert(index)
+        {
+            list.notes.push(BackNote::ExtraLink {
+                reference: fp.reference.trim().to_string(),
+                designator: input.parts[index].eco.part.designator.clone(),
+            });
+            continue;
+        }
+        match found.map(|index| &input.parts[index]) {
             Some(part) if part.eco.read => footprint_rows(&mut list, fp, part, &duplicates),
             Some(part) => list.notes.push(BackNote::PartNotRead {
                 designator: part.eco.part.designator.clone(),
@@ -283,8 +367,8 @@ pub fn diff_schematic(input: &BackInput) -> BackChangeList {
             }),
         }
     }
-    note_shared_designators(&mut list, input.parts);
     list.rows.sort_by_key(|r| r.group);
+    list.refresh_shared_notes();
     list
 }
 
@@ -313,12 +397,13 @@ fn footprint_rows(
 ) {
     let design = &part.eco.part;
     let (sheet, units) = (design.sheet.clone(), design.units.clone());
-    if fp.reference != design.designator {
+    let board_designator = fp.reference.trim();
+    if board_designator != design.designator {
         let blocked = if design.needs_annotation {
             Some(BackBlock::NeedsAnnotation)
         } else if duplicates.contains(&design.designator) {
             Some(BackBlock::DuplicateDesignator(design.designator.clone()))
-        } else if not_annotated(&fp.reference) {
+        } else if not_annotated(board_designator) {
             Some(BackBlock::BoardNotAnnotated)
         } else {
             None
@@ -331,7 +416,7 @@ fn footprint_rows(
                 sheet: sheet.clone(),
                 units: units.clone(),
                 from: design.designator.clone(),
-                to: fp.reference.clone(),
+                to: board_designator.to_string(),
             },
             blocked,
         ));
@@ -344,11 +429,19 @@ fn footprint_rows(
                 footprint: fp.uuid,
                 sheet,
                 units,
-                reference: fp.reference.clone(),
+                reference: board_designator.to_string(),
                 from: part.eco.value.clone(),
                 to: fp.value.clone(),
             },
-            part.shared_sheet.then_some(BackBlock::SharedSheet),
+            if part.shared_sheet {
+                Some(BackBlock::SharedSheet)
+            } else if design.needs_annotation {
+                // An unannotated part may be grouped differently next time:
+                // never give it another part's value.
+                Some(BackBlock::NeedsAnnotation)
+            } else {
+                None
+            },
         ));
     }
     if let Ok(resolved) = &part.eco.footprint
@@ -368,37 +461,6 @@ fn footprint_rows(
             },
             Some(BackBlock::FootprintFromBoard),
         ));
-    }
-}
-
-/// A note for each designator the ticked rows would leave on several parts.
-fn note_shared_designators(list: &mut BackChangeList, parts: &[BackPart]) {
-    let mut after: BTreeMap<String, usize> = BTreeMap::new();
-    let renamed: HashMap<(&InstancePath, &[Uuid]), &str> = list
-        .rows
-        .iter()
-        .filter(|r| r.applies())
-        .filter_map(|r| match &r.change {
-            BackChange::Designator {
-                sheet, units, to, ..
-            } => Some(((sheet, units.as_slice()), to.as_str())),
-            _ => None,
-        })
-        .collect();
-    for p in parts.iter().filter(|p| !p.eco.part.needs_annotation) {
-        let key = (&p.eco.part.sheet, p.eco.part.units.as_slice());
-        let designator = renamed
-            .get(&key)
-            .copied()
-            .unwrap_or(p.eco.part.designator.as_str());
-        *after.entry(designator.to_string()).or_default() += 1;
-    }
-    let targets: HashSet<&str> = renamed.values().copied().collect();
-    for (designator, count) in after {
-        if count > 1 && targets.contains(designator.as_str()) {
-            list.notes
-                .push(BackNote::SharedDesignator { designator, count });
-        }
     }
 }
 

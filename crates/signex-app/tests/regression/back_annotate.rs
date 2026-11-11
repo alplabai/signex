@@ -132,8 +132,65 @@ struct Rig {
     _tmp: TempDir,
 }
 
+fn project_data(
+    dir: &Path,
+    name: &str,
+    root: &str,
+    pcb_file: Option<&str>,
+    sheets: &[&str],
+) -> signex_types::project::ProjectData {
+    signex_types::project::ProjectData {
+        document_id: None,
+        description: None,
+        name: name.to_string(),
+        dir: dir.to_string_lossy().into_owned(),
+        schematic_root: Some(root.to_string()),
+        pcb_file: pcb_file.map(str::to_string),
+        sheets: sheets.iter().map(|name| entry(name)).collect(),
+        variant_definitions: Vec::new(),
+        active_variant: None,
+        libraries: Vec::new(),
+        enable_git: false,
+        rules: Default::default(),
+        net_classes: Default::default(),
+        annotation: None,
+        schematic_defaults: Default::default(),
+        project_defaults: Default::default(),
+        agent_journal: Default::default(),
+        parameters: Default::default(),
+        unknown: Default::default(),
+    }
+}
+
+fn add_project(
+    app: &mut Signex,
+    path: PathBuf,
+    data: signex_types::project::ProjectData,
+) -> signex_app::app::ProjectId {
+    let id = app.document_state.mint_project_id();
+    app.document_state
+        .projects
+        .push(signex_app::app::LoadedProject {
+            id,
+            path,
+            data,
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        });
+    id
+}
+
 /// The project on disk with only its root sheet open; the board is closed.
 fn rig() -> Rig {
+    rig_with(board(), false)
+}
+
+/// [`rig`] with `board` as the board file; `other_project` also opens a
+/// second project, Other, whose root sheet is amp.snxsch, so another open
+/// project reaches that sheet (#1224).
+fn rig_with(board: PcbBoard, other_project: bool) -> Rig {
     let _ = signex_app::diagnostics::init_logging();
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path().to_path_buf();
@@ -165,46 +222,22 @@ fn rig() -> Rig {
         write_sheet(&dir.join(name), content);
     }
     let board_path = dir.join("Proj.snxpcb");
-    std::fs::write(&board_path, SnxPcb::new(board()).write_string().unwrap()).unwrap();
-    let data = signex_types::project::ProjectData {
-        document_id: None,
-        description: None,
-        name: "Proj".to_string(),
-        dir: dir.to_string_lossy().into_owned(),
-        schematic_root: Some("root.snxsch".to_string()),
-        pcb_file: Some("Proj.snxpcb".to_string()),
-        sheets: files.iter().map(|(name, _)| entry(name)).collect(),
-        variant_definitions: Vec::new(),
-        active_variant: None,
-        libraries: Vec::new(),
-        enable_git: false,
-        rules: Default::default(),
-        net_classes: Default::default(),
-        annotation: None,
-        schematic_defaults: Default::default(),
-        project_defaults: Default::default(),
-        agent_journal: Default::default(),
-        parameters: Default::default(),
-        unknown: Default::default(),
-    };
+    std::fs::write(&board_path, SnxPcb::new(board).write_string().unwrap()).unwrap();
+    let names: Vec<&str> = files.iter().map(|(name, _)| *name).collect();
+    let data = project_data(&dir, "Proj", "root.snxsch", Some("Proj.snxpcb"), &names);
     let prj = dir.join("Proj.snxprj");
     signex_types::project::write_project(&prj, &data).unwrap();
 
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     app.ui_state.main_window_id = Some(iced::window::Id::unique());
-    let project = app.document_state.mint_project_id();
-    app.document_state
-        .projects
-        .push(signex_app::app::LoadedProject {
-            id: project,
-            path: prj,
-            data,
-            pending_libraries: Default::default(),
-            case_fold: Default::default(),
-            case_probed: false,
-            case_decided: false,
-        });
+    if other_project {
+        let other = project_data(&dir, "Other", "amp.snxsch", None, &["amp.snxsch"]);
+        let path = dir.join("Other.snxprj");
+        signex_types::project::write_project(&path, &other).unwrap();
+        add_project(&mut app, path, other);
+    }
+    let project = add_project(&mut app, prj, data);
     app.document_state.active_project = Some(project);
     let root = dir.join("root.snxsch");
     let engine = signex_engine::Engine::new_with_path(root_sheet, Some(root.clone())).unwrap();
@@ -459,5 +492,152 @@ fn the_palette_and_the_board_side_open_the_same_dialog() {
         "the board is in front"
     );
     settle(&mut rig.app, menu_row("back_annotate_schematics"));
+    assert_eq!(list(&rig).rows.len(), 4);
+}
+
+/// #1312 review (data loss): Execute writes exactly the plan it stated the
+/// closed sheets for. A row ticked again while the check runs is ignored, so
+/// a sheet the check never stated (and that changed on disk meanwhile) is
+/// not loaded from the read's stale copy.
+#[test]
+fn execute_writes_the_plan_it_checked_and_ticks_wait_while_it_runs() {
+    let mut rig = rig();
+    settle(&mut rig.app, menu_row("back_annotate_schematics"));
+    // buf.snxsch has one live row; untick it so only amp is checked.
+    send(
+        &mut rig,
+        BackAnnotateMsg::RowToggled {
+            key: BackKey::Designator(FP_C5),
+            on: false,
+        },
+    );
+    let task = rig
+        .app
+        .update(Message::from(BackAnnotateMsg::ExecuteRequested));
+    assert!(
+        rig.app
+            .ui_state
+            .back_annotate
+            .as_ref()
+            .unwrap()
+            .is_checking()
+    );
+    // While checking: the tick and Refresh are ignored.
+    send(
+        &mut rig,
+        BackAnnotateMsg::RowToggled {
+            key: BackKey::Designator(FP_C5),
+            on: true,
+        },
+    );
+    let job = rig.app.ui_state.back_annotate.as_ref().unwrap().job();
+    send(&mut rig, BackAnnotateMsg::RefreshRequested);
+    let state = rig.app.ui_state.back_annotate.as_ref().unwrap();
+    assert!(state.is_checking(), "Refresh waits for the check");
+    assert_eq!(state.job(), job);
+    assert!(
+        !state
+            .list()
+            .unwrap()
+            .row(&BackKey::Designator(FP_C5))
+            .unwrap()
+            .on,
+        "the tick waits for the check"
+    );
+    // buf changes on disk while the check runs.
+    let mut changed = sheet(vec![part(C5, "C9", "220n")], Vec::new());
+    changed.uuid = Uuid::from_u128(0xbeef);
+    write_sheet(&rig.buf, &changed);
+    let external = std::fs::read(&rig.buf).unwrap();
+    crate::settle_support::settle_task(&mut rig.app, task);
+
+    assert!(rig.app.ui_state.back_annotate.is_none(), "the plan ran");
+    assert_eq!(symbol(&rig.app, &rig.amp, R10).value, "22k");
+    assert!(
+        !rig.app.document_state.engines.contains_key(&rig.buf),
+        "buf was not in the plan, so its stale copy is never loaded"
+    );
+    assert_eq!(std::fs::read(&rig.buf).unwrap(), external);
+}
+
+/// #1312 review: a blocked row ticked by a message stays off, and Execute
+/// leaves its value alone.
+#[test]
+fn a_blocked_row_cannot_be_ticked_and_execute_leaves_it_alone() {
+    let mut rig = rig();
+    settle(&mut rig.app, menu_row("back_annotate_schematics"));
+    send(
+        &mut rig,
+        BackAnnotateMsg::RowToggled {
+            key: BackKey::Value(FP_C5),
+            on: true,
+        },
+    );
+    send(
+        &mut rig,
+        BackAnnotateMsg::GroupToggled {
+            group: signex_engine::pcb::eco::BackGroup::Values,
+            on: true,
+        },
+    );
+    let row = list(&rig).row(&BackKey::Value(FP_C5)).unwrap().clone();
+    assert_eq!(row.blocked, Some(BackBlock::SharedSheet));
+    assert!(!row.on);
+    send(&mut rig, BackAnnotateMsg::ExecuteRequested);
+    assert_eq!(symbol(&rig.app, &rig.buf, C5).value, "100n");
+}
+
+/// #1312 review (#1224): on a sheet another open project reaches, a value
+/// row is read-only and a designator is written to this placement's entry,
+/// never to the shared `reference`.
+#[test]
+fn a_sheet_another_open_project_reaches_keeps_its_reference_and_value() {
+    let mut board = board();
+    for fp in &mut board.footprints {
+        if fp.uuid == FP_R10 {
+            fp.reference = "R11".into();
+        }
+    }
+    let mut rig = rig_with(board, true);
+    settle(&mut rig.app, menu_row("back_annotate_schematics"));
+    let value = list(&rig).row(&BackKey::Value(FP_R10)).unwrap().clone();
+    assert_eq!(value.blocked, Some(BackBlock::SharedSheet));
+    send(&mut rig, BackAnnotateMsg::ExecuteRequested);
+    let r10 = symbol(&rig.app, &rig.amp, R10);
+    assert_eq!(r10.reference, "R10", "Other's designator is untouched");
+    assert_eq!(r10.designator_in(&InstancePath::root().child(A)), "R11");
+    assert_eq!(r10.value, "10k");
+}
+
+/// #1312 review: a key a profile binds to the command opens the dialog.
+#[test]
+fn a_bound_key_opens_back_annotate() {
+    use signex_app::keymap::{
+        AppCommandId, ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutTrigger,
+    };
+    let mut rig = rig();
+    let ShortcutTrigger::KeySequence(mut strokes) = ShortcutTrigger::parse("Ctrl+Alt+F10").unwrap()
+    else {
+        panic!("a key");
+    };
+    let profiles = &mut rig.app.ui_state.keymap_profiles;
+    profiles
+        .active_profile_mut()
+        .bindings
+        .push(ShortcutBinding {
+            action: ShortcutBindingAction::Command(
+                AppCommandId::new("back_annotate_schematics").unwrap(),
+            ),
+            context: ShortcutContext::Global,
+            triggers: vec![ShortcutTrigger::KeySequence(strokes.clone())],
+        });
+    rig.app.ui_state.active_keymap = rig.app.ui_state.keymap_profiles.compile_active().into();
+    settle(
+        &mut rig.app,
+        Message::Ui(signex_app::app::UiMsg::KeymapStroke {
+            window: None,
+            stroke: strokes.remove(0),
+        }),
+    );
     assert_eq!(list(&rig).rows.len(), 4);
 }

@@ -77,8 +77,12 @@ pub struct BackAnnotateState {
     pub(crate) list: Option<BackChangeList>,
     /// The last Validate or a refused Execute: `Ok` or why.
     pub(crate) validation: Option<Result<(), String>>,
-    /// The closed sheets are being stated before Execute writes.
+    /// The closed sheets are being stated before Execute writes. The ticks
+    /// and Refresh are off meanwhile.
     pub(crate) checking: bool,
+    /// The edits Execute planned, written exactly as planned once the
+    /// closed sheets were stated again.
+    pub(crate) pending: Option<PendingWrite>,
 }
 
 impl BackAnnotateState {
@@ -97,6 +101,7 @@ impl BackAnnotateState {
             list: None,
             validation: None,
             checking: false,
+            pending: None,
         }
     }
 
@@ -125,6 +130,16 @@ impl BackAnnotateState {
         matches!(self.phase, Phase::Ready)
     }
 
+    /// Execute is stating the closed sheets; the ticks and Refresh wait.
+    pub fn is_checking(&self) -> bool {
+        self.checking
+    }
+
+    /// The newest worker job.
+    pub fn job(&self) -> u64 {
+        self.job
+    }
+
     /// The last Validate or refused Execute.
     pub fn validation(&self) -> Option<&Result<(), String>> {
         self.validation.as_ref()
@@ -135,4 +150,15 @@ impl BackAnnotateState {
         self.job += 1;
         self.job
     }
+}
+
+/// The writes Execute planned: the edits per sheet file (whether the file
+/// is placed once, and its edits), the closed files it stated again, and how
+/// many rows they come from.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingWrite {
+    pub(crate) edits:
+        std::collections::BTreeMap<PathBuf, (bool, Vec<signex_engine::pcb::eco::SheetEdit>)>,
+    pub(crate) checked: std::collections::BTreeSet<PathBuf>,
+    pub(crate) rows: usize,
 }

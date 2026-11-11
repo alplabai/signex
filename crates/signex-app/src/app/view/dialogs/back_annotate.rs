@@ -66,7 +66,7 @@ impl Signex {
             .push(self.back_annotate_banner(state, i18n, tokens));
         if let Some(list) = state.ready_list() {
             body = body
-                .push(list_view(list, i18n, tokens))
+                .push(list_view(list, state.checking, i18n, tokens))
                 .push(notes_view(list, i18n, tokens));
         }
         if state.checking {
@@ -161,16 +161,16 @@ impl Signex {
                 if !self.back_annotate_stale() {
                     return summary;
                 }
-                let refresh = link(
-                    t!(i18n, ids::BACK_ANNOTATE_REFRESH),
-                    ba(BackAnnotateMsg::RefreshRequested),
-                );
+                // No Refresh while Execute states the closed sheets.
+                let refresh = (!state.checking).then(|| {
+                    link(
+                        t!(i18n, ids::BACK_ANNOTATE_REFRESH),
+                        ba(BackAnnotateMsg::RefreshRequested),
+                    )
+                });
                 column![
                     summary,
-                    banner(
-                        line(t!(i18n, ids::BACK_ANNOTATE_STALE), danger),
-                        Some(refresh)
-                    )
+                    banner(line(t!(i18n, ids::BACK_ANNOTATE_STALE), danger), refresh)
                 ]
                 .spacing(SP.s)
                 .boxed()
@@ -188,15 +188,21 @@ fn group_id(group: BackGroup) -> MessageId {
 }
 
 /// Every group in list order: its checkbox, then its rows.
-fn list_view<'a>(list: &BackChangeList, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
+/// `locked`: Execute is stating the closed sheets, so no box can be ticked.
+fn list_view<'a>(
+    list: &BackChangeList,
+    locked: bool,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
     let mut col = Column::new().spacing(SP.s);
     let mut shown: Option<BackGroup> = None;
     for row in &list.rows {
         if shown != Some(row.group) {
             shown = Some(row.group);
-            col = col.push(group_header(list, row.group, i18n, tokens));
+            col = col.push(group_header(list, row.group, locked, i18n, tokens));
         }
-        col = col.push(row_view(row, i18n, tokens));
+        col = col.push(row_view(row, locked, i18n, tokens));
     }
     col.boxed()
 }
@@ -205,6 +211,7 @@ fn list_view<'a>(list: &BackChangeList, i18n: &I18n, tokens: &ThemeTokens) -> El
 fn group_header<'a>(
     list: &BackChangeList,
     group: BackGroup,
+    locked: bool,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -219,7 +226,7 @@ fn group_header<'a>(
     } else {
         boxed.style(crate::panels::form_look::checkbox_style)
     };
-    if ticks.open > 0 {
+    if ticks.open > 0 && !locked {
         boxed = boxed.on_toggle(move |_| ba(BackAnnotateMsg::GroupToggled { group, on: target }));
     }
     row![
@@ -240,13 +247,18 @@ fn group_header<'a>(
 }
 
 /// One row: its box (none to tick when blocked), and why it is blocked.
-fn row_view<'a>(row: &BackRow, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
+fn row_view<'a>(
+    row: &BackRow,
+    locked: bool,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
     let mut boxed = checkbox(row.on)
         .size(TS.body)
         .labelled(change_text(i18n, &row.change))
         .text_size(TS.body)
         .style(crate::panels::form_look::checkbox_style);
-    if row.blocked.is_none() {
+    if row.blocked.is_none() && !locked {
         let key = row.key;
         boxed = boxed.on_toggle(move |on| ba(BackAnnotateMsg::RowToggled { key, on }));
     }
@@ -329,6 +341,15 @@ fn note_text(i18n: &I18n, note: &BackNote) -> Localized {
             ids::BACK_ANNOTATE_NOTE_SHARED,
             "designator" => designator.as_str(),
             "count" => *count
+        ),
+        BackNote::ExtraLink {
+            reference,
+            designator,
+        } => t!(
+            i18n,
+            ids::BACK_ANNOTATE_NOTE_EXTRA_LINK,
+            "reference" => reference.as_str(),
+            "designator" => designator.as_str()
         ),
     }
 }
