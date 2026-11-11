@@ -545,6 +545,7 @@ on-demand check shares (`signex_types::check`; DRC adopts it next):
    "date": "...", "message": "..."}}],
  "lapsed": [{"kind": "finding", "rule_id": "...", "objects": ["..."], "...": "..."}],
  "warnings": ["ERC: sheet /abs/x.snxsch could not be read: ..."],
+ "rule_set": {"source": "project", "profile": "...", "sha256": "<64 hex>"},
  "baseline": {"run": 1, "new": ["<key>"], "gone": ["<key>"]}}
 ```
 
@@ -566,9 +567,24 @@ on-demand check shares (`signex_types::check`; DRC adopts it next):
   waiver (`"kind": "net"`, with `rule_id` and `net`) hides, each with that
   waiver; they are not in `findings`. `lapsed`: the per-finding waivers whose
   finding changed since it was waived, so the finding is in `findings` again.
-- `warnings`: what the run could not do completely (an unreadable sheet, an
-  `erc.dsl` that does not compile, a broken hierarchy), as Run ERC would say
-  them in Messages.
+- `warnings`: what Run ERC would say as a warning or error in Messages, in
+  its words, said nowhere else: an unreadable sheet, an `erc.dsl` that does
+  not compile, a broken hierarchy, a child sheet reference that leaves its
+  folder (each once), a stored rule set this build cannot read (this
+  machine's rules are used) and a rule entry it does not recognise. Run ERC's
+  info lines (the totals, "no saved rule set") are not repeated; `rule_set`
+  says which rules ran.
+- `rule_set` (a field every check may fill, its content the check's own):
+  for ERC, `source` (`project`: the project's stored rule set; `machine`:
+  this machine's ERC rules, used when the project has none or one this build
+  cannot read), `profile` (the profile it was saved from, or `null`) and
+  `sha256` (the rule set's hash, as the ERC report prints it).
+- In a headless run or for an agent, the check reads from disk only what a
+  query may read (`docs/AGENT_SOCKET.md`, "Security"): a page, the root, a
+  child sheet or `erc.dsl` outside the project folder (or a link out of it),
+  not a regular file (a FIFO) or over the size cap is not read, and a
+  warning names it. Open sheets are read from memory. Run ERC is not
+  limited this way.
 - `run`: this run's number. The app keeps the last 8 runs' keys in memory
   (`KEPT_CHECK_RUNS`). With `baseline=<run>` the answer also has `baseline`:
   `new` lists the keys of this run that run did not have, `gone` the keys only
@@ -577,6 +593,17 @@ on-demand check shares (`signex_types::check`; DRC adopts it next):
   run is not numbered or kept. The runs are kept by the process: a headless
   `run` keeps them for its own command lines, a running Signex for every
   agent request until it quits.
+
+Known limits:
+
+- Findings that share a key (one rule firing twice on the same identity
+  objects) are numbered `#2`, `#3` in message order, so a new repeat whose
+  message sorts first takes the bare key and the old finding shows as `new`.
+  This is rare.
+- A baseline's scope is the project file. In a project with no
+  `schematic_root` the netlist root is the named sheet, so two runs made with
+  different `document=` sheets can differ in root-dependent findings, which
+  then show as `new` and `gone`. Compare runs made with the same `document=`.
 
 ## Working through a running Signex
 
