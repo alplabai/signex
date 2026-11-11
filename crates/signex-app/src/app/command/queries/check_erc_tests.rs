@@ -770,13 +770,18 @@ fn another_agent_query_still_names_a_page_it_does_not_read_in_messages() {
         matches!(outcome, CommandOutcome::Answered(_)),
         "{outcome:?}"
     );
-    let said = logged(mark, &name);
-    assert!(!said.is_empty(), "{said:?}");
-    assert!(
-        said.iter()
-            .all(|line| line.contains("outside the project folder")),
-        "{said:?}"
+    // `list_documents` as an agent names it twice today (#2172 behaviour).
+    let page = dir.path().join(format!("../{name}"));
+    let line = format!(
+        "{} is outside the project folder (or a link out of it); a headless run does not read it",
+        page.display()
     );
+    let said = logged_lines(mark, &name);
+    assert_eq!(said.len(), 2, "{said:?}");
+    for (level, stored) in &said {
+        assert_eq!(*level, DiagnosticLevel::Warning, "{stored}");
+        assert!(kept_as(stored, &line), "{stored}\n{line}");
+    }
 }
 
 #[test]
