@@ -73,9 +73,13 @@ impl Needs {
             Self::DrawingSelection => ctx.has_schematic && ctx.has_drawing_selection,
             // E edits the selected object in the schematic and in the
             // footprint / symbol editors, whose selections `has_selection`
-            // does not read, so a keystroke must not be dropped there.
+            // does not read, so a keystroke must not be dropped there. On a
+            // board it shows the selection's Properties (#1312).
             Self::SelectedObject => {
-                ctx.has_selection || ctx.has_footprint_editor || ctx.has_symbol_editor
+                ctx.has_selection
+                    || ctx.has_footprint_editor
+                    || ctx.has_symbol_editor
+                    || ctx.pcb.any
             }
             Self::Schematic => ctx.has_schematic,
             // Up Hierarchy opens the sheet whose symbol places the active
@@ -245,7 +249,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // Lists the parts of the active schematic's project.
         | "assign_footprints" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
-        "run_drc" => Needs::Pcb,
+        "run_drc" | "reannotate_board" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" => Needs::PcbSync,
         "new_pcb_document" => Needs::OpenProject,

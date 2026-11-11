@@ -397,6 +397,9 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         SEP,
         // Runs `run_drc` on the PCB in view; greyed with no PCB open.
         cmd_item_gated(ctx, cmd("run_drc", "Design Rule Check", "")),
+        // Positional Re-Annotate of the PCB in view (#1312):
+        // docs/MENU_BAR.md#tools-reannotate-board
+        cmd_item_gated(ctx, cmd("reannotate_board", "Re-Annotate Board...", "")),
         // Opens the Net Inspector panel: docs/MENU_BAR.md#tools-net-inspector
         cmd_item_gated(ctx, cmd("open_net_inspector", "Net Inspector", "")),
         SEP,

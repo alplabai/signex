@@ -396,7 +396,7 @@ pub(super) fn canvas_menu_entries(
 
 /// The board canvas menu (#2240): the placement commands, greyed unless
 /// the selection names an unlocked footprint (Delete: anything deletable),
-/// then Cross Probe, live with anything selected (#1312), then the View
+/// then Cross Probe and Properties, live with anything selected (#1312), then the View
 /// group's Toggle Ratsnest, always live on a board.
 /// Each row runs its catalog command like the keys and the Edit menu do.
 pub(super) fn pcb_canvas_menu_entries(
@@ -429,6 +429,13 @@ pub(super) fn pcb_canvas_menu_entries(
         row(ic::icon_dd_rect(tid), "board_sketch", true),
         DropdownEntry::Separator,
         row(ic::icon_dd_cross_probe(tid), "cross_probe", board.any),
+        // Shows the Properties panel, where one selected footprint's
+        // designator and value are edited (#1312).
+        row(
+            ic::icon_dd_properties(tid),
+            "edit_selected_object_properties",
+            board.any,
+        ),
         DropdownEntry::Separator,
         // View group (#2223): the View menu's board-view row.
         dd_command(None, "toggle_ratsnest", sc.of("toggle_ratsnest"), None),

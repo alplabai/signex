@@ -283,6 +283,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `new_pcb_document` | New PCB in the project | file | — | — |
 | `next_layer` | Make the next copper layer active | view | `+`, `Shift++`, `*`, `Shift+*` | `+`, `Shift++`, `*`, `Shift+*` |
 | `prev_layer` | Make the previous copper layer active | view | `-` | `-` |
+| `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
 | `toggle_layer_visibility` | Show or hide the active layer | view | — | — |

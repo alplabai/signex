@@ -33,3 +33,27 @@ fn the_board_menu_ends_with_a_live_toggle_ratsnest_row() {
         assert!(matches!(&rows[n - 1], DropdownEntry::Item(it) if it.label == "Toggle Ratsnest"));
     }
 }
+
+/// #1312: the board menu's Properties row shows the Properties panel, live
+/// with anything selected.
+#[test]
+fn the_board_menu_properties_row_is_live_with_a_selection() {
+    let sc = shortcuts();
+    let picked = PcbTargets {
+        shown: true,
+        any: true,
+        ..PcbTargets::default()
+    };
+    let rows = pcb_canvas_menu_entries(TID, picked, &sc);
+    assert!(matches!(
+        row_message(&rows, "Properties..."),
+        Some(Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, project: None })))
+            if id.as_str() == "edit_selected_object_properties"
+    ));
+    let empty = PcbTargets {
+        shown: true,
+        ..PcbTargets::default()
+    };
+    let rows = pcb_canvas_menu_entries(TID, empty, &sc);
+    assert!(row_message(&rows, "Properties...").is_none());
+}
