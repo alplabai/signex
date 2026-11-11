@@ -256,10 +256,14 @@ fn answered(data: Value, changed: &[&str]) -> Value {
 fn a_revert_confines_the_sheets_it_names_and_its_answer_lists_only_those() {
     let w = world();
     let doc = w.fx.sheet.to_str().unwrap();
-    // The app answers with a sheet the run never named and may not see.
+    // The app answers with sheets the run never named: one inside its folders
+    // (only the sheets scrub drops it) and one it may not see at all.
+    let unnamed = w.fx.dir.join("other.snxsch");
+    let unnamed = unnamed.to_str().unwrap();
     let app = w.app(&[answered(
         json!({"reverted": true, "group": 1, "revision": 4, "sheets": [
             {"document": "main.snxsch", "path": doc, "revision": 4},
+            {"document": "other.snxsch", "path": unnamed, "revision": 7},
             {"document": "main.snxsch", "path": OTHER_PROJECT_SHEET, "revision": 9},
         ]}),
         &[],
