@@ -22,7 +22,7 @@ impl Signex {
     /// The document Update PCB starts from: inside a window's event the
     /// window's own (its documents are swapped into the main slots), else
     /// the main window's active tab.
-    pub(super) fn update_pcb_source(&self) -> Option<PathBuf> {
+    pub(crate) fn update_pcb_source(&self) -> Option<PathBuf> {
         if self.interaction_state.acting_window.is_some() {
             self.document_state.active_path.clone()
         } else {
@@ -32,7 +32,7 @@ impl Signex {
 
     /// The project that owns the document at `path`: its tab's, else the
     /// one whose folder or sheet list holds it.
-    pub(super) fn owning_project(&self, path: &Path) -> Option<&LoadedProject> {
+    pub(crate) fn owning_project(&self, path: &Path) -> Option<&LoadedProject> {
         let docs = &self.document_state;
         docs.tabs
             .iter()
@@ -44,7 +44,7 @@ impl Signex {
     }
 
     /// The board file a project names, joined to its folder.
-    pub(super) fn project_board(project: &LoadedProject) -> Option<PathBuf> {
+    pub(crate) fn project_board(project: &LoadedProject) -> Option<PathBuf> {
         let file = project.data.pcb_file.as_deref()?.trim();
         (!file.is_empty()).then(|| project.dir().join(file))
     }

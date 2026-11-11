@@ -433,6 +433,9 @@ pub struct UiState {
     pub board_reannotate: Option<crate::app::BoardReannotateState>,
     /// The options Re-Annotate Board was last used with, for its next opening.
     pub board_reannotate_options: signex_engine::pcb::designators::ReannotateOptions,
+    /// Back Annotate (#1312), while open. Execute writes the sheets in
+    /// memory as one undo group; nothing is written to disk.
+    pub back_annotate: Option<crate::app::BackAnnotateState>,
     /// The Find Similar Objects dialog, while open (#1257).
     pub find_similar: Option<crate::find_similar::FindSimilarState>,
     /// Token of the newest Find Similar project search. Lives outside the

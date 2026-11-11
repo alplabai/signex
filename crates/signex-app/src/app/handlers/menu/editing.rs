@@ -30,12 +30,6 @@ impl Signex {
             // sheets are read and the unopened ones written on background
             // jobs (`handlers/erc/annotate_job.rs`), so the fix is project-wide.
             MenuMessage::AnnotateResetDuplicates => Some(self.handle_reset_duplicate_designators()),
-            MenuMessage::AnnotateBack => {
-                crate::diagnostics::log_info(
-                    "Back-annotate from PCB lands with the PCB editor (PCB Routing plan)",
-                );
-                Some(Task::none())
-            }
             _ => None,
         }
     }
