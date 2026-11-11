@@ -8,7 +8,7 @@ use super::*;
 use crate::icons;
 use crate::styles::tokens::{hover_overlay, resolve};
 use crate::styles::{Spacing, TypeScale, ti};
-use signex_i18n::{I18n, Localized, ids, t};
+use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::net_class::{NetClass, NetLineStyle, format_hex_color};
 use signex_types::theme::ThemeId;
 
@@ -190,7 +190,7 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             if !panel.available {
                 return c.push(
                     container(
-                        text(raw("Open a project to define net classes."))
+                        text(t!(i18n, ids::PANELS_NET_CLASSES_NO_PROJECT))
                             .size(TS.body)
                             .color(muted),
                     )
@@ -227,7 +227,7 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             if panel.classes.is_empty() {
                 return c.push(
                     container(
-                        text(raw("No net classes. A net in no class draws as before."))
+                        text(t!(i18n, ids::PANELS_NET_CLASSES_EMPTY))
                             .size(TS.body)
                             .color(muted),
                     )
@@ -252,7 +252,7 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             c = c.push(container(list).padding([SP.xs, SP.m]).boxed());
             c = c.push(
                 container(
-                    text(raw("The first matching class wins; reorder to change it."))
+                    text(t!(i18n, ids::PANELS_NET_CLASSES_ORDER_HINT))
                         .size(TS.caption)
                         .color(muted),
                 )
@@ -282,24 +282,24 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
                 .boxed(),
             );
 
-            let field = |label_text: &str, hint: &str, f: NetClassField, value: &str| {
-                commit_row(label_text, hint, value, label, f)
+            let field = |label_text: &str, hint: MessageId, f: NetClassField, value: &str| {
+                commit_row(label_text, t!(i18n, hint), value, label, f)
             };
             c = c.push(field(
                 "Name",
-                "Class name",
+                ids::PANELS_NET_CLASSES_NAME_HINT,
                 NetClassField::Name,
                 &panel.draft.name,
             ));
             c = c.push(field(
                 "Colour",
-                "#RRGGBB, empty = theme",
+                ids::PANELS_NET_CLASSES_COLOR_HINT,
                 NetClassField::Color,
                 &panel.draft.color,
             ));
             c = c.push(field(
                 "Width (mm)",
-                "empty = wire's own",
+                ids::PANELS_NET_CLASSES_WIDTH_HINT,
                 NetClassField::Width,
                 &panel.draft.width,
             ));
@@ -312,13 +312,13 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             ));
             c = c.push(field(
                 "Nets",
-                "GND, +3V3",
+                ids::PANELS_NET_CLASSES_NETS_HINT,
                 NetClassField::Nets,
                 &panel.draft.nets,
             ));
             c = c.push(field(
                 "Patterns",
-                "VCC*, ?SDA",
+                ids::PANELS_NET_CLASSES_PATTERNS_HINT,
                 NetClassField::Patterns,
                 &panel.draft.patterns,
             ));
@@ -423,7 +423,7 @@ fn history_button<'a>(
 /// Label | text input that edits a draft and commits on Enter.
 fn commit_row<'a>(
     label: &str,
-    hint: &str,
+    hint: Localized,
     value: &str,
     label_c: LabelInk,
     field: NetClassField,
@@ -431,7 +431,7 @@ fn commit_row<'a>(
     container(
         row![
             widgets::property_label(label.to_string(), label_c),
-            signex_widgets::text_input(signex_widgets::raw(hint.to_string()), value.to_string())
+            signex_widgets::text_input(hint, value.to_string())
                 .on_input(move |s| PanelMsg::NetClass(NetClassMsg::Draft(field, s)))
                 .on_submit(PanelMsg::NetClass(NetClassMsg::Commit(field)))
                 .size(TS.body)

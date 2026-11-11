@@ -223,3 +223,49 @@ fn every_en_us_file_on_disk_is_embedded() {
         "EN_US_SOURCES lists a file twice or one that is gone"
     );
 }
+
+/// #2225: catalog text moved out of the views keeps its exact English. These
+/// three once carried an extraction note after the value (#2298 review).
+#[test]
+fn moved_graphite_strings_keep_their_english() {
+    let i18n = I18n::new(&LanguagePref::Locale(EN_US.into()));
+    let plain = |s: String| s.replace(['\u{2068}', '\u{2069}'], "");
+    assert_eq!(
+        plain(
+            i18n.message(ids::EDITORS_COMPONENT_UNSAVED_MARKER, &[])
+                .to_string()
+        ),
+        "\u{2022} unsaved"
+    );
+    assert_eq!(
+        plain(
+            i18n.message(
+                ids::LIBRARY_RANGE_FILTER_EXCLUDED,
+                &[("count", 3usize.into()), ("unit", "Ω".into())]
+            )
+            .to_string()
+        ),
+        "3 excluded: not a measurement in Ω."
+    );
+    assert_eq!(
+        plain(
+            i18n.message(ids::LIBRARY_PREVIEW_OVERRIDE_PIN, &[("pin", "1".into())])
+                .to_string()
+        ),
+        "Override pin 1 \u{2192}"
+    );
+    assert_eq!(
+        plain(
+            i18n.message(ids::PANELS_STATUS_BAR_SNAP_ON, &[])
+                .to_string()
+        ),
+        "Snap on"
+    );
+    assert_eq!(
+        plain(
+            i18n.message(ids::PANELS_STATUS_BAR_SNAP_OFF, &[])
+                .to_string()
+        ),
+        "Snap off"
+    );
+}

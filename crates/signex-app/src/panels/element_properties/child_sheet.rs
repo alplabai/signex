@@ -65,7 +65,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
                 let mut c: Column<Element<'a, PanelMsg>> =
                     Column::new().spacing(0).width(Length::Fill);
                 c = c.push(child_sheet_text_row(
-                    "Name",
+                    signex_i18n::t!(i18n, signex_i18n::ids::PANELS_CHILD_SHEET_NAME),
                     &name,
                     border_c,
                     muted,
@@ -73,7 +73,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
                     PanelMsg::CommitChildSheetName(id),
                 ));
                 c = c.push(child_sheet_text_row(
-                    "File",
+                    signex_i18n::t!(i18n, signex_i18n::ids::PANELS_CHILD_SHEET_FILE),
                     &filename,
                     border_c,
                     muted,
@@ -121,6 +121,7 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
                     stroke_width_buf,
                     muted,
                     border_c,
+                    i18n,
                 ));
                 c = c.push(
                     container(
@@ -231,6 +232,7 @@ fn child_sheet_stroke_width_row<'a>(
     buffered: Option<String>,
     muted: Color,
     _border_c: Color,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     let display = match buffered {
         Some(s) => s,
@@ -249,10 +251,13 @@ fn child_sheet_stroke_width_row<'a>(
 
     container(
         row![
-            text(raw("Line Width (mm)"))
-                .size(TS.body)
-                .color(muted)
-                .width(96),
+            text(signex_i18n::t!(
+                i18n,
+                signex_i18n::ids::PANELS_CHILD_SHEET_LINE_WIDTH
+            ))
+            .size(TS.body)
+            .color(muted)
+            .width(96),
             input,
         ]
         .spacing(SP.s)
@@ -274,7 +279,7 @@ fn buffered_or(buf: &Option<(uuid::Uuid, String)>, id: uuid::Uuid, live: &str) -
 /// Label | text input row that commits on Enter, so a half-typed value is
 /// never validated (or recorded in undo) keystroke by keystroke.
 fn child_sheet_text_row<'a>(
-    label: &'a str,
+    label: signex_i18n::Localized,
     value: &str,
     _border_c: Color,
     muted: Color,
@@ -289,7 +294,7 @@ fn child_sheet_text_row<'a>(
         .on_submit(on_submit)
         .style(crate::panels::form_look::text_input_style);
     container(
-        row![text(raw(label)).size(TS.body).color(muted).width(84), input]
+        row![text(label).size(TS.body).color(muted).width(84), input]
             .spacing(SP.s)
             .align_y(iced::Alignment::Center),
     )

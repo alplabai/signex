@@ -1,4 +1,4 @@
-use super::{KeyStroke, KeyToken, ShortcutTrigger};
+use super::{KeyStroke, KeyToken, Platform, ShortcutTrigger};
 use std::str::FromStr;
 
 #[test]
@@ -35,7 +35,9 @@ fn displays_localization_free_named_keys() {
     ];
 
     for (input, expected) in cases {
-        assert_eq!(KeyStroke::from_str(input).unwrap().to_string(), expected);
+        let stroke = KeyStroke::from_str(input).unwrap();
+        assert_eq!(stroke.display_for(Platform::Windows), expected);
+        assert_eq!(stroke.display_for(Platform::Linux), expected);
     }
 }
 
@@ -93,18 +95,21 @@ fn live_logo_stroke_equals_parsed_cmd_binding_and_stays_distinct_from_ctrl() {
 // too (the old `command && !ctrl` rule dropped it).
 #[test]
 fn the_logo_key_is_named_per_os_and_shown_alongside_ctrl() {
-    let name = crate::keymap::Modifiers::command_key_name();
-    assert_eq!(
-        KeyStroke::from_str("Cmd+W").unwrap().to_string(),
-        format!("{name}+W")
-    );
-    assert_eq!(
-        KeyStroke::from_str("Ctrl+Cmd+W").unwrap().to_string(),
-        format!("Ctrl+{name}+W")
-    );
-    // Whatever this OS prints must parse back to the same stroke.
     let stroke = KeyStroke::from_str("Ctrl+Cmd+W").unwrap();
-    assert_eq!(KeyStroke::from_str(&stroke.to_string()).unwrap(), stroke);
+    for (platform, name) in [(Platform::Windows, "Win"), (Platform::Linux, "Super")] {
+        assert_eq!(
+            KeyStroke::from_str("Cmd+W").unwrap().display_for(platform),
+            format!("{name}+W")
+        );
+        assert_eq!(stroke.display_for(platform), format!("Ctrl+{name}+W"));
+        // Whatever these OSes print must parse back to the same stroke.
+        assert_eq!(
+            KeyStroke::from_str(&stroke.display_for(platform)).unwrap(),
+            stroke
+        );
+    }
+    // macOS prints symbols, which are never parsed back (`mod_token_tests`).
+    assert_eq!(stroke.display_for(Platform::MacOs), "\u{2303}\u{2318}W");
 }
 
 // #1378 — what is written to a profile file must not depend on the OS the
@@ -114,8 +119,8 @@ fn config_text_is_identical_on_every_os_while_the_label_is_per_os() {
     let trigger = ShortcutTrigger::parse("Ctrl+Cmd+W S").unwrap();
     assert_eq!(trigger.config_text(), "Ctrl+Cmd+W S");
 
-    let name = crate::keymap::Modifiers::command_key_name();
-    assert_eq!(trigger.display_text(), format!("Ctrl+{name}+W S"));
+    assert_eq!(trigger.display_text_for(Platform::Windows), "Ctrl+Win+W S");
+    assert_eq!(trigger.display_text_for(Platform::Linux), "Ctrl+Super+W S");
 
     // Every spelling of the logo key serialises as `Cmd`.
     for spelling in ["Win+S", "Super+S", "Command+S"] {

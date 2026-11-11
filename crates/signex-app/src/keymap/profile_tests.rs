@@ -1,5 +1,5 @@
 use super::{
-    AppCommandId, CompiledKeymap, KeyStroke, KeyToken, Modifiers, ProfileLoadError,
+    AppCommandId, CompiledKeymap, KeyStroke, KeyToken, Modifiers, Platform, ProfileLoadError,
     ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
     ShortcutProfileSet, ShortcutTrigger, back_up_profile_file_at, config_path_for_dir,
     discard_profile_backup_at, export_custom_profile, import_custom_profile, load_profile_set_at,
@@ -55,11 +55,13 @@ fn later_unbind_suppresses_earlier_command_binding() {
                 action: ShortcutBindingAction::Command(command.clone()),
                 context: ShortcutContext::Global,
                 triggers: vec![trigger.clone()],
+                platform: None,
             },
             ShortcutBinding {
                 action: ShortcutBindingAction::Unbind(command),
                 context: ShortcutContext::Global,
                 triggers: vec![trigger],
+                platform: None,
             },
         ],
     };
@@ -622,6 +624,7 @@ fn an_unbind_binding_does_not_make_a_shorter_chord_wait() {
         action,
         context: ShortcutContext::Global,
         triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+        platform: None,
     };
     let save = AppCommandId::new("save_document").unwrap();
     let undo = AppCommandId::new("undo").unwrap();
@@ -700,6 +703,7 @@ fn bind(action: ShortcutBindingAction, trigger: &str) -> ShortcutBinding {
         action,
         context: ShortcutContext::Global,
         triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+        platform: None,
     }
 }
 
@@ -746,10 +750,13 @@ fn a_command_whose_every_binding_is_unbound_has_no_hint() {
 #[test]
 fn a_rebind_after_an_unbind_shows_the_rebound_stroke() {
     let print = AppCommandId::new("print").unwrap();
-    let keymap = CompiledKeymap::compile(&custom_profile(vec![
-        bind(ShortcutBindingAction::Unbind(print.clone()), "Ctrl+P"),
-        bind(ShortcutBindingAction::Command(print.clone()), "Ctrl+P"),
-    ]));
+    let keymap = CompiledKeymap::compile_for(
+        &custom_profile(vec![
+            bind(ShortcutBindingAction::Unbind(print.clone()), "Ctrl+P"),
+            bind(ShortcutBindingAction::Command(print.clone()), "Ctrl+P"),
+        ]),
+        Platform::Windows,
+    );
     assert_eq!(keymap.shortcut_label(&print).as_deref(), Some("Ctrl+P"));
 }
 
@@ -763,7 +770,7 @@ fn ctrl_shift_z_redoes_in_every_built_in_profile() {
     for profile in set.profiles() {
         let mut set = set.clone();
         set.set_active_profile(profile.id.clone()).unwrap();
-        let keymap = set.compile_active();
+        let keymap = CompiledKeymap::compile_for(set.active_profile(), Platform::Windows);
         for keys in ["Ctrl+Shift+Z", "Ctrl+Y"] {
             let stroke = KeyStroke::from_str(keys).unwrap();
             let lookup = keymap.lookup(&[stroke], &[ShortcutContext::Global]);

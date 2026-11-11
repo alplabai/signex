@@ -1,7 +1,7 @@
 //! The Symbol preview: the symbol as the schematic canvas draws it, placed
 //! once on the real paper over the real grid (no sheet border or title
 //! block), through the same lowering, scene and replay. Fitted to the box on
-//! first show, with its own zoom/pan camera: left-drag pans, Ctrl+wheel zooms
+//! first show, with its own zoom/pan camera: left-drag pans, Ctrl/Cmd+wheel zooms
 //! (a plain wheel scrolls the panel around it). Shared by the Components
 //! panel and the Component Preview dialog's Symbol pane.
 
@@ -68,7 +68,7 @@ struct PreviewState {
     user_moved: bool,
     /// Last cursor position while a drag-pan is running.
     pan_from: Option<Point>,
-    /// Ctrl state from the last modifiers event; the wheel zooms with it.
+    /// Ctrl/Cmd state from the last modifiers event; the wheel zooms with it.
     ctrl_held: bool,
     cache: canvas::Cache,
     shown: RefCell<Option<Shown>>,
@@ -263,7 +263,7 @@ impl canvas::Program<()> for SymbolSheetPreview {
             state.cache.clear();
         }
         if let iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) = event {
-            state.ctrl_held = mods.control();
+            state.ctrl_held = mods.command();
             return None;
         }
         let iced::Event::Mouse(event) = event else {
@@ -271,7 +271,7 @@ impl canvas::Program<()> for SymbolSheetPreview {
         };
         match event {
             mouse::Event::WheelScrolled { delta } => {
-                // Only Ctrl+wheel zooms; a plain wheel scrolls the panel.
+                // Only Ctrl/Cmd+wheel zooms; a plain wheel scrolls the panel.
                 if !state.ctrl_held {
                     return None;
                 }
