@@ -657,6 +657,7 @@ impl Signex {
                 commit.replace_message,
                 commit.removed_path.map(&rebase).as_deref(),
                 None,
+                commit.with_summary,
             );
         }
     }

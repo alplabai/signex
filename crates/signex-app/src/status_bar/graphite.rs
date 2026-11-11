@@ -76,6 +76,26 @@ pub fn snap_pill(
     }
 }
 
+/// Active-layer pill: `accent_soft` fill, a `hover` fill under the pointer.
+pub fn layer_pill(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let r = resolve(tokens);
+    let (fill, ink, hover) = (r.accent_soft, r.accent_soft_ink, ti(tokens.hover));
+    move |_, status| button::Style {
+        background: Some(Background::Color(match status {
+            button::Status::Hovered | button::Status::Pressed => hover,
+            _ => fill,
+        })),
+        text_color: ink,
+        border: Border {
+            radius: BAR_CONTROL_RADIUS.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
+}
+
 /// The bordered Panels button.
 pub fn panels_button(
     tokens: &ThemeTokens,
@@ -209,6 +229,23 @@ pub(super) fn view<'a>(
     ];
     if let Some(activity) = r.activity {
         bar = bar.push(mono_text(activity.to_owned(), muted).boxed());
+    }
+    // The active copper layer of an open board; a click steps to the next.
+    if let Some((caption, name)) = r.active_layer.clone() {
+        bar = bar.push(
+            button(
+                row![
+                    text(caption).size(TS.body).color(muted),
+                    text(name).size(TS.body).color(ink),
+                ]
+                .spacing(SP.xs)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([1.5, 6.0])
+            .style(layer_pill(tokens))
+            .on_press(StatusBarRequest::ActiveLayerStepRequested)
+            .boxed(),
+        );
     }
     if r.pending_git_commits > 0 {
         let label = if r.pending_git_commits == 1 {

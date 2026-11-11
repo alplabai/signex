@@ -325,6 +325,9 @@ pub struct Connection {
     timeout: Duration,
     /// A request failed: see [`Connection::ask`].
     broken: bool,
+    /// The client name and rights sent with every request, for the app's
+    /// access journal (#2253).
+    identity: Option<(String, Vec<String>)>,
 }
 
 impl Connection {
@@ -341,7 +344,17 @@ impl Connection {
             token,
             timeout: REPLY_TIMEOUT,
             broken: false,
+            identity: None,
         })
+    }
+
+    /// Send `client` (the program's name) and `grants` (what the run may do)
+    /// with every request; the app records them in its access journal. The
+    /// app trusts neither: its own checks apply on top.
+    #[must_use]
+    pub fn with_identity(mut self, client: String, grants: Vec<String>) -> Self {
+        self.identity = Some((client, grants));
+        self
     }
 
     /// Wait at most `timeout` for a reply, instead of the default.
@@ -363,7 +376,7 @@ impl Connection {
                     .into(),
             );
         }
-        let line = request_line(&self.token, id, operands)?;
+        let line = request_line_as(&self.token, id, operands, self.identity.as_ref())?;
         let outcome = self.exchange(id, &line);
         self.broken = outcome.is_err();
         outcome
@@ -440,6 +453,16 @@ pub fn request_line(
     id: &str,
     operands: &[(String, String)],
 ) -> Result<String, String> {
+    request_line_as(token, id, operands, None)
+}
+
+/// [`request_line`] naming the client and what it may do.
+pub fn request_line_as(
+    token: &str,
+    id: &str,
+    operands: &[(String, String)],
+    identity: Option<&(String, Vec<String>)>,
+) -> Result<String, String> {
     let mut args = Map::new();
     for (name, text) in operands {
         let value = if name == "edits" {
@@ -449,7 +472,12 @@ pub fn request_line(
         };
         args.insert(name.clone(), value);
     }
-    Ok(serde_json::json!({"token": token, "id": id, "args": args}).to_string())
+    let mut request = serde_json::json!({"token": token, "id": id, "args": args});
+    if let (Some((client, grants)), Some(object)) = (identity, request.as_object_mut()) {
+        object.insert("client".into(), Value::String(client.clone()));
+        object.insert("grants".into(), serde_json::json!(grants));
+    }
+    Ok(request.to_string())
 }
 
 /// What the app answered, in the headless runner's terms.
@@ -659,6 +687,26 @@ mod tests {
         assert_eq!(value["args"]["edits"][0]["id"], "place_junction");
         let bad = request_line("t", "apply_edits", &[("edits".into(), "nope".into())]);
         assert!(bad.unwrap_err().contains("`edits` is not JSON"));
+    }
+
+    /// #2253: the client's name and rights ride on the request, and only when
+    /// it has them; the app's wire reads them back.
+    #[test]
+    fn a_request_may_name_the_client_and_its_rights_and_the_app_reads_them() {
+        let identity = (
+            "signex-cli".to_string(),
+            vec!["read".to_string(), "save".to_string()],
+        );
+        let named = request_line_as("tok", "list_documents", &[], Some(&identity)).unwrap();
+        let plain = request_line_as("tok", "list_documents", &[], None).unwrap();
+
+        let read = super::super::wire::parse_request(&named).unwrap();
+        assert_eq!(read.client.as_deref(), Some("signex-cli"));
+        assert_eq!(read.grants, ["read", "save"]);
+        let value: Value = serde_json::from_str(&plain).unwrap();
+        assert!(value.get("client").is_none() && value.get("grants").is_none());
+        let bare = super::super::wire::parse_request(&plain).unwrap();
+        assert!(bare.client.is_none() && bare.grants.is_empty());
     }
 
     #[test]

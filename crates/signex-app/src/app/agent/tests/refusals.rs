@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 
-use super::{Input, SHEET_A, app_at_work, ask, ask_raw, line, path, snapshot};
+use super::{Input, SHEET_A, app_at_work, ask, ask_raw_as, line, path, snapshot};
 use crate::app::Signex;
 use crate::app::command::queries::tests::sheet;
 use crate::app::handlers::editing_commands::net_color_driver as fixture;
@@ -34,11 +34,12 @@ fn held(app: &Signex) -> (String, crate::headless::ChangeSnapshot, usize, usize)
 /// Run `input`, and check the reply is a refusal naming `fragment`, that
 /// Messages says so with the client's pid, and that nothing changed.
 fn refused_with(app: &mut Signex, input: Input, named: &str, fragment: &str) -> Value {
-    let needle = format!("Agent request (pid 4242): {named} -> refused: ");
-    let logged = refusals_logged(&needle, fragment);
+    let needle = format!("Agent request (pid {REFUSING_PID}): {named} -> refused: ");
+    let _ = crate::diagnostics::init_logging();
+    let mark = crate::diagnostics::newest_entry_id();
     let before = held(app);
 
-    let reply = ask_raw(app, input);
+    let reply = ask_raw_as(app, REFUSING_PID, input);
 
     assert_eq!(reply["status"], "refused", "{fragment}: {reply}");
     let reason = reply["reason"].as_str().unwrap_or_default();
@@ -49,20 +50,25 @@ fn refused_with(app: &mut Signex, input: Input, named: &str, fragment: &str) -> 
     );
     assert_eq!(reply["changed"], json!([]));
     assert_eq!(
-        refusals_logged(&needle, fragment),
-        logged + 1,
-        "not logged: {needle}{fragment}"
+        refusals_logged_since(mark, &needle, fragment),
+        1,
+        "not logged exactly once: {needle}{fragment}"
     );
     assert_eq!(held(app), before, "{fragment} changed something");
     reply
 }
 
-/// How many Messages lines begin with `start` and say `fragment`. A line over
-/// 160 bytes is compacted and ends in `...`; the reasons come first, so what
-/// the person needs is still in it.
-fn refusals_logged(start: &str, fragment: &str) -> usize {
-    let _ = crate::diagnostics::init_logging();
-    crate::diagnostics::recent_entries()
+/// The pid this file's refusals come from. No other test sends it, so a line
+/// of this pid in Messages is this request's, whatever the other tests log
+/// into the shared ring (#2227).
+const REFUSING_PID: u32 = 6502;
+
+/// How many Messages lines logged after `mark` begin with `start` and say
+/// `fragment`. A line over 160 bytes is compacted and ends in `...`; the reasons
+/// come first, so what the person needs is still in it.
+fn refusals_logged_since(mark: Option<u64>, start: &str, fragment: &str) -> usize {
+    crate::diagnostics::entries_since(mark)
+        .entries
         .iter()
         .filter(|entry| entry.message.starts_with(start) && entry.message.contains(fragment))
         .count()
@@ -301,6 +307,7 @@ fn a_long_path_does_not_push_the_reason_out_of_the_messages_line() {
     let mut app = app_at_work();
     let long = elsewhere(&format!("{}.snxsch", "n".repeat(200)));
     let request = line(&app, "read_document", json!({"document": long}));
+    let mark = crate::diagnostics::newest_entry_id();
     let reply = refuse_line(
         &mut app,
         request,
@@ -309,11 +316,13 @@ fn a_long_path_does_not_push_the_reason_out_of_the_messages_line() {
     );
     // The line is compacted to 160 bytes and says why before it says where.
     assert!(
-        crate::diagnostics::recent_entries().iter().any(|e| e
-            .message
-            .starts_with("Agent request (pid 4242): `read_document`")
-            && e.message.contains("not an open or referenced document")
-            && e.message.ends_with("...")),
+        crate::diagnostics::entries_since(mark)
+            .entries
+            .iter()
+            .any(|e| e.message.starts_with(&format!(
+                "Agent request (pid {REFUSING_PID}): `read_document`"
+            )) && e.message.contains("not an open or referenced document")
+                && e.message.ends_with("...")),
         "{reply}"
     );
 }

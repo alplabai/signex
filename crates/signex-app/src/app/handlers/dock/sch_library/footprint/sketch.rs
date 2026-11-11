@@ -57,10 +57,7 @@ impl Signex {
                 .and_then(|pad| pad.shape_params.get(key).cloned())
         });
         if let Some(name) = parameter_name {
-            if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
-                && let Some(path) = active_tab.kind.as_footprint_editor()
-            {
-                let path = path.clone();
+            if let Some(path) = self.active_footprint_editor().map(|e| e.path.clone()) {
                 follow = self.update(Message::Library(
                     crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                         path,
@@ -95,10 +92,8 @@ impl Signex {
         // mints the per-corner parameter, and triggers a
         // solve+rebake. Undo snapshot captured at dispatcher
         // level via mutates_footprint_state.
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
-            && let Some(path) = active_tab.kind.as_footprint_editor()
-        {
-            let path = path.clone();
+        // The footprint tab in view, or a board's sketch editor (#2234).
+        if let Some(path) = self.active_footprint_editor().map(|e| e.path.clone()) {
             follow = self.update(Message::Library(
                 crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                     path,
@@ -180,10 +175,8 @@ impl Signex {
         // v0.16.2 — Properties-panel parameter row edit.
         // Forwards to `FootprintSketchEditParameter` which
         // upserts the parameter and triggers a solve+bake.
-        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
-            && let Some(path) = active_tab.kind.as_footprint_editor()
-        {
-            let path = path.clone();
+        // The footprint tab in view, or a board's sketch editor (#2234).
+        if let Some(path) = self.active_footprint_editor().map(|e| e.path.clone()) {
             follow = self.update(Message::Library(
                 crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                     path,

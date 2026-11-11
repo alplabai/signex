@@ -46,6 +46,10 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("open_document", file::open),
     ("new_document", file::new_project),
     ("assign_net_class", doc::assign_net_class),
+    (
+        "update_pcb_from_schematic",
+        crate::app::update_pcb::update_pcb_from_schematic,
+    ),
     ("apply_edits", agent::apply_edits),
     ("revert", agent::revert),
     ("place_net_label", place::net_label),

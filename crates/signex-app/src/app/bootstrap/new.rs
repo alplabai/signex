@@ -15,6 +15,8 @@ impl Signex {
         // registry (#1924); an app made any other way (a test, a headless run)
         // does not.
         app.agent.lists_projects = true;
+        // And journals what agents do in its projects (#2253).
+        app.agent.journals_on = true;
         // A test run that boots the real window lists into a folder of its own,
         // as the config files go to a redirect (see `config_root`).
         if crate::config_root::is_test_redirect_active() {
@@ -267,6 +269,7 @@ impl Signex {
                 preferences_draft_component_classes: component_classes.clone(),
                 keymap_profiles,
                 active_keymap,
+                pcb_layer_views: Default::default(),
                 keymap_pending_sequence: Vec::new(),
                 keymap_pending_target: None,
                 keymap_chord_wait: None,
@@ -382,10 +385,16 @@ impl Signex {
                 enable_version_control: None,
                 grid_properties: None,
                 new_project: None,
+                update_pcb: None,
                 sheet_numbering: None,
                 sheet_numbering_reads: 0,
+                board_reannotate: None,
+                board_reannotate_options: Default::default(),
                 find_similar: None,
                 find_similar_generation: 0,
+                assign_footprints: None,
+                assign_footprints_reads: 0,
+                net_inspector: Default::default(),
                 paste_array: None,
                 paste_array_opens: 0,
                 selection_filter_custom: None,
@@ -544,6 +553,7 @@ impl Signex {
                     signal_mode: Default::default(),
                     projects_view: Default::default(),
                     net_classes: Default::default(),
+                    pcb_layers: Default::default(),
                     project_tree: vec![],
                     project_tree_builds: 0,
                     project_tree_selected: None,
@@ -551,6 +561,8 @@ impl Signex {
                     library_row_detail: None,
                     component_sheet: None,
                     pcb_nets: None,
+                    net_inspector: Default::default(),
+                    pcb_board: None,
                     selection_count: 0,
                     selected_uuid: None,
                     selected_kind: None,
@@ -643,8 +655,13 @@ impl Signex {
                 pcb_canvas,
                 pcb_canvases: std::collections::HashMap::new(),
                 pcb_selection: Default::default(),
+                pcb_selections: std::collections::HashMap::new(),
+                pcb_carry: None,
                 pcb_ratsnest: Default::default(),
                 pcb_drc: Default::default(),
+                cross_select: Default::default(),
+                board_sketch: None,
+                pcb_footprint_draft: None,
                 dragging: None,
                 drag_start_pos: None,
                 drag_start_size: 0.0,

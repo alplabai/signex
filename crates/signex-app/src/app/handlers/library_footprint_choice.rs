@@ -100,33 +100,60 @@ impl Signex {
         let Some(doc) = self.document_state.active_engine().map(|e| e.document()) else {
             return Task::none();
         };
-        let Some(symbol) = doc.symbols.iter().find(|s| s.uuid == symbol_id) else {
-            return Task::none();
-        };
-        let reference = symbol.reference.clone();
         // The "(edited)" entry has no binding of its own: picking it is a no-op.
-        let Some((library, footprint)) = split_lib_id(binding) else {
-            return Task::none();
-        };
-        let chosen = PrimitiveRef::new(library, footprint);
-        let Some((_, _, row)) = self.row_of_placed_symbol(symbol) else {
-            self.report_footprint_choice_failure(&reference, "its library row is not open");
-            return Task::none();
-        };
-        if !row.binds_footprint(&chosen) {
-            self.report_footprint_choice_failure(&reference, "its row does not offer it");
+        if split_lib_id(binding).is_none() || !doc.symbols.iter().any(|s| s.uuid == symbol_id) {
             return Task::none();
         }
-        let is_default = row.footprint_ref == Some(chosen);
-        let Some(name) = self.library.footprint_name(&chosen) else {
-            self.report_footprint_choice_failure(
-                &reference,
-                "the library does not list its name; refresh the library",
-            );
-            return Task::none();
+        match self.footprint_binding_commands(doc, symbol_id, binding) {
+            Ok(commands) => {
+                // An engine error is already logged by the gateway.
+                self.apply_engine_commands(commands, true, true);
+            }
+            Err(FootprintChoiceRefusal { reference, why }) => {
+                self.report_footprint_choice_failure(&reference, why);
+            }
+        }
+        Task::none()
+    }
+
+    /// The commands that build the part `symbol_id` of `doc` (every placed
+    /// unit) with the footprint `binding` names, checked against the part's
+    /// own library row: only the row's default and alternates are accepted.
+    /// Properties and Tools ▸ Assign Footprints both go through here.
+    pub(crate) fn footprint_binding_commands(
+        &self,
+        doc: &signex_types::schematic::SchematicSheet,
+        symbol_id: Uuid,
+        binding: &str,
+    ) -> Result<Vec<signex_engine::Command>, FootprintChoiceRefusal> {
+        let symbol =
+            doc.symbols
+                .iter()
+                .find(|s| s.uuid == symbol_id)
+                .ok_or(FootprintChoiceRefusal {
+                    reference: String::new(),
+                    why: "the part is no longer on its sheet",
+                })?;
+        let refuse = |why| FootprintChoiceRefusal {
+            reference: symbol.reference.clone(),
+            why,
         };
+        let (library, footprint) =
+            split_lib_id(binding).ok_or_else(|| refuse("the footprint is not a library one"))?;
+        let chosen = PrimitiveRef::new(library, footprint);
+        let (_, _, row) = self
+            .row_of_placed_symbol(symbol)
+            .ok_or_else(|| refuse("its library row is not open"))?;
+        if !row.binds_footprint(&chosen) {
+            return Err(refuse("its row does not offer it"));
+        }
+        let is_default = row.footprint_ref == Some(chosen);
+        let name = self
+            .library
+            .footprint_name(&chosen)
+            .ok_or_else(|| refuse("the library does not list its name; refresh the library"))?;
         let binding = (!is_default).then(|| lib_id_of(&chosen));
-        let commands: Vec<signex_engine::Command> = signex_engine::placed_unit_ids(doc, symbol_id)
+        Ok(signex_engine::placed_unit_ids(doc, symbol_id)
             .into_iter()
             .map(
                 |symbol_id| signex_engine::Command::SetSymbolFootprintBinding {
@@ -135,10 +162,7 @@ impl Signex {
                     binding: binding.clone(),
                 },
             )
-            .collect();
-        // An engine error is already logged by the gateway.
-        self.apply_engine_commands(commands, true, true);
-        Task::none()
+            .collect())
     }
 
     /// The footprint's listed name, else a short id.
@@ -154,6 +178,13 @@ impl Signex {
             "Could not switch {reference} to another footprint: {detail}."
         ));
     }
+}
+
+/// Why a footprint choice was refused, and for which part.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FootprintChoiceRefusal {
+    pub(crate) reference: String,
+    pub(crate) why: &'static str,
 }
 
 /// The alternate footprint a part is built with, from its valid stamp; `None`

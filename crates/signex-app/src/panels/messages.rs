@@ -19,6 +19,8 @@ pub enum PanelMsg {
     /// footprint editor by tab and flips its `auto_fit_courtyard`
     /// flag via the existing `FootprintToggleAutoFit` path.
     FpEditorToggleAutoFitCourtyard,
+    /// The Board section of a board sketch entity was edited (#2234).
+    BoardSketch(BoardSketchAttrMsg),
     /// Layers panel — an eye toggle was pressed; carries the standard
     /// layer name (`F.Cu`, `B.SilkS`, ...).
     FpEditorLayerEyeClicked(String),
@@ -649,6 +651,11 @@ pub enum PanelMsg {
     Signal(super::signal::SignalMsg),
     /// Graphite Projects panel: file filter and group chevrons (view-only).
     Projects(super::ProjectsMsg),
+    /// A Layers panel row: an eye, or the row itself to make a copper layer
+    /// active (#2223). The board-view event the dispatcher applies.
+    PcbLayers(crate::app::PcbViewMsg),
+    /// The selected board footprint's Designator or Value field (#1312).
+    PcbFootprintText(super::PcbFootprintTextMsg),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active
     /// `PanelContext.library_row_detail`. Routes to
@@ -681,6 +688,8 @@ pub enum PanelMsg {
     /// symbol's uuid and the `<library uuid>:<footprint uuid>` of the
     /// footprint (#1234).
     SwitchFootprintChoice(uuid::Uuid, String),
+    /// The Net Inspector panel (#1269).
+    NetInspector(super::NetInspectorMsg),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.

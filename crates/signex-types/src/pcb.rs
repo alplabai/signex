@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::format::{BoardUnknown, UnknownColumns, UnknownFields, parse_pcb_layer};
+use crate::part::FootprintSourceRef;
 use crate::pcb_layer::PcbLayer;
 use crate::property::PcbProperty;
 use crate::schematic::InstancePath;
@@ -147,7 +148,7 @@ pub struct PcbSetup {
 // Net definition
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NetDef {
     pub number: u32,
     pub name: String,
@@ -297,6 +298,11 @@ pub struct Footprint {
     /// a footprint placed by hand or on a board saved before the link.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schematic_link: Option<SymbolLink>,
+    /// The library footprint this one was built from; `None` for a footprint
+    /// drawn on the board or saved before the field. Saved in the optional
+    /// `lib_ref` footprint column. See ADR-0005 section 13.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub library_ref: Option<FootprintSourceRef>,
     /// Keys in this footprint's `[extras.footprints.<uuid>]` table that
     /// this build does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
@@ -478,6 +484,12 @@ pub struct PcbBoard {
     pub graphics: Vec<BoardGraphic>,
     #[serde(default)]
     pub texts: Vec<BoardText>,
+    /// The board sketch (#2234) and the keepouts, cutouts, holes and
+    /// V-scores it baked to; `None` for a board drawn without one. Written
+    /// only through the board engine's `SetBoardSketch` command, which also
+    /// writes [`Self::outline`] when the sketch owns it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sketch: Option<crate::pcb_sketch::BoardSketch>,
     /// Keys in the `.snxpcb` manifest, `[stackup]`, `[nets]` and
     /// `[extras.board]` that this build does not recognise, kept per
     /// section so a save re-emits each where it was found. Empty for

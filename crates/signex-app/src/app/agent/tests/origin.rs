@@ -316,6 +316,18 @@ fn an_agent_gets_the_persons_read_only_reason_and_the_warning() {
         assert!(reason.contains("snxsch/1.7"), "{reason}");
         let said = reply["messages"].to_string();
         assert!(said.contains("snxsch/1.7"), "{name}: the warning: {said}");
+        // Once for the sheet, not once per check the transaction adds.
+        let warnings = reply["messages"]
+            .as_array()
+            .expect("messages")
+            .iter()
+            .filter(|line| {
+                line["message"]
+                    .as_str()
+                    .is_some_and(|m| m.contains("snxsch/1.7"))
+            })
+            .count();
+        assert_eq!(warnings, 1, "{name}: the warning is said once: {said}");
         assert!(!app.document_state.engines[&path("a.snxsch")].in_transaction());
     }
 }

@@ -69,6 +69,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `close_all_documents` | Close all documents | window | — | — |
 | `copy` | Copy | edit | `Ctrl+C` | `Ctrl+C` |
 | `copy_attributes_or_add_vertex` | Copy attributes from object under cursor or add vertex while drawing | interactive | `Insert` | — |
+| `cross_probe` | Cross probe the selection to the board or schematic | select | — | — |
 | `cut` | Cut | edit | `Ctrl+X` | `Ctrl+X` |
 | `cycle_fast_grid` | Cycle fast grid | view | — | `Alt+4` |
 | `cycle_selection_mode` | Cycle selection mode | select | — | — |
@@ -115,6 +116,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_grid_picker` | Open grid picker | view | — | — |
 | `open_grid_properties` | Open grid properties | view | — | — |
 | `open_library_browser` | Open library browser | library | — | — |
+| `open_net_inspector` | Open Net Inspector panel | panels | — | — |
 | `open_preferences` | Open preferences | preferences | `Ctrl+,` | `Ctrl+,` |
 | `open_schematic_preferences` | Open schematic preferences | preferences | `T P` | — |
 | `paste` | Paste | edit | `Ctrl+V` | `Ctrl+V` |
@@ -184,6 +186,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `align_vertical_centers` | Align vertical centers | modify | — | — |
 | `annotate_schematic` | Annotate schematic | design | `T A` | — |
 | `annotate_schematic_quietly` | Annotate schematic quietly | design | `Alt+A` | `Alt+A` |
+| `assign_footprints` | Assign footprints | design | — | — |
 | `assign_net_class` | Assign net to class | design | — | — |
 | `bring_to_front` | Bring to front | modify | — | — |
 | `bring_to_front_of` | Bring to front of | modify | — | — |
@@ -282,7 +285,17 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
+| `board_sketch` | Enter or leave the board sketch | design | — | — |
+| `flip_selection` | Flip selection to the other board side | modify | — | — |
+| `new_pcb_document` | New PCB in the project | file | — | — |
+| `next_layer` | Make the next copper layer active | view | `+`, `Shift++`, `*`, `Shift+*` | `+`, `Shift++`, `*`, `Shift+*` |
+| `prev_layer` | Make the previous copper layer active | view | `-` | `-` |
+| `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
+| `show_all_layers` | Show every layer | view | — | — |
+| `toggle_layer_visibility` | Show or hide the active layer | view | — | — |
+| `toggle_layers_panel` | Show or hide the Layers panel | view | — | — |
+| `toggle_ratsnest` | Show or hide the ratsnest | view | — | — |
 
 ## 3D
 

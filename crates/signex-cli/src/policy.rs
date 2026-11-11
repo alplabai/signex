@@ -31,6 +31,25 @@ pub struct Approved {
 }
 
 impl Policy {
+    /// What this run may do, as the agent journal records it: each capability
+    /// by name, and `allow-path:<dir>` for each extra folder.
+    pub fn grants(&self) -> Vec<String> {
+        self.capabilities
+            .iter()
+            .map(|capability| capability.name().to_string())
+            .chain(
+                self.allow_paths
+                    .iter()
+                    .map(|dir| format!("allow-path:{}", dir.display())),
+            )
+            .collect()
+    }
+
+    /// Does this run write files? Only a run that does journals what it did.
+    pub fn may_save(&self) -> bool {
+        self.capabilities.contains(&Capability::Save)
+    }
+
     /// Why `request` may not run, or what to run. `base` is the project
     /// folder a relative path is read against; `roots` are the folders a
     /// path may sit in (the project and its mounted libraries).

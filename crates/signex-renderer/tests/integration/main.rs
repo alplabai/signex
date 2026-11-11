@@ -6,5 +6,6 @@ mod pcb_10k_track_benchmark;
 mod pcb_10k_track_fixture;
 mod pcb_dirty_event_integration;
 mod pcb_pad_rotation;
+mod pcb_real_boards;
 mod pcb_vertical_slice_golden;
 mod pcb_zone_stack_benchmark;

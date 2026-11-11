@@ -1,10 +1,13 @@
-//! Read-only design-rule check of a board (#2222): clearance, shorts and
-//! unconnected nets, in integer nm. Pure: the board goes in, a report comes
-//! out, and nothing here edits it. Rules and what is not checked yet:
-//! `docs/architecture/pcb-drc.md`.
+//! Read-only design-rule check of a board (#2222): clearance, shorts,
+//! unconnected nets and board-sketch keepouts (#2234), in integer nm. Pure:
+//! the board goes in, a report comes out, and nothing here edits it. Rules
+//! and what is not checked yet: `docs/architecture/pcb-drc.md`.
 
 mod check;
+mod keepout;
 mod rules;
+
+use uuid::Uuid;
 
 use crate::index::{ItemRef, Rejected};
 use crate::units::PointNm;
@@ -22,6 +25,9 @@ pub enum ViolationKind {
     Clearance,
     /// One missing link of a net the ratsnest still shows open.
     Unconnected,
+    /// A track, via, pad or footprint inside a board-sketch keepout that
+    /// forbids it, on a layer the keepout covers (#2234).
+    Keepout,
 }
 
 /// One finding, sorted by `(kind, items, ..)` in a report.
@@ -29,12 +35,15 @@ pub enum ViolationKind {
 pub struct Violation {
     pub kind: ViolationKind,
     /// The items involved, sorted: two for a clearance or short; for an
-    /// unconnected link the pads at its ends (fewer when an end holds none).
+    /// unconnected link the pads at its ends (fewer when an end holds none);
+    /// the one item for a keepout.
     pub items: Vec<ItemRef>,
-    /// The two nets; the same net twice for an unconnected link.
+    /// The two nets; the same net twice for an unconnected link or a
+    /// keepout (0 for a footprint).
     pub nets: (u32, u32),
     /// Copper layers both items reach, as a bit mask (see
     /// [`copper_layers`](crate::copper_layers)); 0 for an unconnected link.
+    /// For a keepout, the layers the item and the keepout share.
     pub layers: u32,
     /// Where it is: the midpoint of the closest points, the centre of the
     /// overlap, or the middle of the missing link.
@@ -43,8 +52,10 @@ pub struct Violation {
     /// for an unconnected one. Under `required_nm` for a clearance.
     pub measured_nm: i64,
     /// The clearance the rules ask for between these nets; 0 for an
-    /// unconnected link.
+    /// unconnected link or a keepout.
     pub required_nm: i64,
+    /// The keepout broken, for a [`ViolationKind::Keepout`].
+    pub keepout: Option<Uuid>,
 }
 
 /// The result of one run.
@@ -67,5 +78,7 @@ impl DrcReport {
     }
 }
 
+#[cfg(test)]
+mod keepout_tests;
 #[cfg(test)]
 mod tests;

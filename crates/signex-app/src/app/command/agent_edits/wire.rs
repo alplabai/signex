@@ -32,14 +32,44 @@ pub fn operand_text(name: &str, value: &Value) -> Result<String, String> {
         Value::Array(items) if name == "edits" && items.iter().all(Value::is_object) => {
             Ok(value.to_string())
         }
+        Value::Array(items) if name == "documents" && items.iter().all(Value::is_string) => {
+            Ok(value.to_string())
+        }
         Value::Array(point) => match point.as_slice() {
             [Value::Number(x), Value::Number(y)] => Ok(format!("{x},{y}")),
             _ => Err(format!("operand `{name}` must be [x, y] when it is a list")),
         },
+        Value::Object(map) if name == "expect_revisions" && map.values().all(Value::is_u64) => {
+            Ok(value.to_string())
+        }
         Value::Null | Value::Object(_) => Err(format!(
             "operand `{name}` must be a string, number, boolean or [x, y]"
         )),
     }
+}
+
+/// `{"<document>": revision, ..}`, the revision each other sheet of a
+/// cross-sheet `apply_edits` call must be at, in document order of the text.
+pub fn parse_expect_revisions(text: &str) -> Result<Vec<(String, u64)>, String> {
+    const SHAPE: &str = "`expect_revisions` must be a JSON object of document to revision number";
+    let Ok(Value::Object(map)) = serde_json::from_str::<Value>(text) else {
+        return Err(SHAPE.to_string());
+    };
+    map.iter()
+        .map(|(document, revision)| Ok((document.clone(), revision.as_u64().ok_or(SHAPE)?)))
+        .collect()
+}
+
+/// `["<document>", ..]`, the sheets of a cross-sheet group a `revert` names.
+pub fn parse_documents(text: &str) -> Result<Vec<String>, String> {
+    const SHAPE: &str = "`documents` must be a JSON list of document ids or paths";
+    let Ok(Value::Array(items)) = serde_json::from_str::<Value>(text) else {
+        return Err(SHAPE.to_string());
+    };
+    items
+        .iter()
+        .map(|item| item.as_str().map(str::to_string).ok_or(SHAPE.to_string()))
+        .collect()
 }
 
 /// `[{"id": "..", "args": {..}}, ..]` as edits. Nothing else is read: an
@@ -113,10 +143,16 @@ pub fn edit_list_text(edits: &[EditSpec]) -> String {
 
 /// Commands that edit a sheet and still may not be in the list, and why.
 /// Everything else is derived from the catalog (`edit_refusal`).
-const PROJECT_WIDE: &[(&str, &str)] = &[(
-    "assign_net_class",
-    "it writes the project's net classes, which no sheet's undo step covers",
-)];
+const PROJECT_WIDE: &[(&str, &str)] = &[
+    (
+        "assign_net_class",
+        "it writes the project's net classes, which no sheet's undo step covers",
+    ),
+    (
+        "update_pcb_from_schematic",
+        "it edits the project's board, which no sheet's undo step covers; run it as its own command",
+    ),
+];
 
 /// Why `command` may not be one of the edits, or `None` when it may: it must
 /// be an undoable edit of a document that runs headless through an operand
@@ -165,6 +201,44 @@ mod tests {
 
     fn id(name: &str) -> AppCommandId {
         AppCommandId::new(name).unwrap()
+    }
+
+    /// The revisions of a cross-sheet call are an object of whole numbers, and
+    /// only the `expect_revisions` operand takes one.
+    #[test]
+    fn expect_revisions_is_an_object_of_whole_numbers_and_only_there() {
+        let map = json!({"b.snxsch": 12});
+        assert_eq!(
+            operand_text("expect_revisions", &map).unwrap(),
+            r#"{"b.snxsch":12}"#
+        );
+        assert!(operand_text("expect_revisions", &json!({"b": "x"})).is_err());
+        assert!(operand_text("summary", &map).is_err());
+        assert_eq!(
+            parse_expect_revisions(r#"{"b.snxsch":12}"#).unwrap(),
+            [("b.snxsch".to_string(), 12)]
+        );
+        assert!(parse_expect_revisions("[1]").is_err());
+        assert!(parse_expect_revisions(r#"{"b":-1}"#).is_err());
+    }
+
+    /// The sheets a `revert` names are a list of strings, and only the
+    /// `documents` operand takes one.
+    #[test]
+    fn documents_is_a_list_of_strings_and_only_there() {
+        let list = json!(["a.snxsch", "b.snxsch"]);
+        assert_eq!(
+            operand_text("documents", &list).unwrap(),
+            r#"["a.snxsch","b.snxsch"]"#
+        );
+        assert!(operand_text("documents", &json!([1, 2, 3])).is_err());
+        assert!(operand_text("summary", &list).is_err());
+        assert_eq!(
+            parse_documents(r#"["a","b"]"#).unwrap(),
+            ["a".to_string(), "b".to_string()]
+        );
+        assert!(parse_documents(r#"["a",1]"#).is_err());
+        assert!(parse_documents("{}").is_err());
     }
 
     #[test]
@@ -262,6 +336,7 @@ mod tests {
             ("open_document", "does not edit a document"),
             ("apply_edits", "its own edits"),
             ("assign_net_class", "net classes"),
+            ("update_pcb_from_schematic", "edits the project's board"),
             ("toggle_properties_panel", "not runnable headless"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));

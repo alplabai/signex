@@ -168,6 +168,7 @@ fn write_sheet(path: &Path, id: &str) {
 
 fn write_board(path: &Path, id: &str) {
     let mut board = signex_types::pcb::PcbBoard {
+        sketch: None,
         unknown: Default::default(),
         uuid: id.parse().expect("uuid"),
         version: 1,
@@ -221,6 +222,7 @@ fn write_project(dir: &Path) -> PathBuf {
         annotation: None,
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
+        agent_journal: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };

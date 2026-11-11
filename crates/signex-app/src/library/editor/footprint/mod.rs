@@ -56,5 +56,10 @@ pub(crate) mod updates;
 pub use canvas::PreviewFootprint;
 pub(crate) use canvas::graphite_look_for;
 
+// What board sketch mode (#2234) hosts the sketch tool with: the tool and
+// mode its messages name, the board backdrop, and the edit router.
+pub use state::{BoardBackdrop, EditorMode, SketchTool, ToolPending};
+pub(crate) use updates::apply_footprint_primitive_edit;
+
 #[cfg(test)]
 mod tests;

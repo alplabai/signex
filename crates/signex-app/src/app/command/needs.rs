@@ -30,6 +30,23 @@ pub(crate) enum Needs {
     FitTarget,
     FootprintEditor,
     Pcb,
+    /// Rotate and mirror: on a board, an unlocked footprint selected
+    /// (#2240); on a sheet, a selection or something in hand.
+    Turn,
+    /// Move Selection: an unlocked footprint selected on a board, or a
+    /// selection on a sheet.
+    MoveSelection,
+    /// Move: a sheet or a board to pick from.
+    MoveObject,
+    /// Flip Selection: a board with an unlocked footprint selected.
+    PcbPlacement,
+    /// Cross Probe: something selected on the board or sheet in view (#1312).
+    ProbeTarget,
+    /// Update PCB: a schematic or a board in view, with a project open
+    /// (#1312).
+    PcbSync,
+    /// New PCB: a project is open.
+    OpenProject,
     Library,
     ProjectSheet,
     TileableWindows,
@@ -42,6 +59,7 @@ impl Needs {
             Self::SaveTarget => {
                 ctx.document_is_schematic
                     || ctx.document_is_editor
+                    || ctx.document_is_dirty_board
                     || (ctx.document_has_file && ctx.project_dirty)
             }
             Self::SaveAsTarget => ctx.document_is_schematic || ctx.document_is_editor,
@@ -55,16 +73,22 @@ impl Needs {
             Self::DrawingSelection => ctx.has_schematic && ctx.has_drawing_selection,
             // E edits the selected object in the schematic and in the
             // footprint / symbol editors, whose selections `has_selection`
-            // does not read, so a keystroke must not be dropped there.
+            // does not read, so a keystroke must not be dropped there. On a
+            // board it shows the selection's Properties (#1312).
             Self::SelectedObject => {
-                ctx.has_selection || ctx.has_footprint_editor || ctx.has_symbol_editor
+                ctx.has_selection
+                    || ctx.has_footprint_editor
+                    || ctx.has_symbol_editor
+                    || ctx.pcb.any
             }
             Self::Schematic => ctx.has_schematic,
             // Up Hierarchy opens the sheet whose symbol places the active
             // one; a top-level page has none (#1772).
             Self::ParentSheet => ctx.has_parent_sheet,
             // The footprint editor deletes its own selection, which is not
-            // the schematic canvas's; with none it is a no-op.
+            // the schematic canvas's; with none it is a no-op. A board
+            // deletes its own selection, never a locked footprint.
+            Self::DeleteTarget if ctx.pcb.shown => ctx.pcb.deletable,
             Self::DeleteTarget => ctx.has_selection || ctx.has_footprint_editor,
             Self::VertexTarget => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
             // These assemble the project's sheets, not only the active tab's.
@@ -79,6 +103,24 @@ impl Needs {
             // nothing elsewhere.
             Self::FootprintEditor => ctx.has_footprint_editor,
             Self::Pcb => ctx.has_pcb,
+            // On a sheet, rotate also turns a part on the cursor with
+            // nothing selected.
+            Self::Turn if ctx.pcb.shown => ctx.pcb.placeable,
+            Self::Turn => ctx.has_schematic && (ctx.has_selection || ctx.turn_in_hand),
+            Self::MoveSelection if ctx.pcb.shown => ctx.pcb.placeable,
+            Self::MoveSelection => ctx.has_schematic && ctx.has_selection,
+            Self::MoveObject => ctx.has_schematic || ctx.pcb.shown,
+            Self::PcbPlacement => ctx.pcb.shown && ctx.pcb.placeable,
+            Self::ProbeTarget if ctx.pcb.shown => ctx.pcb.any,
+            Self::ProbeTarget => ctx.has_schematic && ctx.has_selection,
+            Self::PcbSync => {
+                ctx.has_open_project
+                    && (ctx.has_schematic
+                        || ctx.has_pcb
+                        || ctx.document_is_schematic
+                        || ctx.pcb.shown)
+            }
+            Self::OpenProject => ctx.has_open_project,
             // Library Editor focuses an open Library Browser tab, else opens the
             // first open library.
             Self::Library => ctx.has_open_library,
@@ -108,7 +150,9 @@ impl Needs {
             Self::SelectedObject => "No object is selected",
             Self::Schematic => "No schematic is open",
             Self::ParentSheet => "The active sheet has no parent sheet",
-            Self::DeleteTarget => "Nothing is selected to delete",
+            Self::DeleteTarget => {
+                "Nothing is selected to delete, or a selected footprint is locked"
+            }
             Self::VertexTarget => "Nothing is selected and no wire is being drawn",
             Self::Sheets => "No schematic or project is open",
             Self::ActiveSheet => "No sheet is open",
@@ -116,11 +160,28 @@ impl Needs {
             Self::FitTarget => "No schematic or PCB is open",
             Self::FootprintEditor => "No footprint editor is open",
             Self::Pcb => "No PCB is open",
+            Self::Turn => {
+                "Nothing is selected or in hand to turn, or a selected footprint is locked"
+            }
+            Self::MoveSelection => "Nothing is selected to move, or a selected footprint is locked",
+            Self::MoveObject => "No schematic or PCB is open",
+            Self::PcbPlacement => "No unlocked footprint is selected on a PCB",
+            Self::ProbeTarget => "Nothing is selected on the sheet or board to cross probe",
+            Self::PcbSync => "No schematic or PCB of an open project is in view",
+            Self::OpenProject => "No project is open",
             Self::Library => "No library is open",
             Self::ProjectSheet => "No sheet of a project is open",
             Self::TileableWindows => "No document is in its own window",
         }
     }
+}
+
+/// The commands that move, turn, flip or delete a board selection (#2240).
+pub(crate) fn is_placement_command(command: &AppCommandId) -> bool {
+    matches!(
+        needs(command),
+        Some(Needs::Turn | Needs::MoveSelection | Needs::PcbPlacement | Needs::DeleteTarget)
+    )
 }
 
 /// What `command` needs; `None` for a command with no gate, which is always
@@ -147,6 +208,17 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "report_manager_bom" => Needs::Schematic,
         "leave_sheet" | "navigate_up_hierarchy" => Needs::ParentSheet,
         "delete_selection" => Needs::DeleteTarget,
+        "rotate_clockwise"
+        | "rotate_counterclockwise"
+        | "rotate_selection"
+        | "rotate_selection_cw"
+        | "mirror_x"
+        | "mirror_y"
+        | "flip_selected_x"
+        | "flip_selected_y" => Needs::Turn,
+        "move_selection" => Needs::MoveSelection,
+        "move_object" => Needs::MoveObject,
+        "flip_selection" => Needs::PcbPlacement,
         "remove_last_vertex" => Needs::VertexTarget,
         "paste"
         | "smart_paste"
@@ -173,13 +245,24 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "measure_distance"
         | "break_wire"
         // The table lists the active sheet's symbols.
-        | "open_parameter_manager" => Needs::Schematic,
+        | "open_parameter_manager"
+        // Lists the parts of the active schematic's project.
+        | "assign_footprints" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
-        "run_drc" => Needs::Pcb,
+        "run_drc" | "reannotate_board" => Needs::Pcb,
+        "cross_probe" => Needs::ProbeTarget,
+        "update_pcb_from_schematic" => Needs::PcbSync,
+        "new_pcb_document" => Needs::OpenProject,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => Needs::FitTarget,
         "cycle_snap_grid_forward" | "open_grid_picker" => Needs::FootprintEditor,
+        "toggle_ratsnest"
+        | "board_sketch"
+        | "next_layer"
+        | "prev_layer"
+        | "toggle_layer_visibility"
+        | "show_all_layers" => Needs::Pcb,
         "open_library_browser" => Needs::Library,
         "number_schematic_sheets" => Needs::ProjectSheet,
         "tile_windows_horizontally" | "tile_windows_vertically" => Needs::TileableWindows,

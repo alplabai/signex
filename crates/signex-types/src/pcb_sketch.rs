@@ -1,17 +1,91 @@
-//! Board geometry baked from a board sketch (#2234): keepout regions,
-//! cutouts and mounting holes.
+//! Board geometry baked from a board sketch (#2234): the outline, keepout
+//! regions, cutouts, mounting holes and V-scores.
 //!
 //! The board sketch ([`crate::sketch::SketchData`]) is the source of truth;
-//! these are what a bake produces from it and what DRC and the ratsnest
-//! read. Coordinates are board millimetres, like [`crate::pcb::PcbBoard`]'s
-//! outline. Data only: nothing writes or persists them yet.
+//! these are what a bake (`signex_bake::bake_board`) produces from it and
+//! what DRC reads. Coordinates are board millimetres, like
+//! [`crate::pcb::PcbBoard`]'s outline. A board holds them in
+//! [`crate::pcb::PcbBoard::sketch`], written only by the board engine's
+//! `SetBoardSketch` command. See `docs/PCB_SKETCH.md`.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::format::UnknownColumns;
 use crate::pcb::Point;
 use crate::pcb_layer::PcbLayer;
-use crate::sketch::attr::KeepoutKinds;
+use crate::sketch::SketchData;
+use crate::sketch::attr::{KeepoutKinds, VScoreSide};
+use crate::sketch::baked_kinds::BakedKind;
+
+/// What a bake of a board sketch produced. Each item takes the uuid of the
+/// sketch entity it came from (the seed edge or the circle), so baking an
+/// unchanged sketch again gives an equal value.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BakedBoard {
+    /// The board outline when the sketch owns it: the closed profile, or an
+    /// empty list once the sketch's outline was deleted after a bake.
+    /// `None`: the sketch draws no outline and the board keeps its own.
+    pub outline: Option<Vec<Point>>,
+    pub keepouts: Vec<PcbKeepout>,
+    pub cutouts: Vec<PcbCutout>,
+    pub holes: Vec<PcbHole>,
+    pub v_scores: Vec<PcbVScore>,
+}
+
+/// A board sketch as the board stores it, with what it baked to. The baked
+/// outline is not here: it is the board's own `outline`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct BoardSketch {
+    pub sketch: SketchData,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keepouts: Vec<PcbKeepout>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cutouts: Vec<PcbCutout>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub holes: Vec<PcbHole>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub v_scores: Vec<PcbVScore>,
+}
+
+impl BoardSketch {
+    /// Store `sketch` with what it baked to, and hand back the outline to
+    /// write to the board ([`BakedBoard::outline`]). Records in the sketch
+    /// whether it baked an outline, so deleting that outline later still
+    /// clears the board's.
+    pub fn from_bake(mut sketch: SketchData, baked: BakedBoard) -> (Self, Option<Vec<Point>>) {
+        let has_outline = baked.outline.as_ref().is_some_and(|o| !o.is_empty());
+        sketch.record_baked(BakedKind::BoardOutline, has_outline);
+        let stored = Self {
+            sketch,
+            keepouts: baked.keepouts,
+            cutouts: baked.cutouts,
+            holes: baked.holes,
+            v_scores: baked.v_scores,
+        };
+        (stored, baked.outline)
+    }
+
+    /// Whether the board outline is the sketch's to write.
+    pub fn owns_outline(&self) -> bool {
+        self.sketch.owns_kind(BakedKind::BoardOutline)
+    }
+}
+
+/// A V-score: a straight scoring line across the board.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PcbVScore {
+    pub uuid: Uuid,
+    pub from: Point,
+    pub to: Point,
+    /// Depth of the cut as a fraction of the board thickness, `0..=1`.
+    pub depth_fraction: f64,
+    /// Thinnest web the cut must leave, in mm; 0 when unset.
+    #[serde(default)]
+    pub min_web: f64,
+    #[serde(default)]
+    pub side: VScoreSide,
+}
 
 /// A region of the board that forbids some object types on some layers.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -61,6 +135,10 @@ pub struct PcbHole {
     /// isolated or unplated hole (Caner, 2026-11-09).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub net: Option<u32>,
+    /// TSV columns this build does not recognise, kept per row so a save
+    /// re-emits them (see [`UnknownColumns`]). A bake writes none.
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 #[cfg(test)]
@@ -114,6 +192,7 @@ mod tests {
             drill: 3.2,
             plated: false,
             net: None,
+            unknown_columns: UnknownColumns::default(),
         };
         let json = serde_json::to_string(&hole).unwrap();
         assert!(

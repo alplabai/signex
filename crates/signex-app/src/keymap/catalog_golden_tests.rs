@@ -23,6 +23,16 @@ fn or_dash(text: Option<&str>) -> &str {
     text.unwrap_or("-")
 }
 
+/// A key sequence cell: the minus key is written `"-"`, so it never reads as
+/// the column's "none" marker.
+fn key_cell(sequence: &str) -> String {
+    if sequence == "-" {
+        "\"-\"".to_owned()
+    } else {
+        sequence.to_owned()
+    }
+}
+
 /// Modifiers in the config spelling, `Cmd` on every OS, so the fixture is
 /// the same on every platform.
 fn keybind(bind: &KeyBind) -> String {
@@ -105,8 +115,10 @@ fn profiles_text() -> String {
                     ShortcutTrigger::PointerGesture(gesture) => format!("pointer:{gesture}"),
                 };
                 out.push_str(&format!(
-                    "{}\tbind\t{:?}\t{sequence}\t{action}\n",
-                    profile.id, binding.context
+                    "{}\tbind\t{:?}\t{}\t{action}\n",
+                    profile.id,
+                    binding.context,
+                    key_cell(&sequence)
                 ));
             }
         }
@@ -116,7 +128,7 @@ fn profiles_text() -> String {
             let command = AppCommandId::new(id).expect("catalog id is valid");
             let hint = keymap
                 .shortcut_label(&command)
-                .map(|label| label.replace(&logo, "Cmd+"));
+                .map(|label| key_cell(&label.replace(&logo, "Cmd+")));
             out.push_str(&format!(
                 "{}\thint\t-\t{}\t{id}\n",
                 profile.id,

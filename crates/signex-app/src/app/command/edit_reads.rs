@@ -37,6 +37,9 @@ use crate::library::messages::ResolvedPlacement;
 
 type Ran = (CommandOutcome, Task<Message>);
 
+/// One edit of a call and the sheet it acts on.
+type ListedEdit = (AppCommandId, CommandArgs, PathBuf);
+
 /// A library row: the `.snxlib` file, the table and the row id.
 pub(crate) type PartKey = (PathBuf, String, Uuid);
 
@@ -335,16 +338,15 @@ impl Signex {
         let edits = if command.as_str() == "apply_edits" {
             super::agent_edits::listed_edits(self, args)?
         } else {
-            vec![(command.clone(), args.clone())]
+            vec![(command.clone(), args.clone(), target.clone())]
         };
         let mut plan = ReadPlan::default();
-        let previous = self
-            .document_state
-            .agent_edits
-            .target
-            .replace(target.clone());
-        for (id, edit) in &edits {
-            self.plan_reads(id.as_str(), edit, &edits, &target, &mut plan);
+        // Each edit is planned on the sheet it acts on (a list may name other
+        // sheets of the call's project, #2178).
+        let previous = self.document_state.agent_edits.target.clone();
+        for (id, edit, sheet) in &edits {
+            self.document_state.agent_edits.target = Some(sheet.clone());
+            self.plan_reads(id.as_str(), edit, &edits, sheet, &mut plan);
         }
         self.document_state.agent_edits.target = previous;
         if wants_project || !plan.is_empty() {
@@ -437,13 +439,14 @@ impl Signex {
         (CommandOutcome::Deferred { ticket }, task)
     }
 
-    /// Add what edit `id` needs to `plan`; `list` is the whole edit list (an
-    /// earlier edit may place the sheet symbol a later one syncs).
+    /// Add what edit `id`, acting on `target`, needs to `plan`; `list` is the
+    /// whole edit list (an earlier edit may place the sheet symbol a later one
+    /// syncs).
     fn plan_reads(
         &self,
         id: &str,
         args: &CommandArgs,
-        list: &[(AppCommandId, CommandArgs)],
+        list: &[ListedEdit],
         target: &Path,
         plan: &mut ReadPlan,
     ) {
@@ -485,14 +488,14 @@ impl Signex {
     fn plan_child_read(
         &self,
         args: &CommandArgs,
-        list: &[(AppCommandId, CommandArgs)],
+        list: &[ListedEdit],
         target: &Path,
         plan: &mut ReadPlan,
     ) {
         let Ok(name) = text(args, "sheet") else {
             return;
         };
-        let Some(file) = self.planned_child_file(&name, list) else {
+        let Some(file) = self.planned_child_file(&name, list, target) else {
             return;
         };
         let dir = target.parent().unwrap_or_else(|| Path::new(""));
@@ -504,12 +507,8 @@ impl Signex {
     }
 
     /// The child file of the sheet symbol `name`: on the target sheet, else
-    /// placed by a `place_sheet_symbol` of the same list.
-    fn planned_child_file(
-        &self,
-        name: &str,
-        list: &[(AppCommandId, CommandArgs)],
-    ) -> Option<String> {
+    /// placed on it by a `place_sheet_symbol` of the same list.
+    fn planned_child_file(&self, name: &str, list: &[ListedEdit], target: &Path) -> Option<String> {
         let on_sheet = self.document_state.edit_engine().and_then(|engine| {
             let found = engine
                 .document()
@@ -520,9 +519,9 @@ impl Signex {
         });
         on_sheet.or_else(|| {
             list.iter()
-                .filter(|(id, _)| id.as_str() == "place_sheet_symbol")
-                .find(|(_, args)| text(args, "name").is_ok_and(|n| n.trim() == name))
-                .and_then(|(_, args)| text(args, "file").ok())
+                .filter(|(id, _, sheet)| id.as_str() == "place_sheet_symbol" && sheet == target)
+                .find(|(_, args, _)| text(args, "name").is_ok_and(|n| n.trim() == name))
+                .and_then(|(_, args, _)| text(args, "file").ok())
         })
     }
 

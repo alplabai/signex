@@ -91,6 +91,9 @@ pub fn run_project_write(plan: ProjectWritePlan, job: DocumentSaveJob) -> Projec
             Err(format!("encode project {}: {error}", path.display())),
         ),
     };
+    if matches!(result, Ok(SaveOutcome::Written)) {
+        sync_journal_ignore(&path, &data);
+    }
     ProjectSaveDone {
         project_id,
         path,
@@ -98,5 +101,21 @@ pub fn run_project_write(plan: ProjectWritePlan, job: DocumentSaveJob) -> Projec
         bytes,
         libraries,
         result,
+    }
+}
+
+/// With the project file written, bring the managed `.gitignore` block in line
+/// with "keep agent journals in git" (#2253). Not on toggle: the setting is not
+/// saved until now, and the person may still discard it. A failure is said in
+/// Messages; the save itself stands.
+fn sync_journal_ignore(project_file: &std::path::Path, data: &ProjectData) {
+    let Some(dir) = project_file.parent() else {
+        return;
+    };
+    let keep = data.agent_journal.keep_in_git;
+    if let Err(error) = signex_types::project_vcs_files::sync_agent_journal_ignore(dir, keep) {
+        crate::diagnostics::log_warning(format!(
+            "[save] The project was saved, but its .gitignore could not be updated for the agent journal setting: {error}"
+        ));
     }
 }

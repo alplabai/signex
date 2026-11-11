@@ -206,6 +206,18 @@ pub(super) fn stepped(
     ))
 }
 
+pub(super) fn inspector_reading() -> String {
+    "Click the member again in a moment; the Net Inspector is reading the project's nets again."
+        .to_string()
+}
+
+pub(super) fn inspector_member_gone(name: &str) -> String {
+    cap(format!(
+        "Pick another member; the one clicked is no longer on net '{}'.",
+        clip(name, NAME_CLIP)
+    ))
+}
+
 pub(super) fn nothing_to_clear() -> String {
     "Nothing to clear; no net is highlighted.".to_string()
 }
@@ -258,6 +270,8 @@ mod tests {
             stepped(&l, "label", &l, &l, 10, 99),
             nothing_to_clear(),
             cleared(),
+            inspector_reading(),
+            inspector_member_gone(&l),
         ];
         for line in &lines {
             assert!(line.len() <= MAX_BYTES, "{} bytes: {line}", line.len());

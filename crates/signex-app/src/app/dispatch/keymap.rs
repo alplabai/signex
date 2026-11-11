@@ -198,7 +198,8 @@ impl Signex {
                     .is_some();
                 if has_schematic {
                     contexts.push(ShortcutContext::Schematic);
-                } else if self.has_active_pcb() {
+                } else if window.is_some_and(|id| self.undocked_pcb_path(id).is_some()) {
+                    // The window's own board, not the main window's (#2223).
                     contexts.push(ShortcutContext::Pcb);
                 }
             }

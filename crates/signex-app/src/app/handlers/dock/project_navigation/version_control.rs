@@ -171,6 +171,15 @@ impl Signex {
         let gitignore = (!gitignore.is_empty()).then_some(gitignore);
         let (scope, project_dir, use_lfs) = (state.scope, state.project_dir.clone(), state.use_lfs);
         let dir = project_dir.clone();
+        // The project's "Keep agent journals in git" (#2253) decides whether the
+        // block this writes lists them.
+        let project_path = state.project_path.clone();
+        let keep_journals = self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| p.path == project_path)
+            .is_none_or(|p| p.data.agent_journal.keep_in_git);
         // The only `.snxprj` the folder may hold (project scope).
         let project_stem = matches!(scope, crate::app::VersionControlScope::Project)
             .then(|| state.project_path.file_stem())
@@ -185,6 +194,7 @@ impl Signex {
                         project_stem.as_deref(),
                         use_lfs,
                         gitignore.as_deref(),
+                        keep_journals,
                     )
                 })
                 .await
@@ -348,6 +358,7 @@ fn enable_version_control_blocking(
     project_stem: Option<&str>,
     use_lfs: bool,
     gitignore: Option<&str>,
+    keep_journals: bool,
 ) -> crate::app::EnableVersionControlOutcome {
     use crate::app::EnableVersionControlOutcome as Outcome;
     // Refuse a folder that holds other projects or personal files (#1205)
@@ -362,6 +373,7 @@ fn enable_version_control_blocking(
         use_lfs,
         matches!(scope, crate::app::VersionControlScope::Project),
         gitignore,
+        keep_journals,
     ) {
         return Outcome::InitFailed(error.to_string());
     }
@@ -385,8 +397,15 @@ fn try_init_project_repo(
     use_lfs: bool,
     project_scope: bool,
     gitignore: Option<&str>,
+    keep_journals: bool,
 ) -> Result<(), signex_library::LibraryError> {
-    signex_library::enable_project_version_control(project_dir, use_lfs, project_scope, gitignore)
+    signex_library::enable_project_version_control_with(
+        project_dir,
+        use_lfs,
+        project_scope,
+        gitignore,
+        keep_journals,
+    )
 }
 
 /// Build the per-row pick-list for the project-scope Enable Version

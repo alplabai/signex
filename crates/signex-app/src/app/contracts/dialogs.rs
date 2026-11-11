@@ -612,6 +612,9 @@ pub enum ProjectMsg {
     /// (Save All / Discard All / Cancel) shown when closing a
     /// project that still has dirty documents.
     CloseConfirm(ProjectCloseChoice),
+    /// The Tools ▸ Assign Footprints dialog (#2248); routed to
+    /// `dispatch_assign_footprints_message`.
+    AssignFootprints(crate::app::AssignFootprintsMsg),
     /// The off-thread child-sheet resolution that Close Project starts
     /// finished (#741). Carries the project by id, not index, because the
     /// project list can shift while the worker reads; `Err` is a worker that
@@ -881,6 +884,8 @@ pub enum EditMsg {
     MirrorSelectedX,
     /// Mirror the current selection about the Y axis.
     MirrorSelectedY,
+    /// Flip the selected footprints to the other side of the board (#2240).
+    FlipSelection,
     /// Copy the current selection to the clipboard.
     Copy,
     /// Cut the current selection to the clipboard.

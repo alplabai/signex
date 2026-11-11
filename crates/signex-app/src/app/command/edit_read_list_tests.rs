@@ -293,3 +293,51 @@ fn a_reader_that_panicked_is_said_in_messages_and_refused_without_a_retry() {
         "{said:?}"
     );
 }
+
+/// `apply_edits` on `top` whose edits all act on `other` (#2178).
+fn apply_on_other(app: &mut Signex, dir: &Path, edits: Value) -> CommandOutcome {
+    let (top, other) = (dir.join("top.snxsch"), dir.join("other.snxsch"));
+    let revision = |p: &Path| app.document_state.engines[p].revision();
+    let expect = json!({other.display().to_string(): revision(&other)});
+    let id = AppCommandId::new("apply_edits").unwrap();
+    let operands = [
+        format!("document={}", top.display()),
+        format!("expect_revision={}", revision(&top)),
+        format!("expect_revisions={expect}"),
+        format!("edits={edits}"),
+    ];
+    let refs: Vec<&str> = operands.iter().map(String::as_str).collect();
+    let call = CommandArgs::parse_operands(&id, &refs).unwrap();
+    app.run_operands_settled(&id, &call).0
+}
+
+/// An edit of a list that acts on another sheet of the project is planned on
+/// that sheet: the closed child of a sheet symbol on `other` is read for its
+/// `sync_sheet_pins`, though the call names `top`.
+#[test]
+fn an_edit_on_another_sheet_of_the_list_reads_what_that_sheet_needs() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project(dir.path(), true);
+    let other = dir.path().join("other.snxsch").display().to_string();
+    let placed = apply_on_other(
+        &mut app,
+        dir.path(),
+        json!([{"id": "place_sheet_symbol", "args": {"document": other,
+            "start": "100,100", "end": "120,120", "name": "Charger", "file": "charger.snxsch"}}]),
+    );
+    assert!(matches!(placed, CommandOutcome::Answered(_)), "{placed:?}");
+
+    let synced = apply_on_other(
+        &mut app,
+        dir.path(),
+        json!([{"id": "sync_sheet_pins", "args": {"document": other, "sheet": "Charger"}}]),
+    );
+    let CommandOutcome::Answered(answer) = &synced else {
+        panic!("not answered: {synced:?}");
+    };
+    assert_eq!(
+        answer["results"][0]["added"],
+        json!(["I2C_SDA", "SDA"]),
+        "{answer}"
+    );
+}

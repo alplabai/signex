@@ -1,3 +1,4 @@
+pub mod agent_journal;
 pub mod anchor2d;
 pub mod atomic_io;
 pub mod coord;
@@ -12,6 +13,7 @@ pub mod net;
 pub mod net_class;
 pub mod numeric;
 pub mod object_id;
+pub mod part;
 pub mod pcb;
 pub mod pcb_layer;
 pub mod pcb_sketch;

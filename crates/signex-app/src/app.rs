@@ -13,6 +13,8 @@ use crate::toolbar::ToolMessage;
 
 mod actions;
 pub(crate) mod agent;
+pub(crate) mod assign_footprints;
+pub(crate) mod board_reannotate;
 mod bootstrap;
 pub(crate) mod command;
 pub mod command_palette;
@@ -65,21 +67,28 @@ pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_depth;
 mod undo_groups;
+pub(crate) mod update_pcb;
 pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
 pub(crate) mod view;
 
+pub use assign_footprints::{
+    AssignFootprintsMsg, AssignFootprintsState, AssignProblem, FootprintOffer, FootprintPart,
+    PartAccess,
+};
+pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 pub use contracts::{
-    AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, CommandPaletteMsg, ContextAction,
-    ContextMenuMsg, ContextMenuState, ContextSubmenu, DragTarget, DrcRunResult, EditMsg,
-    EnableVersionControlMsg, EnableVersionControlOutcome, EnableVersionControlState, ErcMsg,
-    ExcludeDirtyChoice, ExportMsg, FileMsg, GitCommitFailure, GridPickerState, GridPropertiesMsg,
-    GridPropertiesState, InputMsg, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg,
-    NetNavMsg, OverlayMsg, ParameterManagerMsg, PasteIntent, PasteRequest, PcbMsg, PreferencesMsg,
-    PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob,
-    ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg,
-    RenameDialogState, RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest,
-    TabContextAction, TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem,
-    UiMsg, VersionControlScope, WindowMsg,
+    AnnotateMsg, AppQuitConfirmState, BoardSketchMsg, BomPreviewMsg, CommandPaletteMsg,
+    ContextAction, ContextMenuMsg, ContextMenuState, ContextSubmenu, CrossProbeMsg, DragTarget,
+    DrcRunResult, EditMsg, EnableVersionControlMsg, EnableVersionControlOutcome,
+    EnableVersionControlState, ErcMsg, ExcludeDirtyChoice, ExportMsg, FileMsg, GitCommitFailure,
+    GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg, LibraryRowRef, Message,
+    MoveSelectionMsg, NetColorMsg, NetNavMsg, OverlayMsg, ParameterManagerMsg, PasteIntent,
+    PasteRequest, PcbMsg, PcbViewMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
+    ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob, ProjectTreeAction,
+    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
+    RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
+    TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem, UiMsg,
+    VersionControlScope, WindowMsg,
 };
 pub(crate) use document::{Document, DocumentKey};
 pub use documents::{
@@ -97,13 +106,14 @@ pub(crate) use signex_history::SavePoint;
 #[cfg(test)]
 pub(crate) use state::WindowKind;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
-pub use state::pcb_edit::{AgentStep, BoardEditError};
+pub use state::pcb_edit::{BoardEditError, CheckedStep};
 pub use state::project_case::CaseProbeOutcome;
 pub use state::{
     CaseFold, DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
     PreviewState, ProjectId, Signex, UiState,
 };
 pub use symbol_history::SymbolHistorySnapshot;
+pub use update_pcb::{UpdatePcbMsg, UpdatePcbState};
 
 // Re-exported so modal dialogs outside `state` can reference the type.
 pub use state::AnnotateOrder;
@@ -121,6 +131,13 @@ impl Signex {
         }
         let before = self.active_tab_path();
         let mut tasks = vec![self.dispatch_update(message)];
+        // Cross select follows whatever this message selected, and a Cross
+        // Probe asked for runs once its target is open (#1312).
+        tasks.push(self.sync_cross_select());
+        // An Update PCB waiting for its board starts reading once it opened.
+        tasks.push(self.sync_update_pcb());
+        // A Properties draft of a board no window shows any more goes (#1312).
+        self.prune_pcb_footprint_draft();
         self.sync_undo_depth();
         // A Save completed behind the quit prompt must not leave it listing
         // files that are no longer unsaved (#1833).

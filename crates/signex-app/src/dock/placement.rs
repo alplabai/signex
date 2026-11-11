@@ -155,6 +155,7 @@ impl PanelPosition {
             | PanelKind::SchList
             | PanelKind::Drc
             | PanelKind::LayerStack
+            | PanelKind::Layers
             | PanelKind::NetClasses
             | PanelKind::Variants
             | PanelKind::OutputJobs
@@ -165,7 +166,8 @@ impl PanelPosition {
             | PanelKind::Wiki
             | PanelKind::SchLibrary
             | PanelKind::FootprintLibrary
-            | PanelKind::History => PanelPosition::Right,
+            | PanelKind::History
+            | PanelKind::NetInspector => PanelPosition::Right,
         }
     }
 }

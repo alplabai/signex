@@ -12,6 +12,7 @@ pub mod adapters;
 pub mod ai_stub;
 pub mod alternate_symbol;
 pub mod alternate_symbol_edit;
+pub(crate) mod board_footprint;
 pub mod cascade;
 pub mod component;
 pub mod dangling;
@@ -33,6 +34,7 @@ pub mod manifest;
 pub mod manufacturer;
 pub mod param;
 pub mod param_edit;
+pub mod part_footprint;
 pub mod pricing;
 pub mod pricing_refresh;
 pub mod primitive;
@@ -176,6 +178,20 @@ pub fn enable_project_version_control(
     project_scope: bool,
     gitignore: Option<&str>,
 ) -> Result<(), adapter::LibraryError> {
+    enable_project_version_control_with(project_dir, use_lfs, project_scope, gitignore, true)
+}
+
+/// [`enable_project_version_control`] for a project that does not keep its
+/// agent journals in git (`keep_agent_journals_in_git` off, #2253): the managed
+/// `.gitignore` block it writes carries the `.signex/agent-*.jsonl` line.
+#[cfg(feature = "local-git")]
+pub fn enable_project_version_control_with(
+    project_dir: &std::path::Path,
+    use_lfs: bool,
+    project_scope: bool,
+    gitignore: Option<&str>,
+    keep_agent_journals_in_git: bool,
+) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
 
     // Before anything touches disk: never `git init` a home / shared user
@@ -201,8 +217,13 @@ pub fn enable_project_version_control(
 
     // Merge the managed blocks into the user's files in memory first, so a
     // malformed marker pair or a link refuses before anything touches disk.
-    let mut files =
-        vcs_init_files::VcsFilePlan::new(project_dir, use_lfs, project_scope, gitignore)?;
+    let mut files = vcs_init_files::VcsFilePlan::new(
+        project_dir,
+        use_lfs,
+        project_scope,
+        gitignore,
+        keep_agent_journals_in_git,
+    )?;
     if let Err(e) = files.write() {
         return Err(with_rollback_notes(e, files.roll_back()));
     }

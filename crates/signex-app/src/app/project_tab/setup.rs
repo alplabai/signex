@@ -32,6 +32,7 @@ fn edited(project_id: ProjectId) -> impl Fn(NewProjectMsg) -> Message + Clone + 
 pub(super) fn view<'a>(
     project: &LoadedProject,
     draft: Option<&NewProjectState>,
+    journal_lines_draft: Option<&'a str>,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -67,7 +68,14 @@ pub(super) fn view<'a>(
     if let Some(note) = unreadable {
         col = col.push(note.boxed());
     }
-    let body = col.push(body.map(wrap).boxed());
+    let body = col
+        .push(body.map(wrap).boxed())
+        .push(super::agent_journals::view(
+            project,
+            journal_lines_draft,
+            i18n,
+            tokens,
+        ));
     container(body).padding([sp.xl, sp.xl]).boxed()
 }
 

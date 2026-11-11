@@ -15,6 +15,7 @@ pub mod client;
 mod deferred;
 mod files;
 mod handler;
+pub mod journal;
 mod listener;
 mod origin;
 mod registry;
@@ -68,6 +69,16 @@ pub enum AgentMsg {
     /// The disk reads an agent's edit waited for landed (#2199): run it now
     /// and answer its caller (the socket, or a headless run).
     EditReadsLoaded(Box<crate::app::command::ReadsLoaded>),
+    /// A client connected and passed the peer check (#2253).
+    ConnectionOpened { pid: Option<u32> },
+    /// A connection ended: the client left, idled out or was dropped.
+    ConnectionClosed { pid: Option<u32> },
+    /// The task that appended a project's queued journal lines is done;
+    /// `failures` is what could not be written, to be said in Messages.
+    JournalDrained {
+        project: std::path::PathBuf,
+        failures: Vec<String>,
+    },
 }
 
 /// What a connection read, before the app has looked at it.

@@ -192,7 +192,8 @@ fn r1_sheet(id: u128, x: f64) -> signex_types::schematic::SchematicSheet {
     sheet
 }
 
-/// #2199: an edit may repeat the call's document, never name another.
+/// #2199, #2178: an edit may repeat the call's document; one naming a sheet
+/// that is not of the call's project is refused (loose sheets share none).
 #[test]
 fn an_edit_naming_another_document_than_the_list_is_refused() {
     let mut app = app_idle();
@@ -203,7 +204,7 @@ fn an_edit_naming_another_document_than_the_list_is_refused() {
         json!([{"id": "place_junction", "args": {"at": [20, 20], "document": path("a.snxsch").display().to_string()}}]),
     ));
     assert!(
-        reason.contains("names another document than the list"),
+        reason.contains("names a sheet of another project than the list's document"),
         "{reason}"
     );
     assert_eq!(state(&app, "b.snxsch"), before);
@@ -303,6 +304,35 @@ fn a_wire_edit_answers_its_report_in_results_and_a_refused_one_rolls_the_list_ba
     assert!(refused.contains("edit 2 (`place_wire`)"), "{refused}");
     assert!(refused.contains("nothing to connect to"), "{refused}");
     assert_eq!(state(&app, "b.snxsch"), kept);
+}
+
+/// #2178 part 1: a call that names one sheet answers exactly as before the
+/// list could span sheets: the same keys and text, and no `sheets` list.
+#[test]
+fn a_single_sheet_call_answers_byte_for_byte_as_it_always_did() {
+    let mut app = app_idle();
+    let answer = applied(&mut app, "b.snxsch", three_edits());
+    let (group, revision) = (
+        answer["group"].as_u64().unwrap(),
+        answer["revision"].as_u64().unwrap(),
+    );
+    assert_eq!(
+        answer.to_string(),
+        format!(
+            r#"{{"changed":true,"edits":3,"group":{group},"label":"Agent: place_junction, place_no_connect, place_net_label","results":[null,null,null],"revision":{revision}}}"#
+        )
+    );
+    let reverted = match revert(&mut app, "b.snxsch", group) {
+        CommandOutcome::Answered(value) => value,
+        other => panic!("not answered: {other:?}"),
+    };
+    assert_eq!(
+        reverted.to_string(),
+        format!(
+            r#"{{"group":{group},"reverted":true,"revision":{}}}"#,
+            reverted["revision"]
+        )
+    );
 }
 
 #[test]
@@ -471,7 +501,7 @@ fn an_empty_list_and_a_malformed_one_change_nothing() {
         (json!([{"id": "apply_edits"}]), "its own edits"),
         (
             json!([{"id": "color_net", "args": {"at": [5, 0], "color": "#336699", "document": "x"}}]),
-            "leave out its `document`",
+            "a document id or an absolute path",
         ),
         (
             json!([{"id": "place_junction", "args": {"at": [1, 1], "bogus": 1}}]),

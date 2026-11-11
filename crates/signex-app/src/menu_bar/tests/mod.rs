@@ -167,6 +167,8 @@ pub(super) fn menu_context_in(app: &Signex, window: Option<iced::window::Id>) ->
         recent_projects: app.ui_state.recent_projects.entries(),
         open_panels: app.open_panels(),
         i18n: std::sync::Arc::clone(&app.ui_state.i18n),
+        cross_select: app.interaction_state.cross_select.enabled,
+        pcb_sync: app.pcb_sync_label(window),
     }
 }
 
@@ -267,8 +269,19 @@ pub(super) struct Probe {
     pub tour_open: bool,
     pub pcb_camera: (f32, f32, f32),
     pub pcb_fit_queued: bool,
+    /// What each open board shows of its layers and ratsnest (#2223).
+    pub pcb_views: String,
     pub error_notice: bool,
     pub refs: Vec<String>,
+    /// Edit ▸ Move arms a pick on a sheet or a board (#2240).
+    pub move_pick: bool,
+    pub pcb_carry: bool,
+    /// Design ▸ Update PCB Document opens the Update PCB dialog (#1312).
+    pub update_pcb: bool,
+    /// Design ▸ Board Sketch puts the board in sketch mode (#2234).
+    pub board_sketch: bool,
+    /// Tools ▸ Re-Annotate Board opens its dialog (#1312).
+    pub board_reannotate: bool,
 }
 
 pub(super) fn probe(app: &Signex) -> Probe {
@@ -321,6 +334,7 @@ pub(super) fn probe(app: &Signex) -> Probe {
         tour_open: app.ui_state.first_run_tour_open,
         pcb_camera: app.interaction_state.pcb_canvas.live_camera(),
         pcb_fit_queued: app.interaction_state.pcb_canvas.pending_fit.get().is_some(),
+        pcb_views: format!("{:?}", app.ui_state.pcb_layer_views),
         window_fit_queued: app
             .interaction_state
             .canvases
@@ -338,6 +352,11 @@ pub(super) fn probe(app: &Signex) -> Probe {
                     .collect()
             })
             .unwrap_or_default(),
+        move_pick: app.ui_state.move_pick.is_some(),
+        pcb_carry: app.interaction_state.pcb_carry.is_some(),
+        update_pcb: app.ui_state.update_pcb.is_some(),
+        board_sketch: app.interaction_state.board_sketch.is_some(),
+        board_reannotate: app.ui_state.board_reannotate.is_some(),
     }
 }
 
@@ -426,6 +445,7 @@ pub(super) fn open_project(app: &mut Signex, file: &str) -> usize {
             annotation: None,
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
+            agent_journal: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -450,6 +470,7 @@ pub(super) fn loaded_board_app() -> Signex {
     }))
     .expect("via");
     let board = signex_types::pcb::PcbBoard {
+        sketch: None,
         unknown: Default::default(),
         uuid: Uuid::now_v7(),
         version: 1,

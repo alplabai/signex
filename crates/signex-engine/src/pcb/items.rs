@@ -1,8 +1,8 @@
-//! Delete board items and put them back where they were.
+//! Add board items, delete them and put them back where they were.
 
 use std::collections::HashSet;
 
-use signex_types::pcb::{BoardText, Footprint, PcbBoard, Segment, Via, Zone};
+use signex_types::pcb::{BoardText, Footprint, Pad, PcbBoard, Point, Segment, Via, Zone};
 use uuid::Uuid;
 
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
@@ -143,6 +143,137 @@ pub(super) fn delete(
             items: ids.to_vec(),
         },
     })
+}
+
+/// Append `items` to the end of their lists, in the order given. Refused
+/// whole when an item is named twice or is already on the board.
+pub(super) fn add(
+    board: &mut PcbBoard,
+    items: Vec<BoardItem>,
+) -> Result<Applied, BoardCommandError> {
+    let ids: Vec<BoardItemId> = items.iter().map(BoardItem::id).collect();
+    let mut seen = HashSet::with_capacity(ids.len());
+    for &id in &ids {
+        if !seen.insert(id) {
+            return Err(BoardCommandError::DuplicateItem(id));
+        }
+        if position(board, id).is_some() {
+            return Err(BoardCommandError::ItemAlreadyPresent(id));
+        }
+    }
+    items.iter().try_for_each(check_finite)?;
+    check_item_uuids(board, &ids)?;
+    let new_pads = items.iter().flat_map(|item| match item {
+        BoardItem::Footprint(fp) => fp.pads.as_slice(),
+        _ => &[],
+    });
+    let new_ids: Vec<Uuid> = ids.iter().map(|id| id.split().1).collect();
+    check_pad_uuids(board, new_pads, None, &new_ids)?;
+    for item in items {
+        let end = list_len(board, item.id().split().0);
+        put(board, end, item);
+    }
+    Ok(Applied {
+        inverse: BoardCommand::DeleteItems { items: ids.clone() },
+        patch: BoardPatch {
+            kind: BoardPatchKind::ItemsAdded,
+            items: ids,
+        },
+    })
+}
+
+/// Footprints, pads, tracks, vias, zones and texts share one id space (the
+/// load repair treats it so; selection, the pick index and net edits key on
+/// it): refuse `pads` if one repeats, is used by any board item or pad, or is
+/// one of `new_items`. Only the pads of `except`, the footprint a replace
+/// removes, may be reused.
+pub(super) fn check_pad_uuids<'a>(
+    board: &PcbBoard,
+    pads: impl Iterator<Item = &'a Pad>,
+    except: Option<Uuid>,
+    new_items: &[Uuid],
+) -> Result<(), BoardCommandError> {
+    let mut taken: HashSet<Uuid> = board
+        .footprints
+        .iter()
+        .filter(|fp| Some(fp.uuid) != except)
+        .flat_map(|fp| fp.pads.iter().map(|p| p.uuid))
+        .chain(board.footprints.iter().map(|fp| fp.uuid))
+        .chain(board.segments.iter().map(|s| s.uuid))
+        .chain(board.vias.iter().map(|v| v.uuid))
+        .chain(board.zones.iter().map(|z| z.uuid))
+        .chain(board.texts.iter().map(|t| t.uuid))
+        .chain(std::iter::once(board.uuid))
+        .chain(new_items.iter().copied())
+        .collect();
+    for pad in pads {
+        if !taken.insert(pad.uuid) {
+            return Err(BoardCommandError::PadAlreadyPresent(pad.uuid));
+        }
+    }
+    Ok(())
+}
+
+/// The same id space for the new items themselves: refuse one whose uuid the
+/// board itself, any board pad, or a board item or new item of another kind
+/// already uses. (Same-kind repeats are `ItemAlreadyPresent` and
+/// `DuplicateItem`, checked first.)
+fn check_item_uuids(board: &PcbBoard, ids: &[BoardItemId]) -> Result<(), BoardCommandError> {
+    let mut taken: HashSet<Uuid> = board
+        .footprints
+        .iter()
+        .flat_map(|fp| std::iter::once(fp.uuid).chain(fp.pads.iter().map(|p| p.uuid)))
+        .chain(board.segments.iter().map(|s| s.uuid))
+        .chain(board.vias.iter().map(|v| v.uuid))
+        .chain(board.zones.iter().map(|z| z.uuid))
+        .chain(board.texts.iter().map(|t| t.uuid))
+        .chain(std::iter::once(board.uuid))
+        .collect();
+    for &id in ids {
+        if !taken.insert(id.split().1) {
+            return Err(BoardCommandError::UuidAlreadyUsed(id));
+        }
+    }
+    Ok(())
+}
+
+/// A new item's position and angle must be numbers, as for a move or turn.
+fn check_finite(item: &BoardItem) -> Result<(), BoardCommandError> {
+    let finite = |p: Point| p.x.is_finite() && p.y.is_finite();
+    let (position_ok, rotation_ok) = match item {
+        BoardItem::Footprint(fp) => {
+            check_pads_finite(&fp.pads)?;
+            (finite(fp.position), fp.rotation.is_finite())
+        }
+        BoardItem::Segment(s) => (finite(s.start) && finite(s.end), true),
+        BoardItem::Via(v) => (finite(v.position), true),
+        BoardItem::Zone(z) => (z.outline.iter().all(|p| finite(*p)), true),
+        BoardItem::Text(t) => (finite(t.position), t.rotation.is_finite()),
+    };
+    if !position_ok {
+        return Err(BoardCommandError::NonFinite { field: "position" });
+    }
+    if !rotation_ok {
+        return Err(BoardCommandError::NonFinite { field: "rotation" });
+    }
+    Ok(())
+}
+
+/// A footprint's pads must sit at a number and turn by one.
+pub(super) fn check_pads_finite(pads: &[Pad]) -> Result<(), BoardCommandError> {
+    for pad in pads {
+        if !pad.position.x.is_finite() || !pad.position.y.is_finite() {
+            return Err(BoardCommandError::NonFinite {
+                field: "pad position",
+            });
+        }
+        if !pad.rotation.is_finite() {
+            return Err(BoardCommandError::NonFinite {
+                field: "pad rotation",
+            });
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn restore(

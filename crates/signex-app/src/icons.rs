@@ -133,6 +133,11 @@ macro_rules! bar_icon {
 
 bar_icon!(icon_align, "align.svg", "active_bar/graphite/align.svg");
 bar_icon!(
+    icon_board_sketch,
+    "dropdown/rect.svg",
+    "active_bar/graphite/board_sketch.svg"
+);
+bar_icon!(
     icon_chevron_45,
     "chevron_45.svg",
     "active_bar/graphite/chevron.svg"

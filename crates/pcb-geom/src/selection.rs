@@ -85,7 +85,22 @@ impl Selection {
     }
 }
 
-/// The item under `p`: a via over a pad over a track, then the lowest
+impl Selection {
+    /// The footprints a placement edit acts on: each selected footprint and
+    /// the footprint of each selected pad, since a pad does not move alone.
+    pub fn footprints(&self) -> BTreeSet<uuid::Uuid> {
+        self.items
+            .iter()
+            .filter_map(|item| match *item {
+                ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => Some(id),
+                ItemRef::Track(_) | ItemRef::Via(_) => None,
+            })
+            .collect()
+    }
+}
+
+/// The item under `p`: a via over a pad over a track over a footprint
+/// body, then the lowest
 /// [`ItemRef`], so the answer does not depend on how the tree was built.
 pub fn pick(index: &BoardIndex, p: PointNm, tolerance: i64) -> Option<&IndexedItem> {
     index
@@ -99,6 +114,8 @@ fn rank(item: ItemRef) -> u8 {
         ItemRef::Via(_) => 0,
         ItemRef::Pad { .. } => 1,
         ItemRef::Track(_) => 2,
+        // The body is under its own pads: a click on copper takes the copper.
+        ItemRef::Footprint(_) => 3,
     }
 }
 

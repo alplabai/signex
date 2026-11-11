@@ -108,21 +108,21 @@ dialog-new-project-preview-sheet = { $paper } sheet
 
 dialog-new-project-preview-note = New schematics and PCBs in this project start from these settings. Edit them any time in Project Options.
 
-dialog-new-project-stack-silk-top = Top silkscreen
+dialog-new-project-stack-silk-top = Top Overlay
 
-dialog-new-project-stack-mask-top = Top solder mask
+dialog-new-project-stack-mask-top = Top Solder
 
-dialog-new-project-stack-copper-top = Top copper
+dialog-new-project-stack-copper-top = Top Layer
 
-dialog-new-project-stack-copper-inner = Inner { $n }
+dialog-new-project-stack-copper-inner = Mid-Layer { $n }
 
-dialog-new-project-stack-copper-bottom = Bottom copper
+dialog-new-project-stack-copper-bottom = Bottom Layer
 
 dialog-new-project-stack-prepreg = Prepreg
 
 dialog-new-project-stack-core = Core
 
-dialog-new-project-stack-mask-bottom = Bottom solder mask
+dialog-new-project-stack-mask-bottom = Bottom Solder
 
 dialog-new-project-footer-hint = Enter to create · Esc to cancel
 

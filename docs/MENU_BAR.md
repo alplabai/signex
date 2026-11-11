@@ -68,7 +68,11 @@ Schematics..., and Number Schematic Sheets... (see
 - Netlist (Protel .NET)...
 - ERC Report...
 
-**Design** keeps Parameter Manager... only. **File ▸ Export** keeps PDF only.
+**Design** has Update PCB Document (see
+[Design ▸ Update PCB Document](#design-update-pcb)), Board Sketch (see
+[Design ▸ Board Sketch](#design-board-sketch)), a separator, then
+Parameter Manager.... **File ▸ New** has PCB (`new_pcb_document`). **File ▸
+Export** keeps PDF only.
 Project tree actions with no menu message or command id (add or remove a
 document, Enable Version Control, History, Validate Project) stay in the tree's
 context menu; the menu gets no stub for them.
@@ -90,6 +94,104 @@ own. Two rows point at an id other than the one their key suggests (#1991):
 Tools ▸ Design Rule Check runs `run_drc` (#2222) on the PCB in view and is
 greyed while no PCB is open. The command is also in the command palette and
 as the Run DRC button of the Messages panel; no keymap preset binds it.
+
+## Tools ▸ Re-Annotate Board {#tools-reannotate-board}
+
+Tools ▸ Re-Annotate Board... runs `reannotate_board` (#1312), right after
+Design Rule Check with the other board rows, and is greyed while no PCB is
+open. It opens the Positional Re-Annotate dialog for the board in view:
+
+- **Order**: by X, then by Y (the default), or by Y, then by X. The sort is
+  exact at 1 µm: parts are not grouped into columns or rows by a tolerance,
+  so a part 0.01 mm left of another comes first whatever its Y. The board's y
+  grows downwards on screen.
+- **Bottom side**: after the top side (the default), or together with it.
+  Bottom-side parts are ordered as seen from the top.
+- Parts are numbered from 1 within each prefix (`R1, R2, ...`, `C1, ...`);
+  the prefix stays. Surrounding spaces are dropped, and `R01` becomes `R1`.
+  A locked footprint keeps its designator, and its number is skipped; so
+  does a footprint with no link to a schematic part, because Update PCB
+  matches such a footprint to a part by its designator and renumbering it
+  would swap parts. A footprint whose designator is not a prefix and an
+  ASCII number (`12`, `R1A`, `R１`, none) is kept and listed. A `R?` gets a
+  number.
+- The list shows each rename (designator, new designator), how many parts
+  are already in order and the parts kept. Execute runs the renames as one
+  board undo step at the board revision the list was made from; a board
+  that changed meanwhile gets a new list to check first, with a notice.
+  Nothing is written to disk until the board is saved.
+
+The dialog keeps the options it was last used with until the app quits. The
+same command is in the command palette; no keymap preset binds it.
+
+**Update PCB renames parts back.** A designator changed on the board, here
+or in Properties, is not carried to the schematic: the next Update PCB lists
+a rename back to the schematic's designator, ticked like every other row,
+because the command picks the direction (`DECISIONS.md`, 2026-11-10). Use
+Back Annotate (Tools ▸ Annotation ▸ Back Annotate Schematics..., #1312 PR 2)
+to keep them. The dialog and the Properties section say so under their
+fields.
+
+## Board Properties: designator and value {#board-properties}
+
+With exactly one footprint selected on a board, the Properties panel shows
+its designator and value as fields and its footprint name. Each field
+keeps its own draft (another selection on the same board, a tab switch away
+from the board, closing it, or an undo or redo of it drops them; a selection
+on another board, in another window, does not); Enter applies that field as
+one board undo step (`SetFootprintText`, labelled Designator or Value). A locked
+footprint or a read-only board shows the
+fields read-only with the reason; an empty designator is refused with a
+notice; a designator another footprint already has is applied, warned about
+in the Messages panel and noted under the fields. The board canvas
+right-click menu has Properties... (`edit_selected_object_properties`), live
+with anything selected, which shows the Properties panel; the same command
+(and `edit_object_properties`, Altium's double-click) is now enabled by a
+board selection. In an undocked board window the fields edit that window's
+board.
+
+## Tools ▸ Cross Probe and Cross Select Mode {#tools-cross-probe}
+
+Tools ▸ Cross Probe runs `cross_probe` (#1312): the part or net selected on
+the sheet or the board in view is selected on the other side, which is brought
+forward (a hidden tab) or opened (the project's board, or the part's sheet)
+and framed. It is greyed with nothing selected. The same command is the Cross
+Probe row of the sheet canvas menu and of the board canvas menu, and is in the
+command palette; no keymap preset binds it.
+
+Tools ▸ Cross Select Mode runs `toggle_cross_select_mode` and shows a check
+mark while the mode is on, which it is by default. While on, a selection on
+one side is selected in every sheet or board window on screen on the other
+side; it never opens a document or takes focus. The Altium preset binds it to
+Ctrl+Shift+X. How parts and nets are matched: `DECISIONS.md`, 2026-11-09.
+
+## Design ▸ Update PCB Document, File ▸ New ▸ PCB {#design-update-pcb}
+
+Design ▸ Update PCB Document runs `update_pcb_from_schematic` (#1312) and
+opens the Update PCB dialog for the project of the document in view. Its
+label follows that document: on a schematic it is Update PCB Document
+`<board>` (the project's board file, or no name when the project has none), on
+a board Import Changes From `<project>`. It is greyed unless a schematic or a
+board is in view and a project is open. The undocked windows' menu bars word
+and gate it by the window's own document. The same command is in the command
+palette, and the Projects tree's project row has an Update PCB Document row
+for the clicked project. No keymap preset binds it. The dialog:
+[UPDATE_PCB.md](UPDATE_PCB.md).
+
+File ▸ New ▸ PCB runs `new_pcb_document`: the project in view gets its board,
+named after the project, from its project defaults. It is greyed with no
+project open. Projects ▸ Add New ▸ PCB does the same for the clicked project.
+The board opens as an unsaved tab; nothing is written until Save.
+
+## Design ▸ Board Sketch {#design-board-sketch}
+
+Design ▸ Board Sketch runs `board_sketch` (#2234): the board in view enters
+sketch mode, where the footprint editor's sketch tools draw its outline,
+keepouts, cutouts and mounting holes; run again, it leaves the mode and
+commits the changes as one undo step. It is greyed while no PCB is open.
+The same command is the PCB Active Bar's Board Sketch button, a row of the
+board canvas menu and a palette row; no keymap preset binds it. The mode:
+[PCB_SKETCH.md](PCB_SKETCH.md#sketch-mode).
 
 ## File ▸ Library {#file-library}
 
@@ -151,6 +253,66 @@ three has a default key).
   parked as a draft exactly as the tab menu's Close All Documents does. Greyed
   when no tab is open.
 
+## Tools ▸ Assign Footprints {#tools-assign-footprints}
+
+Runs `assign_footprints` (#2248; maintainer decision, Caner 2026-11-10 on
+#2248, `DECISIONS.md`). Greyed without a schematic. The dialog lists every
+placed part of the active schematic's project (a loose sheet lists its own
+parts) with its designator, value, library row and current footprint, sorted
+by designator. The project's sheets are read off the UI thread when it opens.
+
+- A part chooses only among the footprints its own library row offers: the
+  row's default and its alternates, the same list the Properties panel shows
+  (`footprint_choices_for`). Its link to the row does not change. A part with
+  no open library row, or whose row offers one footprint, shows its footprint
+  read-only and why.
+- Tick boxes select several parts; "Tick all from this row" ticks every part
+  of the same library row. "Set ticked parts to" lists the footprints every
+  ticked part's row offers, so a bulk pick never gives a part a footprint its
+  row does not offer.
+- Apply checks each change again against the part's live document and its row
+  (the Properties path, `footprint_binding_commands`), then changes every open
+  sheet in one `update` as one undo group (`UndoGroupKind::Footprints`): one
+  Ctrl+Z on any changed sheet takes all of them back. A refusal on any sheet
+  changes nothing. Nothing is written to disk; the sheets are left unsaved.
+- The dialog does not block the editor, so a footprint can change behind it
+  (Properties, an undo). Apply first compares every listed editable part's
+  live footprint and binding with what the dialog read; if one differs, Apply
+  is refused as stale and nothing changes. When every pick turns out to be a
+  no-op, Messages says nothing changed.
+- A multi-unit part is one row, its units grouped across sheets by the same
+  rule the engine uses within a sheet (`group_into_parts`: one designator, one
+  library symbol, different unit numbers; an unannotated `U?` part is never
+  grouped). Apply changes every unit on every sheet, so one designator never
+  gets two footprints; a part with any unit on a sheet that is not open, or
+  read-only, is read-only whole.
+- A sheet that is not open is listed read-only ("Sheet not open"): its parts
+  are shown for the overview and changed by opening the sheet. This is the
+  safer of the two existing patterns: unlike Replace and Number Schematic
+  Sheets it loads no tabless engine, so nothing outside the open tabs changes
+  and no closed file can drift between the read and Apply. A sheet written by
+  a newer Signex is listed read-only too.
+
+## Tools ▸ Net Inspector {#tools-net-inspector}
+
+Runs `open_net_inspector` (#1269), which opens (or reveals) the Net Inspector
+panel, docked on the right by default. Always available; with no schematic of
+a project in view the panel says so.
+
+- The list is every net of the active document's project, read from the
+  cached stitched project net index (`signex_net::NetIndex`, the one net
+  navigation and highlighting read; `handlers/net_nav/index_job.rs`), never
+  derived again. While the panel is open, a project with no current index has
+  one built off the UI thread; after an edit the last list stays shown until
+  the new index lands.
+- Each row shows the net's name, its first matching net class and how many
+  component pins it connects. Named nets come first, then auto-named ones. The
+  filter matches the net name or the class name.
+- Clicking a net expands it to its pins, labels, power ports and sheet entries,
+  each with its sheet. Clicking a member highlights the net on every sheet and
+  goes to the member through net navigation (`go_to_member`), opening its
+  sheet when needed.
+
 ## Tools ▸ Annotation ▸ Number Schematic Sheets {#number-schematic-sheets}
 
 Runs `number_schematic_sheets` (#2247; editable dialog, maintainer decision
@@ -202,20 +364,54 @@ the whole monitor. The Messages panel names how many windows were arranged.
 
 ## Rows still planned {#rows-still-planned}
 
-- **Tools ▸ Assign Footprints** stays a stub: there is no bulk footprint
-  assignment yet, and picking any library footprint for a placed library part
-  changes how a part and its library row relate, which needs its own design
-  (#2248).
-- **Tools ▸ Net Inspector** stays a stub: there is no schematic net list
-  panel; the PCB Nets panel lists a board's nets only (#1269).
-- **Tools ▸ Annotation ▸ Back Annotate Schematics...** waits for PCB to
-  schematic sync (#2271).
+- **Tools ▸ Annotation ▸ Back Annotate Schematics...** waits for Back
+  Annotate (#1312 PR 2); the board-side edits it carries landed first (see
+  [Tools ▸ Re-Annotate Board](#tools-reannotate-board)).
 
 ## Save and Save As {#file-save}
 
 Both are also enabled for a standalone symbol or footprint editor tab
 (`.snxsym` / `.snxfpt`), which `save_active_document` already handles, so the
 gate is the command's enablement, not "a schematic is open".
+
+## Edit ▸ Move {#edit-move}
+
+Edit ▸ Move (#2240) groups the commands that move, turn and mirror the
+selection: Move (`move_object`), Move Selection (`move_selection`), Rotate
+(`rotate_counterclockwise`), Rotate Clockwise (`rotate_clockwise`), Mirror X
+and Mirror Y (`mirror_x` / `mirror_y`) and Flip Selection (`flip_selection`).
+They run the same ids as the keys, the palette and the canvas menus, on a sheet
+and on a board alike.
+
+On a sheet a row is live when there is something to act on: a selection, or
+for Rotate and Mirror a part on the cursor or the Bus Entry tool. Move needs an
+open sheet or board. On a PCB tab the rows act on the selected footprints (a
+selected pad stands for its footprint). They are greyed with nothing selected
+and when a selected footprint is locked; the key for a greyed row on a locked
+footprint still reaches the handler, which names the locked footprint in the
+Messages panel and changes nothing. Mirror X (the `X` key) flips a footprint
+to the other board side, like Flip Selection; Mirror Y flips it and turns it
+half a turn, so it mirrors top to bottom. Only the footprint moves: tracks
+and vias that end on a moved, rotated, flipped or deleted footprint stay
+where they are. Flip Selection has no default key and
+is greyed outside a board.
+
+## View: board view {#view-board}
+
+Five View rows act on the board in view and are greyed without one (#2223):
+Toggle Ratsnest, Next Layer, Previous Layer, Toggle Layer Visibility (the
+active layer) and Show All Layers. Next and Previous Layer show the keys of
+the active keymap: `Shift++` and `-` in the Altium and Classic profiles, which
+bind `+`, `Shift++`, `*` and `Shift+*` to Next Layer and `-` to Previous Layer
+in the `pcb` context. The Layers panel row sits with the other panel rows and,
+like them, works without a document (the panel shows its empty state). In an
+undocked PCB window the keys and rows act on that window's board. What a row
+changes is the board view in `UiState::pcb_layer_views`: never the board,
+never its file. See `docs/DECISIONS.md` (2026-11-09).
+
+The board canvas menu ends with a View group holding the same Toggle
+Ratsnest row (#2240, #2223); the menu opens only on a board, so the row is
+always live there.
 
 ## Native macOS menu {#native-macos-menu}
 

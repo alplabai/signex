@@ -64,7 +64,9 @@ JSON Lines: one request object per line, one reply object per line, in order.
 ```
 
 `args` take the forms `signex-cli` sends (a string, a number, a boolean,
-`[x, y]` for a point, the edit list of `apply_edits`). The reply is the headless
+`[x, y]` for a point, the edit list of `apply_edits`, for `apply_edits` the
+object `expect_revisions` of document to revision, and for `revert` the list
+`documents` of strings). The reply is the headless
 runner's envelope without its `run` and `seq`: `status` is `answered`, `ran`,
 `refused` or `failed`, `reason` and `data` appear when there is one, `messages`
 are the lines the command wrote to the Messages panel, `changed` the documents
@@ -72,6 +74,23 @@ whose content or unsaved state differ. `id` is `null` until the token has
 proved the request is from a client that holds it. The statuses and the reading
 of a command's outcome are `signex_app::headless::{Status, outcome_verdict}`,
 shared with `signex-cli`: one mapping, never a fake `ran`.
+
+Two optional request fields name the client for the agent journals (#2253,
+`docs/AGENT_JOURNALS.md`): `"client"` (a program name, `signex-cli`) and
+`"grants"` (a list of what it may do: `read`, `edit`, `save`,
+`allow-path:<dir>`). The app records them, never trusts them: its own checks
+apply on top. The client name is also the `client` of the origin.
+
+## Journals
+
+The app writes the access journal of every open project: a connection
+accepted (after the peer check), refused (at connect, or a request turned away
+before its command was looked at: a bad token, a malformed line, a command off
+the allowlist; each with its reason), closed, and the `grants` a client
+reports when it first reports them or changes them. Each request that reaches
+the handler of a command that changes a document (or writes or closes one) is
+a line in the edit journal; read queries are not logged one by one.
+The session token is never written. See `docs/AGENT_JOURNALS.md`.
 
 ## Allowlist
 

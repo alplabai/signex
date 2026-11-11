@@ -75,6 +75,22 @@ impl Signex {
         // The closed sheets were read off the UI thread before the edit ran.
         let mut own = self.edit_project_set(&path)?;
         let set = &mut own;
+        // A list that edits several sheets changes the others while it runs:
+        // each is current in its engine, not in the read (#2178).
+        for other in docs.agent_edits.touched.iter().filter(|p| **p != path) {
+            let Some(engine) = docs.engines.get(other) else {
+                continue;
+            };
+            let wanted = path_key_with(other, fold);
+            let spelled = set
+                .sheets
+                .keys()
+                .find(|p| path_key_with(p, fold) == wanted)
+                .cloned();
+            if let Some(spelled) = spelled {
+                set.sheets.insert(spelled, engine.document().clone());
+            }
+        }
         let complete = set.unreadable.is_empty()
             && set.absent.is_empty()
             && set.refused.is_empty()

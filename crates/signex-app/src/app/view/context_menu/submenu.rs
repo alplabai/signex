@@ -284,7 +284,15 @@ pub(super) fn add_new_entries(
             P::AddProjectSymbolLibrary(target.clone()),
         )),
     ));
-    v.push(dd_planned(Some(ic::icon_dd_part_actions(tid)), "PCB", None));
+    // The project's one board, opened unsaved (#1312).
+    v.push(dd_msg(
+        Some(ic::icon_dd_part_actions(tid)),
+        "PCB",
+        "",
+        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(P::AddNewPcb(
+            target.clone(),
+        ))),
+    ));
     // Footprint editor gated off for release; hide the "PCB Library" create
     // entry on the project-root menu.
     if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {

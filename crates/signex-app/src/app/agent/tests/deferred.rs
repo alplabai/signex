@@ -186,6 +186,55 @@ fn a_waiting_request_is_refused_once_the_session_token_changed() {
     assert_eq!(revision_in(&app, dir.path(), file), started);
 }
 
+/// A request that waited is journaled when its edit runs, once, as one that
+/// did not wait: the outcome and revisions of that run, not of the wait.
+#[test]
+fn a_waiting_request_is_journaled_once_when_its_edit_ran() {
+    use crate::app::agent::journal::{EditEntry, Journal, Report, read_journal};
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_in(dir.path());
+    app.agent.journals_on = true;
+    let file = "b.snxsch";
+    let doc = dir.path().join(file).display().to_string();
+    let started = revision_in(&app, dir.path(), file);
+    let edits = json!([{"id": "place_sheet_symbol", "args": {
+        "start": "100,100", "end": "120,120", "name": "Child", "file": "child.snxsch"
+    }}]);
+    let text = line(
+        &app,
+        "apply_edits",
+        json!({"document": doc, "expect_revision": started, "edits": edits}),
+    );
+    let (reply, mut answer) = AgentReply::channel();
+    let call = AgentCall {
+        pid: Some(4247),
+        input: Input::Line(text),
+        reply,
+    };
+    let task = app.update(Message::Agent(AgentMsg::Request(call)));
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the reads land");
+    let reply = answer.try_recv().unwrap().expect("answered");
+    let reply: serde_json::Value = serde_json::from_str(&reply).expect("JSON");
+    assert_eq!(reply["status"], "answered", "{reply}");
+
+    let journal = dir.path().join(".signex").join(Journal::Edits.file_name());
+    let report: Report<EditEntry> = read_journal(&journal).expect("the journal");
+    let entries = report.entries;
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    let entry = &entries[0];
+    assert_eq!(entry.command, "apply_edits");
+    assert_eq!(entry.outcome, "ran", "{entry:?}");
+    assert_eq!(entry.pid, Some(4247));
+    assert_eq!(entry.revision_before, Some(started));
+    assert_eq!(
+        entry.revision_after,
+        Some(revision_in(&app, dir.path(), file))
+    );
+    assert_eq!(entry.group, reply["data"]["group"].as_u64(), "{reply}");
+}
+
 fn revision_in(app: &crate::app::Signex, dir: &std::path::Path, file: &str) -> u64 {
     app.document_state.engines[&dir.join(file)].revision()
 }

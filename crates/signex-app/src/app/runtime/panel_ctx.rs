@@ -168,6 +168,69 @@ impl Signex {
         request
     }
 
+    /// The Layers panel: the active board's rows, hidden layers and active layer.
+    fn pcb_layers_panel_state(&self) -> crate::panels::PcbLayersPanel {
+        let Some(board) = self.active_pcb() else {
+            return crate::panels::PcbLayersPanel {
+                i18n: self.ui_state.i18n.clone(),
+                ..Default::default()
+            };
+        };
+        let view = self
+            .active_tab_path()
+            .map(|path| self.pcb_layer_view(&path))
+            .unwrap_or_default();
+        crate::panels::PcbLayersPanel::new(&board.layers, &view, self.ui_state.i18n.clone())
+    }
+
+    /// The Properties panel's board summary for the active tab. The selection
+    /// counts only once it is aligned with that tab: right after a tab
+    /// switch it may still hold another board's items.
+    fn pcb_board_summary(&self) -> Option<crate::panels::PcbBoardSummary> {
+        let board = self.active_pcb_snapshot()?;
+        let tab = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)?;
+        let selection = &self.interaction_state.pcb_selection;
+        let selected = if selection.document() == Some(tab.path.as_path()) {
+            selection.selection().len()
+        } else {
+            0
+        };
+        let footprint = self.pcb_footprint_facts(&tab.path, board);
+        Some(
+            crate::panels::PcbBoardSummary::of(board, tab.title.clone(), selected)
+                .with_footprint(footprint),
+        )
+    }
+
+    /// Bring the board summary in step with a selection change, without a
+    /// full rebuild. Inside an undocked window's event the window's context
+    /// and selection are the ones in the main slots (`run_in_window`).
+    pub(crate) fn sync_pcb_board_summary(&mut self) {
+        let summary = self.pcb_board_summary();
+        // A draft belongs to the footprint Properties shows on its board; once
+        // another selection on THAT board replaces it, the unapplied text is
+        // dropped. A selection on another board (another window) leaves it.
+        let in_view = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|tab| tab.path.clone());
+        let shown = summary
+            .as_ref()
+            .and_then(|s| s.footprint.as_ref())
+            .map(|f| f.uuid);
+        let draft = self.interaction_state.pcb_footprint_draft.as_ref();
+        if draft.is_some_and(|d| {
+            in_view.as_deref() == Some(d.board.as_path()) && shown != Some(d.footprint)
+        }) {
+            self.interaction_state.pcb_footprint_draft = None;
+        }
+        self.document_state.panel_ctx.pcb_board = summary;
+    }
+
     /// The Net Classes section's state: the panel's own selection and drafts
     /// carried over, the table and history flags read from the active project.
     fn net_class_panel_state(&self) -> crate::panels::NetClassPanel {
@@ -614,6 +677,7 @@ impl Signex {
         let erc_violation_waivers = self.erc_violation_waiver_entries();
 
         let net_classes = self.net_class_panel_state();
+        let pcb_layers = self.pcb_layers_panel_state();
 
         let (panel_tokens, panel_theme_id) = self.panel_theme();
         self.document_state.panel_ctx = crate::panels::PanelContext {
@@ -681,6 +745,7 @@ impl Signex {
             signal_mode,
             projects_view,
             net_classes,
+            pcb_layers,
             project_tree: kept_project_tree,
             project_tree_builds,
             project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),
@@ -690,6 +755,9 @@ impl Signex {
             pcb_nets: self
                 .active_pcb_snapshot()
                 .map(crate::panels::PcbNetsSummary::of),
+            // Kept in step with the net index by `refresh_net_nav`.
+            net_inspector: self.document_state.panel_ctx.net_inspector.clone(),
+            pcb_board: self.pcb_board_summary(),
             selection_count,
             selected_uuid,
             selected_kind,
@@ -827,6 +895,7 @@ mod tests {
                 annotation: None,
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
+                agent_journal: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },
@@ -880,6 +949,7 @@ mod tests {
                 annotation: None,
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
+                agent_journal: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

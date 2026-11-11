@@ -17,6 +17,8 @@ mod row_delete;
 mod row_save;
 mod slot_param;
 mod tables;
+#[cfg(test)]
+mod trace_level_tests;
 
 use super::*;
 use crate::library::writes::AfterRowCreated;
@@ -43,7 +45,7 @@ impl Signex {
     ) -> Task<Message> {
         use crate::library::mount::{MountIntent, MountRequest};
 
-        tracing::info!(
+        tracing::debug!(
             target: "signex::library",
             path = %path.display(),
             exists = path.exists(),

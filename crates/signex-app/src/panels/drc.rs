@@ -55,10 +55,10 @@ pub struct DrcPanel {
 
 fn layer_label(i18n: &I18n, layer: Option<CopperLayer>) -> Option<Localized> {
     Some(match layer? {
-        CopperLayer::Top => t!(i18n, ids::DRC_LAYER_TOP),
-        CopperLayer::Bottom => t!(i18n, ids::DRC_LAYER_BOTTOM),
+        CopperLayer::Top => t!(i18n, ids::PCB_LAYER_TOP_COPPER),
+        CopperLayer::Bottom => t!(i18n, ids::PCB_LAYER_BOTTOM_COPPER),
         CopperLayer::Inner(inner) => {
-            t!(i18n, ids::DRC_LAYER_INNER, "index" => u32::from(inner.index()))
+            t!(i18n, ids::PCB_LAYER_INNER_COPPER, "index" => u32::from(inner.index()))
         }
     })
 }
@@ -68,6 +68,7 @@ fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
         ViolationKind::Clearance => t!(i18n, ids::DRC_KIND_CLEARANCE),
         ViolationKind::Short => t!(i18n, ids::DRC_KIND_SHORT),
         ViolationKind::Unconnected => t!(i18n, ids::DRC_KIND_UNCONNECTED),
+        ViolationKind::Keepout => t!(i18n, ids::DRC_KIND_KEEPOUT),
     };
     let detail = match row.kind {
         ViolationKind::Clearance => t!(
@@ -82,6 +83,7 @@ fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
             i18n, ids::DRC_DETAIL_UNCONNECTED,
             "net" => row.a.clone(), "length" => row.measured_mm.clone()
         ),
+        ViolationKind::Keepout => t!(i18n, ids::DRC_DETAIL_KEEPOUT, "net" => row.a.clone()),
     };
     let place = t!(i18n, ids::DRC_LOCATION, "x" => row.x_mm.clone(), "y" => row.y_mm.clone());
     (kind, detail, place)
@@ -93,23 +95,49 @@ fn note<'a>(message: Localized, color: Color) -> Element<'a, PanelMsg> {
     text(message).size(TS.caption).color(color).boxed()
 }
 
-fn header<'a>(ctx: &'a PanelContext, col: Rows<'a>) -> Rows<'a> {
+/// The section header: its title and a Graphite Run DRC button, disabled
+/// while a check runs.
+fn header<'a>(ctx: &'a PanelContext, drc: &DrcPanel, col: Rows<'a>) -> Rows<'a> {
     let i18n = &*ctx.i18n;
     let primary = theme_ext::text_primary(&ctx.tokens);
+    let run = (!drc.running).then_some(PanelMsg::RunDrc);
     col.push(
-        row![
-            text(t!(i18n, ids::DRC_HEADING))
-                .size(TS.body)
-                .color(primary),
-            Space::new().width(Length::Fill).height(Length::Shrink),
-            signex_widgets::button(text(t!(i18n, ids::DRC_RUN)).size(TS.body).color(primary))
-                .padding([3, 10])
-                .on_press(PanelMsg::RunDrc)
-                .style(crate::styles::menu_item(&ctx.tokens)),
-        ]
-        .align_y(iced::Alignment::Center)
+        container(
+            row![
+                text(t!(i18n, ids::DRC_HEADING))
+                    .size(TS.label)
+                    .font(iced::Font {
+                        weight: iced::font::Weight::Semibold,
+                        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+                    })
+                    .color(primary),
+                Space::new().width(Length::Fill).height(Length::Shrink),
+                crate::styles::dialog_button(
+                    &t!(i18n, ids::DRC_RUN).into_string(),
+                    crate::styles::DialogButtonKind::Secondary,
+                    run,
+                    &ctx.tokens,
+                ),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .height(Length::Fixed(super::graphite::TABLE_ROW_HEIGHT + SP.m))
+        .align_y(iced::alignment::Vertical::Center)
         .boxed(),
     )
+}
+
+/// The hairline under the section, as between the Messages rows.
+fn rule<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
+    let line = crate::styles::tokens::resolve(&ctx.tokens).line_soft;
+    container(Space::new())
+        .height(Length::Fixed(1.0))
+        .width(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(line)),
+            ..container::Style::default()
+        })
+        .boxed()
 }
 
 /// The state line(s) above the rows: running, idle, or what the last run
@@ -195,8 +223,11 @@ fn violation_row<'a>(ctx: &'a PanelContext, violation: &DrcRow) -> Element<'a, P
 /// The section, or nothing when no PCB is in view.
 pub(super) fn section<'a>(ctx: &'a PanelContext) -> Option<Element<'a, PanelMsg>> {
     let drc = ctx.pcb_drc.as_ref()?;
-    let col: Rows<'a> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
-    let mut col = status(ctx, drc, header(ctx, col));
+    let col: Rows<'a> = Column::new()
+        .spacing(SP.xs)
+        .padding([SP.xs, 12.0])
+        .width(Length::Fill);
+    let mut col = status(ctx, drc, header(ctx, drc, col));
     if !drc.running {
         for violation in &drc.rows {
             col = col.push(violation_row(ctx, violation));
@@ -209,5 +240,51 @@ pub(super) fn section<'a>(ctx: &'a PanelContext) -> Option<Element<'a, PanelMsg>
             muted,
         ));
     }
-    Some(col.push(separator(&ctx.tokens).boxed()).boxed())
+    Some(Column::new().push(col.boxed()).push(rule(ctx)).boxed())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout_probe::messages_on_click;
+
+    fn context(running: bool) -> PanelContext {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.pcb_drc = Some(DrcPanel {
+            running,
+            ..DrcPanel::default()
+        });
+        ctx
+    }
+
+    /// Round 9 of #2262: Run DRC is the section header's button; it runs the
+    /// check, and does nothing while a check is already running.
+    #[test]
+    fn run_drc_is_a_header_button_disabled_while_running() {
+        let window = iced::Size::new(900.0, 300.0);
+        let idle = context(false);
+        let idle_section = section(&idle).expect("section");
+        let pressed = messages_on_click(idle_section, window, "Run DRC");
+        assert!(
+            matches!(pressed.as_slice(), [PanelMsg::RunDrc]),
+            "{pressed:?}"
+        );
+        let busy = context(true);
+        let busy_section = section(&busy).expect("section");
+        assert!(messages_on_click(busy_section, window, "Run DRC").is_empty());
+    }
+
+    /// An inner layer's DRC row uses the Layers panel's name (Mid-Layer n).
+    #[test]
+    fn an_inner_layer_row_uses_the_layers_panel_name() {
+        let i18n = I18n::en_us();
+        let inner = CopperLayer::Inner(signex_types::pcb_layer::InnerCopper::new(2).expect("2"));
+        let label = layer_label(&i18n, Some(inner))
+            .expect("label")
+            .into_string();
+        let panel = crate::pcb_canvas::layer_style::copper_name(&i18n, inner).into_string();
+        assert_eq!(label, panel);
+        assert!(label.contains("Mid-Layer"), "{label}");
+    }
 }

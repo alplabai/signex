@@ -27,6 +27,17 @@ pub fn bar_items(
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let mut items: Vec<ActiveBarItem<LibraryMessage>> = Vec::new();
 
+    // A board sketch (#2234) gets the sketch tools and nothing that edits
+    // pads, silk or 3D bodies.
+    if editor.state.board_backdrop.is_some() {
+        items.extend(
+            crate::library::editor::footprint::sketch_mode::active_bar::items(
+                editor, theme_id, tokens,
+            ),
+        );
+        return items;
+    }
+
     // 1) Eight active-bar dropdown trigger buttons at the FRONT.
     items.extend(dropdown_trigger_items(editor, theme_id));
     items.push(ActiveBarItem::Separator);

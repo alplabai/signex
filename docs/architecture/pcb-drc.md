@@ -11,6 +11,7 @@ the document-hosting decision (#661).
 | `Clearance` | Copper of two different nets that share a copper layer and are closer than the rule. `measured_nm` is the gap, rounded down, always under `required_nm`. |
 | `Short` | Copper of two different nets that touches or overlaps on a shared layer (`Shape::overlaps`). Reported once, never also as a clearance. |
 | `Unconnected` | One violation per link `ratsnest` still draws. `measured_nm` is the link length, `required_nm` is 0, `items` are the pads at its ends. |
+| `Keepout` | A track, via, pad or footprint inside a board-sketch keepout that forbids it, on a copper layer the keepout lists (#2234). One per keepout and item; `items` is the item, `keepout` the keepout's uuid, both distances 0. See "Keepouts" below. |
 
 Each violation carries its items (sorted), the two nets, the shared layer
 mask (`copper_layers` lists them), a location and the two distances. The
@@ -72,8 +73,33 @@ reported open. The pour itself is not checked: a zone's clearance to other
 nets (#2216) and its fill are not modelled, so a zone is never a `Clearance`
 or `Short` party.
 
+## Keepouts
+
+The keepouts are the ones the board sketch baked (`PcbBoard::sketch`,
+`docs/PCB_SKETCH.md`). Any net counts, net 0 included: a keepout keeps out
+copper, not a net.
+
+| Keepout forbids | Reported |
+|---|---|
+| `no_routing` | tracks on a listed layer |
+| `no_vias` | vias reaching a listed layer |
+| `no_copper` | tracks, vias and pads on a listed layer |
+| `no_drilling` | vias and drilled pads, whatever their layers |
+| `no_components` | a footprint whose body (`footprint_body`) meets the keepout, when the outer copper layer of its side is listed |
+
+An item meets a keepout when its copper touches the keepout polygon or lies
+inside it (`Shape::overlaps_polygon`). A keepout that lists no copper layer
+forbids nothing this check sees. Each keepout is tested against every item,
+with a bounding-box test first; an index lookup is a follow-up if boards with
+many keepouts make it slow.
+
 ## Not checked yet
 
 Hole-to-hole, silk-to-pad, courtyard overlap, zone clearance (#2216), annular
 ring, copper with no net (net 0 is skipped, like in the ratsnest), and a rule
 per layer or per object kind. Each is its own follow-up.
+
+From the board sketch (#2234): `no_pours` keepouts (zones are not tested
+against keepouts), board mounting holes in a `no_drilling` keepout, and
+copper-to-board-edge and copper-to-cutout clearance: the rules hold no edge
+clearance yet, so the baked outline and cutouts are not checked.

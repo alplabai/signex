@@ -1,7 +1,8 @@
 //! The one list of unsaved documents the title count, Save All enablement
 //! and `has_dirty_documents` read (#661).
 //!
-//! Files come from the dirty path set plus the dirty drafts. A member the
+//! Files come from the dirty path set plus the dirty drafts and a board's
+//! unapplied sketch (#2234). A member the
 //! app has no document for (a library manifest, a draft save in flight whose
 //! editor closed, a case-variant spelling) is listed like any other. Component
 //! rows live outside the set and are listed apart: a row with unsaved work
@@ -49,9 +50,26 @@ impl Signex {
     /// The unsaved files and the dirty Component rows.
     pub(crate) fn unsaved_set(&self) -> UnsavedDocuments {
         UnsavedDocuments {
-            files: self.document_state.unsaved_files(),
+            files: self.unsaved_files_with_sketch(),
             rows: self.library.dirty_editors(),
         }
+    }
+
+    /// How many files are unsaved: the title bar's "N unsaved".
+    pub(crate) fn unsaved_file_count(&self) -> usize {
+        self.unsaved_files_with_sketch().len()
+    }
+
+    /// The unsaved files, plus a board whose sketch has changes it has not
+    /// taken yet (#2234): that is the board's unsaved work too.
+    fn unsaved_files_with_sketch(&self) -> Vec<PathBuf> {
+        let mut files = self.document_state.unsaved_files();
+        if let Some(board) = self.board_sketch_owed()
+            && let Err(at) = files.binary_search(&board)
+        {
+            files.insert(at, board);
+        }
+        files
     }
 }
 

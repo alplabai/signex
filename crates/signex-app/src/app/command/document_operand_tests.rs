@@ -94,6 +94,7 @@ fn color_net_by_id_colours_that_sheet_and_leaves_the_person_alone() {
 fn a_command_by_id_does_not_depend_on_what_the_active_tab_can_do() {
     let mut app = app_with(&[("a.snxsch", A)]);
     let board = signex_types::pcb::PcbBoard {
+        sketch: None,
         unknown: Default::default(),
         uuid: uid(500),
         version: 1,
@@ -305,6 +306,7 @@ fn a_document_that_cannot_take_the_command_is_refused_with_the_reason() {
 
     // A board is not a sheet.
     let board = signex_types::pcb::PcbBoard {
+        sketch: None,
         unknown: Default::default(),
         uuid: uid(500),
         version: 1,

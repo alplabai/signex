@@ -114,6 +114,24 @@ pub(super) fn cmd_item_gated(ctx: &MenuContext, cmd: Cmd) -> MenuEntry {
     )
 }
 
+/// [`cmd_item_gated`] with a label the context words (a document's name in
+/// it), instead of the catalog's.
+pub(super) fn cmd_item_gated_as(ctx: &MenuContext, cmd: Cmd, label: String) -> MenuEntry {
+    command_row(ctx, cmd, label, command_state(cmd, enabled(ctx, cmd.id)))
+}
+
+/// A keymap-backed toggle row, always enabled, with its check mark shown
+/// while `checked` (a mode the command switches).
+pub(super) fn cmd_toggle(ctx: &MenuContext, cmd: Cmd, checked: bool) -> MenuEntry {
+    match cmd_item(ctx, cmd) {
+        MenuEntry::Item(item) => MenuEntry::Item(MenuItem {
+            checked: Some(checked),
+            ..item
+        }),
+        other => other,
+    }
+}
+
 pub(super) fn submenu(title: &str, entries: Vec<MenuEntry>) -> MenuEntry {
     MenuEntry::Submenu(menu(title, entries))
 }

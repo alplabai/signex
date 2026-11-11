@@ -268,9 +268,7 @@ impl Signex {
             (16.0, WINDOW_PALETTE_WIDTH)
         } else {
             let (x, _) = self.chrome_search_bar_geometry();
-            let window_w = self.ui_state.window_size.0;
-            let w = GRAPHITE_PALETTE_WIDTH.min((window_w - 32.0).max(WINDOW_PALETTE_WIDTH));
-            (x.min((window_w - w - 16.0).max(16.0)), w)
+            chrome_palette_card(x, self.ui_state.window_size.0)
         };
         let ink4 = crate::styles::tokens::resolve(tokens).ink4;
         let window_input: Option<Element<'_, Message>> =
@@ -643,4 +641,21 @@ fn symbol_card_widths(fields: &[(&str, String)], family: &str) -> (f32, f32) {
         .ceil()
         .min(SYMBOL_CARD_MAX_W);
     (label_w, card_w)
+}
+
+/// The x and width of the palette card under the chrome strip, its left
+/// edge at the search field's `search_x` unless that would run it off the
+/// right of a `window_w` wide window.
+fn chrome_palette_card(search_x: f32, window_w: f32) -> (f32, f32) {
+    let w = GRAPHITE_PALETTE_WIDTH.min((window_w - 32.0).max(WINDOW_PALETTE_WIDTH));
+    (search_x.min((window_w - w - 16.0).max(16.0)), w)
+}
+
+#[cfg(test)]
+mod palette_width_tests {
+    /// The palette card is 640 px wide (maintainer, 2026-11-10).
+    #[test]
+    fn the_chrome_palette_card_is_640_px_wide() {
+        assert_eq!(super::chrome_palette_card(400.0, 1600.0), (400.0, 640.0));
+    }
 }

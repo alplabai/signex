@@ -35,6 +35,13 @@ impl Signex {
         let before = self.change_snapshot();
         let (outcome, task) = match self.agent_gate_closed(ticket, &loaded) {
             Some(reason) => (CommandOutcome::Disabled { reason }, Task::none()),
+            // A socket request's edit is journaled as one that did not wait.
+            None if self.agent.waiting.contains_key(&ticket) => {
+                let (command, args) = (loaded.command.clone(), loaded.args.clone());
+                self.with_origin(loaded.origin.clone(), |app| {
+                    app.journaled(&command, &args, |app| app.run_with_reads(loaded))
+                })
+            }
             None => self.run_with_reads(loaded),
         };
         match self.agent.waiting.remove(&ticket) {

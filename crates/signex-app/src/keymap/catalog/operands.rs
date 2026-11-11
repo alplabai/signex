@@ -91,9 +91,11 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("offset", OperandKind::Text),
     ("limit", OperandKind::Text),
     ("expect_revision", OperandKind::Text),
+    ("expect_revisions", OperandKind::Text),
     ("edits", OperandKind::Text),
     ("summary", OperandKind::Text),
     ("group", OperandKind::Text),
+    ("documents", OperandKind::Text),
     ("location", OperandKind::Path),
     ("make_folder", OperandKind::Bool),
     ("profile", OperandKind::Text),
@@ -105,6 +107,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("sheet", OperandKind::Text),
     ("file", OperandKind::Text),
     ("direction", OperandKind::Text),
+    ("apply", OperandKind::Bool),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -244,6 +247,10 @@ pub const NEW_PROJECT: &[Operand] = &[
     optional("overrides", OperandKind::Text),
 ];
 
+/// Update PCB without the dialog (#1312): `apply=true` executes the rows
+/// ticked by default.
+pub const APPLY: &[Operand] = &[required("apply", OperandKind::Bool)];
+
 /// Colour the net under a point of the named document's sheet.
 pub const COLOR_NET: &[Operand] = &[
     required("at", OperandKind::Point),
@@ -307,17 +314,22 @@ pub const ASSIGN_NET_CLASS: &[Operand] = &[
 
 /// `apply_edits` (#2178): a JSON list of catalog edit commands, applied to the
 /// named document as one undo step if its revision is still `expect_revision`.
+/// An edit that names another sheet of the project makes the call one group on
+/// every sheet it touches; `expect_revisions` then holds each such sheet's
+/// revision (a JSON object, document to revision).
 pub const APPLY_EDITS: &[Operand] = &[
     required("document", OperandKind::Document),
     required("expect_revision", OperandKind::Text),
     required("edits", OperandKind::Text),
     optional("summary", OperandKind::Text),
+    optional("expect_revisions", OperandKind::Text),
 ];
 /// `revert` (#2178): take back the agent step `group` of the named document,
 /// while it is that document's newest step.
 pub const REVERT: &[Operand] = &[
     required("document", OperandKind::Document),
     required("group", OperandKind::Text),
+    optional("documents", OperandKind::Text),
 ];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma

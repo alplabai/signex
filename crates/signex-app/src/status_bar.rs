@@ -1,6 +1,7 @@
 //! Bottom status bar — cursor position, grid, snap, layer, zoom, units.
 
 use iced::Element;
+use signex_i18n::Localized;
 use signex_types::coord::Unit;
 use signex_types::schematic::{SelectedItem, SelectedKind};
 use signex_types::theme::ThemeTokens;
@@ -34,6 +35,8 @@ pub(crate) struct Readout<'r> {
     pub pending_git_commits: usize,
     pub altium_import: Option<&'r str>,
     pub activity: Option<&'r str>,
+    /// The active copper layer of an open board: a caption and the name.
+    pub active_layer: Option<(Localized, Localized)>,
 }
 
 /// Format a one-line breakdown of the active canvas selection.
@@ -77,7 +80,7 @@ fn selection_summary(selected: &[SelectedItem]) -> Option<String> {
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "13 arguments: the status bar reads thirteen independent slices of app state and owns none of them"
+    reason = "15 arguments: the status bar reads fifteen independent slices of app state and owns none of them"
 )]
 pub fn view<'a>(
     x: f64,
@@ -93,6 +96,7 @@ pub fn view<'a>(
     pending_git_commits: usize,
     altium_import: Option<&str>,
     activity: Option<&str>,
+    active_layer: Option<(Localized, Localized)>,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, StatusBarRequest> {
     graphite::view(
@@ -109,6 +113,7 @@ pub fn view<'a>(
             pending_git_commits,
             altium_import,
             activity,
+            active_layer,
         },
         tokens,
         i18n,

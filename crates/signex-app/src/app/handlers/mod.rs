@@ -5,9 +5,11 @@ pub mod autosave_primitives;
 pub mod autosave_project;
 pub mod autosave_recovery;
 pub mod autosave_row;
+mod board_sketch;
 pub mod canvas;
 pub mod clipboard_workflows;
 mod component_history;
+mod cross_probe;
 #[cfg(test)]
 mod detached_confirm_tests;
 #[cfg(test)]
@@ -44,8 +46,15 @@ pub mod pcb_drc;
 mod pcb_edit;
 #[cfg(test)]
 mod pcb_edit_tests;
+pub(crate) mod pcb_footprint_text;
 mod pcb_parking;
+pub(crate) mod pcb_placement;
+#[cfg(test)]
+mod pcb_placement_tests;
+#[cfg(test)]
+mod pcb_placement_window_tests;
 pub mod pcb_select;
+pub mod pcb_view;
 pub mod placed_part;
 pub mod placement_session;
 pub mod preferences;
