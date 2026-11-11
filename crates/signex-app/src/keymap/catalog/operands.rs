@@ -100,6 +100,13 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("make_folder", OperandKind::Bool),
     ("profile", OperandKind::Text),
     ("overrides", OperandKind::Text),
+    ("library", OperandKind::Text),
+    ("part", OperandKind::Text),
+    ("unit", OperandKind::Text),
+    ("mirror", OperandKind::Text),
+    ("sheet", OperandKind::Text),
+    ("file", OperandKind::Text),
+    ("direction", OperandKind::Text),
     ("apply", OperandKind::Bool),
 ];
 
@@ -182,6 +189,44 @@ pub const POWER: &[Operand] = &[
     required("net_name", OperandKind::Text),
     required("lib_id", OperandKind::Text),
     optional("allow_merge", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
+/// A library part (#2199): the row of an open library, where, and which unit;
+/// the designator, value, rotation and mirror a click's form would give it.
+/// A connection point landing on anything is refused (no `allow_merge`).
+pub const PART: &[Operand] = &[
+    required("library", OperandKind::Text),
+    required("part", OperandKind::Text),
+    required("at", OperandKind::Point),
+    optional("unit", OperandKind::Text),
+    optional("designator", OperandKind::Text),
+    optional("value", OperandKind::Text),
+    optional("rotation", OperandKind::Angle),
+    optional("mirror", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
+/// A sheet symbol between two corners, referring to its child `file` (relative
+/// to the sheet, inside the project folder; never written). `allow_merge` lets
+/// the nets the file brings in short or rename project nets (#2199).
+pub const SHEET_SYMBOL: &[Operand] = &[
+    required("start", OperandKind::Point),
+    required("end", OperandKind::Point),
+    required("name", OperandKind::Text),
+    required("file", OperandKind::Text),
+    optional("allow_merge", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
+/// An entry on the border of the sheet symbol named `sheet`.
+pub const SHEET_ENTRY: &[Operand] = &[
+    required("sheet", OperandKind::Text),
+    required("at", OperandKind::Point),
+    required("name", OperandKind::Text),
+    optional("direction", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
+/// The entries of the sheet symbol named `sheet` matched to its child file.
+pub const SYNC_SHEET: &[Operand] = &[
+    required("sheet", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
 /// An open dialog's answer.

@@ -44,6 +44,13 @@ the pin's tip, or the sheet entry's point, on the sheet the edit targets.
 lands and answer with a report (optional operands `allow_merge`,
 `allow_open`, `dry_run`); rules in [CLI.md](CLI.md), "Wire intent".
 
+`place_component library=.. part=.. at=x,y` places a row of an open library
+and answers with its designator, unit and pin tips; `place_sheet_symbol`,
+`place_sheet_entry` and `sync_sheet_pins` edit the hierarchy without writing
+a file. Without operands, in a window, they open the picker, arm the tool or
+act on the selection as before; rules in [CLI.md](CLI.md), "Placing parts
+and hierarchy".
+
 Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## General

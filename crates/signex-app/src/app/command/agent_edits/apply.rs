@@ -135,6 +135,31 @@ fn prepare(
         .collect()
 }
 
+/// The project file of the call's document, if it is in a project.
+fn project_of(app: &Signex, target: &DocumentTarget) -> Option<PathBuf> {
+    app.resolve_document_target(target)
+        .ok()
+        .and_then(|entry| entry.project)
+        .map(|project| project.path)
+}
+
+/// The edits of an `apply_edits` call, parsed as the call parses them, each
+/// with the sheet it acts on, for planning their reads (#2199); `None` when
+/// the call is refused anyway (it then runs at once and says why).
+pub(in crate::app::command) fn listed_edits(
+    app: &Signex,
+    args: &CommandArgs,
+) -> Option<Vec<(AppCommandId, CommandArgs, PathBuf)>> {
+    let path = named_sheet(app, args, "`apply_edits`").ok()?;
+    let Some(OperandValue::Document(target)) = args.operand("document") else {
+        return None;
+    };
+    let specs = parse_edit_list(text(args, "edits").unwrap_or_default()).ok()?;
+    let project = project_of(app, target);
+    let edits = prepare(app, &specs, &target.to_string(), &path, project.as_deref()).ok()?;
+    Some(edits.into_iter().map(|e| (e.id, e.args, e.path)).collect())
+}
+
 /// The undo label: "Agent: " and the summary, or the ids of the edits.
 fn label_for(summary: Option<&str>, specs: &[EditSpec]) -> String {
     let summary = summary.map_or_else(
@@ -213,11 +238,7 @@ pub(in crate::app::command) fn apply_edits(app: &mut Signex, args: &CommandArgs)
         Ok(specs) => specs,
         Err(reason) => return refused(reason),
     };
-    let project = app
-        .resolve_document_target(target)
-        .ok()
-        .and_then(|entry| entry.project)
-        .map(|project| project.path);
+    let project = project_of(app, target);
     let edits = match prepare(app, &specs, &target.to_string(), &path, project.as_deref()) {
         Ok(edits) => edits,
         Err(reason) => return refused(reason),

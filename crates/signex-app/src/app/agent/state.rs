@@ -87,6 +87,11 @@ pub(crate) struct AgentState {
     pub(super) registry_in_flight: bool,
     /// How many times a failed listener was restarted since it last started.
     pub(super) restarts: u32,
+    /// The ticket of the request just run when it waits for its reads
+    /// (#2199): its reply is sent when they land, not now.
+    pub(crate) deferred: Option<u64>,
+    /// The replies of requests waiting for their reads, by ticket.
+    pub(super) waiting: std::collections::HashMap<u64, super::deferred::WaitingReply>,
 }
 
 impl AgentState {
@@ -124,6 +129,8 @@ impl AgentState {
             registry_retry: false,
             registry_in_flight: false,
             restarts: 0,
+            deferred: None,
+            waiting: std::collections::HashMap::new(),
         }
     }
 

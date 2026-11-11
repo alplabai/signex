@@ -11,7 +11,7 @@ mod wire;
 #[cfg(test)]
 mod group_run_tests;
 
-pub(super) use apply::apply_edits;
+pub(super) use apply::{apply_edits, listed_edits};
 pub(super) use revert::revert;
 pub(super) use single::{run_as_one_step, runs_as_one_step};
 pub use wire::{

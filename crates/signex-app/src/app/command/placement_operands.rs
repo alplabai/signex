@@ -46,10 +46,21 @@ enum Placement {
 type Ran = (CommandOutcome, Task<Message>);
 
 fn run(app: &mut Signex, args: &CommandArgs, placement: Placement) -> Ran {
+    run_edit(app, args, |app| app.place_from_operands(placement, args))
+}
+
+/// One edit from operands (#2155, #2199) on the sheet the edit targets: the
+/// named `document`, else the active sheet. Refused with the reason when no
+/// schematic is open, the sheet is read-only, or `edit` refuses.
+pub(super) fn run_edit(
+    app: &mut Signex,
+    args: &CommandArgs,
+    edit: impl FnOnce(&mut Signex) -> Result<CommandOutcome, String>,
+) -> Ran {
     if args.operand("document").is_some() {
-        return run_on_document(app, args, placement);
+        return run_on_document(app, args, edit);
     }
-    run_on_target(app, args, placement)
+    run_on_target(app, edit)
 }
 
 /// A placement that names its `document` (#2199): the edit target is that
@@ -57,7 +68,11 @@ fn run(app: &mut Signex, args: &CommandArgs, placement: Placement) -> Ran {
 /// references, the checks, the commit, undo and dirty all go to it and never to
 /// the active tab. The target and the repaint it owes are put back on every
 /// path, a refusal included; no tab or focus changes.
-fn run_on_document(app: &mut Signex, args: &CommandArgs, placement: Placement) -> Ran {
+fn run_on_document(
+    app: &mut Signex,
+    args: &CommandArgs,
+    edit: impl FnOnce(&mut Signex) -> Result<CommandOutcome, String>,
+) -> Ran {
     let path = match super::document_operands::named_sheet(app, args, "a placement") {
         Ok(path) => path,
         Err(reason) => return (CommandOutcome::disabled(reason), Task::none()),
@@ -69,7 +84,7 @@ fn run_on_document(app: &mut Signex, args: &CommandArgs, placement: Placement) -
     if own_repaint {
         targets.owed = RenderInvalidation::NONE;
     }
-    let ran = run_on_target(app, args, placement);
+    let ran = run_on_target(app, edit);
     let owed = if own_repaint {
         std::mem::take(&mut app.document_state.agent_edits.owed)
     } else {
@@ -82,14 +97,17 @@ fn run_on_document(app: &mut Signex, args: &CommandArgs, placement: Placement) -
     ran
 }
 
-fn run_on_target(app: &mut Signex, args: &CommandArgs, placement: Placement) -> Ran {
+fn run_on_target(
+    app: &mut Signex,
+    edit: impl FnOnce(&mut Signex) -> Result<CommandOutcome, String>,
+) -> Ran {
     let outcome = if app.document_state.edit_engine().is_none() {
         CommandOutcome::disabled("no schematic is open")
     } else if let Some(reason) = app.refuse_if_active_read_only() {
         // The gateway would refuse too; say why rather than "nothing placed".
         CommandOutcome::disabled(reason)
     } else {
-        match app.place_from_operands(placement, args) {
+        match edit(app) {
             Ok(outcome) => outcome,
             Err(reason) => CommandOutcome::disabled(reason),
         }
@@ -162,7 +180,7 @@ pub(super) fn rectangle(app: &mut Signex, args: &CommandArgs) -> Ran {
     run(app, args, Placement::Rectangle)
 }
 
-fn text(args: &CommandArgs, name: &str) -> Result<String, String> {
+pub(super) fn text(args: &CommandArgs, name: &str) -> Result<String, String> {
     match args.operand(name) {
         Some(OperandValue::Text(value)) => Ok(value.clone()),
         _ => Err(format!("operand `{name}` is missing")),
@@ -213,7 +231,7 @@ fn placed(was_placed: bool) -> Result<(), String> {
 impl Signex {
     /// The point operand `name`, refused when a click would snap it
     /// elsewhere (snapping on, and off the grid).
-    fn grid_point(&self, args: &CommandArgs, name: &str) -> Result<Point, String> {
+    pub(super) fn grid_point(&self, args: &CommandArgs, name: &str) -> Result<Point, String> {
         self.point_where_a_click_lands(args, name, Self::snap_to_grid)
     }
 

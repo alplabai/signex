@@ -156,7 +156,7 @@ number_schematic_sheets	design	Number schematic sheets	Number Schematic Sheets..
 reset_schematic_designators	design	Reset schematic designators	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 sheet_navigation_back	navigation	Sheet navigation back	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 sheet_navigation_forward	navigation	Sheet navigation forward	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
-sync_sheet_pins	design	Sync the selected sheet symbol's pins with its child sheet	Sync Sheet Pins	Schematic	-	-	RequiresSelection	gui_only	-
+sync_sheet_pins	design	Sync the selected sheet symbol's pins with its child sheet	Sync Sheet Pins	Schematic	-	-	RequiresSelection	mutates_doc,undoable	sheet:text,document:document?
 change_component	edit	Change the selected part's component	Change Component…	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 open_project_options	file	Open Project Options for the active project	Project Options...	Schematic	-	-	Always	gui_only	-
 update_pcb_from_schematic	pcb_sync	Update PCB from schematic	-	Schematic	-	-	Always	mutates_doc,undoable	apply:bool
@@ -176,8 +176,8 @@ bring_to_front	modify	Bring to front	Bring To Front	Schematic	-	-	RequiresSelect
 send_to_back	modify	Send to back	Send To Back	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
 bring_to_front_of	modify	Bring to front of	Bring To Front Of	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 send_to_back_of	modify	Send to back of	Send To Back Of	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
-place_sheet_symbol	place	Place sheet symbol	Sheet Symbol	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
-place_sheet_entry	place	Place sheet entry	Sheet Entry	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_sheet_symbol	place	Place sheet symbol	Sheet Symbol	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,name:text,file:text,allow_merge:bool?,document:document?
+place_sheet_entry	place	Place sheet entry	Sheet Entry	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	sheet:text,at:point/mm,name:text,direction:text?,document:document?
 place_device_sheet_symbol	place	Place device sheet symbol	Device Sheet Symbol	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_reuse_block	place	Place reuse block	Reuse Block...	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 align_left	modify	Align left	Align Left	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
@@ -217,7 +217,7 @@ clear_net_color	view	Clear net color	Clear Net Color	Schematic	-	-	RequiresDocum
 color_net	view	Color net	Custom Color...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,color:color,document:document
 clear_all_net_colors	view	Clear all net colors	Clear All Net Colors	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document
 assign_net_class	design	Assign net to class	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,net_name:text,class:text?
-place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	library:text,part:text,at:point/mm,unit:text?,designator:text?,value:text?,rotation:angle/deg?,mirror:text?,document:document?
 run_drc	pcb	Run the design rule check on the board	Design Rule Check	PCB	-	-	RequiresDocument(Pcb)	runs_headless	-
 reannotate_board	design	Re-annotate the board's designators by position	Re-Annotate Board...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 flip_selection	modify	Flip selection to the other board side	Flip Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	-

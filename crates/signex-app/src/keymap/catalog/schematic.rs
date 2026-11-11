@@ -446,7 +446,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Sync Sheet Pins"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
-        flags: CommandFlags::GUI_ONLY,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SYNC_SHEET,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

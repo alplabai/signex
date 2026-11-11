@@ -232,22 +232,8 @@ impl Signex {
         }
         let prefix = self.placement_prefix_for(target_sheet, &resolved);
         let reference = self.next_designator_in_sheet(target_sheet, &prefix);
-        let mut placed = placed_symbol(
-            &resolved,
-            reference,
-            signex_types::schematic::Point::new(0.0, 0.0),
-        );
-        // A new placement always draws with the library's current symbol; a
-        // sheet that holds an older version keeps it for the parts placed
-        // from it (#2209).
-        let body = resolved.lib_symbol;
-        placed.body_ref = body.body_ref();
-        signex_engine::place_fields_for_new_symbol(&mut placed, &body);
-        let mut fragment = signex_types::schematic::SchematicSheet::default();
-        fragment.lib_symbols.insert(placed.body_ref.clone(), body);
-        fragment.symbols.push(placed);
         self.arm_placement_session(
-            PlacementPayload::new(fragment),
+            part_payload(resolved, reference),
             target_sheet,
             crate::app::state::PlacementKind::Part { prefix },
         );
@@ -258,7 +244,11 @@ impl Signex {
     /// standard of the project that OWNS the sheet decides by component class,
     /// unless the row carries its own prefix override; without a standard (or for
     /// a loose sheet) the symbol's own letters apply.
-    fn placement_prefix_for(&self, target_sheet: &Path, resolved: &ResolvedPlacement) -> String {
+    pub(crate) fn placement_prefix_for(
+        &self,
+        target_sheet: &Path,
+        resolved: &ResolvedPlacement,
+    ) -> String {
         let project = self.document_state.document_project(target_sheet);
         if let Some(p) = project.filter(|p| p.data.has_unreadable_annotation()) {
             crate::diagnostics::log_warning(format!(
@@ -288,6 +278,26 @@ impl Signex {
         self.document_state.error_notice =
             Some(crate::app::state::ErrorNotice::new("Place Failed", detail));
     }
+}
+
+/// The part `resolved` names, numbered `reference`, as a payload at the
+/// origin: what the cursor holds and what `place_component` places (#2199).
+pub(crate) fn part_payload(resolved: ResolvedPlacement, reference: String) -> PlacementPayload {
+    let mut placed = placed_symbol(
+        &resolved,
+        reference,
+        signex_types::schematic::Point::new(0.0, 0.0),
+    );
+    // A new placement always draws with the library's current symbol; a
+    // sheet that holds an older version keeps it for the parts placed from
+    // it (#2209).
+    let body = resolved.lib_symbol;
+    placed.body_ref = body.body_ref();
+    signex_engine::place_fields_for_new_symbol(&mut placed, &body);
+    let mut fragment = signex_types::schematic::SchematicSheet::default();
+    fragment.lib_symbols.insert(placed.body_ref.clone(), body);
+    fragment.symbols.push(placed);
+    PlacementPayload::new(fragment)
 }
 
 /// The schematic `Symbol` for a resolved row. Field set mirrors

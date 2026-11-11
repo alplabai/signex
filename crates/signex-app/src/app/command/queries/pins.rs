@@ -275,7 +275,7 @@ fn not_placed_or_missing(
 }
 
 /// The pin id ERC and the netlist use: the number, else the name.
-fn pin_id(pin: &Pin) -> &str {
+pub(in crate::app::command) fn pin_id(pin: &Pin) -> &str {
     if pin.number.is_empty() {
         &pin.name
     } else {

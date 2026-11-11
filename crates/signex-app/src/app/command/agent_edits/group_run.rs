@@ -118,7 +118,6 @@ fn run_edits(app: &mut Signex, sheets: &[PathBuf], edits: &[Prepared]) -> Execut
     state.target = None;
     state.listing = false;
     state.touched.clear();
-    state.project_set.take();
     ran
 }
 
