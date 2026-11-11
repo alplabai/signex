@@ -283,7 +283,7 @@ mod tests {
             false,
         );
         // Numbers first, then text: `ı` before `i` under tr-TR collation is
-        // covered by the browser tests; this instance formats as en-US.
+        // covered by the browser tests.
         assert_eq!(&items[..2], [2, 0]);
         assert_eq!(items.len(), 4);
     }
