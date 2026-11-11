@@ -250,12 +250,18 @@ impl<'a> SymbolCanvas<'a> {
         state::pin_on_part(pin, self.view)
     }
 
+    /// Whether pin numbers and names are drawn: a power port or flag has
+    /// none, as on the schematic, where its value names the net.
+    pub(super) fn draws_pin_labels(&self) -> bool {
+        !crate::library::place::is_power_symbol(self.symbol)
+    }
+
     /// Pin index whose NAME or NUMBER label bounding box contains (x, y),
     /// respecting the active-unit visibility filter. Lets the user grab a
     /// pin by its text, not just its tip. Iterates in reverse so the
     /// last-drawn pin wins on overlap.
     fn pin_hit_by_label(&self, x: f64, y: f64) -> Option<usize> {
-        if !self.pin_label_grab || !self.selection_filter.pins {
+        if !self.pin_label_grab || !self.selection_filter.pins || !self.draws_pin_labels() {
             return None;
         }
         for (i, pin) in self.symbol.pins.iter().enumerate().rev() {
@@ -741,6 +747,7 @@ impl<'a> SymbolCanvas<'a> {
         }
 
         let pin_stroke_mm = self.pin_stroke_mm();
+        let draws_pin_labels = self.draws_pin_labels();
         for (i, pin) in self.symbol.pins.iter().enumerate() {
             if !self.pin_visible_on_active_part(pin) {
                 continue;
@@ -794,6 +801,9 @@ impl<'a> SymbolCanvas<'a> {
                 });
             }
 
+            if !draws_pin_labels {
+                continue;
+            }
             pin_texts.push(signex_renderer::schematic::TextInput {
                 content: pin.number.clone(),
                 position: [geom.number_pos.x as f32, geom.number_pos.y as f32],

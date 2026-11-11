@@ -27,6 +27,8 @@ mod input;
 mod preview_model;
 
 #[cfg(test)]
+mod chrome_fit_tests;
+#[cfg(test)]
 mod tests;
 
 // `draw_pads_tool_preview` is the one sub-draw still invoked inline by
@@ -76,6 +78,8 @@ pub struct FootprintCanvasState {
     /// Auto-fit on the first draw — toggled false once we've seen
     /// non-zero bounds at least once.
     pub did_initial_fit: bool,
+    /// The last [`super::state::ZoomRequest`] number this camera applied.
+    applied_zoom_seq: u64,
     panning: bool,
     last_pan_pos: Option<Point>,
     /// v0.26 — `true` once the right-button drag has moved further than
@@ -155,6 +159,7 @@ impl Default for FootprintCanvasState {
             scale: DEFAULT_PX_PER_MM,
             offset: Point::new(0.0, 0.0),
             did_initial_fit: false,
+            applied_zoom_seq: 0,
             panning: false,
             last_pan_pos: None,
             pan_moved: false,
@@ -292,6 +297,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             return Some(action);
         }
         if let Some(action) = self.apply_pending_fit(cstate, bounds) {
+            return Some(action);
+        }
+        if let Some(action) = self.apply_pending_zoom(cstate, bounds) {
             return Some(action);
         }
 

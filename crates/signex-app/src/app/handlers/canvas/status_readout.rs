@@ -53,6 +53,17 @@ impl Signex {
         }
     }
 
+    /// The symbol editor `window_id` is showing, if it shows one.
+    pub(crate) fn status_symbol_editor(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Option<&SymbolDocument> {
+        match self.status_surface(window_id) {
+            Surface::SymbolEditor(editor) => Some(editor),
+            _ => None,
+        }
+    }
+
     /// The zoom, in percent, of the canvas `window_id` is showing.
     pub(crate) fn status_zoom(&self, window_id: iced::window::Id) -> f64 {
         match self.status_surface(window_id) {

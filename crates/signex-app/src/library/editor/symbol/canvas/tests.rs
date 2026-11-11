@@ -1034,3 +1034,24 @@ fn a_right_click_on_a_pin_still_targets_the_pin() {
     let menu = rig.editor.context_menu.as_ref().expect("the menu opens");
     assert_eq!(menu.target, state::SymbolContextTarget::Pin(0));
 }
+
+/// #2262: a power port draws no pin number or name, as on the schematic;
+/// its value names the net. An ordinary pin keeps both.
+#[test]
+fn a_power_port_draws_no_pin_number_or_name() {
+    let mut port = Symbol::empty("+3V3");
+    let mut supply = pin("1", 0.0, 0.0, PinOrientation::Up);
+    supply.name = "+3V3".into();
+    supply.electrical = signex_library::primitive::PinDirection::PowerInput;
+    port.pins.push(supply);
+    let rig = Rig::new(port);
+    let (_, snap) = snapshot_of(&rig);
+    assert!(snap.pin_texts.is_empty(), "{:?}", snap.pin_texts);
+    assert_eq!(snap.wires.len(), 1, "the pin stub is still drawn");
+
+    let mut part = Symbol::empty("U");
+    part.pins.push(pin("1", 0.0, 0.0, PinOrientation::Left));
+    let rig = Rig::new(part);
+    let (_, snap) = snapshot_of(&rig);
+    assert_eq!(snap.pin_texts.len(), 2, "number and name");
+}

@@ -235,7 +235,6 @@ impl Signex {
             ui.right_width,
         );
 
-        let center_row = row![left, left_handle, center, right_handle, right].boxed();
         let bottom_handle = self.view_resize_handle(
             DragTarget::BottomPanel,
             bottom_has_panels && !bottom_collapsed,
@@ -248,6 +247,12 @@ impl Signex {
             bottom_collapsed,
             ui.bottom_height,
         );
+        // The bottom dock sits under the canvas only; the side docks run
+        // the full height between the tab strip and the status bar.
+        let center_column = iced::widget::column![center, bottom_handle, bottom]
+            .width(Length::Fill)
+            .height(Length::Fill);
+        let center_row = row![left, left_handle, center_column, right_handle, right].boxed();
 
         let altium_import_name = document.altium_import_running.as_ref().map(|run| {
             run.input
@@ -376,11 +381,7 @@ impl Signex {
             // the chrome does not jump when the first tab opens.
             main = main.push(tab_bar::placeholder(&document.panel_ctx.tokens));
         }
-        let main = main
-            .push(center_row)
-            .push(bottom_handle)
-            .push(bottom)
-            .push(status);
+        let main = main.push(center_row).push(status);
 
         // Borderless window needs its own edge-resize hit zones — the OS
         // frame would normally handle this, but `decorations: false`
@@ -821,6 +822,8 @@ impl Signex {
 
 #[cfg(test)]
 mod canvas_wheel_tests;
+#[cfg(test)]
+mod dock_layout_tests;
 #[cfg(test)]
 mod editor_bar_wheel_tests;
 #[cfg(test)]

@@ -37,6 +37,7 @@ pub mod selection_filter;
 pub mod silk_selection;
 pub mod snap_options;
 pub mod tool;
+mod zoom_request;
 
 pub use board_backdrop::{BackdropTrack, BoardBackdrop};
 pub use context_menu::{
@@ -54,6 +55,7 @@ pub use snap_options::{
     GridDef, GridDisplay, Guide, GuideAxis, SnapOptions, SnapSubTab, SnappingMode,
 };
 pub use tool::{PadsTool, SketchTool, ToolPending};
+pub use zoom_request::ZoomRequest;
 
 use signex_library::{Footprint, LayerId};
 
@@ -296,6 +298,8 @@ pub struct FootprintEditorState {
     pub context_menu: Option<FootprintContextMenuState>,
     /// v0.26-C — one-shot "fit canvas to content" request.
     pub fit_pending: bool,
+    /// The zoom pill's last `-` / `+` click, applied once by the canvas.
+    pub zoom_request: ZoomRequest,
     /// Set when this editor edits a board sketch (#2234): the board drawn
     /// under the sketch. The Active Bar then offers the sketch tools only,
     /// and the footprint bake is off (the board bakes on commit).
@@ -403,6 +407,7 @@ impl FootprintEditorState {
             numeric_buffers: std::collections::HashMap::new(),
             context_menu: None,
             fit_pending: false,
+            zoom_request: ZoomRequest::default(),
             board_backdrop: None,
         }
     }

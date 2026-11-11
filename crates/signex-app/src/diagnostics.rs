@@ -46,6 +46,8 @@ pub struct DiagnosticEntry {
     pub level: DiagnosticLevel,
     pub code: String,
     pub message: String,
+    /// When the record was logged (a held Info line keeps its own time).
+    pub at: chrono::DateTime<chrono::Utc>,
 }
 
 struct SignexLogger {
@@ -184,10 +186,11 @@ impl Log for SignexLogger {
 
         let rendered = format!("{}", record.args());
         let (code, message) = summarize_record(record.target(), &rendered);
-        if record.level() == Level::Info && hold_if_held(&code, &message, &rendered) {
+        let at = chrono::Utc::now();
+        if record.level() == Level::Info && hold_if_held(&code, &message, &rendered, at) {
             return;
         }
-        push_entry(DiagnosticLevel::from(record.level()), code, message);
+        push_entry(DiagnosticLevel::from(record.level()), code, message, at);
 
         eprintln!("[{}] {rendered}", record.level());
     }
@@ -203,6 +206,7 @@ struct HeldInfo {
     code: String,
     message: String,
     rendered: String,
+    at: chrono::DateTime<chrono::Utc>,
 }
 
 thread_local! {
@@ -210,7 +214,12 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
-fn hold_if_held(code: &str, message: &str, rendered: &str) -> bool {
+fn hold_if_held(
+    code: &str,
+    message: &str,
+    rendered: &str,
+    at: chrono::DateTime<chrono::Utc>,
+) -> bool {
     HELD_INFO.with(|held| {
         held.borrow_mut()
             .as_mut()
@@ -219,6 +228,7 @@ fn hold_if_held(code: &str, message: &str, rendered: &str) -> bool {
                     code: code.to_string(),
                     message: message.to_string(),
                     rendered: rendered.to_string(),
+                    at,
                 });
             })
             .is_some()
@@ -237,7 +247,7 @@ pub fn release_held_info(show: bool) {
         return;
     }
     for line in lines.unwrap_or_default() {
-        push_entry(DiagnosticLevel::Info, line.code, line.message);
+        push_entry(DiagnosticLevel::Info, line.code, line.message, line.at);
         eprintln!("[INFO] {}", line.rendered);
     }
 }
@@ -255,8 +265,13 @@ fn entries() -> &'static Mutex<VecDeque<DiagnosticEntry>> {
 /// later keeps entries with a larger one sees exactly the entries logged
 /// after that point. Taking the id before the lock let a thread that was
 /// preempted in between push an older id after a newer one.
-fn push_entry(level: DiagnosticLevel, code: String, message: String) {
-    push_to_ring(entries(), &NEXT_ENTRY_ID, level, code, message);
+fn push_entry(
+    level: DiagnosticLevel,
+    code: String,
+    message: String,
+    at: chrono::DateTime<chrono::Utc>,
+) {
+    push_to_ring(entries(), &NEXT_ENTRY_ID, level, code, message, at);
 }
 
 /// [`push_entry`] against a given ring and id counter, so a test can hammer
@@ -267,6 +282,7 @@ fn push_to_ring(
     level: DiagnosticLevel,
     code: String,
     message: String,
+    at: chrono::DateTime<chrono::Utc>,
 ) {
     let mut entries = ring.lock().expect("diagnostics mutex poisoned");
     if entries.len() == MAX_DIAGNOSTIC_ENTRIES {
@@ -277,6 +293,7 @@ fn push_to_ring(
         level,
         code,
         message,
+        at,
     });
 }
 
@@ -508,6 +525,7 @@ mod ring_order_tests {
                             DiagnosticLevel::Warning,
                             "test".to_owned(),
                             format!("ring-order {t}/{i}"),
+                            chrono::Utc::now(),
                         );
                     }
                 });

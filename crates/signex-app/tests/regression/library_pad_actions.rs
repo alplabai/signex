@@ -433,6 +433,48 @@ fn v026c_fit_consumed_clears_fit_pending() {
     );
 }
 
+// #2262 — the footprint zoom pill. `-` / `+` record a numbered zoom
+// request the canvas applies once; Fit arms the same one-shot fit as the
+// context menu. Neither is an edit.
+#[test]
+fn footprint_zoom_pill_records_a_zoom_request_and_arms_fit() {
+    use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+    let (mut app, path) = fixture_footprint_with_pads("zoom-pill", 1);
+    let dirty_before = app.document_state.footprint_editors[&path].is_dirty();
+    let send = |app: &mut Signex, msg: FootprintEditorMsg| {
+        let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEdit::Footprint(msg),
+        }));
+    };
+
+    send(
+        &mut app,
+        FootprintEditorMsg::ZoomPillStepped { factor: 1.25 },
+    );
+    let state = &app.document_state.footprint_editors[&path].state;
+    assert_eq!(state.zoom_request.seq, 1, "the click is recorded");
+    assert_eq!(state.zoom_request.factor, 1.25);
+
+    send(
+        &mut app,
+        FootprintEditorMsg::ZoomPillStepped { factor: 0.8 },
+    );
+    let state = &app.document_state.footprint_editors[&path].state;
+    assert_eq!(state.zoom_request.seq, 2, "every click gets a new number");
+    assert_eq!(state.zoom_request.factor, 0.8);
+    assert!(!state.fit_pending);
+
+    send(&mut app, FootprintEditorMsg::ZoomPillFitClicked);
+    let editor = &app.document_state.footprint_editors[&path];
+    assert!(editor.state.fit_pending, "Fit arms the one-shot fit");
+    assert_eq!(
+        editor.is_dirty(),
+        dirty_before,
+        "zooming is not an edit of the footprint"
+    );
+}
+
 // ─────────────────────────────────────────────────────────────────
 // v0.26-I — auto-courtyard removed (default flipped to false)
 //
