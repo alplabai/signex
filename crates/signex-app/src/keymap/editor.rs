@@ -296,16 +296,16 @@ impl KeymapEditorRow {
         if needle.is_empty() {
             return true;
         }
-        // Key names and command ids are generated ASCII, not language text:
-        // a Turkic fold would turn `INS` into `ıns` and lose `ins`.
-        let ascii_needle = query.to_ascii_lowercase();
-        let has_ascii = |text: &str| text.to_ascii_lowercase().contains(&ascii_needle);
+        // Key names and command ids are not language text: fold them without
+        // the Turkic rules, which would turn `INS` into `ıns` and lose `ins`.
+        let key_needle = query.to_lowercase();
+        let has_key = |text: &str| text.to_lowercase().contains(&key_needle);
         i18n.fold_for_search(&self.label).contains(&needle)
-            || has_ascii(&self.trigger)
+            || has_key(&self.trigger)
             || self
                 .command
                 .as_ref()
-                .is_some_and(|command| has_ascii(command.as_str()))
+                .is_some_and(|command| has_key(command.as_str()))
     }
 
     /// [`Self::matches_query_in`] under en-US.

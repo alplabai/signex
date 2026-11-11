@@ -103,7 +103,7 @@ fn search_filters_rows_by_label_command_or_trigger() {
 }
 
 #[test]
-fn key_names_match_ascii_case_under_a_turkic_language() {
+fn key_names_fold_without_turkic_rules() {
     let editor = KeymapEditorModel::built_ins().unwrap();
     let tr = signex_i18n::I18n::with_message_locale_for_test("tr");
     let matches = editor.filtered_rows_in(&tr, "ins");
@@ -111,6 +111,11 @@ fn key_names_match_ascii_case_under_a_turkic_language() {
         matches.iter().any(|row| row.trigger == "INS"),
         "`ins` finds the `INS` trigger under tr"
     );
+    // A key recorded from a Turkish keyboard is not ASCII; it still folds.
+    let mut row = editor.rows().remove(0);
+    row.trigger = "Ctrl+Ş".into();
+    assert!(row.matches_query_in(&tr, "ctrl+ş"));
+    assert!(row.matches_query("ş"));
 }
 
 #[test]
