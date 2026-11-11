@@ -697,3 +697,106 @@ fn run_erc_counts_the_one_finding_a_net_waiver_hides() {
     );
     assert_eq!(hidden.values().sum::<usize>(), 1, "{hidden:?}");
 }
+
+/// The project of [`project_app`] with a page `../outside-<uuid>.snxsch`
+/// that exists out of the folder; its file name and path.
+fn project_with_outside_page(dir: &tempfile::TempDir) -> (Signex, String, PathBuf) {
+    let mut app = project_app(dir);
+    let name = format!("outside-{}.snxsch", Uuid::now_v7().simple());
+    let outside = dir.path().parent().unwrap().join(&name);
+    write(&outside, child());
+    app.document_state.projects[0]
+        .data
+        .sheets
+        .push(signex_types::project::SheetEntry {
+            name: "Outside".into(),
+            filename: format!("../{name}"),
+            symbols_count: 0,
+            wires_count: 0,
+            labels_count: 0,
+            unknown: Default::default(),
+        });
+    (app, name, outside)
+}
+
+/// Run `id` with `operands` as the agent channel runs a query.
+fn as_agent(
+    app: &mut Signex,
+    id: &str,
+    operands: &[&str],
+) -> (CommandOutcome, iced::Task<crate::app::Message>) {
+    let id = AppCommandId::new(id).unwrap();
+    let args = if operands.is_empty() {
+        CommandArgs::none()
+    } else {
+        CommandArgs::parse_operands(&id, operands).unwrap()
+    };
+    app.agent.serving = true;
+    let ran = app.run_query_headless(&id, &args).expect("a query");
+    app.agent.serving = false;
+    ran
+}
+
+#[test]
+fn an_agent_check_says_nothing_in_messages_about_a_page_it_does_not_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, name, outside) = project_with_outside_page(&dir);
+    let doc = format!("document={}", top(&dir).display());
+    let mark = crate::diagnostics::newest_entry_id();
+    let (outcome, task) = as_agent(&mut app, "check_erc", &[doc.as_str()]);
+    let CommandOutcome::Deferred { ticket } = outcome else {
+        panic!("{outcome:?}")
+    };
+    let answered = app.settle_deferred(ticket, task).0;
+    std::fs::remove_file(&outside).ok();
+    assert!(
+        matches!(answered, CommandOutcome::Answered(_)),
+        "{answered:?}"
+    );
+    assert_eq!(logged(mark, &name), Vec::<String>::new());
+}
+
+/// Every other query still names the file it does not read in Messages
+/// (#2172; end to end: signex-cli `tests/security.rs`,
+/// `a_project_sheet_reference_outside_the_folder_is_not_read_by_a_query`).
+#[test]
+fn another_agent_query_still_names_a_page_it_does_not_read_in_messages() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, name, outside) = project_with_outside_page(&dir);
+    let mark = crate::diagnostics::newest_entry_id();
+    let (outcome, _) = as_agent(&mut app, "list_documents", &[]);
+    std::fs::remove_file(&outside).ok();
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    let said = logged(mark, &name);
+    assert!(!said.is_empty(), "{said:?}");
+    assert!(
+        said.iter()
+            .all(|line| line.contains("outside the project folder")),
+        "{said:?}"
+    );
+}
+
+#[test]
+fn a_check_says_an_unrecognised_rule_entry_in_its_report_not_in_messages() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    let id = format!("future_{}", Uuid::now_v7().simple());
+    let mut rules = ProjectRules::default();
+    rules.erc.severity.insert(id.clone(), "error".into());
+    set_rules(&mut app, rules);
+    let mark = crate::diagnostics::newest_entry_id();
+    let checked = report(&mut app, &top(&dir), &[]);
+    assert_eq!(logged(mark, &id), Vec::<String>::new());
+    let line = format!("Project ERC rules: ignoring unrecognised entry (severity {id} = error)");
+    assert!(
+        checked["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|w| w == line.as_str()),
+        "{checked}"
+    );
+}

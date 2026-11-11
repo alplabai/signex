@@ -71,13 +71,26 @@ impl Signex {
     /// app's agent channel (#1924) only inside the project folder. A refusal
     /// is named in Messages.
     pub(crate) fn may_read_referenced(&self, project: &LoadedProject, path: &Path) -> bool {
+        self.may_read_referenced_said(project, path, true)
+    }
+
+    /// [`Self::may_read_referenced`]; a refusal is named in Messages only
+    /// when `said` (`check_erc` says nothing there, #2199).
+    pub(crate) fn may_read_referenced_said(
+        &self,
+        project: &LoadedProject,
+        path: &Path,
+        said: bool,
+    ) -> bool {
         if self.headless_answers().is_none() && !self.agent.serving {
             return true;
         }
         match inside_project(project, path).and_then(|()| readable_file(path)) {
             Ok(()) => true,
             Err(reason) => {
-                crate::diagnostics::log_warning(reason);
+                if said {
+                    crate::diagnostics::log_warning(reason);
+                }
                 false
             }
         }
