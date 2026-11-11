@@ -68,3 +68,67 @@ fn a_check_erc_request_on_a_loose_sheet_is_refused_at_once() {
     assert_eq!(reply["status"], "refused", "{reply}");
     assert_eq!(app.document_state.agent_edits.tickets, 0, "no run started");
 }
+
+/// Ask `check_erc` on `b` as process `pid`, let `meanwhile` change the app
+/// while the run is under way, land the run and read the one reply.
+fn check_with_change_meanwhile(
+    pid: u32,
+    meanwhile: impl FnOnce(&mut crate::app::Signex),
+) -> (Value, crate::app::Signex, tempfile::TempDir) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_in(dir.path());
+    let doc = dir.path().join("b.snxsch").display().to_string();
+    let text = line(&app, "check_erc", json!({"document": doc}));
+    let (reply, mut answer) = AgentReply::channel();
+    let call = AgentCall {
+        pid: Some(pid),
+        input: Input::Line(text),
+        reply,
+    };
+    let task = app.update(Message::Agent(AgentMsg::Request(call)));
+    meanwhile(&mut app);
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    let reply = answer.try_recv().unwrap().expect("answered");
+    let reply: Value = serde_json::from_str(&reply).expect("JSON");
+    (reply, app, dir)
+}
+
+/// A refused answer is not numbered or kept as a run.
+fn no_run_kept(app: &crate::app::Signex, dir: &tempfile::TempDir) {
+    let project = dir.path().join("P.snxprj");
+    let why = app
+        .document_state
+        .check_runs
+        .keys_of(1, "erc", &project)
+        .unwrap_err();
+    assert!(why.contains("no such run"), "{why}");
+}
+
+#[test]
+fn a_check_erc_waiting_when_connections_go_off_is_refused_not_answered() {
+    let (reply, app, dir) = check_with_change_meanwhile(4252, |app| {
+        app.ui_state.agent_connections_enabled = false;
+    });
+    assert_eq!(reply["status"], "refused", "{reply}");
+    assert_eq!(reply["reason"], "agent connections are off", "{reply}");
+    assert!(reply.get("data").is_none(), "{reply}");
+    no_run_kept(&app, &dir);
+}
+
+/// Connections turned off and on again while a check runs give the app a new
+/// token: the request's token no longer opens it.
+#[test]
+fn a_check_erc_waiting_when_the_session_token_changed_is_refused_not_answered() {
+    let (reply, app, dir) = check_with_change_meanwhile(4253, |app| {
+        app.agent.rotate_ids();
+    });
+    assert_eq!(reply["status"], "refused", "{reply}");
+    assert_eq!(
+        reply["reason"], "the session token is missing or wrong",
+        "{reply}"
+    );
+    assert!(reply.get("data").is_none(), "{reply}");
+    no_run_kept(&app, &dir);
+}

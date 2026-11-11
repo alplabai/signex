@@ -488,13 +488,19 @@ fn logged_lines(mark: Option<u64>, text: &str) -> Vec<(DiagnosticLevel, String)>
         .collect()
 }
 
-/// Whether `stored` is how Messages keeps `line`: whole, or its first bytes
-/// and `...` when it is longer than the log keeps.
+/// The longest line Messages keeps whole, and the bytes it keeps of a longer
+/// one before `...` (`diagnostics::compact_message`).
+const KEPT_WHOLE: usize = 160;
+const KEPT_HEAD: usize = 157;
+
+/// Whether `stored` is how Messages keeps the single-spaced ASCII `line`:
+/// whole, or its first [`KEPT_HEAD`] bytes and `...`.
 fn kept_as(stored: &str, line: &str) -> bool {
-    match stored.strip_suffix("...") {
-        Some(head) if line.len() > 160 => head.len() >= 150 && line.starts_with(head),
-        _ => stored == line,
+    if line.len() <= KEPT_WHOLE {
+        return stored == line;
     }
+    line.get(..KEPT_HEAD)
+        .is_some_and(|head| stored == format!("{head}..."))
 }
 
 /// Run ERC's own Messages lines, pinned: a child reference out of the
@@ -517,6 +523,7 @@ fn run_erc_says_a_reference_out_of_the_folder_as_before() {
 
 /// How many times Run ERC says one refused reference held by two sheet
 /// symbols of a closed child: the walk and the stitch, two symbols each.
+/// The refile branch is not covered: this fixture has no child-space finding.
 const RUN_ERC_REFUSAL_LINES: usize = 4;
 
 #[test]
@@ -530,10 +537,14 @@ fn run_erc_says_an_unreadable_rule_set_as_before() {
     }))
     .expect("unknown keys");
     let line = "This project's rule set cannot be read by this version of Signex; it is kept unchanged, and this machine's ERC rules (the User Default profile) are used.";
+    let id = app.document_state.projects[0].id;
     let mark = crate::diagnostics::newest_entry_id();
     app.run_erc_blocking();
+    // Not through the shared log: this run took the fallback note.
+    assert!(app.document_state.erc_fallback_noted.contains(&id));
     // The text is the same in every test, so another test's run may add
-    // lines to the shared log meanwhile: at least this run's one.
+    // lines to the shared log meanwhile: at least this run's one. That check
+    // alone can be met by a concurrent test (`erc_run/rules_tests.rs`).
     let said = logged_lines(mark, "rule set cannot be read by this version");
     assert!(!said.is_empty(), "{said:?}");
     for (level, stored) in &said {

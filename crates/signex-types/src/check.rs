@@ -25,7 +25,8 @@ pub struct Finding {
     pub items: Vec<String>,
     /// The document the finding is filed under.
     pub sheet: String,
-    /// The same text for the same finding in every run, unique in a report.
+    /// The same text for the same finding in every run, unique within a
+    /// report's `findings` and within its `waived` (not across the two).
     pub key: String,
 }
 
@@ -57,7 +58,8 @@ pub struct CheckReport {
     pub findings: Vec<Finding>,
     pub waived: Vec<WaivedFinding>,
     /// Waivers that no longer hide their finding: it changed since it was
-    /// waived, and it is in `findings` again.
+    /// waived, and it is in `findings` again (or in `waived`, when another
+    /// waiver, such as a net waiver, hides it).
     pub lapsed: Vec<Value>,
     /// What the check could not do completely (a sheet it could not read).
     pub warnings: Vec<String>,
