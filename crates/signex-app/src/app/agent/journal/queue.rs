@@ -39,9 +39,9 @@ struct ProjectQueue {
 struct Gate {
     running: Mutex<usize>,
     idle: Condvar,
-    /// Lines put on the queue, and lines whose write has ended (done or
-    /// failed): what [`JournalMark`] waits on.
-    lines: Mutex<Lines>,
+    /// Per project folder: lines put on the queue, and lines whose write has
+    /// ended (done, failed or abandoned). What [`JournalMark`] waits on.
+    lines: Mutex<BTreeMap<PathBuf, Lines>>,
     written: Condvar,
 }
 
@@ -51,28 +51,33 @@ struct Lines {
     written: u64,
 }
 
-/// Counts a drain task for as long as it lives.
-struct Running(Arc<Gate>);
+/// Counts a drain task for as long as it lives, and its lines as ended when
+/// it is dropped, whether they were written, the write panicked or the task
+/// was never run.
+struct Running {
+    gate: Arc<Gate>,
+    project: PathBuf,
+    lines: usize,
+}
 
 impl Running {
-    fn enter(gate: &Arc<Gate>) -> Self {
+    fn enter(gate: &Arc<Gate>, project: &Path, lines: usize) -> Self {
         *gate.running.lock().unwrap_or_else(PoisonError::into_inner) += 1;
-        Self(Arc::clone(gate))
-    }
-
-    /// `count` lines have been written (or have failed).
-    fn wrote(&self, count: usize) {
-        let mut lines = self.0.lines.lock().unwrap_or_else(PoisonError::into_inner);
-        lines.written += count as u64;
-        self.0.written.notify_all();
+        Self {
+            gate: Arc::clone(gate),
+            project: project.to_path_buf(),
+            lines,
+        }
     }
 }
 
-/// Every line queued up to the moment it was taken. A commit worker waits on
-/// it so that the edits of an agent that has just run are in the journal
-/// before it reads it (#2253, "Commit message summary").
+/// Every line of one project queued up to the moment it was taken. A commit
+/// worker waits on it so that the edits of an agent that has just run are in
+/// the journal before it reads it (#2253, "Commit message summary"). Other
+/// projects' lines are neither waited for nor counted.
 pub(crate) struct JournalMark {
     gate: Option<Arc<Gate>>,
+    project: PathBuf,
     target: u64,
 }
 
@@ -82,12 +87,13 @@ impl JournalMark {
     pub(crate) fn settled() -> Self {
         Self {
             gate: None,
+            project: PathBuf::new(),
             target: 0,
         }
     }
 
-    /// Wait, at most `limit`, until every line queued by then has been
-    /// written. `false` when the time ran out first.
+    /// Wait, at most `limit`, until every line of the project queued by then
+    /// has been written. `false` when the time ran out first.
     pub(crate) fn wait(&self, limit: Duration) -> bool {
         let Some(gate) = &self.gate else {
             return true;
@@ -95,7 +101,11 @@ impl JournalMark {
         let lines = gate.lines.lock().unwrap_or_else(PoisonError::into_inner);
         let (_lines, wait) = gate
             .written
-            .wait_timeout_while(lines, limit, |lines| lines.written < self.target)
+            .wait_timeout_while(lines, limit, |lines| {
+                lines
+                    .get(&self.project)
+                    .is_some_and(|lines| lines.written < self.target)
+            })
             .unwrap_or_else(PoisonError::into_inner);
         !wait.timed_out()
     }
@@ -103,13 +113,21 @@ impl JournalMark {
 
 impl Drop for Running {
     fn drop(&mut self) {
+        self.gate
+            .lines
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .entry(self.project.clone())
+            .or_default()
+            .written += self.lines as u64;
+        self.gate.written.notify_all();
         let mut running = self
-            .0
+            .gate
             .running
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
         *running -= 1;
-        self.0.idle.notify_all();
+        self.gate.idle.notify_all();
     }
 }
 
@@ -177,21 +195,25 @@ impl JournalQueue {
             .lines
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
+            .entry(project_dir.to_path_buf())
+            .or_default()
             .pushed += 1;
         Self::start_if_idle(&self.gate, project_dir, queue)
     }
 
-    /// The lines queued so far, to be waited for by a worker that reads a
-    /// journal.
-    pub(crate) fn mark(&self) -> JournalMark {
+    /// The lines of `project_dir` queued so far, to be waited for by a worker
+    /// that reads its journal.
+    pub(crate) fn mark(&self, project_dir: &Path) -> JournalMark {
         let pushed = self
             .gate
             .lines
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .pushed;
+            .get(project_dir)
+            .map_or(0, |lines| lines.pushed);
         JournalMark {
             gate: Some(Arc::clone(&self.gate)),
+            project: project_dir.to_path_buf(),
             target: pushed,
         }
     }
@@ -244,7 +266,8 @@ impl JournalQueue {
         }
         queue.draining = true;
         let batch: Vec<Queued> = queue.pending.drain(..).collect();
-        drain_task(project_dir.to_path_buf(), batch, Running::enter(gate))
+        let running = Running::enter(gate, project_dir, batch.len());
+        drain_task(project_dir.to_path_buf(), batch, running)
     }
 }
 
@@ -255,7 +278,6 @@ fn drain_task(project_dir: PathBuf, batch: Vec<Queued>, running: Running) -> Tas
         async move {
             tokio::task::spawn_blocking(move || {
                 let failures = write_batch(&project_dir, &batch);
-                running.wrote(batch.len());
                 drop(running);
                 failures
             })

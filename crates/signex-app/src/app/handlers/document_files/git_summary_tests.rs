@@ -227,10 +227,11 @@ fn a_restore_commit_has_no_summary() {
     assert_eq!(messages(dir.path()), ["Restore a.snxsch"]);
 }
 
-/// The agent's last edit is still on the journal queue when the save's commit
-/// runs: the worker waits for it.
+/// Wiring only: the commit worker is given the project's mark. The race
+/// itself is proved by `an_edit_still_on_the_journal_queue_is_listed`, which
+/// runs the worker on a thread (the task driver here runs tasks in turn).
 #[test]
-fn an_edit_still_on_the_journal_queue_is_in_the_commit() {
+fn the_commit_worker_is_given_the_journal_mark_of_its_project() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = git_app(dir.path(), true);
     let line = edit_line(dir.path(), "a.snxsch", "color_net");

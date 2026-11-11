@@ -371,7 +371,7 @@ fn an_edit_still_on_the_journal_queue_is_listed() {
             max_lines: 10_000,
         },
     );
-    let mark = app.agent.journal.mark();
+    let mark = app.agent.journal.mark(root.path());
     let dir = root.path().to_path_buf();
     let worker = std::thread::spawn(move || {
         message_with_agent_summary(

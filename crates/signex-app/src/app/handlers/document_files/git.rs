@@ -269,7 +269,7 @@ impl Signex {
                 let message = pending.message.clone();
                 let content = pending.content.clone();
                 let summarise = pending.summarise_agent_edits;
-                let journal = self.agent.journal.mark();
+                let journal = self.agent.journal.mark(&project_root);
                 let response_root = project_root.clone();
                 let response_rel = rel_path.clone();
                 iced::Task::perform(
