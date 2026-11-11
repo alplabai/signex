@@ -95,6 +95,46 @@ Tools ▸ Design Rule Check runs `run_drc` (#2222) on the PCB in view and is
 greyed while no PCB is open. The command is also in the command palette and
 as the Run DRC button of the Messages panel; no keymap preset binds it.
 
+## Tools ▸ Re-Annotate Board {#tools-reannotate-board}
+
+Tools ▸ Re-Annotate Board... runs `reannotate_board` (#1312), right after
+Design Rule Check with the other board rows, and is greyed while no PCB is
+open. It opens the Positional Re-Annotate dialog for the board in view:
+
+- **Order**: by X then Y (columns left to right, each top to bottom), the
+  default, or by Y then X (rows top to bottom, each left to right). The
+  board's y grows downwards on screen.
+- **Bottom side**: after the top side (the default), or together with it.
+  Bottom-side parts are ordered as seen from the top.
+- Parts are numbered from 1 within each prefix (`R1, R2, ...`, `C1, ...`);
+  the prefix stays. A locked footprint keeps its designator, and its number
+  is skipped. A footprint whose designator is not a prefix and a number
+  (`12`, `R1A`, none) is kept and listed. A `R?` gets a number.
+- The list shows each rename (designator, new designator), how many parts
+  are already in order and the parts kept. Execute runs the renames as one
+  board undo step at the board revision the list was made from; a board
+  that changed meanwhile gets a new list to check first, with a notice.
+  Nothing is written to disk until the board is saved.
+
+The dialog keeps the options it was last used with until the app quits. The
+same command is in the command palette; no keymap preset binds it. The
+schematic does not follow until Back Annotate (Tools ▸ Annotation ▸ Back
+Annotate Schematics..., #1312 PR 2).
+
+## Board Properties: designator and value {#board-properties}
+
+With exactly one footprint selected on a board, the Properties panel shows
+its designator and value as fields and its footprint name. Typed text is a
+draft (selecting something else drops it); Enter applies it as one board
+undo step (`SetFootprintText`, labelled Designator or Value). A locked
+footprint or a read-only board shows the
+fields read-only with the reason; an empty designator is refused with a
+notice; a designator another footprint already has is applied, warned about
+in the Messages panel and noted under the fields. The board canvas
+right-click menu has Properties... (`edit_selected_object_properties`), live
+with anything selected, which shows the Properties panel; the same command
+(and its key) is now enabled by a board selection.
+
 ## Tools ▸ Cross Probe and Cross Select Mode {#tools-cross-probe}
 
 Tools ▸ Cross Probe runs `cross_probe` (#1312): the part or net selected on
@@ -255,8 +295,9 @@ the whole monitor. The Messages panel names how many windows were arranged.
   (#2248).
 - **Tools ▸ Net Inspector** stays a stub: there is no schematic net list
   panel; the PCB Nets panel lists a board's nets only (#1269).
-- **Tools ▸ Annotation ▸ Back Annotate Schematics...** waits for PCB to
-  schematic sync (#2271).
+- **Tools ▸ Annotation ▸ Back Annotate Schematics...** waits for Back
+  Annotate (#1312 PR 2); the board-side edits it carries landed first (see
+  [Tools ▸ Re-Annotate Board](#tools-reannotate-board)).
 
 ## Save and Save As {#file-save}
 

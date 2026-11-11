@@ -198,18 +198,29 @@ impl Signex {
         } else {
             0
         };
-        Some(crate::panels::PcbBoardSummary::of(
-            board,
-            tab.title.clone(),
-            selected,
-        ))
+        let footprint = self.pcb_footprint_facts(&tab.path, board);
+        Some(
+            crate::panels::PcbBoardSummary::of(board, tab.title.clone(), selected)
+                .with_footprint(footprint),
+        )
     }
 
     /// Bring the board summary in step with a selection change, without a
     /// full rebuild. Inside an undocked window's event the window's context
     /// and selection are the ones in the main slots (`run_in_window`).
     pub(crate) fn sync_pcb_board_summary(&mut self) {
-        self.document_state.panel_ctx.pcb_board = self.pcb_board_summary();
+        let summary = self.pcb_board_summary();
+        // A draft belongs to the footprint Properties shows; once another
+        // selection replaces it, the unapplied text is dropped.
+        let shown = summary
+            .as_ref()
+            .and_then(|s| s.footprint.as_ref())
+            .map(|f| (f.board.as_path(), f.uuid));
+        let draft = self.interaction_state.pcb_footprint_draft.as_ref();
+        if draft.is_some_and(|d| shown != Some((d.board.as_path(), d.footprint))) {
+            self.interaction_state.pcb_footprint_draft = None;
+        }
+        self.document_state.panel_ctx.pcb_board = summary;
     }
 
     /// The Net Classes section's state: the panel's own selection and drafts

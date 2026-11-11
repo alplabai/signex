@@ -985,6 +985,29 @@ mod tests {
         ));
     }
 
+    /// #1312: on a board, Properties is live with anything selected, and
+    /// Re-Annotate Board with a board in view.
+    #[test]
+    fn a_board_selection_enables_properties_and_a_board_re_annotate() {
+        let board = |any| CommandContext {
+            has_pcb: true,
+            pcb: PcbTargets {
+                shown: true,
+                any,
+                ..PcbTargets::default()
+            },
+            ..CommandContext::default()
+        };
+        let properties = id("edit_selected_object_properties");
+        assert!(is_enabled(&properties, &board(true)));
+        assert!(!is_enabled(&properties, &board(false)));
+        assert!(is_enabled(&id("reannotate_board"), &board(false)));
+        assert!(!is_enabled(
+            &id("reannotate_board"),
+            &CommandContext::default()
+        ));
+    }
+
     /// #1152 review: Bill of Materials needs an active schematic, as its
     /// Export menu row does.
     #[test]

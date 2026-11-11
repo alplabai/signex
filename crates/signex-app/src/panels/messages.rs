@@ -654,6 +654,8 @@ pub enum PanelMsg {
     /// A Layers panel row: an eye, or the row itself to make a copper layer
     /// active (#2223). The board-view event the dispatcher applies.
     PcbLayers(crate::app::PcbViewMsg),
+    /// The selected board footprint's Designator or Value field (#1312).
+    PcbFootprintText(super::PcbFootprintTextMsg),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active
     /// `PanelContext.library_row_detail`. Routes to

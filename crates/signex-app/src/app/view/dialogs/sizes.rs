@@ -16,3 +16,4 @@ pub(super) const SELECTION_FILTER_CUSTOM: (f32, f32) = (440.0, 380.0);
 pub(super) const NEW_PROJECT: (f32, f32) = (860.0, 700.0);
 pub(super) const UPDATE_PCB: (f32, f32) = (760.0, 640.0);
 pub(super) const SHEET_NUMBERING: (f32, f32) = (680.0, 560.0);
+pub(super) const BOARD_REANNOTATE: (f32, f32) = (600.0, 600.0);

@@ -241,6 +241,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("next_grid", "CycleGrid"),
     ("open_erc_dialog", "OpenErcDialog"),
     ("run_drc", "RunDrc"),
+    ("reannotate_board", "ReannotateBoard"),
     ("cross_probe", "CrossProbe"),
     ("toggle_cross_select_mode", "ToggleCrossSelectMode"),
     ("open_parameter_manager", "OpenParameterManager"),

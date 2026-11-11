@@ -280,6 +280,8 @@ pub(super) struct Probe {
     pub update_pcb: bool,
     /// Design ▸ Board Sketch puts the board in sketch mode (#2234).
     pub board_sketch: bool,
+    /// Tools ▸ Re-Annotate Board opens its dialog (#1312).
+    pub board_reannotate: bool,
 }
 
 pub(super) fn probe(app: &Signex) -> Probe {
@@ -354,6 +356,7 @@ pub(super) fn probe(app: &Signex) -> Probe {
         pcb_carry: app.interaction_state.pcb_carry.is_some(),
         update_pcb: app.ui_state.update_pcb.is_some(),
         board_sketch: app.interaction_state.board_sketch.is_some(),
+        board_reannotate: app.ui_state.board_reannotate.is_some(),
     }
 }
 

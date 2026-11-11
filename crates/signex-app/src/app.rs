@@ -13,6 +13,7 @@ use crate::toolbar::ToolMessage;
 
 mod actions;
 pub(crate) mod agent;
+pub(crate) mod board_reannotate;
 mod bootstrap;
 pub(crate) mod command;
 pub mod command_palette;
@@ -69,6 +70,7 @@ pub(crate) mod update_pcb;
 pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
 pub(crate) mod view;
 
+pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BoardSketchMsg, BomPreviewMsg, CommandPaletteMsg,
     ContextAction, ContextMenuMsg, ContextMenuState, ContextSubmenu, CrossProbeMsg, DragTarget,

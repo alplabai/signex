@@ -216,6 +216,7 @@ clear_all_net_colors	view	Clear all net colors	Clear All Net Colors	Schematic	-	
 assign_net_class	design	Assign net to class	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,net_name:text,class:text?
 place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 run_drc	pcb	Run the design rule check on the board	Design Rule Check	PCB	-	-	RequiresDocument(Pcb)	runs_headless	-
+reannotate_board	design	Re-annotate the board's designators by position	Re-Annotate Board...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 flip_selection	modify	Flip selection to the other board side	Flip Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	-
 toggle_ratsnest	view	Show or hide the ratsnest	Toggle Ratsnest	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 next_layer	view	Make the next copper layer active	Next Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-

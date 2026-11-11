@@ -155,6 +155,9 @@ mod pcb_canvas_select;
 mod pcb_carry_windows;
 #[path = "regression/pcb_placement.rs"]
 mod pcb_placement;
+// #1312 PR 1: board designators in Properties and Re-Annotate Board.
+#[path = "regression/board_designators.rs"]
+mod board_designators;
 
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;

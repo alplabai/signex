@@ -115,6 +115,7 @@ Tools/Assign Footprints	stub	Assign Footprints	-	-	-	00000000	never
 Tools/Library Editor	item	Library Editor	-	-	OpenLibraryEditor	01000000	cmd:open_library_browser
 Tools/---	separator	-	-	-	-	-	-
 Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc
+Tools/Re-Annotate Board...	item	Re-Annotate Board...	-	-	ReannotateBoard	01100000	cmd:reannotate_board
 Tools/Net Inspector	stub	Net Inspector	-	-	-	00000000	never
 Tools/---	separator	-	-	-	-	-	-
 Tools/Cross Probe	item	Cross Probe	-	-	CrossProbe	01100000	cmd:cross_probe
