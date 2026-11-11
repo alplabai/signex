@@ -70,10 +70,35 @@ custom unbinds ineffective.
 ## Modifiers
 
 `Ctrl` is the physical Control key on every OS. `Cmd`, `Win` and `Super` all
-mean the logo key (Command on macOS, Windows key elsewhere). So `Ctrl+C` in a
-built-in profile is Control on macOS too, not Command. Profile files always
-write the logo key as `Cmd`; the parser also accepts `command`, `super` and
-`win`, so existing files load unchanged.
+mean the logo key (Command on macOS, Windows key elsewhere). So an explicit
+`Ctrl+C` is Control on macOS too, not Command. Profile files always write the
+logo key as `Cmd`; the parser also accepts `command`, `super` and `win`, so
+existing files load unchanged.
+
+`Mod` is the platform's standard modifier: Command on macOS, Control on
+Windows and Linux (never Super). It is resolved once, when a profile is
+compiled for the running OS, and every lookup, chord and conflict check
+compares the resolved strokes. The spelling is kept on save, so a profile
+reads `Mod+S` on every OS.
+
+A section may carry `platform = "macos"` (also `"windows"`, `"linux"`); it is
+skipped on every other OS. A custom profile copied from a built-in keeps the
+sections that applied on the OS it was copied on, without the tag.
+
+On macOS a stroke is shown with Apple symbols in Apple order and no `+`
+(`⇧⌘S`, `⌃Q`, `⌥⌘F`); elsewhere it stays text (`Ctrl+Shift+S`). Menus, the F1
+sheet, context menus and Preferences share that one display path. The
+Preferences recorder stores a Command press as `Mod` on macOS so the profile is
+portable; other OSes record exactly what was pressed. On macOS the conflict
+check also flags a binding on ⌘Q, ⌘H, ⌘M, ⌘Space, ⌘Tab, ⌘` or ⌘, (unless it is
+Preferences) as reserved by the system.
+
+Layouts: a live key press uses the logical key when it is ASCII (AZERTY `z`
+stays `z`). Otherwise (Turkish `ö`, Cyrillic) the physical key's US-QWERTY
+character stands in, so `Mod+,` fires on the key that types `ö`.
+
+Existing user profiles are not rewritten: their `Ctrl+…` and `Cmd+…` keep
+their physical meaning.
 
 ## Chords
 
