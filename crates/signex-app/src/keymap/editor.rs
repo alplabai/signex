@@ -82,7 +82,7 @@ impl KeymapEditorModel {
                     .iter()
                     .enumerate()
                     .filter(move |(_, trigger)| {
-                        !unbind_only_cancels_a_row(active, binding_index, trigger)
+                        !unbind_only_cancels_a_row(active, binding_index, trigger, self.platform)
                     })
                     .map(move |(trigger_index, trigger)| {
                         let command = binding.action.command().cloned();
@@ -123,7 +123,12 @@ impl KeymapEditorModel {
                             trigger_valid,
                             keyboard_editable: matches!(trigger, ShortcutTrigger::KeySequence(_)),
                             unbound: is_unbind_binding(binding)
-                                || is_shadowed_by_unbind(active, binding_index, trigger),
+                                || is_shadowed_by_unbind(
+                                    active,
+                                    binding_index,
+                                    trigger,
+                                    self.platform,
+                                ),
                             source: source.clone(),
                         }
                     })
@@ -372,13 +377,15 @@ fn unbind_only_cancels_a_row(
     profile: &ShortcutProfile,
     binding_index: usize,
     trigger: &ShortcutTrigger,
+    platform: Platform,
 ) -> bool {
     let binding = &profile.bindings[binding_index];
     let ShortcutBindingAction::Unbind(command) = &binding.action else {
         return false;
     };
     profile.bindings[..binding_index].iter().any(|earlier| {
-        matches!(&earlier.action, ShortcutBindingAction::Command(c) if c == command)
+        earlier.applies_on(platform)
+            && matches!(&earlier.action, ShortcutBindingAction::Command(c) if c == command)
             && earlier.context == binding.context
             && earlier.triggers.contains(trigger)
     })
@@ -390,13 +397,15 @@ fn is_shadowed_by_unbind(
     profile: &ShortcutProfile,
     binding_index: usize,
     trigger: &ShortcutTrigger,
+    platform: Platform,
 ) -> bool {
     let binding = &profile.bindings[binding_index];
     let ShortcutBindingAction::Command(command) = &binding.action else {
         return false;
     };
     profile.bindings[binding_index + 1..].iter().any(|later| {
-        matches!(&later.action, ShortcutBindingAction::Unbind(c) if c == command)
+        later.applies_on(platform)
+            && matches!(&later.action, ShortcutBindingAction::Unbind(c) if c == command)
             && later.context == binding.context
             && later.triggers.contains(trigger)
     })
