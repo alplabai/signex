@@ -243,19 +243,6 @@ impl Signex {
                 self.invalidate_primitive_canvas_cache(&path);
                 return Task::none();
             }
-            SymbolEditorMsg::CycleGridSize => {
-                if let Some(lib) = self.library.containing_library_mut_with(&path, fold) {
-                    let sizes = crate::canvas::grid::GRID_SIZES_MM;
-                    let current_idx = sizes
-                        .iter()
-                        .position(|s| (s - lib.display.grid_size_mm).abs() < f32::EPSILON)
-                        .unwrap_or(2);
-                    let next_idx = (current_idx + 1) % sizes.len();
-                    lib.display.grid_size_mm = sizes[next_idx];
-                }
-                self.invalidate_primitive_canvas_cache(&path);
-                return Task::none();
-            }
             SymbolEditorMsg::CycleUnit => {
                 if let Some(lib) = self.library.containing_library_mut_with(&path, fold) {
                     use signex_types::coord::Unit;
@@ -266,9 +253,7 @@ impl Signex {
                         Unit::Micrometer => Unit::Mm,
                     };
                 }
-                // Unit only affects the status footer text — no
-                // canvas redraw needed, but cache clear is harmless
-                // and keeps the message handling shape consistent.
+                // The unit only changes the status bar text: no canvas redraw.
                 return Task::none();
             }
             _ => {}

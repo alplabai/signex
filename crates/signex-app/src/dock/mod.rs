@@ -1,6 +1,7 @@
 //! Panel docking system — wraps PaneGrid regions with tabbed panels.
 //!
 //! Signex has 3 dock regions (left, right, bottom) plus a center canvas.
+//! The side docks run the full height; the bottom dock sits under the canvas.
 //! Each region can hold multiple panels as tabs.
 
 mod first_run;
@@ -9,6 +10,7 @@ mod layout_sync;
 mod measure;
 mod placement;
 mod state;
+mod tab_fit;
 mod types;
 mod view;
 

@@ -175,7 +175,8 @@ impl PanelPosition {
 impl DockArea {
     /// Give a fresh Graphite layout the panels an editor tab needs: the
     /// footprint editor gets Footprint Library and Layers on the left, the
-    /// symbol editor the Pins table at the bottom. Runs once per context and
+    /// symbol editor SCH Library on the left and the Pins table at the
+    /// bottom. Runs once per context and
     /// only for a layout `graphite_first_run` built; a saved layout (the
     /// user's own arrangement) never has a seed owed, so it is never touched.
     pub fn seed_for_editor(&mut self, context: EditorContext) {
@@ -187,6 +188,7 @@ impl DockArea {
             }
             EditorContext::Symbol if self.editor_seeds.symbol => {
                 self.editor_seeds.symbol = false;
+                self.show_panel_at(PanelPosition::Left, PanelKind::SchLibrary);
                 self.show_panel_at(PanelPosition::Bottom, PanelKind::SymbolPins);
             }
             EditorContext::Pcb if self.editor_seeds.pcb => {
@@ -363,6 +365,12 @@ mod tests {
             dock.locate(PanelKind::SymbolPins),
             Some(crate::dock::PanelSite::Docked(PanelPosition::Bottom, _))
         ));
+        // #2262: the symbol editor opens with SCH Library as the left tab.
+        assert!(matches!(
+            dock.locate(PanelKind::SchLibrary),
+            Some(crate::dock::PanelSite::Docked(PanelPosition::Left, _))
+        ));
+        assert!(dock.is_frontmost(PanelKind::SchLibrary));
         // A panel the user closed stays closed on the next tab switch.
         assert!(dock.close_panel(PanelKind::SymbolPins));
         dock.seed_for_editor(EditorContext::Symbol);
@@ -376,5 +384,6 @@ mod tests {
         dock.seed_for_editor(EditorContext::Symbol);
         assert!(dock.locate(PanelKind::FootprintLayers).is_none());
         assert!(dock.locate(PanelKind::SymbolPins).is_none());
+        assert!(dock.locate(PanelKind::SchLibrary).is_none());
     }
 }

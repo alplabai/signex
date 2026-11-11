@@ -66,7 +66,7 @@ pub fn resolve_placement_of(
 
     let lib_id = lib_id_of(&reference);
     let is_flag = is_power_flag(&symbol);
-    let is_power = is_flag || is_power_port(&symbol);
+    let is_power = is_power_symbol(&symbol);
     let value = if is_flag {
         // A flag marks a net as driven; it must not name it, and an empty
         // value keeps it out of the netlist's by-name joining.
@@ -266,6 +266,13 @@ pub fn resolve_symbol_choice(
         lib_symbol: symbol.to_lib_symbol(lib_id.clone()),
         lib_id,
     })
+}
+
+/// A power port or power flag: it places as an `is_power` symbol, so the
+/// schematic draws no pin number or name on it. The symbol editor reads the
+/// same rule.
+pub(crate) fn is_power_symbol(symbol: &signex_library::primitive::Symbol) -> bool {
+    is_power_flag(symbol) || is_power_port(symbol)
 }
 
 /// A power flag: designator prefix `#FLG` (`"#FLG?"`).

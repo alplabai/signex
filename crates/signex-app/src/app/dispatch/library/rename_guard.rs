@@ -238,6 +238,8 @@ fn footprint_msg_is_view_only(msg: &FootprintEditorMsg) -> bool {
         F::CursorAt { .. }
             | F::ViewScaleChanged { .. }
             | F::FitConsumed { .. }
+            | F::ZoomPillStepped { .. }
+            | F::ZoomPillFitClicked
             | F::SelectPad(_)
             | F::SelectPads(_)
             | F::SelectSilkF(_)
