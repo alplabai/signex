@@ -520,8 +520,13 @@ place) the way Run ERC does: the same rules, the project's stored rule set or
 else this machine's, the pin matrix, the project's `erc.dsl`, its waivers and
 the project-wide passes. Open sheets are checked as they are in memory, unsaved
 edits included; closed ones are read from disk off the UI thread, and the
-answer comes when the run lands. It is read-only: it writes nothing to the ERC
-panel, the ERC results or Messages, and `run_erc` (F8, the panel) is unchanged.
+answer comes when the run lands. It is read-only: the check itself writes
+nothing to the ERC panel, the ERC results or Messages, and `run_erc` (F8, the
+panel) is unchanged. Two lines that are not the check's can still appear in
+Messages: over the agent socket, the `Agent request (pid N): ... -> answered`
+line every request gets ([AGENT_SOCKET.md](AGENT_SOCKET.md), "Security",
+Visibility), and the repair of a duplicated document id that every query runs
+first (`reconcile_document_ids`).
 Unlike Run ERC it does not check loose tabs outside the project. It is a query
 (no edit journal line) and is on the agent channel; a palette or key call is
 refused, as for every query.
