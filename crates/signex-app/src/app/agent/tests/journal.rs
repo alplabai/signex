@@ -189,6 +189,46 @@ fn an_apply_edits_line_carries_the_edit_list_and_its_group() {
     assert!(entry.replayable);
 }
 
+/// #2178: a call across sheets is one line per sheet it touched, each with its
+/// own path and revisions and all with the one group; one line alone cannot
+/// replay the all-or-nothing group, so none is replayable.
+#[test]
+fn an_apply_edits_across_sheets_is_one_line_per_sheet_sharing_its_group() {
+    let mut f = fixture();
+    let (a, b) = (f.doc("a.snxsch"), f.doc("b.snxsch"));
+    let (before_a, before_b) = (f.revision("a.snxsch"), f.revision("b.snxsch"));
+
+    let reply = f.ask(
+        "apply_edits",
+        json!({
+            "document": a,
+            "expect_revision": before_a.to_string(),
+            "expect_revisions": {b.clone(): before_b},
+            "edits": [
+                {"id": "place_junction", "args": {"at": [20, 20]}},
+                {"id": "place_junction", "args": {"at": [20, 20], "document": b}},
+            ],
+        }),
+    );
+
+    assert_eq!(reply["status"], "answered", "{reply}");
+    let group = reply["data"]["group"].as_u64();
+    assert!(group.is_some(), "{reply}");
+    let entries = f.edits().entries;
+    assert_eq!(entries.len(), 2, "one line per sheet");
+    for (entry, (path, before, file)) in entries
+        .iter()
+        .zip([(&a, before_a, "a.snxsch"), (&b, before_b, "b.snxsch")])
+    {
+        assert_eq!(entry.command, "apply_edits");
+        assert_eq!(entry.path.as_deref(), Some(path.as_str()));
+        assert_eq!(entry.group, group);
+        assert_eq!(entry.revision_before, Some(before));
+        assert_eq!(entry.revision_after, Some(f.revision(file)));
+        assert!(!entry.replayable, "{file}");
+    }
+}
+
 #[test]
 fn a_refused_command_is_a_line_with_its_reason_and_a_query_is_none() {
     let mut f = fixture();

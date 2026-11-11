@@ -116,8 +116,9 @@ commit, undo and the dirty flag all go to it, and no tab or focus changes. An
 unknown, unloaded, non-schematic or read-only document is refused with its
 reason. Without it, the command acts on the sheet the edit targets (the
 `apply_edits` document, else the session's own active sheet). Inside
-`apply_edits` an edit may repeat the call's `document` but not name another
-("an edit names another document than the list"). The optional `document` does
+`apply_edits` an edit may name another sheet of the call's project (the call is
+then one group across the sheets, see [AGENT_EDITS.md](AGENT_EDITS.md)), but
+not a sheet of another project. The optional `document` does
 not put the placements on the agent channel: they stay reachable through
 `apply_edits` only. When the run works through a running Signex (see "Working
 through a running Signex"), a placement without `document` is refused there,

@@ -34,6 +34,9 @@ pub struct AgentEdits {
     /// `apply_edits` call; a placement reads and writes this sheet's engine
     /// instead of the active one, and what it would refresh waits in `owed`.
     pub(crate) target: Option<PathBuf>,
+    /// Every sheet the running list edits (more than one when its edits name
+    /// other sheets of the project); empty outside a list.
+    pub(crate) touched: Vec<PathBuf>,
     /// Whether an edit list (not one placement naming a `document`) is running.
     pub(crate) listing: bool,
     /// The project read the list's checks share.

@@ -15,7 +15,7 @@ use signex_app::headless::agent_client::{Connection, Reply};
 use signex_app::keymap::OperandKind;
 
 use crate::capability::{Capability, capability_of};
-use crate::edits::{authorize_edits, named_document_paths};
+use crate::edits::{authorize_edits, named_document_paths, scrub_sheets};
 use crate::policy::{Approved, Policy};
 use crate::protocol::{Mode, Request, ResultLine, Status};
 use crate::roots::folder_and_roots;
@@ -86,11 +86,17 @@ impl Attached {
         // each edit, is resolved by the app to the file it holds and confined
         // like any path: the app only knows which projects are open, and
         // another open project is not this run's to touch.
+        // The files the call names, each confined: an answer lists no other.
+        let mut named_by_call: Vec<PathBuf> = Vec::new();
         authorize_edits(policy, &self.project_dir, roots, &mut approved, |checked| {
-            named_document_paths(policy, roots, checked, true, |text| {
-                resolve(connection, text)
-            })
-            .map(drop)
+            named_by_call.extend(named_document_paths(
+                policy,
+                roots,
+                checked,
+                true,
+                |text| resolve(connection, text),
+            )?);
+            Ok(())
         })
         .map_err(refused)?;
         policy.recheck(&approved, roots).map_err(refused)?;
@@ -98,6 +104,7 @@ impl Attached {
             resolve(connection, text)
         })
         .map_err(refused)?;
+        named_by_call.extend(named.iter().cloned());
         if capability_of(approved.meta).writes_files() {
             policy.check_write_targets(&named, roots).map_err(refused)?;
             check_side_writes(policy, roots, connection, &approved).map_err(refused)?;
@@ -121,6 +128,7 @@ impl Attached {
                     if let Value::Object(map) = &mut data {
                         map.remove("save_writes");
                     }
+                    scrub_sheets(&mut data, &named_by_call);
                     Some(data)
                 }
                 // Not revealed to exist: the same answer as for an unknown id.

@@ -10,6 +10,8 @@
 
 pub(crate) mod active_bar;
 #[cfg(test)]
+mod agent_edit_cross_sheet_tests;
+#[cfg(test)]
 mod agent_edit_tests;
 mod agent_edits;
 mod args;
@@ -49,7 +51,8 @@ mod wire_run_tests;
 mod wire_runs;
 
 pub use agent_edits::{
-    EditSpec, MAX_EDITS, edit_list_text, edit_refusal, operand_text, parse_edit_list,
+    EditSpec, MAX_EDITS, edit_list_text, edit_refusal, operand_text, parse_documents,
+    parse_edit_list, parse_expect_revisions,
 };
 pub use args::CommandArgs;
 pub(crate) use args::InvocationContext;

@@ -68,6 +68,14 @@ impl Engine {
         self.transaction.is_some()
     }
 
+    /// Whether [`Self::commit_transaction`] would succeed: a transaction is
+    /// open and no command inside it failed. A caller that commits several
+    /// engines as one group checks every engine first, as a commit cannot be
+    /// taken back once another engine has landed its entry.
+    pub fn transaction_ready(&self) -> bool {
+        self.transaction.as_ref().is_some_and(|tx| !tx.failed)
+    }
+
     /// Record a command that failed inside the open transaction, so a commit
     /// is refused and the caller rolls back.
     pub fn fail_transaction(&mut self) {
@@ -292,6 +300,18 @@ mod tests {
             Err(EngineError::NoTransaction)
         ));
         assert!(engine.document().no_connects.is_empty());
+    }
+
+    #[test]
+    fn a_transaction_is_ready_to_commit_only_while_open_and_not_failed() {
+        let mut engine = engine();
+        assert!(!engine.transaction_ready());
+        engine.begin_transaction().unwrap();
+        assert!(engine.transaction_ready());
+        engine.fail_transaction();
+        assert!(!engine.transaction_ready());
+        engine.rollback_transaction();
+        assert!(!engine.transaction_ready());
     }
 
     #[test]

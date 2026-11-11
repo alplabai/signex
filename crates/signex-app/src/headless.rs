@@ -27,7 +27,7 @@ pub use crate::app::agent::{
 pub use crate::app::command::queries::is_query;
 pub use crate::app::command::{
     CommandArgs, CommandOutcome, EditSpec, MAX_EDITS, OperandError, OperandValue, edit_list_text,
-    edit_refusal, operand_text, parse_edit_list,
+    edit_refusal, operand_text, parse_documents, parse_edit_list, parse_expect_revisions,
 };
 pub use crate::app::document_ids::DocumentTarget;
 use crate::app::{Message, Signex};
