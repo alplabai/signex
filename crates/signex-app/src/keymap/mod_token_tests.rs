@@ -2,11 +2,12 @@
 //! chords and the physical-key fallback (#1645). Every test pins a
 //! `Platform`, so each OS's rule runs on every CI runner.
 
-use super::catalog_golden_tests::profiles_text_for;
+use super::catalog_golden_tests::{Render, profiles_text_for};
 use super::{
-    AppCommandId, CompiledKeymap, KeyStroke, Modifiers, Platform, ShortcutBinding,
-    ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
-    ShortcutProfileSet, ShortcutTrigger, TomlShortcutProfile,
+    AppCommandId, CompiledKeymap, KeyStroke, KeymapEditorModel, Modifiers, Platform,
+    ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
+    ShortcutProfileSet, ShortcutTrigger, TomlShortcutProfile, export_custom_profile,
+    import_custom_profile, load_profile_set_at, save_profile_set_at,
 };
 use iced::keyboard::{self, Key, Modifiers as Held, key::Code, key::Physical};
 use std::str::FromStr;
@@ -25,16 +26,17 @@ fn command(id: &str) -> AppCommandId {
     AppCommandId::new(id).unwrap()
 }
 
-fn keymap_with(platform: Platform, bindings: &[(&str, &str)]) -> CompiledKeymap {
+fn keymap_profile(bindings: &[(&str, &str)]) -> ShortcutProfile {
     let bindings = bindings
         .iter()
         .map(|(trigger, id)| ShortcutBinding {
             action: ShortcutBindingAction::Command(command(id)),
             context: ShortcutContext::Global,
             triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+            platform: None,
         })
         .collect();
-    let profile = ShortcutProfile {
+    ShortcutProfile {
         id: "t".to_string(),
         name: "T".to_string(),
         kind: ShortcutProfileKind::Custom,
@@ -42,8 +44,11 @@ fn keymap_with(platform: Platform, bindings: &[(&str, &str)]) -> CompiledKeymap 
         description: None,
         base_profile: None,
         bindings,
-    };
-    CompiledKeymap::compile_for(&profile, platform)
+    }
+}
+
+fn keymap_with(platform: Platform, bindings: &[(&str, &str)]) -> CompiledKeymap {
+    CompiledKeymap::compile_for(&keymap_profile(bindings), platform)
 }
 
 fn lookup(keymap: &CompiledKeymap, stroke: KeyStroke) -> Option<AppCommandId> {
@@ -134,13 +139,25 @@ context = "global"
 [keyboard_shortcuts.sections.bindings]
 "Mod+W" = "close_active_document"
 "#;
+    let profile = TomlShortcutProfile::parse(source)
+        .unwrap()
+        .into_profile()
+        .unwrap();
     let ids = |platform| {
-        TomlShortcutProfile::parse(source)
-            .unwrap()
-            .into_profile_for(platform)
-            .unwrap()
+        CompiledKeymap::compile_for(&profile, platform)
+            .resolved_table()
+            .into_iter()
+            .map(|(_, _, action)| action)
+            .collect::<Vec<_>>()
+    };
+    let (mac, windows) = (ids(Platform::MacOs), ids(Platform::Windows));
+    assert_eq!((mac.len(), windows.len()), (2, 1));
+    assert!(mac[1].contains("close_active_document"));
+    let ids = |platform| {
+        profile
             .bindings
             .iter()
+            .filter(|b| b.applies_on(platform))
             .filter_map(|b| b.action.command().map(|c| c.as_str().to_string()))
             .collect::<Vec<_>>()
     };
@@ -171,10 +188,25 @@ fn other_oses_keep_the_text_form() {
     assert_eq!(stroke("Cmd+W").display_for(Platform::Linux), "Super+W");
 }
 
+/// #1378: what a profile file says parses back to the same stroke on every
+/// OS; the text shown on Windows and Linux does too. The macOS label cannot
+/// tell `Cmd` from `Mod`, so it is never parsed: the UI carries the file
+/// spelling or the parsed stroke instead.
 #[test]
-fn a_displayed_macos_label_parses_back_as_mod() {
-    let shown = stroke("Mod+Shift+S").display_for(Platform::MacOs);
-    assert_eq!(stroke(&shown), stroke("Mod+Shift+S"));
+fn what_is_shown_or_saved_parses_back_to_the_same_stroke() {
+    for text in ["Mod+Shift+S", "Ctrl+Q", "Cmd+K", "Shift+F1", "Alt+Left"] {
+        let original = stroke(text);
+        assert_eq!(stroke(&original.to_config_string()), original, "{text}");
+        for platform in [Platform::Windows, Platform::Linux] {
+            let shown = original.display_for(platform);
+            assert_eq!(stroke(&shown), original.resolved_for(platform), "{shown}");
+        }
+    }
+    let shown = stroke("Cmd+K").display_for(Platform::MacOs);
+    assert!(
+        KeyStroke::from_str(&shown).is_err(),
+        "{shown} must not parse"
+    );
 }
 
 #[test]
@@ -247,55 +279,74 @@ fn comma_is_allowed_for_preferences_and_nothing_is_flagged_off_macos() {
     }
 }
 
+fn fallback(logical: &str, code: Code, held: Held) -> Option<KeyStroke> {
+    KeyStroke::physical_fallback(&Key::Character(logical.into()), Physical::Code(code), held)
+}
+
+fn shown(stroke: Option<KeyStroke>) -> Option<String> {
+    stroke.map(|stroke| stroke.to_config_string())
+}
+
+/// #1645 D1: the physical key is only a retry, offered with Ctrl, Cmd or Alt
+/// held and a non-ASCII logical key.
 #[test]
-fn a_non_ascii_logical_key_falls_back_to_the_physical_us_key() {
-    let from = |logical: &str, code| {
-        KeyStroke::from_key_event(
-            &Key::Character(logical.into()),
-            Physical::Code(code),
-            Held::LOGO,
-        )
-        .unwrap()
-    };
-    assert_eq!(from("\u{f6}", Code::Comma).key.to_string(), ",");
-    assert_eq!(from("\u{131}", Code::KeyI).key.to_string(), "I");
-    assert_eq!(from("\u{444}", Code::KeyA).key.to_string(), "A");
-    assert_eq!(from("\u{c7}", Code::Period).key.to_string(), ".");
+fn a_non_ascii_logical_key_offers_the_physical_us_key_while_a_command_modifier_is_held() {
+    assert_eq!(
+        shown(fallback("\u{f6}", Code::Comma, Held::LOGO)).as_deref(),
+        Some("Cmd+,")
+    );
+    assert_eq!(
+        shown(fallback("\u{131}", Code::KeyI, Held::CTRL)).as_deref(),
+        Some("Ctrl+I")
+    );
+    assert_eq!(
+        shown(fallback("\u{444}", Code::KeyA, Held::ALT)).as_deref(),
+        Some("Alt+A")
+    );
+    let ctrl_shift = Held::CTRL | Held::SHIFT;
+    assert_eq!(
+        shown(fallback("\u{c7}", Code::Period, ctrl_shift)).as_deref(),
+        Some("Ctrl+Shift+.")
+    );
 }
 
 #[test]
-fn an_ascii_logical_key_beats_the_physical_one() {
+fn bare_and_shift_only_keys_are_never_remapped_to_the_physical_key() {
+    assert_eq!(fallback("\u{e9}", Code::Digit2, Held::empty()), None);
+    assert_eq!(fallback("\u{e9}", Code::Digit2, Held::SHIFT), None);
+}
+
+#[test]
+fn an_ascii_logical_key_is_never_remapped() {
     // AZERTY: the key at physical KeyW types `z`.
-    let azerty = KeyStroke::from_key_event(
-        &Key::Character("z".into()),
-        Physical::Code(Code::KeyW),
-        Held::CTRL,
-    )
-    .unwrap();
-    assert_eq!(azerty.key.to_string(), "Z");
+    assert_eq!(fallback("z", Code::KeyW, Held::CTRL), None);
 }
 
 #[test]
-fn an_unidentified_physical_key_keeps_the_logical_character() {
-    let stroke = KeyStroke::from_key_event(
+fn an_unidentified_physical_key_offers_no_fallback() {
+    let none = KeyStroke::physical_fallback(
         &Key::Character("\u{f6}".into()),
         Physical::Unidentified(keyboard::key::NativeCode::Unidentified),
-        Held::empty(),
-    )
-    .unwrap();
-    assert_eq!(stroke.key.to_string(), "\u{d6}");
+        Held::CTRL,
+    );
+    assert_eq!(none, None);
 }
 
 /// Windows and Linux resolve both built-in profiles exactly as trunk did:
-/// `builtin_profiles.golden.tsv` is that table (unchanged by #1645).
+/// `builtin_profiles_resolved.golden.tsv` is that table (it was
+/// `builtin_profiles.golden.tsv` on trunk, and #1645 leaves it alone).
 #[test]
 fn windows_and_linux_resolve_the_built_ins_exactly_as_trunk() {
-    let golden = include_str!("testdata/builtin_profiles.golden.tsv");
+    let golden = include_str!("testdata/builtin_profiles_resolved.golden.tsv");
     for platform in [Platform::Windows, Platform::Linux] {
-        assert_eq!(profiles_text_for(platform), golden, "{platform:?}");
+        assert_eq!(
+            profiles_text_for(Render::Resolved(platform)),
+            golden,
+            "{platform:?}"
+        );
     }
     let table = |platform| {
-        let set = ShortcutProfileSet::built_ins_for(platform).unwrap();
+        let set = ShortcutProfileSet::built_ins().unwrap();
         set.profiles()
             .map(|p| CompiledKeymap::compile_for(p, platform).resolved_table())
             .collect::<Vec<_>>()
@@ -311,7 +362,7 @@ fn user_profiles_with_ctrl_and_cmd_resolve_as_on_trunk() {
     for platform in ALL {
         let profile = TomlShortcutProfile::parse(source)
             .unwrap()
-            .into_profile_for(platform)
+            .into_profile()
             .unwrap();
         let keymap = CompiledKeymap::compile_for(&profile, platform);
         assert_eq!(
@@ -330,4 +381,121 @@ fn user_profiles_with_ctrl_and_cmd_resolve_as_on_trunk() {
             "{table:?}"
         );
     }
+}
+
+const WITH_MACOS_SECTION: &str = r#"
+[signex_settings]
+application = "signex"
+file_kind = "keyboard_shortcuts"
+version = 1
+
+[keyboard_shortcuts]
+schema_version = 1
+profile_id = "mine"
+profile_name = "Mine"
+profile_kind = "custom"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+[keyboard_shortcuts.sections.bindings]
+"F7" = "run_erc"
+
+[[keyboard_shortcuts.sections]]
+platform = "macos"
+context = "global"
+[keyboard_shortcuts.sections.bindings]
+"Mod+W" = "close_active_document"
+"#;
+
+/// S1: a section for another OS is kept, listed as inactive, and written
+/// back with its tag, so saving on Windows cannot delete the macOS bindings.
+#[test]
+fn a_platform_section_survives_load_save_load_and_a_copy() {
+    let loaded = import_custom_profile(WITH_MACOS_SECTION).unwrap();
+    let saved = export_custom_profile(&loaded).unwrap();
+    assert!(saved.contains("platform = \"macos\""), "{saved}");
+    let resaved = export_custom_profile(&import_custom_profile(&saved).unwrap()).unwrap();
+    assert_eq!(saved, resaved, "load, save, load, save is stable");
+
+    let copy = loaded.copy_as_custom("copy", "Copy").unwrap();
+    let tagged = |profile: &ShortcutProfile| {
+        profile
+            .bindings
+            .iter()
+            .filter(|b| b.platform == Some(Platform::MacOs))
+            .count()
+    };
+    assert_eq!((tagged(&loaded), tagged(&copy)), (1, 1));
+    for platform in ALL {
+        let rows = CompiledKeymap::compile_for(&loaded, platform).resolved_table();
+        assert_eq!(rows.len(), if platform == Platform::MacOs { 2 } else { 1 });
+    }
+}
+
+/// The same through the user's file: save then load keeps the tagged section.
+#[test]
+fn a_platform_section_survives_the_user_file() {
+    let loaded = import_custom_profile(WITH_MACOS_SECTION).unwrap();
+    let mut set = ShortcutProfileSet::built_ins().unwrap();
+    set.insert_custom_profile(loaded).unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("keyboard_shortcuts.toml");
+    save_profile_set_at(&path, &set).unwrap();
+    let first = std::fs::read(&path).unwrap();
+    let reloaded = load_profile_set_at(&path).unwrap();
+    save_profile_set_at(&path, &reloaded).unwrap();
+    assert_eq!(first, std::fs::read(&path).unwrap());
+    assert!(
+        String::from_utf8(first)
+            .unwrap()
+            .contains("platform = \"macos\"")
+    );
+    let mine = reloaded.profile("mine").unwrap();
+    assert!(
+        mine.bindings
+            .iter()
+            .any(|b| b.platform == Some(Platform::MacOs))
+    );
+}
+
+/// A typo in a section for another OS fails to load on every OS.
+#[test]
+fn a_typo_in_another_platforms_section_fails_everywhere() {
+    let broken = WITH_MACOS_SECTION.replace("Mod+W", "Mod+NoSuchKey");
+    assert!(import_custom_profile(&broken).is_err());
+}
+
+/// B2: a macOS profile with an explicit `Cmd+K`; opening the recorder on
+/// that row and applying without recording keeps `Cmd+K`, not `Mod+K`.
+#[test]
+fn applying_the_recorder_untouched_keeps_an_explicit_cmd_on_macos() {
+    let mut set = ShortcutProfileSet::built_ins().unwrap();
+    let mine = custom_with(&[("Cmd+K", "find")]);
+    set.insert_custom_profile(mine).unwrap();
+    set.set_active_profile("t").unwrap();
+    let mut editor = KeymapEditorModel::new(set).with_platform(Platform::MacOs);
+    let row = editor.rows().remove(0);
+    assert_eq!(row.trigger, "\u{2318}K", "shown as the Mac shows it");
+    assert_eq!(row.trigger_config, "Cmd+K");
+
+    let recorder = crate::app::KeymapRecorderState::new(
+        row.slot,
+        row.command.clone().unwrap(),
+        row.label.clone(),
+        row.context,
+        row.trigger_config.clone(),
+    );
+    editor
+        .edit_active_trigger_parsed(recorder.slot, recorder.trigger())
+        .unwrap();
+    let saved = export_custom_profile(editor.active_profile()).unwrap();
+    assert!(saved.contains("\"Cmd+K\""), "{saved}");
+    assert!(!saved.contains("Mod+K"), "{saved}");
+    assert_eq!(editor.rows()[0].trigger, "\u{2318}K");
+}
+
+fn custom_with(bindings: &[(&str, &str)]) -> ShortcutProfile {
+    let mut profile = keymap_profile(bindings);
+    profile.id = "t".to_string();
+    profile
 }

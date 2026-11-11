@@ -225,9 +225,6 @@ pub struct MenuContext<'a> {
     /// What Design ▸ Update PCB Document names: the board a schematic in
     /// view updates, or the project a board imports from (#1312).
     pub(crate) pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
-    /// The OS the hard-coded fallback hints are shown for. Always the
-    /// running OS in the app; tests pin one.
-    pub(crate) platform: crate::keymap::Platform,
 }
 
 impl Default for MenuContext<'_> {
@@ -241,7 +238,6 @@ impl Default for MenuContext<'_> {
             i18n: signex_i18n::I18n::en_us(),
             cross_select: true,
             pcb_sync: None,
-            platform: crate::keymap::Platform::current(),
         }
     }
 }
@@ -367,8 +363,7 @@ fn enabled(ctx: &MenuContext<'_>, command_id: &str) -> bool {
 /// bind (or the user unbound) shows no hint (#1378).
 fn shortcut_for(ctx: &MenuContext<'_>, command_id: &str, fallback: &str) -> Option<String> {
     let Some(keymap) = ctx.active_keymap.as_ref() else {
-        return (!fallback.is_empty())
-            .then(|| crate::keymap::fallback_hint(fallback, ctx.platform));
+        return (!fallback.is_empty()).then(|| fallback.to_string());
     };
     Some(keymap.shortcut_label_for_id(command_id)).filter(|label| !label.is_empty())
 }

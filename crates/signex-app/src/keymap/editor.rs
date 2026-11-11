@@ -1,6 +1,6 @@
 use crate::keymap::{
-    AppCommandId, BindingConflict, CommandGroup, CompiledKeymap, ProfileLoadError, ShortcutBinding,
-    ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
+    AppCommandId, BindingConflict, CommandGroup, CompiledKeymap, Platform, ProfileLoadError,
+    ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
     ShortcutProfileSet, ShortcutTrigger, fallback_label, metadata_for,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -26,6 +26,9 @@ pub struct KeymapEditorModel {
     profiles: ShortcutProfileSet,
     trigger_drafts: BTreeMap<TriggerEditKey, String>,
     invalid_trigger_drafts: BTreeSet<TriggerEditKey>,
+    /// The OS the rows are shown and compiled for; the running OS unless a
+    /// test pins another.
+    platform: Platform,
 }
 
 impl KeymapEditorModel {
@@ -34,7 +37,13 @@ impl KeymapEditorModel {
             profiles,
             trigger_drafts: BTreeMap::new(),
             invalid_trigger_drafts: BTreeSet::new(),
+            platform: Platform::current(),
         }
+    }
+
+    /// The same model shown and compiled for `platform`.
+    pub fn with_platform(self, platform: Platform) -> Self {
+        Self { platform, ..self }
     }
 
     pub fn built_ins() -> Result<Self, ProfileLoadError> {
@@ -65,6 +74,7 @@ impl KeymapEditorModel {
             .bindings
             .iter()
             .enumerate()
+            .filter(|(_, binding)| binding.applies_on(self.platform))
             .flat_map(|(binding_index, binding)| {
                 let source = source.clone();
                 binding
@@ -85,8 +95,15 @@ impl KeymapEditorModel {
                             .trigger_drafts
                             .get(&slot)
                             .cloned()
-                            .unwrap_or_else(|| trigger.display_text());
+                            .unwrap_or_else(|| trigger.display_text_for(self.platform));
                         let trigger_valid = !self.invalid_trigger_drafts.contains(&slot);
+                        // What a re-record starts from: the binding's own
+                        // spelling, never the display text (on macOS that
+                        // has symbols and cannot say `Cmd` from `Mod`).
+                        let trigger_config = match self.trigger_drafts.get(&slot) {
+                            Some(draft) if !trigger_valid => draft.clone(),
+                            _ => trigger.config_text(),
+                        };
                         KeymapEditorRow {
                             slot,
                             command,
@@ -102,6 +119,7 @@ impl KeymapEditorModel {
                                 .unwrap_or_else(|| "No action".to_string()),
                             context: binding.context,
                             trigger: trigger_text,
+                            trigger_config,
                             trigger_valid,
                             keyboard_editable: matches!(trigger, ShortcutTrigger::KeySequence(_)),
                             unbound: is_unbind_binding(binding)
@@ -166,7 +184,7 @@ impl KeymapEditorModel {
     }
 
     pub fn active_keymap(&self) -> CompiledKeymap {
-        self.profiles.compile_active()
+        CompiledKeymap::compile_for(self.profiles.active_profile(), self.platform)
     }
 
     pub fn active_profile_is_custom(&self) -> bool {
@@ -198,6 +216,27 @@ impl KeymapEditorModel {
 
         self.apply_active_trigger(slot, trigger)?;
         self.invalid_trigger_drafts.remove(&key);
+        Ok(())
+    }
+
+    /// Replace a trigger with an already-parsed one (the recorder's strokes),
+    /// so nothing is re-read from display text. The row shows it as this OS
+    /// writes it.
+    pub fn edit_active_trigger_parsed(
+        &mut self,
+        slot: BindingSlot,
+        trigger: ShortcutTrigger,
+    ) -> Result<(), ProfileLoadError> {
+        self.trigger_drafts
+            .insert(slot, trigger.display_text_for(self.platform));
+        if !self.active_profile_is_custom() {
+            self.invalid_trigger_drafts.insert(slot);
+            return Err(ProfileLoadError::BuiltInMutation(
+                self.profiles.active_profile().id.clone(),
+            ));
+        }
+        self.apply_active_trigger(slot, trigger)?;
+        self.invalid_trigger_drafts.remove(&slot);
         Ok(())
     }
 
@@ -271,7 +310,12 @@ pub struct KeymapEditorRow {
     pub category: String,
     pub label: String,
     pub context: ShortcutContext,
+    /// The trigger as shown on this OS (Apple symbols on macOS), or the
+    /// draft the user typed.
     pub trigger: String,
+    /// The trigger in profile-file spelling, the form that parses back to
+    /// the same strokes; `trigger` does not on macOS.
+    pub trigger_config: String,
     pub trigger_valid: bool,
     pub keyboard_editable: bool,
     /// A later `Unbind` of this command on this trigger and context shadows

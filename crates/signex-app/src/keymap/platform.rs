@@ -17,17 +17,6 @@ pub enum Platform {
 impl Platform {
     /// The OS this build runs on. Every non-macOS, non-Windows target is
     /// treated as Linux.
-    ///
-    /// Unit tests of this crate see Windows instead (the text every
-    /// pre-existing assertion was written for), so they read the same on
-    /// every CI runner; a test of another OS passes that platform to the
-    /// explicit-platform function it exercises.
-    #[cfg(test)]
-    pub fn current() -> Self {
-        Self::Windows
-    }
-
-    #[cfg(not(test))]
     pub const fn current() -> Self {
         if cfg!(target_os = "macos") {
             Self::MacOs

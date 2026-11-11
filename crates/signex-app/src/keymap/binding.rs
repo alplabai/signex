@@ -59,17 +59,12 @@ pub struct Modifiers {
     pub primary: bool,
 }
 
-/// The macOS modifier symbols in Apple's order, with the flag each one sets.
-const MAC_SYMBOLS: [(char, fn(&mut Modifiers)); 4] = [
-    ('\u{2303}', |m| m.ctrl = true),
-    ('\u{2325}', |m| m.alt = true),
-    ('\u{21e7}', |m| m.shift = true),
-    ('\u{2318}', |m| m.primary = true),
-];
+/// The macOS modifier symbols in Apple's order: ⌃ ⌥ ⇧ ⌘.
+const MAC_SYMBOLS: [char; 4] = ['\u{2303}', '\u{2325}', '\u{21e7}', '\u{2318}'];
 
 /// Whether `ch` is one of the macOS modifier symbols.
-pub fn is_mac_modifier_symbol(ch: char) -> bool {
-    MAC_SYMBOLS.iter().any(|(symbol, _)| *symbol == ch)
+fn is_mac_modifier_symbol(ch: char) -> bool {
+    MAC_SYMBOLS.contains(&ch)
 }
 
 /// One macOS-style stroke label (`⇧⌘S`) as its key caps (`⇧`, `⌘`, `S`);
@@ -187,35 +182,15 @@ pub struct KeyStroke {
 }
 
 impl KeyStroke {
-    /// [`Self::from_key_event`] with no physical key to fall back on.
+    /// The stroke for the key the layout produced (the logical key).
     pub fn from_iced(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> Option<Self> {
-        Self::from_key_event(
-            key,
-            keyboard::key::Physical::Unidentified(keyboard::key::NativeCode::Unidentified),
-            modifiers,
-        )
-    }
-
-    /// A live keystroke. The logical key wins when it is ASCII (AZERTY `z`
-    /// stays `z`); otherwise (Turkish `ö`, Cyrillic) the physical key's
-    /// US-QWERTY character stands in, so a binding written as `,` or a
-    /// Latin letter still fires on that layout (#1645).
-    pub fn from_key_event(
-        key: &keyboard::Key,
-        physical: keyboard::key::Physical,
-        modifiers: keyboard::Modifiers,
-    ) -> Option<Self> {
         let key = match key.as_ref() {
             keyboard::Key::Character(value) => {
                 let normalized = value.to_lowercase();
                 if normalized.chars().count() != 1 {
                     return None;
                 }
-                let ascii = normalized.is_ascii();
-                match us_qwerty_char(physical) {
-                    Some(fallback) if !ascii => KeyToken::Character(fallback.to_string()),
-                    _ => KeyToken::Character(normalized),
-                }
+                KeyToken::Character(normalized)
             }
             keyboard::Key::Named(named) => match named {
                 keyboard::key::Named::Escape => KeyToken::Escape,
@@ -253,6 +228,34 @@ impl KeyStroke {
         Some(Self {
             modifiers: Modifiers::from_iced(modifiers),
             key,
+        })
+    }
+}
+
+impl KeyStroke {
+    /// The stroke to try when the logical one matches nothing: the key's
+    /// US-QWERTY character, for a layout whose logical key is not ASCII
+    /// (Turkish `ö` on the comma key, Cyrillic). Only offered while Ctrl,
+    /// Cmd or Alt is held; a bare or Shift-only key is never remapped.
+    /// `None` when there is nothing to retry with (#1645).
+    pub fn physical_fallback(
+        key: &keyboard::Key,
+        physical: keyboard::key::Physical,
+        modifiers: keyboard::Modifiers,
+    ) -> Option<Self> {
+        if !(modifiers.control() || modifiers.logo() || modifiers.alt()) {
+            return None;
+        }
+        let keyboard::Key::Character(value) = key.as_ref() else {
+            return None;
+        };
+        if value.to_lowercase().is_ascii() {
+            return None;
+        }
+        let us = us_qwerty_char(physical)?;
+        Some(Self {
+            modifiers: Modifiers::from_iced(modifiers),
+            key: KeyToken::Character(us.to_string()),
         })
     }
 }
@@ -413,23 +416,6 @@ impl FromStr for KeyStroke {
         }
 
         let mut modifiers = Modifiers::default();
-        // The macOS display form (`⇧⌘S`), so a shown label can be fed back.
-        // `⌘` reads as `Mod`, matching what the recorder stores on a Mac.
-        if source.starts_with(is_mac_modifier_symbol) {
-            let rest = source.trim_start_matches(is_mac_modifier_symbol);
-            for (symbol, set) in MAC_SYMBOLS {
-                if source[..source.len() - rest.len()].contains(symbol) {
-                    set(&mut modifiers);
-                }
-            }
-            if rest.is_empty() {
-                return Err(KeyParseError::MissingKey(source.to_string()));
-            }
-            return Ok(Self {
-                modifiers,
-                key: parse_key_token(rest)?,
-            });
-        }
         let mut key = None;
         // The plus key itself: `+` alone, or `Shift++` after the modifiers.
         let (modifier_text, plus_key) = match source.strip_suffix("++") {
@@ -523,6 +509,17 @@ pub struct ShortcutBinding {
     #[serde(default)]
     pub context: ShortcutContext,
     pub triggers: Vec<ShortcutTrigger>,
+    /// The only OS this binding applies on; `None` is every OS. A binding
+    /// for another OS stays in the profile (and is saved back with its tag)
+    /// but is not compiled, listed or edited here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<Platform>,
+}
+
+impl ShortcutBinding {
+    pub fn applies_on(&self, platform: Platform) -> bool {
+        self.platform.is_none_or(|only| only == platform)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

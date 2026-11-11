@@ -9,7 +9,6 @@ mod binding;
 mod catalog;
 mod command;
 mod editor;
-mod hint;
 mod physical;
 mod platform;
 mod profile;
@@ -32,7 +31,6 @@ pub use command::AppCommandId;
 pub use editor::{
     BindingSlot, KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource,
 };
-pub use hint::{fallback_hint, is_standard_chord};
 pub use platform::Platform;
 pub use profile::{
     BindingConflict, BuiltInProfile, CompiledKeymap, KeyLookup, ProfileLoadError, RestoredProfiles,
