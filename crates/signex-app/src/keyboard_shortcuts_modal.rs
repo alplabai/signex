@@ -210,24 +210,7 @@ fn is_listed(row: &KeymapEditorRow) -> bool {
             .is_none_or(crate::app::command::bridge::is_dispatchable)
 }
 
-fn title_case(i18n: &I18n, value: &str) -> String {
-    value
-        .split(['_', '-', ' '])
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            let mut chars = part.chars();
-            match chars.next() {
-                Some(first) => format!(
-                    "{}{}",
-                    i18n.upper_for_display(&first.to_string()),
-                    chars.as_str()
-                ),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
+use crate::keymap::category_title_case as title_case;
 
 #[cfg(test)]
 mod tests {

@@ -2,7 +2,7 @@
 //! instead of once per frame (#1353).
 //!
 //! `view` must stay cheap and pure, so it only reads this cache. `update`
-//! keeps it current through [`LibraryState::sync_view_caches`]: the
+//! keeps it current through [`LibraryState::sync_view_caches_in`]: the
 //! lowercase search keys are rebuilt only when the set of components
 //! changes (`data_version`), and the filtered list only when the query or
 //! a library name changes.

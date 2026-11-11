@@ -374,8 +374,8 @@ mod tests {
         let mask = match_mask_in(&tr, "İstanbul ILIK", "ılık");
         assert_eq!(mask.len(), "İstanbul ILIK".chars().count());
         assert!(mask[9..].iter().all(|m| *m));
-        // Under en-US the dotted capital I is not an `i`.
-        assert!(match_mask("İstanbul", "istanbul").iter().all(|m| !m));
+        // Under en-US a plain `i` still matches and highlights `İ`.
+        assert!(match_mask("İstanbul", "istanbul").iter().all(|m| *m));
     }
 
     #[test]

@@ -3,7 +3,7 @@
 //! Filtering the rows, deriving the columns and sorting are all pure
 //! functions of the cached table, the search/lifecycle/class filters, the
 //! sort selection and the price clock. `update` keeps a [`BrowserViewCache`]
-//! on the browser tab through `LibraryState::sync_view_caches`; `view`
+//! on the browser tab through `LibraryState::sync_view_caches_in`; `view`
 //! reuses it while its key matches, and only if it does not (a message path
 //! that skipped the sync) recomputes for that one frame.
 
@@ -34,7 +34,7 @@ struct ViewKey {
     /// The search fold follows the message locale, the sort order the
     /// formatting one: a language change rebuilds the cache.
     message_locale: &'static str,
-    format_locale: String,
+    format_locale: signex_i18n::Locale,
 }
 
 impl ViewKey {
@@ -47,7 +47,7 @@ impl ViewKey {
         browser: &LibraryBrowserState,
     ) -> bool {
         self.message_locale == i18n.locale()
-            && self.format_locale == i18n.format_locale().to_string()
+            && self.format_locale == *i18n.format_locale()
             && self.data_version == data_version
             && self.clock == clock
             && self.table == table
@@ -167,7 +167,7 @@ impl BrowserViewCache {
                 sort_by: browser.sort_by.clone(),
                 range,
                 message_locale: i18n.locale(),
-                format_locale: i18n.format_locale().to_string(),
+                format_locale: i18n.format_locale().clone(),
             },
             visible,
             columns,

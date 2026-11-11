@@ -395,6 +395,7 @@ impl Signex {
                 lib,
                 lib.primitive_picker.as_ref()?,
                 tokens,
+                &self.ui_state.i18n,
                 windowed,
             )
             .map(Message::Library)

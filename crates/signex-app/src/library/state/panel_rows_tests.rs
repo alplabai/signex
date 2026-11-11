@@ -155,8 +155,7 @@ fn a_turkish_filter_finds_dotted_and_dotless_i_rows_and_a_language_change_refold
         s.sync_view_caches_in(&tr);
         assert_eq!(shown(&s), vec![("t".to_owned(), expected)], "{query}");
     }
-    // The same data under en-US: `İ` is no `i`, so the keys must refold.
-    s.components_panel.filter = "istanbul".into();
+    // The same data under en-US: `ı` is no `I`, so the keys must refold.
     s.sync_view_caches();
     assert!(shown(&s).is_empty());
     s.components_panel.filter = "isparta".into();

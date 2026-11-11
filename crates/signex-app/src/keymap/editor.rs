@@ -116,11 +116,17 @@ impl KeymapEditorModel {
     /// [`Self::rows`] filtered by a case-insensitive search query against
     /// each row's label, command id or trigger text. An empty query
     /// returns every row.
-    pub fn filtered_rows(&self, query: &str) -> Vec<KeymapEditorRow> {
+    pub fn filtered_rows_in(&self, i18n: &signex_i18n::I18n, query: &str) -> Vec<KeymapEditorRow> {
         self.rows()
             .into_iter()
-            .filter(|row| row.matches_query(query))
+            .filter(|row| row.matches_query_in(i18n, query))
             .collect()
+    }
+
+    /// [`Self::filtered_rows_in`] under en-US.
+    #[cfg(test)]
+    pub fn filtered_rows(&self, query: &str) -> Vec<KeymapEditorRow> {
+        self.filtered_rows_in(signex_i18n::I18n::en_us_ref(), query)
     }
 
     pub fn create_custom_from_active(
@@ -284,21 +290,46 @@ impl KeymapEditorRow {
     /// Case-insensitive substring match on the row's label, command id or
     /// current trigger text. An empty (or whitespace-only) query matches
     /// every row. Never panics — safe on empty / odd input.
-    pub fn matches_query(&self, query: &str) -> bool {
-        let needle = query.trim().to_lowercase();
+    pub fn matches_query_in(&self, i18n: &signex_i18n::I18n, query: &str) -> bool {
+        let needle = i18n.fold_for_search(query.trim());
         if needle.is_empty() {
             return true;
         }
-        if self.label.to_lowercase().contains(&needle) {
-            return true;
-        }
-        if self.trigger.to_lowercase().contains(&needle) {
-            return true;
-        }
-        self.command
-            .as_ref()
-            .is_some_and(|command| command.as_str().to_lowercase().contains(&needle))
+        let has = |text: &str| i18n.fold_for_search(text).contains(&needle);
+        has(&self.label)
+            || has(&self.trigger)
+            || self
+                .command
+                .as_ref()
+                .is_some_and(|command| has(command.as_str()))
     }
+
+    /// [`Self::matches_query_in`] under en-US.
+    #[cfg(test)]
+    pub fn matches_query(&self, query: &str) -> bool {
+        self.matches_query_in(signex_i18n::I18n::en_us_ref(), query)
+    }
+}
+
+/// A category id (`idle_tools`) as title text (`Idle Tools`), each word's
+/// first letter capitalised by the message language's rules.
+pub fn category_title_case(i18n: &signex_i18n::I18n, value: &str) -> String {
+    value
+        .split(['_', '-', ' '])
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => format!(
+                    "{}{}",
+                    i18n.upper_for_display(&first.to_string()),
+                    chars.as_str()
+                ),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

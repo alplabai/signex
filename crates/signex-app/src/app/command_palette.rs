@@ -773,8 +773,13 @@ mod tests {
         assert_eq!(hits("ızmir"), [2]);
         // `i` does not match a capital `I` under tr.
         assert!(hits("isparta").is_empty());
-        // en-US is unchanged.
-        assert!(rank_results(&entries, "istanbul").is_empty());
+        // en-US keeps trunk behaviour: `i` finds `İ` and `I`.
+        assert_eq!(rank_results(&entries, "istanbul").len(), 1);
         assert_eq!(rank_results(&entries, "isparta").len(), 1);
+    }
+
+    #[test]
+    fn en_us_palette_still_finds_dotted_capital_i() {
+        assert!(fuzzy_score("istanbul", "İSTANBUL").is_some());
     }
 }

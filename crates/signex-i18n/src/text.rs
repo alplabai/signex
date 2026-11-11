@@ -20,10 +20,14 @@ pub(crate) fn fold_in(tag: &str, text: &str) -> String {
 }
 
 /// `c` simple-folded (always one char) under the rules of the language in `tag`.
+/// Outside `tr`/`az`, `İ` still folds to `i` so a plain `i` query keeps
+/// finding it (docs/DECISIONS.md, #2063).
 pub(crate) fn fold_char_in(tag: &str, c: char) -> char {
     let mapper = CaseMapper::new();
     if matches!(tag.split('-').next(), Some("tr" | "az")) {
         mapper.simple_fold_turkic(c)
+    } else if c == '\u{130}' {
+        'i'
     } else {
         mapper.simple_fold(c)
     }
@@ -64,8 +68,9 @@ impl I18n {
     /// `c` simple-folded to exactly one char, for matching and highlighting
     /// per char (`İ` and `I` become `i` and `ı` under `tr`/`az`). Unlike
     /// [`Self::fold_for_search`] it never changes the length (`ß` stays
-    /// `ß`), so a match position maps back to the original text. Follows the
-    /// message locale like [`Self::fold_for_search`].
+    /// `ß`), so a match position maps back to the original text. Under every
+    /// other language `İ` still folds to `i`, so a plain `i` finds it.
+    /// Follows the message locale like [`Self::fold_for_search`].
     pub fn fold_char_for_search(&self, c: char) -> char {
         fold_char_in(self.locale(), c)
     }

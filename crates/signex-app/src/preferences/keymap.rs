@@ -192,7 +192,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     .padding([SP.s, 0.0]);
 
     let active_profile_is_custom = editor.active_profile_is_custom();
-    let filtered = editor.filtered_rows(search);
+    let filtered = editor.filtered_rows_in(i18n, search);
 
     let mut content = column![header].spacing(10).padding(20);
     content = content.extend(load_error_banner);
@@ -666,24 +666,7 @@ fn context_label(context: crate::keymap::ShortcutContext) -> &'static str {
     }
 }
 
-fn title_case(i18n: &signex_i18n::I18n, value: &str) -> String {
-    value
-        .split(['_', '-', ' '])
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            let mut chars = part.chars();
-            match chars.next() {
-                Some(first) => format!(
-                    "{}{}",
-                    i18n.upper_for_display(&first.to_string()),
-                    chars.as_str()
-                ),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
+use crate::keymap::category_title_case as title_case;
 
 #[cfg(test)]
 mod tests {

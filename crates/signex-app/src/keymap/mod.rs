@@ -28,6 +28,7 @@ pub use catalog::{
 pub use command::AppCommandId;
 pub use editor::{
     BindingSlot, KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource,
+    category_title_case,
 };
 pub use profile::{
     BindingConflict, BuiltInProfile, CompiledKeymap, KeyLookup, ProfileLoadError, RestoredProfiles,

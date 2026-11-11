@@ -370,7 +370,13 @@ pub(super) fn view_sections<'a>(
                 i18n.count(fp.sketch_constraint_count as i64),
             );
             if let Some(s) = fp.last_solve.as_ref() {
-                col = props_kv_row(col, muted, input_bg, "Iterations", s.iterations.to_string());
+                col = props_kv_row(
+                    col,
+                    muted,
+                    input_bg,
+                    "Iterations",
+                    i18n.count(s.iterations as i64),
+                );
                 col = props_kv_row(
                     col,
                     muted,

@@ -100,6 +100,8 @@ impl<'a> CellSortKey<'a> {
     }
 
     fn compare(&self, other: &Self) -> Ordering {
+        // A column's keys are all built one way: locale-aware or synthetic.
+        debug_assert_eq!(self.i18n.is_some(), other.i18n.is_some());
         match (&self.kind, &other.kind) {
             (SortKind::Number(a), SortKind::Number(b)) => a.total_cmp(b),
             (SortKind::Measured(a), SortKind::Measured(b)) => compare_for_sort(a, b),
@@ -205,6 +207,85 @@ mod tests {
         sort_by_cell_key(&mut items, |(_, cell)| CellSortKey::from_cell(cell), false);
         let order: Vec<usize> = items.iter().map(|(i, _)| *i).collect();
         assert_eq!(order, vec![1, 2, 4, 0, 3]);
+    }
+
+    /// The same cell as a locale-aware key (the grid's text columns).
+    fn en_key(cell: &str) -> CellSortKey<'static> {
+        CellSortKey::from_cell_in(I18n::en_us_ref(), cell)
+    }
+
+    #[test]
+    fn locale_aware_comparator_is_a_total_order() {
+        let keys: Vec<CellSortKey> = fixture().iter().map(|c| en_key(c)).collect();
+        for a in &keys {
+            for b in &keys {
+                assert_eq!(a.compare(b), b.compare(a).reverse());
+                for c in &keys {
+                    if a.compare(b).is_le() && b.compare(c).is_le() {
+                        assert!(a.compare(c).is_le());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn locale_aware_long_mixed_column_sorts_without_panic() {
+        let base = fixture();
+        let mut items: Vec<String> = (0..64).flat_map(|_| base.iter().cloned()).collect();
+        for descending in [true, false] {
+            sort_by_cell_key(&mut items, |s| en_key(s), descending);
+        }
+        let first_text = items
+            .iter()
+            .position(|c| matches!(en_key(c).kind, SortKind::Text));
+        let last_number = items
+            .iter()
+            .rposition(|c| matches!(en_key(c).kind, SortKind::Number(_)));
+        assert!(last_number < first_text, "numbers precede text");
+    }
+
+    #[test]
+    fn locale_aware_mixed_numbers_and_text_have_a_defined_order() {
+        let mut items: Vec<String> = ["10k", "NaN", "10", "abc", "9", "", "-3", "inf"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        sort_by_cell_key(&mut items, |s| en_key(s), false);
+        assert_eq!(items, ["-3", "9", "10", "inf", "", "10k", "abc", "NaN"]);
+    }
+
+    #[test]
+    fn locale_aware_ties_keep_original_order() {
+        let mut items: Vec<(usize, String)> = ["b", "A", "a", "B", "a"]
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (i, (*s).to_string()))
+            .collect();
+        sort_by_cell_key(&mut items, |(_, cell)| en_key(cell), false);
+        let order: Vec<usize> = items.iter().map(|(i, _)| *i).collect();
+        assert_eq!(order, vec![1, 2, 4, 0, 3]);
+    }
+
+    #[test]
+    fn locale_aware_parameter_keys_order_numbers_and_text() {
+        let tr = I18n::with_message_locale_for_test("tr");
+        let values = [
+            ParamValue::Number(10.0),
+            ParamValue::Text("ıx".into()),
+            ParamValue::Number(9.0),
+            ParamValue::Text("ix".into()),
+        ];
+        let mut items: Vec<usize> = (0..values.len()).collect();
+        sort_by_cell_key(
+            &mut items,
+            |&i| CellSortKey::from_param_in(&tr, &values[i]),
+            false,
+        );
+        // Numbers first, then text: `ı` before `i` under tr-TR collation is
+        // covered by the browser tests; the message locale only folds here.
+        assert_eq!(&items[..2], [2, 0]);
+        assert_eq!(items.len(), 4);
     }
 
     #[test]

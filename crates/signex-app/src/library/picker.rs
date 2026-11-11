@@ -49,7 +49,7 @@ pub(crate) fn title(mode: &PickerMode) -> &'static str {
 const PICKER_W: f32 = 720.0;
 const PICKER_H: f32 = 480.0;
 
-/// Draws the list `LibraryState::sync_view_caches` last built for the
+/// Draws the list `LibraryState::sync_view_caches_in` last built for the
 /// picker; `view` itself filters and clones nothing.
 pub fn view<'a>(
     picker: &'a PickerState,

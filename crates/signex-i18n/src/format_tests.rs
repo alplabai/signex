@@ -301,6 +301,23 @@ fn a_per_char_fold_keeps_the_length_and_follows_the_language() {
 }
 
 #[test]
+fn a_dotted_capital_i_folds_to_i_in_every_language_one_to_one() {
+    use crate::text::fold_char_in;
+    // en-US keeps the trunk behaviour: a plain `i` finds `İ`.
+    assert_eq!(i18n("en-US").fold_char_for_search('İ'), 'i');
+    assert_eq!(fold_char_in("de", 'İ'), 'i');
+    // Turkic rules give the same for `İ` (and differ for `I`).
+    assert_eq!(fold_char_in("tr", 'İ'), 'i');
+    assert_eq!(fold_char_in("az", 'İ'), 'i');
+    assert_ne!(fold_char_in("tr", 'I'), fold_char_in("en-US", 'I'));
+    let word = "İSTANBUL";
+    for tag in ["en-US", "tr"] {
+        let folded: String = word.chars().map(|c| fold_char_in(tag, c)).collect();
+        assert_eq!(folded, "istanbul");
+    }
+}
+
+#[test]
 fn the_test_instance_folds_by_the_turkic_rules() {
     let tr = I18n::with_message_locale_for_test("tr");
     assert_eq!(tr.locale(), "tr");
@@ -313,7 +330,7 @@ fn the_test_instance_folds_by_the_turkic_rules() {
 // upgrade fixes it this test fails: drop it, and the "avoid Long under sk"
 // caution with it.
 #[test]
-#[cfg_attr(debug_assertions, should_panic)]
+#[cfg_attr(debug_assertions, should_panic(expected = "NamesNotLoaded"))]
 fn a_long_slovak_date_is_broken_in_icu_datetime() {
     let at = wall(2025, 1, 15, 16, 9, 35);
     let shown = i18n("sk").show(at, DateLength::Long, false);

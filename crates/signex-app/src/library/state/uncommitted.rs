@@ -2,7 +2,7 @@
 //!
 //! The adapter keeps the truth (`LibraryAdapter::uncommitted_changes`); this
 //! is the copy `view` reads, because `view` must not call the adapter. It is
-//! refreshed after every update (see `sync_view_caches`), so a save from any
+//! refreshed after every update (see `sync_view_caches_in`), so a save from any
 //! surface shows up on the next frame, and the "Commit now" retry runs off
 //! the update thread like every other git write.
 

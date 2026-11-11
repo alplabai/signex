@@ -187,20 +187,20 @@ fn a_language_change_rebuilds_with_the_new_fold_and_alphabet() {
     let (mut state, root) = fixture();
     named_rows(&mut state, &["İSTANBUL", "ISPARTA", "ÇAY", "CAM", "DAL"]);
     let tr = signex_i18n::I18n::with_message_locale_for_test("tr");
-    browser_mut(&mut state, &root).search = "istanbul".into();
+    browser_mut(&mut state, &root).search = "ıspa".into();
     state.sync_view_caches_in(&tr);
-    assert_eq!(visible(&state, &root), [0], "tr: `i` finds `İ`");
+    assert_eq!(visible(&state, &root), [1], "tr: `ı` finds `I`");
 
     let before = builds();
     state.sync_view_caches_in(&tr);
     assert_eq!(builds(), before, "same language reuses the cache");
     state.sync_view_caches();
     assert_eq!(builds(), before + 1, "a language change rebuilds");
-    assert!(visible(&state, &root).is_empty(), "en-US: `İ` is no `i`");
+    assert!(visible(&state, &root).is_empty(), "en-US: `ı` is no `I`");
 
-    browser_mut(&mut state, &root).search = "ıspa".into();
+    browser_mut(&mut state, &root).search = "istanbul".into();
     state.sync_view_caches_in(&tr);
-    assert_eq!(visible(&state, &root), [1], "tr: `ı` finds `I`");
+    assert_eq!(visible(&state, &root), [0], "tr: `i` finds `İ`");
 }
 
 #[test]
