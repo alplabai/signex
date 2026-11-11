@@ -428,11 +428,27 @@ pub struct UiState {
     /// Generation of the newest Number Schematic Sheets read. Outside the
     /// dialog's state so a reopened dialog never takes an older read.
     pub sheet_numbering_reads: u64,
+    /// Tools ▸ Re-Annotate Board (#1312), while open. Execute is one board
+    /// undo step; nothing is written to disk.
+    pub board_reannotate: Option<crate::app::BoardReannotateState>,
+    /// The options Re-Annotate Board was last used with, for its next opening.
+    pub board_reannotate_options: signex_engine::pcb::designators::ReannotateOptions,
+    /// Back Annotate (#1312), while open. Execute writes the sheets in
+    /// memory as one undo group; nothing is written to disk.
+    pub back_annotate: Option<crate::app::BackAnnotateState>,
     /// The Find Similar Objects dialog, while open (#1257).
     pub find_similar: Option<crate::find_similar::FindSimilarState>,
     /// Token of the newest Find Similar project search. Lives outside the
     /// dialog state so a reopened dialog never reuses an old token.
     pub find_similar_generation: u64,
+    /// The Tools ▸ Assign Footprints dialog, while open (#2248). Apply
+    /// changes the open sheets in memory; the user saves.
+    pub assign_footprints: Option<crate::app::AssignFootprintsState>,
+    /// Generation of the newest Assign Footprints read. Outside the dialog's
+    /// state so a reopened dialog never takes an older read.
+    pub assign_footprints_reads: u64,
+    /// The Net Inspector panel's filter and expanded nets (#1269).
+    pub net_inspector: crate::panels::NetInspectorState,
     /// The open Paste Array dialog (#1264).
     pub paste_array: Option<crate::paste_array::PasteArrayState>,
     /// How many Paste Array dialogs were opened: tags each one so a numbers

@@ -27,6 +27,13 @@ them), `revision_before`, `revision_after`, `group` (the undo group of the step,
 when it made one), `outcome` (`ran`, `refused` or `failed`), `reason`,
 `truncated` and `replayable`.
 
+An `apply_edits` call that edits several sheets (#2178) is one line per sheet that got a
+step, in order of first use (a sheet the call named but did not change has none): each has its own `document`, `path`,
+`revision_before` and `revision_after`, and all share the `group`. The
+operands are the whole call's. A multi-sheet group is recorded but not
+replayable line by line (`replayable: false`: one line alone cannot replay the
+all-or-nothing group); group replay is future work.
+
 An access line: `ts`, `event` (`accepted`, `refused`, `closed`, `grants`,
 `started`, `ended`), `mode` (`socket` or `headless`), `pid`, `client`, `reason`,
 `capabilities` (`read`, `edit`, `save`, ..., `allow-path:<dir>`) and, when
@@ -200,6 +207,55 @@ cannot read, a wrong type such as `"max_lines": "5000"` included, is not
 silently reset: the defaults apply, Messages says so, and the raw value is
 written back untouched until the settings are edited. Keys a newer build stored
 beside the known ones are kept across a re-save.
+
+## Commit message summary
+
+With "Summarise agent changes in the commit message" on, the commit a save
+makes carries the agent edits in its body (`app/agent/journal/summary.rs`). The
+subject is the one the save would have used; the author is the person (the
+`git_identity` rule), always. With the setting off, or with nothing to list, the
+message is byte for byte what it was.
+
+- **Per committed file.** Commits are per file, so each body lists only the
+  edits whose journal `path` is that file, newer than the last commit that
+  touched that file (`git log -1 -- <path>`, the committer time, through
+  `LocalGitProjectAdapter::last_commit_time_for`), or every one of them when the
+  file was never committed. An edit of a document that was saved but not yet
+  committed waits for that document's own commit. A command that changes the
+  project file whatever sheet it names (`assign_net_class`, even a sheet outside
+  the project folder: the journal is per project) and an entry that names no
+  document belong to the `.snxprj` commit. Edits made to a document before its
+  first save are not summarised (known gap): they have no path, and no commit
+  would be theirs.
+- **Which commits.** A save's commit, and the other project commits made the
+  same way (add, remove, rename). A History restore commit is never summarised,
+  and when a later save merges into a queued commit the setting as it is at the
+  later save decides.
+- **Format.** A header line, then one line per edit: `- <time> client=<client>
+  command=<command> doc=<path in the project> outcome=<outcome>` and the
+  reason in parentheses when there is one. No operands. At most 20 lines (the
+  newest), then `and K more earlier edit(s) not listed`. Control characters
+  (newlines included), the Unicode line and paragraph separators and the
+  bidirectional controls become spaces and each text is cut to 120 characters.
+  Every edit line starts with `- `, so no text of an entry can begin a line of
+  its own, which is what a trailer needs.
+- **Where it runs.** In the worker that makes the commit, never in `update`;
+  `update` only copies the setting when the commit is queued. The worker first
+  waits, at most 5 seconds, until every journal line queued by then has been
+  written (a line still on the queue is not on disk to read); if that runs out,
+  the plain message is used and Messages says so. A journal or a last-commit
+  time that cannot be read (or lines the reader skipped) is said in Messages;
+  the commit is still made, with the plain message.
+- **Known gaps.** The comparison is in whole seconds, strictly after the last
+  commit's second, so an edit made in that same second after the commit is not
+  listed (the other choice lists an edit twice). A clock stepped backwards hides
+  the edits made before the last commit's time, and an edit stamped in the
+  future is listed again by the next commit of its file. The last-commit lookup
+  walks at most 2,000 commits back from HEAD (`LAST_COMMIT_WALK`); a file last
+  committed further back reads as never committed, and the journal itself is
+  line-capped. Lines dropped by rotation are not in the working file, so they
+  cannot be listed. The `path` is the one at the time of the event: an edit of
+  a document later renamed is listed under no commit of the new name.
 
 ## Not covered
 

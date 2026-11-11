@@ -50,6 +50,11 @@
     "category": "edit"
   },
   {
+    "id": "assign_footprints",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "assign_net_class",
     "group": "Schematic",
     "category": "design"
@@ -58,6 +63,11 @@
     "id": "autoplace_fields",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "back_annotate_schematics",
+    "group": "Schematic",
+    "category": "pcb_sync"
   },
   {
     "id": "board_sketch",
@@ -600,6 +610,11 @@
     "category": "view"
   },
   {
+    "id": "open_net_inspector",
+    "group": "General",
+    "category": "panels"
+  },
+  {
     "id": "open_parameter_manager",
     "group": "Schematic",
     "category": "design"
@@ -848,6 +863,11 @@
     "id": "read_document",
     "group": "General",
     "category": "file"
+  },
+  {
+    "id": "reannotate_board",
+    "group": "Pcb",
+    "category": "design"
   },
   {
     "id": "redo",

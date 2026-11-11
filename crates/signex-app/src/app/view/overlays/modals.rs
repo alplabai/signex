@@ -301,11 +301,32 @@ impl Signex {
         .then(|| self.view_new_project_dialog())
     }
 
+    pub(in crate::app::view) fn assign_footprints_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .assign_footprints
+            .is_some()
+            .then(|| self.view_assign_footprints_dialog())
+    }
+
     pub(in crate::app::view) fn sheet_numbering_overlay(&self) -> Option<Element<'_, Message>> {
         self.ui_state
             .sheet_numbering
             .is_some()
             .then(|| self.view_sheet_numbering_dialog())
+    }
+
+    pub(in crate::app::view) fn board_reannotate_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .board_reannotate
+            .is_some()
+            .then(|| self.view_board_reannotate_dialog())
+    }
+
+    pub(in crate::app::view) fn back_annotate_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .back_annotate
+            .is_some()
+            .then(|| self.view_back_annotate_dialog())
     }
 
     /// Update PCB from Schematic (#1312); a headless `apply=true` run has no

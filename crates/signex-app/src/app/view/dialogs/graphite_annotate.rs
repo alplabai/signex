@@ -46,6 +46,34 @@ pub(super) fn checkbox_pip<'a, M: 'a>(theme_tokens: &ThemeTokens, on: bool) -> E
     .boxed()
 }
 
+/// Greyed checkbox pip for an option that cannot be changed yet: sunken
+/// fill, soft hairline and a faint check, so it never reads as active.
+pub(super) fn disabled_checkbox_pip<'a, M: 'a>(
+    theme_tokens: &ThemeTokens,
+    on: bool,
+) -> Element<'a, M> {
+    let r = tokens::resolve(theme_tokens);
+    let side = TS.body + 2.0;
+    let mark = if on { "\u{2713}" } else { " " };
+    let (fill, edge) = (r.sunken, r.line_soft);
+    container(text(raw(mark)).size(TS.caption).color(r.ink4))
+        .width(Length::Fixed(side))
+        .height(Length::Fixed(side))
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(fill)),
+            border: Border {
+                width: 1.0,
+                color: edge,
+                radius: 4.0.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
 /// Toggle-pill style (order choice, lock): selected takes the soft accent
 /// fill, its ink and an accent hairline; unselected is a field box.
 pub(super) fn toggle_style(

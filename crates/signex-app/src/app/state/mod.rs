@@ -652,6 +652,9 @@ pub struct DeferredGitCommit {
     pub message: String,
     pub replace_message: bool,
     pub removed_path: Option<PathBuf>,
+    /// Whether the commit may carry the agent edit summary (#2253); a restore
+    /// never does.
+    pub with_summary: bool,
 }
 
 /// An Altium import on the blocking pool (#1123).
@@ -684,6 +687,9 @@ pub struct PendingGitCommit {
     /// restore read back. `None` commits the working file as it is when the
     /// worker runs (callers that hold no copy of what they wrote).
     pub content: Option<crate::persist::SharedBytes>,
+    /// The project's "Summarise agent changes in the commit message" as it was
+    /// when the commit was queued (#2253).
+    pub summarise_agent_edits: bool,
 }
 
 impl PendingGitCommit {

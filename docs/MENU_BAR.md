@@ -57,8 +57,8 @@ enablement; no command left the app.
 **Tools ▸ Annotation** (top of Tools, then a separator, as Altium's schematic
 Tools menu has it): Annotate Schematics..., Reset Schematic Designators...,
 Reset Duplicate Schematic Designators..., Annotate Schematics Quietly (Alt+A),
-Force Annotate All Schematics (Shift+Alt+A), the planned Back Annotate
-Schematics..., and Number Schematic Sheets... (see
+Force Annotate All Schematics (Shift+Alt+A), Back Annotate Schematics... (see
+[below](#back-annotate)), and Number Schematic Sheets... (see
 [below](#number-schematic-sheets)).
 
 **Reports** (outputs of the open schematic, all greyed without one):
@@ -69,7 +69,8 @@ Schematics..., and Number Schematic Sheets... (see
 - ERC Report...
 
 **Design** has Update PCB Document (see
-[Design ▸ Update PCB Document](#design-update-pcb)), Board Sketch (see
+[Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
+[Back Annotate](#back-annotate)), Board Sketch (see
 [Design ▸ Board Sketch](#design-board-sketch)), a separator, then
 Parameter Manager.... **File ▸ New** has PCB (`new_pcb_document`). **File ▸
 Export** keeps PDF only.
@@ -94,6 +95,104 @@ own. Two rows point at an id other than the one their key suggests (#1991):
 Tools ▸ Design Rule Check runs `run_drc` (#2222) on the PCB in view and is
 greyed while no PCB is open. The command is also in the command palette and
 as the Run DRC button of the Messages panel; no keymap preset binds it.
+
+## Tools ▸ Re-Annotate Board {#tools-reannotate-board}
+
+Tools ▸ Re-Annotate Board... runs `reannotate_board` (#1312), right after
+Design Rule Check with the other board rows, and is greyed while no PCB is
+open. It opens the Positional Re-Annotate dialog for the board in view:
+
+- **Order**: by X, then by Y (the default), or by Y, then by X. The sort is
+  exact at 1 µm: parts are not grouped into columns or rows by a tolerance,
+  so a part 0.01 mm left of another comes first whatever its Y. The board's y
+  grows downwards on screen.
+- **Bottom side**: after the top side (the default), or together with it.
+  Bottom-side parts are ordered as seen from the top.
+- Parts are numbered from 1 within each prefix (`R1, R2, ...`, `C1, ...`);
+  the prefix stays. Surrounding spaces are dropped, and `R01` becomes `R1`.
+  A locked footprint keeps its designator, and its number is skipped; so
+  does a footprint with no link to a schematic part, because Update PCB
+  matches such a footprint to a part by its designator and renumbering it
+  would swap parts. A footprint whose designator is not a prefix and an
+  ASCII number (`12`, `R1A`, `R１`, none) is kept and listed. A `R?` gets a
+  number.
+- The list shows each rename (designator, new designator), how many parts
+  are already in order and the parts kept. Execute runs the renames as one
+  board undo step at the board revision the list was made from; a board
+  that changed meanwhile gets a new list to check first, with a notice.
+  Nothing is written to disk until the board is saved.
+
+The dialog keeps the options it was last used with until the app quits. The
+same command is in the command palette; no keymap preset binds it.
+
+**Update PCB renames parts back.** A designator changed on the board, here
+or in Properties, is not carried to the schematic: the next Update PCB lists
+a rename back to the schematic's designator, ticked like every other row,
+because the command picks the direction (`DECISIONS.md`, 2026-11-10). Use
+[Back Annotate](#back-annotate) to keep them. The dialog and the Properties
+section say so under their fields.
+
+## Back Annotate {#back-annotate}
+
+Tools ▸ Annotation ▸ Back Annotate Schematics... and Design ▸ Update
+Schematics run `back_annotate_schematics` (#1312). The Design row reads
+Update Schematics in `<project>` on a board of a project. Both are greyed
+unless a schematic or a board of an open project is in view; the command is
+also in the palette, and no keymap preset binds it. It opens the Back
+Annotate dialog for the project of the document in view, opening the
+project's board first when it is not open.
+
+The dialog has the Update PCB dialog's look with the board as the source:
+
+- **Matching**: a board footprint matches its part only by its stored link
+  (sheet placement + unit UUID), never by designator. An unlinked footprint
+  or one whose part is gone is a note, and so is a second footprint linked
+  to a part already matched (only the first is carried back). Surrounding
+  spaces on the board designator are ignored.
+- **Rows**: Designators (the board's designator for the part at that
+  placement), Values (the board's value for every unit of the part) and
+  Footprints. The board wins on every ticked row; rows start ticked.
+- **Blocked rows**: a designator row while the part's schematic designator
+  is not annotated or is on another part (as in Update PCB), or while the
+  board's designator is empty or holds `?`; a value row on a sheet placed
+  more than once, or on a sheet another open project reaches, since the
+  value is stored once for every placement and project (the shared-sheet
+  rule); a value row of a part that is not annotated; every footprint row,
+  until #2248. Pin and gate swaps have no board model and are
+  not listed.
+- **Notes**: a designator the ticked rows would leave on several parts is
+  noted, following the ticks; nothing blocks it.
+- **Validate** runs the ticked rows on copies of the sheets.
+- **Execute** writes every changed sheet as one undo group: a designator row
+  writes that placement only (the symbol's reference on a sheet placed once
+  in this project and reached by no other open project, a per-placement
+  entry otherwise). Execute plans the writes from the ticks when pressed,
+  states the closed sheets of that plan again, and writes exactly that
+  plan; the ticks, Refresh and Validate wait while the check runs. A sheet
+  that is not open is loaded into memory from the copy the read took, after
+  its file is stated again, and is left unsaved. Nothing is written to disk until the sheets are saved.
+  A list the board or a sheet has moved past since the read is refused
+  until Refresh; so is a closed sheet whose file changed on disk.
+- Opening the board for the read brings its tab to the front, as Update
+  PCB does.
+
+## Board Properties: designator and value {#board-properties}
+
+With exactly one footprint selected on a board, the Properties panel shows
+its designator and value as fields and its footprint name. Each field
+keeps its own draft (another selection on the same board, a tab switch away
+from the board, closing it, or an undo or redo of it drops them; a selection
+on another board, in another window, does not); Enter applies that field as
+one board undo step (`SetFootprintText`, labelled Designator or Value). A locked
+footprint or a read-only board shows the
+fields read-only with the reason; an empty designator is refused with a
+notice; a designator another footprint already has is applied, warned about
+in the Messages panel and noted under the fields. The board canvas
+right-click menu has Properties... (`edit_selected_object_properties`), live
+with anything selected, which shows the Properties panel; the same command
+(and `edit_object_properties`, Altium's double-click) is now enabled by a
+board selection. In an undocked board window the fields edit that window's
+board.
 
 ## Tools ▸ Cross Probe and Cross Select Mode {#tools-cross-probe}
 
@@ -198,6 +297,66 @@ three has a default key).
   parked as a draft exactly as the tab menu's Close All Documents does. Greyed
   when no tab is open.
 
+## Tools ▸ Assign Footprints {#tools-assign-footprints}
+
+Runs `assign_footprints` (#2248; maintainer decision, Caner 2026-11-10 on
+#2248, `DECISIONS.md`). Greyed without a schematic. The dialog lists every
+placed part of the active schematic's project (a loose sheet lists its own
+parts) with its designator, value, library row and current footprint, sorted
+by designator. The project's sheets are read off the UI thread when it opens.
+
+- A part chooses only among the footprints its own library row offers: the
+  row's default and its alternates, the same list the Properties panel shows
+  (`footprint_choices_for`). Its link to the row does not change. A part with
+  no open library row, or whose row offers one footprint, shows its footprint
+  read-only and why.
+- Tick boxes select several parts; "Tick all from this row" ticks every part
+  of the same library row. "Set ticked parts to" lists the footprints every
+  ticked part's row offers, so a bulk pick never gives a part a footprint its
+  row does not offer.
+- Apply checks each change again against the part's live document and its row
+  (the Properties path, `footprint_binding_commands`), then changes every open
+  sheet in one `update` as one undo group (`UndoGroupKind::Footprints`): one
+  Ctrl+Z on any changed sheet takes all of them back. A refusal on any sheet
+  changes nothing. Nothing is written to disk; the sheets are left unsaved.
+- The dialog does not block the editor, so a footprint can change behind it
+  (Properties, an undo). Apply first compares every listed editable part's
+  live footprint and binding with what the dialog read; if one differs, Apply
+  is refused as stale and nothing changes. When every pick turns out to be a
+  no-op, Messages says nothing changed.
+- A multi-unit part is one row, its units grouped across sheets by the same
+  rule the engine uses within a sheet (`group_into_parts`: one designator, one
+  library symbol, different unit numbers; an unannotated `U?` part is never
+  grouped). Apply changes every unit on every sheet, so one designator never
+  gets two footprints; a part with any unit on a sheet that is not open, or
+  read-only, is read-only whole.
+- A sheet that is not open is listed read-only ("Sheet not open"): its parts
+  are shown for the overview and changed by opening the sheet. This is the
+  safer of the two existing patterns: unlike Replace and Number Schematic
+  Sheets it loads no tabless engine, so nothing outside the open tabs changes
+  and no closed file can drift between the read and Apply. A sheet written by
+  a newer Signex is listed read-only too.
+
+## Tools ▸ Net Inspector {#tools-net-inspector}
+
+Runs `open_net_inspector` (#1269), which opens (or reveals) the Net Inspector
+panel, docked on the right by default. Always available; with no schematic of
+a project in view the panel says so.
+
+- The list is every net of the active document's project, read from the
+  cached stitched project net index (`signex_net::NetIndex`, the one net
+  navigation and highlighting read; `handlers/net_nav/index_job.rs`), never
+  derived again. While the panel is open, a project with no current index has
+  one built off the UI thread; after an edit the last list stays shown until
+  the new index lands.
+- Each row shows the net's name, its first matching net class and how many
+  component pins it connects. Named nets come first, then auto-named ones. The
+  filter matches the net name or the class name.
+- Clicking a net expands it to its pins, labels, power ports and sheet entries,
+  each with its sheet. Clicking a member highlights the net on every sheet and
+  goes to the member through net navigation (`go_to_member`), opening its
+  sheet when needed.
+
 ## Tools ▸ Annotation ▸ Number Schematic Sheets {#number-schematic-sheets}
 
 Runs `number_schematic_sheets` (#2247; editable dialog, maintainer decision
@@ -249,14 +408,7 @@ the whole monitor. The Messages panel names how many windows were arranged.
 
 ## Rows still planned {#rows-still-planned}
 
-- **Tools ▸ Assign Footprints** stays a stub: there is no bulk footprint
-  assignment yet, and picking any library footprint for a placed library part
-  changes how a part and its library row relate, which needs its own design
-  (#2248).
-- **Tools ▸ Net Inspector** stays a stub: there is no schematic net list
-  panel; the PCB Nets panel lists a board's nets only (#1269).
-- **Tools ▸ Annotation ▸ Back Annotate Schematics...** waits for PCB to
-  schematic sync (#2271).
+None: every menu row runs a command (#2247).
 
 ## Save and Save As {#file-save}
 

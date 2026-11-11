@@ -20,7 +20,7 @@ fn pt(p: Point) -> String {
 fn run(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
     let id = command(id);
     let args = CommandArgs::parse_operands(&id, operands).expect("operands");
-    app.run_operands(&id, &args).0
+    app.run_operands_settled(&id, &args).0
 }
 
 fn arm(app: &mut Signex, id: &str) {

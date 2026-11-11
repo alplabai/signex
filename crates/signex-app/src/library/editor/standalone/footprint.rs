@@ -86,6 +86,7 @@ pub fn view_footprint<'a>(
             let canvas_with_bar = iced::widget::Stack::new()
                 .push(canvas_area)
                 .push(super::dof_chip::overlay(editor, tokens, i18n))
+                .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
                 .push(mode_switcher);
             column![canvas_with_bar, layers_strip, footer]
                 .spacing(0)

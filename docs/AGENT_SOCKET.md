@@ -64,7 +64,9 @@ JSON Lines: one request object per line, one reply object per line, in order.
 ```
 
 `args` take the forms `signex-cli` sends (a string, a number, a boolean,
-`[x, y]` for a point, the edit list of `apply_edits`). The reply is the headless
+`[x, y]` for a point, the edit list of `apply_edits`, for `apply_edits` the
+object `expect_revisions` of document to revision, and for `revert` the list
+`documents` of strings). The reply is the headless
 runner's envelope without its `run` and `seq`: `status` is `answered`, `ran`,
 `refused` or `failed`, `reason` and `data` appear when there is one, `messages`
 are the lines the command wrote to the Messages panel, `changed` the documents

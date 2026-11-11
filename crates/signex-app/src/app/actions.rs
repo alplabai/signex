@@ -100,6 +100,17 @@ impl Signex {
         next_designator(prefix, self.used_designators(sheet).into_iter())
     }
 
+    /// [`Self::next_designator_in_sheet`] numbered against `scan`, an edit's
+    /// prefetched project (#2199), instead of the cached scan.
+    pub(crate) fn next_designator_in(
+        &self,
+        sheet: &std::path::Path,
+        prefix: &str,
+        scan: &super::designator_scan::DesignatorScan,
+    ) -> String {
+        next_designator(prefix, self.used_designators_in(sheet, scan).into_iter())
+    }
+
     /// Cancel the in-flight placement session and every armed mode.
     ///
     /// There is exactly ONE session app-wide — `current_tool` and all the

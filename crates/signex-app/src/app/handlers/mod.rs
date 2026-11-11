@@ -46,6 +46,7 @@ pub mod pcb_drc;
 mod pcb_edit;
 #[cfg(test)]
 mod pcb_edit_tests;
+pub(crate) mod pcb_footprint_text;
 mod pcb_parking;
 pub(crate) mod pcb_placement;
 #[cfg(test)]

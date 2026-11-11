@@ -89,7 +89,6 @@ fn clear_stale_status_message(editor: &mut SymEditor, msg: &SymbolEditorMsg) {
             | SymbolEditorMsg::CloseActiveBarMenu
             | SymbolEditorMsg::SetSheetColor(_)
             | SymbolEditorMsg::ToggleGrid
-            | SymbolEditorMsg::CycleGridSize
             | SymbolEditorMsg::CycleUnit
     ) {
         editor.status_message = None;
@@ -447,7 +446,6 @@ pub(crate) fn apply_symbol_primitive_edit(
         // ── Display settings intercepted upstream; no-op here ────
         SymbolEditorMsg::SetSheetColor(_)
         | SymbolEditorMsg::ToggleGrid
-        | SymbolEditorMsg::CycleGridSize
         | SymbolEditorMsg::CycleUnit => {}
 
         // ── Multi-part management ────────────────────────────────

@@ -32,14 +32,16 @@ fn held(app: &Signex) -> (String, crate::headless::ChangeSnapshot, usize, usize)
 }
 
 /// Run `input`, and check the reply is a refusal naming `fragment`, that
-/// Messages says so with the client's pid, and that nothing changed.
-fn refused_with(app: &mut Signex, input: Input, named: &str, fragment: &str) -> Value {
-    let needle = format!("Agent request (pid {REFUSING_PID}): {named} -> refused: ");
+/// Messages says so with the client's pid, and that nothing changed. Returns
+/// the reply and the pid the request was sent from.
+fn refused_with(app: &mut Signex, input: Input, named: &str, fragment: &str) -> (Value, u32) {
+    let pid = refusing_pid();
+    let needle = format!("Agent request (pid {pid}): {named} -> refused: ");
     let _ = crate::diagnostics::init_logging();
     let mark = crate::diagnostics::newest_entry_id();
     let before = held(app);
 
-    let reply = ask_raw_as(app, REFUSING_PID, input);
+    let reply = ask_raw_as(app, pid, input);
 
     assert_eq!(reply["status"], "refused", "{fragment}: {reply}");
     let reason = reply["reason"].as_str().unwrap_or_default();
@@ -55,13 +57,15 @@ fn refused_with(app: &mut Signex, input: Input, named: &str, fragment: &str) -> 
         "not logged exactly once: {needle}{fragment}"
     );
     assert_eq!(held(app), before, "{fragment} changed something");
-    reply
+    (reply, pid)
 }
 
-/// The pid this file's refusals come from. No other test sends it, so a line
-/// of this pid in Messages is this request's, whatever the other tests log
-/// into the shared ring (#2227).
-const REFUSING_PID: u32 = 6502;
+/// A pid no other request sends, so a line of it in Messages is that one
+/// request's: the tests of this file share reasons and run in one ring (#2290).
+fn refusing_pid() -> u32 {
+    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(65_000);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
 
 /// How many Messages lines logged after `mark` begin with `start` and say
 /// `fragment`. A line over 160 bytes is compacted and ends in `...`; the reasons
@@ -85,7 +89,7 @@ fn refused_unlogged(app: &mut Signex, text: String, fragment: &str) {
     assert_eq!(held(app), before, "{fragment} changed something");
 }
 
-fn refuse_line(app: &mut Signex, text: String, named: &str, fragment: &str) -> Value {
+fn refuse_line(app: &mut Signex, text: String, named: &str, fragment: &str) -> (Value, u32) {
     refused_with(app, Input::Line(text), named, fragment)
 }
 
@@ -308,7 +312,7 @@ fn a_long_path_does_not_push_the_reason_out_of_the_messages_line() {
     let long = elsewhere(&format!("{}.snxsch", "n".repeat(200)));
     let request = line(&app, "read_document", json!({"document": long}));
     let mark = crate::diagnostics::newest_entry_id();
-    let reply = refuse_line(
+    let (reply, pid) = refuse_line(
         &mut app,
         request,
         "`read_document`",
@@ -319,9 +323,10 @@ fn a_long_path_does_not_push_the_reason_out_of_the_messages_line() {
         crate::diagnostics::entries_since(mark)
             .entries
             .iter()
-            .any(|e| e.message.starts_with(&format!(
-                "Agent request (pid {REFUSING_PID}): `read_document`"
-            )) && e.message.contains("not an open or referenced document")
+            .any(|e| e
+                .message
+                .starts_with(&format!("Agent request (pid {pid}): `read_document`"))
+                && e.message.contains("not an open or referenced document")
                 && e.message.ends_with("...")),
         "{reply}"
     );

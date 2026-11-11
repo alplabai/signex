@@ -27,7 +27,7 @@ pub use crate::app::agent::{
 pub use crate::app::command::queries::is_query;
 pub use crate::app::command::{
     CommandArgs, CommandOutcome, EditSpec, MAX_EDITS, OperandError, OperandValue, edit_list_text,
-    edit_refusal, operand_text, parse_edit_list,
+    edit_refusal, operand_text, parse_documents, parse_edit_list, parse_expect_revisions,
 };
 pub use crate::app::document_ids::DocumentTarget;
 use crate::app::{Message, Signex};
@@ -288,11 +288,13 @@ impl Signex {
                 })
             }
         });
-        // Open and New answer with the document they made, once it exists.
+        // Open and New answer with the document they made, once it exists;
+        // an edit that waits for its reads answers once it ran on them.
         let result = match (opening, result) {
             (Some(snapshot), (CommandOutcome::Ran, task)) => {
                 self.settle_and_answer_new_document(command, snapshot, task)
             }
+            (_, (CommandOutcome::Deferred { ticket }, task)) => self.settle_deferred(ticket, task),
             (_, result) => result,
         };
         // No `update` runs here, so a history the command created gets its

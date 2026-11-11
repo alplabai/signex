@@ -39,10 +39,13 @@ pub(super) fn scroll_style(
     }
 }
 
-/// Tiny inline checkbox pip — read-only indicator used inside the Annotate
-/// dialog's parameter list and sheet table.
-pub(super) fn check_pip(on: bool, theme_tokens: &ThemeTokens) -> Element<'static, Message> {
-    ga::checkbox_pip(theme_tokens, on)
+/// Greyed checkbox pip for the parameter-matching list, which the
+/// annotation engine does not read yet.
+pub(super) fn disabled_check_pip(
+    on: bool,
+    theme_tokens: &ThemeTokens,
+) -> Element<'static, Message> {
+    ga::disabled_checkbox_pip(theme_tokens, on)
 }
 
 pub(super) fn bordered_style(

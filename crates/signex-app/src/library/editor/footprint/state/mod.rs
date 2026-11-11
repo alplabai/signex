@@ -37,6 +37,7 @@ pub mod selection_filter;
 pub mod silk_selection;
 pub mod snap_options;
 pub mod tool;
+mod zoom_request;
 
 pub use board_backdrop::{BackdropTrack, BoardBackdrop};
 pub use context_menu::{
@@ -54,6 +55,7 @@ pub use snap_options::{
     GridDef, GridDisplay, Guide, GuideAxis, SnapOptions, SnapSubTab, SnappingMode,
 };
 pub use tool::{PadsTool, SketchTool, ToolPending};
+pub use zoom_request::ZoomRequest;
 
 use signex_library::{Footprint, LayerId};
 
@@ -296,6 +298,8 @@ pub struct FootprintEditorState {
     pub context_menu: Option<FootprintContextMenuState>,
     /// v0.26-C — one-shot "fit canvas to content" request.
     pub fit_pending: bool,
+    /// The zoom pill's last `-` / `+` click, applied once by the canvas.
+    pub zoom_request: ZoomRequest,
     /// Set when this editor edits a board sketch (#2234): the board drawn
     /// under the sketch. The Active Bar then offers the sketch tools only,
     /// and the footprint bake is off (the board bakes on commit).
@@ -310,6 +314,16 @@ impl FootprintEditorState {
     /// The canvas zoom as a percentage, `100.0` at [`DEFAULT_PX_PER_MM`].
     pub fn zoom_percent(&self) -> f64 {
         f64::from(self.view_px_per_mm) / f64::from(DEFAULT_PX_PER_MM) * 100.0
+    }
+
+    /// [`Self::from_footprint`] for a switch to another footprint of the
+    /// same document. The zoom pill's request carries over, so the canvas
+    /// never sees its number go back and swallow a click.
+    pub fn switched_to(fp: &Footprint, previous: &Self) -> Self {
+        Self {
+            zoom_request: previous.zoom_request,
+            ..Self::from_footprint(fp)
+        }
     }
 
     /// Build canvas state from the primitive's pad list.
@@ -403,6 +417,7 @@ impl FootprintEditorState {
             numeric_buffers: std::collections::HashMap::new(),
             context_menu: None,
             fit_pending: false,
+            zoom_request: ZoomRequest::default(),
             board_backdrop: None,
         }
     }
@@ -732,6 +747,17 @@ mod tests {
         assert_eq!(s.pads.len(), 1);
         assert_eq!(s.pads[0].number, "1");
         assert_eq!(s.pads[0].size_mm, (1.0, 1.5));
+    }
+
+    /// A footprint switch keeps the zoom pill's request number.
+    #[test]
+    fn a_switch_carries_the_zoom_request() {
+        let mut before = FootprintEditorState::empty();
+        before.zoom_request.step(1.25);
+        before.view_px_per_mm = 99.0;
+        let after = FootprintEditorState::switched_to(&Footprint::empty("b"), &before);
+        assert_eq!(after.zoom_request, before.zoom_request);
+        assert_ne!(after.view_px_per_mm, 99.0, "the rest is fresh");
     }
 
     #[test]

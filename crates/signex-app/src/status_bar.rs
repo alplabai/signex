@@ -6,7 +6,7 @@ use signex_types::coord::Unit;
 use signex_types::schematic::{SelectedItem, SelectedKind};
 use signex_types::theme::ThemeTokens;
 
-use crate::app::{StatusBarRequest, Tool};
+use crate::app::StatusBarRequest;
 use crate::styles;
 
 mod graphite;
@@ -34,9 +34,26 @@ pub(crate) struct Readout<'r> {
     pub selection: Option<String>,
     pub pending_git_commits: usize,
     pub altium_import: Option<&'r str>,
-    pub activity: Option<&'r str>,
+    pub activity: Option<&'r Activity>,
     /// The active copper layer of an open board: a caption and the name.
     pub active_layer: Option<(Localized, Localized)>,
+}
+
+/// The activity segment: what a gesture or editor says, or an error the
+/// editor reported, drawn in the error colour.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Activity {
+    pub text: String,
+    pub is_error: bool,
+}
+
+impl Activity {
+    pub(crate) fn note(text: String) -> Self {
+        Self {
+            text,
+            is_error: false,
+        }
+    }
 }
 
 /// Format a one-line breakdown of the active canvas selection.
@@ -82,20 +99,20 @@ fn selection_summary(selected: &[SelectedItem]) -> Option<String> {
     clippy::too_many_arguments,
     reason = "15 arguments: the status bar reads fifteen independent slices of app state and owns none of them"
 )]
-pub fn view<'a>(
+pub(crate) fn view<'a>(
     x: f64,
     y: f64,
     grid_visible: bool,
     snap_enabled: bool,
     zoom: f64,
     unit: Unit,
-    tool: &Tool,
+    tool: String,
     grid_size_mm: f32,
     selected: &[SelectedItem],
     tokens: &ThemeTokens,
     pending_git_commits: usize,
     altium_import: Option<&str>,
-    activity: Option<&str>,
+    activity: Option<&Activity>,
     active_layer: Option<(Localized, Localized)>,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, StatusBarRequest> {
@@ -107,7 +124,7 @@ pub fn view<'a>(
             snap_enabled,
             zoom,
             unit,
-            tool: format!("{tool}"),
+            tool,
             grid_size_mm,
             selection: selection_summary(selected),
             pending_git_commits,

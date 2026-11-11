@@ -41,6 +41,10 @@ pub enum PcbMsg {
     },
     /// Board sketch mode of the main window's board (#2234).
     Sketch(BoardSketchMsg),
+    /// Tools ▸ Re-Annotate Board and its dialog (#1312).
+    Reannotate(crate::app::BoardReannotateMsg),
+    /// Back Annotate and its dialog (#1312).
+    BackAnnotate(crate::app::BackAnnotateMsg),
 }
 
 /// What the user did about board sketch mode (#2234). The drawing itself

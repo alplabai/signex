@@ -8,6 +8,7 @@
 use super::*;
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Color, Element, Length, Theme, Widget};
+use signex_i18n::{ids, t};
 use signex_widgets::{button, raw, text};
 
 use crate::app::state::AnnotateOrder;
@@ -22,7 +23,7 @@ mod reprefix_confirm;
 
 use super::graphite as gr;
 use super::graphite_annotate as ga;
-use controls::{bordered_style, check_pip, order_radio, scroll_style};
+use controls::{bordered_style, disabled_check_pip, order_radio, scroll_style};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -52,6 +53,7 @@ impl Signex {
 
     fn view_annotate_dialog_body_inner(&self, draggable: bool) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = self.ui_state.i18n.as_ref();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
@@ -202,15 +204,15 @@ impl Signex {
             param_rows = param_rows.push(
                 (row![
                     row![
-                        check_pip(false, tokens),
+                        disabled_check_pip(false, tokens),
                         Space::new().width(6),
                         text(signex_i18n::UserText::new(name.clone()))
                             .size(TS.body)
-                            .color(text_c),
+                            .color(text_muted),
                     ]
                     .align_y(iced::Alignment::Center)
                     .width(Length::FillPortion(5)),
-                    container(check_pip(true, tokens))
+                    container(disabled_check_pip(true, tokens))
                         .align_x(iced::alignment::Horizontal::Right)
                         .width(Length::FillPortion(1)),
                 ]
@@ -247,13 +249,15 @@ impl Signex {
             .align_y(iced::Alignment::Center)
             .spacing(6),
             Space::new().height(6),
-            container(scrollable(param_rows)
-                .height(98)
-                .style(scroll_style(tokens)))
-                .padding(SP.xs)
-                .style(bordered_style(tokens)),
+            container(
+                scrollable(param_rows)
+                    .height(98)
+                    .style(scroll_style(tokens))
+            )
+            .padding(SP.xs)
+            .style(bordered_style(tokens)),
             Space::new().height(4),
-            text(raw("Parameter matching is visual grouping only — the annotation engine ignores these checkboxes for now."))
+            text(t!(i18n, ids::DIALOG_ANNOTATE_MATCHING_UNAVAILABLE))
                 .size(TS.caption)
                 .color(text_muted),
         ]
@@ -281,11 +285,13 @@ impl Signex {
         };
 
         let sheets_table = column![
-            text(raw("Schematic Sheets To Annotate")).size(TS.label).color(text_c),
+            text(raw("Schematic Sheets To Annotate"))
+                .size(TS.label)
+                .color(text_c),
             Space::new().height(4),
             sheets_view,
             Space::new().height(4),
-            text(raw("Scope / Start / Suffix columns are visual only — multi-sheet wiring lands with Advanced Schematic."))
+            text(t!(i18n, ids::DIALOG_ANNOTATE_SHEET_OPTIONS_UNAVAILABLE))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::Fill),

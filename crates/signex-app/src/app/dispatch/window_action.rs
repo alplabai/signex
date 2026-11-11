@@ -43,6 +43,8 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
             P::PropertiesTab(_)
                 | P::ToggleSection(_)
                 | P::EditSymbolDesignator(..)
+                // A board window's footprint fields edit that window's board (#1312).
+                | P::PcbFootprintText(..)
                 | P::EditSymbolValue(..)
                 | P::EditSymbolFootprint(..)
                 | P::SwitchSymbolChoice(..)
@@ -238,7 +240,7 @@ impl Signex {
     /// `message` as the dock of `window` sends it: wrapped when it edits the
     /// sheet that undocked window shows, unchanged otherwise (and for the
     /// main window).
-    pub(crate) fn scope_dock_message(&self, window: iced::window::Id, message: Message) -> Message {
+    pub fn scope_dock_message(&self, window: iced::window::Id, message: Message) -> Message {
         match message {
             Message::Dock(dock)
                 if self.is_document_window(window) && dock_message_edits_shown_sheet(&dock) =>

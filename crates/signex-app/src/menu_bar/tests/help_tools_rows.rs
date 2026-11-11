@@ -216,8 +216,6 @@ fn up_hierarchy_is_greyed_on_a_top_level_sheet() {
 fn stub_rows_are_not_live() {
     let app = one_symbol_selected();
     for path in [
-        "Tools/Assign Footprints",
-        "Tools/Net Inspector",
         "Window/Tile Horizontally",
         "Window/Tile Vertically",
         "Tools/Annotation/Back Annotate Schematics...",
@@ -231,5 +229,20 @@ fn stub_rows_are_not_live() {
         uuid::Uuid::from_u128(1),
         SelectedKind::Symbol,
     )];
-    assert!(!row_is_live(&app, "Tools/Net Inspector"));
+    assert!(!row_is_live(
+        &app,
+        "Tools/Annotation/Back Annotate Schematics..."
+    ));
+}
+
+/// #2248 / #1269: the two former stubs are live rows now. Assign Footprints
+/// needs a schematic; Net Inspector opens a panel and needs nothing.
+#[test]
+fn assign_footprints_and_net_inspector_are_live() {
+    let app = one_symbol_selected();
+    assert!(row_is_live(&app, "Tools/Assign Footprints"));
+    assert!(row_is_live(&app, "Tools/Net Inspector"));
+    let (bare, _) = crate::app::Signex::new();
+    assert!(!row_is_live(&bare, "Tools/Assign Footprints"));
+    assert!(row_is_live(&bare, "Tools/Net Inspector"));
 }

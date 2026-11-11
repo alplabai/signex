@@ -155,6 +155,12 @@ mod pcb_canvas_select;
 mod pcb_carry_windows;
 #[path = "regression/pcb_placement.rs"]
 mod pcb_placement;
+// #1312 PR 1: board designators in Properties and Re-Annotate Board.
+#[path = "regression/board_designators.rs"]
+mod board_designators;
+// #1312 PR 2: Back Annotate.
+#[path = "regression/back_annotate.rs"]
+mod back_annotate;
 
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
@@ -243,6 +249,9 @@ mod library_cross_track;
 
 #[path = "regression/library_pad_actions.rs"]
 mod library_pad_actions;
+
+#[path = "regression/symbol_status_bar.rs"]
+mod symbol_status_bar;
 
 #[path = "regression/library_bga.rs"]
 mod library_bga;
@@ -469,10 +478,14 @@ mod library_link_reopen;
 #[path = "regression/library_update_apply.rs"]
 mod library_update_apply;
 // #1234 — pick a row's footprint when placing and on a placed part.
+#[path = "regression/assign_footprints.rs"]
+mod assign_footprints;
 #[path = "regression/library_footprint_pick.rs"]
 mod library_footprint_pick;
 #[path = "regression/library_value_stamp.rs"]
 mod library_value_stamp;
+#[path = "regression/net_inspector.rs"]
+mod net_inspector;
 #[path = "regression/non_finite_edits.rs"]
 mod non_finite_edits;
 #[path = "regression/numeric_drafts.rs"]

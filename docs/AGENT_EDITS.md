@@ -14,6 +14,13 @@ Two commands, both with capability `edit` in `signex-cli`:
   "edits": [{"id": "place_junction", "args": {"at": [5.08, 0]}},
             {"id": "color_net", "args": {"at": [5, 0], "color": "#336699"}}]}}
 {"id": "revert", "args": {"document": "main.snxsch", "group": 7}}
+{"id": "revert", "args": {"document": "main.snxsch", "group": 8,
+  "documents": ["main.snxsch", "power.snxsch"]}}
+{"id": "apply_edits", "args": {"document": "main.snxsch", "expect_revision": 41,
+  "expect_revisions": {"power.snxsch": 12},
+  "edits": [{"id": "place_net_label", "args": {"at": [5.08, 0], "text": "VIN"}},
+            {"id": "place_net_label", "args": {"at": [5.08, 0], "text": "VIN",
+                                                "document": "power.snxsch"}}]}}
 ```
 
 ## apply_edits
@@ -34,12 +41,21 @@ Two commands, both with capability `edit` in `signex-cli`:
   `update_pcb_from_schematic` is refused as well: it edits the project's
   board, which no sheet's undo step covers; it runs as its own command. A
   test pins the set.
-- Every edit acts on the call's `document`; it never names another. Where a
-  command takes a `document` operand (`color_net`, the placements), it is
-  filled in; an edit may repeat the list's own document (an id or a path,
-  compared as the resolved document), and one that names another is refused.
-  Every edit is parsed before any runs, so a typo in the last one changes
-  nothing.
+- An edit acts on the call's `document`, or on the sheet its own `document`
+  names (an id or a path). Where a command takes a `document` operand
+  (`color_net`, the placements), the call's is filled in when the edit names
+  none. Every edit is parsed before any runs, so a typo in the last one
+  changes nothing.
+- **Several sheets in one call.** An edit may name another sheet of the same
+  project as the call's `document`: it must be loaded, and in that project (a
+  loose sheet has none, so two loose sheets never share a call). The call is
+  then one group on every sheet it touches. `expect_revisions`, a JSON object
+  of document to revision (`{"b.snxsch": 12}`), holds the revision each such
+  sheet must be at, exactly as `expect_revision` does for the call's own.
+  Every touched sheet but the call's own needs an entry, and an entry that
+  names the call's own document or a sheet no edit touches is refused, so a
+  typo does not pass unnoticed. A call that names one sheet needs none and
+  answers as it always did.
 - Each edit runs through its own command handler, so it has its own
   validation, read-only refusal and (through the engine) dirty tracking. The
   handlers that read "the active sheet" read the target sheet while the list
@@ -51,6 +67,22 @@ Two commands, both with capability `edit` in `signex-cli`:
   history entry stamped with an `UndoGroupId` at the end. A refused or failing
   edit rolls the sheet, its history and its revisions back, so the dirty flag
   is what it was.
+- **Across sheets** (`agent_edits/group_run.rs`) the app begins a transaction on
+  every touched engine, runs the edits with `DocumentState::edit_path` set to
+  each edit's own sheet, and commits every engine under one `UndoGroupId`. Any
+  refusal rolls every sheet back. Before the first commit each engine is asked
+  whether it can still commit (`Engine::transaction_ready`), because an engine
+  cannot take a commit back once it landed. A commit that fails anyway after
+  others landed does not happen past that check; if it ever did, the landed
+  entries would be taken back with `discard_undo_group_top` and the rest rolled
+  back, but not exactly: those sheets' redo branch and any history the cap
+  trimmed are lost and their revision moves, so it is logged as an error (and
+  asserts in a debug build). A call on one sheet skips the check: its own
+  commit refuses, with the engine's words, and nothing has landed. A read-only sheet refuses the whole
+  call before anything begins. The repaint each sheet owes waits until the
+  group has landed. While the list runs, the project read the name checks share
+  is refreshed with the current document of every touched sheet, so an edit
+  sees what an earlier edit did on another sheet.
 - The answer is `{changed, revision, group, label, edits, results}`; `results`
   holds each edit's own answer by index (a wire or bus run answers its report,
   see [CLI.md](CLI.md) "Wire intent"; its `ends` field holds each end's `ref`
@@ -58,12 +90,18 @@ Two commands, both with capability `edit` in `signex-cli`:
   wire edit sees the edits before it, and is judged against the sheet as it
   stands, so a route sent as chained `place_wire` edits (A to B, then B to C)
   needs `allow_open=true` on every edit but the last; names are judged across
-  the project, not only the sheet (the project is read once per list; a net
-  that reaches no other sheet costs no read). `changed: false`
+  the project, not only the sheet (the project's closed sheets are read once
+  per list, before it runs: "Edits that read the disk"). `changed: false`
   comes only from an empty list or a list of dry runs: it records no step and keeps the person's
   redo. An edit that changes nothing (a junction already there, a net already
   that colour) is refused by its handler like any other, so it refuses the
-  whole list; a refusal is `Disabled`, never a bare `Ran`.
+  whole list; a refusal is `Disabled`, never a bare `Ran`. A call whose touched
+  sheets are not exactly its own `document` (several sheets, or every edit
+  naming another one) adds `sheets`, `[{document, path, revision, changed}]`,
+  in order of first use; `revision` stays the call's own sheet's, so a step
+  that landed elsewhere shows its revision in `sheets`. It is taken back with
+  `revert` naming the sheet(s) that changed (their `changed: true` entries),
+  not the call's own sheet, which has no step.
 - Engine notices an edit raises (`Engine::take_warnings`) are held while the
   transaction is open and shown after the commit; a rollback drops them, so
   Messages never reports a pin or a net of an edit that did not happen.
@@ -81,9 +119,24 @@ Two commands, both with capability `edit` in `signex-cli`:
   when the step is applied, undone, redone or reverted.
 - A person's Ctrl+Z on that sheet undoes the whole step (a one-sheet group, as
   a project-wide run is a many-sheet one), and Ctrl+Y redoes it.
+- A step that spans sheets is recorded as an `UndoGroupKind::AgentEdit` group
+  (`DocumentState::undo_groups`): Ctrl+Z or Ctrl+Y on any of its sheets moves
+  every open sheet of the group, by the rule a project-wide annotate follows
+  (`apply_grouped_step`). If a sheet has a later step on top of the group, the
+  whole undo is refused with a Messages line naming it, and nothing moves: the
+  person undoes the newer edit first. A sheet closed since, or whose history no
+  longer holds the group, is skipped with a warning.
 - The agent has no `undo` or `redo` inside `apply_edits`. `revert group=N`
   takes back step N only while it is the newest entry of that document
-  (`Engine::discard_undo_group_top`): it is refused, and nothing changes, when
+  (`Engine::discard_undo_group_top`); for a step that spans sheets, the call
+  must name every sheet of the group (`document` and the list `documents`) and
+  none other, and the step comes back on all of them, or on none: every sheet
+  is judged first, and a sheet that is closed, reopened or trimmed past the
+  group refuses the revert. A revert that names too few or too many sheets is
+  refused with only the count of each, never the names, since a caller must not
+  learn of a sheet it did not name (`signex-cli` confines each named sheet like
+  a `document` operand, and drops from the answer's `sheets` any entry it did
+  not name). It is refused, and nothing changes, when
   - a later step sits on top. A net-class pick is a `HistoryStep::Pick`
     marker with no group, so it counts as a later step;
   - the person undid a step and can redo it: that redo would restore a
@@ -129,26 +182,96 @@ on b.snxsch (undo group 7)" tells the agent the group for `revert`, which
 works on these steps by the rules above. A command that makes no undo step
 (`save_document`, `close_active_document`), or is refused, gets no group.
 
+## Edits that read the disk (#2199)
+
+An edit never reads a file inside `update` (epic #665; decision
+https://github.com/alplabai/signex/issues/2199#issuecomment-6771692137).
+What its checks need from disk (`command::edit_reads`): the library row of
+`place_component`, the closed child file of `sync_sheet_pins` and whether a
+`place_sheet_symbol` file leaves the project through a link are planned from
+the operands, and an `apply_edits` list plans the union of its edits, each on
+the sheet it acts on; an edit
+that waits for those reads also reads the project's closed sheets, with each
+closed file a `place_sheet_symbol` of the list refers to (as a child-to-be,
+not a page of its own), so the later edits of the list are judged against
+it; a file that is missing or unreadable leaves the project incomplete. The
+project's closed sheets are otherwise asked for by the check that needs them
+(the name check of a wire, bus, label, power port or junction whose net
+reaches another sheet, the designators and units of `place_component`, the
+hierarchy-loop check of `place_sheet_symbol`): the edit is then refused with
+nothing applied, the project is read, and the edit runs again on it.
+
+- The command returns `CommandOutcome::Deferred { ticket }` and a `Task` that
+  reads all of it on a blocking thread. Its completion
+  (`AgentMsg::EditReadsLoaded`) carries the reads and the original request
+  (command, operands, origin, whether the socket served it); the edit then runs
+  through `run_operands` as it would have, with the reads in memory
+  (`AgentEdits::reads`), and nothing is read while it runs. A list still runs
+  as one step, one group on every sheet it touches; a refusal rolls them all
+  back.
+- The outcome is reported at completion: the socket keeps the request's reply
+  (`agent.waiting`, by ticket) and answers when the edit has run, with what
+  that run changed and logged (not what other requests or the person did
+  while the reads ran); a headless run drives the task itself and takes the
+  outcome by ticket, so its result line is unchanged. Replies to requests
+  sent on the socket without waiting may therefore arrive in another order
+  than the requests: match a reply to its request by `id`. The journal line
+  (below) of an edit that waited, from the socket or a headless run, is
+  written when it runs, once, with that run's outcome; the wait itself
+  writes none.
+- Staleness: the revision of the target sheet and of every open sheet of its
+  project is recorded when the reads start (a list's other sheets are of that
+  project, so they are among them). If one differs at completion, or
+  a sheet of the project was opened or closed meanwhile, the edit is refused
+  ("the document changed while its project and files were read; retry.
+  Nothing was applied"); a sheet of another project or of none does not
+  count. The open sheets in the read are replaced by their live state before
+  a check uses them.
+- A reader that fails (panics) is said in Messages and the edit is refused
+  with the reason, not a retry.
+- A socket request waiting for its reads meets the gate again when they
+  land: it is refused, with nothing applied and the reason a new request
+  would get, when agent connections were turned off ("agent connections are
+  off"), turned off and on again (a new session token: "the session token is
+  missing or wrong"), or its document left the agent's reach. Like that
+  refusal at request time, it is a `refused` line of the access journal and
+  has no edit line.
+- No read: a loose sheet, or a project whose sheets are all open, is checked
+  from memory and the edit runs at once. A `place_component` that names an
+  open library and one row of it reads that row, so it waits; one whose
+  library is not open, or whose part matches no row or several, runs at once
+  and is refused. A `place_sheet_symbol` always waits for its link check.
+- A check that needs a read the plan did not make refuses ("a file this edit's
+  check needs was not read first; retry"); it never reads.
+- An agent edit never touches the cached designator scan a person's drop may
+  wait on: `place_component` numbers from its own read of the project.
+- The menu's Sync Sheet Pins, run by a person, still reads the child in
+  `update`; moving it is the GUI side of #665.
+
 ## Journal
 
 Every agent command that changes a document (or writes or closes one), and its outcome, is also a line
 of the project's `.signex/agent-edits.jsonl`, with the revision before and
 after and the undo group named here, so it can be replayed at the same
-revision. See `docs/AGENT_JOURNALS.md`.
+revision. A call across sheets is one line per sheet that got a step, all with
+the same group (a call whose edits all name another sheet has that sheet's line
+only). See `docs/AGENT_JOURNALS.md`.
 
 ## signex-cli
 
 `apply_edits` needs `edit`; each edit is authorized again as a command of its
 own (`gui_only`, capability, every path operand confined, every `document`
 resolved and checked, as for a top-level command), then written back with the
-checked paths. `--save` still gates `save_document`. The result line carries
+checked paths. The documents named as keys of `expect_revisions` are resolved
+and confined like a `document` operand. `--save` still gates `save_document`. The result line carries
 the answer in `data` and the sheet in `changed`.
 
 ## Known limits
 
-- A call acts on one sheet. Edits across sheets under one group id (as project
-  replace does) are not offered. The placements take an optional `document`
-  operand (#2199), but inside a list it can only repeat the list's own.
+- A call may span the sheets of one project, never two projects. Cross-sheet
+  groups are agent steps only: a person's own undo of a sheet is blocked while
+  a later step sits above the group on another of its sheets (by design, as
+  for annotate).
 - `assign_net_class`, annotation and other project-wide data are not edits;
   that needs a decision on how project data joins a sheet's undo step. For the
   same reason an agent's `assign_net_class` on the socket stays a net-class

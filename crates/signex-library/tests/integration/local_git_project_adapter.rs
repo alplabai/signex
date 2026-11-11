@@ -737,6 +737,68 @@ fn commit_rename_records_the_move_and_leaves_a_clean_status() {
     assert!(tree.get_name("Old.snxprj").is_none());
 }
 
+/// The "since" of an agent-edit summary is when the file was committed, not
+/// when its author wrote the change.
+#[test]
+fn the_last_commit_time_is_the_committer_time_not_the_author_time() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    write_file(&root, "a.snxsch", "a");
+    let repo = git2::Repository::init(&root).unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new("a.snxsch")).unwrap();
+    let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+    let author =
+        git2::Signature::new("t", "t@example.org", &git2::Time::new(946_684_800, 0)).unwrap();
+    let committer =
+        git2::Signature::new("t", "t@example.org", &git2::Time::new(4_070_908_800, 0)).unwrap();
+    repo.commit(Some("HEAD"), &author, &committer, "m", &tree, &[])
+        .unwrap();
+    let adapter = LocalGitProjectAdapter::open_or_init(root).unwrap();
+
+    let at = adapter
+        .last_commit_time_for(Path::new("a.snxsch"))
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(at.timestamp(), 4_070_908_800);
+}
+
+#[test]
+fn the_last_commit_walk_is_bounded_and_past_it_reads_as_never_committed() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    write_file(&root, "a.snxsch", "a");
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    adapter
+        .commit_path(Path::new("a.snxsch"), "a")
+        .unwrap()
+        .expect("committed");
+    for name in ["b.snxsch", "c.snxsch", "d.snxsch"] {
+        write_file(&root, name, name);
+        adapter.commit_path(Path::new(name), name).unwrap();
+    }
+
+    let near = adapter.last_commit_time_within(Path::new("a.snxsch"), 4);
+    let far = adapter.last_commit_time_within(Path::new("a.snxsch"), 3);
+
+    assert!(
+        near.unwrap().is_some(),
+        "four back is inside a walk of four"
+    );
+    assert!(
+        far.unwrap().is_none(),
+        "past the bound: no earlier commit found"
+    );
+    assert!(
+        adapter
+            .last_commit_time_for(Path::new("a.snxsch"))
+            .unwrap()
+            .is_some(),
+        "the default bound reaches it"
+    );
+}
+
 #[test]
 fn commit_rename_rejects_a_parent_escape_in_the_removed_path() {
     let tmp = TempDir::new().unwrap();

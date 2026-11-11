@@ -144,6 +144,7 @@ altium	hint	-	Ctrl+O	open_document
 altium	hint	-	-	open_grid_picker
 altium	hint	-	-	open_grid_properties
 altium	hint	-	-	open_library_browser
+altium	hint	-	-	open_net_inspector
 altium	hint	-	Ctrl+,	open_preferences
 altium	hint	-	T P	open_schematic_preferences
 altium	hint	-	Ctrl+V	paste
@@ -199,6 +200,7 @@ altium	hint	-	Ctrl+PGDN	zoom_to_fit
 altium	hint	-	-	zoom_to_selection_area
 altium	hint	-	T A	annotate_schematic
 altium	hint	-	Alt+A	annotate_schematic_quietly
+altium	hint	-	-	assign_footprints
 altium	hint	-	-	clear_net_highlighting
 altium	hint	-	-	draw_graphic_line
 altium	hint	-	-	draw_hierarchical_sheet
@@ -242,6 +244,7 @@ altium	hint	-	-	sync_sheet_pins
 altium	hint	-	-	change_component
 altium	hint	-	-	open_project_options
 altium	hint	-	-	update_pcb_from_schematic
+altium	hint	-	-	back_annotate_schematics
 altium	hint	-	-	tool_select
 altium	hint	-	-	lasso_select
 altium	hint	-	-	select_connection
@@ -300,6 +303,7 @@ altium	hint	-	-	clear_all_net_colors
 altium	hint	-	-	assign_net_class
 altium	hint	-	-	place_component
 altium	hint	-	-	run_drc
+altium	hint	-	-	reannotate_board
 altium	hint	-	-	flip_selection
 altium	hint	-	-	toggle_ratsnest
 altium	hint	-	Shift++	next_layer
@@ -470,6 +474,7 @@ classic	hint	-	Ctrl+O	open_document
 classic	hint	-	-	open_grid_picker
 classic	hint	-	-	open_grid_properties
 classic	hint	-	-	open_library_browser
+classic	hint	-	-	open_net_inspector
 classic	hint	-	Ctrl+,	open_preferences
 classic	hint	-	-	open_schematic_preferences
 classic	hint	-	Ctrl+V	paste
@@ -525,6 +530,7 @@ classic	hint	-	HOME	zoom_to_fit
 classic	hint	-	Ctrl+F5	zoom_to_selection_area
 classic	hint	-	-	annotate_schematic
 classic	hint	-	Alt+A	annotate_schematic_quietly
+classic	hint	-	-	assign_footprints
 classic	hint	-	~	clear_net_highlighting
 classic	hint	-	I	draw_graphic_line
 classic	hint	-	S	draw_hierarchical_sheet
@@ -568,6 +574,7 @@ classic	hint	-	-	sync_sheet_pins
 classic	hint	-	-	change_component
 classic	hint	-	-	open_project_options
 classic	hint	-	-	update_pcb_from_schematic
+classic	hint	-	-	back_annotate_schematics
 classic	hint	-	-	tool_select
 classic	hint	-	-	lasso_select
 classic	hint	-	-	select_connection
@@ -626,6 +633,7 @@ classic	hint	-	-	clear_all_net_colors
 classic	hint	-	-	assign_net_class
 classic	hint	-	-	place_component
 classic	hint	-	-	run_drc
+classic	hint	-	-	reannotate_board
 classic	hint	-	-	flip_selection
 classic	hint	-	-	toggle_ratsnest
 classic	hint	-	Shift++	next_layer

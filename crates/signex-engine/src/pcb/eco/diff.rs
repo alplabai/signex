@@ -229,7 +229,7 @@ fn footprint_rows(
 
 /// Why `fp` should be replaced by `resolved`, if it should. A footprint with
 /// no library identity (an older board) is compared by name.
-fn change_reason(fp: &Footprint, resolved: &ResolvedFootprint) -> Option<ChangeReason> {
+pub(super) fn change_reason(fp: &Footprint, resolved: &ResolvedFootprint) -> Option<ChangeReason> {
     let to = &resolved.source;
     match &fp.library_ref {
         Some(from) if from.library == to.library && from.footprint == to.footprint => {

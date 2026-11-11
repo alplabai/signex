@@ -34,6 +34,8 @@ impl Signex {
                 Task::none()
             }
             PcbMsg::Sketch(event) => self.handle_board_sketch(event),
+            PcbMsg::Reannotate(msg) => self.dispatch_board_reannotate_message(msg),
+            PcbMsg::BackAnnotate(msg) => self.dispatch_back_annotate_message(msg),
         }
     }
 }

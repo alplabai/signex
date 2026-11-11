@@ -162,6 +162,11 @@ impl NetIndexCache {
         self.failed.retain(|id, _| keep.contains(id));
     }
 
+    /// Whether the last build for `key` failed (and is not retried).
+    pub fn has_failed(&self, project: ProjectId, key: &ProjectKey) -> bool {
+        self.failed.get(&project) == Some(key)
+    }
+
     /// Let `project` try again after a failure. The key does not cover what
     /// is on disk, so a user who fixed a file asks for a rebuild this way.
     pub fn clear_failed(&mut self, project: ProjectId) {

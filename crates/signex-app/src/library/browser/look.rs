@@ -40,14 +40,15 @@ pub(super) fn hover_fill(tokens: &ThemeTokens) -> Color {
     tokens::overlay(tokens, Overlay::Hover)
 }
 
-/// Fill of the active sidebar row.
+/// Fill of the active sidebar row: the theme's neutral selection, not an
+/// accent tint.
 pub(super) fn active_fill(tokens: &ThemeTokens) -> Color {
-    resolve(tokens).accent_soft
+    crate::styles::ti(tokens.selection)
 }
 
-/// Fill of the selected grid row.
+/// Fill of the selected grid row: the theme's neutral selection.
 pub(super) fn selected_fill(tokens: &ThemeTokens) -> Color {
-    resolve(tokens).accent_soft
+    crate::styles::ti(tokens.selection)
 }
 
 /// Wash of a deprecated row.
@@ -149,5 +150,22 @@ pub(super) fn bare_input(
         placeholder: r.ink4,
         value: ink,
         selection: Color { a: 0.4, ..accent },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    #[test]
+    fn selected_and_active_rows_use_the_neutral_selection_not_the_accent() {
+        for id in ThemeId::BUILTINS {
+            let t = theme_tokens(*id);
+            let neutral = crate::styles::ti(t.selection);
+            assert_eq!(selected_fill(&t), neutral, "{id:?} grid row");
+            assert_eq!(active_fill(&t), neutral, "{id:?} sidebar row");
+            assert_ne!(selected_fill(&t), resolve(&t).accent_soft, "{id:?}");
+        }
     }
 }

@@ -3,11 +3,18 @@
 //! design and its limits are in `docs/AGENT_EDITS.md`.
 
 mod apply;
+mod group_run;
 mod revert;
 mod single;
 mod wire;
 
-pub(super) use apply::apply_edits;
+#[cfg(test)]
+mod group_run_tests;
+
+pub(super) use apply::{apply_edits, listed_edits};
 pub(super) use revert::revert;
 pub(super) use single::{run_as_one_step, runs_as_one_step};
-pub use wire::{EditSpec, MAX_EDITS, edit_list_text, edit_refusal, operand_text, parse_edit_list};
+pub use wire::{
+    EditSpec, MAX_EDITS, edit_list_text, edit_refusal, operand_text, parse_documents,
+    parse_edit_list, parse_expect_revisions,
+};

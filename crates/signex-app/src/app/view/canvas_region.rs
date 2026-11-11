@@ -143,7 +143,7 @@ mod tests {
             true,
             100.0,
             signex_types::coord::Unit::Mm,
-            &crate::app::Tool::Select,
+            crate::app::Tool::Select.to_string(),
             1.27,
             &[],
             &tokens,

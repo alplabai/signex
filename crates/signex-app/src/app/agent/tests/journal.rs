@@ -189,6 +189,73 @@ fn an_apply_edits_line_carries_the_edit_list_and_its_group() {
     assert!(entry.replayable);
 }
 
+/// #2178: a call across sheets is one line per sheet it touched, each with its
+/// own path and revisions and all with the one group; one line alone cannot
+/// replay the all-or-nothing group, so none is replayable.
+#[test]
+fn an_apply_edits_across_sheets_is_one_line_per_sheet_sharing_its_group() {
+    let mut f = fixture();
+    let (a, b) = (f.doc("a.snxsch"), f.doc("b.snxsch"));
+    let (before_a, before_b) = (f.revision("a.snxsch"), f.revision("b.snxsch"));
+
+    let reply = f.ask(
+        "apply_edits",
+        json!({
+            "document": a,
+            "expect_revision": before_a.to_string(),
+            "expect_revisions": {b.clone(): before_b},
+            "edits": [
+                {"id": "place_junction", "args": {"at": [20, 20]}},
+                {"id": "place_junction", "args": {"at": [20, 20], "document": b}},
+            ],
+        }),
+    );
+
+    assert_eq!(reply["status"], "answered", "{reply}");
+    let group = reply["data"]["group"].as_u64();
+    assert!(group.is_some(), "{reply}");
+    let entries = f.edits().entries;
+    assert_eq!(entries.len(), 2, "one line per sheet");
+    for (entry, (path, before, file)) in entries
+        .iter()
+        .zip([(&a, before_a, "a.snxsch"), (&b, before_b, "b.snxsch")])
+    {
+        assert_eq!(entry.command, "apply_edits");
+        assert_eq!(entry.path.as_deref(), Some(path.as_str()));
+        assert_eq!(entry.group, group);
+        assert_eq!(entry.revision_before, Some(before));
+        assert_eq!(entry.revision_after, Some(f.revision(file)));
+        assert!(!entry.replayable, "{file}");
+    }
+}
+
+/// The call names `a`, every edit names `b`: only `b` got a step, so only `b`
+/// has a line (a line for `a` would claim a step it never had).
+#[test]
+fn an_apply_edits_whose_edits_all_name_another_sheet_is_journaled_on_that_sheet_only() {
+    let mut f = fixture();
+    let (a, b) = (f.doc("a.snxsch"), f.doc("b.snxsch"));
+    let (before_a, before_b) = (f.revision("a.snxsch"), f.revision("b.snxsch"));
+
+    let reply = f.ask(
+        "apply_edits",
+        json!({
+            "document": a,
+            "expect_revision": before_a.to_string(),
+            "expect_revisions": {b.clone(): before_b},
+            "edits": [{"id": "place_junction", "args": {"at": [20, 20], "document": b}}],
+        }),
+    );
+
+    assert_eq!(reply["status"], "answered", "{reply}");
+    let entries = f.edits().entries;
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    assert_eq!(entries[0].path.as_deref(), Some(b.as_str()));
+    assert_eq!(entries[0].group, reply["data"]["group"].as_u64());
+    assert_eq!(entries[0].revision_before, Some(before_b));
+    assert_eq!(f.revision("a.snxsch"), before_a, "a got no step");
+}
+
 #[test]
 fn a_refused_command_is_a_line_with_its_reason_and_a_query_is_none() {
     let mut f = fixture();
@@ -249,6 +316,38 @@ fn a_headless_agent_command_is_journaled_with_this_process_as_the_pid() {
     assert_eq!(entry.pid, Some(std::process::id()));
     assert_eq!(entry.revision_before, Some(revision));
     assert!(entry.replayable);
+}
+
+/// #2199: a headless edit that waited for its reads (a sheet symbol's link
+/// check) is journaled once, when it ran, as one that did not wait.
+#[test]
+fn a_headless_edit_that_waited_for_its_reads_is_journaled_once() {
+    let mut f = fixture();
+    let id = crate::keymap::AppCommandId::new("apply_edits").unwrap();
+    let revision = f.revision("b.snxsch");
+    let edits = json!([{"id": "place_sheet_symbol", "args": {
+        "start": "100,100", "end": "120,120", "name": "Child", "file": "child.snxsch"}}]);
+    let operands = [
+        format!("document={}", f.doc("b.snxsch")),
+        format!("expect_revision={revision}"),
+        format!("edits={edits}"),
+    ];
+    let refs: Vec<&str> = operands.iter().map(String::as_str).collect();
+    let args = crate::app::command::CommandArgs::parse_operands(&id, &refs).unwrap();
+
+    let (outcome, task) = f.app.run_headless_command_in_test(&id, args);
+    assert!(
+        matches!(outcome, crate::app::command::CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    f.driver.settle(&mut f.app, task).unwrap();
+
+    let entries = f.edits().entries;
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    assert_eq!(entries[0].outcome, "ran");
+    assert_eq!(entries[0].pid, Some(std::process::id()));
+    assert_eq!(entries[0].revision_before, Some(revision));
+    assert_eq!(entries[0].revision_after, Some(f.revision("b.snxsch")));
 }
 
 #[test]

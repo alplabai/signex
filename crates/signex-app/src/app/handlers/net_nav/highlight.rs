@@ -20,7 +20,7 @@ use super::navigate::{describe_member, selected_kind_of};
 use super::target::{NetTarget, net_of_target};
 
 /// What stays bright for net `net`, per sheet placement.
-fn bright_elements(
+pub(super) fn bright_elements(
     data: &ProjectNetData,
     net: usize,
 ) -> HashMap<(PathBuf, InstancePath), Arc<HashSet<uuid::Uuid>>> {

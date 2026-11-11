@@ -88,13 +88,16 @@ pub type ReplayRequest<'a> = (&'a str, Vec<(String, String)>);
 impl EditEntry {
     /// Does the entry carry what a replay needs: it ran, it knows its session
     /// and revision, its operands were not dropped, and it is not a `revert`
-    /// (which names an undo group that exists only in its session)?
+    /// (which names an undo group that exists only in its session)? A call
+    /// across sheets (`expect_revisions`) is one line per sheet, each with its
+    /// own revisions: one line alone cannot replay the all-or-nothing group.
     fn replay_ready(&self) -> bool {
         self.outcome == "ran"
             && self.revision_before.is_some()
             && !self.session.is_empty()
             && !self.truncated
             && self.command != "revert"
+            && !(self.command == "apply_edits" && self.operands.contains_key("expect_revisions"))
     }
 
     /// The command and operands to send again, if the entry is of `session`

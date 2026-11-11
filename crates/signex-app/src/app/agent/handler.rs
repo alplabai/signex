@@ -13,12 +13,12 @@ use super::reply::{Status, changed_between, messages_since, outcome_verdict};
 use super::wire::{self, Request};
 use super::{AgentCall, AgentMsg, Input, allow, listener, registry};
 use crate::app::command::queries::is_query;
-use crate::app::command::{CommandArgs, OperandValue};
+use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::{DocumentKey, Message, Signex};
 use crate::keymap::AppCommandId;
 
 /// What running one request came to: the status, its reason and its data.
-type Verdict = (Status, Option<String>, Option<Value>);
+pub(super) type Verdict = (Status, Option<String>, Option<Value>);
 
 /// The longest reason or command text the Messages line repeats.
 const LOGGED_TEXT_CHARS: usize = 200;
@@ -53,6 +53,7 @@ impl Signex {
     pub(crate) fn dispatch_agent_message(&mut self, message: AgentMsg) -> Task<Message> {
         match message {
             AgentMsg::Request(call) => self.handle_agent_request(call),
+            AgentMsg::EditReadsLoaded(loaded) => self.handle_edit_reads_loaded(*loaded),
             AgentMsg::PeerRefused { pid, reason } => {
                 let reason = printable(&reason);
                 crate::diagnostics::log_warning(format!(
@@ -451,36 +452,74 @@ impl Signex {
         let before = self.change_snapshot();
         let origin = super::Origin::agent(call.pid);
         self.agent.reached_handler = false;
-        let (id, (status, reason, data), task) =
-            self.with_origin(origin, |app| app.agent_verdict(&call.input));
+        let (id, verdict, task) = self.with_origin(origin, |app| app.agent_verdict(&call.input));
+        let (status, reason, _) = &verdict;
+        let (status, reason) = (*status, reason.clone());
         // A request turned away before its command was looked at is an access
         // event; one the command's own handler refused is in the edit journal.
         let turned_away = if status == Status::Refused && !self.agent.reached_handler {
-            let (pid, why) = (call.pid, reason.as_deref().map(printable));
-            // The project the request names records it; a request that names
-            // none (a bad token, a malformed line) goes to every open project,
-            // each seeing only what is not another project's path.
             let named = match &call.input {
                 Input::Line(line) => wire::parse_request(line)
                     .ok()
                     .and_then(|request| self.project_named_by(&request.operands)),
                 _ => None,
             };
-            let to = named.map_or_else(|| self.open_project_files(), |project| vec![project]);
-            self.journal_access_to(&to, |ts, _| {
-                let entry = AccessEntry::new(ts, "refused", "socket").with_peer(pid, None);
-                match &why {
-                    Some(why) => entry.with_reason(why.clone()),
-                    None => entry,
-                }
-            })
+            self.journal_turned_away(call.pid, reason.as_deref(), named)
         } else {
             Task::none()
         };
-        let changed = changed_between(&before, &self.change_snapshot());
+        // A command waiting for its reads answers when they land (#2199), with
+        // what its run then changed and logged.
+        if let Some(ticket) = self.agent.deferred.take() {
+            // The token matched: the request was let in with this one.
+            let waiting = super::deferred::WaitingReply {
+                id,
+                pid: call.pid,
+                reply: call.reply,
+                token: self.agent.token().map(|t| t.as_str().to_string()),
+            };
+            self.agent.waiting.insert(ticket, waiting);
+            return Task::batch([task, turned_away]);
+        }
+        self.send_agent_reply(id.as_deref(), call.pid, mark, &before, verdict, &call.reply);
+        Task::batch([task, turned_away])
+    }
+
+    /// Record a request turned away at the gate in the access journal. The
+    /// project it names records it; a request that names none (a bad token, a
+    /// malformed line) goes to every open project, each seeing only what is
+    /// not another project's path.
+    pub(super) fn journal_turned_away(
+        &mut self,
+        pid: Option<u32>,
+        reason: Option<&str>,
+        named: Option<std::path::PathBuf>,
+    ) -> Task<Message> {
+        let why = reason.map(printable);
+        let to = named.map_or_else(|| self.open_project_files(), |project| vec![project]);
+        self.journal_access_to(&to, |ts, _| {
+            let entry = AccessEntry::new(ts, "refused", "socket").with_peer(pid, None);
+            match &why {
+                Some(why) => entry.with_reason(why.clone()),
+                None => entry,
+            }
+        })
+    }
+
+    /// Log one request and answer it on its connection with what it did.
+    pub(super) fn send_agent_reply(
+        &self,
+        id: Option<&str>,
+        pid: Option<u32>,
+        mark: Option<u64>,
+        before: &super::ChangeSnapshot,
+        (status, reason, data): Verdict,
+        reply: &super::AgentReply,
+    ) {
+        let changed = changed_between(before, &self.change_snapshot());
         // What the command logged, before this request's own line.
         let messages = messages_since(mark);
-        let named = id.as_deref().map_or_else(
+        let named = id.map_or_else(
             || "(no command)".to_string(),
             |id| format!("`{}`", printable(id)),
         );
@@ -490,7 +529,7 @@ impl Signex {
             .unwrap_or_default();
         let line = format!(
             "Agent request ({}): {named} -> {}{why}",
-            pid_text(call.pid),
+            pid_text(pid),
             status_text(status)
         );
         if status.is_ok() {
@@ -498,15 +537,14 @@ impl Signex {
         } else {
             crate::diagnostics::log_warning(line);
         }
-        call.reply.send(wire::reply_line(
-            id.as_deref(),
+        reply.send(wire::reply_line(
+            id,
             status,
             reason.as_deref(),
             data.as_ref(),
             &messages,
             &changed,
         ));
-        Task::batch([task, turned_away])
     }
 
     /// Read, check and run one request. The id is returned only once the
@@ -610,6 +648,10 @@ impl Signex {
         };
         self.agent.serving = false;
         match ran {
+            Some((CommandOutcome::Deferred { ticket }, task)) => {
+                self.agent.deferred = Some(ticket);
+                (refused("waiting for its reads"), task)
+            }
             Some((outcome, task)) => (outcome_verdict(command.as_str(), outcome, None), task),
             None => (refused("not a query"), none()),
         }
@@ -618,7 +660,7 @@ impl Signex {
     /// A command that is not a query acts on the document it names, one of an
     /// open project's, and never on the person's active one. Closing it must
     /// not move the person's tab either.
-    fn check_agent_document(
+    pub(super) fn check_agent_document(
         &mut self,
         command: &AppCommandId,
         args: &CommandArgs,

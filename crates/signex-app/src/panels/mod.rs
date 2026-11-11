@@ -38,13 +38,16 @@ pub(crate) mod form_look;
 pub(crate) mod graphite;
 mod library;
 mod messages;
+mod messages_row;
 mod multi_selection;
 mod navigator;
 mod net_class_panel;
+pub mod net_inspector;
 mod numeric_draft;
 mod palette;
 mod paper;
 pub mod pcb_board_properties;
+pub mod pcb_footprint_properties;
 pub mod pcb_nets;
 mod projects;
 mod projects_graphite;
@@ -115,12 +118,14 @@ pub use net_class_panel::{
     LabelClassPick, NetClassChoice, NetClassDraft, NetClassField, NetClassMsg, NetClassPanel,
     net_class_choice, net_class_choices, view_net_classes_section,
 };
+pub use net_inspector::{NetInspectorMsg, NetInspectorState, NetInspectorView};
 pub use palette::PanelPalette;
 pub use paper::{
     PageFormatMode, PageOrigin, SchematicSheetColor, SheetColor, paper_dimensions,
     paper_size_options,
 };
 pub use pcb_board_properties::PcbBoardSummary;
+pub use pcb_footprint_properties::{FootprintEditability, PcbFootprintFacts, PcbFootprintTextMsg};
 pub use pcb_layers::PcbLayersPanel;
 pub use pcb_nets::PcbNetsSummary;
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
@@ -197,6 +202,10 @@ pub enum PanelKind {
     /// follows the active tab and shows the file's last 50 commits
     /// via `signex_widgets::history_pane`.
     History,
+    /// Every net of the active document's project from the stitched
+    /// netlist, filterable, each expandable to its pins, labels, ports and
+    /// sheets; a click goes to the member (#1269).
+    NetInspector,
 }
 
 /// All available panel kinds for the panel list button.
@@ -229,6 +238,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::SymbolPins,
     PanelKind::PcbNets,
     PanelKind::History,
+    PanelKind::NetInspector,
 ];
 
 impl PanelKind {
@@ -291,6 +301,7 @@ impl PanelKind {
             PanelKind::SymbolPins => ids::PANELS_KIND_SYMBOL_PINS,
             PanelKind::PcbNets => ids::PANELS_KIND_PCB_NETS,
             PanelKind::History => ids::PANELS_KIND_HISTORY,
+            PanelKind::NetInspector => ids::PANELS_KIND_NET_INSPECTOR,
         }
     }
 
@@ -324,6 +335,7 @@ impl PanelKind {
             PanelKind::SymbolPins => "Pins",
             PanelKind::PcbNets => "PCB",
             PanelKind::History => "History",
+            PanelKind::NetInspector => "Net Inspector",
         }
     }
 }
@@ -375,6 +387,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::SymbolPins => crate::library::editor::symbol::pins_panel::view(ctx),
         PanelKind::PcbNets => pcb_nets::view(ctx),
         PanelKind::History => return history::view_history(ctx),
+        PanelKind::NetInspector => return net_inspector::view(ctx),
     };
 
     panel_scrollable(content).boxed()

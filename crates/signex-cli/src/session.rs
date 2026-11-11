@@ -17,7 +17,7 @@ use signex_app::task_driver::TaskDriver;
 use signex_types::project::{ErcRules, RuleProfile};
 
 use crate::capability::capability_of;
-use crate::edits::{authorize_edits, named_document_paths};
+use crate::edits::{authorize_edits, named_document_paths, scrub_sheets};
 use crate::policy::{Approved, Policy};
 use crate::protocol::{Mode, Request, ResultLine, Status};
 use crate::roots::folder_and_roots;
@@ -145,9 +145,11 @@ impl Session {
             Ok(approved) => approved,
             Err(reason) => return (Status::Refused, Some(reason), None),
         };
-        if let Err(reason) = self.authorize_edits(&mut approved) {
-            return (Status::Refused, Some(reason), None);
-        }
+        // The files the call names, each confined: an answer lists no other.
+        let mut named_by_call = match self.authorize_edits(&mut approved) {
+            Ok(paths) => paths,
+            Err(reason) => return (Status::Refused, Some(reason), None),
+        };
         let args = match operands_for(&approved) {
             Ok(args) => args,
             Err(reason) => return (Status::Refused, Some(reason), None),
@@ -162,6 +164,7 @@ impl Session {
             Ok(named) => named,
             Err(reason) => return (Status::Refused, Some(reason), None),
         };
+        named_by_call.extend(named.iter().cloned());
         // A command that writes also writes files no operand names. One that
         // names its document writes that document (not whatever is active)
         // and what saving it writes besides: its project file, the sheets a
@@ -190,26 +193,33 @@ impl Session {
         if let Err(error) = settled {
             return (Status::Failed, Some(error.to_string()), None);
         }
-        verdict(
+        let (status, reason, mut data) = verdict(
             approved.command.as_str(),
             outcome,
             notice.map(|n| format!("{}: {}", n.title, n.detail)),
-        )
+        );
+        if let Some(data) = data.as_mut() {
+            scrub_sheets(data, &named_by_call);
+        }
+        (status, reason, data)
     }
 
     /// The edits of an `apply_edits` call, each authorized as a command of its
     /// own (not `gui_only`, the `edit` capability held, every path operand
     /// confined, every `document` resolved and checked), then written back
     /// with the checked paths. Any other command has no edits.
-    fn authorize_edits(&mut self, approved: &mut Approved) -> Result<(), String> {
+    fn authorize_edits(&mut self, approved: &mut Approved) -> Result<Vec<PathBuf>, String> {
         let (policy, base, roots) = (
             self.policy.clone(),
             self.project_dir.clone(),
             self.roots.clone(),
         );
+        let mut named = Vec::new();
         authorize_edits(&policy, &base, &roots, approved, |checked| {
-            self.named_document_paths(checked).map(drop)
-        })
+            named.extend(self.named_document_paths(checked)?);
+            Ok(())
+        })?;
+        Ok(named)
     }
 
     /// The files the `document` operands of `approved` name, resolved by the

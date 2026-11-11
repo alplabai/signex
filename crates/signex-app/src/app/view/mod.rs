@@ -19,6 +19,7 @@ mod parameter_manager;
 mod pcb_strip;
 mod pdf_preview;
 mod print_preview;
+mod status;
 
 use super::*;
 
@@ -235,7 +236,6 @@ impl Signex {
             ui.right_width,
         );
 
-        let center_row = row![left, left_handle, center, right_handle, right].boxed();
         let bottom_handle = self.view_resize_handle(
             DragTarget::BottomPanel,
             bottom_has_panels && !bottom_collapsed,
@@ -248,34 +248,14 @@ impl Signex {
             bottom_collapsed,
             ui.bottom_height,
         );
+        // The bottom dock sits under the canvas only; the side docks run
+        // the full height between the tab strip and the status bar.
+        let center_column = iced::widget::column![center, bottom_handle, bottom]
+            .width(Length::Fill)
+            .height(Length::Fill);
+        let center_row = row![left, left_handle, center_column, right_handle, right].boxed();
 
-        let altium_import_name = document.altium_import_running.as_ref().map(|run| {
-            run.input
-                .file_name()
-                .map(|f| f.to_string_lossy().into_owned())
-                .unwrap_or_else(|| run.input.display().to_string())
-        });
-        let (cursor_x, cursor_y) = self.status_cursor(window_id);
-        let zoom = self.status_zoom(window_id);
-        let status = status_bar::view(
-            cursor_x,
-            cursor_y,
-            ui.grid_visible,
-            ui.snap_enabled,
-            zoom,
-            ui.unit,
-            &interaction.current_tool,
-            ui.grid_size_mm,
-            &interaction.canvas_for_window(window_id).selected,
-            &document.panel_ctx.tokens,
-            document.inflight_git_commits.len(),
-            altium_import_name.as_deref(),
-            self.status_activity(window_id).as_deref(),
-            self.status_active_layer(window_id),
-            &ui.i18n,
-        )
-        .map(move |req| Signex::status_bar_message(window_id, req))
-        .boxed();
+        let status = self.view_status_bar(window_id).boxed();
 
         // Partition tabs across windows: main owns every tab that isn't
         // currently rendered by an undocked-tab window; each undocked
@@ -376,11 +356,7 @@ impl Signex {
             // the chrome does not jump when the first tab opens.
             main = main.push(tab_bar::placeholder(&document.panel_ctx.tokens));
         }
-        let main = main
-            .push(center_row)
-            .push(bottom_handle)
-            .push(bottom)
-            .push(status);
+        let main = main.push(center_row).push(status);
 
         // Borderless window needs its own edge-resize hit zones — the OS
         // frame would normally handle this, but `decorations: false`
@@ -537,17 +513,9 @@ impl Signex {
                 && let Some(editor) = self.document_state.symbol_editors.get(path)
             {
                 let panel_ctx = &self.document_state.panel_ctx;
-                // Per-library display settings — Altium-style
-                // Document Options. Resolve the `.snxlib/` ancestor
-                // of the symbol's path so every primitive editor
-                // opened from the same library shares the same
-                // grid / unit / background. Lone-file edits (no
-                // mounted library) get safe defaults.
-                let display = self
-                    .library
-                    .containing_library_with(path, self.identity_fold_for(path))
-                    .map(|lib| lib.display)
-                    .unwrap_or_default();
+                // Every editor opened from one library shares its grid,
+                // unit and background, as the status bar does.
+                let display = self.symbol_display(path);
                 return crate::library::editor::standalone::view_symbol(
                     editor,
                     panel_ctx,
@@ -821,6 +789,8 @@ impl Signex {
 
 #[cfg(test)]
 mod canvas_wheel_tests;
+#[cfg(test)]
+mod dock_layout_tests;
 #[cfg(test)]
 mod editor_bar_wheel_tests;
 #[cfg(test)]

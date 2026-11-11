@@ -12,6 +12,8 @@
 //! - [`keys`] — modifier tracking + keyboard handling.
 
 mod camera;
+#[cfg(test)]
+pub(super) use camera::chrome_insets;
 mod keys;
 mod pointer;
 mod release;

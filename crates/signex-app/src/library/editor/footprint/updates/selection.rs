@@ -66,8 +66,9 @@ fn select_active_idx(editor: &mut crate::app::FootprintDocument, idx: usize) {
     // Re-derive the canvas-side state from the new active
     // primitive so pads / sketch / courtyard mirror what's
     // on disk for this footprint.
-    editor.state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+    editor.state = crate::library::editor::footprint::state::FootprintEditorState::switched_to(
         editor.primitive(),
+        &editor.state,
     );
     editor.canvas_cache.clear();
 }

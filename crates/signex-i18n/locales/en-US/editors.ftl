@@ -234,3 +234,14 @@ editors-footprint-name-pads =
         [one] { $name } · { $pads } pad
        *[other] { $name } · { $pads } pads
     }
+
+## Symbol editor status bar segment
+editors-symbol-status-part-pins = Part { $part } of { $parts } · { $pins ->
+        [one] { $pins } pin
+       *[other] { $pins } pins
+    }
+editors-symbol-status-pin-selected = Pin { $number } { $name } selected
+editors-symbol-status-items-selected = { $count } selected
+editors-symbol-status-hint-selected = Del removes · drag to move
+editors-symbol-status-hint-idle = Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits
+editors-symbol-copy-again = Copy Again
