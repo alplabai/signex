@@ -561,13 +561,15 @@ on-demand check shares (`signex_types::check`; DRC adopts it next):
   the rule id and the objects of the finding's waiver identity (its objects,
   pin, tag or net, `docs/ERC_RULES.md`, "Waivers"), so moving or editing the
   object keeps it; a finding that names no object is keyed by its message.
-  Keys are unique in a report: a repeat gets `#2`, `#3`, in report order.
+  Keys are unique within `findings` and within `waived` (not across the
+  two): a repeat gets `#2`, `#3`, in report order.
 - Order: by sheet path, then errors, warnings and info, then rule, message,
   key and evidence. The same project gives the same report, byte for byte.
 - `waived`: the findings a per-finding waiver (`"kind": "finding"`) or a net
   waiver (`"kind": "net"`, with `rule_id` and `net`) hides, each with that
   waiver; they are not in `findings`. `lapsed`: the per-finding waivers whose
-  finding changed since it was waived, so the finding is in `findings` again.
+  finding changed since it was waived, so the finding is in `findings` again,
+  or in `waived` when a net waiver hides it.
 - `warnings`: what Run ERC would say as a warning or error in Messages, in
   its words, said nowhere else: an unreadable sheet, an `erc.dsl` that does
   not compile, a broken hierarchy, a child sheet reference that leaves its
@@ -600,9 +602,10 @@ on-demand check shares (`signex_types::check`; DRC adopts it next):
 Known limits:
 
 - Findings that share a key (one rule firing twice on the same identity
-  objects) are numbered `#2`, `#3` in message order, so a new repeat whose
-  message sorts first takes the bare key and the old finding shows as `new`.
-  This is rare.
+  objects) are numbered `#2`, `#3` by message, then by evidence (which holds
+  the position), so a new repeat whose message sorts first takes the bare key
+  and the old finding shows as `new`, and moving one of several repeats can
+  swap their numbers. This is rare.
 - A baseline's scope is the project file. In a project with no
   `schematic_root` the netlist root is the named sheet, so two runs made with
   different `document=` sheets can differ in root-dependent findings, which
