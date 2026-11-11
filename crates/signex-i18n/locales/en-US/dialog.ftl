@@ -53,3 +53,6 @@ dialog-assign-footprints-err-not-changed = { $path } refused the change. Nothing
 dialog-assign-footprints-err-stale = The footprint of { $part } changed after the list was read. Nothing was changed; open the dialog again.
 dialog-assign-footprints-cancel = Cancel
 dialog-assign-footprints-apply = Apply
+
+dialog-annotate-matching-unavailable = Parameter matching is not available yet.
+dialog-annotate-sheet-options-unavailable = Start and Add Suffix cannot be changed yet.

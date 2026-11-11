@@ -51,7 +51,13 @@ fn graphite_header<'a>(
         .center_y(Length::Fixed(metrics.button))
         .style(crate::styles::field(tokens, false));
 
-    let add = button(text(t!(i18n, ids::LIBRARY_BROWSER_ADD_COMPONENT)).size(BROWSER_TEXT_SIZE))
+    // The label fills the fixed-height button and centres itself; a bare
+    // text sits at the top of the button's content box.
+    let add_label = text(t!(i18n, ids::LIBRARY_BROWSER_ADD_COMPONENT))
+        .size(BROWSER_TEXT_SIZE)
+        .height(Length::Fill)
+        .align_y(iced::alignment::Vertical::Center);
+    let add = button(add_label)
         .height(Length::Fixed(metrics.button))
         .padding([SP.xs, SP.l])
         .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserAddComponent {

@@ -21,6 +21,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEd
         FootprintEditorMsg::SetMode(mode) => set_mode(editor, mode),
         FootprintEditorMsg::TogglePlacementPause => toggle_placement_pause(editor),
         FootprintEditorMsg::FitConsumed { px_per_mm } => fit_consumed(editor, px_per_mm),
+        FootprintEditorMsg::ZoomPillStepped { factor } => editor.state.zoom_request.step(factor),
+        FootprintEditorMsg::ZoomPillFitClicked => editor.state.fit_pending = true,
         // v0.26-E — clipboard ops intercepted at the call site
         // (apply_footprint_clipboard_op needs split-borrow with
         // document_state.pad_clipboard). The match arm here is

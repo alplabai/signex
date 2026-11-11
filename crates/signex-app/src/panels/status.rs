@@ -1,5 +1,6 @@
 //! Diagnostic panels -- ERC and Messages.
 
+use super::messages_row::{MessageSource, clock_time};
 use super::*;
 use crate::styles::{Spacing, TypeScale};
 use signex_i18n::{MessageId, UserText, ids, t};
@@ -408,8 +409,9 @@ const MSG_SOURCE_W: f32 = 160.0;
 const MSG_TIME_W: f32 = 84.0;
 
 /// The Graphite Messages table: CLASS / DOCUMENT / SOURCE / MESSAGE / TIME
-/// header, hairline rows, and a centred empty state. The log entries carry
-/// no document or time, so those cells read as an honest dash.
+/// header, hairline rows, and a centred empty state. Source is a short name
+/// for the log target and Time the local clock time the entry was logged;
+/// log entries carry no document, so that cell reads as an honest dash.
 fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let r = crate::styles::tokens::resolve(tokens);
@@ -516,9 +518,8 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     ),
                     cell(dash(), Length::Fixed(MSG_DOCUMENT_W)),
                     cell(
-                        text(UserText::new(entry.code.as_str()))
+                        text(t!(i18n, MessageSource::of_code(&entry.code).id()))
                             .size(TS.body)
-                            .font(mono)
                             .color(ink3)
                             .wrapping(iced::widget::text::Wrapping::None)
                             .boxed(),
@@ -532,7 +533,15 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                             .boxed(),
                         Length::Fill,
                     ),
-                    cell(dash(), Length::Fixed(MSG_TIME_W)),
+                    cell(
+                        text(UserText::new(clock_time(entry.at)))
+                            .size(TS.body)
+                            .font(mono)
+                            .color(ink3)
+                            .wrapping(iced::widget::text::Wrapping::None)
+                            .boxed(),
+                        Length::Fixed(MSG_TIME_W),
+                    ),
                 ]
                 .width(Length::Fill),
             )

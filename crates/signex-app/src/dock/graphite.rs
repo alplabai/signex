@@ -152,8 +152,8 @@ pub(super) fn floating_card(tokens: &ThemeTokens) -> impl Fn(&Theme) -> containe
     }
 }
 
-/// Side padding of a dock tab label; a strip that is too wide scrolls, the label
-/// size never shrinks.
+/// Side padding of a dock tab label; in a strip too narrow for every tab the
+/// wider labels end in an ellipsis (`tab_fit`), the label size never shrinks.
 pub(super) const TAB_PAD: f32 = 10.0;
 
 /// The count chip after a dock tab label, from the panel's own data: messages

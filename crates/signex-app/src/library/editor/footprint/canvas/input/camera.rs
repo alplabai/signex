@@ -37,12 +37,15 @@ impl FootprintCanvas<'_> {
             return None;
         }
         if let Some(bbox) = self.state.content_bbox_mm() {
-            cstate.fit_to_bounds(bbox, bounds);
+            fit_clear_of_chrome(cstate, bbox, bounds);
         } else {
             cstate.offset = Point::new(bounds.width / 2.0, bounds.height / 2.0);
             // Keep DEFAULT_PX_PER_MM scale.
         }
         cstate.did_initial_fit = true;
+        // A new camera starts from the fit, not from a zoom the pill asked
+        // of an earlier camera.
+        self.mark_zoom_applied(cstate);
         Some(canvas::Action::publish(LibraryMessage::EditorEvent {
             library_path: self.address.library_path.clone(),
             table: self.address.table.clone(),
@@ -65,11 +68,13 @@ impl FootprintCanvas<'_> {
     ) -> Option<canvas::Action<LibraryMessage>> {
         if self.state.fit_pending && bounds.width > 0.0 && bounds.height > 0.0 {
             if let Some(bbox) = self.state.content_bbox_mm() {
-                cstate.fit_to_bounds(bbox, bounds);
+                fit_clear_of_chrome(cstate, bbox, bounds);
             } else {
                 cstate.offset = Point::new(bounds.width / 2.0, bounds.height / 2.0);
             }
             cstate.did_initial_fit = true;
+            // Fit replaces any zoom the pill asked for before it.
+            self.mark_zoom_applied(cstate);
             self.cache.clear();
             return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
                 library_path: self.address.library_path.clone(),
@@ -81,6 +86,50 @@ impl FootprintCanvas<'_> {
             }));
         }
         None
+    }
+
+    /// Record this document's current zoom request as applied, without
+    /// zooming.
+    fn mark_zoom_applied(&self, cstate: &mut FootprintCanvasState) {
+        cstate.applied_zoom = Some((self.address.clone(), self.state.zoom_request));
+    }
+
+    /// The zoom pill's `-` / `+`: zoom about the canvas centre by every
+    /// [`ZoomRequest`] step this camera has not applied yet, and publish
+    /// the new scale for the pill's readout. A camera last applied for
+    /// another document (a tab switch) takes the new document's request as
+    /// applied and does not zoom.
+    ///
+    /// [`ZoomRequest`]: crate::library::editor::footprint::state::ZoomRequest
+    pub(in crate::library::editor::footprint::canvas) fn apply_pending_zoom(
+        &self,
+        cstate: &mut FootprintCanvasState,
+        bounds: Rectangle,
+    ) -> Option<canvas::Action<LibraryMessage>> {
+        let request = self.state.zoom_request;
+        let applied = match &cstate.applied_zoom {
+            Some((owner, applied)) if *owner == self.address => *applied,
+            Some(_) => {
+                self.mark_zoom_applied(cstate);
+                return None;
+            }
+            None => Default::default(),
+        };
+        if request.seq == applied.seq || bounds.width <= 0.0 || bounds.height <= 0.0 {
+            return None;
+        }
+        self.mark_zoom_applied(cstate);
+        let centre = Point::new(bounds.width / 2.0, bounds.height / 2.0);
+        cstate.zoom_about(centre, request.factor_since(&applied), MIN_SCALE);
+        self.cache.clear();
+        Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+            library_path: self.address.library_path.clone(),
+            table: self.address.table.clone(),
+            row_id: self.address.row_id,
+            msg: EditorMsg::Footprint(FootprintEditorMsg::ViewScaleChanged {
+                px_per_mm: cstate.scale,
+            }),
+        }))
     }
 
     /// Scroll-wheel zoom, anchored on the cursor, or a pan: see
@@ -230,4 +279,46 @@ impl FootprintCanvas<'_> {
         }
         None
     }
+}
+
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+/// iced's default text line height, as a multiple of the font size.
+const TEXT_LINE_HEIGHT: f32 = 1.3;
+
+/// Room the editor's floating chrome takes at the canvas edges, which a fit
+/// keeps content out of: the two state chips under the Active Bar at the
+/// top (`standalone::dof_chip`) and the zoom pill at the bottom right
+/// (`crate::canvas::zoom_pill`). Derived from the same type and spacing
+/// scales those overlays are built from.
+pub(in crate::library::editor::footprint::canvas) fn chrome_insets() -> iced::Padding {
+    // A chip: one caption line, its padding and its 1 px border.
+    let chip = TS.caption * TEXT_LINE_HEIGHT + 2.0 * SP.xs + 2.0;
+    let (_, pill_h) = crate::canvas::zoom_pill::pill_size();
+    iced::Padding {
+        top: SP.xl + 2.0 * chip + SP.m + SP.m,
+        bottom: SP.l + pill_h + SP.m,
+        left: SP.xl,
+        right: SP.xl,
+    }
+}
+
+/// Fit `bbox` into the part of `bounds` the chrome leaves free. A canvas
+/// too small for that gets the plain whole-canvas fit instead.
+fn fit_clear_of_chrome(
+    cstate: &mut FootprintCanvasState,
+    bbox: (f64, f64, f64, f64),
+    bounds: Rectangle,
+) {
+    let insets = chrome_insets();
+    let free_w = bounds.width - insets.left - insets.right;
+    let free_h = bounds.height - insets.top - insets.bottom;
+    if free_w < bounds.width * 0.5 || free_h < bounds.height * 0.5 {
+        cstate.fit_to_bounds(bbox, bounds);
+        return;
+    }
+    let free = Rectangle::new(Point::ORIGIN, iced::Size::new(free_w, free_h));
+    cstate.fit_to_bounds(bbox, free);
+    cstate.offset.x += insets.left;
+    cstate.offset.y += insets.top;
 }
