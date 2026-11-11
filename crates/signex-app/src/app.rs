@@ -14,6 +14,7 @@ use crate::toolbar::ToolMessage;
 mod actions;
 pub(crate) mod agent;
 pub(crate) mod assign_footprints;
+pub(crate) mod back_annotate;
 pub(crate) mod board_reannotate;
 mod bootstrap;
 pub(crate) mod command;
@@ -41,6 +42,7 @@ pub mod project_entry_disk;
 mod project_tab;
 pub(crate) mod sheet_numbering;
 pub(crate) mod sheet_repairs;
+pub(crate) mod sheet_write;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 pub(crate) mod designator_scan;
 #[cfg(test)]
@@ -75,6 +77,7 @@ pub use assign_footprints::{
     AssignFootprintsMsg, AssignFootprintsState, AssignProblem, FootprintOffer, FootprintPart,
     PartAccess,
 };
+pub use back_annotate::{BackAnnotateMsg, BackAnnotateState};
 pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BoardSketchMsg, BomPreviewMsg, CommandPaletteMsg,
@@ -136,6 +139,7 @@ impl Signex {
         tasks.push(self.sync_cross_select());
         // An Update PCB waiting for its board starts reading once it opened.
         tasks.push(self.sync_update_pcb());
+        tasks.push(self.sync_back_annotate());
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
         self.sync_undo_depth();

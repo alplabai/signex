@@ -320,6 +320,13 @@ impl Signex {
             .then(|| self.view_board_reannotate_dialog())
     }
 
+    pub(in crate::app::view) fn back_annotate_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .back_annotate
+            .is_some()
+            .then(|| self.view_back_annotate_dialog())
+    }
+
     /// Update PCB from Schematic (#1312); a headless `apply=true` run has no
     /// dialog.
     pub(in crate::app::view) fn update_pcb_overlay(&self) -> Option<Element<'_, Message>> {

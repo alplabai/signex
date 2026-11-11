@@ -183,7 +183,7 @@ impl Signex {
     /// must not write it (#1224). Only open projects can be consulted; the
     /// fold is the widest any open project uses, since folding only reports
     /// more sharing.
-    fn shared_with_another_open_project(&self, path: &std::path::Path) -> bool {
+    pub(crate) fn shared_with_another_open_project(&self, path: &std::path::Path) -> bool {
         let doc = &self.document_state;
         let Some(owner) = doc.document_project(path).map(|p| p.id) else {
             return false;

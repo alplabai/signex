@@ -14,7 +14,7 @@
 
 /// The first string literal after each `stub(` call in `model/menus.rs`: the
 /// row's label, or the command id the label is read from.
-const EXPECTED_STUBS: &[&str] = &["Back Annotate Schematics..."];
+const EXPECTED_STUBS: &[&str] = &[];
 
 /// Literal `unavailable` rows that are allowed to stay unexplained.
 const EXPECTED_DISABLED: &[&str] = &["No recent projects"];

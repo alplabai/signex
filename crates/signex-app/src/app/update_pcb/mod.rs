@@ -7,7 +7,7 @@
 //! revision, so it is one undo step and refused once the board moved on.
 
 mod command;
-mod design;
+pub(crate) mod design;
 mod execute;
 mod new_pcb;
 mod state;
@@ -17,7 +17,7 @@ mod update;
 pub(crate) use command::update_pcb_from_schematic;
 pub(crate) use design::DesignSnapshot;
 pub use state::UpdatePcbState;
-pub(crate) use state::{BoardStatus, Phase};
+pub(crate) use state::{BoardStatus, Phase, file_name};
 pub(crate) use target::PcbSyncLabel;
 
 #[cfg(test)]

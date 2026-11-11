@@ -67,13 +67,6 @@ pub(super) fn unavailable(label: &str) -> MenuEntry {
     plain(label, ItemState::Unavailable)
 }
 
-/// A planned feature with no handler yet: greyed with the "planned" tooltip.
-/// Every call site is pinned by the ratchet in `planned_tests`; add a real
-/// action instead of a new stub.
-pub(super) fn stub(label: &str) -> MenuEntry {
-    plain(label, ItemState::Placeholder)
-}
-
 fn command_row(ctx: &MenuContext, cmd: Cmd, label: String, state: ItemState) -> MenuEntry {
     let shortcut = AppCommandId::new(cmd.id).ok().and_then(|command_id| {
         shortcut_for(ctx, cmd.id, cmd.shortcut).map(|text| Shortcut { command_id, text })

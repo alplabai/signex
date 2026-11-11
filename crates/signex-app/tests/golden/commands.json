@@ -65,6 +65,11 @@
     "category": "edit"
   },
   {
+    "id": "back_annotate_schematics",
+    "group": "Schematic",
+    "category": "pcb_sync"
+  },
+  {
     "id": "board_sketch",
     "group": "Pcb",
     "category": "design"
