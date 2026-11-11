@@ -173,16 +173,11 @@ pub enum SymbolEditorMsg {
     /// editor opened from the same library shares the colour.
     SetSheetColor(crate::panels::SheetColor),
 
-    /// Status-footer click on the `Grid` label — toggles whether
-    /// the dot grid renders. Applies to the containing `.snxlib`.
+    /// Status-bar click on the `Grid` span of a symbol tab — toggles
+    /// whether the dot grid renders. Applies to the containing `.snxlib`.
     ToggleGrid,
 
-    /// Status-footer click on the grid spacing — cycles through
-    /// `crate::canvas::grid::GRID_SIZES_MM`. Applies to the
-    /// containing `.snxlib`.
-    CycleGridSize,
-
-    /// Status-footer click on the unit label — cycles
+    /// Status-bar click on the unit of a symbol tab — cycles
     /// mm → mil → inch → um → mm. Applies to the containing
     /// `.snxlib`.
     CycleUnit,

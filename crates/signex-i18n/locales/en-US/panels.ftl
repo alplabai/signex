@@ -416,3 +416,16 @@ panels-net-inspector-summary =
         [one] { $total } net
        *[other] { $total } nets
     }
+
+## Messages panel: short source names
+panels-messages-source-app = App
+panels-messages-source-tasks = Tasks
+panels-messages-source-erc = ERC
+panels-messages-source-drc = DRC
+panels-messages-source-library = Library
+panels-messages-source-preferences = Preferences
+panels-messages-source-sketch = Sketch
+panels-messages-source-project = Project
+panels-messages-source-graphics = Graphics
+panels-messages-source-interface = Interface
+panels-messages-source-system = System

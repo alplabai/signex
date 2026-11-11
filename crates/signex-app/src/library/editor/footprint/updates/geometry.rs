@@ -45,8 +45,9 @@ fn add_new_sibling(editor: &mut crate::app::FootprintDocument) {
     editor.file.footprints.push(new_fp);
     editor.active_idx = editor.file.footprints.len() - 1;
     editor.clear_edit_coalescing();
-    editor.state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+    editor.state = crate::library::editor::footprint::state::FootprintEditorState::switched_to(
         editor.primitive(),
+        &editor.state,
     );
     editor.canvas_cache.clear();
     editor.mark_dirty();

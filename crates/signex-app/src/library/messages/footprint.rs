@@ -209,6 +209,19 @@ pub enum FootprintEditorMsg {
         px_per_mm: f32,
     },
 
+    /// The zoom pill's `-` or `+` was clicked: zoom about the canvas centre
+    /// by `factor` (above 1 zooms in). Recorded as a [`ZoomRequest`] the
+    /// canvas applies once.
+    ///
+    /// [`ZoomRequest`]: crate::library::editor::footprint::state::ZoomRequest
+    ZoomPillStepped {
+        factor: f32,
+    },
+
+    /// The zoom pill's Fit was clicked: arms the same one-shot fit as the
+    /// context menu's Fit to Window.
+    ZoomPillFitClicked,
+
     /// v0.26-E — clipboard ops on the selected pad.
     CopyPad,
 

@@ -101,8 +101,9 @@ impl Signex {
                     // primitive actually changed.
                     if active_moved {
                         editor.state =
-                            crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+                            crate::library::editor::footprint::state::FootprintEditorState::switched_to(
                                 editor.primitive(),
+                                &editor.state,
                             );
                     }
                     editor.panel_selected_idx = None;
