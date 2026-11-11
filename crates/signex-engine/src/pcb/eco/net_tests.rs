@@ -422,6 +422,66 @@ fn a_refresh_recomputes_the_net_rows_for_the_carried_ticks() {
     assert_consistent(&design.board);
 }
 
+/// #2283: a list edited by hand past its needs (the removal of R2 unticked,
+/// the removal of GND, R2's only net, kept) is refused with a reason, by
+/// Validate and by the engine, and the board is left as it was.
+#[test]
+fn a_hand_edited_list_that_leaves_a_pad_on_a_removed_net_is_refused() {
+    let mut design = synced();
+    design.parts[1].on_board = false;
+    design
+        .netlist
+        .nets
+        .iter_mut()
+        .for_each(|n| n.terminals.retain(|t| t.reference != "R2"));
+    design.netlist.nets.retain(|n| !n.terminals.is_empty());
+    let gnd = number_of(&design.board, "GND");
+    let mut list = design.diff();
+    for row in &mut list.rows {
+        match row.key {
+            EcoKey::RemoveFootprint(id) if id == u(0xa2) => row.on = false,
+            EcoKey::RemoveNet(n) if n == gnd => row.needs.clear(),
+            _ => {}
+        }
+    }
+    let remove = list.row(&EcoKey::RemoveNet(gnd)).expect("a remove row");
+    assert!(list.applies(remove), "the hand edit keeps the net removal");
+
+    let mut engine = BoardEngine::new(design.board.clone(), design.revision);
+    let refusal = check(&list, &engine).expect_err("a pad is left on GND");
+    let EcoRefusal::Refused(batch) = &refusal else {
+        panic!("not a batch refusal: {refusal}");
+    };
+    assert!(
+        matches!(
+            &batch.error,
+            crate::pcb::BoardCommandError::PadOnRemovedNet { footprint, number, name, .. }
+                if *footprint == u(0xa2) && *number == gnd && name == "GND"
+        ),
+        "{refusal}"
+    );
+    let reason = refusal.to_string();
+    assert!(
+        reason.contains("would still be on net GND")
+            && reason.contains("removes from the net table"),
+        "{reason}"
+    );
+
+    let commands = lower(&list, engine.board());
+    assert!(
+        engine
+            .execute_labelled(commands, "Update PCB", list.revision)
+            .is_err()
+    );
+    assert_eq!(
+        serde_json::to_value(engine.board()).unwrap(),
+        serde_json::to_value(&design.board).unwrap(),
+        "a refused list changes nothing"
+    );
+    assert_eq!(engine.revision(), design.revision);
+    assert_consistent(engine.board());
+}
+
 /// Review point 4: the pad rows of a replaced footprint need its change row;
 /// review point 7: the nets of pads the new footprint lacks are noted.
 #[test]
