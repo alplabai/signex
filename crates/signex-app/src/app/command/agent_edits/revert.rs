@@ -122,15 +122,36 @@ pub(in crate::app::command) fn revert(app: &mut Signex, args: &CommandArgs) -> R
         return refused(reason);
     }
     let mut taken: Vec<(PathBuf, u64, signex_engine::DocumentPatch)> = Vec::new();
+    let mut failure: Option<String> = None;
     for member in &members {
         let Some(engine) = app.document_state.engines.get_mut(member) else {
             continue;
         };
         match engine.discard_undo_group_top(group) {
             Ok(Some(patch)) => taken.push((member.clone(), engine.revision(), patch.document)),
-            Ok(None) => return refused("nothing was changed"),
-            Err(error) => return refused(error.to_string()),
+            Ok(None) => {
+                failure = Some("nothing was changed".to_string());
+                break;
+            }
+            Err(error) => {
+                failure = Some(error.to_string());
+                break;
+            }
         }
+    }
+    if let Some(reason) = failure.as_ref()
+        && taken.is_empty()
+    {
+        return refused(reason.clone());
+    }
+    if let Some(reason) = failure.as_ref() {
+        // The checks above make this unreachable. Sheets already taken back
+        // stay so: the state below follows them, never a stale group.
+        crate::diagnostics::log_error(
+            "Agent revert stopped after some sheets of the group were already taken back",
+            &anyhow::anyhow!(reason.clone()),
+        );
+        debug_assert!(false, "a revert failed after the checks: {reason}");
     }
     app.document_state.agent_edits.forget_step(group);
     app.document_state.undo_groups.remove(&group);
@@ -138,6 +159,12 @@ pub(in crate::app::command) fn revert(app: &mut Signex, args: &CommandArgs) -> R
     app.library.drift.check_pending = true;
     for (member, _, patch) in &taken {
         app.after_sheet_change(member, Signex::render_invalidation_for_patch(*patch));
+    }
+    if let Some(reason) = failure {
+        return refused(format!(
+            "{reason}; {} sheet(s) of the group were already taken back",
+            taken.len()
+        ));
     }
     let names: Vec<String> = members.iter().map(|member| file_name(member)).collect();
     // A single command's label already says its document.
@@ -157,7 +184,9 @@ pub(in crate::app::command) fn revert(app: &mut Signex, args: &CommandArgs) -> R
     {
         let sheets: Vec<Value> = taken
             .iter()
-            .map(|(member, revision, _)| json!({"document": file_name(member), "revision": revision}))
+            .map(|(member, revision, _)| {
+                json!({"document": file_name(member), "path": member.display().to_string(), "revision": revision})
+            })
             .collect();
         object.insert("sheets".to_string(), Value::Array(sheets));
     }

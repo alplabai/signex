@@ -72,18 +72,18 @@ pub(crate) fn named_document_paths(
 
 /// Keep, in the `sheets` list of an `apply_edits` or `revert` answer, only the
 /// entries for documents this call named itself (`named`, already confined),
-/// compared by file name: the answer never lists a sheet outside the run's
-/// folders, whatever the app says. Fail closed: no `named` file, no entry.
+/// compared by full resolved path (`path`, as the app holds the sheet): the
+/// answer never lists a sheet outside the run's folders, whatever the app says,
+/// and a same-named file in another folder is not one the call named. Fail
+/// closed: an entry with no `path`, or none named, is dropped.
 pub(crate) fn scrub_sheets(data: &mut Value, named: &[PathBuf]) {
     let Some(Value::Array(sheets)) = data.get_mut("sheets") else {
         return;
     };
     sheets.retain(|entry| {
-        entry["document"].as_str().is_some_and(|document| {
-            named
-                .iter()
-                .any(|path| path.file_name().is_some_and(|name| name == document))
-        })
+        entry["path"]
+            .as_str()
+            .is_some_and(|path| named.iter().any(|named| named == Path::new(path)))
     });
 }
 
@@ -193,14 +193,16 @@ mod tests {
     fn the_sheets_of_an_answer_keep_only_the_documents_the_call_named() {
         let named = [PathBuf::from("/w/p/a.snxsch")];
         let mut data = json!({"reverted": true, "sheets": [
-            {"document": "a.snxsch", "revision": 3},
-            {"document": "b.snxsch", "revision": 9},
-            {"revision": 1},
+            {"document": "a.snxsch", "path": "/w/p/a.snxsch", "revision": 3},
+            {"document": "b.snxsch", "path": "/w/q/b.snxsch", "revision": 9},
+            // The same file name in a folder the call never named.
+            {"document": "a.snxsch", "path": "/w/other/a.snxsch", "revision": 5},
+            {"document": "a.snxsch", "revision": 1},
         ]});
         scrub_sheets(&mut data, &named);
         assert_eq!(
             data["sheets"],
-            json!([{"document": "a.snxsch", "revision": 3}])
+            json!([{"document": "a.snxsch", "path": "/w/p/a.snxsch", "revision": 3}])
         );
         let mut none = json!({"changed": false});
         scrub_sheets(&mut none, &named);

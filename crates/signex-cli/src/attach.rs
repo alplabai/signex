@@ -120,7 +120,10 @@ impl Attached {
         // duplicate document id, another thread's line in the shared log), so
         // no command's are shown. The app's own Messages panel keeps them all.
         reply.messages.clear();
-        if let Some(data) = reply.data.take() {
+        if let Some(mut data) = reply.data.take() {
+            // First: a `sheets` entry outside the call's named files is dropped
+            // here, not left to make the whole answer refused below.
+            scrub_sheets(&mut data, &named_by_call);
             reply.data = match scrub_data(data, &inside) {
                 // `save_writes` is for this check alone (made on the raw reply):
                 // it can list files outside the run's folders, so it is never printed.
@@ -128,7 +131,6 @@ impl Attached {
                     if let Value::Object(map) = &mut data {
                         map.remove("save_writes");
                     }
-                    scrub_sheets(&mut data, &named_by_call);
                     Some(data)
                 }
                 // Not revealed to exist: the same answer as for an unknown id.

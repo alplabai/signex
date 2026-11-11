@@ -248,6 +248,49 @@ fn answered(data: Value, changed: &[&str]) -> Value {
         "messages": [{"level": "INFO", "message": "from the app"}], "changed": changed})
 }
 
+/// #2178: a revert moves every sheet of its group, so each is named in
+/// `documents` and confined here, before anything is sent; and what the app
+/// answers lists only sheets the call named (by full path), never one outside
+/// the run's folders.
+#[test]
+fn a_revert_confines_the_sheets_it_names_and_its_answer_lists_only_those() {
+    let w = world();
+    let doc = w.fx.sheet.to_str().unwrap();
+    // The app answers with a sheet the run never named and may not see.
+    let app = w.app(&[answered(
+        json!({"reverted": true, "group": 1, "revision": 4, "sheets": [
+            {"document": "main.snxsch", "path": doc, "revision": 4},
+            {"document": "main.snxsch", "path": OTHER_PROJECT_SHEET, "revision": 9},
+        ]}),
+        &[],
+    )]);
+    let commands = jsonl(&[
+        // SHEET_B is a sheet of another project: outside this run's folders.
+        json!({"id": "revert", "args": {"document": doc, "group": 1, "documents": [doc, SHEET_B]}}),
+        json!({"id": "revert", "args": {"document": doc, "group": 1, "documents": [doc]}}),
+    ]);
+
+    let out = w.cli(&["run", w.project(), "--keep-going"], &commands);
+    let sent = app.finish();
+
+    assert_eq!(out.lines.len(), 2, "{}", out.stdout);
+    let (refused, answered) = (&out.lines[0], &out.lines[1]);
+    assert_eq!(refused["status"], "refused", "{refused}");
+    let reason = refused["reason"].as_str().unwrap();
+    assert!(reason.contains("operand `documents`"), "{reason}");
+    assert!(
+        !reason.contains("ProjectB"),
+        "no path of the other project: {reason}"
+    );
+    assert_eq!(sent.len(), 1, "only the confined revert was sent: {sent:?}");
+    assert_eq!(answered["status"], "answered", "{answered}");
+    assert_eq!(
+        answered["data"]["sheets"],
+        json!([{"document": "main.snxsch", "path": doc, "revision": 4}]),
+        "{answered}"
+    );
+}
+
 #[test]
 fn a_run_with_the_project_open_in_a_running_app_runs_there_and_prints_the_headless_result() {
     let w = world();

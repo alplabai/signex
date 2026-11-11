@@ -229,6 +229,33 @@ fn an_apply_edits_across_sheets_is_one_line_per_sheet_sharing_its_group() {
     }
 }
 
+/// The call names `a`, every edit names `b`: only `b` got a step, so only `b`
+/// has a line (a line for `a` would claim a step it never had).
+#[test]
+fn an_apply_edits_whose_edits_all_name_another_sheet_is_journaled_on_that_sheet_only() {
+    let mut f = fixture();
+    let (a, b) = (f.doc("a.snxsch"), f.doc("b.snxsch"));
+    let (before_a, before_b) = (f.revision("a.snxsch"), f.revision("b.snxsch"));
+
+    let reply = f.ask(
+        "apply_edits",
+        json!({
+            "document": a,
+            "expect_revision": before_a.to_string(),
+            "expect_revisions": {b.clone(): before_b},
+            "edits": [{"id": "place_junction", "args": {"at": [20, 20], "document": b}}],
+        }),
+    );
+
+    assert_eq!(reply["status"], "answered", "{reply}");
+    let entries = f.edits().entries;
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    assert_eq!(entries[0].path.as_deref(), Some(b.as_str()));
+    assert_eq!(entries[0].group, reply["data"]["group"].as_u64());
+    assert_eq!(entries[0].revision_before, Some(before_b));
+    assert_eq!(f.revision("a.snxsch"), before_a, "a got no step");
+}
+
 #[test]
 fn a_refused_command_is_a_line_with_its_reason_and_a_query_is_none() {
     let mut f = fixture();

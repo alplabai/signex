@@ -124,8 +124,10 @@ fn run_edits(app: &mut Signex, sheets: &[PathBuf], edits: &[Prepared]) -> Execut
 
 /// Commit every sheet under `group` with `commit`, which returns whether the
 /// sheet changed. When one fails after others landed, those are taken back
-/// (`discard_undo_group_top`, so nothing lands on the redo stack) and the rest
-/// rolled back: the call then changed nothing.
+/// (`discard_undo_group_top`) and the rest rolled back. The take-back is not an
+/// exact restore: the sheet's redo branch and any history the cap trimmed are
+/// gone and its revision moved. `run_listed` checks every engine first, so a
+/// multi-sheet call does not reach it.
 pub(super) fn commit_all(
     app: &mut Signex,
     sheets: &[PathBuf],
@@ -186,12 +188,15 @@ fn run_listed(
         rollback_all(app, sheets);
         return refused(format!("{reason}. Nothing was applied"));
     }
-    let ready = sheets.iter().all(|path| {
-        app.document_state
-            .engines
-            .get(path)
-            .is_some_and(Engine::transaction_ready)
-    });
+    // With one sheet the commit itself refuses, and nothing has landed to take
+    // back; with several, no engine may commit until every one can.
+    let ready = sheets.len() < 2
+        || sheets.iter().all(|path| {
+            app.document_state
+                .engines
+                .get(path)
+                .is_some_and(Engine::transaction_ready)
+        });
     if !ready {
         rollback_all(app, sheets);
         return refused("a sheet's transaction cannot commit. Nothing was applied");
@@ -201,7 +206,17 @@ fn run_listed(
         engine.commit_transaction(Some(group))
     }) {
         Ok(landed) => landed,
-        Err(why) => return refused(format!("{why}. Nothing was applied")),
+        Err(why) => {
+            if sheets.len() > 1 {
+                // Past the readiness check this does not happen.
+                crate::diagnostics::log_error(
+                    "Agent edit: a commit failed after every sheet was ready; sheets already committed were taken back and may have lost their redo history",
+                    &anyhow::anyhow!(why.clone()),
+                );
+                debug_assert!(false, "a commit failed after the readiness check: {why}");
+            }
+            return refused(format!("{why}. Nothing was applied"));
+        }
     };
     finish(app, call_path, group, &landed, ran, edits.len(), label)
 }
@@ -267,13 +282,15 @@ fn finish(
         ));
         json!({"changed": true, "revision": revision, "group": group.get(), "label": label, "edits": count, "results": ran.results})
     };
-    if landed.len() > 1
-        && let Some(object) = answer.as_object_mut()
-    {
+    // A call that touched anything but its own sheet lists what it did: its
+    // `revision` is the call's sheet's, and a step that landed elsewhere is
+    // taken back by naming those sheets (`docs/AGENT_EDITS.md`).
+    let own_only = landed.len() == 1 && landed[0].0 == call_path;
+    if !own_only && let Some(object) = answer.as_object_mut() {
         let sheets: Vec<Value> = landed
             .iter()
             .map(|(path, changed)| {
-                json!({"document": file_name(path), "revision": revision_of(app, path), "changed": changed})
+                json!({"document": file_name(path), "path": path.display().to_string(), "revision": revision_of(app, path), "changed": changed})
             })
             .collect();
         object.insert("sheets".to_string(), Value::Array(sheets));

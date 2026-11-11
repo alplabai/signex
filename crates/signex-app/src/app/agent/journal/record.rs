@@ -147,12 +147,34 @@ impl Signex {
         let started = self.journal_started(command, args);
         self.document_state.agent_edits.last_group = None;
         let (outcome, task) = run(self);
-        // One line per sheet the call touched, each with its own revisions.
+        let started = self.sheets_with_a_step(started);
+        // One line per sheet that got a step, each with its own revisions.
         let writes: Vec<Task<Message>> = started
             .into_iter()
             .map(|started| self.journal_edit(started, command, args, &outcome))
             .collect();
         (outcome, Task::batch(std::iter::once(task).chain(writes)))
+    }
+
+    /// Of the sheets a call might touch, those that got the step it made. A
+    /// call that made none (refused, or nothing changed) keeps the first, the
+    /// document it names, as one line has always been written for it.
+    fn sheets_with_a_step(&self, mut started: Vec<Started>) -> Vec<Started> {
+        if started.len() < 2 {
+            return started;
+        }
+        let Some(group) = self.document_state.agent_edits.last_group else {
+            started.truncate(1);
+            return started;
+        };
+        started.retain(|sheet| {
+            sheet
+                .path
+                .as_deref()
+                .and_then(|path| self.document_state.engines.get(path))
+                .is_some_and(|engine| engine.has_undo_group(group))
+        });
+        started
     }
 
     /// What is known before the command runs, for each sheet it may touch: the

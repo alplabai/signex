@@ -72,9 +72,13 @@ Two commands, both with capability `edit` in `signex-cli`:
   each edit's own sheet, and commits every engine under one `UndoGroupId`. Any
   refusal rolls every sheet back. Before the first commit each engine is asked
   whether it can still commit (`Engine::transaction_ready`), because an engine
-  cannot take a commit back once it landed; a commit that fails anyway after
-  others landed takes those entries back (`discard_undo_group_top`, nothing on
-  the redo stack) and rolls the rest back. A read-only sheet refuses the whole
+  cannot take a commit back once it landed. A commit that fails anyway after
+  others landed does not happen past that check; if it ever did, the landed
+  entries would be taken back with `discard_undo_group_top` and the rest rolled
+  back, but not exactly: those sheets' redo branch and any history the cap
+  trimmed are lost and their revision moves, so it is logged as an error (and
+  asserts in a debug build). A call on one sheet skips the check: its own
+  commit refuses, with the engine's words, and nothing has landed. A read-only sheet refuses the whole
   call before anything begins. The repaint each sheet owes waits until the
   group has landed. While the list runs, the project read the name checks share
   is refreshed with the current document of every touched sheet, so an edit
@@ -91,9 +95,13 @@ Two commands, both with capability `edit` in `signex-cli`:
   comes only from an empty list or a list of dry runs: it records no step and keeps the person's
   redo. An edit that changes nothing (a junction already there, a net already
   that colour) is refused by its handler like any other, so it refuses the
-  whole list; a refusal is `Disabled`, never a bare `Ran`. A call that
-  changed several sheets adds `sheets`, `[{document, revision, changed}]` with
-  file names, in order of first use; `revision` stays the call's own sheet.
+  whole list; a refusal is `Disabled`, never a bare `Ran`. A call whose touched
+  sheets are not exactly its own `document` (several sheets, or every edit
+  naming another one) adds `sheets`, `[{document, path, revision, changed}]`,
+  in order of first use; `revision` stays the call's own sheet's, so a step
+  that landed elsewhere shows its revision in `sheets`. It is taken back with
+  `revert` naming the sheet(s) that changed (their `changed: true` entries),
+  not the call's own sheet, which has no step.
 - Engine notices an edit raises (`Engine::take_warnings`) are held while the
   transaction is open and shown after the commit; a rollback drops them, so
   Messages never reports a pin or a net of an edit that did not happen.
@@ -179,8 +187,9 @@ works on these steps by the rules above. A command that makes no undo step
 Every agent command that changes a document (or writes or closes one), and its outcome, is also a line
 of the project's `.signex/agent-edits.jsonl`, with the revision before and
 after and the undo group named here, so it can be replayed at the same
-revision. A call across sheets is one line per sheet it touched, all with the
-same group. See `docs/AGENT_JOURNALS.md`.
+revision. A call across sheets is one line per sheet that got a step, all with
+the same group (a call whose edits all name another sheet has that sheet's line
+only). See `docs/AGENT_JOURNALS.md`.
 
 ## signex-cli
 

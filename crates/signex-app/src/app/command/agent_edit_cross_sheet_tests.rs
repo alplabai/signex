@@ -159,6 +159,42 @@ fn an_edit_on_one_sheet_is_seen_by_the_name_check_of_a_later_edit_on_the_other()
     assert!(merged.contains("\"Y\""), "edit 4 did not see Y: {answer}");
 }
 
+/// The call names `top`, but every edit names `child`: the step lands on the
+/// child alone. The answer says so (`sheets`, with the child's new revision;
+/// `revision` stays the call's own sheet's), and the step is taken back by
+/// naming the sheet that has it.
+#[test]
+fn a_call_whose_edits_all_name_another_sheet_lists_it_and_is_reverted_by_naming_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = two_sheets(&dir);
+    let (top, kid) = (top(&dir), kid(&dir));
+    let top_before = state(&app, &top);
+    let kid_at = revision(&app, &kid);
+    let answer = answered(apply_with(
+        &mut app,
+        &dir,
+        Some(json!({ quoted(&kid): kid_at })),
+        json!([{"id": "place_junction", "args": {"at": [20, 20], "document": quoted(&kid)}}]),
+    ));
+    let group = answer["group"].as_u64().expect("a group");
+    assert_eq!(answer["revision"], top_before.0, "the call's own sheet's");
+    assert_eq!(state(&app, &top), top_before, "the top sheet got no step");
+    let sheets = answer["sheets"].as_array().expect("a sheet list");
+    assert_eq!(sheets.len(), 1, "{answer}");
+    assert_eq!(sheets[0]["document"], "child.snxsch");
+    assert_eq!(sheets[0]["revision"], revision(&app, &kid));
+    assert_eq!(sheets[0]["changed"], true);
+    assert_ne!(revision(&app, &kid), kid_at);
+
+    // The sheet without the step cannot take it back; the one with it can.
+    let reason = refusal(revert(&mut app, &top, group));
+    assert!(reason.contains("no longer in the history"), "{reason}");
+    let done = answered(revert(&mut app, &kid, group));
+    assert_eq!(done["reverted"], true);
+    assert_eq!(junctions(&app, &kid), 0);
+    assert_eq!(state(&app, &top), top_before);
+}
+
 #[test]
 fn a_list_across_two_sheets_is_one_group_and_one_ctrl_z_undoes_it_on_both() {
     let dir = tempfile::tempdir().unwrap();
