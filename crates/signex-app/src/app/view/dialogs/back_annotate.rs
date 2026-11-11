@@ -88,8 +88,25 @@ impl Signex {
             && state
                 .ready_list()
                 .is_some_and(|l| l.rows.iter().any(BackRow::applies));
+        // A designator the ticked rows would leave on several parts is not
+        // blocked (Caner, #1312), so it is said next to Execute too.
+        let shared = state.ready_list().map_or(0, |list| {
+            list.notes
+                .iter()
+                .filter(|n| matches!(n, BackNote::SharedDesignator { .. }))
+                .count()
+        });
+        let warning: Vec<Element<'_, Message>> = (shared > 0)
+            .then(|| {
+                line(
+                    t!(i18n, ids::BACK_ANNOTATE_SHARED_WARNING, "count" => shared),
+                    crate::styles::pill_colors(tokens, crate::styles::PillTone::Warn).1,
+                )
+            })
+            .into_iter()
+            .collect();
         let footer = dialog_footer_split(
-            Vec::new(),
+            warning,
             vec![
                 dialog_button(
                     &s(i18n, ids::BACK_ANNOTATE_CLOSE),

@@ -130,6 +130,14 @@ impl BackAnnotateState {
         matches!(self.phase, Phase::Ready)
     }
 
+    /// Why there is no list, when the read or a Refresh failed.
+    pub fn failure(&self) -> Option<&str> {
+        match &self.phase {
+            Phase::Failed(why) => Some(why),
+            _ => None,
+        }
+    }
+
     /// Execute is stating the closed sheets; the ticks and Refresh wait.
     pub fn is_checking(&self) -> bool {
         self.checking

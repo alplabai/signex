@@ -225,7 +225,7 @@ impl Signex {
             };
             // A sheet another open project reaches keeps its `reference`
             // for that project: write a per-placement entry instead (#1224).
-            let single = part.single && !self.shared_with_another_open_project(&part.file);
+            let single = part.single && !self.shared_with_project_other_than(state.project, &part.file);
             by_file
                 .entry(part.file.clone())
                 .or_insert_with(|| (single, Vec::new()))

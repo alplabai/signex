@@ -325,6 +325,9 @@ define_ids! {
     BACK_ANNOTATE_NOTE_PART_NOT_READ = "back-annotate-note-part-not-read";
     BACK_ANNOTATE_NOTE_SHARED = "back-annotate-note-shared";
     BACK_ANNOTATE_NOTE_EXTRA_LINK = "back-annotate-note-extra-link";
+    BACK_ANNOTATE_PROJECT_CLOSED = "back-annotate-project-closed";
+    BACK_ANNOTATE_FAILED_LINE = "back-annotate-failed-line";
+    BACK_ANNOTATE_SHARED_WARNING = "back-annotate-shared-warning";
     BACK_ANNOTATE_STALE = "back-annotate-stale";
     BACK_ANNOTATE_REFRESH = "back-annotate-refresh";
     BACK_ANNOTATE_VALID = "back-annotate-valid";

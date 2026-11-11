@@ -641,3 +641,25 @@ fn a_bound_key_opens_back_annotate() {
     );
     assert_eq!(list(&rig).rows.len(), 4);
 }
+
+/// #1312 review: a Refresh after the project closed says why in the dialog
+/// and in Messages instead of keeping the old list.
+#[test]
+fn a_refresh_after_the_project_closed_fails_with_a_reason() {
+    let mut rig = rig();
+    settle(&mut rig.app, menu_row("back_annotate_schematics"));
+    assert!(rig.app.ui_state.back_annotate.as_ref().unwrap().is_ready());
+    rig.app.document_state.projects.clear();
+    let since = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
+    send(&mut rig, BackAnnotateMsg::RefreshRequested);
+    let state = rig.app.ui_state.back_annotate.as_ref().unwrap();
+    assert!(!state.is_ready());
+    assert!(state.list().is_none(), "the old list is not kept");
+    assert_eq!(state.failure(), Some("The project is no longer open."));
+    assert!(
+        signex_app::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.id > since && e.message.contains("The project is no longer open")),
+        "Messages says why"
+    );
+}

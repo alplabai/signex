@@ -64,3 +64,12 @@ back-annotate-done = Back Annotate: { $count ->
     [one] 1 sheet
    *[other] { $sheets } sheets
 }; save the sheets to keep them.
+# Refresh after the project was closed.
+back-annotate-project-closed = The project is no longer open.
+# Messages panel line when the dialog cannot show a list; $why is the reason.
+back-annotate-failed-line = Back Annotate: { $why }
+# Next to Execute while the ticked rows would leave a designator on several parts.
+back-annotate-shared-warning = { $count ->
+    [one] 1 designator would be on several parts; see Notes.
+   *[other] { $count } designators would be on several parts; see Notes.
+}

@@ -135,13 +135,19 @@ impl Signex {
         let (Some(board_path), project_id) = (state.board.clone(), state.project) else {
             return Task::none();
         };
+        // A Refresh after the project or its board closed says why there
+        // is no list, rather than keep the old one.
+        let Some(project) = self.document_state.project_by_id(project_id) else {
+            let why = t!(self.ui_state.i18n, ids::BACK_ANNOTATE_PROJECT_CLOSED).into_string();
+            self.fail_back_annotate(why);
+            return Task::none();
+        };
         let Some(engine) = self.document_state.board_engine(&board_path) else {
+            let why = self.back_annotate_board_missing(&file_name(&board_path));
+            self.fail_back_annotate(why);
             return Task::none();
         };
         let (board, revision) = (engine.board().clone(), engine.revision());
-        let Some(project) = self.document_state.project_by_id(project_id) else {
-            return Task::none();
-        };
         let Some(root) = project_root_sheet_path(project) else {
             let why = t!(self.ui_state.i18n, ids::UPDATE_PCB_NO_SCHEMATIC).into_string();
             self.fail_back_annotate(why);
@@ -186,14 +192,15 @@ impl Signex {
     }
 
     fn back_annotate_read(&mut self, job: u64, result: Result<Arc<super::BackRead>, String>) {
-        if self
+        let Some(owner) = self
             .ui_state
             .back_annotate
             .as_ref()
-            .is_none_or(|state| state.job != job)
-        {
+            .filter(|state| state.job == job)
+            .map(|state| state.project)
+        else {
             return;
-        }
+        };
         match result {
             Ok(read) => {
                 for (library, why) in &read.library_errors {
@@ -207,7 +214,7 @@ impl Signex {
                 let shared: HashSet<(InstancePath, Vec<Uuid>)> = read
                     .files
                     .iter()
-                    .filter(|(_, part)| self.shared_with_another_open_project(&part.file))
+                    .filter(|(_, part)| self.shared_with_project_other_than(owner, &part.file))
                     .map(|(key, _)| key.clone())
                     .collect();
                 let mut list = read.list.clone();
@@ -236,9 +243,14 @@ impl Signex {
 
     /// The read or the board open failed: the dialog says why.
     pub(super) fn fail_back_annotate(&mut self, why: String) {
-        crate::diagnostics::log_warning(format!("Back Annotate: {why}"));
+        let line = t!(self.ui_state.i18n, ids::BACK_ANNOTATE_FAILED_LINE, "why" => why.as_str());
+        crate::diagnostics::log_warning(line.into_string());
         if let Some(state) = self.ui_state.back_annotate.as_mut() {
             state.phase = Phase::Failed(why);
+            state.list = None;
+            state.read = None;
+            state.checking = false;
+            state.pending = None;
         }
     }
 
