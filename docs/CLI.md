@@ -544,7 +544,8 @@ on-demand check shares (`signex_types::check`; DRC adopts it next):
    "objects": ["..."], "fingerprint": "...", "reason": "...", "author": "...",
    "date": "...", "message": "..."}}],
  "lapsed": [{"kind": "finding", "rule_id": "...", "objects": ["..."], "...": "..."}],
- "warnings": ["ERC: sheet /abs/x.snxsch could not be read: ..."],
+ "warnings": ["ERC: sheet /abs/x.snxsch could not be read (<error>)",
+   "ERC: sheet /abs/../y.snxsch is not read: /abs/../y.snxsch is outside the project folder (or a link out of it); a headless run does not read it"],
  "rule_set": {"source": "project", "profile": "...", "sha256": "<64 hex>"},
  "baseline": {"run": 1, "new": ["<key>"], "gone": ["<key>"]}}
 ```
@@ -573,18 +574,20 @@ on-demand check shares (`signex_types::check`; DRC adopts it next):
   folder (each once), a stored rule set this build cannot read (this
   machine's rules are used) and a rule entry it does not recognise. Run ERC's
   info lines (the totals, "no saved rule set") are not repeated; `rule_set`
-  says which rules ran.
+  says which rules ran. Run ERC's rule-profile drift check ("Cannot check
+  this project's rule profile for changes: ...") is not part of `check_erc`.
 - `rule_set` (a field every check may fill, its content the check's own):
   for ERC, `source` (`project`: the project's stored rule set; `machine`:
   this machine's ERC rules, used when the project has none or one this build
   cannot read), `profile` (the profile it was saved from, or `null`) and
   `sha256` (the rule set's hash, as the ERC report prints it).
-- In a headless run or for an agent, the check reads from disk only what a
-  query may read (`docs/AGENT_SOCKET.md`, "Security"): a page, the root, a
-  child sheet or `erc.dsl` outside the project folder (or a link out of it),
-  not a regular file (a FIFO) or over the size cap is not read, and a
-  warning names it. Open sheets are read from memory. Run ERC is not
-  limited this way.
+- For a sheet of a project, in a headless run or for an agent, the check
+  reads from disk only what a query may read (`docs/AGENT_SOCKET.md`,
+  "Security"): a page, the root, a child sheet or `erc.dsl` outside the
+  project folder (or a link out of it), not a regular file (a FIFO) or over
+  the size cap is not read, and a warning names it. Open sheets are read
+  from memory. A loose sheet is not limited this way (see the known limits),
+  and neither is Run ERC.
 - `run`: this run's number. The app keeps the last 8 runs' keys in memory
   (`KEPT_CHECK_RUNS`). With `baseline=<run>` the answer also has `baseline`:
   `new` lists the keys of this run that run did not have, `gone` the keys only
@@ -604,6 +607,13 @@ Known limits:
   `schematic_root` the netlist root is the named sheet, so two runs made with
   different `document=` sheets can differ in root-dependent findings, which
   then show as `new` and `gone`. Compare runs made with the same `document=`.
+- A loose sheet (in no project) checked in a headless run is not confined:
+  there is no project folder to confine it to, so the files its sheet symbols
+  refer to are read as Run ERC reads them (a reference leaving the sheet's
+  folder is still refused). The agent channel cannot reach a loose sheet.
+- A file can change between the check that allows it and its read (a link
+  put in its place). The headless queries have the same gap; using it needs
+  write access to the project folder.
 
 ## Working through a running Signex
 
