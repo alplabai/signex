@@ -114,7 +114,9 @@ fn search_filters_rows_by_label_command_or_trigger() {
 
 #[test]
 fn key_names_fold_without_turkic_rules() {
-    let editor = KeymapEditorModel::built_ins().unwrap();
+    let editor = KeymapEditorModel::built_ins()
+        .unwrap()
+        .with_platform(Platform::Windows);
     let tr = signex_i18n::I18n::with_message_locale_for_test("tr");
     let matches = editor.filtered_rows_in(&tr, "ins");
     assert!(
