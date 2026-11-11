@@ -387,3 +387,55 @@ fn file_new_pcb_follows_the_open_project() {
     open_project(&mut app, "P.snxprj");
     assert!(row_is_live(&app, "File/New/PCB"));
 }
+
+/// The second Design row: Update Schematics (#1312).
+fn update_schematics_row(app: &Signex) -> MenuItem {
+    let model = menu_bar_model(&menu_context(app));
+    let design = model
+        .menus
+        .iter()
+        .find(|m| m.title == "Design")
+        .expect("Design menu");
+    match design.entries.get(1) {
+        Some(MenuEntry::Item(item)) => item.clone(),
+        other => panic!("Design's second entry is a row, got {other:?}"),
+    }
+}
+
+/// #1312: on a project's board, Design ▸ Update Schematics in the project
+/// runs Back Annotate; without a project it is greyed.
+#[test]
+fn design_update_schematics_names_the_project_on_a_board_and_opens_back_annotate() {
+    let mut app = loaded_board_app();
+    assert!(
+        !update_schematics_row(&app).is_enabled(),
+        "no project: greyed"
+    );
+    open_project(&mut app, "P.snxprj");
+    let row = update_schematics_row(&app);
+    assert_eq!(
+        row.label.replace(['\u{2068}', '\u{2069}'], ""),
+        "Update Schematics in P.snxprj"
+    );
+    assert!(row.is_enabled());
+    let _ = app.update(Message::Menu(row.dispatches().expect("live").clone()));
+    assert!(app.ui_state.back_annotate.is_some(), "the dialog opened");
+}
+
+/// #1312: Tools ▸ Annotation ▸ Back Annotate Schematics... is live on a
+/// project's sheet and runs the same command.
+#[test]
+fn tools_back_annotate_is_live_on_a_project_sheet() {
+    let mut app = one_symbol_selected();
+    assert!(!row_is_live(
+        &app,
+        "Tools/Annotation/Back Annotate Schematics..."
+    ));
+    open_project(&mut app, "P.snxprj");
+    assert!(row_is_live(
+        &app,
+        "Tools/Annotation/Back Annotate Schematics..."
+    ));
+    let label = update_schematics_row(&app).label;
+    assert_eq!(label, "Update Schematics", "{label}");
+}

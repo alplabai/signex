@@ -123,7 +123,6 @@ pub enum MenuMessage {
     Annotate,
     AnnotateReset,
     AnnotateResetDuplicates,
-    AnnotateBack,
     // Tools
     /// Tools ▸ Passive Network Calculator — opens the in-app
     /// resistor/capacitor/inductor calculator modal. Not an OS window

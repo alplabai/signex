@@ -2,7 +2,7 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, item, item_if, panel_item, stub,
+    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, item, item_if, panel_item,
     submenu, unavailable,
 };
 use super::{MenuEntry, MenuMessage};
@@ -270,6 +270,7 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
 pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         update_pcb_row(ctx),
+        update_schematics_row(ctx),
         // #2234: enter or leave the sketch of the board in view; greyed
         // with no PCB.
         cmd_item_gated(ctx, cmd("board_sketch", "Board Sketch", "")),
@@ -299,6 +300,24 @@ fn update_pcb_row(ctx: &MenuContext) -> MenuEntry {
     cmd_item_gated_as(
         ctx,
         cmd("update_pcb_from_schematic", "Update PCB Document", ""),
+        label.into_string(),
+    )
+}
+
+/// Design ▸ Update Schematics in `<project>` (#1312): Back Annotate, the
+/// board-side mirror of the row above. The project is named on a board.
+fn update_schematics_row(ctx: &MenuContext) -> MenuEntry {
+    use signex_i18n::{ids, t};
+    let i18n = &ctx.i18n;
+    let label = match &ctx.pcb_sync {
+        Some(PcbSyncLabel::ImportFrom(project)) => {
+            t!(i18n, ids::BACK_ANNOTATE_MENU_UPDATE_IN, "project" => project.as_str())
+        }
+        _ => t!(i18n, ids::BACK_ANNOTATE_MENU_UPDATE),
+    };
+    cmd_item_gated_as(
+        ctx,
+        cmd("back_annotate_schematics", "Update Schematics", ""),
         label.into_string(),
     )
 }
@@ -376,7 +395,15 @@ fn annotation(ctx: &MenuContext) -> Vec<MenuEntry> {
             ),
         ),
         SEP,
-        stub("Back Annotate Schematics..."),
+        // Back Annotate: docs/MENU_BAR.md#back-annotate
+        cmd_item_gated(
+            ctx,
+            cmd(
+                "back_annotate_schematics",
+                "Back Annotate Schematics...",
+                "",
+            ),
+        ),
         // The editable numbering dialog: docs/MENU_BAR.md#number-schematic-sheets
         cmd_item_gated(
             ctx,

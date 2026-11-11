@@ -28,12 +28,17 @@
 //! - A placed part whose footprint cannot be resolved gets a note, and the
 //!   pads of it and of an unread part are left out of net sync.
 
+mod back;
 mod change;
 mod diff;
 mod lower;
 mod nets;
 mod report;
 
+pub use back::{
+    BackBlock, BackChange, BackChangeList, BackGroup, BackInput, BackKey, BackNote, BackPart,
+    BackRow, SheetEdit, diff_schematic, sheet_commands,
+};
 pub use change::{
     ChangeReason, EcoBlock, EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow, GroupTicks,
 };

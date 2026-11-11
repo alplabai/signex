@@ -244,6 +244,7 @@ altium	hint	-	-	sync_sheet_pins
 altium	hint	-	-	change_component
 altium	hint	-	-	open_project_options
 altium	hint	-	-	update_pcb_from_schematic
+altium	hint	-	-	back_annotate_schematics
 altium	hint	-	-	tool_select
 altium	hint	-	-	lasso_select
 altium	hint	-	-	select_connection
@@ -573,6 +574,7 @@ classic	hint	-	-	sync_sheet_pins
 classic	hint	-	-	change_component
 classic	hint	-	-	open_project_options
 classic	hint	-	-	update_pcb_from_schematic
+classic	hint	-	-	back_annotate_schematics
 classic	hint	-	-	tool_select
 classic	hint	-	-	lasso_select
 classic	hint	-	-	select_connection

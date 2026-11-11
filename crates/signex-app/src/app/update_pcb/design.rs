@@ -135,7 +135,7 @@ pub(crate) fn compute(request: DesignRequest) -> Result<Arc<Computed>, String> {
 /// The placements nothing linked under may be removed from: every child
 /// sheet whose file did not assemble, and the root placement when a page
 /// with no parent failed (its parts sit at the root).
-fn unreadable_placements(
+pub(crate) fn unreadable_placements(
     set: &ProjectSheetSet,
     graph: &crate::app::project_sheets::AssembledGraph,
     occurrences: &[signex_net::SheetOccurrence],
@@ -164,15 +164,15 @@ fn unreadable_placements(
 
 /// Footprint resolution against the open libraries, with one adapter per
 /// library opened once.
-struct Resolver<'a> {
+pub(crate) struct Resolver<'a> {
     libraries: &'a [LibraryRows],
     adapters: HashMap<Uuid, LocalGitAdapter>,
     /// The libraries that did not open, with why.
-    errors: Vec<(PathBuf, String)>,
+    pub(crate) errors: Vec<(PathBuf, String)>,
 }
 
 impl<'a> Resolver<'a> {
-    fn open(libraries: &'a [LibraryRows]) -> Self {
+    pub(crate) fn open(libraries: &'a [LibraryRows]) -> Self {
         let mut adapters = HashMap::new();
         let mut errors = Vec::new();
         for lib in libraries {
@@ -192,7 +192,10 @@ impl<'a> Resolver<'a> {
 
     /// The board footprint of the part whose first unit is `symbol`: its
     /// library row, the alternate it was built with, the library footprint.
-    fn resolve(&self, symbol: &Symbol) -> Result<ResolvedFootprint, FootprintResolveError> {
+    pub(crate) fn resolve(
+        &self,
+        symbol: &Symbol,
+    ) -> Result<ResolvedFootprint, FootprintResolveError> {
         let (Some(library), Some(row_id)) = (symbol.library_id, symbol.row_id) else {
             return Err(FootprintResolveError::NoFootprint);
         };
