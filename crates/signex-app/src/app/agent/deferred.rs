@@ -34,15 +34,24 @@ impl Signex {
         let mark = crate::diagnostics::newest_entry_id();
         let before = self.change_snapshot();
         let (outcome, task) = match self.agent_gate_closed(ticket, &loaded) {
-            Some(reason) => (CommandOutcome::Disabled { reason }, Task::none()),
-            // A socket request's edit is journaled as one that did not wait.
-            None if self.agent.waiting.contains_key(&ticket) => {
+            // Turned away at the gate, as at request time: an access event,
+            // no edit line.
+            Some(reason) => {
+                let pid = self.agent.waiting.get(&ticket).and_then(|w| w.pid);
+                let named = self
+                    .document_state
+                    .document_project(&loaded.target)
+                    .map(|project| project.path.clone());
+                let refused = self.journal_turned_away(pid, Some(&reason), named);
+                (CommandOutcome::Disabled { reason }, refused)
+            }
+            // A socket or headless edit is journaled as one that did not wait.
+            None => {
                 let (command, args) = (loaded.command.clone(), loaded.args.clone());
                 self.with_origin(loaded.origin.clone(), |app| {
                     app.journaled(&command, &args, |app| app.run_with_reads(loaded))
                 })
             }
-            None => self.run_with_reads(loaded),
         };
         match self.agent.waiting.remove(&ticket) {
             Some(waiting) => {

@@ -216,8 +216,9 @@ nothing applied, the project is read, and the edit runs again on it.
   outcome by ticket, so its result line is unchanged. Replies to requests
   sent on the socket without waiting may therefore arrive in another order
   than the requests: match a reply to its request by `id`. The journal line
-  (below) of a socket edit that waited is written when it runs, once, with
-  that run's outcome; the wait itself writes none.
+  (below) of an edit that waited, from the socket or a headless run, is
+  written when it runs, once, with that run's outcome; the wait itself
+  writes none.
 - Staleness: the revision of the target sheet and of every open sheet of its
   project is recorded when the reads start (a list's other sheets are of that
   project, so they are among them). If one differs at completion, or
@@ -232,7 +233,9 @@ nothing applied, the project is read, and the edit runs again on it.
   land: it is refused, with nothing applied and the reason a new request
   would get, when agent connections were turned off ("agent connections are
   off"), turned off and on again (a new session token: "the session token is
-  missing or wrong"), or its document left the agent's reach.
+  missing or wrong"), or its document left the agent's reach. Like that
+  refusal at request time, it is a `refused` line of the access journal and
+  has no edit line.
 - No read: a loose sheet, or a project whose sheets are all open, is checked
   from memory and the edit runs at once. A `place_component` that names an
   open library and one row of it reads that row, so it waits; one whose

@@ -1018,3 +1018,31 @@ fn a_dry_run_in_a_project_writes_nothing_to_messages() {
         .collect();
     assert!(said.is_empty(), "{said:?}");
 }
+
+/// A headless `place_wire` whose net reaches the closed child waits for the
+/// project's read, and is still journaled once, as it was before it waited.
+#[test]
+fn a_headless_wire_that_waited_for_the_project_is_journaled_once() {
+    use crate::app::agent::journal::{EditEntry, Journal, Report, read_journal};
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    app.agent.journals_on = true;
+    let id = AppCommandId::new("place_wire").unwrap();
+    let args =
+        CommandArgs::parse_operands(&id, &["start=5.08,0", "end=10.16,0", "allow_merge=true"])
+            .unwrap();
+    let (outcome, task) = app.run_headless_command_in_test(&id, args);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .unwrap();
+    let path = dir.path().join(".signex").join(Journal::Edits.file_name());
+    let report: Report<EditEntry> = read_journal(&path).expect("the edit journal");
+    assert_eq!(report.entries.len(), 1, "{:?}", report.entries);
+    assert_eq!(report.entries[0].command, "place_wire");
+    assert_eq!(report.entries[0].outcome, "ran");
+    assert_eq!(report.entries[0].pid, Some(std::process::id()));
+}

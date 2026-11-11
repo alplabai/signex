@@ -458,24 +458,13 @@ impl Signex {
         // A request turned away before its command was looked at is an access
         // event; one the command's own handler refused is in the edit journal.
         let turned_away = if status == Status::Refused && !self.agent.reached_handler {
-            let (pid, why) = (call.pid, reason.as_deref().map(printable));
-            // The project the request names records it; a request that names
-            // none (a bad token, a malformed line) goes to every open project,
-            // each seeing only what is not another project's path.
             let named = match &call.input {
                 Input::Line(line) => wire::parse_request(line)
                     .ok()
                     .and_then(|request| self.project_named_by(&request.operands)),
                 _ => None,
             };
-            let to = named.map_or_else(|| self.open_project_files(), |project| vec![project]);
-            self.journal_access_to(&to, |ts, _| {
-                let entry = AccessEntry::new(ts, "refused", "socket").with_peer(pid, None);
-                match &why {
-                    Some(why) => entry.with_reason(why.clone()),
-                    None => entry,
-                }
-            })
+            self.journal_turned_away(call.pid, reason.as_deref(), named)
         } else {
             Task::none()
         };
@@ -494,6 +483,27 @@ impl Signex {
         }
         self.send_agent_reply(id.as_deref(), call.pid, mark, &before, verdict, &call.reply);
         Task::batch([task, turned_away])
+    }
+
+    /// Record a request turned away at the gate in the access journal. The
+    /// project it names records it; a request that names none (a bad token, a
+    /// malformed line) goes to every open project, each seeing only what is
+    /// not another project's path.
+    pub(super) fn journal_turned_away(
+        &mut self,
+        pid: Option<u32>,
+        reason: Option<&str>,
+        named: Option<std::path::PathBuf>,
+    ) -> Task<Message> {
+        let why = reason.map(printable);
+        let to = named.map_or_else(|| self.open_project_files(), |project| vec![project]);
+        self.journal_access_to(&to, |ts, _| {
+            let entry = AccessEntry::new(ts, "refused", "socket").with_peer(pid, None);
+            match &why {
+                Some(why) => entry.with_reason(why.clone()),
+                None => entry,
+            }
+        })
     }
 
     /// Log one request and answer it on its connection with what it did.

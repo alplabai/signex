@@ -235,6 +235,58 @@ fn a_waiting_request_is_journaled_once_when_its_edit_ran() {
     assert_eq!(entry.group, reply["data"]["group"].as_u64(), "{reply}");
 }
 
+/// A waiting request turned away when its reads land is an access event, as
+/// the same refusal at request time is, and has no edit line.
+#[test]
+fn a_waiting_request_refused_at_the_gate_is_in_the_access_journal() {
+    use crate::app::agent::journal::{AccessEntry, Journal, Report, read_journal};
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_in(dir.path());
+    app.agent.journals_on = true;
+    let file = "b.snxsch";
+    let doc = dir.path().join(file).display().to_string();
+    let edits = json!([{"id": "place_sheet_symbol", "args": {
+        "start": "100,100", "end": "120,120", "name": "Child", "file": "child.snxsch"
+    }}]);
+    let text = line(
+        &app,
+        "apply_edits",
+        json!({"document": doc, "expect_revision": revision_in(&app, dir.path(), file), "edits": edits}),
+    );
+    let (reply, mut answer) = AgentReply::channel();
+    let call = AgentCall {
+        pid: Some(4248),
+        input: Input::Line(text),
+        reply,
+    };
+    let task = app.update(Message::Agent(AgentMsg::Request(call)));
+    app.ui_state.agent_connections_enabled = false;
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the reads land");
+    let reply = answer.try_recv().unwrap().expect("answered");
+    assert!(reply.contains("agent connections are off"), "{reply}");
+
+    let signex = dir.path().join(".signex");
+    let access: Report<AccessEntry> =
+        read_journal(&signex.join(Journal::Access.file_name())).expect("the access journal");
+    let refused: Vec<_> = access
+        .entries
+        .iter()
+        .filter(|e| e.event == "refused" && e.mode == "socket")
+        .collect();
+    assert_eq!(refused.len(), 1, "{:?}", access.entries);
+    assert_eq!(refused[0].pid, Some(4248));
+    assert_eq!(
+        refused[0].reason.as_deref(),
+        Some("agent connections are off")
+    );
+    assert!(
+        !signex.join(Journal::Edits.file_name()).exists(),
+        "an edit that never ran has no edit line"
+    );
+}
+
 fn revision_in(app: &crate::app::Signex, dir: &std::path::Path, file: &str) -> u64 {
     app.document_state.engines[&dir.join(file)].revision()
 }
