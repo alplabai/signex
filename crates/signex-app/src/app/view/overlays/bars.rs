@@ -176,15 +176,19 @@ impl Signex {
             column![
                 row![
                     glyph,
-                    signex_widgets::text(signex_widgets::raw("Placement Paused"))
-                        .size(TS.title)
-                        .font(title_font)
-                        .color(ink),
+                    signex_widgets::text(signex_i18n::t!(
+                        self.ui_state.i18n,
+                        signex_i18n::ids::OVERLAY_PLACEMENT_PAUSED_TITLE
+                    ))
+                    .size(TS.title)
+                    .font(title_font)
+                    .color(ink),
                 ]
                 .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
-                signex_widgets::text(signex_widgets::raw(
-                    "Editing properties in the panel. Click Resume to keep placing."
+                signex_widgets::text(signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::OVERLAY_PLACEMENT_PAUSED_BODY
                 ))
                 .size(TS.body)
                 .color(muted),
@@ -624,7 +628,7 @@ impl Signex {
                                 .color(check_c),
                         )
                         .width(Length::Fixed(16.0)),
-                        signex_widgets::text(signex_widgets::raw(kind.label().to_string()))
+                        signex_widgets::text(signex_i18n::t!(ui.i18n, kind.message()))
                             .size(TS.body)
                             .color(text_c),
                     ]

@@ -8,7 +8,8 @@
 use super::*;
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length};
-use signex_widgets::{raw, text};
+use signex_i18n::{Localized, MessageId, ids, t};
+use signex_widgets::{Label, raw, text};
 
 use super::widgets::modal_title_header;
 use crate::styles::{
@@ -145,6 +146,7 @@ impl Signex {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = self.ui_state.i18n.as_ref();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
@@ -172,7 +174,7 @@ impl Signex {
         let mut items_col: iced::widget::Column<Element<'_, Message>> = column![].spacing(SP.s);
         if !st.items.is_empty() {
             items_col = items_col.push(
-                text(raw("Track in repository"))
+                text(t!(i18n, ids::DIALOG_VERSION_CONTROL_TRACK_HEADING))
                     .size(TS.body)
                     .color(items_text_muted)
                     .boxed(),
@@ -210,10 +212,10 @@ impl Signex {
             lfs_check,
             Space::new().width(8),
             column![
-                text(raw("Track binary 3D models via Git LFS"))
+                text(t!(i18n, ids::DIALOG_VERSION_CONTROL_LFS))
                     .size(TS.label)
                     .color(text_c),
-                text(raw("Routes `*.step / *.stp / *.wrl / *.iges` through Git LFS. Requires `git lfs` locally."))
+                text(t!(i18n, ids::DIALOG_VERSION_CONTROL_LFS_HELP))
                     .size(TS.caption)
                     .color(text_muted),
             ]
@@ -237,7 +239,7 @@ impl Signex {
         body_col = body_col.push(lfs_row.boxed());
         if st.scanning {
             body_col = body_col.push(
-                text(raw("Reading the project folder…"))
+                text(t!(i18n, ids::DIALOG_VERSION_CONTROL_SCANNING))
                     .size(TS.caption)
                     .color(text_muted)
                     .boxed(),
@@ -304,6 +306,7 @@ impl Signex {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = self.ui_state.i18n.as_ref();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
@@ -337,29 +340,46 @@ impl Signex {
         // Display style + multiplier rows.
         use crate::library::editor::footprint::state::GridDisplay as Gd;
         let mk_display_row =
-            |label: &'static str, current: Gd, setter: fn(Gd) -> Message| -> Element<'_, Message> {
-                let seg = move |label: &'static str, target: Gd, active: bool| {
+            |label: Localized, current: Gd, setter: fn(Gd) -> Message| -> Element<'_, Message> {
+                let seg = move |label: Localized, target: Gd, active: bool| {
                     grid_segment(label, active, setter(target), text_c, border_c, tokens)
                 };
                 row![
-                    container(text(raw(label)).size(TS.body).color(text_muted))
+                    container(text(label).size(TS.body).color(text_muted))
                         .width(Length::Fixed(80.0)),
-                    seg("Lines", Gd::Lines, current == Gd::Lines),
-                    seg("Dots", Gd::Dots, current == Gd::Dots),
-                    seg("Hidden", Gd::Hidden, current == Gd::Hidden),
+                    seg(
+                        t!(i18n, ids::DIALOG_GRID_LINES),
+                        Gd::Lines,
+                        current == Gd::Lines
+                    ),
+                    seg(
+                        t!(i18n, ids::DIALOG_GRID_DOTS),
+                        Gd::Dots,
+                        current == Gd::Dots
+                    ),
+                    seg(
+                        t!(i18n, ids::DIALOG_GRID_HIDDEN),
+                        Gd::Hidden,
+                        current == Gd::Hidden
+                    ),
                 ]
                 .spacing(SP.s)
                 .align_y(iced::Alignment::Center)
                 .boxed()
             };
         let mk_mult_row = |current: u32| -> Element<'_, Message> {
+            // The multiplier labels are numbers, not words.
             let seg = move |label: &'static str, target: u32, active: bool| {
                 let msg = Message::GridProperties(GridPropertiesMsg::SetMultiplier(target));
-                grid_segment(label, active, msg, text_c, border_c, tokens)
+                grid_segment(raw(label), active, msg, text_c, border_c, tokens)
             };
             row![
-                container(text(raw("Multiplier")).size(TS.body).color(text_muted))
-                    .width(Length::Fixed(80.0)),
+                container(
+                    text(t!(i18n, ids::DIALOG_GRID_MULTIPLIER))
+                        .size(TS.body)
+                        .color(text_muted)
+                )
+                .width(Length::Fixed(80.0)),
                 seg("1×", 1, current == 1),
                 seg("2×", 2, current == 2),
                 seg("5×", 5, current == 5),
@@ -372,31 +392,31 @@ impl Signex {
 
         let body = column![
             row![
-                container(text(raw("Step")).size(TS.body).color(text_muted))
-                    .width(Length::Fixed(80.0)),
+                container(
+                    text(t!(i18n, ids::DIALOG_GRID_STEP))
+                        .size(TS.body)
+                        .color(text_muted)
+                )
+                .width(Length::Fixed(80.0)),
                 mk_input("0.127", &st.step_mm, |v| Message::GridProperties(
                     GridPropertiesMsg::SetStep(v)
                 )),
-                text(raw("mm, both axes"))
+                text(t!(i18n, ids::DIALOG_GRID_STEP_UNIT))
                     .size(TS.caption)
                     .color(text_muted),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
-            mk_display_row("Fine", st.fine_display, |d| {
+            mk_display_row(t!(i18n, ids::DIALOG_GRID_FINE), st.fine_display, |d| {
                 Message::GridProperties(GridPropertiesMsg::SetFineDisplay(d))
             }),
-            mk_display_row("Coarse", st.coarse_display, |d| {
+            mk_display_row(t!(i18n, ids::DIALOG_GRID_COARSE), st.coarse_display, |d| {
                 Message::GridProperties(GridPropertiesMsg::SetCoarseDisplay(d))
             }),
             mk_mult_row(st.multiplier),
-            text(raw(
-                "The step applies to both axes (one grid step per footprint editor). \
-                 Display: Lines / Dots / Hidden. \
-                 Multiplier sets the coarse-grid stride (5× / 10× are typical Altium defaults)."
-            ))
-            .size(TS.caption)
-            .color(text_muted),
+            text(t!(i18n, ids::DIALOG_GRID_HELP))
+                .size(TS.caption)
+                .color(text_muted),
         ]
         .spacing(10);
         let body = with_graphite_intro(
@@ -456,6 +476,7 @@ impl Signex {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = self.ui_state.i18n.as_ref();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
@@ -470,7 +491,7 @@ impl Signex {
         );
 
         // A real checkbox per kind; the whole row toggles it too.
-        let mk_row = |label: &'static str, kind: K, on: bool| -> Element<'_, Message> {
+        let mk_row = |label: MessageId, kind: K, on: bool| -> Element<'_, Message> {
             let toggle = Message::SelectionFilter(SelectionFilterMsg::ToggleCustomKind(kind));
             let check = signex_widgets::checkbox(on)
                 .style(crate::panels::form_look::checkbox_style)
@@ -479,7 +500,7 @@ impl Signex {
                     let toggle = toggle.clone();
                     move |_| toggle.clone()
                 });
-            let name = text(raw(label))
+            let name = text(t!(i18n, label))
                 .size(TS.body)
                 .color(text_c)
                 .width(Length::Fill);
@@ -495,19 +516,25 @@ impl Signex {
         };
 
         let body = column![
-            text(raw("Toggle which kinds the canvas hit-test will accept. \
-                 Pads is the only kind functionally wired today; the \
-                 rest store flags for forward compatibility."))
-            .size(TS.caption)
-            .color(text_muted),
-            mk_row("Pads", K::Pads, st.pads),
-            mk_row("Tracks", K::Tracks, st.tracks),
-            mk_row("Arcs", K::Arcs, st.arcs),
-            mk_row("Pours", K::Pours, st.pours),
-            mk_row("3D Bodies", K::Bodies3d, st.bodies_3d),
-            mk_row("Keepouts", K::Keepouts, st.keepouts),
-            mk_row("Cutouts", K::Cutouts, st.cutouts),
-            mk_row("Texts", K::Texts, st.texts),
+            text(t!(i18n, ids::DIALOG_SELECTION_FILTER_HELP))
+                .size(TS.caption)
+                .color(text_muted),
+            mk_row(ids::DIALOG_SELECTION_FILTER_PADS, K::Pads, st.pads),
+            mk_row(ids::DIALOG_SELECTION_FILTER_TRACKS, K::Tracks, st.tracks),
+            mk_row(ids::DIALOG_SELECTION_FILTER_ARCS, K::Arcs, st.arcs),
+            mk_row(ids::DIALOG_SELECTION_FILTER_POURS, K::Pours, st.pours),
+            mk_row(
+                ids::DIALOG_SELECTION_FILTER_BODIES_3D,
+                K::Bodies3d,
+                st.bodies_3d
+            ),
+            mk_row(
+                ids::DIALOG_SELECTION_FILTER_KEEPOUTS,
+                K::Keepouts,
+                st.keepouts
+            ),
+            mk_row(ids::DIALOG_SELECTION_FILTER_CUTOUTS, K::Cutouts, st.cutouts),
+            mk_row(ids::DIALOG_SELECTION_FILTER_TEXTS, K::Texts, st.texts),
         ]
         .spacing(SP.s);
         let body =
@@ -559,7 +586,7 @@ fn with_graphite_intro<'a>(
 /// One segment button of the Grid Properties display and multiplier rows:
 /// tinted while `active`.
 fn grid_segment<'a>(
-    label: &'static str,
+    label: impl Into<Label<'a>>,
     active: bool,
     on_press: Message,
     text_c: iced::Color,
@@ -572,7 +599,7 @@ fn grid_segment<'a>(
     } else {
         crate::styles::tokens::resolve(tokens).field
     };
-    signex_widgets::button(text(raw(label)).size(TS.caption).color(text_c))
+    signex_widgets::button(text(label).size(TS.caption).color(text_c))
         .padding([3, 10])
         .on_press(on_press)
         .style(move |_: &iced::Theme, _| iced::widget::button::Style {
