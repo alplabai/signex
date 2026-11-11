@@ -160,3 +160,77 @@ fn a_new_camera_does_not_replay_an_old_zoom_request() {
     assert!(fpc.apply_pending_zoom(&mut cstate, BOUNDS).is_none());
     assert_eq!(cstate.scale, fitted);
 }
+
+/// The canvas a standalone tab for `path` draws.
+fn tab_canvas<'a>(
+    path: &str,
+    state: &'a FootprintEditorState,
+    cache: &'a canvas::Cache,
+) -> FootprintCanvas<'a> {
+    FootprintCanvas {
+        address: EditorAddress::new(
+            std::path::PathBuf::from(path),
+            String::new(),
+            signex_library::RowId::from_uuid(uuid::Uuid::nil()),
+        ),
+        ..canvas_for(state, cache)
+    }
+}
+
+/// The canvas widget keeps its state across a tab switch. Footprint B's
+/// request number is not compared with A's, so the switch does not zoom,
+/// and B's next click zooms once.
+#[test]
+fn switching_footprint_tabs_does_not_replay_a_zoom() {
+    let mut a = tall_footprint();
+    a.zoom_request.step(2.0);
+    let mut b = tall_footprint();
+    for _ in 0..3 {
+        b.zoom_request.step(1.25);
+    }
+    let cache = canvas::Cache::new();
+    let mut cstate = FootprintCanvasState::default();
+    redraw(&tab_canvas("a.snxfpt", &a, &cache), &mut cstate);
+    a.zoom_request.step(2.0);
+    published_scale(redraw(&tab_canvas("a.snxfpt", &a, &cache), &mut cstate));
+    let on_a = cstate.scale;
+
+    let tab_b = tab_canvas("b.snxfpt", &b, &cache);
+    assert!(redraw(&tab_b, &mut cstate).is_none());
+    assert!(redraw(&tab_b, &mut cstate).is_none());
+    assert_eq!(cstate.scale, on_a, "switching to B zoomed");
+
+    b.zoom_request.step(2.0);
+    let scale = published_scale(redraw(&tab_canvas("b.snxfpt", &b, &cache), &mut cstate));
+    assert_eq!(scale, on_a * 2.0);
+}
+
+/// Two clicks before the canvas runs zoom by both.
+#[test]
+fn two_pending_zoom_steps_both_apply() {
+    let mut state = tall_footprint();
+    state.zoom_request.step(2.0);
+    state.zoom_request.step(1.5);
+    let cache = canvas::Cache::new();
+    let fpc = canvas_for(&state, &cache);
+    let mut cstate = FootprintCanvasState::with_view(10.0, Point::new(400.0, 300.0));
+
+    assert_eq!(published_scale(redraw(&fpc, &mut cstate)), 30.0);
+}
+
+/// Fit replaces a zoom the pill asked for before it.
+#[test]
+fn a_fit_clears_a_pending_zoom() {
+    let mut state = tall_footprint();
+    let cache = canvas::Cache::new();
+    let mut cstate = FootprintCanvasState::default();
+    redraw(&tab_canvas("f.snxfpt", &state, &cache), &mut cstate);
+    let fitted = cstate.scale;
+
+    state.zoom_request.step(2.0);
+    state.fit_pending = true;
+    let fpc = tab_canvas("f.snxfpt", &state, &cache);
+    redraw(&fpc, &mut cstate);
+    assert!(fpc.apply_pending_zoom(&mut cstate, BOUNDS).is_none());
+    assert_eq!(cstate.scale, fitted);
+}

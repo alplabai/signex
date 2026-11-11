@@ -316,6 +316,16 @@ impl FootprintEditorState {
         f64::from(self.view_px_per_mm) / f64::from(DEFAULT_PX_PER_MM) * 100.0
     }
 
+    /// [`Self::from_footprint`] for a switch to another footprint of the
+    /// same document. The zoom pill's request carries over, so the canvas
+    /// never sees its number go back and swallow a click.
+    pub fn switched_to(fp: &Footprint, previous: &Self) -> Self {
+        Self {
+            zoom_request: previous.zoom_request,
+            ..Self::from_footprint(fp)
+        }
+    }
+
     /// Build canvas state from the primitive's pad list.
     pub fn from_footprint(fp: &Footprint) -> Self {
         let mut pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
@@ -737,6 +747,17 @@ mod tests {
         assert_eq!(s.pads.len(), 1);
         assert_eq!(s.pads[0].number, "1");
         assert_eq!(s.pads[0].size_mm, (1.0, 1.5));
+    }
+
+    /// A footprint switch keeps the zoom pill's request number.
+    #[test]
+    fn a_switch_carries_the_zoom_request() {
+        let mut before = FootprintEditorState::empty();
+        before.zoom_request.step(1.25);
+        before.view_px_per_mm = 99.0;
+        let after = FootprintEditorState::switched_to(&Footprint::empty("b"), &before);
+        assert_eq!(after.zoom_request, before.zoom_request);
+        assert_ne!(after.view_px_per_mm, 99.0, "the rest is fresh");
     }
 
     #[test]

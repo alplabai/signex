@@ -45,7 +45,7 @@ impl FootprintCanvas<'_> {
         cstate.did_initial_fit = true;
         // A new camera starts from the fit, not from a zoom the pill asked
         // of an earlier camera.
-        cstate.applied_zoom_seq = self.state.zoom_request.seq;
+        self.mark_zoom_applied(cstate);
         Some(canvas::Action::publish(LibraryMessage::EditorEvent {
             library_path: self.address.library_path.clone(),
             table: self.address.table.clone(),
@@ -73,6 +73,8 @@ impl FootprintCanvas<'_> {
                 cstate.offset = Point::new(bounds.width / 2.0, bounds.height / 2.0);
             }
             cstate.did_initial_fit = true;
+            // Fit replaces any zoom the pill asked for before it.
+            self.mark_zoom_applied(cstate);
             self.cache.clear();
             return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
                 library_path: self.address.library_path.clone(),
@@ -86,9 +88,17 @@ impl FootprintCanvas<'_> {
         None
     }
 
-    /// The zoom pill's `-` / `+`: apply a [`ZoomRequest`] this camera has
-    /// not applied yet, about the canvas centre, and publish the new scale
-    /// for the pill's readout.
+    /// Record this document's current zoom request as applied, without
+    /// zooming.
+    fn mark_zoom_applied(&self, cstate: &mut FootprintCanvasState) {
+        cstate.applied_zoom = Some((self.address.clone(), self.state.zoom_request));
+    }
+
+    /// The zoom pill's `-` / `+`: zoom about the canvas centre by every
+    /// [`ZoomRequest`] step this camera has not applied yet, and publish
+    /// the new scale for the pill's readout. A camera last applied for
+    /// another document (a tab switch) takes the new document's request as
+    /// applied and does not zoom.
     ///
     /// [`ZoomRequest`]: crate::library::editor::footprint::state::ZoomRequest
     pub(in crate::library::editor::footprint::canvas) fn apply_pending_zoom(
@@ -97,12 +107,20 @@ impl FootprintCanvas<'_> {
         bounds: Rectangle,
     ) -> Option<canvas::Action<LibraryMessage>> {
         let request = self.state.zoom_request;
-        if request.seq == cstate.applied_zoom_seq || bounds.width <= 0.0 || bounds.height <= 0.0 {
+        let applied = match &cstate.applied_zoom {
+            Some((owner, applied)) if *owner == self.address => *applied,
+            Some(_) => {
+                self.mark_zoom_applied(cstate);
+                return None;
+            }
+            None => Default::default(),
+        };
+        if request.seq == applied.seq || bounds.width <= 0.0 || bounds.height <= 0.0 {
             return None;
         }
-        cstate.applied_zoom_seq = request.seq;
+        self.mark_zoom_applied(cstate);
         let centre = Point::new(bounds.width / 2.0, bounds.height / 2.0);
-        cstate.zoom_about(centre, request.factor, MIN_SCALE);
+        cstate.zoom_about(centre, request.factor_since(&applied), MIN_SCALE);
         self.cache.clear();
         Some(canvas::Action::publish(LibraryMessage::EditorEvent {
             library_path: self.address.library_path.clone(),

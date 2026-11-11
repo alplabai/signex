@@ -1055,3 +1055,22 @@ fn a_power_port_draws_no_pin_number_or_name() {
     let (_, snap) = snapshot_of(&rig);
     assert_eq!(snap.pin_texts.len(), 2, "number and name");
 }
+
+/// #2262: the rule is read live, from the same test placement uses. A new
+/// one-pin symbol whose pin is set to Power Input places as a power port,
+/// so the editor hides its labels too; a second pin brings them back.
+#[test]
+fn a_one_pin_power_input_symbol_follows_the_power_port_rule() {
+    let mut symbol = Symbol::empty("U");
+    let mut only = pin("1", 0.0, 0.0, PinOrientation::Left);
+    only.electrical = signex_library::primitive::PinDirection::PowerInput;
+    symbol.pins.push(only);
+    assert!(crate::library::place::is_power_symbol(&symbol));
+    let (_, snap) = snapshot_of(&Rig::new(symbol.clone()));
+    assert!(snap.pin_texts.is_empty(), "{:?}", snap.pin_texts);
+
+    symbol.pins.push(pin("2", 0.0, 2.54, PinOrientation::Left));
+    assert!(!crate::library::place::is_power_symbol(&symbol));
+    let (_, snap) = snapshot_of(&Rig::new(symbol));
+    assert_eq!(snap.pin_texts.len(), 4, "both pins keep number and name");
+}

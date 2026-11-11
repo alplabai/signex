@@ -454,7 +454,8 @@ fn footprint_zoom_pill_records_a_zoom_request_and_arms_fit() {
     );
     let state = &app.document_state.footprint_editors[&path].state;
     assert_eq!(state.zoom_request.seq, 1, "the click is recorded");
-    assert_eq!(state.zoom_request.factor, 1.25);
+    let first = state.zoom_request;
+    assert!((first.factor_since(&Default::default()) - 1.25).abs() < 1e-6);
 
     send(
         &mut app,
@@ -462,7 +463,7 @@ fn footprint_zoom_pill_records_a_zoom_request_and_arms_fit() {
     );
     let state = &app.document_state.footprint_editors[&path].state;
     assert_eq!(state.zoom_request.seq, 2, "every click gets a new number");
-    assert_eq!(state.zoom_request.factor, 0.8);
+    assert!((state.zoom_request.factor_since(&first) - 0.8).abs() < 1e-6);
     assert!(!state.fit_pending);
 
     send(&mut app, FootprintEditorMsg::ZoomPillFitClicked);

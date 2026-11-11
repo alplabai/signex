@@ -170,6 +170,20 @@ pub(super) fn coord_values(unit: Unit, x: f64, y: f64) -> (String, String) {
     }
 }
 
+/// The Grid span's value: the spacing in `unit`, or "OFF".
+pub(super) fn grid_label(visible: bool, size_mm: f32, unit: Unit) -> String {
+    if !visible {
+        return "OFF".to_string();
+    }
+    let mm = f64::from(size_mm);
+    match unit {
+        Unit::Mm => format!("{mm:.3} {unit}"),
+        Unit::Mil => format!("{:.1} {unit}", mm / 0.0254),
+        Unit::Inch => format!("{:.4} {unit}", mm / 25.4),
+        Unit::Micrometer => format!("{:.0} {unit}", mm * 1000.0),
+    }
+}
+
 fn mono_text(s: String, color: Color) -> Text<'static> {
     text(raw(s)).size(TS.body).color(color).font(mono_font())
 }
@@ -203,11 +217,7 @@ pub(super) fn view<'a>(
     let muted = resolve(tokens).ink3;
     let unit = r.unit;
     let (xs, ys) = coord_values(unit, r.x, r.y);
-    let grid = if r.grid_visible {
-        format!("{:.3} {unit}", r.grid_size_mm)
-    } else {
-        "OFF".to_string()
-    };
+    let grid = grid_label(r.grid_visible, r.grid_size_mm, unit);
 
     let mut bar = row![
         mono_text(format!("X {xs} {unit}"), muted).boxed(),
@@ -228,7 +238,12 @@ pub(super) fn view<'a>(
         mono_text(format!("Tool: {}", r.tool), muted).boxed(),
     ];
     if let Some(activity) = r.activity {
-        bar = bar.push(mono_text(activity.to_owned(), muted).boxed());
+        let ink = if activity.is_error {
+            signex_widgets::theme_ext::error_color(tokens)
+        } else {
+            muted
+        };
+        bar = bar.push(mono_text(activity.text.clone(), ink).boxed());
     }
     // The active copper layer of an open board; a click steps to the next.
     if let Some((caption, name)) = r.active_layer.clone() {
@@ -312,6 +327,14 @@ mod tests {
         assert!(on.background.is_some());
         assert!(off.background.is_none());
         assert_ne!(on.text_color, off.text_color);
+    }
+
+    /// The grid spacing reads in the unit the bar shows, not as mm.
+    #[test]
+    fn the_grid_reads_in_the_shown_unit() {
+        assert_eq!(grid_label(true, 0.254, Unit::Mil), "10.0 mil");
+        assert_eq!(grid_label(true, 1.27, Unit::Mm), "1.270 mm");
+        assert_eq!(grid_label(false, 1.27, Unit::Mm), "OFF");
     }
 
     #[test]

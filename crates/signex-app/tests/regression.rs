@@ -244,6 +244,9 @@ mod library_cross_track;
 #[path = "regression/library_pad_actions.rs"]
 mod library_pad_actions;
 
+#[path = "regression/symbol_status_bar.rs"]
+mod symbol_status_bar;
+
 #[path = "regression/library_bga.rs"]
 mod library_bga;
 

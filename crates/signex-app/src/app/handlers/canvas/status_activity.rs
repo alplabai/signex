@@ -3,6 +3,7 @@
 
 use super::super::super::*;
 use crate::canvas::FLIP_WIRES_MODIFIER;
+use crate::status_bar::Activity;
 
 impl Signex {
     /// How the drag in flight in `window` treats wires, `None` outside a drag.
@@ -20,7 +21,7 @@ impl Signex {
     }
 
     /// The one activity segment the status bar shows.
-    pub(crate) fn status_activity(&self, window_id: iced::window::Id) -> Option<String> {
+    pub(crate) fn status_activity(&self, window_id: iced::window::Id) -> Option<Activity> {
         // A symbol editor's own segment; the schematic gestures behind it
         // are not what this window shows.
         if let Some(editor) = self.status_symbol_editor(window_id) {
@@ -31,6 +32,7 @@ impl Signex {
         }
         self.move_status(window_id)
             .or_else(|| self.measure_status(window_id))
+            .map(Activity::note)
     }
 }
 
@@ -79,12 +81,12 @@ mod tests {
         let slot = app.interaction_state.canvas_for_window(window);
         slot.move_behaviour.set(Some(true));
         assert_eq!(
-            app.status_activity(window).as_deref(),
+            app.status_activity(window).map(|a| a.text).as_deref(),
             Some("Dragging with wires (Alt: plain move)")
         );
         slot.move_behaviour.set(Some(false));
         assert_eq!(
-            app.status_activity(window).as_deref(),
+            app.status_activity(window).map(|a| a.text).as_deref(),
             Some("Moving without wires (Alt: drag with wires)")
         );
     }

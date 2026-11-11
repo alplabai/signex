@@ -1,18 +1,30 @@
 //! The symbol editor's segment of the global status bar: the active part,
 //! its pin count and what is selected, or the editor's last error.
-//! X / Y, zoom, grid and snap come from the status bar itself.
+//! The rest of the bar reads the symbol tab too: X / Y and zoom from the
+//! editor, the tool from `editor.tool`, and the grid and unit from the
+//! library's Document Options, which its Grid and unit buttons toggle.
 
 use signex_i18n::{I18n, ids, t};
 
 use crate::app::SymbolDocument;
 use crate::library::editor::symbol::state::{self as sym_state, SymbolSelection};
+use crate::status_bar::Activity;
 
-/// The status bar segment for `editor`. An error the editor reported wins;
-/// otherwise "Part 1 / 2 · 8 pins" and the selection, or the key hints.
-pub(crate) fn segment(editor: &SymbolDocument, i18n: &I18n) -> String {
+/// The status bar segment for `editor`. An error the editor reported wins
+/// and is drawn as an error; otherwise "Part 1 / 2 · 8 pins" and the
+/// selection, or the key hints.
+pub(crate) fn segment(editor: &SymbolDocument, i18n: &I18n) -> Activity {
     if let Some(message) = &editor.status_message {
-        return message.clone();
+        return Activity {
+            text: message.clone(),
+            is_error: true,
+        };
     }
+    Activity::note(summary(editor, i18n))
+}
+
+/// "Part 1 / 2 · 8 pins" and the selection, or the key hints.
+fn summary(editor: &SymbolDocument, i18n: &I18n) -> String {
     let symbol = editor.primitive();
     let view = editor.view();
     let pins = symbol
@@ -89,6 +101,8 @@ mod tests {
         let editor = editor_with_pins(&[("1", "VIN", 1), ("2", "GND", 2), ("3", "EN", 1)]);
         let i18n = i18n();
         let segment = segment(&editor, &i18n);
+        assert!(!segment.is_error);
+        let segment = segment.text;
         let part = t!(
             i18n,
             ids::EDITORS_SYMBOL_STATUS_PART_PINS,
@@ -105,7 +119,7 @@ mod tests {
         let mut editor = editor_with_pins(&[("1", "VIN", 1), ("8", "VOUT", 1)]);
         editor.selected = Some(SymbolSelection::Pin(1));
         let i18n = i18n();
-        let shown = segment(&editor, &i18n);
+        let shown = segment(&editor, &i18n).text;
         assert!(shown.contains("8") && shown.contains("VOUT"), "{shown}");
     }
 
@@ -113,6 +127,8 @@ mod tests {
     fn an_editor_error_replaces_the_segment() {
         let mut editor = editor_with_pins(&[("1", "VIN", 1)]);
         editor.status_message = Some("Arc sweep rejected".into());
-        assert_eq!(segment(&editor, &i18n()), "Arc sweep rejected");
+        let shown = segment(&editor, &i18n());
+        assert_eq!(shown.text, "Arc sweep rejected");
+        assert!(shown.is_error, "the error is drawn as an error");
     }
 }

@@ -439,14 +439,31 @@ impl Signex {
     }
 
     /// A click on the status bar of `window`. The layer pill steps the
-    /// board that window shows, the one it names (#2272).
-    pub fn status_bar_message(window: iced::window::Id, request: StatusBarRequest) -> Message {
-        match request {
-            StatusBarRequest::ActiveLayerStepRequested => Message::Pcb(PcbMsg::ViewInWindow {
+    /// board that window shows, the one it names (#2272). On a symbol tab
+    /// (`symbol`, from [`Self::status_symbol_path`]) the Grid and unit
+    /// buttons toggle that symbol's library settings, the ones the bar shows.
+    pub fn status_bar_message(
+        window: iced::window::Id,
+        symbol: Option<&std::path::Path>,
+        request: StatusBarRequest,
+    ) -> Message {
+        use crate::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg};
+        let symbol_edit = |path: &std::path::Path, msg| {
+            Message::Library(LibraryMessage::PrimitiveEditorEvent {
+                path: path.to_path_buf(),
+                msg: PrimitiveEdit::Symbol(msg),
+            })
+        };
+        match (request, symbol) {
+            (StatusBarRequest::ActiveLayerStepRequested, _) => Message::Pcb(PcbMsg::ViewInWindow {
                 window,
                 event: PcbViewMsg::ActiveLayerStepped { forward: true },
             }),
-            request => Message::Ui(UiMsg::StatusBar(request)),
+            (StatusBarRequest::ToggleGrid, Some(path)) => {
+                symbol_edit(path, SymbolEditorMsg::ToggleGrid)
+            }
+            (StatusBarRequest::CycleUnit, Some(path)) => symbol_edit(path, SymbolEditorMsg::CycleUnit),
+            (request, _) => Message::Ui(UiMsg::StatusBar(request)),
         }
     }
 

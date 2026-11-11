@@ -2,7 +2,20 @@
 //! canvas it is showing, never a stored copy that another canvas wrote
 //! (#1789).
 
+use std::path::{Path, PathBuf};
+
+use signex_types::coord::Unit;
+
 use super::super::super::*;
+use crate::library::state::LibraryDisplaySettings;
+
+/// The grid and unit a window's status bar shows.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StatusGrid {
+    pub visible: bool,
+    pub size_mm: f32,
+    pub unit: Unit,
+}
 
 /// The surface a window's canvas area is showing.
 enum Surface<'a> {
@@ -61,6 +74,49 @@ impl Signex {
         match self.status_surface(window_id) {
             Surface::SymbolEditor(editor) => Some(editor),
             _ => None,
+        }
+    }
+
+    /// The file of the symbol tab `window_id` is showing: its status bar's
+    /// Grid and unit buttons drive that symbol's library.
+    pub fn status_symbol_path(&self, window_id: iced::window::Id) -> Option<PathBuf> {
+        self.status_symbol_editor(window_id)
+            .map(|editor| editor.path.clone())
+    }
+
+    /// The Document Options of the library holding the symbol at `path`;
+    /// a lone file, outside any open library, gets the defaults.
+    pub(crate) fn symbol_display(&self, path: &Path) -> LibraryDisplaySettings {
+        self.library
+            .containing_library_with(path, self.identity_fold_for(path))
+            .map(|lib| lib.display)
+            .unwrap_or_default()
+    }
+
+    /// The grid and unit the status bar of `window_id` shows: a symbol
+    /// tab's library settings, or the app-wide ones.
+    pub fn status_grid(&self, window_id: iced::window::Id) -> StatusGrid {
+        if let Surface::SymbolEditor(editor) = self.status_surface(window_id) {
+            let display = self.symbol_display(&editor.path);
+            return StatusGrid {
+                visible: display.grid_visible,
+                size_mm: display.grid_size_mm,
+                unit: display.unit,
+            };
+        }
+        let ui = &self.ui_state;
+        StatusGrid {
+            visible: ui.grid_visible,
+            size_mm: ui.grid_size_mm,
+            unit: ui.unit,
+        }
+    }
+
+    /// The tool the status bar of `window_id` names.
+    pub fn status_tool(&self, window_id: iced::window::Id) -> String {
+        match self.status_surface(window_id) {
+            Surface::SymbolEditor(editor) => editor.tool.label().to_string(),
+            _ => self.interaction_state.current_tool.to_string(),
         }
     }
 

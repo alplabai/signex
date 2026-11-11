@@ -47,7 +47,8 @@ impl MessageSource {
 
     /// A target outside the Signex crates (a dependency's own log line).
     fn of_foreign_crate(first: &str) -> Self {
-        const GRAPHICS: [&str; 4] = ["WGPU", "NAGA", "COSMIC_TEXT", "GLYPHON"];
+        // Graphics is read first: `ICED_WGPU` is the renderer, not `ICED`.
+        const GRAPHICS: [&str; 5] = ["ICED_WGPU", "WGPU", "NAGA", "COSMIC_TEXT", "GLYPHON"];
         const INTERFACE: [&str; 2] = ["ICED", "WINIT"];
         if GRAPHICS.iter().any(|p| first.starts_with(p)) {
             Self::Graphics
@@ -68,7 +69,7 @@ impl MessageSource {
             "PREFS" | "PREFERENCES" | "KEYMAP" | "FONTS" => Self::Preferences,
             "FOOTPRINT_PAD" | "BAKE" => Self::Sketch,
             w if w.starts_with("SKETCH") => Self::Sketch,
-            "PROJECT" | "FORMAT" | "FS" | "HISTORY" => Self::Project,
+            "PROJECT" | "FORMAT" | "FS" | "HISTORY" | "NET" | "ENGINE" | "OUTPUT" => Self::Project,
             "GFX" | "RENDERER" => Self::Graphics,
             "WINDOW" | "UI" | "TABS" | "WIDGETS" => Self::Interface,
             _ => return None,
@@ -129,6 +130,9 @@ mod tests {
         assert_eq!(source("signex::keymap"), MessageSource::Preferences);
         assert_eq!(source("signex::sketch_constraints"), MessageSource::Sketch);
         assert_eq!(source("signex::project"), MessageSource::Project);
+        assert_eq!(source("signex_net::netlist"), MessageSource::Project);
+        assert_eq!(source("signex_engine::history"), MessageSource::Project);
+        assert_eq!(source("signex_output::pdf"), MessageSource::Project);
         assert_eq!(source("signex::window"), MessageSource::Interface);
         assert_eq!(source("signex"), MessageSource::App);
     }
@@ -141,6 +145,7 @@ mod tests {
         );
         assert_eq!(source("wgpu_core::device"), MessageSource::Graphics);
         assert_eq!(source("iced_winit::program"), MessageSource::Interface);
+        assert_eq!(source("iced_wgpu::window"), MessageSource::Graphics);
         assert_eq!(source("reqwest::connect"), MessageSource::System);
         assert_eq!(MessageSource::of_code("APP-EVENT"), MessageSource::App);
     }
