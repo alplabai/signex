@@ -15,6 +15,7 @@ fn app_with_prefix_chord() -> Signex {
         action: ShortcutBindingAction::Command(AppCommandId::new(command).unwrap()),
         context: ShortcutContext::Global,
         triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+        platform: None,
     };
     let profile = ShortcutProfile {
         id: "prefix".to_string(),
@@ -278,6 +279,7 @@ fn app_with_shifted_chord() -> Signex {
         action: ShortcutBindingAction::Command(AppCommandId::new(command).unwrap()),
         context: ShortcutContext::Global,
         triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+        platform: None,
     };
     let profile = ShortcutProfile {
         id: "shifted".to_string(),

@@ -536,6 +536,7 @@ mod tests {
                     action,
                     context: ShortcutContext::Global,
                     triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+                    platform: None,
                 })
                 .collect(),
         })

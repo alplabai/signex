@@ -3,17 +3,21 @@
 //! `testdata/catalog.golden.tsv` pins every catalog command (id, category,
 //! labels, group, icon, default key, enablement, flags, operands) and
 //! `testdata/builtin_profiles.golden.tsv` every binding of each built-in
-//! profile (`bind` rows) plus each command's menu hint (`hint` rows). A diff is a behaviour change, not a snapshot
-//! to refresh. Regenerate with `UPDATE_GOLDEN=1 cargo test -p signex-app golden`.
+//! profile as the TOML spells it (`bind` rows) plus each command's menu hint
+//! (`hint` rows). `builtin_profiles_resolved.golden.tsv` is the same table as
+//! Windows and Linux resolve it, and `builtin_profiles_macos.golden.tsv` as
+//! macOS shows it. A diff is a behaviour change, not a snapshot to refresh. Regenerate with `UPDATE_GOLDEN=1 cargo test -p signex-app golden`.
 
 use super::catalog::{CommandMetadata, KeyBind, describe_operands};
 use super::{
-    AppCommandId, CompiledKeymap, KeyStroke, Modifiers, ShortcutBindingAction, ShortcutProfileSet,
+    AppCommandId, CompiledKeymap, Platform, ShortcutBindingAction, ShortcutProfileSet,
     ShortcutTrigger, all_command_ids, metadata_for_str,
 };
 
 const CATALOG: &str = include_str!("testdata/catalog.golden.tsv");
 const PROFILES: &str = include_str!("testdata/builtin_profiles.golden.tsv");
+const RESOLVED: &str = include_str!("testdata/builtin_profiles_resolved.golden.tsv");
+const MACOS: &str = include_str!("testdata/builtin_profiles_macos.golden.tsv");
 const CATALOG_HEADER: &str =
     "# id\tcategory\tlabel\tmenu_label\tgroup\ticon\tkeybind\tenablement\tflags\toperands";
 const PROFILES_HEADER: &str = "# profile\tkind\tcontext\tsequence\taction";
@@ -92,14 +96,51 @@ fn catalog_text() -> String {
     out
 }
 
-/// Every binding of every built-in profile (`bind` rows, strokes in the
-/// config spelling) and the menu hint each command shows (`hint` rows, the
-/// logo key normalised to `Cmd`), so a dropped extra binding is noticed too.
+/// How a stroke is written in a profile golden.
+#[derive(Clone, Copy)]
+pub(super) enum Render {
+    /// As the profile file spells it (`Mod+S`), every binding listed, a
+    /// platform-tagged one as `Global@macos`: a Ctrl-to-Mod rewrite shows.
+    Spelling,
+    /// The stroke a lookup compares: resolved for the platform, config
+    /// spelling, only the bindings that apply there.
+    Resolved(Platform),
+    /// The label the UI shows on the platform (`⇧⌘S` on macOS).
+    Shown(Platform),
+}
+
+/// Every binding of every built-in profile (`bind` rows) and the menu hint
+/// each command shows (`hint` rows, Windows logo key normalised to `Cmd`),
+/// so a dropped extra binding is noticed too.
 fn profiles_text() -> String {
+    profiles_text_for(Render::Spelling)
+}
+
+/// The hint rows and, for `Resolved`/`Shown`, the bind rows are those of the
+/// given platform whatever the host; `Spelling` is the file as written, with
+/// Windows hints.
+pub(super) fn profiles_text_for(render: Render) -> String {
+    let platform = match render {
+        Render::Spelling => Platform::Windows,
+        Render::Resolved(platform) | Render::Shown(platform) => platform,
+    };
     let set = ShortcutProfileSet::built_ins().expect("built-in profiles");
     let mut out = format!("{PROFILES_HEADER}\n");
     for profile in set.profiles() {
         for binding in &profile.bindings {
+            if !matches!(render, Render::Spelling) && !binding.applies_on(platform) {
+                continue;
+            }
+            let context = match binding.platform {
+                Some(only) if matches!(render, Render::Spelling) => {
+                    format!(
+                        "{:?}@{}",
+                        binding.context,
+                        format!("{only:?}").to_lowercase()
+                    )
+                }
+                _ => format!("{:?}", binding.context),
+            };
             let action = match &binding.action {
                 ShortcutBindingAction::Command(id) => format!("command:{id}"),
                 ShortcutBindingAction::Unbind(id) => format!("unbind:{id}"),
@@ -109,21 +150,24 @@ fn profiles_text() -> String {
                 let sequence = match trigger {
                     ShortcutTrigger::KeySequence(strokes) => strokes
                         .iter()
-                        .map(KeyStroke::to_config_string)
+                        .map(|stroke| match render {
+                            Render::Spelling => stroke.to_config_string(),
+                            Render::Resolved(_) => stroke.resolved_for(platform).to_config_string(),
+                            Render::Shown(_) => stroke.display_for(platform),
+                        })
                         .collect::<Vec<_>>()
                         .join(" "),
                     ShortcutTrigger::PointerGesture(gesture) => format!("pointer:{gesture}"),
                 };
                 out.push_str(&format!(
-                    "{}\tbind\t{:?}\t{}\t{action}\n",
+                    "{}\tbind\t{context}\t{}\t{action}\n",
                     profile.id,
-                    binding.context,
                     key_cell(&sequence)
                 ));
             }
         }
-        let keymap = CompiledKeymap::compile(profile);
-        let logo = format!("{}+", Modifiers::command_key_name());
+        let keymap = CompiledKeymap::compile_for(profile, platform);
+        let logo = format!("{}+", platform.logo_key_name());
         for id in all_command_ids() {
             let command = AppCommandId::new(id).expect("catalog id is valid");
             let hint = keymap
@@ -180,4 +224,23 @@ fn golden_catalog_matches_the_live_catalog() {
 #[test]
 fn golden_builtin_profiles_match_the_compiled_keymaps() {
     assert_golden("builtin_profiles.golden.tsv", PROFILES, &profiles_text());
+}
+
+/// What Windows and Linux compare on a lookup. Unlike the spelling golden,
+/// this one does not change when a profile starts saying `Mod`: the strokes
+/// the platform resolves to stay exactly what they were.
+#[test]
+fn golden_builtin_profiles_resolve_the_same_on_windows_and_linux() {
+    let windows = profiles_text_for(Render::Resolved(Platform::Windows));
+    assert_golden("builtin_profiles_resolved.golden.tsv", RESOLVED, &windows);
+    assert_eq!(
+        profiles_text_for(Render::Resolved(Platform::Linux)),
+        windows
+    );
+}
+
+#[test]
+fn golden_builtin_profiles_as_macos_shows_them() {
+    let text = profiles_text_for(Render::Shown(Platform::MacOs));
+    assert_golden("builtin_profiles_macos.golden.tsv", MACOS, &text);
 }
