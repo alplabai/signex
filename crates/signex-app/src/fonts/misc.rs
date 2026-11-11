@@ -33,6 +33,27 @@ pub fn write_first_run_tour_dismissed(dismissed: bool) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// One-time macOS prompt: move a custom shortcut profile to Cmd (#1645)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Has the one-time "Use ⌘ / Keep Control" question been answered? Default
+/// `false`; once answered, either way, it is never asked again.
+pub fn read_keymap_mod_prompt_asked_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json["keymap_mod_prompt_asked"].as_bool())
+        .unwrap_or(false)
+}
+
+/// Persist that the question was answered, without clobbering other keys.
+pub fn write_keymap_mod_prompt_asked() {
+    update_prefs_json(&prefs_path(), "keymap_mod_prompt_asked", |prefs| {
+        prefs.insert(
+            "keymap_mod_prompt_asked".to_string(),
+            serde_json::Value::Bool(true),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Stock primitive copy target (#813)
 // ──────────────────────────────────────────────────────────────────────────
 

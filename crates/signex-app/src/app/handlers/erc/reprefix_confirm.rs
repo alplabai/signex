@@ -58,10 +58,11 @@ impl ReprefixConfirm {
         };
         let headline = format!(
             "Re-issue the prefix of {parts} part(s) across {} sheet(s) under {standard}, then \
-             renumber them.{matched} It is one undo step: Ctrl+Z on any sheet this changes \
+             renumber them.{matched} It is one undo step: {undo} on any sheet this changes \
              undoes it on all of them. Every sheet, open or not, stays unsaved until you save \
              it. PCB references are not updated.",
-            plan.sheets_changed
+            plan.sheets_changed,
+            undo = crate::keymap::shown("Mod+Z")
         );
         let change_lines: Vec<String> = plan
             .changes

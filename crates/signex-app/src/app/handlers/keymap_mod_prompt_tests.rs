@@ -1,0 +1,142 @@
+use super::*;
+use crate::app::Signex;
+use crate::config_root::isolated::IsolatedConfigRoot;
+use crate::keymap::{ShortcutProfileKind, TomlShortcutProfile};
+
+const LEGACY: &str = r#"
+[signex_settings]
+application = "signex"
+file_kind = "keyboard_shortcuts"
+version = 1
+
+[keyboard_shortcuts]
+schema_version = 1
+profile_id = "mine"
+profile_name = "Mine"
+profile_kind = "custom"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Ctrl+S" = "save_document"
+"Ctrl+Q" = "cycle_unit"
+"#;
+
+fn legacy_set() -> ShortcutProfileSet {
+    let profile = TomlShortcutProfile::parse(LEGACY)
+        .unwrap()
+        .into_profile()
+        .unwrap();
+    assert_eq!(profile.kind, ShortcutProfileKind::Custom);
+    let mut set = ShortcutProfileSet::built_ins().unwrap();
+    set.insert_custom_profile(profile).unwrap();
+    set.set_active_profile("mine").unwrap();
+    set
+}
+
+fn asked(json: &str) -> serde_json::Value {
+    serde_json::from_str(json).unwrap()
+}
+
+#[test]
+fn the_prompt_is_built_only_on_macos_for_a_custom_profile_not_asked_before() {
+    let set = legacy_set();
+    assert_eq!(
+        keymap_mod_prompt_boot(&set, None, Platform::MacOs).units(),
+        1
+    );
+    for other in [Platform::Windows, Platform::Linux] {
+        assert_eq!(keymap_mod_prompt_boot(&set, None, other).units(), 0);
+    }
+    let built_in = ShortcutProfileSet::built_ins().unwrap();
+    assert_eq!(
+        keymap_mod_prompt_boot(&built_in, None, Platform::MacOs).units(),
+        0
+    );
+}
+
+#[test]
+fn an_answered_prompt_is_never_built_again() {
+    let prefs = asked(r#"{"keymap_mod_prompt_asked": true}"#);
+    assert_eq!(
+        keymap_mod_prompt_boot(&legacy_set(), Some(&prefs), Platform::MacOs).units(),
+        0
+    );
+}
+
+#[test]
+fn use_command_backs_the_file_up_then_writes_the_moved_rows() {
+    let _root = IsolatedConfigRoot::new();
+    let path = crate::keymap::config_path().unwrap();
+    crate::keymap::save_profile_set(&legacy_set()).unwrap();
+    let before = std::fs::read_to_string(&path).unwrap();
+    let moved = crate::keymap::migrate_active_to_mod(&legacy_set()).unwrap();
+
+    let done = write_migration(moved).unwrap();
+
+    let backup = done.backup.expect("an existing file is backed up first");
+    assert_eq!(std::fs::read_to_string(&backup).unwrap(), before);
+    let written = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        written.contains("Mod+S") && !written.contains("Ctrl+S"),
+        "{written}"
+    );
+    assert!(written.contains("Ctrl+Q"), "collision stays: {written}");
+    let reloaded = crate::keymap::load_profile_set().unwrap();
+    assert_eq!(reloaded.active_profile(), done.set.active_profile());
+}
+
+#[test]
+fn a_failed_move_leaves_the_keymap_alone_and_reports_to_messages() {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.set_keymap_profiles(legacy_set());
+    let before = app.ui_state.keymap_profiles.clone();
+    let needle = "Shortcuts were not moved to \u{2318}: disk said no";
+    let seen = crate::diagnostics::logged_count(needle);
+
+    let _ = app.update(Message::Ui(UiMsg::KeymapModMigrationWritten(Err(
+        "disk said no".to_string(),
+    ))));
+
+    assert_eq!(app.ui_state.keymap_profiles, before);
+    assert_eq!(crate::diagnostics::logged_count(needle), seen + 1);
+}
+
+#[test]
+fn a_finished_move_is_adopted_and_reported() {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.set_keymap_profiles(legacy_set());
+    let moved = crate::keymap::migrate_active_to_mod(&legacy_set()).unwrap();
+    let seen = crate::diagnostics::logged_count("the standard commands now use \u{2318}.");
+
+    let _ = app.update(Message::Ui(UiMsg::KeymapModMigrationWritten(Ok(
+        KeymapModMigration {
+            set: moved.clone(),
+            backup: Some("keyboard_shortcuts.toml.bak".to_string()),
+        },
+    ))));
+
+    assert_eq!(app.ui_state.keymap_profiles, moved);
+    assert_eq!(
+        crate::diagnostics::logged_count("the standard commands now use \u{2318}."),
+        seen + 1
+    );
+}
+
+#[test]
+fn keeping_control_changes_nothing_and_says_so() {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.set_keymap_profiles(legacy_set());
+    let before = app.ui_state.keymap_profiles.clone();
+    let seen = crate::diagnostics::logged_count("kept Control for the standard commands");
+
+    let task = app.handle_keymap_mod_prompt_answered(false);
+
+    assert_eq!(app.ui_state.keymap_profiles, before);
+    assert_eq!(
+        crate::diagnostics::logged_count("kept Control for the standard commands"),
+        seen + 1
+    );
+    assert!(task.units() >= 1, "the asked flag is persisted by a Task");
+}

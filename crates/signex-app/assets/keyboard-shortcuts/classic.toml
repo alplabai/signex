@@ -1,4 +1,11 @@
 # Built-in "Classic" single-key keyboard shortcut profile defaults for Signex.
+#
+# `Mod` is Cmd on macOS and Ctrl elsewhere; a plain `Ctrl` stays the physical
+# Control key (it is kept where Cmd would collide with a macOS system chord).
+# Bindings inside one section load in alphabetical order of their trigger
+# text, and the last binding of a command gives its menu hint. The global
+# sections are split so the load order is the one the all-`Ctrl` spelling had
+# (see docs/KEYBOARD_SHORTCUTS.md, "Built-in profiles").
 
 [signex_settings]
 application = "signex"
@@ -16,94 +23,129 @@ description = "Classic single-key keyboard shortcut defaults for Signex."
 context = "global"
 
 [keyboard_shortcuts.sections.bindings]
-"A" = "place_symbol"
-"P" = "place_power_symbol"
-"W" = "place_wire"
-"B" = "place_bus"
-"Z" = "place_wire_to_bus_entry"
-"L" = "place_local_net_label"
-"Ctrl+L" = "place_global_label"
-"H" = "place_hierarchical_label"
-"J" = "place_junction"
-"Q" = "place_no_connect"
-"T" = "place_text"
-"S" = "draw_hierarchical_sheet"
-"I" = "draw_graphic_line"
-"Shift+B" = "place_design_block"
-"E" = "edit_selected_object_properties"
-"M" = "move_selection"
-"G" = "drag_keep_connections"
-"R" = "rotate_counterclockwise"
-"Shift+R" = "rotate_clockwise"
-"X" = "mirror_x"
-"Y" = "mirror_y"
-"F" = "edit_footprint_field"
-"U" = "edit_reference_designator"
-"V" = "edit_value"
-"O" = "autoplace_fields"
-"Insert" = "repeat_last_item"
-"Delete" = "delete_selection"
-"Ctrl+D" = "duplicate"
-"D" = "open_datasheet"
-"Shift+Space" = "cycle_wire_bus_graphic_mode"
 "/" = "switch_segment_posture"
-"Backspace" = "undo_last_segment"
-"Ctrl+4" = "select_expand_connection"
-"Alt+3" = "select_node_or_connection_item"
-"`" = "highlight_net_under_cursor"
-"~" = "clear_net_highlighting"
-"Tab" = "next_highlighted_net_item"
-"Shift+Tab" = "previous_highlighted_net_item"
-"F1" = "zoom_in_at_cursor"
-"F2" = "zoom_out_at_cursor"
-"Home" = "zoom_to_fit"
-"Ctrl+Home" = "zoom_to_all_objects"
-"Ctrl+F5" = "zoom_to_selection_area"
-"F4" = "center_on_cursor"
-"F5" = "refresh_view"
-"Space" = "reset_local_coordinates"
-"N" = "next_grid"
-"Shift+N" = "previous_grid"
+"A" = "place_symbol"
 "Alt+1" = "fast_grid_1"
 "Alt+2" = "fast_grid_2"
+"Alt+3" = "select_node_or_connection_item"
 "Alt+4" = "cycle_fast_grid"
-"PageUp" = "previous_sheet"
-"PageDown" = "next_sheet"
+"Alt+A" = "annotate_schematic_quietly"
+"Alt+Backspace" = "leave_sheet"
 "Alt+Left" = "sheet_navigation_back"
 "Alt+Right" = "sheet_navigation_forward"
-"Alt+Backspace" = "leave_sheet"
 "Alt+Up" = "navigate_up_hierarchy"
-"Ctrl+S" = "save_document"
-"Ctrl+Shift+S" = "save_document_as"
-"Ctrl+O" = "open_document"
-"Ctrl+N" = "new_document"
-"Ctrl+P" = "print"
-"Ctrl+Z" = "undo"
-"Ctrl+Shift+Z" = "redo"
-"Ctrl+Y" = "redo"
-"Ctrl+C" = "copy"
-"Ctrl+X" = "cut"
-"Ctrl+V" = "paste"
-"Ctrl+Shift+V" = "paste_special"
-"Ctrl+A" = "select_all"
-"Ctrl+Shift+A" = "unselect_all"
-"Ctrl+Shift+G" = "toggle_visible_grid"
-"Ctrl+F" = "find"
-"Ctrl+K" = "open_command_palette"
-"Ctrl+Shift+P" = "open_command_palette"
-"Ctrl+," = "open_preferences"
-"Ctrl+Q" = "cycle_unit"
-"Alt+A" = "annotate_schematic_quietly"
-"Shift+Alt+A" = "force_annotate_all_schematics"
-"F3" = "find_next"
-"Shift+F3" = "find_previous"
+"B" = "place_bus"
+"Backspace" = "undo_last_segment"
+"Mod+," = "open_preferences"
+"Mod+4" = "select_expand_connection"
+"Mod+A" = "select_all"
+"Mod+C" = "copy"
+"Mod+D" = "duplicate"
+"Mod+E" = "edit_selected_symbol_in_symbol_editor"
+"Mod+F" = "find"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Ctrl+F5" = "zoom_to_selection_area"
 "Ctrl+G" = "toggle_search_panel"
+"Ctrl+Home" = "zoom_to_all_objects"
+"Ctrl+K" = "open_command_palette"
+"Mod+L" = "place_global_label"
+"Mod+N" = "new_document"
+"Mod+O" = "open_document"
+"Mod+P" = "print"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Ctrl+Q" = "cycle_unit"
+"Mod+S" = "save_document"
+"Mod+Shift+A" = "unselect_all"
+"Mod+Shift+E" = "edit_library_symbol"
+"Mod+Shift+F" = "import_graphics"
+"Mod+Shift+G" = "toggle_visible_grid"
+"Mod+Shift+P" = "open_command_palette"
+"Mod+Shift+S" = "save_document_as"
+"Mod+Shift+V" = "paste_special"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Ctrl+Shift+Z" = "redo"
+"Mod+V" = "paste"
+"Mod+X" = "cut"
+
+# macOS only: redo keeps its plain Ctrl+Shift+Z (the same chord on every OS)
+# and gains the Mac chord here; this section sits before Ctrl+Y so redo's menu
+# hint stays Ctrl+Y.
+[[keyboard_shortcuts.sections]]
+platform = "macos"
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Mod+Shift+Z" = "redo"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Ctrl+Y" = "redo"
+"Mod+Z" = "undo"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"D" = "open_datasheet"
+"Delete" = "delete_selection"
+"E" = "edit_selected_object_properties"
 "Escape" = "cancel_current_tool"
+"F" = "edit_footprint_field"
+"F1" = "zoom_in_at_cursor"
+"F2" = "zoom_out_at_cursor"
+"F3" = "find_next"
+"F4" = "center_on_cursor"
+"F5" = "refresh_view"
 "F8" = "run_erc"
 "F9" = "toggle_auto_focus"
-"Ctrl+E" = "edit_selected_symbol_in_symbol_editor"
-"Ctrl+Shift+E" = "edit_library_symbol"
-"Ctrl+Shift+F" = "import_graphics"
+"G" = "drag_keep_connections"
+"H" = "place_hierarchical_label"
+"Home" = "zoom_to_fit"
+"I" = "draw_graphic_line"
+"Insert" = "repeat_last_item"
+"J" = "place_junction"
+"L" = "place_local_net_label"
+"M" = "move_selection"
+"N" = "next_grid"
+"O" = "autoplace_fields"
+"P" = "place_power_symbol"
+"PageDown" = "next_sheet"
+"PageUp" = "previous_sheet"
+"Q" = "place_no_connect"
+"R" = "rotate_counterclockwise"
+"S" = "draw_hierarchical_sheet"
+"Shift+Alt+A" = "force_annotate_all_schematics"
+"Shift+B" = "place_design_block"
+"Shift+F3" = "find_previous"
+"Shift+N" = "previous_grid"
+"Shift+R" = "rotate_clockwise"
+"Shift+Space" = "cycle_wire_bus_graphic_mode"
+"Shift+Tab" = "previous_highlighted_net_item"
+"Space" = "reset_local_coordinates"
+"T" = "place_text"
+"Tab" = "next_highlighted_net_item"
+"U" = "edit_reference_designator"
+"V" = "edit_value"
+"W" = "place_wire"
+"X" = "mirror_x"
+"Y" = "mirror_y"
+"Z" = "place_wire_to_bus_entry"
+"`" = "highlight_net_under_cursor"
+"~" = "clear_net_highlighting"
 
 # The board view (PCB tabs only): `+` and `*` step to the next copper layer,
 # `-` to the previous. A shifted `+` or `*` is its own stroke on a US layout.

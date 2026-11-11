@@ -10,6 +10,12 @@ impl Signex {
                 self.sync_diagnostics_panel_ctx();
                 Task::none()
             }
+            UiMsg::KeymapModPromptAnswered { use_command } => {
+                self.handle_keymap_mod_prompt_answered(use_command)
+            }
+            UiMsg::KeymapModMigrationWritten(result) => {
+                self.handle_keymap_mod_migration_written(result)
+            }
             UiMsg::MenuInWindow { window, msg } => {
                 let Some(id) = msg.window_command() else {
                     return self.update(Message::Menu(msg));

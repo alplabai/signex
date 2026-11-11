@@ -11,7 +11,12 @@ use signex_widgets::{raw, text};
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-const ANNOTATE_UNDO_HELP: &str = "How many undo steps one annotate run is. One step reverts every sheet the run touched together from whichever sheet Ctrl+Z is pressed on; per sheet undoes each sheet on its own. Applies to the next annotate run.";
+fn annotate_undo_help() -> String {
+    format!(
+        "How many undo steps one annotate run is. One step reverts every sheet the run touched together from whichever sheet {} is pressed on; per sheet undoes each sheet on its own. Applies to the next annotate run.",
+        crate::keymap::shown("Mod+Z")
+    )
+}
 
 pub(super) fn content_annotation<'a>(draft: AnnotateUndo) -> Element<'a, PrefMsg> {
     let setting = row![
@@ -19,7 +24,7 @@ pub(super) fn content_annotation<'a>(draft: AnnotateUndo) -> Element<'a, PrefMsg
             text(raw("Annotate undo"))
                 .size(TS.label)
                 .style(text_primary),
-            text(raw(ANNOTATE_UNDO_HELP))
+            text(raw(annotate_undo_help()))
                 .size(TS.caption)
                 .style(text_muted),
         ]
@@ -44,10 +49,11 @@ pub(super) fn content_annotation<'a>(draft: AnnotateUndo) -> Element<'a, PrefMsg
 
 #[cfg(test)]
 mod tests {
-    use super::ANNOTATE_UNDO_HELP;
+    use super::annotate_undo_help;
 
     #[test]
     fn the_help_text_has_no_stray_line_continuation_backslash() {
-        assert!(!ANNOTATE_UNDO_HELP.contains('\\'), "{ANNOTATE_UNDO_HELP}");
+        let help = annotate_undo_help();
+        assert!(!help.contains('\\'), "{help}");
     }
 }

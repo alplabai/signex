@@ -621,7 +621,10 @@ fn reprefix_names_the_sheets_where_undo_reverts_it() {
 
     let log = messages(&w);
     assert!(
-        log.contains("Ctrl+Z on any of these sheets undoes the whole run"),
+        log.contains(&format!(
+            "{} on any of these sheets undoes the whole run",
+            signex_app::keymap::shown("Mod+Z")
+        )),
         "{log}"
     );
     assert!(log.contains("child-1315.snxsch"), "{log}");

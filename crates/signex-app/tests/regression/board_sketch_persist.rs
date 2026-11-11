@@ -84,7 +84,9 @@ fn press(f: &mut Fixture, window: Option<iced::window::Id>, keys: &str) {
         f,
         Message::Ui(UiMsg::KeymapStroke {
             window,
-            stroke: strokes.remove(0),
+            stroke: strokes
+                .remove(0)
+                .resolved_for(signex_app::keymap::Platform::current()),
         }),
     );
 }
@@ -142,7 +144,7 @@ fn ctrl_s_and_the_save_row_write_a_sketch_on_a_clean_board() {
         !f.app.document_state.is_document_dirty(&f.path),
         "only the sketch is owed"
     );
-    press(&mut f, None, "Ctrl+S");
+    press(&mut f, None, "Mod+S");
     assert!(on_disk(&f).sketch.is_some(), "Ctrl+S wrote the sketch");
 
     let mut f = open_board();
@@ -278,7 +280,7 @@ fn undock_applies_the_sketch_and_ctrl_z_there_steps_the_board() {
     assert!(!in_sketch(&f), "the mode ends on undock");
     assert_eq!(live(&f).outline.len(), 4, "the sketch reached the board");
 
-    press(&mut f, Some(window), "Ctrl+Z");
+    press(&mut f, Some(window), "Mod+Z");
     assert_eq!(
         snapshot(&f),
         before,

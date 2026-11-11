@@ -14,6 +14,13 @@ pub use picker::{FileDialog, HeadlessAnswers, Picker};
 
 use std::path::Path;
 
+/// Ask a two-answer question in a native dialog; `true` when `yes` is
+/// pressed. Only the GUI boot asks (the one-time macOS shortcut prompt), so a
+/// headless run never reaches it.
+pub(crate) async fn ask_two(title: &str, description: &str, yes: &str, no: &str) -> bool {
+    native::ask_two(title, description, yes, no).await
+}
+
 /// The ports `update` hands to the tasks it returns.
 #[derive(Debug, Clone, Default)]
 pub struct IoPorts {

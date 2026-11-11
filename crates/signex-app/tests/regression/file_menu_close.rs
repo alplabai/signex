@@ -15,7 +15,9 @@ fn press(app: &mut Signex, keys: &str) {
     };
     let _ = app.update(Message::Ui(UiMsg::KeymapStroke {
         window: None,
-        stroke: strokes.remove(0),
+        stroke: strokes
+            .remove(0)
+            .resolved_for(signex_app::keymap::Platform::current()),
     }));
 }
 

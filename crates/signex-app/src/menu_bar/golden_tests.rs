@@ -139,7 +139,7 @@ fn golden_labels_and_shortcuts_match_helpers() {
             continue;
         }
         assert_eq!(cmd_label(id, label), label, "label of {id}");
-        let expected = (shortcut != "-").then(|| shortcut.to_string());
+        let expected = (shortcut != "-").then(|| crate::keymap::shown(shortcut));
         assert_eq!(
             shortcut_for(&ctx, id, shortcut),
             expected,
@@ -328,9 +328,17 @@ fn model_reproduces_golden_menu_bar() {
         };
         got.push_str(&format!("{cols}\t{bits}\n"));
     }
+    // The fixture spells a fallback hint (`Mod+N`); the model shows it as
+    // this OS writes it.
     let want: String = rows()
         .iter()
-        .map(|r| format!("{}\n", r[..7].join("\t")))
+        .map(|r| {
+            let mut cols: Vec<String> = r[..7].iter().map(|c| c.to_string()).collect();
+            if cols[4] != "-" {
+                cols[4] = crate::keymap::shown(&cols[4]);
+            }
+            format!("{}\n", cols.join("\t"))
+        })
         .collect();
     assert_eq!(got, want);
 }
