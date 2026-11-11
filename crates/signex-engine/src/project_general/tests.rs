@@ -1,3 +1,4 @@
+use signex_types::agent_journal::{AgentJournalSettings, MIN_JOURNAL_MAX_LINES};
 use signex_types::designator::DesignatorStandard;
 use signex_types::project::ProjectData;
 
@@ -406,4 +407,55 @@ fn each_project_setup_pick_is_its_own_step_and_typing_one_field_is_one() {
         hobby.defaults(),
         "the typing was one step"
     );
+}
+
+fn journal(settings: AgentJournalSettings, typing: bool) -> ProjectGeneralCommand {
+    ProjectGeneralCommand::SetAgentJournal { settings, typing }
+}
+
+/// #2253: the agent journal settings are a General-history step that undoes;
+/// a checkbox is a step of its own and the line cap typed is one run.
+#[test]
+fn the_agent_journal_settings_are_steps_that_undo_and_the_cap_typed_is_one_run() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let off = AgentJournalSettings {
+        keep_in_git: false,
+        ..data.agent_journal
+    };
+    assert!(history.apply(&mut data, journal(off, false)));
+    let summary = AgentJournalSettings {
+        summarise_in_commit: true,
+        ..off
+    };
+    assert!(history.apply(&mut data, journal(summary, false)));
+    for lines in [200, 2_000, 20_000] {
+        let typed = AgentJournalSettings {
+            max_lines: lines,
+            ..summary
+        };
+        assert!(history.apply(&mut data, journal(typed, true)));
+    }
+    assert_eq!(data.agent_journal.max_lines, 20_000);
+
+    assert!(history.undo(&mut data));
+    assert_eq!(data.agent_journal, summary, "the typing was one step");
+    assert!(history.undo(&mut data));
+    assert_eq!(data.agent_journal, off, "a checkbox is a step of its own");
+    assert!(history.undo(&mut data));
+    assert!(data.agent_journal.is_default());
+}
+
+#[test]
+fn the_agent_journal_line_cap_is_kept_in_range_and_an_unchanged_pick_records_nothing() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let tiny = AgentJournalSettings {
+        max_lines: 3,
+        ..data.agent_journal
+    };
+    assert!(history.apply(&mut data, journal(tiny, true)));
+    assert_eq!(data.agent_journal.max_lines, MIN_JOURNAL_MAX_LINES);
+    let unchanged = data.agent_journal;
+    assert!(!history.apply(&mut data, journal(unchanged, false)));
 }

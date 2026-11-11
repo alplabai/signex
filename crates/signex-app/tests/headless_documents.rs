@@ -222,6 +222,7 @@ fn write_project(dir: &Path) -> PathBuf {
         annotation: None,
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
+        agent_journal: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };

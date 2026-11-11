@@ -84,6 +84,7 @@ impl CommandArgs {
     pub fn parse_operands(command: &AppCommandId, args: &[&str]) -> Result<Self, OperandError> {
         let schema = metadata_for(command).map_or(&[][..], |meta| meta.operands);
         let mut values = BTreeMap::new();
+        let mut texts = BTreeMap::new();
         for arg in args {
             let (name, text) = arg
                 .split_once('=')
@@ -100,6 +101,7 @@ impl CommandArgs {
             if values.insert(name.to_string(), value).is_some() {
                 return Err(OperandError::Duplicate(name.to_string()));
             }
+            texts.insert(name.to_string(), text.to_string());
         }
         if let Some(op) = schema
             .iter()
@@ -111,9 +113,14 @@ impl CommandArgs {
             });
         }
         Ok(Self {
-            operands: Operands { values },
+            operands: Operands { values, texts },
             ..Self::none()
         })
+    }
+
+    /// Each operand as the text it was given, by name.
+    pub(crate) fn operand_texts(&self) -> &BTreeMap<String, String> {
+        &self.operands.texts
     }
 
     /// The operand `name` as parsed, `None` when it was not given.

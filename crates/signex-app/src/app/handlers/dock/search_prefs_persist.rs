@@ -111,6 +111,9 @@ impl Signex {
         self.warn_owed_cascades_at_quit();
         // The agent socket, token and registry entries go just before `next`.
         let next = self.agent_cleanup_then(next);
+        // Agent journal lines queued or being written are on disk before the
+        // process goes (#2253).
+        let next = self.wait_for_journal_then(next);
         // A pricing walk must not write into a library after quit, and an
         // in-flight save + commit is waited for.
         let next = self.wait_for_pricing_then(next);

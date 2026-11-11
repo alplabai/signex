@@ -19,6 +19,13 @@ struct WireRequest {
     id: String,
     #[serde(default)]
     args: Map<String, Value>,
+    /// The client's name, e.g. `signex-cli`; journaled, never trusted.
+    #[serde(default)]
+    client: Option<String>,
+    /// What the client says it may do (`read`, `edit`, `save`, `allow-path:..`);
+    /// journaled so a person can see under which rights an agent worked.
+    #[serde(default)]
+    grants: Vec<String>,
 }
 
 /// A request that is well formed; its token is not checked yet.
@@ -29,6 +36,8 @@ pub(super) struct Request {
     /// `name`, `text` pairs, the text being what `CommandArgs::parse_operands`
     /// reads: the same forms `signex-cli` sends.
     pub(super) operands: Vec<(String, String)>,
+    pub(super) client: Option<String>,
+    pub(super) grants: Vec<String>,
 }
 
 /// One input line: `{"token": "...", "id": "...", "args": {...}}`. Unknown
@@ -45,6 +54,8 @@ pub(super) fn parse_request(line: &str) -> Result<Request, String> {
         token: wire.token,
         id: wire.id,
         operands,
+        client: wire.client,
+        grants: wire.grants,
     })
 }
 

@@ -57,6 +57,8 @@ pub enum UndoGroupKind {
     Footprints,
     /// Tools ▸ Annotation ▸ Number Schematic Sheets (#2247).
     SheetNumbers,
+    /// An agent's `apply_edits` call that edited several sheets (#2178).
+    AgentEdit,
 }
 
 impl UndoGroupSheets {
@@ -67,7 +69,17 @@ impl UndoGroupSheets {
             UndoGroupKind::Replace => "replace",
             UndoGroupKind::Footprints => "footprint assignment",
             UndoGroupKind::SheetNumbers => "sheet numbering",
+            UndoGroupKind::AgentEdit => "agent edit",
         }
+    }
+
+    /// The step as a message names it: "the project-wide annotate".
+    fn wide(&self) -> String {
+        let scope = match self.kind {
+            UndoGroupKind::AgentEdit => "cross-sheet",
+            _ => "project-wide",
+        };
+        format!("{scope} {}", self.noun())
     }
 
     fn title(&self) -> &'static str {
@@ -77,6 +89,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Replace => "Replace",
             UndoGroupKind::Footprints => "Assign Footprints",
             UndoGroupKind::SheetNumbers => "Sheet numbering",
+            UndoGroupKind::AgentEdit => "Agent edit",
         }
     }
 
@@ -86,6 +99,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Replace => "replaced text".to_string(),
             UndoGroupKind::Footprints => "assigned footprints".to_string(),
             UndoGroupKind::SheetNumbers => "new sheet numbers".to_string(),
+            UndoGroupKind::AgentEdit => "agent edits".to_string(),
             _ => format!("{} designators", self.participle()),
         }
     }
@@ -97,6 +111,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Replace => "text",
             UndoGroupKind::Footprints => "footprints",
             UndoGroupKind::SheetNumbers => "sheet numbers",
+            UndoGroupKind::AgentEdit => "contents",
             _ => "designators",
         }
     }
@@ -109,6 +124,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Replace => "replaced",
             UndoGroupKind::Footprints => "assigned",
             UndoGroupKind::SheetNumbers => "renumbered",
+            UndoGroupKind::AgentEdit => "edited",
         }
     }
 }
@@ -179,12 +195,12 @@ impl Signex {
             .cloned()
             .unwrap_or_default();
         let (noun, title, done) = (recorded.noun(), recorded.title(), recorded.participle());
-        let (kept, holds) = (recorded.kept(), recorded.holds());
+        let (kept, holds, wide) = (recorded.kept(), recorded.holds(), recorded.wide());
         if direction == StepDirection::Redo && !recorded.dropped.is_empty() {
             // All or nothing: redoing the other sheets would leave one part
             // under two designators.
             crate::diagnostics::log_warning(format!(
-                "Cannot redo the project-wide {noun}: {} went back to its saved state. \
+                "Cannot redo the {wide}: {} went back to its saved state. \
                  Run {title} again.",
                 file_names(&recorded.dropped),
             ));
@@ -234,11 +250,11 @@ impl Signex {
             let names = file_names(&blocked);
             let message = match direction {
                 StepDirection::Undo => format!(
-                    "Cannot undo the project-wide {noun}: {names} has a later step (an edit or a \
+                    "Cannot undo the {wide}: {names} has a later step (an edit or a \
                      net-class pick). Undo the newer edit on {names} first."
                 ),
                 StepDirection::Redo => format!(
-                    "Cannot redo the project-wide {noun}: {names} was edited after the \
+                    "Cannot redo the {wide}: {names} was edited after the \
                      undo, so the {noun} can't be redone across sheets."
                 ),
             };

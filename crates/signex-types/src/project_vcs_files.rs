@@ -25,11 +25,50 @@ pub const GITIGNORE_BLOCK_BODY: &str = "\
 *.tmp
 # Library write-lock sidecar (a library without a .git directory)
 .*.signex-writelock
+# Agent journal lock (#2253); its rotation temp file is covered by *.tmp
+.signex/agent-journal.lock
 # OS clutter
 .DS_Store
 Thumbs.db
 desktop.ini
 ";
+
+/// The line the managed block adds while a project does not keep its agent
+/// journals in git (#2253).
+pub const GITIGNORE_AGENT_JOURNALS: &str = ".signex/agent-*.jsonl\n";
+
+/// The body of the managed `.gitignore` block for a project: the fixed lines,
+/// and the journal line when `keep_agent_journals_in_git` is off. Turning it
+/// off adds a line; it never untracks a journal that is already committed.
+pub fn gitignore_block_body(keep_agent_journals_in_git: bool) -> String {
+    if keep_agent_journals_in_git {
+        GITIGNORE_BLOCK_BODY.to_string()
+    } else {
+        format!("{GITIGNORE_BLOCK_BODY}{GITIGNORE_AGENT_JOURNALS}")
+    }
+}
+
+/// Bring the managed block of `<project_dir>/.gitignore` in line with the
+/// project's journal setting. Git reads a `.gitignore` in every folder, and the
+/// anchored `.signex/agent-*.jsonl` works from the project's own, so the block
+/// is written there whether the repository's root is the project folder or any
+/// folder above it. A project under no repository has no version control files
+/// to keep current, so nothing is written for it.
+pub fn sync_agent_journal_ignore(
+    project_dir: &Path,
+    keep_agent_journals_in_git: bool,
+) -> Result<(), ManagedFileError> {
+    let under_a_repository = project_dir
+        .ancestors()
+        .any(|dir| std::fs::symlink_metadata(dir.join(".git")).is_ok());
+    if !under_a_repository {
+        return Ok(());
+    }
+    ensure_managed_file(
+        &project_dir.join(".gitignore"),
+        &gitignore_block_body(keep_agent_journals_in_git),
+    )
+}
 
 /// Extensions Signex's native text formats use; kept LF so collaborators on
 /// other platforms do not churn diffs.

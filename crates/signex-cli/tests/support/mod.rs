@@ -185,6 +185,7 @@ fn project_data(dir: &Path, libraries: Vec<LibraryEntry>) -> ProjectData {
         annotation: None,
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
+        agent_journal: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     }
@@ -291,6 +292,30 @@ pub fn snapshot(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
         }
     }
     out
+}
+
+/// The three files a run that may save writes under `.signex/` (#2253).
+pub const JOURNAL_FILES: [&str; 3] = [
+    "agent-edits.jsonl",
+    "agent-access.jsonl",
+    "agent-journal.lock",
+];
+
+/// `snapshot` without those three files: only they are ignored, so any other
+/// file a run leaves under `.signex/` (or anywhere) still shows.
+pub fn without_journals(mut files: BTreeMap<PathBuf, Vec<u8>>) -> BTreeMap<PathBuf, Vec<u8>> {
+    files.retain(|path, _| {
+        let in_signex = path
+            .parent()
+            .and_then(Path::file_name)
+            .is_some_and(|dir| dir == ".signex");
+        let known = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| JOURNAL_FILES.contains(&name));
+        !(in_signex && known)
+    });
+    files
 }
 
 pub struct Output {

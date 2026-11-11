@@ -21,13 +21,13 @@ use iced::Task;
 use signex_types::project::RuleProfile;
 
 pub use crate::app::agent::{
-    ChangeSnapshot, MessageLine, Status, changed_between, client as agent_client, messages_since,
-    outcome_verdict,
+    ChangeSnapshot, MessageLine, Status, changed_between, client as agent_client,
+    journal as agent_journal, messages_since, outcome_verdict,
 };
 pub use crate::app::command::queries::is_query;
 pub use crate::app::command::{
     CommandArgs, CommandOutcome, EditSpec, MAX_EDITS, OperandError, OperandValue, edit_list_text,
-    edit_refusal, operand_text, parse_edit_list,
+    edit_refusal, operand_text, parse_documents, parse_edit_list, parse_expect_revisions,
 };
 pub use crate::app::document_ids::DocumentTarget;
 use crate::app::{Message, Signex};
@@ -129,6 +129,42 @@ impl Signex {
             app,
             Task::batch([boot, rules_applied].into_iter().chain(opens)),
         ))
+    }
+
+    /// Journal this run's agent commands in the project's `.signex/` (#2253):
+    /// call it only for a run that may write files, since a run that may not
+    /// leaves the project folder as it found it. `capabilities` is what the
+    /// run was given (`read`, `save`, `allow-path:..`). Returns the task that
+    /// writes the start of the run, to be driven like any other.
+    pub fn start_agent_journals(
+        &mut self,
+        client: &str,
+        capabilities: Vec<String>,
+    ) -> Task<Message> {
+        self.agent.journals_on = true;
+        self.agent.run_client = Some(client.to_string());
+        let pid = Some(std::process::id());
+        let open = self.open_project_files();
+        self.journal_access_to(&open, |ts, folder| {
+            crate::app::agent::journal::AccessEntry::new(ts, "started", "headless")
+                .with_peer(pid, Some(client.to_string()))
+                .with_capabilities(crate::app::agent::journal::record::rights_within(
+                    &capabilities,
+                    folder,
+                ))
+        })
+    }
+
+    /// The task that journals the end of a run begun with
+    /// [`Self::start_agent_journals`]; nothing for a run that did not.
+    pub fn end_agent_journals(&mut self) -> Task<Message> {
+        let pid = Some(std::process::id());
+        let client = self.agent.run_client.clone();
+        let open = self.open_project_files();
+        self.journal_access_to(&open, |ts, _| {
+            crate::app::agent::journal::AccessEntry::new(ts, "ended", "headless")
+                .with_peer(pid, client.clone())
+        })
     }
 
     /// The file the document `text` names (an id or an absolute path) is
@@ -244,9 +280,12 @@ impl Signex {
                     Task::none(),
                 )
             } else if args.has_operands() {
-                app.run_operands(command, &args)
+                app.journaled(command, &args, |app| app.run_operands(command, &args))
             } else {
-                app.dispatch_command_reporting(command, args, None)
+                let by_id = args.clone();
+                app.journaled(command, &by_id, |app| {
+                    app.dispatch_command_reporting(command, args, None)
+                })
             }
         });
         // Open and New answer with the document they made, once it exists.

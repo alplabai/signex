@@ -34,6 +34,9 @@ pub struct AgentEdits {
     /// `apply_edits` call; a placement reads and writes this sheet's engine
     /// instead of the active one, and what it would refresh waits in `owed`.
     pub(crate) target: Option<PathBuf>,
+    /// Every sheet the running list edits (more than one when its edits name
+    /// other sheets of the project); empty outside a list.
+    pub(crate) touched: Vec<PathBuf>,
     /// Whether an edit list (not one placement naming a `document`) is running.
     pub(crate) listing: bool,
     /// The project read the list's checks share.
@@ -44,12 +47,16 @@ pub struct AgentEdits {
     pub(crate) labels: HashMap<UndoGroupId, String>,
     /// Who made each of those steps, for the steps an agent made.
     pub(crate) origins: HashMap<UndoGroupId, Origin>,
+    /// The undo group the newest recorded step made; the journal reads it
+    /// after a command to name the step.
+    pub(crate) last_group: Option<UndoGroupId>,
 }
 
 impl AgentEdits {
     /// Remember an agent's undo step: its label and who made it.
     pub(crate) fn record_step(&mut self, group: UndoGroupId, label: String, origin: &Origin) {
         self.labels.insert(group, label);
+        self.last_group = Some(group);
         if origin.is_agent() {
             self.origins.insert(group, origin.clone());
         }

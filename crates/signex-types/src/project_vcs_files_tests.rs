@@ -433,6 +433,90 @@ fn merging_keeps_the_files_permissions() {
     assert_eq!(mode, 0o600);
 }
 
+#[test]
+fn the_block_always_ignores_the_journal_lock_and_the_rotation_temp_file() {
+    assert!(ignored(".signex/agent-journal.lock"));
+    // `atomic_write` stages a rotation at `<file>.<pid>-<n>.tmp`.
+    assert!(ignored(".signex/agent-edits.jsonl.4242-0.tmp"));
+    for keep in [true, false] {
+        assert!(gitignore_block_body(keep).contains(".signex/agent-journal.lock"));
+    }
+}
+
+#[test]
+fn the_journal_line_is_in_the_block_only_while_journals_stay_out_of_git() {
+    assert!(!gitignore_block_body(true).contains(".signex/agent-*.jsonl"));
+    assert!(gitignore_block_body(false).contains(".signex/agent-*.jsonl"));
+    assert!(glob_matches(
+        ".signex/agent-*.jsonl",
+        ".signex/agent-edits.jsonl"
+    ));
+    assert!(glob_matches(
+        ".signex/agent-*.jsonl",
+        ".signex/agent-access.jsonl"
+    ));
+}
+
+#[test]
+fn syncing_the_journal_setting_adds_then_removes_the_line_and_keeps_user_lines() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join(".git")).unwrap();
+    let path = dir.path().join(".gitignore");
+    std::fs::write(&path, "mine\n").unwrap();
+
+    sync_agent_journal_ignore(dir.path(), false).unwrap();
+    let off = std::fs::read_to_string(&path).unwrap();
+    assert!(off.contains(".signex/agent-*.jsonl") && off.contains("mine"));
+
+    sync_agent_journal_ignore(dir.path(), true).unwrap();
+    let on = std::fs::read_to_string(&path).unwrap();
+    assert!(!on.contains(".signex/agent-*.jsonl") && on.contains("mine"));
+}
+
+#[test]
+fn syncing_writes_nothing_for_a_project_without_version_control() {
+    let dir = tempfile::tempdir().unwrap();
+    sync_agent_journal_ignore(dir.path(), false).unwrap();
+    assert!(!dir.path().join(".gitignore").exists());
+}
+
+/// Whether git, run in `dir`, ignores `.signex/agent-edits.jsonl`.
+fn git_ignores_the_journal(dir: &Path) -> bool {
+    let status = std::process::Command::new("git")
+        .args(["check-ignore", "-q", ".signex/agent-edits.jsonl"])
+        .current_dir(dir)
+        .status()
+        .expect("git runs");
+    match status.code() {
+        Some(0) => true,
+        Some(1) => false,
+        other => panic!("git check-ignore failed: {other:?}"),
+    }
+}
+
+/// A project in a subfolder of a repository whose root is above it: git reads
+/// the project's own `.gitignore`, so the block goes there and the rule works
+/// (a real repository, `git check-ignore`).
+#[test]
+fn a_project_below_the_repository_root_follows_keep_in_git_through_its_own_gitignore() {
+    let repo = tempfile::tempdir().unwrap();
+    let init = std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(repo.path())
+        .status()
+        .expect("git runs");
+    assert!(init.success());
+    let project = repo.path().join("boards").join("p1");
+    std::fs::create_dir_all(&project).unwrap();
+
+    sync_agent_journal_ignore(&project, false).unwrap();
+    assert!(git_ignores_the_journal(&project), "keep in git off");
+    assert!(project.join(".gitignore").is_file());
+
+    sync_agent_journal_ignore(&project, true).unwrap();
+    assert!(!git_ignores_the_journal(&project), "keep in git on");
+}
+
 #[cfg(unix)]
 #[test]
 fn a_write_that_cannot_create_its_temp_file_is_a_write_error_and_changes_nothing() {

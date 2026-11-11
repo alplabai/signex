@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use signex_history::{DEFAULT_UNDO_DEPTH, History};
+use signex_types::agent_journal::AgentJournalSettings;
 use signex_types::designator::DesignatorStandard;
 use signex_types::project::{
     AnnotationState, PcbField, ProjectData, ProjectDefaults, SchematicDefaultField,
@@ -66,6 +67,13 @@ pub enum ProjectGeneralCommand {
         designators: Option<DesignatorStandard>,
         typing: Option<PcbField>,
     },
+    /// The agent journal settings (#2253). `typing` is true while the line
+    /// cap is being typed: those edits join one undo step; a checkbox is a
+    /// step of its own.
+    SetAgentJournal {
+        settings: AgentJournalSettings,
+        typing: bool,
+    },
 }
 
 /// The `title_block` keys a project parameter shares with a sheet: empty
@@ -93,6 +101,7 @@ struct GeneralSnapshot {
     annotation: AnnotationState,
     schematic_defaults: SchematicDefaultOverrides,
     project_defaults: ProjectDefaults,
+    agent_journal: AgentJournalSettings,
 }
 
 impl GeneralSnapshot {
@@ -103,6 +112,7 @@ impl GeneralSnapshot {
             annotation: data.annotation_state(),
             schematic_defaults: data.schematic_defaults.clone(),
             project_defaults: data.project_defaults.clone(),
+            agent_journal: data.agent_journal,
         }
     }
 
@@ -113,6 +123,7 @@ impl GeneralSnapshot {
         data.restore_annotation_state(self.annotation);
         data.schematic_defaults = self.schematic_defaults;
         data.project_defaults = self.project_defaults;
+        data.agent_journal = self.agent_journal;
     }
 }
 
@@ -134,6 +145,7 @@ enum RunField {
     SchematicDefault(SchematicDefaultField),
     SchematicDefaultFont,
     ProjectRule(PcbField),
+    AgentJournalLines,
 }
 
 impl RunField {
@@ -147,6 +159,7 @@ impl RunField {
                 typing: Some(field),
                 ..
             } => Self::ProjectRule(*field),
+            ProjectGeneralCommand::SetAgentJournal { typing: true, .. } => Self::AgentJournalLines,
             _ => Self::General,
         }
     }
@@ -190,6 +203,7 @@ impl ProjectGeneralHistory {
                 | ProjectGeneralCommand::SetSchematicDefaultLineStyle(_)
                 | ProjectGeneralCommand::SetSchematicDefaultShapeFill(_)
                 | ProjectGeneralCommand::SetProjectDefaults { typing: None, .. }
+                | ProjectGeneralCommand::SetAgentJournal { typing: false, .. }
         );
         let field = RunField::of(&command);
         if is_pick || self.run_field != Some(field) {
@@ -238,6 +252,9 @@ impl ProjectGeneralHistory {
                 if let Some(standard) = designators {
                     data.set_designator_standard(Some(standard));
                 }
+            }
+            ProjectGeneralCommand::SetAgentJournal { settings, .. } => {
+                data.set_agent_journal(settings);
             }
         }
         if GeneralSnapshot::of(data) == before {

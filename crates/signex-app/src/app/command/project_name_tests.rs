@@ -29,7 +29,7 @@ fn global(text: &str, at: (f64, f64)) -> Label {
 
 /// The parent: a wire from the sheet pin `SIG` at (0,0) to (5.08,0), and a
 /// second wire (10.16,0)-(15.24,0) named `X`; and a free wire at y = 40.64.
-fn parent() -> SchematicSheet {
+pub(super) fn parent() -> SchematicSheet {
     let mut sheet = SchematicSheet::default();
     sheet.child_sheets.push(ChildSheet {
         uuid: Uuid::now_v7(),
@@ -61,7 +61,7 @@ fn parent() -> SchematicSheet {
 }
 
 /// The child: `SIG` on a wire that also carries the `VCC` power port.
-fn child() -> SchematicSheet {
+pub(super) fn child() -> SchematicSheet {
     let mut sheet = SchematicSheet::default();
     sheet.wires.push(wire((0.0, 0.0), (10.16, 0.0)));
     sheet.labels.push(Label::new(
@@ -88,7 +88,7 @@ fn write(path: &Path, sheet: SchematicSheet) {
 }
 
 /// An app with the project open and its parent sheet the edit target.
-fn project_app(dir: &tempfile::TempDir) -> Signex {
+pub(super) fn project_app(dir: &tempfile::TempDir) -> Signex {
     let _ = crate::diagnostics::init_logging();
     write(&dir.path().join("top.snxsch"), parent());
     write(&dir.path().join("child.snxsch"), child());

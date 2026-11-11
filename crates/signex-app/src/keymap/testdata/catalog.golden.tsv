@@ -1,5 +1,5 @@
 # id	category	label	menu_label	group	icon	keybind	enablement	flags	operands
-apply_edits	edit	Apply edits (agent)	-	General	-	-	Always	mutates_doc,undoable	document:document,expect_revision:text,edits:text,summary:text?
+apply_edits	edit	Apply edits (agent)	-	General	-	-	Always	mutates_doc,undoable	document:document,expect_revision:text,edits:text,summary:text?,expect_revisions:text?
 autoplace_fields	edit	Autoplace fields	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
 bring_drawings_forward	edit	Bring drawings forward	Bring Forward	General	-	-	RequiresSelection	mutates_doc,undoable	-
 bring_drawings_to_front	edit	Bring drawings to front	Bring to Front	General	-	-	RequiresSelection	mutates_doc,undoable	-
@@ -80,7 +80,7 @@ repeat_last_item	edit	Repeat last item	-	General	-	-	Always	gui_only,mutates_doc
 report_manager_bom	reports	Report Manager / BOM	-	General	-	-	Always	gui_only	-
 reset_local_coordinates	view	Reset local coordinates	-	General	-	-	Always	gui_only	-
 resolve	file	Resolve id	-	General	-	-	Always	-	id:text
-revert	edit	Revert an agent's edit step	-	General	-	-	Always	mutates_doc	document:document,group:text
+revert	edit	Revert an agent's edit step	-	General	-	-	Always	mutates_doc	document:document,group:text,documents:text?
 rotate_clockwise	modify	Rotate clockwise by 90 degrees	Rotate Clockwise	General	-	-	RequiresSelection	mutates_doc,undoable	-
 rotate_counterclockwise	modify	Rotate counterclockwise by 90 degrees	Rotate	General	-	-	RequiresSelection	mutates_doc,undoable	-
 rubber_stamp_copy	edit	Rubber-stamp copy / repeated paste	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-

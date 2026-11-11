@@ -133,6 +133,13 @@ impl Signex {
                     ProjectGeneralCommand::SetSchematicDefaultShapeFill(fill),
                 );
             }
+            ProjectTabMsg::AgentJournalPicked {
+                project_id,
+                settings,
+            } => self.pick_agent_journal(project_id, settings),
+            ProjectTabMsg::AgentJournalLinesEdited { project_id, text } => {
+                self.edit_agent_journal_lines(project_id, text);
+            }
             ProjectTabMsg::RenameRequested { project_id } => {
                 self.open_project_rename_from_tab(project_id);
             }
@@ -142,7 +149,7 @@ impl Signex {
     }
 
     /// End the General history's typing run: the next edit is its own step.
-    fn close_general_run(&mut self, project_id: ProjectId) {
+    pub(super) fn close_general_run(&mut self, project_id: ProjectId) {
         if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
             tab.general_history.close_run();
         }
@@ -172,6 +179,7 @@ impl Signex {
             tab.general_history.close_run();
             tab.default_drafts.clear();
             tab.setup_draft = None;
+            tab.journal_lines_draft = None;
         }
     }
 
@@ -241,6 +249,7 @@ impl Signex {
         // The boxes show the stored values again.
         tab.default_drafts.clear();
         tab.setup_draft = None;
+        tab.journal_lines_draft = None;
         if moved {
             // Dirty unless the step landed back on the saved state.
             document.sync_project_history_dirty(project_id, true);

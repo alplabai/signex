@@ -117,7 +117,11 @@ pub fn run(
     // The hold lives to the end of the run, however it ends.
     match place(options.route, &project)? {
         Placement::Attach(peer) => {
-            let connection = peer.connect()?;
+            // The app writes the access and edit journals; this run names
+            // itself and its rights so they are recorded there.
+            let connection = peer
+                .connect()?
+                .with_identity("signex-cli".to_string(), policy.grants());
             let mut attached = Attached::new(connection, policy, run_id, &project)?;
             drive(&mut attached, &options, input, out)
         }

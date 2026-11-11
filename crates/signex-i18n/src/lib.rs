@@ -648,6 +648,14 @@ define_ids! {
     DIALOG_ASSIGN_FOOTPRINTS_ERR_STALE = "dialog-assign-footprints-err-stale";
     DIALOG_ASSIGN_FOOTPRINTS_CANCEL = "dialog-assign-footprints-cancel";
     DIALOG_ASSIGN_FOOTPRINTS_APPLY = "dialog-assign-footprints-apply";
+    PROJECT_AGENT_JOURNALS_TITLE = "project-agent-journals-title";
+    PROJECT_AGENT_JOURNALS_KEEP_IN_GIT = "project-agent-journals-keep-in-git";
+    PROJECT_AGENT_JOURNALS_KEEP_IN_GIT_HELP = "project-agent-journals-keep-in-git-help";
+    PROJECT_AGENT_JOURNALS_SUMMARISE = "project-agent-journals-summarise";
+    PROJECT_AGENT_JOURNALS_SUMMARISE_HELP = "project-agent-journals-summarise-help";
+    PROJECT_AGENT_JOURNALS_LINES = "project-agent-journals-lines";
+    PROJECT_AGENT_JOURNALS_LINES_HELP = "project-agent-journals-lines-help";
+    PROJECT_AGENT_JOURNALS_LINES_INVALID = "project-agent-journals-lines-invalid";
     UPDATE_PCB_MENU_UPDATE = "update-pcb-menu-update";
     UPDATE_PCB_MENU_UPDATE_BOARD = "update-pcb-menu-update-board";
     UPDATE_PCB_MENU_IMPORT = "update-pcb-menu-import";

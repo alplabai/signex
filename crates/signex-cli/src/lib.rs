@@ -7,6 +7,7 @@
 //! capability groups, input limits, audit log) live in [`policy`], [`confine`],
 //! [`capability`] and [`input`]; see `docs/CLI.md`.
 
+pub mod agent_log;
 mod attach;
 pub mod capability;
 pub mod catalog;
