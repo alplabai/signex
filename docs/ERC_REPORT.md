@@ -1,5 +1,8 @@
 # ERC report
 
+For an agent or a script, `check_erc` runs ERC on demand and answers with
+structured findings instead of a file ([CLI.md](CLI.md), "Checks on demand").
+
 Reports > ERC Report writes the results of the newest ERC run. It never
 runs ERC itself; the rows are the ERC panel's rows, in the same order, so a
 finding whose part, wire or label has since been deleted is left out, as it is

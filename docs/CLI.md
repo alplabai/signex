@@ -506,6 +506,78 @@ menu action, run by a person, keeps its read in place. The answer is
 `{"sheet", "file", "added", "removed", "kept"}`
 (entry names); Messages reports it as the menu action does.
 
+## Checks on demand
+
+```text
+check_erc document=<sheet> [baseline=<run>]
+```
+
+`check_erc` (#2199, decision
+https://github.com/alplabai/signex/issues/2199#issuecomment-6798772157) runs
+ERC when an agent asks for it, not after every edit. It checks the project of
+the named sheet (a loose sheet on its own, with the sheets its sheet symbols
+place) the way Run ERC does: the same rules, the project's stored rule set or
+else this machine's, the pin matrix, the project's `erc.dsl`, its waivers and
+the project-wide passes. Open sheets are checked as they are in memory, unsaved
+edits included; closed ones are read from disk off the UI thread, and the
+answer comes when the run lands. It is read-only: it writes nothing to the ERC
+panel, the ERC results or Messages, and `run_erc` (F8, the panel) is unchanged.
+Unlike Run ERC it does not check loose tabs outside the project. It is a query
+(no edit journal line) and is on the agent channel; a palette or key call is
+refused, as for every query.
+
+```bash
+signex-cli run demo.snxprj check_erc --arg document=main.snxsch
+```
+
+The answer (`data` of the `answered` line) is a check report, the shape every
+on-demand check shares (`signex_types::check`; DRC adopts it next):
+
+```json
+{"check": "erc", "run": 2,
+ "findings": [{"rule": "builtin::unused_pin", "severity": "warning",
+   "message": "...", "evidence": {"rule_name": "Unused pin", "space": "sheet",
+   "at": [63.5, 50.8], "pin": "1", "waiver_key": {"rule_id": "...",
+   "objects": ["..."], "fingerprint": "..."}},
+   "items": ["<uuid>"], "sheet": "/abs/main.snxsch", "key": "<32 hex>"}],
+ "waived": [{"finding": {...}, "waiver": {"kind": "finding", "rule_id": "...",
+   "objects": ["..."], "fingerprint": "...", "reason": "...", "author": "...",
+   "date": "...", "message": "..."}}],
+ "lapsed": [{"kind": "finding", "rule_id": "...", "objects": ["..."], "...": "..."}],
+ "warnings": ["ERC: sheet /abs/x.snxsch could not be read: ..."],
+ "baseline": {"run": 1, "new": ["<key>"], "gone": ["<key>"]}}
+```
+
+- `rule`, `severity` (`error`, `warning`, `info`), `message`, `items` (the
+  uuids of the objects the finding is about) and `sheet` (the path of the
+  sheet it is filed under) are what every check has. ERC's own facts are in
+  `evidence`: the rule's name, `space` (`sheet`, `child_sheet`, `net` or
+  `unplaced`), `at` (the point in that sheet's own coordinates, mm, when it
+  has one), `child_sheet`, `net` (`name` and `pins` as `R1.1`), `pin`, and the
+  `waiver_key` a waiver of this finding would record.
+- `key` names the same finding in every run. It is a hash of the sheet path,
+  the rule id and the objects of the finding's waiver identity (its objects,
+  pin, tag or net, `docs/ERC_RULES.md`, "Waivers"), so moving or editing the
+  object keeps it; a finding that names no object is keyed by its message.
+  Keys are unique in a report: a repeat gets `#2`, `#3`, in report order.
+- Order: by sheet path, then errors, warnings and info, then rule, message,
+  key and evidence. The same project gives the same report, byte for byte.
+- `waived`: the findings a per-finding waiver (`"kind": "finding"`) or a net
+  waiver (`"kind": "net"`, with `rule_id` and `net`) hides, each with that
+  waiver; they are not in `findings`. `lapsed`: the per-finding waivers whose
+  finding changed since it was waived, so the finding is in `findings` again.
+- `warnings`: what the run could not do completely (an unreadable sheet, an
+  `erc.dsl` that does not compile, a broken hierarchy), as Run ERC would say
+  them in Messages.
+- `run`: this run's number. The app keeps the last 8 runs' keys in memory
+  (`KEPT_CHECK_RUNS`). With `baseline=<run>` the answer also has `baseline`:
+  `new` lists the keys of this run that run did not have, `gone` the keys only
+  it had. A baseline that is not kept (never made, or older than the last 8)
+  or that checked another project is refused with the reason, and the refused
+  run is not numbered or kept. The runs are kept by the process: a headless
+  `run` keeps them for its own command lines, a running Signex for every
+  agent request until it quits.
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > Editing >

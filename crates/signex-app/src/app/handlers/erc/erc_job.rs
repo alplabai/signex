@@ -70,7 +70,22 @@ pub struct WaivedFinding {
     pub waiver: signex_types::project::ErcWaiver,
 }
 
+/// The findings a net waiver hid, in sheet path order: the sheet, the finding
+/// and the (rule id, net) waiver.
+pub type NetWaived = Vec<(PathBuf, signex_erc::Violation, (String, String))>;
+
 pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
+    run_job(inputs, true).0
+}
+
+/// The run `check_erc` makes (#2199): [`run_erc_job`] raising no Messages
+/// line, with the findings a net waiver hid kept.
+pub(super) fn run_erc_check_job(inputs: ErcRunInputs) -> (ErcRunOutcome, NetWaived) {
+    run_job(inputs, false)
+}
+
+/// `logged`: a refused child reference is said in Messages as it is met.
+fn run_job(inputs: ErcRunInputs, logged: bool) -> (ErcRunOutcome, NetWaived) {
     let inputs_rule_set = inputs.rule_set.clone();
     let mut warnings = Vec::new();
     let mut infos = Vec::new();
@@ -89,13 +104,13 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
 
     // The project itself, from the one assembler the export and the cached
     // canvas netlist also use (#406).
+    let assemble = if logged {
+        project_sheets::assemble_project_sheets_from
+    } else {
+        project_sheets::assemble_project_sheets_quiet_from
+    };
     let project_set = match &inputs.root {
-        Some(root) => project_sheets::assemble_project_sheets_from(
-            &inputs.open,
-            &inputs.pages,
-            root,
-            inputs.fold,
-        ),
+        Some(root) => assemble(&inputs.open, &inputs.pages, root, inputs.fold),
         None => project_sheets::ProjectSheetSet::empty(),
     };
     for (path, why) in &project_set.unreadable {
@@ -110,7 +125,12 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
     // Built exactly as the export builds it, so a key collision keeps the
     // same sheet. ERC still reports on every sheet, reached or not.
     let fold = project_set.fold;
-    let graph = project_sheets::project_graph_with(
+    let stitch = if logged {
+        project_sheets::project_graph_with
+    } else {
+        project_sheets::project_graph_quiet
+    };
+    let graph = stitch(
         &project_set.sheets,
         base_dir.as_deref(),
         project_set.root.as_deref(),
@@ -175,7 +195,7 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         &inputs.overrides,
     );
     add_project_units_not_placed(&mut by_path, &snapshots, &project_paths, &inputs.overrides);
-    refile_child_sheet_violations(&mut by_path);
+    refile_child_sheet_violations(&mut by_path, logged);
     dedupe_descendant_clashes(&mut by_path);
 
     let (waived_findings, lapsed_waivers) =
@@ -184,14 +204,10 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
     // Last, so every pass above (including the project-wide net-name pass)
     // is waivable. Hidden findings are counted, not lost: the panel lists
     // the waivers and offers to restore them.
+    let net_waived = split_net_waived(&mut by_path, &inputs.net_waivers);
     let mut waived_hidden = std::collections::BTreeMap::new();
-    for list in by_path.values_mut() {
-        let (kept, hidden) =
-            signex_erc::waivers::split_waived(std::mem::take(list), &inputs.net_waivers);
-        *list = kept;
-        for (key, n) in hidden {
-            *waived_hidden.entry(key).or_default() += n;
-        }
+    for (_, _, key) in &net_waived {
+        *waived_hidden.entry(key.clone()).or_default() += 1;
     }
 
     let page_frames = snapshots
@@ -206,7 +222,7 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         "ERC: {total} total violations across {} sheet(s)",
         by_path.len()
     ));
-    ErcRunOutcome {
+    let outcome = ErcRunOutcome {
         by_path,
         warnings,
         infos,
@@ -215,7 +231,28 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         waived_findings,
         lapsed_waivers,
         page_frames,
+    };
+    (outcome, net_waived)
+}
+
+/// Take out of each sheet's list, in sheet path order, the findings a net
+/// waiver (#1581) hides.
+fn split_net_waived(
+    by_path: &mut ViolationsByPath,
+    waivers: &signex_erc::waivers::NetWaivers,
+) -> NetWaived {
+    let mut paths: Vec<PathBuf> = by_path.keys().cloned().collect();
+    paths.sort();
+    let mut hidden = Vec::new();
+    for path in paths {
+        let Some(list) = by_path.get_mut(&path) else {
+            continue;
+        };
+        let (kept, waived) = signex_erc::waivers::partition_waived(std::mem::take(list), waivers);
+        *list = kept;
+        hidden.extend(waived.into_iter().map(|(v, key)| (path.clone(), v, key)));
     }
+    hidden
 }
 
 /// Key every finding against the sheet it is filed under, then take out the
@@ -343,7 +380,7 @@ fn add_project_units_not_placed(
 /// coordinate, so its marker and panel entry land on the right canvas (#956).
 /// A child that was not part of the run stays under the parent as a
 /// non-locatable entry: it is reported, never drawn at a foreign coordinate.
-fn refile_child_sheet_violations(by_path: &mut ViolationsByPath) {
+fn refile_child_sheet_violations(by_path: &mut ViolationsByPath, logged: bool) {
     let ran: std::collections::HashSet<std::path::PathBuf> = by_path.keys().cloned().collect();
     let mut moved: Vec<(std::path::PathBuf, signex_erc::Violation)> = Vec::new();
     for (parent, list) in by_path.iter_mut() {
@@ -352,11 +389,18 @@ fn refile_child_sheet_violations(by_path: &mut ViolationsByPath) {
             .into_iter()
             .partition(|v| v.location_space == signex_erc::LocationSpace::ChildSheet);
         *list = kept;
+        let resolve = |name: &str| {
+            if logged {
+                project_sheets::resolve_child_reference(dir, name)
+            } else {
+                project_sheets::resolve_child_reference_quiet(dir, name).ok()
+            }
+        };
         for v in child_space {
             let owner = v
                 .child_sheet
                 .as_deref()
-                .and_then(|name| crate::app::project_sheets::resolve_child_reference(dir, name))
+                .and_then(resolve)
                 .filter(|p| p != parent && ran.contains(p));
             match owner {
                 Some(child) => moved.push((child, v.into_child_sheet_space())),
