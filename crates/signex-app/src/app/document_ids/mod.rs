@@ -22,6 +22,7 @@ use std::path::PathBuf;
 
 use signex_types::document_id::DocumentId;
 
+pub(crate) use confine::confined_read;
 pub(crate) use entries::referenced_files;
 pub(crate) use entries::{DocumentEntry, DocumentKind};
 pub use headers::HeaderRead;

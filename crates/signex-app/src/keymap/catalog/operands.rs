@@ -108,6 +108,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("file", OperandKind::Text),
     ("direction", OperandKind::Text),
     ("apply", OperandKind::Bool),
+    ("baseline", OperandKind::Text),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -303,6 +304,12 @@ pub const READ_DOCUMENT: &[Operand] = &[
 pub const QUERY_PINS: &[Operand] = &[
     required("document", OperandKind::Document),
     required("designator", OperandKind::Text),
+];
+/// `check_erc` (#2199): ERC on the project of the named sheet, answered as a
+/// check report; `baseline` is an earlier answer's `run`.
+pub const CHECK_ERC: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("baseline", OperandKind::Text),
 ];
 /// Put a net, by its name in the project netlist, in a class of the project
 /// the named sheet belongs to; no `class` takes it out of its listed class.

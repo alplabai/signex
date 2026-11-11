@@ -97,7 +97,9 @@ The session token is never written. See `docs/AGENT_JOURNALS.md`.
 Derived from the command catalog (`allow.rs`), not listed by hand:
 
 - the #2172 queries: `list_documents`, `document_info`, `resolve`, `find_items`,
-  `read_document`, `query_pins`;
+  `read_document`, `query_pins`, and `check_erc` (#2199), which is answered
+  once its ERC run lands, like an edit waiting for its reads
+  ([CLI.md](CLI.md), "Checks on demand");
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,

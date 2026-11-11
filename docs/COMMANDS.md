@@ -35,7 +35,10 @@ keybinding call has no operands and keeps the active document.
 (`CommandOutcome::Answered`); `find` is still the Find dialog.
 `query_pins document=<doc> designator=<ref>` lists the pins of a part on
 one sheet: number, name, electrical type, hidden, unit, shared and the tip
-in mm.
+in mm. `check_erc document=<sheet> [baseline=<run>]` is a query too: it
+runs ERC on the sheet's project, answers with a check report once the run
+lands and writes nothing to the ERC panel or Messages; rules in
+[CLI.md](CLI.md), "Checks on demand".
 
 A point operand (`at`, `start`, `end`) also takes a pin reference
 `<designator>.<pin>` (`R1.2`) or `<sheet name>.<entry name>` (`Charger.SDA`):
@@ -65,6 +68,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `cancel_current_tool` | Cancel current stage / exit placement mode | interactive | `Escape` | `Escape` |
 | `center_on_cursor` | Center on cursor | view | — | `F4` |
 | `center_view_at_cursor` | Center/redraw view around cursor | view | `Home` | — |
+| `check_erc` | Check electrical rules | validation | — | — |
 | `close_active_document` | Close active document | file | `Ctrl+F4` | — |
 | `close_all_documents` | Close all documents | window | — | — |
 | `copy` | Copy | edit | `Ctrl+C` | `Ctrl+C` |
