@@ -101,15 +101,20 @@ Tools ▸ Re-Annotate Board... runs `reannotate_board` (#1312), right after
 Design Rule Check with the other board rows, and is greyed while no PCB is
 open. It opens the Positional Re-Annotate dialog for the board in view:
 
-- **Order**: by X then Y (columns left to right, each top to bottom), the
-  default, or by Y then X (rows top to bottom, each left to right). The
-  board's y grows downwards on screen.
+- **Order**: by X, then by Y (the default), or by Y, then by X. The sort is
+  exact at 1 µm: parts are not grouped into columns or rows by a tolerance,
+  so a part 0.01 mm left of another comes first whatever its Y. The board's y
+  grows downwards on screen.
 - **Bottom side**: after the top side (the default), or together with it.
   Bottom-side parts are ordered as seen from the top.
 - Parts are numbered from 1 within each prefix (`R1, R2, ...`, `C1, ...`);
-  the prefix stays. A locked footprint keeps its designator, and its number
-  is skipped. A footprint whose designator is not a prefix and a number
-  (`12`, `R1A`, none) is kept and listed. A `R?` gets a number.
+  the prefix stays. Surrounding spaces are dropped, and `R01` becomes `R1`.
+  A locked footprint keeps its designator, and its number is skipped; so
+  does a footprint with no link to a schematic part, because Update PCB
+  matches such a footprint to a part by its designator and renumbering it
+  would swap parts. A footprint whose designator is not a prefix and an
+  ASCII number (`12`, `R1A`, `R１`, none) is kept and listed. A `R?` gets a
+  number.
 - The list shows each rename (designator, new designator), how many parts
   are already in order and the parts kept. Execute runs the renames as one
   board undo step at the board revision the list was made from; a board
@@ -117,23 +122,33 @@ open. It opens the Positional Re-Annotate dialog for the board in view:
   Nothing is written to disk until the board is saved.
 
 The dialog keeps the options it was last used with until the app quits. The
-same command is in the command palette; no keymap preset binds it. The
-schematic does not follow until Back Annotate (Tools ▸ Annotation ▸ Back
-Annotate Schematics..., #1312 PR 2).
+same command is in the command palette; no keymap preset binds it.
+
+**Update PCB renames parts back.** A designator changed on the board, here
+or in Properties, is not carried to the schematic: the next Update PCB lists
+a rename back to the schematic's designator, ticked like every other row,
+because the command picks the direction (`DECISIONS.md`, 2026-11-10). Use
+Back Annotate (Tools ▸ Annotation ▸ Back Annotate Schematics..., #1312 PR 2)
+to keep them. The dialog and the Properties section say so under their
+fields.
 
 ## Board Properties: designator and value {#board-properties}
 
 With exactly one footprint selected on a board, the Properties panel shows
-its designator and value as fields and its footprint name. Typed text is a
-draft (selecting something else drops it); Enter applies it as one board
-undo step (`SetFootprintText`, labelled Designator or Value). A locked
+its designator and value as fields and its footprint name. Each field
+keeps its own draft (another selection on the same board, a tab switch away
+from the board, closing it, or an undo or redo of it drops them; a selection
+on another board, in another window, does not); Enter applies that field as
+one board undo step (`SetFootprintText`, labelled Designator or Value). A locked
 footprint or a read-only board shows the
 fields read-only with the reason; an empty designator is refused with a
 notice; a designator another footprint already has is applied, warned about
 in the Messages panel and noted under the fields. The board canvas
 right-click menu has Properties... (`edit_selected_object_properties`), live
 with anything selected, which shows the Properties panel; the same command
-(and its key) is now enabled by a board selection.
+(and `edit_object_properties`, Altium's double-click) is now enabled by a
+board selection. In an undocked board window the fields edit that window's
+board.
 
 ## Tools ▸ Cross Probe and Cross Select Mode {#tools-cross-probe}
 

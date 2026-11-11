@@ -36,8 +36,10 @@ pub struct PcbFootprintFacts {
     pub value: String,
     /// The library footprint's name (`footprint_id`); may be empty.
     pub footprint_name: String,
-    /// The field being typed in and its text, while not yet applied.
-    pub draft: Option<(FootprintTextField, String)>,
+    /// Text typed into the Designator field and not yet applied.
+    pub designator_draft: Option<String>,
+    /// Text typed into the Value field and not yet applied.
+    pub value_draft: Option<String>,
     pub editability: FootprintEditability,
     /// How many other footprints carry the same designator.
     pub also_on: usize,
@@ -93,10 +95,11 @@ pub fn view<'a>(ctx: &'a PanelContext, fp: &'a PcbFootprintFacts) -> Element<'a,
             .width(Length::FillPortion(2))
     };
     let field_row = |key: MessageId, field: FootprintTextField, stored: &str| {
-        let shown = match &fp.draft {
-            Some((f, typed)) if *f == field => typed.clone(),
-            _ => stored.to_string(),
+        let typed = match field {
+            FootprintTextField::Designator => fp.designator_draft.as_ref(),
+            FootprintTextField::Value => fp.value_draft.as_ref(),
         };
+        let shown = typed.cloned().unwrap_or_else(|| stored.to_string());
         let mut input = text_input(UserText::new(String::new()), shown)
             .size(TS.body)
             .padding(SP.s)
@@ -180,7 +183,9 @@ fn notes(
 ) -> Vec<(signex_i18n::Localized, iced::Color)> {
     let mut lines = Vec::new();
     match fp.editability {
-        FootprintEditability::Editable => {}
+        FootprintEditability::Editable => {
+            lines.push((t!(i18n, ids::PCB_DESIGNATOR_UPDATE_PCB_NOTE), muted));
+        }
         FootprintEditability::Locked => {
             lines.push((t!(i18n, ids::PCB_FOOTPRINT_LOCKED), muted));
         }
@@ -197,7 +202,7 @@ fn notes(
             warn,
         ));
     }
-    if fp.draft.is_some() {
+    if fp.designator_draft.is_some() || fp.value_draft.is_some() {
         lines.push((t!(i18n, ids::PCB_FOOTPRINT_ENTER_HINT), muted));
     }
     lines

@@ -131,6 +131,8 @@ impl Signex {
         tasks.push(self.sync_cross_select());
         // An Update PCB waiting for its board starts reading once it opened.
         tasks.push(self.sync_update_pcb());
+        // A Properties draft of a board no window shows any more goes (#1312).
+        self.prune_pcb_footprint_draft();
         self.sync_undo_depth();
         // A Save completed behind the quit prompt must not leave it listing
         // files that are no longer unsaved (#1833).

@@ -4,9 +4,7 @@ use signex_engine::pcb::designators::{ReannotateOptions, plan_reannotate};
 use super::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{Message, Signex};
-
-/// The undo label of an executed re-annotation.
-const LABEL: &str = "Re-Annotate";
+use signex_i18n::{ids, t};
 
 impl Signex {
     pub(crate) fn dispatch_board_reannotate_message(
@@ -31,7 +29,8 @@ impl Signex {
     /// used with on this run of the app.
     fn open_board_reannotate(&mut self) {
         let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
-            crate::diagnostics::log_info("Re-Annotate: no PCB is in view");
+            let line = t!(self.ui_state.i18n, ids::PCB_REANNOTATE_NO_PCB);
+            crate::diagnostics::log_info(line.into_string());
             return;
         };
         let board_name = self
@@ -85,8 +84,14 @@ impl Signex {
         let Some(state) = self.ui_state.board_reannotate.take() else {
             return;
         };
+        // A read-only board keeps the dialog open with its reason.
+        if !state.can_execute() {
+            self.ui_state.board_reannotate = Some(state);
+            return;
+        }
         let Some(engine) = self.document_state.board_engine(&state.board) else {
-            crate::diagnostics::log_warning("Re-Annotate: the board is no longer open");
+            let line = t!(self.ui_state.i18n, ids::PCB_REANNOTATE_BOARD_GONE);
+            crate::diagnostics::log_warning(line.into_string());
             return;
         };
         if engine.revision() != state.revision {
@@ -107,17 +112,20 @@ impl Signex {
                 return;
             }
         };
+        let label = t!(self.ui_state.i18n, ids::PCB_REANNOTATE_TITLE).into_string();
         let step = CheckedStep {
-            label: LABEL,
+            label: &label,
             expected_revision: state.revision,
         };
         match self.execute_board_commands(&state.board, commands, Some(step)) {
             Ok(_) => {
-                crate::diagnostics::log_info(format!(
-                    "Re-Annotate: {} footprint(s) renamed on {}",
-                    state.plan.renames.len(),
-                    state.board_name
-                ));
+                let line = t!(
+                    self.ui_state.i18n,
+                    ids::PCB_REANNOTATE_DONE,
+                    "count" => state.plan.renames.len(),
+                    "board" => state.board_name.as_str()
+                );
+                crate::diagnostics::log_info(line.into_string());
                 self.refresh_pcb_highlight();
             }
             Err(error) => {

@@ -16,14 +16,38 @@ use uuid::Uuid;
 use crate::app::Signex;
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::panels::{FootprintEditability, PcbFootprintFacts, PcbFootprintTextMsg};
+use signex_i18n::{ids, t};
 
-/// Text typed into a footprint's field and not yet applied.
+/// Text typed into a footprint's fields and not yet applied, one draft per
+/// field, so typing in one field never loses the other's text.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PcbFootprintDraft {
     pub board: PathBuf,
     pub footprint: Uuid,
-    pub field: FootprintTextField,
-    pub text: String,
+    pub designator: Option<String>,
+    pub value: Option<String>,
+}
+
+impl PcbFootprintDraft {
+    /// Whether this draft is for `footprint` on `board`.
+    pub(crate) fn is_for(&self, board: &Path, footprint: Uuid) -> bool {
+        self.board == board && self.footprint == footprint
+    }
+
+    /// The typed text of `field`, if any.
+    pub(crate) fn text(&self, field: FootprintTextField) -> Option<&String> {
+        match field {
+            FootprintTextField::Designator => self.designator.as_ref(),
+            FootprintTextField::Value => self.value.as_ref(),
+        }
+    }
+
+    fn slot(&mut self, field: FootprintTextField) -> &mut Option<String> {
+        match field {
+            FootprintTextField::Designator => &mut self.designator,
+            FootprintTextField::Value => &mut self.value,
+        }
+    }
 }
 
 impl Signex {
@@ -35,64 +59,99 @@ impl Signex {
                 field,
                 text,
             } => {
-                self.interaction_state.pcb_footprint_draft = Some(PcbFootprintDraft {
-                    board: board.clone(),
-                    footprint: *footprint,
-                    field: *field,
-                    text: text.clone(),
-                });
+                let slot = &mut self.interaction_state.pcb_footprint_draft;
+                if !slot.as_ref().is_some_and(|d| d.is_for(board, *footprint)) {
+                    *slot = Some(PcbFootprintDraft {
+                        board: board.clone(),
+                        footprint: *footprint,
+                        designator: None,
+                        value: None,
+                    });
+                }
+                if let Some(draft) = slot.as_mut() {
+                    *draft.slot(*field) = Some(text.clone());
+                }
             }
             PcbFootprintTextMsg::Submitted {
                 board,
                 footprint,
                 field,
             } => {
-                let draft = self.interaction_state.pcb_footprint_draft.take();
-                if let Some(draft) = draft
-                    .filter(|d| d.board == *board && d.footprint == *footprint && d.field == *field)
+                // Only this field's text is taken; the other field's stays.
+                let typed = self
+                    .interaction_state
+                    .pcb_footprint_draft
+                    .as_mut()
+                    .filter(|d| d.is_for(board, *footprint))
+                    .and_then(|d| d.slot(*field).take());
+                if self
+                    .interaction_state
+                    .pcb_footprint_draft
+                    .as_ref()
+                    .is_some_and(|d| d.designator.is_none() && d.value.is_none())
                 {
-                    self.apply_footprint_text(&draft);
+                    self.interaction_state.pcb_footprint_draft = None;
+                }
+                if let Some(text) = typed {
+                    self.apply_footprint_text(board, *footprint, *field, &text);
                 }
             }
         }
         self.sync_pcb_board_summary();
     }
 
-    /// Run `draft` on its board as one labelled step, or say why not.
-    fn apply_footprint_text(&mut self, draft: &PcbFootprintDraft) {
-        let what = match draft.field {
-            FootprintTextField::Designator => "Designator",
-            FootprintTextField::Value => "Value",
+    /// Run `text` into `field` of `footprint` on `board` as one labelled
+    /// step, or say why not.
+    fn apply_footprint_text(
+        &mut self,
+        board: &Path,
+        footprint: Uuid,
+        field: FootprintTextField,
+        text: &str,
+    ) {
+        let what = t!(
+            self.ui_state.i18n,
+            match field {
+                FootprintTextField::Designator => ids::PCB_FOOTPRINT_DESIGNATOR,
+                FootprintTextField::Value => ids::PCB_FOOTPRINT_VALUE,
+            }
+        )
+        .into_string();
+        let refused = |app: &Self, why: String| {
+            let line = t!(
+                app.ui_state.i18n,
+                ids::PCB_FOOTPRINT_REFUSED,
+                "what" => what.as_str(),
+                "why" => why
+            );
+            crate::diagnostics::log_warning(line.into_string());
         };
-        let Some(engine) = self.document_state.board_engine(&draft.board) else {
-            crate::diagnostics::log_warning(format!("{what}: the board is no longer open"));
+        let Some(engine) = self.document_state.board_engine(board) else {
+            let line =
+                t!(self.ui_state.i18n, ids::PCB_FOOTPRINT_BOARD_GONE, "what" => what.as_str());
+            crate::diagnostics::log_warning(line.into_string());
             return;
         };
         let revision = engine.revision();
-        let built = designators::text_edit_command(
-            engine.board(),
-            draft.footprint,
-            draft.field,
-            &draft.text,
-        );
+        let built = designators::text_edit_command(engine.board(), footprint, field, text);
         let command = match built {
             Ok(Some(command)) => command,
             Ok(None) => return,
             Err(refusal) => {
-                crate::diagnostics::log_warning(format!("{what}: {refusal}; nothing changed"));
+                refused(self, refusal.to_string());
                 return;
             }
         };
         let step = CheckedStep {
-            label: what,
+            label: &what,
             expected_revision: revision,
         };
-        if let Err(error) = self.execute_board_commands(&draft.board, vec![command], Some(step)) {
-            crate::diagnostics::log_warning(format!("{what}: {error}; nothing changed"));
+        if let Err(error) = self.execute_board_commands(board, vec![command], Some(step)) {
+            refused(self, error.to_string());
             return;
         }
-        if draft.field == FootprintTextField::Designator {
-            self.warn_shared_designator(&draft.board, draft.footprint);
+        if field == FootprintTextField::Designator {
+            self.warn_shared_designator(board, footprint);
         }
     }
 
@@ -107,10 +166,13 @@ impl Signex {
         };
         let others = designators::designator_holders(board, &fp.reference, footprint).len();
         if others > 0 {
-            crate::diagnostics::log_warning(format!(
-                "Designator: {} is also on {others} other footprint(s) of this board",
-                fp.reference
-            ));
+            let line = t!(
+                self.ui_state.i18n,
+                ids::PCB_FOOTPRINT_SHARED_NOTICE,
+                "designator" => fp.reference.as_str(),
+                "count" => others
+            );
+            crate::diagnostics::log_warning(line.into_string());
         }
     }
 
@@ -141,17 +203,59 @@ impl Signex {
             .interaction_state
             .pcb_footprint_draft
             .as_ref()
-            .filter(|d| d.board == path && d.footprint == id)
-            .map(|d| (d.field, d.text.clone()));
+            .filter(|d| d.is_for(path, id));
         Some(PcbFootprintFacts {
             board: path.to_path_buf(),
             uuid: id,
             designator: fp.reference.clone(),
             value: fp.value.clone(),
             footprint_name: fp.footprint_id.clone(),
-            draft,
+            designator_draft: draft.and_then(|d| d.text(FootprintTextField::Designator).cloned()),
+            value_draft: draft.and_then(|d| d.text(FootprintTextField::Value).cloned()),
             editability,
             also_on: designators::designator_holders(board, &fp.reference, id).len(),
         })
+    }
+}
+
+impl Signex {
+    /// The pass after every update: an unapplied draft goes once its board
+    /// is closed or no window shows it (a tab switch), or its footprint is
+    /// gone, so Enter can never apply text typed for a board left behind.
+    pub(crate) fn prune_pcb_footprint_draft(&mut self) {
+        let Some(draft) = self.interaction_state.pcb_footprint_draft.as_ref() else {
+            return;
+        };
+        let docs = &self.document_state;
+        let in_main = docs
+            .tabs
+            .get(docs.active_tab)
+            .is_some_and(|tab| tab.path == draft.board);
+        let in_window = self.ui_state.windows.values().any(|kind| {
+            matches!(
+                kind,
+                crate::app::state::WindowKind::UndockedTab { path, .. } if *path == draft.board
+            )
+        });
+        let footprint_there = docs.has_pcb_tab(&draft.board)
+            && docs
+                .pcb_board(&draft.board)
+                .is_some_and(|b| b.footprints.iter().any(|fp| fp.uuid == draft.footprint));
+        if !(footprint_there && (in_main || in_window)) {
+            self.interaction_state.pcb_footprint_draft = None;
+        }
+    }
+
+    /// An undo or redo moved the board at `path`: the text a draft was typed
+    /// over may have changed under it, so its draft goes.
+    pub(crate) fn drop_pcb_footprint_draft_of(&mut self, path: &Path) {
+        if self
+            .interaction_state
+            .pcb_footprint_draft
+            .as_ref()
+            .is_some_and(|d| d.board == path)
+        {
+            self.interaction_state.pcb_footprint_draft = None;
+        }
     }
 }

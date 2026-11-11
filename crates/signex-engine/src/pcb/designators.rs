@@ -81,15 +81,19 @@ pub fn designator_holders<'a>(
         .collect()
 }
 
-/// A designator's prefix and number: `R12` is `("R", Some(12))`, `R?` and `R`
-/// are `("R", None)`. `None` when there is no prefix or the rest is not a
-/// plain number (`12`, `R1A`, an empty one).
+/// A designator's prefix and number, around surrounding whitespace: `R12` is
+/// `("R", Some(12))`, ` R12 ` the same, `R?` and `R` are `("R", None)`, and
+/// `R01` is `("R", Some(1))`, so a re-annotation writes it `R1`. Only ASCII
+/// digits count as the number. `None` when there is no prefix, the rest is
+/// not a plain number (`12`, `R1A`, an empty one), or the prefix holds another
+/// digit (`R１`), which is kept rather than numbered.
 pub fn split_designator(designator: &str) -> Option<(&str, Option<u32>)> {
+    let designator = designator.trim();
     let at = designator
         .find(|c: char| c.is_ascii_digit() || c == '?')
         .unwrap_or(designator.len());
     let (prefix, rest) = designator.split_at(at);
-    if prefix.trim().is_empty() {
+    if prefix.trim().is_empty() || prefix.chars().any(char::is_numeric) {
         return None;
     }
     match rest {
@@ -105,11 +109,12 @@ pub fn split_designator(designator: &str) -> Option<(&str, Option<u32>)> {
 /// downwards on screen, so "top to bottom" is increasing y.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ReannotateOrder {
-    /// Columns left to right, each top to bottom.
+    /// By X, then by Y: left to right, and top to bottom where X is equal
+    /// to the micrometre. There is no column tolerance.
     #[default]
-    ColumnsThenRows,
-    /// Rows top to bottom, each left to right.
-    RowsThenColumns,
+    XThenY,
+    /// By Y, then by X: top to bottom, and left to right where Y is equal.
+    YThenX,
 }
 
 /// Where the bottom side's parts fall in the numbering.
@@ -141,8 +146,11 @@ pub struct Rename {
 pub enum KeptReason {
     /// Locked footprints keep theirs; its number is not given to another.
     Locked,
-    /// Not a prefix and a number (`12`, `R1A`, empty).
+    /// Not a prefix and a number (`12`, `R1A`, `R１`, empty).
     NoPrefix,
+    /// No link to a schematic part: Update PCB matches such a footprint to a
+    /// part by its designator, so renumbering it would swap parts.
+    Unlinked,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -180,8 +188,9 @@ impl ReannotatePlan {
 }
 
 /// Number the board's parts by position, within each prefix from 1: `R`s
-/// count `R1, R2, ...` and `C`s their own. The prefix stays. Locked
-/// footprints keep their designators, and their numbers are skipped.
+/// count `R1, R2, ...` and `C`s their own. The prefix stays. Locked and
+/// unlinked footprints keep their designators, and their numbers are
+/// skipped.
 pub fn plan_reannotate(board: &PcbBoard, options: ReannotateOptions) -> ReannotatePlan {
     let mut plan = ReannotatePlan::default();
     let mut taken: BTreeMap<&str, BTreeSet<u32>> = BTreeMap::new();
@@ -190,13 +199,14 @@ pub fn plan_reannotate(board: &PcbBoard, options: ReannotateOptions) -> Reannota
         let split = split_designator(&fp.reference);
         let reason = match split {
             _ if fp.locked => KeptReason::Locked,
+            _ if fp.schematic_link.is_none() => KeptReason::Unlinked,
             None => KeptReason::NoPrefix,
             Some((prefix, _)) => {
                 numbered.push((fp, prefix));
                 continue;
             }
         };
-        if let (KeptReason::Locked, Some((prefix, Some(number)))) = (reason, split) {
+        if let Some((prefix, Some(number))) = split {
             taken.entry(prefix).or_default().insert(number);
         }
         plan.kept.push(Kept {
@@ -239,8 +249,8 @@ fn position_order(a: &Footprint, b: &Footprint, options: ReannotateOptions) -> O
         };
         let (x, y) = (micrometres(fp.position.x), micrometres(fp.position.y));
         let (first, second) = match options.order {
-            ReannotateOrder::ColumnsThenRows => (x, y),
-            ReannotateOrder::RowsThenColumns => (y, x),
+            ReannotateOrder::XThenY => (x, y),
+            ReannotateOrder::YThenX => (y, x),
         };
         (side, first, second, fp.uuid)
     };

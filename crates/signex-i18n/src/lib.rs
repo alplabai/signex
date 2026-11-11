@@ -294,6 +294,14 @@ define_ids! {
     PCB_REANNOTATE_REFUSED = "pcb-reannotate-refused";
     PCB_REANNOTATE_CANCEL = "pcb-reannotate-cancel";
     PCB_REANNOTATE_EXECUTE = "pcb-reannotate-execute";
+    PCB_DESIGNATOR_UPDATE_PCB_NOTE = "pcb-designator-update-pcb-note";
+    PCB_REANNOTATE_KEPT_UNLINKED = "pcb-reannotate-kept-unlinked";
+    PCB_FOOTPRINT_REFUSED = "pcb-footprint-refused";
+    PCB_FOOTPRINT_BOARD_GONE = "pcb-footprint-board-gone";
+    PCB_FOOTPRINT_SHARED_NOTICE = "pcb-footprint-shared-notice";
+    PCB_REANNOTATE_NO_PCB = "pcb-reannotate-no-pcb";
+    PCB_REANNOTATE_BOARD_GONE = "pcb-reannotate-board-gone";
+    PCB_REANNOTATE_DONE = "pcb-reannotate-done";
     LIBRARY_BROWSER_SEARCH = "library-browser-search";
     LIBRARY_BROWSER_ADD_COMPONENT = "library-browser-add-component";
     LIBRARY_BROWSER_SUMMARY = "library-browser-summary";

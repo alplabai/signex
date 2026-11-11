@@ -8,7 +8,8 @@ fn id(n: u128) -> Uuid {
     Uuid::from_u128(n)
 }
 
-/// A board of `(n, reference, x, y, layer, locked)` footprints.
+// A board of `(n, reference, x, y, layer, locked)` footprints, each linked to
+/// a part (unit `n + 0x1000` on the root sheet) as Update PCB leaves them.
 fn board(parts: &[(u128, &str, f64, f64, &str, bool)]) -> PcbBoard {
     let footprints: Vec<_> = parts
         .iter()
@@ -16,6 +17,7 @@ fn board(parts: &[(u128, &str, f64, f64, &str, bool)]) -> PcbBoard {
             serde_json::json!({
                 "uuid": id(n), "reference": reference, "value": format!("v{n}"),
                 "position": {"x": x, "y": y}, "layer": layer, "locked": locked,
+                "schematic_link": {"sheet": [], "units": [id(n + 0x1000)]},
                 "properties": [
                     {"key": "Reference", "value": reference},
                     {"key": "Value", "value": format!("v{n}")}
@@ -144,7 +146,7 @@ fn designator_holders_are_the_other_footprints_with_it() {
 }
 
 #[test]
-fn columns_then_rows_numbers_each_column_top_to_bottom() {
+fn x_then_y_numbers_left_to_right_then_top_to_bottom() {
     let b = board(&[
         top(1, "R9", 10.0, 20.0),
         top(2, "R8", 10.0, 10.0),
@@ -160,14 +162,14 @@ fn columns_then_rows_numbers_each_column_top_to_bottom() {
 }
 
 #[test]
-fn rows_then_columns_numbers_each_row_left_to_right() {
+fn y_then_x_numbers_top_to_bottom_then_left_to_right() {
     let b = board(&[
         top(1, "R1", 10.0, 20.0),
         top(2, "R2", 10.0, 10.0),
         top(3, "R3", 0.0, 10.0),
     ]);
     let options = ReannotateOptions {
-        order: ReannotateOrder::RowsThenColumns,
+        order: ReannotateOrder::YThenX,
         ..ReannotateOptions::default()
     };
     let plan = plan_reannotate(&b, options);
@@ -254,4 +256,33 @@ fn a_plan_for_a_footprint_that_is_gone_is_refused() {
         plan.commands(&empty),
         Err(BoardCommandError::FootprintNotFound(id(1)))
     );
+}
+
+#[test]
+fn surrounding_spaces_are_trimmed_and_other_digits_are_not_a_number() {
+    assert_eq!(split_designator(" R1 "), Some(("R", Some(1))));
+    assert_eq!(split_designator("R01"), Some(("R", Some(1))));
+    assert_eq!(split_designator("R\u{ff11}"), None, "a full-width digit");
+    let b = board(&[top(1, " R1", 0.0, 0.0), top(2, "R\u{ff11}", 10.0, 0.0)]);
+    let plan = plan_reannotate(&b, ReannotateOptions::default());
+    assert_eq!(renames(&plan), pairs(&[(" R1", "R1")]));
+    assert_eq!(plan.kept.len(), 1);
+    assert_eq!(plan.kept[0].reason, KeptReason::NoPrefix);
+}
+
+#[test]
+fn unlinked_footprints_keep_their_designators_and_numbers() {
+    let mut b = board(&[
+        top(1, "R1", 50.0, 0.0),
+        top(2, "R5", 0.0, 0.0),
+        top(3, "R9", 10.0, 0.0),
+    ]);
+    b.footprints[0].schematic_link = None;
+    let plan = plan_reannotate(&b, ReannotateOptions::default());
+    assert_eq!(
+        renames(&plan),
+        pairs(&[("R5", "R2"), ("R9", "R3")]),
+        "the unlinked R1 keeps its number"
+    );
+    assert_eq!(plan.kept[0].reason, KeptReason::Unlinked);
 }

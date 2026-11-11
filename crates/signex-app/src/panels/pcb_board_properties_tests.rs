@@ -114,12 +114,8 @@ fn footprint_context(
         designator: "R7".into(),
         value: "10k".into(),
         footprint_name: "R_0603".into(),
-        draft: draft.then(|| {
-            (
-                signex_engine::pcb::designators::FootprintTextField::Value,
-                "4k7".into(),
-            )
-        }),
+        designator_draft: None,
+        value_draft: draft.then(|| "4k7".into()),
         editability,
         also_on,
     };
@@ -140,6 +136,12 @@ fn one_selected_footprint_shows_its_designator_value_and_name() {
         "{texts:?}"
     );
     assert!(!texts.iter().any(|t| t.contains("Enter")), "{texts:?}");
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.starts_with("Update PCB renames parts back")),
+        "{texts:?}"
+    );
 }
 
 #[test]

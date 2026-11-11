@@ -99,18 +99,24 @@ fn body<'a>(
             .color(muted)
             .boxed(),
     );
+    col = col.push(
+        text(t!(i18n, ids::PCB_DESIGNATOR_UPDATE_PCB_NOTE))
+            .size(TS.body)
+            .color(muted)
+            .boxed(),
+    );
     col = col.push(choices(
         t!(i18n, ids::PCB_REANNOTATE_ORDER),
         [
             (
                 t!(i18n, ids::PCB_REANNOTATE_ORDER_COLUMNS),
-                options.order == ReannotateOrder::ColumnsThenRows,
-                BoardReannotateMsg::OrderPicked(ReannotateOrder::ColumnsThenRows),
+                options.order == ReannotateOrder::XThenY,
+                BoardReannotateMsg::OrderPicked(ReannotateOrder::XThenY),
             ),
             (
                 t!(i18n, ids::PCB_REANNOTATE_ORDER_ROWS),
-                options.order == ReannotateOrder::RowsThenColumns,
-                BoardReannotateMsg::OrderPicked(ReannotateOrder::RowsThenColumns),
+                options.order == ReannotateOrder::YThenX,
+                BoardReannotateMsg::OrderPicked(ReannotateOrder::YThenX),
             ),
         ],
         tokens,
@@ -246,6 +252,9 @@ fn kept_text(kept: &Kept, i18n: &I18n) -> Localized {
         }
         KeptReason::NoPrefix => {
             t!(i18n, ids::PCB_REANNOTATE_KEPT_NO_PREFIX, "designator" => designator)
+        }
+        KeptReason::Unlinked => {
+            t!(i18n, ids::PCB_REANNOTATE_KEPT_UNLINKED, "designator" => designator)
         }
     }
 }

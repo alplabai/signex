@@ -210,14 +210,22 @@ impl Signex {
     /// and selection are the ones in the main slots (`run_in_window`).
     pub(crate) fn sync_pcb_board_summary(&mut self) {
         let summary = self.pcb_board_summary();
-        // A draft belongs to the footprint Properties shows; once another
-        // selection replaces it, the unapplied text is dropped.
+        // A draft belongs to the footprint Properties shows on its board; once
+        // another selection on THAT board replaces it, the unapplied text is
+        // dropped. A selection on another board (another window) leaves it.
+        let in_view = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|tab| tab.path.clone());
         let shown = summary
             .as_ref()
             .and_then(|s| s.footprint.as_ref())
-            .map(|f| (f.board.as_path(), f.uuid));
+            .map(|f| f.uuid);
         let draft = self.interaction_state.pcb_footprint_draft.as_ref();
-        if draft.is_some_and(|d| shown != Some((d.board.as_path(), d.footprint))) {
+        if draft.is_some_and(|d| {
+            in_view.as_deref() == Some(d.board.as_path()) && shown != Some(d.footprint)
+        }) {
             self.interaction_state.pcb_footprint_draft = None;
         }
         self.document_state.panel_ctx.pcb_board = summary;
