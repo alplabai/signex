@@ -8,7 +8,7 @@
 
 use super::catalog::{CommandMetadata, KeyBind, describe_operands};
 use super::{
-    AppCommandId, CompiledKeymap, KeyStroke, Modifiers, ShortcutBindingAction, ShortcutProfileSet,
+    AppCommandId, CompiledKeymap, Platform, ShortcutBindingAction, ShortcutProfileSet,
     ShortcutTrigger, all_command_ids, metadata_for_str,
 };
 
@@ -96,7 +96,13 @@ fn catalog_text() -> String {
 /// config spelling) and the menu hint each command shows (`hint` rows, the
 /// logo key normalised to `Cmd`), so a dropped extra binding is noticed too.
 fn profiles_text() -> String {
-    let set = ShortcutProfileSet::built_ins().expect("built-in profiles");
+    profiles_text_for(Platform::Windows)
+}
+
+/// The golden is rendered as Windows sees the profiles, whatever the host,
+/// and Linux must render the same table (see `profile_platform_tests`).
+pub(super) fn profiles_text_for(platform: Platform) -> String {
+    let set = ShortcutProfileSet::built_ins_for(platform).expect("built-in profiles");
     let mut out = format!("{PROFILES_HEADER}\n");
     for profile in set.profiles() {
         for binding in &profile.bindings {
@@ -109,7 +115,7 @@ fn profiles_text() -> String {
                 let sequence = match trigger {
                     ShortcutTrigger::KeySequence(strokes) => strokes
                         .iter()
-                        .map(KeyStroke::to_config_string)
+                        .map(|stroke| stroke.resolved_for(platform).to_config_string())
                         .collect::<Vec<_>>()
                         .join(" "),
                     ShortcutTrigger::PointerGesture(gesture) => format!("pointer:{gesture}"),
@@ -122,8 +128,8 @@ fn profiles_text() -> String {
                 ));
             }
         }
-        let keymap = CompiledKeymap::compile(profile);
-        let logo = format!("{}+", Modifiers::command_key_name());
+        let keymap = CompiledKeymap::compile_for(profile, platform);
+        let logo = format!("{}+", platform.logo_key_name());
         for id in all_command_ids() {
             let command = AppCommandId::new(id).expect("catalog id is valid");
             let hint = keymap

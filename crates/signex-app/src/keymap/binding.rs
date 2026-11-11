@@ -1,4 +1,4 @@
-use crate::keymap::AppCommandId;
+use crate::keymap::{AppCommandId, Platform, physical::us_qwerty_char};
 use iced::keyboard;
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt, str::FromStr};
@@ -50,9 +50,63 @@ pub struct Modifiers {
     pub alt: bool,
     pub shift: bool,
     pub command: bool,
+    /// The `Mod` token of a profile: the platform's standard modifier,
+    /// Cmd on macOS and Ctrl elsewhere (#1645). Only parsed or recorded
+    /// strokes carry it; a live keystroke never does. Spelling is kept so a
+    /// saved profile reads `Mod+…` on every OS. Compare strokes through
+    /// [`KeyStroke::resolved_for`], never raw.
+    #[serde(default)]
+    pub primary: bool,
+}
+
+/// The macOS modifier symbols in Apple's order, with the flag each one sets.
+const MAC_SYMBOLS: [(char, fn(&mut Modifiers)); 4] = [
+    ('\u{2303}', |m| m.ctrl = true),
+    ('\u{2325}', |m| m.alt = true),
+    ('\u{21e7}', |m| m.shift = true),
+    ('\u{2318}', |m| m.primary = true),
+];
+
+/// Whether `ch` is one of the macOS modifier symbols.
+pub fn is_mac_modifier_symbol(ch: char) -> bool {
+    MAC_SYMBOLS.iter().any(|(symbol, _)| *symbol == ch)
+}
+
+/// One macOS-style stroke label (`⇧⌘S`) as its key caps (`⇧`, `⌘`, `S`);
+/// `None` when it does not start with a modifier symbol.
+pub fn mac_stroke_caps(label: &str) -> Option<Vec<String>> {
+    if !label.starts_with(is_mac_modifier_symbol) {
+        return None;
+    }
+    let rest = label.trim_start_matches(is_mac_modifier_symbol);
+    let mut caps: Vec<String> = label[..label.len() - rest.len()]
+        .chars()
+        .map(String::from)
+        .collect();
+    if !rest.is_empty() {
+        caps.push(rest.to_owned());
+    }
+    Some(caps)
 }
 
 impl Modifiers {
+    /// `primary` replaced by the concrete key it means on `platform`: Cmd
+    /// on macOS, Ctrl elsewhere, never Super. Idempotent.
+    pub fn resolved_for(self, platform: Platform) -> Self {
+        if !self.primary {
+            return self;
+        }
+        let mut resolved = Self {
+            primary: false,
+            ..self
+        };
+        match platform {
+            Platform::MacOs => resolved.command = true,
+            Platform::Windows | Platform::Linux => resolved.ctrl = true,
+        }
+        resolved
+    }
+
     /// Canonical form shared by live keystrokes and parsed bindings (#1378).
     ///
     /// `ctrl` is the physical Control key and `command` is the logo key
@@ -67,7 +121,49 @@ impl Modifiers {
             alt: modifiers.alt(),
             shift: modifiers.shift(),
             command: modifiers.logo(),
+            primary: false,
         }
+    }
+
+    /// The held modifiers as `platform` writes them, without a key: Apple
+    /// symbols in Apple order on macOS (`⇧⌘`), `Ctrl+Shift` elsewhere.
+    pub fn display_for(self, platform: Platform) -> String {
+        let m = self.resolved_for(platform);
+        if platform == Platform::MacOs {
+            return [
+                (m.ctrl, '\u{2303}'),
+                (m.alt, '\u{2325}'),
+                (m.shift, '\u{21e7}'),
+                (m.command, '\u{2318}'),
+            ]
+            .into_iter()
+            .filter_map(|(on, symbol)| on.then_some(symbol))
+            .collect();
+        }
+        [
+            (m.ctrl, "Ctrl"),
+            (m.command, platform.logo_key_name()),
+            (m.alt, "Alt"),
+            (m.shift, "Shift"),
+        ]
+        .into_iter()
+        .filter_map(|(on, name)| on.then_some(name))
+        .collect::<Vec<_>>()
+        .join("+")
+    }
+
+    /// The form the Preferences recorder stores: on macOS a Cmd press is
+    /// `Mod`, so a profile made on a Mac also works elsewhere. Other OSes
+    /// record exactly what was pressed.
+    pub fn recorded_for(self, platform: Platform) -> Self {
+        if platform == Platform::MacOs && self.command {
+            return Self {
+                command: false,
+                primary: true,
+                ..self
+            };
+        }
+        self
     }
 
     /// The logo key's spelling in profile files, on every OS.
@@ -76,17 +172,11 @@ impl Modifiers {
     /// What this OS calls the logo key: Cmd on macOS, Win on Windows,
     /// Super elsewhere. The parser accepts all three spellings on every OS.
     pub fn command_key_name() -> &'static str {
-        if cfg!(target_os = "macos") {
-            "Cmd"
-        } else if cfg!(windows) {
-            "Win"
-        } else {
-            "Super"
-        }
+        Platform::current().logo_key_name()
     }
 
     pub fn is_empty(self) -> bool {
-        !self.ctrl && !self.alt && !self.shift && !self.command
+        !self.ctrl && !self.alt && !self.shift && !self.command && !self.primary
     }
 }
 
@@ -97,14 +187,35 @@ pub struct KeyStroke {
 }
 
 impl KeyStroke {
+    /// [`Self::from_key_event`] with no physical key to fall back on.
     pub fn from_iced(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> Option<Self> {
+        Self::from_key_event(
+            key,
+            keyboard::key::Physical::Unidentified(keyboard::key::NativeCode::Unidentified),
+            modifiers,
+        )
+    }
+
+    /// A live keystroke. The logical key wins when it is ASCII (AZERTY `z`
+    /// stays `z`); otherwise (Turkish `ö`, Cyrillic) the physical key's
+    /// US-QWERTY character stands in, so a binding written as `,` or a
+    /// Latin letter still fires on that layout (#1645).
+    pub fn from_key_event(
+        key: &keyboard::Key,
+        physical: keyboard::key::Physical,
+        modifiers: keyboard::Modifiers,
+    ) -> Option<Self> {
         let key = match key.as_ref() {
             keyboard::Key::Character(value) => {
                 let normalized = value.to_lowercase();
                 if normalized.chars().count() != 1 {
                     return None;
                 }
-                KeyToken::Character(normalized)
+                let ascii = normalized.is_ascii();
+                match us_qwerty_char(physical) {
+                    Some(fallback) if !ascii => KeyToken::Character(fallback.to_string()),
+                    _ => KeyToken::Character(normalized),
+                }
             }
             keyboard::Key::Named(named) => match named {
                 keyboard::key::Named::Escape => KeyToken::Escape,
@@ -155,8 +266,39 @@ impl KeyStroke {
         self.labelled(Modifiers::CONFIG_COMMAND_NAME)
     }
 
+    /// This stroke with `Mod` replaced by the concrete modifier of `platform`.
+    pub fn resolved_for(&self, platform: Platform) -> Self {
+        Self {
+            modifiers: self.modifiers.resolved_for(platform),
+            key: self.key.clone(),
+        }
+    }
+
+    /// The stroke as the Preferences recorder stores it on `platform`.
+    pub fn recorded_for(&self, platform: Platform) -> Self {
+        Self {
+            modifiers: self.modifiers.recorded_for(platform),
+            key: self.key.clone(),
+        }
+    }
+
+    /// The label shown in the UI on `platform`: Apple symbols in Apple
+    /// order without `+` on macOS (`⇧⌘S`), text elsewhere (`Ctrl+Shift+S`).
+    pub fn display_for(&self, platform: Platform) -> String {
+        let stroke = self.resolved_for(platform);
+        if platform != Platform::MacOs {
+            return stroke.labelled(platform.logo_key_name());
+        }
+        let mut text = stroke.modifiers.display_for(platform);
+        text.push_str(&stroke.key.to_string());
+        text
+    }
+
     fn labelled(&self, command_name: &str) -> String {
         let mut text = String::new();
+        if self.modifiers.primary {
+            text.push_str("Mod+");
+        }
         if self.modifiers.ctrl {
             text.push_str("Ctrl+");
         }
@@ -177,7 +319,7 @@ impl KeyStroke {
 
 impl fmt::Display for KeyStroke {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.labelled(Modifiers::command_key_name()))
+        f.write_str(&self.display_for(Platform::current()))
     }
 }
 
@@ -245,10 +387,15 @@ impl ShortcutTrigger {
 
     /// The per-OS label shown in the UI (Cmd / Win / Super for the logo key).
     pub fn display_text(&self) -> String {
+        self.display_text_for(Platform::current())
+    }
+
+    /// [`Self::display_text`] for an explicit platform.
+    pub fn display_text_for(&self, platform: Platform) -> String {
         match self {
             Self::KeySequence(strokes) => strokes
                 .iter()
-                .map(ToString::to_string)
+                .map(|stroke| stroke.display_for(platform))
                 .collect::<Vec<_>>()
                 .join(" "),
             Self::PointerGesture(gesture) => gesture.clone(),
@@ -266,6 +413,23 @@ impl FromStr for KeyStroke {
         }
 
         let mut modifiers = Modifiers::default();
+        // The macOS display form (`⇧⌘S`), so a shown label can be fed back.
+        // `⌘` reads as `Mod`, matching what the recorder stores on a Mac.
+        if source.starts_with(is_mac_modifier_symbol) {
+            let rest = source.trim_start_matches(is_mac_modifier_symbol);
+            for (symbol, set) in MAC_SYMBOLS {
+                if source[..source.len() - rest.len()].contains(symbol) {
+                    set(&mut modifiers);
+                }
+            }
+            if rest.is_empty() {
+                return Err(KeyParseError::MissingKey(source.to_string()));
+            }
+            return Ok(Self {
+                modifiers,
+                key: parse_key_token(rest)?,
+            });
+        }
         let mut key = None;
         // The plus key itself: `+` alone, or `Shift++` after the modifiers.
         let (modifier_text, plus_key) = match source.strip_suffix("++") {
@@ -284,6 +448,7 @@ impl FromStr for KeyStroke {
             match part.to_ascii_lowercase().as_str() {
                 "ctrl" | "control" => modifiers.ctrl = true,
                 "cmd" | "command" | "super" | "win" => modifiers.command = true,
+                "mod" => modifiers.primary = true,
                 "alt" | "option" => modifiers.alt = true,
                 "shift" => modifiers.shift = true,
                 _ if key.is_none() => key = Some(parse_key_token(part)?),

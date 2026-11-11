@@ -1,5 +1,5 @@
 use crate::keymap::{
-    AppCommandId, KeyBindingSource, KeyStroke, ShortcutBinding, ShortcutBindingAction,
+    AppCommandId, KeyBindingSource, KeyStroke, Platform, ShortcutBinding, ShortcutBindingAction,
     ShortcutContext, ShortcutTrigger,
 };
 use serde::{Deserialize, Serialize};
@@ -76,9 +76,15 @@ pub struct ShortcutProfileSet {
 
 impl ShortcutProfileSet {
     pub fn built_ins() -> Result<Self, ProfileLoadError> {
+        Self::built_ins_for(Platform::current())
+    }
+
+    /// The built-ins as `platform` sees them: sections tagged for another
+    /// platform are left out.
+    pub fn built_ins_for(platform: Platform) -> Result<Self, ProfileLoadError> {
         let profiles = [
-            TomlShortcutProfile::parse(ALTIUM_PROFILE_TOML)?.into_profile()?,
-            TomlShortcutProfile::parse(CLASSIC_PROFILE_TOML)?.into_profile()?,
+            TomlShortcutProfile::parse(ALTIUM_PROFILE_TOML)?.into_profile_for(platform)?,
+            TomlShortcutProfile::parse(CLASSIC_PROFILE_TOML)?.into_profile_for(platform)?,
         ];
         Self::new(profiles, BuiltInProfile::Altium.id())
     }
@@ -178,6 +184,9 @@ impl ShortcutProfileSet {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CompiledKeymap {
+    /// The platform every `Mod` was resolved for and every label is shown
+    /// for; lookups compare resolved strokes only.
+    platform: Platform,
     bindings: Vec<CompiledBinding>,
     /// Per-command menu label, derived from `bindings` at compile time so
     /// `shortcut_label` is a map hit instead of a reverse scan plus a
@@ -192,7 +201,7 @@ pub struct CompiledKeymap {
 /// The hint is context-free: it does not know which context the menu is
 /// shown in, and an `Unbind` shadows a binding only in its own context
 /// (the same rule `shortcut_label_linear` states independently).
-fn label_index(bindings: &[CompiledBinding]) -> BTreeMap<AppCommandId, String> {
+fn label_index(bindings: &[CompiledBinding], platform: Platform) -> BTreeMap<AppCommandId, String> {
     let mut labels = BTreeMap::new();
     // Reverse scan; `unbinds` holds the unbinds that come after the
     // binding under inspection.
@@ -206,7 +215,10 @@ fn label_index(bindings: &[CompiledBinding]) -> BTreeMap<AppCommandId, String> {
                 let shadowed =
                     unbinds.contains(&(command, binding.context, binding.sequence.as_slice()));
                 if !shadowed && !labels.contains_key(command) {
-                    labels.insert(command.clone(), display_sequence(&binding.sequence));
+                    labels.insert(
+                        command.clone(),
+                        display_sequence(&binding.sequence, platform),
+                    );
                 }
             }
             ShortcutBindingAction::NoAction => {}
@@ -215,16 +227,40 @@ fn label_index(bindings: &[CompiledBinding]) -> BTreeMap<AppCommandId, String> {
     labels
 }
 
-fn display_sequence(sequence: &[KeyStroke]) -> String {
+fn display_sequence(sequence: &[KeyStroke], platform: Platform) -> String {
     sequence
         .iter()
-        .map(ToString::to_string)
+        .map(|stroke| stroke.display_for(platform))
         .collect::<Vec<_>>()
         .join(" ")
 }
 
+/// Strokes macOS keeps for itself: Quit, Hide, Minimize, Spotlight, the app
+/// switcher and window cycling. Settings (`⌘,`) is allowed for Preferences.
+fn is_macos_reserved(stroke: &KeyStroke, command: &AppCommandId) -> bool {
+    use crate::keymap::KeyToken;
+    let m = stroke.modifiers;
+    if !m.command || m.ctrl || m.alt || m.shift {
+        return false;
+    }
+    match &stroke.key {
+        KeyToken::Space | KeyToken::Tab => true,
+        KeyToken::Character(c) => match c.as_str() {
+            "q" | "h" | "m" | "`" => true,
+            "," => command.as_str() != "open_preferences",
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
 impl CompiledKeymap {
     pub fn compile(profile: &ShortcutProfile) -> Self {
+        Self::compile_for(profile, Platform::current())
+    }
+
+    /// Compile with every `Mod` resolved for `platform`.
+    pub fn compile_for(profile: &ShortcutProfile, platform: Platform) -> Self {
         let source = match profile.kind {
             ShortcutProfileKind::BuiltIn => KeyBindingSource::BuiltIn(profile.id.clone()),
             ShortcutProfileKind::Custom => KeyBindingSource::Custom(profile.id.clone()),
@@ -236,14 +272,21 @@ impl CompiledKeymap {
                     bindings.push(CompiledBinding {
                         action: binding.action.clone(),
                         context: binding.context,
-                        sequence: sequence.clone(),
+                        sequence: sequence
+                            .iter()
+                            .map(|stroke| stroke.resolved_for(platform))
+                            .collect(),
                         source: source.clone(),
                     });
                 }
             }
         }
-        let labels = label_index(&bindings);
-        Self { bindings, labels }
+        let labels = label_index(&bindings, platform);
+        Self {
+            platform,
+            bindings,
+            labels,
+        }
     }
 
     pub fn lookup(&self, input: &[KeyStroke], contexts: &[ShortcutContext]) -> KeyLookup {
@@ -299,12 +342,19 @@ impl CompiledKeymap {
         let Ok(command) = AppCommandId::new(command_id) else {
             return String::new();
         };
+        let Ok(ShortcutTrigger::KeySequence(wanted)) = ShortcutTrigger::parse(preferred) else {
+            return self.shortcut_label(&command).unwrap_or_default();
+        };
+        let wanted: Vec<KeyStroke> = wanted
+            .iter()
+            .map(|stroke| stroke.resolved_for(self.platform))
+            .collect();
         let bound = self.bindings.iter().enumerate().any(|(index, binding)| {
             let ShortcutBindingAction::Command(c) = &binding.action else {
                 return false;
             };
             c == &command
-                && display_sequence(&binding.sequence) == preferred
+                && binding.sequence == wanted
                 && !self.bindings[index + 1..].iter().any(|later| {
                     matches!(&later.action, ShortcutBindingAction::Unbind(u) if u == &command)
                         && later.context == binding.context
@@ -312,10 +362,28 @@ impl CompiledKeymap {
                 })
         });
         if bound {
-            preferred.to_string()
+            display_sequence(&wanted, self.platform)
         } else {
             self.shortcut_label(&command).unwrap_or_default()
         }
+    }
+
+    /// Every compiled binding as `(context, resolved stroke text, action)`,
+    /// in compile order: the table a lookup actually compares against.
+    #[cfg(test)]
+    pub(crate) fn resolved_table(&self) -> Vec<(ShortcutContext, String, String)> {
+        self.bindings
+            .iter()
+            .map(|binding| {
+                let strokes = binding
+                    .sequence
+                    .iter()
+                    .map(KeyStroke::to_config_string)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                (binding.context, strokes, format!("{:?}", binding.action))
+            })
+            .collect()
     }
 
     /// A quadratic restatement of the label rule, kept so a test can prove
@@ -335,7 +403,8 @@ impl CompiledKeymap {
                         && later.context == binding.context
                         && later.sequence == binding.sequence
                 });
-                (bound == command && !shadowed).then(|| display_sequence(&binding.sequence))
+                (bound == command && !shadowed)
+                    .then(|| display_sequence(&binding.sequence, self.platform))
             })
     }
 
@@ -360,18 +429,40 @@ impl CompiledKeymap {
                 };
                 conflicts.push(BindingConflict {
                     context: binding.context,
-                    trigger: binding
-                        .sequence
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join(" "),
+                    trigger: display_sequence(&binding.sequence, self.platform),
                     first_command,
                     second_command,
+                    system_reserved: false,
                 });
             }
         }
+        conflicts.extend(self.reserved_conflicts());
         conflicts
+    }
+
+    /// On macOS, each binding whose first stroke the system owns (⌘Q, ⌘H,
+    /// ⌘M, ⌘Space, ⌘Tab, ⌘`, and ⌘, outside Preferences). The command
+    /// is named on both sides of the conflict.
+    fn reserved_conflicts(&self) -> Vec<BindingConflict> {
+        if self.platform != Platform::MacOs {
+            return Vec::new();
+        }
+        self.bindings
+            .iter()
+            .filter_map(|binding| {
+                let ShortcutBindingAction::Command(command) = &binding.action else {
+                    return None;
+                };
+                let first = binding.sequence.first()?;
+                is_macos_reserved(first, command).then(|| BindingConflict {
+                    context: binding.context,
+                    trigger: display_sequence(&binding.sequence, self.platform),
+                    first_command: command.clone(),
+                    second_command: command.clone(),
+                    system_reserved: true,
+                })
+            })
+            .collect()
     }
 }
 
@@ -437,6 +528,9 @@ pub struct BindingConflict {
     pub trigger: String,
     pub first_command: AppCommandId,
     pub second_command: AppCommandId,
+    /// The trigger belongs to the operating system (macOS ⌘Q, ⌘H, …), not to
+    /// another command; both command fields name the one command.
+    pub system_reserved: bool,
 }
 
 pub fn config_path() -> Option<PathBuf> {
@@ -551,8 +645,14 @@ impl TomlShortcutProfile {
     }
 
     pub fn into_profile(self) -> Result<ShortcutProfile, ProfileLoadError> {
+        self.into_profile_for(Platform::current())
+    }
+
+    /// The profile as `platform` sees it: a section tagged for another
+    /// platform is skipped.
+    pub fn into_profile_for(self, platform: Platform) -> Result<ShortcutProfile, ProfileLoadError> {
         self.signex_settings.validate()?;
-        self.keyboard_shortcuts.into_profile()
+        self.keyboard_shortcuts.into_profile_for(platform)
     }
 
     fn from_profile(profile: &ShortcutProfile) -> Result<Self, ProfileLoadError> {
@@ -687,6 +787,10 @@ struct TomlKeyboardShortcuts {
 
 impl TomlKeyboardShortcuts {
     fn into_profile(self) -> Result<ShortcutProfile, ProfileLoadError> {
+        self.into_profile_for(Platform::current())
+    }
+
+    fn into_profile_for(self, platform: Platform) -> Result<ShortcutProfile, ProfileLoadError> {
         validate_profile_id(&self.profile_id)?;
         if self.schema_version != 1 {
             return Err(ProfileLoadError::UnsupportedSchemaVersion(
@@ -696,6 +800,7 @@ impl TomlKeyboardShortcuts {
         let bindings = self
             .sections
             .into_iter()
+            .filter(|section| section.platform.is_none_or(|only| only == platform))
             .flat_map(TomlKeymapSection::into_bindings)
             .collect::<Result<Vec<_>, _>>()?;
         Ok(ShortcutProfile {
@@ -735,6 +840,9 @@ impl TomlKeyboardShortcuts {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TomlKeymapSection {
+    /// A section tagged with a platform applies on that platform only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    platform: Option<Platform>,
     #[serde(default)]
     context: ShortcutContext,
     #[serde(default)]
@@ -783,6 +891,7 @@ impl TomlKeymapSection {
             }
         }
         Ok(Self {
+            platform: None,
             context: binding.context,
             bindings,
             unbind,
