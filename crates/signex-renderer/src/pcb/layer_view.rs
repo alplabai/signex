@@ -8,12 +8,12 @@
 use std::collections::HashSet;
 
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{Footprint, LayerDef, Pad, PadType, PcbBoard};
+use signex_types::pcb::{Footprint, LayerDef, Pad, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
 use super::emit::{
-    layer_rank_index, pad_from_footprint, sort_zone_stack, trace_from_segment, via_from_board_via,
-    zone_from_board_zone,
+    is_through_pad, layer_rank_index, pad_from_footprint, sort_zone_stack, trace_from_segment,
+    via_from_board_via, zone_from_board_zone,
 };
 use super::{CopperInk, PcbSnapshot};
 
@@ -79,11 +79,6 @@ fn copper_span(names: &[String]) -> Option<CopperSpan> {
             (top.min(layer), bottom.max(layer))
         }))
     })
-}
-
-/// A pad drilled through the board, drawn on the Multi-Layer.
-fn is_through_pad(pad: &Pad) -> bool {
-    matches!(pad.pad_type, PadType::Thru | PadType::NpThru)
 }
 
 /// How an item on `names` is drawn: its emphasis under `view` (nothing is
@@ -184,11 +179,6 @@ impl PcbLayerView {
             return self.shows_any(names);
         }
         copper.any(|layer| self.is_visible(PcbLayer::Copper(layer)))
-    }
-
-    /// Where a pad stands against the active copper layer.
-    pub fn pad_emphasis(&self, footprint: &Footprint, pad: &Pad) -> Emphasis {
-        self.emphasis(pad_layer_names(footprint, pad))
     }
 
     /// Where an item on `names` stands against the active copper layer. An

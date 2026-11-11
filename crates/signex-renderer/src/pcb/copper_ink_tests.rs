@@ -209,3 +209,32 @@ fn copper_slots_follow_the_layer_cycle_for_mid_layers() {
     assert_eq!(copper_slot(mid(6)), ColorSlot::LayerCycle0);
     assert_eq!(copper_slot(mid(13)), ColorSlot::LayerCycle1);
 }
+
+/// A non-plated hole has no copper: it draws as its opening alone, the
+/// drill circle, or its own shape when it gives no drill.
+#[test]
+fn an_npth_pad_draws_only_its_opening() {
+    let opening = board_theme().color(ColorSlot::BoardOpening);
+    let mut board = board();
+    let pad = &mut board.footprints[0].pads[2];
+    pad.pad_type = PadType::NpThru;
+    let snapshot = PcbSnapshot::from_board(&board);
+    let scene = scene_of(&snapshot);
+
+    // Two SMD pads and the hole: no copper annulus, no second polygon.
+    assert_eq!(scene.top_polygons.len(), 3);
+    let hole = &scene.top_polygons[2];
+    assert_eq!(hole.fill_color, opening);
+    let npth = &snapshot.pads[2];
+    for v in &hole.vertices {
+        let r = ((v[0] - npth.center[0]).powi(2) + (v[1] - npth.center[1]).powi(2)).sqrt();
+        assert!((r - 0.5).abs() < 1e-4, "drill radius {r}");
+    }
+
+    board.footprints[0].pads[2].drill = None;
+    let snapshot = PcbSnapshot::from_board(&board);
+    let scene = scene_of(&snapshot);
+    assert_eq!(scene.top_polygons.len(), 3);
+    assert_eq!(scene.top_polygons[2].fill_color, opening);
+    assert_eq!(scene.top_polygons[2].vertices, snapshot.pads[2].outline);
+}

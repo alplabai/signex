@@ -172,8 +172,7 @@ pub(super) fn ellipse_vertices(
 pub(super) fn pad_alpha_mul(pad_type: PadType) -> f32 {
     match pad_type {
         PadType::Connect => 0.8,
-        PadType::NpThru => 0.7,
-        PadType::Thru | PadType::Smd => 1.0,
+        PadType::NpThru | PadType::Thru | PadType::Smd => 1.0,
     }
 }
 
@@ -191,9 +190,15 @@ pub(super) fn with_alpha_mul(mut color: [f32; 4], alpha_mul: f32) -> [f32; 4] {
     color
 }
 
+/// A pad drilled through the board: drawn on the Multi-Layer, with its
+/// drill as an opening.
+pub(super) fn is_through_pad(pad: &Pad) -> bool {
+    matches!(pad.pad_type, PadType::Thru | PadType::NpThru)
+}
+
 /// The diameter of a through-hole pad's drill, 0 when it has none.
 fn pad_drill_mm(pad: &Pad) -> f32 {
-    let through = matches!(pad.pad_type, PadType::Thru | PadType::NpThru);
+    let through = is_through_pad(pad);
     match &pad.drill {
         Some(drill) if through && drill.diameter.is_finite() && drill.diameter > 0.0 => {
             drill.diameter as f32
@@ -238,6 +243,16 @@ pub(super) fn emit_vias(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &m
         let hole = (via.drill_mm * 0.5).clamp(0.0, outer);
         let color = copper_color(theme, via.ink, ColorSlot::Junction);
 
+        // A drill as wide as the via leaves no copper: all of it is hole.
+        if hole > 0.0 && hole >= outer {
+            scene.circles.push(Circle {
+                center: via.center,
+                radius: outer,
+                stroke_width: 0.0,
+                color: opening,
+            });
+            continue;
+        }
         // Both renderers centre a ring's stroke on its radius, so stroke the
         // annulus at the midpoint between the hole edge and the outer edge.
         scene.circles.push(Circle {
@@ -246,9 +261,8 @@ pub(super) fn emit_vias(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &m
             stroke_width: outer - hole,
             color: dim_if(color, via.dimmed),
         });
-        // The drill shows as an opening, not the trace under it. A drill as
-        // wide as the via leaves no annulus and draws as a copper disc.
-        if hole > 0.0 && hole < outer {
+        // The drill shows as an opening, not the trace under it.
+        if hole > 0.0 {
             scene.circles.push(Circle {
                 center: via.center,
                 radius: hole,
@@ -293,6 +307,24 @@ pub(super) fn emit_static_polygons(
     // A pad is its copper outline alone: `pcb-geom` gives the exact shape,
     // and an outline stroke would widen it.
     for pad in &snapshot.pads {
+        // A non-plated hole has no copper: only its opening is drawn, the
+        // drill, or the pad's own shape when it gives no drill.
+        if pad.pad_type == PadType::NpThru {
+            let vertices = if pad.drill_mm > 0.0 {
+                let radius = pad.drill_mm * 0.5;
+                ellipse_vertices(pad.center, [radius, radius], DRILL_SEGMENTS)
+            } else {
+                pad.outline.clone()
+            };
+            scene.top_polygons.push(GpuPolygon {
+                holes: Vec::new(),
+                vertices,
+                fill_color: opening,
+                stroke_color: None,
+                stroke_width: 0.0,
+            });
+            continue;
+        }
         let copper = copper_color(theme, pad.ink, ColorSlot::Pin);
         let fill_color = dim_if(
             with_alpha_mul(copper, pad_alpha_mul(pad.pad_type)),

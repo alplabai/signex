@@ -549,10 +549,10 @@ mod tests {
         }
     }
 
-    /// A drill at or above the via diameter leaves no annulus; the hole clamps
-    /// to the outer edge and the via draws as a filled disc of its diameter.
+    /// A drill at or above the via diameter leaves no copper: the via draws
+    /// as one opening disc of its diameter, no copper under it.
     #[test]
-    fn via_without_annulus_draws_a_filled_disc() {
+    fn via_without_annulus_draws_only_its_opening() {
         let theme = ResolvedTheme::builtin_default();
         for drill_mm in [0.6, 0.8] {
             let snapshot = PcbSnapshot {
@@ -570,9 +570,15 @@ mod tests {
 
             PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::CIRCLES, &mut scene);
 
+            assert_eq!(scene.circles.len(), 1, "drill {drill_mm}");
             let disc = scene.circles[0];
             assert!(disc.is_filled(), "drill {drill_mm}");
             assert!((disc.radius - 0.3).abs() < 1e-6, "drill {drill_mm}");
+            assert_eq!(
+                disc.color,
+                theme.color(signex_gfx::style::ColorSlot::BoardOpening),
+                "drill {drill_mm}"
+            );
         }
     }
 

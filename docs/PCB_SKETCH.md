@@ -198,7 +198,9 @@ A blind item takes its topmost layer's colour. Vias and through-hole pads
 are drawn in `MultiLayer` (the Layers panel's Multi-Layer row, whose eye
 shows or hides them), whatever the active layer. Copper on no layer this
 build knows keeps its kind's slot. A through-hole pad's drill and a via's
-drill are drawn as openings (`BoardOpening`) over their copper. The board
+drill are drawn as openings (`BoardOpening`) over their copper; a via whose
+drill is as wide as the via, and a non-plated (NPTH) pad, draw as the
+opening alone, with no copper. The board
 area inside the outline is filled with `BoardArea` (the board palette's
 `board_area`) under every zone and all copper; cutouts and mounting holes
 stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,

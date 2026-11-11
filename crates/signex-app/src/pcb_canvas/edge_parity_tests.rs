@@ -71,8 +71,9 @@ fn board_edge_overlay_lands_on_the_edge_cuts_graphics_after_fit_and_zoom() {
 
     let canvas = fitted_canvas(&board);
     let scene = canvas.gpu_scene().expect("scene");
-    let edge_color =
-        ResolvedTheme::from_canvas_colors(canvas.canvas_colors).color(ColorSlot::BoardEdge);
+    let theme = ResolvedTheme::from_canvas_colors(canvas.canvas_colors);
+    let edge_color = theme.color(ColorSlot::BoardEdge);
+    let board_area = theme.color(ColorSlot::BoardArea);
     let overlay_edge: Vec<[f32; 2]> = scene
         .overlay_lines
         .iter()
@@ -80,13 +81,11 @@ fn board_edge_overlay_lands_on_the_edge_cuts_graphics_after_fit_and_zoom() {
         .flat_map(|l| [l.p0, l.p1])
         .collect();
     assert!(!overlay_edge.is_empty(), "the overlay draws the board edge");
-    // The board-area fill shares the edge's outline; the pour is the largest
-    // polygon that does not end on the edge corner.
-    let edge_end = bottom_right(overlay_edge.iter().copied());
+    // The pour is the largest polygon that is not the board-area fill.
     let pour = scene
         .polygons
         .iter()
-        .filter(|p| bottom_right(p.vertices.iter().copied()) != edge_end)
+        .filter(|p| p.fill_color != board_area)
         .max_by(|a, b| a.vertices.len().cmp(&b.vertices.len()))
         .expect("the GND pour is in the main polygon bucket");
 

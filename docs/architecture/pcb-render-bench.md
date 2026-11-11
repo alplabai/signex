@@ -127,6 +127,22 @@ p95 in every scenario.
 | AMD Radeon 880M (Vulkan) | gpu | msaa4 | zoom | 5.81 | 7.34 | 7.41 | 172.0 | ok |
 | AMD Radeon 880M (Vulkan) | gpu | msaa4 | zoom-pan | 5.91 | 6.80 | 7.47 | 169.3 | ok |
 
+Rerun on 2026-11-11, same laptop and settings, after copper took its layer
+colours, drills became openings and the board area was filled (#2262, PR
+#2301: one more circle per via, one more polygon per through-hole pad, one
+board-area polygon):
+
+- CPU mount, MSAAx4: zoom p95 16.60 ms and pan p95 16.36 ms, inside the
+  16.7 ms budget by less than 0.4 ms.
+- CPU mount, no AA: every scenario at or under 14.22 ms p95.
+- GPU mount: 5.3 to 7.7 ms in every scenario.
+
+Known risk: the CPU mount is the default (Preferences GPU render off,
+`gpu_render = false`), and with MSAAx4 its zoom and pan rows now sit at the
+edge of the 60 fps budget. Any further per-item geometry on the CPU path
+(silkscreen, designators, net colours) is likely to push them over unless the
+CPU path gets cheaper or the GPU mount becomes the default.
+
 ## Realistic boards
 
 The 10,000-track board measures scale; it is not a design. Five complete

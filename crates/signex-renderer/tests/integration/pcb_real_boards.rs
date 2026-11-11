@@ -17,7 +17,7 @@ use signex_renderer::pcb::{
 use signex_renderer::schematic::ViewRenderer;
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::format::SnxPcb;
-use signex_types::pcb::PcbBoard;
+use signex_types::pcb::{PadType, PcbBoard};
 
 fn load(name: &str) -> PcbBoard {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -90,7 +90,12 @@ fn via_drills(snapshot: &PcbSnapshot) -> usize {
 
 /// Pads drawn with a drill opening over their copper.
 fn pad_drills(snapshot: &PcbSnapshot) -> usize {
-    snapshot.pads.iter().filter(|p| p.drill_mm > 0.0).count()
+    // A non-plated pad draws its opening alone, in place of its copper.
+    snapshot
+        .pads
+        .iter()
+        .filter(|p| p.drill_mm > 0.0 && p.pad_type != PadType::NpThru)
+        .count()
 }
 
 fn draw(name: &'static str) -> Drawn {

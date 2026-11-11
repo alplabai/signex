@@ -50,6 +50,9 @@ pub struct PcbLayersPanel {
     pub active: Option<CopperLayer>,
     /// The Multi-Layer row (vias and through-hole pads) is hidden.
     pub multi_layer_hidden: bool,
+    /// The view hides something (`PcbLayerView::has_hidden`), so Show all
+    /// layers has work to do.
+    pub any_hidden: bool,
     /// A board is open; without one the panel shows its empty state.
     pub board_open: bool,
     pub i18n: Arc<I18n>,
@@ -62,6 +65,7 @@ impl Default for PcbLayersPanel {
             hidden: HashSet::new(),
             active: None,
             multi_layer_hidden: false,
+            any_hidden: false,
             board_open: false,
             i18n: I18n::en_us(),
         }
@@ -81,6 +85,7 @@ impl PcbLayersPanel {
             hidden,
             active: view.shown_active(),
             multi_layer_hidden: !view.multi_layer_visible(),
+            any_hidden: view.has_hidden(),
             board_open: true,
             i18n,
         }
@@ -90,9 +95,8 @@ impl PcbLayersPanel {
         self.hidden.contains(&layer)
     }
 
-    /// Something is hidden, so Show all layers has work to do.
     pub fn has_hidden(&self) -> bool {
-        !self.hidden.is_empty() || self.multi_layer_hidden
+        self.any_hidden
     }
 }
 
