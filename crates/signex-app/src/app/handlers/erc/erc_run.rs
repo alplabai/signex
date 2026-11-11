@@ -7,6 +7,15 @@ use super::super::super::*;
 type RuleOverrides = std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>;
 type PinMatrixOverrides = std::collections::HashMap<(u8, u8), signex_erc::Severity>;
 
+/// Said when a project's stored rule set cannot be read and this machine's
+/// rules are used instead (#1180).
+pub(super) const UNREADABLE_RULES_NOTE: &str = "This project's rule set cannot be read by this version of Signex; it is kept unchanged, and this machine's ERC rules (the User Default profile) are used.";
+
+/// Said for a project rule entry this build does not know.
+pub(super) fn unrecognised_rule_note(entry: impl std::fmt::Display) -> String {
+    format!("Project ERC rules: ignoring unrecognised entry ({entry})")
+}
+
 impl Signex {
     /// The rule settings an ERC run uses (#1085): the active project's stored
     /// rule set when it has one, never the machine's preferences, so the same
@@ -22,10 +31,7 @@ impl Signex {
             {
                 if unreadable {
                     // Kept for re-save, never applied (#1180).
-                    crate::diagnostics::log_warning(
-                        "This project's rule set cannot be read by this version of Signex; it is \
-                         kept unchanged, and this machine's ERC rules (the User Default profile) are used.",
-                    );
+                    crate::diagnostics::log_warning(UNREADABLE_RULES_NOTE);
                 } else {
                     crate::diagnostics::log_info(
                         "This project has no saved rule set; using this machine's ERC rules (the User Default profile).",
@@ -39,9 +45,7 @@ impl Signex {
         };
         let resolved = signex_erc::project_rules::resolve(&rules.erc);
         for entry in &resolved.unrecognised {
-            crate::diagnostics::log_warning(format!(
-                "Project ERC rules: ignoring unrecognised entry ({entry})"
-            ));
+            crate::diagnostics::log_warning(unrecognised_rule_note(entry));
         }
         if !resolved.missing.is_empty() {
             let names: Vec<_> = resolved.missing.iter().map(|r| r.key()).collect();
