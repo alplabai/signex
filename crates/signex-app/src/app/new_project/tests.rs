@@ -494,3 +494,70 @@ fn changing_the_name_location_or_folder_clears_a_stale_create_error() {
         );
     }
 }
+
+#[test]
+fn by_default_create_makes_a_folder_named_after_the_project() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, _t) = Signex::new();
+    settle(&mut app, Message::Menu(MenuMessage::NewProject));
+    assert!(app.ui_state.new_project.as_ref().unwrap().make_folder);
+    dialog(
+        &mut app,
+        NewProjectMsg::LocationEdited(tmp.path().display().to_string()),
+    );
+    dialog(&mut app, NewProjectMsg::NameEdited("Nested".into()));
+    dialog(&mut app, NewProjectMsg::SubmitRequested);
+    assert!(app.ui_state.new_project.is_none(), "created");
+    assert!(tmp.path().join("Nested").join("Nested.snxprj").is_file());
+    assert!(!tmp.path().join("Nested.snxprj").exists());
+}
+
+#[test]
+fn an_existing_project_in_the_named_folder_refuses_create_and_writes_nothing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let folder = tmp.path().join("Taken");
+    std::fs::create_dir(&folder).unwrap();
+    std::fs::write(folder.join("Taken.snxprj"), b"mine").unwrap();
+    let (mut app, _t) = Signex::new();
+    settle(&mut app, Message::Menu(MenuMessage::NewProject));
+    dialog(
+        &mut app,
+        NewProjectMsg::LocationEdited(tmp.path().display().to_string()),
+    );
+    dialog(&mut app, NewProjectMsg::NameEdited("Taken".into()));
+    let state = app.ui_state.new_project.as_ref().unwrap();
+    assert_eq!(
+        state.target,
+        TargetStatus::Problem(TargetProblem::Exists(folder.join("Taken.snxprj")))
+    );
+    assert!(!state.can_create());
+    dialog(&mut app, NewProjectMsg::SubmitRequested);
+    assert!(app.ui_state.new_project.is_some(), "the dialog stays open");
+    assert_eq!(std::fs::read(folder.join("Taken.snxprj")).unwrap(), b"mine");
+    assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
+}
+
+#[test]
+fn a_named_folder_that_is_not_empty_refuses_create_and_writes_nothing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let folder = tmp.path().join("Busy");
+    std::fs::create_dir(&folder).unwrap();
+    std::fs::write(folder.join("notes.txt"), b"x").unwrap();
+    let (mut app, _t) = Signex::new();
+    settle(&mut app, Message::Menu(MenuMessage::NewProject));
+    dialog(
+        &mut app,
+        NewProjectMsg::LocationEdited(tmp.path().display().to_string()),
+    );
+    dialog(&mut app, NewProjectMsg::NameEdited("Busy".into()));
+    let state = app.ui_state.new_project.as_ref().unwrap();
+    assert_eq!(
+        state.target,
+        TargetStatus::Problem(TargetProblem::FolderNotEmpty(folder.clone()))
+    );
+    assert!(!state.can_create());
+    dialog(&mut app, NewProjectMsg::SubmitRequested);
+    assert!(app.ui_state.new_project.is_some(), "the dialog stays open");
+    assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
+    assert!(!folder.join("Busy.snxprj").exists());
+}
