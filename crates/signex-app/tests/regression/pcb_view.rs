@@ -391,7 +391,7 @@ fn hiding_the_multi_layer_hides_vias_and_through_hole_pads() {
     };
     assert_eq!(snapshot(&f).vias.len(), 1);
     assert_eq!(snapshot(&f).pads.len(), 3);
-    assert!(pick(&mut f, 30.0), "the via can be picked");
+    assert!(picks_a_via(&mut f, 30.0), "the via can be picked");
     assert!(
         picks_a_pad(&mut f, 40.0),
         "the through-hole pad can be picked"
@@ -400,7 +400,7 @@ fn hiding_the_multi_layer_hides_vias_and_through_hole_pads() {
     toggle(&mut f);
     assert!(snapshot(&f).vias.is_empty(), "the via is not drawn");
     assert_eq!(snapshot(&f).pads.len(), 2, "only the SMD pads are drawn");
-    assert!(!pick(&mut f, 30.0), "the hidden via is not hit");
+    assert!(!picks_a_via(&mut f, 30.0), "the hidden via is not hit");
     assert!(
         !picks_a_pad(&mut f, 40.0),
         "the hidden through-hole pad is not hit"
@@ -419,17 +419,27 @@ fn hiding_the_multi_layer_hides_vias_and_through_hole_pads() {
     run(&mut f, "show_all_layers");
     assert_eq!(snapshot(&f).vias.len(), 1);
     assert_eq!(snapshot(&f).pads.len(), 3);
-    assert!(pick(&mut f, 30.0));
+    assert!(picks_a_via(&mut f, 30.0));
 }
 
 /// A click at x 5 mm, `y` picks a pad. The footprint body around a hidden
 /// pad stays shown, so a click there may still pick the footprint.
 fn picks_a_pad(f: &mut Fixture, y: f64) -> bool {
+    picks(f, y, |item| matches!(item, pcb_geom::ItemRef::Pad { .. }))
+}
+
+/// A click at x 5 mm, `y` picks a via. The via in the Multi-Layer test sits
+/// inside the footprint body, so a click there may still pick the footprint.
+fn picks_a_via(f: &mut Fixture, y: f64) -> bool {
+    picks(f, y, |item| matches!(item, pcb_geom::ItemRef::Via(_)))
+}
+
+fn picks(f: &mut Fixture, y: f64, kind: impl Fn(&pcb_geom::ItemRef) -> bool) -> bool {
     pick(f, y);
     f.app
         .interaction_state
         .pcb_selection
         .selection()
         .items()
-        .any(|item| matches!(item, pcb_geom::ItemRef::Pad { .. }))
+        .any(|item| kind(&item))
 }
