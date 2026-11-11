@@ -6,6 +6,7 @@ use std::sync::LazyLock;
 
 use iced::widget::{Space, container, mouse_area, row, svg};
 use iced::{Alignment, Background, Border, Color, Element, Length, Widget as _};
+use signex_i18n::{I18n, ids, t};
 use signex_widgets::{button, raw, text, text_input, tooltip};
 
 use super::{SP, TS, buttons};
@@ -109,8 +110,14 @@ impl Signex {
         let dark = is_dark(tokens.toolbar_bg);
         let cluster = container(
             row![
-                signal_button(tokens, ink, line),
-                theme_toggle(tokens, theme_id.light_dark_counterpart(), dark, ink3),
+                signal_button(tokens, &self.ui_state.i18n, ink, line),
+                theme_toggle(
+                    tokens,
+                    &self.ui_state.i18n,
+                    theme_id.light_dark_counterpart(),
+                    dark,
+                    ink3,
+                ),
             ]
             .spacing(CLUSTER_GAP)
             .align_y(Alignment::Center),
@@ -169,20 +176,23 @@ impl Signex {
         } else {
             ""
         };
-        let input = text_input(raw("Search commands, parts, nets"), query)
-            .id(crate::app::command_palette::COMMAND_PALETTE_INPUT_ID.clone())
-            .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryChanged(q)))
-            .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
-            .padding(iced::Padding::ZERO)
-            .size(TS.dense)
-            .width(Length::Fill)
-            .style(move |_: &iced::Theme, _| text_input::Style {
-                background: Background::Color(Color::TRANSPARENT),
-                border: Border::default(),
-                placeholder: ink4,
-                value: ink,
-                selection: Color { a: 0.4, ..ink },
-            });
+        let input = text_input(
+            t!(self.ui_state.i18n, ids::MENU_BAR_SEARCH_PLACEHOLDER),
+            query,
+        )
+        .id(crate::app::command_palette::COMMAND_PALETTE_INPUT_ID.clone())
+        .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryChanged(q)))
+        .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
+        .padding(iced::Padding::ZERO)
+        .size(TS.dense)
+        .width(Length::Fill)
+        .style(move |_: &iced::Theme, _| text_input::Style {
+            background: Background::Color(Color::TRANSPARENT),
+            border: Border::default(),
+            placeholder: ink4,
+            value: ink,
+            selection: Color { a: 0.4, ..ink },
+        });
         // The key cap names the real binding, so it never promises a chord
         // the keymap does not have.
         let hint = self
@@ -218,6 +228,7 @@ impl Signex {
 /// "Signex AI": copper dot and label; opens the Signex AI panel like View ▸ Signex AI.
 fn signal_button(
     tokens: &signex_types::theme::ThemeTokens,
+    i18n: &I18n,
     ink: Color,
     line: Color,
 ) -> Element<'static, Message> {
@@ -235,9 +246,12 @@ fn signal_button(
             ..container::Style::default()
         });
     button(
-        row![dot, text(raw("Signex AI")).size(TS.dense)]
-            .spacing(SP.l)
-            .align_y(Alignment::Center),
+        row![
+            dot,
+            text(t!(i18n, ids::PANELS_KIND_SIGNEX_AI)).size(TS.dense)
+        ]
+        .spacing(SP.l)
+        .align_y(Alignment::Center),
     )
     .width(SIGNAL_W)
     .height(ChromeMetrics::DEFAULT.field)
@@ -267,17 +281,21 @@ fn signal_button(
 /// twin of the opposite lightness. Moon on a light bar, sun on a dark one.
 fn theme_toggle(
     tokens: &signex_types::theme::ThemeTokens,
+    i18n: &I18n,
     target: signex_types::theme::ThemeId,
     dark_bar: bool,
     ink: Color,
 ) -> Element<'static, Message> {
     let hover = ti(tokens.hover);
     let border = ti(tokens.border);
-    let label = if dark_bar {
-        "Light theme"
-    } else {
-        "Dark theme"
-    };
+    let label = t!(
+        i18n,
+        if dark_bar {
+            ids::MENU_BAR_LIGHT_THEME
+        } else {
+            ids::MENU_BAR_DARK_THEME
+        }
+    );
     let glyph = svg(if dark_bar { SUN.clone() } else { MOON.clone() })
         .width(15)
         .height(15)
@@ -306,7 +324,7 @@ fn theme_toggle(
         },
         ..button::Style::default()
     });
-    let hint = container(text(raw(label)).size(TS.caption).color(ink))
+    let hint = container(text(label).size(TS.caption).color(ink))
         .padding([3, 8])
         .style(signex_widgets::active_bar_dropdown::tooltip_style(
             hover, border,

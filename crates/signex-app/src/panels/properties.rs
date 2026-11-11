@@ -4,6 +4,7 @@ use super::*;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use iced::widget::column;
+use signex_i18n::{ids, t};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -257,15 +258,17 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         // yet" from "project open, but the active tab isn't a
         // schematic". GitHub issue #51.
         let hint = if ctx.has_pcb {
-            "Properties are available when a schematic is active"
+            ids::PANELS_PROPERTIES_NEEDS_SCHEMATIC
         } else {
-            "Open a project"
+            ids::PANELS_PROPERTIES_OPEN_PROJECT
         };
         return container(
             column![
-                text(raw("Properties")).size(TS.label).color(primary),
+                text(t!(ctx.i18n, ids::PANELS_KIND_PROPERTIES))
+                    .size(TS.label)
+                    .color(primary),
                 Space::new().height(12.0),
-                text(raw(hint)).size(TS.body).color(muted),
+                text(t!(ctx.i18n, hint)).size(TS.body).color(muted),
             ]
             .spacing(SP.s)
             .padding(SP.m),
@@ -314,14 +317,14 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         container(
             row![
                 props_tab_btn(
-                    "General",
+                    t!(ctx.i18n, ids::PANELS_PROPERTIES_TAB_GENERAL),
                     tab == 0,
                     PanelMsg::PropertiesTab(0),
                     primary,
                     text_inactive
                 ),
                 props_tab_btn(
-                    "Parameters",
+                    t!(ctx.i18n, ids::PANELS_PROPERTIES_TAB_PARAMETERS),
                     tab == 1,
                     PanelMsg::PropertiesTab(1),
                     primary,
@@ -352,10 +355,14 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // ── Status: Nothing selected ──
     col = col.push(Space::new().height(8.0).boxed());
     col = col.push(
-        container(text(raw("Nothing selected")).size(TS.caption).color(muted))
-            .padding([6.0, 12.0])
-            .width(Length::Fill)
-            .boxed(),
+        container(
+            text(t!(ctx.i18n, ids::PANELS_PROPERTIES_NOTHING_SELECTED))
+                .size(TS.caption)
+                .color(muted),
+        )
+        .padding([6.0, 12.0])
+        .width(Length::Fill)
+        .boxed(),
     );
 
     scrollable(col)
@@ -581,7 +588,7 @@ fn view_pre_placement<'a>(
                         muted,
                     ));
                     if show_fill {
-                        c = c.push(shape_fill_row(fill, muted, border_c));
+                        c = c.push(shape_fill_row(fill, muted, border_c, i18n));
                     }
                     c
                 },
@@ -618,7 +625,7 @@ fn view_pre_placement<'a>(
     } else {
         col = col.push(
             container(
-                text(raw("Click to place. No per-instance options."))
+                text(t!(i18n, ids::PANELS_PROPERTIES_NO_PLACEMENT_OPTIONS))
                     .size(TS.caption)
                     .color(muted),
             )

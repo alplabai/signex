@@ -3,6 +3,7 @@
 
 use iced::widget::{Text, Widget, container, row, space};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme};
+use signex_i18n::{Localized, MessageId, ids, t};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
@@ -188,20 +189,28 @@ fn mono_text(s: String, color: Color) -> Text<'static> {
     text(raw(s)).size(TS.body).color(color).font(mono_font())
 }
 
+/// A catalog message in the mono face.
+fn mono_message(s: Localized, color: Color) -> Text<'static> {
+    text(s).size(TS.body).color(color).font(mono_font())
+}
+
 fn mono_button(
-    s: String,
-    color: Color,
+    label: Text<'static>,
     request: StatusBarRequest,
 ) -> button::Button<'static, StatusBarRequest, Text<'static>> {
-    button(mono_text(s, color))
+    button(label)
         .padding([1.0, SP.s])
         .style(button::text)
         .on_press(request)
 }
 
 /// Label of the Snap pill: "Snap on" while snapping, "Snap off" while free.
-pub(super) fn snap_label(snapping: bool) -> &'static str {
-    if snapping { "Snap on" } else { "Snap off" }
+pub(super) fn snap_label(snapping: bool) -> MessageId {
+    if snapping {
+        ids::PANELS_STATUS_BAR_SNAP_ON
+    } else {
+        ids::PANELS_STATUS_BAR_SNAP_OFF
+    }
 }
 
 /// The Graphite status bar: mono X / Y / Grid spans, a Snap on/off pill and
@@ -222,9 +231,20 @@ pub(super) fn view<'a>(
     let mut bar = row![
         mono_text(format!("X {xs} {unit}"), muted).boxed(),
         mono_text(format!("Y {ys} {unit}"), muted).boxed(),
-        mono_button(format!("Grid {grid}"), muted, StatusBarRequest::ToggleGrid).boxed(),
-        button(mono_text(
-            snap_label(r.snap_enabled).to_string(),
+        mono_button(
+            mono_message(
+                if r.grid_visible {
+                    t!(i18n, ids::PANELS_STATUS_BAR_GRID, "grid" => grid)
+                } else {
+                    t!(i18n, ids::PANELS_STATUS_BAR_GRID_OFF)
+                },
+                muted,
+            ),
+            StatusBarRequest::ToggleGrid,
+        )
+        .boxed(),
+        button(mono_message(
+            t!(i18n, snap_label(r.snap_enabled)),
             if r.snap_enabled {
                 ti(tokens.success)
             } else {
@@ -235,7 +255,11 @@ pub(super) fn view<'a>(
         .style(snap_pill(tokens, r.snap_enabled))
         .on_press(StatusBarRequest::ToggleSnap)
         .boxed(),
-        mono_text(format!("Tool: {}", r.tool), muted).boxed(),
+        mono_message(
+            t!(i18n, ids::PANELS_STATUS_BAR_TOOL, "tool" => r.tool.as_str()),
+            muted,
+        )
+        .boxed(),
     ];
     if let Some(activity) = r.activity {
         let ink = if activity.is_error {
@@ -273,8 +297,10 @@ pub(super) fn view<'a>(
     if let Some(name) = r.altium_import {
         bar = bar.push(
             mono_button(
-                format!("Importing {name}… ✕"),
-                ink,
+                mono_message(
+                    t!(i18n, ids::PANELS_STATUS_BAR_IMPORTING, "name" => name),
+                    ink,
+                ),
                 StatusBarRequest::CancelAltiumImport,
             )
             .boxed(),
@@ -282,12 +308,23 @@ pub(super) fn view<'a>(
     }
     bar = bar.push(space::horizontal().boxed());
     if let Some(summary) = r.selection.clone() {
-        bar = bar
-            .push(mono_button(summary, ink, StatusBarRequest::OpenPropertiesForSelection).boxed());
+        bar = bar.push(
+            mono_button(
+                mono_text(summary, ink),
+                StatusBarRequest::OpenPropertiesForSelection,
+            )
+            .boxed(),
+        );
     }
     let bar = bar
         .push(mono_text(format!("{:.0}%", r.zoom), muted).boxed())
-        .push(mono_button(format!("{unit}"), muted, StatusBarRequest::CycleUnit).boxed())
+        .push(
+            mono_button(
+                mono_text(format!("{unit}"), muted),
+                StatusBarRequest::CycleUnit,
+            )
+            .boxed(),
+        )
         .push(
             button(
                 text(signex_i18n::t!(
@@ -339,8 +376,8 @@ mod tests {
 
     #[test]
     fn the_snap_pill_reads_on_or_off() {
-        assert_eq!(snap_label(true), "Snap on");
-        assert_eq!(snap_label(false), "Snap off");
+        assert_eq!(snap_label(true), ids::PANELS_STATUS_BAR_SNAP_ON);
+        assert_eq!(snap_label(false), ids::PANELS_STATUS_BAR_SNAP_OFF);
     }
 
     #[test]

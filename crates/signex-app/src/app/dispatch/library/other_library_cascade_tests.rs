@@ -369,7 +369,9 @@ fn a_read_only_library_is_not_cascaded_into() {
 }
 
 /// Two busy libraries share the one wait: the save gives up after about
-/// `limit`, not after `limit` for each.
+/// `limit`, not after `limit` for each. A wait never ends before its budget
+/// while the turn is held, so a budget per library takes at least
+/// `2 * limit`; under that bound, the runner's speed only eats the slack.
 #[test]
 fn the_blocking_save_waits_once_for_all_busy_libraries() {
     let tmp = tempfile::tempdir().unwrap();
@@ -386,7 +388,7 @@ fn the_blocking_save_waits_once_for_all_busy_libraries() {
         t.app.library.writes.turn(&t.far),
         t.app.library.writes.turn(&far2),
     ];
-    let limit = std::time::Duration::from_millis(500);
+    let limit = std::time::Duration::from_secs(1);
     let started = std::time::Instant::now();
     let result = t
         .app
@@ -395,7 +397,11 @@ fn the_blocking_save_waits_once_for_all_busy_libraries() {
     drop(held);
     assert!(result.is_ok(), "the primitive itself is saved: {result:?}");
     assert!(
-        took < limit * 3 / 2,
+        took >= limit,
+        "waited {took:?}, so it never met a held turn"
+    );
+    assert!(
+        took < limit * 2,
         "waited {took:?} for two libraries; one deadline of {limit:?} covers both"
     );
 }
