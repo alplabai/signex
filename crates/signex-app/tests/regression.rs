@@ -469,10 +469,14 @@ mod library_link_reopen;
 #[path = "regression/library_update_apply.rs"]
 mod library_update_apply;
 // #1234 — pick a row's footprint when placing and on a placed part.
+#[path = "regression/assign_footprints.rs"]
+mod assign_footprints;
 #[path = "regression/library_footprint_pick.rs"]
 mod library_footprint_pick;
 #[path = "regression/library_value_stamp.rs"]
 mod library_value_stamp;
+#[path = "regression/net_inspector.rs"]
+mod net_inspector;
 #[path = "regression/non_finite_edits.rs"]
 mod non_finite_edits;
 #[path = "regression/numeric_drafts.rs"]

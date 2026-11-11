@@ -49,6 +49,9 @@ impl PanelContext {
         if self.pcb_drc != main.pcb_drc {
             self.pcb_drc.clone_from(&main.pcb_drc);
         }
+        if self.net_inspector != main.net_inspector {
+            self.net_inspector.clone_from(&main.net_inspector);
+        }
         if self.component_classes != main.component_classes {
             self.component_classes.clone_from(&main.component_classes);
         }

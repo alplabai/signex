@@ -13,6 +13,7 @@ use crate::toolbar::ToolMessage;
 
 mod actions;
 pub(crate) mod agent;
+pub(crate) mod assign_footprints;
 mod bootstrap;
 pub(crate) mod command;
 pub mod command_palette;
@@ -69,6 +70,10 @@ pub(crate) mod update_pcb;
 pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
 pub(crate) mod view;
 
+pub use assign_footprints::{
+    AssignFootprintsMsg, AssignFootprintsState, AssignProblem, FootprintOffer, FootprintPart,
+    PartAccess,
+};
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BoardSketchMsg, BomPreviewMsg, CommandPaletteMsg,
     ContextAction, ContextMenuMsg, ContextMenuState, ContextSubmenu, CrossProbeMsg, DragTarget,

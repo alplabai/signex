@@ -686,6 +686,8 @@ pub enum PanelMsg {
     /// symbol's uuid and the `<library uuid>:<footprint uuid>` of the
     /// footprint (#1234).
     SwitchFootprintChoice(uuid::Uuid, String),
+    /// The Net Inspector panel (#1269).
+    NetInspector(super::NetInspectorMsg),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.

@@ -111,11 +111,11 @@ Tools/Annotation/---	separator	-	-	-	-	-	-
 Tools/Annotation/Back Annotate Schematics...	stub	Back Annotate Schematics...	-	-	-	00000000	never
 Tools/Annotation/Number Schematic Sheets...	item	Number Schematic Sheets...	-	-	NumberSchematicSheets	01001000	cmd:number_schematic_sheets
 Tools/---	separator	-	-	-	-	-	-
-Tools/Assign Footprints	stub	Assign Footprints	-	-	-	00000000	never
+Tools/Assign Footprints	item	Assign Footprints	-	-	AssignFootprints	01000000	cmd:assign_footprints
 Tools/Library Editor	item	Library Editor	-	-	OpenLibraryEditor	01000000	cmd:open_library_browser
 Tools/---	separator	-	-	-	-	-	-
 Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc
-Tools/Net Inspector	stub	Net Inspector	-	-	-	00000000	never
+Tools/Net Inspector	item	Net Inspector	-	-	OpenNetInspector	11111111	cmd:open_net_inspector
 Tools/---	separator	-	-	-	-	-	-
 Tools/Cross Probe	item	Cross Probe	-	-	CrossProbe	01100000	cmd:cross_probe
 Tools/Cross Select Mode	item	Cross Select Mode	toggle_cross_select_mode	Ctrl+Shift+X	ToggleCrossSelectMode	11111111	cmd:toggle_cross_select_mode

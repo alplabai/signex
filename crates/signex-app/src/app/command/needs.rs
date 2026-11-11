@@ -241,7 +241,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "measure_distance"
         | "break_wire"
         // The table lists the active sheet's symbols.
-        | "open_parameter_manager" => Needs::Schematic,
+        | "open_parameter_manager"
+        // Lists the parts of the active schematic's project.
+        | "assign_footprints" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
         "run_drc" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
