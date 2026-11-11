@@ -860,6 +860,11 @@
     "category": "file"
   },
   {
+    "id": "reannotate_board",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "redo",
     "group": "General",
     "category": "edit"

@@ -15,6 +15,18 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::RUNS_HEADLESS,
         ..CommandMetadata::DEFAULT
     },
+    // #1312: Positional Re-Annotate. Opens the dialog; its Execute is one
+    // board undo step. No default key.
+    CommandMetadata {
+        id: "reannotate_board",
+        category: "design",
+        label: "Re-annotate the board's designators by position",
+        menu_label: Some("Re-Annotate Board..."),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     // Flip the selected footprints to the other side of the board (#2240).
     // No default key: a profile may bind one.
     CommandMetadata {

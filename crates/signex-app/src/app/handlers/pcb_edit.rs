@@ -39,6 +39,7 @@ impl Signex {
         };
         match result {
             Ok(true) => {
+                self.drop_pcb_footprint_draft_of(path);
                 self.after_board_change(path);
                 true
             }

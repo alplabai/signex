@@ -81,3 +81,75 @@ pcb-properties-selection = { $count ->
    *[other] { $count } items selected on { $board }
 }
 pcb-properties-selection-hint = Press Esc to clear the selection and see the board's properties.
+
+# Properties panel while one footprint is selected on a board (#1312). The
+# title is followed by the footprint's designator.
+pcb-footprint-title = Footprint
+pcb-footprint-designator = Designator
+pcb-footprint-value = Value
+# The library footprint the board footprint was made from.
+pcb-footprint-name = Footprint
+# Shown as the footprint name when the footprint has none.
+pcb-footprint-no-name = Not named
+pcb-footprint-locked = This footprint is locked, so its designator and value cannot be changed.
+pcb-footprint-read-only = This board opened read-only (a newer format), so it cannot be edited.
+# $designator is the footprint's designator; $count the other footprints with it.
+pcb-footprint-duplicate = { $count ->
+    [one] { $designator } is also on 1 other footprint.
+   *[other] { $designator } is also on { $count } other footprints.
+}
+# Under the fields while typed text is not applied yet.
+pcb-footprint-enter-hint = Press Enter to apply the change.
+
+# Tools > Re-Annotate Board (#1312): the Positional Re-Annotate dialog.
+pcb-reannotate-title = Positional Re-Annotate
+# Under the title. $board is the board document's name.
+pcb-reannotate-subtitle = { $board }
+pcb-reannotate-intro = Numbers the board's parts by where they sit, from 1 within each prefix (R1, R2, … and C1, C2, …). Prefixes stay, and locked footprints keep their designators. Execute renames the parts on the board as one undo step; save the board to keep them.
+# The walk order and its two choices.
+pcb-reannotate-order = Order
+pcb-reannotate-order-columns = By X, then by Y (left to right; equal X top to bottom)
+pcb-reannotate-order-rows = By Y, then by X (top to bottom; equal Y left to right)
+# Where bottom-side parts fall in the numbering.
+pcb-reannotate-bottom = Bottom side
+pcb-reannotate-bottom-after = After the top side
+pcb-reannotate-bottom-with = With the top side
+# Column headings of the rename list.
+pcb-reannotate-col-from = Designator
+pcb-reannotate-col-to = New designator
+# $renamed parts get a new designator, $unchanged already have theirs, $kept are left alone.
+pcb-reannotate-summary = { $renamed ->
+    [one] 1 part renamed
+   *[other] { $renamed } parts renamed
+}, { $unchanged } already in order, { $kept } kept.
+pcb-reannotate-nothing = Every part is already numbered in this order.
+# $designator is the kept footprint's designator.
+pcb-reannotate-kept-locked = { $designator } is locked and keeps its designator.
+pcb-reannotate-kept-no-prefix = { $designator } is not a prefix and a number, so it is kept.
+pcb-reannotate-kept-empty = A footprint with no designator is kept.
+pcb-reannotate-read-only = This board opened read-only (a newer format), so it cannot be re-annotated.
+pcb-reannotate-stale = The board changed, so the list was made again. Check it, then Execute again.
+# $why is the reason the board gave.
+pcb-reannotate-refused = Nothing was changed: { $why }
+pcb-reannotate-cancel = Cancel
+pcb-reannotate-execute = Execute
+# Under the Designator field and in the Re-Annotate dialog: the board's
+# designators are not carried to the schematic by Update PCB.
+pcb-designator-update-pcb-note = Update PCB renames parts back to the schematic's designators; use Back Annotate to keep them.
+# $designator is the kept footprint's designator.
+pcb-reannotate-kept-unlinked = { $designator } is not linked to a schematic part, so it keeps its designator.
+# Messages panel lines. $what is the field (Designator or Value), $why the reason.
+pcb-footprint-refused = { $what }: { $why }; nothing changed
+pcb-footprint-board-gone = { $what }: the board is no longer open
+# $designator is the new designator, $count the other footprints with it.
+pcb-footprint-shared-notice = Designator: { $designator } is also on { $count ->
+    [one] 1 other footprint
+   *[other] { $count } other footprints
+} of this board
+pcb-reannotate-no-pcb = Re-Annotate: no PCB is in view
+pcb-reannotate-board-gone = Re-Annotate: the board is no longer open
+# $count renamed footprints on the board file $board.
+pcb-reannotate-done = Re-Annotate: { $count ->
+    [one] 1 footprint renamed
+   *[other] { $count } footprints renamed
+} on { $board }; save the board to keep them.

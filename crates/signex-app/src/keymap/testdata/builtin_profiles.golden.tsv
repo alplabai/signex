@@ -302,6 +302,7 @@ altium	hint	-	-	clear_all_net_colors
 altium	hint	-	-	assign_net_class
 altium	hint	-	-	place_component
 altium	hint	-	-	run_drc
+altium	hint	-	-	reannotate_board
 altium	hint	-	-	flip_selection
 altium	hint	-	-	toggle_ratsnest
 altium	hint	-	Shift++	next_layer
@@ -630,6 +631,7 @@ classic	hint	-	-	clear_all_net_colors
 classic	hint	-	-	assign_net_class
 classic	hint	-	-	place_component
 classic	hint	-	-	run_drc
+classic	hint	-	-	reannotate_board
 classic	hint	-	-	flip_selection
 classic	hint	-	-	toggle_ratsnest
 classic	hint	-	Shift++	next_layer

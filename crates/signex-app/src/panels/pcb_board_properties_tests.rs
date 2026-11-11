@@ -101,3 +101,70 @@ fn a_selection_shows_a_card_naming_the_board() {
     );
     assert!(!texts.iter().any(|t| t == "Size"), "{texts:?}");
 }
+
+fn footprint_context(
+    editability: super::super::FootprintEditability,
+    also_on: usize,
+    draft: bool,
+) -> PanelContext {
+    let mut ctx = context(1);
+    let facts = super::super::PcbFootprintFacts {
+        board: "board.snxpcb".into(),
+        uuid: uuid::Uuid::from_u128(1),
+        designator: "R7".into(),
+        value: "10k".into(),
+        footprint_name: "R_0603".into(),
+        designator_draft: None,
+        value_draft: draft.then(|| "4k7".into()),
+        editability,
+        also_on,
+    };
+    ctx.pcb_board = ctx.pcb_board.map(|b| b.with_footprint(Some(facts)));
+    ctx
+}
+
+/// #1312: one selected footprint shows its own rows, not the card.
+#[test]
+fn one_selected_footprint_shows_its_designator_value_and_name() {
+    use super::super::FootprintEditability as E;
+    let texts = texts(&footprint_context(E::Editable, 0, false));
+    for wanted in ["Footprint", "R7", "Designator", "Value", "R_0603"] {
+        assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
+    }
+    assert!(
+        !texts.iter().any(|t| t.contains("selected on")),
+        "{texts:?}"
+    );
+    assert!(!texts.iter().any(|t| t.contains("Enter")), "{texts:?}");
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.starts_with("Update PCB renames parts back")),
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn the_footprint_rows_say_why_they_are_read_only_and_warn_of_a_shared_designator() {
+    use super::super::FootprintEditability as E;
+    let locked = texts(&footprint_context(E::Locked, 0, false));
+    assert!(locked.iter().any(|t| t.contains("is locked")), "{locked:?}");
+    let read_only = texts(&footprint_context(E::ReadOnly, 0, false));
+    assert!(
+        read_only.iter().any(|t| t.contains("read-only")),
+        "{read_only:?}"
+    );
+    let shared = texts(&footprint_context(E::Editable, 2, true));
+    assert!(
+        shared
+            .iter()
+            .any(|t| t == "R7 is also on 2 other footprints."),
+        "{shared:?}"
+    );
+    assert!(
+        shared
+            .iter()
+            .any(|t| t == "Press Enter to apply the change."),
+        "{shared:?}"
+    );
+}
