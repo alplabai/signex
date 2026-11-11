@@ -59,6 +59,8 @@ struct OpenOverlays {
     assign_footprints_open: bool,
     update_pcb_open: bool,
     sheet_numbering_open: bool,
+    board_reannotate_open: bool,
+    back_annotate_open: bool,
     library_picker_open: bool,
     library_document_options_open: bool,
     library_updates_open: bool,
@@ -320,6 +322,12 @@ impl OpenOverlays {
             OverlayId::SheetNumbering => self
                 .sheet_numbering_open
                 .then(|| Message::from(crate::app::SheetNumberingMsg::CancelRequested)),
+            OverlayId::BoardReannotate => self
+                .board_reannotate_open
+                .then(|| Message::from(crate::app::BoardReannotateMsg::CancelRequested)),
+            OverlayId::BackAnnotate => self
+                .back_annotate_open
+                .then(|| Message::from(crate::app::BackAnnotateMsg::CloseRequested)),
             OverlayId::AnnotateDialog => self
                 .annotate_open
                 .then(|| Message::Annotate(AnnotateMsg::CloseDialog)),
@@ -622,6 +630,8 @@ impl Signex {
             // A headless apply run has no dialog to close.
             update_pcb_open: self.ui_state.update_pcb.as_ref().is_some_and(|s| !s.apply),
             sheet_numbering_open: self.ui_state.sheet_numbering.is_some(),
+            board_reannotate_open: self.ui_state.board_reannotate.is_some(),
+            back_annotate_open: self.ui_state.back_annotate.is_some(),
             library_picker_open: self.library.picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPicker),
             library_document_options_open: self.library.document_options.is_some()
@@ -1712,6 +1722,8 @@ mod tests {
             assign_footprints_open,
             update_pcb_open,
             sheet_numbering_open,
+            board_reannotate_open,
+            back_annotate_open,
             library_picker_open,
             library_document_options_open,
             library_updates_open,
@@ -1778,6 +1790,8 @@ mod tests {
             }),
             ("update_pcb_open", |o| o.update_pcb_open = true),
             ("sheet_numbering_open", |o| o.sheet_numbering_open = true),
+            ("board_reannotate_open", |o| o.board_reannotate_open = true),
+            ("back_annotate_open", |o| o.back_annotate_open = true),
             ("selection_filter_custom_open", |o| {
                 o.selection_filter_custom_open = true
             }),

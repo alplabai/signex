@@ -38,6 +38,7 @@ pub(crate) mod form_look;
 pub(crate) mod graphite;
 mod library;
 mod messages;
+mod messages_row;
 mod multi_selection;
 mod navigator;
 mod net_class_panel;
@@ -46,6 +47,7 @@ mod numeric_draft;
 mod palette;
 mod paper;
 pub mod pcb_board_properties;
+pub mod pcb_footprint_properties;
 pub mod pcb_nets;
 mod projects;
 mod projects_graphite;
@@ -123,6 +125,7 @@ pub use paper::{
     paper_size_options,
 };
 pub use pcb_board_properties::PcbBoardSummary;
+pub use pcb_footprint_properties::{FootprintEditability, PcbFootprintFacts, PcbFootprintTextMsg};
 pub use pcb_layers::PcbLayersPanel;
 pub use pcb_nets::PcbNetsSummary;
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};

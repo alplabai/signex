@@ -38,6 +38,8 @@ pub use wire_intent::{
     EndSpec, ExtraItem, ExtraKind, IntentNet, RunEnd, WireIntent, has_connection_anchor,
     wire_intent,
 };
+mod placement_contacts;
+pub use placement_contacts::placement_contacts;
 mod placement_intent;
 pub(crate) use placement_intent::name_changes;
 pub use placement_intent::{

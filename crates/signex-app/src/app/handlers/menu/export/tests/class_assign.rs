@@ -193,6 +193,7 @@ fn a_path_operand_assigns_on_another_open_sheet_without_activating_it() {
 /// refused with a reason, no panel, tab or focus change.
 #[test]
 fn without_operands_the_command_is_refused_and_changes_nothing_else() {
+    let _turn = serial();
     let (mut app, ..) = child_label_selected(&dir("assign-bare"));
     let command = AppCommandId::new("assign_net_class").expect("catalog id");
     let (path, tab) = (
@@ -227,11 +228,21 @@ fn without_operands_the_command_is_refused_and_changes_nothing_else() {
     assert!(classes(&app)[0].nets.is_empty());
 }
 
-fn did_nothing_lines() -> usize {
-    crate::diagnostics::recent_entries()
-        .iter()
-        .filter(|entry| entry.message.contains("did nothing"))
-        .count()
+/// The tests of this file that log the bare `assign_net_class` refusal take
+/// turns: the line has no per-dispatch text, and the ring is shared (#2295).
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// The Messages lines logged after `mark` that `keep` accepts.
+fn lines_since(mark: Option<u64>, keep: impl Fn(&str) -> bool) -> Vec<String> {
+    crate::diagnostics::entries_since(mark)
+        .entries
+        .into_iter()
+        .map(|entry| entry.message)
+        .filter(|message| keep(message.as_str()))
+        .collect()
 }
 
 /// Only the missing-operand refusal is written to the Messages panel by
@@ -239,24 +250,40 @@ fn did_nothing_lines() -> usize {
 #[test]
 fn only_the_operand_refusal_is_logged_by_a_key_or_palette_dispatch() {
     let _ = crate::diagnostics::init_logging();
+    let _turn = serial();
     let (mut app, ..) = child_label_selected(&dir("assign-log"));
     let id = |name| AppCommandId::new(name).expect("catalog id");
+    let assign = id("assign_net_class");
+    let (CommandOutcome::Disabled { reason }, _) =
+        app.dispatch_command_reporting(&assign, CommandArgs::none(), None)
+    else {
+        panic!("expected the operand refusal");
+    };
+    let refusal = format!("Command: assign_net_class did nothing: {reason}");
 
-    let before = did_nothing_lines();
-    let _ = app.dispatch_command(&id("assign_net_class"), CommandArgs::none(), None);
+    let mark = crate::diagnostics::newest_entry_id();
+    let _ = app.dispatch_command(&assign, CommandArgs::none(), None);
     assert_eq!(
-        did_nothing_lines(),
-        before + 1,
+        lines_since(mark, |line| line.contains("assign_net_class did nothing")),
+        [refusal],
         "the refusal says why, once"
     );
 
-    let before = did_nothing_lines();
-    for name in ["undo", "redo", "leave_sheet"] {
+    // A line another test logs names its own command; these three log none.
+    let others = ["undo", "redo", "leave_sheet"];
+    let mark = crate::diagnostics::newest_entry_id();
+    for name in others {
         let _ = app.dispatch_command(&id(name), CommandArgs::none(), None);
     }
+    let named = |line: &str| {
+        !line.starts_with("Menu: ")
+            && others
+                .iter()
+                .any(|name| line.contains(&format!("{name} did nothing")))
+    };
     assert_eq!(
-        did_nothing_lines(),
-        before,
+        lines_since(mark, named),
+        Vec::<String>::new(),
         "nothing new for other commands"
     );
 }

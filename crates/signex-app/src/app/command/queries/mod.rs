@@ -12,6 +12,7 @@ mod documents;
 mod elements;
 mod find;
 mod pins;
+pub(in crate::app::command) use pins::pin_id;
 mod read;
 mod sheet_view;
 mod transient;

@@ -155,6 +155,12 @@ mod pcb_canvas_select;
 mod pcb_carry_windows;
 #[path = "regression/pcb_placement.rs"]
 mod pcb_placement;
+// #1312 PR 1: board designators in Properties and Re-Annotate Board.
+#[path = "regression/board_designators.rs"]
+mod board_designators;
+// #1312 PR 2: Back Annotate.
+#[path = "regression/back_annotate.rs"]
+mod back_annotate;
 
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
@@ -243,6 +249,9 @@ mod library_cross_track;
 
 #[path = "regression/library_pad_actions.rs"]
 mod library_pad_actions;
+
+#[path = "regression/symbol_status_bar.rs"]
+mod symbol_status_bar;
 
 #[path = "regression/library_bga.rs"]
 mod library_bga;

@@ -9,16 +9,13 @@ use crate::fonts;
 use crate::render_config::{GridStyle, PinSelectionMode};
 use iced::widget::{Space, column, row};
 use iced::{Element, Length, Widget};
+use signex_i18n::{I18n, ids, t};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{raw, text};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
-
-const TRACKPAD_PAN_HELP: &str = "When on, a two-finger trackpad scroll pans the schematic, PCB, symbol and footprint canvases instead of zooming them. Pinching and Ctrl/Cmd + scroll still zoom, and a mouse wheel notch still zooms. Off by default.";
-
-const REMEMBER_GEOMETRY_HELP: &str = "When on, Signex reopens the main window at the size and position it had when you last closed it. Off by default.";
 
 pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let PrefsView {
@@ -37,6 +34,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_ui_scale_percent,
         draft_window_controls_placement,
         window_controls_restart_note,
+        i18n,
         ..
     } = v;
     let mut col: iced::widget::Column<Element<'a, PrefMsg>> =
@@ -46,7 +44,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(super::theme_cards::theme_section(
         draft_theme,
         v.panel_tokens,
-        v.i18n,
+        i18n,
     ));
     col = col.push(Space::new().height(10).boxed());
 
@@ -61,8 +59,10 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text(raw("UI Font")).size(TS.label).style(text_primary),
-                text(raw("Applies to all panels and menus. Requires restart."))
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_UI_FONT))
+                    .size(TS.label)
+                    .style(text_primary),
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_UI_FONT_HELP))
                     .size(TS.caption)
                     .style(text_muted),
             ]
@@ -92,6 +92,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(window_controls_row(
         draft_window_controls_placement,
         window_controls_restart_note,
+        i18n,
     ));
     col = col.push(Space::new().height(20).boxed());
 
@@ -103,10 +104,15 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text(raw("Grid Style")).size(TS.label).style(text_primary),
-                text(raw("Appearance of snap points on the schematic canvas."))
-                    .size(TS.caption)
-                    .style(text_muted),
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_GRID_STYLE))
+                    .size(TS.label)
+                    .style(text_primary),
+                text(t!(
+                    i18n,
+                    ids::PREFERENCES_APPEARANCE_SCHEMATIC_GRID_STYLE_HELP
+                ))
+                .size(TS.caption)
+                .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -131,10 +137,10 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text(raw("GPU Render (experimental)"))
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_GPU_RENDER))
                     .size(TS.label)
                     .style(text_primary),
-                text(raw("Draw the PCB canvas on the GPU (shader) instead of the CPU. Applies immediately."))
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_GPU_RENDER_HELP))
                     .size(TS.caption)
                     .style(text_muted),
                 // This used to carry a second line naming the known GPU gaps.
@@ -164,14 +170,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text(raw("Anti-aliasing (MSAA 4x)"))
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_ANTIALIASING))
                     .size(TS.label)
                     .style(text_primary),
-                text(raw(
-                    "Smooth the edges of canvas shapes. Applies after restart."
-                ))
-                .size(TS.caption)
-                .style(text_muted),
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_ANTIALIASING_HELP))
+                    .size(TS.caption)
+                    .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -193,13 +197,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text(raw("Default Grid Size"))
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_SYMBOL_GRID_SIZE))
                     .size(TS.label)
                     .style(text_primary),
-                text(raw("Applied when a symbol library is first opened. \
-                      Can be changed per-library from the canvas status bar."))
-                .size(TS.caption)
-                .style(text_muted),
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_SYMBOL_GRID_SIZE_HELP))
+                    .size(TS.caption)
+                    .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -232,12 +235,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text(raw("Grid Style")).size(TS.label).style(text_primary),
-                text(raw(
-                    "Appearance of snap points on the symbol editor canvas."
-                ))
-                .size(TS.caption)
-                .style(text_muted),
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_GRID_STYLE))
+                    .size(TS.label)
+                    .style(text_primary),
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_SYMBOL_GRID_STYLE_HELP))
+                    .size(TS.caption)
+                    .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -258,8 +261,10 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text(raw("Pin Selection")).size(TS.label).style(text_primary),
-                text(raw("How a click selects a pin on the symbol editor canvas — the pin body only, or its name and number labels too."))
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_PIN_SELECTION))
+                    .size(TS.label)
+                    .style(text_primary),
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_PIN_SELECTION_HELP))
                     .size(TS.caption)
                     .style(text_muted),
             ]
@@ -270,7 +275,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 Some(draft_symbol_pin_selection),
                 PinSelectionMode::ALL,
                 |v: &PinSelectionMode| v.to_string(),
-            ).graphite()
+            )
+            .graphite()
             .on_select(PrefMsg::DraftSymbolPinSelection)
             .width(200),
         ]
@@ -285,15 +291,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text(raw("Interface scale"))
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_UI_SCALE))
                     .size(TS.label)
                     .style(text_primary),
-                text(raw(
-                    "Scales text, panels, menus and dialogs on top of the display \
-                     scale. Applied to every window when you save."
-                ))
-                .size(TS.caption)
-                .style(text_muted),
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_UI_SCALE_HELP))
+                    .size(TS.caption)
+                    .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -323,13 +326,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text(raw("Zoom speed")).size(TS.label).style(text_primary),
-                text(raw(
-                    "How far one mouse-wheel notch zooms on the schematic, PCB, \
-                      symbol and footprint canvases."
-                ))
-                .size(TS.caption)
-                .style(text_muted),
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_ZOOM_SPEED))
+                    .size(TS.label)
+                    .style(text_primary),
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_ZOOM_SPEED_HELP))
+                    .size(TS.caption)
+                    .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -355,10 +357,10 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text(raw("Two-finger scroll pans"))
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_TRACKPAD_PAN))
                     .size(TS.label)
                     .style(text_primary),
-                text(raw(TRACKPAD_PAN_HELP))
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_TRACKPAD_PAN_HELP))
                     .size(TS.caption)
                     .style(text_muted),
             ]
@@ -377,13 +379,13 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         row![
             column![
                 text(signex_i18n::t!(
-                    v.i18n,
+                    i18n,
                     signex_i18n::ids::PREFERENCES_WHEEL_MODE_LABEL
                 ))
                 .size(TS.label)
                 .style(text_primary),
                 text(signex_i18n::t!(
-                    v.i18n,
+                    i18n,
                     signex_i18n::ids::PREFERENCES_WHEEL_MODE_HELP
                 ))
                 .size(TS.caption)
@@ -412,10 +414,10 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(
         row![
             column![
-                text(raw("Remember window size and position"))
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_REMEMBER_GEOMETRY))
                     .size(TS.label)
                     .style(text_primary),
-                text(raw(REMEMBER_GEOMETRY_HELP))
+                text(t!(i18n, ids::PREFERENCES_APPEARANCE_REMEMBER_GEOMETRY_HELP))
                     .size(TS.caption)
                     .style(text_muted),
             ]
@@ -439,22 +441,21 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
 fn window_controls_row<'a>(
     draft: crate::chrome::controls::WindowControlsPlacement,
     restart_note: bool,
+    i18n: &'a I18n,
 ) -> Element<'a, PrefMsg> {
     let mut help = column![
-        text(raw("Window buttons"))
+        text(t!(i18n, ids::PREFERENCES_APPEARANCE_WINDOW_BUTTONS))
             .size(TS.label)
             .style(text_primary),
-        text(raw(
-            "Where minimize, maximize and close sit. Automatic follows your system."
-        ))
-        .size(TS.caption)
-        .style(text_muted),
+        text(t!(i18n, ids::PREFERENCES_APPEARANCE_WINDOW_BUTTONS_HELP))
+            .size(TS.caption)
+            .style(text_muted),
     ]
     .spacing(3)
     .width(200);
     if restart_note {
         help = help.push(
-            text(raw("Takes effect after restart."))
+            text(t!(i18n, ids::PREFERENCES_APPEARANCE_RESTART_NOTE))
                 .size(TS.caption)
                 .style(text_muted)
                 .boxed(),

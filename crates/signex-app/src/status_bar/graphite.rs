@@ -3,6 +3,7 @@
 
 use iced::widget::{Text, Widget, container, row, space};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme};
+use signex_i18n::{Localized, MessageId, ids, t};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
@@ -170,24 +171,46 @@ pub(super) fn coord_values(unit: Unit, x: f64, y: f64) -> (String, String) {
     }
 }
 
+/// The Grid span's value: the spacing in `unit`, or "OFF".
+pub(super) fn grid_label(visible: bool, size_mm: f32, unit: Unit) -> String {
+    if !visible {
+        return "OFF".to_string();
+    }
+    let mm = f64::from(size_mm);
+    match unit {
+        Unit::Mm => format!("{mm:.3} {unit}"),
+        Unit::Mil => format!("{:.1} {unit}", mm / 0.0254),
+        Unit::Inch => format!("{:.4} {unit}", mm / 25.4),
+        Unit::Micrometer => format!("{:.0} {unit}", mm * 1000.0),
+    }
+}
+
 fn mono_text(s: String, color: Color) -> Text<'static> {
     text(raw(s)).size(TS.body).color(color).font(mono_font())
 }
 
+/// A catalog message in the mono face.
+fn mono_message(s: Localized, color: Color) -> Text<'static> {
+    text(s).size(TS.body).color(color).font(mono_font())
+}
+
 fn mono_button(
-    s: String,
-    color: Color,
+    label: Text<'static>,
     request: StatusBarRequest,
 ) -> button::Button<'static, StatusBarRequest, Text<'static>> {
-    button(mono_text(s, color))
+    button(label)
         .padding([1.0, SP.s])
         .style(button::text)
         .on_press(request)
 }
 
 /// Label of the Snap pill: "Snap on" while snapping, "Snap off" while free.
-pub(super) fn snap_label(snapping: bool) -> &'static str {
-    if snapping { "Snap on" } else { "Snap off" }
+pub(super) fn snap_label(snapping: bool) -> MessageId {
+    if snapping {
+        ids::PANELS_STATUS_BAR_SNAP_ON
+    } else {
+        ids::PANELS_STATUS_BAR_SNAP_OFF
+    }
 }
 
 /// The Graphite status bar: mono X / Y / Grid spans, a Snap on/off pill and
@@ -203,18 +226,25 @@ pub(super) fn view<'a>(
     let muted = resolve(tokens).ink3;
     let unit = r.unit;
     let (xs, ys) = coord_values(unit, r.x, r.y);
-    let grid = if r.grid_visible {
-        format!("{:.3} {unit}", r.grid_size_mm)
-    } else {
-        "OFF".to_string()
-    };
+    let grid = grid_label(r.grid_visible, r.grid_size_mm, unit);
 
     let mut bar = row![
         mono_text(format!("X {xs} {unit}"), muted).boxed(),
         mono_text(format!("Y {ys} {unit}"), muted).boxed(),
-        mono_button(format!("Grid {grid}"), muted, StatusBarRequest::ToggleGrid).boxed(),
-        button(mono_text(
-            snap_label(r.snap_enabled).to_string(),
+        mono_button(
+            mono_message(
+                if r.grid_visible {
+                    t!(i18n, ids::PANELS_STATUS_BAR_GRID, "grid" => grid)
+                } else {
+                    t!(i18n, ids::PANELS_STATUS_BAR_GRID_OFF)
+                },
+                muted,
+            ),
+            StatusBarRequest::ToggleGrid,
+        )
+        .boxed(),
+        button(mono_message(
+            t!(i18n, snap_label(r.snap_enabled)),
             if r.snap_enabled {
                 ti(tokens.success)
             } else {
@@ -225,10 +255,19 @@ pub(super) fn view<'a>(
         .style(snap_pill(tokens, r.snap_enabled))
         .on_press(StatusBarRequest::ToggleSnap)
         .boxed(),
-        mono_text(format!("Tool: {}", r.tool), muted).boxed(),
+        mono_message(
+            t!(i18n, ids::PANELS_STATUS_BAR_TOOL, "tool" => r.tool.as_str()),
+            muted,
+        )
+        .boxed(),
     ];
     if let Some(activity) = r.activity {
-        bar = bar.push(mono_text(activity.to_owned(), muted).boxed());
+        let ink = if activity.is_error {
+            signex_widgets::theme_ext::error_color(tokens)
+        } else {
+            muted
+        };
+        bar = bar.push(mono_text(activity.text.clone(), ink).boxed());
     }
     // The active copper layer of an open board; a click steps to the next.
     if let Some((caption, name)) = r.active_layer.clone() {
@@ -258,8 +297,10 @@ pub(super) fn view<'a>(
     if let Some(name) = r.altium_import {
         bar = bar.push(
             mono_button(
-                format!("Importing {name}… ✕"),
-                ink,
+                mono_message(
+                    t!(i18n, ids::PANELS_STATUS_BAR_IMPORTING, "name" => name),
+                    ink,
+                ),
                 StatusBarRequest::CancelAltiumImport,
             )
             .boxed(),
@@ -267,12 +308,23 @@ pub(super) fn view<'a>(
     }
     bar = bar.push(space::horizontal().boxed());
     if let Some(summary) = r.selection.clone() {
-        bar = bar
-            .push(mono_button(summary, ink, StatusBarRequest::OpenPropertiesForSelection).boxed());
+        bar = bar.push(
+            mono_button(
+                mono_text(summary, ink),
+                StatusBarRequest::OpenPropertiesForSelection,
+            )
+            .boxed(),
+        );
     }
     let bar = bar
         .push(mono_text(format!("{:.0}%", r.zoom), muted).boxed())
-        .push(mono_button(format!("{unit}"), muted, StatusBarRequest::CycleUnit).boxed())
+        .push(
+            mono_button(
+                mono_text(format!("{unit}"), muted),
+                StatusBarRequest::CycleUnit,
+            )
+            .boxed(),
+        )
         .push(
             button(
                 text(signex_i18n::t!(
@@ -314,10 +366,18 @@ mod tests {
         assert_ne!(on.text_color, off.text_color);
     }
 
+    /// The grid spacing reads in the unit the bar shows, not as mm.
+    #[test]
+    fn the_grid_reads_in_the_shown_unit() {
+        assert_eq!(grid_label(true, 0.254, Unit::Mil), "10.0 mil");
+        assert_eq!(grid_label(true, 1.27, Unit::Mm), "1.270 mm");
+        assert_eq!(grid_label(false, 1.27, Unit::Mm), "OFF");
+    }
+
     #[test]
     fn the_snap_pill_reads_on_or_off() {
-        assert_eq!(snap_label(true), "Snap on");
-        assert_eq!(snap_label(false), "Snap off");
+        assert_eq!(snap_label(true), ids::PANELS_STATUS_BAR_SNAP_ON);
+        assert_eq!(snap_label(false), ids::PANELS_STATUS_BAR_SNAP_OFF);
     }
 
     #[test]

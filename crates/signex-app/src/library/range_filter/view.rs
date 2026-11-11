@@ -7,12 +7,12 @@ use std::rc::Rc;
 
 use iced::widget::{Widget, column, container, pick_list, row};
 use iced::{Element, Length};
-use signex_i18n::UserText;
+use signex_i18n::{I18n, UserText, ids, t};
 use signex_library::RangeOp;
 use signex_types::quantity::{SiPrefix, Unit};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
-use signex_widgets::{PickListPlaceholder, button, raw, text, text_input};
+use signex_widgets::{Label, PickListPlaceholder, button, raw, text, text_input};
 
 use super::draft::{BoundDraft, RangeFilterDraft, RangeFilters};
 use crate::library::messages::{RangeBound, RangeFilterMsg};
@@ -76,7 +76,7 @@ pub(crate) fn range_filter_bar<'a, M: Clone + 'a>(
             .map_or(key.as_str(), |c| c.label.as_str());
         let label = parameter_caption(i18n, label);
         let dropped = excluded.get(key).copied().unwrap_or(0);
-        bar = bar.push(filter_row(key, &label, draft, dropped, tokens, &wrap));
+        bar = bar.push(filter_row(key, &label, draft, dropped, tokens, i18n, &wrap));
     }
     if !free.is_empty() {
         let w = Rc::clone(&wrap);
@@ -91,7 +91,7 @@ pub(crate) fn range_filter_bar<'a, M: Clone + 'a>(
                     unit: c.unit,
                 })
             })
-            .placeholder_label(raw("Add range filter…"))
+            .placeholder_label(t!(i18n, ids::LIBRARY_RANGE_FILTER_ADD))
             .padding(SP.s)
             .boxed(),
         );
@@ -105,6 +105,7 @@ fn filter_row<'a, M: Clone + 'a>(
     draft: &'a RangeFilterDraft,
     dropped: usize,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     wrap: &Rc<dyn Fn(RangeFilterMsg) -> M + 'a>,
 ) -> Element<'a, M> {
     let text_c = theme_ext::text_primary(tokens);
@@ -129,19 +130,33 @@ fn filter_row<'a, M: Clone + 'a>(
     let mut line = row![
         text(raw(label.to_string())).size(TS.body).color(text_c),
         op,
-        bound(key, RangeBound::Low, &draft.low, &draft.unit, tokens, wrap),
+        bound(
+            key,
+            RangeBound::Low,
+            &draft.low,
+            &draft.unit,
+            tokens,
+            i18n,
+            wrap
+        ),
     ]
     .spacing(SP.m)
     .align_y(iced::Alignment::Center);
     if draft.op.is_between() {
         line = line
-            .push(text(raw("and")).size(TS.body).color(muted).boxed())
+            .push(
+                text(t!(i18n, ids::LIBRARY_RANGE_FILTER_AND))
+                    .size(TS.body)
+                    .color(muted)
+                    .boxed(),
+            )
             .push(bound(
                 key,
                 RangeBound::High,
                 &draft.high,
                 &draft.unit,
                 tokens,
+                i18n,
                 wrap,
             ));
     }
@@ -154,24 +169,30 @@ fn filter_row<'a, M: Clone + 'a>(
     };
     line = line.push(clear.boxed());
 
-    let status: Option<(String, iced::Color)> = [&draft.low, &draft.high]
+    let status: Option<(Label<'a>, iced::Color)> = [&draft.low, &draft.high]
         .into_iter()
         .find_map(|b| b.refusal.clone())
-        .map(|why| (why, error_c))
+        .map(|why| (raw(why), error_c))
         .or_else(|| match draft.filter() {
-            None => Some(("Enter a number to apply the filter.".to_string(), muted)),
+            None => Some((
+                t!(i18n, ids::LIBRARY_RANGE_FILTER_ENTER_NUMBER).into(),
+                muted,
+            )),
             Some(_) if dropped > 0 => Some((
-                format!(
-                    "{dropped} excluded: not a measurement in {}.",
-                    draft.unit.glyph()
-                ),
+                t!(
+                    i18n,
+                    ids::LIBRARY_RANGE_FILTER_EXCLUDED,
+                    "count" => dropped,
+                    "unit" => draft.unit.glyph()
+                )
+                .into(),
                 muted,
             )),
             Some(_) => None,
         });
     let mut out = column![line].spacing(2);
     if let Some((msg, color)) = status {
-        out = out.push(text(raw(msg)).size(TS.caption).color(color).boxed());
+        out = out.push(text(msg).size(TS.caption).color(color).boxed());
     }
     container(out).width(Length::Shrink).boxed()
 }
@@ -184,21 +205,25 @@ fn bound<'a, M: Clone + 'a>(
     b: &'a BoundDraft,
     unit: &Unit,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     wrap: &Rc<dyn Fn(RangeFilterMsg) -> M + 'a>,
 ) -> Element<'a, M> {
     let number = {
         let (w, key) = (Rc::clone(wrap), key.to_string());
-        text_input(raw("number"), &b.text)
-            .on_input(move |text| {
-                w(RangeFilterMsg::NumberEdited {
-                    key: key.clone(),
-                    bound: which,
-                    text,
-                })
+        text_input(
+            t!(i18n, ids::LIBRARY_RANGE_FILTER_NUMBER_PLACEHOLDER),
+            &b.text,
+        )
+        .on_input(move |text| {
+            w(RangeFilterMsg::NumberEdited {
+                key: key.clone(),
+                bound: which,
+                text,
             })
-            .padding(SP.s)
-            .size(TS.body)
-            .width(Length::Fixed(NUMBER_W))
+        })
+        .padding(SP.s)
+        .size(TS.body)
+        .width(Length::Fixed(NUMBER_W))
     };
     let (w, pick_key) = (Rc::clone(wrap), key.to_string());
     let unit_part: Element<'a, M> = prefix_picker(unit, b.prefix, move |prefix: SiPrefix| {

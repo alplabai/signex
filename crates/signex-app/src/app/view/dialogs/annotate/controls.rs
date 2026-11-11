@@ -6,8 +6,9 @@
 use super::super::*;
 use iced::widget::{container, scrollable};
 use iced::{Background, Border, Element, Theme};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text};
+use signex_widgets::{button, text};
 
 use super::super::graphite_annotate as ga;
 use crate::app::state::AnnotateOrder;
@@ -39,10 +40,13 @@ pub(super) fn scroll_style(
     }
 }
 
-/// Tiny inline checkbox pip — read-only indicator used inside the Annotate
-/// dialog's parameter list and sheet table.
-pub(super) fn check_pip(on: bool, theme_tokens: &ThemeTokens) -> Element<'static, Message> {
-    ga::checkbox_pip(theme_tokens, on)
+/// Greyed checkbox pip for the parameter-matching list, which the
+/// annotation engine does not read yet.
+pub(super) fn disabled_check_pip(
+    on: bool,
+    theme_tokens: &ThemeTokens,
+) -> Element<'static, Message> {
+    ga::disabled_checkbox_pip(theme_tokens, on)
 }
 
 pub(super) fn bordered_style(
@@ -52,12 +56,12 @@ pub(super) fn bordered_style(
 }
 
 pub(super) fn order_radio<'a>(
-    label: &'a str,
+    label: Localized,
     value: AnnotateOrder,
     current: AnnotateOrder,
     theme_tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    button(container(text(raw(label.to_string())).size(TS.body)).padding([SP.s, 10.0]))
+    button(container(text(label).size(TS.body)).padding([SP.s, 10.0]))
         .on_press(Message::Annotate(AnnotateMsg::OrderChanged(value)))
         .style(ga::toggle_style(theme_tokens, value == current))
         .boxed()
@@ -66,19 +70,15 @@ pub(super) fn order_radio<'a>(
 /// The line under the Annotation Summary that says what "Re-prefix to
 /// standard" will do, or why it is unavailable (#1315).
 pub(super) fn reprefix_note(
+    i18n: &I18n,
     standard: Option<signex_types::designator::DesignatorStandard>,
-) -> String {
+) -> Localized {
     match standard {
-        None => "Re-prefix to standard is unavailable: this project follows no designator \
-                 standard. Pick one in Project Options."
-            .to_string(),
-        Some(standard) => format!(
-            "Re-prefix to standard re-issues the prefix of every placed part under {standard} \
-             and renumbers them, across the whole project, as one undo step, after you confirm a \
-             list of the changes. Sheets that are not open are loaded unsaved; nothing is \
-             written until you save. Locked parts, hand-edited prefixes and parts without a \
-             library link are left alone and listed in Messages. PCB references are not \
-             updated."
+        None => t!(i18n, ids::DIALOG_ANNOTATE_REPREFIX_UNAVAILABLE),
+        Some(standard) => t!(
+            i18n,
+            ids::DIALOG_ANNOTATE_REPREFIX_NOTE,
+            "standard" => standard.to_string()
         ),
     }
 }

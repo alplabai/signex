@@ -446,7 +446,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         menu_label: Some("Sync Sheet Pins"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
-        flags: CommandFlags::GUI_ONLY,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SYNC_SHEET,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -480,6 +481,19 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES,
         operands: operands::APPLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1312: Back Annotate, from a schematic or (Update Schematics) a board
+    // of a project. Execute is one undo group across the changed sheets.
+    // No default key.
+    CommandMetadata {
+        id: "back_annotate_schematics",
+        category: "pcb_sync",
+        label: "Back-annotate the board's designators and values to the schematic",
+        menu_label: Some("Back Annotate Schematics..."),
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
 ];

@@ -44,6 +44,13 @@ the pin's tip, or the sheet entry's point, on the sheet the edit targets.
 lands and answer with a report (optional operands `allow_merge`,
 `allow_open`, `dry_run`); rules in [CLI.md](CLI.md), "Wire intent".
 
+`place_component library=.. part=.. at=x,y` places a row of an open library
+and answers with its designator, unit and pin tips; `place_sheet_symbol`,
+`place_sheet_entry` and `sync_sheet_pins` edit the hierarchy without writing
+a file. Without operands, in a window, they open the picker, arm the tool or
+act on the selection as before; rules in [CLI.md](CLI.md), "Placing parts
+and hierarchy".
+
 Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## General
@@ -181,6 +188,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `annotate_schematic_quietly` | Annotate schematic quietly | design | `Alt+A` | `Alt+A` |
 | `assign_footprints` | Assign footprints | design | — | — |
 | `assign_net_class` | Assign net to class | design | — | — |
+| `back_annotate_schematics` | Back-annotate the board's designators and values to the schematic | pcb_sync | — | — |
 | `bring_to_front` | Bring to front | modify | — | — |
 | `bring_to_front_of` | Bring to front of | modify | — | — |
 | `change_component` | Change the selected part's component | edit | — | — |
@@ -283,6 +291,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `new_pcb_document` | New PCB in the project | file | — | — |
 | `next_layer` | Make the next copper layer active | view | `+`, `Shift++`, `*`, `Shift+*` | `+`, `Shift++`, `*`, `Shift+*` |
 | `prev_layer` | Make the previous copper layer active | view | `-` | `-` |
+| `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
 | `toggle_layer_visibility` | Show or hide the active layer | view | — | — |

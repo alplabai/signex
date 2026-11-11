@@ -84,3 +84,62 @@ fn a_dropped_part_waits_for_the_closed_sheets_numbers() {
     assert_eq!(symbols[before].reference, "R102");
     assert!(app.interaction_state.placement.is_none(), "the tool ends");
 }
+
+/// An agent's `place_component` while a person's drop waits for the scan
+/// (#2199) numbers its part from its own read of the project and leaves the
+/// scan the drop waits on in place, so the drop still lands when it does.
+#[test]
+fn an_agent_part_never_supersedes_the_scan_a_drop_waits_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, _child) = placed_twice_on_disk(&dir);
+    app.ui_state.snap_enabled = false;
+    let stock = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/stock-library/Stock.snxlib");
+    app.library
+        .open_library_read_only(stock.clone())
+        .expect("mount stock");
+    let (_, row) = app
+        .library
+        .all_components()
+        .into_iter()
+        .find(|(_, c)| c.internal_pn.as_str() == "STOCK-R")
+        .expect("Stock lists STOCK-R");
+    let table = app.library.table_of_row(&stock, row.row_id).expect("table");
+    let row_id = signex_library::RowId::from_uuid(row.row_id);
+    let before = app.document_state.engines[&top].document().symbols.len();
+    let _read = app.handle_place_library_component(stock.clone(), table.clone(), row_id);
+    let epoch = app.interaction_state.placement_epoch;
+    app.library.components_panel.pending_drop = Some((epoch, (5.0, 5.0)));
+    let open: Vec<_> = app
+        .library
+        .open_libraries
+        .iter()
+        .map(|l| (l.library_id, l.root.clone()))
+        .collect();
+    let resolved =
+        crate::library::place::resolve_placement(&stock, &table, row_id, &open).map(Box::new);
+    let scan = app.handle_library_component_resolved(top.clone(), epoch, stock.clone(), resolved);
+
+    let id = crate::keymap::AppCommandId::new("place_component").unwrap();
+    let library = format!("library={}", stock.display());
+    let call = crate::app::command::CommandArgs::parse_operands(
+        &id,
+        &[&library, "part=STOCK-R", "at=254,254"],
+    )
+    .unwrap();
+    let (outcome, _) = app.run_operands_settled(&id, &call);
+    let crate::app::command::CommandOutcome::Answered(answer) = outcome else {
+        panic!("not answered: {outcome:?}");
+    };
+    assert_eq!(
+        answer["designator"], "R102",
+        "numbered past the closed child"
+    );
+
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, scan)
+        .expect("the scan lands");
+    let symbols = &app.document_state.engines[&top].document().symbols;
+    assert_eq!(symbols.len(), before + 2, "the drop landed too");
+    assert_eq!(symbols[before + 1].reference, "R103");
+}

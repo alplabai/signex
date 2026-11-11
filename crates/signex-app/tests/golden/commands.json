@@ -65,6 +65,11 @@
     "category": "edit"
   },
   {
+    "id": "back_annotate_schematics",
+    "group": "Schematic",
+    "category": "pcb_sync"
+  },
+  {
     "id": "board_sketch",
     "group": "Pcb",
     "category": "design"
@@ -858,6 +863,11 @@
     "id": "read_document",
     "group": "General",
     "category": "file"
+  },
+  {
+    "id": "reannotate_board",
+    "group": "Pcb",
+    "category": "design"
   },
   {
     "id": "redo",

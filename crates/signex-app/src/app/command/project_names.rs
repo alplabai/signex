@@ -13,8 +13,7 @@ use signex_types::schematic::{Point, SchematicSheet};
 
 use crate::app::Signex;
 use crate::app::project_sheets::{
-    ProjectSheetSet, assemble_project_sheets_quiet, project_graph_quiet, project_pages,
-    project_roots, resolve_netlist_root_for, sheet_key_with,
+    ProjectSheetSet, project_graph_quiet, project_roots, resolve_netlist_root_for, sheet_key_with,
 };
 use crate::app::state::scope::path_key_with;
 
@@ -54,6 +53,16 @@ impl Signex {
         if !self.project_judges_names(after, points) {
             return Ok(None);
         }
+        self.project_name_changes_of(after, allow_merge)
+    }
+
+    /// [`Self::project_name_changes`] for any edit of the target, wherever on
+    /// the sheet: a sheet symbol brings its file's nets in (#2199).
+    pub(super) fn project_name_changes_of(
+        &self,
+        after: &SchematicSheet,
+        allow_merge: bool,
+    ) -> Result<Option<Vec<ProjectNetChange>>, String> {
         let docs = &self.document_state;
         let Some(path) = docs.edit_path().map(std::path::Path::to_path_buf) else {
             return Ok(None);
@@ -63,17 +72,9 @@ impl Signex {
         };
         let fold = crate::app::state::project_case::fold_of(Some(project));
         let root = resolve_netlist_root_for(docs, &path);
-        let pages = project_pages(Some(project));
-        let assemble = || assemble_project_sheets_quiet(docs, &pages, &root, fold);
-        // Inside an edit list the other sheets are read once.
-        let mut cache = docs.agent_edits.project_set.borrow_mut();
-        let mut own;
-        let set = if docs.agent_edits.listing {
-            cache.0.get_or_insert_with(assemble)
-        } else {
-            own = assemble();
-            &mut own
-        };
+        // The closed sheets were read off the UI thread before the edit ran.
+        let mut own = self.edit_project_set(&path)?;
+        let set = &mut own;
         // A list that edits several sheets changes the others while it runs:
         // each is current in its engine, not in the read (#2178).
         for other in docs.agent_edits.touched.iter().filter(|p| **p != path) {
@@ -179,7 +180,7 @@ pub(super) fn project_change_refusal(what: &str, at: Point, names: &[String]) ->
 }
 
 /// What kept the project from being read in full, for a refusal.
-fn unreadable_reason(set: &ProjectSheetSet) -> String {
+pub(super) fn unreadable_reason(set: &ProjectSheetSet) -> String {
     // File names only: an answer carries no path.
     let name = |path: &std::path::Path| {
         path.file_name()

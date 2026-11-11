@@ -9,7 +9,9 @@ mod child_sheet_create_tests;
 mod child_sheet_path;
 #[cfg(test)]
 mod cursor_moved_tests;
-pub(crate) use child_sheet_path::relative_within;
+pub(crate) use child_sheet_path::{
+    escapes_through_symlink, reference_from, relative_within, resolve_new_sheet_path,
+};
 mod break_wire_tool;
 mod clicked;
 mod descend;
@@ -333,9 +335,14 @@ impl Signex {
         // instead of a phantom sibling beside the `.snxprj`. Falls back to the
         // project directory when the active tab is unsaved (no path). Both call
         // sites go through the one shared resolver (`resolve_child_reference`),
-        // which also handles the empty and absolute-reference cases.
+        // which also handles the empty and absolute-reference cases. An edit
+        // from operands naming its document (#2199) carries it there instead.
         let parent_dir = self
-            .active_tab_path()
+            .document_state
+            .agent_edits
+            .target
+            .clone()
+            .or_else(|| self.active_tab_path())
             .and_then(|path| path.parent().map(std::path::PathBuf::from))
             .or_else(|| {
                 self.document_state

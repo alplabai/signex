@@ -14,6 +14,8 @@ use iced::Task;
 use super::agent_edits as agent;
 use super::document_operands as doc;
 use super::file_operands as file;
+use super::hierarchy_operands as hierarchy;
+use super::part_operands as part;
 use super::placement_operands as place;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::{Message, Signex};
@@ -67,6 +69,10 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("draw_line", place::line),
     ("draw_graphic_line", place::line),
     ("draw_rectangle", place::rectangle),
+    ("place_component", part::place_component),
+    ("place_sheet_symbol", hierarchy::place_sheet_symbol),
+    ("place_sheet_entry", hierarchy::place_sheet_entry),
+    ("sync_sheet_pins", hierarchy::sync_sheet_pins),
 ];
 
 /// The handler of `command`, if it runs its operands.
@@ -131,12 +137,28 @@ impl Signex {
         {
             return refused(reason);
         }
+        // What its checks read from disk is read off the UI thread first, and
+        // the command runs when that lands (#2199).
+        if let Some(deferred) = self.defer_for_reads(command, args) {
+            return deferred;
+        }
+        self.document_state.agent_edits.project_wanted.set(false);
         // The socket only: a headless run has no person, and its own `undo`
         // refuses a grouped agent step (docs/AGENT_EDITS.md, "Origin").
-        if self.agent.serving && agent::runs_as_one_step(command) {
-            return agent::run_as_one_step(self, command, args, handler);
+        let ran = if self.agent.serving && agent::runs_as_one_step(command) {
+            agent::run_as_one_step(self, command, args, handler)
+        } else {
+            handler(self, args)
+        };
+        // A check found that it needs the project's closed sheets: it refused
+        // with nothing applied; read them and run the command again.
+        if self.document_state.agent_edits.project_wanted.take()
+            && matches!(ran.0, CommandOutcome::Disabled { .. })
+            && let Some(deferred) = self.defer_for_project(command, args)
+        {
+            return deferred;
         }
-        handler(self, args)
+        ran
     }
 }
 

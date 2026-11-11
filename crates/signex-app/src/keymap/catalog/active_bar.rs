@@ -173,7 +173,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Sheet Symbol"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SHEET_SYMBOL,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -183,7 +184,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Sheet Entry"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SHEET_ENTRY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -591,7 +593,8 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         menu_label: Some("Part"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PART,
         ..CommandMetadata::DEFAULT
     },
 ];

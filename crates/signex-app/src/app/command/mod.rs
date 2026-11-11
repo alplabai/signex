@@ -19,12 +19,20 @@ pub(crate) mod bridge;
 #[cfg(test)]
 mod document_operand_tests;
 mod document_operands;
+#[cfg(test)]
+mod edit_read_list_tests;
+#[cfg(test)]
+mod edit_read_tests;
+mod edit_reads;
 pub(crate) mod enablement;
 #[cfg(test)]
 mod file_operand_tests;
 mod file_operands;
 #[cfg(test)]
 mod headless_gui_only_tests;
+#[cfg(test)]
+mod hierarchy_operand_tests;
+mod hierarchy_operands;
 #[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
 mod needs;
@@ -35,6 +43,9 @@ mod operand_handlers;
 mod operands;
 mod outcome;
 #[cfg(test)]
+mod part_operand_tests;
+mod part_operands;
+#[cfg(test)]
 mod placement_operand_tests;
 mod placement_operands;
 #[cfg(test)]
@@ -43,6 +54,9 @@ mod project_names;
 pub(crate) mod queries;
 #[cfg(test)]
 mod sheet_entry_ref_tests;
+#[cfg(test)]
+mod sheet_symbol_check_tests;
+mod sheet_symbol_checks;
 #[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;
@@ -57,6 +71,7 @@ pub use agent_edits::{
 pub use args::CommandArgs;
 pub(crate) use args::InvocationContext;
 use bridge::core_to_message;
+pub use edit_reads::{EditReads, ReadsLoaded};
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;
 pub(crate) use opened::answers_with_the_new_document;

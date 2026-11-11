@@ -7,6 +7,7 @@ use signex_widgets::{button, raw, text};
 
 use super::graphite;
 use super::measure;
+use super::tab_fit;
 use super::types::*;
 use crate::icons;
 use crate::panels::components_panel::details::symbol_canvas::SheetGrid;
@@ -76,114 +77,134 @@ impl DockArea {
             return self.view_rail(position, region, ctx);
         }
 
-        // ── Altium-style flat tabs with accent underline + overflow scroll ──
-        // The strip scrolls itself (wheel or thin bar), so it has no arrows
-        // and never starts mid-strip.
-        let mut tab_row = row![]
-            .spacing(0.0)
-            .align_y(iced::Alignment::End)
-            .height(Length::Fill);
+        // ── Altium-style flat tabs with accent underline ──
+        // Every tab is shown: when the natural widths do not fit the strip,
+        // the wider tabs shrink and their labels end in an ellipsis
+        // (`tab_fit::fit_widths`), so no tab is cut at the strip edge.
+        let tab_strip = iced::widget::responsive(move |size| {
+            let font = crate::fonts::iced_font_for_family(&ctx.ui_font_name);
+            let natural: Vec<f32> = region
+                .panels
+                .iter()
+                .map(|panel| tab_natural_width(*panel, ctx, font))
+                .collect();
+            let widths = tab_fit::fit_widths(&natural, size.width);
+            let mut tab_row = row![]
+                .spacing(0.0)
+                .align_y(iced::Alignment::End)
+                .height(Length::Fill);
 
-        // Last visible panel index drives the `is_last` flag so
-        // adjacent tabs share their L/R borders and the rightmost
-        // tab actually closes off with a right edge.
-        let last_panel_idx = region.panels.len().saturating_sub(1);
-        // A long strip scrolls.
-        let (tab_size, tab_pad) = (TS.body, graphite::TAB_PAD);
-        for (i, panel) in region.panels.iter().enumerate() {
-            let label = t!(ctx.i18n, panel.message());
-            let is_active = i == region.active;
-            let is_last = i == last_panel_idx;
+            // Last visible panel index drives the `is_last` flag so
+            // adjacent tabs share their L/R borders and the rightmost
+            // tab actually closes off with a right edge.
+            let last_panel_idx = region.panels.len().saturating_sub(1);
+            let (tab_size, tab_pad) = (TS.body, graphite::TAB_PAD);
+            for (i, panel) in region.panels.iter().enumerate() {
+                let squeezed = (widths[i] < natural[i]).then_some(widths[i]);
+                let label = t!(ctx.i18n, panel.message());
+                let is_active = i == region.active;
+                let is_last = i == last_panel_idx;
 
-            let text_c = if is_active {
-                styles::ti(ctx.tokens.text)
-            } else {
-                styles::ti(ctx.tokens.text_secondary)
-            };
-            // Visual feedback while dragging: give the source tab a
-            // brighter border + tinted background so the user sees
-            // which tab they grabbed.
-            let is_dragging_this =
-                matches!(self.tab_drag, Some((p, src)) if p == position && src == i);
-            let is_hovered =
-                matches!(self.hovered_tab, Some((p, idx)) if p == position && idx == i);
-            // No manual width — Iced's layout engine measures the text.
-            // The accent underline is done via bottom-padding on an outer
-            // container whose background is the accent color, avoiding
-            // Length::Fill which would expand the tab to the panel width.
-            // Shared `signex_widgets::TabPill` custom widget — same
-            // rounded-top + 3-sided border + accent underline that the
-            // document tab bar uses. Panel tabs and document tabs stay
-            // visually in lockstep — the accent line is drawn by
-            // `TabPill` itself from `accent` + `is_active` below.
-            let accent = styles::ti(ctx.tokens.accent);
-            let fill = if is_dragging_this {
-                iced::Color { a: 0.22, ..accent }
-            } else {
-                // The active tab merges into the panel fill.
-                let panel = styles::ti(ctx.tokens.panel_bg);
-                if is_active {
-                    panel
-                } else if is_hovered {
-                    styles::tokens::hover_overlay(&ctx.tokens)
+                let text_c = if is_active {
+                    styles::ti(ctx.tokens.text)
                 } else {
-                    iced::Color { a: 0.0, ..panel }
+                    styles::ti(ctx.tokens.text_secondary)
+                };
+                // Visual feedback while dragging: give the source tab a
+                // brighter border + tinted background so the user sees
+                // which tab they grabbed.
+                let is_dragging_this =
+                    matches!(self.tab_drag, Some((p, src)) if p == position && src == i);
+                let is_hovered =
+                    matches!(self.hovered_tab, Some((p, idx)) if p == position && idx == i);
+                // No manual width — Iced's layout engine measures the text.
+                // The accent underline is done via bottom-padding on an outer
+                // container whose background is the accent color, avoiding
+                // Length::Fill which would expand the tab to the panel width.
+                // Shared `signex_widgets::TabPill` custom widget — same
+                // rounded-top + 3-sided border + accent underline that the
+                // document tab bar uses. Panel tabs and document tabs stay
+                // visually in lockstep — the accent line is drawn by
+                // `TabPill` itself from `accent` + `is_active` below.
+                let accent = styles::ti(ctx.tokens.accent);
+                let fill = if is_dragging_this {
+                    iced::Color { a: 0.22, ..accent }
+                } else {
+                    // The active tab merges into the panel fill.
+                    let panel = styles::ti(ctx.tokens.panel_bg);
+                    if is_active {
+                        panel
+                    } else if is_hovered {
+                        styles::tokens::hover_overlay(&ctx.tokens)
+                    } else {
+                        iced::Color { a: 0.0, ..panel }
+                    }
+                };
+                let pill_style = signex_widgets::tab_pill::TabPillStyle {
+                    fill,
+                    border: styles::ti(ctx.tokens.border),
+                    accent,
+                    is_active,
+                    is_last,
+                    // Panel tabs sit at the top of each dock region but
+                    // visually hang from the strip baseline that runs
+                    // ABOVE the panel content — so the accent stripe
+                    // belongs at the top of the pill and the rounded
+                    // corners flip to the bottom. Inverse of doc tabs.
+                    accent_position: signex_widgets::tab_pill::AccentPosition::Top,
+                };
+                // F27 — pin the panel-tab label to a single line. Without
+                // `Wrapping::None` iced word-wraps "SCH Library" onto two
+                // lines whenever the dock area squeezes the tab — which
+                // happens any time the panel column is in its default
+                // ~240 px width with several panels in the strip.
+                let mut label_text = text(label)
+                    .size(tab_size)
+                    .color(text_c)
+                    .wrapping(iced::widget::text::Wrapping::None);
+                if squeezed.is_some() {
+                    label_text = label_text
+                        .width(Length::Fill)
+                        .ellipsis(iced::widget::text::Ellipsis::End);
                 }
-            };
-            let pill_style = signex_widgets::tab_pill::TabPillStyle {
-                fill,
-                border: styles::ti(ctx.tokens.border),
-                accent,
-                is_active,
-                is_last,
-                // Panel tabs sit at the top of each dock region but
-                // visually hang from the strip baseline that runs
-                // ABOVE the panel content — so the accent stripe
-                // belongs at the top of the pill and the rounded
-                // corners flip to the bottom. Inverse of doc tabs.
-                accent_position: signex_widgets::tab_pill::AccentPosition::Top,
-            };
-            // F27 — pin the panel-tab label to a single line. Without
-            // `Wrapping::None` iced word-wraps "SCH Library" onto two
-            // lines whenever the dock area squeezes the tab — which
-            // happens any time the panel column is in its default
-            // ~240 px width with several panels in the strip.
-            let label_text = text(label)
-                .size(tab_size)
-                .color(text_c)
-                .wrapping(iced::widget::text::Wrapping::None);
-            let tab_content: Element<'_, DockMessage> = match graphite::tab_badge(*panel, ctx) {
-                Some((count, tone)) => row![
-                    label_text.boxed(),
-                    container(
-                        text(t!(ctx.i18n, ids::PANELS_DOCK_TAB_COUNT, "count" => count))
-                            .size(TS.caption)
-                            .boxed(),
-                    )
-                    .padding([0.0, SP.s])
-                    .style(styles::pill(&ctx.tokens, tone))
+                let tab_content: Element<'_, DockMessage> = match graphite::tab_badge(*panel, ctx) {
+                    Some((count, tone)) => row![
+                        label_text.boxed(),
+                        container(
+                            text(t!(ctx.i18n, ids::PANELS_DOCK_TAB_COUNT, "count" => count))
+                                .size(TS.caption)
+                                .boxed(),
+                        )
+                        .padding([0.0, SP.s])
+                        .style(styles::pill(&ctx.tokens, tone))
+                        .boxed(),
+                    ]
+                    .spacing(SP.s)
+                    .align_y(iced::Alignment::Center)
                     .boxed(),
-                ]
-                .spacing(SP.s)
-                .align_y(iced::Alignment::Center)
-                .boxed(),
-                None => label_text.boxed(),
-            };
-            let inner = container(tab_content)
-                .padding([SP.s, tab_pad])
-                .height(Length::Fill)
-                .align_y(iced::Alignment::Center);
-            let tab = mouse_area(
-                signex_widgets::tab_pill::TabPill::new(inner.boxed(), pill_style).square(true),
-            )
-            .on_enter(DockMessage::TabHoverEnter(position, i))
-            .on_exit(DockMessage::TabHoverExit(position, i))
-            .on_press(DockMessage::TabDragStart(position, i))
-            .on_release(DockMessage::TabClick(position, i))
-            .on_right_press(DockMessage::TabContextMenuRequested(position, i));
+                    None => label_text.boxed(),
+                };
+                let mut inner = container(tab_content)
+                    .padding([SP.s, tab_pad])
+                    .height(Length::Fill)
+                    .align_y(iced::Alignment::Center);
+                if let Some(width) = squeezed {
+                    inner = inner.width(width).clip(true);
+                }
+                let tab = mouse_area(
+                    signex_widgets::tab_pill::TabPill::new(inner.boxed(), pill_style).square(true),
+                )
+                .on_enter(DockMessage::TabHoverEnter(position, i))
+                .on_exit(DockMessage::TabHoverExit(position, i))
+                .on_press(DockMessage::TabDragStart(position, i))
+                .on_release(DockMessage::TabClick(position, i))
+                .on_right_press(DockMessage::TabContextMenuRequested(position, i));
 
-            tab_row = tab_row.push(tab.boxed());
-        }
+                tab_row = tab_row.push(tab.boxed());
+            }
+            tab_row.boxed()
+        })
+        .boxed();
 
         // Collapse button (SVG icon)
         let tid = ctx.theme_id;
@@ -220,23 +241,9 @@ impl DockArea {
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
 
-        // Bottom tab strip — just the tab buttons + overflow arrows.
-        // Collapse / close moved up to the title bar so they're always
-        // visible alongside the active panel name.
-        let tab_row: Element<'_, DockMessage> = iced::widget::scrollable(tab_row)
-            .direction(iced::widget::scrollable::Direction::Horizontal(
-                iced::widget::scrollable::Scrollbar::new()
-                    .width(3)
-                    .scroller_width(3),
-            ))
-            .width(Length::Shrink)
-            .height(Length::Fill)
-            .boxed();
-        let tab_strip = row![tab_row, Space::new().width(Length::Fill),]
-            .spacing(0)
-            .align_y(iced::Alignment::End)
-            .width(Length::Fill)
-            .height(Length::Fill);
+        // The tab strip (built above) holds just the tab buttons. Collapse /
+        // close moved up to the title bar so they're always visible
+        // alongside the active panel name.
 
         // Panel content
         let content: Element<'_, DockMessage> =
@@ -471,6 +478,19 @@ impl DockArea {
         .style(graphite::floating_card(&ctx.tokens));
         Some(card.boxed())
     }
+}
+
+/// Width a dock tab takes when nothing squeezes it: label, count chip and
+/// side padding, measured in the UI font. One `SP.xs` of slack covers the
+/// shaping difference between this measurement and the drawn text.
+fn tab_natural_width(panel: PanelKind, ctx: &panels::PanelContext, font: iced::Font) -> f32 {
+    let label = t!(ctx.i18n, panel.message()).to_string();
+    let mut width = measure::text_width_in(&label, TS.body, font) + 2.0 * graphite::TAB_PAD;
+    if let Some((count, _)) = graphite::tab_badge(panel, ctx) {
+        let chip = t!(ctx.i18n, ids::PANELS_DOCK_TAB_COUNT, "count" => count).to_string();
+        width += SP.s + measure::text_width_in(&chip, TS.caption, font) + 2.0 * SP.s;
+    }
+    width + SP.xs
 }
 
 /// Font size for collapsed rail labels — every other dimension derives from this.

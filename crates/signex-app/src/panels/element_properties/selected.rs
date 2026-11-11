@@ -162,9 +162,16 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     col = col.push(Space::new().height(8.0).boxed());
     col = col.push(thin_sep(border_c));
     col = col.push(
-        container(text(raw("1 object selected")).size(TS.caption).color(muted))
-            .padding([SP.s, SP.m])
-            .boxed(),
+        container(
+            text(signex_i18n::t!(
+                ctx.i18n,
+                signex_i18n::ids::PANELS_PROPERTIES_ONE_OBJECT_SELECTED
+            ))
+            .size(TS.caption)
+            .color(muted),
+        )
+        .padding([SP.s, SP.m])
+        .boxed(),
     );
 
     scrollable(col).width(Length::Fill).boxed()

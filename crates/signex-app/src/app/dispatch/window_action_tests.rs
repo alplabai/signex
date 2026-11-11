@@ -1087,6 +1087,18 @@ fn every_properties_message_that_writes_the_shown_sheet_or_its_context_is_scoped
         P::TogglePrePlacementUnderline,
         P::ConfirmPrePlacement,
         P::Navigator(TreeMsg::Toggle(vec!["x".into()])),
+        // #1312 review: a board window's footprint fields.
+        P::PcbFootprintText(crate::panels::PcbFootprintTextMsg::Typed {
+            board: "b.snxpcb".into(),
+            footprint: id,
+            field: signex_engine::pcb::designators::FootprintTextField::Value,
+            text: String::new(),
+        }),
+        P::PcbFootprintText(crate::panels::PcbFootprintTextMsg::Submitted {
+            board: "b.snxpcb".into(),
+            footprint: id,
+            field: signex_engine::pcb::designators::FootprintTextField::Value,
+        }),
     ];
     for message in scoped {
         let wrapped = typed_in_window(&f, message.clone());

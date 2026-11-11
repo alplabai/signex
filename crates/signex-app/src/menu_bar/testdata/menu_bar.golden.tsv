@@ -96,6 +96,7 @@ Place/No Connect	item	No Connect	-	-	PlaceNoConnect	01000000	sch
 Place/Sheet Entry	item	Sheet Entry	-	-	PlaceSheetEntry	01000000	cmd:place_sheet_entry
 Design	menu	Design	-	-	-	-	-
 Design/Update PCB Document	item	Update PCB Document	-	-	UpdatePcb	01000000	cmd:update_pcb_from_schematic
+Design/Update Schematics	item	Update Schematics	-	-	BackAnnotate	01000000	cmd:back_annotate_schematics
 Design/Board Sketch	item	Board Sketch	-	-	BoardSketch	01100000	cmd:board_sketch
 Design/---	separator	-	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
@@ -108,13 +109,14 @@ Tools/Annotation/---	separator	-	-	-	-	-	-
 Tools/Annotation/Annotate Schematics Quietly	item	Annotate Schematics Quietly	annotate_schematic_quietly	Alt+A	AnnotateQuietly	01000000	cmd:annotate_schematic_quietly
 Tools/Annotation/Force Annotate All Schematics	item	Force Annotate All Schematics	force_annotate_all_schematics	Shift+Alt+A	AnnotateForceAll	01000000	cmd:force_annotate_all_schematics
 Tools/Annotation/---	separator	-	-	-	-	-	-
-Tools/Annotation/Back Annotate Schematics...	stub	Back Annotate Schematics...	-	-	-	00000000	never
+Tools/Annotation/Back Annotate Schematics...	item	Back Annotate Schematics...	-	-	BackAnnotate	01000000	cmd:back_annotate_schematics
 Tools/Annotation/Number Schematic Sheets...	item	Number Schematic Sheets...	-	-	NumberSchematicSheets	01001000	cmd:number_schematic_sheets
 Tools/---	separator	-	-	-	-	-	-
 Tools/Assign Footprints	item	Assign Footprints	-	-	AssignFootprints	01000000	cmd:assign_footprints
 Tools/Library Editor	item	Library Editor	-	-	OpenLibraryEditor	01000000	cmd:open_library_browser
 Tools/---	separator	-	-	-	-	-	-
 Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc
+Tools/Re-Annotate Board...	item	Re-Annotate Board...	-	-	ReannotateBoard	01100000	cmd:reannotate_board
 Tools/Net Inspector	item	Net Inspector	-	-	OpenNetInspector	11111111	cmd:open_net_inspector
 Tools/---	separator	-	-	-	-	-	-
 Tools/Cross Probe	item	Cross Probe	-	-	CrossProbe	01100000	cmd:cross_probe

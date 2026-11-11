@@ -147,6 +147,10 @@ impl Signex {
         let started = self.journal_started(command, args);
         self.document_state.agent_edits.last_group = None;
         let (outcome, task) = run(self);
+        // An edit waiting for its reads is journaled when it runs (#2199).
+        if matches!(outcome, CommandOutcome::Deferred { .. }) {
+            return (outcome, task);
+        }
         let started = self.sheets_with_a_step(started);
         // One line per sheet that got a step, each with its own revisions.
         let writes: Vec<Task<Message>> = started

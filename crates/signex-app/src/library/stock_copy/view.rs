@@ -77,8 +77,9 @@ pub fn view<'a>(
 
     let writable = library.writable_libraries();
     let list: Element<'a, LibraryMessage> = if writable.is_empty() {
-        text(raw(
-            "No writable library is open. Create a new one to copy into.",
+        text(signex_i18n::t!(
+            i18n,
+            signex_i18n::ids::LIBRARY_STOCK_COPY_NO_WRITABLE
         ))
         .size(ts.body)
         .color(muted)

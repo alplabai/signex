@@ -138,7 +138,7 @@ impl Signex {
         }
     }
 
-    pub(super) fn is_board_opening(&self, board: &Path) -> bool {
+    pub(crate) fn is_board_opening(&self, board: &Path) -> bool {
         self.document_state.pending_opens.contains(board)
             || self.ui_state.pending_sheet_opens.contains_key(board)
     }
@@ -223,7 +223,7 @@ impl Signex {
     }
 
     /// Every open library's rows, for the worker to resolve footprints from.
-    fn library_rows(&self) -> Vec<LibraryRows> {
+    pub(crate) fn library_rows(&self) -> Vec<LibraryRows> {
         self.library
             .open_libraries
             .iter()

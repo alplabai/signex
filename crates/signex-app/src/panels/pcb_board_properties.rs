@@ -1,7 +1,8 @@
 //! Properties panel of the active PCB: the board's own properties (size,
-//! copper layers, thickness, nets) when nothing is selected, and a card
-//! naming the board while board items are selected (no per-item view yet).
-//! A pure view over data the panel context copies from the board.
+//! copper layers, thickness, nets) when nothing is selected, one footprint's
+//! designator and value when only it is selected (`pcb_footprint_properties`),
+//! and a card naming the board for any other selection. A pure view over data
+//! the panel context copies from the board.
 
 use iced::widget::{Column, column, container, row};
 use iced::{Element, Length, Widget as _};
@@ -27,6 +28,8 @@ pub struct PcbBoardSummary {
     pub thickness_mm: f64,
     /// Board items selected in the main window.
     pub selected: usize,
+    /// The one selected footprint, when the selection is exactly one.
+    pub footprint: Option<super::PcbFootprintFacts>,
 }
 
 impl PcbBoardSummary {
@@ -45,7 +48,13 @@ impl PcbBoardSummary {
             copper_layers: signex_renderer::pcb::board_copper_layers(&board.layers).len(),
             thickness_mm: board.thickness,
             selected,
+            footprint: None,
         }
+    }
+
+    /// This summary showing `footprint`'s properties.
+    pub fn with_footprint(self, footprint: Option<super::PcbFootprintFacts>) -> Self {
+        Self { footprint, ..self }
     }
 }
 
@@ -54,6 +63,9 @@ impl PcbBoardSummary {
 pub fn view<'a>(ctx: &'a PanelContext, board: &'a PcbBoardSummary) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let i18n = &*ctx.i18n;
+    if let Some(footprint) = board.footprint.as_ref() {
+        return super::pcb_footprint_properties::view(ctx, footprint);
+    }
     if board.selected > 0 {
         return container(super::empty_state::empty_state_card(
             tokens,

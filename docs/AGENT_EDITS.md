@@ -90,8 +90,8 @@ Two commands, both with capability `edit` in `signex-cli`:
   wire edit sees the edits before it, and is judged against the sheet as it
   stands, so a route sent as chained `place_wire` edits (A to B, then B to C)
   needs `allow_open=true` on every edit but the last; names are judged across
-  the project, not only the sheet (the project is read once per list; a net
-  that reaches no other sheet costs no read). `changed: false`
+  the project, not only the sheet (the project's closed sheets are read once
+  per list, before it runs: "Edits that read the disk"). `changed: false`
   comes only from an empty list or a list of dry runs: it records no step and keeps the person's
   redo. An edit that changes nothing (a junction already there, a net already
   that colour) is refused by its handler like any other, so it refuses the
@@ -181,6 +181,72 @@ its step. The reply is unchanged (`ran`); the Messages line "Agent: color_net
 on b.snxsch (undo group 7)" tells the agent the group for `revert`, which
 works on these steps by the rules above. A command that makes no undo step
 (`save_document`, `close_active_document`), or is refused, gets no group.
+
+## Edits that read the disk (#2199)
+
+An edit never reads a file inside `update` (epic #665; decision
+https://github.com/alplabai/signex/issues/2199#issuecomment-6771692137).
+What its checks need from disk (`command::edit_reads`): the library row of
+`place_component`, the closed child file of `sync_sheet_pins` and whether a
+`place_sheet_symbol` file leaves the project through a link are planned from
+the operands, and an `apply_edits` list plans the union of its edits, each on
+the sheet it acts on; an edit
+that waits for those reads also reads the project's closed sheets, with each
+closed file a `place_sheet_symbol` of the list refers to (as a child-to-be,
+not a page of its own), so the later edits of the list are judged against
+it; a file that is missing or unreadable leaves the project incomplete. The
+project's closed sheets are otherwise asked for by the check that needs them
+(the name check of a wire, bus, label, power port or junction whose net
+reaches another sheet, the designators and units of `place_component`, the
+hierarchy-loop check of `place_sheet_symbol`): the edit is then refused with
+nothing applied, the project is read, and the edit runs again on it.
+
+- The command returns `CommandOutcome::Deferred { ticket }` and a `Task` that
+  reads all of it on a blocking thread. Its completion
+  (`AgentMsg::EditReadsLoaded`) carries the reads and the original request
+  (command, operands, origin, whether the socket served it); the edit then runs
+  through `run_operands` as it would have, with the reads in memory
+  (`AgentEdits::reads`), and nothing is read while it runs. A list still runs
+  as one step, one group on every sheet it touches; a refusal rolls them all
+  back.
+- The outcome is reported at completion: the socket keeps the request's reply
+  (`agent.waiting`, by ticket) and answers when the edit has run, with what
+  that run changed and logged (not what other requests or the person did
+  while the reads ran); a headless run drives the task itself and takes the
+  outcome by ticket, so its result line is unchanged. Replies to requests
+  sent on the socket without waiting may therefore arrive in another order
+  than the requests: match a reply to its request by `id`. The journal line
+  (below) of an edit that waited, from the socket or a headless run, is
+  written when it runs, once, with that run's outcome; the wait itself
+  writes none.
+- Staleness: the revision of the target sheet and of every open sheet of its
+  project is recorded when the reads start (a list's other sheets are of that
+  project, so they are among them). If one differs at completion, or
+  a sheet of the project was opened or closed meanwhile, the edit is refused
+  ("the document changed while its project and files were read; retry.
+  Nothing was applied"); a sheet of another project or of none does not
+  count. The open sheets in the read are replaced by their live state before
+  a check uses them.
+- A reader that fails (panics) is said in Messages and the edit is refused
+  with the reason, not a retry.
+- A socket request waiting for its reads meets the gate again when they
+  land: it is refused, with nothing applied and the reason a new request
+  would get, when agent connections were turned off ("agent connections are
+  off"), turned off and on again (a new session token: "the session token is
+  missing or wrong"), or its document left the agent's reach. Like that
+  refusal at request time, it is a `refused` line of the access journal and
+  has no edit line.
+- No read: a loose sheet, or a project whose sheets are all open, is checked
+  from memory and the edit runs at once. A `place_component` that names an
+  open library and one row of it reads that row, so it waits; one whose
+  library is not open, or whose part matches no row or several, runs at once
+  and is refused. A `place_sheet_symbol` always waits for its link check.
+- A check that needs a read the plan did not make refuses ("a file this edit's
+  check needs was not read first; retry"); it never reads.
+- An agent edit never touches the cached designator scan a person's drop may
+  wait on: `place_component` numbers from its own read of the project.
+- The menu's Sync Sheet Pins, run by a person, still reads the child in
+  `update`; moving it is the GUI side of #665.
 
 ## Journal
 

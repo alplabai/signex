@@ -1,5 +1,6 @@
 //! Diagnostic panels -- ERC and Messages.
 
+use super::messages_row::{MessageSource, clock_time};
 use super::*;
 use crate::styles::{Spacing, TypeScale};
 use signex_i18n::{MessageId, UserText, ids, t};
@@ -93,7 +94,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             Space::new().boxed(),
             Space::new().width(Length::Fill).height(Length::Shrink),
             signex_widgets::button(
-                text(raw("Run ERC (F8)"))
+                text(t!(ctx.i18n, ids::PANELS_ERC_RUN))
                     .size(TS.body)
                     .color(theme_ext::text_primary(&ctx.tokens)),
             )
@@ -102,7 +103,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .style(crate::styles::menu_item(&ctx.tokens)),
             Space::new().width(6).height(Length::Shrink),
             signex_widgets::button(
-                text(raw("Clear"))
+                text(t!(ctx.i18n, ids::PANELS_ERC_CLEAR))
                     .size(TS.body)
                     .color(theme_ext::text_secondary(&ctx.tokens)),
             )
@@ -117,7 +118,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     if ctx.erc_running {
         col = col.push(
-            text(raw("Running…"))
+            text(t!(ctx.i18n, ids::PANELS_ERC_RUNNING))
                 .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens))
                 .boxed(),
@@ -125,7 +126,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     }
     if ctx.erc_results_stale {
         col = col.push(
-            text(raw(STALE_RESULTS_NOTICE))
+            text(t!(ctx.i18n, ids::PANELS_ERC_STALE))
                 .size(TS.caption)
                 .color(theme_ext::warning_color(&ctx.tokens))
                 .boxed(),
@@ -133,18 +134,21 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     }
     if ctx.erc_diagnostics.is_empty() && !ctx.erc_running {
         col = col.push(
-            text(raw(if ctx.erc_results_stale {
-                "No findings left since the last run"
-            } else {
-                "No ERC diagnostics yet"
-            }))
+            text(t!(
+                ctx.i18n,
+                if ctx.erc_results_stale {
+                    ids::PANELS_ERC_NO_FINDINGS_LEFT
+                } else {
+                    ids::PANELS_ERC_NO_DIAGNOSTICS
+                }
+            ))
             .size(TS.caption)
             .color(theme_ext::text_secondary(&ctx.tokens))
             .boxed(),
         );
         if !ctx.erc_results_stale {
             col = col.push(
-                text(raw("Run ERC to populate project-wide diagnostics"))
+                text(t!(ctx.i18n, ids::PANELS_ERC_EMPTY_HINT))
                     .size(TS.caption)
                     .color(theme_ext::text_secondary(&ctx.tokens))
                     .boxed(),
@@ -182,7 +186,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     col = col.push(
         row![
-            text(raw("ERC Diagnostic Results"))
+            text(t!(ctx.i18n, ids::PANELS_ERC_RESULTS_TITLE))
                 .size(TS.body)
                 .color(theme_ext::text_primary(&ctx.tokens)),
             Space::new().width(8).height(Length::Shrink),
@@ -243,8 +247,8 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         // even when the row's text is long enough that the click
         // target's centre lands far from the cursor.
         let quick_fix_label = match v.rule_kind {
-            Some(signex_erc::RuleKind::UnusedPin) => "Add No-Connect",
-            _ => "Show on Canvas",
+            Some(signex_erc::RuleKind::UnusedPin) => ids::PANELS_ERC_ADD_NO_CONNECT,
+            _ => ids::PANELS_ERC_SHOW_ON_CANVAS,
         };
         col = col.push(
             row![
@@ -290,14 +294,14 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 ),
                 Space::new().width(6).height(Length::Shrink),
                 signex_widgets::button(
-                    text(raw(quick_fix_label))
+                    text(t!(ctx.i18n, quick_fix_label))
                         .size(TS.body)
                         .color(theme_ext::text_primary(&ctx.tokens)),
                 )
                 .padding([SP.xs, SP.m])
                 .on_press(PanelMsg::ErcQuickFix(v.global_index))
                 .style(crate::styles::menu_item(&ctx.tokens)),
-                waive_chip(v, &ctx.tokens),
+                waive_chip(v, &ctx.tokens, &ctx.i18n),
                 super::erc_waivers::waive_chip(v, &ctx.tokens),
             ]
             .align_y(iced::Alignment::Center)
@@ -314,10 +318,6 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .boxed()
 }
 
-/// Shown while the document has changed since the newest ERC run.
-const STALE_RESULTS_NOTICE: &str =
-    "Results may be out of date: the sheet changed since the last run. Run ERC again.";
-
 /// Where a finding is, on one line: the sheet's file name and the point. The
 /// full path is the row's tooltip, so a long path never wraps the row.
 fn location_label(sheet_name: &str, x: f64, y: f64) -> String {
@@ -329,6 +329,7 @@ fn location_label(sheet_name: &str, x: f64, y: f64) -> String {
 fn waive_chip<'a>(
     v: &ErcDiagnosticEntry,
     tokens: &'a signex_types::theme::ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     let Some(net) = v.net.as_ref().filter(|n| !n.name.is_empty()) else {
         return Space::new().width(0).height(0).boxed();
@@ -336,7 +337,7 @@ fn waive_chip<'a>(
     row![
         Space::new().width(6).height(Length::Shrink),
         signex_widgets::button(
-            text(raw("Waive net"))
+            text(t!(i18n, ids::PANELS_ERC_WAIVE_NET))
                 .size(TS.body)
                 .color(theme_ext::text_primary(tokens))
         )
@@ -379,7 +380,7 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     .color(muted),
                 Space::new().width(Length::Fill).height(Length::Shrink),
                 signex_widgets::button(
-                    text(raw("Restore"))
+                    text(t!(ctx.i18n, ids::PANELS_ERC_RESTORE))
                         .size(TS.body)
                         .color(theme_ext::text_primary(&ctx.tokens)),
                 )
@@ -408,8 +409,9 @@ const MSG_SOURCE_W: f32 = 160.0;
 const MSG_TIME_W: f32 = 84.0;
 
 /// The Graphite Messages table: CLASS / DOCUMENT / SOURCE / MESSAGE / TIME
-/// header, hairline rows, and a centred empty state. The log entries carry
-/// no document or time, so those cells read as an honest dash.
+/// header, hairline rows, and a centred empty state. Source is a short name
+/// for the log target and Time the local clock time the entry was logged;
+/// log entries carry no document, so that cell reads as an honest dash.
 fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let r = crate::styles::tokens::resolve(tokens);
@@ -516,9 +518,8 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     ),
                     cell(dash(), Length::Fixed(MSG_DOCUMENT_W)),
                     cell(
-                        text(UserText::new(entry.code.as_str()))
+                        text(t!(i18n, MessageSource::of_code(&entry.code).id()))
                             .size(TS.body)
-                            .font(mono)
                             .color(ink3)
                             .wrapping(iced::widget::text::Wrapping::None)
                             .boxed(),
@@ -532,7 +533,15 @@ fn view_messages_graphite<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                             .boxed(),
                         Length::Fill,
                     ),
-                    cell(dash(), Length::Fixed(MSG_TIME_W)),
+                    cell(
+                        text(UserText::new(clock_time(entry.at)))
+                            .size(TS.body)
+                            .font(mono)
+                            .color(ink3)
+                            .wrapping(iced::widget::text::Wrapping::None)
+                            .boxed(),
+                        Length::Fixed(MSG_TIME_W),
+                    ),
                 ]
                 .width(Length::Fill),
             )

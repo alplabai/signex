@@ -117,6 +117,13 @@ fn render() -> String {
          lands and answer with a report (optional operands `allow_merge`,\n\
          `allow_open`, `dry_run`); rules in [CLI.md](CLI.md), \"Wire intent\".\n\
          \n\
+         `place_component library=.. part=.. at=x,y` places a row of an open library\n\
+         and answers with its designator, unit and pin tips; `place_sheet_symbol`,\n\
+         `place_sheet_entry` and `sync_sheet_pins` edit the hierarchy without writing\n\
+         a file. Without operands, in a window, they open the picker, arm the tool or\n\
+         act on the selection as before; rules in [CLI.md](CLI.md), \"Placing parts\n\
+         and hierarchy\".\n\
+         \n\
          Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).\n",
     );
 

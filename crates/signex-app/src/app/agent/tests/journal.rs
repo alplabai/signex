@@ -318,6 +318,38 @@ fn a_headless_agent_command_is_journaled_with_this_process_as_the_pid() {
     assert!(entry.replayable);
 }
 
+/// #2199: a headless edit that waited for its reads (a sheet symbol's link
+/// check) is journaled once, when it ran, as one that did not wait.
+#[test]
+fn a_headless_edit_that_waited_for_its_reads_is_journaled_once() {
+    let mut f = fixture();
+    let id = crate::keymap::AppCommandId::new("apply_edits").unwrap();
+    let revision = f.revision("b.snxsch");
+    let edits = json!([{"id": "place_sheet_symbol", "args": {
+        "start": "100,100", "end": "120,120", "name": "Child", "file": "child.snxsch"}}]);
+    let operands = [
+        format!("document={}", f.doc("b.snxsch")),
+        format!("expect_revision={revision}"),
+        format!("edits={edits}"),
+    ];
+    let refs: Vec<&str> = operands.iter().map(String::as_str).collect();
+    let args = crate::app::command::CommandArgs::parse_operands(&id, &refs).unwrap();
+
+    let (outcome, task) = f.app.run_headless_command_in_test(&id, args);
+    assert!(
+        matches!(outcome, crate::app::command::CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    f.driver.settle(&mut f.app, task).unwrap();
+
+    let entries = f.edits().entries;
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    assert_eq!(entries[0].outcome, "ran");
+    assert_eq!(entries[0].pid, Some(std::process::id()));
+    assert_eq!(entries[0].revision_before, Some(revision));
+    assert_eq!(entries[0].revision_after, Some(f.revision("b.snxsch")));
+}
+
 #[test]
 fn a_headless_command_that_changes_no_document_is_not_journaled() {
     let mut f = fixture();

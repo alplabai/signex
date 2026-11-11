@@ -265,8 +265,8 @@ pub fn view_properties_general<'a>(
                                 canvas_font_bold,
                                 canvas_font_italic,
                                 muted,
-                                input_bg,
-                                input_bdr,
+                                palette,
+                                i18n,
                             ))
                             .padding(iced::Padding {
                                 top: 0.0,
@@ -363,7 +363,7 @@ pub fn view_properties_general<'a>(
                             if matches!(format_mode, PageFormatMode::Template) {
                                 c = c.push(
                                     container(
-                                        text(raw("Template: using A-series defaults"))
+                                        text(t!(i18n, ids::PANELS_PROPERTIES_TEMPLATE_DEFAULTS))
                                             .size(TS.caption)
                                             .color(muted),
                                     )
@@ -566,14 +566,14 @@ pub fn view_properties_parameters<'a>(
 
 /// Properties panel tab button (General / Parameters).
 pub fn props_tab_btn(
-    label: &str,
+    label: signex_i18n::Localized,
     active: bool,
     msg: PanelMsg,
     text_active: Color,
     text_inactive: Color,
 ) -> Element<'static, PanelMsg> {
     let text_c = if active { text_active } else { text_inactive };
-    signex_widgets::button(text(raw(label.to_string())).size(TS.body).color(text_c))
+    signex_widgets::button(text(label).size(TS.body).color(text_c))
         .padding([SP.s, SP.l])
         .on_press(msg)
         .style(move |theme: &Theme, status: iced::widget::button::Status| {

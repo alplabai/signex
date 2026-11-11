@@ -12,6 +12,7 @@
 mod batch;
 mod board_sketch;
 mod command;
+pub mod designators;
 pub mod eco;
 mod engine;
 mod error;

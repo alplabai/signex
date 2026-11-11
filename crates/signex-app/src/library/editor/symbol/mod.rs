@@ -9,6 +9,7 @@ pub mod canvas;
 pub mod context_menu;
 pub mod pins_panel;
 pub mod state;
+pub(crate) mod status;
 pub(crate) mod updates;
 
 /// Fit the symbol editor camera to a viewport; the document layer calls it

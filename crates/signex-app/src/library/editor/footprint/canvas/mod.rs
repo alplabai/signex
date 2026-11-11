@@ -27,6 +27,8 @@ mod input;
 mod preview_model;
 
 #[cfg(test)]
+mod chrome_fit_tests;
+#[cfg(test)]
 mod tests;
 
 // `draw_pads_tool_preview` is the one sub-draw still invoked inline by
@@ -55,7 +57,7 @@ use crate::library::messages::LibraryMessage;
 use crate::library::state::EditorAddress;
 
 use super::snap::SnapResult;
-use super::state::{DEFAULT_PX_PER_MM, FootprintEditorState};
+use super::state::{DEFAULT_PX_PER_MM, FootprintEditorState, ZoomRequest};
 
 /// Drag threshold in screen pixels — below this we treat the press
 /// as a click, above this as a drag.
@@ -76,6 +78,11 @@ pub struct FootprintCanvasState {
     /// Auto-fit on the first draw — toggled false once we've seen
     /// non-zero bounds at least once.
     pub did_initial_fit: bool,
+    /// The document this camera last showed and the last
+    /// [`super::state::ZoomRequest`] it applied for it. The canvas widget
+    /// keeps this state across a tab switch, so a request is only compared
+    /// with one from the same document.
+    applied_zoom: Option<(EditorAddress, ZoomRequest)>,
     panning: bool,
     last_pan_pos: Option<Point>,
     /// v0.26 — `true` once the right-button drag has moved further than
@@ -155,6 +162,7 @@ impl Default for FootprintCanvasState {
             scale: DEFAULT_PX_PER_MM,
             offset: Point::new(0.0, 0.0),
             did_initial_fit: false,
+            applied_zoom: None,
             panning: false,
             last_pan_pos: None,
             pan_moved: false,
@@ -292,6 +300,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             return Some(action);
         }
         if let Some(action) = self.apply_pending_fit(cstate, bounds) {
+            return Some(action);
+        }
+        if let Some(action) = self.apply_pending_zoom(cstate, bounds) {
             return Some(action);
         }
 

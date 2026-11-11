@@ -30,13 +30,15 @@ fn at(p: Point) -> String {
     format!("{},{}", p.x, p.y)
 }
 
-fn describe(item: &ExtraItem) -> String {
+pub(super) fn describe(item: &ExtraItem) -> String {
     let what = match item.kind {
         ExtraKind::Pin => format!("pin {}", item.identity),
         ExtraKind::Label => format!("label `{}`", item.identity),
         ExtraKind::Junction => "a junction".to_string(),
         ExtraKind::Wire => "another wire".to_string(),
         ExtraKind::SheetPin => format!("sheet pin {}", item.identity),
+        ExtraKind::NoConnect => "a no-connect marker".to_string(),
+        ExtraKind::Bus => "a bus".to_string(),
     };
     format!("{what} at {}", at(item.position))
 }

@@ -8,6 +8,7 @@
 use super::*;
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Color, Element, Length, Theme, Widget};
+use signex_i18n::{ids, t};
 use signex_widgets::{button, raw, text};
 
 use crate::app::state::AnnotateOrder;
@@ -22,7 +23,7 @@ mod reprefix_confirm;
 
 use super::graphite as gr;
 use super::graphite_annotate as ga;
-use controls::{bordered_style, check_pip, order_radio, scroll_style};
+use controls::{bordered_style, disabled_check_pip, order_radio, scroll_style};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -52,6 +53,7 @@ impl Signex {
 
     fn view_annotate_dialog_body_inner(&self, draggable: bool) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = self.ui_state.i18n.as_ref();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
@@ -71,7 +73,7 @@ impl Signex {
             .tabs
             .get(self.document_state.active_tab)
             .map(|t| t.title.clone())
-            .unwrap_or_else(|| "Current Sheet".to_string());
+            .unwrap_or_else(|| t!(i18n, ids::DIALOG_ANNOTATE_CURRENT_SHEET).into_string());
 
         // ── Header (draggable when in-window; OS-window-drag when
         // detached) ──
@@ -92,21 +94,21 @@ impl Signex {
         };
 
         let order_row = column![
-            text(raw("Order of Processing"))
+            text(t!(i18n, ids::DIALOG_ANNOTATE_ORDER_HEADING))
                 .size(TS.caption)
                 .color(text_muted),
             row![
                 column![
                     row![
                         order_radio(
-                            "Up Then Across",
+                            t!(i18n, ids::DIALOG_ANNOTATE_ORDER_UP_THEN_ACROSS),
                             AnnotateOrder::UpThenAcross,
                             self.ui_state.annotate_order,
                             tokens,
                         ),
                         Space::new().width(4),
                         order_radio(
-                            "Across Then Down",
+                            t!(i18n, ids::DIALOG_ANNOTATE_ORDER_ACROSS_THEN_DOWN),
                             AnnotateOrder::AcrossThenDown,
                             self.ui_state.annotate_order,
                             tokens,
@@ -116,14 +118,14 @@ impl Signex {
                     Space::new().height(4),
                     row![
                         order_radio(
-                            "Down Then Across",
+                            t!(i18n, ids::DIALOG_ANNOTATE_ORDER_DOWN_THEN_ACROSS),
                             AnnotateOrder::DownThenAcross,
                             self.ui_state.annotate_order,
                             tokens,
                         ),
                         Space::new().width(4),
                         order_radio(
-                            "Across Then Up",
+                            t!(i18n, ids::DIALOG_ANNOTATE_ORDER_ACROSS_THEN_UP),
                             AnnotateOrder::AcrossThenUp,
                             self.ui_state.annotate_order,
                             tokens,
@@ -142,24 +144,32 @@ impl Signex {
         .spacing(SP.s);
 
         let process_location = column![
-            text(raw("Process Location of"))
+            text(t!(i18n, ids::DIALOG_ANNOTATE_PROCESS_LOCATION))
                 .size(TS.caption)
                 .color(text_muted),
-            container(text(raw("Designator")).size(TS.body).color(text_c),)
-                .padding([5.0, 10.0])
-                .width(Length::Fill)
-                .style(bordered_style(tokens)),
+            container(
+                text(t!(i18n, ids::DIALOG_ANNOTATE_PROCESS_LOCATION_DESIGNATOR))
+                    .size(TS.body)
+                    .color(text_c),
+            )
+            .padding([5.0, 10.0])
+            .width(Length::Fill)
+            .style(bordered_style(tokens)),
         ]
         .spacing(SP.s);
 
         let replace_sub = column![
-            text(raw("Replace Sub-Parts"))
+            text(t!(i18n, ids::DIALOG_ANNOTATE_REPLACE_SUB_PARTS))
                 .size(TS.caption)
                 .color(text_muted),
-            container(text(raw("Off")).size(TS.body).color(text_muted))
-                .padding([5.0, 10.0])
-                .width(Length::Fill)
-                .style(bordered_style(tokens)),
+            container(
+                text(t!(i18n, ids::DIALOG_ANNOTATE_REPLACE_SUB_PARTS_OFF))
+                    .size(TS.body)
+                    .color(text_muted)
+            )
+            .padding([5.0, 10.0])
+            .width(Length::Fill)
+            .style(bordered_style(tokens)),
         ]
         .spacing(SP.s);
 
@@ -186,11 +196,11 @@ impl Signex {
         };
         let mut param_rows: iced::widget::Column<Element<'_, Message>> = column![
             row![
-                text(raw("Component Parameter"))
+                text(t!(i18n, ids::DIALOG_ANNOTATE_COL_COMPONENT_PARAMETER))
                     .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(5)),
-                text(raw("Strictly"))
+                text(t!(i18n, ids::DIALOG_ANNOTATE_COL_STRICTLY))
                     .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(1)),
@@ -202,15 +212,15 @@ impl Signex {
             param_rows = param_rows.push(
                 (row![
                     row![
-                        check_pip(false, tokens),
+                        disabled_check_pip(false, tokens),
                         Space::new().width(6),
                         text(signex_i18n::UserText::new(name.clone()))
                             .size(TS.body)
-                            .color(text_c),
+                            .color(text_muted),
                     ]
                     .align_y(iced::Alignment::Center)
                     .width(Length::FillPortion(5)),
-                    container(check_pip(true, tokens))
+                    container(disabled_check_pip(true, tokens))
                         .align_x(iced::alignment::Horizontal::Right)
                         .width(Length::FillPortion(1)),
                 ]
@@ -222,7 +232,7 @@ impl Signex {
         if param_names.is_empty() {
             param_rows = param_rows.push(
                 (container(
-                    text(raw("No custom parameters on any symbol yet."))
+                    text(t!(i18n, ids::DIALOG_ANNOTATE_NO_CUSTOM_PARAMETERS))
                         .size(TS.body)
                         .color(text_muted),
                 )
@@ -232,28 +242,36 @@ impl Signex {
         }
 
         let matching = column![
-            text(raw("Matching Options")).size(TS.label).color(text_c),
+            text(t!(i18n, ids::DIALOG_ANNOTATE_MATCHING_HEADING))
+                .size(TS.label)
+                .color(text_c),
             Space::new().height(4),
             row![
-                text(raw("Complete Existing Packages"))
+                text(t!(i18n, ids::DIALOG_ANNOTATE_COMPLETE_PACKAGES))
                     .size(TS.caption)
                     .color(text_muted)
                     .width(Length::FillPortion(2)),
-                container(text(raw("None")).size(TS.body).color(text_muted))
-                    .padding([SP.s, SP.m])
-                    .width(Length::FillPortion(3))
-                    .style(bordered_style(tokens)),
+                container(
+                    text(t!(i18n, ids::DIALOG_ANNOTATE_COMPLETE_PACKAGES_NONE))
+                        .size(TS.body)
+                        .color(text_muted)
+                )
+                .padding([SP.s, SP.m])
+                .width(Length::FillPortion(3))
+                .style(bordered_style(tokens)),
             ]
             .align_y(iced::Alignment::Center)
             .spacing(6),
             Space::new().height(6),
-            container(scrollable(param_rows)
-                .height(98)
-                .style(scroll_style(tokens)))
-                .padding(SP.xs)
-                .style(bordered_style(tokens)),
+            container(
+                scrollable(param_rows)
+                    .height(98)
+                    .style(scroll_style(tokens))
+            )
+            .padding(SP.xs)
+            .style(bordered_style(tokens)),
             Space::new().height(4),
-            text(raw("Parameter matching is visual grouping only — the annotation engine ignores these checkboxes for now."))
+            text(t!(i18n, ids::DIALOG_ANNOTATE_MATCHING_UNAVAILABLE))
                 .size(TS.caption)
                 .color(text_muted),
         ]
@@ -277,15 +295,22 @@ impl Signex {
                     on: Some(&tab.title) == active_title.as_ref(),
                 })
                 .collect();
-            ga::sheet_table(tokens, rows, "No schematic tab open.")
+            ga::sheet_table(
+                tokens,
+                i18n,
+                rows,
+                t!(i18n, ids::DIALOG_ANNOTATE_SHEETS_EMPTY),
+            )
         };
 
         let sheets_table = column![
-            text(raw("Schematic Sheets To Annotate")).size(TS.label).color(text_c),
+            text(t!(i18n, ids::DIALOG_ANNOTATE_SHEETS_HEADING))
+                .size(TS.label)
+                .color(text_c),
             Space::new().height(4),
             sheets_view,
             Space::new().height(4),
-            text(raw("Scope / Start / Suffix columns are visual only — multi-sheet wiring lands with Advanced Schematic."))
+            text(t!(i18n, ids::DIALOG_ANNOTATE_SHEET_OPTIONS_UNAVAILABLE))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::Fill),
@@ -307,25 +332,25 @@ impl Signex {
         .width(Length::Fill);
 
         // ── Right column: Proposed Change List ──
-        let right_title = text(raw("Proposed Change List"))
+        let right_title = text(t!(i18n, ids::DIALOG_ANNOTATE_CHANGES_HEADING))
             .size(TS.label)
             .color(text_c);
 
         // Column headers
         let list_headers = row![
-            text(raw("Lock"))
+            text(t!(i18n, ids::DIALOG_ANNOTATE_COL_LOCK))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::Fixed(42.0)),
-            text(raw("Current"))
+            text(t!(i18n, ids::DIALOG_ANNOTATE_COL_CURRENT))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(2)),
-            text(raw("Proposed"))
+            text(t!(i18n, ids::DIALOG_ANNOTATE_COL_PROPOSED))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(2)),
-            text(raw("Location"))
+            text(t!(i18n, ids::DIALOG_ANNOTATE_COL_LOCATION))
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(3)),
@@ -338,13 +363,16 @@ impl Signex {
         if proposed.is_empty() {
             rows_col = rows_col.push(
                 (container(
-                    text(raw(if self.ui_state.annotate_preview.loading {
-                        "Loading project sheets…"
-                    } else if self.ui_state.annotate_preview.load_failed {
-                        "Could not load the project's sheets - see the Messages panel."
-                    } else {
-                        "No symbols need annotation — every reference has a number."
-                    }))
+                    text(t!(
+                        i18n,
+                        if self.ui_state.annotate_preview.loading {
+                            ids::DIALOG_ANNOTATE_LOADING
+                        } else if self.ui_state.annotate_preview.load_failed {
+                            ids::DIALOG_ANNOTATE_LOAD_FAILED
+                        } else {
+                            ids::DIALOG_ANNOTATE_NOTHING_TO_NUMBER
+                        }
+                    ))
                     .size(TS.body)
                     .color(text_muted),
                 )
@@ -427,21 +455,28 @@ impl Signex {
         // Count only rows where proposed != current (actual changes).
         let changes: usize = proposed.iter().filter(|e| e.current != e.proposed).count();
         let summary_text = if changes == 0 {
-            format!(
-                "Annotation has nothing to do — all {total_symbols} symbols on '{current_sheet_name}' already carry a designator. Use Reset All or Reset & Renumber below to renumber from scratch."
+            t!(
+                i18n,
+                ids::DIALOG_ANNOTATE_SUMMARY_NOTHING,
+                "total" => total_symbols,
+                "sheet" => current_sheet_name
             )
         } else {
-            format!(
-                "Annotation will assign new designators to {changes} of {total_symbols} symbols on '{current_sheet_name}'. The list updates live. Click Accept Changes to apply, or Reset All to clear every number first.",
+            t!(
+                i18n,
+                ids::DIALOG_ANNOTATE_SUMMARY_CHANGES,
+                "changes" => changes,
+                "total" => total_symbols,
+                "sheet" => current_sheet_name
             )
         };
-        let summary = container(text(raw(summary_text)).size(TS.caption).color(text_muted))
-            .padding([SP.s, SP.s]);
+        let summary =
+            container(text(summary_text).size(TS.caption).color(text_muted)).padding([SP.s, SP.s]);
         let standard = self
             .document_state
             .active_document_project()
             .and_then(|p| p.data.designator_standard());
-        let reprefix_note = controls::reprefix_note(standard);
+        let reprefix_note = controls::reprefix_note(i18n, standard);
 
         let right_col = column![
             right_title,
@@ -449,12 +484,11 @@ impl Signex {
             list_headers,
             right_list,
             Space::new().height(6),
-            text(raw("Annotation Summary"))
+            text(t!(i18n, ids::DIALOG_ANNOTATE_SUMMARY_HEADING))
                 .size(TS.caption)
                 .color(text_c),
             summary,
-            container(text(raw(reprefix_note)).size(TS.caption).color(text_muted))
-                .padding([SP.s, SP.s]),
+            container(text(reprefix_note).size(TS.caption).color(text_muted)).padding([SP.s, SP.s]),
         ]
         .spacing(0)
         .width(Length::Fill)
@@ -468,10 +502,14 @@ impl Signex {
         let secondary = |label: &str, message: Option<Message>| {
             dialog_button(label, DialogButtonKind::Secondary, message, tokens)
         };
-        let status: Element<'_, Message> = text(raw(if busy { "Running…" } else { "" }))
-            .size(TS.caption)
-            .color(text_muted)
-            .boxed();
+        let status: Element<'_, Message> = if busy {
+            text(t!(i18n, ids::DIALOG_ANNOTATE_RUNNING))
+                .size(TS.caption)
+                .color(text_muted)
+                .boxed()
+        } else {
+            Space::new().boxed()
+        };
         let footer = dialog_footer_split(
             vec![
                 secondary(

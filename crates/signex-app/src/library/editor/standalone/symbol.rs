@@ -3,9 +3,8 @@
 
 use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Theme, Widget};
-use signex_types::coord::Unit;
 use signex_widgets::theme_ext;
-use signex_widgets::{button, raw, text};
+use signex_widgets::{button, text};
 
 use crate::app::SymbolDocument;
 use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas};
@@ -45,166 +44,32 @@ pub fn view_symbol<'a>(
     // which is also where the theme id for its icons is resolved.
     let canvas_widget = view_symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
 
-    // No header strip. The canvas carries the body / part card at its
+    // No header strip and no footer: the global status bar carries X / Y,
+    // zoom, grid and the editor's part / pins / hint segment
+    // (`symbol::status`). The canvas carries the body / part card at its
     // bottom-left and the zoom pill at its bottom-right.
-    let body: Element<'a, LibraryMessage> = {
-        let path = editor.path.clone();
-        let card = container(graphite_toolbar(editor, &path, tokens, &panel_ctx.i18n))
-            .padding(SP.l)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Left)
-            .align_y(iced::alignment::Vertical::Bottom);
-        let pill = container(graphite_zoom_pill(editor, &path, tokens))
-            .padding(SP.l)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Right)
-            .align_y(iced::alignment::Vertical::Bottom);
-        iced::widget::stack![canvas_widget, card.boxed(), pill.boxed()]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .boxed()
-    };
-
-    let status_line = view_symbol_status(editor, panel_ctx, display, path);
-
-    let outer = column![body, Space::new().height(SP.s), status_line]
-        .spacing(0)
+    let card = container(graphite_toolbar(editor, path, tokens, &panel_ctx.i18n))
+        .padding(SP.l)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(iced::alignment::Horizontal::Left)
+        .align_y(iced::alignment::Vertical::Bottom);
+    let pill = container(graphite_zoom_pill(editor, path, tokens))
+        .padding(SP.l)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(iced::alignment::Horizontal::Right)
+        .align_y(iced::alignment::Vertical::Bottom);
+    let body = iced::widget::stack![canvas_widget, card.boxed(), pill.boxed()]
         .width(Length::Fill)
         .height(Length::Fill);
 
-    container(outer)
+    container(body)
         .padding(0)
         .width(Length::Fill)
         .height(Length::Fill)
         .style(crate::styles::modal_card(tokens))
         .boxed()
-}
-
-/// Bottom status footer for the .snxsym tab — Altium SchLib parity.
-/// X / Y in the active unit (mm / mil), zoom %, grid spacing,
-/// pin count + a hint string. Mirrors the global schematic
-/// status bar so a user editing a symbol library has the same
-/// metadata at the same place on screen.
-fn view_symbol_status<'a>(
-    editor: &'a SymbolDocument,
-    panel_ctx: &'a PanelContext,
-    display: LibraryDisplaySettings,
-    path: &'a std::path::Path,
-) -> Element<'a, LibraryMessage> {
-    let tokens = &panel_ctx.tokens;
-    let muted = theme_ext::text_secondary(tokens);
-    let text_c = theme_ext::text_primary(tokens);
-
-    let unit = display.unit;
-    let coord_text = match editor.cursor_mm {
-        Some((x, y)) => format_coord(x, y, unit),
-        None => "X: -.--   Y: -.--".to_string(),
-    };
-    let zoom_text = format!("{:.0}%", editor.camera.zoom_percent());
-    let pin_count = format!("{} pins", editor.primitive().pins.len());
-    let tool_text = format!("Tool: {}", editor.tool.label());
-
-    let sep = || text(raw("|")).size(TS.caption).color(muted);
-
-    // Grid toggle button.
-    let grid_vis_label = if display.grid_visible {
-        "Grid: ON"
-    } else {
-        "Grid: OFF"
-    };
-    let grid_toggle = button(text(raw(grid_vis_label)).size(TS.body).color(text_c))
-        .padding([SP.xs, SP.m])
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path.to_path_buf(),
-            msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ToggleGrid),
-        })
-        .style(symbol_tool_button_style(false, tokens));
-
-    // Grid size cycle button.
-    let grid_size_label = format!("{:.3} mm", display.grid_size_mm);
-    let grid_cycle = button(text(raw(grid_size_label)).size(TS.body).color(muted))
-        .padding([SP.xs, SP.m])
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path.to_path_buf(),
-            msg: PrimitiveEdit::Symbol(SymbolEditorMsg::CycleGridSize),
-        })
-        .style(symbol_tool_button_style(false, tokens));
-
-    // A copy of a stock symbol can be made again from the editor (#813).
-    let copy_again: Element<'a, LibraryMessage> = if editor.file.copied_from.is_some() {
-        crate::library::modal_chrome::secondary_btn(
-            "Copy Again",
-            LibraryMessage::StockCopy(
-                crate::library::stock_copy::StockCopyMsg::CopyAgainRequested(path.to_path_buf()),
-            ),
-            tokens,
-        )
-    } else {
-        Space::new().boxed()
-    };
-
-    container(
-        row![
-            text(raw(coord_text)).size(TS.body).color(text_c),
-            sep(),
-            text(raw(zoom_text)).size(TS.body).color(muted),
-            sep(),
-            text(raw(pin_count)).size(TS.body).color(muted),
-            sep(),
-            text(raw(tool_text)).size(TS.body).color(muted),
-            sep(),
-            grid_toggle,
-            grid_cycle,
-            copy_again,
-            Space::new().width(Length::Fill),
-            match &editor.status_message {
-                Some(msg) => text(raw(msg.clone()))
-                    .size(TS.caption)
-                    .color(theme_ext::error_color(tokens)),
-                None => text(raw(if editor.selected.is_some() {
-                    "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
-                        .to_string()
-                } else {
-                    // Undo/redo here read the platform modifier (Cmd on macOS).
-                    let shown = |spelling: &str| {
-                        crate::keymap::ShortcutTrigger::parse(spelling)
-                            .map_or_else(|_| spelling.to_string(), |t| t.display_text())
-                    };
-                    let (undo, redo) = (shown("Mod+Z"), shown("Mod+Y"));
-                    format!(
-                        "{undo} undo · {redo} redo · scroll zooms · right-drag pans · Home fits"
-                    )
-                }))
-                .size(TS.caption)
-                .color(muted),
-            },
-        ]
-        .spacing(SP.m)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([SP.s, SP.l])
-    .style(crate::styles::status_bar(tokens))
-    .width(Length::Fill)
-    .boxed()
-}
-
-fn format_coord(x_mm: f64, y_mm: f64, unit: Unit) -> String {
-    match unit {
-        Unit::Mm => format!("X: {x_mm:>+8.3} mm   Y: {y_mm:>+8.3} mm"),
-        Unit::Mil => format!(
-            "X: {:>+8.1} mil  Y: {:>+8.1} mil",
-            x_mm / 0.0254,
-            y_mm / 0.0254
-        ),
-        Unit::Inch => format!("X: {:>+8.4} in   Y: {:>+8.4} in", x_mm / 25.4, y_mm / 25.4),
-        Unit::Micrometer => format!(
-            "X: {:>+8.0} um   Y: {:>+8.0} um",
-            x_mm * 1000.0,
-            y_mm * 1000.0
-        ),
-    }
 }
 
 /// Graphite body / part card over the canvas: a segmented Normal / Alternate
@@ -348,11 +213,26 @@ fn graphite_toolbar<'a>(
             t!(i18n, ids::EDITORS_SYMBOL_REMOVE_PART),
             sym(SymbolEditorMsg::RemovePart)
         ),
-        Space::new().width(SP.m),
-        save,
     ]
     .spacing(SP.s)
     .align_y(iced::Alignment::Center);
+    // A copy of a stock symbol can be made again from the editor (#813).
+    let part_row = match &editor.file.copied_from {
+        Some(_) => part_row.push(
+            ghost(
+                t!(i18n, ids::EDITORS_SYMBOL_COPY_AGAIN),
+                LibraryMessage::StockCopy(
+                    crate::library::stock_copy::StockCopyMsg::CopyAgainRequested(
+                        path.to_path_buf(),
+                    ),
+                ),
+            )
+            .boxed(),
+        ),
+        None => part_row,
+    }
+    .push(Space::new().width(SP.m).boxed())
+    .push(save.boxed());
     container(column![body_row, part_row].spacing(SP.s))
         .padding(SP.m)
         .style(move |_: &Theme| iced::widget::container::Style {
@@ -398,38 +278,6 @@ fn graphite_zoom_pill<'a>(
 
 /// Scale factor of one zoom-pill click.
 const ZOOM_BUTTON_STEP: f32 = 1.25;
-
-fn symbol_tool_button_style(
-    active: bool,
-    tokens: &signex_types::theme::ThemeTokens,
-) -> impl Fn(&Theme, iced::widget::button::Status) -> iced::widget::button::Style + use<> {
-    use crate::styles::tokens::{Overlay, overlay};
-    let resting = overlay(
-        tokens,
-        if active {
-            Overlay::Pressed
-        } else {
-            Overlay::Faint
-        },
-    );
-    let hover = overlay(tokens, Overlay::Hover);
-    let pressed = overlay(tokens, Overlay::Pressed);
-    let border = theme_ext::border_color(tokens);
-    move |_: &Theme, status| iced::widget::button::Style {
-        background: Some(iced::Background::Color(match status {
-            iced::widget::button::Status::Hovered => hover,
-            iced::widget::button::Status::Pressed => pressed,
-            _ => resting,
-        })),
-        border: Border {
-            width: crate::styles::HAIRLINE,
-            radius: crate::styles::RADIUS.into(),
-            color: border,
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    }
-}
 
 /// The canvas program the view draws: the editor's document and the window's
 /// display scale (#1887).

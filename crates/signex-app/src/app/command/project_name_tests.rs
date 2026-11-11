@@ -87,7 +87,8 @@ fn write(path: &Path, sheet: SchematicSheet) {
     std::fs::write(path, text).expect("write sheet");
 }
 
-/// An app with the project open and its parent sheet the edit target.
+/// An app with the project open and its parent sheet the edit target; the
+/// child sheet stays closed.
 pub(super) fn project_app(dir: &tempfile::TempDir) -> Signex {
     let _ = crate::diagnostics::init_logging();
     write(&dir.path().join("top.snxsch"), parent());
@@ -102,7 +103,7 @@ pub(super) fn project_app(dir: &tempfile::TempDir) -> Signex {
 fn run(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
     let id = AppCommandId::new(id).expect("a catalog id");
     let args = CommandArgs::parse_operands(&id, operands).expect("operands parse");
-    app.run_operands(&id, &args).0
+    app.run_operands_settled(&id, &args).0
 }
 
 fn refusal(outcome: CommandOutcome) -> String {
@@ -988,6 +989,12 @@ fn a_dry_run_in_a_project_writes_nothing_to_messages() {
     write(&dir.path().join("top.snxsch"), top);
     write(&dir.path().join("child.snxsch"), child());
     let mut app = open_project(&dir);
+    // The edit runs in `update` once its read lands (#2199); the app's own
+    // hierarchy walk, which says so in Messages, runs to its end first.
+    let walk = app.update(crate::app::Message::noop());
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, walk)
+        .expect("the walk ends");
     let mark = crate::diagnostics::newest_entry_id();
     let outcome = run(
         &mut app,
@@ -1010,4 +1017,32 @@ fn a_dry_run_in_a_project_writes_nothing_to_messages() {
         .filter(|m| m.contains("zz_unique_2199_away") || m.contains("child-sheet reference"))
         .collect();
     assert!(said.is_empty(), "{said:?}");
+}
+
+/// A headless `place_wire` whose net reaches the closed child waits for the
+/// project's read, and is still journaled once, as it was before it waited.
+#[test]
+fn a_headless_wire_that_waited_for_the_project_is_journaled_once() {
+    use crate::app::agent::journal::{EditEntry, Journal, Report, read_journal};
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    app.agent.journals_on = true;
+    let id = AppCommandId::new("place_wire").unwrap();
+    let args =
+        CommandArgs::parse_operands(&id, &["start=5.08,0", "end=10.16,0", "allow_merge=true"])
+            .unwrap();
+    let (outcome, task) = app.run_headless_command_in_test(&id, args);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .unwrap();
+    let path = dir.path().join(".signex").join(Journal::Edits.file_name());
+    let report: Report<EditEntry> = read_journal(&path).expect("the edit journal");
+    assert_eq!(report.entries.len(), 1, "{:?}", report.entries);
+    assert_eq!(report.entries[0].command, "place_wire");
+    assert_eq!(report.entries[0].outcome, "ran");
+    assert_eq!(report.entries[0].pid, Some(std::process::id()));
 }

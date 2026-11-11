@@ -1,5 +1,6 @@
-//! Graphite canvas chips of the footprint editor: the sketch's constraint
-//! state and the footprint name with its pad count. Both read the document.
+//! Graphite canvas overlays of the footprint editor: the chips with the
+//! sketch's constraint state and the footprint name with its pad count, and
+//! the zoom pill. All read the document.
 
 use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Widget};
@@ -10,7 +11,7 @@ use signex_widgets::theme_ext;
 use signex_widgets::{Label, text};
 
 use crate::app::FootprintDocument;
-use crate::library::messages::LibraryMessage;
+use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::{PillTone, Radii, pill_colors};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -111,5 +112,39 @@ pub fn overlay<'a>(
         .padding(SP.xl)
         .width(Length::Fill)
         .height(Length::Fill)
+        .boxed()
+}
+
+/// Scale factor of one zoom-pill click, the symbol editor's step.
+const ZOOM_PILL_STEP: f32 = 1.25;
+
+/// The Graphite zoom pill at the canvas's bottom right: `-` / `+` zoom about
+/// the canvas centre, Fit arms the one-shot fit. The readout is the model's
+/// last known camera scale.
+pub fn zoom_pill_overlay<'a>(
+    editor: &FootprintDocument,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let fp = |msg: FootprintEditorMsg| LibraryMessage::PrimitiveEditorEvent {
+        path: editor.path.clone(),
+        msg: PrimitiveEdit::Footprint(msg),
+    };
+    let pill = crate::canvas::zoom_pill::view(
+        tokens,
+        editor.state.zoom_percent(),
+        fp(FootprintEditorMsg::ZoomPillStepped {
+            factor: 1.0 / ZOOM_PILL_STEP,
+        }),
+        fp(FootprintEditorMsg::ZoomPillStepped {
+            factor: ZOOM_PILL_STEP,
+        }),
+        fp(FootprintEditorMsg::ZoomPillFitClicked),
+    );
+    container(pill)
+        .padding(SP.l)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(iced::alignment::Horizontal::Right)
+        .align_y(iced::alignment::Vertical::Bottom)
         .boxed()
 }
