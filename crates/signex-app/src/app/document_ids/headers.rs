@@ -118,16 +118,18 @@ impl Signex {
 }
 
 impl Signex {
-    /// Read, now, the heads that are wanted (never read, holding no id, or
-    /// forgotten after a write or a close). For the headless entry, whose
-    /// answer must name what the files hold at the time it is given; a GUI
-    /// reads them on a worker ([`Self::read_missing_document_headers`]).
+    /// [`Self::read_wanted_document_headers_said`], naming in Messages each
+    /// file it does not read.
+    #[cfg(test)]
     pub(crate) fn read_wanted_document_headers_now(&mut self) {
         self.read_wanted_document_headers_said(true);
     }
 
-    /// [`Self::read_wanted_document_headers_now`]; a file not read is named
-    /// in Messages only when `said`.
+    /// Read, now, the heads that are wanted (never read, holding no id, or
+    /// forgotten after a write or a close). For the headless entry, whose
+    /// answer must name what the files hold at the time it is given; a GUI
+    /// reads them on a worker ([`Self::read_missing_document_headers`]). A
+    /// file it does not read is named in Messages only when `said`.
     pub(crate) fn read_wanted_document_headers_said(&mut self, said: bool) {
         let docs = &self.document_state;
         let wanted: Vec<PathBuf> = docs
