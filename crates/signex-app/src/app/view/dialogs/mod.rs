@@ -9,6 +9,7 @@
 use super::*;
 
 mod annotate;
+mod assign_footprints;
 mod autosave_recovery;
 mod board_reannotate;
 mod bom;

@@ -61,6 +61,10 @@ impl Signex {
                 let task = self.handle_switch_footprint_choice(*uuid, binding);
                 return Task::batch([task, self.finish_update()]);
             }
+            if let crate::panels::PanelMsg::NetInspector(inspector_msg) = panel_msg {
+                let task = self.handle_net_inspector_message(inspector_msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
             if let Some(task) = self.handle_dock_panel_control_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);
             }

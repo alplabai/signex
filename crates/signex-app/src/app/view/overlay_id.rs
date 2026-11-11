@@ -91,6 +91,8 @@ pub(crate) enum OverlayId {
     SelectionFilterCustom,
     /// File > New Project (#2232): the setup dialog.
     NewProject,
+    /// Tools ▸ Assign Footprints (#2248).
+    AssignFootprints,
     /// Tools ▸ Annotation ▸ Number Schematic Sheets (#2247).
     SheetNumbering,
     /// Tools ▸ Re-Annotate Board (#1312).
@@ -179,6 +181,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 62] = [
     OverlayId::EnableVersionControl,
     OverlayId::GridProperties,
     OverlayId::SelectionFilterCustom,
+    OverlayId::AssignFootprints,
     OverlayId::SheetNumbering,
     OverlayId::BoardReannotate,
     OverlayId::AnnotateDialog,
@@ -298,6 +301,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::GridProperties
         | OverlayId::SelectionFilterCustom
         | OverlayId::NewProject
+        | OverlayId::AssignFootprints
         | OverlayId::SheetNumbering
         | OverlayId::BoardReannotate
         | OverlayId::AnnotateDialog
@@ -493,6 +497,7 @@ impl Signex {
                 layers.extend(self.selection_filter_custom_overlay())
             }
             OverlayId::NewProject => layers.extend(self.new_project_overlay()),
+            OverlayId::AssignFootprints => layers.extend(self.assign_footprints_overlay()),
             OverlayId::SheetNumbering => layers.extend(self.sheet_numbering_overlay()),
             OverlayId::BoardReannotate => layers.extend(self.board_reannotate_overlay()),
             OverlayId::AnnotateDialog => layers.extend(self.annotate_dialog_overlay()),

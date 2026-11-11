@@ -50,6 +50,11 @@
     "category": "edit"
   },
   {
+    "id": "assign_footprints",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "assign_net_class",
     "group": "Schematic",
     "category": "design"
@@ -598,6 +603,11 @@
     "id": "open_net_color_palette",
     "group": "Schematic",
     "category": "view"
+  },
+  {
+    "id": "open_net_inspector",
+    "group": "General",
+    "category": "panels"
   },
   {
     "id": "open_parameter_manager",

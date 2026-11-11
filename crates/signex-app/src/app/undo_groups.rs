@@ -53,6 +53,8 @@ pub enum UndoGroupKind {
     Annotate,
     Reprefix,
     Replace,
+    /// Tools ▸ Assign Footprints (#2248).
+    Footprints,
     /// Tools ▸ Annotation ▸ Number Schematic Sheets (#2247).
     SheetNumbers,
     /// An agent's `apply_edits` call that edited several sheets (#2178).
@@ -65,6 +67,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Annotate => "annotate",
             UndoGroupKind::Reprefix => "re-prefix",
             UndoGroupKind::Replace => "replace",
+            UndoGroupKind::Footprints => "footprint assignment",
             UndoGroupKind::SheetNumbers => "sheet numbering",
             UndoGroupKind::AgentEdit => "agent edit",
         }
@@ -84,6 +87,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Annotate => "Annotate",
             UndoGroupKind::Reprefix => "Re-prefix",
             UndoGroupKind::Replace => "Replace",
+            UndoGroupKind::Footprints => "Assign Footprints",
             UndoGroupKind::SheetNumbers => "Sheet numbering",
             UndoGroupKind::AgentEdit => "Agent edit",
         }
@@ -93,6 +97,7 @@ impl UndoGroupSheets {
     fn kept(&self) -> String {
         match self.kind {
             UndoGroupKind::Replace => "replaced text".to_string(),
+            UndoGroupKind::Footprints => "assigned footprints".to_string(),
             UndoGroupKind::SheetNumbers => "new sheet numbers".to_string(),
             UndoGroupKind::AgentEdit => "agent edits".to_string(),
             _ => format!("{} designators", self.participle()),
@@ -104,6 +109,7 @@ impl UndoGroupSheets {
     fn holds(&self) -> &'static str {
         match self.kind {
             UndoGroupKind::Replace => "text",
+            UndoGroupKind::Footprints => "footprints",
             UndoGroupKind::SheetNumbers => "sheet numbers",
             UndoGroupKind::AgentEdit => "contents",
             _ => "designators",
@@ -116,6 +122,7 @@ impl UndoGroupSheets {
             UndoGroupKind::Annotate => "annotated",
             UndoGroupKind::Reprefix => "re-prefixed",
             UndoGroupKind::Replace => "replaced",
+            UndoGroupKind::Footprints => "assigned",
             UndoGroupKind::SheetNumbers => "renumbered",
             UndoGroupKind::AgentEdit => "edited",
         }

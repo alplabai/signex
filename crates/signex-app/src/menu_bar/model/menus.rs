@@ -389,8 +389,9 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         submenu("Annotation", annotation(ctx)),
         SEP,
-        // Planned: bulk footprint assignment needs its own design (#2248).
-        stub("Assign Footprints"),
+        // The project's parts and their row's footprints:
+        // docs/MENU_BAR.md#tools-assign-footprints
+        cmd_item_gated(ctx, cmd("assign_footprints", "Assign Footprints", "")),
         // Opens or focuses a Library Browser tab: docs/MENU_BAR.md#tools-library-editor
         cmd_item_gated(ctx, cmd("open_library_browser", "Library Editor", "")),
         SEP,
@@ -399,8 +400,8 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         // Positional Re-Annotate of the PCB in view (#1312):
         // docs/MENU_BAR.md#tools-reannotate-board
         cmd_item_gated(ctx, cmd("reannotate_board", "Re-Annotate Board...", "")),
-        // Planned: no schematic net list panel exists yet (#1269).
-        stub("Net Inspector"),
+        // Opens the Net Inspector panel: docs/MENU_BAR.md#tools-net-inspector
+        cmd_item_gated(ctx, cmd("open_net_inspector", "Net Inspector", "")),
         SEP,
         // #1312: Cross Probe shows the selection on the other side; Cross
         // Select Mode (checked while on) mirrors every selection there.

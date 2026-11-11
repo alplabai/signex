@@ -144,6 +144,7 @@ altium	hint	-	Ctrl+O	open_document
 altium	hint	-	-	open_grid_picker
 altium	hint	-	-	open_grid_properties
 altium	hint	-	-	open_library_browser
+altium	hint	-	-	open_net_inspector
 altium	hint	-	Ctrl+,	open_preferences
 altium	hint	-	T P	open_schematic_preferences
 altium	hint	-	Ctrl+V	paste
@@ -199,6 +200,7 @@ altium	hint	-	Ctrl+PGDN	zoom_to_fit
 altium	hint	-	-	zoom_to_selection_area
 altium	hint	-	T A	annotate_schematic
 altium	hint	-	Alt+A	annotate_schematic_quietly
+altium	hint	-	-	assign_footprints
 altium	hint	-	-	clear_net_highlighting
 altium	hint	-	-	draw_graphic_line
 altium	hint	-	-	draw_hierarchical_sheet
@@ -471,6 +473,7 @@ classic	hint	-	Ctrl+O	open_document
 classic	hint	-	-	open_grid_picker
 classic	hint	-	-	open_grid_properties
 classic	hint	-	-	open_library_browser
+classic	hint	-	-	open_net_inspector
 classic	hint	-	Ctrl+,	open_preferences
 classic	hint	-	-	open_schematic_preferences
 classic	hint	-	Ctrl+V	paste
@@ -526,6 +529,7 @@ classic	hint	-	HOME	zoom_to_fit
 classic	hint	-	Ctrl+F5	zoom_to_selection_area
 classic	hint	-	-	annotate_schematic
 classic	hint	-	Alt+A	annotate_schematic_quietly
+classic	hint	-	-	assign_footprints
 classic	hint	-	~	clear_net_highlighting
 classic	hint	-	I	draw_graphic_line
 classic	hint	-	S	draw_hierarchical_sheet

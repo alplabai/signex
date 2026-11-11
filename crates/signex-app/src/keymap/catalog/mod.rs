@@ -353,6 +353,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "open_preferences",
     "open_schematic_preferences",
     "open_library_browser",
+    "open_net_inspector",
     "show_current_command_hotkeys",
     "show_current_command_shortcuts",
     "toggle_floating_panels",

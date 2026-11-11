@@ -60,6 +60,7 @@ open_document	file	Open document	Open...	General	-	-	Always	-	path:path
 open_grid_picker	view	Open grid picker	-	General	-	-	Always	gui_only	-
 open_grid_properties	view	Open grid properties	-	General	-	-	Always	gui_only	-
 open_library_browser	library	Open library browser	Library Editor	General	-	-	Always	gui_only	-
+open_net_inspector	panels	Open Net Inspector panel	Net Inspector	General	-	-	Always	gui_only	-
 open_preferences	preferences	Open preferences	Preferences...	General	-	-	Always	gui_only	-
 open_schematic_preferences	preferences	Open schematic preferences	-	General	-	-	Always	gui_only	-
 paste	edit	Paste	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
@@ -115,6 +116,7 @@ zoom_to_fit	view	Zoom to fit	Fit All	General	-	-	Always	gui_only	-
 zoom_to_selection_area	view	Zoom to selection area	-	General	-	-	RequiresSelection	gui_only	-
 annotate_schematic	design	Annotate schematic	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 annotate_schematic_quietly	design	Annotate schematic quietly	Annotate Schematics Quietly	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-
+assign_footprints	design	Assign footprints	Assign Footprints	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 clear_net_highlighting	select	Clear net highlighting	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 draw_graphic_line	place	Draw graphic line	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
 draw_hierarchical_sheet	place	Draw hierarchical sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-

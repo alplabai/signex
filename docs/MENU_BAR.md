@@ -253,6 +253,66 @@ three has a default key).
   parked as a draft exactly as the tab menu's Close All Documents does. Greyed
   when no tab is open.
 
+## Tools ▸ Assign Footprints {#tools-assign-footprints}
+
+Runs `assign_footprints` (#2248; maintainer decision, Caner 2026-11-10 on
+#2248, `DECISIONS.md`). Greyed without a schematic. The dialog lists every
+placed part of the active schematic's project (a loose sheet lists its own
+parts) with its designator, value, library row and current footprint, sorted
+by designator. The project's sheets are read off the UI thread when it opens.
+
+- A part chooses only among the footprints its own library row offers: the
+  row's default and its alternates, the same list the Properties panel shows
+  (`footprint_choices_for`). Its link to the row does not change. A part with
+  no open library row, or whose row offers one footprint, shows its footprint
+  read-only and why.
+- Tick boxes select several parts; "Tick all from this row" ticks every part
+  of the same library row. "Set ticked parts to" lists the footprints every
+  ticked part's row offers, so a bulk pick never gives a part a footprint its
+  row does not offer.
+- Apply checks each change again against the part's live document and its row
+  (the Properties path, `footprint_binding_commands`), then changes every open
+  sheet in one `update` as one undo group (`UndoGroupKind::Footprints`): one
+  Ctrl+Z on any changed sheet takes all of them back. A refusal on any sheet
+  changes nothing. Nothing is written to disk; the sheets are left unsaved.
+- The dialog does not block the editor, so a footprint can change behind it
+  (Properties, an undo). Apply first compares every listed editable part's
+  live footprint and binding with what the dialog read; if one differs, Apply
+  is refused as stale and nothing changes. When every pick turns out to be a
+  no-op, Messages says nothing changed.
+- A multi-unit part is one row, its units grouped across sheets by the same
+  rule the engine uses within a sheet (`group_into_parts`: one designator, one
+  library symbol, different unit numbers; an unannotated `U?` part is never
+  grouped). Apply changes every unit on every sheet, so one designator never
+  gets two footprints; a part with any unit on a sheet that is not open, or
+  read-only, is read-only whole.
+- A sheet that is not open is listed read-only ("Sheet not open"): its parts
+  are shown for the overview and changed by opening the sheet. This is the
+  safer of the two existing patterns: unlike Replace and Number Schematic
+  Sheets it loads no tabless engine, so nothing outside the open tabs changes
+  and no closed file can drift between the read and Apply. A sheet written by
+  a newer Signex is listed read-only too.
+
+## Tools ▸ Net Inspector {#tools-net-inspector}
+
+Runs `open_net_inspector` (#1269), which opens (or reveals) the Net Inspector
+panel, docked on the right by default. Always available; with no schematic of
+a project in view the panel says so.
+
+- The list is every net of the active document's project, read from the
+  cached stitched project net index (`signex_net::NetIndex`, the one net
+  navigation and highlighting read; `handlers/net_nav/index_job.rs`), never
+  derived again. While the panel is open, a project with no current index has
+  one built off the UI thread; after an edit the last list stays shown until
+  the new index lands.
+- Each row shows the net's name, its first matching net class and how many
+  component pins it connects. Named nets come first, then auto-named ones. The
+  filter matches the net name or the class name.
+- Clicking a net expands it to its pins, labels, power ports and sheet entries,
+  each with its sheet. Clicking a member highlights the net on every sheet and
+  goes to the member through net navigation (`go_to_member`), opening its
+  sheet when needed.
+
 ## Tools ▸ Annotation ▸ Number Schematic Sheets {#number-schematic-sheets}
 
 Runs `number_schematic_sheets` (#2247; editable dialog, maintainer decision
@@ -304,12 +364,6 @@ the whole monitor. The Messages panel names how many windows were arranged.
 
 ## Rows still planned {#rows-still-planned}
 
-- **Tools ▸ Assign Footprints** stays a stub: there is no bulk footprint
-  assignment yet, and picking any library footprint for a placed library part
-  changes how a part and its library row relate, which needs its own design
-  (#2248).
-- **Tools ▸ Net Inspector** stays a stub: there is no schematic net list
-  panel; the PCB Nets panel lists a board's nets only (#1269).
 - **Tools ▸ Annotation ▸ Back Annotate Schematics...** waits for Back
   Annotate (#1312 PR 2); the board-side edits it carries landed first (see
   [Tools ▸ Re-Annotate Board](#tools-reannotate-board)).
