@@ -51,24 +51,34 @@ pub fn split_waived(
     violations: Vec<Violation>,
     waivers: &NetWaivers,
 ) -> (Vec<Violation>, BTreeMap<(String, String), usize>) {
+    let (kept, waived) = partition_waived(violations, waivers);
     let mut hidden: BTreeMap<(String, String), usize> = BTreeMap::new();
-    if waivers.is_empty() {
-        return (violations, hidden);
+    for (_, key) in waived {
+        *hidden.entry(key).or_default() += 1;
     }
-    let kept = violations
-        .into_iter()
-        .filter(|v| {
-            let Some((rule, net)) = waiver_key(v) else {
-                return true;
-            };
-            if waivers.get(&rule).is_some_and(|nets| nets.contains(&net)) {
-                *hidden.entry((rule, net)).or_default() += 1;
-                return false;
-            }
-            true
-        })
-        .collect();
     (kept, hidden)
+}
+
+/// [`split_waived`] keeping the hidden findings, in their order, each with
+/// the (rule id, net) waiver that hid it.
+pub fn partition_waived(
+    violations: Vec<Violation>,
+    waivers: &NetWaivers,
+) -> (Vec<Violation>, Vec<(Violation, (String, String))>) {
+    if waivers.is_empty() {
+        return (violations, Vec::new());
+    }
+    let mut kept = Vec::new();
+    let mut waived = Vec::new();
+    for v in violations {
+        match waiver_key(&v) {
+            Some((rule, net)) if waivers.get(&rule).is_some_and(|nets| nets.contains(&net)) => {
+                waived.push((v, (rule, net)));
+            }
+            _ => kept.push(v),
+        }
+    }
+    (kept, waived)
 }
 
 #[cfg(test)]
@@ -104,6 +114,31 @@ mod tests {
         let (kept, hidden) = split_waived(all, &w);
         assert_eq!(kept.len(), 2);
         assert_eq!(hidden[&("user::r".into(), "A".into())], 1);
+    }
+
+    #[test]
+    fn a_partition_keeps_each_hidden_finding_with_its_waiver_in_order() {
+        let mut w = NetWaivers::new();
+        set_waived(&mut w, "user::r", "A", true);
+        set_waived(&mut w, "user::r", "C", true);
+        let all = vec![
+            net_violation("r", "C"),
+            net_violation("r", "B"),
+            net_violation("r", "A"),
+        ];
+        let (kept, waived) = partition_waived(all, &w);
+        assert_eq!(kept.len(), 1);
+        let hidden: Vec<_> = waived
+            .iter()
+            .map(|(v, (rule, net))| {
+                (
+                    v.net.as_ref().unwrap().name.as_str(),
+                    rule.as_str(),
+                    net.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(hidden, [("C", "user::r", "C"), ("A", "user::r", "A")]);
     }
 
     #[test]
