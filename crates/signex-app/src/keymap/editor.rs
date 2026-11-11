@@ -291,17 +291,21 @@ impl KeymapEditorRow {
     /// current trigger text. An empty (or whitespace-only) query matches
     /// every row. Never panics — safe on empty / odd input.
     pub fn matches_query_in(&self, i18n: &signex_i18n::I18n, query: &str) -> bool {
-        let needle = i18n.fold_for_search(query.trim());
+        let query = query.trim();
+        let needle = i18n.fold_for_search(query);
         if needle.is_empty() {
             return true;
         }
-        let has = |text: &str| i18n.fold_for_search(text).contains(&needle);
-        has(&self.label)
-            || has(&self.trigger)
+        // Key names and command ids are generated ASCII, not language text:
+        // a Turkic fold would turn `INS` into `ıns` and lose `ins`.
+        let ascii_needle = query.to_ascii_lowercase();
+        let has_ascii = |text: &str| text.to_ascii_lowercase().contains(&ascii_needle);
+        i18n.fold_for_search(&self.label).contains(&needle)
+            || has_ascii(&self.trigger)
             || self
                 .command
                 .as_ref()
-                .is_some_and(|command| has(command.as_str()))
+                .is_some_and(|command| has_ascii(command.as_str()))
     }
 
     /// [`Self::matches_query_in`] under en-US.

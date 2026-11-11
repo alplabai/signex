@@ -220,6 +220,11 @@ fn the_text_sort_follows_the_format_alphabet() {
     assert_eq!(visible(&state, &root), [1, 0], "tr-TR");
     state.sync_view_caches();
     assert_eq!(visible(&state, &root), [0, 1], "en-US");
+    // Case folds by the format language too: `IŞIK` is in the `ı` group,
+    // although the en-US catalog is the message language.
+    named_rows(&mut state, &["IŞIK", "ılık", "inci"]);
+    state.sync_view_caches_in(&tr);
+    assert_eq!(visible(&state, &root), [1, 0, 2], "ılık, IŞIK, inci");
 }
 
 #[test]

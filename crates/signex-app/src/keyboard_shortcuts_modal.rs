@@ -220,6 +220,8 @@ mod tests {
     #[test]
     fn category_titles_capitalise_by_the_message_language() {
         let tr = I18n::with_message_locale_for_test("tr");
+        // Pins today's output for an untranslated English id; the `tr`
+        // catalog (#2065) is expected to change it.
         assert_eq!(title_case(&tr, "idle_tools"), "İdle Tools");
         assert_eq!(title_case(&I18n::en_us(), "idle_tools"), "Idle Tools");
         assert_eq!(tr.upper_for_display("ilk"), "İLK");

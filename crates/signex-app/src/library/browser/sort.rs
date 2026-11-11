@@ -64,7 +64,7 @@ impl<'a> CellSortKey<'a> {
     pub(super) fn from_cell_in(i18n: &'a I18n, cell: &str) -> Self {
         Self {
             kind: kind_of_cell(cell),
-            folded: i18n.fold_for_search(cell),
+            folded: i18n.fold_for_sort(cell),
             i18n: Some(i18n),
         }
     }
@@ -94,7 +94,7 @@ impl<'a> CellSortKey<'a> {
         };
         Self {
             kind,
-            folded: i18n.fold_for_search(&value.display()),
+            folded: i18n.fold_for_sort(&value.display()),
             i18n: Some(i18n),
         }
     }

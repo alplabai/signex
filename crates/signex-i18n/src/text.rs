@@ -65,6 +65,14 @@ impl I18n {
         fold_in(self.locale(), text)
     }
 
+    /// `text` case-folded by the FORMAT locale's rules, as a key for
+    /// [`Self::compare_for_display`], whose collator follows the same
+    /// locale: under `tr-TR`, `IŞIK` folds to `ışık` and sorts in the `ı`
+    /// group. For ordering only, never for matching or showing.
+    pub fn fold_for_sort(&self, text: &str) -> String {
+        fold_in(self.format_locale().id.language.as_str(), text)
+    }
+
     /// `c` simple-folded to exactly one char, for matching and highlighting
     /// per char (`İ` and `I` become `i` and `ı` under `tr`/`az`). Unlike
     /// [`Self::fold_for_search`] it never changes the length (`ß` stays

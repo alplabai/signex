@@ -103,6 +103,17 @@ fn search_filters_rows_by_label_command_or_trigger() {
 }
 
 #[test]
+fn key_names_match_ascii_case_under_a_turkic_language() {
+    let editor = KeymapEditorModel::built_ins().unwrap();
+    let tr = signex_i18n::I18n::with_message_locale_for_test("tr");
+    let matches = editor.filtered_rows_in(&tr, "ins");
+    assert!(
+        matches.iter().any(|row| row.trigger == "INS"),
+        "`ins` finds the `INS` trigger under tr"
+    );
+}
+
+#[test]
 fn rows_carry_the_command_group_from_metadata() {
     let editor = KeymapEditorModel::built_ins().unwrap();
     let rows = editor.rows();
