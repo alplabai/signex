@@ -75,22 +75,42 @@ pub struct WaivedFinding {
 pub type NetWaived = Vec<(PathBuf, signex_erc::Violation, (String, String))>;
 
 pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
-    run_job(inputs, true).0
+    run_job(inputs, true, None).0
 }
 
 /// The run `check_erc` makes (#2199): [`run_erc_job`] raising no Messages
-/// line, with the findings a net waiver hid kept.
-pub(super) fn run_erc_check_job(inputs: ErcRunInputs) -> (ErcRunOutcome, NetWaived) {
-    run_job(inputs, false)
+/// line (what Run ERC would say there is in the outcome's `warnings`), with
+/// the findings a net waiver hid kept. With `confine`, the project folder, a
+/// file is read from disk only as a headless query may read it
+/// (`document_ids::confined_read`); one that is not is in `warnings`.
+pub(super) fn run_erc_check_job(
+    inputs: ErcRunInputs,
+    confine: Option<&Path>,
+) -> (ErcRunOutcome, NetWaived) {
+    run_job(inputs, false, confine)
 }
 
-/// `logged`: a refused child reference is said in Messages as it is met.
-fn run_job(inputs: ErcRunInputs, logged: bool) -> (ErcRunOutcome, NetWaived) {
+/// `logged`: a refused child reference is said in Messages as it is met;
+/// otherwise it is a warning of the outcome.
+fn run_job(
+    inputs: ErcRunInputs,
+    logged: bool,
+    confine: Option<&Path>,
+) -> (ErcRunOutcome, NetWaived) {
     let inputs_rule_set = inputs.rule_set.clone();
     let mut warnings = Vec::new();
     let mut infos = Vec::new();
-    let dsl_eval_fns =
-        load_project_dsl_eval_fns(inputs.project_dir.as_deref(), &mut infos, &mut warnings);
+    let may_read = |path: &Path| {
+        confine.map_or(Ok(()), |dir| {
+            crate::app::document_ids::confined_read(dir, path)
+        })
+    };
+    let dsl_eval_fns = load_project_dsl_eval_fns(
+        inputs.project_dir.as_deref(),
+        &may_read,
+        &mut infos,
+        &mut warnings,
+    );
 
     // Live snapshots for open tabs; the active tab's render snapshot wins.
     let mut snapshots: HashMap<PathBuf, SchematicRenderSnapshot> = inputs
@@ -104,17 +124,28 @@ fn run_job(inputs: ErcRunInputs, logged: bool) -> (ErcRunOutcome, NetWaived) {
 
     // The project itself, from the one assembler the export and the cached
     // canvas netlist also use (#406).
-    let assemble = if logged {
-        project_sheets::assemble_project_sheets_from
-    } else {
-        project_sheets::assemble_project_sheets_quiet_from
-    };
+    let sheet_guard = |path: &Path| may_read(path).map_err(|why| format!("is not read: {why}"));
     let project_set = match &inputs.root {
-        Some(root) => assemble(&inputs.open, &inputs.pages, root, inputs.fold),
+        Some(root) if logged => project_sheets::assemble_project_sheets_from(
+            &inputs.open,
+            &inputs.pages,
+            root,
+            inputs.fold,
+        ),
+        Some(root) => project_sheets::assemble_project_sheets_guarded_from(
+            &inputs.open,
+            &inputs.pages,
+            root,
+            inputs.fold,
+            &sheet_guard,
+        ),
         None => project_sheets::ProjectSheetSet::empty(),
     };
     for (path, why) in &project_set.unreadable {
         warnings.push(format!("ERC: sheet {} {why}", path.display()));
+    }
+    if !logged {
+        warnings.extend(refused_reference_lines(&project_set));
     }
     let base_dir = inputs.project_dir.clone().or_else(|| {
         project_set
@@ -195,7 +226,11 @@ fn run_job(inputs: ErcRunInputs, logged: bool) -> (ErcRunOutcome, NetWaived) {
         &inputs.overrides,
     );
     add_project_units_not_placed(&mut by_path, &snapshots, &project_paths, &inputs.overrides);
-    refile_child_sheet_violations(&mut by_path, logged);
+    for line in refile_child_sheet_violations(&mut by_path, logged) {
+        if !warnings.contains(&line) {
+            warnings.push(line);
+        }
+    }
     dedupe_descendant_clashes(&mut by_path);
 
     let (waived_findings, lapsed_waivers) =
@@ -380,27 +415,30 @@ fn add_project_units_not_placed(
 /// coordinate, so its marker and panel entry land on the right canvas (#956).
 /// A child that was not part of the run stays under the parent as a
 /// non-locatable entry: it is reported, never drawn at a foreign coordinate.
-fn refile_child_sheet_violations(by_path: &mut ViolationsByPath, logged: bool) {
+/// Not `logged`, a refused reference is returned instead of said.
+fn refile_child_sheet_violations(by_path: &mut ViolationsByPath, logged: bool) -> Vec<String> {
     let ran: std::collections::HashSet<std::path::PathBuf> = by_path.keys().cloned().collect();
     let mut moved: Vec<(std::path::PathBuf, signex_erc::Violation)> = Vec::new();
+    let mut refused = Vec::new();
     for (parent, list) in by_path.iter_mut() {
         let dir = parent.parent().unwrap_or_else(|| std::path::Path::new(""));
         let (child_space, kept): (Vec<_>, Vec<_>) = std::mem::take(list)
             .into_iter()
             .partition(|v| v.location_space == signex_erc::LocationSpace::ChildSheet);
         *list = kept;
-        let resolve = |name: &str| {
+        let mut resolve = |name: &str| {
             if logged {
-                project_sheets::resolve_child_reference(dir, name)
-            } else {
-                project_sheets::resolve_child_reference_quiet(dir, name).ok()
+                return project_sheets::resolve_child_reference(dir, name);
             }
+            project_sheets::resolve_child_reference_quiet(dir, name)
+                .map_err(|refusal| refused.extend(project_sheets::refusal_message(&refusal)))
+                .ok()
         };
         for v in child_space {
             let owner = v
                 .child_sheet
                 .as_deref()
-                .and_then(resolve)
+                .and_then(&mut resolve)
                 .filter(|p| p != parent && ran.contains(p));
             match owner {
                 Some(child) => moved.push((child, v.into_child_sheet_space())),
@@ -411,6 +449,26 @@ fn refile_child_sheet_violations(by_path: &mut ViolationsByPath, logged: bool) {
     for (child, v) in moved {
         by_path.entry(child).or_default().push(v);
     }
+    refused
+}
+
+/// What Run ERC says in Messages for each child reference the walk refused
+/// (`project_sheets::log_refusal`), once each.
+fn refused_reference_lines(set: &project_sheets::ProjectSheetSet) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for refused in &set.refused {
+        let dir = refused.parent.parent().unwrap_or_else(|| Path::new(""));
+        let Err(refusal) = project_sheets::resolve_child_reference_quiet(dir, &refused.reference)
+        else {
+            continue;
+        };
+        if let Some(line) = project_sheets::refusal_message(&refusal)
+            && !lines.contains(&line)
+        {
+            lines.push(line);
+        }
+    }
+    lines
 }
 
 /// A duplicate-designator clash between descendant sheets is found by each
@@ -449,8 +507,11 @@ fn dedupe_descendant_clashes(by_path: &mut ViolationsByPath) {
     }
 }
 
+/// The project's DSL rules; `may_read` refuses a file a headless check may
+/// not read (always allows for Run ERC).
 fn load_project_dsl_eval_fns(
     project_root: Option<&Path>,
+    may_read: &dyn Fn(&Path) -> Result<(), String>,
     infos: &mut Vec<String>,
     warnings: &mut Vec<String>,
 ) -> Option<Vec<signex_erc::engine::EvalFn>> {
@@ -459,6 +520,10 @@ fn load_project_dsl_eval_fns(
         .iter()
         .map(|name| project_root.join(name))
         .find(|p| p.exists())?;
+    if let Err(why) = may_read(&dsl_path) {
+        warnings.push(format!("ERC DSL: {why}"));
+        return None;
+    }
 
     let src = match std::fs::read_to_string(&dsl_path) {
         Ok(src) => src,

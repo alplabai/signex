@@ -134,3 +134,14 @@ fn a_comparison_with_the_same_findings_has_nothing_new_or_gone() {
     let diff = compared.baseline.expect("compared");
     assert!(diff.new.is_empty() && diff.gone.is_empty(), "{diff:?}");
 }
+
+#[test]
+fn a_report_names_its_rule_set_only_when_given_one() {
+    let plain = serde_json::to_value(report(&["k1"])).unwrap();
+    assert!(plain.get("rule_set").is_none(), "{plain}");
+    let named = report(&["k1"]).with_rule_set(json!({"sha256": "ab"}));
+    let value = serde_json::to_value(&named).unwrap();
+    assert_eq!(value["rule_set"], json!({"sha256": "ab"}));
+    let back: CheckReport = serde_json::from_value(value).expect("reads back");
+    assert_eq!(back, named);
+}

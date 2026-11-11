@@ -61,6 +61,10 @@ pub struct CheckReport {
     pub lapsed: Vec<Value>,
     /// What the check could not do completely (a sheet it could not read).
     pub warnings: Vec<String>,
+    /// The rules the run used, as the check names them (for ERC: where the
+    /// rule set came from, its profile and its hash).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule_set: Option<Value>,
     /// Present when the run was compared with an earlier one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub baseline: Option<BaselineDiff>,
@@ -92,7 +96,16 @@ impl CheckReport {
             waived,
             lapsed,
             warnings,
+            rule_set: None,
             baseline: None,
+        }
+    }
+
+    /// This report naming the rules its run used.
+    pub fn with_rule_set(self, rule_set: Value) -> Self {
+        Self {
+            rule_set: Some(rule_set),
+            ..self
         }
     }
 

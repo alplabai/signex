@@ -15,7 +15,12 @@ use crate::app::state::LoadedProject;
 /// Why `path` may not be read for `project`, or `Ok`: it must resolve, links
 /// followed, to a place inside the folder the project file sits in.
 pub(super) fn inside_project(project: &LoadedProject, path: &Path) -> Result<(), String> {
-    let folder = std::fs::canonicalize(project.dir())
+    inside_folder(project.dir(), path)
+}
+
+/// [`inside_project`] for the project folder `dir`.
+fn inside_folder(dir: &Path, path: &Path) -> Result<(), String> {
+    let folder = std::fs::canonicalize(dir)
         .map_err(|e| format!("the project folder cannot be read: {e}"))?;
     // A file that is not there yet cannot be read either, so it is no leak.
     let Ok(resolved) = std::fs::canonicalize(path) else {
@@ -51,6 +56,13 @@ fn readable_file(path: &Path) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// The rules of [`Signex::may_read_referenced`] for a file of the project in
+/// folder `dir`, without saying anything: a job off the UI thread reports the
+/// reason itself (`check_erc`, #2199).
+pub(crate) fn confined_read(dir: &Path, path: &Path) -> Result<(), String> {
+    inside_folder(dir, path).and_then(|()| readable_file(path))
 }
 
 impl Signex {

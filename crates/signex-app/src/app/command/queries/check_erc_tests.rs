@@ -443,6 +443,12 @@ fn the_run_of_a_check_says_nothing_in_messages() {
     assert!(!checked.findings.is_empty());
     let said = logged(mark, &reference);
     assert!(said.is_empty(), "{said:?}");
+    // What Run ERC says in Messages is in the report instead.
+    assert!(
+        checked.warnings.iter().any(|w| w.contains(&reference)),
+        "{:?}",
+        checked.warnings
+    );
 
     let mark = crate::diagnostics::newest_entry_id();
     app.run_erc_blocking();
@@ -478,4 +484,69 @@ fn a_check_finds_what_run_erc_finds() {
     found.sort();
     assert!(!found.is_empty());
     assert_eq!(found, ran);
+}
+
+#[test]
+fn an_unreadable_project_rule_set_is_a_warning_and_the_machine_rules_are_named() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    // A rule set a newer build wrote: kept for re-save, never applied (#1180).
+    let project = &mut app.document_state.projects[0].data;
+    project.rules = None;
+    project.unknown = serde_json::from_value(serde_json::json!({
+        "rules": {"schema": 2, "erc": {}}
+    }))
+    .expect("unknown keys");
+    assert!(project.has_unreadable_rules());
+    let checked = report(&mut app, &top(&dir), &[]);
+    let warnings = checked["warnings"].as_array().unwrap();
+    assert!(
+        warnings.iter().any(|w| w
+            .as_str()
+            .is_some_and(|w| w.contains("rule set cannot be read by this version"))),
+        "{checked}"
+    );
+    assert_eq!(checked["rule_set"]["source"], "machine", "{checked}");
+}
+
+#[test]
+fn the_report_names_the_rule_set_it_used() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    let machine = report(&mut app, &top(&dir), &[]);
+    assert_eq!(machine["rule_set"]["source"], "machine", "{machine}");
+    set_rules(&mut app, ProjectRules::default());
+    let stored = report(&mut app, &top(&dir), &[]);
+    assert_eq!(stored["rule_set"]["source"], "project", "{stored}");
+    let sha = stored["rule_set"]["sha256"].as_str().unwrap_or_default();
+    assert_eq!(sha.len(), 64, "{stored}");
+}
+
+/// Run ERC's count of the findings each net waiver hides (the panel's
+/// "hidden" line), one finding hidden.
+#[test]
+fn run_erc_counts_the_one_finding_a_net_waiver_hides() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    let mut kid = with_free_wire(&child(), 100.0);
+    kid.labels.push(Label::new(
+        "LONELY",
+        Point::new(100.0, 100.0),
+        LabelType::Net,
+    ));
+    write(&child_path(&dir), kid);
+    let rule = signex_erc::RuleId::builtin(signex_erc::RuleKind::LabelsOnlyNet).to_string();
+    let mut rules = ProjectRules::default();
+    rules
+        .erc_net_waivers
+        .insert(rule.clone(), ["LONELY".to_string()].into_iter().collect());
+    set_rules(&mut app, rules);
+    app.run_erc_blocking();
+    let hidden = &app.ui_state.erc_waived_hidden;
+    assert_eq!(
+        hidden.get(&(rule, "LONELY".to_string())),
+        Some(&1),
+        "{hidden:?}"
+    );
+    assert_eq!(hidden.values().sum::<usize>(), 1, "{hidden:?}");
 }
