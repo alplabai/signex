@@ -494,6 +494,49 @@ fn applying_the_recorder_untouched_keeps_an_explicit_cmd_on_macos() {
     assert_eq!(editor.rows()[0].trigger, "\u{2318}K");
 }
 
+/// An `Unbind` in a macOS-only section must not mark the row Unbound on
+/// Windows, where it is not compiled and Ctrl+S still saves.
+#[test]
+fn an_unbind_for_another_os_does_not_mark_the_row_unbound() {
+    let source = WITH_MACOS_SECTION
+        .replace("\"F7\" = \"run_erc\"", "\"Ctrl+S\" = \"save_document\"")
+        .replace(
+            "\"Mod+W\" = \"close_active_document\"",
+            "\"Mod+W\" = \"close_active_document\"\n[keyboard_shortcuts.sections.unbind]\n\"Ctrl+S\" = \"save_document\"",
+        );
+    let profile = import_custom_profile(&source).unwrap();
+    let mut set = ShortcutProfileSet::built_ins().unwrap();
+    set.insert_custom_profile(profile).unwrap();
+    set.set_active_profile("mine").unwrap();
+    let unbound_on = |platform| {
+        let editor = KeymapEditorModel::new(set.clone()).with_platform(platform);
+        let row = editor
+            .rows()
+            .into_iter()
+            .find(|row| row.command.as_ref().map(|c| c.as_str()) == Some("save_document"))
+            .expect("the Save row is listed");
+        row.unbound
+    };
+    assert!(!unbound_on(Platform::Windows));
+    assert!(!unbound_on(Platform::Linux));
+    assert!(unbound_on(Platform::MacOs));
+}
+
+/// AltGr arrives as Ctrl+Alt on Windows: `ą` is a character, not a chord.
+#[test]
+fn altgr_is_not_retried_as_a_physical_chord_but_ctrl_alone_still_is() {
+    assert_eq!(
+        fallback("\u{105}", Code::KeyA, Held::CTRL | Held::ALT),
+        None
+    );
+    assert_eq!(
+        shown(fallback("\u{f6}", Code::Comma, Held::CTRL)).as_deref(),
+        Some("Ctrl+,")
+    );
+    // With Cmd also held the chord is deliberate and still retried.
+    assert!(fallback("\u{f6}", Code::Comma, Held::CTRL | Held::ALT | Held::LOGO).is_some());
+}
+
 fn custom_with(bindings: &[(&str, &str)]) -> ShortcutProfile {
     let mut profile = keymap_profile(bindings);
     profile.id = "t".to_string();

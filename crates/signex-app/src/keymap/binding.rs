@@ -246,6 +246,11 @@ impl KeyStroke {
         if !(modifiers.control() || modifiers.logo() || modifiers.alt()) {
             return None;
         }
+        // Windows reports AltGr as Ctrl+Alt: that is a typed character
+        // (`ą`), not a chord. Applied on every OS for simplicity.
+        if modifiers.control() && modifiers.alt() && !modifiers.logo() {
+            return None;
+        }
         let keyboard::Key::Character(value) = key.as_ref() else {
             return None;
         };
