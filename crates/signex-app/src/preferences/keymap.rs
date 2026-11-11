@@ -750,15 +750,18 @@ mod tests {
     #[test]
     fn a_mod_row_and_a_literal_row_on_one_key_both_show_the_conflict() {
         use crate::keymap::Platform;
-        for (platform, literal) in [
+        // The second row is typed as a draft in a spelling that is neither
+        // `Mod+K` nor how the row is shown, so only a stroke comparison sees
+        // that it is the same key.
+        for (platform, typed) in [
             (Platform::MacOs, "Cmd+K"),
-            (Platform::Windows, "Ctrl+K"),
-            (Platform::Linux, "Ctrl+K"),
+            (Platform::Windows, "Control+K"),
+            (Platform::Linux, "Control+K"),
         ] {
-            let editor = editor_with(
-                platform,
-                &[("Mod+K", "find"), (literal, "open_preferences")],
-            );
+            let mut editor =
+                editor_with(platform, &[("Mod+K", "find"), ("F9", "open_preferences")]);
+            let slot = editor.rows()[1].slot;
+            editor.edit_active_trigger(slot, typed.to_string()).unwrap();
             let conflicts = editor.active_conflicts();
             assert_eq!(conflicts.len(), 1, "{platform:?}");
             for row in editor.rows() {
