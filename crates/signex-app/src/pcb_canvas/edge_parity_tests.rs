@@ -80,9 +80,13 @@ fn board_edge_overlay_lands_on_the_edge_cuts_graphics_after_fit_and_zoom() {
         .flat_map(|l| [l.p0, l.p1])
         .collect();
     assert!(!overlay_edge.is_empty(), "the overlay draws the board edge");
+    // The board-area fill shares the edge's outline; the pour is the largest
+    // polygon that does not end on the edge corner.
+    let edge_end = bottom_right(overlay_edge.iter().copied());
     let pour = scene
         .polygons
         .iter()
+        .filter(|p| bottom_right(p.vertices.iter().copied()) != edge_end)
         .max_by(|a, b| a.vertices.len().cmp(&b.vertices.len()))
         .expect("the GND pour is in the main polygon bucket");
 
