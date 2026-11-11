@@ -108,6 +108,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("file", OperandKind::Text),
     ("direction", OperandKind::Text),
     ("apply", OperandKind::Bool),
+    ("baseline", OperandKind::Text),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
