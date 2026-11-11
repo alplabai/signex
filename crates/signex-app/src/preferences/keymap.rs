@@ -245,14 +245,9 @@ fn keymap_table_row<'a>(
     active_profile_is_custom: bool,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, PrefMsg> {
-    let has_conflict = conflicts.iter().any(|conflict| {
-        conflict.context == row_model.context
-            && conflict.trigger == row_model.trigger
-            && row_model.command.as_ref().is_some_and(|command| {
-                command == &conflict.first_command || command == &conflict.second_command
-            })
-    });
-    let overridden_by = shadow_note(&row_model.trigger);
+    let (has_conflict, reserved_by_system) =
+        row_conflict_kinds(row_model, conflicts, crate::keymap::Platform::current());
+    let overridden_by = shadow_note(&row_model.trigger_config);
     let state = if !row_model.trigger_valid {
         "Invalid".to_string()
     } else if row_model.unbound {
@@ -261,6 +256,8 @@ fn keymap_table_row<'a>(
         "Unbound".to_string()
     } else if let Some(note) = overridden_by.clone() {
         note
+    } else if reserved_by_system {
+        "Reserved by macOS".to_string()
     } else if has_conflict {
         "Conflict".to_string()
     } else if row_model.unbound || row_model.trigger.trim().is_empty() {
@@ -294,7 +291,7 @@ fn keymap_table_row<'a>(
             if let Some(command) = row_model.command.clone() {
                 let context = row_model.context;
                 let label = row_model.label.clone();
-                let trigger = row_model.trigger.clone();
+                let trigger = row_model.trigger_config.clone();
                 let tone = if state_warn {
                     ChipTone::Warning
                 } else {
@@ -423,10 +420,44 @@ fn shadow_note(trigger: &str) -> Option<String> {
 
 /// Recorder warning for a recorded chord that a fixed app key would
 /// swallow before the profile sees it.
+#[cfg(test)]
 fn recorder_shadow_warning(trigger: &str) -> Option<String> {
-    crate::app::dispatch::input::shadowing_fixed_key_for_trigger(trigger).map(|action| {
-        format!("{trigger} is claimed by {action} and will never reach this binding.")
+    recorder_shadow_warning_for(trigger, trigger)
+}
+
+/// [`recorder_shadow_warning`] for a trigger shown as `display` whose
+/// parseable spelling is `config` (they differ on macOS).
+fn recorder_shadow_warning_for(display: &str, config: &str) -> Option<String> {
+    crate::app::dispatch::input::shadowing_fixed_key_for_trigger(config).map(|action| {
+        format!("{display} is claimed by {action} and will never reach this binding.")
     })
+}
+
+/// Whether `row` is in a conflict, and whether that conflict is a chord the
+/// OS reserves. Compared as strokes resolved for `platform`, not as text:
+/// `Mod+K`, `Ctrl+K` and a typed `Cmd+K` all land on the same key on the OS
+/// that runs them.
+fn row_conflict_kinds(
+    row: &crate::keymap::KeymapEditorRow,
+    conflicts: &[crate::keymap::BindingConflict],
+    platform: crate::keymap::Platform,
+) -> (bool, bool) {
+    let Some(crate::keymap::ShortcutTrigger::KeySequence(strokes)) =
+        crate::keymap::ShortcutTrigger::parse(&row.trigger_config).ok()
+    else {
+        return (false, false);
+    };
+    let sequence: Vec<_> = strokes.iter().map(|s| s.resolved_for(platform)).collect();
+    let mut hits = conflicts.iter().filter(|conflict| {
+        conflict.context == row.context
+            && conflict.sequence == sequence
+            && row.command.as_ref().is_some_and(|command| {
+                command == &conflict.first_command || command == &conflict.second_command
+            })
+    });
+    let first = hits.next();
+    let reserved = first.is_some_and(|c| c.system_reserved) || hits.any(|c| c.system_reserved);
+    (first.is_some(), reserved)
 }
 
 fn keymap_recorder_control<'a>(
@@ -477,17 +508,19 @@ fn keymap_recorder_control<'a>(
         capture_row = capture_row.push(transient_modifiers);
     }
 
-    let recorder_warning: Element<'a, PrefMsg> =
-        match recorder_shadow_warning(&recorder.trigger_text()) {
-            Some(message) if !recorder.strokes.is_empty() => text(raw(message))
-                .size(TS.body)
-                .style(|theme: &Theme| text::Style {
-                    color: Some(theme.palette().warning.base.color),
-                    ..text::Style::default()
-                })
-                .boxed(),
-            _ => Space::new().boxed(),
-        };
+    let recorder_warning: Element<'a, PrefMsg> = match recorder_shadow_warning_for(
+        &recorder.trigger_text(),
+        &recorder.trigger().config_text(),
+    ) {
+        Some(message) if !recorder.strokes.is_empty() => text(raw(message))
+            .size(TS.body)
+            .style(|theme: &Theme| text::Style {
+                color: Some(theme.palette().warning.base.color),
+                ..text::Style::default()
+            })
+            .boxed(),
+        _ => Space::new().boxed(),
+    };
 
     let record_button = if recorder.recording {
         button(container(text(raw("Stop")).size(TS.body)).padding([5.0, SP.l]))
@@ -682,5 +715,79 @@ mod tests {
         assert!(recorder_shadow_warning("Esc").is_some());
         assert!(recorder_shadow_warning("X Esc").is_some());
         assert!(recorder_shadow_warning("Ctrl+K").is_none());
+    }
+
+    fn editor_with(
+        platform: crate::keymap::Platform,
+        bindings: &[(&str, &str)],
+    ) -> KeymapEditorModel {
+        use crate::keymap::{
+            AppCommandId, ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutProfile,
+            ShortcutProfileKind, ShortcutTrigger,
+        };
+        KeymapEditorModel::from(ShortcutProfile {
+            id: "t".to_string(),
+            name: "T".to_string(),
+            kind: ShortcutProfileKind::Custom,
+            schema_version: 1,
+            description: None,
+            base_profile: None,
+            bindings: bindings
+                .iter()
+                .map(|(trigger, id)| ShortcutBinding {
+                    action: ShortcutBindingAction::Command(AppCommandId::new(*id).unwrap()),
+                    context: ShortcutContext::Global,
+                    triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+                    platform: None,
+                })
+                .collect(),
+        })
+        .with_platform(platform)
+    }
+
+    /// `Mod+K` and a literal key that lands on the same stroke are one
+    /// conflict, whatever each row's text says (m1).
+    #[test]
+    fn a_mod_row_and_a_literal_row_on_one_key_both_show_the_conflict() {
+        use crate::keymap::Platform;
+        for (platform, literal) in [
+            (Platform::MacOs, "Cmd+K"),
+            (Platform::Windows, "Ctrl+K"),
+            (Platform::Linux, "Ctrl+K"),
+        ] {
+            let editor = editor_with(
+                platform,
+                &[("Mod+K", "find"), (literal, "open_preferences")],
+            );
+            let conflicts = editor.active_conflicts();
+            assert_eq!(conflicts.len(), 1, "{platform:?}");
+            for row in editor.rows() {
+                assert_eq!(
+                    row_conflict_kinds(&row, &conflicts, platform),
+                    (true, false),
+                    "{platform:?} {}",
+                    row.trigger
+                );
+            }
+        }
+    }
+
+    /// m2: a chord macOS owns is a conflict marked as the system's.
+    #[test]
+    fn a_macos_reserved_chord_is_marked_reserved_on_its_row() {
+        use crate::keymap::Platform;
+        let editor = editor_with(
+            Platform::MacOs,
+            &[("Mod+Q", "cycle_unit"), ("Mod+S", "save_document")],
+        );
+        let conflicts = editor.active_conflicts();
+        let kinds: Vec<_> = editor
+            .rows()
+            .iter()
+            .map(|row| row_conflict_kinds(row, &conflicts, Platform::MacOs))
+            .collect();
+        assert_eq!(kinds, [(true, true), (false, false)]);
+        let elsewhere = editor_with(Platform::Windows, &[("Mod+Q", "cycle_unit")]);
+        assert!(elsewhere.active_conflicts().is_empty());
     }
 }

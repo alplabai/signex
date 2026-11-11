@@ -25,6 +25,7 @@ fn binding(action: ShortcutBindingAction, trigger: &str) -> ShortcutBinding {
         action,
         context: ShortcutContext::Global,
         triggers: vec![ShortcutTrigger::parse(trigger).unwrap()],
+        platform: None,
     }
 }
 

@@ -643,6 +643,7 @@ fn a_command_the_keymap_does_not_bind_gets_no_shortcut_hint() {
             action: ShortcutBindingAction::Unbind(copy),
             context: ShortcutContext::Global,
             triggers: vec![ShortcutTrigger::parse("Ctrl+C").unwrap()],
+            platform: None,
         }],
     };
     let (mut app, _boot) = crate::app::Signex::new();

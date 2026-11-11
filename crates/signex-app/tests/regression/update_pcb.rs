@@ -802,6 +802,7 @@ fn a_bound_key_opens_update_pcb() {
             ),
             context: ShortcutContext::Global,
             triggers: vec![ShortcutTrigger::KeySequence(strokes.clone())],
+            platform: None,
         });
     f.app.ui_state.active_keymap = f.app.ui_state.keymap_profiles.compile_active().into();
     send(
