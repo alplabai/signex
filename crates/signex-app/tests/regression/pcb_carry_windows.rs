@@ -351,7 +351,10 @@ fn the_layer_pill_of_a_board_window_steps_that_windows_board() {
     assert_eq!(active_layer(&rig.app, &rig.a), Some(CopperLayer::Bottom));
     assert_eq!(active_layer(&rig.app, &rig.b), b_before, "B untouched");
 
-    send(&mut rig.app, Signex::status_bar_message(rig.main, None, pill));
+    send(
+        &mut rig.app,
+        Signex::status_bar_message(rig.main, None, pill),
+    );
     assert_eq!(active_layer(&rig.app, &rig.b), Some(CopperLayer::Bottom));
     assert_eq!(
         active_layer(&rig.app, &rig.a),

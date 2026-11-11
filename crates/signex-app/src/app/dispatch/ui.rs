@@ -462,7 +462,9 @@ impl Signex {
             (StatusBarRequest::ToggleGrid, Some(path)) => {
                 symbol_edit(path, SymbolEditorMsg::ToggleGrid)
             }
-            (StatusBarRequest::CycleUnit, Some(path)) => symbol_edit(path, SymbolEditorMsg::CycleUnit),
+            (StatusBarRequest::CycleUnit, Some(path)) => {
+                symbol_edit(path, SymbolEditorMsg::CycleUnit)
+            }
             (request, _) => Message::Ui(UiMsg::StatusBar(request)),
         }
     }

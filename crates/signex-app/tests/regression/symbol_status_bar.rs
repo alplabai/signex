@@ -75,7 +75,10 @@ fn the_status_bar_shows_the_symbol_librarys_grid_and_unit() {
     assert_eq!(grid.unit, Unit::Mil);
     assert_eq!(grid.size_mm, 0.254);
     assert!(grid.visible);
-    assert_ne!(app.ui_state.grid_size_mm, 0.254, "the schematic grid differs");
+    assert_ne!(
+        app.ui_state.grid_size_mm, 0.254,
+        "the schematic grid differs"
+    );
 }
 
 #[test]
