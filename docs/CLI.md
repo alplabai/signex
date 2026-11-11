@@ -564,7 +564,8 @@ on-demand check shares (`signex_types::check`; DRC adopts it next):
   Keys are unique within `findings` and within `waived` (not across the
   two): a repeat gets `#2`, `#3`, in report order.
 - Order: by sheet path, then errors, warnings and info, then rule, message,
-  key and evidence. The same project gives the same report, byte for byte.
+  key and evidence. The same project gives the same `findings`, `waived`
+  and `lapsed`, byte for byte (`run` and `baseline` differ from run to run).
 - `waived`: the findings a per-finding waiver (`"kind": "finding"`) or a net
   waiver (`"kind": "net"`, with `rule_id` and `net`) hides, each with that
   waiver; they are not in `findings`. `lapsed`: the per-finding waivers whose
