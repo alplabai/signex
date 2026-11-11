@@ -593,20 +593,7 @@ fn recorded_shortcut_chips<'a>(
 }
 
 fn modifiers_label(modifiers: crate::keymap::Modifiers) -> String {
-    let mut parts = Vec::new();
-    if modifiers.ctrl {
-        parts.push("Ctrl");
-    }
-    if modifiers.command {
-        parts.push(crate::keymap::Modifiers::command_key_name());
-    }
-    if modifiers.alt {
-        parts.push("Alt");
-    }
-    if modifiers.shift {
-        parts.push("Shift");
-    }
-    parts.join("+")
+    modifiers.display_for(crate::keymap::Platform::current())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

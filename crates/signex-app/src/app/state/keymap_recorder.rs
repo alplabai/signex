@@ -53,6 +53,8 @@ impl KeymapRecorderState {
     }
 
     pub fn trigger_text(&self) -> String {
-        crate::keymap::ShortcutTrigger::KeySequence(self.strokes.clone()).display_text()
+        // Config spelling, so a recorded `Mod` survives the round trip
+        // through the editor's parser instead of being flattened to Ctrl.
+        crate::keymap::ShortcutTrigger::KeySequence(self.strokes.clone()).config_text()
     }
 }

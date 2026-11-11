@@ -336,6 +336,17 @@ impl Signex {
     /// Held modifiers are claimed too: they drive the live "Ctrl+…" hint
     /// before a key lands.
     fn claim_keymap_recorder(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
+        self.claim_keymap_recorder_for(target, event, crate::keymap::Platform::current())
+    }
+
+    /// [`Self::claim_keymap_recorder`] recording as `platform` does: on
+    /// macOS a Cmd press is stored as `Mod`.
+    fn claim_keymap_recorder_for(
+        &self,
+        target: InputTarget,
+        event: &keyboard::Event,
+        platform: crate::keymap::Platform,
+    ) -> Claim {
         if self.ui_state.preferences_keymap_recorder.is_none() {
             return Claim::Pass;
         }
@@ -351,13 +362,20 @@ impl Signex {
         match event {
             keyboard::Event::ModifiersChanged(modifiers) => Claim::Consume(Message::Preferences(
                 PreferencesMsg::Inner(crate::preferences::PrefMsg::KeymapRecorderModifiersChanged(
-                    crate::keymap::Modifiers::from_iced(*modifiers),
+                    crate::keymap::Modifiers::from_iced(*modifiers).recorded_for(platform),
                 )),
             )),
-            keyboard::Event::KeyPressed { key, modifiers, .. } => {
-                match KeyStroke::from_iced(key, *modifiers) {
+            keyboard::Event::KeyPressed {
+                key,
+                physical_key,
+                modifiers,
+                ..
+            } => {
+                match KeyStroke::from_key_event(key, *physical_key, *modifiers) {
                     Some(stroke) => Claim::Consume(Message::Preferences(PreferencesMsg::Inner(
-                        crate::preferences::PrefMsg::KeymapRecorderKeyPressed(stroke),
+                        crate::preferences::PrefMsg::KeymapRecorderKeyPressed(
+                            stroke.recorded_for(platform),
+                        ),
                     ))),
                     // Unexpressible as a `KeyStroke` (a bare modifier
                     // press). Still the recorder's — swallowed, not
@@ -546,10 +564,16 @@ impl Signex {
     /// press) is ignored. Being last, `Pass` and `Swallow` are equivalent
     /// here — `Pass` says the honest thing: nobody wanted it.
     fn claim_keymap(window: iced::window::Id, event: &keyboard::Event) -> Claim {
-        let keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
+        let keyboard::Event::KeyPressed {
+            key,
+            physical_key,
+            modifiers,
+            ..
+        } = event
+        else {
             return Claim::Pass;
         };
-        match KeyStroke::from_iced(key, *modifiers) {
+        match KeyStroke::from_key_event(key, *physical_key, *modifiers) {
             Some(stroke) => Claim::Consume(Message::Ui(UiMsg::KeymapStroke {
                 window: Some(window),
                 stroke,

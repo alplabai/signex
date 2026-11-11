@@ -4,7 +4,7 @@
 //! [`PreviewFootprint`], with its own zoom/pan camera. Fitted to the box on
 //! first show, and again when the box changes size while the user has not
 //! zoomed or panned. Shared by the Components panel and the Component Preview
-//! dialog. Left-drag pans; Ctrl+wheel zooms (a plain wheel scrolls the
+//! dialog. Left-drag pans; Ctrl/Cmd+wheel zooms (a plain wheel scrolls the
 //! panel around it).
 
 use iced::widget::canvas::{self, Action, Cache, Geometry};
@@ -82,7 +82,7 @@ pub struct PreviewState {
     user_moved: bool,
     /// Last cursor position while a drag-pan is running.
     pan_from: Option<Point>,
-    /// Ctrl state from the last modifiers event; the wheel zooms with it.
+    /// Ctrl/Cmd state from the last modifiers event; the wheel zooms with it.
     ctrl_held: bool,
     cache: Cache,
     /// Ground colour the cached drawing was built with; another colour
@@ -142,7 +142,7 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
             state.cache.clear();
         }
         if let iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) = event {
-            state.ctrl_held = mods.control();
+            state.ctrl_held = mods.command();
             return None;
         }
         let iced::Event::Mouse(event) = event else {
@@ -150,7 +150,7 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
         };
         match event {
             mouse::Event::WheelScrolled { delta } => {
-                // Only Ctrl+wheel zooms; a plain wheel scrolls the panel.
+                // Only Ctrl/Cmd+wheel zooms; a plain wheel scrolls the panel.
                 if !state.ctrl_held {
                     return None;
                 }

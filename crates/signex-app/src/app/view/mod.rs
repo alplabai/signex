@@ -177,6 +177,7 @@ impl Signex {
             i18n: std::sync::Arc::clone(&ui.i18n),
             cross_select: interaction.cross_select.enabled,
             pcb_sync: self.pcb_sync_label(Some(window_id)),
+            platform: crate::keymap::Platform::current(),
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {

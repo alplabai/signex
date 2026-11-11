@@ -164,6 +164,14 @@ pub(super) fn label_runs(label: &str, query: &str) -> Vec<(String, bool)> {
 /// The keys of a shortcut label, one per cap: `"Ctrl+Shift+P"` gives
 /// `["Ctrl", "Shift", "P"]`; a trailing `+` key is kept.
 pub(super) fn shortcut_keys(label: &str) -> Vec<String> {
+    // macOS labels (`⇧⌘P`) have no `+`: each symbol is its own cap.
+    let mac: Option<Vec<Vec<String>>> = label
+        .split_whitespace()
+        .map(crate::keymap::mac_stroke_caps)
+        .collect();
+    if let Some(strokes) = mac.filter(|strokes| !strokes.is_empty()) {
+        return strokes.into_iter().flatten().collect();
+    }
     label
         .replace("++", "+\u{0}")
         .split(|c: char| c == '+' || c == ',' || c.is_whitespace())

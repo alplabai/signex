@@ -165,8 +165,17 @@ fn view_symbol_status<'a>(
                     .color(theme_ext::error_color(tokens)),
                 None => text(raw(if editor.selected.is_some() {
                     "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
+                        .to_string()
                 } else {
-                    "Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits"
+                    // Undo/redo here read the platform modifier (Cmd on macOS).
+                    let shown = |spelling: &str| {
+                        crate::keymap::ShortcutTrigger::parse(spelling)
+                            .map_or_else(|_| spelling.to_string(), |t| t.display_text())
+                    };
+                    let (undo, redo) = (shown("Mod+Z"), shown("Mod+Y"));
+                    format!(
+                        "{undo} undo · {redo} redo · scroll zooms · right-drag pans · Home fits"
+                    )
                 }))
                 .size(TS.caption)
                 .color(muted),
