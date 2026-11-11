@@ -18,6 +18,16 @@ pub enum BoardCommandError {
     PadNotFound { footprint: Uuid, pad: Uuid },
     #[error("pad {pad} of footprint {footprint} is named more than once")]
     DuplicatePadChange { footprint: Uuid, pad: Uuid },
+    #[error(
+        "pad {pad} of footprint {footprint} would still be on net {name} ({number}), \
+         which the edit removes from the net table"
+    )]
+    PadOnRemovedNet {
+        footprint: Uuid,
+        pad: Uuid,
+        number: u32,
+        name: String,
+    },
     #[error("uuid {0} of a new pad is already used on the board")]
     PadAlreadyPresent(Uuid),
     #[error("{0:?} takes a uuid the board or another item already uses")]

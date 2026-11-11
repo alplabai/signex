@@ -12,7 +12,7 @@ use super::items::BoardItemId;
 
 /// Apply a net edit, refused whole when it names a footprint, pad or zone
 /// the board does not hold, or one twice, so a stale list is never a silent
-/// no-op. The inverse is the edit `BoardNetEdit::apply` returns: only what
+/// no-op, or when it leaves a pad on a net it removes from the table. The inverse is the edit `BoardNetEdit::apply` returns: only what
 /// was written, all of it present again when undo runs.
 pub(super) fn set_nets(
     board: &mut PcbBoard,
@@ -43,6 +43,17 @@ fn refusal(why: NetEditRefusal) -> BoardCommandError {
         NetEditRefusal::ZoneNotFound(id) => E::ItemNotFound(BoardItemId::Zone(id)),
         NetEditRefusal::DuplicatePad { footprint, pad } => E::DuplicatePadChange { footprint, pad },
         NetEditRefusal::DuplicateZone(id) => E::DuplicateItem(BoardItemId::Zone(id)),
+        NetEditRefusal::PadOnRemovedNet {
+            footprint,
+            pad,
+            number,
+            name,
+        } => E::PadOnRemovedNet {
+            footprint,
+            pad,
+            number,
+            name,
+        },
     }
 }
 
