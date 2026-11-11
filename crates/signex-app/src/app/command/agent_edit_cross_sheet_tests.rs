@@ -290,7 +290,9 @@ fn a_revision_is_expected_per_sheet_and_a_wrong_one_changes_nothing() {
 fn an_edit_naming_a_sheet_of_another_project_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = two_sheets(&dir);
-    let other = Path::new("/w/loose/other.snxsch").to_path_buf();
+    // A folder of its own, so the path is absolute on every OS.
+    let elsewhere = tempfile::tempdir().unwrap();
+    let other = elsewhere.path().join("other.snxsch");
     fixture::add_sheet_with(&mut app, &other, child());
     fixture::activate(&mut app, &top(&dir));
     let top = top(&dir);

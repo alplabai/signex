@@ -191,18 +191,26 @@ mod tests {
     /// The answer never lists a sheet the call did not name itself.
     #[test]
     fn the_sheets_of_an_answer_keep_only_the_documents_the_call_named() {
-        let named = [PathBuf::from("/w/p/a.snxsch")];
+        // Paths from real folders, absolute on every OS.
+        let (p, q, other) = (
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+        );
+        let text =
+            |dir: &tempfile::TempDir, file: &str| dir.path().join(file).display().to_string();
+        let named = [p.path().join("a.snxsch")];
         let mut data = json!({"reverted": true, "sheets": [
-            {"document": "a.snxsch", "path": "/w/p/a.snxsch", "revision": 3},
-            {"document": "b.snxsch", "path": "/w/q/b.snxsch", "revision": 9},
+            {"document": "a.snxsch", "path": text(&p, "a.snxsch"), "revision": 3},
+            {"document": "b.snxsch", "path": text(&q, "b.snxsch"), "revision": 9},
             // The same file name in a folder the call never named.
-            {"document": "a.snxsch", "path": "/w/other/a.snxsch", "revision": 5},
+            {"document": "a.snxsch", "path": text(&other, "a.snxsch"), "revision": 5},
             {"document": "a.snxsch", "revision": 1},
         ]});
         scrub_sheets(&mut data, &named);
         assert_eq!(
             data["sheets"],
-            json!([{"document": "a.snxsch", "path": "/w/p/a.snxsch", "revision": 3}])
+            json!([{"document": "a.snxsch", "path": text(&p, "a.snxsch"), "revision": 3}])
         );
         let mut none = json!({"changed": false});
         scrub_sheets(&mut none, &named);
