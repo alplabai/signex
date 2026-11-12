@@ -1,6 +1,7 @@
 # `.snxrules` — portable ERC rule profile (#1085)
 
-A `.snxrules` file is a named ERC rule set that lives outside any project. A
+A `.snxrules` file is a named ERC rule set (and, since #2307, an optional DRC
+section) that lives outside any project. A
 project is seeded from one, can be compared against it, and can be updated
 from it after the user reviews the differences. Parsing and writing is
 `signex_types::project::RuleProfile`; the shipped profile, the diff and the
@@ -30,9 +31,18 @@ change is a small git diff.
 | `name` | string | The profile's identity. Projects find a profile by this name. |
 | `version` | string | Content version chosen by the author; recorded in a project's provenance. |
 | `erc` | object, optional | Same shape as the project's `rules.erc`: `severity` (rule id to `error` / `warning` / `info` / `off`) and `pin_matrix` (`"<row axis>/<column axis>"` to severity, only cells that differ from the factory matrix). Omitted when empty. |
+| `drc` | object, optional | Same shape as the project's `rules.drc` (#2307): `severity` (DRC rule id such as `builtin::clearance` to `error` / `warning` / `info` / `off`) and `dsl` (DRC rule language text, kept but not read until #2307 step 2b). Omitted when empty. Rule ids and layers: [`pcb-drc.md`](pcb-drc.md#rule-ids-and-severities-2307-step-2a). |
 
 Every key is optional on load (`name` and `version` default to the empty
-string). An explicitly empty `erc` is the same as an absent one.
+string). An explicitly empty `erc` or `drc` is the same as an absent one, and
+`"drc": {}` is dropped on re-save. `drc` was added without a `schema` bump: an
+older build keeps it as an unknown key, and a profile without it re-saves
+byte-identical. A profile that already held a `drc` object before this build
+re-saves with equal values, but `drc` may move among the top-level keys. The
+shipped
+`Signex Default` profile has no `drc` section, so its version (`1.1`) and its
+hash are unchanged; the built-in DRC severities live in `signex-drc` as the
+built-in layer.
 
 ## Schema token and newer files
 
@@ -45,13 +55,20 @@ reported to the user (Messages panel) naming the file; it is never reported as
 valid JSON, or whose values have the wrong shape, is refused the same way with
 the parse error.
 
+This now covers `drc` (#2307), a behaviour change. Before #2307 the key was
+reserved and any value rode along as an unknown key. Now it is typed, so a
+`drc` of another shape (`"drc": "legacy"`, `null`, a list, a severity or `dsl`
+that is not a string) refuses the whole profile. The file is kept byte for
+byte and never overwritten. For `User Default` this means the session runs on
+the built-in ERC and DRC defaults and says so in the Messages panel.
+
 ## Unknown keys
 
 Keys this build does not know are kept verbatim and written back, so loading
 and saving a profile never drops what a newer build added:
 
-- top level (a future `drc` section, say) and inside `erc`: captured in an
-  `UnknownJson` bag (`#[serde(flatten)]`), ordered by key;
+- top level, inside `erc` and inside `drc`: captured in an `UnknownJson` bag
+  (`#[serde(flatten)]`), ordered by key;
 - unknown rule ids in `erc.severity` and unknown keys in `erc.pin_matrix`: kept
   as ordinary map entries.
 
@@ -113,6 +130,18 @@ its `erc` object: `severity`, `pin_matrix` and everything in `erc.unknown`.
 The maps are ordered, so equal rule sets hash equal on every machine. `name`,
 `version`, `schema` and the top-level unknown keys are labels and are not
 hashed, so renaming a profile or bumping its `version` is not drift.
+
+The `drc` section is not in this hash, so adding one moves no recorded hash,
+no provenance and no drift result. `DrcRuleSet::sha256_hex` (the same
+canonical-JSON SHA-256 of the `drc` object) exists, but nothing records or
+compares it yet. "Save as profile" (it writes only the project's `erc`),
+"Update from profile", its confirmation diff and the drift note still cover
+`erc` only. Covering `drc` by the hash, the drift check, Update from profile
+and Save as profile is step 2b, with the rule language (maintainer decision,
+https://github.com/alplabai/signex/issues/2307#issuecomment-6824136804).
+Duplicate in Preferences ▸ Rule Profiles copies the whole profile, `drc`
+included. Save as profile over an existing profile replaces that file with the
+project's `erc` only, so the target profile's `drc` is dropped until step 2b.
 
 The same hash is recorded in two places:
 

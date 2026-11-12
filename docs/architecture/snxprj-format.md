@@ -157,17 +157,48 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   written by "Store ERC rules in this project" when the snapshot equals the
   shipped profile, by "Save as profile", and by "Update from profile". It is
   provenance only: ERC never reads a profile file, only the project's own
-  `erc`. `drc` is reserved: it is carried verbatim in the section's
-  unknown-key bag until its feature lands.
+  `erc`.
+- `drc` (#2307) holds the project's DRC rules, typed as `DrcRuleSet`:
+  `severity` maps a DRC rule id (`builtin::short`, `builtin::clearance`,
+  `builtin::unconnected`, `builtin::keepout`) to `error` / `warning` / `info`
+  / `off`, and `dsl` is the text of the DRC rule language, stored and written
+  back but not read until step 2b. Keys this build does not know stay in its
+  own unknown-key bag, so a `drc` object written before the section was typed
+  re-saves unchanged. It is added without a `schema` bump: an older build
+  keeps the whole object in the section's unknown-key bag, and a file without
+  it loads with an empty section and re-saves without a `drc` key. The DRC
+  run reads it when `rules` is present. "Store ERC rules in this project" and
+  a first ERC waiver also store the machine's `User Default` DRC severities
+  here (the action keeps its ERC name), so DRC keeps the rules it used; with
+  no machine DRC rules no `drc` key is written. It is not in the rule-set hash,
+  and nothing records `DrcRuleSet::sha256_hex` until step 2b. See
+  [`pcb-drc.md`](pcb-drc.md#rule-ids-and-severities-2307-step-2a) for the
+  layers and [`snxrules-format.md`](snxrules-format.md#what-the-hash-covers)
+  for the hash.
+  ```json
+  "drc": {
+    "severity": { "builtin::unconnected": "error" },
+    "dsl": "..."
+  }
+  ```
 - A section this build cannot interpret never stops the project from opening
   (#1180). A `schema` above 1, or a value whose shape changed (a severity that
   is an object, say), makes the whole section opaque: it is kept verbatim in
   the project's unknown-key bag, written back untouched, and not applied; ERC
   uses the machine preferences and says so once per open. A later build may
   therefore change a value's shape only together with a `schema` bump.
-- `schema`, `erc` and every `profile` field are optional and omitted when
-  absent or empty. An explicitly empty value (`"erc": {}`, `"name": ""`) has
-  the same meaning as an absent one and is dropped on re-save.
+  Behaviour change in #2307: before it, `drc` was reserved and any value rode
+  along verbatim while the ERC rules applied. Now `drc` is typed, so a `drc`
+  of another shape (`"drc": "legacy"`, `null`, a list, a severity or `dsl`
+  that is not a string) makes the whole section opaque the same way. The
+  bytes are kept, but ERC falls back to the machine rules, and storing rules,
+  rule edits and waivers are refused for that project.
+- `schema`, `erc`, `drc` and every `profile` field are optional and omitted
+  when absent or empty. An explicitly empty value (`"erc": {}`, `"drc": {}`,
+  `"name": ""`) has
+  the same meaning as an absent one and is dropped on re-save. A section
+  that already held a `drc` object before #2307 re-saves with equal values,
+  but `drc` may move among the section's keys.
 
 ## Annotation settings (#1232)
 

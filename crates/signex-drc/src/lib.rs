@@ -6,13 +6,16 @@
 mod check;
 mod keepout;
 mod rules;
+mod severity;
 
 use uuid::Uuid;
 
 use pcb_geom::{ItemRef, PointNm, Rejected};
+use signex_types::violation::Severity;
 
 pub use check::run;
 pub use rules::{DEFAULT_CLEARANCE_MM, DrcRules};
+pub use severity::{DrcSeverities, resolve_severities};
 
 /// What a violation breaks. Declared most severe first: a report sorts by
 /// kind, so a capped list of rows keeps the shorts.
@@ -75,9 +78,16 @@ impl DrcReport {
     pub fn is_clean(&self) -> bool {
         self.violations.is_empty() && self.skipped.is_empty()
     }
+
+    /// The resolved severity of `violation`'s rule; `None` when switched off.
+    pub fn severity_of(&self, violation: &Violation) -> Option<Severity> {
+        self.rules.severities.of(violation.kind)
+    }
 }
 
 #[cfg(test)]
 mod keepout_tests;
+#[cfg(test)]
+mod severity_tests;
 #[cfg(test)]
 mod tests;

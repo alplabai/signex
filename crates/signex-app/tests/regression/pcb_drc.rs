@@ -166,6 +166,41 @@ fn run_drc_with_no_board_open_runs_nothing() {
     assert!(app.document_state.panel_ctx.pcb_drc.is_none());
 }
 
+/// #2307 step 2a: a run carries the resolved severity of each rule, taken
+/// from the machine's `User Default` profile for a board without a project,
+/// and the severity never changes what is found.
+#[test]
+fn a_run_carries_the_severities_of_the_machine_profile_and_finds_the_same() {
+    use signex_app::app::ErcMsg;
+    use signex_types::violation::Severity;
+    let (mut app, _tmp, path) = open_board();
+    run_drc(&mut app);
+    let plain = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    let plain = plain.report.clone();
+    assert_eq!(plain.rules.severities, signex_drc::DrcSeverities::builtin());
+    assert_eq!(
+        plain.severity_of(&plain.violations[0]),
+        Some(Severity::Error)
+    );
+
+    let mut profile = signex_types::project::RuleProfile::new("User Default", "1", <_>::default());
+    profile
+        .drc
+        .severity
+        .insert("builtin::clearance".into(), "warning".into());
+    let task = app.update(Message::Erc(ErcMsg::UserDefaultLoaded(
+        std::sync::Arc::new(Ok(Some(profile))),
+    )));
+    crate::drive::drive(&mut app, task);
+    run_drc(&mut app);
+    let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    assert_eq!(done.report.violations, plain.violations);
+    assert_eq!(
+        done.report.severity_of(&done.report.violations[0]),
+        Some(Severity::Warning)
+    );
+}
+
 #[test]
 fn the_default_clearance_is_said_and_a_set_rule_is_not() {
     let (mut app, _tmp, _path) = open_board();

@@ -77,7 +77,7 @@ impl Signex {
             }
             None => {
                 crate::diagnostics::log_info(format!(
-                    "ERC: project {} now stores its own ERC rules, copied from this \
+                    "ERC: project {} now stores its own rules, copied from this \
                      machine's preferences, so the waiver has a place to live.",
                     project.data.name
                 ));
@@ -87,8 +87,9 @@ impl Signex {
     }
 
     /// The rule set "Store ERC rules in this project" would write: this
-    /// machine's preferences, with the shipped profile named as provenance
-    /// only when the snapshot is exactly that profile.
+    /// machine's preferences and `User Default` DRC section, with the shipped
+    /// profile named as provenance only when the ERC snapshot is exactly that
+    /// profile.
     pub(super) fn seeded_project_rules(&self) -> ProjectRules {
         let erc = signex_erc::project_rules::seed_from_overrides(
             &self.ui_state.erc_severity_override,
@@ -101,9 +102,12 @@ impl Signex {
                 signex_erc::project_rules::profile::SOURCE_BUILTIN,
             )
         });
+        // The machine's DRC rules travel too: storing rules switches DRC to
+        // the project layer, which must hold what DRC used until now.
         ProjectRules {
             erc,
             profile,
+            drc: self.ui_state.machine_drc_rules.clone(),
             ..ProjectRules::default()
         }
     }
