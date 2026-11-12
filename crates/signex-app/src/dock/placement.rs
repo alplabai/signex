@@ -176,7 +176,8 @@ impl DockArea {
     /// Give a fresh Graphite layout the panels an editor tab needs: the
     /// footprint editor gets Footprint Library and Layers on the left, the
     /// symbol editor SCH Library on the left and the Pins table at the
-    /// bottom. Runs once per context and
+    /// bottom, the component editor folds the left dock to its rail.
+    /// Runs once per context and
     /// only for a layout `graphite_first_run` built; a saved layout (the
     /// user's own arrangement) never has a seed owed, so it is never touched.
     pub fn seed_for_editor(&mut self, context: EditorContext) {
@@ -194,6 +195,10 @@ impl DockArea {
             EditorContext::Pcb if self.editor_seeds.pcb => {
                 self.editor_seeds.pcb = false;
                 self.show_panel_at(PanelPosition::Left, PanelKind::PcbNets);
+            }
+            EditorContext::Component if self.editor_seeds.component => {
+                self.editor_seeds.component = false;
+                self.left.collapsed = self.has_panels(PanelPosition::Left);
             }
             _ => {}
         }
@@ -377,9 +382,28 @@ mod tests {
         assert!(dock.locate(PanelKind::SymbolPins).is_none());
     }
 
+    /// #2262: the first component tab of a fresh layout folds the left
+    /// dock to its Projects / Components / Navigator rail, once; the user
+    /// opening it again is not undone by the next component tab.
+    #[test]
+    fn a_fresh_layout_folds_the_left_dock_for_the_component_editor_once() {
+        let mut dock = crate::dock::graphite_first_run();
+        assert!(!dock.is_collapsed(PanelPosition::Left));
+        dock.seed_for_editor(EditorContext::Component);
+        assert!(dock.is_collapsed(PanelPosition::Left));
+        assert!(dock.locate(PanelKind::Projects).is_some());
+        dock.update(crate::dock::DockMessage::ToggleCollapse(
+            PanelPosition::Left,
+        ));
+        dock.seed_for_editor(EditorContext::Component);
+        assert!(!dock.is_collapsed(PanelPosition::Left));
+    }
+
     #[test]
     fn a_saved_layout_is_never_seeded() {
         let mut dock = DockArea::new();
+        dock.seed_for_editor(EditorContext::Component);
+        assert!(!dock.is_collapsed(PanelPosition::Left));
         dock.seed_for_editor(EditorContext::Footprint);
         dock.seed_for_editor(EditorContext::Symbol);
         assert!(dock.locate(PanelKind::FootprintLayers).is_none());

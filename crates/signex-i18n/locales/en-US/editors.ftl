@@ -250,3 +250,18 @@ editors-symbol-copy-again = Copy Again
 editors-component-read-only-footer = Read-only library - this component cannot be changed.
 editors-component-unsaved-marker = • unsaved
 editors-component-reload-confirm = Discard your edits and reload?
+
+## Component editor header (Graphite)
+editors-component-header-version = v{ $version }
+editors-component-header-location = { $library } / { $table }
+editors-component-header-unparsed = { $count ->
+    [one] { $count } field does not parse
+   *[other] { $count } fields do not parse
+}
+
+## Footprint editor status bar (Graphite)
+editors-footprint-status-pad-selected = Pad { $number } — { $width } × { $height } mm @ ({ $x }, { $y })
+editors-footprint-status-hint-idle = { $pads ->
+    [one] { $pads } pad
+   *[other] { $pads } pads
+} · Click empty area to add, drag to move, Del to remove

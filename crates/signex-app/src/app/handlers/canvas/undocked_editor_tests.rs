@@ -75,7 +75,7 @@ fn an_undocked_footprint_window_shows_the_footprint_editor() {
     editor.state.cursor_mm = Some((4.0, 5.0));
     app.document_state.footprint_editors.insert(path, editor);
 
-    assert!(shows(&app, window, "Layers"), "the footprint toolbar");
+    assert!(shows(&app, window, "3D"), "the footprint mode switcher");
     assert_eq!(app.status_zoom(window), SCHEMATIC_ZOOM * 3.0);
     assert_eq!(app.status_cursor(window), (4.0, 5.0));
 }
@@ -159,7 +159,7 @@ fn an_undocked_footprint_window_does_not_draw_another_footprints_active_bar() {
         .push(tab(&b, TabKind::FootprintEditor(b.clone())));
     app.document_state.active_tab = 1;
     assert!(
-        shows(&app, window, "Layers"),
+        shows(&app, window, "3D"),
         "A's window draws a footprint editor"
     );
     assert!(

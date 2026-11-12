@@ -369,6 +369,9 @@ impl Signex {
                     Some(crate::dock::EditorContext::Symbol)
                 }
                 Some(crate::app::TabKind::Pcb) => Some(crate::dock::EditorContext::Pcb),
+                Some(crate::app::TabKind::ComponentEditor(_)) => {
+                    Some(crate::dock::EditorContext::Component)
+                }
                 _ => None,
             };
             if let Some(context) = context {
@@ -867,6 +870,42 @@ mod tests {
         app.refresh_panel_ctx();
         assert!(app.document_state.panel_ctx.placed_symbols.is_empty());
         assert_eq!(app.document_state.panel_ctx.symbol_lists_key, key);
+    }
+
+    /// #2262: a component editor tab, active in a fresh layout, folds the
+    /// left dock to its rail on the next panel refresh.
+    #[test]
+    fn an_active_component_tab_folds_the_fresh_left_dock() {
+        use crate::app::{ComponentEditorTab, TabInfo, TabKind};
+        use crate::dock::PanelPosition;
+        use crate::library::state::EditorAddress;
+
+        let (mut app, _task) = Signex::new();
+        app.document_state.dock = crate::dock::graphite_first_run();
+        app.refresh_panel_ctx();
+        assert!(!app.document_state.dock.is_collapsed(PanelPosition::Left));
+
+        let row = crate::library::component_preview::test_row();
+        let library_path = PathBuf::from("/tmp/dock-seed/Lib.snxlib");
+        let address = EditorAddress::new(
+            library_path.clone(),
+            "R".into(),
+            signex_library::RowId::from_uuid(row.row_id),
+        );
+        app.document_state.tabs.push(TabInfo {
+            title: "R1".into(),
+            path: address.synthetic_tab_path(),
+            cached_document: None,
+            project_id: None,
+            kind: TabKind::ComponentEditor(ComponentEditorTab {
+                library_path,
+                table: "R".into(),
+                row_id: address.row_id,
+            }),
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        app.refresh_panel_ctx();
+        assert!(app.document_state.dock.is_collapsed(PanelPosition::Left));
     }
 
     /// #1383: the project tree is rebuilt only when what it shows changes,

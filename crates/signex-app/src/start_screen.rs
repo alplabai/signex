@@ -243,6 +243,85 @@ mod tests {
         }
     }
 
+    /// A window as wide as the mock (1440 x 900).
+    const MOCK_WINDOW: iced::Size = iced::Size::new(1440.0, 900.0);
+
+    /// #2262: the hero title is semibold at the hero size, the line under it
+    /// one step up the type scale.
+    #[test]
+    fn hero_lines_use_the_mock_sizes() {
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        let texts = lay_out_texts(view(&tokens, &i18n, "Ctrl+O", &[], &[]), MOCK_WINDOW);
+        let title = "What are you building?";
+        let laid = find(&texts, title).bounds;
+        let natural = crate::layout_probe::natural::<()>(
+            text(raw(title.to_string()))
+                .size(graphite::HERO_TITLE_SIZE)
+                .font(graphite::semibold())
+                .boxed(),
+            title,
+        );
+        assert!(
+            (laid.height - natural.height).abs() < 0.5,
+            "hero title {laid:?}, one semibold line is {natural:?}"
+        );
+        let body = i18n
+            .message(signex_i18n::ids::START_HERO_BODY, &[])
+            .into_string();
+        let laid = find(&texts, &body).bounds;
+        let one_line = crate::layout_probe::natural::<()>(
+            text(raw(body.clone()))
+                .size(graphite::HERO_BODY_SIZE)
+                .boxed(),
+            &body,
+        );
+        assert!(
+            laid.height + 0.5 >= one_line.height,
+            "hero body is drawn below the heading size: {laid:?}, one line is {one_line:?}"
+        );
+    }
+
+    /// #2262: the app-only rows sit under a divider after the mock's page
+    /// rows and still dispatch their commands.
+    #[test]
+    fn app_only_nav_rows_sit_under_the_divider_and_still_work() {
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        let texts = lay_out_texts(view(&tokens, &i18n, "Ctrl+O", &[], &[]), MOCK_WINDOW);
+        let top = |label: &str| find(&texts, label).bounds.y;
+        // Projects, Libraries, Parts search: two row steps.
+        let row_step = (top("Parts search") - top("Projects")) / 2.0;
+        let gap = top("Open Sample Project") - top("Parts search");
+        assert!(
+            gap > row_step + 2.0 * crate::styles::Spacing::DEFAULT.m - 0.5,
+            "no divider room between the page rows and the app rows: gap {gap}, row {row_step}"
+        );
+        assert!(top("Keyboard Shortcuts (F1)") > top("Open Sample Project"));
+
+        let sample = crate::layout_probe::messages_on_click(
+            view(&tokens, &i18n, "Ctrl+O", &[], &[]),
+            MOCK_WINDOW,
+            "Open Sample Project",
+        );
+        assert!(
+            sample
+                .iter()
+                .any(|m| matches!(m, Message::Menu(MenuMessage::OpenSampleProject))),
+            "{sample:?}"
+        );
+        let keys = crate::layout_probe::messages_on_click(
+            view(&tokens, &i18n, "Ctrl+O", &[], &[]),
+            MOCK_WINDOW,
+            "Keyboard Shortcuts (F1)",
+        );
+        assert!(
+            keys.iter()
+                .any(|m| matches!(m, Message::Menu(MenuMessage::OpenKeyboardShortcuts))),
+            "{keys:?}"
+        );
+    }
+
     /// #331: the app sets no `min_size` on the main window, so the screen is
     /// verified at 800 x 500 (floor) and 640 x 360 (stress).
     const MIN_SENSIBLE_WINDOW: iced::Size = iced::Size::new(800.0, 500.0);

@@ -77,6 +77,17 @@ impl Signex {
         }
     }
 
+    /// The footprint editor `window_id` is showing, if it shows one.
+    pub(crate) fn status_footprint_editor(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Option<&FootprintDocument> {
+        match self.status_surface(window_id) {
+            Surface::FootprintEditor(editor) => Some(editor),
+            _ => None,
+        }
+    }
+
     /// The file of the symbol tab `window_id` is showing: its status bar's
     /// Grid and unit buttons drive that symbol's library.
     pub fn status_symbol_path(&self, window_id: iced::window::Id) -> Option<PathBuf> {

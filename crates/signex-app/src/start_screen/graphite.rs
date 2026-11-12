@@ -15,11 +15,24 @@ use super::{Action, recent_label, recent_message, visible_recent};
 use crate::app::Message;
 use crate::panels::signal::coming_soon;
 use crate::styles::{
-    self, ChromeMetrics, Radii, TypeScale, ti,
+    self, ChromeMetrics, Radii, Spacing, TypeScale, ti,
     tokens::{hover_overlay, resolve},
 };
 
 const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
+/// The hero title ("What are you building?").
+pub(super) const HERO_TITLE_SIZE: f32 = TS.display * 1.4;
+/// The line under the hero title.
+pub(super) const HERO_BODY_SIZE: f32 = TS.heading;
+
+/// The semibold UI face of the hero title and the section labels.
+pub(super) fn semibold() -> iced::Font {
+    iced::Font {
+        weight: iced::font::Weight::Semibold,
+        ..iced::Font::DEFAULT
+    }
+}
 /// Width of the navigation column (the mock's 232 px).
 const NAV_W: f32 = 232.0;
 /// Widest the main column gets.
@@ -185,6 +198,8 @@ fn nav<'a>(
             i18n,
             tooltip::Position::Right,
         ),
+        // The mock's divider; the two app-only rows sit under it.
+        container(nav_divider(tokens)).padding([SP.m, SP.l]),
         nav_row(
             tokens,
             t!(i18n, ids::START_OPEN_SAMPLE),
@@ -219,6 +234,18 @@ fn nav<'a>(
         }
     })
     .boxed()
+}
+
+/// The hairline between the page rows and the other navigation rows.
+fn nav_divider<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+    let line = ti(tokens.border);
+    container(Space::new().height(styles::HAIRLINE))
+        .width(Length::Fill)
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(Background::Color(line)),
+            ..container::Style::default()
+        })
+        .boxed()
 }
 
 /// A navigation row with the real count at the right (none when unavailable).
@@ -296,10 +323,12 @@ fn libraries_card<'a>(
         .boxed()
 }
 
-/// A section heading; the catalog writes it in capitals.
+/// A section heading; the catalog writes it in capitals. Semibold as in the
+/// mock; iced has no letter spacing, so the mock's tracking is not drawn.
 fn section_header<'a>(tokens: &ThemeTokens, title: Localized) -> Element<'a, Message> {
     text(title)
         .size(TS.section)
+        .font(semibold())
         .style(styles::section_label(tokens))
         .boxed()
 }
@@ -572,10 +601,11 @@ fn view_sized<'a>(
 ) -> Element<'a, Message> {
     let main = column![
         text(t!(i18n, ids::START_HERO_TITLE))
-            .size(TS.display * 1.4)
+            .size(HERO_TITLE_SIZE)
+            .font(semibold())
             .color(ti(tokens.text)),
         text(t!(i18n, ids::START_HERO_BODY))
-            .size(TS.title)
+            .size(HERO_BODY_SIZE)
             .color(ti(tokens.text_secondary)),
         Space::new().height(8.0),
         spec_box(tokens, i18n),

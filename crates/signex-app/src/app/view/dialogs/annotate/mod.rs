@@ -1,5 +1,5 @@
-//! Annotate-Schematics modal — order pick-list + preview of proposed
-//! changes, plus the reset-annotations confirm.
+//! Annotate-Schematics modal — order dropdown, matching options, sheets and
+//! the preview of proposed changes, plus the reset-annotations confirm.
 //!
 //! Extracted verbatim from `view/dialogs.rs` (ADR-0001, issue #164) as pure
 //! code motion — no behaviour change. These are methods of the same
@@ -11,8 +11,6 @@ use iced::{Background, Color, Element, Length, Theme, Widget};
 use signex_i18n::{ids, t};
 use signex_widgets::{button, raw, text};
 
-use crate::app::state::AnnotateOrder;
-
 use super::widgets::{draggable_header, fit_modal_size, modal_title_header, os_title_bar_slot};
 use crate::styles::{
     DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_footer_split,
@@ -23,11 +21,17 @@ mod reprefix_confirm;
 
 use super::graphite as gr;
 use super::graphite_annotate as ga;
-use controls::{bordered_style, disabled_check_pip, order_radio, scroll_style};
+use controls::{
+    all_listed_locked, bordered_style, disabled_check_pip, lock_all_header, order_dropdown,
+    scroll_style, section_heading,
+};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
+/// Width of the Lock column: its checkbox and the "Lock" caption.
+const LOCK_COL_W: f32 = 64.0;
 
 impl Signex {
     pub(in crate::app::view) fn view_annotate_dialog(&self) -> Element<'_, Message> {
@@ -93,60 +97,21 @@ impl Signex {
             os_title_bar_slot()
         };
 
-        let order_row = column![
-            text(t!(i18n, ids::DIALOG_ANNOTATE_ORDER_HEADING))
-                .size(TS.caption)
-                .color(text_muted),
-            row![
-                column![
-                    row![
-                        order_radio(
-                            t!(i18n, ids::DIALOG_ANNOTATE_ORDER_UP_THEN_ACROSS),
-                            AnnotateOrder::UpThenAcross,
-                            self.ui_state.annotate_order,
-                            tokens,
-                        ),
-                        Space::new().width(4),
-                        order_radio(
-                            t!(i18n, ids::DIALOG_ANNOTATE_ORDER_ACROSS_THEN_DOWN),
-                            AnnotateOrder::AcrossThenDown,
-                            self.ui_state.annotate_order,
-                            tokens,
-                        ),
-                    ]
-                    .spacing(0),
-                    Space::new().height(4),
-                    row![
-                        order_radio(
-                            t!(i18n, ids::DIALOG_ANNOTATE_ORDER_DOWN_THEN_ACROSS),
-                            AnnotateOrder::DownThenAcross,
-                            self.ui_state.annotate_order,
-                            tokens,
-                        ),
-                        Space::new().width(4),
-                        order_radio(
-                            t!(i18n, ids::DIALOG_ANNOTATE_ORDER_ACROSS_THEN_UP),
-                            AnnotateOrder::AcrossThenUp,
-                            self.ui_state.annotate_order,
-                            tokens,
-                        ),
-                    ]
-                    .spacing(0),
-                ]
-                .spacing(0)
-                .width(Length::FillPortion(3)),
-                Space::new().width(8),
-                ga::order_diagram(tokens, self.ui_state.annotate_order),
+        // Order of processing: the mock's dropdown beside the traversal card.
+        let order_row = row![
+            column![
+                section_heading(i18n, ids::DIALOG_ANNOTATE_ORDER_HEADING, tokens),
+                order_dropdown(i18n, self.ui_state.annotate_order),
             ]
-            .align_y(iced::Alignment::Start)
-            .spacing(0),
+            .spacing(SP.s)
+            .width(Length::Fill),
+            ga::order_diagram(tokens, self.ui_state.annotate_order),
         ]
-        .spacing(SP.s);
+        .align_y(iced::Alignment::End)
+        .spacing(SP.l);
 
         let process_location = column![
-            text(t!(i18n, ids::DIALOG_ANNOTATE_PROCESS_LOCATION))
-                .size(TS.caption)
-                .color(text_muted),
+            section_heading(i18n, ids::DIALOG_ANNOTATE_PROCESS_LOCATION, tokens),
             container(
                 text(t!(i18n, ids::DIALOG_ANNOTATE_PROCESS_LOCATION_DESIGNATOR))
                     .size(TS.body)
@@ -159,9 +124,7 @@ impl Signex {
         .spacing(SP.s);
 
         let replace_sub = column![
-            text(t!(i18n, ids::DIALOG_ANNOTATE_REPLACE_SUB_PARTS))
-                .size(TS.caption)
-                .color(text_muted),
+            section_heading(i18n, ids::DIALOG_ANNOTATE_REPLACE_SUB_PARTS, tokens),
             container(
                 text(t!(i18n, ids::DIALOG_ANNOTATE_REPLACE_SUB_PARTS_OFF))
                     .size(TS.body)
@@ -173,11 +136,10 @@ impl Signex {
         ]
         .spacing(SP.s);
 
-        // Component-parameter matching list. Altium shows every parameter
-        // name that appears on any symbol in the project, with a "Strictly"
-        // toggle per row. We pull the set from the active snapshot's
-        // Symbol.fields HashMap so what the user sees matches what their
-        // schematic actually carries — no hard-coded IntLib catalogue.
+        // Matching options: every parameter name on any symbol of the active
+        // sheet, as a checkbox list, so what the user sees matches what the
+        // schematic carries. The engine does not match on them yet, so the
+        // boxes are greyed.
         let param_names: Vec<String> = {
             let mut set: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
             // Always include the three built-in fields so the list isn't
@@ -194,83 +156,56 @@ impl Signex {
             }
             set.into_iter().collect()
         };
-        let mut param_rows: iced::widget::Column<Element<'_, Message>> = column![
-            row![
-                text(t!(i18n, ids::DIALOG_ANNOTATE_COL_COMPONENT_PARAMETER))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(Length::FillPortion(5)),
-                text(t!(i18n, ids::DIALOG_ANNOTATE_COL_STRICTLY))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(Length::FillPortion(1)),
-            ]
-            .padding([SP.s, SP.m]),
-        ]
-        .spacing(0);
+        let mut param_rows: iced::widget::Column<Element<'_, Message>> =
+            column![].spacing(SP.s).width(Length::Fill);
         for name in &param_names {
             param_rows = param_rows.push(
-                (row![
-                    row![
-                        disabled_check_pip(false, tokens),
-                        Space::new().width(6),
-                        text(signex_i18n::UserText::new(name.clone()))
-                            .size(TS.body)
-                            .color(text_muted),
-                    ]
-                    .align_y(iced::Alignment::Center)
-                    .width(Length::FillPortion(5)),
-                    container(disabled_check_pip(true, tokens))
-                        .align_x(iced::alignment::Horizontal::Right)
-                        .width(Length::FillPortion(1)),
+                row![
+                    disabled_check_pip(false, tokens),
+                    text(signex_i18n::UserText::new(name.clone()))
+                        .size(TS.body)
+                        .color(text_muted),
                 ]
-                .padding([3.0, SP.m])
-                .align_y(iced::Alignment::Center))
+                .spacing(SP.s)
+                .align_y(iced::Alignment::Center)
                 .boxed(),
             );
         }
         if param_names.is_empty() {
             param_rows = param_rows.push(
-                (container(
-                    text(t!(i18n, ids::DIALOG_ANNOTATE_NO_CUSTOM_PARAMETERS))
-                        .size(TS.body)
-                        .color(text_muted),
-                )
-                .padding([10.0, SP.m]))
-                .boxed(),
+                text(t!(i18n, ids::DIALOG_ANNOTATE_NO_CUSTOM_PARAMETERS))
+                    .size(TS.body)
+                    .color(text_muted)
+                    .boxed(),
             );
         }
 
+        // The mock's two columns: Complete Existing Packages beside the
+        // Matching Options checkbox list.
         let matching = column![
-            text(t!(i18n, ids::DIALOG_ANNOTATE_MATCHING_HEADING))
-                .size(TS.label)
-                .color(text_c),
-            Space::new().height(4),
             row![
-                text(t!(i18n, ids::DIALOG_ANNOTATE_COMPLETE_PACKAGES))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .width(Length::FillPortion(2)),
-                container(
-                    text(t!(i18n, ids::DIALOG_ANNOTATE_COMPLETE_PACKAGES_NONE))
-                        .size(TS.body)
-                        .color(text_muted)
-                )
-                .padding([SP.s, SP.m])
-                .width(Length::FillPortion(3))
-                .style(bordered_style(tokens)),
+                column![
+                    section_heading(i18n, ids::DIALOG_ANNOTATE_COMPLETE_PACKAGES, tokens),
+                    container(
+                        text(t!(i18n, ids::DIALOG_ANNOTATE_COMPLETE_PACKAGES_NONE))
+                            .size(TS.body)
+                            .color(text_muted)
+                    )
+                    .padding([SP.s, SP.m])
+                    .width(Length::Fill)
+                    .style(bordered_style(tokens)),
+                ]
+                .spacing(SP.s)
+                .width(Length::Fill),
+                column![
+                    section_heading(i18n, ids::DIALOG_ANNOTATE_MATCHING_HEADING, tokens),
+                    // The left column scrolls, so the list grows in place.
+                    param_rows,
+                ]
+                .spacing(SP.s)
+                .width(Length::Fill),
             ]
-            .align_y(iced::Alignment::Center)
-            .spacing(6),
-            Space::new().height(6),
-            container(
-                scrollable(param_rows)
-                    .height(98)
-                    .style(scroll_style(tokens))
-            )
-            .padding(SP.xs)
-            .style(bordered_style(tokens)),
-            Space::new().height(4),
+            .spacing(SP.l),
             text(t!(i18n, ids::DIALOG_ANNOTATE_MATCHING_UNAVAILABLE))
                 .size(TS.caption)
                 .color(text_muted),
@@ -304,12 +239,8 @@ impl Signex {
         };
 
         let sheets_table = column![
-            text(t!(i18n, ids::DIALOG_ANNOTATE_SHEETS_HEADING))
-                .size(TS.label)
-                .color(text_c),
-            Space::new().height(4),
+            section_heading(i18n, ids::DIALOG_ANNOTATE_SHEETS_HEADING, tokens),
             sheets_view,
-            Space::new().height(4),
             text(t!(i18n, ids::DIALOG_ANNOTATE_SHEET_OPTIONS_UNAVAILABLE))
                 .size(TS.caption)
                 .color(text_muted)
@@ -317,31 +248,38 @@ impl Signex {
         ]
         .spacing(SP.s);
 
-        let left_col = column![
-            order_row,
-            Space::new().height(8),
-            process_location,
-            Space::new().height(8),
-            replace_sub,
-            Space::new().height(10),
-            matching,
-            Space::new().height(10),
-            sheets_table,
+        // Process Location and Replace Sub-Parts are read-only; they share
+        // one row so the mock's sections lead.
+        let fixed_options = row![
+            process_location.width(Length::Fill),
+            replace_sub.width(Length::Fill),
         ]
-        .spacing(0)
-        .width(Length::Fill);
+        .spacing(SP.l);
+
+        let left_col = column![order_row, matching, fixed_options, sheets_table]
+            .spacing(SP.xl)
+            .width(Length::Fill);
 
         // ── Right column: Proposed Change List ──
-        let right_title = text(t!(i18n, ids::DIALOG_ANNOTATE_CHANGES_HEADING))
-            .size(TS.label)
-            .color(text_c);
+        let right_title = section_heading(i18n, ids::DIALOG_ANNOTATE_CHANGES_HEADING, tokens);
 
-        // Column headers
+        // Column headers. The Lock header's checkbox locks or unlocks every
+        // row (the former All Off / All On buttons).
+        let locked_set = &self.ui_state.annotate_locked;
+        let all_locked = all_listed_locked(proposed.iter().map(|e| e.uuid), locked_set);
         let list_headers = row![
-            text(t!(i18n, ids::DIALOG_ANNOTATE_COL_LOCK))
-                .size(TS.caption)
-                .color(text_muted)
-                .width(Length::Fixed(42.0)),
+            container(
+                row![
+                    lock_all_header(all_locked, !proposed.is_empty(), tokens),
+                    text(t!(i18n, ids::DIALOG_ANNOTATE_COL_LOCK))
+                        .size(TS.caption)
+                        .color(text_muted),
+                ]
+                .spacing(SP.s)
+                .align_y(iced::Alignment::Center),
+            )
+            .width(Length::Fixed(LOCK_COL_W))
+            .padding([0.0, 6.0]),
             text(t!(i18n, ids::DIALOG_ANNOTATE_COL_CURRENT))
                 .size(TS.caption)
                 .color(text_muted)
@@ -355,9 +293,9 @@ impl Signex {
                 .color(text_muted)
                 .width(Length::FillPortion(3)),
         ]
-        .padding([SP.s, SP.m]);
+        .padding([SP.s, SP.m])
+        .align_y(iced::Alignment::Center);
 
-        let locked_set = &self.ui_state.annotate_locked;
         let mut rows_col: iced::widget::Column<Element<'_, Message>> =
             column![].spacing(0).width(Length::Fill);
         if proposed.is_empty() {
@@ -424,7 +362,7 @@ impl Signex {
                     .font(gr::mono());
                 let line = row![
                     container(lock_btn)
-                        .width(Length::Fixed(42.0))
+                        .width(Length::Fixed(LOCK_COL_W))
                         .padding([0.0, 6.0]),
                     cur_text,
                     new_text,
@@ -478,23 +416,6 @@ impl Signex {
             .and_then(|p| p.data.designator_standard());
         let reprefix_note = controls::reprefix_note(i18n, standard);
 
-        let right_col = column![
-            right_title,
-            Space::new().height(6),
-            list_headers,
-            right_list,
-            Space::new().height(6),
-            text(t!(i18n, ids::DIALOG_ANNOTATE_SUMMARY_HEADING))
-                .size(TS.caption)
-                .color(text_c),
-            summary,
-            container(text(reprefix_note).size(TS.caption).color(text_muted)).padding([SP.s, SP.s]),
-        ]
-        .spacing(0)
-        .width(Length::Fill)
-        .height(Length::Fill);
-
-        // ── Footer ──
         // A run reads, numbers and writes off the UI thread; the buttons that
         // start another stay off until it ends (#1753).
         let busy = self.ui_state.annotate_runs.is_running();
@@ -502,6 +423,36 @@ impl Signex {
         let secondary = |label: &str, message: Option<Message>| {
             dialog_button(label, DialogButtonKind::Secondary, message, tokens)
         };
+
+        // Re-prefix moved out of the footer to the list's heading row, where
+        // it stays visible at any window size; its note stays in the summary.
+        let title_row = row![
+            container(right_title).width(Length::Fill),
+            secondary(
+                "Re-prefix to standard",
+                (standard.is_some() && !self.ui_state.annotate_preview.loading && !busy)
+                    .then_some(Message::Annotate(AnnotateMsg::ReprefixPressed)),
+            ),
+        ]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center);
+
+        let right_col = column![
+            title_row,
+            Space::new().height(SP.s),
+            list_headers,
+            right_list,
+            Space::new().height(SP.m),
+            section_heading(i18n, ids::DIALOG_ANNOTATE_SUMMARY_HEADING, tokens),
+            summary,
+            container(text(reprefix_note).size(TS.caption).color(text_muted)).padding([SP.s, SP.s]),
+        ]
+        .spacing(0)
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+        // ── Footer ── the mock's three: resets at the left, Accept at the
+        // right. Close is the header's ✕ (and Esc).
         let status: Element<'_, Message> = if busy {
             text(t!(i18n, ids::DIALOG_ANNOTATE_RUNNING))
                 .size(TS.caption)
@@ -512,22 +463,6 @@ impl Signex {
         };
         let footer = dialog_footer_split(
             vec![
-                secondary(
-                    "All On",
-                    Some(Message::Annotate(AnnotateMsg::SetAllLocked(false))),
-                ),
-                secondary(
-                    "All Off",
-                    Some(Message::Annotate(AnnotateMsg::SetAllLocked(true))),
-                ),
-            ],
-            vec![
-                status,
-                secondary(
-                    "Re-prefix to standard",
-                    (standard.is_some() && !self.ui_state.annotate_preview.loading && !busy)
-                        .then_some(Message::Annotate(AnnotateMsg::ReprefixPressed)),
-                ),
                 secondary(
                     "Reset All",
                     idle(Message::Annotate(AnnotateMsg::Run(
@@ -540,12 +475,9 @@ impl Signex {
                         signex_engine::AnnotateMode::ResetAndRenumber,
                     ))),
                 ),
-                dialog_button(
-                    "Close",
-                    DialogButtonKind::Cancel,
-                    Some(Message::Annotate(AnnotateMsg::CloseDialog)),
-                    tokens,
-                ),
+            ],
+            vec![
+                status,
                 dialog_button(
                     "Accept Changes",
                     gr::call_to_action(tokens),

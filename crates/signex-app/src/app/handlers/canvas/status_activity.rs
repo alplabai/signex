@@ -30,6 +30,14 @@ impl Signex {
                 &self.ui_state.i18n,
             ));
         }
+        // Likewise the footprint editor: its pad summary replaces the strip
+        // that used to sit under its canvas.
+        if let Some(editor) = self.status_footprint_editor(window_id) {
+            return Some(crate::library::editor::footprint::status::segment(
+                editor,
+                &self.ui_state.i18n,
+            ));
+        }
         self.move_status(window_id)
             .or_else(|| self.measure_status(window_id))
             .map(Activity::note)
@@ -61,6 +69,37 @@ mod tests {
         let editor = SymbolDocument::new(path.clone(), file);
         let expected = crate::library::editor::symbol::status::segment(&editor, &app.ui_state.i18n);
         app.document_state.symbol_editors.insert(path, editor);
+        app.interaction_state
+            .canvas_for_window(window)
+            .move_behaviour
+            .set(Some(true));
+
+        assert_eq!(app.status_activity(window), Some(expected));
+    }
+
+    /// #2262: the footprint editor's pad summary sits in the global status
+    /// bar, not in a strip under its canvas; a schematic drag behind the
+    /// tab does not show.
+    #[test]
+    fn a_footprint_editor_tab_shows_its_own_segment() {
+        let (mut app, _task) = Signex::new();
+        let window = iced::window::Id::unique();
+        app.ui_state.main_window_id = Some(window);
+        let path = std::path::PathBuf::from("f.snxfpt");
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "f".into(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::FootprintEditor(path.clone()),
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        let file =
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
+        let editor = FootprintDocument::new(path.clone(), file);
+        let expected =
+            crate::library::editor::footprint::status::segment(&editor, &app.ui_state.i18n);
+        app.document_state.footprint_editors.insert(path, editor);
         app.interaction_state
             .canvas_for_window(window)
             .move_behaviour
