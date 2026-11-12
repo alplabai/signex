@@ -7,7 +7,7 @@ use iced::widget::{container, row};
 use iced::{Color, Element, Length, Theme};
 use iced_aw::menu::{DrawPath, Item, Menu, MenuBar};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{raw, text};
+use signex_widgets::text;
 
 use crate::keymap::{AppCommandId, CompiledKeymap};
 use crate::styles;

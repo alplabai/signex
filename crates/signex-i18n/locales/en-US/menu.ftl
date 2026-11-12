@@ -80,3 +80,13 @@ menu-help-about = About Signex
 menu-help-documentation = Documentation
 menu-help-report-issue = Report an Issue
 menu-help-sample-project = Open Sample Project
+
+## Native app menu and menu chrome (#2057)
+# The product name. A message that names it inside a sentence would carry
+# Unicode isolation marks around the term, which a native menu label shows
+# as stray glyphs, so those messages spell it out.
+-brand-name = Signex
+# Title of the app menu of the macOS menu bar (AppKit shows the process name regardless).
+menu-app-title = { -brand-name }
+# Tooltip of a menu row for a feature that is planned but not built yet.
+menu-planned-tooltip = Planned — not available yet

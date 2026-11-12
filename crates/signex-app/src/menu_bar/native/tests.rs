@@ -30,7 +30,7 @@ fn contexts(recent: &[PathBuf]) -> Vec<MenuContext<'_>> {
 }
 
 fn built(ctx: &MenuContext) -> NativeMenu {
-    build(&menu_bar_model(ctx), false)
+    build(&menu_bar_model(ctx), &ctx.i18n, false)
 }
 
 /// The model row a native row carries, with the shortcut text appended.
@@ -85,7 +85,7 @@ fn menu_mirrors_the_model_for_every_variant() {
     let recent = recent_paths();
     for ctx in contexts(&recent) {
         let model = menu_bar_model(&ctx);
-        let menu = build(&model, false);
+        let menu = build(&model, &ctx.i18n, false);
         assert_eq!(menu.items().len(), model.menus.len() + 1);
         assert_eq!(root_titles(&menu)[0], APP_MENU_TITLE);
         for (model_menu, native) in model.menus.iter().zip(&menu.items()[1..]) {
@@ -175,7 +175,7 @@ fn a_locked_bar_greys_the_model_rows_and_keeps_the_app_menu() {
     let unlocked = built(&ctx);
     assert!(row_message(&unlocked, "File/Save").is_some());
 
-    let locked = build(&menu_bar_model(&ctx), true);
+    let locked = build(&menu_bar_model(&ctx), &ctx.i18n, true);
     let live: Vec<String> = all_rows(&locked)
         .into_iter()
         .filter(|(_, action)| action.on_activate.is_some())

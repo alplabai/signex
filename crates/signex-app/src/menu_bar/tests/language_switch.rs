@@ -22,7 +22,7 @@ fn in_window_title(app: &Signex) -> String {
 fn native_title(app: &Signex) -> String {
     let model = menu_bar_model(&menu_context(app));
     // Menu 0 is the app menu; File follows it.
-    root_titles(&build(&model, false))[1].clone()
+    root_titles(&build(&model, &app.ui_state.i18n, false))[1].clone()
 }
 
 #[test]

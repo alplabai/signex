@@ -21,11 +21,10 @@ mod tests;
 
 pub(crate) use state::{MenuInputs, NativeMenuState};
 
-/// Title of the app menu. AppKit shows the process name regardless.
+/// The English title of the app menu the tests pin; the bar reads the
+/// catalog's `menu-app-title`.
+#[cfg(test)]
 const APP_MENU_TITLE: &str = "Signex";
-
-const ABOUT_LABEL: &str = "About Signex";
-const PREFERENCES_LABEL: &str = "Preferences...";
 
 /// The one key equivalent a custom row registers; the stock rows (Quit, Hide,
 /// Hide Others) bring their own (docs/MENU_BAR.md).
@@ -37,8 +36,12 @@ const SHORTCUT_GAP: &str = "    ";
 /// The bar the model describes: the app menu first, then the model's roots.
 /// `locked` greys every model row (a confirm dialog is open); the app menu
 /// stays live. Pure: the same model gives the same menu.
-pub(crate) fn build(model: &MenuBarModel, locked: bool) -> iced_menu::Menu<Message> {
-    let mut items = vec![app_menu()];
+pub(crate) fn build(
+    model: &MenuBarModel,
+    i18n: &signex_i18n::I18n,
+    locked: bool,
+) -> iced_menu::Menu<Message> {
+    let mut items = vec![app_menu(i18n)];
     items.extend(
         model
             .menus
@@ -61,7 +64,11 @@ pub(crate) fn build_for(inputs: &MenuInputs) -> iced_menu::Menu<Message> {
         pcb_sync: inputs.pcb_sync(),
         ..super::MenuContext::default()
     };
-    build(&super::model::menu_bar_model(&ctx), inputs.locked())
+    build(
+        &super::model::menu_bar_model(&ctx),
+        &ctx.i18n,
+        inputs.locked(),
+    )
 }
 
 /// What a model row sends: its action, routed and lock-checked when it
@@ -70,16 +77,26 @@ fn model_row(action: MenuMessage) -> Message {
     Message::Window(WindowMsg::NativeMenuRowChosen(action))
 }
 
-fn app_menu() -> Item<Message> {
+/// The app menu. Hide, Hide Others, Show All and Quit are the system's rows:
+/// the iced fork's `Predefined` carries no label, so the OS words them.
+fn app_menu(i18n: &signex_i18n::I18n) -> Item<Message> {
+    use signex_i18n::ids;
     let preferences = crate::keymap::AppCommandId::new("open_preferences")
         .ok()
         .map(|id| Message::Menu(MenuMessage::Command(id)));
     iced_menu::submenu(
-        APP_MENU_TITLE,
+        i18n.message(ids::MENU_APP_TITLE, &[]).into_string(),
         [
-            iced_menu::item(ABOUT_LABEL, Message::Menu(MenuMessage::OpenAbout)),
+            iced_menu::item(
+                i18n.message(ids::MENU_HELP_ABOUT, &[]).into_string(),
+                Message::Menu(MenuMessage::OpenAbout),
+            ),
             iced_menu::separator(),
-            iced_menu::item_maybe(PREFERENCES_LABEL, preferences).shortcut(PREFERENCES_KEY),
+            iced_menu::item_maybe(
+                super::cmd_label(i18n, "open_preferences", "open_preferences"),
+                preferences,
+            )
+            .shortcut(PREFERENCES_KEY),
             iced_menu::separator(),
             iced_menu::predefined(Predefined::Hide),
             iced_menu::predefined(Predefined::HideOthers),

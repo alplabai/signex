@@ -81,15 +81,15 @@ impl MenuItem {
     }
 }
 
-/// Titles of the root menus, left to right: the one list both the model and
-/// the chrome's width estimate read.
+/// The English titles of the root menus, left to right, which the tests pin;
+/// the bar reads [`ROOT_TITLE_IDS`].
+#[cfg(test)]
 pub const ROOT_TITLES: [&str; 10] = [
     "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Reports", "Window", "Help",
 ];
 
-/// The catalog message of each root title, left to right. [`ROOT_TITLES`]
-/// stays the English text the width estimate measures.
-const ROOT_TITLE_IDS: [signex_i18n::MessageId; ROOT_TITLES.len()] = [
+/// The catalog message of each root title, left to right.
+const ROOT_TITLE_IDS: [signex_i18n::MessageId; 10] = [
     signex_i18n::ids::MENU_FILE,
     signex_i18n::ids::MENU_EDIT,
     signex_i18n::ids::MENU_VIEW,

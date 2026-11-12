@@ -250,6 +250,8 @@ define_ids! {
     MENU_HELP_DOCUMENTATION = "menu-help-documentation";
     MENU_HELP_REPORT_ISSUE = "menu-help-report-issue";
     MENU_HELP_SAMPLE_PROJECT = "menu-help-sample-project";
+    MENU_APP_TITLE = "menu-app-title";
+    MENU_PLANNED_TOOLTIP = "menu-planned-tooltip";
     OVERLAY_PLACEMENT_PAUSED_ESC_HINT = "overlay-placement-paused-esc-hint";
     PROPERTIES_LIBRARY_OUT_OF_DATE = "properties-library-out-of-date";
     PROPERTIES_LIBRARY_SYMBOL_MISSING = "properties-library-symbol-missing";
