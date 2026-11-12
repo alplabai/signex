@@ -816,6 +816,7 @@ impl Signex {
             open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id))),
             mount_task,
             tour_boot,
+            app.check_pinned_projects(),
         ]);
         // The panel context above was seeded with Signex tokens; point it at the
         // saved theme before the first frame, so a Graphite first launch does not

@@ -139,6 +139,31 @@ mod tests {
         assert!(read_pinned_projects_from(None).is_empty());
     }
 
+    /// As for `recent_projects`: a malformed value reads as its string
+    /// entries (or none), and the next write replaces it.
+    #[test]
+    fn a_malformed_pinned_list_reads_as_its_strings_and_the_next_write_replaces_it() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("prefs.json");
+        std::fs::write(&path, br#"{"pinned_projects": "oops"}"#).expect("write");
+        assert!(read_pinned_projects_at(&path).is_empty());
+
+        std::fs::write(
+            &path,
+            br#"{"pinned_projects": ["a.snxprj", 7, null, "", {"x": 1}, "b.snxprj"]}"#,
+        )
+        .expect("write");
+        assert_eq!(
+            read_pinned_projects_at(&path),
+            [PathBuf::from("a.snxprj"), PathBuf::from("b.snxprj")]
+        );
+
+        write_pinned_projects_at(&path, &[PathBuf::from("c.snxprj")]);
+        let json: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).expect("read")).expect("json");
+        assert_eq!(json["pinned_projects"], serde_json::json!(["c.snxprj"]));
+    }
+
     #[test]
     fn pinned_projects_round_trip_in_order_beside_the_recent_list() {
         let dir = tempfile::tempdir().expect("tempdir");

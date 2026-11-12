@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-use signex_app::app::{InputMsg, Message, ProjectMsg, ProjectTabMsg, RenameMsg, Signex};
+use signex_app::app::{FileMsg, InputMsg, Message, ProjectMsg, ProjectTabMsg, RenameMsg, Signex};
 use signex_app::pinned_projects::PinnedProjects;
 use signex_app::recent_projects::RecentProjects;
 use signex_app::start_screen::{self, StartScreenMsg};
@@ -156,10 +156,22 @@ fn a_pinned_project_opens_and_a_missing_one_is_marked_then_removed() {
         "a pinned row opens its project"
     );
 
+    let _ = signex_app::diagnostics::init_logging();
+    let since = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
     let opened = app.document_state.projects.len();
     send(&mut app, StartScreenMsg::PinnedProjectClicked(gone.clone()));
     assert_eq!(app.document_state.projects.len(), opened, "nothing opens");
     assert!(app.ui_state.pinned_projects.is_missing(&gone));
+    // The path is a Fluent placeable, so it sits inside isolation marks.
+    let gone_text = gone.display().to_string();
+    assert!(
+        signex_app::diagnostics::recent_entries().iter().any(|e| {
+            e.id > since
+                && e.message.contains(&gone_text)
+                && e.message.contains("is no longer on disk; the pin is kept.")
+        }),
+        "Messages says the pin's file is gone"
+    );
     assert!(
         app.ui_state.pinned_projects.contains(&gone),
         "a missing pin stays until the user removes it"
@@ -205,6 +217,21 @@ fn open_from_a_recent_row_menu_closes_the_menu() {
         !app.ui_state.recent_projects.entries().contains(&gone),
         "a vanished entry is dropped as File > Open Recent drops it"
     );
+}
+
+/// Review of #2310: a project opened by another route while the row menu is
+/// up takes the menu away, so it never comes back or takes an Esc.
+#[test]
+fn the_row_menu_goes_when_a_project_opens_another_way() {
+    let _lock = lock();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, recent) = app_with_recent(dir.path(), &["a.snxprj"]);
+
+    send(&mut app, StartScreenMsg::RowRightClicked(recent[0].clone()));
+    assert!(app.interaction_state.start_row_menu.is_some());
+    let _ = app.update(Message::File(FileMsg::Opened(Some(recent[0].clone()))));
+    assert!(app.document_state.active_project.is_some());
+    assert!(app.interaction_state.start_row_menu.is_none());
 }
 
 #[test]
@@ -263,6 +290,11 @@ fn a_pin_missing_at_start_up_shows_as_missing() {
     let pins = app.ui_state.pinned_projects.entries().to_vec();
     assert_eq!(pins.len(), 1);
     assert_eq!(pins[0].file_name().unwrap(), "gone.snxprj");
+    // Boot reads no file for the pins: the mark lands when the check that
+    // boot starts has run on its worker.
+    assert!(!app.ui_state.pinned_projects.is_missing(&pins[0]));
+    let check = app.check_pinned_projects();
+    crate::drive::drive(&mut app, check);
     assert!(app.ui_state.pinned_projects.is_missing(&pins[0]));
     let sections = start_screen::project_sections(
         app.ui_state.recent_projects.entries(),

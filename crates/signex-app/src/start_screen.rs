@@ -145,6 +145,9 @@ pub enum StartScreenMsg {
     RowRightClicked(PathBuf),
     /// The row menu was dismissed without a pick.
     RowMenuDismissed,
+    /// The start-up check of the pins finished off the UI thread: the pins
+    /// whose file is not on disk, or why the check could not run.
+    PinsChecked(Result<Vec<PathBuf>, String>),
 }
 
 /// The open right-click menu of a Start screen project row.

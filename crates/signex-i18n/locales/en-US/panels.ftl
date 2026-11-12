@@ -301,6 +301,12 @@ start-remove = Remove
 start-open-project = Open
 # Shown on a pinned project whose file is no longer on disk.
 start-project-missing = Missing on disk
+# Messages panel warning when a pinned project is clicked but its file is
+# gone. $path is the project file's path.
+start-pin-missing-warning = { $path } is no longer on disk; the pin is kept.
+# Messages panel warning when the start-up check of the pinned projects
+# could not run. $reason is the error text.
+start-pin-check-failed = Could not check the pinned projects on disk: { $reason }
 
 ## Projects panel
 

@@ -7,8 +7,6 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::recent_projects::RecentProjects;
-
 /// Pinned project paths in the user's order, and which of them were last
 /// found missing on disk.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -26,19 +24,21 @@ impl PinnedProjects {
         }
     }
 
-    /// Build the list from persisted paths at boot: spelled as the recent
-    /// list spells them, de-duplicated, order kept. An entry that is not a
-    /// file on disk is marked missing.
+    /// Build the list from persisted paths at boot, as saved (the saved
+    /// spelling is the recent list's), de-duplicated, order kept. Nothing is
+    /// read from disk: which pins are missing comes later, from
+    /// [`missing_files`] run off the UI thread.
     pub fn from_paths(paths: impl IntoIterator<Item = PathBuf>) -> Self {
         let mut entries: Vec<PathBuf> = Vec::new();
         for path in paths {
-            let path = RecentProjects::spelling_of(&path);
             if !entries.contains(&path) {
                 entries.push(path);
             }
         }
-        let missing = entries.iter().filter(|p| !p.is_file()).cloned().collect();
-        Self { entries, missing }
+        Self {
+            entries,
+            missing: Vec::new(),
+        }
     }
 
     /// Paths, in the order they were pinned.
@@ -108,6 +108,12 @@ impl PinnedProjects {
     }
 }
 
+/// The `paths` that are not files on disk. Blocking: run it on a worker,
+/// never in `update` or `view`.
+pub fn missing_files(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    paths.into_iter().filter(|path| !path.is_file()).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,19 +156,20 @@ mod tests {
     }
 
     #[test]
-    fn from_paths_dedupes_keeps_order_and_marks_missing_files() {
+    fn from_paths_dedupes_keeps_order_and_marks_nothing() {
+        let pinned =
+            PinnedProjects::from_paths([p("gone.snxprj"), p("here.snxprj"), p("gone.snxprj")]);
+        assert_eq!(pinned.entries(), [p("gone.snxprj"), p("here.snxprj")]);
+        assert!(!pinned.is_missing(&p("gone.snxprj")));
+    }
+
+    #[test]
+    fn missing_files_names_only_the_paths_not_on_disk() {
         let dir = tempfile::tempdir().expect("tempdir");
         let here = dir.path().join("here.snxprj");
         std::fs::write(&here, b"").expect("create project");
         let gone = dir.path().join("gone.snxprj");
-
-        let pinned = PinnedProjects::from_paths([gone.clone(), here.clone(), gone.clone()]);
-
-        let here = RecentProjects::spelling_of(&here);
-        let gone = RecentProjects::spelling_of(&gone);
-        assert_eq!(pinned.entries(), [gone.clone(), here.clone()]);
-        assert!(pinned.is_missing(&gone));
-        assert!(!pinned.is_missing(&here));
+        assert_eq!(missing_files(vec![gone.clone(), here]), [gone]);
     }
 
     #[test]

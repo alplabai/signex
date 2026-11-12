@@ -841,6 +841,8 @@ define_ids! {
     START_REMOVE = "start-remove";
     START_OPEN_PROJECT = "start-open-project";
     START_PROJECT_MISSING = "start-project-missing";
+    START_PIN_MISSING_WARNING = "start-pin-missing-warning";
+    START_PIN_CHECK_FAILED = "start-pin-check-failed";
     PANELS_PROJECTS_SHEETS = "panels-projects-sheets";
     PANELS_PROJECTS_BOARDS = "panels-projects-boards";
     PANELS_PROJECTS_LIBRARIES = "panels-projects-libraries";

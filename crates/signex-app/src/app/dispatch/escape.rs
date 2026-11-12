@@ -130,7 +130,7 @@ impl Signex {
                 if let Some(dismiss) = self.components_row_menu_escape() {
                     return self.update(dismiss);
                 }
-                if self.interaction_state.start_row_menu.is_some() {
+                if self.interaction_state.start_row_menu.is_some() && self.start_screen_shown() {
                     return self.update(crate::start_screen::message(
                         crate::start_screen::StartScreenMsg::RowMenuDismissed,
                     ));

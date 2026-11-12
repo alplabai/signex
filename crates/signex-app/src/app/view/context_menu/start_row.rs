@@ -62,6 +62,11 @@ impl Signex {
         let Some(menu_ctx) = self.interaction_state.start_row_menu.as_ref() else {
             return Vec::new();
         };
+        // The menu belongs to the Start screen; it never paints over a
+        // project or tab opened while it was up.
+        if !self.start_screen_shown() {
+            return Vec::new();
+        }
         if !self.overlay_belongs_to(None, window_id) {
             return Vec::new();
         }
