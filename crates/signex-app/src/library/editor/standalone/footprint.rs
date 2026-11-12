@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use iced::widget::{Space, container, row};
+use iced::widget::{Space, container, row, scrollable};
 use iced::{Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -32,6 +32,7 @@ pub fn view_footprint<'a>(
     tokens: &'a ThemeTokens,
     _theme_id: signex_types::theme::ThemeId,
     i18n: &signex_i18n::I18n,
+    undocked: bool,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     // v0.16.2.2 — footprint canvas uses Altium PCB-editor colours
@@ -80,14 +81,124 @@ pub fn view_footprint<'a>(
         .width(Length::Fill)
         .height(Length::Fill)
         .push(canvas_area);
-    match editor.state.mode {
+    let body = match editor.state.mode {
         EditorMode::Sketch | EditorMode::Normal => stack
             .push(super::dof_chip::overlay(editor, tokens, i18n))
             .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
             .push(mode_switcher)
             .boxed(),
         EditorMode::View3d => stack.push(mode_switcher).boxed(),
+    };
+    // An undocked window has no dock, and the Layers panel follows the
+    // main window's tab, so the window keeps its own layer strip.
+    if undocked {
+        iced::widget::column![body, view_footprint_layers_strip(editor, tokens, i18n)]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .boxed()
+    } else {
+        body
     }
+}
+
+/// v0.14.2 — Altium PCB-Library-style layer tab strip at the bottom
+/// of the canvas (above the footer). Each layer is a clickable pill
+/// with a colour swatch + label. Click toggles visibility (existing
+/// `FootprintToggleLayer` message).
+///
+/// Replaces the heavy layer pills that used to sit at the top of the
+/// editor; moving them below the canvas keeps the top compact and
+/// matches Altium's bottom-of-canvas layer tab pattern.
+fn view_footprint_layers_strip<'a>(
+    editor: &'a FootprintDocument,
+    tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, LibraryMessage> {
+    let text_c = theme_ext::text_primary(tokens);
+    let muted = theme_ext::text_secondary(tokens);
+    let border = theme_ext::border_color(tokens);
+
+    let layers = editor.state.layer_visibility;
+
+    let mut row_widget = row![
+        text(signex_i18n::t!(
+            i18n,
+            signex_i18n::ids::PANELS_KIND_FOOTPRINT_LAYERS
+        ))
+        .size(TS.caption)
+        .color(muted)
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center);
+
+    for layer in FpLayer::ORDER {
+        let on = layers.get(*layer);
+        let swatch = layer.color_in(editor.state.layer_palette);
+        let label_color = if on { text_c } else { muted };
+        let toggle_path = editor.path.clone();
+        let layer_standard = layer.standard_name().to_string();
+        let pill = button(
+            row![
+                container(text(raw("")).size(TS.caption))
+                    .width(Length::Fixed(SP.m))
+                    .height(Length::Fixed(SP.m))
+                    .style(move |_: &Theme| iced::widget::container::Style {
+                        background: Some(iced::Background::Color(swatch)),
+                        border: Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: iced::Color { a: 0.5, ..swatch },
+                            ..Border::default()
+                        },
+                        ..iced::widget::container::Style::default()
+                    }),
+                text(raw(layer.label())).size(TS.caption).color(label_color),
+            ]
+            .spacing(SP.s)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([SP.s, SP.m])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: toggle_path,
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleLayer(layer_standard)),
+        })
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: if on {
+                Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.05,
+                )))
+            } else {
+                Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.01,
+                )))
+            },
+            border: Border {
+                width: 1.0,
+                radius: 2.0.into(),
+                color: if on {
+                    swatch
+                } else {
+                    iced::Color { a: 0.5, ..border }
+                },
+                ..Border::default()
+            },
+            ..iced::widget::button::Style::default()
+        });
+        row_widget = row_widget.push(pill.boxed());
+    }
+
+    container(
+        scrollable(row_widget).direction(iced::widget::scrollable::Direction::Horizontal(
+            iced::widget::scrollable::Scrollbar::default()
+                .width(0)
+                .margin(0)
+                .scroller_width(0),
+        )),
+    )
+    .padding([SP.s, SP.l])
+    .width(Length::Fill)
+    .style(crate::styles::tab_bar_strip(tokens))
+    .boxed()
 }
 
 /// Minimal Sketch-mode top bar — replaces the layer-heavy

@@ -260,7 +260,7 @@ editors-component-header-unparsed = { $count ->
 }
 
 ## Footprint editor status bar (Graphite)
-editors-footprint-status-pad-selected = Pad { $number } — { $width } × { $height } mm @ ({ $x }, { $y })
+editors-footprint-status-pad-selected = Pad { $number } — { $width } × { $height } { $unit } @ ({ $x }, { $y })
 editors-footprint-status-hint-idle = { $pads ->
     [one] { $pads } pad
    *[other] { $pads } pads

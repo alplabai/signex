@@ -31,7 +31,9 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Width of the Lock column: its checkbox and the "Lock" caption.
-const LOCK_COL_W: f32 = 64.0;
+const LOCK_COL_W: f32 = SP.xl * 4.0;
+/// Side padding inside the Lock column.
+const LOCK_COL_PAD: f32 = SP.s + SP.xs;
 
 impl Signex {
     pub(in crate::app::view) fn view_annotate_dialog(&self) -> Element<'_, Message> {
@@ -270,7 +272,13 @@ impl Signex {
         let list_headers = row![
             container(
                 row![
-                    lock_all_header(all_locked, !proposed.is_empty(), tokens),
+                    lock_all_header(
+                        all_locked,
+                        !proposed.is_empty()
+                            && !self.ui_state.annotate_preview.loading
+                            && !self.ui_state.annotate_runs.is_running(),
+                        tokens,
+                    ),
                     text(t!(i18n, ids::DIALOG_ANNOTATE_COL_LOCK))
                         .size(TS.caption)
                         .color(text_muted),
@@ -279,7 +287,7 @@ impl Signex {
                 .align_y(iced::Alignment::Center),
             )
             .width(Length::Fixed(LOCK_COL_W))
-            .padding([0.0, 6.0]),
+            .padding([0.0, LOCK_COL_PAD]),
             text(t!(i18n, ids::DIALOG_ANNOTATE_COL_CURRENT))
                 .size(TS.caption)
                 .color(text_muted)
@@ -363,7 +371,7 @@ impl Signex {
                 let line = row![
                     container(lock_btn)
                         .width(Length::Fixed(LOCK_COL_W))
-                        .padding([0.0, 6.0]),
+                        .padding([0.0, LOCK_COL_PAD]),
                     cur_text,
                     new_text,
                     text(signex_i18n::UserText::new(entry.sheet.clone()))

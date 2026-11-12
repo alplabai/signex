@@ -76,6 +76,10 @@ fn an_undocked_footprint_window_shows_the_footprint_editor() {
     app.document_state.footprint_editors.insert(path, editor);
 
     assert!(shows(&app, window, "3D"), "the footprint mode switcher");
+    assert!(
+        shows(&app, window, "Layers"),
+        "an undocked window keeps its own layer strip"
+    );
     assert_eq!(app.status_zoom(window), SCHEMATIC_ZOOM * 3.0);
     assert_eq!(app.status_cursor(window), (4.0, 5.0));
 }

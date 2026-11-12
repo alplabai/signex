@@ -35,6 +35,7 @@ impl Signex {
         if let Some(editor) = self.status_footprint_editor(window_id) {
             return Some(crate::library::editor::footprint::status::segment(
                 editor,
+                self.status_grid(window_id).unit,
                 &self.ui_state.i18n,
             ));
         }
@@ -97,9 +98,14 @@ mod tests {
         let file =
             signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
         let editor = FootprintDocument::new(path.clone(), file);
-        let expected =
-            crate::library::editor::footprint::status::segment(&editor, &app.ui_state.i18n);
-        app.document_state.footprint_editors.insert(path, editor);
+        app.document_state
+            .footprint_editors
+            .insert(path.clone(), editor);
+        let expected = crate::library::editor::footprint::status::segment(
+            &app.document_state.footprint_editors[&path],
+            app.status_grid(window).unit,
+            &app.ui_state.i18n,
+        );
         app.interaction_state
             .canvas_for_window(window)
             .move_behaviour

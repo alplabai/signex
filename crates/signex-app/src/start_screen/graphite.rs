@@ -30,7 +30,7 @@ pub(super) const HERO_BODY_SIZE: f32 = TS.heading;
 pub(super) fn semibold() -> iced::Font {
     iced::Font {
         weight: iced::font::Weight::Semibold,
-        ..iced::Font::DEFAULT
+        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
     }
 }
 /// Width of the navigation column (the mock's 232 px).
