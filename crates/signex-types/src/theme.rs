@@ -440,7 +440,9 @@ const GRAPHITE_LIGHT_TOKENS: ThemeTokens = ThemeTokens {
         err_soft: s(0xFB, 0xED, 0xEA),
         info_soft: s(0xEA, 0xF0, 0xFD),
         shadow: Some(Color::new(0x15, 0x17, 0x1A, 26)),
-        scrim: Some(Color::new(0x15, 0x17, 0x1A, 87)),
+        // About 50%: the Light backdrop must visibly dim the app behind a
+        // dialog or the palette (#2262, Caner 2026-11-12).
+        scrim: Some(Color::new(0x15, 0x17, 0x1A, 128)),
     },
 };
 

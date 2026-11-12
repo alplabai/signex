@@ -498,3 +498,69 @@ panels-net-classes-patterns-hint = VCC*, ?SDA
 panels-child-sheet-name = Name
 panels-child-sheet-file = File
 panels-child-sheet-line-width = Line Width (mm)
+
+## ERC panel counts and waivers. $count is a whole number.
+panels-erc-count-errors = { $count } errors
+panels-erc-count-warnings = { $count } warnings
+panels-erc-count-info = { $count } info
+panels-erc-waived = { $count } waived
+# A net waiver: the rule id, the net name and how many findings it hid in the
+# newest run.
+panels-erc-waiver-row = { $rule }  net { $net }  ({ $hidden ->
+        [0] matches no finding
+        [one] { $hidden } finding hidden
+       *[other] { $hidden } findings hidden
+    })
+
+## Components panel
+panels-components-dismiss = Dismiss
+# Rows of one library beyond the ones shown. $count is a whole number.
+panels-components-more-rows = { $count } more — refine search
+panels-components-no-matches-in-library = (no matches in this library)
+
+## SCH Library panel
+panels-sch-library-empty = Open a `.snxsym` to see its symbols here. Right-click a library node in the project tree and pick `Add New ▸ Symbol` to create one.
+# Stands in for the file name of a symbol file not saved yet.
+panels-sch-library-untitled-file = <untitled>
+# $library is the library name, $file the symbol file; $count is a whole number.
+panels-sch-library-breadcrumb-in-library = { $library }  ›  { $file }  ({ $count } symbols)
+panels-sch-library-breadcrumb = { $file }  ({ $count } symbols)
+panels-sch-library-column-design-item-id = Design Item ID
+panels-sch-library-column-description = Description
+panels-sch-library-part-shared = Part 0 (shared)
+panels-sch-library-part = Part { $part }
+panels-sch-library-place = Place
+panels-sch-library-add = Add
+panels-sch-library-delete = Delete
+panels-sch-library-edit = Edit
+panels-sch-library-delete-warning-note = Deleting it leaves placed parts on their embedded copy; the library symbol will be missing.
+panels-sch-library-delete-anyway = Delete anyway
+panels-sch-library-delete-cancel = Cancel
+
+## Footprint Library panel
+panels-footprint-library-empty = Open a `.snxfpt` to see its footprints here. Right-click a `.snxlib` (or a project) in the project tree and pick `Add New ▸ Footprint Library` to create one.
+# Stands in for a file name that cannot be read.
+panels-footprint-library-unknown-file = <unknown>
+# $file is the footprint name; $count is a whole number.
+panels-footprint-library-breadcrumb = { $file }  ({ $count ->
+        [one] { $count } footprint
+       *[other] { $count } footprints
+    })
+panels-footprint-library-column-name = Name
+panels-footprint-library-column-pads = Pads
+
+## Library Browser row in the Properties panel
+panels-library-row-title = Library Row
+panels-library-row-unnamed = (unnamed row)
+# $table, $class and $lifecycle come from the row; $row is a short row id.
+panels-library-row-summary = table: { $table }  ·  class: { $class }  ·  { $lifecycle }  ·  row { $row }
+panels-library-row-symbol = Symbol
+panels-library-row-footprint = Footprint
+panels-library-row-pick-symbol = Pick Symbol…
+panels-library-row-pick-footprint = Pick Footprint…
+
+## Drawing properties (lines, rectangles, circles, arcs, polygons)
+panels-drawing-color = Color
+panels-drawing-placement = Placement
+panels-drawing-placement-behind = Behind circuit
+panels-drawing-placement-above = Above circuit

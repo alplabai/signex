@@ -13,16 +13,30 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Whether a row survives the filter: a case-insensitive substring of its
-/// reference, value or footprint. An empty filter keeps every row.
-fn row_matches_filter(filter: &str, sym: &signex_types::schematic::Symbol) -> bool {
-    // Match folding, never shown: the same fold on both sides of the compare.
-    // ast-grep-ignore: no-case-in-view
-    let needle = filter.trim().to_lowercase();
+/// reference, value or footprint, folded with `i18n.fold_for_search` on both
+/// sides. An empty filter keeps every row.
+fn row_matches_filter(
+    i18n: &signex_i18n::I18n,
+    filter: &str,
+    sym: &signex_types::schematic::Symbol,
+) -> bool {
+    fields_match_filter(
+        i18n,
+        filter,
+        [
+            sym.reference.as_str(),
+            sym.value.as_str(),
+            sym.footprint.as_str(),
+        ],
+    )
+}
+
+fn fields_match_filter(i18n: &signex_i18n::I18n, filter: &str, fields: [&str; 3]) -> bool {
+    let needle = i18n.fold_for_search(filter.trim());
     needle.is_empty()
-        || [&sym.reference, &sym.value, &sym.footprint]
+        || fields
             .iter()
-            // ast-grep-ignore: no-case-in-view
-            .any(|field| field.to_lowercase().contains(&needle))
+            .any(|field| i18n.fold_for_search(field).contains(&needle))
 }
 
 impl Signex {
@@ -128,7 +142,7 @@ impl Signex {
         for sym in doc
             .symbols
             .iter()
-            .filter(|s| !s.is_power && row_matches_filter(&table.filter, s))
+            .filter(|s| !s.is_power && row_matches_filter(&self.ui_state.i18n, &table.filter, s))
         {
             let mut r = row![
                 text(signex_i18n::UserText::new(sym.reference.clone()))
@@ -199,5 +213,30 @@ impl Signex {
         .style(crate::styles::modal_card(tokens))
         .clip(true)
         .boxed()
+    }
+}
+
+#[cfg(test)]
+mod filter_tests {
+    use super::fields_match_filter;
+    use signex_i18n::I18n;
+
+    #[test]
+    fn a_turkish_filter_finds_dotted_and_dotless_i() {
+        let tr = I18n::with_message_locale_for_test("tr");
+        let row = ["U1", "İSTANBUL", "ISPARTA"];
+        assert!(fields_match_filter(&tr, "istanbul", row));
+        assert!(fields_match_filter(&tr, " ısparta ", row));
+        assert!(!fields_match_filter(&tr, "isparta", row));
+        assert!(fields_match_filter(&tr, "", row));
+    }
+
+    #[test]
+    fn en_us_is_unchanged() {
+        let en = I18n::en_us();
+        let row = ["U1", "ISTANBUL", "Bridge"];
+        assert!(fields_match_filter(&en, "istanbul", row));
+        assert!(fields_match_filter(&en, "BRI", row));
+        assert!(!fields_match_filter(&en, "ıstanbul", row));
     }
 }

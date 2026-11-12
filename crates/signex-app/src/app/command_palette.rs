@@ -17,6 +17,7 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 
 use iced::widget::Id;
+use signex_i18n::I18n;
 
 use crate::keymap::{AppCommandId, metadata_for};
 use crate::panels::{ALL_PANELS, PanelKind};
@@ -129,13 +130,14 @@ impl CommandSource {
     }
 
     /// Header of the source's group in the Graphite palette.
-    pub fn group_title(self) -> &'static str {
+    pub fn group_title(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
         match self {
-            Self::Command => "COMMANDS",
-            Self::Symbol => "COMPONENTS",
-            Self::Net => "NETS",
-            Self::Sheet => "SHEETS",
-            Self::File => "FILES",
+            Self::Command => ids::OVERLAY_PALETTE_GROUP_COMMANDS,
+            Self::Symbol => ids::OVERLAY_PALETTE_GROUP_COMPONENTS,
+            Self::Net => ids::OVERLAY_PALETTE_GROUP_NETS,
+            Self::Sheet => ids::OVERLAY_PALETTE_GROUP_SHEETS,
+            Self::File => ids::OVERLAY_PALETTE_GROUP_FILES,
         }
     }
 }
@@ -445,7 +447,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
 /// is better). Empty query passes everything through with a baseline
 /// rank that prefers Commands > Symbols > Files. The caller can
 /// truncate to `MAX_RESULTS`.
-pub fn rank_results(catalog: &[CommandEntry], query: &str) -> Vec<(usize, i32)> {
+pub fn rank_results_in(i18n: &I18n, catalog: &[CommandEntry], query: &str) -> Vec<(usize, i32)> {
     if query.trim().is_empty() {
         // No query → show the catalog in source-priority order so the
         // empty palette is still useful (recently used menus near top).
@@ -476,7 +478,7 @@ pub fn rank_results(catalog: &[CommandEntry], query: &str) -> Vec<(usize, i32)> 
             } else {
                 format!("{} {}", entry.label, entry.detail)
             };
-            fuzzy_score(query, &target).map(|score| {
+            fuzzy_score_in(i18n, query, &target).map(|score| {
                 let source_bonus = match entry.source {
                     CommandSource::Command => 5,
                     CommandSource::Symbol => 3,
@@ -500,17 +502,16 @@ pub fn rank_results(catalog: &[CommandEntry], query: &str) -> Vec<(usize, i32)> 
 /// bonus dominates the word-boundary bonus so "save" → "Save File"
 /// outranks "save" → "Set Animation Variant Edit" (acronym matches
 /// rank below literal word matches, which matches VS Code's feel).
-pub fn fuzzy_score(query: &str, target: &str) -> Option<i32> {
+pub fn fuzzy_score_in(i18n: &I18n, query: &str, target: &str) -> Option<i32> {
     if query.is_empty() {
         return Some(0);
     }
-    let q: Vec<char> = query.chars().flat_map(char::to_lowercase).collect();
-    // Lowercasing can expand one char into several; keep an original-case
-    // char per lowercased char so both vectors share indices.
-    let (t, t_orig): (Vec<char>, Vec<char>) = target
-        .chars()
-        .flat_map(|c| c.to_lowercase().map(move |l| (l, c)))
-        .unzip();
+    // The per-char fold keeps the length (`İ`/`ı` follow the message
+    // language), so both vectors share indices.
+    let fold = |c: char| i18n.fold_char_for_search(c);
+    let q: Vec<char> = query.chars().map(fold).collect();
+    let t_orig: Vec<char> = target.chars().collect();
+    let t: Vec<char> = t_orig.iter().copied().map(fold).collect();
     if q.len() > t.len() {
         return None;
     }
@@ -568,6 +569,18 @@ pub fn fuzzy_score(query: &str, target: &str) -> Option<i32> {
     }
     score -= (t.len() as i32) / 4;
     Some(score)
+}
+
+/// [`fuzzy_score_in`] under en-US.
+#[cfg(test)]
+pub fn fuzzy_score(query: &str, target: &str) -> Option<i32> {
+    fuzzy_score_in(&I18n::en_us(), query, target)
+}
+
+/// [`rank_results_in`] under en-US.
+#[cfg(test)]
+pub fn rank_results(catalog: &[CommandEntry], query: &str) -> Vec<(usize, i32)> {
+    rank_results_in(&I18n::en_us(), catalog, query)
 }
 
 #[cfg(test)]
@@ -738,5 +751,36 @@ mod tests {
         assert_eq!(matched.len(), 2);
         // Command source breaks the tie before File source.
         assert_eq!(matched[0], 0);
+    }
+
+    #[test]
+    fn a_turkish_palette_finds_dotted_and_dotless_i_rows() {
+        let row = |label: &str| CommandEntry {
+            source: CommandSource::Net,
+            label: label.into(),
+            detail: String::new(),
+            action: CommandAction::OpenFile(PathBuf::new()),
+        };
+        let entries = [row("İSTANBUL"), row("ISPARTA"), row("Izmir")];
+        let tr = I18n::with_message_locale_for_test("tr");
+        let hits = |query: &str| -> Vec<usize> {
+            rank_results_in(&tr, &entries, query)
+                .iter()
+                .map(|(idx, _)| *idx)
+                .collect()
+        };
+        assert_eq!(hits("istanbul"), [0]);
+        assert_eq!(hits("ısparta"), [1]);
+        assert_eq!(hits("ızmir"), [2]);
+        // `i` does not match a capital `I` under tr.
+        assert!(hits("isparta").is_empty());
+        // en-US keeps trunk behaviour: `i` finds `İ` and `I`.
+        assert_eq!(rank_results(&entries, "istanbul").len(), 1);
+        assert_eq!(rank_results(&entries, "isparta").len(), 1);
+    }
+
+    #[test]
+    fn en_us_palette_still_finds_dotted_capital_i() {
+        assert!(fuzzy_score("istanbul", "İSTANBUL").is_some());
     }
 }

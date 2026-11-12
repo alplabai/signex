@@ -97,7 +97,7 @@ impl Signex {
             None => None,
         };
         self.library.note_shown_browser(shown_browser.as_deref());
-        self.library.sync_view_caches();
+        self.library.sync_view_caches_in(&self.ui_state.i18n);
         let library_tabs = self.close_tabs_of_unmounted_libraries();
         self.sync_component_tab_titles();
         let class_styles = self.refresh_net_class_styles();

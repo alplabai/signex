@@ -6,6 +6,7 @@
 
 use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Element, Length, Widget};
+use signex_i18n::I18n;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{raw, text};
 
@@ -56,19 +57,25 @@ pub fn build_sections(profiles: &ShortcutProfileSet) -> Vec<ShortcutSection> {
 }
 
 /// The sheet painted as a card in the main window.
-pub fn view<'a>(tokens: &'a ThemeTokens, sections: &[ShortcutSection]) -> Element<'a, Message> {
-    build(tokens, sections, false)
+pub fn view<'a>(
+    i18n: &I18n,
+    tokens: &'a ThemeTokens,
+    sections: &[ShortcutSection],
+) -> Element<'a, Message> {
+    build(i18n, tokens, sections, false)
 }
 
 /// The sheet as the content of its own OS window: no header, filling it.
 pub fn window_view<'a>(
+    i18n: &I18n,
     tokens: &'a ThemeTokens,
     sections: &[ShortcutSection],
 ) -> Element<'a, Message> {
-    build(tokens, sections, true)
+    build(i18n, tokens, sections, true)
 }
 
 fn build<'a>(
+    i18n: &I18n,
     tokens: &'a ThemeTokens,
     sections: &[ShortcutSection],
     windowed: bool,
@@ -127,9 +134,7 @@ fn build<'a>(
 
         body = body.push(
             container(
-                // user-visible: migrate to the #2063 casemap
-                // ast-grep-ignore: no-case-in-view
-                text(raw(title_case(category).to_uppercase()))
+                text(raw(i18n.upper_for_display(&title_case(i18n, category))))
                     .size(TS.caption)
                     .color(text_secondary),
             )
@@ -205,26 +210,22 @@ fn is_listed(row: &KeymapEditorRow) -> bool {
             .is_none_or(crate::app::command::bridge::is_dispatchable)
 }
 
-fn title_case(value: &str) -> String {
-    value
-        .split(['_', '-', ' '])
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            let mut chars = part.chars();
-            match chars.next() {
-                // user-visible: migrate to the #2063 casemap (inside format!, which the case lint cannot see)
-                Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
+use crate::keymap::category_title_case as title_case;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::keymap::KeymapEditorModel;
+
+    #[test]
+    fn category_titles_capitalise_by_the_message_language() {
+        let tr = I18n::with_message_locale_for_test("tr");
+        // Pins today's output for an untranslated English id; the `tr`
+        // catalog (#2065) is expected to change it.
+        assert_eq!(title_case(&tr, "idle_tools"), "İdle Tools");
+        assert_eq!(title_case(&I18n::en_us(), "idle_tools"), "Idle Tools");
+        assert_eq!(tr.upper_for_display("ilk"), "İLK");
+    }
 
     /// The pre-cache algorithm (#1380), kept as the oracle.
     fn legacy_sections(profiles: &ShortcutProfileSet) -> Vec<(String, Vec<(String, String)>)> {

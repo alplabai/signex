@@ -19,9 +19,8 @@ pub const TABLE_ROW_HEIGHT: f32 = 28.0;
 /// Corner radius of a Properties field.
 pub const PROPERTY_FIELD_RADIUS: f32 = 7.0;
 
-/// Row look of the Projects tree: accent-soft selection, 24 px rows.
+/// Row look of the Projects tree: the neutral selection, 24 px rows.
 pub fn tree_style(tokens: &ThemeTokens) -> TreeStyle {
-    let r = resolve(tokens);
     let tone = |t: PillTone| pill_colors(tokens, t);
     // The mock's violet has no token: a fixed pair per light / dark panel.
     let violet = if relative_luminance(ti(tokens.panel_bg)) < 0.5 {
@@ -35,7 +34,7 @@ pub fn tree_style(tokens: &ThemeTokens) -> TreeStyle {
             Color::from_rgb8(0x6B, 0x3F, 0xA0),
         )
     };
-    TreeStyle::new(r.accent_soft, r.accent_soft_ink).badge_tones([
+    TreeStyle::new(selection_fill(tokens), ti(tokens.text)).badge_tones([
         tone(PillTone::Neutral),
         tone(PillTone::Info),
         tone(PillTone::Ok),
@@ -47,7 +46,7 @@ pub fn tree_style(tokens: &ThemeTokens) -> TreeStyle {
 /// Short kind badge of a document row, with its tint: SCH info, PCB ok,
 /// LIB violet, BOM warn, OUT neutral.
 fn kind_badge(node: &TreeNode) -> Option<(&'static str, BadgeTone)> {
-    // identifier/data folding, never shown
+    // File-extension match, not UI text: ASCII lowercase in every language.
     // ast-grep-ignore: no-case-in-view
     let label = node.label.to_ascii_lowercase();
     let ext = |e: &str| label.contains(e);
@@ -101,9 +100,16 @@ pub fn decorate_tree(roots: &[TreeNode]) -> Vec<TreeNode> {
     roots.iter().map(|n| walk(n, 0)).collect()
 }
 
-/// Fill of the active / selected row in a library list: the soft accent.
+/// Fill of the active row of the PCB Layers list: the soft accent.
 pub fn active_fill(tokens: &ThemeTokens) -> Color {
     resolve(tokens).accent_soft
+}
+
+/// Fill of the selected row in a tree or library list (Projects, SCH
+/// Library, Footprint Library): the theme's neutral selection, as in the
+/// Library Browser, not an accent tint.
+pub fn selection_fill(tokens: &ThemeTokens) -> Color {
+    ti(tokens.selection)
 }
 
 /// Translucent state wash at `alpha`: the text colour, so it also works on
@@ -244,4 +250,56 @@ pub(crate) fn summary_card<'a>(ctx: &PanelContext) -> Option<Element<'a, PanelMs
             })
             .boxed(),
     )
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+    use signex_types::theme::{ThemeId, theme_tokens};
+    use signex_widgets::tree_view::TreeView;
+
+    const THEMES: [ThemeId; 2] = [ThemeId::GraphiteLight, ThemeId::GraphiteDark];
+
+    /// #2262: the Projects tree and the SCH / Footprint Library rows select
+    /// with the neutral grey the Library Browser uses, not the accent tint.
+    #[test]
+    fn tree_and_library_rows_select_with_the_neutral_grey() {
+        for id in THEMES {
+            let t = theme_tokens(id);
+            let neutral = ti(t.selection);
+            assert_ne!(neutral, resolve(&t).accent_soft, "{id:?}");
+            assert_eq!(selection_fill(&t), neutral, "{id:?} library rows");
+            let style = tree_style(&t);
+            assert_eq!(style.selected_fill, neutral, "{id:?} tree row");
+            assert_eq!(style.selected_ink, ti(t.text), "{id:?} tree ink");
+        }
+    }
+
+    /// The selected Projects row is drawn in that grey.
+    #[test]
+    fn the_selected_tree_row_is_drawn_in_the_neutral_grey() {
+        for id in THEMES {
+            let t = theme_tokens(id);
+            let roots = [TreeNode::leaf("a.snxsch", TreeIcon::SnxSchematic).with_key("a")];
+            let key = ["a".to_string()];
+            let tree = TreeView::new(&roots, &t)
+                .style(tree_style(&t))
+                .selected(&key)
+                .view();
+            let (w, h) = (200usize, 24usize);
+            let pixels =
+                crate::layout_probe::draw_pixels(tree, iced::Size::new(w as f32, h as f32));
+            // Middle of the row, right of the label and clear of the corners.
+            let at = (h / 2 * w + w * 3 / 4) * 4;
+            let drawn = [pixels[at], pixels[at + 1], pixels[at + 2]];
+            let n = ti(t.selection);
+            let want = [n.r, n.g, n.b].map(|v| (v * 255.0).round() as u8);
+            for (d, e) in drawn.iter().zip(want) {
+                assert!(
+                    d.abs_diff(e) <= 2,
+                    "{id:?}: row {drawn:?}, selection {want:?}"
+                );
+            }
+        }
+    }
 }

@@ -2,7 +2,7 @@
 //! instead of once per frame (#1353).
 //!
 //! `view` must stay cheap and pure, so it only reads this cache. `update`
-//! keeps it current through [`LibraryState::sync_view_caches`]: the
+//! keeps it current through [`LibraryState::sync_view_caches_in`]: the
 //! lowercase search keys are rebuilt only when the set of components
 //! changes (`data_version`), and the filtered list only when the query or
 //! a library name changes.
@@ -39,7 +39,7 @@ struct LibraryRows {
 }
 
 impl LibraryRows {
-    fn build(lib: &OpenLibrary) -> Self {
+    fn build(i18n: &signex_i18n::I18n, lib: &OpenLibrary) -> Self {
         let mut tables: Vec<(&String, &Vec<ComponentRow>)> = lib.tables.iter().collect();
         tables.sort_by(|a, b| a.0.cmp(b.0));
         let mut keys = Vec::with_capacity(lib.total_rows());
@@ -48,9 +48,9 @@ impl LibraryRows {
             keys.extend(rows.iter().enumerate().map(|(index, r)| RowKey {
                 table: Arc::clone(&table),
                 index,
-                mpn: r.primary_mpn.mpn.to_lowercase(),
-                manufacturer: r.primary_mpn.manufacturer.to_lowercase(),
-                internal_pn: r.internal_pn.as_str().to_lowercase(),
+                mpn: i18n.fold_for_search(&r.primary_mpn.mpn),
+                manufacturer: i18n.fold_for_search(&r.primary_mpn.manufacturer),
+                internal_pn: i18n.fold_for_search(r.internal_pn.as_str()),
             }));
         }
         Self {
@@ -77,6 +77,8 @@ impl LibraryRows {
 pub struct PanelRows {
     /// `LibraryState::data_version` the keys were built at.
     built_at: Option<u64>,
+    /// The message locale the keys were folded in.
+    built_in: Option<&'static str>,
     /// The normalised query `visible` lists were filtered for.
     needle: Option<String>,
     libs: HashMap<PathBuf, LibraryRows>,
@@ -103,21 +105,29 @@ impl PanelRows {
         })
     }
 
-    pub(super) fn sync(&mut self, libraries: &[OpenLibrary], data_version: u64, filter: &str) {
-        let needle = filter.trim().to_lowercase();
-        let keys_stale = self.built_at != Some(data_version);
+    pub(super) fn sync(
+        &mut self,
+        i18n: &signex_i18n::I18n,
+        libraries: &[OpenLibrary],
+        data_version: u64,
+        filter: &str,
+    ) {
+        let needle = i18n.fold_for_search(filter.trim());
+        let keys_stale =
+            self.built_at != Some(data_version) || self.built_in != Some(i18n.locale());
         if keys_stale {
             self.libs = libraries
                 .iter()
-                .map(|lib| (lib.root.clone(), LibraryRows::build(lib)))
+                .map(|lib| (lib.root.clone(), LibraryRows::build(i18n, lib)))
                 .collect();
             self.built_at = Some(data_version);
+            self.built_in = Some(i18n.locale());
             #[cfg(test)]
             counters::KEY_BUILDS.with(|c| c.set(c.get() + 1));
         }
         let needle_changed = self.needle.as_deref() != Some(needle.as_str());
         for lib in libraries {
-            let name_lc = lib.display_name.to_lowercase();
+            let name_lc = i18n.fold_for_search(&lib.display_name);
             let Some(rows) = self.libs.get_mut(&lib.root) else {
                 continue;
             };
@@ -130,9 +140,10 @@ impl PanelRows {
 }
 
 impl LibraryState {
-    pub(super) fn sync_panel_rows(&mut self) {
+    pub(super) fn sync_panel_rows(&mut self, i18n: &signex_i18n::I18n) {
         let version = self.data_version;
         self.components_panel.rows.sync(
+            i18n,
             &self.open_libraries,
             version,
             &self.components_panel.filter,

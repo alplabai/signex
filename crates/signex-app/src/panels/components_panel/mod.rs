@@ -102,13 +102,11 @@ pub(crate) fn view<'a>(
     col = col.push(Space::new().height(6.0).boxed());
     col = col.push(thin_sep(look::separator(tokens)));
     if !state.id_clash_notices.is_empty() {
-        col = col.push(id_clash_notices(state, tokens));
+        col = col.push(id_clash_notices(state, tokens, i18n));
     }
 
     // ── One flat list: Stock, Project, Installed, Global ─────────
-    // identifier/data folding, never shown
-    // ast-grep-ignore: no-case-in-view
-    let needle = panel.filter.trim().to_lowercase();
+    let needle = i18n.fold_for_search(panel.filter.trim());
     let mut shown = 0;
     for (source, lib) in &libraries {
         if selected.is_some_and(|s| s != *source) {
@@ -264,6 +262,7 @@ fn source_chips<'a>(
 fn id_clash_notices<'a>(
     state: &'a LibraryState,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let mut notices: Column<Element<'a, LibraryMessage>> = column![].spacing(SP.xs);
@@ -275,10 +274,14 @@ fn id_clash_notices<'a>(
                 .boxed(),
         );
     }
-    let dismiss = button(text(raw("Dismiss")).size(ROW_TEXT_SIZE).color(text_c))
-        .padding([SP.xs, SP.m])
-        .on_press(LibraryMessage::IdClashNoticesDismissed)
-        .style(crate::styles::menu_item(tokens));
+    let dismiss = button(
+        text(t!(i18n, ids::PANELS_COMPONENTS_DISMISS))
+            .size(ROW_TEXT_SIZE)
+            .color(text_c),
+    )
+    .padding([SP.xs, SP.m])
+    .on_press(LibraryMessage::IdClashNoticesDismissed)
+    .style(crate::styles::menu_item(tokens));
     container(notices.push(dismiss.boxed()))
         .padding([SP.s, SP.m])
         .width(Length::Fill)
@@ -392,10 +395,11 @@ fn view_library_block<'a>(
     if matched > MAX_ROWS_PER_LIBRARY {
         col = col.push(
             container(
-                text(raw(format!(
-                    "{} more — refine search",
-                    matched - MAX_ROWS_PER_LIBRARY
-                )))
+                text(t!(
+                    i18n,
+                    ids::PANELS_COMPONENTS_MORE_ROWS,
+                    "count" => (matched - MAX_ROWS_PER_LIBRARY) as i64
+                ))
                 .size(HINT_TEXT_SIZE)
                 .color(muted),
             )
@@ -407,7 +411,7 @@ fn view_library_block<'a>(
     if matched == 0 && !needle.is_empty() {
         col = col.push(
             container(
-                text(raw("(no matches in this library)"))
+                text(t!(i18n, ids::PANELS_COMPONENTS_NO_MATCHES_IN_LIBRARY))
                     .size(HINT_TEXT_SIZE)
                     .color(muted),
             )
@@ -618,7 +622,8 @@ mod tests {
         let texts = crate::layout_probe::lay_out_texts(build(&state, &tokens), window);
         let rows = texts.iter().filter(|t| t.text.starts_with("PN-")).count();
         assert_eq!(rows, 200);
-        crate::layout_probe::find(&texts, "50 more — refine search");
+        // The count is a catalog argument, wrapped in isolation marks.
+        crate::layout_probe::find(&texts, "\u{2068}50\u{2069} more — refine search");
 
         // Narrowing the filter below the cap removes the summary row.
         state.components_panel.filter = "pn-7".into();

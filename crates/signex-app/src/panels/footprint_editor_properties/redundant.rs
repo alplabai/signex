@@ -19,13 +19,14 @@ pub(super) fn push_redundant_rows<'a>(
     s: &'a FootprintSolveSummary,
     muted: Color,
     input_bg: Color,
+    i18n: &signex_i18n::I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     col = props_kv_row(
         col,
         muted,
         input_bg,
         "Redundant",
-        s.redundant_constraints.len().to_string(),
+        i18n.count(s.redundant_constraints.len() as i64),
     );
     let amber = Color::from_rgba(1.00, 0.78, 0.35, 1.00);
     for rc in s.redundant_constraints.iter().take(MAX_ROWS) {

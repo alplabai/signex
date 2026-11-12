@@ -13,15 +13,26 @@ use signex_widgets::{button, raw, text, text_input};
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+/// What the last keymap load, save or profile action left to tell the user.
+pub(super) struct KeymapFeedback<'a> {
+    pub status: &'a str,
+    pub load_error: Option<&'a str>,
+    pub backup: Option<&'a str>,
+}
+
 pub(super) fn content_keyboard_shortcuts<'a>(
+    i18n: &signex_i18n::I18n,
     editor: &'a crate::keymap::KeymapEditorModel,
-    status: &'a str,
-    load_error: Option<&'a str>,
-    backup: Option<&'a str>,
+    feedback: KeymapFeedback<'a>,
     search: &'a str,
     recorder: Option<&'a crate::app::KeymapRecorderState>,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, PrefMsg> {
+    let KeymapFeedback {
+        status,
+        load_error,
+        backup,
+    } = feedback;
     let profiles = editor.profiles();
     let active = profiles.iter().find(|profile| profile.active);
     let active_option = active.map(KeymapProfileOption::from);
@@ -181,7 +192,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     .padding([SP.s, 0.0]);
 
     let active_profile_is_custom = editor.active_profile_is_custom();
-    let filtered = editor.filtered_rows(search);
+    let filtered = editor.filtered_rows_in(i18n, search);
 
     let mut content = column![header].spacing(10).padding(20);
     content = content.extend(load_error_banner);
@@ -220,7 +231,13 @@ pub(super) fn content_keyboard_shortcuts<'a>(
             .iter()
             .filter(|row_model| row_model.group == group)
             .map(|row_model| {
-                keymap_table_row(row_model, &conflicts, active_profile_is_custom, tokens)
+                keymap_table_row(
+                    i18n,
+                    row_model,
+                    &conflicts,
+                    active_profile_is_custom,
+                    tokens,
+                )
             })
             .collect();
         if group_rows.is_empty() {
@@ -240,6 +257,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
 /// keeps the shared muted / primary constants; the trigger chip and Edit
 /// button pull their colours from the active theme.
 fn keymap_table_row<'a>(
+    i18n: &signex_i18n::I18n,
     row_model: &crate::keymap::KeymapEditorRow,
     conflicts: &[crate::keymap::BindingConflict],
     active_profile_is_custom: bool,
@@ -324,7 +342,7 @@ fn keymap_table_row<'a>(
 
     row![
         container(
-            text(raw(title_case(&row_model.category)))
+            text(raw(title_case(i18n, &row_model.category)))
                 .size(TS.body)
                 .style(text_muted)
         )
@@ -668,21 +686,7 @@ fn context_label(context: crate::keymap::ShortcutContext) -> &'static str {
     }
 }
 
-fn title_case(value: &str) -> String {
-    value
-        .split(['_', '-', ' '])
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            let mut chars = part.chars();
-            match chars.next() {
-                // user-visible: migrate to the #2063 casemap (inside format!, which the case lint cannot see)
-                Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
+use crate::keymap::category_title_case as title_case;
 
 #[cfg(test)]
 mod tests {

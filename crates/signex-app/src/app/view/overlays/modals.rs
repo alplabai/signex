@@ -138,6 +138,7 @@ impl Signex {
         };
         Some(
             iced::widget::opaque(crate::keyboard_shortcuts_modal::view(
+                &ui.i18n,
                 &self.document_state.panel_ctx.tokens,
                 sections,
             ))
@@ -157,6 +158,7 @@ impl Signex {
             }
         };
         crate::keyboard_shortcuts_modal::window_view(
+            &ui.i18n,
             &self.document_state.panel_ctx.tokens,
             sections,
         )
@@ -414,6 +416,7 @@ impl Signex {
                 lib,
                 lib.primitive_picker.as_ref()?,
                 tokens,
+                &self.ui_state.i18n,
                 windowed,
             )
             .map(Message::Library)
@@ -611,10 +614,12 @@ impl Signex {
         {
             return Vec::new();
         }
-        Self::dismiss_over(
-            Message::CommandPalette(CommandPaletteMsg::Close),
+        // The palette dims the app with the theme's modal scrim, like a dialog.
+        let scrim = crate::app::view::dialogs::dialog_scrim(&self.document_state.panel_ctx.tokens);
+        vec![
+            Self::dismiss_layer_tinted(Message::CommandPalette(CommandPaletteMsg::Close), scrim),
             self.view_command_palette_dropdown(),
-        )
+        ]
     }
 
     pub(in crate::app::view) fn library_updates_overlay(&self) -> Option<Element<'_, Message>> {

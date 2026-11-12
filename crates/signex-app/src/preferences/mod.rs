@@ -467,10 +467,13 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             content_library_distributors(distributor_settings, panel_tokens)
         }
         PrefNav::Keyboard => content_keyboard_shortcuts(
+            i18n,
             keymap_editor,
-            keymap_status,
-            keymap_load_error,
-            keymap_backup,
+            keymap::KeymapFeedback {
+                status: keymap_status,
+                load_error: keymap_load_error,
+                backup: keymap_backup,
+            },
             keymap_search,
             keymap_recorder,
             panel_tokens,

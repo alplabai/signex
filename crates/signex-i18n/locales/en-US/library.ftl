@@ -134,4 +134,20 @@ library-preview-not-set = Not set
 library-preview-no-description = No description
 library-preview-pad-placeholder = pad number…
 library-preview-override-pin = Override pin { $pin } →
+# Footer of the component editor. $sheets and $projects are whole numbers.
+library-preview-where-used = Used by { $sheets ->
+        [one] { $sheets } sheet
+       *[other] { $sheets } sheets
+    } in { $projects ->
+        [one] { $projects } project
+       *[other] { $projects } projects
+    }.
 library-stock-copy-no-writable = No writable library is open. Create a new one to copy into.
+
+## Library panel (left dock)
+library-panel-search = Search libraries…
+library-panel-none-open = No libraries open. Use File ▸ Library ▸ Open Library… to open a *.snxlib/.
+library-panel-open-library = + Open Library…
+library-panel-no-tables = No tables in this library.
+# Row-count pill of a library. $count is a whole number.
+library-panel-rows = { $count } rows

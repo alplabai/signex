@@ -265,3 +265,32 @@ editors-footprint-status-hint-idle = { $pads ->
     [one] { $pads } pad
    *[other] { $pads } pads
 } · Click empty area to add, drag to move, Del to remove
+
+## Footprint editor Properties panel
+# Header while a pad is selected: its number, its kind (SMD, Through-hole…)
+# and its place among the footprint's pads. $index and $pads are whole numbers.
+editors-footprint-pad-heading = Pad { $number } · { $kind } · { $index } of { $pads ->
+        [one] { $pads } pad
+       *[other] { $pads } pads
+    }
+# Beside the header while several pads are selected. $count is a whole number.
+editors-footprint-pads-selected = ({ $count } pads selected)
+# Pad kinds, as the Pad Properties header names them.
+editors-pad-kind-smd = SMD
+editors-pad-kind-through-hole = Through-hole
+editors-pad-kind-npt-hole = NPT hole
+editors-pad-kind-connector = Connector
+editors-pad-kind-castellated = Castellated
+editors-pad-kind-fiducial = Fiducial
+editors-pad-kind-unknown = Unknown
+# Degrees of freedom of the selected sketch point.
+editors-footprint-dof = DOF
+editors-footprint-dof-fully-constrained = Fully constrained
+editors-footprint-unlink-corner-radius = Unlink corner radius
+editors-footprint-role-points-only = Pad role applies to Points only
+# A silk graphic baked from the sketch: edited in Sketch mode only.
+editors-footprint-silk-from-sketch = From sketch: edit in Sketch mode
+# Pad placement form. TAB is the key that pauses placement.
+editors-pad-placement-paused = PAUSED — TAB to resume placement
+editors-pad-placement-pause-hint = TAB to pause placement and edit defaults
+editors-pad-testpoint = Testpoint

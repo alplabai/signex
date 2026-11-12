@@ -57,6 +57,7 @@ enum ListItem {
 /// Flatten the filtered per-library cache into header + row entries. Cheap
 /// (no widgets), so it can run on every view.
 fn list_items(
+    i18n: &signex_i18n::I18n,
     state: &LibraryState,
     kind: PrimitiveKind,
     needle: &str,
@@ -79,7 +80,7 @@ fn list_items(
         });
         for s in summaries {
             let hit = needle.is_empty()
-                || contains_ci(&s.name, needle)
+                || contains_ci_in(i18n, &s.name, needle)
                 || s.uuid
                     .simple()
                     .encode_lower(&mut uuid::Uuid::encode_buffer())
@@ -101,12 +102,13 @@ fn list_items(
             };
         }
     }
-    push_loose(&mut items, state, loose, needle);
+    push_loose(i18n, &mut items, state, loose, needle);
     items
 }
 
 /// The symbols of files in no library, one group per file (#1841).
 fn push_loose(
+    i18n: &signex_i18n::I18n,
     items: &mut Vec<ListItem>,
     state: &LibraryState,
     loose: &[LooseSymbol],
@@ -135,7 +137,9 @@ fn push_loose(
         items.extend(
             loose
                 .iter()
-                .filter(|s| s.file == file && (needle.is_empty() || contains_ci(&s.name, needle)))
+                .filter(|s| {
+                    s.file == file && (needle.is_empty() || contains_ci_in(i18n, &s.name, needle))
+                })
                 .map(|s| ListItem::Loose((*s).clone())),
         );
         let count = items.len() - start - 1;
@@ -240,6 +244,7 @@ pub fn view<'a>(
     state: &'a LibraryState,
     picker: &'a PrimitivePickerState,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
@@ -259,9 +264,9 @@ pub fn view<'a>(
         .padding(6)
         .size(TS.label);
 
-    let needle = picker.filter.trim().to_lowercase();
+    let needle = i18n.fold_for_search(picker.filter.trim());
 
-    let items = list_items(state, picker.kind, &needle, &picker.loose);
+    let items = list_items(i18n, state, picker.kind, &needle, &picker.loose);
     let total_visible = items
         .iter()
         .filter(|i| matches!(i, ListItem::Row(..) | ListItem::Loose(..)))
@@ -475,11 +480,13 @@ fn copy_confirm_row<'a>(
     .boxed()
 }
 
-/// Case-insensitive substring test against an already-lowercased
-/// `needle`, without allocating for ASCII needles (this runs per
-/// primitive per frame).
-fn contains_ci(hay: &str, needle: &str) -> bool {
-    if needle.is_ascii() {
+/// Case-insensitive substring test against a `needle` already folded by
+/// `i18n.fold_for_search`. An all-ASCII `hay` and `needle` skip the
+/// allocation under a non-Turkic language (this runs per primitive per
+/// frame); anything else folds `hay` the same way as the needle.
+fn contains_ci_in(i18n: &signex_i18n::I18n, hay: &str, needle: &str) -> bool {
+    let plain_ascii = hay.is_ascii() && needle.is_ascii() && i18n.fold_char_for_search('I') == 'i';
+    if plain_ascii {
         let n = needle.as_bytes();
         if n.is_empty() {
             return true;
@@ -489,19 +496,31 @@ fn contains_ci(hay: &str, needle: &str) -> bool {
             .windows(n.len())
             .any(|w| w.eq_ignore_ascii_case(n));
     }
-    hay.to_lowercase().contains(needle)
+    i18n.fold_for_search(hay).contains(needle)
+}
+
+/// [`contains_ci_in`] under en-US.
+#[cfg(test)]
+fn contains_ci(hay: &str, needle: &str) -> bool {
+    contains_ci_in(signex_i18n::I18n::en_us_ref(), hay, needle)
 }
 
 /// The header labels the list shows for `picker`, for tests.
 #[cfg(test)]
 pub(crate) fn header_labels(state: &LibraryState, picker: &PrimitivePickerState) -> Vec<String> {
-    list_items(state, picker.kind, "", &picker.loose)
-        .into_iter()
-        .filter_map(|item| match item {
-            ListItem::Header { text } => Some(text),
-            _ => None,
-        })
-        .collect()
+    list_items(
+        signex_i18n::I18n::en_us_ref(),
+        state,
+        picker.kind,
+        "",
+        &picker.loose,
+    )
+    .into_iter()
+    .filter_map(|item| match item {
+        ListItem::Header { text } => Some(text),
+        _ => None,
+    })
+    .collect()
 }
 
 #[cfg(test)]
@@ -515,6 +534,18 @@ mod tests {
         assert!(contains_ci("anything", ""));
         assert!(!contains_ci("LM317", "lm7"));
         assert!(!contains_ci("ab", "abc"));
+    }
+
+    #[test]
+    fn the_primitive_filter_follows_the_search_fold() {
+        use super::contains_ci_in;
+        let tr = signex_i18n::I18n::with_message_locale_for_test("tr");
+        let en = signex_i18n::I18n::en_us();
+        assert!(contains_ci_in(&en, "STRAßE", "strasse"));
+        assert!(contains_ci_in(&tr, "İSTANBUL", "istanbul"));
+        assert!(contains_ci_in(&tr, "ISPARTA", "ısparta"));
+        assert!(!contains_ci_in(&tr, "ISPARTA", "isparta"));
+        assert!(contains_ci_in(&en, "ISPARTA", "isparta"));
     }
 
     fn max_built() -> usize {

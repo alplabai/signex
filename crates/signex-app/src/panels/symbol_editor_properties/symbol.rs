@@ -106,7 +106,7 @@ pub(super) fn view_symbol_selection<'a>(
         "Symbol name",
         PanelMsg::SymEditorSetSymbolName,
     ));
-    col = col.push(super::prop_row_static(
+    col = col.push(super::prop_row_mono(
         "UUID",
         sym.symbol_uuid.to_string(),
         muted,
@@ -114,13 +114,13 @@ pub(super) fn view_symbol_selection<'a>(
     ));
     col = col.push(super::prop_row_static(
         "Pins",
-        sym.pins.len().to_string(),
+        i18n.count(sym.pins.len() as i64),
         muted,
         primary,
     ));
     col = col.push(super::prop_row_static(
         "Graphics",
-        sym.graphics.len().to_string(),
+        i18n.count(sym.graphics.len() as i64),
         muted,
         primary,
     ));

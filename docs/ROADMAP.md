@@ -520,7 +520,7 @@ the area migrations come after the infrastructure.
 
 | Plan | Scope |
 |------|-------|
-| **Internationalisation** | `signex-i18n` crate (Fluent + ICU4X), `Localized` display-only type, runtime language switch with the locale persisted in preferences (#2055); API gate, key-consistency and locale-invariance tests (#2056); locale-aware formatting of non-engineering numbers, dates, lists and case (#2063, library functions; engineering values stay `.`); then the Preferences language picker, the area migrations (#2057–#2062), pseudolocale layout and font coverage (#2064) and the first translation, `tr-TR`, with the translator workflow (#2065) |
+| **Internationalisation** | `signex-i18n` crate (Fluent + ICU4X), `Localized` display-only type, runtime language switch with the locale persisted in preferences (#2055); API gate, key-consistency and locale-invariance tests (#2056); locale-aware formatting of non-engineering numbers, dates, lists and case (#2063: library functions and UI wiring done; Turkish acceptance waits for the `tr` catalog; engineering values stay `.`); then the Preferences language picker, the area migrations (#2057–#2062), pseudolocale layout and font coverage (#2064) and the first translation, `tr-TR`, with the translator workflow (#2065) |
 
 **Not in this plan:** right-to-left layout (a later phase of #2053), translated user guide
 and sample projects, user content.

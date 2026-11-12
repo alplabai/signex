@@ -8,6 +8,7 @@
 use super::*;
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
+use signex_i18n::{ids, t};
 use signex_widgets::{raw, text, text_input};
 
 use super::rule_editor::{RuleEditor, rule_editor};
@@ -85,24 +86,20 @@ impl Signex {
         let has_project = self.document_state.active_document_project().is_some();
         let unreadable = self.active_project_has_unreadable_rules();
         let scope_note = match (has_project, stored.is_some(), unreadable) {
-            (_, true, _) => "Editing the rules stored in this project.",
-            (true, false, true) => {
-                "This project's rule set is from a newer Signex and is kept unchanged; \
-                 editing the \"User Default\" rule profile (this machine's rules)."
-            }
-            (true, false, false) => {
-                "Editing the \"User Default\" rule profile (this machine's rules); \
-                 this project stores no rules."
-            }
-            (false, false, _) => {
-                "Editing the \"User Default\" rule profile (this machine's rules)."
-            }
+            (_, true, _) => ids::DIALOG_ERC_SCOPE_PROJECT,
+            (true, false, true) => ids::DIALOG_ERC_SCOPE_NEWER_PROJECT,
+            (true, false, false) => ids::DIALOG_ERC_SCOPE_PROJECT_WITHOUT_RULES,
+            (false, false, _) => ids::DIALOG_ERC_SCOPE_USER_DEFAULT,
         };
         // Editing the machine's rules while they are loading, or while the
         // User Default file cannot be read or written: say so here, not only
         // in the log.
-        let mut scope =
-            column![text(raw(scope_note)).size(TS.caption).color(text_muted)].spacing(SP.xs);
+        let mut scope = column![
+            text(t!(self.ui_state.i18n, scope_note))
+                .size(TS.caption)
+                .color(text_muted)
+        ]
+        .spacing(SP.xs);
         if stored.is_none()
             && let Some(notice) = self.machine_rules_notice()
         {
@@ -190,10 +187,14 @@ impl Signex {
                 };
                 counts[slot] += 1;
             }
-            container(super::graphite::severity_chips(tokens, counts))
-                .padding([SP.l, 14.0])
-                .width(Length::Fill)
-                .boxed()
+            container(super::graphite::severity_chips(
+                &self.ui_state.i18n,
+                tokens,
+                counts,
+            ))
+            .padding([SP.l, 14.0])
+            .width(Length::Fill)
+            .boxed()
         };
 
         // In-window: sized to the window-capped modal. Detached: the OS
@@ -239,17 +240,18 @@ impl Signex {
         let Some((name, lines)) = self.pending_profile_update_lines() else {
             return Space::new().height(0).boxed();
         };
+        let i18n = &*self.ui_state.i18n;
         let heading = if lines.is_empty() {
-            format!(
-                "Profile \"{name}\": rules already match; only the recorded hash is out of date."
-            )
+            t!(i18n, ids::DIALOG_ERC_PROFILE_HASH_ONLY, "name" => name.as_str())
         } else {
-            format!(
-                "Update from profile \"{name}\" changes {} entries:",
-                lines.len()
+            t!(
+                i18n,
+                ids::DIALOG_ERC_PROFILE_UPDATE_HEADING,
+                "name" => name.as_str(),
+                "count" => lines.len() as i64
             )
         };
-        let mut list = column![text(raw(heading)).size(TS.body).color(text_c)].spacing(SP.xs);
+        let mut list = column![text(heading).size(TS.body).color(text_c)].spacing(SP.xs);
         for line in lines {
             list = list.push(text(raw(line)).size(TS.caption).color(text_muted).boxed());
         }
@@ -293,8 +295,9 @@ impl Signex {
         let Some(dialog) = self.ui_state.save_profile_dialog.as_ref() else {
             return Space::new().height(0).boxed();
         };
+        let i18n = &*self.ui_state.i18n;
         let mut panel = column![
-            text(raw("Save the project's ERC rules as a profile"))
+            text(t!(i18n, ids::DIALOG_ERC_PROFILE_SAVE_TITLE))
                 .size(TS.body)
                 .color(text_c)
         ]
@@ -303,14 +306,10 @@ impl Signex {
             let name = dialog.name.trim();
             panel = panel
                 .push(
-                    text(raw(format!(
-                        "A profile named \"{name}\" already exists. Overwriting replaces its \
-                         rules and version; projects that took their rules from it will show \
-                         the change as an update."
-                    )))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .boxed(),
+                    text(t!(i18n, ids::DIALOG_ERC_PROFILE_OVERWRITE_NOTE, "name" => name))
+                        .size(TS.caption)
+                        .color(text_muted)
+                        .boxed(),
                 )
                 .push(
                     row![
@@ -334,13 +333,19 @@ impl Signex {
         } else {
             let submit = || Message::Erc(ErcMsg::ProfileSaveSubmitted);
             let editable = !dialog.busy;
-            let mut name_input = text_input(raw("Profile name"), &dialog.name)
-                .style(crate::panels::form_look::text_input_style)
-                .size(TS.body);
-            let mut version_input = text_input(raw("Version"), &dialog.version)
-                .style(crate::panels::form_look::text_input_style)
-                .size(TS.body)
-                .width(90);
+            let mut name_input = text_input(
+                t!(i18n, ids::DIALOG_ERC_PROFILE_NAME_PLACEHOLDER),
+                &dialog.name,
+            )
+            .style(crate::panels::form_look::text_input_style)
+            .size(TS.body);
+            let mut version_input = text_input(
+                t!(i18n, ids::DIALOG_ERC_PROFILE_VERSION_PLACEHOLDER),
+                &dialog.version,
+            )
+            .style(crate::panels::form_look::text_input_style)
+            .size(TS.body)
+            .width(90);
             if editable {
                 name_input = name_input
                     .on_input(|v| Message::Erc(ErcMsg::ProfileSaveNameChanged(v)))
@@ -351,9 +356,13 @@ impl Signex {
             }
             panel = panel.push(
                 row![
-                    text(raw("Name")).size(TS.caption).color(text_muted),
+                    text(t!(i18n, ids::DIALOG_ERC_PROFILE_NAME))
+                        .size(TS.caption)
+                        .color(text_muted),
                     name_input,
-                    text(raw("Version")).size(TS.caption).color(text_muted),
+                    text(t!(i18n, ids::DIALOG_ERC_PROFILE_VERSION))
+                        .size(TS.caption)
+                        .color(text_muted),
                     version_input,
                 ]
                 .spacing(SP.m)

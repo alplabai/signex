@@ -25,6 +25,8 @@ mod bars;
 mod modals;
 mod net_hover;
 mod palette;
+#[cfg(test)]
+mod palette_scrim_tests;
 pub(super) mod read_only_badge;
 #[cfg(test)]
 mod window_gate_tests;
@@ -198,9 +200,11 @@ impl Signex {
         use crate::app::command_palette::MAX_RESULTS;
         use iced::widget::{Space, column, container, scrollable};
         use iced::{Background, Border, Color};
-        use signex_widgets::{raw, text, text_input};
+        use signex_i18n::{ids, t};
+        use signex_widgets::{text, text_input};
 
         let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = &*self.ui_state.i18n;
         let text_c = crate::styles::ti(tokens.text);
         let muted_c = crate::styles::ti(tokens.text_secondary);
 
@@ -220,9 +224,15 @@ impl Signex {
             // header goes wherever the source changes.
             if display_idx == 0 || results[display_idx - 1].source != entry.source {
                 let count = results.iter().filter(|e| e.source == entry.source).count();
-                rows.push(palette::group_header(tokens, entry.source, count));
+                rows.push(palette::group_header(
+                    &self.ui_state.i18n,
+                    tokens,
+                    entry.source,
+                    count,
+                ));
             }
             rows.push(palette::result_row(
+                &self.ui_state.i18n,
                 tokens,
                 entry,
                 &self.ui_state.command_palette.query,
@@ -232,10 +242,14 @@ impl Signex {
         }
 
         let body: Element<'_, Message> = if total == 0 {
-            container(text(raw("No results")).size(TS.label).color(muted_c))
-                .padding([SP.l, 14.0])
-                .width(Length::Fill)
-                .boxed()
+            container(
+                text(t!(i18n, ids::OVERLAY_PALETTE_NO_RESULTS))
+                    .size(TS.label)
+                    .color(muted_c),
+            )
+            .padding([SP.l, 14.0])
+            .width(Length::Fill)
+            .boxed()
         } else {
             let list = column(rows).spacing(SP.xs).padding(SP.s);
             // Bound the list so the 360 px card keeps room for the search
@@ -250,9 +264,10 @@ impl Signex {
         // Footer with the hint line, and a note when there are more matches
         // than we render.
         let footer: Element<'_, Message> = if total > 0 {
-            let more = (total > MAX_RESULTS)
-                .then(|| format!("{} more results — refine query", total - MAX_RESULTS));
-            palette::hint_footer(tokens, results.get(selected), more)
+            let more = (total > MAX_RESULTS).then(|| {
+                t!(i18n, ids::OVERLAY_PALETTE_MORE_RESULTS, "count" => (total - MAX_RESULTS) as i64)
+            });
+            palette::hint_footer(i18n, tokens, results.get(selected), more)
         } else {
             Space::new().height(0).boxed()
         };
@@ -274,7 +289,7 @@ impl Signex {
         let window_input: Option<Element<'_, Message>> =
             self.ui_state.command_palette.window.map(|window| {
                 text_input(
-                    raw("Search files, symbols, commands…"),
+                    t!(i18n, ids::OVERLAY_PALETTE_WINDOW_SEARCH),
                     &self.ui_state.command_palette.query,
                 )
                 .id(crate::app::command_palette::COMMAND_PALETTE_WINDOW_INPUT_ID.clone())
@@ -294,7 +309,12 @@ impl Signex {
                 })
                 .boxed()
             });
-        let input = palette::search_row(tokens, &self.ui_state.command_palette.query, window_input);
+        let input = palette::search_row(
+            i18n,
+            tokens,
+            &self.ui_state.command_palette.query,
+            window_input,
+        );
         let card = container(column![input, body, footer])
             .width(card_w)
             .height(Length::Fit.max(360.0))
@@ -310,6 +330,17 @@ impl Signex {
     }
 
     pub(super) fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
+        Self::dismiss_layer_tinted(
+            on_press,
+            crate::styles::tokens::scrim(crate::styles::tokens::BACKDROP_ALPHA),
+        )
+    }
+
+    /// [`Self::dismiss_layer`] painted in `scrim`.
+    pub(super) fn dismiss_layer_tinted(
+        on_press: Message,
+        scrim: iced::Color,
+    ) -> Element<'static, Message> {
         // Opaque semi-transparent backdrop that blocks interaction with
         // underlying content. Left-click anywhere on it triggers the
         // dismiss message.
@@ -332,9 +363,7 @@ impl Signex {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .style(move |_: &iced::Theme| container::Style {
-                    background: Some(iced::Background::Color(crate::styles::tokens::scrim(
-                        crate::styles::tokens::BACKDROP_ALPHA,
-                    ))),
+                    background: Some(iced::Background::Color(scrim)),
                     ..container::Style::default()
                 }),
         )
