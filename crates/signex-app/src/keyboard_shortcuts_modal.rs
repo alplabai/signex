@@ -12,7 +12,7 @@ use signex_widgets::{raw, text};
 
 use crate::app::view::dialogs::modal_title_header;
 use crate::app::{Message, OverlayMsg};
-use crate::keymap::{KeymapEditorModel, KeymapEditorRow, ShortcutProfileSet};
+use crate::keymap::{KeymapEditorModel, KeymapEditorRow, ShortcutProfileSet, category_title};
 use crate::styles;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -36,11 +36,11 @@ pub struct ShortcutSection {
 /// first-seen order. Pure: the result depends only on `profiles`, so
 /// `UiState` caches it and rebuilds on a keymap change instead of the view
 /// rebuilding it every frame (#1380).
-pub fn build_sections(profiles: &ShortcutProfileSet) -> Vec<ShortcutSection> {
+pub fn build_sections(i18n: &I18n, profiles: &ShortcutProfileSet) -> Vec<ShortcutSection> {
     let editor = KeymapEditorModel::new(profiles.clone());
     let mut sections: Vec<ShortcutSection> = Vec::new();
     let mut index = std::collections::HashMap::<String, usize>::new();
-    for row in editor.rows() {
+    for row in editor.rows_in(i18n) {
         let slot = *index.entry(row.category.clone()).or_insert_with(|| {
             sections.push(ShortcutSection {
                 category: row.category.clone(),
@@ -134,7 +134,7 @@ fn build<'a>(
 
         body = body.push(
             container(
-                text(raw(i18n.upper_for_display(&title_case(i18n, category))))
+                text(raw(i18n.upper_for_display(&category_title(i18n, category))))
                     .size(TS.caption)
                     .color(text_secondary),
             )
@@ -210,8 +210,6 @@ fn is_listed(row: &KeymapEditorRow) -> bool {
             .is_none_or(crate::app::command::bridge::is_dispatchable)
 }
 
-use crate::keymap::category_title_case as title_case;
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -220,10 +218,10 @@ mod tests {
     #[test]
     fn category_titles_capitalise_by_the_message_language() {
         let tr = I18n::with_message_locale_for_test("tr");
-        // Pins today's output for an untranslated English id; the `tr`
-        // catalog (#2065) is expected to change it.
-        assert_eq!(title_case(&tr, "idle_tools"), "İdle Tools");
-        assert_eq!(title_case(&I18n::en_us(), "idle_tools"), "Idle Tools");
+        // A title comes from the catalog (`tr` falls back to en-US until
+        // #2065 translates it), so it no longer takes Turkish casing.
+        assert_eq!(category_title(&tr, "idle_tools"), "Idle Tools");
+        assert_eq!(category_title(&I18n::en_us(), "idle_tools"), "Idle Tools");
         assert_eq!(tr.upper_for_display("ilk"), "İLK");
     }
 
@@ -258,7 +256,7 @@ mod tests {
         let ids: Vec<String> = set.profiles().map(|p| p.id.clone()).collect();
         for id in ids {
             set.set_active_profile(id).unwrap();
-            let built: Vec<_> = build_sections(&set)
+            let built: Vec<_> = build_sections(I18n::en_us_ref(), &set)
                 .into_iter()
                 .map(|s| (s.category, s.rows))
                 .collect();

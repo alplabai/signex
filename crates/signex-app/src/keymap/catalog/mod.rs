@@ -1,10 +1,14 @@
 use crate::keymap::{AppCommandId, Modifiers, ShortcutContext};
+use signex_i18n::{I18n, MessageId, command_ids, t};
+
+pub use categories::category_title;
 
 #[cfg(test)]
 pub(crate) use operands::{CONVENTION as OPERAND_CONVENTION, describe as describe_operands};
 pub use operands::{Operand, OperandKind};
 
 mod active_bar;
+mod categories;
 mod general;
 mod operands;
 mod pcb;
@@ -176,16 +180,17 @@ pub enum HeadlessUse {
 pub struct CommandMetadata {
     pub id: &'static str,
     pub category: &'static str,
-    /// Descriptive command label — shown in the Keyboard Shortcuts pane
-    /// and the (future) command palette, where the full phrasing helps
-    /// ("Place wire", "Zoom in at cursor").
-    pub label: &'static str,
-    /// Optional terse label for menu surfaces (menu_bar). `None` falls
-    /// back to `label`. Lets one command carry both a short menu label
+    /// Descriptive command label message — shown in the Keyboard Shortcuts
+    /// pane and the command palette, where the full phrasing helps
+    /// ("Place wire", "Zoom in at cursor"). Render via
+    /// [`CommandMetadata::label_in`].
+    pub label: MessageId,
+    /// Optional terse label message for menu surfaces (menu_bar). `None`
+    /// falls back to `label`. Lets one command carry both a short menu label
     /// ("Wire") and a descriptive catalog label ("Place wire") so the two
-    /// UIs don't have to agree on a single string. Resolve via
-    /// [`CommandMetadata::menu_label`].
-    pub menu_label: Option<&'static str>,
+    /// UIs don't have to agree on a single string. Render via
+    /// [`CommandMetadata::menu_label_in`].
+    pub menu_label: Option<MessageId>,
     pub group: CommandGroup,
     /// Surface-agnostic icon key. `None` until a command is given one.
     pub icon: Option<IconId>,
@@ -211,7 +216,7 @@ impl CommandMetadata {
     pub const DEFAULT: Self = Self {
         id: "",
         category: "",
-        label: "",
+        label: command_ids::CMD_UNNAMED,
         menu_label: None,
         group: CommandGroup::General,
         icon: None,
@@ -251,13 +256,21 @@ impl CommandMetadata {
             .then(|| format!("`{}` only works in a window", self.id))
     }
 
+    /// The descriptive label in the message language.
+    pub fn label_in(&self, i18n: &I18n) -> String {
+        t!(i18n, self.label).to_string()
+    }
+
+    /// The descriptive label in en-US, for the CLI catalog and other
+    /// surfaces that are English by contract.
+    pub fn label_en_us(&self) -> String {
+        self.label_in(I18n::en_us_ref())
+    }
+
     /// The label a menu surface should display: the terse `menu_label`
     /// override when present, else the descriptive `label`.
-    pub const fn menu_label(&self) -> &'static str {
-        match self.menu_label {
-            Some(menu) => menu,
-            None => self.label,
-        }
+    pub fn menu_label_in(&self, i18n: &I18n) -> String {
+        t!(i18n, self.menu_label.unwrap_or(self.label)).to_string()
     }
 }
 
@@ -435,23 +448,7 @@ pub fn offered_in(command: &AppCommandId, live: &[ShortcutContext]) -> bool {
 }
 
 pub fn fallback_label(command: &AppCommandId) -> String {
-    command
-        .as_str()
-        .split('_')
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            let mut chars = part.chars();
-            match chars.next() {
-                Some(first) => {
-                    let mut label = first.to_ascii_uppercase().to_string();
-                    label.push_str(chars.as_str());
-                    label
-                }
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+    categories::title_words(command.as_str())
 }
 
 #[cfg(test)]
@@ -605,18 +602,67 @@ mod tests {
         assert!(all_metadata().any(|metadata| metadata.group == CommandGroup::ThreeD));
     }
 
+    /// #2057: labels and category titles live in the en-US catalog; every
+    /// command renders a real one, and a few keep their pre-migration English.
+    #[test]
+    fn every_command_label_and_category_title_comes_from_the_catalog() {
+        let en = I18n::en_us_ref();
+        for metadata in all_metadata() {
+            let label = metadata.label_in(en);
+            assert!(!label.is_empty(), "`{}` has an empty label", metadata.id);
+            assert_ne!(
+                label,
+                metadata.label.as_str(),
+                "`{}` label missing",
+                metadata.id
+            );
+            let menu = metadata.menu_label_in(en);
+            assert!(
+                !menu.is_empty(),
+                "`{}` has an empty menu label",
+                metadata.id
+            );
+            assert!(
+                categories::category_title_id(metadata.category).is_some(),
+                "category `{}` has no title",
+                metadata.category
+            );
+        }
+        let text = |id: &str| {
+            let md = metadata_for(&AppCommandId::new(id).unwrap()).unwrap();
+            (md.label_in(en), md.menu_label_in(en))
+        };
+        assert_eq!(
+            text("run_drc"),
+            (
+                "Run the design rule check on the board".to_string(),
+                "Design Rule Check".to_string()
+            )
+        );
+        assert_eq!(
+            text("place_wire"),
+            ("Place wire".to_string(), "Wire".to_string())
+        );
+        assert_eq!(category_title(en, "pcb_sync"), "Pcb Sync");
+        assert_eq!(category_title(en, "navigation"), "Navigation");
+        assert_eq!(category_title(en, "uncategorized"), "Uncategorized");
+    }
+
     #[test]
     fn menu_label_falls_back_to_label_when_unset() {
         // No override → menus show the descriptive label unchanged.
         let copy = metadata_for(&AppCommandId::new("copy").unwrap()).unwrap();
         assert_eq!(copy.menu_label, None);
-        assert_eq!(copy.menu_label(), copy.label);
-        assert_eq!(copy.menu_label(), "Copy");
+        assert_eq!(
+            copy.menu_label_in(I18n::en_us_ref()),
+            copy.label_in(I18n::en_us_ref())
+        );
+        assert_eq!(copy.menu_label_in(I18n::en_us_ref()), "Copy");
         // Override present → menus get the terse form while `label` keeps
         // the descriptive phrasing for the Keyboard Shortcuts pane.
         let wire = metadata_for(&AppCommandId::new("place_wire").unwrap()).unwrap();
-        assert_eq!(wire.label, "Place wire");
-        assert_eq!(wire.menu_label(), "Wire");
+        assert_eq!(wire.label_in(I18n::en_us_ref()), "Place wire");
+        assert_eq!(wire.menu_label_in(I18n::en_us_ref()), "Wire");
     }
 
     #[test]
@@ -648,7 +694,11 @@ mod tests {
         for (id, expected) in MENU {
             let md = metadata_for(&AppCommandId::new(*id).unwrap())
                 .unwrap_or_else(|| panic!("missing catalog entry for `{id}`"));
-            assert_eq!(md.menu_label(), *expected, "menu label drift for `{id}`");
+            assert_eq!(
+                md.menu_label_in(I18n::en_us_ref()),
+                *expected,
+                "menu label drift for `{id}`"
+            );
         }
     }
 

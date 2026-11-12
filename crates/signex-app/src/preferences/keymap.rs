@@ -213,7 +213,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     content = content.push(h_sep());
 
     if filtered.is_empty() {
-        let empty = if editor.rows().is_empty() {
+        let empty = if editor.rows_in(i18n).is_empty() {
             "No shortcuts are defined in the active profile.".to_string()
         } else {
             format!("No shortcuts match “{}”.", search.trim())
@@ -342,7 +342,7 @@ fn keymap_table_row<'a>(
 
     row![
         container(
-            text(raw(title_case(i18n, &row_model.category)))
+            text(raw(category_title(i18n, &row_model.category)))
                 .size(TS.body)
                 .style(text_muted)
         )
@@ -686,7 +686,7 @@ fn context_label(context: crate::keymap::ShortcutContext) -> &'static str {
     }
 }
 
-use crate::keymap::category_title_case as title_case;
+use crate::keymap::category_title;
 
 #[cfg(test)]
 mod tests {

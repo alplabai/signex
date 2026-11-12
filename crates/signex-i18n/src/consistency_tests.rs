@@ -117,10 +117,19 @@ fn language_name_ids() -> BTreeSet<String> {
         .collect()
 }
 
+/// Every defined id, across the id modules.
+fn all_ids() -> Vec<crate::MessageId> {
+    ids::ALL
+        .iter()
+        .chain(crate::command_ids::ALL)
+        .copied()
+        .collect()
+}
+
 #[test]
 fn every_defined_id_exists_in_en_us() {
     let en_us = messages_of(EN_US);
-    for id in ids::ALL {
+    for id in all_ids() {
         assert!(
             en_us.contains_key(id.as_str()),
             "{} is not in en-US",
@@ -131,7 +140,7 @@ fn every_defined_id_exists_in_en_us() {
 
 #[test]
 fn every_en_us_message_is_a_defined_id() {
-    let defined: BTreeSet<String> = ids::ALL
+    let defined: BTreeSet<String> = all_ids()
         .iter()
         .map(|id| id.as_str().to_owned())
         .chain(language_name_ids())
@@ -146,8 +155,8 @@ fn every_en_us_message_is_a_defined_id() {
 
 #[test]
 fn the_id_registry_has_no_duplicates() {
-    let unique: BTreeSet<_> = ids::ALL.iter().map(|id| id.as_str()).collect();
-    assert_eq!(unique.len(), ids::ALL.len());
+    let unique: BTreeSet<_> = all_ids().iter().map(|id| id.as_str()).collect();
+    assert_eq!(unique.len(), all_ids().len());
 }
 
 #[test]
@@ -171,8 +180,8 @@ fn every_locale_on_disk_parses_and_its_variables_are_in_the_source() {
 #[test]
 fn every_id_renders_from_the_embedded_en_us_catalog() {
     let i18n = I18n::new(&LanguagePref::Locale(EN_US.into()));
-    for id in ids::ALL {
-        let text = i18n.message(*id, &[]).to_string();
+    for id in all_ids() {
+        let text = i18n.message(id, &[]).to_string();
         assert_ne!(
             text,
             id.as_str(),

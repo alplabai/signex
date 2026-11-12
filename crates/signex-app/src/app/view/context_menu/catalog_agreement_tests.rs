@@ -225,7 +225,7 @@ fn check_rows(
                 });
                 assert_eq!(
                     item.label,
-                    meta.menu_label(),
+                    meta.menu_label_in(signex_i18n::I18n::en_us_ref()),
                     "{origin}: {id} shows a label other than the catalog's"
                 );
                 let hint = app.keymap_shortcut_label(id);

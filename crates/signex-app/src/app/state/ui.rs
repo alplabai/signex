@@ -652,9 +652,9 @@ impl UiState {
     /// Rebuild the shortcuts-modal cache: built while the modal is open,
     /// dropped otherwise (the next open rebuilds it).
     pub fn refresh_shortcut_sections(&mut self) {
-        self.shortcut_sections = self
-            .keyboard_shortcuts_open
-            .then(|| crate::keyboard_shortcuts_modal::build_sections(&self.keymap_profiles));
+        self.shortcut_sections = self.keyboard_shortcuts_open.then(|| {
+            crate::keyboard_shortcuts_modal::build_sections(&self.i18n, &self.keymap_profiles)
+        });
     }
 
     /// Per-wheel-notch zoom factor every canvas uses. Reads the DRAFT, like

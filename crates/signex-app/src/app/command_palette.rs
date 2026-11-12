@@ -239,7 +239,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             // the surface where the full phrasing helps ("Place wire",
             // not "Wire"). That split is exactly why #281 added the
             // second field.
-            label: metadata.label.to_string(),
+            label: metadata.label_in(&app.ui_state.i18n),
             // #374 — the binding from the ACTIVE profile, not the
             // catalog's suggested `keybind`, because a profile always
             // overrides the default.

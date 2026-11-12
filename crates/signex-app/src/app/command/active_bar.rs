@@ -185,17 +185,18 @@ fn variant_name(action: &ActiveBarAction) -> String {
 /// without a second copy of its wording. `fallback` covers the actions
 /// still without an id — the parameterised families awaiting
 /// `CommandArgs` — so no row can lose its label.
-pub(crate) fn action_label(action: &ActiveBarAction, fallback: &'static str) -> &'static str {
+pub(crate) fn action_label(action: &ActiveBarAction, fallback: &'static str) -> String {
     if AMBIGUOUS_LABELS
         .iter()
         .any(|name| variant_name(action) == *name)
     {
-        return fallback;
+        return fallback.to_string();
     }
     id_for_action(action)
         .and_then(crate::keymap::metadata_for_str)
-        .map(|metadata| metadata.menu_label())
-        .unwrap_or(fallback)
+        // The Active Bar dropdown does not carry an `I18n` yet.
+        .map(|metadata| metadata.menu_label_in(signex_i18n::I18n::en_us_ref()))
+        .unwrap_or_else(|| fallback.to_string())
 }
 
 /// Every id this table carries. The bridge's coverage guard folds these
@@ -223,8 +224,8 @@ mod tests {
                 .find(|candidate| candidate == id)
                 .and_then(|found| AppCommandId::new(found).ok())
                 .and_then(|command| metadata_for(&command))
-                .map(|metadata| metadata.menu_label())
-                .unwrap_or("fallback");
+                .map(|metadata| metadata.menu_label_in(signex_i18n::I18n::en_us_ref()))
+                .unwrap_or_else(|| "fallback".to_string());
             assert_eq!(action_label(action, "fallback"), linear, "{id}");
         }
     }
@@ -384,10 +385,10 @@ mod tests {
             let metadata = metadata_for(&command)
                 .unwrap_or_else(|| panic!("`{id}` is in the table but not the catalog"));
             checked += 1;
-            if metadata.menu_label() != literal {
+            if metadata.menu_label_in(signex_i18n::I18n::en_us_ref()) != literal {
                 drift.push(format!(
                     "`{id}`: catalog says {:?}, dropdown.rs says {literal:?}",
-                    metadata.menu_label()
+                    metadata.menu_label_in(signex_i18n::I18n::en_us_ref())
                 ));
             }
         }

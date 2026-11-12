@@ -22,7 +22,7 @@ fn entry(command: &CommandMetadata) -> Value {
     let mut entry = json!({
         "id": command.id,
         "category": command.category,
-        "label": command.label,
+        "label": command.label_en_us(),
         "capability": capability_of(command),
         "headless": if command.headless_refusal().is_some() { "gui_only" } else { "runnable" },
         "operands": operands,

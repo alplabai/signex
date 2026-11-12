@@ -73,9 +73,11 @@ pub(super) fn dd_disabled(
 /// Catalog menu text for `command_id`. An id missing from the catalog shows
 /// the bare id, which the catalog-agreement test turns into a failure.
 pub(super) fn command_text(command_id: &str) -> String {
-    crate::keymap::metadata_for_str(command_id)
-        .map_or(command_id, |meta| meta.menu_label())
-        .to_string()
+    // The context menus do not carry an `I18n` yet.
+    crate::keymap::metadata_for_str(command_id).map_or_else(
+        || command_id.to_string(),
+        |meta| meta.menu_label_in(signex_i18n::I18n::en_us_ref()),
+    )
 }
 
 /// A row that runs the catalog command `command_id`: its label is the

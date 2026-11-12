@@ -337,7 +337,8 @@ pub use view::view;
 /// a menu row's label and keybinding come from the same `AppCommandId`.
 pub(crate) fn cmd_label(command_id: &str, fallback: &str) -> String {
     crate::keymap::metadata_for_str(command_id)
-        .map(|meta| meta.menu_label().to_string())
+        // The menu rows do not carry an `I18n` yet.
+        .map(|meta| meta.menu_label_in(signex_i18n::I18n::en_us_ref()))
         .unwrap_or_else(|| fallback.to_string())
 }
 
