@@ -77,7 +77,7 @@ impl Signex {
             }
             None => {
                 crate::diagnostics::log_info(format!(
-                    "ERC: project {} now stores its own ERC rules, copied from this \
+                    "ERC: project {} now stores its own rules, copied from this \
                      machine's preferences, so the waiver has a place to live.",
                     project.data.name
                 ));

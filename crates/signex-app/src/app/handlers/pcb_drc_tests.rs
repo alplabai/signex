@@ -51,6 +51,23 @@ fn storing_erc_rules_in_the_project_keeps_the_drc_severities() {
     assert_eq!(clearance(&app), Some(Severity::Warning));
 }
 
+/// With no machine DRC rules, storing ERC rules writes no `drc` key, so the
+/// project file is what it was before #2307.
+#[test]
+fn storing_erc_rules_without_machine_drc_rules_writes_no_drc_key() {
+    let mut app = project_without_rules();
+    app.ui_state.machine_drc_rules = DrcRuleSet::default();
+    let _ = app.handle_store_erc_rules_in_project();
+    let rules = app
+        .document_state
+        .active_document_project()
+        .and_then(|p| p.data.rules.as_ref())
+        .expect("stored rules");
+    let json = serde_json::to_value(rules).unwrap();
+    assert!(json.get("erc").is_some(), "{json}");
+    assert!(json.get("drc").is_none(), "{json}");
+}
+
 #[test]
 fn a_first_erc_waiver_keeps_the_drc_severities() {
     let mut app = project_without_rules();

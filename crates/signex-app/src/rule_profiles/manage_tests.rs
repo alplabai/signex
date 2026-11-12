@@ -548,6 +548,30 @@ fn a_new_project_copies_the_profiles_drc_section_and_the_shipped_one_has_none() 
     assert!(shipped.drc.is_empty());
 }
 
+#[test]
+fn duplicating_a_profile_copies_its_drc_section() {
+    let tmp = dir();
+    let mut source = builtin_profile();
+    source
+        .drc
+        .severity
+        .insert("builtin::unconnected".into(), "error".into());
+    source.drc.dsl = Some("rule a".into());
+    create_profile_from(tmp.path(), &source, "Copy").unwrap();
+    let copy = read(&tmp.path().join("copy.snxrules"));
+    assert_eq!(copy.drc, source.drc);
+
+    let extra =
+        RuleProfile::from_json_bytes(br#"{"name":"S","version":"2","future":[1]}"#).unwrap();
+    create_profile_from(tmp.path(), &extra, "Copy Two").unwrap();
+    let copy = read(&tmp.path().join("copy-two.snxrules"));
+    assert_eq!(
+        (copy.name.as_str(), copy.version.as_str()),
+        ("Copy Two", "2")
+    );
+    assert_eq!(copy.unknown, extra.unknown);
+}
+
 /// A User Default whose `drc` has another shape cannot be read; an edit of
 /// the machine rules refuses to replace it, so its bytes stay (#2307).
 #[test]
