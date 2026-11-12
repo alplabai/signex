@@ -2,13 +2,16 @@
 //! [name=..]`: make the document with a profile and no dialog (#2232), for
 //! headless runs and agents. They run the same paths as the dialogs' Create.
 
+use std::path::{Path, PathBuf};
+
 use iced::Task;
 use signex_types::project::{PROJECT_PROFILE_TOKEN, ProjectSetup};
 
 use super::SheetChoice;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
+use crate::app::handlers::dock::project_navigation::add_io::on_blocking_pool;
 use crate::app::state::ProjectId;
-use crate::app::{Message, Signex};
+use crate::app::{Message, ProjectMsg, Signex};
 
 type Ran = (CommandOutcome, Task<Message>);
 
@@ -30,7 +33,7 @@ fn text<'a>(args: &'a CommandArgs, key: &str) -> Option<&'a str> {
 
 /// The project in view and the setup its `profile` operand names.
 fn project_and_setup(
-    app: &Signex,
+    app: &mut Signex,
     args: &CommandArgs,
     command: &str,
 ) -> Result<(ProjectId, ProjectSetup), String> {
@@ -70,10 +73,11 @@ pub(crate) fn new_pcb_document(app: &mut Signex, args: &CommandArgs) -> Ran {
     (CommandOutcome::Ran, task)
 }
 
-/// `new_schematic_sheet profile=.. [name=..]`: a blank sheet named
-/// `<name>.snxsch` in the project folder (default `Sheet<n>`, the first
-/// number the project does not list), with the profile's sheet values, as
-/// the New Schematic dialog's Create and file dialog make it.
+/// `new_schematic_sheet [profile=..] [name=..]`: a blank sheet named
+/// `<name>.snxsch` in the project folder, with the profile's sheet values, as
+/// the New Schematic dialog's Create and file dialog make it. With no `name`
+/// it is the first `Sheet<n>` the project does not list and the folder does
+/// not hold, found off the update thread.
 pub(crate) fn new_schematic_sheet(app: &mut Signex, args: &CommandArgs) -> Ran {
     let (project, setup) = match project_and_setup(app, args, "new_schematic_sheet") {
         Ok(found) => found,
@@ -82,44 +86,71 @@ pub(crate) fn new_schematic_sheet(app: &mut Signex, args: &CommandArgs) -> Ran {
     let Some(loaded) = app.document_state.project_by_id(project) else {
         return refused("`new_schematic_sheet`: the project is no longer open");
     };
-    let stem = match text(args, "name") {
-        Some(name) => match crate::app::new_project::check_name(name) {
-            Ok(name) => name.trim_end_matches(".snxsch").to_string(),
-            Err(_) => return refused(format!("`{name}` is not a usable sheet name")),
-        },
-        None => free_sheet_stem(loaded),
-    };
-    let file = format!("{stem}.snxsch");
-    let listed = loaded
-        .data
-        .sheets
-        .iter()
-        .any(|s| s.filename.eq_ignore_ascii_case(&file));
-    if listed {
-        return refused(format!(
-            "`new_schematic_sheet`: the project already lists {file}"
-        ));
-    }
-    let path = loaded.dir().join(&file);
     let choice = SheetChoice {
         sheet: setup.sheet,
         designators: setup.designators,
     };
-    let task = app.handle_add_new_schematic_picked(project, Some(path), Some(choice));
+    let listed: Vec<String> = loaded
+        .data
+        .sheets
+        .iter()
+        .map(|s| s.filename.to_lowercase())
+        .collect();
+    let dir = loaded.dir().to_path_buf();
+    let Some(name) = text(args, "name") else {
+        let task = Task::perform(
+            on_blocking_pool(move || Ok(free_sheet_path(&dir, &listed))),
+            move |found| match found {
+                Ok(path) => Message::Project(ProjectMsg::AddNewSchematicPicked {
+                    project_id: project,
+                    path: Some(path),
+                    choice: Some(choice.clone()),
+                }),
+                Err(_) => Message::noop(),
+            },
+        );
+        return (CommandOutcome::Ran, task);
+    };
+    let stem = match crate::app::new_project::check_name(name) {
+        Ok(name) => strip_sheet_extension(name).to_string(),
+        Err(_) => return refused(format!("`{name}` is not a usable sheet name")),
+    };
+    let file = format!("{stem}.snxsch");
+    if listed.contains(&file.to_lowercase()) {
+        return refused(format!(
+            "`new_schematic_sheet`: the project already lists {file}"
+        ));
+    }
+    let task = app.handle_add_new_schematic_picked(project, Some(dir.join(&file)), Some(choice));
     (CommandOutcome::Ran, task)
 }
 
-/// `Sheet<n>` with the first `n` the project does not list.
-fn free_sheet_stem(project: &crate::app::LoadedProject) -> String {
-    (1..)
-        .map(|n| format!("Sheet{n}"))
-        .find(|stem| {
-            let file = format!("{stem}.snxsch");
-            !project
-                .data
-                .sheets
-                .iter()
-                .any(|s| s.filename.eq_ignore_ascii_case(&file))
-        })
-        .unwrap_or_else(|| "Sheet".to_string())
+/// `name` without a trailing `.snxsch`, in any case.
+fn strip_sheet_extension(name: &str) -> &str {
+    const EXT: &str = ".snxsch";
+    match name.len().checked_sub(EXT.len()) {
+        Some(at) if name.is_char_boundary(at) && name[at..].eq_ignore_ascii_case(EXT) => {
+            &name[..at]
+        }
+        _ => name,
+    }
+}
+
+/// `<dir>/Sheet<n>.snxsch` with the first `n` that `listed` (lower-case
+/// file names) does not name and `dir` does not hold. Blocking: reads `dir`.
+fn free_sheet_path(dir: &Path, listed: &[String]) -> PathBuf {
+    (1..=9999)
+        .map(|n| format!("Sheet{n}.snxsch"))
+        .find(|file| !listed.contains(&file.to_lowercase()) && !dir.join(file).exists())
+        .map_or_else(|| dir.join("Sheet.snxsch"), |file| dir.join(file))
+}
+
+#[cfg(test)]
+mod name_tests {
+    #[test]
+    fn the_extension_is_stripped_in_any_case() {
+        assert_eq!(super::strip_sheet_extension("Power.SNXSCH"), "Power");
+        assert_eq!(super::strip_sheet_extension("Power.snxsch"), "Power");
+        assert_eq!(super::strip_sheet_extension("Power"), "Power");
+    }
 }

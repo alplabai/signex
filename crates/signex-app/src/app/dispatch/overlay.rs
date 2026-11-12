@@ -93,6 +93,10 @@ impl Signex {
         match msg {
             ProjectMsg::Setup(msg) => self.dispatch_new_project_message(msg),
             ProjectMsg::DocumentSetup(msg) => self.dispatch_document_setup_message(msg),
+            ProjectMsg::SetupProfilesWritten { note, result } => {
+                self.setup_profiles_written(note, result);
+                Task::none()
+            }
             ProjectMsg::StartScreen(msg) => self.dispatch_start_screen_message(msg),
             ProjectMsg::SheetNumbering(msg) => self.dispatch_sheet_numbering_message(msg),
             ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
@@ -149,8 +153,9 @@ impl Signex {
                 project_id,
                 path,
                 result,
+                designators,
             } => {
-                self.handle_add_new_schematic_written(project_id, path, result);
+                self.handle_add_new_schematic_written(project_id, path, result, designators);
                 Task::none()
             }
             ProjectMsg::CreateChildSheetPathChanged(text) => {

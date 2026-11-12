@@ -72,7 +72,8 @@ Force Annotate All Schematics (Shift+Alt+A), Back Annotate Schematics... (see
 [Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
 [Back Annotate](#back-annotate)), Board Sketch (see
 [Design ▸ Board Sketch](#design-board-sketch)), a separator, then
-Parameter Manager.... **File ▸ New** has PCB (`new_pcb_document`). **File ▸
+Parameter Manager.... **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
+(`new_pcb_document`), each opening its setup dialog (#2232). **File ▸
 Export** keeps PDF only.
 Project tree actions with no menu message or command id (add or remove a
 document, Enable Version Control, History, Validate Project) stay in the tree's
@@ -222,10 +223,15 @@ palette, and the Projects tree's project row has an Update PCB Document row
 for the clicked project. No keymap preset binds it. The dialog:
 [UPDATE_PCB.md](UPDATE_PCB.md).
 
-File ▸ New ▸ PCB runs `new_pcb_document`: the project in view gets its board,
-named after the project, from its project defaults. It is greyed with no
-project open. Projects ▸ Add New ▸ PCB does the same for the clicked project.
-The board opens as an unsaved tab; nothing is written until Save.
+File ▸ New ▸ PCB runs `new_pcb_document`: it opens the New PCB setup dialog
+for the project in view, prefilled from the project's setup (#2232); its
+Create PCB makes the project's board, named after the project, with the values
+shown. It is greyed with no project open. Projects ▸ Add New ▸ PCB does the
+same for the clicked project. The board opens as an unsaved tab; nothing is
+written until Save. File ▸ New ▸ Schematic runs `new_schematic_sheet`: the New
+Schematic setup dialog, whose Create asks where to save the sheet; also greyed
+with no project. Both dialogs: `PROJECT_SETUP.md`, "New PCB and New
+Schematic".
 
 ## Design ▸ Board Sketch {#design-board-sketch}
 

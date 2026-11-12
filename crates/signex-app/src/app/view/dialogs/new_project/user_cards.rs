@@ -11,7 +11,7 @@ use signex_widgets::{button, text, text_input};
 
 use super::cards::{card, mm};
 use super::{SP, TS};
-use crate::app::new_project::{NewProjectMsg, NewProjectState};
+use crate::app::new_project::{NewProjectMsg, NewProjectState, SaveProfileProblem};
 use crate::styles::{ti, tokens};
 
 /// Cards per row; a longer list wraps onto the next row.
@@ -62,14 +62,22 @@ fn profile_card<'a>(
         ),
     ];
     let selected = state.setup.user_profile.as_deref() == Some(profile.id.as_str());
-    let remove = button(
-        text(t!(i18n, ids::SETUP_PROFILE_REMOVE))
-            .size(TS.body)
-            .color(tokens::muted_text(tokens)),
-    )
-    .padding([SP.xs, SP.s])
-    .on_press(NewProjectMsg::UserProfileRemoved(profile.id.clone()))
-    .style(crate::styles::ghost_button(tokens));
+    let confirming = state.remove_confirm.as_deref() == Some(profile.id.as_str());
+    let remove = if confirming {
+        remove_confirm(profile, i18n, tokens)
+    } else {
+        button(
+            text(t!(i18n, ids::SETUP_PROFILE_REMOVE))
+                .size(TS.body)
+                .color(tokens::muted_text(tokens)),
+        )
+        .padding([SP.xs, SP.s])
+        .on_press(NewProjectMsg::UserProfileRemoveRequested(
+            profile.id.clone(),
+        ))
+        .style(crate::styles::ghost_button(tokens))
+        .boxed()
+    };
     column![
         card(
             profile.name.clone(),
@@ -82,6 +90,40 @@ fn profile_card<'a>(
     ]
     .spacing(SP.xs)
     .width(Length::FillPortion(1))
+    .boxed()
+}
+
+/// The inline confirm under a card whose Remove was pressed: the question,
+/// then Remove (danger) and Keep.
+fn remove_confirm<'a>(
+    profile: &UserProfile,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, NewProjectMsg> {
+    let question = text(t!(
+        i18n,
+        ids::SETUP_PROFILE_REMOVE_CONFIRM,
+        "name" => profile.name.as_str()
+    ))
+    .size(TS.body)
+    .color(ti(tokens.text));
+    let remove = button(
+        text(t!(i18n, ids::SETUP_PROFILE_REMOVE))
+            .size(TS.body)
+            .color(tokens::danger(tokens)),
+    )
+    .padding([SP.xs, SP.s])
+    .on_press(NewProjectMsg::UserProfileRemoveConfirmed)
+    .style(crate::styles::outline_button(tokens));
+    let keep = button(text(t!(i18n, ids::SETUP_PROFILE_KEEP)).size(TS.body))
+        .padding([SP.xs, SP.s])
+        .on_press(NewProjectMsg::UserProfileRemoveCancelled)
+        .style(crate::styles::ghost_button(tokens));
+    column![
+        question,
+        row![remove, keep].spacing(SP.s).align_y(Alignment::Center)
+    ]
+    .spacing(SP.xs)
     .boxed()
 }
 
@@ -123,8 +165,11 @@ fn save_as<'a>(
     .align_x(Alignment::End);
     if let Some(problem) = state.save_profile_problem {
         let why = match problem {
-            ProfileNameProblem::Empty => t!(i18n, ids::SETUP_PROFILE_ERR_NAME_EMPTY),
-            ProfileNameProblem::TooLong => t!(
+            SaveProfileProblem::Rules => t!(i18n, ids::SETUP_PROFILE_ERR_RULES),
+            SaveProfileProblem::Name(ProfileNameProblem::Empty) => {
+                t!(i18n, ids::SETUP_PROFILE_ERR_NAME_EMPTY)
+            }
+            SaveProfileProblem::Name(ProfileNameProblem::TooLong) => t!(
                 i18n,
                 ids::SETUP_PROFILE_ERR_NAME_TOO_LONG,
                 "max" => signex_types::project::MAX_PROFILE_NAME_CHARS as u32

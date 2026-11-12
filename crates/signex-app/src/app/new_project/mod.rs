@@ -11,7 +11,7 @@ mod update;
 pub(crate) use command::new_project_with_profile;
 pub(crate) use profiles::{ProfileStored, store_profile};
 pub use state::NewProjectState;
-pub(crate) use state::{Blocker, NameProblem, RULE_FIELDS, check_name};
+pub(crate) use state::{Blocker, NameProblem, RULE_FIELDS, SaveProfileProblem, check_name};
 pub(crate) use target::{TargetProblem, TargetStatus};
 pub(crate) use update::{NAME_INPUT_ID, import_rule_file};
 
@@ -70,8 +70,12 @@ pub enum NewProjectMsg {
     /// The name field's Save: store the current values as a user profile.
     SaveProfileConfirmed,
     SaveProfileCancelled,
-    /// Remove on a user profile's card, by id.
-    UserProfileRemoved(String),
+    /// Remove on a user profile's card, by id: asks to confirm.
+    UserProfileRemoveRequested(String),
+    /// The confirm's Remove: the asked profile leaves the user's settings.
+    UserProfileRemoveConfirmed,
+    /// The confirm's Keep.
+    UserProfileRemoveCancelled,
     DesignatorsPicked(DesignatorStandard),
     /// The disk check of generation `generation` finished.
     TargetChecked {

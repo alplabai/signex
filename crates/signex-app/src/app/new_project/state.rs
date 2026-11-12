@@ -111,11 +111,11 @@ impl RuleDrafts {
 
 /// The rule fields in the order the dialog lists them.
 pub(crate) const RULE_FIELDS: [PcbField; 5] = [
-    PcbField::Thickness,
     PcbField::Clearance,
     PcbField::TrackWidth,
     PcbField::ViaSize,
     PcbField::ViaDrill,
+    PcbField::Thickness,
 ];
 
 /// Everything the open New Project dialog holds.
@@ -142,7 +142,9 @@ pub struct NewProjectState {
     /// The Save as profile name field, while open.
     pub(crate) save_profile_name: Option<String>,
     /// Why the last Save as profile was refused.
-    pub(crate) save_profile_problem: Option<signex_types::project::ProfileNameProblem>,
+    pub(crate) save_profile_problem: Option<SaveProfileProblem>,
+    /// The saved profile whose Remove asks to confirm, by id.
+    pub(crate) remove_confirm: Option<String>,
 }
 
 impl NewProjectState {
@@ -164,6 +166,7 @@ impl NewProjectState {
             generation: 0,
             save_profile_name: None,
             save_profile_problem: None,
+            remove_confirm: None,
         }
     }
 
@@ -302,6 +305,8 @@ impl NewProjectState {
                 self.save_profile_name = None;
                 self.save_profile_problem = None;
             }
+            M::UserProfileRemoveRequested(id) => self.remove_confirm = Some(id),
+            M::UserProfileRemoveCancelled => self.remove_confirm = None,
             M::SheetOrientationPicked(orientation) => {
                 let (size, _) = SheetSize::parse(&self.setup.sheet.paper_size);
                 self.setup.sheet.paper_size = size.token(orientation);
@@ -375,6 +380,14 @@ pub(crate) fn project_file_in(location: &Path, name: &str, make_folder: bool) ->
     } else {
         location.join(file)
     }
+}
+
+/// Why Save as profile was refused, shown under its name field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SaveProfileProblem {
+    Name(signex_types::project::ProfileNameProblem),
+    /// A rule value shown is not valid.
+    Rules,
 }
 
 /// Why Create is off, for the inline message under the fields.

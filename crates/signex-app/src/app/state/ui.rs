@@ -428,6 +428,12 @@ pub struct UiState {
     /// The user's saved setup profiles (#2232), loaded from `prefs.json` at
     /// boot and saved on every Save as profile and Remove.
     pub setup_profiles: Vec<signex_types::project::UserProfile>,
+    /// Names of the profiles removed this session, by id, so a project that
+    /// still names one can say which.
+    pub removed_profile_names: std::collections::HashMap<String, String>,
+    /// Profile ids a project named and the user did not have, already said
+    /// in Messages this session.
+    pub missing_profiles_warned: std::collections::HashSet<String>,
     /// The Update PCB dialog, while open, or a headless `apply=true` run
     /// (#1312).
     pub update_pcb: Option<crate::app::UpdatePcbState>,

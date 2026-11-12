@@ -151,8 +151,26 @@ impl Signex {
             .or_default();
         let draft = tab.setup_draft.get_or_insert(fresh);
         let users = &mut self.ui_state.setup_profiles;
+        let picked = matches!(msg, NewProjectMsg::ProfilePicked(_));
         match store_profile(draft, users, &msg) {
             ProfileStored::NotAStore => {}
+            ProfileStored::Removed { profile } => {
+                // The project's own default profile is gone: the project no
+                // longer names it, in the same edit.
+                if stored.profile.as_deref() == Some(profile.id.as_str()) {
+                    let mut defaults = stored;
+                    defaults.profile = None;
+                    self.apply_project_general(
+                        project_id,
+                        ProjectGeneralCommand::SetProjectDefaults {
+                            defaults,
+                            designators: None,
+                            typing: None,
+                        },
+                    );
+                }
+                return self.after_profile_store(ProfileStored::Removed { profile });
+            }
             stored => return self.after_profile_store(stored),
         }
         let before = draft.setup.clone();
@@ -173,7 +191,10 @@ impl Signex {
             }
             SetupPart::Pcb => {
                 defaults.pcb = Some(draft.setup.pcb.clone());
-                defaults.profile = Some(draft.setup.profile_id());
+                // Only a card pick names the project's default profile.
+                if picked {
+                    defaults.profile = Some(draft.setup.profile_id());
+                }
             }
             SetupPart::Sheet => defaults.sheet = Some(draft.setup.sheet.clone()),
             // A user profile carries all three parts.

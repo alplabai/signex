@@ -153,6 +153,7 @@ fn a_project_reordered_before_add_new_completes_still_gets_its_own_sheet() {
         project_id: target,
         path: new_sheet.clone(),
         result: Ok(crate::app::project_entry_disk::EntryPatch::NoProjectFile),
+        designators: None,
     }));
     drop(d2);
 
@@ -188,6 +189,7 @@ fn a_failed_blank_schematic_write_reaches_the_messages_panel() {
         project_id: target,
         path: existing,
         result,
+        designators: None,
     }));
 
     assert!(app.document_state.projects[0].data.sheets.is_empty());

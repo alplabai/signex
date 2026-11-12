@@ -797,12 +797,17 @@ pub use dock_layout::*;
 pub use erc::*;
 pub use language::*;
 pub use misc::*;
-pub use ordered_write::{OrderedPrefWrite, background_pref_write, wait_for_pref_writes};
+pub use ordered_write::{
+    OrderedPrefWrite, background_pref_merge, background_pref_write, wait_for_pref_writes,
+};
 #[cfg(test)]
 pub(crate) use ordered_write::{install_wait_probe, take_wait_probe};
 pub use presets::*;
 pub use recent::*;
-pub use setup_profiles::{SETUP_PROFILES_KEY, read_setup_profiles_from, write_setup_profiles};
+pub use setup_profiles::{
+    SETUP_PROFILES_KEY, SetupProfileEdit, apply_setup_profile_edit, read_setup_profiles_from,
+    unusable_setup_profiles,
+};
 
 #[cfg(test)]
 mod tests {

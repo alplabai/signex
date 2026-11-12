@@ -154,18 +154,14 @@ fn new_pcb_opens_the_setup_dialog_prefilled_from_the_project() {
 #[test]
 fn create_with_hdi_makes_a_board_with_the_hdi_rules() {
     let mut f = fixture(ProjectDefaults::default());
-    let key = signex_widgets::tree_view::key_of(&f.app.document_state.panel_ctx.project_tree, &[0]);
-    match key {
-        // The Projects tree row, when the panel has built it.
-        Some(key) => send(
-            &mut f.app,
-            Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                ProjectTreeAction::AddNewPcb(key),
-            )),
-        ),
-        None => send(&mut f.app, menu_row("new_pcb_document")),
-    }
-    assert!(f.app.ui_state.document_setup.is_some(), "the dialog opens");
+    let key = tree_key(&mut f.app);
+    send(
+        &mut f.app,
+        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            ProjectTreeAction::AddNewPcb(key),
+        )),
+    );
+    assert_open(&f.app, SetupKind::Pcb);
     setup(&mut f.app, NewProjectMsg::ProfilePicked(SetupProfile::Hdi));
     setup(
         &mut f.app,
@@ -314,12 +310,33 @@ fn a_saved_profile_appears_in_a_second_project() {
     assert_eq!(copper(board), 10);
     assert_eq!(board.setup.as_ref().map(|s| s.clearance), Some(0.11));
 
-    // Remove takes it off the list.
+    // Remove asks first; Keep keeps it, the confirm's Remove takes it off.
     send(&mut f.app, menu_row("new_schematic_sheet"));
     setup(
         &mut f.app,
-        NewProjectMsg::UserProfileRemoved(saved.id.clone()),
+        NewProjectMsg::UserProfileRemoveRequested(saved.id.clone()),
     );
+    setup(&mut f.app, NewProjectMsg::UserProfileRemoveCancelled);
+    assert!(
+        f.app
+            .ui_state
+            .setup_profiles
+            .iter()
+            .any(|p| p.id == saved.id)
+    );
+    setup(
+        &mut f.app,
+        NewProjectMsg::UserProfileRemoveRequested(saved.id.clone()),
+    );
+    assert!(
+        f.app
+            .ui_state
+            .setup_profiles
+            .iter()
+            .any(|p| p.id == saved.id),
+        "a pressed Remove only asks"
+    );
+    setup(&mut f.app, NewProjectMsg::UserProfileRemoveConfirmed);
     assert!(
         f.app
             .ui_state
@@ -375,4 +392,183 @@ fn esc_closes_the_setup_dialog_without_creating_anything() {
     assert_eq!(project.data.sheets.len(), 1, "no sheet added");
     assert!(!f.app.document_state.is_document_dirty(&project.path));
     assert!(!f.dir.join("demo.snxpcb").exists());
+}
+
+/// A UI message refreshes the panel context, which builds the Projects
+/// tree; the project row's key, which must exist.
+fn tree_key(app: &mut Signex) -> signex_widgets::tree_view::TreeKey {
+    send(
+        app,
+        Message::Ui(signex_app::app::UiMsg::GridPickerSelect(1.0)),
+    );
+    signex_widgets::tree_view::key_of(&app.document_state.panel_ctx.project_tree, &[0])
+        .expect("the project row")
+}
+
+/// The setup dialog is open for `kind` and the fixture's project.
+fn assert_open(app: &Signex, kind: SetupKind) {
+    let state = app.ui_state.document_setup.as_ref().expect("the dialog");
+    assert_eq!(state.kind, kind);
+    assert_eq!(Some(state.project), app.document_state.active_project);
+}
+
+fn palette(app: &mut Signex, label: &str) {
+    use signex_app::app::CommandPaletteMsg as P;
+    send(app, Message::CommandPalette(P::Open));
+    send(app, Message::CommandPalette(P::QueryChanged(label.into())));
+    send(app, Message::CommandPalette(P::ExecuteSelected));
+}
+
+/// Every entry point opens its setup dialog for the project before anything
+/// is made: File ▸ New rows, the Projects tree, Update PCB's Create PCB and
+/// the palette.
+#[test]
+fn every_entry_point_opens_its_setup_dialog_for_the_project() {
+    type Entry = (&'static str, SetupKind, fn(&mut Signex));
+    let entries: [Entry; 7] = [
+        ("File/New/PCB", SetupKind::Pcb, |app| {
+            send(app, menu_row("new_pcb_document"))
+        }),
+        ("File/New/Schematic", SetupKind::Sheet, |app| {
+            send(app, menu_row("new_schematic_sheet"))
+        }),
+        ("Projects ▸ Add New ▸ PCB", SetupKind::Pcb, |app| {
+            let key = tree_key(app);
+            send(
+                app,
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                    ProjectTreeAction::AddNewPcb(key),
+                )),
+            )
+        }),
+        (
+            "Projects ▸ Add New ▸ Schematic",
+            SetupKind::Sheet,
+            |app| {
+                let key = tree_key(app);
+                send(
+                    app,
+                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                        ProjectTreeAction::AddNewSchematic(key),
+                    )),
+                )
+            },
+        ),
+        ("Update PCB ▸ Create PCB", SetupKind::Pcb, |app| {
+            use signex_app::app::UpdatePcbMsg;
+            let project = app.document_state.projects[0].id;
+            send(
+                app,
+                Message::from(UpdatePcbMsg::RequestedForProject(project)),
+            );
+            send(app, Message::from(UpdatePcbMsg::CreatePcbRequested));
+        }),
+        ("palette: New PCB", SetupKind::Pcb, |app| {
+            palette(app, "New PCB in the project")
+        }),
+        ("palette: New schematic", SetupKind::Sheet, |app| {
+            palette(app, "New schematic sheet in the project")
+        }),
+    ];
+    for (entry, kind, press) in entries {
+        let mut f = fixture(ProjectDefaults::default());
+        let tabs = f.app.document_state.tabs.len();
+        press(&mut f.app);
+        assert!(
+            f.app.ui_state.document_setup.is_some(),
+            "{entry}: no dialog"
+        );
+        assert_open(&f.app, kind);
+        assert_eq!(
+            f.app.document_state.tabs.len(),
+            tabs,
+            "{entry}: nothing made"
+        );
+        let project = &f.app.document_state.projects[0];
+        assert!(project.data.pcb_file.is_none(), "{entry}");
+        assert_eq!(project.data.sheets.len(), 1, "{entry}");
+    }
+}
+
+/// A sheet write that is refused (the file is there) leaves the project's
+/// designator standard as it was and the project clean.
+#[test]
+fn a_refused_sheet_write_changes_no_designator_standard() {
+    let mut f = fixture(ProjectDefaults::default());
+    let target = f.dir.join("Power.snxsch");
+    std::fs::write(&target, b"keep").expect("an existing file");
+    send(&mut f.app, menu_row("new_schematic_sheet"));
+    assert_open(&f.app, SetupKind::Sheet);
+    setup(
+        &mut f.app,
+        NewProjectMsg::DesignatorsPicked(DesignatorStandard::Iec81346_2),
+    );
+    let answers = HeadlessAnswers::default();
+    f.app.ui_state.io = IoPorts::headless(answers.clone());
+    answers.replace_all([
+        ("path".to_string(), target.display().to_string()),
+        ("overwrite".to_string(), "true".to_string()),
+    ]);
+    create(&mut f.app);
+    assert_eq!(
+        std::fs::read(&target).expect("read"),
+        b"keep",
+        "not replaced"
+    );
+    let project = &f.app.document_state.projects[0];
+    assert_eq!(
+        project.data.designator_standard(),
+        None,
+        "standard unchanged"
+    );
+    assert_eq!(project.data.sheets.len(), 1, "no sheet listed");
+    assert!(
+        !f.app.document_state.is_document_dirty(&project.path),
+        "the project is not dirtied"
+    );
+}
+
+/// Project Options: Remove asks first; removing the project's own default
+/// profile clears `project_defaults.profile` in the same edit.
+#[test]
+fn removing_the_projects_default_profile_clears_its_id() {
+    use signex_app::app::{ProjectMsg, ProjectTabMsg};
+    let mut users = Vec::new();
+    let id = signex_types::project::save_user_profile(
+        &mut users,
+        "Mine 2232",
+        SetupProfile::Hdi.pcb(8),
+        Default::default(),
+        DesignatorStandard::Ieee315,
+    );
+    let mut defaults =
+        signex_types::project::ProjectSetup::from_profile(SetupProfile::Hdi).defaults();
+    defaults.profile = Some(id.clone());
+    let mut f = fixture(defaults);
+    f.app.ui_state.setup_profiles = users;
+    let project_id = f.app.document_state.projects[0].id;
+    let edit = |msg| {
+        Message::Project(ProjectMsg::Tab(ProjectTabMsg::SetupEdited {
+            project_id,
+            msg,
+        }))
+    };
+    send(
+        &mut f.app,
+        edit(NewProjectMsg::UserProfileRemoveRequested(id.clone())),
+    );
+    assert_eq!(f.app.ui_state.setup_profiles.len(), 1, "only asked");
+    send(&mut f.app, edit(NewProjectMsg::UserProfileRemoveConfirmed));
+    assert!(f.app.ui_state.setup_profiles.is_empty());
+    let project = &f.app.document_state.projects[0];
+    assert_eq!(
+        project.data.project_defaults.profile, None,
+        "no dangling id"
+    );
+    assert_eq!(
+        project.data.project_defaults.pcb,
+        Some(SetupProfile::Hdi.pcb(8)),
+        "the stored values stay"
+    );
+    assert!(f.app.document_state.is_document_dirty(&project.path));
 }

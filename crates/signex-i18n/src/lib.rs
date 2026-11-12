@@ -1031,6 +1031,13 @@ define_ids! {
     SETUP_CREATE_PCB = "setup-create-pcb";
     SETUP_CREATE_SHEET = "setup-create-sheet";
     SETUP_PCB_PREVIEW_NOTE = "setup-pcb-preview-note";
+    SETUP_PROFILE_REMOVE_CONFIRM = "setup-profile-remove-confirm";
+    SETUP_PROFILE_KEEP = "setup-profile-keep";
+    SETUP_PROFILE_ERR_RULES = "setup-profile-err-rules";
+    SETUP_PROFILE_WRITE_FAILED = "setup-profile-write-failed";
+    SETUP_PROFILES_SKIPPED = "setup-profiles-skipped";
+    SETUP_PROFILE_MISSING_UNKNOWN = "setup-profile-missing-unknown";
+    SETUP_PROJECT_CLOSED = "setup-project-closed";
     OVERLAY_PALETTE_GROUP_COMMANDS = "overlay-palette-group-commands";
     OVERLAY_PALETTE_GROUP_COMPONENTS = "overlay-palette-group-components";
     OVERLAY_PALETTE_GROUP_NETS = "overlay-palette-group-nets";

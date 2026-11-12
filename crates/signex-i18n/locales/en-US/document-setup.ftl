@@ -7,8 +7,8 @@ setup-profile-saved = Saved the setup profile "{ $name }". It is offered in ever
 # Messages panel; $name is the profile name.
 setup-profile-removed = Removed the setup profile "{ $name }".
 
-# Messages panel; $profile is the profile id the project names, $project the project name.
-setup-profile-missing = Project { $project } names the setup profile { $profile }, which is not among your saved profiles. Its stored values are used.
+# Messages panel; $profile is the name the profile had when it was removed, $project the project name.
+setup-profile-missing = Project { $project } names the setup profile "{ $profile }", which was removed from your saved profiles. Its stored values are used.
 
 # Heading over the user's saved profile cards.
 setup-profiles-heading = Your profiles
@@ -59,3 +59,27 @@ setup-create-sheet = Create schematic…
 
 # Note under the New PCB preview.
 setup-pcb-preview-note = The board opens unsaved. Nothing is written until you save it.
+
+# Inline confirm under a saved profile's card; $name is the profile name.
+setup-profile-remove-confirm = Remove "{ $name }" from your profiles? Projects that use it keep their own values.
+
+# The confirm's button that keeps the profile.
+setup-profile-keep = Keep
+
+# Under the profile name field when a rule value is not valid.
+setup-profile-err-rules = Fix the values marked below before saving them as a profile.
+
+# Messages panel; $why is the reason the settings file was not written.
+setup-profile-write-failed = The setup profile change was not saved: { $why }
+
+# Messages panel at start-up; $count is how many saved profiles are not offered.
+setup-profiles-skipped = { $count ->
+    [one] One saved setup profile could not be read and is not offered. It is kept in your settings unchanged.
+   *[other] { $count } saved setup profiles could not be read and are not offered. They are kept in your settings unchanged.
+}
+
+# Messages panel; $project is the project name.
+setup-profile-missing-unknown = Project { $project } names a setup profile that was removed or is not among your saved profiles. Its stored values are used.
+
+# Messages panel; $project is the project name.
+setup-project-closed = Project { $project } was closed, so its New PCB or New Schematic dialog was closed and nothing was made.

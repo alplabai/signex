@@ -608,6 +608,12 @@ pub enum ProjectMsg {
     /// The New PCB or New Schematic setup dialog (#2232); routed to
     /// `dispatch_document_setup_message`.
     DocumentSetup(crate::app::DocumentSetupMsg),
+    /// A Save as profile or Remove was merged into `prefs.json` (or not):
+    /// `note` is said in Messages on success (#2232).
+    SetupProfilesWritten {
+        note: String,
+        result: Result<(), String>,
+    },
     /// Start screen project rows: pin, unpin, open a pinned project, the
     /// row menu (#2305); routed to `dispatch_start_screen_message`.
     StartScreen(crate::start_screen::StartScreenMsg),
@@ -728,6 +734,9 @@ pub enum ProjectMsg {
         project_id: crate::app::state::ProjectId,
         path: std::path::PathBuf,
         result: Result<crate::app::project_entry_disk::EntryPatch, String>,
+        /// The setup dialog's designator standard, applied only when the
+        /// write succeeded (#2232).
+        designators: Option<signex_types::designator::DesignatorStandard>,
     },
     /// The Create Sheet dialog's path field was edited.
     CreateChildSheetPathChanged(String),

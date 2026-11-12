@@ -143,6 +143,8 @@ impl Signex {
         tasks.push(self.sync_back_annotate());
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
+        // A New PCB / New Schematic dialog of a closed project closes (#2232).
+        self.drop_document_setup_of_closed_project();
         self.sync_undo_depth();
         // A Save completed behind the quit prompt must not leave it listing
         // files that are no longer unsaved (#1833).

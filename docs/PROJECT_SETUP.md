@@ -150,24 +150,38 @@ PCB and New Schematic dialogs and in Project Options' setup section. It asks
 for a name and stores the values shown (board rules, sheet values, designator
 standard) as a profile in the user's settings (`prefs.json`, key
 `setup_profiles`), not in the project. Saving under a name that exists (case
-ignored) replaces that profile's values. Saved profiles appear under **Your
-profiles**, next to the built-ins, in every project; **Remove** under a card
-deletes it. Settings are written read-modify-write and atomically off the UI
-thread, like every other preference.
+ignored) replaces that profile's values. A rule value that is not valid
+refuses the save with the reason under the name field. Saved profiles appear
+under **Your profiles**, next to the built-ins, in every project. **Remove**
+under a card asks first (Remove "name"? Remove / Keep, in the card); the
+removal is a settings change and stays when the dialog is cancelled.
 
-A project names its default profile by id (`project_defaults.profile`). The
-project's stored values stay its own: they win over the named profile, and
-the id picks the card. A part the project does not store comes from the
-named profile. A project that names a saved profile the user does not have
-(shared from someone else, or removed) uses its stored values (else
-Standard) and the Messages panel says so.
+Each save or removal is merged into the list the file holds now, by id, read-
+modify-write and atomic, off the UI thread: entries this build cannot read,
+and profiles another running Signex saved, are kept. Messages says "Saved the
+setup profile" only once the file is written, and says why when it is not.
+At start-up, stored entries that cannot be offered are counted once in
+Messages; they stay in the file.
+
+A project names its default profile by id (`project_defaults.profile`),
+written by New Project and by a profile card pick in Project Options (a rule
+edit does not change it). A saved-profile pick in Project Options stores its
+board rules, sheet values, designator standard and id as one edit. Removing
+the project's own default profile in Project Options clears the id in the
+same edit, so it does not dangle. The project's stored values stay its own:
+they win over the named profile, and the id picks the card; no built-in card
+is highlighted while a saved profile is picked. A part the project does not
+store comes from the named profile. A project that names a saved profile the
+user does not have (shared from someone else, or removed) uses its stored
+values (else Standard); Messages says so once per profile per session, by the
+name it had if it was removed this session.
 
 ## New PCB and New Schematic
 
 **New PCB** (File > New > PCB, Projects > Add New > PCB, the Update PCB
 dialog's Create PCB, the palette) opens the New PCB dialog, prefilled from
 the project: the profile cards, the PCB rules (rule template, Import rules...,
-copper layers, thickness, clearance, track, via, drill) and the stack-up
+copper layers, clearance, track, via, drill, thickness) and the stack-up
 preview. **Create PCB** makes the board with those values in its board setup
 (the design rule check reads its clearance) and opens it unsaved, as before;
 **Cancel** and Esc make nothing. A project holds one board: when its board is
@@ -179,9 +193,11 @@ cards differ only in board rules, so they are not offered), sheet size,
 orientation, title block and designator standard. **Create schematic...**
 asks where to save the sheet and writes it with those values; cancelling the
 file dialog makes nothing. The designator standard is the project's: a change
-is a project edit (dirty, undoable). There is no title-block template list,
+is a project edit (dirty, undoable), made only once the sheet is written: a
+refused or failed write leaves it as it was. There is no title-block template list,
 so the title block is on or off. Grid and units are app preferences, not
-dialog fields.
+dialog fields. Closing the project closes its open setup dialog, with a note
+in Messages; nothing is made.
 
 Headless and agent runs make the document with no dialog:
 

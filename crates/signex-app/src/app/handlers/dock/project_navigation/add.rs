@@ -247,11 +247,6 @@ impl Signex {
         // sheet or library rename or a second Add New started meanwhile is
         // refused instead of racing the read-modify-write. Released by the
         // completion, whatever its result.
-        // The setup dialog's designator standard is the project's: a change
-        // is one undoable project edit (#2232).
-        if let Some(choice) = &choice {
-            self.apply_sheet_designators(project_id, choice.designators);
-        }
         self.document_state.pending_path_ops.begin_with_dependents(
             crate::app::path_ops::PathOpKind::AddSheet,
             vec![path.clone()],
@@ -261,7 +256,9 @@ impl Signex {
         self.begin_project_write(&path);
         // The blank sheet and its project entry are committed together off
         // the update thread; the project is looked up again by id when the
-        // job lands. The setup dialog's sheet values win over the project's.
+        // job lands. The setup dialog's sheet values win over the project's;
+        // its designator standard is applied when the write lands (#2232).
+        let designators = choice.as_ref().map(|c| c.designators);
         let sheet_defaults = match choice {
             Some(choice) => Some(choice.sheet),
             None => self
@@ -290,6 +287,7 @@ impl Signex {
                     project_id,
                     path,
                     result,
+                    designators,
                 })
             },
         )
@@ -334,11 +332,15 @@ impl Signex {
     /// dialog was opened for, or report the failure. A sheet the saved
     /// project already lists (`Patched`) leaves the project's dirty state as
     /// it was, so other unsaved project edits are neither written nor lost.
+    /// The setup dialog's designator standard (`designators`) is applied only
+    /// once the sheet is written, so a refused or failed write changes
+    /// nothing (#2232).
     pub(crate) fn handle_add_new_schematic_written(
         &mut self,
         project_id: ProjectId,
         path: std::path::PathBuf,
         result: Result<EntryPatch, String>,
+        designators: Option<signex_types::designator::DesignatorStandard>,
     ) {
         self.end_project_write(&path);
         self.document_state.pending_path_ops.finish_add_sheet(&path);
@@ -349,6 +351,19 @@ impl Signex {
                 return;
             }
         };
+        self.register_written_schematic(project_id, &path, patch);
+        if let Some(standard) = designators {
+            self.apply_sheet_designators(project_id, standard);
+        }
+    }
+
+    fn register_written_schematic(
+        &mut self,
+        project_id: ProjectId,
+        path: &std::path::Path,
+        patch: EntryPatch,
+    ) {
+        let path = path.to_path_buf();
         let Some((_, project_path)) =
             self.project_dir_and_path(project_id, "Add New", std::slice::from_ref(&path))
         else {

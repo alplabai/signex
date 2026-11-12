@@ -210,3 +210,53 @@ fn the_gui_command_opens_the_dialog_instead() {
     assert_eq!(state.kind, super::SetupKind::Sheet);
     assert_eq!(state.project_name, "demo");
 }
+
+#[test]
+fn the_default_sheet_name_skips_a_file_already_on_disk() {
+    let mut f = fixture(ProjectDefaults::default());
+    std::fs::write(f.dir.join("Sheet1.snxsch"), b"keep").expect("a stray file");
+    let outcome = run(&mut f.app, "new_schematic_sheet", &[]);
+    assert!(matches!(outcome, CommandOutcome::Ran), "{outcome:?}");
+    assert_eq!(
+        std::fs::read(f.dir.join("Sheet1.snxsch")).expect("read"),
+        b"keep"
+    );
+    assert!(f.dir.join("Sheet2.snxsch").exists());
+}
+
+#[test]
+fn a_missing_profile_is_said_once_per_session() {
+    let mut stored = ProjectSetup::from_profile(SetupProfile::Hobby).defaults();
+    stored.profile = Some("user-gone-2232".into());
+    let mut f = fixture(stored);
+    let needle = "names a setup profile that was removed or is not among your saved profiles";
+    let before = crate::diagnostics::logged_count(needle);
+    for _ in 0..2 {
+        let _ = f
+            .app
+            .update(Message::from(super::DocumentSetupMsg::OpenRequested {
+                kind: super::SetupKind::Pcb,
+                project: None,
+            }));
+        let _ = f
+            .app
+            .update(Message::from(super::DocumentSetupMsg::CancelRequested));
+    }
+    assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
+}
+
+#[test]
+fn the_dialog_closes_when_its_project_closes() {
+    let mut f = fixture(ProjectDefaults::default());
+    let _ = f
+        .app
+        .update(Message::from(super::DocumentSetupMsg::OpenRequested {
+            kind: super::SetupKind::Sheet,
+            project: None,
+        }));
+    assert!(f.app.ui_state.document_setup.is_some());
+    f.app.document_state.projects.clear();
+    f.app.document_state.active_project = None;
+    let _ = f.app.update(Message::noop());
+    assert!(f.app.ui_state.document_setup.is_none());
+}

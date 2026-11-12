@@ -149,6 +149,32 @@ impl OrderedPrefWrite {
     }
 }
 
+/// [`background_pref_write`] for an edit merged into what the file holds
+/// rather than a whole value: no write is skipped as stale (each carries a
+/// different edit), the quit path still waits for it, and its outcome comes
+/// back through `done` (#2232).
+pub fn background_pref_merge(
+    key: &'static str,
+    write: impl FnOnce() -> Result<(), String> + Send + 'static,
+    done: impl Fn(Result<(), String>) -> Message + Send + 'static,
+) -> Task<Message> {
+    let slot = InFlightSlot::take(key);
+    let has_run = slot.has_run.clone();
+    Task::perform(
+        async move {
+            let result = tokio::task::spawn_blocking(move || {
+                has_run.store(true, Ordering::SeqCst);
+                write()
+            })
+            .await
+            .unwrap_or_else(|e| Err(format!("the preference write task failed: {e}")));
+            drop(slot);
+            result
+        },
+        done,
+    )
+}
+
 /// The `Task` that performs `write` on a blocking worker, never in `update`.
 /// `write` reports its own failure through the prefs refusal log; the
 /// completion message only republishes that log to the Messages panel.
