@@ -4,6 +4,7 @@ use super::*;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use iced::widget::column;
+use signex_i18n::{ids, t};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -63,25 +64,27 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
     let primary = theme_ext::text_primary(&ctx.tokens);
     let border_c = theme_ext::border_color(&ctx.tokens);
+    let i18n = &*ctx.i18n;
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
-        container(text(raw("SCH Library")).size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
+        container(
+            text(t!(i18n, PanelKind::SchLibrary.message()))
+                .size(TS.body)
+                .color(primary),
+        )
+        .padding([6.0, SP.m])
+        .width(Length::Fill)
+        .boxed(),
     );
     col = col.push(thin_sep(border_c));
 
     let Some(sym) = ctx.symbol_editor.as_ref() else {
         col = col.push(
             container(
-                text(raw(
-                    "Open a `.snxsym` to see its symbols here. Right-click a library node \
-                 in the project tree and pick `Add New ▸ Symbol` to create one.",
-                ))
-                .size(TS.caption)
-                .color(muted),
+                text(t!(i18n, ids::PANELS_SCH_LIBRARY_EMPTY))
+                    .size(TS.caption)
+                    .color(muted),
             )
             .padding([6.0, SP.m])
             .width(Length::Fill)
@@ -100,7 +103,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .path
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "<untitled>".to_string());
+        .unwrap_or_else(|| t!(i18n, ids::PANELS_SCH_LIBRARY_UNTITLED_FILE).into_string());
     let library_stem: Option<String> = sym
         .path
         .ancestors()
@@ -113,17 +116,24 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .and_then(|p| p.file_stem())
         .and_then(|s| s.to_str())
         .map(|s| s.to_string());
+    let symbols = sym.symbols_in_file.len();
     let breadcrumb = match library_stem {
-        Some(lib) => format!(
-            "{}  ›  {}  ({} symbols)",
-            lib,
-            symbol_file,
-            sym.symbols_in_file.len(),
+        Some(lib) => t!(
+            i18n,
+            ids::PANELS_SCH_LIBRARY_BREADCRUMB_IN_LIBRARY,
+            "library" => lib,
+            "file" => symbol_file,
+            "count" => symbols
         ),
-        None => format!("{}  ({} symbols)", symbol_file, sym.symbols_in_file.len()),
+        None => t!(
+            i18n,
+            ids::PANELS_SCH_LIBRARY_BREADCRUMB,
+            "file" => symbol_file,
+            "count" => symbols
+        ),
     };
     col = col.push(
-        container(text(raw(breadcrumb)).size(TS.caption).color(muted))
+        container(text(breadcrumb).size(TS.caption).color(muted))
             .padding([SP.s, SP.m])
             .boxed(),
     );
@@ -134,11 +144,11 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(
         container(
             row![
-                text(raw("Design Item ID"))
+                text(t!(i18n, ids::PANELS_SCH_LIBRARY_COLUMN_DESIGN_ITEM_ID))
                     .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(3)),
-                text(raw("Description"))
+                text(t!(i18n, ids::PANELS_SCH_LIBRARY_COLUMN_DESCRIPTION))
                     .size(TS.body)
                     .color(muted)
                     .width(Length::FillPortion(4)),
@@ -159,7 +169,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     for entry in &sym.symbols_in_file {
         let is_active = entry.idx == sym.active_idx;
         let label_color = if is_active { primary } else { muted };
-        let bg_active = super::graphite::active_fill(&ctx.tokens);
+        let bg_active = super::graphite::selection_fill(&ctx.tokens);
         let row_msg = PanelMsg::SchLibrarySelectSymbol(entry.idx);
         let wash = super::graphite::wash_fn(&ctx.tokens);
         let row_btn = signex_widgets::button(
@@ -201,7 +211,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         if is_active && (sym.active_max_part > 1 || sym.active_has_part_zero) {
             if sym.active_has_part_zero {
                 col = col.push(part_tree_row(
-                    "Part 0 (shared)",
+                    &t!(i18n, ids::PANELS_SCH_LIBRARY_PART_SHARED).into_string(),
                     0,
                     sym.active_part == 0,
                     primary,
@@ -211,7 +221,8 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             }
             for part in 1..=sym.active_max_part {
                 col = col.push(part_tree_row(
-                    &format!("Part {part}"),
+                    &t!(i18n, ids::PANELS_SCH_LIBRARY_PART, "part" => u32::from(part))
+                        .into_string(),
                     part,
                     sym.active_part == part,
                     primary,
@@ -266,21 +277,32 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // Place — fires on the active symbol (would dispatch to schematic
     // place flow when wired). Stub for now: greyed-out.
-    let place_btn = signex_widgets::button(text(raw("Place")).size(TS.body).color(muted))
-        .padding([SP.s, 10.0])
-        .style(action_btn_style(true, false));
+    let place_btn = signex_widgets::button(
+        text(t!(i18n, ids::PANELS_SCH_LIBRARY_PLACE))
+            .size(TS.body)
+            .color(muted),
+    )
+    .padding([SP.s, 10.0])
+    .style(action_btn_style(true, false));
 
-    let add_btn = signex_widgets::button(text(raw("Add")).size(TS.body).color(primary))
-        .padding([SP.s, 10.0])
-        .on_press(PanelMsg::SchLibraryAddSymbol)
-        .style(action_btn_style(false, true));
+    let add_btn = signex_widgets::button(
+        text(t!(i18n, ids::PANELS_SCH_LIBRARY_ADD))
+            .size(TS.body)
+            .color(primary),
+    )
+    .padding([SP.s, 10.0])
+    .on_press(PanelMsg::SchLibraryAddSymbol)
+    .style(action_btn_style(false, true));
 
     let can_delete = sym.symbols_in_file.len() > 1;
     let delete_color = if can_delete { primary } else { muted };
-    let mut delete_btn =
-        signex_widgets::button(text(raw("Delete")).size(TS.body).color(delete_color))
-            .padding([SP.s, 10.0])
-            .style(action_btn_style(false, can_delete));
+    let mut delete_btn = signex_widgets::button(
+        text(t!(i18n, ids::PANELS_SCH_LIBRARY_DELETE))
+            .size(TS.body)
+            .color(delete_color),
+    )
+    .padding([SP.s, 10.0])
+    .style(action_btn_style(false, can_delete));
     if can_delete {
         delete_btn = delete_btn.on_press(PanelMsg::SchLibraryDeleteSymbol(sym.active_idx));
     }
@@ -288,9 +310,13 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // Edit — opens the active symbol in the standalone editor (for
     // when the SCH Library panel is the only visible surface).
     // Stub for now since the symbol is already open in its tab.
-    let edit_btn = signex_widgets::button(text(raw("Edit")).size(TS.body).color(muted))
-        .padding([SP.s, 10.0])
-        .style(action_btn_style(false, false));
+    let edit_btn = signex_widgets::button(
+        text(t!(i18n, ids::PANELS_SCH_LIBRARY_EDIT))
+            .size(TS.body)
+            .color(muted),
+    )
+    .padding([SP.s, 10.0])
+    .style(action_btn_style(false, false));
 
     col = col.push(
         container(
@@ -311,7 +337,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     );
 
     if let Some(warning) = sym.delete_warning.as_ref() {
-        col = col.push(delete_warning_block(warning, primary, muted));
+        col = col.push(delete_warning_block(warning, primary, muted, i18n));
     }
 
     scrollable(col).width(Length::Fill).boxed()
@@ -323,6 +349,7 @@ fn delete_warning_block<'a>(
     warning: &'a crate::panels::SymbolDeleteWarning,
     primary: Color,
     muted: Color,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     let mut block: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs).push(
         text(raw(warning.heading()))
@@ -339,17 +366,19 @@ fn delete_warning_block<'a>(
         );
     }
     block = block.push(
-        text(raw("Deleting it leaves placed parts on their embedded copy; the library symbol will be missing."))
+        text(t!(i18n, ids::PANELS_SCH_LIBRARY_DELETE_WARNING_NOTE))
             .size(TS.caption)
             .color(muted)
             .boxed(),
     );
-    let confirm = signex_widgets::button(text(raw("Delete anyway")).size(TS.body))
-        .padding([SP.xs, SP.m])
-        .on_press(PanelMsg::SchLibraryDeleteConfirmed(warning.idx));
-    let cancel = signex_widgets::button(text(raw("Cancel")).size(TS.body))
-        .padding([SP.xs, SP.m])
-        .on_press(PanelMsg::SchLibraryDeleteCancelled);
+    let confirm =
+        signex_widgets::button(text(t!(i18n, ids::PANELS_SCH_LIBRARY_DELETE_ANYWAY)).size(TS.body))
+            .padding([SP.xs, SP.m])
+            .on_press(PanelMsg::SchLibraryDeleteConfirmed(warning.idx));
+    let cancel =
+        signex_widgets::button(text(t!(i18n, ids::PANELS_SCH_LIBRARY_DELETE_CANCEL)).size(TS.body))
+            .padding([SP.xs, SP.m])
+            .on_press(PanelMsg::SchLibraryDeleteCancelled);
     block = block.push(row![confirm, cancel].spacing(SP.m).boxed());
     container(block)
         .padding([6.0, SP.m])
@@ -370,27 +399,18 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
     let muted = theme_ext::text_secondary(&ctx.tokens);
     let primary = theme_ext::text_primary(&ctx.tokens);
     let border_c = theme_ext::border_color(&ctx.tokens);
-    let bg_active = super::graphite::active_fill(&ctx.tokens);
+    let bg_active = super::graphite::selection_fill(&ctx.tokens);
+    let i18n = &*ctx.i18n;
 
+    // The dock tab already names the panel, so the body has no title row.
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
-    col = col.push(
-        container(text(raw("Footprint Library")).size(TS.body).color(primary))
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
-    );
-    col = col.push(thin_sep(border_c));
 
     let Some(fp) = ctx.footprint_editor.as_ref() else {
         col = col.push(
             container(
-                text(raw(
-                    "Open a `.snxfpt` to see its footprints here. Right-click a \
-                 `.snxlib` (or a project) in the project tree and pick \
-                 `Add New ▸ Footprint Library` to create one.",
-                ))
-                .size(TS.caption)
-                .color(muted),
+                text(t!(i18n, ids::PANELS_FOOTPRINT_LIBRARY_EMPTY))
+                    .size(TS.caption)
+                    .color(muted),
             )
             .padding([6.0, SP.m])
             .width(Length::Fill)
@@ -407,21 +427,17 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
         fp.path
             .file_name()
             .and_then(|s| s.to_str())
-            .unwrap_or("<unknown>")
-            .to_string()
+            .map(str::to_string)
+            .unwrap_or_else(|| t!(i18n, ids::PANELS_FOOTPRINT_LIBRARY_UNKNOWN_FILE).into_string())
     };
-    let breadcrumb = format!(
-        "{}  ({} footprint{})",
-        file_name,
-        fp.internal_footprints.len(),
-        if fp.internal_footprints.len() == 1 {
-            ""
-        } else {
-            "s"
-        },
+    let breadcrumb = t!(
+        i18n,
+        ids::PANELS_FOOTPRINT_LIBRARY_BREADCRUMB,
+        "file" => file_name,
+        "count" => fp.internal_footprints.len()
     );
     col = col.push(
-        container(text(raw(breadcrumb)).size(TS.caption).color(muted))
+        container(text(breadcrumb).size(TS.caption).color(muted))
             .padding([SP.s, SP.m])
             .boxed(),
     );
@@ -431,11 +447,13 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
     col = col.push(
         container(
             row![
-                text(raw("Name"))
+                text(t!(i18n, ids::PANELS_FOOTPRINT_LIBRARY_COLUMN_NAME))
                     .size(TS.body)
                     .color(muted)
                     .width(Length::Fill),
-                text(raw("Pads")).size(TS.body).color(muted),
+                text(t!(i18n, ids::PANELS_FOOTPRINT_LIBRARY_COLUMN_PADS))
+                    .size(TS.body)
+                    .color(muted),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
@@ -602,59 +620,76 @@ pub fn view_library_row_properties<'a>(
     primary: iced::Color,
     border_c: iced::Color,
     warning: iced::Color,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     let row_id_short = signex_types::object_id::short_id(&d.row_id);
-    let pn_text = if d.internal_pn.is_empty() {
-        "(unnamed row)".to_string()
+    let pn_text: signex_widgets::Label<'a> = if d.internal_pn.is_empty() {
+        t!(i18n, ids::PANELS_LIBRARY_ROW_UNNAMED).into()
     } else {
-        d.internal_pn.clone()
+        signex_i18n::UserText::new(d.internal_pn.clone()).into()
     };
 
     let wash = |alpha: f32| iced::Color::from_rgba(1.0, 1.0, 1.0, alpha);
     let corner = 3.0_f32;
-    let pick_symbol_btn = button(text(raw("Pick Symbol…")).size(TS.body).color(primary))
-        .padding([SP.s, 10.0])
-        .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickSymbol))
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(wash(0.04))),
-            text_color: primary,
-            border: Border {
-                width: 1.0,
-                radius: corner.into(),
-                color: border_c,
-                ..Default::default()
-            },
-            ..iced::widget::button::Style::default()
-        });
+    let pick_symbol_btn = button(
+        text(t!(i18n, ids::PANELS_LIBRARY_ROW_PICK_SYMBOL))
+            .size(TS.body)
+            .color(primary),
+    )
+    .padding([SP.s, 10.0])
+    .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickSymbol))
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(wash(0.04))),
+        text_color: primary,
+        border: Border {
+            width: 1.0,
+            radius: corner.into(),
+            color: border_c,
+            ..Default::default()
+        },
+        ..iced::widget::button::Style::default()
+    });
 
-    let pick_footprint_btn = button(text(raw("Pick Footprint…")).size(TS.body).color(primary))
-        .padding([SP.s, 10.0])
-        .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickFootprint))
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(wash(0.04))),
-            text_color: primary,
-            border: Border {
-                width: 1.0,
-                radius: corner.into(),
-                color: border_c,
-                ..Default::default()
-            },
-            ..iced::widget::button::Style::default()
-        });
+    let pick_footprint_btn = button(
+        text(t!(i18n, ids::PANELS_LIBRARY_ROW_PICK_FOOTPRINT))
+            .size(TS.body)
+            .color(primary),
+    )
+    .padding([SP.s, 10.0])
+    .on_press_maybe((!d.read_only).then_some(PanelMsg::LibraryRowPickFootprint))
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(wash(0.04))),
+        text_color: primary,
+        border: Border {
+            width: 1.0,
+            radius: corner.into(),
+            color: border_c,
+            ..Default::default()
+        },
+        ..iced::widget::button::Style::default()
+    });
 
     let body = column![
-        text(raw("Library Row")).size(TS.body).color(muted),
+        text(t!(i18n, ids::PANELS_LIBRARY_ROW_TITLE))
+            .size(TS.body)
+            .color(muted),
         Space::new().height(4),
-        text(raw(pn_text)).size(TS.title).color(primary),
+        text(pn_text).size(TS.title).color(primary),
         Space::new().height(2),
-        text(raw(format!(
-            "table: {}  ·  class: {}  ·  {}  ·  row {}",
-            d.table, d.class, d.lifecycle_label, row_id_short,
-        )))
+        text(t!(
+            i18n,
+            ids::PANELS_LIBRARY_ROW_SUMMARY,
+            "table" => d.table.as_str(),
+            "class" => d.class.as_str(),
+            "lifecycle" => d.lifecycle_label.as_str(),
+            "row" => row_id_short
+        ))
         .size(TS.caption)
         .color(muted),
         Space::new().height(12),
-        text(raw("Symbol")).size(TS.body).color(muted),
+        text(t!(i18n, ids::PANELS_LIBRARY_ROW_SYMBOL))
+            .size(TS.body)
+            .color(muted),
         Space::new().height(4),
         text(raw(d.symbol_summary.clone()))
             .size(TS.body)
@@ -662,7 +697,9 @@ pub fn view_library_row_properties<'a>(
         Space::new().height(6),
         pick_symbol_btn,
         Space::new().height(14),
-        text(raw("Footprint")).size(TS.body).color(muted),
+        text(t!(i18n, ids::PANELS_LIBRARY_ROW_FOOTPRINT))
+            .size(TS.body)
+            .color(muted),
         Space::new().height(4),
         text(signex_i18n::UserText::new(d.footprint_summary.clone()))
             .size(TS.body)
@@ -704,7 +741,6 @@ pub fn view_component_sheet<'a>(
     let r = crate::styles::tokens::resolve(tokens);
     let ink = crate::styles::ti(tokens.text);
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
-    use signex_i18n::{ids, t};
     let line =
         |label: signex_i18n::MessageId, value: &'a str, is_mono: bool| -> Element<'a, PanelMsg> {
             let shown: signex_widgets::Label<'a> = if value.trim().is_empty() {

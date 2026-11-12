@@ -8,6 +8,7 @@
 
 use iced::widget::{Column, container, row, scrollable};
 use iced::{Color, Element, Length, Widget};
+use signex_i18n::{ids, t};
 use signex_widgets::{raw, text};
 
 use super::{
@@ -37,6 +38,9 @@ mod selection;
 mod silk;
 mod snap_options;
 mod subforms;
+
+#[cfg(test)]
+mod header_tests;
 
 /// v0.14.2 — Properties panel body for the Footprint editor. Switches
 /// between three contexts:
@@ -75,24 +79,24 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // "(N pads selected)" tag next to the mode label so the user
     // knows the form below shows only the primary pad's properties
     // while highlights cover everything.
-    let multi_select_tag = if fp.selected_pad_count > 1 {
-        Some(format!("({} pads selected)", fp.selected_pad_count))
-    } else {
-        None
-    };
+    let multi_select_tag = (fp.selected_pad_count > 1)
+        .then(|| t!(i18n, ids::EDITORS_FOOTPRINT_PADS_SELECTED, "count" => fp.selected_pad_count));
 
-    let mut header_row = row![
-        text(signex_i18n::UserText::new(&fp.footprint_name))
-            .size(TS.label)
-            .color(primary),
-        text(raw("·")).size(TS.label).color(muted),
-        text(raw(mode_label)).size(TS.body).color(muted),
-    ]
+    let mut header_row = match selected_pad_heading(fp, i18n) {
+        Some(heading) => row![text(heading).size(TS.label).color(primary)],
+        None => row![
+            text(signex_i18n::UserText::new(&fp.footprint_name))
+                .size(TS.label)
+                .color(primary),
+            text(raw("·")).size(TS.label).color(muted),
+            text(raw(mode_label)).size(TS.body).color(muted),
+        ],
+    }
     .spacing(6)
     .align_y(iced::Alignment::Center);
     if let Some(tag) = multi_select_tag {
         header_row = header_row.push(text(raw("·")).size(TS.label).color(muted).boxed());
-        header_row = header_row.push(text(raw(tag)).size(TS.body).color(accent_c).boxed());
+        header_row = header_row.push(text(tag).size(TS.body).color(accent_c).boxed());
     }
 
     col = col.push(
@@ -128,6 +132,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 false,
                 palette,
                 collapsed_sections,
+                i18n,
             );
             col = props_kv_row(
                 col,
@@ -144,7 +149,14 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 collapsed_sections,
                 &fp.selected_pad_shape_params,
             );
-            col = render_pad_form_pad_features(col, &values, target, palette, collapsed_sections);
+            col = render_pad_form_pad_features(
+                col,
+                &values,
+                target,
+                palette,
+                collapsed_sections,
+                i18n,
+            );
             // v0.21 — "Edit in Sketch" jump button. Visible only
             // when the pad has a backing sketch entity (auto-
             // minted on first Sketch-mode entry or placed via
@@ -193,9 +205,17 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 fp.placement_paused,
                 palette,
                 collapsed_sections,
+                i18n,
             );
             col = render_pad_form_pad_stack(col, &values, target, palette, collapsed_sections, &[]);
-            col = render_pad_form_pad_features(col, &values, target, palette, collapsed_sections);
+            col = render_pad_form_pad_features(
+                col,
+                &values,
+                target,
+                palette,
+                collapsed_sections,
+                i18n,
+            );
             return scrollable(container(col).padding(iced::Padding {
                 top: 0.0,
                 right: 12.0,
@@ -234,6 +254,30 @@ pub(super) fn view_footprint_editor_properties<'a>(
     .height(Length::Fill)
     .style(crate::panels::form_look::scrollbar_style)
     .boxed()
+}
+
+/// The Pad Properties header while a pad is selected outside placement:
+/// "Pad 11 · SMD · 1 of 11 pads". `None` keeps the footprint header: no
+/// pad selected, a placement running, or an index past the pad count.
+fn selected_pad_heading(
+    fp: &FootprintEditorPanelContext,
+    i18n: &signex_i18n::I18n,
+) -> Option<signex_i18n::Localized> {
+    if fp.mode_kind != FootprintModeKind::Pads || fp.placement_active || fp.placement_paused {
+        return None;
+    }
+    let pad = fp.selected_pad.as_ref()?;
+    if pad.idx >= fp.pad_count {
+        return None;
+    }
+    Some(t!(
+        i18n,
+        ids::EDITORS_FOOTPRINT_PAD_HEADING,
+        "number" => pad.number.as_str(),
+        "kind" => pad.kind_label,
+        "index" => pad.idx + 1,
+        "pads" => fp.pad_count
+    ))
 }
 
 /// v0.20 — common Settings + Hint footer: the Settings header and a

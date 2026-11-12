@@ -106,7 +106,7 @@ pub(super) fn view_symbol_selection<'a>(
         "Symbol name",
         PanelMsg::SymEditorSetSymbolName,
     ));
-    col = col.push(super::prop_row_static(
+    col = col.push(super::prop_row_mono(
         "UUID",
         sym.symbol_uuid.to_string(),
         muted,

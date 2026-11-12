@@ -130,13 +130,14 @@ impl CommandSource {
     }
 
     /// Header of the source's group in the Graphite palette.
-    pub fn group_title(self) -> &'static str {
+    pub fn group_title(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
         match self {
-            Self::Command => "COMMANDS",
-            Self::Symbol => "COMPONENTS",
-            Self::Net => "NETS",
-            Self::Sheet => "SHEETS",
-            Self::File => "FILES",
+            Self::Command => ids::OVERLAY_PALETTE_GROUP_COMMANDS,
+            Self::Symbol => ids::OVERLAY_PALETTE_GROUP_COMPONENTS,
+            Self::Net => ids::OVERLAY_PALETTE_GROUP_NETS,
+            Self::Sheet => ids::OVERLAY_PALETTE_GROUP_SHEETS,
+            Self::File => ids::OVERLAY_PALETTE_GROUP_FILES,
         }
     }
 }

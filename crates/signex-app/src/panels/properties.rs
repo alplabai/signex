@@ -213,6 +213,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             primary,
             border_c,
             theme_ext::warning_color(&ctx.tokens),
+            &ctx.i18n,
         );
     }
 

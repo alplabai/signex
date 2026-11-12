@@ -98,3 +98,5 @@ preferences-appearance-remember-geometry-help = When on, Signex reopens the main
 preferences-appearance-window-buttons = Window buttons
 preferences-appearance-window-buttons-help = Where minimize, maximize and close sit. Automatic follows your system.
 preferences-appearance-restart-note = Takes effect after restart.
+# Value beside the zoom speed slider. $percent is a whole number.
+preferences-appearance-zoom-step-value = { $percent }% per notch

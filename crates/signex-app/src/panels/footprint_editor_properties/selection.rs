@@ -1,7 +1,8 @@
 use iced::widget::{Column, container, pick_list, row};
 use iced::{Element, Length, Widget as _};
+use signex_i18n::{ids, t};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::{raw, text};
+use signex_widgets::text;
 
 use super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
@@ -61,6 +62,7 @@ pub(super) fn view_selection<'a>(
                 false,
                 palette,
                 collapsed_sections,
+                i18n,
             );
             // Position is the one read-only field (use drag to move).
             col = props_kv_row(
@@ -78,7 +80,14 @@ pub(super) fn view_selection<'a>(
                 collapsed_sections,
                 &fp.selected_pad_shape_params,
             );
-            col = render_pad_form_pad_features(col, &values, target, palette, collapsed_sections);
+            col = render_pad_form_pad_features(
+                col,
+                &values,
+                target,
+                palette,
+                collapsed_sections,
+                i18n,
+            );
         }
         (FootprintModeKind::Sketch, _, Some(ent)) => {
             col = col.push(
@@ -128,14 +137,19 @@ pub(super) fn view_selection<'a>(
                 if let Some(dof) = ent.dof_state {
                     use signex_sketch::solver::dof::DofColor;
                     let (label, look) = match dof {
-                        DofColor::Under => ("Under-constrained", palette.dof.under),
-                        DofColor::Full => ("Fully constrained", palette.dof.full),
-                        DofColor::Over => ("Over-constrained", palette.dof.over),
+                        DofColor::Under => {
+                            (ids::EDITORS_SKETCH_UNDER_CONSTRAINED, palette.dof.under)
+                        }
+                        DofColor::Full => (
+                            ids::EDITORS_FOOTPRINT_DOF_FULLY_CONSTRAINED,
+                            palette.dof.full,
+                        ),
+                        DofColor::Over => (ids::EDITORS_SKETCH_OVER_CONSTRAINED, palette.dof.over),
                     };
                     let c = look.ink;
                     let fill = look.fill;
                     let chip: Element<'a, PanelMsg> =
-                        container(text(raw(label)).size(TS.caption).color(c))
+                        container(text(t!(i18n, label)).size(TS.caption).color(c))
                             .padding([2.0, SP.m])
                             .style(move |_: &iced::Theme| iced::widget::container::Style {
                                 background: Some(iced::Background::Color(fill)),
@@ -149,8 +163,12 @@ pub(super) fn view_selection<'a>(
                     col = col.push(
                         container(
                             row![
-                                container(text(raw("DOF")).size(TS.caption).color(muted))
-                                    .width(Length::FillPortion(1)),
+                                container(
+                                    text(t!(i18n, ids::EDITORS_FOOTPRINT_DOF))
+                                        .size(TS.caption)
+                                        .color(muted),
+                                )
+                                .width(Length::FillPortion(1)),
                                 container(chip).width(Length::FillPortion(2)),
                             ]
                             .align_y(iced::Alignment::Center),
@@ -177,7 +195,7 @@ pub(super) fn view_selection<'a>(
                 col = col.push(
                     container(
                         signex_widgets::button(
-                            text(raw("Unlink corner radius"))
+                            text(t!(i18n, ids::EDITORS_FOOTPRINT_UNLINK_CORNER_RADIUS))
                                 .size(TS.caption)
                                 .color(primary),
                         )
@@ -223,7 +241,7 @@ pub(super) fn view_selection<'a>(
                 if !fp.selected_sketch_is_point {
                     col = col.push(
                         container(
-                            text(raw("Pad role applies to Points only"))
+                            text(t!(i18n, ids::EDITORS_FOOTPRINT_ROLE_POINTS_ONLY))
                                 .size(TS.caption)
                                 .color(muted),
                         )
@@ -277,7 +295,7 @@ pub(super) fn view_selection<'a>(
                         // shows it but does not edit it.
                         col = col.push(
                             container(
-                                text(raw("From sketch: edit in Sketch mode"))
+                                text(t!(i18n, ids::EDITORS_FOOTPRINT_SILK_FROM_SKETCH))
                                     .size(TS.caption)
                                     .color(muted),
                             )

@@ -113,3 +113,20 @@ dialog-selection-filter-bodies-3d = 3D Bodies
 dialog-selection-filter-keepouts = Keepouts
 dialog-selection-filter-cutouts = Cutouts
 dialog-selection-filter-texts = Texts
+
+## ERC dialog: which rules are being edited, and saving them as a profile
+dialog-erc-scope-project = Editing the rules stored in this project.
+dialog-erc-scope-newer-project = This project's rule set is from a newer Signex and is kept unchanged; editing the "User Default" rule profile (this machine's rules).
+dialog-erc-scope-project-without-rules = Editing the "User Default" rule profile (this machine's rules); this project stores no rules.
+dialog-erc-scope-user-default = Editing the "User Default" rule profile (this machine's rules).
+dialog-erc-profile-save-title = Save the project's ERC rules as a profile
+# $name is the profile name the user typed.
+dialog-erc-profile-overwrite-note = A profile named "{ $name }" already exists. Overwriting replaces its rules and version; projects that took their rules from it will show the change as an update.
+dialog-erc-profile-name = Name
+dialog-erc-profile-name-placeholder = Profile name
+dialog-erc-profile-version = Version
+dialog-erc-profile-version-placeholder = Version
+# A pending profile update whose rules already match; only the stored hash differs.
+dialog-erc-profile-hash-only = Profile "{ $name }": rules already match; only the recorded hash is out of date.
+# Heading above the list of rule changes a profile update applies. $count is a whole number.
+dialog-erc-profile-update-heading = Update from profile "{ $name }" changes { $count } entries:
