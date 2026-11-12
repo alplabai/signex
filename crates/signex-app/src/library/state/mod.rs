@@ -244,7 +244,7 @@ pub struct LibraryBrowserState {
     /// confirm waits for the result.
     pub rename_saving: bool,
     /// Filtered, sorted rows and derived columns of the active table (#1374),
-    /// kept current by `LibraryState::sync_view_caches`; `view` reads it
+    /// kept current by `LibraryState::sync_view_caches_in`; `view` reads it
     /// instead of recomputing every frame.
     pub view_cache: Option<super::browser::BrowserViewCache>,
     /// Where the grid is scrolled to, as reported by its scrollable. The
@@ -849,7 +849,7 @@ pub struct ComponentsPanelState {
     /// a follow-up.
     pub filter: String,
     /// Searchable row list the panel draws; kept current by
-    /// `LibraryState::sync_view_caches` (#1353).
+    /// `LibraryState::sync_view_caches_in` (#1353).
     pub rows: PanelRows,
     /// The row a click highlighted; the details section shows it.
     pub selected: Option<ComponentsPanelRowKey>,

@@ -65,6 +65,27 @@ fn compare_text_runs(a: &[u8], b: &[u8]) -> Ordering {
 /// the result is a total order (required by `sort_by`) and `R01` still differs
 /// from `R1`.
 pub fn compare_references(a: &str, b: &str) -> Ordering {
+    compare_runs(a, b, compare_text_runs)
+}
+
+/// [`compare_references`] with the text runs compared by `text` instead of
+/// by ASCII-lowercased bytes, so an on-screen list can order them in a
+/// language's alphabet. Digit runs stay numeric. Never for an export order.
+pub fn compare_references_with(
+    a: &str,
+    b: &str,
+    text: impl Fn(&str, &str) -> Ordering,
+) -> Ordering {
+    compare_runs(a, b, |l, r| {
+        // Runs split at ASCII digits, so both are whole UTF-8 text.
+        match (std::str::from_utf8(l), std::str::from_utf8(r)) {
+            (Ok(l), Ok(r)) => text(l, r),
+            _ => compare_text_runs(l, r),
+        }
+    })
+}
+
+fn compare_runs(a: &str, b: &str, text: impl Fn(&[u8], &[u8]) -> Ordering) -> Ordering {
     let mut left = a.as_bytes();
     let mut right = b.as_bytes();
 
@@ -78,7 +99,7 @@ pub fn compare_references(a: &str, b: &str) -> Ordering {
                 let (right_run, right_rest) = take_run(right);
                 let ordering = match (l.is_ascii_digit(), r.is_ascii_digit()) {
                     (true, true) => compare_digit_runs(left_run, right_run),
-                    (false, false) => compare_text_runs(left_run, right_run),
+                    (false, false) => text(left_run, right_run),
                     // A number sorts ahead of text at the same position.
                     (true, false) => Ordering::Less,
                     (false, true) => Ordering::Greater,
@@ -98,6 +119,23 @@ pub fn compare_references(a: &str, b: &str) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_custom_text_order_keeps_digit_runs_numeric() {
+        // Reverse alphabet for the text runs; `R2` still precedes `R10`.
+        let reversed = |a: &str, b: &str| b.cmp(a);
+        let mut items = vec!["A10", "B2", "A2"];
+        items.sort_by(|a, b| compare_references_with(a, b, reversed));
+        assert_eq!(items, ["B2", "A2", "A10"]);
+        assert_eq!(
+            compare_references_with("r1", "R1", compare_by_bytes),
+            Ordering::Greater
+        );
+    }
+
+    fn compare_by_bytes(a: &str, b: &str) -> Ordering {
+        a.cmp(b)
+    }
 
     fn sorted(mut items: Vec<&str>) -> Vec<&str> {
         items.sort_by(|a, b| compare_references(a, b));

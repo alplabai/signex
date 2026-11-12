@@ -76,6 +76,7 @@ fn name_row<'a>(project: &'a LoadedProject, tokens: &ThemeTokens) -> Element<'a,
 }
 
 pub(in crate::app::project_tab) fn view<'a>(
+    i18n: &signex_i18n::I18n,
     project: &'a LoadedProject,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -101,7 +102,7 @@ pub(in crate::app::project_tab) fn view<'a>(
         read_only("Directory", facts.directory, tokens),
         read_only("Root schematic", or_dash(facts.schematic_root), tokens),
         read_only("PCB file", or_dash(facts.pcb_file), tokens),
-        read_only("Libraries", facts.library_count.to_string(), tokens),
+        read_only("Libraries", i18n.count(facts.library_count as i64), tokens),
     ]
     .spacing(sp.l)
     .width(Length::Fill.max(ts.body * SECTION_MAX_EMS));

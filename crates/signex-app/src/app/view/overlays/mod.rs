@@ -220,9 +220,15 @@ impl Signex {
             // header goes wherever the source changes.
             if display_idx == 0 || results[display_idx - 1].source != entry.source {
                 let count = results.iter().filter(|e| e.source == entry.source).count();
-                rows.push(palette::group_header(tokens, entry.source, count));
+                rows.push(palette::group_header(
+                    &self.ui_state.i18n,
+                    tokens,
+                    entry.source,
+                    count,
+                ));
             }
             rows.push(palette::result_row(
+                &self.ui_state.i18n,
                 tokens,
                 entry,
                 &self.ui_state.command_palette.query,

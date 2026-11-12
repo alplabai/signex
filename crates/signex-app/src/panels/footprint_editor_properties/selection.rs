@@ -30,6 +30,7 @@ pub(super) fn view_selection<'a>(
     mode_label: &str,
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
+    i18n: &signex_i18n::I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
@@ -117,7 +118,7 @@ pub(super) fn view_selection<'a>(
                     muted,
                     input_bg,
                     "Attached constraints",
-                    ent.attached_constraint_count.to_string(),
+                    i18n.count(ent.attached_constraint_count as i64),
                 );
                 // v0.22 Phase A3+A4 — DOF state row. Surfaces the solver's
                 // per-Point colour code (blue under / green fully / red
@@ -396,21 +397,27 @@ pub(super) fn view_selection<'a>(
                     ));
                     col = props_kv_row(col, muted, input_bg, "Version", fp.version.clone());
                     col = props_kv_row(col, muted, input_bg, "Mode", mode_label.into());
-                    col = props_kv_row(col, muted, input_bg, "Pads", fp.pad_count.to_string());
+                    col = props_kv_row(
+                        col,
+                        muted,
+                        input_bg,
+                        "Pads",
+                        i18n.count(fp.pad_count as i64),
+                    );
                     if fp.sketch_entity_count > 0 || fp.sketch_constraint_count > 0 {
                         col = props_kv_row(
                             col,
                             muted,
                             input_bg,
                             "Sketch entities",
-                            fp.sketch_entity_count.to_string(),
+                            i18n.count(fp.sketch_entity_count as i64),
                         );
                         col = props_kv_row(
                             col,
                             muted,
                             input_bg,
                             "Constraints",
-                            fp.sketch_constraint_count.to_string(),
+                            i18n.count(fp.sketch_constraint_count as i64),
                         );
                     }
                 }

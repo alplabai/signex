@@ -2,9 +2,10 @@
 //! per frame (#1374).
 //!
 //! `view` must stay cheap and pure, so it only reads this cache. `update`
-//! keeps it current through [`LibraryState::sync_view_caches`]: the entries
-//! (with their lowercase search keys) are rebuilt only when the set of
-//! components changes, and the filtered list only when the query changes.
+//! keeps it current through [`LibraryState::sync_view_caches_in`]: the entries
+//! (with their case-folded search keys) are rebuilt only when the set of
+//! components or the message language changes, and the filtered list only
+//! when the query changes.
 
 use super::*;
 use crate::library::range_filter::{FilterColumn, RangeFilters, retain_in_range};
@@ -28,6 +29,7 @@ pub struct PickerEntry {
 
 impl PickerEntry {
     fn new(
+        i18n: &signex_i18n::I18n,
         path: &Arc<Path>,
         summary: &ComponentSummary,
         parameters: signex_library::ParamMap,
@@ -37,9 +39,9 @@ impl PickerEntry {
             path: Arc::clone(path),
             summary: summary.clone(),
             state_label: format!("{:?}", summary.state),
-            internal_pn_key: summary.internal_pn.as_str().to_lowercase(),
-            mpn_key: summary.mpn.to_lowercase(),
-            description_key: summary.description.to_lowercase(),
+            internal_pn_key: i18n.fold_for_search(summary.internal_pn.as_str()),
+            mpn_key: i18n.fold_for_search(&summary.mpn),
+            description_key: i18n.fold_for_search(&summary.description),
         }
     }
 
@@ -56,6 +58,8 @@ impl PickerEntry {
 pub struct PickerRows {
     /// `LibraryState::data_version` the entries were built at.
     entries_at: Option<u64>,
+    /// The message locale the entries' keys were folded in.
+    built_in: Option<&'static str>,
     entries: Vec<PickerEntry>,
     /// The normalised query `visible` was filtered for.
     needle: Option<String>,
@@ -95,18 +99,21 @@ impl PickerRows {
     /// picker's `filter`, doing only the work that input change needs.
     pub(super) fn sync(
         &mut self,
+        i18n: &signex_i18n::I18n,
         libraries: &[OpenLibrary],
         data_version: u64,
         filter: &str,
         range_filters: &RangeFilters,
     ) {
-        let needle = filter.trim().to_lowercase();
+        let needle = i18n.fold_for_search(filter.trim());
         let range = range_filters.active();
-        let entries_stale = self.entries_at != Some(data_version);
+        let entries_stale =
+            self.entries_at != Some(data_version) || self.built_in != Some(i18n.locale());
         if entries_stale {
-            self.entries = build_entries(libraries);
+            self.entries = build_entries(i18n, libraries);
             self.filter_columns = picker_filter_columns(&self.entries);
             self.entries_at = Some(data_version);
+            self.built_in = Some(i18n.locale());
             #[cfg(test)]
             counters::ENTRY_BUILDS.with(|c| c.set(c.get() + 1));
         }
@@ -126,7 +133,7 @@ impl PickerRows {
     }
 }
 
-fn build_entries(libraries: &[OpenLibrary]) -> Vec<PickerEntry> {
+fn build_entries(i18n: &signex_i18n::I18n, libraries: &[OpenLibrary]) -> Vec<PickerEntry> {
     let mut entries = Vec::new();
     for lib in libraries {
         let path: Arc<Path> = Arc::from(lib.root.as_path());
@@ -141,7 +148,7 @@ fn build_entries(libraries: &[OpenLibrary]) -> Vec<PickerEntry> {
                 .get(&summary.row_id)
                 .map(|r| r.parameters.clone())
                 .unwrap_or_default();
-            PickerEntry::new(&path, summary, parameters)
+            PickerEntry::new(i18n, &path, summary, parameters)
         }));
     }
     entries
@@ -168,27 +175,35 @@ fn picker_filter_columns(entries: &[PickerEntry]) -> Vec<FilterColumn> {
 impl LibraryState {
     /// Record that an open library's rows, prices or set of libraries
     /// changed, so caches derived from them rebuild at the next
-    /// [`Self::sync_view_caches`].
+    /// [`Self::sync_view_caches_in`].
     pub fn touch_data(&mut self) {
         self.data_version += 1;
     }
 
     /// Bring the caches `view` reads up to date. Called from `update`
     /// (`finish_update`, and the picker handlers); cheap when nothing
-    /// they depend on changed.
-    pub fn sync_view_caches(&mut self) {
+    /// they depend on changed. The search fold and the sort order follow
+    /// `i18n`, so a language change rebuilds what they produced.
+    pub fn sync_view_caches_in(&mut self, i18n: &signex_i18n::I18n) {
         let version = self.data_version;
         if let Some(picker) = self.picker.as_mut() {
             picker.rows.sync(
+                i18n,
                 &self.open_libraries,
                 version,
                 &picker.filter,
                 &picker.range_filters,
             );
         }
-        self.sync_panel_rows();
-        self.sync_browser_caches();
+        self.sync_panel_rows(i18n);
+        self.sync_browser_caches(i18n);
         self.sync_uncommitted();
+    }
+
+    /// [`Self::sync_view_caches_in`] under en-US.
+    #[cfg(test)]
+    pub fn sync_view_caches(&mut self) {
+        self.sync_view_caches_in(signex_i18n::I18n::en_us_ref());
     }
 }
 

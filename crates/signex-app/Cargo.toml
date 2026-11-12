@@ -102,6 +102,7 @@ test-prefs-redirect = []
 [dev-dependencies]
 signex-app = { path = ".", features = ["test-prefs-redirect"] }
 wiremock = "0.6"
+signex-i18n = { workspace = true, features = ["test-support"] }
 signex-library = { workspace = true, features = ["test-identity"] }
 git2 = { workspace = true }
 # Names `url::Url` in a fake `DistributorAdapter` (pricing refresh tests).

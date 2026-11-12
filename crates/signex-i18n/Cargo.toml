@@ -25,6 +25,10 @@ log = "0.4"
 sys-locale = "0.3"
 unic-langid = "0.9"
 
+[features]
+# Constructors for other crates' tests; not for production code.
+test-support = []
+
 [dev-dependencies]
 fluent-syntax = "0.12"
 

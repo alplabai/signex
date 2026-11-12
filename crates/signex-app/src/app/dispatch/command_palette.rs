@@ -6,7 +6,7 @@ use iced::widget::operation;
 use super::super::*;
 use crate::app::command_palette::{
     COMMAND_PALETTE_INPUT_ID, COMMAND_PALETTE_WINDOW_INPUT_ID, CommandAction, MAX_RESULTS,
-    build_catalog, catalog_stamp, rank_results,
+    build_catalog, catalog_stamp, rank_results_in,
 };
 use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 
@@ -92,7 +92,11 @@ impl Signex {
     /// top [`MAX_RESULTS`] for the dropdown to render.
     pub(in crate::app) fn refresh_command_palette_results(&mut self) {
         let catalog = build_catalog(self);
-        let ranked = rank_results(&catalog, &self.ui_state.command_palette.query);
+        let ranked = rank_results_in(
+            &self.ui_state.i18n,
+            &catalog,
+            &self.ui_state.command_palette.query,
+        );
         let stamp = catalog_stamp(self);
         let palette = &mut self.ui_state.command_palette;
         palette.catalog_stamp = stamp;

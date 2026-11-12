@@ -40,6 +40,7 @@ pub use catalog::{
 pub use command::AppCommandId;
 pub use editor::{
     BindingSlot, KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource,
+    category_title_case,
 };
 pub use mod_migration::{
     ModMigration, ModMove, migrate_active_to_mod, offers_mod_migration, standard_ctrl_rows,
