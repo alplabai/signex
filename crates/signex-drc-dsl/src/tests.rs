@@ -102,10 +102,84 @@ fn a_syntax_error_has_a_span_and_applies_no_rule() {
 }
 
 #[test]
-fn a_space_before_the_unit_is_a_syntax_error() {
-    let got = compile("rule r on via require drill >= 0.2 mm then error");
-    assert!(got.rules.is_empty());
-    assert_eq!(got.diagnostics.len(), 1, "{got:?}");
+fn a_space_before_a_known_unit_is_accepted_and_and_is_not_a_unit() {
+    let got = compile(
+        "rule r on track require width >= 0.2 mm and width <= 12 mil then error\n\
+         rule v on via require drill >= 150 \u{b5}m then error",
+    );
+    assert!(got.diagnostics.is_empty(), "{got:?}");
+    assert_eq!(
+        got.rules[0].limits,
+        [Limit::MinTrackWidth(200_000), Limit::MaxTrackWidth(304_800)]
+    );
+    assert_eq!(got.rules[1].limits, [Limit::MinViaDrill(150_000)]);
+    // A spaced word that is not a unit is not taken as one.
+    let missing = compile("rule r on via require drill >= 0.2 and drill >= 1mm then error");
+    assert_eq!(
+        messages(&missing),
+        ["'0.2' needs a unit (mm, mil, um or nm)"]
+    );
+}
+
+#[test]
+fn an_implausible_or_zero_limit_is_said() {
+    let got = compile(
+        "rule big on clearance require clearance >= 20mm then error\n\
+         rule huge on clearance require clearance >= 200mm then error\n\
+         rule none on track require width >= 0mm then error",
+    );
+    let names: Vec<_> = got.rules.iter().map(|r| r.name.as_str()).collect();
+    assert_eq!(names, ["big", "none"]);
+    let said: Vec<_> = got
+        .diagnostics
+        .iter()
+        .map(|d| (d.level, d.message.as_str()))
+        .collect();
+    assert_eq!(
+        said,
+        [
+            (
+                Level::Warning,
+                "a clearance of 20 mm is over 10 mm; check the unit"
+            ),
+            (
+                Level::Error,
+                "a clearance of 200 mm is over 100 mm; check the unit"
+            ),
+            (
+                Level::Warning,
+                "a limit of 0 checks nothing for this rule's scope"
+            ),
+        ]
+    );
+}
+
+#[test]
+fn an_invalid_rule_does_not_take_its_name_from_a_valid_one() {
+    let got = compile(
+        "rule w on track require width >= 1in then error\n\
+         rule w on track require width >= 1mm then error",
+    );
+    assert_eq!(got.rules.len(), 1, "{got:?}");
+    assert_eq!(got.rules[0].limits, [Limit::MinTrackWidth(1_000_000)]);
+    assert_eq!(got.not_applied, 1);
+}
+
+#[test]
+fn what_was_not_applied_is_counted() {
+    let skipped = compile(
+        "rule a on via require drill >= 2in then error\n\
+         rule e on clearance between track and edge require clearance >= 1mm then error\n\
+         rule ok on via require drill >= 1mm then error",
+    );
+    assert_eq!((skipped.not_applied, skipped.unparsed), (2, false));
+    let broken = compile("rule a on via require drill");
+    assert_eq!((broken.not_applied, broken.unparsed), (0, true));
+    let layered = compile_layers(
+        Some(&layer("rule a on")),
+        Some(&layer("rule a on via require drill >= 2in then error")),
+    );
+    assert_eq!((layered.not_applied, layered.unparsed), (1, 1));
 }
 
 #[test]
@@ -145,7 +219,7 @@ fn a_missing_or_unknown_unit_is_an_error_at_the_number() {
     assert_eq!(
         messages(&got),
         [
-            "'0.2' needs a unit right after it (mm, mil, um or nm)",
+            "'0.2' needs a unit (mm, mil, um or nm)",
             "unknown unit 'in' (mm, mil, um or nm)",
         ]
     );

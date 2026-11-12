@@ -14,6 +14,10 @@ use crate::{Diagnostic, Level};
 const OUTER: u32 = 1 | 1 << 31;
 const INNER: u32 = !OUTER;
 
+/// A clearance over 10 mm is said; one over 100 mm is refused.
+const CLEARANCE_WARN_NM: i64 = 10_000_000;
+const CLEARANCE_MAX_NM: i64 = 100_000_000;
+
 /// What one rule compiled to.
 pub(crate) enum Outcome {
     /// Applied, with any warnings.
@@ -238,18 +242,41 @@ impl Checker<'_> {
                 self.error(&ast.field.span, msg);
                 continue;
             }
+            if !self.plausible(ast, &limit, nm) {
+                continue;
+            }
             out.push(limit);
         }
         out
     }
 
+    /// Says a limit of 0 (it checks nothing) and a clearance so large it is
+    /// likely a wrong unit: over 10 mm a warning, over 100 mm an error (a
+    /// clearance widens the search around every copper item it covers).
+    /// False when the limit is refused.
+    fn plausible(&mut self, ast: &LimitAst, limit: &Limit, nm: i64) -> bool {
+        if nm == 0 {
+            let msg = "a limit of 0 checks nothing for this rule's scope".to_string();
+            self.say(Level::Warning, &ast.number.span, msg);
+        }
+        if !matches!(limit, Limit::MinClearance(_)) || nm <= CLEARANCE_WARN_NM {
+            return true;
+        }
+        let mm = pcb_geom::nm_to_mm(nm);
+        if nm > CLEARANCE_MAX_NM {
+            let msg = format!("a clearance of {mm} mm is over 100 mm; check the unit");
+            self.error(&ast.number.span, msg);
+            return false;
+        }
+        let msg = format!("a clearance of {mm} mm is over 10 mm; check the unit");
+        self.say(Level::Warning, &ast.number.span, msg);
+        true
+    }
+
     /// The limit's length in nm.
     fn length(&mut self, ast: &LimitAst) -> Option<i64> {
         let Some(unit) = &ast.unit else {
-            let msg = format!(
-                "'{}' needs a unit right after it (mm, mil, um or nm)",
-                ast.number.text
-            );
+            let msg = format!("'{}' needs a unit (mm, mil, um or nm)", ast.number.text);
             self.error(&ast.number.span, msg);
             return None;
         };

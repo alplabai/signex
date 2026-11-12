@@ -8,7 +8,7 @@
 //! when     := "when" cond ("and" cond)*
 //! cond     := SUBJECT ("==" | "matches") (STRING | WORD)
 //! require  := "require" limit ("and" limit)*
-//! limit    := FIELD (">=" | "<=") NUMBER UNIT?      (no space before UNIT)
+//! limit    := FIELD (">=" | "<=") NUMBER UNIT?      (a space before UNIT only for a known unit)
 //! severity := "error" | "warning" | "info"
 //! ```
 
@@ -18,6 +18,10 @@ use chumsky::text::ascii;
 use crate::ast::*;
 
 type Extra<'src> = extra::Err<Rich<'src, char>>;
+
+/// Units a length may take after a space (attached, any word is read as
+/// a unit and the validator names one it does not know).
+const KNOWN_UNITS: [&str; 6] = ["mm", "mil", "um", "\u{b5}m", "\u{3bc}m", "nm"];
 
 /// Parse rule text; on failure, each error's span and message.
 pub fn parse(src: &str) -> Result<Vec<RuleAst>, Vec<(Span, String)>> {
@@ -83,9 +87,19 @@ fn limit<'src>() -> impl Parser<'src, &'src str, LimitAst, Extra<'src>> + Clone 
             text: text.to_string(),
             span: range(e.span()),
         });
+    // After a space only a known unit counts, so `0.2 and` is not `0.2and`.
+    let spaced_unit = text::inline_whitespace()
+        .at_least(1)
+        .ignore_then(unit.clone().try_map(|w: Word, span| {
+            if KNOWN_UNITS.contains(&w.text.as_str()) {
+                Ok(w)
+            } else {
+                Err(Rich::custom(span, "not a unit"))
+            }
+        }));
     word()
         .then(bound)
-        .then(number.then(unit.or_not()).padded())
+        .then(number.then(unit.or(spaced_unit).or_not()).padded())
         .map(|((field, bound), (number, unit))| LimitAst {
             field,
             bound,

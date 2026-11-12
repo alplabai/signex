@@ -59,10 +59,15 @@ pub struct Compiled {
     /// The rules applied, in written order.
     pub rules: Vec<UserRule>,
     pub diagnostics: Vec<Diagnostic>,
+    /// Rules written but not applied: invalid, repeated, or naming
+    /// something not measured yet.
+    pub not_applied: usize,
+    /// The text has a syntax error, so none of it is applied.
+    pub unparsed: bool,
 }
 
 /// Parse, validate and compile `src`. A syntax error applies no rule of
-/// the text; an invalid rule (or a second rule of the same name) is
+/// the text; an invalid rule (or a second valid rule of the same name) is
 /// dropped alone; a rule naming something not measured yet is not applied.
 pub fn compile(src: &str) -> Compiled {
     let asts = match parser::parse(src) {
@@ -78,18 +83,22 @@ pub fn compile(src: &str) -> Compiled {
                 })
                 .collect();
             return Compiled {
-                rules: Vec::new(),
                 diagnostics,
+                unparsed: true,
+                ..Compiled::default()
             };
         }
     };
     let mut out = Compiled::default();
+    // Only a valid rule takes its name; an invalid one leaves it free.
     let mut names = BTreeSet::new();
     for ast in &asts {
-        if !names.insert(ast.name.text.as_str()) {
+        let name = ast.name.text.as_str();
+        if names.contains(name) {
+            out.not_applied += 1;
             out.diagnostics.push(Diagnostic {
                 level: Level::Error,
-                rule: Some(ast.name.text.clone()),
+                rule: Some(name.to_string()),
                 span: ast.name.span.clone(),
                 message: "a rule of this name is already defined".to_string(),
             });
@@ -97,10 +106,17 @@ pub fn compile(src: &str) -> Compiled {
         }
         match compile::compile_rule(ast) {
             compile::Outcome::Rule(rule, said) => {
+                names.insert(name);
                 out.rules.push(rule);
                 out.diagnostics.extend(said);
             }
-            compile::Outcome::NotChecked(said) | compile::Outcome::Dropped(said) => {
+            compile::Outcome::NotChecked(said) => {
+                names.insert(name);
+                out.not_applied += 1;
+                out.diagnostics.extend(said);
+            }
+            compile::Outcome::Dropped(said) => {
+                out.not_applied += 1;
                 out.diagnostics.extend(said);
             }
         }
@@ -113,6 +129,10 @@ pub fn compile(src: &str) -> Compiled {
 pub struct LayeredRules {
     pub rules: Vec<UserRule>,
     pub messages: Vec<String>,
+    /// Rules not applied, over every layer.
+    pub not_applied: usize,
+    /// Layers whose text has a syntax error, so none of it is applied.
+    pub unparsed: usize,
 }
 
 /// Compile the `dsl` text of `profile` then `project`. A project rule
@@ -126,6 +146,8 @@ pub fn compile_layers(profile: Option<&DrcRuleSet>, project: Option<&DrcRuleSet>
             continue;
         };
         let compiled = compile(src);
+        out.not_applied += compiled.not_applied;
+        out.unparsed += usize::from(compiled.unparsed);
         for d in &compiled.diagnostics {
             let what = match (d.level, &d.rule) {
                 (Level::Error, None) => "; no rule of this text is applied",
