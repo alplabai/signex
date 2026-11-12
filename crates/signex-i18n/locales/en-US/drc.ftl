@@ -35,10 +35,16 @@ drc-kind-clearance = Clearance
 drc-kind-short = Short
 drc-kind-unconnected = Unconnected
 drc-kind-keepout = Keepout
+drc-kind-track-width = Track width
+drc-kind-via-diameter = Via diameter
+drc-kind-via-drill = Via drill
 
 drc-detail-clearance = { $a } to { $b }: { $measured } mm, needs { $required } mm
 drc-detail-short = { $a } shorted to { $b }
 drc-detail-unconnected = { $net }: link of { $length } mm not routed
 drc-detail-keepout = { $net }: inside a keepout that forbids it
+# A track width or via size under (or a track over) a rule-language limit.
+drc-detail-at-least = { $net }: { $measured } mm, needs at least { $required } mm
+drc-detail-at-most = { $net }: { $measured } mm, needs at most { $required } mm
 
 drc-location = { $x }, { $y } mm

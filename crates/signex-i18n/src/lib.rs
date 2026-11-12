@@ -89,10 +89,15 @@ define_ids! {
     DRC_KIND_SHORT = "drc-kind-short";
     DRC_KIND_UNCONNECTED = "drc-kind-unconnected";
     DRC_KIND_KEEPOUT = "drc-kind-keepout";
+    DRC_KIND_TRACK_WIDTH = "drc-kind-track-width";
+    DRC_KIND_VIA_DIAMETER = "drc-kind-via-diameter";
+    DRC_KIND_VIA_DRILL = "drc-kind-via-drill";
     DRC_DETAIL_CLEARANCE = "drc-detail-clearance";
     DRC_DETAIL_SHORT = "drc-detail-short";
     DRC_DETAIL_UNCONNECTED = "drc-detail-unconnected";
     DRC_DETAIL_KEEPOUT = "drc-detail-keepout";
+    DRC_DETAIL_AT_LEAST = "drc-detail-at-least";
+    DRC_DETAIL_AT_MOST = "drc-detail-at-most";
     DRC_LOCATION = "drc-location";
     DIALOG_NEW_PROJECT_TITLE = "dialog-new-project-title";
     DIALOG_NEW_PROJECT_NAME_LABEL = "dialog-new-project-name-label";

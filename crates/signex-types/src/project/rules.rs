@@ -143,8 +143,8 @@ pub struct DrcRuleSet {
     /// `info` / `off`), for rules set away from the built-in default.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub severity: BTreeMap<String, String>,
-    /// Text in the DRC rule language (#2307 step 2b). Stored and written
-    /// back as is; this build does not read it.
+    /// Text in the DRC rule language (#2307 step 2b), compiled by
+    /// `signex-drc-dsl` for each run. Stored and written back as is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dsl: Option<String>,
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]

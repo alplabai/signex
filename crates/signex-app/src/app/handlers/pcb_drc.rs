@@ -7,7 +7,8 @@
 use std::sync::Arc;
 
 use iced::Task;
-use signex_drc::{DrcRules, DrcSeverities, ViolationKind};
+use signex_drc::{DrcRules, ViolationKind};
+use signex_types::project::DrcRuleSet;
 
 use crate::app::{DrcRunResult, Message, PcbMsg, Signex};
 
@@ -41,15 +42,19 @@ impl Signex {
         let classes = project
             .map(|p| p.data.net_classes.clone())
             .unwrap_or_default();
-        let severities = drc_severities(
+        let (profile, project_layer) = drc_layers(
             project.and_then(|p| p.data.rules.as_ref()),
             &self.ui_state.machine_drc_rules,
         );
+        let layers = Layers {
+            profile: profile.cloned(),
+            project: project_layer.cloned(),
+        };
         let generation = self.interaction_state.pcb_drc.begin(path, revision);
         self.refresh_panel_ctx();
         Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || run_check(&board, &classes, severities))
+                tokio::task::spawn_blocking(move || run_check(&board, &classes, &layers))
                     .await
                     .unwrap_or_else(|e| Err(format!("DRC worker failed: {e}")))
             },
@@ -136,6 +141,7 @@ impl Signex {
                 b: name(v.nets.1),
                 measured_mm: mm(v.measured_nm),
                 required_mm: mm(v.required_nm),
+                over_maximum: v.kind == ViolationKind::TrackWidth && v.measured_nm > v.required_nm,
                 x_mm: mm(v.at.x),
                 y_mm: mm(v.at.y),
                 layer: pcb_geom::copper_layers(v.layers).first().copied(),
@@ -162,27 +168,49 @@ impl Signex {
     }
 }
 
-/// The rule severities a DRC run uses, as ERC picks its rules: a project
-/// that stores a rule set uses its `rules.drc` alone, so it checks the same
-/// on every machine; otherwise the machine's `User Default` profile layer.
+/// The built-in rule severities of the layers [`drc_layers`] picks.
+#[cfg(test)]
 pub(crate) fn drc_severities(
     project: Option<&signex_types::project::ProjectRules>,
-    machine: &signex_types::project::DrcRuleSet,
-) -> DrcSeverities {
+    machine: &DrcRuleSet,
+) -> signex_drc::DrcSeverities {
+    let (profile, project) = drc_layers(project, machine);
+    signex_drc::resolve_severities(profile, project)
+}
+
+/// The `(profile, project)` rule layers a DRC run reads, severities and
+/// rule text alike, as ERC picks its rules: a project that stores a rule
+/// set uses its `rules.drc` alone, so it checks the same on every machine;
+/// otherwise the machine's `User Default` profile layer.
+pub(crate) fn drc_layers<'a>(
+    project: Option<&'a signex_types::project::ProjectRules>,
+    machine: &'a DrcRuleSet,
+) -> (Option<&'a DrcRuleSet>, Option<&'a DrcRuleSet>) {
     match project {
-        Some(rules) => signex_drc::resolve_severities(None, Some(&rules.drc)),
-        None => signex_drc::resolve_severities(Some(machine), None),
+        Some(rules) => (None, Some(&rules.drc)),
+        None => (Some(machine), None),
     }
 }
 
+/// The rule layers, owned, for the background run.
+struct Layers {
+    profile: Option<DrcRuleSet>,
+    project: Option<DrcRuleSet>,
+}
+
+/// The run itself, off the UI thread: the rule text is compiled here too.
 fn run_check(
     board: &signex_types::pcb::PcbBoard,
     classes: &[signex_types::net_class::NetClass],
-    severities: DrcSeverities,
+    layers: &Layers,
 ) -> DrcRunResult {
+    let (profile, project) = (layers.profile.as_ref(), layers.project.as_ref());
+    let written = signex_drc_dsl::compile_layers(profile, project);
     let mut rules = DrcRules::for_board(board, classes)
-        .map_err(|e| format!("the board's clearance rules are not usable: {e}"))?;
-    rules.severities = severities;
+        .map_err(|e| format!("the board's clearance rules are not usable: {e}"))?
+        .with_user_rules(board, classes, written.rules.iter().cloned());
+    rules.severities = signex_drc::resolve_severities_with(profile, project, &written.rules);
+    rules.notes = written.messages;
     let report = signex_drc::run(board, &rules);
     let names = board
         .nets
@@ -209,6 +237,25 @@ fn log_report(report: &signex_drc::DrcReport, names: &std::collections::BTreeMap
     );
     for entry in &report.rules.severities.unrecognised {
         crate::diagnostics::log_info(format!("DRC rules: ignoring unrecognised entry ({entry})"));
+    }
+    for note in &report.rules.notes {
+        crate::diagnostics::log_warning(note.clone());
+    }
+    let written = report.rules.user_rules().count();
+    if written > 0 {
+        crate::diagnostics::log_info(format!("DRC DSL: applying {written} rule(s)"));
+    }
+    let sizes = [
+        ViolationKind::TrackWidth,
+        ViolationKind::ViaDiameter,
+        ViolationKind::ViaDrill,
+    ]
+    .map(count);
+    if sizes.iter().any(|&n| n > 0) {
+        crate::diagnostics::log_warning(format!(
+            "DRC: {} track width, {} via diameter, {} via drill",
+            sizes[0], sizes[1], sizes[2]
+        ));
     }
     if report.rules.from_default {
         crate::diagnostics::log_info(format!(
@@ -240,13 +287,34 @@ fn log_report(report: &signex_drc::DrcReport, names: &std::collections::BTreeMap
                 pcb_geom::nm_to_mm(v.measured_nm)
             ),
             ViolationKind::Keepout => "inside a keepout that forbids it".to_string(),
+            ViolationKind::TrackWidth => size_text("track width", v),
+            ViolationKind::ViaDiameter => size_text("via diameter", v),
+            ViolationKind::ViaDrill => size_text("via drill", v),
         };
+        let rule = v
+            .rule
+            .as_ref()
+            .map_or_else(String::new, |id| format!(" ({id})"));
         crate::diagnostics::log_warning(format!(
-            "DRC: {what}, {} / {} at ({}, {}) mm",
+            "DRC: {what}{rule}, {} / {} at ({}, {}) mm",
             name(v.nets.0),
             name(v.nets.1),
             pcb_geom::nm_to_mm(v.at.x),
             pcb_geom::nm_to_mm(v.at.y)
         ));
     }
+}
+
+/// `track width 0.1 mm, needs at least 0.15 mm` (or `at most`).
+fn size_text(what: &str, v: &signex_drc::Violation) -> String {
+    let bound = if v.measured_nm < v.required_nm {
+        "at least"
+    } else {
+        "at most"
+    };
+    format!(
+        "{what} {} mm, needs {bound} {} mm",
+        pcb_geom::nm_to_mm(v.measured_nm),
+        pcb_geom::nm_to_mm(v.required_nm)
+    )
 }

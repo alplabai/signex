@@ -27,6 +27,8 @@ pub struct DrcRow {
     pub b: String,
     pub measured_mm: String,
     pub required_mm: String,
+    /// Over a maximum rather than under a minimum (a track width).
+    pub over_maximum: bool,
     pub x_mm: String,
     pub y_mm: String,
     /// The first copper layer the two items share.
@@ -69,6 +71,15 @@ fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
         ViolationKind::Short => t!(i18n, ids::DRC_KIND_SHORT),
         ViolationKind::Unconnected => t!(i18n, ids::DRC_KIND_UNCONNECTED),
         ViolationKind::Keepout => t!(i18n, ids::DRC_KIND_KEEPOUT),
+        ViolationKind::TrackWidth => t!(i18n, ids::DRC_KIND_TRACK_WIDTH),
+        ViolationKind::ViaDiameter => t!(i18n, ids::DRC_KIND_VIA_DIAMETER),
+        ViolationKind::ViaDrill => t!(i18n, ids::DRC_KIND_VIA_DRILL),
+    };
+    let limit = |id| {
+        t!(
+            i18n, id, "net" => row.a.clone(),
+            "measured" => row.measured_mm.clone(), "required" => row.required_mm.clone()
+        )
     };
     let detail = match row.kind {
         ViolationKind::Clearance => t!(
@@ -84,6 +95,10 @@ fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
             "net" => row.a.clone(), "length" => row.measured_mm.clone()
         ),
         ViolationKind::Keepout => t!(i18n, ids::DRC_DETAIL_KEEPOUT, "net" => row.a.clone()),
+        ViolationKind::TrackWidth if row.over_maximum => limit(ids::DRC_DETAIL_AT_MOST),
+        ViolationKind::TrackWidth | ViolationKind::ViaDiameter | ViolationKind::ViaDrill => {
+            limit(ids::DRC_DETAIL_AT_LEAST)
+        }
     };
     let place = t!(i18n, ids::DRC_LOCATION, "x" => row.x_mm.clone(), "y" => row.y_mm.clone());
     (kind, detail, place)
@@ -286,5 +301,41 @@ mod tests {
         let panel = crate::pcb_canvas::layer_style::copper_name(&i18n, inner).into_string();
         assert_eq!(label, panel);
         assert!(label.contains("Mid-Layer"), "{label}");
+    }
+
+    /// #2307 step 2b: a width or via-size row says which limit it breaks.
+    #[test]
+    fn a_size_row_says_the_limit_it_breaks() {
+        let i18n = I18n::en_us();
+        let row = |kind, over_maximum| DrcRow {
+            index: 0,
+            kind,
+            a: "GND".into(),
+            b: "GND".into(),
+            measured_mm: "0.100".into(),
+            required_mm: "0.150".into(),
+            over_maximum,
+            x_mm: "0".into(),
+            y_mm: "0".into(),
+            layer: None,
+        };
+        let text = |kind, over| {
+            let (kind, detail, _) = row_text(&i18n, &row(kind, over));
+            format!("{} | {}", kind.into_string(), detail.into_string())
+                .replace(['\u{2068}', '\u{2069}'], "")
+        };
+        assert_eq!(
+            text(ViolationKind::TrackWidth, false),
+            "Track width | GND: 0.100 mm, needs at least 0.150 mm"
+        );
+        assert_eq!(
+            text(ViolationKind::TrackWidth, true),
+            "Track width | GND: 0.100 mm, needs at most 0.150 mm"
+        );
+        assert_eq!(
+            text(ViolationKind::ViaDrill, false),
+            "Via drill | GND: 0.100 mm, needs at least 0.150 mm"
+        );
+        assert!(text(ViolationKind::ViaDiameter, false).starts_with("Via diameter | "));
     }
 }
