@@ -142,6 +142,7 @@ fn a_project_reordered_before_add_new_completes_still_gets_its_own_sheet() {
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicPicked {
         project_id: target,
         path: Some(new_sheet.clone()),
+        choice: None,
     }));
     assert!(!new_sheet.exists(), "no IO inside update");
 
@@ -367,7 +368,7 @@ fn writers_of_the_project_file_are_refused_while_add_new_rewrites_it() {
 
     let task = fx
         .app
-        .handle_add_new_schematic_picked(id, Some(extra.clone()));
+        .handle_add_new_schematic_picked(id, Some(extra.clone()), None);
 
     // Ctrl+S / Save All / Close Project.
     assert!(fx.app.begin_project_save(id).is_err(), "save is refused");
@@ -375,7 +376,7 @@ fn writers_of_the_project_file_are_refused_while_add_new_rewrites_it() {
     let other = fx.folder.join("Other.snxsch");
     let second = fx
         .app
-        .handle_add_new_schematic_picked(id, Some(other.clone()));
+        .handle_add_new_schematic_picked(id, Some(other.clone()), None);
     assert!(iced_runtime::task::into_stream(second).is_none());
     // A sheet rename.
     fx.app.ui_state.rename_dialog = Some(RenameDialogState {

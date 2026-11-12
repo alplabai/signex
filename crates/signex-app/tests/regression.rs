@@ -351,6 +351,10 @@ mod cross_sheet_multiple_names;
 #[path = "regression/cross_probe.rs"]
 mod cross_probe;
 
+// #2232 — New PCB / New Schematic setup dialogs and saved profiles.
+#[path = "regression/document_setup.rs"]
+mod document_setup;
+
 // #1312 — Update PCB from schematic, its entry points and New PCB.
 #[path = "regression/update_pcb.rs"]
 mod update_pcb;

@@ -605,6 +605,9 @@ pub enum ProjectMsg {
     /// The New Project setup dialog (#2232); routed to
     /// `dispatch_new_project_message`.
     Setup(crate::app::NewProjectMsg),
+    /// The New PCB or New Schematic setup dialog (#2232); routed to
+    /// `dispatch_document_setup_message`.
+    DocumentSetup(crate::app::DocumentSetupMsg),
     /// Start screen project rows: pin, unpin, open a pinned project, the
     /// row menu (#2305); routed to `dispatch_start_screen_message`.
     StartScreen(crate::start_screen::StartScreenMsg),
@@ -705,6 +708,9 @@ pub enum ProjectMsg {
     AddNewSchematicPicked {
         project_id: crate::app::state::ProjectId,
         path: Option<std::path::PathBuf>,
+        /// The New Schematic setup dialog's values (#2232); `None`: the
+        /// project's sheet defaults.
+        choice: Option<crate::app::SheetChoice>,
     },
     /// The off-thread copies behind `AddExistingFilePicked` finished: one
     /// entry per pick, `Ok` the path to register, `Err` a message for the

@@ -45,6 +45,14 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("close_active_document", doc::close),
     ("open_document", file::open),
     ("new_document", file::new_project),
+    (
+        "new_pcb_document",
+        crate::app::document_setup::new_pcb_document,
+    ),
+    (
+        "new_schematic_sheet",
+        crate::app::document_setup::new_schematic_sheet,
+    ),
     ("assign_net_class", doc::assign_net_class),
     (
         "update_pcb_from_schematic",

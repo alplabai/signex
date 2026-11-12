@@ -3,7 +3,7 @@
 use iced::widget::{Space, column, container, row, svg};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
-use signex_types::project::SetupProfile;
+use signex_types::project::{SetupProfile, UserProfile};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, button::Status, text};
 
@@ -58,7 +58,7 @@ pub(in crate::app::view) fn card_style(
 }
 
 /// One selectable card: title (with the check when selected), then lines.
-fn card<'a>(
+pub(super) fn card<'a>(
     title: String,
     selected: bool,
     lines: Vec<Element<'a, NewProjectMsg>>,
@@ -92,7 +92,7 @@ fn blurb<'a>(i18n: &I18n, id: MessageId, tokens: &ThemeTokens) -> Element<'a, Ne
         .boxed()
 }
 
-fn mm(value: f64) -> String {
+pub(super) fn mm(value: f64) -> String {
     format!("{value}")
 }
 
@@ -151,9 +151,11 @@ fn heading_row<'a>(
     .boxed()
 }
 
-/// "Start from a profile": the four profile cards.
+/// "Start from a profile": the four built-in cards, then the user's saved
+/// profiles and Save as profile.
 pub(crate) fn profiles<'a>(
     state: &NewProjectState,
+    users: &[UserProfile],
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, NewProjectMsg> {
@@ -184,7 +186,7 @@ pub(crate) fn profiles<'a>(
         lines.extend(summary(state, profile, i18n, tokens));
         card(
             t!(i18n, name).into_string(),
-            state.setup.profile == profile,
+            state.setup.is_builtin_picked(profile),
             lines,
             NewProjectMsg::ProfilePicked(profile),
             tokens,
@@ -197,6 +199,7 @@ pub(crate) fn profiles<'a>(
             tokens
         ),
         row(cards).spacing(SP.l).height(Length::Shrink),
+        super::user_cards::section(state, users, i18n, tokens),
     ]
     .spacing(SP.m)
     .boxed()

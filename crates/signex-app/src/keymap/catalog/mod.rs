@@ -376,6 +376,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "update_pcb_from_schematic",
     "back_annotate_schematics",
     "new_pcb_document",
+    "new_schematic_sheet",
 ];
 
 /// The editor contexts in which `command` can act, or `None` when it is

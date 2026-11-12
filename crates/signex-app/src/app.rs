@@ -46,6 +46,7 @@ pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, Projec
 pub(crate) mod designator_scan;
 #[cfg(test)]
 mod designator_scan_tests;
+pub(crate) mod document_setup;
 pub mod palette_index;
 #[cfg(test)]
 mod palette_index_tests;
@@ -93,6 +94,7 @@ pub use contracts::{
     UiMsg, VersionControlScope, WindowMsg,
 };
 pub(crate) use document::{Document, DocumentKey};
+pub use document_setup::{DocumentSetupMsg, DocumentSetupState, SetupKind, SheetChoice};
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
     LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolDocument, SymbolViewRequest,

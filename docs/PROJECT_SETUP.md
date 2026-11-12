@@ -88,9 +88,13 @@ profile copy is added after, as for every new project):
 - `project_defaults.pcb`: copper layers, thickness, clearance, track width,
   via size and via drill (mm).
 - `project_defaults.sheet`: paper size token and title block on or off.
+- `project_defaults.profile`: the id of the profile picked (a built-in token
+  such as `standard`, or a saved profile's `user-...` id). Only the id is
+  stored, never the saved profile itself.
 - `annotation.designator_standard`, the existing Project Options setting.
 
-A PCB added to the project starts from `project_defaults.pcb` (layers,
+A PCB or sheet added to the project starts from these through its setup
+dialog (below): `project_defaults.pcb` (layers,
 thickness and the board setup rules), and a schematic sheet added to it
 starts with the paper size and title block of `project_defaults.sheet`.
 A new board's snap grid is 0.1 mm.
@@ -138,3 +142,57 @@ It answers with the id, path and kind of the project it made. Without
 operands, the palette entry opens the dialog. The command needs the `save`
 capability in `signex-cli` (`--save`), and the folder it creates must stay
 inside the allowed folders.
+
+## Saved profiles
+
+**Save as profile...** sits above the profile cards in the New Project, New
+PCB and New Schematic dialogs and in Project Options' setup section. It asks
+for a name and stores the values shown (board rules, sheet values, designator
+standard) as a profile in the user's settings (`prefs.json`, key
+`setup_profiles`), not in the project. Saving under a name that exists (case
+ignored) replaces that profile's values. Saved profiles appear under **Your
+profiles**, next to the built-ins, in every project; **Remove** under a card
+deletes it. Settings are written read-modify-write and atomically off the UI
+thread, like every other preference.
+
+A project names its default profile by id (`project_defaults.profile`). The
+project's stored values stay its own: they win over the named profile, and
+the id picks the card. A part the project does not store comes from the
+named profile. A project that names a saved profile the user does not have
+(shared from someone else, or removed) uses its stored values (else
+Standard) and the Messages panel says so.
+
+## New PCB and New Schematic
+
+**New PCB** (File > New > PCB, Projects > Add New > PCB, the Update PCB
+dialog's Create PCB, the palette) opens the New PCB dialog, prefilled from
+the project: the profile cards, the PCB rules (rule template, Import rules...,
+copper layers, thickness, clearance, track, via, drill) and the stack-up
+preview. **Create PCB** makes the board with those values in its board setup
+(the design rule check reads its clearance) and opens it unsaved, as before;
+**Cancel** and Esc make nothing. A project holds one board: when its board is
+already open the dialog does not open and the reason is shown.
+
+**New Schematic** (File > New > Schematic, Projects > Add New > Schematic,
+the palette) opens the New Schematic dialog: the saved profiles (the built-in
+cards differ only in board rules, so they are not offered), sheet size,
+orientation, title block and designator standard. **Create schematic...**
+asks where to save the sheet and writes it with those values; cancelling the
+file dialog makes nothing. The designator standard is the project's: a change
+is a project edit (dirty, undoable). There is no title-block template list,
+so the title block is on or off. Grid and units are app preferences, not
+dialog fields.
+
+Headless and agent runs make the document with no dialog:
+
+```text
+new_pcb_document profile=<project|hobby|standard|hdi|custom|saved profile>
+new_schematic_sheet profile=<...> [name=<file stem>]
+```
+
+`profile=project` is the project's own setup; a built-in token changes only
+the board rules; a saved profile (id or name) sets its rules, sheet values
+and designator standard. `name` defaults to the first `Sheet<n>` the project
+does not list. Without `profile` the headless run is refused.
+`new_schematic_sheet` writes a file and needs the `save` capability in
+`signex-cli`.

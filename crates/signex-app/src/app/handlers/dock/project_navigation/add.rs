@@ -38,15 +38,26 @@ impl Signex {
         )
     }
 
-    /// `Add New ▸ Schematic` — Save-As dialog scoped to the project
-    /// directory; result returns through [`ProjectMsg::AddNewSchematicPicked`].
-    /// The handler writes a blank `.snxsch` and lists it in the saved
-    /// `.snxprj` in one worker job (#1821); the project is dirtied only when
-    /// the saved project could not take the entry.
+    /// `Add New ▸ Schematic` — the New Schematic setup dialog (#2232) for
+    /// the project; its Create opens the file dialog
+    /// ([`Self::pick_new_schematic_path`]).
     pub(crate) fn add_new_schematic(&mut self, tree_path: Vec<usize>) -> iced::Task<Message> {
         let Some(project_id) = self.project_id_for_tree_path(&tree_path) else {
             return iced::Task::none();
         };
+        self.open_document_setup(crate::app::SetupKind::Sheet, Some(project_id))
+    }
+
+    /// Save-As dialog scoped to the project directory; the result returns
+    /// through [`ProjectMsg::AddNewSchematicPicked`] with `choice`. The
+    /// handler writes a blank `.snxsch` and lists it in the saved `.snxprj`
+    /// in one worker job (#1821); the project is dirtied only when the saved
+    /// project could not take the entry.
+    pub(crate) fn pick_new_schematic_path(
+        &mut self,
+        project_id: ProjectId,
+        choice: crate::app::SheetChoice,
+    ) -> iced::Task<Message> {
         let project_dir = match self
             .document_state
             .project_by_id(project_id)
@@ -68,7 +79,13 @@ impl Signex {
                     .save_file()
                     .await
             },
-            move |path| Message::Project(ProjectMsg::AddNewSchematicPicked { project_id, path }),
+            move |path| {
+                Message::Project(ProjectMsg::AddNewSchematicPicked {
+                    project_id,
+                    path,
+                    choice: Some(choice.clone()),
+                })
+            },
         )
     }
 
@@ -162,6 +179,7 @@ impl Signex {
         &mut self,
         project_id: ProjectId,
         path: Option<std::path::PathBuf>,
+        choice: Option<crate::app::SheetChoice>,
     ) -> iced::Task<Message> {
         let Some(path) = path else {
             return iced::Task::none();
@@ -229,6 +247,11 @@ impl Signex {
         // sheet or library rename or a second Add New started meanwhile is
         // refused instead of racing the read-modify-write. Released by the
         // completion, whatever its result.
+        // The setup dialog's designator standard is the project's: a change
+        // is one undoable project edit (#2232).
+        if let Some(choice) = &choice {
+            self.apply_sheet_designators(project_id, choice.designators);
+        }
         self.document_state.pending_path_ops.begin_with_dependents(
             crate::app::path_ops::PathOpKind::AddSheet,
             vec![path.clone()],
@@ -238,11 +261,14 @@ impl Signex {
         self.begin_project_write(&path);
         // The blank sheet and its project entry are committed together off
         // the update thread; the project is looked up again by id when the
-        // job lands.
-        let sheet_defaults = self
-            .document_state
-            .project_by_id(project_id)
-            .and_then(|p| p.data.project_defaults.sheet.clone());
+        // job lands. The setup dialog's sheet values win over the project's.
+        let sheet_defaults = match choice {
+            Some(choice) => Some(choice.sheet),
+            None => self
+                .document_state
+                .project_by_id(project_id)
+                .and_then(|p| p.data.project_defaults.sheet.clone()),
+        };
         iced::Task::perform(
             {
                 let path = path.clone();
@@ -267,6 +293,34 @@ impl Signex {
                 })
             },
         )
+    }
+
+    /// Set the project's designator standard to `standard` when it differs,
+    /// as a Project Options edit would (dirty, undoable).
+    fn apply_sheet_designators(
+        &mut self,
+        project_id: ProjectId,
+        standard: signex_types::designator::DesignatorStandard,
+    ) {
+        let Some(project) = self.document_state.project_by_id(project_id) else {
+            return;
+        };
+        let current = project
+            .data
+            .designator_standard()
+            .unwrap_or(signex_types::project::DEFAULT_DESIGNATORS);
+        if current == standard {
+            return;
+        }
+        let defaults = project.data.project_defaults.clone();
+        self.apply_project_general(
+            project_id,
+            signex_engine::ProjectGeneralCommand::SetProjectDefaults {
+                defaults,
+                designators: Some(standard),
+                typing: None,
+            },
+        );
     }
 
     fn refuse_add_while_project_saving(&self) {

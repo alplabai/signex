@@ -422,6 +422,12 @@ pub struct UiState {
     /// The New Project setup dialog, while open (#2232). Nothing is on disk
     /// until its Create.
     pub new_project: Option<crate::app::NewProjectState>,
+    /// The New PCB or New Schematic setup dialog, while open (#2232).
+    /// Nothing is made until its Create.
+    pub document_setup: Option<crate::app::DocumentSetupState>,
+    /// The user's saved setup profiles (#2232), loaded from `prefs.json` at
+    /// boot and saved on every Save as profile and Remove.
+    pub setup_profiles: Vec<signex_types::project::UserProfile>,
     /// The Update PCB dialog, while open, or a headless `apply=true` run
     /// (#1312).
     pub update_pcb: Option<crate::app::UpdatePcbState>,

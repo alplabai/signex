@@ -8,7 +8,7 @@ use iced::Task;
 use signex_engine::pcb::BoardEngine;
 use signex_i18n::{ids, t};
 use signex_types::pcb::PcbBoard;
-use signex_types::project::SetupProfile;
+use signex_types::project::{PcbDefaults, SetupProfile};
 
 use super::UpdatePcbMsg;
 use super::state::{Phase, file_name};
@@ -23,7 +23,11 @@ impl Signex {
     /// New PCB for `project`, else the project in view: check the board's
     /// path on the worker before anything is made. A board the project
     /// names but that is neither open nor on disk is made at that path.
-    pub(super) fn request_new_pcb(&mut self, project: Option<ProjectId>) -> Task<Message> {
+    pub(crate) fn request_new_pcb(
+        &mut self,
+        project: Option<ProjectId>,
+        rules: Option<PcbDefaults>,
+    ) -> Task<Message> {
         let Some(project) = project.or_else(|| self.project_in_view()) else {
             self.refuse_new_pcb(self.update_pcb_text(ids::NEW_PCB_NO_PROJECT));
             return Task::none();
@@ -51,6 +55,7 @@ impl Signex {
                     project,
                     path,
                     exists,
+                    rules,
                 })
             },
         )
@@ -63,6 +68,7 @@ impl Signex {
         project: ProjectId,
         path: PathBuf,
         exists: Result<bool, String>,
+        rules: Option<PcbDefaults>,
     ) {
         let Some(loaded) = self.document_state.project_by_id(project) else {
             return;
@@ -101,9 +107,10 @@ impl Signex {
         let Some(loaded) = self.document_state.project_by_id_mut(project) else {
             return;
         };
-        let board = loaded
-            .data
-            .new_board()
+        let board = rules
+            .as_ref()
+            .map(PcbDefaults::new_board)
+            .or_else(|| loaded.data.new_board())
             .unwrap_or_else(|| SetupProfile::Standard.pcb(FALLBACK_LAYERS).new_board());
         let project_path = loaded.path.clone();
         if loaded.data.pcb_file.is_none() {
@@ -154,7 +161,7 @@ impl Signex {
 
     /// `path` is open or on disk: the project's board (`named`) or a file
     /// in the way of a new one.
-    fn refuse_new_pcb_taken(&mut self, path: &Path, named: bool) {
+    pub(crate) fn refuse_new_pcb_taken(&mut self, path: &Path, named: bool) {
         let why = if named {
             t!(self.ui_state.i18n, ids::NEW_PCB_HAS_BOARD, "board" => file_name(path))
         } else {
@@ -163,7 +170,7 @@ impl Signex {
         self.refuse_new_pcb(why.into_string());
     }
 
-    fn refuse_new_pcb(&mut self, why: String) {
+    pub(crate) fn refuse_new_pcb(&mut self, why: String) {
         crate::diagnostics::log_warning(why.clone());
         let title = self.update_pcb_text(ids::NEW_PCB_TITLE);
         self.document_state.error_notice = Some(ErrorNotice::new(title, why));
@@ -171,7 +178,7 @@ impl Signex {
 }
 
 /// `<project folder>/<project name>.snxpcb`.
-fn new_board_path(project: &Path) -> PathBuf {
+pub(crate) fn new_board_path(project: &Path) -> PathBuf {
     let stem = project
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())

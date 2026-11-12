@@ -4,7 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
-use signex_types::project::{PcbField, PcbValueError, ProjectSetup, SetupProfile};
+use signex_types::project::{PcbField, PcbValueError, ProjectSetup, SetupProfile, UserProfile};
+use signex_types::schematic::SheetSize;
 
 use super::NewProjectMsg;
 use super::target::{TargetProblem, TargetStatus};
@@ -44,7 +45,7 @@ pub(crate) fn check_name(name: &str) -> Result<&str, NameProblem> {
     Ok(name)
 }
 
-/// The four rule fields as typed. A value that does not parse keeps its text
+/// The rule fields as typed. A value that does not parse keeps its text
 /// and shows its reason; the setup keeps the last good value.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct RuleDrafts {
@@ -52,6 +53,7 @@ pub(crate) struct RuleDrafts {
     pub track: String,
     pub via: String,
     pub drill: String,
+    pub thickness: String,
 }
 
 fn mm_text(value: f64) -> String {
@@ -65,6 +67,7 @@ impl RuleDrafts {
             track: mm_text(setup.pcb.track_width_mm),
             via: mm_text(setup.pcb.via_diameter_mm),
             drill: mm_text(setup.pcb.via_drill_mm),
+            thickness: mm_text(setup.pcb.thickness_mm),
         }
     }
 
@@ -74,7 +77,8 @@ impl RuleDrafts {
             PcbField::TrackWidth => &self.track,
             PcbField::ViaSize => &self.via,
             PcbField::ViaDrill => &self.drill,
-            PcbField::CopperLayers | PcbField::Thickness => "",
+            PcbField::Thickness => &self.thickness,
+            PcbField::CopperLayers => "",
         }
     }
 
@@ -84,7 +88,8 @@ impl RuleDrafts {
             PcbField::TrackWidth => Some(&mut self.track),
             PcbField::ViaSize => Some(&mut self.via),
             PcbField::ViaDrill => Some(&mut self.drill),
-            PcbField::CopperLayers | PcbField::Thickness => None,
+            PcbField::Thickness => Some(&mut self.thickness),
+            PcbField::CopperLayers => None,
         }
     }
 
@@ -105,7 +110,8 @@ impl RuleDrafts {
 }
 
 /// The rule fields in the order the dialog lists them.
-pub(crate) const RULE_FIELDS: [PcbField; 4] = [
+pub(crate) const RULE_FIELDS: [PcbField; 5] = [
+    PcbField::Thickness,
     PcbField::Clearance,
     PcbField::TrackWidth,
     PcbField::ViaSize,
@@ -133,6 +139,10 @@ pub struct NewProjectState {
     /// Bumped by every edit that changes the target; a check result for an
     /// older value is dropped.
     pub(crate) generation: u64,
+    /// The Save as profile name field, while open.
+    pub(crate) save_profile_name: Option<String>,
+    /// Why the last Save as profile was refused.
+    pub(crate) save_profile_problem: Option<signex_types::project::ProfileNameProblem>,
 }
 
 impl NewProjectState {
@@ -152,6 +162,8 @@ impl NewProjectState {
             dropdown_open: false,
             target: TargetStatus::Unchecked,
             generation: 0,
+            save_profile_name: None,
+            save_profile_problem: None,
         }
     }
 
@@ -224,7 +236,8 @@ impl NewProjectState {
                 PcbField::TrackWidth => self.setup.pcb.track_width_mm = v,
                 PcbField::ViaSize => self.setup.pcb.via_diameter_mm = v,
                 PcbField::ViaDrill => self.setup.pcb.via_drill_mm = v,
-                PcbField::CopperLayers | PcbField::Thickness => {}
+                PcbField::Thickness => self.setup.pcb.thickness_mm = v,
+                PcbField::CopperLayers => {}
             }
         }
     }
@@ -258,10 +271,42 @@ impl NewProjectState {
     /// Apply a message that edits the setup (profile, rules, sheet),
     /// the part the dialog shares with the Project tab. `false` for any other
     /// message, which is left to the caller.
-    pub(crate) fn apply_setup(&mut self, msg: NewProjectMsg) -> bool {
+    pub(crate) fn apply_setup(&mut self, msg: NewProjectMsg, users: &[UserProfile]) -> bool {
         use NewProjectMsg as M;
         match msg {
             M::ProfilePicked(p) => self.pick_profile(p),
+            M::UserProfilePicked(id) => {
+                let Some(profile) = users.iter().find(|p| p.id == id) else {
+                    return true;
+                };
+                self.setup.pick_user_profile(profile);
+                self.import_error = None;
+                self.refresh_drafts();
+            }
+            M::SaveProfileOpened => {
+                let name = self
+                    .setup
+                    .user_profile
+                    .as_ref()
+                    .and_then(|id| users.iter().find(|p| p.id == *id))
+                    .map(|p| p.name.clone())
+                    .unwrap_or_default();
+                self.save_profile_name = Some(name);
+                self.save_profile_problem = None;
+            }
+            M::SaveProfileNameEdited(name) => {
+                self.save_profile_name = Some(name);
+                self.save_profile_problem = None;
+            }
+            M::SaveProfileCancelled => {
+                self.save_profile_name = None;
+                self.save_profile_problem = None;
+            }
+            M::SheetOrientationPicked(orientation) => {
+                let (size, _) = SheetSize::parse(&self.setup.sheet.paper_size);
+                self.setup.sheet.paper_size = size.token(orientation);
+                self.dropdown_open = false;
+            }
             M::CustomizeToggled => self.customize_open = !self.customize_open,
             M::FabPicked(fab) => {
                 self.setup.apply_fab(fab);
@@ -280,7 +325,9 @@ impl NewProjectState {
             // A pick closes its list; `on_close` only fires on an outside
             // click, so the pick clears the open flag itself.
             M::SheetSizePicked(size) => {
-                self.setup.sheet.paper_size = size;
+                // The size keeps the orientation already chosen.
+                let (_, orientation) = SheetSize::parse(&self.setup.sheet.paper_size);
+                self.setup.sheet.paper_size = SheetSize::parse(&size).0.token(orientation);
                 self.dropdown_open = false;
             }
             M::TitleBlockPicked(on) => {
@@ -297,12 +344,25 @@ impl NewProjectState {
         true
     }
 
-    /// A draft for the Project tab, from what the project stores.
-    pub(crate) fn of_project(data: &signex_types::project::ProjectData) -> Self {
-        let mut state = Self::new(String::new());
-        state.setup = ProjectSetup::from_stored(&data.project_defaults, data.designator_standard());
-        state.refresh_drafts();
+    /// A draft for the Project tab, from what the project stores; the card
+    /// its stored profile id names is picked when the user has it.
+    pub(crate) fn of_project(
+        data: &signex_types::project::ProjectData,
+        users: &[UserProfile],
+    ) -> Self {
+        let mut state = Self::of_setup(
+            ProjectSetup::for_project(&data.project_defaults, data.designator_standard(), users)
+                .setup,
+        );
         state.customize_open = true;
+        state
+    }
+
+    /// A draft holding `setup`, for a dialog with no name or location.
+    pub(crate) fn of_setup(setup: ProjectSetup) -> Self {
+        let mut state = Self::new(String::new());
+        state.setup = setup;
+        state.refresh_drafts();
         state
     }
 }

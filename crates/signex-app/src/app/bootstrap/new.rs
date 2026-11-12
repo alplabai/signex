@@ -413,6 +413,8 @@ impl Signex {
                 enable_version_control: None,
                 grid_properties: None,
                 new_project: None,
+                document_setup: None,
+                setup_profiles: crate::fonts::read_setup_profiles_from(prefs),
                 update_pcb: None,
                 sheet_numbering: None,
                 sheet_numbering_reads: 0,

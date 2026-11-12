@@ -284,6 +284,8 @@ pub(super) struct Probe {
     pub board_reannotate: bool,
     /// Back Annotate opens its dialog (#1312).
     pub back_annotate: bool,
+    /// File ▸ New ▸ PCB / Schematic opens its setup dialog (#2232).
+    pub document_setup: bool,
 }
 
 pub(super) fn probe(app: &Signex) -> Probe {
@@ -360,6 +362,7 @@ pub(super) fn probe(app: &Signex) -> Probe {
         board_sketch: app.interaction_state.board_sketch.is_some(),
         board_reannotate: app.ui_state.board_reannotate.is_some(),
         back_annotate: app.ui_state.back_annotate.is_some(),
+        document_setup: app.ui_state.document_setup.is_some(),
     }
 }
 

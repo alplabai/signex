@@ -654,6 +654,7 @@ fn add_new_schematic_writes_blank_snxsch_marks_project_dirty_no_tab_open() {
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicPicked {
         project_id,
         path: Some(new_sheet.clone()),
+        choice: None,
     }));
     assert!(!new_sheet.exists(), "update itself does no IO");
 
@@ -695,6 +696,7 @@ fn add_new_schematic_cancelled_picker_is_a_clean_noop() {
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicPicked {
         project_id: app.document_state.projects[0].id,
         path: None, // user cancelled the Save-As dialog
+        choice: None,
     }));
 
     assert!(

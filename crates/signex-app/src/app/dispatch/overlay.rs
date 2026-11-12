@@ -92,6 +92,7 @@ impl Signex {
     pub(crate) fn dispatch_project_message(&mut self, msg: ProjectMsg) -> Task<Message> {
         match msg {
             ProjectMsg::Setup(msg) => self.dispatch_new_project_message(msg),
+            ProjectMsg::DocumentSetup(msg) => self.dispatch_document_setup_message(msg),
             ProjectMsg::StartScreen(msg) => self.dispatch_start_screen_message(msg),
             ProjectMsg::SheetNumbering(msg) => self.dispatch_sheet_numbering_message(msg),
             ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
@@ -172,9 +173,11 @@ impl Signex {
                 path,
                 result,
             } => self.handle_child_sheet_created(project_id, &parent, symbol, path, result),
-            ProjectMsg::AddNewSchematicPicked { project_id, path } => {
-                self.handle_add_new_schematic_picked(project_id, path)
-            }
+            ProjectMsg::AddNewSchematicPicked {
+                project_id,
+                path,
+                choice,
+            } => self.handle_add_new_schematic_picked(project_id, path, choice),
             ProjectMsg::GitCommitDone {
                 project_root,
                 rel_path,

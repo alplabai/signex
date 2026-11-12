@@ -66,19 +66,22 @@ impl Signex {
             M::ReopenRequested => self.reopen_update_pcb_board(),
             M::CreatePcbRequested => {
                 let project = self.ui_state.update_pcb.as_ref().map(|s| s.project);
-                self.request_new_pcb(project)
+                self.open_document_setup(crate::app::SetupKind::Pcb, project)
             }
             M::CloseRequested => {
                 self.ui_state.update_pcb = None;
                 Task::none()
             }
-            M::NewPcbRequested(project) => self.request_new_pcb(project),
+            M::NewPcbRequested(project) => {
+                self.open_document_setup(crate::app::SetupKind::Pcb, project)
+            }
             M::NewPcbPathChecked {
                 project,
                 path,
                 exists,
+                rules,
             } => {
-                self.new_pcb_path_checked(project, path, exists);
+                self.new_pcb_path_checked(project, path, exists, rules);
                 Task::none()
             }
         }

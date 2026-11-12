@@ -339,6 +339,14 @@ impl Signex {
             .then(|| self.view_update_pcb_dialog())
     }
 
+    /// New PCB / New Schematic setup (#2232).
+    pub(in crate::app::view) fn document_setup_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .document_setup
+            .is_some()
+            .then(|| self.view_document_setup_dialog())
+    }
+
     pub(in crate::app::view) fn selection_filter_custom_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {

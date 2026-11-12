@@ -6,6 +6,9 @@ use super::rule_file::RuleTemplate;
 use super::setup::{
     COPPER_LAYERS, DEFAULT_DESIGNATORS, PcbDefaults, PcbField, ProjectDefaults, SheetDefaults,
 };
+use super::user_profile::{
+    PROJECT_PROFILE_TOKEN, ProfileRef, UserProfile, find_user_profile, resolve_profile,
+};
 use crate::designator::DesignatorStandard;
 use crate::schematic::{SheetOrientation, SheetSize};
 
@@ -90,7 +93,17 @@ pub struct ProjectSetup {
     pub pcb: PcbDefaults,
     pub sheet: SheetDefaults,
     pub designators: DesignatorStandard,
+    /// The user profile picked, by id; `None` while a built-in card is.
+    pub user_profile: Option<String>,
     custom_layers: u8,
+}
+
+/// A project's setup as a dialog starts from it, and the user profile it
+/// names that is not in the user's settings, if any.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedSetup {
+    pub setup: ProjectSetup,
+    pub missing_profile: Option<String>,
 }
 
 impl Default for ProjectSetup {
@@ -108,13 +121,52 @@ impl ProjectSetup {
             pcb: profile.pcb(CUSTOM_START_LAYERS),
             sheet: SheetDefaults::default(),
             designators: DEFAULT_DESIGNATORS,
+            user_profile: None,
             custom_layers: CUSTOM_START_LAYERS,
         }
+    }
+
+    /// The draft of a user profile: its rules, sheet and designators.
+    pub fn from_user_profile(profile: &UserProfile) -> Self {
+        let mut setup = Self::default();
+        setup.pick_user_profile(profile);
+        setup
+    }
+
+    /// Pick a user profile card: its values replace the rules, the sheet
+    /// and the designator standard.
+    pub fn pick_user_profile(&mut self, profile: &UserProfile) {
+        self.pcb = profile.pcb.clone();
+        self.sheet = profile.sheet.clone();
+        self.designators = profile.designators;
+        self.fab = None;
+        self.imported = false;
+        self.select_user(&profile.id);
+    }
+
+    fn select_user(&mut self, id: &str) {
+        self.profile = SetupProfile::Custom;
+        self.custom_layers = self.pcb.copper_layers;
+        self.user_profile = Some(id.to_string());
+    }
+
+    /// The id of the picked profile: the user profile's, else the built-in
+    /// token.
+    pub fn profile_id(&self) -> String {
+        self.user_profile
+            .clone()
+            .unwrap_or_else(|| self.profile.token().to_string())
+    }
+
+    /// Whether the built-in card `profile` is the one picked.
+    pub fn is_builtin_picked(&self, profile: SetupProfile) -> bool {
+        self.user_profile.is_none() && self.profile == profile
     }
 
     /// Pick a profile card. A fixed profile resets the rules and layers to
     /// its values; Custom keeps what is set.
     pub fn pick_profile(&mut self, profile: SetupProfile) {
+        self.user_profile = None;
         self.profile = profile;
         if profile == SetupProfile::Custom {
             self.pcb.copper_layers = self.custom_layers;
@@ -136,6 +188,7 @@ impl ProjectSetup {
         self.custom_layers = layers;
         self.pcb.copper_layers = layers;
         self.profile = SetupProfile::Custom;
+        self.user_profile = None;
     }
 
     /// Fill clearance, track and via sizes from a generic class.
@@ -176,7 +229,78 @@ impl ProjectSetup {
         ProjectDefaults {
             pcb: Some(self.pcb.clone()),
             sheet: Some(self.sheet.clone()),
+            profile: Some(self.profile_id()),
         }
+    }
+
+    /// The draft a dialog of `defaults`' project starts from. The stored
+    /// values win; the stored profile id picks the card. A part the project
+    /// does not store comes from the named profile. A user profile that is
+    /// not in `users` leaves the stored values (else Standard) and is
+    /// returned so the caller can say so.
+    pub fn for_project(
+        defaults: &ProjectDefaults,
+        designators: Option<DesignatorStandard>,
+        users: &[UserProfile],
+    ) -> ResolvedSetup {
+        let mut setup = Self::from_stored(defaults, designators);
+        let mut missing_profile = None;
+        match defaults.profile.as_deref() {
+            None => {}
+            Some(id) => match resolve_profile(id, users) {
+                Some(ProfileRef::BuiltIn(profile)) if defaults.pcb.is_none() => {
+                    setup.pick_profile(profile);
+                }
+                Some(ProfileRef::BuiltIn(profile)) => {
+                    setup.profile = profile;
+                    setup.user_profile = None;
+                }
+                Some(ProfileRef::User(user)) => {
+                    if defaults.pcb.is_none() {
+                        setup.pcb = user.pcb.clone();
+                    }
+                    if defaults.sheet.is_none() {
+                        setup.sheet = user.sheet.clone();
+                    }
+                    if designators.is_none() {
+                        setup.designators = user.designators;
+                    }
+                    setup.select_user(&user.id);
+                }
+                None => missing_profile = Some(id.to_string()),
+            },
+        }
+        ResolvedSetup {
+            setup,
+            missing_profile,
+        }
+    }
+
+    /// The setup a command's `profile` operand names: a built-in token, a
+    /// user profile by id or name, or `project` for `project`'s own
+    /// (`for_project`). `Err` says why the token is refused.
+    pub fn for_command(
+        token: &str,
+        project: &ResolvedSetup,
+        users: &[UserProfile],
+    ) -> Result<Self, String> {
+        let token = token.trim();
+        if token == PROJECT_PROFILE_TOKEN {
+            return Ok(project.setup.clone());
+        }
+        if let Some(builtin) = SetupProfile::from_token(token) {
+            let mut setup = project.setup.clone();
+            setup.pick_profile(builtin);
+            return Ok(setup);
+        }
+        if let Some(user) = find_user_profile(token, users) {
+            let mut setup = project.setup.clone();
+            setup.pick_user_profile(user);
+            return Ok(setup);
+        }
+        Err(format!(
+            "profile `{token}` is not project, hobby, standard, hdi, custom or a saved profile"
+        ))
     }
 
     /// The preview's sheet line: the paper and its orientation, such as

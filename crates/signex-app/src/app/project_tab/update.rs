@@ -185,7 +185,7 @@ impl Signex {
 
     /// Apply one General edit to the project's data and mark the `.snxprj`
     /// dirty. An edit for a project that is no longer loaded is dropped.
-    pub(super) fn apply_project_general(
+    pub(crate) fn apply_project_general(
         &mut self,
         project_id: ProjectId,
         command: ProjectGeneralCommand,

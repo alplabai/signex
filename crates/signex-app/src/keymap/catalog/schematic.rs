@@ -483,6 +483,20 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         operands: operands::APPLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2232: a new sheet in the project (File > New > Schematic, Projects >
+    // Add New > Schematic). The GUI opens the New Schematic setup dialog,
+    // whose Create asks for the file; a headless run names its `profile`.
+    CommandMetadata {
+        id: "new_schematic_sheet",
+        category: "file",
+        label: "New schematic sheet in the project",
+        menu_label: Some("Schematic"),
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        operands: operands::NEW_SCHEMATIC,
+        ..CommandMetadata::DEFAULT
+    },
     // #1312: Back Annotate, from a schematic or (Update Schematics) a board
     // of a project. Execute is one undo group across the changed sheets.
     // No default key.

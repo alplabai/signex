@@ -301,6 +301,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "update_pcb_from_schematic" => Message::UpdatePcb(UpdatePcbMsg::Requested { apply: false }),
         "back_annotate_schematics" => Message::from(crate::app::BackAnnotateMsg::Requested),
         "new_pcb_document" => Message::UpdatePcb(UpdatePcbMsg::NewPcbRequested(None)),
+        // #2232: the setup dialogs; a headless run with `profile` makes the
+        // document through `run_operands` instead.
+        "new_schematic_sheet" => Message::from(crate::app::DocumentSetupMsg::OpenRequested {
+            kind: crate::app::SetupKind::Sheet,
+            project: None,
+        }),
         "undo" => Message::Edit(EditMsg::Undo),
         "unselect_all" => Message::Selection(selection_request::SelectionRequest::ClearAll),
         // Tools > Up Hierarchy: the sheet that references the focused one.
