@@ -7,7 +7,7 @@
 use iced::Task;
 
 use crate::app::{KeymapModMigration, Message, Signex, UiMsg};
-use crate::keymap::{Platform, ShortcutProfileSet};
+use crate::keymap::{Platform, ShortcutProfileKind, ShortcutProfileSet};
 
 const PREFS_KEY: &str = "keymap_mod_prompt_asked";
 const USE_COMMAND: &str = "Use \u{2318}";
@@ -102,6 +102,32 @@ impl Signex {
         Task::batch([asked, write])
     }
 
+    /// The Preferences keymap draft is a copy of the profile as it was when
+    /// Preferences opened. Apply would write that copy over the migrated
+    /// file, so move the draft's own standard-set rows to `Mod` too; its
+    /// other edits are kept. An invalid trigger text the user is still typing
+    /// is dropped by the swap.
+    fn rebase_keymap_draft_onto_mod(&mut self, profile_id: &str) {
+        let editor = &mut self.ui_state.preferences_keymap_editor;
+        let Some(profile) = editor.profile_set().profile(profile_id).cloned() else {
+            return;
+        };
+        if profile.kind != ShortcutProfileKind::Custom
+            || crate::keymap::standard_ctrl_rows(&profile) == 0
+        {
+            return;
+        }
+        match editor.insert_custom_profile(crate::keymap::with_standard_set_on_mod(&profile)) {
+            Ok(()) => crate::diagnostics::log_info(
+                "Keyboard shortcuts: the open Preferences draft was moved to \u{2318} too; its other edits are kept.",
+            ),
+            Err(error) => tracing::error!(
+                target: "signex::keymap",
+                "The open Preferences draft was not moved to \u{2318} ({error}); Apply there would write Control back"
+            ),
+        }
+    }
+
     /// The move finished: adopt the new set and say so, or report why the
     /// file was left as it was.
     pub(crate) fn handle_keymap_mod_migration_written(
@@ -113,6 +139,12 @@ impl Signex {
                 self.ui_state.set_keymap_profiles(done.set);
                 self.ui_state.active_keymap =
                     std::sync::Arc::new(self.ui_state.keymap_profiles.compile_active());
+                let migrated = self
+                    .ui_state
+                    .keymap_profiles
+                    .active_profile_id()
+                    .to_string();
+                self.rebase_keymap_draft_onto_mod(&migrated);
                 let kept = done
                     .backup
                     .map(|path| format!(" The previous file is kept as {path}."))

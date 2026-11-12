@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::Signex;
 use crate::config_root::isolated::IsolatedConfigRoot;
-use crate::keymap::{ShortcutProfileKind, TomlShortcutProfile};
+use crate::keymap::{ShortcutProfileKind, ShortcutTrigger, TomlShortcutProfile};
 
 const LEGACY: &str = r#"
 [signex_settings]
@@ -121,6 +121,52 @@ fn a_finished_move_is_adopted_and_reported() {
     assert_eq!(
         crate::diagnostics::logged_count("the standard commands now use \u{2318}."),
         seen + 1
+    );
+}
+
+/// An open Preferences draft still holds the Control rows: Apply would write
+/// them back over the migrated file. The draft is moved too, edits kept.
+#[test]
+fn an_open_preferences_draft_is_rebased_onto_the_moved_profile() {
+    use crate::keymap::{AppCommandId, KeymapEditorModel};
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.set_keymap_profiles(legacy_set());
+    let mut draft = KeymapEditorModel::new(legacy_set());
+    let cycle = AppCommandId::new("cycle_unit").unwrap();
+    let slot = draft
+        .rows()
+        .into_iter()
+        .find(|row| row.command.as_ref() == Some(&cycle))
+        .expect("the legacy profile binds cycle_unit")
+        .slot;
+    draft
+        .edit_active_trigger(slot, "Ctrl+Alt+Q".into())
+        .unwrap();
+    app.ui_state.preferences_keymap_editor = draft;
+    let moved = crate::keymap::migrate_active_to_mod(&legacy_set()).unwrap();
+
+    let _ = app.update(Message::Ui(UiMsg::KeymapModMigrationWritten(Ok(
+        KeymapModMigration {
+            set: moved,
+            backup: None,
+        },
+    ))));
+
+    let draft = app.ui_state.preferences_keymap_editor.active_profile();
+    assert_eq!(
+        crate::keymap::standard_ctrl_rows(draft),
+        0,
+        "Apply would revert the move"
+    );
+    let text: Vec<String> = draft
+        .bindings
+        .iter()
+        .flat_map(|b| b.triggers.iter().map(ShortcutTrigger::config_text))
+        .collect();
+    assert!(text.iter().any(|t| t == "Mod+S"), "{text:?}");
+    assert!(
+        text.iter().any(|t| t == "Ctrl+Alt+Q"),
+        "the pending edit is kept: {text:?}"
     );
 }
 
