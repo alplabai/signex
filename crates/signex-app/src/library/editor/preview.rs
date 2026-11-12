@@ -56,7 +56,7 @@ pub(crate) fn view<'a>(
     let body = column![
         header_row(&state.row, tokens, i18n),
         panes,
-        where_used_footer(state, library_state, tokens),
+        where_used_footer(state, library_state, tokens, i18n),
     ]
     .spacing(SP.l)
     .width(Length::Fill)
@@ -675,12 +675,12 @@ fn override_editor_row<'a>(
 }
 
 /// "Used by N sheet(s) in M project(s)."
-fn where_used_label(sheets: usize, projects: usize) -> String {
-    let plural = |n: usize| if n == 1 { "" } else { "s" };
-    format!(
-        "Used by {sheets} sheet{} in {projects} project{}.",
-        plural(sheets),
-        plural(projects),
+fn where_used_label(i18n: &I18n, sheets: usize, projects: usize) -> Localized {
+    t!(
+        i18n,
+        ids::LIBRARY_PREVIEW_WHERE_USED,
+        "sheets" => sheets,
+        "projects" => projects
     )
 }
 
@@ -688,6 +688,7 @@ fn where_used_footer<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
     tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let row_id = signex_library::RowId::from_uuid(state.row.row_id);
     let uses = library_state.where_used_for(row_id);
@@ -702,7 +703,7 @@ fn where_used_footer<'a>(
         theme_ext::text_primary(tokens)
     };
     kit::card(
-        text(raw(where_used_label(uses.len(), projects)))
+        text(where_used_label(i18n, uses.len(), projects))
             .size(TS.body)
             .color(color)
             .boxed(),
@@ -764,8 +765,15 @@ mod tests {
 
     #[test]
     fn where_used_pluralises() {
-        assert_eq!(where_used_label(0, 0), "Used by 0 sheets in 0 projects.");
-        assert_eq!(where_used_label(1, 1), "Used by 1 sheet in 1 project.");
-        assert_eq!(where_used_label(3, 2), "Used by 3 sheets in 2 projects.");
+        // The counts are catalog arguments, wrapped in isolation marks.
+        let i18n = I18n::en_us();
+        let label = |sheets, projects| {
+            where_used_label(&i18n, sheets, projects)
+                .to_string()
+                .replace(['\u{2068}', '\u{2069}'], "")
+        };
+        assert_eq!(label(0, 0), "Used by 0 sheets in 0 projects.");
+        assert_eq!(label(1, 1), "Used by 1 sheet in 1 project.");
+        assert_eq!(label(3, 2), "Used by 3 sheets in 2 projects.");
     }
 }

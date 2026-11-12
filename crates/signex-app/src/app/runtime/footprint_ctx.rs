@@ -589,6 +589,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         version: editor.primitive().version.clone(),
         mode_kind,
         pad_count,
+        editor_pad_count: editor.state.pads.len(),
         sketch_entity_count,
         sketch_constraint_count,
         last_solve,

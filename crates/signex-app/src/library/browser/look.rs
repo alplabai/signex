@@ -43,12 +43,12 @@ pub(super) fn hover_fill(tokens: &ThemeTokens) -> Color {
 /// Fill of the active sidebar row: the theme's neutral selection, not an
 /// accent tint.
 pub(super) fn active_fill(tokens: &ThemeTokens) -> Color {
-    crate::styles::ti(tokens.selection)
+    crate::panels::graphite::selection_fill(tokens)
 }
 
 /// Fill of the selected grid row: the theme's neutral selection.
 pub(super) fn selected_fill(tokens: &ThemeTokens) -> Color {
-    crate::styles::ti(tokens.selection)
+    crate::panels::graphite::selection_fill(tokens)
 }
 
 /// Wash of a deprecated row.
