@@ -6,7 +6,7 @@
 
 use serde::Deserialize;
 use signex_gfx::style::ColorSlot;
-use signex_types::theme::{CanvasColors, Color, ThemeId, canvas_colors};
+use signex_types::theme::{BoardLayerColors, CanvasColors, Color, ThemeId, canvas_colors};
 use std::sync::OnceLock;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -49,8 +49,20 @@ impl ResolvedTheme {
         resolved.set_slot(ColorSlot::BoardEdge, to_rgba(canvas.board_edge_color()));
         resolved.set_slot(ColorSlot::BoardOpening, to_rgba(canvas.background));
         resolved.set_slot(ColorSlot::Keepout, to_rgba(canvas.keepout_color()));
+        resolved.set_board_layers(canvas.board_layer_colors());
+        resolved.set_slot(ColorSlot::BoardArea, to_rgba(canvas.board_area_color()));
 
         resolved
+    }
+
+    /// Copper is drawn in the colour its layer is listed with.
+    fn set_board_layers(&mut self, layers: BoardLayerColors) {
+        self.set_slot(ColorSlot::TopCopper, to_rgba(layers.top_copper));
+        self.set_slot(ColorSlot::BottomCopper, to_rgba(layers.bottom_copper));
+        self.set_slot(ColorSlot::MultiLayer, to_rgba(layers.multi_layer));
+        for (slot, color) in ColorSlot::LAYER_CYCLE.into_iter().zip(layers.layer_cycle) {
+            self.set_slot(slot, to_rgba(color));
+        }
     }
 
     pub fn with_slot(mut self, slot: ColorSlot, color: [f32; 4]) -> Self {
@@ -124,6 +136,10 @@ fn load_builtin_theme() -> ResolvedTheme {
     resolved.set_slot(ColorSlot::BoardEdge, palette.slots.snap);
     resolved.set_slot(ColorSlot::BoardOpening, palette.slots.pin);
     resolved.set_slot(ColorSlot::Keepout, palette.slots.drc_warning);
+    // The schematic palette file has no board layers; take the board palette's.
+    let board = canvas_colors(ThemeId::GraphiteDark);
+    resolved.set_board_layers(board.board_layer_colors());
+    resolved.set_slot(ColorSlot::BoardArea, to_rgba(board.board_area_color()));
 
     resolved
 }
@@ -202,6 +218,31 @@ mod tests {
             rgba(canvas.background),
             "the edge shows against an opening"
         );
+    }
+
+    #[test]
+    fn copper_slots_are_the_board_layer_colours() {
+        let canvas = canvas_colors(ThemeId::GraphiteDark);
+        let layers = canvas.board_layer_colors();
+        let rgba = super::to_rgba;
+        for theme in [
+            ResolvedTheme::from_canvas_colors(canvas),
+            ResolvedTheme::builtin_default(),
+        ] {
+            assert_eq!(theme.color(ColorSlot::TopCopper), rgba(layers.top_copper));
+            assert_eq!(
+                theme.color(ColorSlot::BottomCopper),
+                rgba(layers.bottom_copper)
+            );
+            assert_eq!(theme.color(ColorSlot::MultiLayer), rgba(layers.multi_layer));
+            assert_eq!(
+                theme.color(ColorSlot::BoardArea),
+                rgba(canvas.board_area_color())
+            );
+            for (slot, color) in ColorSlot::LAYER_CYCLE.into_iter().zip(layers.layer_cycle) {
+                assert_eq!(theme.color(slot), rgba(color), "{slot:?}");
+            }
+        }
     }
 
     #[test]

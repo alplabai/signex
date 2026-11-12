@@ -141,6 +141,7 @@ fn apply_event(view: &mut PcbLayerView, copper: &[CopperLayer], event: PcbViewMs
         PcbViewMsg::ActiveLayerVisibilityToggled => {
             view.toggle_visibility(PcbLayer::Copper(view.active()));
         }
+        PcbViewMsg::MultiLayerVisibilityToggled => view.toggle_multi_layer(),
         PcbViewMsg::AllLayersShown => view.show_all(),
     }
 }

@@ -190,6 +190,22 @@ slots `BoardEdge` (the canvas cursor ink), `BoardOpening` (the canvas
 background) and `Keepout` (the DRC warning colour), so both Graphite themes
 draw them in their own palette. V-scores are not drawn yet.
 
+Copper (tracks, pads, vias, copper zones) is drawn in its layer's colour,
+the one the Layers panel lists it with: the slots `TopCopper`,
+`BottomCopper` and `LayerCycle0`..`LayerCycle5` (Mid-Layer `n` takes entry
+`n % 6`), set from the board palette (`CanvasColors::board_layer_colors`).
+A blind item takes its topmost layer's colour. Vias and through-hole pads
+are drawn in `MultiLayer` (the Layers panel's Multi-Layer row, whose eye
+shows or hides them), whatever the active layer. Copper on no layer this
+build knows keeps its kind's slot. A through-hole pad's drill and a via's
+drill are drawn as openings (`BoardOpening`) over their copper; a via whose
+drill is as wide as the via, and a non-plated (NPTH) pad, draw as the
+opening alone, with no copper. The board
+area inside the outline is filled with `BoardArea` (the board palette's
+`board_area`) under every zone and all copper; cutouts and mounting holes
+stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,
+2026-11-11, #2262.
+
 ## Not done yet
 
 - Exporting cutouts, holes and V-scores (Gerber edge cuts, drill file), and
