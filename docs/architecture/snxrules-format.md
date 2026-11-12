@@ -140,7 +140,8 @@ compares it yet. "Save as profile" (it writes only the project's `erc`),
 and Save as profile is step 2b, with the rule language (maintainer decision,
 https://github.com/alplabai/signex/issues/2307#issuecomment-6824136804).
 Duplicate in Preferences ▸ Rule Profiles copies the whole profile, `drc`
-included.
+included. Save as profile over an existing profile replaces that file with the
+project's `erc` only, so the target profile's `drc` is dropped until step 2b.
 
 The same hash is recorded in two places:
 
