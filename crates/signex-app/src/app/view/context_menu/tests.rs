@@ -94,7 +94,14 @@ fn edit_rows_show_the_resolved_keymap_shortcuts() {
     sc.set("delete_selection", "Delete");
     sc.set("mirror_x", "Shift+X");
     sc.set("mirror_y", "Shift+Y");
-    let entries = canvas_menu_entries(TID, selected(), None, None, &sc);
+    let entries = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        selected(),
+        None,
+        None,
+        &sc,
+    );
     let shortcut_of = |label: &str| {
         entries.iter().find_map(|e| match e {
             DropdownEntry::Item(it) if it.label == label => Some(it.shortcut.clone()),
@@ -103,8 +110,10 @@ fn edit_rows_show_the_resolved_keymap_shortcuts() {
     };
     assert_eq!(shortcut_of("Rotate").flatten().as_deref(), Some("R"));
     assert_eq!(shortcut_of("Delete").flatten().as_deref(), Some("Delete"));
-    let mirror_x = crate::menu_bar::cmd_label("mirror_x", "Mirror X");
-    let mirror_y = crate::menu_bar::cmd_label("mirror_y", "Mirror Y");
+    let mirror_x =
+        crate::menu_bar::cmd_label(signex_i18n::I18n::en_us_ref(), "mirror_x", "Mirror X");
+    let mirror_y =
+        crate::menu_bar::cmd_label(signex_i18n::I18n::en_us_ref(), "mirror_y", "Mirror Y");
     assert_eq!(shortcut_of(&mirror_x).flatten().as_deref(), Some("Shift+X"));
     assert_eq!(shortcut_of(&mirror_y).flatten().as_deref(), Some("Shift+Y"));
 }
@@ -167,6 +176,7 @@ fn dd_msg_row_carries_message_and_optional_shortcut() {
 fn find_similar_row_is_enabled_and_routes_to_its_action() {
     for has_selection in [false, true] {
         let rows = canvas_menu_entries(
+            signex_i18n::I18n::en_us_ref(),
             TID,
             CanvasSelection {
                 has_selection,
@@ -198,6 +208,7 @@ fn find_similar_row_is_enabled_and_routes_to_its_action() {
 fn canvas_menu_grows_and_gates_on_selection() {
     let sc = shortcuts();
     let with = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
         TID,
         CanvasSelection {
             has_selection: true,
@@ -210,6 +221,7 @@ fn canvas_menu_grows_and_gates_on_selection() {
         &sc,
     );
     let without = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
         TID,
         CanvasSelection {
             has_selection: false,
@@ -249,6 +261,7 @@ fn project_options_row(entries: &[DropdownEntry<Message>]) -> &DropdownItem<Mess
 fn canvas_project_options_opens_the_active_project_options() {
     let sc = shortcuts();
     let live = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
         TID,
         CanvasSelection::default(),
         None,
@@ -269,6 +282,7 @@ fn canvas_project_options_opens_the_active_project_options() {
 fn canvas_project_options_is_greyed_without_a_project_and_says_nothing_planned() {
     let sc = shortcuts();
     let none = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
         TID,
         CanvasSelection {
             has_selection: false,
@@ -290,6 +304,7 @@ fn canvas_project_options_is_greyed_without_a_project_and_says_nothing_planned()
 fn canvas_child_sheet_adds_open_row() {
     let sc = shortcuts();
     let plain = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
         TID,
         CanvasSelection {
             has_selection: false,
@@ -302,6 +317,7 @@ fn canvas_child_sheet_adds_open_row() {
         &sc,
     );
     let child = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
         TID,
         CanvasSelection {
             has_selection: false,
@@ -321,15 +337,15 @@ fn canvas_child_sheet_adds_open_row() {
 
 #[test]
 fn tab_menu_gates_bulk_close_and_undock() {
-    let single = tab_menu_entries("sheet1.SchDoc", 0, 1, false);
-    let multi = tab_menu_entries("sheet1.SchDoc", 2, 3, false);
+    let single = tab_menu_entries(signex_i18n::I18n::en_us_ref(), "sheet1.SchDoc", 0, 1, false);
+    let multi = tab_menu_entries(signex_i18n::I18n::en_us_ref(), "sheet1.SchDoc", 2, 3, false);
     // Close row carries the live tab title.
     assert!(has_row(&single, "Close sheet1.SchDoc"));
     // Single tab → "Close All Other Documents" is greyed.
     assert!(disabled_of(&single, "Close All Other Documents"));
     assert!(!disabled_of(&multi, "Close All Other Documents"));
     // Undock greys out once the tab has its own window.
-    let undocked = tab_menu_entries("s", 0, 3, true);
+    let undocked = tab_menu_entries(signex_i18n::I18n::en_us_ref(), "s", 0, 3, true);
     assert!(!disabled_of(&multi, "Open In New Window"));
     assert!(disabled_of(&undocked, "Open In New Window"));
     assert_eq!(seps(&single), 1);
@@ -374,8 +390,8 @@ fn align_gate_thresholds() {
 
 #[test]
 fn align_menu_disables_pairwise_below_two() {
-    let one = align_entries(TID, 1, &|_| String::new());
-    let three = align_entries(TID, 3, &|_| String::new());
+    let one = align_entries(signex_i18n::I18n::en_us_ref(), TID, 1, &|_| String::new());
+    let three = align_entries(signex_i18n::I18n::en_us_ref(), TID, 3, &|_| String::new());
     // Pairwise + distribute greyed with one item; grid always on.
     assert!(disabled_of(&one, "Align Left"));
     assert!(disabled_of(&one, "Distribute Horizontally"));
@@ -389,7 +405,7 @@ fn align_menu_disables_pairwise_below_two() {
 
 #[test]
 fn place_menu_greys_only_the_planned_tools() {
-    let e = place_entries(TID, &|_| String::new());
+    let e = place_entries(signex_i18n::I18n::en_us_ref(), TID, &|_| String::new());
     assert!(has_row(&e, "Wire"));
     assert!(has_row(&e, "Part"));
     // Placement actions are always available, except the planned tools
@@ -425,7 +441,7 @@ fn refresh_all_pricing_row_is_live_for_a_library_node() {
         project_id: app.document_state.projects[0].id,
         root: std::path::PathBuf::from("/libs/Power.snxlib"),
     };
-    match refresh_pricing_entry(Some(row.clone()), true) {
+    match refresh_pricing_entry(signex_i18n::I18n::en_us_ref(), Some(row.clone()), true) {
         DropdownEntry::Item(it) => {
             assert_eq!(it.label, "Refresh All Pricing");
             assert!(!it.disabled, "the row used to be a greyed stub");
@@ -439,7 +455,14 @@ fn refresh_all_pricing_row_is_live_for_a_library_node() {
         _ => panic!("expected an Item"),
     }
     assert!(
-        disabled_of(&[refresh_pricing_entry(None, true)], "Refresh All Pricing"),
+        disabled_of(
+            &[refresh_pricing_entry(
+                signex_i18n::I18n::en_us_ref(),
+                None,
+                true
+            )],
+            "Refresh All Pricing"
+        ),
         "no resolvable library, nothing to refresh"
     );
 }
@@ -452,7 +475,7 @@ fn refresh_all_pricing_row_is_greyed_with_a_reason_when_no_client_prices() {
         project_id: app.document_state.projects[0].id,
         root: std::path::PathBuf::from("/libs/Power.snxlib"),
     };
-    match refresh_pricing_entry(Some(row), false) {
+    match refresh_pricing_entry(signex_i18n::I18n::en_us_ref(), Some(row), false) {
         DropdownEntry::Item(it) => {
             assert!(it.disabled);
             assert!(it.on_press.is_none(), "a greyed row must not publish");
@@ -493,7 +516,9 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
     // Routing the rows through `action_label` must not change what the
     // user sees; this pins the wording that was hard-coded before.
     assert_eq!(
-        labels(&place_entries(TID, &|_| String::new())),
+        labels(&place_entries(signex_i18n::I18n::en_us_ref(), TID, &|_| {
+            String::new()
+        })),
         [
             "Wire",
             "Bus",
@@ -523,7 +548,12 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
         ]
     );
     assert_eq!(
-        labels(&align_entries(TID, 3, &|_| String::new())),
+        labels(&align_entries(
+            signex_i18n::I18n::en_us_ref(),
+            TID,
+            3,
+            &|_| String::new()
+        )),
         [
             "Align Left",
             "Align Right",
@@ -541,6 +571,7 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
 #[test]
 fn canvas_row_text_is_byte_identical_to_the_old_literals() {
     let rows = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
         TID,
         CanvasSelection {
             has_selection: true,
@@ -581,6 +612,7 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
     // Context-menu canvas ids: label comes from the catalog, so the menu
     // bar's lookup of the same id must agree with the row.
     let rows = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
         TID,
         CanvasSelection {
             has_selection: true,
@@ -604,7 +636,7 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
         ("edit_selected_object_properties", "Properties..."),
     ] {
         assert_eq!(
-            crate::menu_bar::cmd_label(id, "<missing>"),
+            crate::menu_bar::cmd_label(signex_i18n::I18n::en_us_ref(), id, "<missing>"),
             row_label,
             "{id}"
         );
@@ -619,7 +651,10 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
         (A::AlignToGrid, "Align To Grid"),
     ] {
         assert!(id_for_action(&action).is_some(), "{action:?} lost its id");
-        assert_eq!(action_label(&action, "<missing>"), row_label);
+        assert_eq!(
+            action_label(signex_i18n::I18n::en_us_ref(), &action, "<missing>"),
+            row_label
+        );
     }
 }
 
@@ -663,6 +698,7 @@ fn a_command_the_keymap_does_not_bind_gets_no_shortcut_hint() {
 fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
     let sc = shortcuts();
     let with = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
         TID,
         CanvasSelection {
             has_selection: true,
@@ -675,6 +711,7 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
         &sc,
     );
     let without = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
         TID,
         CanvasSelection {
             has_selection: true,
@@ -688,7 +725,7 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
     );
     assert_eq!(launchers(&with), launchers(&without) + 1);
 
-    let rows = super::submenu::arrange_entries(&|_| String::new());
+    let rows = super::submenu::arrange_entries(signex_i18n::I18n::en_us_ref(), &|_| String::new());
     for label in [
         "Bring to Front",
         "Send to Back",
@@ -709,8 +746,15 @@ fn canvas_menu_offers_the_placed_part_actions_for_a_placed_part_only() {
         placed_part_selected: true,
         ..selected()
     };
-    let with = canvas_menu_entries(TID, part, None, None, &sc);
-    let without = canvas_menu_entries(TID, selected(), None, None, &sc);
+    let with = canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, part, None, None, &sc);
+    let without = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        selected(),
+        None,
+        None,
+        &sc,
+    );
 
     for (label, command) in [
         ("Open Datasheet", "open_datasheet"),
@@ -761,8 +805,22 @@ fn runs_cross_probe(message: Option<Message>) -> bool {
 #[test]
 fn canvas_cross_probe_row_runs_the_command_with_a_selection() {
     let sc = shortcuts();
-    let with = canvas_menu_entries(TID, selected(), None, None, &sc);
-    let without = canvas_menu_entries(TID, CanvasSelection::default(), None, None, &sc);
+    let with = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        selected(),
+        None,
+        None,
+        &sc,
+    );
+    let without = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        CanvasSelection::default(),
+        None,
+        None,
+        &sc,
+    );
     assert!(runs_cross_probe(row_message(&with, "Cross Probe")));
     assert!(row_message(&without, "Cross Probe").is_none());
     assert!(disabled_of(&without, "Cross Probe"));
@@ -778,13 +836,15 @@ fn board_cross_probe_row_runs_the_command_with_a_selection() {
         any: true,
         ..PcbTargets::default()
     };
-    let rows = super::menus::pcb_canvas_menu_entries(TID, picked, &sc);
+    let rows =
+        super::menus::pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, picked, &sc);
     assert!(runs_cross_probe(row_message(&rows, "Cross Probe")));
     let empty = PcbTargets {
         shown: true,
         ..PcbTargets::default()
     };
-    let rows = super::menus::pcb_canvas_menu_entries(TID, empty, &sc);
+    let rows =
+        super::menus::pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, empty, &sc);
     assert!(row_message(&rows, "Cross Probe").is_none());
 }
 
@@ -798,7 +858,8 @@ fn board_sketch_row_runs_the_command() {
         shown: true,
         ..PcbTargets::default()
     };
-    let rows = super::menus::pcb_canvas_menu_entries(TID, empty, &sc);
+    let rows =
+        super::menus::pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, empty, &sc);
     assert!(matches!(
         row_message(&rows, "Board Sketch"),
         Some(Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, project: None })))

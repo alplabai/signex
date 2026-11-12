@@ -14,6 +14,7 @@ mod rows;
 
 use std::path::Path;
 
+use signex_i18n::I18n;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
@@ -39,10 +40,11 @@ pub fn view_context_menu<'a>(
     editor: &'a SymbolDocument,
     tokens: &'a ThemeTokens,
     path: &'a Path,
+    i18n: &I18n,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
     let menu_state = editor.context_menu.as_ref()?;
     let rows = build_symbol_context_menu_rows(editor.primitive(), editor.view(), &editor.selected);
-    let entries = flatten(rows, menu_state.open_submenu, path, false);
+    let entries = flatten(rows, menu_state.open_submenu, path, false, i18n);
     Some(signex_widgets::active_bar_dropdown::view(
         entries,
         tokens,
@@ -63,18 +65,24 @@ fn flatten(
     open_submenu: Option<SymbolContextSubmenu>,
     path: &Path,
     indented: bool,
+    i18n: &I18n,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
         match row.submenu {
             Some(children) => {
                 let is_open = row_submenu_matches(row.id, open_submenu);
-                out.push(submenu_header_entry(row.id, row.label, is_open, path));
+                out.push(submenu_header_entry(
+                    row.id,
+                    i18n.message(row.label, &[]).into_string(),
+                    is_open,
+                    path,
+                ));
                 if is_open {
-                    out.extend(flatten(children, open_submenu, path, true));
+                    out.extend(flatten(children, open_submenu, path, true, i18n));
                 }
             }
-            None => out.push(leaf_entry(row, path, indented)),
+            None => out.push(leaf_entry(row, path, indented, i18n)),
         }
     }
     out
@@ -110,7 +118,7 @@ fn wrap(path: &Path, msg: SymbolEditorMsg) -> LibraryMessage {
 /// close the whole popover.
 fn submenu_header_entry(
     id: &'static str,
-    label: &'static str,
+    label: String,
     is_open: bool,
     path: &Path,
 ) -> DropdownEntry<LibraryMessage> {
@@ -126,11 +134,16 @@ fn submenu_header_entry(
 /// A real-action row — wraps `row.msg` in `ContextMenuAction` so the
 /// dispatcher applies it and closes the menu in one step, and
 /// disables the row (no `on_press`) when `!row.enabled`.
-fn leaf_entry(row: SymbolMenuRow, path: &Path, indented: bool) -> DropdownEntry<LibraryMessage> {
+fn leaf_entry(
+    row: SymbolMenuRow,
+    path: &Path,
+    indented: bool,
+    i18n: &I18n,
+) -> DropdownEntry<LibraryMessage> {
     let label = if indented {
-        format!("  {}", row.label)
+        format!("  {}", i18n.message(row.label, &[]))
     } else {
-        row.label.to_string()
+        i18n.message(row.label, &[]).into_string()
     };
     // `row.msg` is `None` only for submenu headers, already routed to
     // `submenu_header_entry` by `flatten` before reaching here.

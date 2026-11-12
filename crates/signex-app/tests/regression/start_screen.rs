@@ -124,7 +124,10 @@ fn shortcuts_modal_cache_is_built_on_open_and_rebuilt_on_keymap_change() {
         .shortcut_sections
         .clone()
         .expect("opening the modal builds the cache");
-    assert_eq!(built, build_sections(&app.ui_state.keymap_profiles));
+    assert_eq!(
+        built,
+        build_sections(&app.ui_state.i18n, &app.ui_state.keymap_profiles)
+    );
     assert!(!built.is_empty());
 
     // Commit a different active profile: the cache must follow it.
@@ -135,7 +138,7 @@ fn shortcuts_modal_cache_is_built_on_open_and_rebuilt_on_keymap_change() {
         .find(|id| id != profiles.active_profile_id())
         .expect("two built-in profiles");
     profiles.set_active_profile(other).unwrap();
-    let expected = build_sections(&profiles);
+    let expected = build_sections(signex_i18n::I18n::en_us_ref(), &profiles);
     assert_ne!(
         expected, built,
         "profiles must differ for the check to bite"

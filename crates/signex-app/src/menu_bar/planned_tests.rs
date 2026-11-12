@@ -16,11 +16,13 @@
 /// row's label, or the command id the label is read from.
 const EXPECTED_STUBS: &[&str] = &[];
 
-/// Literal `unavailable` rows that are allowed to stay unexplained.
-const EXPECTED_DISABLED: &[&str] = &["No recent projects"];
+/// `unavailable` rows (by label id) that are allowed to stay unexplained.
+/// The label ids are pinned to their English by `disabled_row_label_is_pinned`.
+const EXPECTED_DISABLED: &[&str] = &["START_NO_RECENT_TITLE"];
 
-/// The label literal of each `<callee>(` call in `source` whose first
-/// argument is a string literal or `&cmd_label("id", ..)`.
+/// The label key of each `<callee>(` call in `source`: the string literal or
+/// `&cmd_label("id", ..)` it opens with, or the name of the `menu_ids::NAME`
+/// message it labels the row with (after the leading `ctx,`).
 fn call_keys(source: &str, callee: &str) -> Vec<String> {
     let needle = format!("{callee}(");
     let mut keys = Vec::new();
@@ -36,6 +38,17 @@ fn call_keys(source: &str, callee: &str) -> Vec<String> {
             continue;
         }
         let arg = rest.trim_start();
+        let arg = arg.strip_prefix("ctx,").map_or(arg, str::trim_start);
+        if let Some(named) = arg
+            .strip_prefix("menu_ids::")
+            .or_else(|| arg.strip_prefix("ids::"))
+        {
+            let end = named
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .unwrap_or(named.len());
+            keys.push(named[..end].to_string());
+            continue;
+        }
         let literal_start = if arg.starts_with('"') {
             Some(1)
         } else if arg.starts_with("&cmd_label(") {
@@ -87,6 +100,20 @@ fn the_scanner_catches_a_new_inert_row() {
     assert_eq!(call_keys(fake, "stub"), vec!["Brand New Row"]);
     let fake = "unavailable(\n    \"Greyed\",";
     assert_eq!(call_keys(fake, "unavailable"), vec!["Greyed"]);
+    let fake = "unavailable(\n    ctx,\n    menu_ids::MENU_GREYED,";
+    assert_eq!(call_keys(fake, "unavailable"), vec!["MENU_GREYED"]);
+}
+
+/// The one allowed unexplained row keeps its English: the ratchet above keys
+/// it by id, so its text is pinned here.
+#[test]
+fn disabled_row_label_is_pinned() {
+    let i18n = signex_i18n::I18n::en_us_ref();
+    assert_eq!(
+        i18n.message(signex_i18n::ids::START_NO_RECENT_TITLE, &[])
+            .to_string(),
+        "No recent projects"
+    );
 }
 
 #[test]
@@ -102,13 +129,35 @@ fn bill_of_materials_is_not_a_stub() {
 fn working_rows_are_wired() {
     let source: String = include_str!("model/menus.rs").split_whitespace().collect();
     for call in [
-        "cmd_item_gated(ctx,cmd(\"zoom_in_at_cursor\",\"ZoomIn\",\"Ctrl+=\"))",
-        "cmd_item_gated(ctx,cmd(\"zoom_out_at_cursor\",\"ZoomOut\",\"Ctrl+-\"))",
-        "cmd_item_gated(ctx,cmd(\"place_power_symbol\",\"PowerPort\",\"P\"))",
-        "item_if(\"Text\",MenuMessage::PlaceText,",
-        "item_if(\"NoConnect\",MenuMessage::PlaceNoConnect,",
-        "item_if(\"BillofMaterials…\",MenuMessage::ExportBom,",
+        "cmd_item_gated(ctx,cmd(\"zoom_in_at_cursor\",\"Ctrl+=\"))",
+        "cmd_item_gated(ctx,cmd(\"zoom_out_at_cursor\",\"Ctrl+-\"))",
+        "cmd_item_gated(ctx,cmd(\"place_power_symbol\",\"P\"))",
+        "item_if(ctx,menu_ids::MENU_PLACE_TEXT,MenuMessage::PlaceText,",
+        "item_if(ctx,menu_ids::MENU_PLACE_NO_CONNECT,MenuMessage::PlaceNoConnect,",
+        "item_if(ctx,menu_ids::MENU_REPORTS_BOM,MenuMessage::ExportBom,",
     ] {
         assert!(source.contains(call), "the row is not wired as `{call}`");
+    }
+}
+
+/// The labels of those wired rows, now catalog text instead of literals in
+/// the model source, keep their English.
+#[test]
+fn working_rows_keep_their_labels() {
+    use signex_i18n::{I18n, menu_ids};
+    let i18n = I18n::en_us_ref();
+    for (command, label) in [
+        ("zoom_in_at_cursor", "Zoom In"),
+        ("zoom_out_at_cursor", "Zoom Out"),
+        ("place_power_symbol", "Power Port"),
+    ] {
+        assert_eq!(super::cmd_label(i18n, command, "<missing>"), label);
+    }
+    for (id, label) in [
+        (menu_ids::MENU_PLACE_TEXT, "Text"),
+        (menu_ids::MENU_PLACE_NO_CONNECT, "No Connect"),
+        (menu_ids::MENU_REPORTS_BOM, "Bill of Materials…"),
+    ] {
+        assert_eq!(i18n.message(id, &[]).to_string(), label);
     }
 }

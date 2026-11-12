@@ -225,7 +225,7 @@ fn check_rows(
                 });
                 assert_eq!(
                     item.label,
-                    meta.menu_label(),
+                    meta.menu_label_in(signex_i18n::I18n::en_us_ref()),
                     "{origin}: {id} shows a label other than the catalog's"
                 );
                 let hint = app.keymap_shortcut_label(id);
@@ -296,7 +296,14 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
             let (app, selection, derived_key) = app_in_selection(profile, bits);
             let ctx = app.command_context(None);
             for project_key in [derived_key, Some(vec!["proj".to_string()])] {
-                let rows = canvas_menu_entries(TID, selection, None, project_key, &sc);
+                let rows = canvas_menu_entries(
+                    signex_i18n::I18n::en_us_ref(),
+                    TID,
+                    selection,
+                    None,
+                    project_key,
+                    &sc,
+                );
                 check_rows(
                     &format!("canvas {profile} {selection:?}"),
                     &rows,
@@ -315,7 +322,7 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
         for selected in [1, 3] {
             check_rows(
                 "align flyout",
-                &align_entries(TID, selected, &hint),
+                &align_entries(signex_i18n::I18n::en_us_ref(), TID, selected, &hint),
                 &app,
                 &flyout_ctx,
                 &mut walk,
@@ -323,14 +330,14 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
         }
         check_rows(
             "place flyout",
-            &place_entries(TID, &hint),
+            &place_entries(signex_i18n::I18n::en_us_ref(), TID, &hint),
             &app,
             &flyout_ctx,
             &mut walk,
         );
         check_rows(
             "arrange flyout",
-            &arrange_entries(&hint),
+            &arrange_entries(signex_i18n::I18n::en_us_ref(), &hint),
             &app,
             &flyout_ctx,
             &mut walk,

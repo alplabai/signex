@@ -394,6 +394,31 @@ mod tests {
         assert_eq!(app.ui_state.command_palette.total_matches, 2);
     }
 
+    /// #2057 - the rows are worded in the message language, so a language
+    /// switch while the palette is open rebuilds them.
+    #[test]
+    fn an_open_palette_follows_a_language_switch() {
+        use crate::app::{Message, UiMsg};
+        use signex_i18n::LanguagePref;
+        let switch = |app: &mut Signex, tag: &str| {
+            let pref = LanguagePref::Locale(tag.to_owned());
+            let _ = app.update(Message::Ui(UiMsg::LanguageChanged(pref)));
+        };
+        let (mut app, _task) = Signex::new();
+        switch(&mut app, "en-US");
+        let _focus = app.open_command_palette();
+        app.ui_state.command_palette.query = "Open Panel".into();
+        app.refresh_command_palette_results();
+        let before = app.ui_state.command_palette.results[0].label.clone();
+
+        switch(&mut app, "en-XA");
+
+        // Under the pseudolocale the English query no longer matches: the stale
+        // English row must be gone, not kept.
+        let rows = &app.ui_state.command_palette.results;
+        assert!(rows.iter().all(|row| row.label != before), "{rows:?}");
+    }
+
     /// #1351 - a palette row goes through the same funnel as a keystroke,
     /// so a command with nothing to act on is dropped, not run.
     #[test]

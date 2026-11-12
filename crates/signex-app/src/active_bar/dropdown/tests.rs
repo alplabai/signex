@@ -66,7 +66,7 @@ fn action_enable_predicate() {
 
 #[test]
 fn wiring_menu_is_five_ungated_items() {
-    let e = render(WIRING, TID, false, false);
+    let e = render(signex_i18n::I18n::en_us_ref(), WIRING, TID, false, false);
     assert_eq!(
         labels(&e),
         ["Wire", "Bus", "Bus Entry", "Net Label", "Junction"]
@@ -77,8 +77,8 @@ fn wiring_menu_is_five_ungated_items() {
 
 #[test]
 fn disabled_state_flips_but_labels_are_stable() {
-    let on = render(SELECT, TID, true, false);
-    let off = render(SELECT, TID, false, false);
+    let on = render(signex_i18n::I18n::en_us_ref(), SELECT, TID, true, false);
+    let off = render(signex_i18n::I18n::en_us_ref(), SELECT, TID, false, false);
     // same rows regardless of selection — only the disabled flag moves
     assert_eq!(labels(&on), labels(&off));
     // a selection-family row greys out with no selection
@@ -88,17 +88,17 @@ fn disabled_state_flips_but_labels_are_stable() {
 
 #[test]
 fn select_mode_toggle_sits_after_the_separator() {
-    let e = render(SELECT_MODE, TID, true, true);
+    let e = render(signex_i18n::I18n::en_us_ref(), SELECT_MODE, TID, true, true);
     assert_eq!(seps(&e), 1);
     assert_eq!(items(&e).last().unwrap().0, "Toggle Selection");
 }
 
 #[test]
 fn align_and_shapes_have_expected_shape() {
-    let a = render(ALIGN, TID, true, true);
+    let a = render(signex_i18n::I18n::en_us_ref(), ALIGN, TID, true, true);
     assert_eq!(items(&a).len(), 9);
     assert_eq!(seps(&a), 2);
-    let s = render(SHAPES, TID, true, true);
+    let s = render(signex_i18n::I18n::en_us_ref(), SHAPES, TID, true, true);
     assert_eq!(items(&s).len(), 10);
     assert_eq!(seps(&s), 2);
 }
@@ -106,8 +106,8 @@ fn align_and_shapes_have_expected_shape() {
 #[test]
 fn net_color_swatches_and_gated_clear_rows() {
     let tokens = signex_types::theme::theme_tokens(TID);
-    let with = net_color_entries(&tokens, TID, false, true);
-    let without = net_color_entries(&tokens, TID, false, false);
+    let with = net_color_entries(signex_i18n::I18n::en_us_ref(), &tokens, TID, false, true);
+    let without = net_color_entries(signex_i18n::I18n::en_us_ref(), &tokens, TID, false, false);
     assert_eq!(customs(&with), 7); // seven colour swatches
     assert_eq!(seps(&with), 2);
     // Clear rows grey out when no net carries a custom colour
@@ -886,7 +886,16 @@ fn dropdown_entries_match_pre_refactor_golden() {
     let filters: std::collections::HashSet<SelectionFilter> = std::collections::HashSet::new();
     let presets: Vec<CustomFilterPreset> = vec![];
     for &(menu, sel, nc, expected) in GOLDEN {
-        let entries = dropdown_entries(menu, &tokens, &filters, &presets, TID, sel, nc);
+        let entries = dropdown_entries(
+            signex_i18n::I18n::en_us_ref(),
+            menu,
+            &tokens,
+            &filters,
+            &presets,
+            TID,
+            sel,
+            nc,
+        );
         let actual = describe(&entries);
         let actual_refs: Vec<&str> = actual.iter().map(String::as_str).collect();
         assert_eq!(

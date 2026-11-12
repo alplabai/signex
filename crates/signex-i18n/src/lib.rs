@@ -31,8 +31,11 @@ pub use types::{Arg, LocalNumber, Localized, MessageId, UserText};
 /// `MessageId::new` is called (it is crate-private).
 macro_rules! define_ids {
     ($($name:ident = $id:literal;)+) => {
+        define_ids! { pub mod ids { $($name = $id;)+ } }
+    };
+    (pub mod $module:ident { $($name:ident = $id:literal;)+ }) => {
         /// The message ids; each lives in `locales/en-US/`.
-        pub mod ids {
+        pub mod $module {
             use crate::MessageId;
 
             $(pub const $name: MessageId = MessageId::new($id);)+
@@ -1095,6 +1098,10 @@ define_ids! {
     LIBRARY_PANEL_ROWS = "library-panel-rows";
     LIBRARY_PREVIEW_WHERE_USED = "library-preview-where-used";
 }
+
+include!("command_ids.rs");
+include!("menu_ids.rs");
+include!("shortcut_ids.rs");
 
 /// Render a message: `t!(i18n, ids::MENU_FILE)` or, with arguments,
 /// `t!(i18n, ID, "count" => 3_i64, "name" => "R1")`.

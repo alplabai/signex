@@ -4,7 +4,7 @@
 
 use iced::widget::{Row, Space, column, container, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
-use signex_i18n::{I18n, Localized, ids, t};
+use signex_i18n::{I18n, Localized, ids, shortcut_ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, rich_text, span, text};
 
@@ -93,7 +93,10 @@ pub(super) fn search_row<'a, M: 'a>(
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.l).align_y(Alignment::Center);
     line = line.push(text(raw("\u{2315}")).size(TS.body).color(r.ink4).boxed());
     line = line.push(body);
-    line = line.push(cap(theme_tokens, "Esc"));
+    line = line.push(cap(
+        theme_tokens,
+        &i18n.message_plain(shortcut_ids::PALETTE_KEY_ESC, &[]),
+    ));
     let rule = r.line_soft;
     container(line)
         .padding([SP.l, SP.l])
@@ -322,7 +325,10 @@ pub(super) fn hint_footer<'a, M: 'a>(
     line = line.push(cap(theme_tokens, "\u{2191}"));
     line = line.push(cap(theme_tokens, "\u{2193}"));
     line = line.push(hint(t!(i18n, ids::OVERLAY_PALETTE_NAVIGATE)));
-    line = line.push(cap(theme_tokens, "Enter"));
+    line = line.push(cap(
+        theme_tokens,
+        &i18n.message_plain(shortcut_ids::PALETTE_KEY_ENTER, &[]),
+    ));
     line = line.push(hint(t!(i18n, ids::OVERLAY_PALETTE_RUN)));
     line = line.push(Space::new().width(Length::Fill).boxed());
     // "Enter Run" already says what Enter does; no sentence repeats it.

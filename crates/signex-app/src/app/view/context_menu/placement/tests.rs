@@ -178,7 +178,7 @@ fn a_canvas_right_click_opens_the_menu_at_the_cursor() {
     let texts = lay_out_layers(app.context_menu_overlay(main), window);
     let first = find(
         &texts,
-        &super::super::items::command_text("find_similar_objects"),
+        &super::super::items::command_text(signex_i18n::I18n::en_us_ref(), "find_similar_objects"),
     )
     .bounds;
     let row_top = first.y + first.height / 2.0 - metrics.item_height(true) / 2.0;
@@ -207,7 +207,11 @@ fn the_canvas_menu_has_28_px_rows_and_a_fitted_width() {
         iced::Size::new(1400.0, 1000.0),
     );
     let y = |id: &str| {
-        let b = find(&texts, &super::super::items::command_text(id)).bounds;
+        let b = find(
+            &texts,
+            &super::super::items::command_text(signex_i18n::I18n::en_us_ref(), id),
+        )
+        .bounds;
         b.y + b.height / 2.0
     };
     let pitch = y("smart_paste") - y("paste");
@@ -224,7 +228,11 @@ fn a_click_anywhere_on_a_drawn_row_runs_that_row() {
     let window = iced::Size::new(1400.0, 1000.0);
     let metrics = MenuMetrics::GRAPHITE;
     let texts = lay_out_layers(app.context_menu_overlay(main), window);
-    let label = find(&texts, &super::super::items::command_text("paste")).bounds;
+    let label = find(
+        &texts,
+        &super::super::items::command_text(signex_i18n::I18n::en_us_ref(), "paste"),
+    )
+    .bounds;
     let hint = app.keymap_shortcut_label("paste");
     let gap_x = if hint.is_empty() {
         label.x + label.width + 20.0

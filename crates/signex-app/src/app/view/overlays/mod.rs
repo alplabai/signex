@@ -391,6 +391,7 @@ impl Signex {
         let has_selection = !interaction.canvas_for_window(window_id).selected.is_empty();
         let has_net_colors = !ui.net_colors.is_empty();
         let dropdown = crate::active_bar::view_dropdown(
+            &self.ui_state.i18n,
             ab_menu,
             &document.panel_ctx.tokens,
             &interaction.selection_filters,

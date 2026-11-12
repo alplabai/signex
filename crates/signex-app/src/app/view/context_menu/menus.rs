@@ -14,10 +14,11 @@
 use super::*;
 
 use super::items::{
-    dd_cmd_disabled, dd_command, dd_disabled, dd_msg, dd_planned, dd_planned_submenu,
-    submenu_launcher,
+    command_text, dd_cmd_disabled, dd_command, dd_disabled, dd_msg, dd_planned, dd_planned_submenu,
+    submenu_launcher, text,
 };
 use crate::icons as ic;
+use signex_i18n::{I18n, menu_ids};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
@@ -127,12 +128,19 @@ impl Signex {
         let ui_font = &self.document_state.panel_ctx.ui_font_name;
         let board = self.pcb_targets(Some(window_id));
         if board.shown {
-            let entries = pcb_canvas_menu_entries(tid, board, &sc);
+            let entries = pcb_canvas_menu_entries(&self.ui_state.i18n, tid, board, &sc);
             return super::placement::menu_card(entries, tokens, ui_font);
         }
         let (selection, project_key) = self.canvas_menu_inputs(window_id);
         let active_submenu = self.interaction_state.context_submenu;
-        let entries = canvas_menu_entries(tid, selection, active_submenu, project_key, &sc);
+        let entries = canvas_menu_entries(
+            &self.ui_state.i18n,
+            tid,
+            selection,
+            active_submenu,
+            project_key,
+            &sc,
+        );
         super::placement::menu_card(entries, tokens, ui_font)
     }
 
@@ -157,6 +165,7 @@ impl Signex {
                 |kind| matches!(kind, WindowKind::UndockedTab { path, .. } if *path == tab.path),
             );
         let entries = tab_menu_entries(
+            &self.ui_state.i18n,
             &tab.title,
             ctx.tab_idx,
             self.document_state.tabs.len(),
@@ -183,6 +192,7 @@ pub(super) struct CanvasSelection {
 /// only from the passed selection flags + shortcut hints, so the menu's
 /// shape is unit-testable without a window.
 pub(super) fn canvas_menu_entries(
+    i18n: &I18n,
     tid: ThemeId,
     selection: CanvasSelection,
     active_submenu: Option<ContextSubmenu>,
@@ -198,73 +208,85 @@ pub(super) fn canvas_menu_entries(
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(24);
 
     v.push(dd_command(
+        i18n,
         Some(ic::icon_dd_find_similar(tid)),
         "find_similar_objects",
         sc.of("find_similar_objects"),
         None,
     ));
     v.push(dd_command(
+        i18n,
         Some(ic::icon_chrome_search(tid)),
         "find",
         sc.of("find"),
         None,
     ));
     v.push(dd_planned(
+        i18n,
         Some(ic::icon_dd_clear_filter(tid)),
-        "Clear Filter",
+        &text(i18n, menu_ids::CTX_CLEAR_FILTER),
         Some("Shift+C"),
     ));
     v.push(DropdownEntry::Separator);
     v.push(submenu_launcher(
         Some(ic::icon_dd_place_menu(tid)),
-        "Place",
+        &text(i18n, menu_ids::MENU_PLACE),
         ContextSubmenu::Place,
         active_submenu == Some(ContextSubmenu::Place),
     ));
     v.push(dd_planned_submenu(
+        i18n,
         Some(ic::icon_dd_part_actions(tid)),
-        "Part Actions",
+        &text(i18n, menu_ids::CTX_PART_ACTIONS),
     ));
     v.push(dd_planned_submenu(
+        i18n,
         Some(ic::icon_dd_sheet_actions(tid)),
-        "Sheet Actions",
+        &text(i18n, menu_ids::CTX_SHEET_ACTIONS),
     ));
 
     if has_selection {
         v.push(dd_planned_submenu(
+            i18n,
             Some(ic::icon_dd_references(tid)),
-            "References",
+            &text(i18n, menu_ids::CTX_REFERENCES),
         ));
         v.push(submenu_launcher(
             Some(ic::icon_dd_align_menu(tid)),
-            "Align",
+            &text(i18n, menu_ids::CTX_ALIGN),
             ContextSubmenu::Align,
             active_submenu == Some(ContextSubmenu::Align),
         ));
         if drawing_selected {
             v.push(submenu_launcher(
                 Some(ic::icon_dd_align_menu(tid)),
-                "Arrange",
+                &text(i18n, menu_ids::MENU_EDIT_ARRANGE),
                 ContextSubmenu::Arrange,
                 active_submenu == Some(ContextSubmenu::Arrange),
             ));
         }
-        v.push(dd_planned_submenu(Some(ic::icon_dd_unions(tid)), "Unions"));
         v.push(dd_planned_submenu(
+            i18n,
+            Some(ic::icon_dd_unions(tid)),
+            &text(i18n, menu_ids::CTX_UNIONS),
+        ));
+        v.push(dd_planned_submenu(
+            i18n,
             Some(ic::icon_dd_snippets(tid)),
-            "Snippets",
+            &text(i18n, menu_ids::CTX_SNIPPETS),
         ));
     }
 
     if child_sheet_selected {
         v.push(dd_command(
+            i18n,
             Some(ic::icon_dd_open_child_sheet(tid)),
             "open_child_sheet",
             sc.of("open_child_sheet"),
             None,
         ));
         for command_id in ["create_sheet_from_sheet_symbol", "sync_sheet_pins"] {
-            v.push(dd_command(None, command_id, sc.of(command_id), None));
+            v.push(dd_command(i18n, None, command_id, sc.of(command_id), None));
         }
         v.push(DropdownEntry::Separator);
     }
@@ -272,9 +294,9 @@ pub(super) fn canvas_menu_entries(
     // #1312: the selected part or net on the board, opened when needed.
     let probe_icon = Some(ic::icon_dd_cross_probe(tid));
     v.push(if has_selection {
-        dd_command(probe_icon, "cross_probe", sc.of("cross_probe"), None)
+        dd_command(i18n, probe_icon, "cross_probe", sc.of("cross_probe"), None)
     } else {
-        dd_cmd_disabled(probe_icon, "cross_probe", sc.of("cross_probe"))
+        dd_cmd_disabled(i18n, probe_icon, "cross_probe", sc.of("cross_probe"))
     });
     v.push(DropdownEntry::Separator);
     // Cut and Copy have nothing to act on without a selection: greyed, as
@@ -284,18 +306,20 @@ pub(super) fn canvas_menu_entries(
         (ic::icon_dd_copy(tid), "copy"),
     ] {
         v.push(if has_selection {
-            dd_command(Some(icon), command_id, sc.of(command_id), None)
+            dd_command(i18n, Some(icon), command_id, sc.of(command_id), None)
         } else {
-            dd_cmd_disabled(Some(icon), command_id, sc.of(command_id))
+            dd_cmd_disabled(i18n, Some(icon), command_id, sc.of(command_id))
         });
     }
     v.push(dd_command(
+        i18n,
         Some(ic::icon_dd_paste(tid)),
         "paste",
         sc.of("paste"),
         None,
     ));
     v.push(dd_command(
+        i18n,
         Some(ic::icon_dd_smart_paste(tid)),
         "smart_paste",
         sc.of("smart_paste"),
@@ -305,24 +329,28 @@ pub(super) fn canvas_menu_entries(
 
     if has_selection {
         v.push(dd_command(
+            i18n,
             Some(ic::icon_dd_rotate(tid)),
             "rotate_counterclockwise",
             sc.of("rotate_counterclockwise"),
             None,
         ));
         v.push(dd_command(
+            i18n,
             Some(ic::icon_dd_flip_x(tid)),
             "mirror_x",
             sc.of("mirror_x"),
             None,
         ));
         v.push(dd_command(
+            i18n,
             Some(ic::icon_dd_flip_y(tid)),
             "mirror_y",
             sc.of("mirror_y"),
             None,
         ));
         v.push(dd_command(
+            i18n,
             Some(ic::icon_dd_delete(tid)),
             "delete_selection",
             sc.of("delete_selection"),
@@ -332,13 +360,15 @@ pub(super) fn canvas_menu_entries(
     }
 
     v.push(dd_planned(
+        i18n,
         Some(ic::icon_dd_comment(tid)),
-        "Comment...",
+        &text(i18n, menu_ids::CTX_COMMENT),
         None,
     ));
     v.push(dd_planned(
+        i18n,
         Some(ic::icon_dd_pin_mapping(tid)),
-        "Pin Mapping...",
+        &text(i18n, menu_ids::CTX_PIN_MAPPING),
         None,
     ));
     // The project that owns the active sheet, addressed by its tree key the
@@ -346,18 +376,21 @@ pub(super) fn canvas_menu_entries(
     // tooltip (the feature exists, there is just nothing to open it for).
     v.push(match project_key {
         Some(key) => dd_command(
+            i18n,
             Some(ic::icon_dd_project_options(tid)),
             "open_project_options",
             sc.of("open_project_options"),
             key.first().cloned(),
         ),
         None => dd_cmd_disabled(
+            i18n,
             Some(ic::icon_dd_project_options(tid)),
             "open_project_options",
             sc.of("open_project_options"),
         ),
     });
     v.push(dd_command(
+        i18n,
         Some(ic::icon_dd_preferences(tid)),
         "open_preferences",
         sc.of("open_preferences"),
@@ -371,19 +404,21 @@ pub(super) fn canvas_menu_entries(
             "edit_selected_symbol_in_symbol_editor",
             "change_component",
         ] {
-            v.push(dd_command(None, command_id, sc.of(command_id), None));
+            v.push(dd_command(i18n, None, command_id, sc.of(command_id), None));
         }
     }
     if has_selection {
         v.push(dd_planned(
+            i18n,
             Some(ic::icon_dd_supplier_links(tid)),
-            "Supplier Links...",
+            &text(i18n, menu_ids::CTX_SUPPLIER_LINKS),
             None,
         ));
         // Properties → ensure the Properties panel is visible; it already
         // tracks the current selection, so it populates with the
         // right-clicked item's fields once shown.
         v.push(dd_command(
+            i18n,
             Some(ic::icon_dd_properties(tid)),
             "edit_selected_object_properties",
             sc.of("edit_selected_object_properties"),
@@ -400,15 +435,16 @@ pub(super) fn canvas_menu_entries(
 /// group's Toggle Ratsnest, always live on a board.
 /// Each row runs its catalog command like the keys and the Edit menu do.
 pub(super) fn pcb_canvas_menu_entries(
+    i18n: &I18n,
     tid: ThemeId,
     board: crate::app::handlers::pcb_placement::PcbTargets,
     sc: &CanvasShortcuts,
 ) -> Vec<DropdownEntry<Message>> {
     let row = |icon, command_id: &'static str, enabled: bool| {
         if enabled {
-            dd_command(Some(icon), command_id, sc.of(command_id), None)
+            dd_command(i18n, Some(icon), command_id, sc.of(command_id), None)
         } else {
-            dd_cmd_disabled(Some(icon), command_id, sc.of(command_id))
+            dd_cmd_disabled(i18n, Some(icon), command_id, sc.of(command_id))
         }
     };
     let placeable = board.placeable;
@@ -438,7 +474,13 @@ pub(super) fn pcb_canvas_menu_entries(
         ),
         DropdownEntry::Separator,
         // View group (#2223): the View menu's board-view row.
-        dd_command(None, "toggle_ratsnest", sc.of("toggle_ratsnest"), None),
+        dd_command(
+            i18n,
+            None,
+            "toggle_ratsnest",
+            sc.of("toggle_ratsnest"),
+            None,
+        ),
     ]
 }
 
@@ -448,6 +490,7 @@ pub(super) fn pcb_canvas_menu_entries(
 /// greys out when the tab cannot be undocked: it already lives in its own
 /// OS window, or it is a Project tab.
 pub(super) fn tab_menu_entries(
+    i18n: &I18n,
     title: &str,
     tab_idx: usize,
     total_tabs: usize,
@@ -458,33 +501,41 @@ pub(super) fn tab_menu_entries(
 
     v.push(dd_msg(
         None,
-        &format!("Close {title}"),
+        &i18n.message_plain(menu_ids::CTX_TAB_CLOSE, &[("title", title.into())]),
         "",
         Message::ContextMenu(ContextMenuMsg::TabAction(A::Close(tab_idx))),
     ));
     if total_tabs > 1 {
         v.push(dd_msg(
             None,
-            "Close All Other Documents",
+            &text(i18n, menu_ids::CTX_TAB_CLOSE_OTHERS),
             "",
             Message::ContextMenu(ContextMenuMsg::TabAction(A::CloseAllOthers(tab_idx))),
         ));
     } else {
-        v.push(dd_disabled(None, "Close All Other Documents", None));
+        v.push(dd_disabled(
+            None,
+            &text(i18n, menu_ids::CTX_TAB_CLOSE_OTHERS),
+            None,
+        ));
     }
     v.push(dd_msg(
         None,
-        "Close All Documents",
+        &command_text(i18n, "close_all_documents"),
         "",
         Message::ContextMenu(ContextMenuMsg::TabAction(A::CloseAll)),
     ));
     v.push(DropdownEntry::Separator);
     v.push(if undock_unavailable {
-        dd_disabled(None, "Open In New Window", None)
+        dd_disabled(
+            None,
+            &text(i18n, menu_ids::CTX_TAB_OPEN_IN_NEW_WINDOW),
+            None,
+        )
     } else {
         dd_msg(
             None,
-            "Open In New Window",
+            &text(i18n, menu_ids::CTX_TAB_OPEN_IN_NEW_WINDOW),
             "",
             Message::ContextMenu(ContextMenuMsg::TabAction(A::Undock(tab_idx))),
         )

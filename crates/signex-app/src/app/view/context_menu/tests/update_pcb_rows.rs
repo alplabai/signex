@@ -42,7 +42,7 @@ fn add_new_offers_a_live_pcb_row() {
     app.document_state.panel_ctx.project_tree =
         vec![TreeNode::branch("proj", TreeIcon::Folder, Vec::new())];
     let key = key_of(&app.document_state.panel_ctx.project_tree, &[0]).expect("the project row");
-    let rows = add_new_entries(TID, key.clone());
+    let rows = add_new_entries(signex_i18n::I18n::en_us_ref(), TID, key.clone());
     let press = press_of(&rows, "PCB").expect("a live PCB row");
     assert!(matches!(
         press,

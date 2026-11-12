@@ -132,7 +132,8 @@ impl Signex {
         let sections = match &ui.shortcut_sections {
             Some(cached) => cached.as_slice(),
             None => {
-                built = crate::keyboard_shortcuts_modal::build_sections(&ui.keymap_profiles);
+                built =
+                    crate::keyboard_shortcuts_modal::build_sections(&ui.i18n, &ui.keymap_profiles);
                 built.as_slice()
             }
         };
@@ -153,7 +154,8 @@ impl Signex {
         let sections = match &ui.shortcut_sections {
             Some(cached) => cached.as_slice(),
             None => {
-                built = crate::keyboard_shortcuts_modal::build_sections(&ui.keymap_profiles);
+                built =
+                    crate::keyboard_shortcuts_modal::build_sections(&ui.i18n, &ui.keymap_profiles);
                 built.as_slice()
             }
         };

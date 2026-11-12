@@ -63,7 +63,14 @@ impl KeymapEditorModel {
             .collect()
     }
 
+    /// [`Self::rows_in`] under en-US.
+    #[cfg(test)]
     pub fn rows(&self) -> Vec<KeymapEditorRow> {
+        self.rows_in(signex_i18n::I18n::en_us_ref())
+    }
+
+    /// The rows, labelled in the message language of `i18n`.
+    pub fn rows_in(&self, i18n: &signex_i18n::I18n) -> Vec<KeymapEditorRow> {
         let active = self.profiles.active_profile();
         let source = match active.kind {
             ShortcutProfileKind::BuiltIn => KeymapEditorSource::BuiltIn(active.id.clone()),
@@ -114,7 +121,7 @@ impl KeymapEditorModel {
                                 .map(|metadata| metadata.category.to_string())
                                 .unwrap_or_else(|| "uncategorized".to_string()),
                             label: metadata
-                                .map(|metadata| metadata.label.to_string())
+                                .map(|metadata| metadata.label_in(i18n))
                                 .or_else(|| binding.action.command().map(fallback_label))
                                 .unwrap_or_else(|| "No action".to_string()),
                             context: binding.context,
@@ -140,7 +147,7 @@ impl KeymapEditorModel {
     /// each row's label, command id or trigger text. An empty query
     /// returns every row.
     pub fn filtered_rows_in(&self, i18n: &signex_i18n::I18n, query: &str) -> Vec<KeymapEditorRow> {
-        self.rows()
+        self.rows_in(i18n)
             .into_iter()
             .filter(|row| row.matches_query_in(i18n, query))
             .collect()
@@ -362,27 +369,6 @@ impl KeymapEditorRow {
     pub fn matches_query(&self, query: &str) -> bool {
         self.matches_query_in(signex_i18n::I18n::en_us_ref(), query)
     }
-}
-
-/// A category id (`idle_tools`) as title text (`Idle Tools`), each word's
-/// first letter capitalised by the message language's rules.
-pub fn category_title_case(i18n: &signex_i18n::I18n, value: &str) -> String {
-    value
-        .split(['_', '-', ' '])
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            let mut chars = part.chars();
-            match chars.next() {
-                Some(first) => format!(
-                    "{}{}",
-                    i18n.upper_for_display(&first.to_string()),
-                    chars.as_str()
-                ),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
