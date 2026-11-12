@@ -713,6 +713,7 @@ impl Signex {
                         &self.ui_state.i18n,
                         &open_shortcut,
                         self.ui_state.recent_projects.entries(),
+                        &self.ui_state.pinned_projects,
                         &libraries,
                     )
                 }

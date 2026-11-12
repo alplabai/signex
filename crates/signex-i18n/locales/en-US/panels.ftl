@@ -289,6 +289,24 @@ start-sample-body = Open the bundled example project and look around.
 # Recent projects list when it is empty.
 start-no-recent-title = No recent projects
 start-no-recent-body = Projects you open appear here.
+# Section heading above the pinned projects, shown in capitals.
+start-pinned-projects = PINNED PROJECTS
+# Project row actions (hover button and right-click menu): keep the
+# project on the Start screen, take it off, or drop a pinned project that
+# is no longer on disk.
+start-pin = Pin
+start-unpin = Unpin
+start-remove = Remove
+# Right-click menu row that opens the project.
+start-open-project = Open
+# Shown on a pinned project whose file is no longer on disk.
+start-project-missing = Missing on disk
+# Messages panel warning when a pinned project is clicked but its file is
+# gone. $path is the project file's path.
+start-pin-missing-warning = { $path } is no longer on disk; the pin is kept.
+# Messages panel warning when the start-up check of the pinned projects
+# could not run. $reason is the error text.
+start-pin-check-failed = Could not check the pinned projects on disk: { $reason }
 
 ## Projects panel
 

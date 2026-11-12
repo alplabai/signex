@@ -250,6 +250,7 @@ impl OpenOverlays {
             | OverlayId::TabContextMenu
             | OverlayId::ProjectTreeContextMenu
             | OverlayId::ComponentsRowContextMenu
+            | OverlayId::StartRowContextMenu
             | OverlayId::GridPicker
             | OverlayId::PanelList
             | OverlayId::DockDragZone

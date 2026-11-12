@@ -16,12 +16,15 @@ impl Signex {
 
     /// A project was renamed or moved: its Open Recent entry (as the list
     /// spelled it, see `RecentProjects::spelling_of`) follows it, in place.
+    /// A pinned entry follows it too (#2305).
     pub(crate) fn replace_recent_project(&mut self, old: &Path, new: &Path) -> iced::Task<Message> {
-        if self.ui_state.recent_projects.replace(old, new) {
+        let pinned = self.replace_pinned_project(old, new);
+        let recent = if self.ui_state.recent_projects.replace(old, new) {
             self.persist_recent_projects()
         } else {
             iced::Task::none()
-        }
+        };
+        iced::Task::batch([recent, pinned])
     }
 
     /// The `Task` that writes the list to `prefs.json` off the UI thread (#1351).

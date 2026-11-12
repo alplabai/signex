@@ -87,6 +87,7 @@ impl Signex {
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.refresh_placement_reference();
+        self.drop_start_row_menu_off_screen();
         self.sync_panel_ctx_mirrors();
         let shown_browser = match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) => match &tab.kind {
