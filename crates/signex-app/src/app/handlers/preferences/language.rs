@@ -28,6 +28,8 @@ impl Signex {
         let next = Arc::new(I18n::new(&pref));
         log_dropped_language(&next);
         self.ui_state.i18n = next;
+        // The shortcuts-sheet cache holds labels rendered in the old language.
+        self.ui_state.refresh_shortcut_sections();
         crate::fonts::background_pref_write("language", move || {
             crate::fonts::write_language_pref(&pref)
         })

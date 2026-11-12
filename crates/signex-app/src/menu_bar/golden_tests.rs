@@ -138,7 +138,7 @@ fn golden_labels_and_shortcuts_match_helpers() {
         if id == "-" {
             continue;
         }
-        assert_eq!(cmd_label(id, label), label, "label of {id}");
+        assert_eq!(cmd_label(&ctx.i18n, id, label), label, "label of {id}");
         let expected = (shortcut != "-").then(|| shown_on_host(shortcut));
         assert_eq!(
             shortcut_for(&ctx, id, shortcut),
@@ -213,9 +213,12 @@ fn squash(text: &str) -> String {
         .replace(",)", ")")
 }
 
-/// The model resolves labels through the command catalog, so the fixture
-/// label alone would not notice a changed fallback literal: pin each
-/// `cmd(id, label, shortcut)` call in the model source to the fixture.
+/// The model resolves labels through the command catalog (the label lives in
+/// `commands.ftl`, no longer as a literal in the model), so the fixture
+/// label alone would not notice a changed catalog text: pin each fixture row
+/// twice. The catalog must render the fixture label for the id (no fallback
+/// applies), and the `cmd(id, shortcut)` call in the model source must carry
+/// the fixture shortcut.
 #[test]
 fn golden_fallback_literals_are_pinned_in_the_model_source() {
     let source = squash(include_str!("model/menus.rs"));
@@ -225,7 +228,12 @@ fn golden_fallback_literals_are_pinned_in_the_model_source() {
         if id == "-" {
             continue;
         }
-        let call = squash(&format!("cmd(\"{id}\", \"{label}\", \"{shortcut}\")"));
+        assert_eq!(
+            cmd_label(signex_i18n::I18n::en_us_ref(), id, "<missing>"),
+            label,
+            "the catalog text of {id} differs from the fixture"
+        );
+        let call = squash(&format!("cmd(\"{id}\", \"{shortcut}\")"));
         assert!(source.contains(&call), "fallbacks of {id} differ: {call}");
         pinned += 1;
     }
@@ -500,14 +508,19 @@ fn approx_menu_bar_width_is_unchanged() {
     );
 }
 
-/// The estimate counts the title the bar draws: under the pseudolocale the
-/// File title is longer, and the width grows by exactly that many glyphs.
+/// The estimate counts the titles the bar draws: under the pseudolocale the
+/// titles are longer, and the width grows by exactly that many glyphs.
 #[test]
 fn approx_menu_bar_width_follows_the_catalog_titles() {
     let xa = signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale("en-XA".into()));
     let en = signex_i18n::I18n::en_us();
-    let drawn = |i18n: &signex_i18n::I18n| super::model::root_titles(i18n)[0].chars().count();
-    assert!(drawn(&xa) > drawn(&en), "en-XA File title is longer");
+    let drawn = |i18n: &signex_i18n::I18n| {
+        super::model::root_titles(i18n)
+            .iter()
+            .map(|title| title.chars().count())
+            .sum::<usize>()
+    };
+    assert!(drawn(&xa) > drawn(&en), "en-XA titles are longer");
     let grown = super::approx_menu_bar_width(&xa) - super::approx_menu_bar_width(&en);
     assert_eq!(grown, (drawn(&xa) - drawn(&en)) as f32 * 7.5);
 }

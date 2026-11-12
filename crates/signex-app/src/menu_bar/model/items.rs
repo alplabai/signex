@@ -3,28 +3,29 @@
 use super::{ItemState, Menu, MenuEntry, MenuItem, Shortcut};
 use crate::keymap::AppCommandId;
 use crate::menu_bar::{MenuContext, MenuMessage, cmd_label, enabled, shortcut_for};
+use signex_i18n::MessageId;
 
-/// A keymap-backed row: the command id, the label used when the command
-/// catalog has none, and the shortcut text used when the active keymap binds
-/// none.
+/// A keymap-backed row: the command id, and the shortcut text used when the
+/// active keymap binds none. The row's label is the command's catalog menu
+/// text.
 #[derive(Clone, Copy)]
 pub(super) struct Cmd {
     pub id: &'static str,
-    pub label: &'static str,
     pub shortcut: &'static str,
 }
 
-pub(super) const fn cmd(id: &'static str, label: &'static str, shortcut: &'static str) -> Cmd {
-    Cmd {
-        id,
-        label,
-        shortcut,
-    }
+pub(super) const fn cmd(id: &'static str, shortcut: &'static str) -> Cmd {
+    Cmd { id, shortcut }
 }
 
-fn plain(label: &str, state: ItemState) -> MenuEntry {
+/// The catalog text of `id` in the menu's message language.
+fn text(ctx: &MenuContext, id: MessageId) -> String {
+    ctx.i18n.message(id, &[]).into_string()
+}
+
+fn plain(label: String, state: ItemState) -> MenuEntry {
     MenuEntry::Item(MenuItem {
-        label: label.to_owned(),
+        label,
         shortcut: None,
         state,
         checked: None,
@@ -36,7 +37,12 @@ fn live(action: MenuMessage, is_enabled: bool) -> ItemState {
 }
 
 /// An always-enabled row.
-pub(super) fn item(label: &str, action: MenuMessage) -> MenuEntry {
+pub(super) fn item(ctx: &MenuContext, label: MessageId, action: MenuMessage) -> MenuEntry {
+    plain(text(ctx, label), live(action, true))
+}
+
+/// An always-enabled row whose label is data, not a message (a file name).
+pub(super) fn item_named(label: String, action: MenuMessage) -> MenuEntry {
     plain(label, live(action, true))
 }
 
@@ -44,13 +50,13 @@ pub(super) fn item(label: &str, action: MenuMessage) -> MenuEntry {
 /// answer as the status-bar panel list, via [`MenuContext::open_panels`]).
 pub(super) fn panel_item(
     ctx: &MenuContext,
-    label: &str,
+    label: MessageId,
     kind: crate::panels::PanelKind,
     action: MenuMessage,
 ) -> MenuEntry {
     debug_assert!(action.is_panel_row());
     MenuEntry::Item(MenuItem {
-        label: label.to_owned(),
+        label: text(ctx, label),
         shortcut: None,
         state: live(action, true),
         checked: Some(ctx.open_panels.contains(&kind)),
@@ -58,13 +64,31 @@ pub(super) fn panel_item(
 }
 
 /// A live row, greyed out unless `is_enabled`.
-pub(super) fn item_if(label: &str, action: MenuMessage, is_enabled: bool) -> MenuEntry {
-    plain(label, live(action, is_enabled))
+pub(super) fn item_if(
+    ctx: &MenuContext,
+    label: MessageId,
+    action: MenuMessage,
+    is_enabled: bool,
+) -> MenuEntry {
+    plain(text(ctx, label), live(action, is_enabled))
+}
+
+/// [`item_if`] worded by the catalog's menu text of the command `command_id`.
+pub(super) fn item_if_command(
+    ctx: &MenuContext,
+    command_id: &str,
+    action: MenuMessage,
+    is_enabled: bool,
+) -> MenuEntry {
+    plain(
+        cmd_label(&ctx.i18n, command_id, command_id),
+        live(action, is_enabled),
+    )
 }
 
 /// A greyed informational row that is not a missing feature (no tooltip).
-pub(super) fn unavailable(label: &str) -> MenuEntry {
-    plain(label, ItemState::Unavailable)
+pub(super) fn unavailable(ctx: &MenuContext, label: MessageId) -> MenuEntry {
+    plain(text(ctx, label), ItemState::Unavailable)
 }
 
 fn command_row(ctx: &MenuContext, cmd: Cmd, label: String, state: ItemState) -> MenuEntry {
@@ -91,7 +115,7 @@ pub(super) fn cmd_item(ctx: &MenuContext, cmd: Cmd) -> MenuEntry {
     command_row(
         ctx,
         cmd,
-        cmd_label(cmd.id, cmd.label),
+        cmd_label(&ctx.i18n, cmd.id, cmd.id),
         command_state(cmd, true),
     )
 }
@@ -102,7 +126,7 @@ pub(super) fn cmd_item_gated(ctx: &MenuContext, cmd: Cmd) -> MenuEntry {
     command_row(
         ctx,
         cmd,
-        cmd_label(cmd.id, cmd.label),
+        cmd_label(&ctx.i18n, cmd.id, cmd.id),
         command_state(cmd, enabled(ctx, cmd.id)),
     )
 }
@@ -125,13 +149,9 @@ pub(super) fn cmd_toggle(ctx: &MenuContext, cmd: Cmd, checked: bool) -> MenuEntr
     }
 }
 
-pub(super) fn submenu(title: &str, entries: Vec<MenuEntry>) -> MenuEntry {
-    MenuEntry::Submenu(menu(title, entries))
-}
-
-pub(super) fn menu(title: &str, entries: Vec<MenuEntry>) -> Menu {
-    Menu {
-        title: title.to_owned(),
+pub(super) fn submenu(ctx: &MenuContext, title: MessageId, entries: Vec<MenuEntry>) -> MenuEntry {
+    MenuEntry::Submenu(Menu {
+        title: text(ctx, title),
         entries,
-    }
+    })
 }

@@ -158,7 +158,7 @@ fn render() -> String {
                     format!(
                         "| `{}` | {} | {} | {} | {} |\n",
                         id,
-                        metadata.label,
+                        metadata.label_in(signex_i18n::I18n::en_us_ref()),
                         metadata.category,
                         cell(altium.get(id)),
                         cell(classic.get(id)),

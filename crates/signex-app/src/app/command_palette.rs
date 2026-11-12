@@ -81,6 +81,8 @@ pub fn catalog_stamp(app: &super::Signex) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     let window = app.ui_state.command_palette.window;
     window.hash(&mut h);
+    // The rows are worded in the message language.
+    app.ui_state.i18n.locale().hash(&mut h);
     app.palette_panel_ctx().placed_symbols.hash(&mut h);
     // #1070 — which commands the command rows offer follows the active
     // editor kind and the enablement facts, so a tab switch rebuilds.
@@ -240,7 +242,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             // the surface where the full phrasing helps ("Place wire",
             // not "Wire"). That split is exactly why #281 added the
             // second field.
-            label: metadata.label.to_string(),
+            label: metadata.label_in(&app.ui_state.i18n),
             // #374 — the binding from the ACTIVE profile, not the
             // catalog's suggested `keybind`, because a profile always
             // overrides the default.
@@ -257,7 +259,13 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
     for &panel in ALL_PANELS {
         out.push(CommandEntry {
             source: CommandSource::Command,
-            label: format!("Open Panel: {}", panel.label()),
+            label: app.ui_state.i18n.message_plain(
+                signex_i18n::shortcut_ids::PALETTE_OPEN_PANEL,
+                &[(
+                    "panel",
+                    app.ui_state.i18n.message_plain(panel.message(), &[]).into(),
+                )],
+            ),
             detail: String::new(),
             action: CommandAction::Panel(panel),
         });

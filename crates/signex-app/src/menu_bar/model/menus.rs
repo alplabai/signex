@@ -2,59 +2,64 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, item, item_if, panel_item,
-    submenu, unavailable,
+    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, item, item_if, item_if_command,
+    item_named, panel_item, submenu, unavailable,
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
 use crate::app::update_pcb::PcbSyncLabel;
 use crate::menu_bar::{MenuContext, enabled};
 use crate::panels::PanelKind;
+use signex_i18n::{ids, menu_ids};
 
 const SEP: MenuEntry = MenuEntry::Separator;
 
 pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        cmd_item(ctx, cmd("new_document", "New Project", "Mod+N")),
+        cmd_item(ctx, cmd("new_document", "Mod+N")),
         // A board (#1312) or a sheet (#2232) for the open project, each
         // through its setup dialog; greyed with no project.
         submenu(
-            "New",
+            ctx,
+            menu_ids::MENU_FILE_NEW,
             vec![
-                cmd_item_gated(ctx, cmd("new_schematic_sheet", "Schematic", "")),
-                cmd_item_gated(ctx, cmd("new_pcb_document", "PCB", "")),
+                cmd_item_gated(ctx, cmd("new_schematic_sheet", "")),
+                cmd_item_gated(ctx, cmd("new_pcb_document", "")),
             ],
         ),
-        cmd_item(ctx, cmd("open_document", "Open...", "Mod+O")),
-        submenu("Open Recent", open_recent(ctx)),
+        cmd_item(ctx, cmd("open_document", "Mod+O")),
+        submenu(ctx, menu_ids::MENU_FILE_OPEN_RECENT, open_recent(ctx)),
         SEP,
-        cmd_item_gated(
-            ctx,
-            cmd("close_active_document", "Close Document", "Ctrl+F4"),
-        ),
+        cmd_item_gated(ctx, cmd("close_active_document", "Ctrl+F4")),
         SEP,
         // Save gating: docs/MENU_BAR.md#file-save
-        cmd_item_gated(ctx, cmd("save_document", "Save", "Mod+S")),
-        cmd_item_gated(ctx, cmd("save_document_as", "Save As...", "Mod+Shift+S")),
+        cmd_item_gated(ctx, cmd("save_document", "Mod+S")),
+        cmd_item_gated(ctx, cmd("save_document_as", "Mod+Shift+S")),
         // Greyed when nothing is unsaved; runs the shared Save All flow.
         item_if(
-            "Save All",
+            ctx,
+            menu_ids::MENU_FILE_SAVE_ALL,
             MenuMessage::SaveAll,
             ctx.commands.has_dirty_documents,
         ),
         SEP,
         // No New Component row here: docs/MENU_BAR.md#file-library
-        submenu("Library", library(ctx)),
+        submenu(ctx, menu_ids::MENU_FILE_LIBRARY, library(ctx)),
         SEP,
         submenu(
-            "Import",
-            vec![item("Altium Project...", MenuMessage::ImportAltium)],
+            ctx,
+            menu_ids::MENU_FILE_IMPORT,
+            vec![item(
+                ctx,
+                menu_ids::MENU_FILE_IMPORT_ALTIUM,
+                MenuMessage::ImportAltium,
+            )],
         ),
         // Export > PDF and File > Print open the same modal; only Print shows Mod+P: docs/MENU_BAR.md#file-export-pdf
-        submenu("Export", export(ctx)),
-        cmd_item_gated(ctx, cmd("print", "Print...", "Mod+P")),
+        submenu(ctx, menu_ids::MENU_FILE_EXPORT, export(ctx)),
+        cmd_item_gated(ctx, cmd("print", "Mod+P")),
         SEP,
-        item("Exit", MenuMessage::Exit),
+        item(ctx, menu_ids::MENU_FILE_EXIT, MenuMessage::Exit),
     ]
 }
 
@@ -70,15 +75,16 @@ fn open_recent(ctx: &MenuContext) -> Vec<MenuEntry> {
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_else(|| path.display().to_string());
-            item(&label, MenuMessage::OpenRecentProject(path.clone()))
+            item_named(label, MenuMessage::OpenRecentProject(path.clone()))
         })
         .collect();
     if entries.is_empty() {
-        entries.push(unavailable("No recent projects"));
+        entries.push(unavailable(ctx, ids::START_NO_RECENT_TITLE));
     }
     entries.push(SEP);
     entries.push(item_if(
-        "Clear Recent",
+        ctx,
+        menu_ids::MENU_FILE_CLEAR_RECENT,
         MenuMessage::ClearRecentProjects,
         !ctx.recent_projects.is_empty(),
     ));
@@ -87,10 +93,15 @@ fn open_recent(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 fn library(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        item("Open Library...", MenuMessage::LibraryOpenLibrary),
+        item(
+            ctx,
+            menu_ids::MENU_FILE_OPEN_LIBRARY,
+            MenuMessage::LibraryOpenLibrary,
+        ),
         SEP,
         item_if(
-            "Place Component...",
+            ctx,
+            menu_ids::MENU_FILE_PLACE_COMPONENT,
             MenuMessage::LibraryPlaceComponent,
             ctx.commands.has_schematic,
         ),
@@ -101,29 +112,34 @@ fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         // No shortcut: Ctrl+P is shown on File > Print, which opens this
         // same modal. Gated like Print.
-        item_if("PDF…", MenuMessage::ExportPdf, enabled(ctx, "print")),
+        item_if(
+            ctx,
+            menu_ids::MENU_FILE_EXPORT_PDF,
+            MenuMessage::ExportPdf,
+            enabled(ctx, "print"),
+        ),
     ]
 }
 
 pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        cmd_item_gated(ctx, cmd("undo", "Undo", "Mod+Z")),
-        cmd_item_gated(ctx, cmd("redo", "Redo", "Ctrl+Y")),
+        cmd_item_gated(ctx, cmd("undo", "Mod+Z")),
+        cmd_item_gated(ctx, cmd("redo", "Ctrl+Y")),
         SEP,
-        cmd_item_gated(ctx, cmd("cut", "Cut", "Mod+X")),
-        cmd_item_gated(ctx, cmd("copy", "Copy", "Mod+C")),
-        cmd_item_gated(ctx, cmd("paste", "Paste", "Mod+V")),
+        cmd_item_gated(ctx, cmd("cut", "Mod+X")),
+        cmd_item_gated(ctx, cmd("copy", "Mod+C")),
+        cmd_item_gated(ctx, cmd("paste", "Mod+V")),
         // Trunk spelling kept (not `Mod+`): the fallback is never shown while a keymap is active.
-        cmd_item_gated(ctx, cmd("smart_paste", "Paste Special", "Shift+Ctrl+V")),
-        cmd_item_gated(ctx, cmd("duplicate", "Duplicate", "Mod+D")),
-        cmd_item_gated(ctx, cmd("delete_selection", "Delete", "Del")),
-        submenu("Move", move_menu(ctx)),
-        submenu("Arrange", arrange(ctx)),
+        cmd_item_gated(ctx, cmd("smart_paste", "Shift+Ctrl+V")),
+        cmd_item_gated(ctx, cmd("duplicate", "Mod+D")),
+        cmd_item_gated(ctx, cmd("delete_selection", "Del")),
+        submenu(ctx, menu_ids::MENU_EDIT_MOVE, move_menu(ctx)),
+        submenu(ctx, menu_ids::MENU_EDIT_ARRANGE, arrange(ctx)),
         SEP,
-        cmd_item_gated(ctx, cmd("select_all", "Select All", "Mod+A")),
+        cmd_item_gated(ctx, cmd("select_all", "Mod+A")),
         SEP,
-        cmd_item_gated(ctx, cmd("find", "Find", "Mod+F")),
-        cmd_item_gated(ctx, cmd("find_and_replace", "Find and Replace", "Ctrl+H")),
+        cmd_item_gated(ctx, cmd("find", "Mod+F")),
+        cmd_item_gated(ctx, cmd("find_and_replace", "Ctrl+H")),
     ]
 }
 
@@ -132,17 +148,14 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
 /// Gated by the commands, so a locked footprint greys the board rows.
 fn move_menu(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        cmd_item_gated(ctx, cmd("move_object", "Move", "")),
-        cmd_item_gated(ctx, cmd("move_selection", "Move Selection", "")),
+        cmd_item_gated(ctx, cmd("move_object", "")),
+        cmd_item_gated(ctx, cmd("move_selection", "")),
         SEP,
-        cmd_item_gated(ctx, cmd("rotate_counterclockwise", "Rotate", "Space")),
-        cmd_item_gated(
-            ctx,
-            cmd("rotate_clockwise", "Rotate Clockwise", "Shift+Space"),
-        ),
-        cmd_item_gated(ctx, cmd("mirror_x", "Mirror X", "X")),
-        cmd_item_gated(ctx, cmd("mirror_y", "Mirror Y", "Y")),
-        cmd_item_gated(ctx, cmd("flip_selection", "Flip Selection", "")),
+        cmd_item_gated(ctx, cmd("rotate_counterclockwise", "Space")),
+        cmd_item_gated(ctx, cmd("rotate_clockwise", "Shift+Space")),
+        cmd_item_gated(ctx, cmd("mirror_x", "X")),
+        cmd_item_gated(ctx, cmd("mirror_y", "Y")),
+        cmd_item_gated(ctx, cmd("flip_selection", "")),
     ]
 }
 
@@ -151,102 +164,82 @@ fn move_menu(ctx: &MenuContext) -> Vec<MenuEntry> {
 /// No default shortcut, so these are plain rows gated by their commands; a
 /// binding the user adds in the keymap still runs the command.
 fn arrange(ctx: &MenuContext) -> Vec<MenuEntry> {
-    let row = |label: &str, command: &str, action: MenuMessage| {
-        item_if(label, action, enabled(ctx, command))
+    let row = |command: &str, action: MenuMessage| {
+        item_if_command(ctx, command, action, enabled(ctx, command))
     };
     vec![
-        row(
-            "Bring to Front",
-            "bring_drawings_to_front",
-            MenuMessage::BringDrawingsToFront,
-        ),
-        row(
-            "Send to Back",
-            "send_drawings_to_back",
-            MenuMessage::SendDrawingsToBack,
-        ),
-        row(
-            "Bring Forward",
-            "bring_drawings_forward",
-            MenuMessage::BringDrawingsForward,
-        ),
-        row(
-            "Send Backward",
-            "send_drawings_backward",
-            MenuMessage::SendDrawingsBackward,
-        ),
+        row("bring_drawings_to_front", MenuMessage::BringDrawingsToFront),
+        row("send_drawings_to_back", MenuMessage::SendDrawingsToBack),
+        row("bring_drawings_forward", MenuMessage::BringDrawingsForward),
+        row("send_drawings_backward", MenuMessage::SendDrawingsBackward),
     ]
 }
 
 pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        cmd_item_gated(ctx, cmd("zoom_in_at_cursor", "Zoom In", "Ctrl+=")),
-        cmd_item_gated(ctx, cmd("zoom_out_at_cursor", "Zoom Out", "Ctrl+-")),
-        cmd_item_gated(ctx, cmd("zoom_to_fit", "Fit All", "Home")),
+        cmd_item_gated(ctx, cmd("zoom_in_at_cursor", "Ctrl+=")),
+        cmd_item_gated(ctx, cmd("zoom_out_at_cursor", "Ctrl+-")),
+        cmd_item_gated(ctx, cmd("zoom_to_fit", "Home")),
         SEP,
         // Trunk spelling kept (not `Mod+`): the fallback is never shown while a keymap is active.
-        cmd_item_gated(
-            ctx,
-            cmd("toggle_visible_grid", "Toggle Grid", "Shift+Ctrl+G"),
-        ),
-        cmd_item_gated(ctx, cmd("next_grid", "Cycle Grid Size", "")),
-        cmd_item_gated(
-            ctx,
-            cmd("toggle_auto_focus", "AutoFocus (dim unselected)", "F9"),
-        ),
+        cmd_item_gated(ctx, cmd("toggle_visible_grid", "Shift+Ctrl+G")),
+        cmd_item_gated(ctx, cmd("next_grid", "")),
+        cmd_item_gated(ctx, cmd("toggle_auto_focus", "F9")),
         SEP,
         // The board view: greyed unless a PCB is open.
-        cmd_item_gated(ctx, cmd("toggle_ratsnest", "Toggle Ratsnest", "")),
-        cmd_item_gated(ctx, cmd("next_layer", "Next Layer", "")),
-        cmd_item_gated(ctx, cmd("prev_layer", "Previous Layer", "")),
-        cmd_item_gated(
-            ctx,
-            cmd("toggle_layer_visibility", "Toggle Layer Visibility", ""),
-        ),
-        cmd_item_gated(ctx, cmd("show_all_layers", "Show All Layers", "")),
+        cmd_item_gated(ctx, cmd("toggle_ratsnest", "")),
+        cmd_item_gated(ctx, cmd("next_layer", "")),
+        cmd_item_gated(ctx, cmd("prev_layer", "")),
+        cmd_item_gated(ctx, cmd("toggle_layer_visibility", "")),
+        cmd_item_gated(ctx, cmd("show_all_layers", "")),
         SEP,
         // Panels work without an active document (they show an empty
         // state), so these are always available.
         panel_item(
             ctx,
-            "Projects",
+            ids::PANELS_KIND_PROJECTS,
             PanelKind::Projects,
             MenuMessage::OpenProjectsPanel,
         ),
         panel_item(
             ctx,
-            "Components",
+            ids::PANELS_KIND_COMPONENTS,
             PanelKind::Components,
             MenuMessage::OpenComponentsPanel,
         ),
         panel_item(
             ctx,
-            "Navigator",
+            ids::PANELS_KIND_NAVIGATOR,
             PanelKind::Navigator,
             MenuMessage::OpenNavigatorPanel,
         ),
         panel_item(
             ctx,
-            "Properties",
+            ids::PANELS_KIND_PROPERTIES,
             PanelKind::Properties,
             MenuMessage::OpenPropertiesPanel,
         ),
-        panel_item(ctx, "ERC", PanelKind::Erc, MenuMessage::OpenErcPanel),
         panel_item(
             ctx,
-            "Messages",
+            ids::PANELS_KIND_ERC,
+            PanelKind::Erc,
+            MenuMessage::OpenErcPanel,
+        ),
+        panel_item(
+            ctx,
+            ids::PANELS_KIND_MESSAGES,
             PanelKind::Messages,
             MenuMessage::OpenMessagesPanel,
         ),
         panel_item(
             ctx,
-            "Signex AI",
+            ids::PANELS_KIND_SIGNEX_AI,
             PanelKind::SignexAi,
             MenuMessage::OpenSignexAiPanel,
         ),
         panel_item(
             ctx,
-            "Layers",
+            ids::PANELS_KIND_LAYERS,
             PanelKind::Layers,
             MenuMessage::OpenLayersPanel,
         ),
@@ -255,21 +248,27 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        cmd_item_gated(ctx, cmd("place_wire", "Wire", "W")),
-        cmd_item_gated(ctx, cmd("place_bus", "Bus", "B")),
-        cmd_item_gated(ctx, cmd("place_net_label", "Net Label", "L")),
+        cmd_item_gated(ctx, cmd("place_wire", "W")),
+        cmd_item_gated(ctx, cmd("place_bus", "B")),
+        cmd_item_gated(ctx, cmd("place_net_label", "L")),
         SEP,
-        cmd_item_gated(ctx, cmd("open_components_panel", "Component...", "P")),
-        cmd_item_gated(ctx, cmd("place_power_symbol", "Power Port", "P")),
-        cmd_item_gated(ctx, cmd("place_junction", "Junction", "J")),
+        cmd_item_gated(ctx, cmd("open_components_panel", "P")),
+        cmd_item_gated(ctx, cmd("place_power_symbol", "P")),
+        cmd_item_gated(ctx, cmd("place_junction", "J")),
         SEP,
-        item_if("Text", MenuMessage::PlaceText, ctx.commands.has_schematic),
         item_if(
-            "No Connect",
+            ctx,
+            menu_ids::MENU_PLACE_TEXT,
+            MenuMessage::PlaceText,
+            ctx.commands.has_schematic,
+        ),
+        item_if(
+            ctx,
+            menu_ids::MENU_PLACE_NO_CONNECT,
             MenuMessage::PlaceNoConnect,
             ctx.commands.has_schematic,
         ),
-        cmd_item_gated(ctx, cmd("place_sheet_entry", "Sheet Entry", "")),
+        cmd_item_gated(ctx, cmd("place_sheet_entry", "")),
     ]
 }
 
@@ -279,12 +278,9 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
         update_schematics_row(ctx),
         // #2234: enter or leave the sketch of the board in view; greyed
         // with no PCB.
-        cmd_item_gated(ctx, cmd("board_sketch", "Board Sketch", "")),
+        cmd_item_gated(ctx, cmd("board_sketch", "")),
         SEP,
-        cmd_item_gated(
-            ctx,
-            cmd("open_parameter_manager", "Parameter Manager...", ""),
-        ),
+        cmd_item_gated(ctx, cmd("open_parameter_manager", "")),
     ]
 }
 
@@ -305,7 +301,7 @@ fn update_pcb_row(ctx: &MenuContext) -> MenuEntry {
     };
     cmd_item_gated_as(
         ctx,
-        cmd("update_pcb_from_schematic", "Update PCB Document", ""),
+        cmd("update_pcb_from_schematic", ""),
         label.into_string(),
     )
 }
@@ -323,7 +319,7 @@ fn update_schematics_row(ctx: &MenuContext) -> MenuEntry {
     };
     cmd_item_gated_as(
         ctx,
-        cmd("back_annotate_schematics", "Update Schematics", ""),
+        cmd("back_annotate_schematics", ""),
         label.into_string(),
     )
 }
@@ -331,17 +327,19 @@ fn update_schematics_row(ctx: &MenuContext) -> MenuEntry {
 pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         // F8 (`run_erc`) runs ERC at once; this row opens the dialog.
-        cmd_item_gated(ctx, cmd("open_erc_dialog", "Electrical Rules Check", "")),
+        cmd_item_gated(ctx, cmd("open_erc_dialog", "")),
         SEP,
         // Gated like Close Project: with no project there is no tab to open.
-        item_if(
-            "Project Options...",
+        item_if_command(
+            ctx,
+            "open_project_options",
             MenuMessage::OpenProjectOptions,
             ctx.commands.has_open_project,
         ),
         SEP,
         item_if(
-            "Close Project",
+            ctx,
+            menu_ids::MENU_PROJECT_CLOSE,
             MenuMessage::CloseProject,
             ctx.commands.has_open_project,
         ),
@@ -353,13 +351,24 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
 pub(super) fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
     let has_schematic = ctx.commands.has_schematic;
     vec![
-        item_if("Bill of Materials…", MenuMessage::ExportBom, has_schematic),
         item_if(
-            "Netlist (Protel .NET)...",
+            ctx,
+            menu_ids::MENU_REPORTS_BOM,
+            MenuMessage::ExportBom,
+            has_schematic,
+        ),
+        item_if(
+            ctx,
+            menu_ids::MENU_REPORTS_NETLIST,
             MenuMessage::ExportNetlist,
             has_schematic,
         ),
-        item_if("ERC Report…", MenuMessage::ExportErcReport, has_schematic),
+        item_if(
+            ctx,
+            menu_ids::MENU_REPORTS_ERC,
+            MenuMessage::ExportErcReport,
+            has_schematic,
+        ),
     ]
 }
 
@@ -369,88 +378,64 @@ fn annotation(ctx: &MenuContext) -> Vec<MenuEntry> {
     let has_schematic = ctx.commands.has_schematic;
     vec![
         item_if(
-            "Annotate Schematics...",
+            ctx,
+            menu_ids::MENU_TOOLS_ANNOTATE,
             MenuMessage::Annotate,
             has_schematic,
         ),
         item_if(
-            "Reset Schematic Designators...",
+            ctx,
+            menu_ids::MENU_TOOLS_RESET_DESIGNATORS,
             MenuMessage::AnnotateReset,
             has_schematic,
         ),
         item_if(
-            "Reset Duplicate Schematic Designators...",
+            ctx,
+            menu_ids::MENU_TOOLS_RESET_DUPLICATE_DESIGNATORS,
             MenuMessage::AnnotateResetDuplicates,
             has_schematic,
         ),
         SEP,
-        cmd_item_gated(
-            ctx,
-            cmd(
-                "annotate_schematic_quietly",
-                "Annotate Schematics Quietly",
-                "Alt+A",
-            ),
-        ),
-        cmd_item_gated(
-            ctx,
-            cmd(
-                "force_annotate_all_schematics",
-                "Force Annotate All Schematics",
-                "Shift+Alt+A",
-            ),
-        ),
+        cmd_item_gated(ctx, cmd("annotate_schematic_quietly", "Alt+A")),
+        cmd_item_gated(ctx, cmd("force_annotate_all_schematics", "Shift+Alt+A")),
         SEP,
         // Back Annotate: docs/MENU_BAR.md#back-annotate
-        cmd_item_gated(
-            ctx,
-            cmd(
-                "back_annotate_schematics",
-                "Back Annotate Schematics...",
-                "",
-            ),
-        ),
+        cmd_item_gated(ctx, cmd("back_annotate_schematics", "")),
         // The editable numbering dialog: docs/MENU_BAR.md#number-schematic-sheets
-        cmd_item_gated(
-            ctx,
-            cmd("number_schematic_sheets", "Number Schematic Sheets...", ""),
-        ),
+        cmd_item_gated(ctx, cmd("number_schematic_sheets", "")),
     ]
 }
 
 pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        submenu("Annotation", annotation(ctx)),
+        submenu(ctx, menu_ids::MENU_TOOLS_ANNOTATION, annotation(ctx)),
         SEP,
         // The project's parts and their row's footprints:
         // docs/MENU_BAR.md#tools-assign-footprints
-        cmd_item_gated(ctx, cmd("assign_footprints", "Assign Footprints", "")),
+        cmd_item_gated(ctx, cmd("assign_footprints", "")),
         // Opens or focuses a Library Browser tab: docs/MENU_BAR.md#tools-library-editor
-        cmd_item_gated(ctx, cmd("open_library_browser", "Library Editor", "")),
+        cmd_item_gated(ctx, cmd("open_library_browser", "")),
         SEP,
         // Runs `run_drc` on the PCB in view; greyed with no PCB open.
-        cmd_item_gated(ctx, cmd("run_drc", "Design Rule Check", "")),
+        cmd_item_gated(ctx, cmd("run_drc", "")),
         // Positional Re-Annotate of the PCB in view (#1312):
         // docs/MENU_BAR.md#tools-reannotate-board
-        cmd_item_gated(ctx, cmd("reannotate_board", "Re-Annotate Board...", "")),
+        cmd_item_gated(ctx, cmd("reannotate_board", "")),
         // Opens the Net Inspector panel: docs/MENU_BAR.md#tools-net-inspector
-        cmd_item_gated(ctx, cmd("open_net_inspector", "Net Inspector", "")),
+        cmd_item_gated(ctx, cmd("open_net_inspector", "")),
         SEP,
         // #1312: Cross Probe shows the selection on the other side; Cross
         // Select Mode (checked while on) mirrors every selection there.
-        cmd_item_gated(ctx, cmd("cross_probe", "Cross Probe", "")),
+        cmd_item_gated(ctx, cmd("cross_probe", "")),
         cmd_toggle(
             ctx,
-            cmd(
-                "toggle_cross_select_mode",
-                "Cross Select Mode",
-                "Mod+Shift+X",
-            ),
+            cmd("toggle_cross_select_mode", "Mod+Shift+X"),
             ctx.cross_select,
         ),
         SEP,
         item_if(
-            "Up Hierarchy",
+            ctx,
+            menu_ids::MENU_TOOLS_UP_HIERARCHY,
             MenuMessage::AscendToParentSheet,
             enabled(ctx, "navigate_up_hierarchy"),
         ),
@@ -458,29 +443,33 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         // Multi-part flow: acts only on a `.snxsym` editor tab, and Remove
         // Part only on a part after the first.
         item_if(
-            "New Part",
+            ctx,
+            menu_ids::MENU_TOOLS_NEW_PART,
             MenuMessage::ToolsNewPart,
             new_part_menu_enabled(&ctx.commands),
         ),
         item_if(
-            "Remove Part",
+            ctx,
+            menu_ids::MENU_TOOLS_REMOVE_PART,
             MenuMessage::ToolsRemovePart,
             remove_part_menu_enabled(&ctx.commands),
         ),
         SEP,
         // Opens the options of the library the active editor tab is in.
         item_if(
-            "Document Options...",
+            ctx,
+            menu_ids::MENU_TOOLS_DOCUMENT_OPTIONS,
             MenuMessage::ToolsDocumentOptions,
             ctx.commands.has_library_editor,
         ),
         SEP,
         item(
-            "Passive Network Calculator...",
+            ctx,
+            menu_ids::MENU_TOOLS_PASSIVE_CALCULATOR,
             MenuMessage::OpenPassiveCalculator,
         ),
         SEP,
-        cmd_item(ctx, cmd("open_preferences", "Preferences...", "Mod+,")),
+        cmd_item(ctx, cmd("open_preferences", "Mod+,")),
     ]
 }
 
@@ -488,26 +477,28 @@ pub(super) fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         // Main window plus undocked document windows; greyed with none
         // undocked: docs/MENU_BAR.md#window-tile
-        cmd_item_gated(
-            ctx,
-            cmd("tile_windows_horizontally", "Tile Horizontally", ""),
-        ),
-        cmd_item_gated(ctx, cmd("tile_windows_vertically", "Tile Vertically", "")),
+        cmd_item_gated(ctx, cmd("tile_windows_horizontally", "")),
+        cmd_item_gated(ctx, cmd("tile_windows_vertically", "")),
         SEP,
-        cmd_item_gated(ctx, cmd("close_all_documents", "Close All Documents", "")),
+        cmd_item_gated(ctx, cmd("close_all_documents", "")),
     ]
 }
 
 pub(super) fn help(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        item("About Signex", MenuMessage::OpenAbout),
-        item("Documentation", MenuMessage::OpenDocumentation),
-        item("Report an Issue", MenuMessage::ReportIssue),
-        item("Open Sample Project", MenuMessage::OpenSampleProject),
-        SEP,
-        cmd_item(
+        item(ctx, menu_ids::MENU_HELP_ABOUT, MenuMessage::OpenAbout),
+        item(
             ctx,
-            cmd("show_current_command_hotkeys", "Keyboard Shortcuts", "F1"),
+            menu_ids::MENU_HELP_DOCUMENTATION,
+            MenuMessage::OpenDocumentation,
         ),
+        item(
+            ctx,
+            menu_ids::MENU_HELP_REPORT_ISSUE,
+            MenuMessage::ReportIssue,
+        ),
+        item(ctx, ids::START_OPEN_SAMPLE, MenuMessage::OpenSampleProject),
+        SEP,
+        cmd_item(ctx, cmd("show_current_command_hotkeys", "F1")),
     ]
 }

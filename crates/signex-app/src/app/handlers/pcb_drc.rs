@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use iced::Task;
-use signex_drc::{DrcRules, ViolationKind};
+use signex_drc::{DrcRules, DrcSeverities, ViolationKind};
 
 use crate::app::{DrcRunResult, Message, PcbMsg, Signex};
 
@@ -37,16 +37,19 @@ impl Signex {
             crate::diagnostics::log_info("DRC: a check of this board is already running");
             return Task::none();
         }
-        let classes = self
-            .document_state
-            .active_document_project()
+        let project = self.document_state.active_document_project();
+        let classes = project
             .map(|p| p.data.net_classes.clone())
             .unwrap_or_default();
+        let severities = drc_severities(
+            project.and_then(|p| p.data.rules.as_ref()),
+            &self.ui_state.machine_drc_rules,
+        );
         let generation = self.interaction_state.pcb_drc.begin(path, revision);
         self.refresh_panel_ctx();
         Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || run_check(&board, &classes))
+                tokio::task::spawn_blocking(move || run_check(&board, &classes, severities))
                     .await
                     .unwrap_or_else(|e| Err(format!("DRC worker failed: {e}")))
             },
@@ -159,12 +162,27 @@ impl Signex {
     }
 }
 
+/// The rule severities a DRC run uses, as ERC picks its rules: a project
+/// that stores a rule set uses its `rules.drc` alone, so it checks the same
+/// on every machine; otherwise the machine's `User Default` profile layer.
+pub(crate) fn drc_severities(
+    project: Option<&signex_types::project::ProjectRules>,
+    machine: &signex_types::project::DrcRuleSet,
+) -> DrcSeverities {
+    match project {
+        Some(rules) => signex_drc::resolve_severities(None, Some(&rules.drc)),
+        None => signex_drc::resolve_severities(Some(machine), None),
+    }
+}
+
 fn run_check(
     board: &signex_types::pcb::PcbBoard,
     classes: &[signex_types::net_class::NetClass],
+    severities: DrcSeverities,
 ) -> DrcRunResult {
-    let rules = DrcRules::for_board(board, classes)
+    let mut rules = DrcRules::for_board(board, classes)
         .map_err(|e| format!("the board's clearance rules are not usable: {e}"))?;
+    rules.severities = severities;
     let report = signex_drc::run(board, &rules);
     let names = board
         .nets
@@ -189,6 +207,9 @@ fn log_report(report: &signex_drc::DrcReport, names: &std::collections::BTreeMap
             format!("; {} item(s) could not be checked", report.skipped.len())
         },
     );
+    for entry in &report.rules.severities.unrecognised {
+        crate::diagnostics::log_info(format!("DRC rules: ignoring unrecognised entry ({entry})"));
+    }
     if report.rules.from_default {
         crate::diagnostics::log_info(format!(
             "DRC: No clearance rule set on this board; checked with {} mm. Set it in Board Setup.",

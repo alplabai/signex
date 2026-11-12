@@ -183,7 +183,7 @@ impl Signex {
                 if let Some(profile) = done {
                     self.ui_state
                         .profile_manager
-                        .replace_profile(profile.clone());
+                        .replace_profile(profile.as_ref().clone());
                 }
             }
         }
@@ -258,6 +258,7 @@ impl Signex {
                 let resolved = signex_erc::project_rules::resolve(&profile.erc);
                 self.ui_state.erc_severity_override = resolved.severity;
                 self.ui_state.pin_matrix_overrides = resolved.pin_matrix;
+                self.ui_state.machine_drc_rules = profile.drc.clone();
                 if !resolved.unrecognised.is_empty() {
                     crate::diagnostics::log_info(format!(
                         "The User Default rule profile holds {} entries from a newer Signex; \
@@ -271,8 +272,9 @@ impl Signex {
             // unreadable profile, so the user's file is never overwritten.
             Err(why) => {
                 crate::diagnostics::log_warning(format!(
-                    "The machine's ERC rules could not be read, so this session uses the \
-                     built-in defaults and the file is left untouched: {why}"
+                    "The machine's rules ({}) could not be read, so this session uses the \
+                     built-in defaults and the file is left untouched: {why}",
+                    rule_profiles::file_name_for(USER_DEFAULT_PROFILE_NAME)
                 ));
                 self.ui_state.machine_rules_problem = Some(why.clone());
             }

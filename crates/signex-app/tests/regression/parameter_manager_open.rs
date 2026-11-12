@@ -37,7 +37,10 @@ fn field(app: &Signex, key: &str) -> Option<String> {
 fn the_command_is_in_the_catalog() {
     assert!(all_command_ids().any(|id| id == COMMAND));
     let meta = metadata_for(&AppCommandId::new(COMMAND).unwrap()).expect("catalog entry");
-    assert_eq!(meta.menu_label(), "Parameter Manager...");
+    assert_eq!(
+        meta.menu_label_in(signex_i18n::I18n::en_us_ref()),
+        "Parameter Manager..."
+    );
 }
 
 #[test]

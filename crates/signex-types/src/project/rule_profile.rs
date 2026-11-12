@@ -10,15 +10,17 @@
 //!   "erc": { "severity": { ... }, "pin_matrix": { ... } } }
 //! ```
 //!
-//! Keys this build does not know (a `drc` section from a newer build, an
-//! unknown rule id) are kept verbatim and written back, as everywhere else.
-//! A `schema` newer than [`RULE_PROFILE_SCHEMA_V1`] is refused rather than
-//! half-read, because applying part of a rule set silently changes results.
+//! An optional `drc` section (#2307) has the shape of the project's
+//! `rules.drc`. Keys this build does not know (a section from a newer build,
+//! an unknown rule id) are kept verbatim and written back, as everywhere
+//! else. A `schema` newer than [`RULE_PROFILE_SCHEMA_V1`] is refused rather
+//! than half-read, because applying part of a rule set silently changes
+//! results.
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::{ErcRules, UnknownJson};
+use super::{DrcRuleSet, ErcRules, UnknownJson};
 
 /// Current version of the profile file, independent of the project's
 /// `rules.schema`.
@@ -41,6 +43,9 @@ pub struct RuleProfile {
     pub version: String,
     #[serde(default, skip_serializing_if = "ErcRules::is_empty")]
     pub erc: ErcRules,
+    /// DRC settings (#2307); not written when empty.
+    #[serde(default, skip_serializing_if = "DrcRuleSet::is_empty")]
+    pub drc: DrcRuleSet,
     /// Keys written by a newer build; kept so a save does not drop them.
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
     pub unknown: UnknownJson,
@@ -63,6 +68,7 @@ impl RuleProfile {
             name: name.into(),
             version: version.into(),
             erc,
+            drc: DrcRuleSet::default(),
             unknown: UnknownJson::default(),
         }
     }
@@ -86,9 +92,10 @@ impl RuleProfile {
         bytes
     }
 
-    /// Hash of the content that decides results (the rule set). The name and
-    /// version are labels and do not enter it, so renaming a profile is not
-    /// drift.
+    /// Hash of the content that decides ERC results (the `erc` rule set). The
+    /// name and version are labels and do not enter it, so renaming a profile
+    /// is not drift. The `drc` section has its own hash
+    /// ([`DrcRuleSet::sha256_hex`]), so adding one never moves this value.
     pub fn content_sha256(&self) -> String {
         self.erc.sha256_hex()
     }

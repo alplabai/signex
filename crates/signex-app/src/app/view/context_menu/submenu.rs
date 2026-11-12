@@ -13,9 +13,11 @@ use super::*;
 
 use super::items::{
     command_text, dd_cmd_disabled, dd_command, dd_disabled, dd_kb, dd_msg, dd_planned, tag_command,
+    text,
 };
 use crate::app::command::active_bar::id_for_action;
 use crate::icons as ic;
+use signex_i18n::{I18n, MessageId, menu_ids};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
@@ -24,31 +26,41 @@ use signex_widgets::active_bar_dropdown::DropdownEntry;
 /// only for an action that has no id. A disabled row keeps its hint in the
 /// right-hand column.
 fn active_bar_row(
+    i18n: &I18n,
     icon: iced::widget::svg::Handle,
-    fallback: &'static str,
+    fallback: Option<MessageId>,
     action: crate::active_bar::ActiveBarAction,
     enabled: bool,
     planned: bool,
     hint: &dyn Fn(&str) -> String,
 ) -> DropdownEntry<Message> {
     let Some(id) = id_for_action(&action) else {
+        let fallback_text = fallback.map_or_else(String::new, |id| text(i18n, id));
         return if !enabled {
-            dd_disabled(Some(icon), fallback, None)
+            dd_disabled(Some(icon), &fallback_text, None)
         } else if planned {
-            dd_planned(Some(icon), fallback, None)
+            dd_planned(i18n, Some(icon), &fallback_text, None)
         } else {
-            dd_kb(Some(icon), fallback, "", ContextAction::ActiveBar(action))
+            dd_kb(
+                Some(icon),
+                &fallback_text,
+                "",
+                ContextAction::ActiveBar(action),
+            )
         };
     };
     let shortcut = hint(id);
     let right = (!shortcut.is_empty()).then_some(shortcut.as_str());
     if planned {
         // A planned tool is shown but cannot be armed (#1249).
-        tag_command(dd_planned(Some(icon), &command_text(id), right), id)
+        tag_command(
+            dd_planned(i18n, Some(icon), &command_text(i18n, id), right),
+            id,
+        )
     } else if enabled {
-        dd_command(Some(icon), id, &shortcut, None)
+        dd_command(i18n, Some(icon), id, &shortcut, None)
     } else {
-        dd_cmd_disabled(Some(icon), id, &shortcut)
+        dd_cmd_disabled(i18n, Some(icon), id, &shortcut)
     }
 }
 
@@ -57,103 +69,80 @@ fn active_bar_row(
 /// tooltip; every other row is always enabled. `hint` resolves a command id
 /// to its keymap shortcut.
 pub(super) fn place_entries(
+    i18n: &I18n,
     tid: ThemeId,
     hint: &dyn Fn(&str) -> String,
 ) -> Vec<DropdownEntry<Message>> {
     use crate::active_bar::ActiveBarAction as A;
-    let ab = |icon, label: &'static str, action: A| {
+    let ab = |icon, label: Option<MessageId>, action: A| {
         let planned = crate::active_bar::is_planned(&action);
-        active_bar_row(icon, label, action, true, planned, hint)
+        active_bar_row(i18n, icon, label, action, true, planned, hint)
     };
     vec![
         // Wires + buses + entries
-        ab(ic::icon_dd_wire(tid), "Wire", A::DrawWire),
-        ab(ic::icon_dd_bus(tid), "Bus", A::DrawBus),
-        ab(ic::icon_dd_bus_entry(tid), "Bus Entry", A::PlaceBusEntry),
-        ab(ic::icon_dd_net_label(tid), "Net Label", A::PlaceNetLabel),
-        ab(ic::icon_dd_junction(tid), "Junction", A::PlaceJunction),
+        ab(ic::icon_dd_wire(tid), None, A::DrawWire),
+        ab(ic::icon_dd_bus(tid), None, A::DrawBus),
+        ab(ic::icon_dd_bus_entry(tid), None, A::PlaceBusEntry),
+        ab(ic::icon_dd_net_label(tid), None, A::PlaceNetLabel),
+        ab(ic::icon_dd_junction(tid), None, A::PlaceJunction),
         DropdownEntry::Separator,
         // Ports
-        ab(ic::icon_dd_port(tid), "Port", A::PlacePort),
-        ab(
-            ic::icon_dd_off_sheet(tid),
-            "Off Sheet Connector",
-            A::PlaceOffSheetConnector,
-        ),
+        ab(ic::icon_dd_port(tid), None, A::PlacePort),
+        ab(ic::icon_dd_off_sheet(tid), None, A::PlaceOffSheetConnector),
         DropdownEntry::Separator,
         // Power ports (the four most common)
-        ab(ic::icon_dd_gnd(tid), "GND Power Port", A::PlacePowerGND),
-        ab(ic::icon_dd_vcc(tid), "VCC Power Port", A::PlacePowerVCC),
+        ab(
+            ic::icon_dd_gnd(tid),
+            Some(menu_ids::CTX_PLACE_POWER_GND),
+            A::PlacePowerGND,
+        ),
+        ab(
+            ic::icon_dd_vcc(tid),
+            Some(menu_ids::CTX_PLACE_POWER_VCC),
+            A::PlacePowerVCC,
+        ),
         ab(
             ic::icon_dd_pwr_plus5(tid),
-            "+5 Power Port",
+            Some(menu_ids::CTX_PLACE_POWER_PLUS5),
             A::PlacePowerPlus5,
         ),
         ab(
             ic::icon_dd_pwr_plus12(tid),
-            "+12 Power Port",
+            Some(menu_ids::CTX_PLACE_POWER_PLUS12),
             A::PlacePowerPlus12,
         ),
         DropdownEntry::Separator,
         // Directives
-        ab(
-            ic::icon_dd_param_set(tid),
-            "Parameter Set",
-            A::PlaceParameterSet,
-        ),
-        ab(ic::icon_dd_no_erc(tid), "Generic No ERC", A::PlaceNoERC),
-        ab(
-            ic::icon_dd_diff_pair(tid),
-            "Differential Pair",
-            A::PlaceDiffPair,
-        ),
-        ab(ic::icon_dd_blanket(tid), "Blanket", A::PlaceBlanket),
+        ab(ic::icon_dd_param_set(tid), None, A::PlaceParameterSet),
+        ab(ic::icon_dd_no_erc(tid), None, A::PlaceNoERC),
+        ab(ic::icon_dd_diff_pair(tid), None, A::PlaceDiffPair),
+        ab(ic::icon_dd_blanket(tid), None, A::PlaceBlanket),
         DropdownEntry::Separator,
         // Harness
-        ab(
-            ic::icon_dd_harness(tid),
-            "Signal Harness",
-            A::PlaceSignalHarness,
-        ),
+        ab(ic::icon_dd_harness(tid), None, A::PlaceSignalHarness),
         ab(
             ic::icon_dd_harness_conn(tid),
-            "Harness Connector",
+            None,
             A::PlaceHarnessConnector,
         ),
-        ab(
-            ic::icon_dd_harness_entry(tid),
-            "Harness Entry",
-            A::PlaceHarnessEntry,
-        ),
+        ab(ic::icon_dd_harness_entry(tid), None, A::PlaceHarnessEntry),
         DropdownEntry::Separator,
         // Sheet symbols
-        ab(
-            ic::icon_dd_sheet_symbol(tid),
-            "Sheet Symbol",
-            A::PlaceSheetSymbol,
-        ),
-        ab(
-            ic::icon_dd_sheet_entry(tid),
-            "Sheet Entry",
-            A::PlaceSheetEntry,
-        ),
+        ab(ic::icon_dd_sheet_symbol(tid), None, A::PlaceSheetSymbol),
+        ab(ic::icon_dd_sheet_entry(tid), None, A::PlaceSheetEntry),
         ab(
             ic::icon_dd_device_sheet(tid),
-            "Device Sheet Symbol",
+            None,
             A::PlaceDeviceSheetSymbol,
         ),
         DropdownEntry::Separator,
         // Component
-        ab(ic::icon_component(tid), "Part", A::PlaceComponent),
+        ab(ic::icon_component(tid), None, A::PlaceComponent),
         DropdownEntry::Separator,
         // Text
-        ab(
-            ic::icon_dd_text_string(tid),
-            "Text String",
-            A::PlaceTextString,
-        ),
-        ab(ic::icon_dd_text_frame(tid), "Text Frame", A::PlaceTextFrame),
-        ab(ic::icon_dd_note(tid), "Note", A::PlaceNote),
+        ab(ic::icon_dd_text_string(tid), None, A::PlaceTextString),
+        ab(ic::icon_dd_text_frame(tid), None, A::PlaceTextFrame),
+        ab(ic::icon_dd_note(tid), None, A::PlaceNote),
     ]
 }
 
@@ -169,73 +158,57 @@ pub(super) fn align_gate(selected: usize) -> (bool, bool) {
 /// Align submenu — pairwise aligns + distribute (gated by selection
 /// count) and the always-on Align To Grid.
 pub(super) fn align_entries(
+    i18n: &I18n,
     tid: ThemeId,
     selected: usize,
     hint: &dyn Fn(&str) -> String,
 ) -> Vec<DropdownEntry<Message>> {
     use crate::active_bar::ActiveBarAction as A;
     let (pair, dist) = align_gate(selected);
-    let row = |icon, label: &'static str, action: A, enabled: bool| {
-        active_bar_row(icon, label, action, enabled, false, hint)
+    let row = |icon, label: Option<MessageId>, action: A, enabled: bool| {
+        active_bar_row(i18n, icon, label, action, enabled, false, hint)
     };
     vec![
-        row(
-            ic::icon_dd_align_left(tid),
-            "Align Left",
-            A::AlignLeft,
-            pair,
-        ),
-        row(
-            ic::icon_dd_align_right(tid),
-            "Align Right",
-            A::AlignRight,
-            pair,
-        ),
+        row(ic::icon_dd_align_left(tid), None, A::AlignLeft, pair),
+        row(ic::icon_dd_align_right(tid), None, A::AlignRight, pair),
         row(
             ic::icon_dd_align_hcenter(tid),
-            "Align Horizontal Centers",
+            None,
             A::AlignHorizontalCenters,
             pair,
         ),
         row(
             ic::icon_dd_dist_horiz(tid),
-            "Distribute Horizontally",
+            None,
             A::DistributeHorizontally,
             dist,
         ),
         DropdownEntry::Separator,
-        row(ic::icon_dd_align_top(tid), "Align Top", A::AlignTop, pair),
-        row(
-            ic::icon_dd_align_bottom(tid),
-            "Align Bottom",
-            A::AlignBottom,
-            pair,
-        ),
+        row(ic::icon_dd_align_top(tid), None, A::AlignTop, pair),
+        row(ic::icon_dd_align_bottom(tid), None, A::AlignBottom, pair),
         row(
             ic::icon_dd_align_vcenter(tid),
-            "Align Vertical Centers",
+            None,
             A::AlignVerticalCenters,
             pair,
         ),
         row(
             ic::icon_dd_dist_vert(tid),
-            "Distribute Vertically",
+            None,
             A::DistributeVertically,
             dist,
         ),
         DropdownEntry::Separator,
-        row(
-            ic::icon_dd_align_grid(tid),
-            "Align To Grid",
-            A::AlignToGrid,
-            true,
-        ),
+        row(ic::icon_dd_align_grid(tid), None, A::AlignToGrid, true),
     ]
 }
 
 /// Arrange submenu — order the selected drawings (#1583). Offered only while
 /// the selection holds a drawing, so every row is live.
-pub(super) fn arrange_entries(hint: &dyn Fn(&str) -> String) -> Vec<DropdownEntry<Message>> {
+pub(super) fn arrange_entries(
+    i18n: &I18n,
+    hint: &dyn Fn(&str) -> String,
+) -> Vec<DropdownEntry<Message>> {
     [
         "bring_drawings_to_front",
         "send_drawings_to_back",
@@ -243,7 +216,7 @@ pub(super) fn arrange_entries(hint: &dyn Fn(&str) -> String) -> Vec<DropdownEntr
         "send_drawings_backward",
     ]
     .into_iter()
-    .map(|id| dd_command(None, id, &hint(id), None))
+    .map(|id| dd_command(i18n, None, id, &hint(id), None))
     .collect()
 }
 
@@ -252,6 +225,7 @@ pub(super) fn arrange_entries(hint: &dyn Fn(&str) -> String) -> Vec<DropdownEntr
 /// Library / Symbol Library are wired; the rest stay version-badged stubs
 /// until their editors land.
 pub(super) fn add_new_entries(
+    i18n: &I18n,
     tid: ThemeId,
     target: signex_widgets::tree_view::TreeKey,
 ) -> Vec<DropdownEntry<Message>> {
@@ -260,7 +234,7 @@ pub(super) fn add_new_entries(
 
     v.push(dd_msg(
         Some(ic::icon_dd_wire(tid)),
-        "Schematic",
+        &text(i18n, menu_ids::CTX_ADD_SCHEMATIC),
         "",
         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(P::AddNewSchematic(
             target.clone(),
@@ -270,7 +244,7 @@ pub(super) fn add_new_entries(
     // "Schematic Library" row, wired through the menu bridge.
     v.push(dd_msg(
         Some(ic::icon_component(tid)),
-        "Component Library",
+        &text(i18n, menu_ids::CTX_ADD_COMPONENT_LIBRARY),
         "",
         Message::Menu(crate::menu_bar::MenuMessage::AddComponentLibrary),
     ));
@@ -278,7 +252,7 @@ pub(super) fn add_new_entries(
     // project document. Opens a Save-As dialog scoped to the project dir.
     v.push(dd_msg(
         Some(ic::icon_component(tid)),
-        "Symbol Library",
+        &text(i18n, menu_ids::CTX_ADD_SYMBOL_LIBRARY),
         "",
         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
             P::AddProjectSymbolLibrary(target.clone()),
@@ -287,7 +261,7 @@ pub(super) fn add_new_entries(
     // The project's one board, opened unsaved (#1312).
     v.push(dd_msg(
         Some(ic::icon_dd_part_actions(tid)),
-        "PCB",
+        &text(i18n, menu_ids::CTX_ADD_PCB),
         "",
         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(P::AddNewPcb(
             target.clone(),
@@ -298,7 +272,7 @@ pub(super) fn add_new_entries(
     if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
         v.push(dd_msg(
             Some(ic::icon_component(tid)),
-            "PCB Library",
+            &text(i18n, menu_ids::CTX_ADD_PCB_LIBRARY),
             "",
             Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                 P::AddProjectFootprintLibrary(target.clone()),
@@ -307,24 +281,28 @@ pub(super) fn add_new_entries(
     }
     v.push(DropdownEntry::Separator);
     v.push(dd_planned(
+        i18n,
         Some(ic::icon_dd_text_string(tid)),
-        "Output Job",
+        &text(i18n, menu_ids::CTX_ADD_OUTPUT_JOB),
         None,
     ));
     v.push(dd_planned(
+        i18n,
         Some(ic::icon_dd_text_frame(tid)),
-        "Design Notebook",
+        &text(i18n, menu_ids::CTX_ADD_DESIGN_NOTEBOOK),
         None,
     ));
     v.push(DropdownEntry::Separator);
     v.push(dd_planned(
+        i18n,
         Some(ic::icon_dd_text_string(tid)),
-        "Constraint File",
+        &text(i18n, menu_ids::CTX_ADD_CONSTRAINT_FILE),
         None,
     ));
     v.push(dd_planned(
+        i18n,
         Some(ic::icon_dd_text_string(tid)),
-        "VHDL File",
+        &text(i18n, menu_ids::CTX_ADD_VHDL_FILE),
         None,
     ));
 
@@ -345,11 +323,15 @@ impl Signex {
         let tid = self.ui_state.effective_theme_id();
         let tokens = &self.document_state.panel_ctx.tokens;
         let entries = match kind {
-            ContextSubmenu::Place => place_entries(tid, &|id| self.keymap_shortcut_label(id)),
-            ContextSubmenu::Align => {
-                align_entries(tid, selected, &|id| self.keymap_shortcut_label(id))
+            ContextSubmenu::Place => place_entries(&self.ui_state.i18n, tid, &|id| {
+                self.keymap_shortcut_label(id)
+            }),
+            ContextSubmenu::Align => align_entries(&self.ui_state.i18n, tid, selected, &|id| {
+                self.keymap_shortcut_label(id)
+            }),
+            ContextSubmenu::Arrange => {
+                arrange_entries(&self.ui_state.i18n, &|id| self.keymap_shortcut_label(id))
             }
-            ContextSubmenu::Arrange => arrange_entries(&|id| self.keymap_shortcut_label(id)),
             ContextSubmenu::AddNewToProject => {
                 // The right-clicked project lives at `tree_path[0]` —
                 // resolve it off the captured menu state so the action
@@ -360,7 +342,7 @@ impl Signex {
                     .as_ref()
                     .and_then(|m| m.key.clone())
                     .unwrap_or_default();
-                add_new_entries(tid, target)
+                add_new_entries(&self.ui_state.i18n, tid, target)
             }
         };
         super::placement::menu_card(entries, tokens, &self.document_state.panel_ctx.ui_font_name)

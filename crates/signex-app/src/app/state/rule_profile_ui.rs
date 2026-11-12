@@ -173,8 +173,9 @@ pub struct WriteGate(Mutex<HashMap<String, u64>>);
 /// What running a queued write did.
 #[derive(Debug, Clone, PartialEq)]
 pub enum WriteOutcome {
-    /// The write ran; for a library-profile edit, the profile the file holds.
-    Done(Option<RuleProfile>),
+    /// The write ran; for a library-profile edit, the profile the file holds
+    /// (boxed: a profile is large next to `Skipped`).
+    Done(Option<Box<RuleProfile>>),
     /// Another runner (the quit path, New Project) already ran this write.
     /// Says nothing about whether the file is healthy.
     Skipped,
@@ -203,7 +204,9 @@ impl Dispatch {
             return Ok(WriteOutcome::Skipped);
         }
         *newest = self.seq;
-        self.write.execute(dir).map(WriteOutcome::Done)
+        self.write
+            .execute(dir)
+            .map(|profile| WriteOutcome::Done(profile.map(Box::new)))
     }
 }
 

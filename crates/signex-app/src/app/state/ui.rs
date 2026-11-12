@@ -520,6 +520,9 @@ pub struct UiState {
     /// at launch and written back to it on every edit.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    /// The `drc` section of the `User Default` profile (#2307): the DRC
+    /// profile layer of a project that stores no rules of its own.
+    pub machine_drc_rules: signex_types::project::DrcRuleSet,
     /// Net-color overrides keyed by net-label text. Drives the Active-Bar
     /// net-colour menu state and the net-color modal; the canvas paints
     /// from each sheet's own net colours (`SchematicSheet::net_colors`).
@@ -667,9 +670,9 @@ impl UiState {
     /// Rebuild the shortcuts-modal cache: built while the modal is open,
     /// dropped otherwise (the next open rebuilds it).
     pub fn refresh_shortcut_sections(&mut self) {
-        self.shortcut_sections = self
-            .keyboard_shortcuts_open
-            .then(|| crate::keyboard_shortcuts_modal::build_sections(&self.keymap_profiles));
+        self.shortcut_sections = self.keyboard_shortcuts_open.then(|| {
+            crate::keyboard_shortcuts_modal::build_sections(&self.i18n, &self.keymap_profiles)
+        });
     }
 
     /// Per-wheel-notch zoom factor every canvas uses. Reads the DRAFT, like

@@ -32,6 +32,7 @@ use crate::library::editor::footprint::state::{
 };
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::ti;
+use signex_i18n::{Arg, I18n, MessageId, menu_ids};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -40,15 +41,15 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// v0.26-C — surface the silk graphic''s kind in the menu header so
 /// the user can tell at a glance what they''re about to delete /
 /// inspect. Mirrors Altium''s naming.
-fn silk_kind_label(kind: &signex_library::FpGraphicKind) -> &'static str {
+fn silk_kind_label(kind: &signex_library::FpGraphicKind) -> MessageId {
     use signex_library::FpGraphicKind;
     match kind {
-        FpGraphicKind::Line { .. } => "Track",
-        FpGraphicKind::Rectangle { .. } => "Rectangle",
-        FpGraphicKind::Circle { .. } => "Circle",
-        FpGraphicKind::Arc { .. } => "Arc",
-        FpGraphicKind::Text { .. } => "String",
-        FpGraphicKind::Polygon { .. } => "Region",
+        FpGraphicKind::Line { .. } => menu_ids::CTX_FP_TRACK,
+        FpGraphicKind::Rectangle { .. } => menu_ids::CTX_SHAPE_RECTANGLE,
+        FpGraphicKind::Circle { .. } => menu_ids::CTX_SHAPE_CIRCLE,
+        FpGraphicKind::Arc { .. } => menu_ids::CTX_SHAPE_ARC,
+        FpGraphicKind::Text { .. } => menu_ids::CTX_FP_SILK_STRING,
+        FpGraphicKind::Polygon { .. } => menu_ids::CTX_FP_SILK_REGION,
     }
 }
 
@@ -56,6 +57,12 @@ fn silk_kind_label(kind: &signex_library::FpGraphicKind) -> &'static str {
 /// entry baked from the sketch, which the next bake would bring back.
 fn silk_delete_msg(fp: &Footprint, idx: usize) -> Option<FootprintEditorMsg> {
     (!is_sketch_owned_silk(fp, idx)).then_some(FootprintEditorMsg::DeleteSilkF)
+}
+
+/// Header naming a pad or silk graphic by its index, when it has no number
+/// or is gone. The index is an identifier, so it shows without digit grouping.
+fn indexed_header(i18n: &I18n, id: MessageId, key: &str, idx: usize) -> String {
+    i18n.message_plain(id, &[(key, idx.to_string().into())])
 }
 
 const MENU_WIDTH: f32 = 220.0;
@@ -71,6 +78,7 @@ pub fn view_context_menu<'a>(
     path: &'a std::path::Path,
     has_clipboard: bool,
     keymap: &'a CompiledKeymap,
+    i18n: &I18n,
 ) -> Option<Element<'a, LibraryMessage>> {
     let menu_state = editor.state.context_menu.as_ref()?;
 
@@ -80,6 +88,14 @@ pub fn view_context_menu<'a>(
         msg: PrimitiveEdit::Footprint(msg),
     };
 
+    let t = |id: MessageId| i18n.message(id, &[]).into_string();
+    // Command rows show the command's own catalog text.
+    let c = |id: &str| {
+        crate::keymap::metadata_for_str(id)
+            .map_or_else(|| id.to_string(), |meta| meta.menu_label_in(i18n))
+    };
+    // Plain text: the card is fitted to the characters.
+    let with = |id: MessageId, args: &[(&str, Arg)]| i18n.message_plain(id, args);
     let mut items: Vec<Element<'a, LibraryMessage>> = Vec::new();
     // Shortcut hints resolved from the active keymap profile.
     let select_all_shortcut = keymap.shortcut_label_for_id("select_all");
@@ -90,7 +106,7 @@ pub fn view_context_menu<'a>(
 
     match menu_state.target {
         FootprintContextTarget::Empty => {
-            items.push(item_disabled(tokens, "Find Similar Objects...", ""));
+            items.push(item_disabled(tokens, &c("find_similar_objects"), ""));
             items.push(separator(tokens));
 
             // Place ▸ — switches the Pads-mode tool. The five most-
@@ -99,7 +115,7 @@ pub fn view_context_menu<'a>(
             let place_open = menu_state.submenu == Some(FootprintContextSubmenu::Place);
             items.push(item_submenu_header(
                 tokens,
-                "Place",
+                &t(menu_ids::MENU_PLACE),
                 place_open,
                 make_msg(FootprintEditorMsg::ContextMenuOpenSubmenu(Some(
                     FootprintContextSubmenu::Place,
@@ -109,31 +125,31 @@ pub fn view_context_menu<'a>(
                 use crate::library::editor::footprint::state::PadsTool;
                 items.push(item_indented(
                     tokens,
-                    "Pad",
+                    &t(menu_ids::CTX_FP_PAD),
                     "P",
                     make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlacePad)),
                 ));
                 items.push(item_indented(
                     tokens,
-                    "Track",
+                    &t(menu_ids::CTX_FP_TRACK),
                     "T",
                     make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlaceTrack)),
                 ));
                 items.push(item_indented(
                     tokens,
-                    "Arc",
+                    &t(menu_ids::CTX_SHAPE_ARC),
                     "A",
                     make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlaceArc)),
                 ));
                 items.push(item_indented(
                     tokens,
-                    "Polygon (Region)",
+                    &t(menu_ids::CTX_FP_POLYGON_REGION),
                     "R",
                     make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlacePolygon)),
                 ));
                 items.push(item_indented(
                     tokens,
-                    "String (Text)",
+                    &t(menu_ids::CTX_FP_STRING_TEXT),
                     "S",
                     make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlaceString)),
                 ));
@@ -142,7 +158,7 @@ pub fn view_context_menu<'a>(
             let sel_open = menu_state.submenu == Some(FootprintContextSubmenu::Selection);
             items.push(item_submenu_header(
                 tokens,
-                "Selection",
+                &t(menu_ids::CTX_FP_SELECTION),
                 sel_open,
                 make_msg(FootprintEditorMsg::ContextMenuOpenSubmenu(Some(
                     FootprintContextSubmenu::Selection,
@@ -151,7 +167,7 @@ pub fn view_context_menu<'a>(
             if sel_open {
                 items.push(item_indented(
                     tokens,
-                    "Select All",
+                    &c("select_all"),
                     &select_all_shortcut,
                     make_msg(FootprintEditorMsg::ContextMenuAction(
                         FootprintContextAction::SelectAllPads,
@@ -159,7 +175,7 @@ pub fn view_context_menu<'a>(
                 ));
                 items.push(item_indented(
                     tokens,
-                    "Deselect All",
+                    &t(menu_ids::CTX_DESELECT_ALL),
                     &unselect_all_shortcut,
                     make_msg(FootprintEditorMsg::ContextMenuAction(
                         FootprintContextAction::DeselectAll,
@@ -170,7 +186,7 @@ pub fn view_context_menu<'a>(
             let view_open = menu_state.submenu == Some(FootprintContextSubmenu::View);
             items.push(item_submenu_header(
                 tokens,
-                "View",
+                &t(menu_ids::MENU_VIEW),
                 view_open,
                 make_msg(FootprintEditorMsg::ContextMenuOpenSubmenu(Some(
                     FootprintContextSubmenu::View,
@@ -179,7 +195,7 @@ pub fn view_context_menu<'a>(
             if view_open {
                 items.push(item_indented(
                     tokens,
-                    "Fit to Window",
+                    &t(menu_ids::CTX_FIT_TO_WINDOW),
                     "V, F",
                     make_msg(FootprintEditorMsg::ContextMenuAction(
                         FootprintContextAction::FitToWindow,
@@ -195,7 +211,7 @@ pub fn view_context_menu<'a>(
             if has_clipboard {
                 items.push(item_msg(
                     tokens,
-                    "Paste",
+                    &c("paste"),
                     &paste_shortcut,
                     make_msg(FootprintEditorMsg::PastePad),
                 ));
@@ -204,7 +220,7 @@ pub fn view_context_menu<'a>(
 
             items.push(item_msg(
                 tokens,
-                "Properties...",
+                &c("edit_selected_object_properties"),
                 "",
                 make_msg(FootprintEditorMsg::CloseContextMenu),
             ));
@@ -217,14 +233,21 @@ pub fn view_context_menu<'a>(
                 .state
                 .pads
                 .get(idx)
-                .map(|p| format!("Pad {}", p.number))
-                .unwrap_or_else(|| format!("Pad {idx}"));
+                .map(|p| {
+                    with(
+                        menu_ids::CTX_FP_PAD_HEADER,
+                        &[("number", p.number.as_str().into())],
+                    )
+                })
+                .unwrap_or_else(|| {
+                    indexed_header(i18n, menu_ids::CTX_FP_PAD_HEADER, "number", idx)
+                });
             items.push(item_disabled(tokens, &header, ""));
             items.push(separator(tokens));
 
             items.push(item_msg(
                 tokens,
-                "Properties...",
+                &c("edit_selected_object_properties"),
                 "",
                 make_msg(FootprintEditorMsg::CloseContextMenu),
             ));
@@ -236,7 +259,7 @@ pub fn view_context_menu<'a>(
             let pad_actions_open = menu_state.submenu == Some(FootprintContextSubmenu::PadActions);
             items.push(item_submenu_header(
                 tokens,
-                "Pad Actions",
+                &t(menu_ids::CTX_FP_PAD_ACTIONS),
                 pad_actions_open,
                 make_msg(FootprintEditorMsg::ContextMenuOpenSubmenu(Some(
                     FootprintContextSubmenu::PadActions,
@@ -245,26 +268,26 @@ pub fn view_context_menu<'a>(
             if pad_actions_open {
                 items.push(item_indented(
                     tokens,
-                    "Rotate 90°",
+                    &t(menu_ids::CTX_FP_ROTATE_90),
                     "Space",
                     make_msg(FootprintEditorMsg::ActiveBarRotateSelection),
                 ));
                 items.push(item_indented(
                     tokens,
-                    "Flip Layer",
+                    &t(menu_ids::CTX_FP_FLIP_LAYER),
                     "X",
                     make_msg(FootprintEditorMsg::ActiveBarFlipSelection),
                 ));
                 // Stubs — Custom Pad + Thermal subsystems pending.
                 items.push(item_indented(
                     tokens,
-                    "Custom Pad from Outline...",
+                    &t(menu_ids::CTX_FP_CUSTOM_PAD),
                     "",
                     make_msg(FootprintEditorMsg::CloseContextMenu),
                 ));
                 items.push(item_indented(
                     tokens,
-                    "Thermal Connection Points...",
+                    &t(menu_ids::CTX_FP_THERMAL_POINTS),
                     "",
                     make_msg(FootprintEditorMsg::CloseContextMenu),
                 ));
@@ -275,34 +298,34 @@ pub fn view_context_menu<'a>(
             // v0.26-E — wired clipboard ops on the selected pad.
             items.push(item_msg(
                 tokens,
-                "Cut",
+                &c("cut"),
                 &cut_shortcut,
                 make_msg(FootprintEditorMsg::CutPad),
             ));
             items.push(item_msg(
                 tokens,
-                "Copy",
+                &c("copy"),
                 &copy_shortcut,
                 make_msg(FootprintEditorMsg::CopyPad),
             ));
             if has_clipboard {
                 items.push(item_msg(
                     tokens,
-                    "Paste",
+                    &c("paste"),
                     &paste_shortcut,
                     make_msg(FootprintEditorMsg::PastePad),
                 ));
             }
             items.push(item_msg(
                 tokens,
-                "Delete",
+                &c("delete_selection"),
                 "Del",
                 make_msg(FootprintEditorMsg::DeleteSelected),
             ));
 
             items.push(separator(tokens));
 
-            items.push(item_disabled(tokens, "Find Similar Objects...", ""));
+            items.push(item_disabled(tokens, &c("find_similar_objects"), ""));
         }
 
         FootprintContextTarget::SilkF(idx) => {
@@ -313,24 +336,31 @@ pub fn view_context_menu<'a>(
             // entry (e.g. concurrent mutation between hit-test +
             // render).
             let header = match editor.primitive().silk_f.get(idx) {
-                Some(g) => format!("{} (silk)", silk_kind_label(&g.kind)),
-                None => format!("Silk graphic {idx}"),
+                Some(g) => with(
+                    menu_ids::CTX_FP_SILK_HEADER,
+                    &[("kind", t(silk_kind_label(&g.kind)).into())],
+                ),
+                None => indexed_header(i18n, menu_ids::CTX_FP_SILK_UNKNOWN, "index", idx),
             };
             items.push(item_disabled(tokens, &header, ""));
             items.push(separator(tokens));
 
-            items.push(item_disabled(tokens, "Properties...", ""));
+            items.push(item_disabled(
+                tokens,
+                &c("edit_selected_object_properties"),
+                "",
+            ));
             // SilkF dispatches via FootprintDeleteSilkF which reads
             // `state.selected_silk_f` — the show-context-menu handler
             // set that when target == SilkF(idx) so this fires the
             // right delete.
             // A baked entry comes back with the next bake: not deletable.
             items.push(match silk_delete_msg(editor.primitive(), idx) {
-                Some(msg) => item_msg(tokens, "Delete", "Del", make_msg(msg)),
-                None => item_disabled(tokens, "Delete", "Del"),
+                Some(msg) => item_msg(tokens, &c("delete_selection"), "Del", make_msg(msg)),
+                None => item_disabled(tokens, &c("delete_selection"), "Del"),
             });
             items.push(separator(tokens));
-            items.push(item_disabled(tokens, "Find Similar Objects...", ""));
+            items.push(item_disabled(tokens, &c("find_similar_objects"), ""));
         }
     }
 
@@ -515,12 +545,31 @@ fn separator<'a>(tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Footprint, FootprintEditorMsg, silk_delete_msg};
+    use super::{Footprint, FootprintEditorMsg, indexed_header, silk_delete_msg};
     use crate::keymap::{
         AppCommandId, CompiledKeymap, ShortcutBinding, ShortcutBindingAction, ShortcutContext,
         ShortcutProfile, ShortcutProfileKind, ShortcutTrigger,
     };
     use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
+
+    /// An index shows as the plain digits, not grouped like a count.
+    #[test]
+    fn an_index_header_has_no_digit_grouping() {
+        let en = signex_i18n::I18n::en_us_ref();
+        assert_eq!(
+            indexed_header(
+                en,
+                signex_i18n::menu_ids::CTX_FP_SILK_UNKNOWN,
+                "index",
+                1234
+            ),
+            "Silk graphic 1234"
+        );
+        assert_eq!(
+            indexed_header(en, signex_i18n::menu_ids::CTX_FP_PAD_HEADER, "number", 1234),
+            "Pad 1234"
+        );
+    }
 
     fn keymap_with(bindings: Vec<(ShortcutBindingAction, &str)>) -> CompiledKeymap {
         CompiledKeymap::compile(&ShortcutProfile {
