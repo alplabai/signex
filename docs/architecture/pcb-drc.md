@@ -128,7 +128,7 @@ pair     := "between" OBJECT "and" OBJECT
 when     := "when" cond ("and" cond)*
 cond     := SUBJECT ("==" | "matches") (STRING | WORD)
 require  := "require" limit ("and" limit)*
-limit    := FIELD (">=" | "<=") NUMBER UNIT        (no space before UNIT)
+limit    := FIELD (">=" | "<=") NUMBER UNIT        (a space before UNIT only for a known unit)
 severity := "error" | "warning" | "info"
 ```
 
@@ -138,13 +138,13 @@ severity := "error" | "warning" | "info"
 | `track` | `width >=`, `width <=` | none | checked |
 | `via` | `diameter >=`, `drill >=` | none | checked |
 
-| Condition | Scope | Rank |
+| Condition | Scope | Net-scope rank |
 |---|---|---|
-| `net == "GND"` | one net, by name | 4 |
-| `class == "Power"` | the nets of a net class (first matching class) | 3 |
-| `net matches "USB_*"` | a net-name glob (`*`, `?`, as net classes) | 2 |
-| `layer == outer` / `inner` / `TopCopper` | copper layers; ranks 1 only with no net condition | 1 |
-| none | board-wide | 0 |
+| `net == "GND"` | one net, by name | 3 |
+| `class == "Power"` | the nets of a net class (first matching class) | 2 |
+| `net matches "USB_*"` | a net-name glob (`*`, `?`, as net classes) | 1 |
+| none of the above | every net | 0 |
+| `layer == outer` / `inner` / `TopCopper` | copper layers; a narrowing condition | (adds 1) |
 
 A rule takes at most one net, class or pattern condition and one layer
 condition. Words the grammar keeps open on purpose: a region scope (v2) is one
@@ -152,26 +152,45 @@ more condition subject (`region == "BGA1"`, reported today as "not supported
 yet"), mask and silkscreen are more pair objects, and more targets or fields
 join the tables above, all without a grammar change.
 
-Units are `mm`, `mil`, `um` (or `µm`) and `nm`, written right after the
-number, converted to integer nm with `pcb_geom::mm_to_nm`. There is no
-expression arithmetic (#1984, #1989).
+Units are `mm`, `mil`, `um` (or `µm`) and `nm`, converted to integer nm with
+`pcb_geom::mm_to_nm`. A unit may follow the number directly (`0.2mm`) or after
+spaces (`0.2 mm`); after a space only these unit words count, so `0.2 and`
+is a missing unit, not a unit called `and`. There is no expression
+arithmetic (#1984, #1989). A limit of 0 is a warning (it checks nothing); a
+clearance over 10 mm is a warning and one over 100 mm is refused, since a
+clearance widens the search around every copper item it covers.
 
 ### Precedence
 
 Specificity first, strictness only between equals (maintainer, 2026-11-13).
-For each check the most specific written rule that covers the object (or, for
-a clearance, either of the two nets on a shared layer, and the pair of object
-kinds) applies, even when it is looser than a less specific one: a rule for
-one net beats its class. Among rules of equal rank the strictest wins (the
-largest minimum, the smallest maximum); identical ones go to the first
-written. A clearance is resolved per shared copper layer and the pair needs
-the most of its layers.
+A rule's specificity is its net-scope rank, then the number of narrowing
+conditions it adds (a layer condition, an object pair): `class == "HV" and
+layer == inner` is more specific than `class == "HV"`, and a layer-only rule
+is above a board-wide one. The most specific written rule that covers an
+object applies, even when it is looser than a less specific one: a rule for
+one net beats its class. Among rules of equal specificity the strictest wins
+(the largest minimum, the smallest maximum); identical ones go to the first
+written.
+
+Specificity is per object. A clearance has two sides: for each side's net, on
+each shared copper layer, the most specific written rule covering that net
+(and the pair's object kinds) gives the side's value, else the net's implicit
+value; the pair needs the stricter of its two sides and the most of its
+layers. So a looser rule for one net never relaxes the other net's stricter
+rule, written or implicit, exactly as the implicit tier has always combined
+two nets' class values.
 
 Today's values are the lowest, implicit rules, below every written rule: the
-board setup clearance (or the 0.2 mm default) and the net-class clearances,
-combined as before (a pair needs the largest of them). A pair no written rule
-covers is checked exactly as before, so a board with no rule text gives the
-same results, in the same order, with the same Messages lines.
+board setup clearance (or the 0.2 mm default) and the net-class clearances.
+A side with no written rule takes the larger of the setup value and its
+class's value, so a pair no written rule covers needs what it always did and
+a board with no rule text gives the same results, in the same order, with
+the same Messages lines.
+
+The broad phase searches around each copper item as far as the widest
+clearance any pair with that net can need: its implicit value and the
+widest written rule covering the net. A pair whose other side asks for more
+is found from that other item.
 
 Track width and via size are checked only against a limit a written rule
 sets. The board setup's `track_min_width`, `via_min_diameter` and
@@ -184,7 +203,9 @@ change for the maintainer to decide.
 A written rule's id is `user::<name>` (ERC's convention); its severity is the
 one after `then`, and a `drc.severity` entry for that id overrides it like a
 built-in rule's, a later layer winning (`resolve_severities_with`). An entry
-for a `user::` id no rule has stays unrecognised.
+for a `user::` id no rule has stays unrecognised. As for built-in rules the
+severity is recorded on the report only: it is not shown yet and `off` does
+not hide a finding.
 
 The app compiles the same layers it takes severities from (the project's
 `rules.drc` when the project stores rules, else the machine's `User Default`),
@@ -198,6 +219,18 @@ example `DRC DSL (project): line 2, column 33: rule 'vias': unknown unit 'in'
 applying N rule(s)`, a `DRC: N track width, N via diameter, N via drill`
 summary when any is found, and the rule id after each logged finding of a
 written rule.
+
+Rule text that was not applied is also said where the results are read, so
+a typo never passes as a clean board: the summary line ends with `; N rule(s)
+not applied` or `; rule text not applied (syntax error)` (and is a warning
+then), and the DRC panel shows a warning line above the results. With
+written rules the default-clearance note and the summary say the board value
+holds only where no written rule applies. All of these appear only when rule
+text is present, so a run without it logs and shows what it always did.
+
+Known limit: the panel's summary counts clearance, shorts and unconnected
+links only; keepout (#2300), track width and via size findings are listed as
+rows but not counted there yet.
 
 ## How it stays fast
 

@@ -56,8 +56,10 @@ The language has no comments yet.
 | `track` | `width >= <length>`, `width <= <length>` |
 | `via` | `diameter >= <length>`, `drill >= <length>` |
 
-A length is a number with its unit right after it, no space: `0.2mm`,
-`8mil`, `150um` (or `150µm`), `125000nm`.
+A length is a number with its unit: `0.2mm` or `0.2 mm`, `8mil`, `150um`
+(or `150µm`), `125000nm`. A limit of 0 is reported (it checks nothing). A
+clearance over 10 mm is reported as a likely wrong unit, and one over 100 mm
+is not applied.
 
 ### Conditions
 
@@ -80,7 +82,7 @@ applied.
 
 ## Which rule applies
 
-The most specific rule wins, even when it is looser:
+For each net, the most specific rule wins, even when it is looser:
 
 1. a rule for one net,
 2. a net-class rule,
@@ -89,17 +91,27 @@ The most specific rule wins, even when it is looser:
 5. a board-wide rule,
 6. the board setup clearance and net-class clearances (as without rule text).
 
-Between two rules of the same rank, the stricter one wins.
+Within each level, a rule with more conditions (a layer, an object pair) is
+more specific: `class == "HV" and layer == inner` wins over `class == "HV"`
+on inner layers. Between two rules of the same specificity, the stricter one
+wins.
+
+A clearance is between two nets, and each net keeps its own rule: the pair
+needs the stricter of the two. A looser rule for `GND` never lowers what an
+`HV` net asks of its neighbours.
 
 ## Severity
 
 A finding of a rule has the severity after `then`. A severity entry for the
 rule's id (`user::<name>`) in the profile or project overrides it, as for the
-built-in rules; `off` switches the rule's findings off.
+built-in rules. The severity is recorded but not shown yet, and `off` does
+not hide findings yet.
 
 ## Mistakes in the text
 
-Run DRC says in Messages what it could not apply, with the line and column:
+Run DRC says in Messages what it could not apply, with the line and column,
+and the DRC panel and the summary line say that some rule text was not
+applied:
 
 - a syntax error: no rule of that text is applied;
 - an unknown target, field, condition, object or unit, a missing unit, a
@@ -110,4 +122,6 @@ Run DRC says in Messages what it could not apply, with the line and column:
 
 Region-scoped rules, clearance to holes and the board edge, annular ring,
 differential pairs, arithmetic in lengths, and checking the board setup's
-minimum track width and via sizes without a written rule.
+minimum track width and via sizes without a written rule. The DRC panel's
+summary counts clearance, shorts and unconnected links only; width and via
+findings are listed as rows.
