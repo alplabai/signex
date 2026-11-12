@@ -22,7 +22,10 @@ fn every_kind_has_a_stable_builtin_rule_id() {
             "builtin::short",
             "builtin::clearance",
             "builtin::unconnected",
-            "builtin::keepout"
+            "builtin::keepout",
+            "builtin::track_width",
+            "builtin::via_diameter",
+            "builtin::via_drill"
         ]
     );
     for kind in ViolationKind::ALL {
@@ -39,6 +42,13 @@ fn builtin_severities_make_unconnected_a_warning_and_the_rest_errors() {
     assert_eq!(builtin.of(ViolationKind::Short), Some(Severity::Error));
     assert_eq!(builtin.of(ViolationKind::Clearance), Some(Severity::Error));
     assert_eq!(builtin.of(ViolationKind::Keepout), Some(Severity::Error));
+    for kind in [
+        ViolationKind::TrackWidth,
+        ViolationKind::ViaDiameter,
+        ViolationKind::ViaDrill,
+    ] {
+        assert_eq!(builtin.of(kind), Some(Severity::Error), "{kind:?}");
+    }
     assert_eq!(
         builtin.of(ViolationKind::Unconnected),
         Some(Severity::Warning)

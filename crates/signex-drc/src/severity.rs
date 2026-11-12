@@ -8,15 +8,18 @@ use std::collections::BTreeMap;
 use signex_types::project::DrcRuleSet;
 use signex_types::violation::Severity;
 
-use crate::ViolationKind;
+use crate::{UserRule, ViolationKind};
 
 impl ViolationKind {
     /// Every kind, most severe first (the report order).
-    pub const ALL: [ViolationKind; 4] = [
+    pub const ALL: [ViolationKind; 7] = [
         ViolationKind::Short,
         ViolationKind::Clearance,
         ViolationKind::Unconnected,
         ViolationKind::Keepout,
+        ViolationKind::TrackWidth,
+        ViolationKind::ViaDiameter,
+        ViolationKind::ViaDrill,
     ];
 
     /// Stable rule id, stored in profiles and projects; never renamed.
@@ -26,6 +29,9 @@ impl ViolationKind {
             ViolationKind::Clearance => "builtin::clearance",
             ViolationKind::Unconnected => "builtin::unconnected",
             ViolationKind::Keepout => "builtin::keepout",
+            ViolationKind::TrackWidth => "builtin::track_width",
+            ViolationKind::ViaDiameter => "builtin::via_diameter",
+            ViolationKind::ViaDrill => "builtin::via_drill",
         }
     }
 
@@ -38,9 +44,12 @@ impl ViolationKind {
     pub const fn default_severity(self) -> Severity {
         match self {
             ViolationKind::Unconnected => Severity::Warning,
-            ViolationKind::Short | ViolationKind::Clearance | ViolationKind::Keepout => {
-                Severity::Error
-            }
+            ViolationKind::Short
+            | ViolationKind::Clearance
+            | ViolationKind::Keepout
+            | ViolationKind::TrackWidth
+            | ViolationKind::ViaDiameter
+            | ViolationKind::ViaDrill => Severity::Error,
         }
     }
 }
@@ -50,6 +59,9 @@ impl ViolationKind {
 pub struct DrcSeverities {
     /// A rule switched `off` has no entry.
     by_kind: BTreeMap<ViolationKind, Severity>,
+    /// Written rules by id (`user::<name>`): the rule's own severity, then
+    /// any layer entry for that id; `None` when switched `off`.
+    by_rule: BTreeMap<String, Option<Severity>>,
     /// Entries no layer could map (an id or severity this build lacks); they
     /// stay in the file and are ignored here.
     pub unrecognised: Vec<String>,
@@ -69,6 +81,7 @@ impl DrcSeverities {
                 .into_iter()
                 .map(|k| (k, k.default_severity()))
                 .collect(),
+            by_rule: BTreeMap::new(),
             unrecognised: Vec::new(),
         }
     }
@@ -76,6 +89,15 @@ impl DrcSeverities {
     /// The severity of `kind`; `None` when a layer switched it off.
     pub fn of(&self, kind: ViolationKind) -> Option<Severity> {
         self.by_kind.get(&kind).copied()
+    }
+
+    /// The severity of the rule `id`: a written rule's (`user::<name>`) or
+    /// a built-in one's; `None` when switched off or unknown.
+    pub fn of_rule(&self, id: &str) -> Option<Severity> {
+        match ViolationKind::from_rule_id(id) {
+            Some(kind) => self.of(kind),
+            None => self.by_rule.get(id).copied().flatten(),
+        }
     }
 
     fn apply(&mut self, layer: &DrcRuleSet) {
@@ -86,6 +108,9 @@ impl DrcSeverities {
                 }
                 (Some(kind), Some(None)) => {
                     self.by_kind.remove(&kind);
+                }
+                (None, Some(sev)) if self.by_rule.contains_key(id) => {
+                    self.by_rule.insert(id.clone(), sev);
                 }
                 _ => self.unrecognised.push(format!("severity {id} = {sev}")),
             }
@@ -98,7 +123,21 @@ pub fn resolve_severities(
     profile: Option<&DrcRuleSet>,
     project: Option<&DrcRuleSet>,
 ) -> DrcSeverities {
+    resolve_severities_with(profile, project, &[])
+}
+
+/// [`resolve_severities`] with written rules: each starts at its own
+/// severity and a layer entry for its id overrides it, as for a built-in
+/// rule. An entry for a `user::` id no rule has stays unrecognised.
+pub fn resolve_severities_with(
+    profile: Option<&DrcRuleSet>,
+    project: Option<&DrcRuleSet>,
+    rules: &[UserRule],
+) -> DrcSeverities {
     let mut out = DrcSeverities::builtin();
+    for rule in rules {
+        out.by_rule.insert(rule.id(), Some(rule.severity));
+    }
     for layer in [profile, project].into_iter().flatten() {
         out.apply(layer);
     }

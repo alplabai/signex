@@ -17,6 +17,7 @@ pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
     let mut violations = copper_pairs(&items, &index, rules);
     violations.extend(unconnected(board, &items));
     violations.extend(super::keepout::violations(board));
+    violations.extend(super::limits::violations(board, rules));
     violations.sort_unstable();
     DrcReport {
         rules: rules.clone(),
@@ -57,7 +58,7 @@ fn check_pair(a: &CopperItem, b: &CopperItem, rules: &DrcRules) -> Option<Violat
     if a.net == b.net || shared == 0 {
         return None;
     }
-    let required = rules.required(a.net, b.net);
+    let (required, rule) = rules.required_between(a, b, shared);
     let ((first, second), nets) = if a.item <= b.item {
         ((a, b), (a.net, b.net))
     } else {
@@ -74,6 +75,7 @@ fn check_pair(a: &CopperItem, b: &CopperItem, rules: &DrcRules) -> Option<Violat
             measured_nm: 0,
             required_nm: required,
             keepout: None,
+            rule: None,
         });
     }
     let gap = a.shape.separation(&b.shape);
@@ -87,6 +89,7 @@ fn check_pair(a: &CopperItem, b: &CopperItem, rules: &DrcRules) -> Option<Violat
         measured_nm: gap.distance_nm().min(required - 1),
         required_nm: required,
         keepout: None,
+        rule,
     })
 }
 
@@ -141,6 +144,7 @@ fn unconnected(board: &PcbBoard, items: &[CopperItem]) -> Vec<Violation> {
                 measured_nm: length,
                 required_nm: 0,
                 keepout: None,
+                rule: None,
             }
         })
         .collect()
