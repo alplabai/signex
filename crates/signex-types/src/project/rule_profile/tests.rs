@@ -40,6 +40,43 @@ fn saved_bytes_are_stable_and_ordered() {
 }
 
 #[test]
+fn the_drc_section_is_read_and_round_trips_with_unknown_keys() {
+    let profile = RuleProfile::from_json_bytes(
+        br#"{"name":"C","version":"1","drc":{"severity":{"builtin::unconnected":"error"},"dsl":"rule a","future":[1]}}"#,
+    )
+    .unwrap();
+    assert_eq!(profile.drc.severity["builtin::unconnected"], "error");
+    assert_eq!(profile.drc.dsl.as_deref(), Some("rule a"));
+    let json: serde_json::Value = serde_json::from_slice(&profile.to_json_bytes()).unwrap();
+    assert_eq!(json["drc"]["future"][0], 1);
+    assert_eq!(
+        RuleProfile::from_json_bytes(&profile.to_json_bytes()).unwrap(),
+        profile
+    );
+}
+
+#[test]
+fn a_profile_without_drc_resaves_without_it() {
+    let text = b"{\n  \"schema\": 1,\n  \"name\": \"C\",\n  \"version\": \"1\"\n}\n";
+    let profile = RuleProfile::from_json_bytes(text).unwrap();
+    assert!(profile.drc.is_empty());
+    assert_eq!(profile.to_json_bytes(), text);
+}
+
+/// The content hash recorded in projects stays the ERC hash: a DRC section
+/// has its own (#2307), so no existing provenance or drift result moves.
+#[test]
+fn the_drc_section_does_not_enter_the_profile_content_hash() {
+    let a = RuleProfile::from_json_bytes(SAMPLE.as_bytes()).unwrap();
+    let mut b = a.clone();
+    b.drc.severity.insert("builtin::short".into(), "off".into());
+    b.drc.dsl = Some("rule x".into());
+    assert_eq!(a.content_sha256(), b.content_sha256());
+    assert_eq!(a.content_sha256(), a.erc.sha256_hex());
+    assert_ne!(a.drc.sha256_hex(), b.drc.sha256_hex());
+}
+
+#[test]
 fn a_newer_schema_is_refused() {
     let err = RuleProfile::from_json_bytes(br#"{"schema": 2, "name": "x"}"#).unwrap_err();
     assert!(matches!(err, RuleProfileError::UnsupportedSchema(2)));

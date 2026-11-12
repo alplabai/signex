@@ -27,7 +27,7 @@ pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
 pub use rule_profile::{
     RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
 };
-pub use rules::{ErcRules, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef};
+pub use rules::{DrcRuleSet, ErcRules, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef};
 pub use schematic_defaults::{
     MAX_BUS_WIDTH_MM, MAX_DEFAULT_WIDTH_MM, MIN_TEXT_SIZE_PT, SchematicDefaultField,
     SchematicDefaultOverrides,

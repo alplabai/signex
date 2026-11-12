@@ -258,6 +258,7 @@ impl Signex {
                 let resolved = signex_erc::project_rules::resolve(&profile.erc);
                 self.ui_state.erc_severity_override = resolved.severity;
                 self.ui_state.pin_matrix_overrides = resolved.pin_matrix;
+                self.ui_state.machine_drc_rules = profile.drc.clone();
                 if !resolved.unrecognised.is_empty() {
                     crate::diagnostics::log_info(format!(
                         "The User Default rule profile holds {} entries from a newer Signex; \

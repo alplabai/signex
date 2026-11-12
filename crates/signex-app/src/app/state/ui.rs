@@ -505,6 +505,9 @@ pub struct UiState {
     /// at launch and written back to it on every edit.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    /// The `drc` section of the `User Default` profile (#2307): the DRC
+    /// profile layer of a project that stores no rules of its own.
+    pub machine_drc_rules: signex_types::project::DrcRuleSet,
     /// Net-color overrides keyed by net-label text. Drives the Active-Bar
     /// net-colour menu state and the net-color modal; the canvas paints
     /// from each sheet's own net colours (`SchematicSheet::net_colors`).

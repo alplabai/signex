@@ -57,8 +57,12 @@ pub struct ProjectRules {
     /// `erc_net_waivers`. Older builds keep the key verbatim in `unknown`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub erc_waivers: Vec<super::ErcWaiver>,
-    /// Keys written by a newer build (`drc`, `annotation`, ...); kept so a
-    /// save does not drop them.
+    /// Design rule check settings (#2307). An empty section is not written,
+    /// so a file without one re-saves without one.
+    #[serde(default, skip_serializing_if = "DrcRuleSet::is_empty")]
+    pub drc: DrcRuleSet,
+    /// Keys written by a newer build (`annotation`, ...); kept so a save
+    /// does not drop them.
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
     pub unknown: UnknownJson,
 }
@@ -71,6 +75,7 @@ impl Default for ProjectRules {
             erc: ErcRules::default(),
             erc_net_waivers: BTreeMap::new(),
             erc_waivers: Vec::new(),
+            drc: DrcRuleSet::default(),
             unknown: UnknownJson::default(),
         }
     }
@@ -126,11 +131,44 @@ impl ErcRules {
     /// ordered, so equal rule sets hash equal on every machine; the profile
     /// provenance and the ERC report header both record this value.
     pub fn sha256_hex(&self) -> String {
-        use sha2::{Digest, Sha256};
-        // A map of strings and JSON values always serialises.
-        let canonical = serde_json::to_vec(self).unwrap_or_default();
-        format!("{:x}", Sha256::digest(canonical))
+        canonical_sha256(self)
     }
+}
+
+/// DRC settings of a project or a profile (#2307). Like [`ErcRules`], this
+/// crate stores strings; `signex-drc` owns what they mean.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DrcRuleSet {
+    /// Rule id (`builtin::clearance`, ...) -> severity (`error` / `warning` /
+    /// `info` / `off`), for rules set away from the built-in default.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub severity: BTreeMap<String, String>,
+    /// Text in the DRC rule language (#2307 step 2b). Stored and written
+    /// back as is; this build does not read it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dsl: Option<String>,
+    #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
+    pub unknown: UnknownJson,
+}
+
+impl DrcRuleSet {
+    /// No severities, no rule text and no foreign keys.
+    pub fn is_empty(&self) -> bool {
+        self.severity.is_empty() && self.dsl.is_none() && self.unknown.is_empty()
+    }
+
+    /// Lower-case hex SHA-256 of the section's canonical JSON. Separate from
+    /// [`ErcRules::sha256_hex`], so no recorded ERC hash moves.
+    pub fn sha256_hex(&self) -> String {
+        canonical_sha256(self)
+    }
+}
+
+fn canonical_sha256(value: &impl Serialize) -> String {
+    use sha2::{Digest, Sha256};
+    // A map of strings and JSON values always serialises.
+    let canonical = serde_json::to_vec(value).unwrap_or_default();
+    format!("{:x}", Sha256::digest(canonical))
 }
 
 #[cfg(test)]

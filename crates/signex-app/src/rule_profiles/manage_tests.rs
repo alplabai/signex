@@ -531,3 +531,33 @@ fn a_chosen_profile_that_is_gone_or_unreadable_falls_back_loudly() {
         b"{nope"
     );
 }
+
+#[test]
+fn a_new_project_copies_the_profiles_drc_section_and_the_shipped_one_has_none() {
+    let tmp = dir();
+    let mut profile = company(tmp.path());
+    profile
+        .drc
+        .severity
+        .insert("builtin::unconnected".into(), "error".into());
+    profile.drc.dsl = Some("rule a".into());
+    std::fs::write(tmp.path().join("company.snxrules"), profile.to_json_bytes()).unwrap();
+    let (seeded, _) = rules_for_new_project(Some(tmp.path()), Some("Company"));
+    assert_eq!(seeded.drc, profile.drc);
+    let (shipped, _) = rules_for_new_project(None, None);
+    assert!(shipped.drc.is_empty());
+}
+
+#[test]
+fn editing_the_machine_rules_keeps_their_drc_section() {
+    let tmp = dir();
+    write_user_default(tmp.path(), rules("unused_pin", "off")).unwrap();
+    let path = tmp.path().join(file_name_for(USER_DEFAULT_PROFILE_NAME));
+    let mut stored = read(&path);
+    stored.drc.dsl = Some("rule keep".into());
+    std::fs::write(&path, stored.to_json_bytes()).unwrap();
+    write_user_default(tmp.path(), rules("unused_pin", "error")).unwrap();
+    let after = read(&path);
+    assert_eq!(after.erc.severity["unused_pin"], "error");
+    assert_eq!(after.drc.dsl.as_deref(), Some("rule keep"));
+}

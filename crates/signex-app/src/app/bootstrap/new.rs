@@ -416,6 +416,7 @@ impl Signex {
                 // The machine's rules live in the `User Default` profile; the
                 // boot task loads them (`ErcMsg::UserDefaultLoaded`).
                 erc_severity_override: std::collections::HashMap::new(),
+                machine_drc_rules: Default::default(),
                 profile_manager: Default::default(),
                 default_rule_profile,
                 machine_rules_loading: false,
