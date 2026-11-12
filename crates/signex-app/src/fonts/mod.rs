@@ -765,6 +765,7 @@ pub mod document_report;
 mod erc;
 mod language;
 pub mod measure;
+mod merge_queue;
 mod misc;
 mod ordered_write;
 #[cfg(test)]

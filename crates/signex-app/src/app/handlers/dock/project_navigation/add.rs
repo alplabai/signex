@@ -258,7 +258,7 @@ impl Signex {
         // the update thread; the project is looked up again by id when the
         // job lands. The setup dialog's sheet values win over the project's;
         // its designator standard is applied when the write lands (#2232).
-        let designators = choice.as_ref().map(|c| c.designators);
+        let designators = choice.as_ref().and_then(|c| c.designators);
         let sheet_defaults = match choice {
             Some(choice) => Some(choice.sheet),
             None => self

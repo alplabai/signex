@@ -86,9 +86,16 @@ pub(crate) fn new_schematic_sheet(app: &mut Signex, args: &CommandArgs) -> Ran {
     let Some(loaded) = app.document_state.project_by_id(project) else {
         return refused("`new_schematic_sheet`: the project is no longer open");
     };
+    // The designator standard is the project's: a saved profile named here
+    // sets it only on a project that stores none; `project` and a built-in
+    // leave it.
+    let names_saved_profile = text(args, "profile").is_some_and(|token| {
+        signex_types::project::find_user_profile(token, &app.ui_state.setup_profiles).is_some()
+    });
     let choice = SheetChoice {
         sheet: setup.sheet,
-        designators: setup.designators,
+        designators: (names_saved_profile && loaded.data.designator_standard().is_none())
+            .then_some(setup.designators),
     };
     let listed: Vec<String> = loaded
         .data
@@ -98,15 +105,32 @@ pub(crate) fn new_schematic_sheet(app: &mut Signex, args: &CommandArgs) -> Ran {
         .collect();
     let dir = loaded.dir().to_path_buf();
     let Some(name) = text(args, "name") else {
+        let i18n = app.ui_state.i18n.clone();
         let task = Task::perform(
-            on_blocking_pool(move || Ok(free_sheet_path(&dir, &listed))),
+            async move {
+                match on_blocking_pool(move || Ok(free_sheet_path(&dir, &listed))).await {
+                    Ok(path) => Some(path),
+                    Err(why) => {
+                        // The search died (a panic or a join error): say it.
+                        crate::diagnostics::log_warning(
+                            signex_i18n::t!(
+                                i18n,
+                                signex_i18n::ids::SETUP_SHEET_NAME_FAILED,
+                                "why" => why
+                            )
+                            .into_string(),
+                        );
+                        None
+                    }
+                }
+            },
             move |found| match found {
-                Ok(path) => Message::Project(ProjectMsg::AddNewSchematicPicked {
+                Some(path) => Message::Project(ProjectMsg::AddNewSchematicPicked {
                     project_id: project,
                     path: Some(path),
                     choice: Some(choice.clone()),
                 }),
-                Err(_) => Message::noop(),
+                None => Message::noop(),
             },
         );
         return (CommandOutcome::Ran, task);

@@ -1041,6 +1041,7 @@ define_ids! {
     SETUP_PROFILES_SKIPPED = "setup-profiles-skipped";
     SETUP_PROFILE_MISSING_UNKNOWN = "setup-profile-missing-unknown";
     SETUP_PROJECT_CLOSED = "setup-project-closed";
+    SETUP_SHEET_NAME_FAILED = "setup-sheet-name-failed";
     OVERLAY_PALETTE_GROUP_COMMANDS = "overlay-palette-group-commands";
     OVERLAY_PALETTE_GROUP_COMPONENTS = "overlay-palette-group-components";
     OVERLAY_PALETTE_GROUP_NETS = "overlay-palette-group-nets";

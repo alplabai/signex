@@ -33,6 +33,12 @@ pub struct DocumentSetupState {
     /// The project's name, for the intro line.
     pub(crate) project_name: String,
     pub(crate) draft: NewProjectState,
+    /// The project stored a designator standard when the dialog opened.
+    pub(crate) project_had_designators: bool,
+    /// The user picked a designator standard in this dialog.
+    pub(crate) designators_picked: bool,
+    /// The user picked a saved profile card in this dialog.
+    pub(crate) profile_picked: bool,
 }
 
 impl DocumentSetupState {
@@ -46,21 +52,35 @@ impl DocumentSetupState {
         }
     }
 
-    /// The setup the sheet is made with.
+    /// The designator standard the dialog shows.
+    pub fn draft_designators(&self) -> DesignatorStandard {
+        self.draft.setup.designators
+    }
+
+    /// The saved profile card picked in the dialog, by id.
+    pub fn draft_user_profile(&self) -> Option<&str> {
+        self.draft.setup.user_profile.as_deref()
+    }
+
+    /// The setup the sheet is made with. The designator standard is the
+    /// project's, so it is carried only when the user chose it here: picked
+    /// it, or picked a profile while the project stored none.
     pub(crate) fn sheet_choice(&self) -> SheetChoice {
+        let chosen =
+            self.designators_picked || (self.profile_picked && !self.project_had_designators);
         SheetChoice {
             sheet: self.draft.setup.sheet.clone(),
-            designators: self.draft.setup.designators,
+            designators: chosen.then_some(self.draft.setup.designators),
         }
     }
 }
 
 /// What a new sheet is made with: its size, orientation and title block,
-/// and the project's designator standard.
+/// and, when chosen, the project's designator standard.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SheetChoice {
     pub sheet: SheetDefaults,
-    pub designators: DesignatorStandard,
+    pub designators: Option<DesignatorStandard>,
 }
 
 /// What happened in the New PCB or New Schematic dialog.

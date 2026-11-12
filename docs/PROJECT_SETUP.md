@@ -158,8 +158,13 @@ removal is a settings change and stays when the dialog is cancelled.
 
 Each save or removal is merged into the list the file holds now, by id, read-
 modify-write and atomic, off the UI thread: entries this build cannot read,
-and profiles another running Signex saved, are kept. Messages says "Saved the
-setup profile" only once the file is written, and says why when it is not.
+and profiles another running Signex saved, are kept. Edits run in the order
+they were made, whatever the disk speed. A new profile whose id is already in
+the file is stored under the next free number (`user-team-2`) and replaces
+nothing; a `setup_profiles` value that is not a list refuses the edit and is
+left as it is. Messages says "Saved the
+setup profile" only once the file is written; when the write fails it says
+why and the change is taken back in the app.
 At start-up, stored entries that cannot be offered are counted once in
 Messages; they stay in the file.
 
@@ -167,14 +172,17 @@ A project names its default profile by id (`project_defaults.profile`),
 written by New Project and by a profile card pick in Project Options (a rule
 edit does not change it). A saved-profile pick in Project Options stores its
 board rules, sheet values, designator standard and id as one edit. Removing
-the project's own default profile in Project Options clears the id in the
+the project's own default profile, in Project Options or in the New PCB or
+New Schematic dialog of that project, clears the id in the
 same edit, so it does not dangle. The project's stored values stay its own:
 they win over the named profile, and the id picks the card; no built-in card
 is highlighted while a saved profile is picked. A part the project does not
 store comes from the named profile. A project that names a saved profile the
 user does not have (shared from someone else, or removed) uses its stored
 values (else Standard); Messages says so once per profile per session, by the
-name it had if it was removed this session.
+name it had if it was removed this session. A Signex build from before the id
+existed drops `project_defaults.profile` when it re-saves the project (it keeps
+no unknown keys inside `project_defaults`); the stored values stay.
 
 ## New PCB and New Schematic
 
@@ -192,7 +200,12 @@ the palette) opens the New Schematic dialog: the saved profiles (the built-in
 cards differ only in board rules, so they are not offered), sheet size,
 orientation, title block and designator standard. **Create schematic...**
 asks where to save the sheet and writes it with those values; cancelling the
-file dialog makes nothing. The designator standard is the project's: a change
+file dialog makes nothing. On a project that stores no sheet defaults (and
+names no saved profile) the dialog starts from the blank sheet Add New always
+made (A4), so pressing Create unchanged writes the same sheet as before. The
+designator standard is the project's: it is applied only when it was picked
+in the dialog, or when a saved profile was picked there and the project
+stored none. A change
 is a project edit (dirty, undoable), made only once the sheet is written: a
 refused or failed write leaves it as it was. There is no title-block template list,
 so the title block is on or off. Grid and units are app preferences, not

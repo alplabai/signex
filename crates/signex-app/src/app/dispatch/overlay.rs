@@ -93,8 +93,8 @@ impl Signex {
         match msg {
             ProjectMsg::Setup(msg) => self.dispatch_new_project_message(msg),
             ProjectMsg::DocumentSetup(msg) => self.dispatch_document_setup_message(msg),
-            ProjectMsg::SetupProfilesWritten { note, result } => {
-                self.setup_profiles_written(note, result);
+            ProjectMsg::SetupProfilesWritten { note, undo, result } => {
+                self.setup_profiles_written(note, *undo, result);
                 Task::none()
             }
             ProjectMsg::StartScreen(msg) => self.dispatch_start_screen_message(msg),

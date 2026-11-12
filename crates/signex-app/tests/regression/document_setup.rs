@@ -572,3 +572,125 @@ fn removing_the_projects_default_profile_clears_its_id() {
     );
     assert!(f.app.document_state.is_document_dirty(&project.path));
 }
+
+/// Create the New Schematic dialog's sheet at `name` in the fixture folder.
+fn create_sheet_at(f: &mut Fixture, name: &str) -> SchematicSheet {
+    let answers = HeadlessAnswers::default();
+    f.app.ui_state.io = IoPorts::headless(answers.clone());
+    let target = f.dir.join(name);
+    answers.replace_all([("path".to_string(), target.display().to_string())]);
+    create(&mut f.app);
+    let text = std::fs::read_to_string(&target).expect("the sheet is written");
+    SnxSchematic::parse(&text).expect("a sheet").sheet
+}
+
+/// A project from before setup defaults: New Schematic, Create unchanged,
+/// still writes the A4 blank sheet Add New always made.
+#[test]
+fn an_old_project_without_sheet_defaults_still_gets_a4() {
+    let mut f = fixture(ProjectDefaults::default());
+    send(&mut f.app, menu_row("new_schematic_sheet"));
+    assert_open(&f.app, SetupKind::Sheet);
+    let sheet = create_sheet_at(&mut f, "Plain.snxsch");
+    assert_eq!(sheet.paper_size, "A4");
+    let project = &f.app.document_state.projects[0];
+    assert_eq!(project.data.designator_standard(), None, "untouched");
+}
+
+/// A saved default profile's designator standard shows in the dialog but is
+/// not applied to the project when the user did not touch it.
+#[test]
+fn a_profile_default_standard_is_not_applied_untouched() {
+    let mut users = Vec::new();
+    let id = signex_types::project::save_user_profile(
+        &mut users,
+        "Din team",
+        SetupProfile::Standard.pcb(8),
+        Default::default(),
+        DesignatorStandard::Din40719_2,
+    );
+    let mut f = fixture(ProjectDefaults {
+        profile: Some(id.clone()),
+        ..ProjectDefaults::default()
+    });
+    f.app.ui_state.setup_profiles = users;
+    send(&mut f.app, menu_row("new_schematic_sheet"));
+    let shown = f.app.ui_state.document_setup.as_ref().expect("dialog");
+    assert_eq!(shown.draft_designators(), DesignatorStandard::Din40719_2);
+    create_sheet_at(&mut f, "Untouched.snxsch");
+    let project = &f.app.document_state.projects[0];
+    assert_eq!(project.data.designator_standard(), None, "not applied");
+    // Picking the profile in the dialog on a project with none applies it.
+    send(&mut f.app, menu_row("new_schematic_sheet"));
+    setup(&mut f.app, NewProjectMsg::UserProfilePicked(id));
+    create_sheet_at(&mut f, "Picked.snxsch");
+    assert_eq!(
+        f.app.document_state.projects[0].data.designator_standard(),
+        Some(DesignatorStandard::Din40719_2)
+    );
+}
+
+/// Remove in the New PCB dialog un-names the project's default profile, as
+/// the Project tab does.
+#[test]
+fn removing_the_default_profile_in_the_dialog_unnames_it() {
+    let mut users = Vec::new();
+    let id = signex_types::project::save_user_profile(
+        &mut users,
+        "Gone 2317",
+        SetupProfile::Hdi.pcb(8),
+        Default::default(),
+        DesignatorStandard::Ieee315,
+    );
+    let mut stored =
+        signex_types::project::ProjectSetup::from_profile(SetupProfile::Hdi).defaults();
+    stored.profile = Some(id.clone());
+    let mut f = fixture(stored);
+    f.app.ui_state.setup_profiles = users;
+    send(&mut f.app, menu_row("new_pcb_document"));
+    setup(&mut f.app, NewProjectMsg::UserProfileRemoveRequested(id));
+    setup(&mut f.app, NewProjectMsg::UserProfileRemoveConfirmed);
+    let project = &f.app.document_state.projects[0];
+    assert_eq!(project.data.project_defaults.profile, None);
+    assert!(f.app.document_state.is_document_dirty(&project.path));
+}
+
+/// A profile save whose write failed is taken back in the app.
+#[test]
+fn a_failed_profile_write_is_undone() {
+    use signex_app::app::{ProfileUndo, ProjectMsg};
+    let mut f = fixture(ProjectDefaults::default());
+    send(&mut f.app, menu_row("new_pcb_document"));
+    setup(&mut f.app, NewProjectMsg::SaveProfileOpened);
+    setup(
+        &mut f.app,
+        NewProjectMsg::SaveProfileNameEdited("Undo 2317".into()),
+    );
+    setup(&mut f.app, NewProjectMsg::SaveProfileConfirmed);
+    let id = f
+        .app
+        .ui_state
+        .setup_profiles
+        .iter()
+        .find(|p| p.name == "Undo 2317")
+        .map(|p| p.id.clone())
+        .expect("saved in the app");
+    send(
+        &mut f.app,
+        Message::Project(ProjectMsg::SetupProfilesWritten {
+            note: String::new(),
+            undo: Box::new(ProfileUndo::Saved {
+                id: id.clone(),
+                previous: None,
+            }),
+            result: Err("disk full".into()),
+        }),
+    );
+    assert!(f.app.ui_state.setup_profiles.iter().all(|p| p.id != id));
+    let draft = f.app.ui_state.document_setup.as_ref().expect("dialog");
+    assert_eq!(
+        draft.draft_user_profile(),
+        None,
+        "the card is no longer picked"
+    );
+}

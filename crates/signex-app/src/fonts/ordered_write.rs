@@ -151,20 +151,32 @@ impl OrderedPrefWrite {
 
 /// [`background_pref_write`] for an edit merged into what the file holds
 /// rather than a whole value: no write is skipped as stale (each carries a
-/// different edit), the quit path still waits for it, and its outcome comes
-/// back through `done` (#2232).
-pub fn background_pref_merge(
+/// different edit), the edits of one key run in the order they were made
+/// (`merge_queue`), the quit path still waits for them, and each outcome
+/// comes back through `done` (#2232).
+pub fn background_pref_merge<T: Send + 'static>(
     key: &'static str,
-    write: impl FnOnce() -> Result<(), String> + Send + 'static,
-    done: impl Fn(Result<(), String>) -> Message + Send + 'static,
+    write: impl FnOnce() -> Result<T, String> + Send + 'static,
+    done: impl Fn(Result<T, String>) -> Message + Send + 'static,
 ) -> Task<Message> {
     let slot = InFlightSlot::take(key);
     let has_run = slot.has_run.clone();
+    // Taken here, on the UI thread, so the order is the user's.
+    let ticket = super::merge_queue::Ticket::take(key);
     Task::perform(
         async move {
             let result = tokio::task::spawn_blocking(move || {
                 has_run.store(true, Ordering::SeqCst);
-                write()
+                if !ticket.wait_turn() {
+                    tracing::warn!(
+                        target: "signex::prefs",
+                        key = key,
+                        "an earlier edit of this preference did not finish in time; this one runs anyway"
+                    );
+                }
+                let result = write();
+                drop(ticket);
+                result
             })
             .await
             .unwrap_or_else(|e| Err(format!("the preference write task failed: {e}")));

@@ -490,8 +490,8 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
     CommandMetadata {
         id: "new_schematic_sheet",
         category: "file",
-        label: "New schematic sheet in the project",
-        menu_label: Some("Schematic"),
+        label: command_ids::CMD_NEW_SCHEMATIC_SHEET,
+        menu_label: Some(command_ids::CMD_MENU_NEW_SCHEMATIC_SHEET),
         group: CommandGroup::Schematic,
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES_NOT_UNDOABLE,

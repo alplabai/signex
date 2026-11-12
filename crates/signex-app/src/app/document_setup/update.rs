@@ -2,7 +2,7 @@
 
 use iced::Task;
 use signex_i18n::{ids, t};
-use signex_types::project::{ProjectSetup, ResolvedSetup};
+use signex_types::project::{ProjectSetup, ResolvedSetup, SheetDefaults};
 
 use super::{DocumentSetupMsg, DocumentSetupState, SetupKind};
 use crate::app::new_project::{NewProjectMsg, NewProjectState, ProfileStored, store_profile};
@@ -16,11 +16,21 @@ impl Signex {
     /// values are used.
     pub(crate) fn resolved_project_setup(&mut self, project: ProjectId) -> Option<ResolvedSetup> {
         let loaded = self.document_state.project_by_id(project)?;
-        let resolved = ProjectSetup::for_project(
+        let mut resolved = ProjectSetup::for_project(
             &loaded.data.project_defaults,
             loaded.data.designator_standard(),
             &self.ui_state.setup_profiles,
         );
+        // A project that stores no sheet defaults and names no saved profile
+        // gets the blank sheet Add New always made (A4), not the New Project
+        // default.
+        if loaded.data.project_defaults.sheet.is_none() && resolved.setup.user_profile.is_none() {
+            let blank = crate::app::handlers::document_files::blank_schematic_sheet_for_new_doc();
+            resolved.setup.sheet = SheetDefaults {
+                paper_size: blank.paper_size,
+                show_title_block: blank.frame.show_title_block,
+            };
+        }
         let ui = &mut self.ui_state;
         if let Some(missing) = &resolved.missing_profile
             && ui.missing_profiles_warned.insert(missing.clone())
@@ -91,6 +101,7 @@ impl Signex {
             }
         }
         let project_name = loaded.data.name.clone();
+        let project_had_designators = loaded.data.designator_standard().is_some();
         let Some(resolved) = self.resolved_project_setup(project) else {
             return Task::none();
         };
@@ -101,6 +112,9 @@ impl Signex {
             project,
             project_name,
             draft,
+            project_had_designators,
+            designators_picked: false,
+            profile_picked: false,
         });
         Task::none()
     }
@@ -160,10 +174,22 @@ impl Signex {
                 let Some(state) = ui.document_setup.as_mut() else {
                     return Task::none();
                 };
+                match &edit {
+                    M::DesignatorsPicked(_) => state.designators_picked = true,
+                    M::UserProfilePicked(_) => state.profile_picked = true,
+                    _ => {}
+                }
+                let project = state.project;
                 match store_profile(&mut state.draft, &mut ui.setup_profiles, &edit) {
                     ProfileStored::NotAStore => {
                         state.draft.apply_setup(edit, &ui.setup_profiles);
                         Task::none()
+                    }
+                    // Removing this project's default profile un-names it, as
+                    // the Project tab does.
+                    ProfileStored::Removed { profile, at } => {
+                        self.clear_removed_default_profile(project, &profile.id);
+                        self.after_profile_store(ProfileStored::Removed { profile, at })
                     }
                     stored => self.after_profile_store(stored),
                 }

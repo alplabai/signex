@@ -154,22 +154,11 @@ impl Signex {
         let picked = matches!(msg, NewProjectMsg::ProfilePicked(_));
         match store_profile(draft, users, &msg) {
             ProfileStored::NotAStore => {}
-            ProfileStored::Removed { profile } => {
+            ProfileStored::Removed { profile, at } => {
                 // The project's own default profile is gone: the project no
                 // longer names it, in the same edit.
-                if stored.profile.as_deref() == Some(profile.id.as_str()) {
-                    let mut defaults = stored;
-                    defaults.profile = None;
-                    self.apply_project_general(
-                        project_id,
-                        ProjectGeneralCommand::SetProjectDefaults {
-                            defaults,
-                            designators: None,
-                            typing: None,
-                        },
-                    );
-                }
-                return self.after_profile_store(ProfileStored::Removed { profile });
+                self.clear_removed_default_profile(project_id, &profile.id);
+                return self.after_profile_store(ProfileStored::Removed { profile, at });
             }
             stored => return self.after_profile_store(stored),
         }

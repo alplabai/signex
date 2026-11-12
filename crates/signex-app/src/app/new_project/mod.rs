@@ -9,6 +9,7 @@ mod target;
 mod update;
 
 pub(crate) use command::new_project_with_profile;
+pub use profiles::ProfileUndo;
 pub(crate) use profiles::{ProfileStored, store_profile};
 pub use state::NewProjectState;
 pub(crate) use state::{Blocker, NameProblem, RULE_FIELDS, SaveProfileProblem, check_name};

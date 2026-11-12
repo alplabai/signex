@@ -612,7 +612,10 @@ pub enum ProjectMsg {
     /// `note` is said in Messages on success (#2232).
     SetupProfilesWritten {
         note: String,
-        result: Result<(), String>,
+        /// How to take the in-memory change back if the write failed.
+        undo: Box<crate::app::ProfileUndo>,
+        /// The id the profile is stored under (`None` for a removal).
+        result: Result<Option<String>, String>,
     },
     /// Start screen project rows: pin, unpin, open a pinned project, the
     /// row menu (#2305); routed to `dispatch_start_screen_message`.

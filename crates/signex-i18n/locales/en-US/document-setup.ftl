@@ -70,7 +70,7 @@ setup-profile-keep = Keep
 setup-profile-err-rules = Fix the values marked below before saving them as a profile.
 
 # Messages panel; $why is the reason the settings file was not written.
-setup-profile-write-failed = The setup profile change was not saved: { $why }
+setup-profile-write-failed = The setup profile change was not saved, so it was undone: { $why }
 
 # Messages panel at start-up; $count is how many saved profiles are not offered.
 setup-profiles-skipped = { $count ->
@@ -83,3 +83,6 @@ setup-profile-missing-unknown = Project { $project } names a setup profile that 
 
 # Messages panel; $project is the project name.
 setup-project-closed = Project { $project } was closed, so its New PCB or New Schematic dialog was closed and nothing was made.
+
+# Messages panel; $why is why a free Sheet<n> name could not be found.
+setup-sheet-name-failed = New schematic sheet: no free sheet name could be found, so nothing was made: { $why }
