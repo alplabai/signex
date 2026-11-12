@@ -2,14 +2,15 @@
 //! board view (ratsnest, layers) and board sketch mode.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
+use signex_i18n::command_ids;
 
 pub(super) const PCB: &[CommandMetadata] = &[
     // Read-only: the report goes to the Messages panel, the board is not touched.
     CommandMetadata {
         id: "run_drc",
         category: "pcb",
-        label: "Run the design rule check on the board",
-        menu_label: Some("Design Rule Check"),
+        label: command_ids::CMD_RUN_DRC,
+        menu_label: Some(command_ids::CMD_MENU_RUN_DRC),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::RUNS_HEADLESS,
@@ -20,8 +21,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "reannotate_board",
         category: "design",
-        label: "Re-annotate the board's designators by position",
-        menu_label: Some("Re-Annotate Board..."),
+        label: command_ids::CMD_REANNOTATE_BOARD,
+        menu_label: Some(command_ids::CMD_MENU_REANNOTATE_BOARD),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
@@ -32,8 +33,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "flip_selection",
         category: "modify",
-        label: "Flip selection to the other board side",
-        menu_label: Some("Flip Selection"),
+        label: command_ids::CMD_FLIP_SELECTION,
+        menu_label: Some(command_ids::CMD_MENU_FLIP_SELECTION),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::MUTATES,
@@ -42,8 +43,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "toggle_ratsnest",
         category: "view",
-        label: "Show or hide the ratsnest",
-        menu_label: Some("Toggle Ratsnest"),
+        label: command_ids::CMD_TOGGLE_RATSNEST,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_RATSNEST),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
@@ -52,8 +53,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "next_layer",
         category: "view",
-        label: "Make the next copper layer active",
-        menu_label: Some("Next Layer"),
+        label: command_ids::CMD_NEXT_LAYER,
+        menu_label: Some(command_ids::CMD_MENU_NEXT_LAYER),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
@@ -62,8 +63,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "prev_layer",
         category: "view",
-        label: "Make the previous copper layer active",
-        menu_label: Some("Previous Layer"),
+        label: command_ids::CMD_PREV_LAYER,
+        menu_label: Some(command_ids::CMD_MENU_PREV_LAYER),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
@@ -72,8 +73,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "toggle_layer_visibility",
         category: "view",
-        label: "Show or hide the active layer",
-        menu_label: Some("Toggle Layer Visibility"),
+        label: command_ids::CMD_TOGGLE_LAYER_VISIBILITY,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_LAYER_VISIBILITY),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
@@ -82,8 +83,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "show_all_layers",
         category: "view",
-        label: "Show every layer",
-        menu_label: Some("Show All Layers"),
+        label: command_ids::CMD_SHOW_ALL_LAYERS,
+        menu_label: Some(command_ids::CMD_MENU_SHOW_ALL_LAYERS),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
@@ -96,8 +97,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "view_rotate",
         category: "view",
-        label: "Rotate the board view clockwise",
-        menu_label: Some("Rotate View 90° Clockwise"),
+        label: command_ids::CMD_VIEW_ROTATE,
+        menu_label: Some(command_ids::CMD_MENU_VIEW_ROTATE),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::NONE,
@@ -107,8 +108,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "view_rotate_ccw",
         category: "view",
-        label: "Rotate the board view 90° counter-clockwise",
-        menu_label: Some("Rotate View 90° Counter-Clockwise"),
+        label: command_ids::CMD_VIEW_ROTATE_CCW,
+        menu_label: Some(command_ids::CMD_MENU_VIEW_ROTATE_CCW),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
@@ -117,8 +118,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "view_rotate_180",
         category: "view",
-        label: "Rotate the board view 180°",
-        menu_label: Some("Rotate View 180°"),
+        label: command_ids::CMD_VIEW_ROTATE_180,
+        menu_label: Some(command_ids::CMD_MENU_VIEW_ROTATE_180),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
@@ -127,8 +128,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "view_rotate_reset",
         category: "view",
-        label: "Reset the board view rotation to 0°",
-        menu_label: Some("Reset View Rotation"),
+        label: command_ids::CMD_VIEW_ROTATE_RESET,
+        menu_label: Some(command_ids::CMD_MENU_VIEW_ROTATE_RESET),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
@@ -137,8 +138,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "toggle_layers_panel",
         category: "view",
-        label: "Show or hide the Layers panel",
-        menu_label: Some("Layers"),
+        label: command_ids::CMD_TOGGLE_LAYERS_PANEL,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_LAYERS_PANEL),
         group: CommandGroup::Pcb,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -149,8 +150,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "new_pcb_document",
         category: "file",
-        label: "New PCB in the project",
-        menu_label: Some("PCB"),
+        label: command_ids::CMD_NEW_PCB_DOCUMENT,
+        menu_label: Some(command_ids::CMD_MENU_NEW_PCB_DOCUMENT),
         group: CommandGroup::Pcb,
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES_NOT_UNDOABLE,
@@ -161,8 +162,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
     CommandMetadata {
         id: "board_sketch",
         category: "design",
-        label: "Enter or leave the board sketch",
-        menu_label: Some("Board Sketch"),
+        label: command_ids::CMD_BOARD_SKETCH,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_SKETCH),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,

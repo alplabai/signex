@@ -13,6 +13,7 @@ use super::{
     AppCommandId, CompiledKeymap, Platform, ShortcutBindingAction, ShortcutProfileSet,
     ShortcutTrigger, all_command_ids, metadata_for_str,
 };
+use signex_i18n::{I18n, t};
 
 const CATALOG: &str = include_str!("testdata/catalog.golden.tsv");
 const PROFILES: &str = include_str!("testdata/builtin_profiles.golden.tsv");
@@ -81,8 +82,9 @@ fn catalog_text() -> String {
         let row = [
             meta.id.to_string(),
             meta.category.to_string(),
-            meta.label.to_string(),
-            or_dash(meta.menu_label).to_string(),
+            meta.label_in(I18n::en_us_ref()),
+            meta.menu_label
+                .map_or("-".into(), |id| t!(I18n::en_us_ref(), id).to_string()),
             meta.group.display_name().to_string(),
             or_dash(meta.icon.map(|i| i.0)).to_string(),
             meta.keybind.as_ref().map_or("-".into(), keybind),

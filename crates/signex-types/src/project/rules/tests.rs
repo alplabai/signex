@@ -238,3 +238,81 @@ fn a_waiver_from_a_newer_build_keeps_its_unknown_keys() {
     assert!(w.is_complete());
     assert_eq!(saved["rules"], rules_of(&text));
 }
+
+// ---------------------------------------------------------------------------
+// The `drc` section (#2307 step 2a).
+// ---------------------------------------------------------------------------
+
+#[test]
+fn the_drc_section_is_read_and_round_trips_with_unknown_keys() {
+    let text = project_with_rules(
+        r#"{"schema":1,"drc":{"severity":{"builtin::unconnected":"error","user::future":"info"},"dsl":"rule a on net","future_key":{"a":[1,2]}}}"#,
+    );
+    let (data, saved) = open_and_resave(&text);
+    let drc = &data.rules.as_ref().expect("rules").drc;
+    assert_eq!(drc.severity["builtin::unconnected"], "error");
+    assert_eq!(drc.severity["user::future"], "info");
+    assert_eq!(drc.dsl.as_deref(), Some("rule a on net"));
+    assert_eq!(drc.unknown.get("future_key").unwrap()["a"][1], 2);
+    assert_eq!(saved["rules"], rules_of(&text));
+}
+
+#[test]
+fn a_drc_key_from_before_the_section_existed_is_kept() {
+    let (data, saved) = open_and_resave(WITH_RULES);
+    let drc = &data.rules.as_ref().unwrap().drc;
+    assert!(drc.severity.is_empty() && drc.dsl.is_none());
+    assert_eq!(drc.unknown.get("clearance_nm").unwrap(), 150000);
+    assert_eq!(saved["rules"]["drc"], rules_of(WITH_RULES)["drc"]);
+}
+
+#[test]
+fn a_rule_set_without_drc_loads_empty_and_resaves_byte_identical() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("p.snxprj");
+    std::fs::write(&path, WITH_NET_WAIVERS_ONLY).unwrap();
+    let data = parse_project(&path).unwrap();
+    assert!(data.rules.as_ref().unwrap().drc.is_empty());
+    // `dir` is re-derived on load, so compare two load -> save cycles.
+    write_project(&path, &data).unwrap();
+    let first = std::fs::read(&path).unwrap();
+    write_project(&path, &parse_project(&path).unwrap()).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), first);
+    assert!(!String::from_utf8_lossy(&first).contains("drc"));
+}
+
+#[test]
+fn an_empty_drc_section_is_never_written() {
+    let rules = crate::project::ProjectRules::default();
+    assert!(rules.drc.is_empty());
+    assert!(!serde_json::to_string(&rules).unwrap().contains("drc"));
+}
+
+#[test]
+fn a_drc_section_holding_only_rule_text_is_kept() {
+    let text = project_with_rules(r#"{"schema":1,"drc":{"dsl":""}}"#);
+    let (data, saved) = open_and_resave(&text);
+    assert_eq!(data.rules.unwrap().drc.dsl.as_deref(), Some(""));
+    assert_eq!(saved["rules"], rules_of(&text));
+}
+
+/// A `drc` of another shape makes the whole section unreadable (#1180), as
+/// any other shape change does: kept byte for byte, not applied.
+#[test]
+fn a_malformed_drc_section_is_kept_and_marks_the_rules_unreadable() {
+    for drc in [
+        r#""legacy""#,
+        "null",
+        "[1]",
+        r#"{"severity":{"builtin::short":1}}"#,
+        r#"{"dsl":5}"#,
+    ] {
+        let text = project_with_rules(&format!(
+            r#"{{"schema":1,"erc":{{"severity":{{"unused_pin":"error"}}}},"drc":{drc}}}"#
+        ));
+        let (data, saved) = open_and_resave(&text);
+        assert!(data.rules.is_none(), "{drc}");
+        assert!(data.has_unreadable_rules(), "{drc}");
+        assert_eq!(saved["rules"], rules_of(&text), "{drc}");
+    }
+}

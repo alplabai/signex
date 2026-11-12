@@ -7,6 +7,13 @@ overlay-placement-paused-esc-hint = Esc cancels placement.
 overlay-placement-paused-title = Placement Paused
 overlay-placement-paused-body = Editing properties in the panel. Click Resume to keep placing.
 
+## Command palette (#2057)
+# Key caps of the palette's hint line.
+palette-key-esc = Esc
+palette-key-enter = Enter
+# Row that opens a panel. { $panel } is the panel's name.
+palette-open-panel = Open Panel: { $panel }
+
 ## Command palette. The group headings are shown in capitals, so they are
 ## written in capitals here.
 overlay-palette-group-commands = COMMANDS

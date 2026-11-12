@@ -22,7 +22,7 @@ fn in_window_title(app: &Signex) -> String {
 fn native_title(app: &Signex) -> String {
     let model = menu_bar_model(&menu_context(app));
     // Menu 0 is the app menu; File follows it.
-    root_titles(&build(&model, false))[1].clone()
+    root_titles(&build(&model, &app.ui_state.i18n, false))[1].clone()
 }
 
 #[test]
@@ -66,4 +66,20 @@ fn a_switched_language_reaches_the_native_menu_through_the_runtime_path() {
     let title = root_titles(&app.native_menu())[1].clone();
     assert_ne!(title, EN_US_FILE);
     assert_eq!(title, in_window_title(&app));
+}
+
+/// #2057: the Keyboard Shortcuts sheet caches its rows rendered in the
+/// message language, so a switch must rebuild the cache.
+#[test]
+fn the_shortcuts_sheet_cache_follows_the_language() {
+    let (mut app, _task) = Signex::new();
+    switch(&mut app, "en-US");
+    app.ui_state.keyboard_shortcuts_open = true;
+    app.ui_state.refresh_shortcut_sections();
+    let before = app.ui_state.shortcut_sections.clone();
+    assert!(before.is_some());
+
+    switch(&mut app, "en-XA");
+
+    assert_ne!(app.ui_state.shortcut_sections, before);
 }

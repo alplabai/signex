@@ -1,3 +1,3 @@
 # Raw-label baseline (scripts/check_raw_labels.sh). The count must equal this number (lower it with --generate in the same change).
 # Regenerate with: bash scripts/check_raw_labels.sh --generate
-raw_labels=858
+raw_labels=821

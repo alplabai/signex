@@ -2,12 +2,13 @@
 //! `keymap/catalog.rs`; entries verbatim.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
+use signex_i18n::command_ids;
 
 pub(super) const THREE_D: &[CommandMetadata] = &[
     CommandMetadata {
         id: "footprint_mode_pads",
         category: "library",
-        label: "Switch footprint editor to Pads mode",
+        label: command_ids::CMD_FOOTPRINT_MODE_PADS,
         menu_label: None,
         group: CommandGroup::ThreeD,
         enable: Enablement::RequiresDocument(DocumentKind::Footprint),
@@ -17,7 +18,7 @@ pub(super) const THREE_D: &[CommandMetadata] = &[
     CommandMetadata {
         id: "footprint_mode_sketch",
         category: "library",
-        label: "Switch footprint editor to Sketch mode",
+        label: command_ids::CMD_FOOTPRINT_MODE_SKETCH,
         menu_label: None,
         group: CommandGroup::ThreeD,
         enable: Enablement::RequiresDocument(DocumentKind::Footprint),
@@ -27,7 +28,7 @@ pub(super) const THREE_D: &[CommandMetadata] = &[
     CommandMetadata {
         id: "footprint_mode_view_3d",
         category: "library",
-        label: "Switch footprint editor to 3D View mode",
+        label: command_ids::CMD_FOOTPRINT_MODE_VIEW_3D,
         menu_label: None,
         group: CommandGroup::ThreeD,
         enable: Enablement::RequiresDocument(DocumentKind::Footprint),
@@ -37,7 +38,7 @@ pub(super) const THREE_D: &[CommandMetadata] = &[
     CommandMetadata {
         id: "footprint_recompute_courtyard_outline",
         category: "library",
-        label: "Recompute footprint courtyard outline from pads",
+        label: command_ids::CMD_FOOTPRINT_RECOMPUTE_COURTYARD_OUTLINE,
         menu_label: None,
         group: CommandGroup::ThreeD,
         enable: Enablement::RequiresDocument(DocumentKind::Footprint),

@@ -44,6 +44,8 @@ pub mod net_nav;
 pub mod parameter_manager;
 pub mod paste;
 pub mod pcb_drc;
+#[cfg(test)]
+mod pcb_drc_tests;
 mod pcb_edit;
 #[cfg(test)]
 mod pcb_edit_tests;

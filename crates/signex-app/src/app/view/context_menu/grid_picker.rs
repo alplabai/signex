@@ -3,6 +3,8 @@
 
 use super::*;
 
+use super::items::text;
+use signex_i18n::{I18n, menu_ids};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
 impl Signex {
@@ -23,7 +25,7 @@ impl Signex {
             .map(|e| e.state.snap_options.grid_step_mm);
         let panel_ctx = &self.document_state.panel_ctx;
         super::placement::menu_card(
-            grid_picker_entries(active_step),
+            grid_picker_entries(&self.ui_state.i18n, active_step),
             &panel_ctx.tokens,
             &panel_ctx.ui_font_name,
         )
@@ -34,29 +36,32 @@ impl Signex {
 /// The grid picker's rows: the Altium-standard ladder, mil steps first
 /// (imperial designs anchor on 50 mil), then metric; the active step is
 /// checked. Clicking a row sends `UiMsg::GridPickerSelect(step_mm)`.
-fn grid_picker_entries(active_step: Option<f64>) -> Vec<DropdownEntry<Message>> {
-    const LADDER: &[(&str, f64)] = &[
-        ("1 Mil", 0.0254),
-        ("5 Mil", 0.127),
-        ("10 Mil", 0.254),
-        ("20 Mil", 0.508),
-        ("25 Mil", 0.635),
-        ("50 Mil", 1.27),
-        ("100 Mil", 2.54),
-        ("0.025 mm", 0.025),
-        ("0.100 mm", 0.100),
-        ("0.250 mm", 0.250),
-        ("0.500 mm", 0.500),
-        ("1.000 mm", 1.000),
-        ("2.500 mm", 2.500),
+fn grid_picker_entries(i18n: &I18n, active_step: Option<f64>) -> Vec<DropdownEntry<Message>> {
+    const LADDER: &[(signex_i18n::MessageId, f64)] = &[
+        (menu_ids::CTX_GRID_1_MIL, 0.0254),
+        (menu_ids::CTX_GRID_5_MIL, 0.127),
+        (menu_ids::CTX_GRID_10_MIL, 0.254),
+        (menu_ids::CTX_GRID_20_MIL, 0.508),
+        (menu_ids::CTX_GRID_25_MIL, 0.635),
+        (menu_ids::CTX_GRID_50_MIL, 1.27),
+        (menu_ids::CTX_GRID_100_MIL, 2.54),
+        (menu_ids::CTX_GRID_0_025_MM, 0.025),
+        (menu_ids::CTX_GRID_0_100_MM, 0.100),
+        (menu_ids::CTX_GRID_0_250_MM, 0.250),
+        (menu_ids::CTX_GRID_0_500_MM, 0.500),
+        (menu_ids::CTX_GRID_1_000_MM, 1.000),
+        (menu_ids::CTX_GRID_2_500_MM, 2.500),
     ];
     LADDER
         .iter()
         .map(|&(label, step_mm)| {
             let is_active = active_step.is_some_and(|s| (s - step_mm).abs() < 1e-9);
             DropdownEntry::Item(
-                DropdownItem::new(label, Message::Ui(UiMsg::GridPickerSelect(step_mm)))
-                    .checked(is_active),
+                DropdownItem::new(
+                    text(i18n, label),
+                    Message::Ui(UiMsg::GridPickerSelect(step_mm)),
+                )
+                .checked(is_active),
             )
         })
         .collect()
@@ -69,7 +74,7 @@ mod tests {
     /// Every step is a row that picks it; only the active one is checked.
     #[test]
     fn each_row_picks_its_step_and_the_active_one_is_checked() {
-        let rows = grid_picker_entries(Some(1.27));
+        let rows = grid_picker_entries(I18n::en_us_ref(), Some(1.27));
         assert_eq!(rows.len(), 13);
         for row in &rows {
             let DropdownEntry::Item(item) = row else {

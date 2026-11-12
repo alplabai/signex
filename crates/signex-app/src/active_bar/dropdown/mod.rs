@@ -30,7 +30,12 @@ mod tests;
 // ─── View: Dropdown menus ────────────────────────────────────
 
 /// Render the dropdown menu for the given Active Bar button.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the language, the menu and the bar's state are separate inputs of one dropdown"
+)]
 pub fn view_dropdown<'a>(
+    i18n: &signex_i18n::I18n,
     menu: ActiveBarMenu,
     tokens: &'a ThemeTokens,
     filters: &std::collections::HashSet<SelectionFilter>,
@@ -47,6 +52,7 @@ pub fn view_dropdown<'a>(
     // from the passed booleans — #633 removed the render-time
     // thread-locals the bar buttons used to share.
     let entries = dropdown_entries(
+        i18n,
         menu,
         tokens,
         filters,
@@ -61,6 +67,7 @@ pub fn view_dropdown<'a>(
 /// One icon + label dropdown row. Disabled rows drop their `on_press`
 /// (the widget greys the row and ignores clicks — Altium parity).
 fn dd_item(
+    i18n: &signex_i18n::I18n,
     icon: svg::Handle,
     label: &'static str,
     action: ActiveBarAction,
@@ -74,13 +81,13 @@ fn dd_item(
     // fallback for actions still without an id (the parameterised
     // families awaiting `CommandArgs`), and a test pins the catalog text
     // to these literals so nothing the user sees moves.
-    let label = crate::app::command::active_bar::action_label(&action, label);
+    let label = crate::app::command::active_bar::action_label(i18n, &action, label);
     let planned = super::is_planned(&action);
     let mut item = DropdownItem::new(label, ActiveBarMsg::Action(action))
         .icon(icon)
         .disabled(!enabled);
     if planned {
-        item = item.tooltip(super::PLANNED_TOOLTIP);
+        item = item.tooltip(i18n.message_plain(signex_i18n::menu_ids::MENU_PLANNED_TOOLTIP, &[]));
     }
     DropdownEntry::Item(item)
 }
@@ -89,7 +96,12 @@ fn dd_item(
 /// through the `EntrySpec` data table + `render` below; the two
 /// irregular menus (Filter chip grid and NetColor swatches) use the
 /// widget's `Custom` escape hatch and keep their own builder.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the language, the menu and the bar's state are separate inputs of one dropdown"
+)]
 fn dropdown_entries(
+    i18n: &signex_i18n::I18n,
     menu: ActiveBarMenu,
     tokens: &ThemeTokens,
     filters: &std::collections::HashSet<SelectionFilter>,
@@ -102,18 +114,18 @@ fn dropdown_entries(
     let nc = has_net_colors;
     match menu {
         ActiveBarMenu::Filter => vec![filter_entry(tokens, filters, custom_presets)],
-        ActiveBarMenu::SelectMode => render(SELECT_MODE, tid, sel, nc),
-        ActiveBarMenu::Select => render(SELECT, tid, sel, nc),
-        ActiveBarMenu::Align => render(ALIGN, tid, sel, nc),
-        ActiveBarMenu::Wiring => render(WIRING, tid, sel, nc),
-        ActiveBarMenu::Power => render(POWER, tid, sel, nc),
-        ActiveBarMenu::Harness => render(HARNESS, tid, sel, nc),
-        ActiveBarMenu::SheetSymbol => render(SHEET_SYMBOL, tid, sel, nc),
-        ActiveBarMenu::Port => render(PORT, tid, sel, nc),
-        ActiveBarMenu::Directives => render(DIRECTIVES, tid, sel, nc),
-        ActiveBarMenu::TextTools => render(TEXT_TOOLS, tid, sel, nc),
-        ActiveBarMenu::Shapes => render(SHAPES, tid, sel, nc),
-        ActiveBarMenu::NetColor => net_color_entries(tokens, tid, sel, nc),
+        ActiveBarMenu::SelectMode => render(i18n, SELECT_MODE, tid, sel, nc),
+        ActiveBarMenu::Select => render(i18n, SELECT, tid, sel, nc),
+        ActiveBarMenu::Align => render(i18n, ALIGN, tid, sel, nc),
+        ActiveBarMenu::Wiring => render(i18n, WIRING, tid, sel, nc),
+        ActiveBarMenu::Power => render(i18n, POWER, tid, sel, nc),
+        ActiveBarMenu::Harness => render(i18n, HARNESS, tid, sel, nc),
+        ActiveBarMenu::SheetSymbol => render(i18n, SHEET_SYMBOL, tid, sel, nc),
+        ActiveBarMenu::Port => render(i18n, PORT, tid, sel, nc),
+        ActiveBarMenu::Directives => render(i18n, DIRECTIVES, tid, sel, nc),
+        ActiveBarMenu::TextTools => render(i18n, TEXT_TOOLS, tid, sel, nc),
+        ActiveBarMenu::Shapes => render(i18n, SHAPES, tid, sel, nc),
+        ActiveBarMenu::NetColor => net_color_entries(i18n, tokens, tid, sel, nc),
     }
 }
 

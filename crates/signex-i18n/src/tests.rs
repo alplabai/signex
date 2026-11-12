@@ -178,3 +178,19 @@ fn an_absent_saved_language_reads_as_system() {
 fn user_text_is_kept_verbatim() {
     assert_eq!(UserText::new("NET_1").as_str(), "NET_1");
 }
+
+#[test]
+fn message_plain_leaves_no_isolation_marks() {
+    let en = i18n("en-US");
+    let args: &[(&str, Arg)] = &[("title", "a.snxsch".into())];
+    assert_eq!(
+        en.message_plain(crate::menu_ids::CTX_TAB_CLOSE, args),
+        "Close a.snxsch"
+    );
+    // The bundle still isolates; only the plain form is stripped.
+    let isolated = en.message(crate::menu_ids::CTX_TAB_CLOSE, args).to_string();
+    assert!(
+        isolated.contains(FSI) && isolated.contains(PDI),
+        "{isolated:?}"
+    );
+}

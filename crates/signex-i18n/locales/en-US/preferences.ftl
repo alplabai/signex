@@ -98,5 +98,85 @@ preferences-appearance-remember-geometry-help = When on, Signex reopens the main
 preferences-appearance-window-buttons = Window buttons
 preferences-appearance-window-buttons-help = Where minimize, maximize and close sit. Automatic follows your system.
 preferences-appearance-restart-note = Takes effect after restart.
+
+## Keyboard shortcuts (#2057)
+# Column headers shared by the Keyboard Shortcuts sheet and the preferences table.
+keymap-col-action = Action
+keymap-col-shortcut = Shortcut
+# Names of the command groups, over the groups of the preferences table.
+keymap-group-general = General
+keymap-group-schematic = Schematic
+keymap-group-pcb = PCB
+keymap-group-3d = 3D
+# Where a shortcut applies.
+pref-keymap-context-global = Global
+pref-keymap-context-schematic = Schematic
+pref-keymap-context-footprint = Footprint
+pref-keymap-context-pcb = PCB
+pref-keymap-context-library = Library
+pref-keymap-context-modal = Modal
+pref-keymap-context-text-input = Text Input
+pref-keymap-context-command-palette = Command Palette
+pref-keymap-context-placement = Placement
+pref-keymap-intro = Configure keyboard shortcut profiles. Command names and categories come from Signex command metadata.
+# Banner when the saved shortcuts file could not be loaded. { $location } is its path, { $error } the reason.
+pref-keymap-load-error = Your saved keyboard shortcuts could not be loaded from { $location } — { $error }. The built-in profiles are in use for this session and that file has not been changed. Saving from this pane overwrites it, so the original is kept beside it as a .bak file.
+# Stands for the path of the shortcuts file when it is not known.
+pref-keymap-usual-location = its usual location
+# { $path } is where the backup of the previous shortcuts is kept.
+pref-keymap-backup = A backup of your previous keyboard shortcuts is kept at { $path }.
+pref-keymap-restore = Restore from backup
+pref-keymap-discard-backup = Delete the backup
+# Profile picker.
+pref-keymap-profile = Profile
+# { $count } is the number of bindings of the active profile.
+pref-keymap-bindings = { $count } bindings
+pref-keymap-no-profile = No active profile
+# { $name } is the profile's name.
+pref-keymap-profile-built-in = { $name } (built-in)
+pref-keymap-profile-custom = { $name } (custom)
+pref-keymap-create = Create
+pref-keymap-delete = Delete
+pref-keymap-import = Import
+pref-keymap-export = Export
+# Status line under the profile picker.
+pref-keymap-conflict-one = 1 conflict in active profile
+# { $count } is the number of conflicts, more than one.
+pref-keymap-conflicts = { $count } conflicts in active profile
+pref-keymap-no-conflicts = No conflicts detected in active keyboard shortcuts.
+pref-keymap-search = Search shortcuts…
+# Column headers of the table.
+pref-keymap-col-category = Category
+pref-keymap-col-command = Command
+pref-keymap-col-context = Context
+pref-keymap-col-state = State
+pref-keymap-empty = No shortcuts are defined in the active profile.
+# { $query } is what the user typed in the search box.
+pref-keymap-no-match = No shortcuts match “{ $query }”.
+# What a row's State column says.
+pref-keymap-state-invalid = Invalid
+pref-keymap-state-unbound = Unbound
+pref-keymap-state-reserved = Reserved by macOS
+pref-keymap-state-conflict = Conflict
+pref-keymap-state-editable = Editable
+pref-keymap-state-create-custom = Create custom
+pref-keymap-state-gesture = Gesture
+# A fixed key of the app claims this stroke first. { $action } names that key's action.
+pref-keymap-overridden = Overridden by { $action }
+pref-keymap-edit = Edit
+# Chord recorder card.
+pref-keymap-recorder-title = Edit Shortcut
+pref-keymap-recorder-hint = Press Record, then type a shortcut
+pref-keymap-recorder-help = Press the exact keystroke to record it. ESC is recorded as a key; use Cancel to close.
+pref-keymap-recording = Recording
+pref-keymap-recorded = Recorded
+pref-keymap-current = Current
+pref-keymap-stop = Stop
+pref-keymap-record = Record
+pref-keymap-cancel = Cancel
+pref-keymap-clear = Clear
+pref-keymap-ok = OK
+# { $display } is the recorded stroke, { $action } the action of the fixed key that takes it.
+pref-keymap-claimed = { $display } is claimed by { $action } and will never reach this binding.
 # Value beside the zoom speed slider. $percent is a whole number.
 preferences-appearance-zoom-step-value = { $percent }% per notch

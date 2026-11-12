@@ -9,10 +9,12 @@
 //! rendering. `super::flatten` is the one place that walks this data
 //! into widgets.
 
+use crate::keymap::command_menu_message;
 use crate::library::editor::symbol::state::{
     SymbolSelection, selected_is_deletable, selection_is_join_eligible,
 };
 use crate::library::messages::{SymbolEditorMsg, SymbolSelectionMsg, SymbolToolMsg};
+use signex_i18n::{MessageId, menu_ids};
 use signex_library::Symbol;
 
 /// One row of the symbol context menu. `id` is a stable, kebab-case,
@@ -26,14 +28,14 @@ use signex_library::Symbol;
 /// expand-in-place behaviour), not a hover flyout.
 pub struct SymbolMenuRow {
     pub id: &'static str,
-    pub label: &'static str,
+    pub label: MessageId,
     pub enabled: bool,
     pub msg: Option<SymbolEditorMsg>,
     pub submenu: Option<Vec<SymbolMenuRow>>,
 }
 
 impl SymbolMenuRow {
-    fn item(id: &'static str, label: &'static str, enabled: bool, msg: SymbolEditorMsg) -> Self {
+    fn item(id: &'static str, label: MessageId, enabled: bool, msg: SymbolEditorMsg) -> Self {
         Self {
             id,
             label,
@@ -43,7 +45,7 @@ impl SymbolMenuRow {
         }
     }
 
-    fn submenu(id: &'static str, label: &'static str, children: Vec<SymbolMenuRow>) -> Self {
+    fn submenu(id: &'static str, label: MessageId, children: Vec<SymbolMenuRow>) -> Self {
         Self {
             id,
             label,
@@ -68,31 +70,31 @@ pub fn build_symbol_context_menu_rows(
         place_submenu(),
         SymbolMenuRow::item(
             "symbol.join-into-polygon",
-            "Join into Polygon",
+            menu_ids::CTX_SYMBOL_JOIN_POLYGON,
             selection_is_join_eligible(sym, view, selected),
             SymbolEditorMsg::JoinSelectionIntoPolygon,
         ),
         SymbolMenuRow::item(
             "symbol.delete",
-            "Delete",
+            command_menu_message("delete_selection"),
             selected_is_deletable(selected),
             SymbolEditorMsg::DeleteSelected,
         ),
         SymbolMenuRow::item(
             "symbol.select-all",
-            "Select All",
+            command_menu_message("select_all"),
             true,
             SymbolEditorMsg::Select(SymbolSelectionMsg::All),
         ),
         SymbolMenuRow::item(
             "symbol.deselect-all",
-            "Deselect All",
+            menu_ids::CTX_DESELECT_ALL,
             selected.is_some(),
             SymbolEditorMsg::Deselect,
         ),
         SymbolMenuRow::item(
             "symbol.fit-to-window",
-            "Fit to Window",
+            menu_ids::CTX_FIT_TO_WINDOW,
             true,
             SymbolEditorMsg::Fit,
         ),
@@ -102,20 +104,40 @@ pub fn build_symbol_context_menu_rows(
 /// `(id, label, tool)` for every `Place ▸` row — one per canvas
 /// placement tool, mirroring the SchLib Place menu / toolbar tool set
 /// (`SymbolTool`).
-pub const PLACE_TOOLS: &[(&str, &str, SymbolToolMsg)] = &[
-    ("symbol.place-pin", "Pin", SymbolToolMsg::AddPin),
-    ("symbol.place-line", "Line", SymbolToolMsg::PlaceLine),
+pub const PLACE_TOOLS: &[(&str, MessageId, SymbolToolMsg)] = &[
+    (
+        "symbol.place-pin",
+        menu_ids::CTX_SYMBOL_PIN,
+        SymbolToolMsg::AddPin,
+    ),
+    (
+        "symbol.place-line",
+        menu_ids::CTX_SYMBOL_LINE,
+        SymbolToolMsg::PlaceLine,
+    ),
     (
         "symbol.place-rectangle",
-        "Rectangle",
+        menu_ids::CTX_SHAPE_RECTANGLE,
         SymbolToolMsg::PlaceRectangle,
     ),
-    ("symbol.place-circle", "Circle", SymbolToolMsg::PlaceCircle),
-    ("symbol.place-arc", "Arc", SymbolToolMsg::PlaceArc),
-    ("symbol.place-text", "Text", SymbolToolMsg::PlaceText),
+    (
+        "symbol.place-circle",
+        menu_ids::CTX_SHAPE_CIRCLE,
+        SymbolToolMsg::PlaceCircle,
+    ),
+    (
+        "symbol.place-arc",
+        menu_ids::CTX_SHAPE_ARC,
+        SymbolToolMsg::PlaceArc,
+    ),
+    (
+        "symbol.place-text",
+        menu_ids::CTX_SYMBOL_TEXT,
+        SymbolToolMsg::PlaceText,
+    ),
     (
         "symbol.place-polygon",
-        "Polygon",
+        menu_ids::CTX_SYMBOL_POLYGON,
         SymbolToolMsg::PlacePolygon,
     ),
 ];
@@ -129,7 +151,7 @@ fn place_submenu() -> SymbolMenuRow {
             SymbolMenuRow::item(id, label, true, SymbolEditorMsg::SetTool(tool))
         })
         .collect();
-    SymbolMenuRow::submenu("symbol.place", "Place", children)
+    SymbolMenuRow::submenu("symbol.place", menu_ids::MENU_PLACE, children)
 }
 
 #[cfg(test)]
@@ -182,6 +204,22 @@ mod tests {
                 "symbol.place-polygon",
             ]
         );
+    }
+
+    /// Delete and Select All read their text through a command id
+    /// string; a mistyped id would quietly show "Unnamed command".
+    #[test]
+    fn command_rows_keep_their_english() {
+        let sym = Symbol::empty("T");
+        let rows = build_symbol_context_menu_rows(
+            &sym,
+            crate::library::editor::symbol::state::PartView::normal(1),
+            &None,
+        );
+        let en = signex_i18n::I18n::en_us_ref();
+        let text = |id| en.message(find(&rows, id).label, &[]).to_string();
+        assert_eq!(text("symbol.delete"), "Delete");
+        assert_eq!(text("symbol.select-all"), "Select All");
     }
 
     /// Empty selection: Join into Polygon, Delete, and Deselect All
