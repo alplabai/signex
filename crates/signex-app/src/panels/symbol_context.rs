@@ -274,13 +274,15 @@ pub struct SymbolDeleteWarning {
 }
 
 impl SymbolDeleteWarning {
-    pub fn heading(&self) -> String {
-        if self.checking && self.only_unknown {
-            format!("Checking whether symbol \"{}\" is in use", self.name)
+    pub fn heading(&self, i18n: &signex_i18n::I18n) -> signex_i18n::Localized {
+        use signex_i18n::{ids, t};
+        let id = if self.checking && self.only_unknown {
+            ids::LIBRARY_SYMBOL_DELETE_CHECKING
         } else if self.only_unknown {
-            format!("Symbol \"{}\" may still be in use", self.name)
+            ids::LIBRARY_SYMBOL_DELETE_MAY_BE_IN_USE
         } else {
-            format!("Symbol \"{}\" is still in use", self.name)
-        }
+            ids::LIBRARY_SYMBOL_DELETE_IN_USE
+        };
+        t!(i18n, id, "name" => self.name.as_str())
     }
 }

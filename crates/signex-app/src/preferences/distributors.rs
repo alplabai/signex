@@ -22,9 +22,13 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 pub(super) fn content_library_distributors<'a>(
     settings: &'a crate::library::state::DistributorSettings,
     tokens: &'a signex_types::theme::ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PrefMsg> {
     let header: Element<'a, PrefMsg> = column![
-        section_title("Library — Distributor APIs"),
+        section_title(signex_i18n::t!(
+            i18n,
+            signex_i18n::ids::PREFERENCES_SECTION_DISTRIBUTORS
+        )),
         Space::new().height(8),
     ]
     .padding([SP.xl, 20.0])

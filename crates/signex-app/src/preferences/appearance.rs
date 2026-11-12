@@ -54,7 +54,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(Space::new().height(16).boxed());
 
     // ── Section: UI Font ──
-    col = col.push(section_title("Font"));
+    col = col.push(section_title(t!(i18n, ids::PREFERENCES_SECTION_FONT)));
     col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![
@@ -87,7 +87,10 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     // ── Section: Window controls ──
     col = col.push(h_sep());
     col = col.push(Space::new().height(16).boxed());
-    col = col.push(section_title("Window controls"));
+    col = col.push(section_title(t!(
+        i18n,
+        ids::PREFERENCES_SECTION_WINDOW_CONTROLS
+    )));
     col = col.push(Space::new().height(10).boxed());
     col = col.push(window_controls_row(
         draft_window_controls_placement,
@@ -99,7 +102,10 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     // ── Section: Schematic Editor ──
     col = col.push(h_sep());
     col = col.push(Space::new().height(16).boxed());
-    col = col.push(section_title("Schematic Editor"));
+    col = col.push(section_title(t!(
+        i18n,
+        ids::PREFERENCES_SECTION_SCHEMATIC_EDITOR
+    )));
     col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![
@@ -132,7 +138,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     // ── Section: PCB Editor ──
     col = col.push(h_sep());
     col = col.push(Space::new().height(16).boxed());
-    col = col.push(section_title("PCB Editor"));
+    col = col.push(section_title(t!(i18n, ids::PREFERENCES_SECTION_PCB_EDITOR)));
     col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![
@@ -165,7 +171,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     // ── Section: Rendering ──
     col = col.push(h_sep());
     col = col.push(Space::new().height(16).boxed());
-    col = col.push(section_title("Rendering"));
+    col = col.push(section_title(t!(i18n, ids::PREFERENCES_SECTION_RENDERING)));
     col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![
@@ -192,7 +198,10 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     // ── Section: Symbol Editor ──
     col = col.push(h_sep());
     col = col.push(Space::new().height(16).boxed());
-    col = col.push(section_title("Symbol Editor"));
+    col = col.push(section_title(t!(
+        i18n,
+        ids::PREFERENCES_SECTION_SYMBOL_EDITOR
+    )));
     col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![
@@ -286,7 +295,10 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(Space::new().height(20).boxed());
 
     // ── Section: Interface scale ──
-    col = col.push(section_title("Interface scale"));
+    col = col.push(section_title(t!(
+        i18n,
+        ids::PREFERENCES_SECTION_INTERFACE_SCALE
+    )));
     col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![
@@ -321,7 +333,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(Space::new().height(20).boxed());
 
     // ── Section: Navigation ──
-    col = col.push(section_title("Navigation"));
+    col = col.push(section_title(t!(i18n, ids::PREFERENCES_SECTION_NAVIGATION)));
     col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![
@@ -413,7 +425,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(Space::new().height(20).boxed());
 
     // ── Section: Window ──
-    col = col.push(section_title("Window"));
+    col = col.push(section_title(t!(i18n, ids::PREFERENCES_SECTION_WINDOW)));
     col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![

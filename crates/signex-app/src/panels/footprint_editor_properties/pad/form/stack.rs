@@ -55,6 +55,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
     shape_params: &'a [crate::panels::PadShapeParamSummary],
+    i18n: &signex_i18n::I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
@@ -98,7 +99,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
     // rows like the rest of the form. Per-layer tabs: a table.
     let is_simple = values.pad_stack_tab == PadStackTab::Simple;
     if is_simple {
-        col = push_simple_copper_rows(col, values, current_shape, target, fw, muted);
+        col = push_simple_copper_rows(col, values, current_shape, target, fw, muted, i18n);
     } else {
         col = col.push(pad_table_header(
             &["COPPER", "X-Size", "Y-Size", "Shape", "Relief"],
@@ -141,7 +142,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             .unwrap_or_default();
         col = col.push(pad_input_row_w(
             fw,
-            "Corner radius %",
+            t!(i18n, ids::EDITORS_PAD_CORNER_RADIUS),
             "25",
             corner_buf,
             move |v| pad_corner_radius_msg(target, v),
@@ -152,7 +153,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
     if is_simple {
         col = col.push(pad_check_row_w(
             fw,
-            "Relief",
+            t!(i18n, ids::EDITORS_PAD_RELIEF),
             values.stack.thermal_relief,
             move |v| pad_thermal_relief_msg(target, v),
             muted,
@@ -173,7 +174,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             let value_string = entry.current_expr.clone();
             col = col.push(pad_input_row_w(
                 fw,
-                entry.label.as_str(),
+                raw(entry.label.as_str()),
                 "0.25mm",
                 value_string,
                 move |v| PanelMsg::FpEditorEditPadShapeParam {
@@ -260,10 +261,14 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         // holes, Copper Offset shifts the copper outline relative to
         // the hole centre. Only shown for Multi-Layer pads.
         col = col.push(
-            container(text(raw("Hole Details")).size(TS.caption).color(muted))
-                .padding([6.0, SP.m])
-                .width(Length::Fill)
-                .boxed(),
+            container(
+                text(t!(i18n, ids::EDITORS_PAD_HOLE_DETAILS))
+                    .size(TS.caption)
+                    .color(muted),
+            )
+            .padding([6.0, SP.m])
+            .width(Length::Fill)
+            .boxed(),
         );
         let tol_p_buf = values
             .hole_tolerance_plus_mm
@@ -271,7 +276,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             .unwrap_or_default();
         col = col.push(pad_input_row_w(
             fw,
-            "Tolerance + (mm)",
+            t!(i18n, ids::EDITORS_PAD_HOLE_TOLERANCE_PLUS),
             "0",
             tol_p_buf,
             move |v| pad_hole_tolerance_plus_msg(target, v),
@@ -283,7 +288,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             .unwrap_or_default();
         col = col.push(pad_input_row_w(
             fw,
-            "Tolerance − (mm)",
+            t!(i18n, ids::EDITORS_PAD_HOLE_TOLERANCE_MINUS),
             "0",
             tol_m_buf,
             move |v| pad_hole_tolerance_minus_msg(target, v),
@@ -295,7 +300,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             .unwrap_or_default();
         col = col.push(pad_input_row_w(
             fw,
-            "Hole rotation (°)",
+            t!(i18n, ids::EDITORS_PAD_HOLE_ROTATION),
             "0",
             rot_buf,
             move |v| pad_hole_rotation_msg(target, v),
@@ -307,7 +312,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             .unwrap_or_default();
         col = col.push(pad_input_row_w(
             fw,
-            "Copper offset X (mm)",
+            t!(i18n, ids::EDITORS_PAD_COPPER_OFFSET_X),
             "0",
             cox_buf,
             move |v| pad_copper_offset_x_msg(target, v),
@@ -319,7 +324,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             .unwrap_or_default();
         col = col.push(pad_input_row_w(
             fw,
-            "Copper offset Y (mm)",
+            t!(i18n, ids::EDITORS_PAD_COPPER_OFFSET_Y),
             "0",
             coy_buf,
             move |v| pad_copper_offset_y_msg(target, v),
@@ -495,10 +500,11 @@ fn push_simple_copper_rows<'a>(
     target: PadEditTarget,
     fw: (Length, Length),
     muted: iced::Color,
+    i18n: &signex_i18n::I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     col = col.push(pad_pick_row_w(
         fw,
-        "Shape",
+        t!(i18n, ids::EDITORS_PAD_SHAPE),
         PadShapeChoice::ALL,
         current_shape,
         move |c: PadShapeChoice| pad_shape_msg(target, c.to_lib()),
@@ -506,7 +512,7 @@ fn push_simple_copper_rows<'a>(
     ));
     col = col.push(pad_input_row_w(
         fw,
-        "X-Size",
+        t!(i18n, ids::EDITORS_PAD_SIZE_X),
         "",
         pad_size_buf(values.size_x_mm),
         move |v| pad_size_x_msg(target, v),
@@ -514,7 +520,7 @@ fn push_simple_copper_rows<'a>(
     ));
     col.push(pad_input_row_w(
         fw,
-        "Y-Size",
+        t!(i18n, ids::EDITORS_PAD_SIZE_Y),
         "",
         pad_size_buf(values.size_y_mm),
         move |v| pad_size_y_msg(target, v),

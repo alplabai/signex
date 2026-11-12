@@ -35,11 +35,11 @@ const SIM_KIND_OPTS: [SimKind; 4] = [
 ];
 
 /// Shown when no SPICE model is bound to the row.
-const EMPTY_MESSAGE: &str = "No SPICE model is bound to this component.";
+const EMPTY_MESSAGE: signex_i18n::MessageId = ids::EDITORS_COMPONENT_MODEL_EMPTY;
 /// Shown in the node table while the symbol has not resolved.
-const SYMBOL_PENDING: &str = "Open the Symbol tab first to list the pins.";
+const SYMBOL_PENDING: signex_i18n::MessageId = ids::EDITORS_COMPONENT_PIN_NODE_PENDING;
 /// Shown in the node table when the symbol has no pins.
-const NO_PINS: &str = "The symbol has no pins yet.";
+const NO_PINS: signex_i18n::MessageId = ids::EDITORS_COMPONENT_PIN_NODE_NO_PINS;
 /// Pin-name cell for an unnamed pin.
 const UNNAMED_PIN: &str = "\u{2014}";
 
@@ -158,7 +158,10 @@ pub fn view<'a>(
         );
         let body = column![
             kit::section_header(model_heading(), None, tokens),
-            kit::card(kit::empty_state(EMPTY_MESSAGE, Some(add), tokens), tokens),
+            kit::card(
+                kit::empty_state(t!(i18n, EMPTY_MESSAGE), Some(add), tokens),
+                tokens
+            ),
         ]
         .spacing(SP.m)
         .width(Length::Fill)
@@ -233,7 +236,7 @@ pub fn view<'a>(
 
     let table: Element<'a, LibraryMessage> = match state.symbol.as_ref() {
         Some(symbol) => view_pin_node_table(sim, &symbol.pins, tokens, i18n, &address),
-        None => kit::empty_state(SYMBOL_PENDING, None, tokens).boxed(),
+        None => kit::empty_state(t!(i18n, SYMBOL_PENDING), None, tokens).boxed(),
     };
 
     scrollable(
@@ -264,7 +267,7 @@ fn view_pin_node_table<'a>(
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     if pins.is_empty() {
-        return kit::empty_state(NO_PINS, None, tokens);
+        return kit::empty_state(t!(i18n, NO_PINS), None, tokens);
     }
 
     let muted = theme_ext::text_secondary(tokens);

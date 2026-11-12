@@ -2,7 +2,8 @@
 
 use iced::widget::{Column, container};
 use iced::{Color, Element, Length, Widget};
-use signex_widgets::{raw, text};
+use signex_i18n::{I18n, ids, t};
+use signex_widgets::text;
 
 use super::super::{PanelMsg, SilkKindGeometry};
 use super::pad::pad_input_row;
@@ -16,32 +17,33 @@ pub(super) fn silk_geometry_rows<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     kind: &'a SilkKindGeometry,
     muted: Color,
+    i18n: &I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     match kind {
         SilkKindGeometry::Line { from_mm, to_mm } => {
             col = col.push(pad_input_row(
-                "From X (mm)",
+                t!(i18n, ids::EDITORS_SILK_FROM_X),
                 "0",
                 format!("{:.3}", from_mm[0]),
                 PanelMsg::FpEditorSetSilkLineFromX,
                 muted,
             ));
             col = col.push(pad_input_row(
-                "From Y (mm)",
+                t!(i18n, ids::EDITORS_SILK_FROM_Y),
                 "0",
                 format!("{:.3}", from_mm[1]),
                 PanelMsg::FpEditorSetSilkLineFromY,
                 muted,
             ));
             col = col.push(pad_input_row(
-                "To X (mm)",
+                t!(i18n, ids::EDITORS_SILK_TO_X),
                 "0",
                 format!("{:.3}", to_mm[0]),
                 PanelMsg::FpEditorSetSilkLineToX,
                 muted,
             ));
             col = col.push(pad_input_row(
-                "To Y (mm)",
+                t!(i18n, ids::EDITORS_SILK_TO_Y),
                 "0",
                 format!("{:.3}", to_mm[1]),
                 PanelMsg::FpEditorSetSilkLineToY,
@@ -54,28 +56,28 @@ pub(super) fn silk_geometry_rows<'a>(
             size_mm,
         } => {
             col = col.push(pad_input_row(
-                "Content",
+                t!(i18n, ids::EDITORS_SILK_CONTENT),
                 "TEXT",
                 content.clone(),
                 PanelMsg::FpEditorSetSilkText,
                 muted,
             ));
             col = col.push(pad_input_row(
-                "Position X (mm)",
+                t!(i18n, ids::EDITORS_SILK_POSITION_X),
                 "0",
                 format!("{:.3}", position_mm[0]),
                 PanelMsg::FpEditorSetSilkTextPositionX,
                 muted,
             ));
             col = col.push(pad_input_row(
-                "Position Y (mm)",
+                t!(i18n, ids::EDITORS_SILK_POSITION_Y),
                 "0",
                 format!("{:.3}", position_mm[1]),
                 PanelMsg::FpEditorSetSilkTextPositionY,
                 muted,
             ));
             col = col.push(pad_input_row(
-                "Size (mm)",
+                t!(i18n, ids::EDITORS_SILK_SIZE),
                 "1.0",
                 format!("{:.3}", size_mm),
                 PanelMsg::FpEditorSetSilkTextSize,
@@ -85,7 +87,7 @@ pub(super) fn silk_geometry_rows<'a>(
         SilkKindGeometry::Other => {
             col = col.push(
                 container(
-                    text(raw("Use Sketch mode for parametric editing"))
+                    text(t!(i18n, ids::EDITORS_SILK_USE_SKETCH))
                         .size(TS.caption)
                         .color(muted),
                 )

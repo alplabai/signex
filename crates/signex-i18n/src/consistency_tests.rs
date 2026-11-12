@@ -120,7 +120,7 @@ fn language_name_ids() -> BTreeSet<String> {
 #[test]
 fn every_defined_id_exists_in_en_us() {
     let en_us = messages_of(EN_US);
-    for id in ids::ALL {
+    for id in ids::all() {
         assert!(
             en_us.contains_key(id.as_str()),
             "{} is not in en-US",
@@ -131,7 +131,7 @@ fn every_defined_id_exists_in_en_us() {
 
 #[test]
 fn every_en_us_message_is_a_defined_id() {
-    let defined: BTreeSet<String> = ids::ALL
+    let defined: BTreeSet<String> = ids::all()
         .iter()
         .map(|id| id.as_str().to_owned())
         .chain(language_name_ids())
@@ -146,8 +146,9 @@ fn every_en_us_message_is_a_defined_id() {
 
 #[test]
 fn the_id_registry_has_no_duplicates() {
-    let unique: BTreeSet<_> = ids::ALL.iter().map(|id| id.as_str()).collect();
-    assert_eq!(unique.len(), ids::ALL.len());
+    let all = ids::all();
+    let unique: BTreeSet<_> = all.iter().map(|id| id.as_str()).collect();
+    assert_eq!(unique.len(), all.len());
 }
 
 #[test]
@@ -171,8 +172,8 @@ fn every_locale_on_disk_parses_and_its_variables_are_in_the_source() {
 #[test]
 fn every_id_renders_from_the_embedded_en_us_catalog() {
     let i18n = I18n::new(&LanguagePref::Locale(EN_US.into()));
-    for id in ids::ALL {
-        let text = i18n.message(*id, &[]).to_string();
+    for id in ids::all() {
+        let text = i18n.message(id, &[]).to_string();
         assert_ne!(
             text,
             id.as_str(),
@@ -356,6 +357,135 @@ fn moved_graphite_strings_of_the_second_wave_keep_their_english() {
          in the project tree and pick `Add New \u{25B8} Footprint Library` to create one."
     );
     assert_eq!(shown(ids::OVERLAY_PALETTE_GROUP_COMMANDS, &[]), "COMMANDS");
+}
+
+/// #2225 part 1, third wave: the labels helpers used to take as `&str` keep
+/// their English, plurals and placeables included.
+#[test]
+fn moved_graphite_strings_of_the_third_wave_keep_their_english() {
+    let i18n = I18n::new(&LanguagePref::Locale(EN_US.into()));
+    let shown = |id, args: &[(&str, crate::Arg)]| {
+        i18n.message(id, args)
+            .to_string()
+            .replace(['\u{2068}', '\u{2069}'], "")
+    };
+    for (id, english) in [
+        (ids::PANELS_DRAWING_START_X, "Start X"),
+        (ids::PANELS_DRAWING_END_Y, "End Y"),
+        (ids::PANELS_DRAWING_POSITION_X, "Position X"),
+        (ids::PANELS_DRAWING_CENTER_Y, "Center Y"),
+        (ids::PANELS_DRAWING_WIDTH, "Width"),
+        (ids::PANELS_DRAWING_WIDTH_MM, "Width (mm)"),
+        (ids::PANELS_DRAWING_HEIGHT_MM, "Height (mm)"),
+        (ids::PANELS_DRAWING_BORDER, "Border"),
+        (ids::PANELS_DRAWING_RADIUS, "Radius"),
+        (ids::PANELS_DRAWING_START_ANGLE, "Start Angle"),
+        (ids::PANELS_DRAWING_COLOR_AUTO, "Auto"),
+        (ids::EDITORS_PAD_ROTATION, "Rotation (\u{B0})"),
+        (ids::EDITORS_PAD_TEMPLATE_LIBRARY, "Library"),
+        (ids::EDITORS_PAD_TOP_SIDE, "Top Side"),
+        (ids::EDITORS_PAD_BOTTOM_FAB, "Bottom Fab"),
+        (ids::EDITORS_PAD_SHAPE, "Shape"),
+        (ids::EDITORS_PAD_SIZE_X, "X-Size"),
+        (ids::EDITORS_PAD_SIZE_Y, "Y-Size"),
+        (ids::EDITORS_PAD_RELIEF, "Relief"),
+        (ids::EDITORS_PAD_CORNER_RADIUS, "Corner radius %"),
+        (ids::EDITORS_PAD_HOLE_TOLERANCE_PLUS, "Tolerance + (mm)"),
+        (
+            ids::EDITORS_PAD_HOLE_TOLERANCE_MINUS,
+            "Tolerance \u{2212} (mm)",
+        ),
+        (ids::EDITORS_PAD_COPPER_OFFSET_Y, "Copper offset Y (mm)"),
+        (ids::EDITORS_PAD_BOTTOM_MASK_TENTED, "Bottom mask tented"),
+        (ids::EDITORS_SILK_STROKE_WIDTH, "Stroke width (mm)"),
+        (
+            ids::EDITORS_SILK_USE_SKETCH,
+            "Use Sketch mode for parametric editing",
+        ),
+        (
+            ids::EDITORS_PATTERN_SKIP_LETTERS,
+            "Skip I/O/Q/S/X/Z (IPC-7351)",
+        ),
+        (
+            ids::EDITORS_COMPONENT_ALTERNATES_EMPTY,
+            "No alternate drawings; the row uses its default symbol only.",
+        ),
+        (
+            ids::EDITORS_COMPONENT_PIN_MAP_NO_PINS,
+            "This symbol has no pins yet. Open the Symbol Editor to add some.",
+        ),
+        (ids::EDITORS_COMPONENT_PARTS_EMPTY, "No alternates yet."),
+        (ids::OVERLAY_SYMBOL_CARD_DESIGNATOR, "Designator"),
+        (ids::OVERLAY_SYMBOL_CARD_LIBRARY, "Library"),
+        (ids::OVERLAY_KEY_ESC, "Esc"),
+        (ids::OVERLAY_KEY_ENTER, "Enter"),
+        (ids::MENU_EDIT, "Edit"),
+        (ids::MENU_REPORTS, "Reports"),
+        (ids::MENU_HELP, "Help"),
+        (
+            ids::PREFERENCES_SECTION_ANNOTATION,
+            "Schematic \u{2014} Annotation",
+        ),
+        (
+            ids::PREFERENCES_SECTION_DISTRIBUTORS,
+            "Library \u{2014} Distributor APIs",
+        ),
+        (
+            ids::PREFERENCES_SECTION_KEYBOARD_SHORTCUTS,
+            "Keyboard Shortcuts",
+        ),
+        (ids::PREFERENCES_KEYMAP_GROUP_THREE_D, "3D"),
+        (ids::LIBRARY_ROW_NO_SYMBOL, "No symbol bound"),
+        (
+            ids::LIBRARY_ROW_SYMBOL_ABSENT,
+            "Symbol unresolved (UUID not in mounted libraries)",
+        ),
+        (ids::LIBRARY_ROW_SYMBOL_READING, "Reading symbol\u{2026}"),
+        (ids::LIBRARY_ROW_FOOTPRINT_BOUND, "Footprint bound"),
+    ] {
+        assert_eq!(shown(id, &[]), english, "{}", id.as_str());
+    }
+    let pins = |count: usize| shown(ids::LIBRARY_ROW_SYMBOL_PINS, &[("pins", count.into())]);
+    assert_eq!(pins(0), "Symbol bound \u{2014} 0 pins");
+    assert_eq!(pins(1), "Symbol bound \u{2014} 1 pin");
+    assert_eq!(pins(4), "Symbol bound \u{2014} 4 pins");
+    let alternates = |count: usize| {
+        shown(
+            ids::LIBRARY_ROW_ALTERNATE_SYMBOLS,
+            &[
+                ("summary", "Symbol bound \u{2014} 4 pins".into()),
+                ("count", count.into()),
+            ],
+        )
+    };
+    assert_eq!(
+        alternates(1),
+        "Symbol bound \u{2014} 4 pins (+1 alternate symbol)"
+    );
+    assert_eq!(
+        alternates(3),
+        "Symbol bound \u{2014} 4 pins (+3 alternate symbols)"
+    );
+    assert_eq!(
+        shown(
+            ids::LIBRARY_ROW_FOOTPRINT_FAILED,
+            &[("error", "timed out".into())]
+        ),
+        "Footprint could not be read from its library \u{2014} timed out"
+    );
+    let delete = |id| shown(id, &[("name", "R".into())]);
+    assert_eq!(
+        delete(ids::LIBRARY_SYMBOL_DELETE_CHECKING),
+        "Checking whether symbol \"R\" is in use"
+    );
+    assert_eq!(
+        delete(ids::LIBRARY_SYMBOL_DELETE_MAY_BE_IN_USE),
+        "Symbol \"R\" may still be in use"
+    );
+    assert_eq!(
+        delete(ids::LIBRARY_SYMBOL_DELETE_IN_USE),
+        "Symbol \"R\" is still in use"
+    );
 }
 
 /// #2262: the Pad Properties header of a selected pad, singular and plural.

@@ -79,6 +79,7 @@ pub(super) fn view_selection<'a>(
                 palette,
                 collapsed_sections,
                 &fp.selected_pad_shape_params,
+                i18n,
             );
             col = render_pad_form_pad_features(
                 col,
@@ -263,10 +264,19 @@ pub(super) fn view_selection<'a>(
                     primary,
                     border_c,
                     collapsed_sections,
+                    i18n,
                 );
                 // v0.23 — Pattern sub-form. Renders when the
                 // selected entity is the source of an Array.
-                col = render_pattern_subform(col, fp, muted, primary, border_c, collapsed_sections);
+                col = render_pattern_subform(
+                    col,
+                    fp,
+                    muted,
+                    primary,
+                    border_c,
+                    collapsed_sections,
+                    i18n,
+                );
             }
         }
         _ => {
@@ -304,12 +314,12 @@ pub(super) fn view_selection<'a>(
                             .boxed(),
                         );
                     } else {
-                        col = silk_geometry_rows(col, &silk.kind, muted);
+                        col = silk_geometry_rows(col, &silk.kind, muted, i18n);
 
                         // Stroke width (all kinds).
                         col = col.push(pad_input_row_w(
                             fw,
-                            "Stroke width (mm)",
+                            t!(i18n, ids::EDITORS_SILK_STROKE_WIDTH),
                             "0.15",
                             format!("{:.3}", silk.stroke_width_mm),
                             PanelMsg::FpEditorSetSilkStrokeWidth,
@@ -320,7 +330,7 @@ pub(super) fn view_selection<'a>(
                         // hunting for the right tool).
                         col = col.push(pad_check_row_w(
                             fw,
-                            "Filled",
+                            t!(i18n, ids::EDITORS_SILK_FILLED),
                             silk.filled,
                             PanelMsg::FpEditorToggleSilkFilled,
                             muted,

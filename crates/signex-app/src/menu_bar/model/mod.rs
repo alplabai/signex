@@ -91,15 +91,15 @@ pub const ROOT_TITLES: [&str; 10] = [
 /// not migrated yet, which keeps its [`ROOT_TITLES`] text.
 const ROOT_TITLE_IDS: [Option<signex_i18n::MessageId>; ROOT_TITLES.len()] = [
     Some(signex_i18n::ids::MENU_FILE),
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
+    Some(signex_i18n::ids::MENU_EDIT),
+    Some(signex_i18n::ids::MENU_VIEW),
+    Some(signex_i18n::ids::MENU_PROJECT),
+    Some(signex_i18n::ids::MENU_PLACE),
+    Some(signex_i18n::ids::MENU_DESIGN),
+    Some(signex_i18n::ids::MENU_TOOLS),
+    Some(signex_i18n::ids::MENU_REPORTS),
+    Some(signex_i18n::ids::MENU_WINDOW),
+    Some(signex_i18n::ids::MENU_HELP),
 ];
 
 /// The root titles as the bar draws them under `i18n`: the catalog text of a

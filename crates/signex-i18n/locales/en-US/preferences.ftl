@@ -100,3 +100,23 @@ preferences-appearance-window-buttons-help = Where minimize, maximize and close 
 preferences-appearance-restart-note = Takes effect after restart.
 # Value beside the zoom speed slider. $percent is a whole number.
 preferences-appearance-zoom-step-value = { $percent }% per notch
+
+## Section titles of the pages
+preferences-section-font = Font
+preferences-section-window-controls = Window controls
+preferences-section-schematic-editor = Schematic Editor
+preferences-section-pcb-editor = PCB Editor
+preferences-section-rendering = Rendering
+preferences-section-symbol-editor = Symbol Editor
+preferences-section-interface-scale = Interface scale
+preferences-section-navigation = Navigation
+preferences-section-window = Window
+preferences-section-annotation = Schematic — Annotation
+preferences-section-editing = Schematic — Editing
+preferences-section-distributors = Library — Distributor APIs
+preferences-section-keyboard-shortcuts = Keyboard Shortcuts
+# Command groups of the Keyboard Shortcuts page.
+preferences-keymap-group-general = General
+preferences-keymap-group-schematic = Schematic
+preferences-keymap-group-pcb = PCB
+preferences-keymap-group-three-d = 3D

@@ -26,23 +26,43 @@ pub use icu_locale_core::Locale;
 pub use locale::LanguagePref;
 pub use types::{Arg, LocalNumber, Localized, MessageId, UserText};
 
-/// Every message id, defined together with the [`ids::ALL`] list so a new
-/// id cannot be left out of the consistency tests. This is the only non-test place
-/// `MessageId::new` is called (it is crate-private).
+/// Every message id, defined together with a list of them so a new id cannot
+/// be left out of the consistency tests (`ids::all` joins the lists). This
+/// is the only non-test place `MessageId::new` is called (it is crate-private).
+/// `define_ids! { LIST; … }` defines one area's ids in an `area_ids` file.
 macro_rules! define_ids {
+    ($list:ident; $($name:ident = $id:literal;)+) => {
+        $(pub const $name: crate::MessageId = crate::MessageId::new($id);)+
+
+        /// Every id above.
+        #[cfg(test)]
+        pub(crate) const $list: &[crate::MessageId] = &[$($name),+];
+    };
     ($($name:ident = $id:literal;)+) => {
         /// The message ids; each lives in `locales/en-US/`.
         pub mod ids {
             use crate::MessageId;
 
+            pub use crate::area_ids::*;
+
             $(pub const $name: MessageId = MessageId::new($id);)+
 
             /// Every id above.
             #[cfg(test)]
-            pub(crate) const ALL: &[MessageId] = &[$($name),+];
+            const ALL: &[MessageId] = &[$($name),+];
+
+            /// Every id: the list above and the `area_ids` lists.
+            #[cfg(test)]
+            pub(crate) fn all() -> Vec<MessageId> {
+                let mut all = ALL.to_vec();
+                all.extend(crate::area_ids::area_lists());
+                all
+            }
         }
     };
 }
+
+mod area_ids;
 
 define_ids! {
     BOARD_SKETCH_TITLE = "board-sketch-title";

@@ -564,3 +564,24 @@ panels-drawing-color = Color
 panels-drawing-placement = Placement
 panels-drawing-placement-behind = Behind circuit
 panels-drawing-placement-above = Above circuit
+# Number rows. X and Y are the sheet axes.
+panels-drawing-start-x = Start X
+panels-drawing-start-y = Start Y
+panels-drawing-end-x = End X
+panels-drawing-end-y = End Y
+panels-drawing-position-x = Position X
+panels-drawing-position-y = Position Y
+panels-drawing-center-x = Center X
+panels-drawing-center-y = Center Y
+# Stroke width of an arc.
+panels-drawing-width = Width
+# Stroke width of a line, or the width of a rectangle.
+panels-drawing-width-mm = Width (mm)
+panels-drawing-height-mm = Height (mm)
+# Stroke width of a closed shape.
+panels-drawing-border = Border
+panels-drawing-radius = Radius
+panels-drawing-start-angle = Start Angle
+panels-drawing-end-angle = End Angle
+# Colour tile: the theme's own colour.
+panels-drawing-color-auto = Auto

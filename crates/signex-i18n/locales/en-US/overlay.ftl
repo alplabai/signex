@@ -23,3 +23,12 @@ overlay-palette-more-results = { $count } more results — refine query
 # Footer key hints: the arrow keys move the selection, Enter runs it.
 overlay-palette-navigate = Navigate
 overlay-palette-run = Run
+# Key caps: the names of the Escape and Enter keys, as printed on a keyboard.
+overlay-key-esc = Esc
+overlay-key-enter = Enter
+
+## Hover card of a placed symbol: the field names
+overlay-symbol-card-designator = Designator
+overlay-symbol-card-value = Value
+overlay-symbol-card-footprint = Footprint
+overlay-symbol-card-library = Library

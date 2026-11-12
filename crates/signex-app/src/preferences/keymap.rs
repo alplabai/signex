@@ -59,7 +59,10 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     };
 
     let header = column![
-        section_title("Keyboard Shortcuts"),
+        section_title(signex_i18n::t!(
+            i18n,
+            signex_i18n::ids::PREFERENCES_SECTION_KEYBOARD_SHORTCUTS
+        )),
         Space::new().height(4),
         text(raw("Configure keyboard shortcut profiles. Command names and categories come from Signex command metadata."))
             .size(TS.body)
@@ -244,11 +247,23 @@ pub(super) fn content_keyboard_shortcuts<'a>(
             continue;
         }
         content = content.push(Space::new().height(6).boxed());
-        content = content.push(section_title(group.display_name()));
+        content = content.push(section_title(i18n.message(group_title(group), &[])));
         content = content.push(Column::with_children(group_rows).spacing(SP.xs).boxed());
     }
 
     content.boxed()
+}
+
+/// The heading of a command group in the Keyboard Shortcuts page.
+fn group_title(group: crate::keymap::CommandGroup) -> signex_i18n::MessageId {
+    use crate::keymap::CommandGroup;
+    use signex_i18n::ids;
+    match group {
+        CommandGroup::General => ids::PREFERENCES_KEYMAP_GROUP_GENERAL,
+        CommandGroup::Schematic => ids::PREFERENCES_KEYMAP_GROUP_SCHEMATIC,
+        CommandGroup::Pcb => ids::PREFERENCES_KEYMAP_GROUP_PCB,
+        CommandGroup::ThreeD => ids::PREFERENCES_KEYMAP_GROUP_THREE_D,
+    }
 }
 
 /// Render one shortcut table row. Extracted so the grouped view can build
