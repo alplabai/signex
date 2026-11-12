@@ -67,9 +67,11 @@ cmd-menu-mirror-x = Mirror X
 cmd-mirror-y = Mirror along Y-axis
 cmd-menu-mirror-y = Mirror Y
 cmd-move-object = Move object
+# Verb, a tool: pick an object and move it. Not the Move submenu of the Edit menu.
 cmd-menu-move-object = Move
 cmd-move-selection = Move selection
 cmd-menu-move-selection = Move Selection
+# Verb: create a new document. The File menu row says "New Project".
 cmd-new-document = New
 cmd-menu-new-document = New Project
 cmd-new-project-with-profile = New project from a profile
@@ -112,6 +114,7 @@ cmd-revert = Revert an agent's edit step
 cmd-rotate-clockwise = Rotate clockwise by 90 degrees
 cmd-menu-rotate-clockwise = Rotate Clockwise
 cmd-rotate-counterclockwise = Rotate counterclockwise by 90 degrees
+# Verb: turn the selection by 90 degrees counterclockwise.
 cmd-menu-rotate-counterclockwise = Rotate
 cmd-rubber-stamp-copy = Rubber-stamp copy / repeated paste
 cmd-save-document = Save document
@@ -142,6 +145,7 @@ cmd-toggle-schematic-filter-panel = Toggle schematic filter panel
 cmd-toggle-schematic-list-panel = Toggle schematic list panel
 cmd-toggle-search-panel = Show/hide search panel
 cmd-toggle-selection = Add/remove object from selection
+# Verb: add the picked object to the selection, or remove it when it is in.
 cmd-menu-toggle-selection = Toggle Selection
 cmd-toggle-auto-focus = Toggle AutoFocus
 cmd-menu-toggle-auto-focus = AutoFocus (dim unselected)
@@ -180,9 +184,11 @@ cmd-next-sheet = Next sheet
 cmd-open-child-sheet = Open the selected sheet symbol's child sheet
 cmd-menu-open-child-sheet = Open Child Sheet
 cmd-open-components-panel = Open Components panel / place components
+# Noun: opens the Components panel, where a part is chosen to place.
 cmd-menu-open-components-panel = Component...
 cmd-open-net-color-palette = Open net color palette
 cmd-place-bus = Draw bus
+# Noun: the bus tool, a bundle of signals drawn as one thick wire. Not a computer bus. Same wording as cmd-menu-draw-bus, a different command.
 cmd-menu-place-bus = Bus
 cmd-place-compile-mask = Place Compile Mask directive
 cmd-menu-place-compile-mask = Compile Mask
@@ -204,6 +210,7 @@ cmd-menu-place-power-symbol = Power Port
 cmd-place-symbol = Place symbol
 cmd-place-text = Place text
 cmd-place-wire = Place wire
+# Noun: the wire tool, an electrical connection drawn between pins. Same wording as cmd-menu-draw-wire, a different command.
 cmd-menu-place-wire = Wire
 cmd-place-wire-to-bus-entry = Place wire-to-bus entry
 cmd-previous-highlighted-net-item = Previous item on highlighted net
@@ -232,8 +239,11 @@ cmd-tool-select = Tool select
 cmd-lasso-select = Lasso select
 cmd-menu-lasso-select = Lasso Select
 cmd-select-connection = Select connection
+# Noun, in the Select menu: selects every wire joined to the one picked.
 cmd-menu-select-connection = Connection
+# Verb, a tool: drag an object with the mouse, its wires following.
 cmd-drag = Drag
+# Verb, a tool: drag an object with the mouse, its wires following.
 cmd-menu-drag = Drag
 cmd-move-selection-xy = Move selection x y
 cmd-menu-move-selection-xy = Move Selection by X, Y...
@@ -284,8 +294,10 @@ cmd-menu-distribute-vertically = Distribute Vertically
 cmd-align-to-grid = Align to grid
 cmd-menu-align-to-grid = Align To Grid
 cmd-draw-wire = Draw wire
+# Noun: the wire tool of the Active Bar. Same wording as cmd-menu-place-wire, a different command.
 cmd-menu-draw-wire = Wire
 cmd-draw-bus = Draw bus
+# Noun: the bus tool of the Active Bar, a bundle of signals drawn as one thick wire. Same wording as cmd-menu-place-bus, a different command.
 cmd-menu-draw-bus = Bus
 cmd-place-bus-entry = Place bus entry
 cmd-menu-place-bus-entry = Bus Entry
@@ -296,6 +308,7 @@ cmd-menu-place-harness-connector = Harness Connector
 cmd-place-harness-entry = Place harness entry
 cmd-menu-place-harness-entry = Harness Entry
 cmd-place-port = Place port
+# Noun: a connection point of a sheet that carries a signal in or out.
 cmd-menu-place-port = Port
 cmd-place-off-sheet-connector = Place off sheet connector
 cmd-menu-place-off-sheet-connector = Off Sheet Connector
@@ -304,12 +317,14 @@ cmd-menu-place-parameter-set = Parameter Set
 cmd-place-diff-pair = Place diff pair
 cmd-menu-place-diff-pair = Differential Pair
 cmd-place-blanket = Place blanket
+# Noun: a directive that covers an area of the sheet.
 cmd-menu-place-blanket = Blanket
 cmd-place-text-string = Place text string
 cmd-menu-place-text-string = Text String
 cmd-place-text-frame = Place text frame
 cmd-menu-place-text-frame = Text Frame
 cmd-place-note = Place note
+# Noun: a text note placed on the sheet.
 cmd-menu-place-note = Note
 cmd-draw-arc = Draw arc
 cmd-menu-draw-arc = Arc
@@ -320,6 +335,7 @@ cmd-menu-draw-elliptical-arc = Elliptical Arc
 cmd-draw-ellipse = Draw ellipse
 cmd-menu-draw-ellipse = Ellipse
 cmd-draw-line = Draw line
+# Noun: the line tool of the symbol editor, a graphic line (not an electrical wire).
 cmd-menu-draw-line = Line
 cmd-draw-rectangle = Draw rectangle
 cmd-menu-draw-rectangle = Rectangle
@@ -339,6 +355,7 @@ cmd-clear-all-net-colors = Clear all net colors
 cmd-menu-clear-all-net-colors = Clear All Net Colors
 cmd-assign-net-class = Assign net to class
 cmd-place-component = Place component
+# Noun: a component placed on the sheet.
 cmd-menu-place-component = Part
 cmd-run-drc = Run the design rule check on the board
 cmd-menu-run-drc = Design Rule Check

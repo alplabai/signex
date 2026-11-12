@@ -29,7 +29,6 @@ define_ids! {
         MENU_EDIT_ARRANGE = "menu-edit-arrange";
         MENU_PLACE_TEXT = "menu-place-text";
         MENU_PLACE_NO_CONNECT = "menu-place-no-connect";
-        MENU_PROJECT_OPTIONS = "menu-project-options";
         MENU_PROJECT_CLOSE = "menu-project-close";
         MENU_REPORTS_BOM = "menu-reports-bom";
         MENU_REPORTS_NETLIST = "menu-reports-netlist";

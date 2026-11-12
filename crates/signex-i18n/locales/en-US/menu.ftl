@@ -51,7 +51,6 @@ menu-place-no-connect = No Connect
 
 ## Project menu (#2057)
 # Rows of the Project menu that are not commands.
-menu-project-options = Project Options...
 menu-project-close = Close Project
 
 ## Reports menu (#2057)
@@ -76,15 +75,15 @@ menu-tools-passive-calculator = Passive Network Calculator...
 
 ## Help menu (#2057)
 # Rows of the Help menu that are not commands.
-menu-help-about = About Signex
+menu-help-about = About { -brand-name }
 menu-help-documentation = Documentation
 menu-help-report-issue = Report an Issue
 menu-help-sample-project = Open Sample Project
 
 ## Native app menu and menu chrome (#2057)
-# The product name. A message that names it inside a sentence would carry
-# Unicode isolation marks around the term, which a native menu label shows
-# as stray glyphs, so those messages spell it out.
+# The product name: a term, so a message names it as { -brand-name }.
+# Fluent does not isolate a term reference, so it adds no bidi marks and
+# a native menu label stays plain.
 -brand-name = Signex
 # Title of the app menu of the macOS menu bar (AppKit shows the process name regardless).
 menu-app-title = { -brand-name }

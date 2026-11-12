@@ -69,7 +69,10 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     };
 
     let header = column![
-        section_title(&i18n.message_plain(command_ids::CMD_MENU_SHOW_CURRENT_COMMAND_HOTKEYS, &[])),
+        section_title(&crate::keymap::command_menu_text(
+            i18n,
+            "show_current_command_hotkeys"
+        )),
         Space::new().height(4),
         text(i18n.message(ids::PREF_KEYMAP_INTRO, &[]))
             .size(TS.body)
@@ -779,7 +782,7 @@ fn context_label(
 }
 
 use crate::keymap::category_title;
-use signex_i18n::{command_ids, shortcut_ids as ids};
+use signex_i18n::shortcut_ids as ids;
 
 #[cfg(test)]
 mod tests {

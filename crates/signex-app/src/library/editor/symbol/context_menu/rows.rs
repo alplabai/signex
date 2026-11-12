@@ -9,11 +9,12 @@
 //! rendering. `super::flatten` is the one place that walks this data
 //! into widgets.
 
+use crate::keymap::command_menu_message;
 use crate::library::editor::symbol::state::{
     SymbolSelection, selected_is_deletable, selection_is_join_eligible,
 };
 use crate::library::messages::{SymbolEditorMsg, SymbolSelectionMsg, SymbolToolMsg};
-use signex_i18n::{MessageId, command_ids, menu_ids};
+use signex_i18n::{MessageId, menu_ids};
 use signex_library::Symbol;
 
 /// One row of the symbol context menu. `id` is a stable, kebab-case,
@@ -75,13 +76,13 @@ pub fn build_symbol_context_menu_rows(
         ),
         SymbolMenuRow::item(
             "symbol.delete",
-            command_ids::CMD_MENU_DELETE_SELECTION,
+            command_menu_message("delete_selection"),
             selected_is_deletable(selected),
             SymbolEditorMsg::DeleteSelected,
         ),
         SymbolMenuRow::item(
             "symbol.select-all",
-            command_ids::CMD_MENU_SELECT_ALL,
+            command_menu_message("select_all"),
             true,
             SymbolEditorMsg::Select(SymbolSelectionMsg::All),
         ),

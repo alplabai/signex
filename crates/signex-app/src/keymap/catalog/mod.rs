@@ -281,8 +281,31 @@ impl CommandMetadata {
     /// The label a menu surface should display: the terse `menu_label`
     /// override when present, else the descriptive `label`.
     pub fn menu_label_in(&self, i18n: &I18n) -> String {
-        t!(i18n, self.menu_label.unwrap_or(self.label)).to_string()
+        t!(i18n, self.menu_label_id()).to_string()
     }
+
+    /// The message behind [`Self::menu_label_in`].
+    pub const fn menu_label_id(&self) -> MessageId {
+        match self.menu_label {
+            Some(menu) => menu,
+            None => self.label,
+        }
+    }
+}
+
+/// The menu text of the command `command_id` in the message language; the
+/// bare id for one the catalog does not have.
+pub fn command_menu_text(i18n: &I18n, command_id: &str) -> String {
+    metadata_for_str(command_id).map_or_else(
+        || command_id.to_string(),
+        |metadata| metadata.menu_label_in(i18n),
+    )
+}
+
+/// The message of the menu text of `command_id`, for row data that renders
+/// later; `cmd-unnamed` for an id the catalog does not have.
+pub fn command_menu_message(command_id: &str) -> MessageId {
+    metadata_for_str(command_id).map_or(command_ids::CMD_UNNAMED, CommandMetadata::menu_label_id)
 }
 
 /// Every command-metadata table, one per surface group. `metadata_for`

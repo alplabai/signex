@@ -326,9 +326,9 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("open_erc_dialog", "")),
         SEP,
         // Gated like Close Project: with no project there is no tab to open.
-        item_if(
+        item_if_command(
             ctx,
-            menu_ids::MENU_PROJECT_OPTIONS,
+            "open_project_options",
             MenuMessage::OpenProjectOptions,
             ctx.commands.has_open_project,
         ),

@@ -81,6 +81,8 @@ pub fn catalog_stamp(app: &super::Signex) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     let window = app.ui_state.command_palette.window;
     window.hash(&mut h);
+    // The rows are worded in the message language.
+    app.ui_state.i18n.locale().hash(&mut h);
     app.palette_panel_ctx().placed_symbols.hash(&mut h);
     // #1070 — which commands the command rows offer follows the active
     // editor kind and the enablement facts, so a tab switch rebuilds.

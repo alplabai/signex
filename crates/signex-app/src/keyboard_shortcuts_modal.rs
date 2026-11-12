@@ -6,7 +6,7 @@
 
 use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Element, Length, Widget};
-use signex_i18n::{I18n, command_ids, shortcut_ids};
+use signex_i18n::{I18n, shortcut_ids};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{raw, text};
 
@@ -96,7 +96,7 @@ fn build<'a>(
 
     // ── Header — canonical modal chrome ─────────────────────────
     let header = modal_title_header(
-        i18n.message_plain(command_ids::CMD_MENU_SHOW_CURRENT_COMMAND_HOTKEYS, &[]),
+        crate::keymap::command_menu_text(i18n, "show_current_command_hotkeys"),
         Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
         tokens,
     );

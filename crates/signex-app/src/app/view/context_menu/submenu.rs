@@ -267,7 +267,7 @@ pub(super) fn add_new_entries(
             target.clone(),
         ))),
     ));
-    // Footprint editor gated off for release; hide the &text(i18n, menu_ids::CTX_ADD_PCB_LIBRARY) create
+    // Footprint editor gated off for release; hide the "PCB Library" create
     // entry on the project-root menu.
     if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
         v.push(dd_msg(

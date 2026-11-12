@@ -59,6 +59,12 @@ fn silk_delete_msg(fp: &Footprint, idx: usize) -> Option<FootprintEditorMsg> {
     (!is_sketch_owned_silk(fp, idx)).then_some(FootprintEditorMsg::DeleteSilkF)
 }
 
+/// Header naming a pad or silk graphic by its index, when it has no number
+/// or is gone. The index is an identifier, so it shows without digit grouping.
+fn indexed_header(i18n: &I18n, id: MessageId, key: &str, idx: usize) -> String {
+    i18n.message_plain(id, &[(key, idx.to_string().into())])
+}
+
 const MENU_WIDTH: f32 = 220.0;
 const ROW_PAD_X: u16 = 12;
 const ROW_PAD_Y: u16 = 5;
@@ -233,7 +239,9 @@ pub fn view_context_menu<'a>(
                         &[("number", p.number.as_str().into())],
                     )
                 })
-                .unwrap_or_else(|| with(menu_ids::CTX_FP_PAD_HEADER, &[("number", idx.into())]));
+                .unwrap_or_else(|| {
+                    indexed_header(i18n, menu_ids::CTX_FP_PAD_HEADER, "number", idx)
+                });
             items.push(item_disabled(tokens, &header, ""));
             items.push(separator(tokens));
 
@@ -332,7 +340,7 @@ pub fn view_context_menu<'a>(
                     menu_ids::CTX_FP_SILK_HEADER,
                     &[("kind", t(silk_kind_label(&g.kind)).into())],
                 ),
-                None => with(menu_ids::CTX_FP_SILK_UNKNOWN, &[("index", idx.into())]),
+                None => indexed_header(i18n, menu_ids::CTX_FP_SILK_UNKNOWN, "index", idx),
             };
             items.push(item_disabled(tokens, &header, ""));
             items.push(separator(tokens));
@@ -537,12 +545,31 @@ fn separator<'a>(tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Footprint, FootprintEditorMsg, silk_delete_msg};
+    use super::{Footprint, FootprintEditorMsg, indexed_header, silk_delete_msg};
     use crate::keymap::{
         AppCommandId, CompiledKeymap, ShortcutBinding, ShortcutBindingAction, ShortcutContext,
         ShortcutProfile, ShortcutProfileKind, ShortcutTrigger,
     };
     use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
+
+    /// An index shows as the plain digits, not grouped like a count.
+    #[test]
+    fn an_index_header_has_no_digit_grouping() {
+        let en = signex_i18n::I18n::en_us_ref();
+        assert_eq!(
+            indexed_header(
+                en,
+                signex_i18n::menu_ids::CTX_FP_SILK_UNKNOWN,
+                "index",
+                1234
+            ),
+            "Silk graphic 1234"
+        );
+        assert_eq!(
+            indexed_header(en, signex_i18n::menu_ids::CTX_FP_PAD_HEADER, "number", 1234),
+            "Pad 1234"
+        );
+    }
 
     fn keymap_with(bindings: Vec<(ShortcutBindingAction, &str)>) -> CompiledKeymap {
         CompiledKeymap::compile(&ShortcutProfile {
