@@ -75,7 +75,11 @@ fn an_undocked_footprint_window_shows_the_footprint_editor() {
     editor.state.cursor_mm = Some((4.0, 5.0));
     app.document_state.footprint_editors.insert(path, editor);
 
-    assert!(shows(&app, window, "Layers"), "the footprint toolbar");
+    assert!(shows(&app, window, "3D"), "the footprint mode switcher");
+    assert!(
+        shows(&app, window, "Layers"),
+        "an undocked window keeps its own layer strip"
+    );
     assert_eq!(app.status_zoom(window), SCHEMATIC_ZOOM * 3.0);
     assert_eq!(app.status_cursor(window), (4.0, 5.0));
 }
@@ -159,7 +163,7 @@ fn an_undocked_footprint_window_does_not_draw_another_footprints_active_bar() {
         .push(tab(&b, TabKind::FootprintEditor(b.clone())));
     app.document_state.active_tab = 1;
     assert!(
-        shows(&app, window, "Layers"),
+        shows(&app, window, "3D"),
         "A's window draws a footprint editor"
     );
     assert!(
@@ -311,5 +315,34 @@ fn an_undocked_footprint_window_does_not_draw_another_footprints_move_by_dialog(
     assert!(
         shows(&app, window, "Move Selection By"),
         "A's own dialog shows"
+    );
+}
+
+/// #2262: the main window drops the footprint layer strip only when the
+/// Layers panel is docked; a saved layout without the panel keeps the strip,
+/// and an undocked window always has it.
+#[test]
+fn the_footprint_layer_strip_stands_in_for_a_missing_layers_panel() {
+    use crate::dock::PanelPosition;
+    use crate::panels::PanelKind;
+    let path = PathBuf::from("main.snxfpt");
+    let (mut app, window) = main_showing(TabKind::FootprintEditor(path.clone()), &path);
+    app.document_state
+        .dock
+        .close_panel(PanelKind::FootprintLayers);
+    assert!(
+        app.shows_footprint_layer_strip(window),
+        "a layout without the Layers panel keeps the strip"
+    );
+    app.document_state
+        .dock
+        .add_panel(PanelPosition::Left, PanelKind::FootprintLayers);
+    assert!(
+        !app.shows_footprint_layer_strip(window),
+        "with the panel docked, the strip is gone"
+    );
+    assert!(
+        app.shows_footprint_layer_strip(iced::window::Id::unique()),
+        "an undocked window keeps its strip"
     );
 }

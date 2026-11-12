@@ -44,7 +44,14 @@ fn annotate_footer_buttons_stay_inside_a_960_by_540_window() {
     let app = app_at_small_window();
     assert_labels_inside_window(
         app.view_annotate_dialog(),
-        &["Annotate", "All On", "Reset All", "Accept Changes", "Close"],
+        &[
+            "Annotate",
+            "Lock",
+            "Re-prefix to standard",
+            "Reset All",
+            "Reset & Renumber",
+            "Accept Changes",
+        ],
     );
 }
 

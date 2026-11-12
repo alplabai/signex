@@ -10,8 +10,9 @@ use super::super::stack_preview::{
     ExpansionMode, HoleShapeChoice, PadShapeChoice, pad_stack_preview, pad_stack_tab_strip,
 };
 use super::super::table::{
-    pad_copper_row, pad_table_check_cell, pad_table_disabled_cell, pad_table_header,
-    pad_table_input_cell, pad_table_picklist_cell, pad_table_row,
+    COPPER_CELLS, HOLE_CELLS, PASTE_CELLS, SOLDER_CELLS, pad_copper_row, pad_size_buf,
+    pad_table_check_cell, pad_table_disabled_cell, pad_table_header, pad_table_input_cell,
+    pad_table_picklist_cell, pad_table_row,
 };
 use super::*;
 use crate::panels::{collapsible_section_header, is_section_collapsed};
@@ -93,34 +94,42 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
 
     let current_shape = PadShapeChoice::from_lib(&values.shape);
 
-    // ── COPPER table ──
-    col = col.push(pad_table_header(
-        &["COPPER", "X-Size", "Y-Size", "Shape", "Relief"],
-        &[3, 2, 2, 3, 1],
-        muted,
-        border_c,
-    ));
-    let copper_rows: &[&str] = match values.pad_stack_tab {
-        PadStackTab::Simple => &["All Layers"],
-        PadStackTab::TopMiddleBottom => &[TOP_LAYER, MID_LAYERS, BOTTOM_LAYER],
-        PadStackTab::FullStack => match values.side {
-            PadSide::Top => &[TOP_LAYER, TOP_SOLDER, TOP_PASTE],
-            PadSide::Bottom => &[BOTTOM_LAYER, BOTTOM_SOLDER, BOTTOM_PASTE],
-            PadSide::All => &[TOP_LAYER, MID_LAYERS, BOTTOM_LAYER],
-        },
-    };
-    for (idx, row_label) in copper_rows.iter().enumerate() {
-        let is_first = idx == 0;
-        col = col.push(pad_copper_row(
-            row_label,
-            values,
-            current_shape,
-            target,
-            palette,
-            // Only the first (top) row drives shape / size; mid / bottom
-            // mirror until the schema carries per-layer shape / size.
-            is_first,
+    // ── COPPER ── Simple: one copper for all layers, as label / value
+    // rows like the rest of the form. Per-layer tabs: a table.
+    let is_simple = values.pad_stack_tab == PadStackTab::Simple;
+    if is_simple {
+        col = push_simple_copper_rows(col, values, current_shape, target, fw, muted);
+    } else {
+        col = col.push(pad_table_header(
+            &["COPPER", "X-Size", "Y-Size", "Shape", "Relief"],
+            &COPPER_CELLS,
+            muted,
+            border_c,
         ));
+        let copper_rows: &[&str] = match values.pad_stack_tab {
+            // Simple drew its rows above; it never reaches the table.
+            PadStackTab::Simple | PadStackTab::TopMiddleBottom => {
+                &[TOP_LAYER, MID_LAYERS, BOTTOM_LAYER]
+            }
+            PadStackTab::FullStack => match values.side {
+                PadSide::Top => &[TOP_LAYER, TOP_SOLDER, TOP_PASTE],
+                PadSide::Bottom => &[BOTTOM_LAYER, BOTTOM_SOLDER, BOTTOM_PASTE],
+                PadSide::All => &[TOP_LAYER, MID_LAYERS, BOTTOM_LAYER],
+            },
+        };
+        for (idx, row_label) in copper_rows.iter().enumerate() {
+            let is_first = idx == 0;
+            col = col.push(pad_copper_row(
+                row_label,
+                values,
+                current_shape,
+                target,
+                palette,
+                // Only the first (top) row drives shape / size; mid / bottom
+                // mirror until the schema carries per-layer shape / size.
+                is_first,
+            ));
+        }
     }
     // Corner radius stays as its own labelled row beneath the table —
     // it's a shape-modifier, not a per-layer override.
@@ -137,6 +146,17 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             corner_buf,
             move |v| pad_corner_radius_msg(target, v),
             muted,
+        ));
+    }
+    // Simple's thermal relief toggle, the table's Relief column.
+    if is_simple {
+        col = col.push(pad_check_row_w(
+            fw,
+            "Relief",
+            values.stack.thermal_relief,
+            move |v| pad_thermal_relief_msg(target, v),
+            muted,
+            primary,
         ));
     }
 
@@ -170,7 +190,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
     if is_multilayer {
         col = col.push(pad_table_header(
             &["HOLE", "Size", "Length", "Shape", "Plated"],
-            &[3, 2, 2, 3, 1],
+            &HOLE_CELLS,
             muted,
             border_c,
         ));
@@ -231,7 +251,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                     move |v| pad_plated_msg(target, v),
                 ),
             ],
-            &[2, 2, 3, 1],
+            &HOLE_CELLS,
             primary,
             border_c,
         ));
@@ -311,7 +331,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
     if show_top_side || show_bottom_side {
         col = col.push(pad_table_header(
             &["PASTE", "Expansion", "%", "Shape", "Enabled"],
-            &[3, 2, 2, 3, 1],
+            &PASTE_CELLS,
             muted,
             border_c,
         ));
@@ -346,7 +366,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                     pad_paste_enabled_top_msg(target, v)
                 }),
             ],
-            &[2, 2, 3, 1],
+            &PASTE_CELLS,
             primary,
             border_c,
         ));
@@ -381,7 +401,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                     pad_paste_enabled_bottom_msg(target, v)
                 }),
             ],
-            &[2, 2, 3, 1],
+            &PASTE_CELLS,
             primary,
             border_c,
         ));
@@ -391,7 +411,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
     if show_top_side || show_bottom_side {
         col = col.push(pad_table_header(
             &["SOLDER", "Expansion", "Shape", "Tented"],
-            &[3, 2, 3, 1],
+            &SOLDER_CELLS,
             muted,
             border_c,
         ));
@@ -423,7 +443,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                     pad_mask_tented_top_msg(target, v)
                 }),
             ],
-            &[2, 3, 1],
+            &SOLDER_CELLS,
             primary,
             border_c,
         ));
@@ -457,13 +477,49 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                     pad_mask_tented_bottom_msg(target, v)
                 }),
             ],
-            &[2, 3, 1],
+            &SOLDER_CELLS,
             primary,
             border_c,
         ));
     }
 
     col
+}
+
+/// The Simple pad stack's copper as label / value rows: Shape, X-Size and
+/// Y-Size, each the full form width so the values are never cut.
+fn push_simple_copper_rows<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    values: &PadFormValues,
+    current_shape: PadShapeChoice,
+    target: PadEditTarget,
+    fw: (Length, Length),
+    muted: iced::Color,
+) -> Column<Element<'a, PanelMsg>> {
+    col = col.push(pad_pick_row_w(
+        fw,
+        "Shape",
+        PadShapeChoice::ALL,
+        current_shape,
+        move |c: PadShapeChoice| pad_shape_msg(target, c.to_lib()),
+        muted,
+    ));
+    col = col.push(pad_input_row_w(
+        fw,
+        "X-Size",
+        "",
+        pad_size_buf(values.size_x_mm),
+        move |v| pad_size_x_msg(target, v),
+        muted,
+    ));
+    col.push(pad_input_row_w(
+        fw,
+        "Y-Size",
+        "",
+        pad_size_buf(values.size_y_mm),
+        move |v| pad_size_y_msg(target, v),
+        muted,
+    ))
 }
 
 #[cfg(test)]

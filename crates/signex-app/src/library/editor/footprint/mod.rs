@@ -43,6 +43,7 @@ pub mod sketch_solve_task;
 mod sketch_solve_task_tests;
 pub mod snap;
 pub mod state;
+pub(crate) mod status;
 pub mod step_attach;
 #[cfg(test)]
 mod swallowed_input_tests;

@@ -22,6 +22,7 @@
 pub mod alternate_symbols;
 pub mod datasheet_picker;
 pub mod footprint;
+mod header;
 pub mod inert;
 pub(crate) mod kit;
 mod measurement_cell;
@@ -97,90 +98,7 @@ fn view_header<'a>(
     address: EditorAddress,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
-    graphite_header(state, tokens, i18n, address, read_only)
-}
-
-/// Graphite document header: the internal PN in mono, then the lifecycle
-/// and class as pills, with Discard / Release... / Save and the close
-/// button at the right.
-fn graphite_header<'a>(
-    state: &'a ComponentPreviewState,
-    tokens: &'a ThemeTokens,
-    i18n: &I18n,
-    address: EditorAddress,
-    read_only: bool,
-) -> Element<'a, LibraryMessage> {
-    let pn = state.row.internal_pn.as_str();
-    let pn = if pn.trim().is_empty() {
-        "(no part number)"
-    } else {
-        pn
-    };
-    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
-    let mut line: iced::widget::Row<Element<'a, LibraryMessage>> = row![
-        text(signex_i18n::UserText::new(pn))
-            .size(TS.heading)
-            .font(mono)
-            .color(theme_ext::text_primary(tokens))
-            .boxed(),
-        kit::toned_pill(
-            kit::lifecycle_label(state.row.state).to_string(),
-            kit::lifecycle_tone(state.row.state),
-            tokens,
-        ),
-    ]
-    .spacing(SP.m)
-    .align_y(iced::Alignment::Center);
-    let class = state.row.class.as_str().trim();
-    if !class.is_empty() {
-        line = line.push(kit::toned_pill(
-            class.to_string(),
-            crate::styles::PillTone::Neutral,
-            tokens,
-        ));
-    }
-    let event = |msg: EditorMsg| {
-        Some(LibraryMessage::EditorEvent {
-            library_path: address.library_path.clone(),
-            table: address.table.clone(),
-            row_id: address.row_id,
-            msg,
-        })
-    };
-    line = line.push(Space::new().width(Length::Fill).boxed());
-    if state.dirty {
-        line = line.push(
-            text(t!(i18n, ids::EDITORS_COMPONENT_UNSAVED))
-                .size(TS.body)
-                .color(theme_ext::text_secondary(tokens))
-                .boxed(),
-        );
-    }
-    let editable = !read_only;
-    // Discard drops the working copy for the stored row (asks first when
-    // dirty); Release has no backend yet, so it is a disabled stub.
-    line = line
-        .push(kit::secondary_button(
-            "Discard",
-            event(EditorMsg::ReloadRequested).filter(|_| editable && state.dirty),
-            tokens,
-        ))
-        .push(kit::secondary_button("Release...", None, tokens))
-        .push(kit::secondary_button(
-            "Save & Close",
-            event(EditorMsg::Commit).filter(|_| editable),
-            tokens,
-        ))
-        .push(kit::primary_button(
-            "Save",
-            event(EditorMsg::SaveDraft).filter(|_| editable),
-            tokens,
-        ));
-    // No close button: the document tab's own cross closes the editor.
-    container(line.boxed())
-        .padding([SP.m, SP.l])
-        .style(crate::styles::modal_header_strip(tokens))
-        .boxed()
+    header::view(state, tokens, i18n, address, read_only)
 }
 
 /// How many required slots of `class` have no usable value. Zero for a
@@ -616,6 +534,74 @@ mod tests {
         assert!(
             texts.iter().all(|t| !t.trim().is_empty()),
             "an empty class leaves a blank pill: {texts:?}"
+        );
+    }
+
+    /// Header texts with Fluent's bidi isolation marks removed.
+    fn plain_header_texts(state: &ComponentPreviewState) -> Vec<String> {
+        header_texts(state)
+            .into_iter()
+            .map(|t| t.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect()
+    }
+
+    /// #2262: the identity line carries the version and the library /
+    /// table the row lives in; the description is the heading and the
+    /// manufacturer part sits beside it.
+    #[test]
+    fn header_shows_version_location_description_and_part() {
+        let mut state = preview_with("RES-0001", "resistor");
+        state.row.description = "Thick-film chip resistor".into();
+        let texts = plain_header_texts(&state);
+        for want in [
+            "v0.0.1",
+            "test / t",
+            "Thick-film chip resistor",
+            "Acme ACM-001",
+        ] {
+            assert!(texts.iter().any(|t| t == want), "{want:?} in {texts:?}");
+        }
+    }
+
+    /// A row with no description and no manufacturer part draws no empty
+    /// heading line.
+    #[test]
+    fn header_leaves_out_an_empty_summary() {
+        let mut state = preview_with("RES-0001", "resistor");
+        state.row.primary_mpn = signex_library::ManufacturerPart::draft("", " ");
+        let texts = plain_header_texts(&state);
+        assert!(texts.iter().all(|t| !t.trim().is_empty()), "{texts:?}");
+    }
+
+    /// The parse-error chip counts the pending measurement edits that did
+    /// not parse, and is absent when there are none; the unsaved marker
+    /// follows the dirty flag.
+    #[test]
+    fn header_chip_counts_unparsed_fields_and_marks_unsaved() {
+        let mut state = preview_with("RES-0001", "resistor");
+        let clean = plain_header_texts(&state);
+        assert!(!clean.iter().any(|t| t.contains("parse")), "{clean:?}");
+        assert!(!clean.iter().any(|t| t.contains("Unsaved")), "{clean:?}");
+        state
+            .params_error
+            .insert("value".into(), "not a number".into());
+        state.dirty = true;
+        let texts = plain_header_texts(&state);
+        assert!(
+            texts.iter().any(|t| t == "1 field does not parse"),
+            "{texts:?}"
+        );
+        assert!(
+            texts.iter().any(|t| t.contains("Unsaved changes")),
+            "{texts:?}"
+        );
+        state
+            .params_error
+            .insert("power".into(), "not a number".into());
+        let texts = plain_header_texts(&state);
+        assert!(
+            texts.iter().any(|t| t == "2 fields do not parse"),
+            "{texts:?}"
         );
     }
 }

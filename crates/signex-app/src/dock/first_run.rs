@@ -30,6 +30,7 @@ pub fn graphite_first_run() -> DockArea {
         footprint: true,
         symbol: true,
         pcb: true,
+        component: true,
     };
     dock
 }
