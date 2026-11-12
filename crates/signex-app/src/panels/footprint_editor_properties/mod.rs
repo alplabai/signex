@@ -267,17 +267,33 @@ fn selected_pad_heading(
         return None;
     }
     let pad = fp.selected_pad.as_ref()?;
-    if pad.idx >= fp.pad_count {
+    // The editor's own pads, unsaved ones included: the list `idx` indexes.
+    if pad.idx >= fp.editor_pad_count {
         return None;
     }
     Some(t!(
         i18n,
         ids::EDITORS_FOOTPRINT_PAD_HEADING,
         "number" => pad.number.as_str(),
-        "kind" => pad.kind_label,
+        "kind" => t!(i18n, pad_kind_message(pad.kind)).into_string(),
         "index" => pad.idx + 1,
-        "pads" => fp.pad_count
+        "pads" => fp.editor_pad_count
     ))
+}
+
+/// The catalog name of a pad kind, as the Pad Properties header shows it.
+fn pad_kind_message(kind: signex_library::PadKind) -> signex_i18n::MessageId {
+    use signex_library::PadKind;
+    match kind {
+        PadKind::Smd => ids::EDITORS_PAD_KIND_SMD,
+        PadKind::Tht => ids::EDITORS_PAD_KIND_THROUGH_HOLE,
+        PadKind::NptHole => ids::EDITORS_PAD_KIND_NPT_HOLE,
+        PadKind::ConnectorPad => ids::EDITORS_PAD_KIND_CONNECTOR,
+        PadKind::Castellated => ids::EDITORS_PAD_KIND_CASTELLATED,
+        PadKind::Fiducial => ids::EDITORS_PAD_KIND_FIDUCIAL,
+        // `PadKind` is non-exhaustive.
+        _ => ids::EDITORS_PAD_KIND_UNKNOWN,
+    }
 }
 
 /// v0.20 — common Settings + Hint footer: the Settings header and a

@@ -377,4 +377,16 @@ fn the_pad_heading_names_the_pad_and_its_place_among_the_pads() {
     };
     assert_eq!(heading(1, 11), "Pad 11 \u{00B7} SMD \u{00B7} 1 of 11 pads");
     assert_eq!(heading(1, 1), "Pad 11 \u{00B7} SMD \u{00B7} 1 of 1 pad");
+    // The pad kinds keep the English the header showed as data before.
+    for (id, english) in [
+        (ids::EDITORS_PAD_KIND_SMD, "SMD"),
+        (ids::EDITORS_PAD_KIND_THROUGH_HOLE, "Through-hole"),
+        (ids::EDITORS_PAD_KIND_NPT_HOLE, "NPT hole"),
+        (ids::EDITORS_PAD_KIND_CONNECTOR, "Connector"),
+        (ids::EDITORS_PAD_KIND_CASTELLATED, "Castellated"),
+        (ids::EDITORS_PAD_KIND_FIDUCIAL, "Fiducial"),
+        (ids::EDITORS_PAD_KIND_UNKNOWN, "Unknown"),
+    ] {
+        assert_eq!(i18n.message(id, &[]).to_string(), english);
+    }
 }

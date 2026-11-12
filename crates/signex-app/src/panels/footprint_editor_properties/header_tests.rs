@@ -9,10 +9,28 @@ use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit
 use crate::panels::FootprintEditorPanelContext;
 use signex_library::{Footprint, FootprintFile, Pad};
 
-/// The panel context of a footprint editor with eight pads and pad 3
-/// selected, built the way the app builds it.
-fn ctx_with_pad_3_selected() -> FootprintEditorPanelContext {
-    let path = PathBuf::from("pad-heading.snxfpt");
+const PATH: &str = "pad-heading.snxfpt";
+
+/// One footprint edit, sent through `Signex::update` as the canvas sends it.
+fn edit(app: &mut Signex, msg: FootprintEditorMsg) {
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: PathBuf::from(PATH),
+        msg: PrimitiveEdit::Footprint(msg),
+    }));
+}
+
+fn panel_ctx(app: &Signex) -> FootprintEditorPanelContext {
+    app.document_state
+        .panel_ctx
+        .footprint_editor
+        .clone()
+        .expect("the footprint editor panel context is built")
+}
+
+/// An app with a footprint editor tab open on eight saved pads, nothing
+/// selected.
+fn app_with_eight_pads() -> Signex {
+    let path = PathBuf::from(PATH);
     // Pads go in through the library primitive, as a loaded file brings
     // them, so the test does not reach into the editor's internals.
     let mut footprint = Footprint::empty("SOIC-8");
@@ -38,19 +56,14 @@ fn ctx_with_pad_3_selected() -> FootprintEditorPanelContext {
         kind: TabKind::FootprintEditor(path.clone()),
     });
     app.document_state.active_tab = 0;
-    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-        path,
-        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SelectPad(Some(2))),
-    }));
-    let mut ctx = app
-        .document_state
-        .panel_ctx
-        .footprint_editor
-        .clone()
-        .expect("the footprint editor panel context is built");
-    // The count is the footprint's baked pads; this editor bakes none.
-    ctx.pad_count = 8;
-    ctx
+    app
+}
+
+/// The panel context of the eight-pad editor with pad 3 selected.
+fn ctx_with_pad_3_selected() -> FootprintEditorPanelContext {
+    let mut app = app_with_eight_pads();
+    edit(&mut app, FootprintEditorMsg::SelectPad(Some(2)));
+    panel_ctx(&app)
 }
 
 fn shown(ctx: &FootprintEditorPanelContext) -> Option<String> {
@@ -64,10 +77,37 @@ fn a_selected_pad_names_its_number_kind_and_place_among_the_pads() {
     assert_eq!(shown(&ctx).as_deref(), Some("Pad 3 · SMD · 3 of 8 pads"));
 }
 
+/// A pad placed and not saved yet counts: the header numbers it among the
+/// editor's pads, not the eight the file holds.
+#[test]
+fn an_unsaved_new_pad_is_counted_among_the_pads() {
+    let mut app = app_with_eight_pads();
+    edit(
+        &mut app,
+        FootprintEditorMsg::AddPad {
+            x_mm: 20.0,
+            y_mm: 0.0,
+        },
+    );
+    edit(&mut app, FootprintEditorMsg::SelectPad(Some(8)));
+    let ctx = panel_ctx(&app);
+    assert_eq!(ctx.editor_pad_count, 9);
+    let number = ctx
+        .selected_pad
+        .as_ref()
+        .expect("the new pad is selected")
+        .number
+        .clone();
+    assert_eq!(
+        shown(&ctx),
+        Some(format!("Pad {number} · SMD · 9 of 9 pads"))
+    );
+}
+
 #[test]
 fn a_footprint_with_one_pad_says_pad_not_pads() {
     let mut ctx = ctx_with_pad_3_selected();
-    ctx.pad_count = 1;
+    ctx.editor_pad_count = 1;
     ctx.selected_pad.as_mut().expect("pad 3 is selected").idx = 0;
     assert_eq!(shown(&ctx).as_deref(), Some("Pad 3 · SMD · 1 of 1 pad"));
 }
@@ -82,7 +122,7 @@ fn no_selected_pad_keeps_the_footprint_header() {
 #[test]
 fn a_pad_index_past_the_pad_count_keeps_the_footprint_header() {
     let mut ctx = ctx_with_pad_3_selected();
-    ctx.pad_count = 2;
+    ctx.editor_pad_count = 2;
     assert_eq!(shown(&ctx), None);
 }
 

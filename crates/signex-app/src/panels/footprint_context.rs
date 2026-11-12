@@ -17,6 +17,9 @@ pub struct FootprintEditorPanelContext {
     pub mode_kind: FootprintModeKind,
     /// Number of baked pads on the footprint primitive.
     pub pad_count: usize,
+    /// Number of pads in the editor, unsaved ones included: the list
+    /// `selected_pad.idx` indexes (#2262).
+    pub editor_pad_count: usize,
     /// Number of sketch entities (Points + Lines + Arcs + Circles)
     /// when a sketch is present.
     pub sketch_entity_count: usize,

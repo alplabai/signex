@@ -275,6 +275,14 @@ editors-footprint-pad-heading = Pad { $number } · { $kind } · { $index } of { 
     }
 # Beside the header while several pads are selected. $count is a whole number.
 editors-footprint-pads-selected = ({ $count } pads selected)
+# Pad kinds, as the Pad Properties header names them.
+editors-pad-kind-smd = SMD
+editors-pad-kind-through-hole = Through-hole
+editors-pad-kind-npt-hole = NPT hole
+editors-pad-kind-connector = Connector
+editors-pad-kind-castellated = Castellated
+editors-pad-kind-fiducial = Fiducial
+editors-pad-kind-unknown = Unknown
 # Degrees of freedom of the selected sketch point.
 editors-footprint-dof = DOF
 editors-footprint-dof-fully-constrained = Fully constrained

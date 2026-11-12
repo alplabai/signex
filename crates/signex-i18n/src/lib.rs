@@ -1064,6 +1064,13 @@ define_ids! {
     PANELS_DRAWING_PLACEMENT_ABOVE = "panels-drawing-placement-above";
     EDITORS_FOOTPRINT_PAD_HEADING = "editors-footprint-pad-heading";
     EDITORS_FOOTPRINT_PADS_SELECTED = "editors-footprint-pads-selected";
+    EDITORS_PAD_KIND_SMD = "editors-pad-kind-smd";
+    EDITORS_PAD_KIND_THROUGH_HOLE = "editors-pad-kind-through-hole";
+    EDITORS_PAD_KIND_NPT_HOLE = "editors-pad-kind-npt-hole";
+    EDITORS_PAD_KIND_CONNECTOR = "editors-pad-kind-connector";
+    EDITORS_PAD_KIND_CASTELLATED = "editors-pad-kind-castellated";
+    EDITORS_PAD_KIND_FIDUCIAL = "editors-pad-kind-fiducial";
+    EDITORS_PAD_KIND_UNKNOWN = "editors-pad-kind-unknown";
     EDITORS_FOOTPRINT_DOF = "editors-footprint-dof";
     EDITORS_FOOTPRINT_DOF_FULLY_CONSTRAINED = "editors-footprint-dof-fully-constrained";
     EDITORS_FOOTPRINT_UNLINK_CORNER_RADIUS = "editors-footprint-unlink-corner-radius";
