@@ -8,6 +8,7 @@ signex-3d-model-importer -> signex-types
 signex-app -> pcb-geom
 signex-app -> signex-bake
 signex-app -> signex-drc
+signex-app -> signex-drc-dsl
 signex-app -> signex-engine
 signex-app -> signex-erc
 signex-app -> signex-erc-dsl
@@ -29,6 +30,9 @@ signex-cli -> signex-app
 signex-cli -> signex-types
 signex-drc -> pcb-geom
 signex-drc -> signex-types
+signex-drc-dsl -> pcb-geom
+signex-drc-dsl -> signex-drc
+signex-drc-dsl -> signex-types
 signex-engine -> pcb-geom
 signex-engine -> signex-history
 signex-engine -> signex-net
