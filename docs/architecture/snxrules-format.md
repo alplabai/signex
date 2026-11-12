@@ -1,6 +1,7 @@
 # `.snxrules` — portable ERC rule profile (#1085)
 
-A `.snxrules` file is a named ERC rule set that lives outside any project. A
+A `.snxrules` file is a named ERC rule set (and, since #2307, an optional DRC
+section) that lives outside any project. A
 project is seeded from one, can be compared against it, and can be updated
 from it after the user reviews the differences. Parsing and writing is
 `signex_types::project::RuleProfile`; the shipped profile, the diff and the
@@ -30,9 +31,15 @@ change is a small git diff.
 | `name` | string | The profile's identity. Projects find a profile by this name. |
 | `version` | string | Content version chosen by the author; recorded in a project's provenance. |
 | `erc` | object, optional | Same shape as the project's `rules.erc`: `severity` (rule id to `error` / `warning` / `info` / `off`) and `pin_matrix` (`"<row axis>/<column axis>"` to severity, only cells that differ from the factory matrix). Omitted when empty. |
+| `drc` | object, optional | Same shape as the project's `rules.drc` (#2307): `severity` (DRC rule id such as `builtin::clearance` to `error` / `warning` / `info` / `off`) and `dsl` (DRC rule language text, kept but not read until #2307 step 2b). Omitted when empty. Rule ids and layers: [`pcb-drc.md`](pcb-drc.md#rule-ids-and-severities-2307-step-2a). |
 
 Every key is optional on load (`name` and `version` default to the empty
-string). An explicitly empty `erc` is the same as an absent one.
+string). An explicitly empty `erc` or `drc` is the same as an absent one.
+`drc` was added without a `schema` bump: an older build keeps it as an
+unknown key, and a profile without it re-saves byte-identical. The shipped
+`Signex Default` profile has no `drc` section, so its version (`1.1`) and its
+hash are unchanged; the built-in DRC severities live in `signex-drc` as the
+built-in layer.
 
 ## Schema token and newer files
 
@@ -50,8 +57,8 @@ the parse error.
 Keys this build does not know are kept verbatim and written back, so loading
 and saving a profile never drops what a newer build added:
 
-- top level (a future `drc` section, say) and inside `erc`: captured in an
-  `UnknownJson` bag (`#[serde(flatten)]`), ordered by key;
+- top level, inside `erc` and inside `drc`: captured in an `UnknownJson` bag
+  (`#[serde(flatten)]`), ordered by key;
 - unknown rule ids in `erc.severity` and unknown keys in `erc.pin_matrix`: kept
   as ordinary map entries.
 
@@ -113,6 +120,13 @@ its `erc` object: `severity`, `pin_matrix` and everything in `erc.unknown`.
 The maps are ordered, so equal rule sets hash equal on every machine. `name`,
 `version`, `schema` and the top-level unknown keys are labels and are not
 hashed, so renaming a profile or bumping its `version` is not drift.
+
+The `drc` section is not in this hash. It has its own,
+`DrcRuleSet::sha256_hex` (the same canonical-JSON SHA-256 of the `drc`
+object), so adding a `drc` section moves no recorded hash, no provenance and
+no drift result. "Update from profile", its confirmation diff and the drift
+note still cover `erc` only; recording and comparing the DRC hash comes with
+the rule language (#2307 step 2b), when there is DRC content to review.
 
 The same hash is recorded in two places:
 
