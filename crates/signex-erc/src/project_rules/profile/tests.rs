@@ -9,6 +9,22 @@ fn builtin_profile_lists_every_rule_and_hashes_stably() {
     assert_eq!(p.content_sha256(), builtin_profile().content_sha256());
 }
 
+/// The shipped profile's hash is recorded in existing projects, so a DRC
+/// section (#2307) must not move it: pinned at the value trunk shipped.
+#[test]
+fn builtin_profile_hash_and_bytes_are_unchanged_by_the_drc_section() {
+    let p = builtin_profile();
+    assert_eq!(
+        p.content_sha256(),
+        "89b152e97b10f513191914dc00133755a6fd3a57271b43193ac062f95aebdd76"
+    );
+    assert!(
+        !String::from_utf8(p.to_json_bytes())
+            .unwrap()
+            .contains("drc")
+    );
+}
+
 #[test]
 fn profile_ref_records_name_source_and_content_hash() {
     let p = builtin_profile();
