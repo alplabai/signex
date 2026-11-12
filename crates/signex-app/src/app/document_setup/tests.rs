@@ -130,13 +130,21 @@ fn headless_new_pcb_with_the_project_profile_takes_the_stored_rules() {
 }
 
 #[test]
-fn headless_new_pcb_without_or_with_an_unknown_profile_is_refused() {
-    let mut f = fixture(ProjectDefaults::default());
+fn headless_new_pcb_without_a_profile_takes_the_project_setup_as_before() {
+    let hobby = ProjectSetup::from_profile(SetupProfile::Hobby).defaults();
+    let mut f = fixture(hobby);
     let outcome = run(&mut f.app, "new_pcb_document", &[]);
-    assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("profile")),
-        "{outcome:?}"
+    assert!(matches!(outcome, CommandOutcome::Ran), "{outcome:?}");
+    assert!(f.app.ui_state.document_setup.is_none(), "no dialog");
+    assert_eq!(
+        board_copper(&f.app, &f.dir.join("demo.snxpcb")),
+        Some((2, 0.2))
     );
+}
+
+#[test]
+fn headless_new_pcb_with_an_unknown_profile_is_refused() {
+    let mut f = fixture(ProjectDefaults::default());
     let outcome = run(&mut f.app, "new_pcb_document", &["profile=nope"]);
     assert!(
         matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("nope")),
@@ -183,8 +191,8 @@ fn headless_new_schematic_with_a_saved_profile_writes_its_sheet() {
             .iter()
             .any(|s| s.filename == "Power.snxsch")
     );
-    // The default name is the first free `Sheet<n>`.
-    let outcome = run(&mut f.app, "new_schematic_sheet", &["profile=project"]);
+    // No operands: the project's setup and the first free `Sheet<n>`.
+    let outcome = run(&mut f.app, "new_schematic_sheet", &[]);
     assert!(matches!(outcome, CommandOutcome::Ran), "{outcome:?}");
     assert!(f.dir.join("Sheet1.snxsch").exists());
 }

@@ -91,6 +91,13 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
         .map(|(_, handler)| *handler)
 }
 
+/// Commands a headless run hands to their handler even with no operands:
+/// the GUI form opens a setup dialog, the headless form makes the document
+/// from the project's own setup (#2232), as it did before the dialog.
+pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
+    matches!(command.as_str(), "new_pcb_document" | "new_schematic_sheet")
+}
+
 /// Why `command` does nothing without operands on a surface that gives it
 /// none (palette, key binding, menu): its GUI surface is another widget, and
 /// a command never opens, closes or focuses one as a side effect.

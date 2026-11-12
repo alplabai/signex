@@ -252,14 +252,14 @@ pub const NEW_PROJECT: &[Operand] = &[
 /// ticked by default.
 pub const APPLY: &[Operand] = &[required("apply", OperandKind::Bool)];
 
-/// New PCB without the dialog (#2232): `profile` is `project` (the
-/// project's own setup), a built-in token or a saved user profile.
-pub const NEW_PCB: &[Operand] = &[required("profile", OperandKind::Text)];
+/// New PCB without the dialog (#2232): `profile` is `project` (the default,
+/// the project's own setup), a built-in token or a saved user profile.
+pub const NEW_PCB: &[Operand] = &[optional("profile", OperandKind::Text)];
 
 /// New Schematic without the dialog (#2232): `profile` as for `NEW_PCB`;
 /// `name` is the file stem in the project folder (default `Sheet<n>`).
 pub const NEW_SCHEMATIC: &[Operand] = &[
-    required("profile", OperandKind::Text),
+    optional("profile", OperandKind::Text),
     optional("name", OperandKind::Text),
 ];
 

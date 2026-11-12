@@ -75,6 +75,7 @@ pub use edit_reads::{EditReads, ReadsLoaded};
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;
 pub(crate) use opened::answers_with_the_new_document;
+pub(crate) use operand_handlers::runs_headless_without_operands;
 pub(crate) use operands::missing_headless_operand;
 pub use operands::{OperandError, OperandValue};
 pub use outcome::CommandOutcome;

@@ -279,7 +279,9 @@ impl Signex {
                     },
                     Task::none(),
                 )
-            } else if args.has_operands() {
+            } else if args.has_operands()
+                || crate::app::command::runs_headless_without_operands(command)
+            {
                 app.journaled(command, &args, |app| app.run_operands(command, &args))
             } else {
                 let by_id = args.clone();

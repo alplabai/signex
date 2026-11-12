@@ -352,3 +352,27 @@ pub(crate) fn create_if_asked(app: &mut Signex) {
         create(app);
     }
 }
+
+/// Esc closes either setup dialog and makes nothing.
+#[test]
+fn esc_closes_the_setup_dialog_without_creating_anything() {
+    let mut f = fixture(ProjectDefaults::default());
+    let tabs = f.app.document_state.tabs.len();
+    let esc = || Message::Input(signex_app::app::InputMsg::EscapePressed { window: None });
+    for row in ["new_pcb_document", "new_schematic_sheet"] {
+        send(&mut f.app, menu_row(row));
+        assert!(f.app.ui_state.document_setup.is_some(), "{row}: open");
+        setup(&mut f.app, NewProjectMsg::ProfilePicked(SetupProfile::Hdi));
+        send(&mut f.app, esc());
+        assert!(
+            f.app.ui_state.document_setup.is_none(),
+            "{row}: Esc closed it"
+        );
+    }
+    assert_eq!(f.app.document_state.tabs.len(), tabs, "no board opened");
+    let project = &f.app.document_state.projects[0];
+    assert!(project.data.pcb_file.is_none());
+    assert_eq!(project.data.sheets.len(), 1, "no sheet added");
+    assert!(!f.app.document_state.is_document_dirty(&project.path));
+    assert!(!f.dir.join("demo.snxpcb").exists());
+}

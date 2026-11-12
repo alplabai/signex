@@ -186,13 +186,14 @@ dialog fields.
 Headless and agent runs make the document with no dialog:
 
 ```text
-new_pcb_document profile=<project|hobby|standard|hdi|custom|saved profile>
-new_schematic_sheet profile=<...> [name=<file stem>]
+new_pcb_document [profile=<project|hobby|standard|hdi|custom|saved profile>]
+new_schematic_sheet [profile=<...>] [name=<file stem>]
 ```
 
 `profile=project` is the project's own setup; a built-in token changes only
 the board rules; a saved profile (id or name) sets its rules, sheet values
 and designator standard. `name` defaults to the first `Sheet<n>` the project
-does not list. Without `profile` the headless run is refused.
+does not list. Without `profile` the project's own setup is used, as before
+the dialog existed.
 `new_schematic_sheet` writes a file and needs the `save` capability in
 `signex-cli`.

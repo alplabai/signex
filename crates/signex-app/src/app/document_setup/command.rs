@@ -1,9 +1,9 @@
-//! `new_pcb_document profile=..` and `new_schematic_sheet profile=..
+//! `new_pcb_document [profile=..]` and `new_schematic_sheet [profile=..]
 //! [name=..]`: make the document with a profile and no dialog (#2232), for
 //! headless runs and agents. They run the same paths as the dialogs' Create.
 
 use iced::Task;
-use signex_types::project::ProjectSetup;
+use signex_types::project::{PROJECT_PROFILE_TOKEN, ProjectSetup};
 
 use super::SheetChoice;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
@@ -34,8 +34,8 @@ fn project_and_setup(
     args: &CommandArgs,
     command: &str,
 ) -> Result<(ProjectId, ProjectSetup), String> {
-    let token =
-        text(args, "profile").ok_or_else(|| format!("`{command}` needs the operand `profile`"))?;
+    // No `profile`: the project's own setup, as before the dialog existed.
+    let token = text(args, "profile").unwrap_or(PROJECT_PROFILE_TOKEN);
     let project = app
         .project_in_view()
         .ok_or_else(|| format!("`{command}` needs an open project"))?;
