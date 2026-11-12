@@ -59,8 +59,10 @@ impl PinnedProjects {
         self.missing.iter().any(|entry| entry == path)
     }
 
-    /// Pin `path`, spelled as the recent list spells it, after the others.
-    /// Returns whether the list changed.
+    /// Pin `path` after the others, stored exactly as given: the Start
+    /// screen passes a Recent Projects entry, already in the recent list's
+    /// spelling, so pinning reads nothing from disk. Returns whether the
+    /// list changed.
     pub fn pin(&mut self, path: &Path) -> bool {
         if self.contains(path) {
             return false;

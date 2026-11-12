@@ -95,6 +95,9 @@ pub struct ProjectSections<'a> {
     pub pinned: &'a [PathBuf],
     /// Recent Projects without the pinned ones, newest first, capped.
     pub recent: Vec<&'a PathBuf>,
+    /// Whether Recent Projects shows: hidden when every recent project is
+    /// pinned, shown (with its empty card) when there are none at all.
+    pub show_recent: bool,
 }
 
 /// Split `recent` and `pinned` into the Start screen's sections: a pinned
@@ -103,13 +106,15 @@ pub fn project_sections<'a>(
     recent: &'a [PathBuf],
     pinned: &'a PinnedProjects,
 ) -> ProjectSections<'a> {
+    let unpinned: Vec<&PathBuf> = recent
+        .iter()
+        .filter(|path| !pinned.contains(path))
+        .take(MAX_START_RECENT)
+        .collect();
     ProjectSections {
         pinned: pinned.entries(),
-        recent: recent
-            .iter()
-            .filter(|path| !pinned.contains(path))
-            .take(MAX_START_RECENT)
-            .collect(),
+        show_recent: recent.is_empty() || !unpinned.is_empty(),
+        recent: unpinned,
     }
 }
 
@@ -129,6 +134,9 @@ pub fn message(msg: StartScreenMsg) -> Message {
 pub enum StartScreenMsg {
     /// Pin was pressed on a Recent Projects row (hover button or menu).
     ProjectPinned(PathBuf),
+    /// Open was picked in a Recent Projects row's menu: the menu closes and
+    /// the project opens as File ▸ Open Recent opens it.
+    RecentProjectClicked(PathBuf),
     /// Unpin, or Remove on a pinned project missing on disk, was pressed.
     ProjectUnpinned(PathBuf),
     /// A Pinned Projects row (or its menu's Open) was clicked.
@@ -234,6 +242,54 @@ mod tests {
         let none = project_sections(&all, &NO_PINS);
         assert!(none.pinned.is_empty());
         assert_eq!(none.recent.len(), MAX_START_RECENT);
+        assert!(none.show_recent);
+        assert!(sections.show_recent);
+        // No recent projects at all: Recent shows, with its empty card.
+        assert!(project_sections(&[], &pinned).show_recent);
+    }
+
+    /// #2305: when every recent project is pinned, Recent Projects is
+    /// hidden instead of claiming there are none.
+    #[test]
+    fn recent_is_hidden_when_every_recent_project_is_pinned() {
+        let recent = paths(2);
+        let mut pinned = PinnedProjects::default();
+        for path in &recent {
+            pinned.pin(path);
+        }
+        let sections = project_sections(&recent, &pinned);
+        assert!(sections.recent.is_empty());
+        assert!(!sections.show_recent);
+
+        let tokens = graphite();
+        let texts = lay_out_texts(
+            view(
+                &tokens,
+                &signex_i18n::I18n::en_us(),
+                "Ctrl+O",
+                &recent,
+                &pinned,
+                &[],
+            ),
+            MOCK_WINDOW,
+        );
+        assert!(texts.iter().any(|t| t.text == "PINNED PROJECTS"));
+        assert!(texts.iter().all(|t| t.text != "RECENT PROJECTS"));
+        assert!(texts.iter().all(|t| t.text != "No recent projects"));
+
+        let empty = lay_out_texts(
+            view(
+                &tokens,
+                &signex_i18n::I18n::en_us(),
+                "Ctrl+O",
+                &[],
+                &NO_PINS,
+                &[],
+            ),
+            MOCK_WINDOW,
+        );
+        assert!(empty.iter().any(|t| t.text == "RECENT PROJECTS"));
+        assert!(empty.iter().any(|t| t.text == "No recent projects"));
     }
 
     /// #2305: Pinned Projects sits above Recent Projects, only when a
@@ -270,7 +326,28 @@ mod tests {
                 .filter(|t| t.text == "proj1.snxprj")
                 .all(|t| t.bounds.y < top("RECENT PROJECTS"))
         );
-        assert!(top("Missing on disk") > top("gone.snxprj") - BASE);
+        // The mark sits on the gone row: under its path line, above the
+        // next section's header.
+        let gone_lines: Vec<_> = texts.iter().filter(|t| t.text == "gone.snxprj").collect();
+        assert_eq!(gone_lines.len(), 2, "name and path: {gone_lines:#?}");
+        let path_line = gone_lines[1].bounds;
+        let mark = find(&texts, "Missing on disk").bounds;
+        assert!(
+            mark.y + 0.5 >= path_line.y + path_line.height,
+            "mark {mark:?}, path {path_line:?}"
+        );
+        assert!(
+            mark.y + mark.height <= top("RECENT PROJECTS"),
+            "mark {mark:?} spills past the row"
+        );
+        // Remove has its own column: the path never runs under it.
+        let remove_label = find(&texts, "Remove").bounds;
+        assert!(
+            path_line.x + path_line.width <= remove_label.x,
+            "path {path_line:?} runs under Remove {remove_label:?}"
+        );
+        assert!(remove_label.y < path_line.y + path_line.height + BASE);
+        assert!(remove_label.y + remove_label.height > gone_lines[0].bounds.y);
         let remove = crate::layout_probe::messages_on_click(
             view(&tokens, &i18n, "Ctrl+O", &recent, &pinned, &[]),
             MOCK_WINDOW,

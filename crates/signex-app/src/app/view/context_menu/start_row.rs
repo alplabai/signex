@@ -8,7 +8,7 @@ use std::path::Path;
 
 use super::items::dd_msg;
 use crate::pinned_projects::PinnedProjects;
-use crate::start_screen::{StartScreenMsg, message, recent_message};
+use crate::start_screen::{StartScreenMsg, message};
 use signex_i18n::{I18n, ids};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
@@ -27,7 +27,7 @@ pub(super) fn start_row_menu_entries(
                 None,
                 &label(ids::START_OPEN_PROJECT),
                 "",
-                recent_message(path),
+                message(StartScreenMsg::RecentProjectClicked(owned.clone())),
             ),
             dd_msg(
                 None,
@@ -107,6 +107,11 @@ mod tests {
         let path = PathBuf::from("a.snxprj");
         let rows = rows(&path, &PinnedProjects::default());
         assert_eq!(labels(&rows), ["Open", "Pin"]);
+        // Open goes through the Start screen so the menu closes first.
+        assert!(matches!(
+            &rows[0].1,
+            Message::Project(crate::app::ProjectMsg::StartScreen(StartScreenMsg::RecentProjectClicked(p))) if *p == path
+        ));
         assert!(matches!(
             &rows[1].1,
             Message::Project(crate::app::ProjectMsg::StartScreen(StartScreenMsg::ProjectPinned(p))) if *p == path

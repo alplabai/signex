@@ -30,6 +30,10 @@ impl Signex {
                     iced::Task::none()
                 }
             }
+            StartScreenMsg::RecentProjectClicked(path) => {
+                self.interaction_state.start_row_menu = None;
+                self.handle_open_recent_project(path)
+            }
             StartScreenMsg::PinnedProjectClicked(path) => {
                 self.interaction_state.start_row_menu = None;
                 self.open_pinned_project(path)

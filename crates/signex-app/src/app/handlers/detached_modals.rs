@@ -324,6 +324,7 @@ impl Signex {
         let interaction = &mut self.interaction_state;
         interaction.context_menu = None;
         interaction.tab_context_menu = None;
+        interaction.start_row_menu = None;
         interaction.project_tree_context_menu = None;
         interaction.active_bar_menu = None;
         interaction.grid_picker = None;
