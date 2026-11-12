@@ -4,7 +4,7 @@
 use std::path::Path;
 use std::time::Instant;
 
-use pcb_geom::{DrcRules, ViolationKind, run_drc};
+use signex_drc::{DrcRules, ViolationKind, run as run_drc};
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{PcbBoard, Point, Segment};
 use uuid::Uuid;

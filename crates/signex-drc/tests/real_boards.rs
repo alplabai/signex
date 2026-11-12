@@ -4,7 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
-use pcb_geom::{DrcReport, DrcRules, ViolationKind, ratsnest, run_drc};
+use pcb_geom::ratsnest;
+use signex_drc::{DrcReport, DrcRules, ViolationKind, run as run_drc};
 use signex_types::format::SnxPcb;
 use signex_types::net_class::NetClass;
 use signex_types::pcb::PcbBoard;

@@ -203,7 +203,7 @@ impl BoardIndex {
 
     /// The items whose bounding box meets `rect`, in no fixed order: the
     /// broad phase of a pair search, before any shape test.
-    pub(crate) fn bounds_meeting(&self, rect: &RectNm) -> impl Iterator<Item = &IndexedItem> {
+    pub fn bounds_meeting(&self, rect: &RectNm) -> impl Iterator<Item = &IndexedItem> {
         self.tree
             .locate_in_envelope_intersecting(&envelope_of(rect))
     }
@@ -246,7 +246,7 @@ fn envelope_of(rect: &RectNm) -> AABB<[i128; 2]> {
 }
 
 /// A track's copper; a negative width counts as its magnitude.
-pub(crate) fn track_shape(segment: &Segment) -> Result<Shape, GeomError> {
+pub fn track_shape(segment: &Segment) -> Result<Shape, GeomError> {
     Ok(Shape::Capsule {
         a: PointNm::from_mm(segment.start, "track.start")?,
         b: PointNm::from_mm(segment.end, "track.end")?,
@@ -255,7 +255,7 @@ pub(crate) fn track_shape(segment: &Segment) -> Result<Shape, GeomError> {
 }
 
 /// A via's copper; a negative diameter counts as its magnitude.
-pub(crate) fn via_shape(via: &Via) -> Result<Shape, GeomError> {
+pub fn via_shape(via: &Via) -> Result<Shape, GeomError> {
     Ok(Shape::Disc {
         center: PointNm::from_mm(via.position, "via.position")?,
         radius: (mm_to_nm(via.diameter, "via.diameter")? / 2).abs(),

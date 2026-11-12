@@ -5662,6 +5662,7 @@ dependencies = [
  "sha2",
  "signex-app",
  "signex-bake",
+ "signex-drc",
  "signex-engine",
  "signex-erc",
  "signex-erc-dsl",
@@ -5722,6 +5723,15 @@ dependencies = [
  "signex-engine",
  "signex-types",
  "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "signex-drc"
+version = "26.11.0-rc.1"
+dependencies = [
+ "pcb-geom",
+ "signex-types",
  "uuid",
 ]
 

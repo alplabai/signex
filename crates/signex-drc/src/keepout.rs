@@ -14,13 +14,10 @@ use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::CopperLayer;
 use signex_types::pcb_sketch::PcbKeepout;
 
-use crate::body::footprint_body;
-use crate::copper::{layer_bit, layer_mask, pad_layers, via_layers};
-use crate::index::{ItemRef, track_shape, via_shape};
-use crate::rect::RectNm;
-use crate::shape::Shape;
-use crate::transform::{Side, pad_shape};
-use crate::units::PointNm;
+use pcb_geom::{
+    ItemRef, PointNm, RectNm, Shape, Side, footprint_body, layer_bit, layer_mask, pad_layers,
+    pad_shape, track_shape, via_layers, via_shape,
+};
 
 use super::{Violation, ViolationKind};
 

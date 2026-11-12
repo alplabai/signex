@@ -41,6 +41,7 @@ See [`.github/labels.yml`](labels.yml) for the full taxonomy.
 - [ ] signex-sketch
 - [ ] signex-bake
 - [ ] signex-erc / signex-erc-dsl
+- [ ] signex-drc
 - [ ] signex-bom
 - [ ] signex-output
 - [ ] signex-renderer / signex-gfx

@@ -11,18 +11,18 @@ use crate::transform::{Side, pad_shape, pad_world_center};
 use crate::units::PointNm;
 
 /// A copper item of a numbered net, with where it touches other copper.
-pub(crate) struct CopperItem {
-    pub(crate) item: ItemRef,
-    pub(crate) net: u32,
+pub struct CopperItem {
+    pub item: ItemRef,
+    pub net: u32,
     /// Bit `n` set: the copper layer with [`layer_bit`] `n`.
-    pub(crate) layers: u32,
+    pub layers: u32,
     /// The item's copper; it joins any same-net copper it overlaps.
-    pub(crate) shape: Shape,
+    pub shape: Shape,
     /// Set for a pad: its centre, where a ratsnest line ends.
-    pub(crate) pad_center: Option<PointNm>,
+    pub pad_center: Option<PointNm>,
 }
 
-pub(crate) fn collect_copper(board: &PcbBoard) -> Vec<CopperItem> {
+pub fn collect_copper(board: &PcbBoard) -> Vec<CopperItem> {
     let mut nodes = Vec::new();
     for footprint in &board.footprints {
         for pad in &footprint.pads {
@@ -81,7 +81,7 @@ pub(crate) fn collect_copper(board: &PcbBoard) -> Vec<CopperItem> {
 
 /// A through via reaches every copper layer; a blind or micro via the span
 /// between the outermost layers it names.
-pub(crate) fn via_layers(via: &Via) -> u32 {
+pub fn via_layers(via: &Via) -> u32 {
     match via.via_type {
         ViaType::Through => u32::MAX,
         ViaType::Blind | ViaType::Micro => span_mask(via.layers.iter().map(String::as_str)),
@@ -90,7 +90,7 @@ pub(crate) fn via_layers(via: &Via) -> u32 {
 
 /// A through-hole pad reaches every copper layer; a surface pad the copper
 /// layers it lists, or its footprint's side when it lists none.
-pub(crate) fn pad_layers(footprint: &Footprint, pad: &Pad) -> u32 {
+pub fn pad_layers(footprint: &Footprint, pad: &Pad) -> u32 {
     if pad.pad_type == PadType::Thru {
         return u32::MAX;
     }
@@ -104,7 +104,7 @@ pub(crate) fn pad_layers(footprint: &Footprint, pad: &Pad) -> u32 {
 }
 
 /// Bit position of a copper layer: top 0, inner `n` at `n`, bottom 31.
-pub(crate) fn layer_bit(layer: CopperLayer) -> u32 {
+pub fn layer_bit(layer: CopperLayer) -> u32 {
     match layer {
         CopperLayer::Top => 0,
         CopperLayer::Inner(inner) => u32::from(inner.index()),
@@ -119,7 +119,7 @@ fn copper_bits<'a>(names: impl Iterator<Item = &'a str>) -> impl Iterator<Item =
         .map(layer_bit)
 }
 
-pub(crate) fn layer_mask<'a>(names: impl Iterator<Item = &'a str>) -> u32 {
+pub fn layer_mask<'a>(names: impl Iterator<Item = &'a str>) -> u32 {
     copper_bits(names).fold(0, |mask, bit| mask | 1 << bit)
 }
 

@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use pcb_geom::DrcReport;
+use signex_drc::DrcReport;
 
 /// A finished run: the report and what it was run on.
 #[derive(Debug)]
@@ -91,7 +91,7 @@ mod tests {
 
     fn report() -> DrcReport {
         DrcReport {
-            rules: pcb_geom::DrcRules::new(1),
+            rules: signex_drc::DrcRules::new(1),
             violations: Vec::new(),
             skipped: Vec::new(),
         }
