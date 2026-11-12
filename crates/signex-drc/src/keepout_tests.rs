@@ -7,7 +7,7 @@ use signex_types::sketch::attr::KeepoutKinds;
 
 use super::tests::{board, footprint, id, pad, track, via};
 use super::*;
-use crate::index::ItemRef;
+use pcb_geom::ItemRef;
 
 const TOP: u32 = 1;
 const KEEPOUT: u128 = 0x900;

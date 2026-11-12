@@ -1,5 +1,6 @@
 //! Board geometry in integer nanometres (#2174): the base that board
-//! connectivity, ratsnest, hit-test and later DRC are built on.
+//! connectivity, ratsnest, hit-test and the design rule check
+//! (`signex-drc`) are built on.
 //!
 //! The board model stays `f64` mm. Every value enters through
 //! [`mm_to_nm`] / [`PointNm::from_mm`], which refuse a length the
@@ -12,7 +13,6 @@
 
 mod body;
 mod copper;
-mod drc;
 mod flip;
 mod index;
 mod mst;
@@ -28,11 +28,11 @@ mod union_find;
 mod units;
 
 pub use body::footprint_body;
-pub use copper::copper_layers;
-pub use drc::run as run_drc;
-pub use drc::{DEFAULT_CLEARANCE_MM, DrcReport, DrcRules, Violation, ViolationKind};
+pub use copper::{
+    CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, pad_layers, via_layers,
+};
 pub use flip::flip_footprint;
-pub use index::{BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected};
+pub use index::{BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected, track_shape, via_shape};
 pub use mst::{Edge, euclidean_mst, spanning_forest};
 pub use ratsnest::{RatLine, ratsnest};
 pub use rect::RectNm;

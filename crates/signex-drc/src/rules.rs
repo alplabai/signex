@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use signex_types::net_class::{NetClass, first_matching_class};
 use signex_types::pcb::PcbBoard;
 
-use crate::units::{GeomError, MAX_ABS_NM, mm_to_nm};
+use pcb_geom::{GeomError, MAX_ABS_NM, mm_to_nm};
 
 /// The clearance used when the board's setup holds none (0 is "unset").
 pub const DEFAULT_CLEARANCE_MM: f64 = 0.2;

@@ -338,11 +338,11 @@ fn a_commit_is_one_undo_step_with_the_outline_hole_and_keepout() {
     );
     assert!((stored.holes[0].position.x - 5.0).abs() < 1e-6);
     assert_eq!(stored.keepouts.len(), 1);
-    let drc = pcb_geom::run_drc(&after, &pcb_geom::DrcRules::new(200_000));
+    let drc = signex_drc::run(&after, &signex_drc::DrcRules::new(200_000));
     assert!(
         drc.violations
             .iter()
-            .any(|v| v.kind == pcb_geom::ViolationKind::Keepout),
+            .any(|v| v.kind == signex_drc::ViolationKind::Keepout),
         "DRC sees the track through the keepout"
     );
 

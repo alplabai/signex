@@ -25,6 +25,7 @@ members = [
     "crates/signex-3d-model-importer",
     "crates/signex-i18n",
     "crates/pcb-geom",
+    "crates/signex-drc",
 ]
 # A bare `cargo build` / `cargo test` at the root only builds the daily-
 # driver crates. The library server and the chrome-catalog dev sandbox are
@@ -48,6 +49,7 @@ default-members = [
     "crates/signex-widgets",
     "crates/signex-i18n",
     "crates/pcb-geom",
+    "crates/signex-drc",
 ]
 
 [workspace.package]
@@ -110,6 +112,7 @@ signex-widgets = { path = "crates/signex-widgets" }
 signex-i18n = { path = "crates/signex-i18n" }
 signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
+signex-drc = { path = "crates/signex-drc" }
 signex-net = { path = "crates/signex-net" }
 signex-history = { path = "crates/signex-history" }
 signex-output = { path = "crates/signex-output" }

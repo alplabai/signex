@@ -4,8 +4,13 @@ use std::sync::Arc;
 
 /// What a design-rule check run came back with (#2222): the report and the
 /// net names its rows show, or why it could not run.
-pub type DrcRunResult =
-    Result<(pcb_geom::DrcReport, std::collections::BTreeMap<u32, String>), String>;
+pub type DrcRunResult = Result<
+    (
+        signex_drc::DrcReport,
+        std::collections::BTreeMap<u32, String>,
+    ),
+    String,
+>;
 
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 

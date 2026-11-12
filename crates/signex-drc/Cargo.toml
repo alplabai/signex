@@ -1,0 +1,16 @@
+[package]
+name = "signex-drc"
+description = "Design rule check of a board: clearance, shorts, unconnected nets and keepouts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# UI-free: reads the board model, measures with pcb-geom.
+[dependencies]
+pcb-geom = { path = "../pcb-geom" }
+signex-types.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
