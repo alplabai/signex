@@ -138,6 +138,9 @@ pub struct UiState {
     /// File ▸ Open Recent — loaded from `prefs.json` at boot, updated on
     /// every successful project open.
     pub recent_projects: crate::recent_projects::RecentProjects,
+    /// The Start screen's pinned projects (#2305), loaded from `prefs.json`
+    /// at boot and saved on every pin and unpin.
+    pub pinned_projects: crate::pinned_projects::PinnedProjects,
     /// First-run tour overlay — a single dismissible card shown only
     /// before the user has dismissed it once. Initial value is read
     /// from prefs in `bootstrap`; transitions to `false` on the first

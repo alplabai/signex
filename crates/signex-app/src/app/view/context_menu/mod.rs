@@ -12,6 +12,7 @@ mod items;
 mod menus;
 mod placement;
 mod project_tree;
+mod start_row;
 mod submenu;
 
 #[cfg(test)]
