@@ -93,6 +93,9 @@ pub struct InteractionState {
     /// `context_menu` and `project_tree_context_menu` — opening one
     /// dismisses the others.
     pub tab_context_menu: Option<crate::app::TabContextMenuState>,
+    /// Right-click menu of a Start screen project row (#2305): which
+    /// project, anchored where the click landed.
+    pub start_row_menu: Option<crate::start_screen::StartRowMenu>,
     /// Currently-expanded submenu inside the right-click context menu
     /// (None when no submenu is shown). Always cleared when
     /// `context_menu` becomes None.

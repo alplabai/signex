@@ -1,6 +1,7 @@
 //! Graphite start screen: a 232 px navigation column and a main column with
 //! the "What are you building?" hero, the specification box (a shell: the AI
-//! backend is not built), the bundled sample project and the recent list.
+//! backend is not built), the bundled sample project and the project lists
+//! (`projects.rs`).
 //! Every real control dispatches the same messages as the legacy screen.
 
 use std::path::PathBuf;
@@ -11,9 +12,10 @@ use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, text_input, tooltip};
 
-use super::{Action, recent_label, recent_message, visible_recent};
+use super::{Action, project_sections};
 use crate::app::Message;
 use crate::panels::signal::coming_soon;
+use crate::pinned_projects::PinnedProjects;
 use crate::styles::{
     self, ChromeMetrics, Radii, Spacing, TypeScale, ti,
     tokens::{hover_overlay, resolve},
@@ -40,7 +42,7 @@ const MAIN_MAX_W: f32 = 880.0;
 /// Horizontal padding of the main column.
 const MAIN_PAD_X: f32 = 32.0;
 
-fn mono() -> iced::Font {
+pub(super) fn mono() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
 }
 
@@ -61,7 +63,7 @@ fn rule(line: Color, right: bool) -> impl Fn(&iced::Theme) -> container::Style {
 }
 
 /// Quiet bordered button ("Open…"): raised fill, hairline border.
-fn outline_button(
+pub(super) fn outline_button(
     tokens: &ThemeTokens,
 ) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
     let (raised, hover, line, ink) = (
@@ -325,7 +327,7 @@ fn libraries_card<'a>(
 
 /// A section heading; the catalog writes it in capitals. Semibold as in the
 /// mock; iced has no letter spacing, so the mock's tracking is not drawn.
-fn section_header<'a>(tokens: &ThemeTokens, title: Localized) -> Element<'a, Message> {
+pub(super) fn section_header<'a>(tokens: &ThemeTokens, title: Localized) -> Element<'a, Message> {
     text(title)
         .size(TS.section)
         .font(semibold())
@@ -480,97 +482,13 @@ fn sample_card<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Message> {
         .boxed()
 }
 
-fn recent_list<'a>(
-    tokens: &ThemeTokens,
-    i18n: &I18n,
-    recent: &'a [PathBuf],
-) -> Element<'a, Message> {
-    let shown = visible_recent(recent);
-    if shown.is_empty() {
-        return crate::panels::empty_state_card(
-            tokens,
-            t!(i18n, ids::START_NO_RECENT_TITLE),
-            t!(i18n, ids::START_NO_RECENT_BODY),
-            None,
-        );
-    }
-    let (ink, ink3) = (ti(tokens.text), resolve(tokens).ink3);
-    let (hover, line) = (hover_overlay(tokens), resolve(tokens).line_soft);
-    let tile_fill = resolve(tokens).sunken;
-    let mut separators = 0;
-    let mut list = column![].width(Length::Fill);
-    for path in shown {
-        // No cheap real thumbnail exists, so the mock's tile is drawn empty.
-        let tile =
-            container(Space::new())
-                .width(52.0)
-                .height(40.0)
-                .style(move |_: &iced::Theme| container::Style {
-                    background: Some(Background::Color(tile_fill)),
-                    border: Border {
-                        radius: Radii::GRAPHITE.small.into(),
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                });
-        let entry = row![
-            tile,
-            column![
-                text(UserText::new(recent_label(path)))
-                    .size(TS.label)
-                    .color(ink),
-                text(signex_i18n::UserText::new(path.display().to_string()))
-                    .size(TS.caption)
-                    .font(mono())
-                    .color(ink3),
-            ]
-            .spacing(2),
-        ]
-        .spacing(12)
-        .align_y(Alignment::Center);
-        list = list.push(
-            button(entry)
-                .width(Length::Fill)
-                .padding([10.0, 14.0])
-                .on_press(recent_message(path))
-                .style(move |_: &iced::Theme, status| button::Style {
-                    background: matches!(status, button::Status::Hovered | button::Status::Pressed)
-                        .then_some(Background::Color(hover)),
-                    text_color: ink,
-                    border: Border {
-                        radius: Radii::GRAPHITE.small.into(),
-                        ..Border::default()
-                    },
-                    ..button::Style::default()
-                })
-                .boxed(),
-        );
-        separators += 1;
-        if separators < shown.len() {
-            list = list.push(
-                container(Space::new().height(1.0))
-                    .width(Length::Fill)
-                    .style(move |_: &iced::Theme| container::Style {
-                        background: Some(Background::Color(line)),
-                        ..container::Style::default()
-                    })
-                    .boxed(),
-            );
-        }
-    }
-    container(list)
-        .width(Length::Fill)
-        .padding(1)
-        .style(styles::card(tokens))
-        .boxed()
-}
-
 /// The Graphite start screen.
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
     i18n: &'a I18n,
     open_shortcut: &str,
     recent: &'a [PathBuf],
+    pinned: &'a PinnedProjects,
     libraries: &[super::LoadedLibrary],
 ) -> Element<'a, Message> {
     let open_shortcut = open_shortcut.to_owned();
@@ -583,7 +501,7 @@ pub fn view<'a>(
             tokens,
             i18n,
             &open_shortcut,
-            recent,
+            (recent, pinned),
             &libraries,
             room.min(MAIN_MAX_W),
         )
@@ -595,11 +513,13 @@ fn view_sized<'a>(
     tokens: &'a ThemeTokens,
     i18n: &I18n,
     open_shortcut: &str,
-    recent: &'a [PathBuf],
+    (recent, pinned): (&'a [PathBuf], &'a PinnedProjects),
     libraries: &[super::LoadedLibrary],
     main_w: f32,
 ) -> Element<'a, Message> {
-    let main = column![
+    let sections = project_sections(recent, pinned);
+    let listed = sections.pinned.len() + sections.recent.len();
+    let mut main = column![
         text(t!(i18n, ids::START_HERO_TITLE))
             .size(HERO_TITLE_SIZE)
             .font(semibold())
@@ -613,24 +533,18 @@ fn view_sized<'a>(
         section_header(tokens, t!(i18n, ids::START_REFERENCE_DESIGN)),
         sample_card(tokens, i18n),
         Space::new().height(8.0),
-        section_header(tokens, t!(i18n, ids::START_RECENT_PROJECTS)),
-        recent_list(tokens, i18n, recent),
-    ]
-    .spacing(10)
-    .width(Length::Fixed(main_w));
+    ];
+    for section in super::projects::sections(tokens, i18n, &sections, pinned) {
+        main = main.push(section);
+    }
+    let main = main.spacing(10).width(Length::Fixed(main_w));
     let body = scrollable(
         container(main)
             .padding([40.0, MAIN_PAD_X])
             .center_x(Length::Fill),
     );
     row![
-        nav(
-            tokens,
-            i18n,
-            open_shortcut,
-            visible_recent(recent).len(),
-            libraries,
-        ),
+        nav(tokens, i18n, open_shortcut, listed, libraries,),
         container(body)
             .width(Length::Fill)
             .height(Length::Fill)

@@ -27,6 +27,7 @@ mod open;
 mod open_read;
 #[cfg(test)]
 mod open_read_tests;
+mod pinned;
 mod project_save;
 #[cfg(test)]
 mod project_save_tests;

@@ -835,6 +835,12 @@ define_ids! {
     START_SAMPLE_BODY = "start-sample-body";
     START_NO_RECENT_TITLE = "start-no-recent-title";
     START_NO_RECENT_BODY = "start-no-recent-body";
+    START_PINNED_PROJECTS = "start-pinned-projects";
+    START_PIN = "start-pin";
+    START_UNPIN = "start-unpin";
+    START_REMOVE = "start-remove";
+    START_OPEN_PROJECT = "start-open-project";
+    START_PROJECT_MISSING = "start-project-missing";
     PANELS_PROJECTS_SHEETS = "panels-projects-sheets";
     PANELS_PROJECTS_BOARDS = "panels-projects-boards";
     PANELS_PROJECTS_LIBRARIES = "panels-projects-libraries";

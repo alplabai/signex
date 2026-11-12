@@ -362,6 +362,10 @@ mod hierarchy_checks;
 #[path = "regression/start_screen.rs"]
 mod start_screen;
 
+// #2305 — Start screen Pinned Projects: pin, unpin, missing, saved.
+#[path = "regression/pinned_projects.rs"]
+mod pinned_projects;
+
 #[path = "regression/command_enablement.rs"]
 mod command_enablement;
 

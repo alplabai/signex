@@ -10,7 +10,8 @@
 //! Every button dispatches an existing message: the actions reuse the
 //! menu messages, and a recent entry reuses File ▸ Open Recent's
 //! `OpenRecentProject`, so a vanished project is dropped and reported by
-//! the same handler.
+//! the same handler. Pinning, the Pinned Projects rows and the row menu send
+//! [`StartScreenMsg`] (#2305).
 
 use std::path::{Path, PathBuf};
 
@@ -21,9 +22,11 @@ use signex_widgets::{raw, text};
 
 use crate::app::Message;
 use crate::menu_bar::MenuMessage;
+use crate::pinned_projects::PinnedProjects;
 use crate::styles;
 
 mod graphite;
+mod projects;
 
 /// Base text size every other measure on this screen is derived from.
 const BASE: f32 = crate::styles::TypeScale::DEFAULT.body;
@@ -84,9 +87,64 @@ pub fn visible_recent(recent: &[PathBuf]) -> &[PathBuf] {
     &recent[..recent.len().min(MAX_START_RECENT)]
 }
 
+/// The two project lists the Start screen shows (#2305).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectSections<'a> {
+    /// Pinned Projects, in the user's order; the section is hidden when
+    /// this is empty.
+    pub pinned: &'a [PathBuf],
+    /// Recent Projects without the pinned ones, newest first, capped.
+    pub recent: Vec<&'a PathBuf>,
+}
+
+/// Split `recent` and `pinned` into the Start screen's sections: a pinned
+/// project is listed under Pinned Projects only.
+pub fn project_sections<'a>(
+    recent: &'a [PathBuf],
+    pinned: &'a PinnedProjects,
+) -> ProjectSections<'a> {
+    ProjectSections {
+        pinned: pinned.entries(),
+        recent: recent
+            .iter()
+            .filter(|path| !pinned.contains(path))
+            .take(MAX_START_RECENT)
+            .collect(),
+    }
+}
+
 /// The existing File ▸ Open Recent message for one entry.
 pub fn recent_message(path: &Path) -> Message {
     Message::Menu(MenuMessage::OpenRecentProject(path.to_path_buf()))
+}
+
+/// Wrap a Start screen event in its namespace.
+pub fn message(msg: StartScreenMsg) -> Message {
+    Message::Project(crate::app::ProjectMsg::StartScreen(msg))
+}
+
+/// Start screen project-row events (#2305). Routed to
+/// `Signex::dispatch_start_screen_message`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartScreenMsg {
+    /// Pin was pressed on a Recent Projects row (hover button or menu).
+    ProjectPinned(PathBuf),
+    /// Unpin, or Remove on a pinned project missing on disk, was pressed.
+    ProjectUnpinned(PathBuf),
+    /// A Pinned Projects row (or its menu's Open) was clicked.
+    PinnedProjectClicked(PathBuf),
+    /// A project row was right-clicked: open its menu at the pointer.
+    RowRightClicked(PathBuf),
+    /// The row menu was dismissed without a pick.
+    RowMenuDismissed,
+}
+
+/// The open right-click menu of a Start screen project row.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StartRowMenu {
+    pub path: PathBuf,
+    pub x: f32,
+    pub y: f32,
 }
 
 fn recent_label(path: &Path) -> String {
@@ -104,9 +162,10 @@ pub fn view<'a>(
     i18n: &'a signex_i18n::I18n,
     open_shortcut: &str,
     recent: &'a [PathBuf],
+    pinned: &'a PinnedProjects,
     libraries: &[LoadedLibrary],
 ) -> Element<'a, Message> {
-    graphite::view(tokens, i18n, open_shortcut, recent, libraries)
+    graphite::view(tokens, i18n, open_shortcut, recent, pinned, libraries)
 }
 
 pub fn hint_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
@@ -145,6 +204,8 @@ mod tests {
             .collect()
     }
 
+    static NO_PINS: PinnedProjects = PinnedProjects::new();
+
     #[test]
     fn the_list_is_capped_and_keeps_order() {
         let all = paths(MAX_START_RECENT + 4);
@@ -153,18 +214,105 @@ mod tests {
         assert!(visible_recent(&[]).is_empty());
     }
 
+    /// #2305: a pinned project leaves the Recent list, which still fills up
+    /// to its cap from the older entries.
+    #[test]
+    fn a_pinned_project_is_listed_only_under_pinned() {
+        let all = paths(MAX_START_RECENT + 2);
+        let mut pinned = PinnedProjects::default();
+        pinned.pin(&all[3]);
+        pinned.pin(&all[0]);
+        let sections = project_sections(&all, &pinned);
+        assert_eq!(sections.pinned, [all[3].clone(), all[0].clone()]);
+        let expected: Vec<&PathBuf> = all
+            .iter()
+            .filter(|p| **p != all[0] && **p != all[3])
+            .take(MAX_START_RECENT)
+            .collect();
+        assert_eq!(sections.recent, expected);
+
+        let none = project_sections(&all, &NO_PINS);
+        assert!(none.pinned.is_empty());
+        assert_eq!(none.recent.len(), MAX_START_RECENT);
+    }
+
+    /// #2305: Pinned Projects sits above Recent Projects, only when a
+    /// project is pinned; a pinned project missing on disk says so and
+    /// offers Remove.
+    #[test]
+    fn the_pinned_section_shows_above_recent_only_when_something_is_pinned() {
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        let recent = paths(3);
+        let texts = lay_out_texts(
+            view(&tokens, &i18n, "Ctrl+O", &recent, &NO_PINS, &[]),
+            MOCK_WINDOW,
+        );
+        assert!(texts.iter().all(|t| t.text != "PINNED PROJECTS"));
+
+        let mut pinned = PinnedProjects::default();
+        pinned.pin(&recent[1]);
+        pinned.pin(&PathBuf::from("gone.snxprj"));
+        pinned.set_missing(&PathBuf::from("gone.snxprj"), true);
+        let texts = lay_out_texts(
+            view(&tokens, &i18n, "Ctrl+O", &recent, &pinned, &[]),
+            MOCK_WINDOW,
+        );
+        let top = |label: &str| find(&texts, label).bounds.y;
+        assert!(top("PINNED PROJECTS") < top("proj1.snxprj"));
+        assert!(top("proj1.snxprj") < top("gone.snxprj"));
+        assert!(top("gone.snxprj") < top("RECENT PROJECTS"));
+        assert!(top("RECENT PROJECTS") < top("proj0.snxprj"));
+        // proj1 is pinned, so Recent does not list it again.
+        assert!(
+            texts
+                .iter()
+                .filter(|t| t.text == "proj1.snxprj")
+                .all(|t| t.bounds.y < top("RECENT PROJECTS"))
+        );
+        assert!(top("Missing on disk") > top("gone.snxprj") - BASE);
+        let remove = crate::layout_probe::messages_on_click(
+            view(&tokens, &i18n, "Ctrl+O", &recent, &pinned, &[]),
+            MOCK_WINDOW,
+            "Remove",
+        );
+        assert!(
+            remove.iter().any(|m| matches!(
+                m,
+                Message::Project(crate::app::ProjectMsg::StartScreen(
+                    StartScreenMsg::ProjectUnpinned(p)
+                )) if p == &PathBuf::from("gone.snxprj")
+            )),
+            "{remove:?}"
+        );
+    }
+
     #[test]
     fn recent_section_is_absent_without_entries_and_present_with_them() {
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark);
         let empty = lay_out_texts(
-            view(&tokens, &signex_i18n::I18n::en_us(), "Ctrl+O", &[], &[]),
+            view(
+                &tokens,
+                &signex_i18n::I18n::en_us(),
+                "Ctrl+O",
+                &[],
+                &NO_PINS,
+                &[],
+            ),
             SMALL_WINDOW,
         );
         assert!(empty.iter().all(|t| !t.text.starts_with("proj")));
 
         let some = paths(2);
         let texts = lay_out_texts(
-            view(&tokens, &signex_i18n::I18n::en_us(), "Ctrl+O", &some, &[]),
+            view(
+                &tokens,
+                &signex_i18n::I18n::en_us(),
+                "Ctrl+O",
+                &some,
+                &NO_PINS,
+                &[],
+            ),
             SMALL_WINDOW,
         );
         // The Graphite screen names an entry in its list and on its card.
@@ -186,12 +334,19 @@ mod tests {
     fn an_unbound_open_shortcut_leaves_no_empty_keycap() {
         let tokens = graphite();
         let bound = lay_out_texts(
-            view(&tokens, &signex_i18n::I18n::en_us(), "F2", &[], &[]),
+            view(
+                &tokens,
+                &signex_i18n::I18n::en_us(),
+                "F2",
+                &[],
+                &NO_PINS,
+                &[],
+            ),
             SMALL_WINDOW,
         );
         assert!(bound.iter().any(|t| t.text == "F2"));
         let unbound = lay_out_texts(
-            view(&tokens, &signex_i18n::I18n::en_us(), "", &[], &[]),
+            view(&tokens, &signex_i18n::I18n::en_us(), "", &[], &NO_PINS, &[]),
             SMALL_WINDOW,
         );
         assert!(unbound.iter().any(|t| t.text == "Open\u{2026}"));
@@ -216,7 +371,14 @@ mod tests {
         let tokens = graphite();
         let recent = paths(MAX_START_RECENT + 2);
         let texts = lay_out_texts(
-            view(&tokens, &signex_i18n::I18n::en_us(), "Ctrl+O", &recent, &[]),
+            view(
+                &tokens,
+                &signex_i18n::I18n::en_us(),
+                "Ctrl+O",
+                &recent,
+                &NO_PINS,
+                &[],
+            ),
             SMALL_WINDOW,
         );
         let one_line = BASE * 2.0;
@@ -252,7 +414,10 @@ mod tests {
     fn hero_lines_use_the_mock_sizes() {
         let tokens = graphite();
         let i18n = signex_i18n::I18n::en_us();
-        let texts = lay_out_texts(view(&tokens, &i18n, "Ctrl+O", &[], &[]), MOCK_WINDOW);
+        let texts = lay_out_texts(
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            MOCK_WINDOW,
+        );
         let title = "What are you building?";
         let laid = find(&texts, title).bounds;
         let natural = crate::layout_probe::natural::<()>(
@@ -288,7 +453,10 @@ mod tests {
     fn app_only_nav_rows_sit_under_the_divider_and_still_work() {
         let tokens = graphite();
         let i18n = signex_i18n::I18n::en_us();
-        let texts = lay_out_texts(view(&tokens, &i18n, "Ctrl+O", &[], &[]), MOCK_WINDOW);
+        let texts = lay_out_texts(
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            MOCK_WINDOW,
+        );
         let top = |label: &str| find(&texts, label).bounds.y;
         // Projects, Libraries, Parts search: two row steps.
         let row_step = (top("Parts search") - top("Projects")) / 2.0;
@@ -300,7 +468,7 @@ mod tests {
         assert!(top("Keyboard Shortcuts (F1)") > top("Open Sample Project"));
 
         let sample = crate::layout_probe::messages_on_click(
-            view(&tokens, &i18n, "Ctrl+O", &[], &[]),
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
             MOCK_WINDOW,
             "Open Sample Project",
         );
@@ -311,7 +479,7 @@ mod tests {
             "{sample:?}"
         );
         let keys = crate::layout_probe::messages_on_click(
-            view(&tokens, &i18n, "Ctrl+O", &[], &[]),
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
             MOCK_WINDOW,
             "Keyboard Shortcuts (F1)",
         );
@@ -348,7 +516,14 @@ mod tests {
 
         for window in [MIN_SENSIBLE_WINDOW, SMALL_WINDOW] {
             let texts = lay_out_texts(
-                view(&tokens, &signex_i18n::I18n::en_us(), "Ctrl+O", &recent, &[]),
+                view(
+                    &tokens,
+                    &signex_i18n::I18n::en_us(),
+                    "Ctrl+O",
+                    &recent,
+                    &NO_PINS,
+                    &[],
+                ),
                 window,
             );
             for (label, size) in &labels {

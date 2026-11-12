@@ -296,6 +296,9 @@ impl Signex {
                 recent_projects: crate::recent_projects::RecentProjects::from_paths(
                     crate::fonts::read_recent_projects_from(prefs),
                 ),
+                pinned_projects: crate::pinned_projects::PinnedProjects::from_paths(
+                    crate::fonts::read_pinned_projects_from(prefs),
+                ),
                 first_run_tour_open,
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,
@@ -681,6 +684,7 @@ impl Signex {
                 project_tree_context_menu: None,
                 grid_picker: None,
                 tab_context_menu: None,
+                start_row_menu: None,
                 context_submenu: None,
                 pending_submenu: None,
                 submenu_launcher_hovered: None,

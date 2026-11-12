@@ -130,6 +130,11 @@ impl Signex {
                 if let Some(dismiss) = self.components_row_menu_escape() {
                     return self.update(dismiss);
                 }
+                if self.interaction_state.start_row_menu.is_some() {
+                    return self.update(crate::start_screen::message(
+                        crate::start_screen::StartScreenMsg::RowMenuDismissed,
+                    ));
+                }
                 // The modal Esc ladder resolves FIRST, and here rather
                 // than in the keyboard subscription (#535). Two things
                 // follow from resolving it against live state:
