@@ -87,33 +87,26 @@ pub const ROOT_TITLES: [&str; 10] = [
     "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Reports", "Window", "Help",
 ];
 
-/// The catalog message of each root title, left to right; `None` is a title
-/// not migrated yet, which keeps its [`ROOT_TITLES`] text.
-const ROOT_TITLE_IDS: [Option<signex_i18n::MessageId>; ROOT_TITLES.len()] = [
-    Some(signex_i18n::ids::MENU_FILE),
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
+/// The catalog message of each root title, left to right. [`ROOT_TITLES`]
+/// stays the English text the width estimate measures.
+const ROOT_TITLE_IDS: [signex_i18n::MessageId; ROOT_TITLES.len()] = [
+    signex_i18n::ids::MENU_FILE,
+    signex_i18n::ids::MENU_EDIT,
+    signex_i18n::ids::MENU_VIEW,
+    signex_i18n::ids::MENU_PROJECT,
+    signex_i18n::ids::MENU_PLACE,
+    signex_i18n::ids::MENU_DESIGN,
+    signex_i18n::ids::MENU_TOOLS,
+    signex_i18n::ids::MENU_REPORTS,
+    signex_i18n::ids::MENU_WINDOW,
+    signex_i18n::ids::MENU_HELP,
 ];
 
-/// The root titles as the bar draws them under `i18n`: the catalog text of a
-/// migrated title, English for the rest.
+/// The root titles as the bar draws them under `i18n`.
 pub fn root_titles(i18n: &signex_i18n::I18n) -> Vec<String> {
-    ROOT_TITLES
+    ROOT_TITLE_IDS
         .into_iter()
-        .zip(ROOT_TITLE_IDS)
-        .map(|(english, id)| {
-            id.map_or_else(
-                || english.to_owned(),
-                |id| i18n.message(id, &[]).into_string(),
-            )
-        })
+        .map(|id| i18n.message(id, &[]).into_string())
         .collect()
 }
 

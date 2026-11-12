@@ -103,8 +103,10 @@ fn edit_rows_show_the_resolved_keymap_shortcuts() {
     };
     assert_eq!(shortcut_of("Rotate").flatten().as_deref(), Some("R"));
     assert_eq!(shortcut_of("Delete").flatten().as_deref(), Some("Delete"));
-    let mirror_x = crate::menu_bar::cmd_label("mirror_x", "Mirror X");
-    let mirror_y = crate::menu_bar::cmd_label("mirror_y", "Mirror Y");
+    let mirror_x =
+        crate::menu_bar::cmd_label(signex_i18n::I18n::en_us_ref(), "mirror_x", "Mirror X");
+    let mirror_y =
+        crate::menu_bar::cmd_label(signex_i18n::I18n::en_us_ref(), "mirror_y", "Mirror Y");
     assert_eq!(shortcut_of(&mirror_x).flatten().as_deref(), Some("Shift+X"));
     assert_eq!(shortcut_of(&mirror_y).flatten().as_deref(), Some("Shift+Y"));
 }
@@ -604,7 +606,7 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
         ("edit_selected_object_properties", "Properties..."),
     ] {
         assert_eq!(
-            crate::menu_bar::cmd_label(id, "<missing>"),
+            crate::menu_bar::cmd_label(signex_i18n::I18n::en_us_ref(), id, "<missing>"),
             row_label,
             "{id}"
         );

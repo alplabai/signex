@@ -332,22 +332,22 @@ pub use view::view;
 
 /// Menu-display label for `command_id`, sourced from the command table's
 /// terse `menu_label` (which falls back to the descriptive `label`). The
-/// `fallback` literal covers a command with no catalog entry so the visible
-/// menu text is never changed by the lookup. Pairs with [`shortcut_for`] so
-/// a menu row's label and keybinding come from the same `AppCommandId`.
-pub(crate) fn cmd_label(command_id: &str, fallback: &str) -> String {
+/// `fallback` covers a command with no catalog entry. Pairs with
+/// [`shortcut_for`] so a menu row's label and keybinding come from the same
+/// `AppCommandId`.
+pub(crate) fn cmd_label(i18n: &signex_i18n::I18n, command_id: &str, fallback: &str) -> String {
     crate::keymap::metadata_for_str(command_id)
-        // The menu rows do not carry an `I18n` yet.
-        .map(|meta| meta.menu_label_in(signex_i18n::I18n::en_us_ref()))
+        .map(|meta| meta.menu_label_in(i18n))
         .unwrap_or_else(|| fallback.to_string())
 }
 
 /// Menu path of the Electrical Rules Check row, built from the label and menu
 /// the Project menu uses, so a message naming it cannot drift.
-pub(crate) fn erc_menu_path() -> String {
+pub(crate) fn erc_menu_path(i18n: &signex_i18n::I18n) -> String {
     format!(
-        "Project ▸ {}",
-        cmd_label("open_erc_dialog", "Electrical Rules Check")
+        "{} ▸ {}",
+        i18n.message(signex_i18n::ids::MENU_PROJECT, &[]),
+        cmd_label(i18n, "open_erc_dialog", "open_erc_dialog")
     )
 }
 
