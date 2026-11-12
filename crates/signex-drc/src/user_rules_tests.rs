@@ -267,16 +267,16 @@ fn a_written_rule_takes_its_own_severity_and_a_layer_entry_overrides_it() {
 }
 
 /// Naming every variant makes a new kind a compile error here; it must
-/// then be added to `every` and to `ViolationKind::ALL`.
-fn listed(kind: ViolationKind) -> ViolationKind {
+/// then be given its place here, in `every` and in `ViolationKind::ALL`.
+fn position(kind: ViolationKind) -> usize {
     match kind {
-        ViolationKind::Short => ViolationKind::Short,
-        ViolationKind::Clearance => ViolationKind::Clearance,
-        ViolationKind::Unconnected => ViolationKind::Unconnected,
-        ViolationKind::Keepout => ViolationKind::Keepout,
-        ViolationKind::TrackWidth => ViolationKind::TrackWidth,
-        ViolationKind::ViaDiameter => ViolationKind::ViaDiameter,
-        ViolationKind::ViaDrill => ViolationKind::ViaDrill,
+        ViolationKind::Short => 0,
+        ViolationKind::Clearance => 1,
+        ViolationKind::Unconnected => 2,
+        ViolationKind::Keepout => 3,
+        ViolationKind::TrackWidth => 4,
+        ViolationKind::ViaDiameter => 5,
+        ViolationKind::ViaDrill => 6,
     }
 }
 
@@ -293,7 +293,8 @@ fn all_lists_every_kind_in_declaration_order() {
     ];
     assert_eq!(ViolationKind::ALL.len(), every.len());
     for (i, kind) in every.into_iter().enumerate() {
-        assert_eq!(ViolationKind::ALL[i], listed(kind));
+        assert_eq!(position(kind), i);
+        assert_eq!(ViolationKind::ALL[i], kind);
         assert_eq!(kind as usize, i, "declaration order");
     }
 }
