@@ -183,7 +183,7 @@ impl Signex {
                 if let Some(profile) = done {
                     self.ui_state
                         .profile_manager
-                        .replace_profile(profile.clone());
+                        .replace_profile(profile.as_ref().clone());
                 }
             }
         }
