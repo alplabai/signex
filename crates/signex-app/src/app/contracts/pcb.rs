@@ -76,6 +76,9 @@ pub enum PcbViewMsg {
     LayerVisibilityToggled(PcbLayer),
     /// The user asked to show or hide the active layer.
     ActiveLayerVisibilityToggled,
+    /// The user asked to show or hide the Multi-Layer row: vias and
+    /// through-hole pads (its eye in the Layers panel).
+    MultiLayerVisibilityToggled,
     /// The user asked to show every layer again.
     AllLayersShown,
 }

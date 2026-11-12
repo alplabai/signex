@@ -281,8 +281,11 @@ impl DockArea {
         // Title + collapse/close on top, tabs on the bottom. Content grows
         // between them.
         // Projects panel footer: the ERC / DRC / last-commit summary.
-        let footer = (position == PanelPosition::Left
-            && region.panels.get(region.active) == Some(&PanelKind::Projects))
+        let footer = shows_project_summary(
+            position,
+            region.panels.get(region.active),
+            !ctx.projects.is_empty() || !ctx.erc_diagnostics.is_empty(),
+        )
         .then(|| panels::graphite::summary_card(ctx))
         .flatten()
         .map(|card| {
@@ -493,6 +496,17 @@ fn tab_natural_width(panel: PanelKind, ctx: &panels::PanelContext, font: iced::F
     width + SP.xs
 }
 
+/// Whether a dock region draws the project ERC / DRC summary card: only
+/// under the left dock's Projects tab, and only with a project open or ERC
+/// findings to count (the card has nothing to summarise otherwise, #2262).
+fn shows_project_summary(
+    position: PanelPosition,
+    active: Option<&PanelKind>,
+    has_content: bool,
+) -> bool {
+    position == PanelPosition::Left && active == Some(&PanelKind::Projects) && has_content
+}
+
 /// Font size for collapsed rail labels — every other dimension derives from this.
 const RAIL_FONT_SIZE: f32 = TS.label;
 
@@ -530,5 +544,24 @@ impl canvas::Program<DockMessage> for RotatedLabel {
             ..canvas::Text::default()
         });
         vec![frame.into_geometry()]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_project_summary_shows_under_projects_with_a_project_open_only() {
+        let projects = Some(&PanelKind::Projects);
+        assert!(shows_project_summary(PanelPosition::Left, projects, true));
+        assert!(!shows_project_summary(PanelPosition::Left, projects, false));
+        assert!(!shows_project_summary(PanelPosition::Right, projects, true));
+        assert!(!shows_project_summary(
+            PanelPosition::Left,
+            Some(&PanelKind::Navigator),
+            true
+        ));
+        assert!(!shows_project_summary(PanelPosition::Left, None, true));
     }
 }

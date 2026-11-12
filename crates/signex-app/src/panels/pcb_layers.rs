@@ -13,7 +13,7 @@ use signex_renderer::pcb::{DIMMED_ALPHA, LayerGroup, LayerRow, PcbLayerView, lay
 use signex_types::pcb::LayerDef;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, text, tooltip};
+use signex_widgets::{Label, button, text, tooltip};
 
 use super::form_look::{FormLook, ghost_button};
 use super::graphite::{active_fill, wash_fn};
@@ -48,6 +48,11 @@ pub struct PcbLayersPanel {
     /// The active copper layer as drawn; `None` while every copper layer is
     /// hidden or no board is open.
     pub active: Option<CopperLayer>,
+    /// The Multi-Layer row (vias and through-hole pads) is hidden.
+    pub multi_layer_hidden: bool,
+    /// The view hides something (`PcbLayerView::has_hidden`), so Show all
+    /// layers has work to do.
+    pub any_hidden: bool,
     /// A board is open; without one the panel shows its empty state.
     pub board_open: bool,
     pub i18n: Arc<I18n>,
@@ -59,6 +64,8 @@ impl Default for PcbLayersPanel {
             rows: Vec::new(),
             hidden: HashSet::new(),
             active: None,
+            multi_layer_hidden: false,
+            any_hidden: false,
             board_open: false,
             i18n: I18n::en_us(),
         }
@@ -77,6 +84,8 @@ impl PcbLayersPanel {
             rows,
             hidden,
             active: view.shown_active(),
+            multi_layer_hidden: !view.multi_layer_visible(),
+            any_hidden: view.has_hidden(),
             board_open: true,
             i18n,
         }
@@ -84,6 +93,10 @@ impl PcbLayersPanel {
 
     pub fn is_hidden(&self, layer: PcbLayer) -> bool {
         self.hidden.contains(&layer)
+    }
+
+    pub fn has_hidden(&self) -> bool {
+        self.any_hidden
     }
 }
 
@@ -120,7 +133,8 @@ pub(super) fn view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
                 .padding([SP.xs, SP.m])
                 .style(show_all_button)
                 .on_press_maybe(
-                    (!panel.hidden.is_empty())
+                    panel
+                        .has_hidden()
                         .then_some(PanelMsg::PcbLayers(PcbViewMsg::AllLayersShown)),
                 ),
         )
@@ -139,10 +153,16 @@ pub(super) fn view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
         let header = t!(i18n, header).into_string();
         body = body.push(
             ctx.collapsible(group_key(group), &header, &ctx.collapsed_sections, || {
-                rows.iter().fold(
+                let col = rows.iter().fold(
                     Column::<Element<'_, PanelMsg>>::new().spacing(0),
                     |col, layer| col.push(layer_row(panel, layer, ctx)),
-                )
+                );
+                // Vias and through-hole pads list under the copper rows.
+                if group == LayerGroup::Copper {
+                    col.push(multi_layer_row(panel, ctx))
+                } else {
+                    col
+                }
             })
             .boxed(),
         );
@@ -150,20 +170,66 @@ pub(super) fn view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
     body.boxed()
 }
 
+/// What one row of the panel shows and does.
+struct RowLook {
+    label: Label<'static>,
+    swatch: Color,
+    hidden: bool,
+    is_active: bool,
+    /// What its eye sends.
+    toggled: PcbViewMsg,
+    /// What a click on its name sends: a copper row makes its layer active.
+    picked: Option<PcbViewMsg>,
+}
+
 fn layer_row<'a>(
     panel: &PcbLayersPanel,
     layer: &LayerRow,
     ctx: &PanelContext,
 ) -> Element<'a, PanelMsg> {
+    let look = RowLook {
+        label: layer_style::row_label(&panel.i18n, layer),
+        swatch: layer_style::layer_colour(layer.layer, &ctx.tokens),
+        hidden: panel.is_hidden(layer.layer),
+        is_active: panel.active.is_some() && layer.layer.copper() == panel.active,
+        toggled: PcbViewMsg::LayerVisibilityToggled(layer.layer),
+        picked: layer.layer.copper().map(PcbViewMsg::ActiveLayerPicked),
+    };
+    row_view(panel, look, ctx)
+}
+
+/// The Multi-Layer row: vias and through-hole pads, never the active layer.
+fn multi_layer_row<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Element<'a, PanelMsg> {
+    let look = RowLook {
+        label: t!(panel.i18n, ids::PCB_LAYER_MULTI_LAYER).into(),
+        swatch: layer_style::multi_layer_colour(),
+        hidden: panel.multi_layer_hidden,
+        is_active: false,
+        toggled: PcbViewMsg::MultiLayerVisibilityToggled,
+        picked: None,
+    };
+    row_view(panel, look, ctx)
+}
+
+fn row_view<'a>(
+    panel: &PcbLayersPanel,
+    look: RowLook,
+    ctx: &PanelContext,
+) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
-    let hidden = panel.is_hidden(layer.layer);
-    let is_active = panel.active.is_some() && layer.layer.copper() == panel.active;
+    let RowLook {
+        label,
+        swatch: swatch_c,
+        hidden,
+        is_active,
+        toggled,
+        picked,
+    } = look;
     let text_c = if hidden {
         resolve(tokens).ink3
     } else {
         ti(tokens.text)
     };
-    let swatch_c = layer_style::layer_colour(layer.layer, tokens);
     let i18n = &panel.i18n;
     let eye_tip = if hidden {
         t!(i18n, ids::PCB_LAYERS_SHOW)
@@ -181,9 +247,7 @@ fn layer_row<'a>(
     )
     .padding([SP.xs, SP.s])
     .style(row_button(tokens))
-    .on_press(PanelMsg::PcbLayers(PcbViewMsg::LayerVisibilityToggled(
-        layer.layer,
-    )));
+    .on_press(PanelMsg::PcbLayers(toggled));
     let eye = tooltip(
         eye,
         text(eye_tip).size(TS.body),
@@ -209,19 +273,17 @@ fn layer_row<'a>(
             },
             ..container::Style::default()
         });
-    let label = text(layer_style::row_label(i18n, layer))
-        .size(TS.body)
-        .color(text_c);
+    let label = text(label).size(TS.body).color(text_c);
     let active_c = active_fill(tokens);
     let content = row![swatch, label]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
-    let name: Element<'a, PanelMsg> = match layer.layer.copper() {
-        Some(copper) => button(content)
+    let name: Element<'a, PanelMsg> = match picked {
+        Some(picked) => button(content)
             .padding([SP.xs, SP.s])
             .width(Length::Fill)
             .style(row_button(tokens))
-            .on_press(PanelMsg::PcbLayers(PcbViewMsg::ActiveLayerPicked(copper)))
+            .on_press(PanelMsg::PcbLayers(picked))
             .boxed(),
         None => container(content)
             .padding([SP.xs, SP.s])

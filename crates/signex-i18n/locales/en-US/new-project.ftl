@@ -13,6 +13,9 @@ dialog-new-project-browse = Browse…
 # Checkbox label; $name is the project name as typed.
 dialog-new-project-make-folder = Create "{ $name }" folder
 
+# The same checkbox while the name field is empty.
+dialog-new-project-make-folder-unnamed = Create a folder named after the project
+
 dialog-new-project-profile-heading = Start from a profile
 
 dialog-new-project-profile-hint = Sets board rules and sheet defaults. You can change everything later.

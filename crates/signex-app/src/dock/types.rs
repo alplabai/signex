@@ -138,6 +138,7 @@ pub(super) struct EditorSeeds {
     pub(super) footprint: bool,
     pub(super) symbol: bool,
     pub(super) pcb: bool,
+    pub(super) component: bool,
 }
 
 /// A document editor whose tab asks for its own default panels.
@@ -146,4 +147,5 @@ pub enum EditorContext {
     Footprint,
     Symbol,
     Pcb,
+    Component,
 }

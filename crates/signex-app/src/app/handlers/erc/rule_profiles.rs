@@ -63,10 +63,15 @@ impl Signex {
     /// Which rule set an ERC run started now would use: the project's own
     /// (with its recorded profile name) or this machine's preferences.
     pub(crate) fn current_rule_set_identity(&self) -> signex_output::ErcReportRuleSet {
-        let stored = self
-            .document_state
-            .active_document_project()
-            .and_then(|p| p.data.rules.as_ref());
+        self.rule_set_identity_of(self.document_state.active_document_project())
+    }
+
+    /// [`Self::current_rule_set_identity`] for the rules of `project`.
+    pub(crate) fn rule_set_identity_of(
+        &self,
+        project: Option<&crate::app::state::LoadedProject>,
+    ) -> signex_output::ErcReportRuleSet {
+        let stored = project.and_then(|p| p.data.rules.as_ref());
         match stored {
             Some(rules) => {
                 let sha256 = rules.erc.sha256_hex();

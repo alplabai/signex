@@ -165,13 +165,7 @@ pub fn view_properties_general<'a>(
 
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
-    // Custom Selection Filters — shared widget reused by the Footprint
-    // editor's Properties panel so both editors render the EXACT same
-    // chrome (tabs, chips, name input, accent border).
-    col = col.push(selection_filters_section_for(ctx, palette).boxed());
-
     // General (collapsible)
-    col = col.push(thin_sep(hairline));
     {
         let unit = ctx.unit;
         let grid_size_mm = ctx.grid_size_mm;
@@ -483,6 +477,11 @@ pub fn view_properties_general<'a>(
 
     col = col.push(thin_sep(hairline));
     col = col.push(view_net_classes_section(ctx).boxed());
+
+    // Custom Selection Filters sit last: Document Options opens on General
+    // (#2262); the presets stay here and in the active bar's Filter menu.
+    col = col.push(thin_sep(hairline));
+    col = col.push(selection_filters_section_for(ctx, palette).boxed());
 
     col
 }

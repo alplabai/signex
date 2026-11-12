@@ -1,5 +1,6 @@
 //! The read-only query commands (#2172): `list_documents`, `document_info`,
-//! `resolve`, `find_items`, `read_document` and `query_pins`. Each answers with data through
+//! `resolve`, `find_items`, `read_document`, `query_pins` and `check_erc`
+//! (#2199, answered once its ERC run lands). Each answers with data through
 //! [`CommandOutcome::Answered`], never a bare `Ran`, and reads only the
 //! documents (engines, boards, editors, projects, the library): no active
 //! tab, window, selection or panel is looked at, and none is changed. What it
@@ -8,6 +9,8 @@
 //! Which ids the commands print, and where each kind stores one, is in
 //! `docs/DOCUMENT_IDS.md`; the answer shapes are in `docs/COMMANDS.md`.
 
+mod check_erc;
+pub use check_erc::CheckFinished;
 mod documents;
 mod elements;
 mod find;
@@ -33,6 +36,7 @@ const QUERY_IDS: &[&str] = &[
     "find_items",
     "read_document",
     "query_pins",
+    "check_erc",
 ];
 
 /// Every query command id.
@@ -83,6 +87,9 @@ impl Signex {
         }
         // Ids are made unique before anything is listed or addressed.
         self.reconcile_document_ids();
+        if id == "check_erc" {
+            return Some(self.check_erc(command, args));
+        }
         let answer = match id {
             "list_documents" => self.list_documents(args),
             "document_info" => self.document_info(args),
@@ -119,3 +126,6 @@ pub(in crate::app) mod tests;
 
 #[cfg(test)]
 pub(in crate::app) mod pins_tests;
+
+#[cfg(test)]
+mod check_erc_tests;

@@ -355,3 +355,93 @@ fn the_board_outline_row_hides_and_shows_the_board_edge() {
     assert!(!snapshot(&f).board_features.edge_hidden, "the edge is back");
     assert_eq!(std::fs::read(&f.path).unwrap(), f.saved);
 }
+
+/// #2262: the Layers panel's Multi-Layer eye hides vias and through-hole
+/// pads: gone from the render snapshot, not hit by a click, back with Show
+/// all layers. It is view state: Save writes the board as it was.
+#[test]
+fn hiding_the_multi_layer_hides_vias_and_through_hole_pads() {
+    let mut board = board();
+    board.vias.push(signex_types::pcb::Via {
+        uuid: Uuid::from_u128(20),
+        position: pt(5.0, 30.0),
+        diameter: 0.8,
+        drill: 0.4,
+        layers: vec!["TopCopper".into(), "BottomCopper".into()],
+        net: 2,
+        via_type: signex_types::pcb::ViaType::Through,
+        unknown_columns: Default::default(),
+    });
+    let mut tht = pad(3, 5.0);
+    tht.pad_type = PadType::Thru;
+    tht.position = pt(5.0, 40.0);
+    tht.size = pt(1.8, 1.8);
+    tht.shape = PadShape::Circle;
+    tht.drill = Some(signex_types::pcb::DrillDef {
+        diameter: 1.0,
+        shape: "circle".into(),
+    });
+    tht.layers = vec!["TopCopper".into(), "BottomCopper".into()];
+    board.footprints[0].pads.push(tht);
+    let mut f = open(board);
+    let revision = f.app.document_state.pcb_revisions.get(&f.path).copied();
+    let toggle = |f: &mut Fixture| {
+        let task = f.app.update(Message::Pcb(PcbMsg::View(
+            PcbViewMsg::MultiLayerVisibilityToggled,
+        )));
+        drive(&mut f.app, task);
+    };
+    assert_eq!(snapshot(&f).vias.len(), 1);
+    assert_eq!(snapshot(&f).pads.len(), 3);
+    assert!(picks_a_via(&mut f, 30.0), "the via can be picked");
+    assert!(
+        picks_a_pad(&mut f, 40.0),
+        "the through-hole pad can be picked"
+    );
+
+    toggle(&mut f);
+    assert!(snapshot(&f).vias.is_empty(), "the via is not drawn");
+    assert_eq!(snapshot(&f).pads.len(), 2, "only the SMD pads are drawn");
+    assert!(!picks_a_via(&mut f, 30.0), "the hidden via is not hit");
+    assert!(
+        !picks_a_pad(&mut f, 40.0),
+        "the hidden through-hole pad is not hit"
+    );
+    let panel = &f.app.document_state.panel_ctx.pcb_layers;
+    assert!(panel.multi_layer_hidden && panel.has_hidden());
+
+    run(&mut f, "save_document");
+    assert_eq!(std::fs::read(&f.path).unwrap(), f.saved);
+    assert_eq!(
+        f.app.document_state.pcb_revisions.get(&f.path).copied(),
+        revision,
+        "the board itself did not change"
+    );
+
+    run(&mut f, "show_all_layers");
+    assert_eq!(snapshot(&f).vias.len(), 1);
+    assert_eq!(snapshot(&f).pads.len(), 3);
+    assert!(picks_a_via(&mut f, 30.0));
+}
+
+/// A click at x 5 mm, `y` picks a pad. The footprint body around a hidden
+/// pad stays shown, so a click there may still pick the footprint.
+fn picks_a_pad(f: &mut Fixture, y: f64) -> bool {
+    picks(f, y, |item| matches!(item, pcb_geom::ItemRef::Pad { .. }))
+}
+
+/// A click at x 5 mm, `y` picks a via. The via in the Multi-Layer test sits
+/// inside the footprint body, so a click there may still pick the footprint.
+fn picks_a_via(f: &mut Fixture, y: f64) -> bool {
+    picks(f, y, |item| matches!(item, pcb_geom::ItemRef::Via(_)))
+}
+
+fn picks(f: &mut Fixture, y: f64, kind: impl Fn(&pcb_geom::ItemRef) -> bool) -> bool {
+    pick(f, y);
+    f.app
+        .interaction_state
+        .pcb_selection
+        .selection()
+        .items()
+        .any(|item| kind(&item))
+}

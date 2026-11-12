@@ -1,21 +1,21 @@
-//! Small read-only form controls used by the Annotate modal — the inline
-//! checkbox pip, the order-of-processing radio pill, the 2×2 order-preview
-//! legend, and the shared bordered-container style. On Graphite each one
-//! delegates to `graphite_annotate`; other themes keep the original look.
+//! Small form controls used by the Annotate modal: the inline checkbox pip,
+//! the uppercase section label, the order-of-processing dropdown, the Lock
+//! column header checkbox (lock or unlock every row) and the shared
+//! bordered-container style. Graphite looks come from `graphite_annotate`.
 
 use super::super::*;
-use iced::widget::{container, scrollable};
+use iced::widget::{container, pick_list, scrollable};
 use iced::{Background, Border, Element, Theme};
-use signex_i18n::{I18n, Localized, ids, t};
+use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, text};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::{button, raw, text};
 
 use super::super::graphite_annotate as ga;
 use crate::app::state::AnnotateOrder;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Scroll-rail style of the modal's lists: a quiet pill thumb (the
 /// form-look rail).
@@ -55,15 +55,103 @@ pub(super) fn bordered_style(
     Box::new(ga::field_box(theme_tokens))
 }
 
-pub(super) fn order_radio<'a>(
-    label: Localized,
-    value: AnnotateOrder,
-    current: AnnotateOrder,
+/// An uppercase section label (ORDER OF PROCESSING): the section size and
+/// the muted section ink, in capitals for the message language.
+pub(super) fn section_heading<'a>(
+    i18n: &I18n,
+    label: MessageId,
     theme_tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    button(container(text(label).size(TS.body)).padding([SP.s, 10.0]))
-        .on_press(Message::Annotate(AnnotateMsg::OrderChanged(value)))
-        .style(ga::toggle_style(theme_tokens, value == current))
+    let words = t!(i18n, label).into_string();
+    text(raw(i18n.upper_for_display(&words)))
+        .size(TS.section)
+        .style(crate::styles::section_label(theme_tokens))
+        .boxed()
+}
+
+/// One entry of the order-of-processing dropdown.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct OrderChoice {
+    pub(super) order: AnnotateOrder,
+    pub(super) label: String,
+}
+
+/// The four orders, in the dropdown's order, with their words.
+pub(super) fn order_choices(i18n: &I18n) -> Vec<OrderChoice> {
+    [
+        (
+            AnnotateOrder::UpThenAcross,
+            ids::DIALOG_ANNOTATE_ORDER_UP_THEN_ACROSS,
+        ),
+        (
+            AnnotateOrder::AcrossThenDown,
+            ids::DIALOG_ANNOTATE_ORDER_ACROSS_THEN_DOWN,
+        ),
+        (
+            AnnotateOrder::DownThenAcross,
+            ids::DIALOG_ANNOTATE_ORDER_DOWN_THEN_ACROSS,
+        ),
+        (
+            AnnotateOrder::AcrossThenUp,
+            ids::DIALOG_ANNOTATE_ORDER_ACROSS_THEN_UP,
+        ),
+    ]
+    .into_iter()
+    .map(|(order, id)| OrderChoice {
+        order,
+        label: t!(i18n, id).into_string(),
+    })
+    .collect()
+}
+
+/// The order-of-processing dropdown (Graphite pick list).
+pub(super) fn order_dropdown<'a>(i18n: &I18n, current: AnnotateOrder) -> Element<'a, Message> {
+    let options = order_choices(i18n);
+    let selected = options.iter().find(|c| c.order == current).cloned();
+    pick_list(selected, options, |c: &OrderChoice| c.label.clone())
+        .graphite()
+        .on_select(|c: OrderChoice| Message::Annotate(AnnotateMsg::OrderChanged(c.order)))
+        .width(iced::Length::Fill)
+        .boxed()
+}
+
+/// Whether every listed symbol is locked: the Lock column header shows a
+/// tick then. An empty list is never "all locked".
+pub(super) fn all_listed_locked(
+    listed: impl IntoIterator<Item = uuid::Uuid>,
+    locked: &std::collections::HashSet<uuid::Uuid>,
+) -> bool {
+    let mut any = false;
+    for uuid in listed {
+        if !locked.contains(&uuid) {
+            return false;
+        }
+        any = true;
+    }
+    any
+}
+
+/// The message of the Lock column header checkbox (the former All On / All
+/// Off buttons): unlock every row when all are locked, else lock them all.
+pub(super) fn lock_all_message(all_locked: bool) -> Message {
+    Message::Annotate(AnnotateMsg::SetAllLocked(!all_locked))
+}
+
+/// The Lock column header: a checkbox that locks or unlocks every row.
+pub(super) fn lock_all_header<'a>(
+    all_locked: bool,
+    enabled: bool,
+    theme_tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    // Disabled (no rows, loading, or a run busy): drawn dimmed, like the
+    // other read-only boxes in the dialog.
+    if !enabled {
+        return disabled_check_pip(all_locked, theme_tokens);
+    }
+    button(ga::checkbox_pip(theme_tokens, all_locked))
+        .on_press(lock_all_message(all_locked))
+        .padding(0.0)
+        .style(ga::bare_button_style)
         .boxed()
 }
 
@@ -80,5 +168,47 @@ pub(super) fn reprefix_note(
             ids::DIALOG_ANNOTATE_REPREFIX_NOTE,
             "standard" => standard.to_string()
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn order_dropdown_offers_all_four_orders_once() {
+        let choices = order_choices(&I18n::en_us());
+        let orders: HashSet<AnnotateOrder> = choices.iter().map(|c| c.order).collect();
+        assert_eq!(choices.len(), 4);
+        assert_eq!(orders.len(), 4);
+        assert!(choices.iter().all(|c| !c.label.is_empty()));
+    }
+
+    #[test]
+    fn lock_header_is_ticked_only_when_every_listed_row_is_locked() {
+        let (a, b) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
+        let mut locked = HashSet::new();
+        assert!(!all_listed_locked([a, b], &locked));
+        locked.insert(a);
+        assert!(!all_listed_locked([a, b], &locked));
+        locked.insert(b);
+        assert!(all_listed_locked([a, b], &locked));
+        assert!(
+            !all_listed_locked(std::iter::empty(), &locked),
+            "an empty list is not all locked"
+        );
+    }
+
+    #[test]
+    fn lock_header_locks_all_unless_all_are_locked_then_unlocks() {
+        assert!(matches!(
+            lock_all_message(false),
+            Message::Annotate(AnnotateMsg::SetAllLocked(true))
+        ));
+        assert!(matches!(
+            lock_all_message(true),
+            Message::Annotate(AnnotateMsg::SetAllLocked(false))
+        ));
     }
 }

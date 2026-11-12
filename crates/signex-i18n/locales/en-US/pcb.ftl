@@ -51,6 +51,8 @@ pcb-layer-notes = Notes
 pcb-layer-drill-drawing = Drill Drawing
 pcb-layer-eco-1 = ECO 1
 pcb-layer-eco-2 = ECO 2
+# Vias and through-hole pads.
+pcb-layer-multi-layer = Multi-Layer
 # Tooltip of a layer's eye in the Layers panel.
 pcb-layers-hide = Hide layer
 pcb-layers-show = Show layer

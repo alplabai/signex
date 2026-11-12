@@ -94,6 +94,7 @@ define_ids! {
     DIALOG_NEW_PROJECT_LOCATION_LABEL = "dialog-new-project-location-label";
     DIALOG_NEW_PROJECT_BROWSE = "dialog-new-project-browse";
     DIALOG_NEW_PROJECT_MAKE_FOLDER = "dialog-new-project-make-folder";
+    DIALOG_NEW_PROJECT_MAKE_FOLDER_UNNAMED = "dialog-new-project-make-folder-unnamed";
     DIALOG_NEW_PROJECT_PROFILE_HEADING = "dialog-new-project-profile-heading";
     DIALOG_NEW_PROJECT_PROFILE_HINT = "dialog-new-project-profile-hint";
     DIALOG_NEW_PROJECT_PROFILE_HOBBY_NAME = "dialog-new-project-profile-hobby-name";
@@ -250,6 +251,7 @@ define_ids! {
     PCB_LAYER_DRILL_DRAWING = "pcb-layer-drill-drawing";
     PCB_LAYER_ECO_1 = "pcb-layer-eco-1";
     PCB_LAYER_ECO_2 = "pcb-layer-eco-2";
+    PCB_LAYER_MULTI_LAYER = "pcb-layer-multi-layer";
     PCB_LAYERS_HIDE = "pcb-layers-hide";
     PCB_LAYERS_SHOW = "pcb-layers-show";
     PCB_PROPERTIES_TITLE = "pcb-properties-title";
@@ -460,8 +462,6 @@ define_ids! {
     DIALOG_ANNOTATE_PROCESS_LOCATION_DESIGNATOR = "dialog-annotate-process-location-designator";
     DIALOG_ANNOTATE_REPLACE_SUB_PARTS = "dialog-annotate-replace-sub-parts";
     DIALOG_ANNOTATE_REPLACE_SUB_PARTS_OFF = "dialog-annotate-replace-sub-parts-off";
-    DIALOG_ANNOTATE_COL_COMPONENT_PARAMETER = "dialog-annotate-col-component-parameter";
-    DIALOG_ANNOTATE_COL_STRICTLY = "dialog-annotate-col-strictly";
     DIALOG_ANNOTATE_NO_CUSTOM_PARAMETERS = "dialog-annotate-no-custom-parameters";
     DIALOG_ANNOTATE_MATCHING_HEADING = "dialog-annotate-matching-heading";
     DIALOG_ANNOTATE_COMPLETE_PACKAGES = "dialog-annotate-complete-packages";
@@ -555,6 +555,11 @@ define_ids! {
     PANELS_CHILD_SHEET_NAME = "panels-child-sheet-name";
     PANELS_CHILD_SHEET_FILE = "panels-child-sheet-file";
     PANELS_CHILD_SHEET_LINE_WIDTH = "panels-child-sheet-line-width";
+    EDITORS_COMPONENT_HEADER_VERSION = "editors-component-header-version";
+    EDITORS_COMPONENT_HEADER_LOCATION = "editors-component-header-location";
+    EDITORS_COMPONENT_HEADER_UNPARSED = "editors-component-header-unparsed";
+    EDITORS_FOOTPRINT_STATUS_PAD_SELECTED = "editors-footprint-status-pad-selected";
+    EDITORS_FOOTPRINT_STATUS_HINT_IDLE = "editors-footprint-status-hint-idle";
     EDITORS_PINS_NO_SYMBOL = "editors-pins-no-symbol";
     EDITORS_PINS_SUMMARY = "editors-pins-summary";
     EDITORS_PINS_COLUMN_NUMBER = "editors-pins-column-number";

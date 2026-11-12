@@ -21,10 +21,46 @@ use crate::styles::{Spacing, TypeScale};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
+/// Width share of a table's row-label column.
+const LABEL_PORTION: u16 = 3;
+
+/// Width shares of each table's value cells, after the label column. The
+/// header and every row of a table share one array so the columns line up;
+/// number fields get the widest share, the checkbox column the narrowest.
+pub(super) const COPPER_CELLS: [u16; 4] = [3, 3, 3, 2];
+pub(super) const HOLE_CELLS: [u16; 4] = [3, 3, 3, 2];
+pub(super) const PASTE_CELLS: [u16; 4] = [3, 2, 3, 2];
+pub(super) const SOLDER_CELLS: [u16; 3] = [3, 3, 2];
+
+/// Gap between table cells: the dock is narrow, so cells sit close.
+const CELL_GAP: f32 = SP.xs;
+
+/// One line of table text that ends in "…" instead of wrapping when its
+/// cell is too narrow, so headers never stack onto two lines.
+fn cell_text<'a>(label: impl Into<String>, color: Color, portion: u16) -> iced::widget::Text<'a> {
+    text(raw(label.into()))
+        .size(TS.caption)
+        .color(color)
+        .wrapping(iced::widget::text::Wrapping::None)
+        .ellipsis(iced::widget::text::Ellipsis::End)
+        .width(Length::FillPortion(portion))
+}
+
+/// The text a size cell shows: empty for zero so the user can clear the
+/// field (an empty edit parses back to 0), else the value to 3 decimals.
+pub(super) fn pad_size_buf(v: f64) -> String {
+    if v.abs() < 1e-9 {
+        String::new()
+    } else {
+        format!("{v:.3}")
+    }
+}
+
 /// v0.20 — Altium-style table header row. Renders the column titles
 /// in muted small text with the same FillPortion layout the data
 /// rows use, so columns line up vertically. First cell is the
-/// section family name (COPPER / HOLE / PASTE / SOLDER).
+/// section family name (COPPER / HOLE / PASTE / SOLDER), sized like the
+/// rows' label column; `portions` are the value cells' shares.
 pub(super) fn pad_table_header<'a>(
     cols: &[&'static str],
     portions: &[u16],
@@ -32,17 +68,14 @@ pub(super) fn pad_table_header<'a>(
     border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
     let mut row = iced::widget::Row::<iced::Element<'a, PanelMsg>>::new()
-        .spacing(SP.s)
+        .spacing(CELL_GAP)
         .align_y(iced::Alignment::Center);
     for (i, label) in cols.iter().enumerate() {
-        let portion = portions.get(i).copied().unwrap_or(1);
-        row = row.push(
-            text(raw(label.to_string()))
-                .size(TS.caption)
-                .color(muted)
-                .width(Length::FillPortion(portion))
-                .boxed(),
-        );
+        let portion = match i {
+            0 => LABEL_PORTION,
+            _ => portions.get(i - 1).copied().unwrap_or(1),
+        };
+        row = row.push(cell_text(*label, muted, portion).boxed());
     }
     container(row)
         .padding([SP.s, SP.m])
@@ -72,17 +105,10 @@ pub(super) fn pad_table_row<'a>(
     primary: Color,
     _border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    let label_portion = 3_u16;
     let mut row = iced::widget::Row::<iced::Element<'a, PanelMsg>>::new()
-        .spacing(SP.s)
+        .spacing(CELL_GAP)
         .align_y(iced::Alignment::Center);
-    row = row.push(
-        text(raw(label.to_string()))
-            .size(TS.caption)
-            .color(primary)
-            .width(Length::FillPortion(label_portion))
-            .boxed(),
-    );
+    row = row.push(cell_text(label, primary, LABEL_PORTION).boxed());
     for (i, cell) in cells.into_iter().enumerate() {
         let portion = portions.get(i).copied().unwrap_or(1);
         row = row.push(container(cell).width(Length::FillPortion(portion)).boxed());
@@ -137,7 +163,7 @@ pub(super) fn pad_table_check_cell<'a>(
             .spacing(0)
             .style(crate::panels::form_look::checkbox_style),
     )
-    .padding([SP.xs, SP.s])
+    .padding([SP.xs, 0.0])
     .boxed()
 }
 
@@ -150,8 +176,8 @@ pub(super) fn pad_table_disabled_cell<'a>(
     muted: Color,
     border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    container(text(raw(value.into())).size(TS.caption).color(muted))
-        .padding([3, 6])
+    container(cell_text(value, muted, 1))
+        .padding([SP.xs, SP.xs])
         .style(move |_: &Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
                 1.0, 1.0, 1.0, 0.02,
@@ -175,8 +201,8 @@ pub(super) fn pad_table_static_cell<'a>(
     value: impl Into<String>,
     muted: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    container(text(raw(value.into())).size(TS.caption).color(muted))
-        .padding([3, 6])
+    container(cell_text(value, muted, 1))
+        .padding([SP.xs, SP.xs])
         .width(Length::Fill)
         .boxed()
 }
@@ -198,24 +224,8 @@ pub(super) fn pad_copper_row<'a>(
         border: border_c,
         ..
     } = palette;
-    // v0.25 polish — render empty when the value is effectively
-    // zero so the user can clear the input by deleting all
-    // characters. With format!("{:.3}", 0.0) the field rebuilds to
-    // "0.000" on every render, which fights the user's typing as
-    // soon as they backspace past the first character. The fp_parse
-    // handler turns an empty string into 0.0 so the round-trip
-    // works: empty → 0.0 → empty. A nonzero size renders the value
-    // verbatim. The longer-term per-field buffer pattern (see
-    // reference_erasable_numeric_input.md) is queued for v0.26.
-    let buf_or_empty = |v: f64| -> String {
-        if v.abs() < 1e-9 {
-            String::new()
-        } else {
-            format!("{v:.3}")
-        }
-    };
-    let x_buf = buf_or_empty(values.size_x_mm);
-    let y_buf = buf_or_empty(values.size_y_mm);
+    let x_buf = pad_size_buf(values.size_x_mm);
+    let y_buf = pad_size_buf(values.size_y_mm);
     let cells = if is_authoritative {
         vec![
             pad_table_input_cell(x_buf, "", move |v| pad_size_x_msg(target, v)),
@@ -236,5 +246,29 @@ pub(super) fn pad_copper_row<'a>(
             pad_table_disabled_cell("", muted, border_c),
         ]
     };
-    pad_table_row(label, cells, &[2, 2, 3, 1], primary, border_c)
+    pad_table_row(label, cells, &COPPER_CELLS, primary, border_c)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A zero size shows an empty field the user can type into; any other
+    /// size shows to 3 decimals.
+    #[test]
+    fn a_size_cell_is_empty_at_zero_and_three_decimals_otherwise() {
+        assert_eq!(pad_size_buf(0.0), "");
+        assert_eq!(pad_size_buf(1.55), "1.550");
+        assert_eq!(pad_size_buf(-0.6), "-0.600");
+    }
+
+    /// Number cells get at least the share of the checkbox column, so a
+    /// value like "1.550" is not cut while a tick box has room to spare.
+    #[test]
+    fn number_cells_are_never_narrower_than_the_checkbox_column() {
+        for cells in [&COPPER_CELLS[..], &HOLE_CELLS, &PASTE_CELLS, &SOLDER_CELLS] {
+            let (numbers, check) = cells.split_at(cells.len() - 1);
+            assert!(numbers.iter().all(|share| *share >= check[0]), "{cells:?}");
+        }
+    }
 }

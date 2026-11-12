@@ -62,12 +62,12 @@ fn pcb_vertical_slice_dirty_paths_are_family_scoped() {
 
     PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::CIRCLES, &mut scene);
     assert_eq!(scene.lines.len(), 2);
-    assert_eq!(scene.circles.len(), 1);
+    assert_eq!(scene.circles.len(), 2, "the via ring and its drill");
     assert_eq!(scene.polygons.len(), 0);
 
     PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::POLYGONS, &mut scene);
     assert_eq!(scene.lines.len(), 2);
-    assert_eq!(scene.circles.len(), 1);
+    assert_eq!(scene.circles.len(), 2);
     assert_eq!(scene.polygons.len() + scene.top_polygons.len(), 4);
 }
 

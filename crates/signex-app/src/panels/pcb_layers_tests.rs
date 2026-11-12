@@ -151,3 +151,42 @@ fn the_empty_panel_says_a_board_is_needed() {
     find(&texts, "Layers");
     find(&texts, "Open a PCB to see its layers.");
 }
+
+/// The Multi-Layer row lists under the copper rows; its eye shows or hides
+/// vias and through-hole pads, and a click on its name picks no layer.
+#[test]
+fn the_multi_layer_row_toggles_vias_and_through_hole_pads() {
+    let ctx = context(&PcbLayerView::default());
+    let texts = lay_out_texts(view_panel_for_test(&ctx), WINDOW);
+    let label = find(&texts, "Multi-Layer").bounds;
+    assert!(label.y > find(&texts, "Bottom Layer").bounds.y);
+    assert!(label.y < find(&texts, "TECHNICAL").bounds.y);
+    let eye_x = label.x - SP.s - 12.0 - SP.s - SP.xs - (7.0 + SP.s);
+    let toggled = messages_on_click_at(
+        view_panel_for_test(&ctx),
+        WINDOW,
+        None,
+        iced::Point::new(eye_x, label.center_y()),
+    );
+    assert!(
+        matches!(
+            toggled.as_slice(),
+            [PanelMsg::PcbLayers(PcbViewMsg::MultiLayerVisibilityToggled)]
+        ),
+        "{toggled:?}"
+    );
+    assert!(messages_on_click(view_panel_for_test(&ctx), WINDOW, "Multi-Layer").is_empty());
+
+    let mut view = PcbLayerView::default();
+    view.toggle_multi_layer();
+    let ctx = context(&view);
+    assert!(ctx.pcb_layers.multi_layer_hidden && ctx.pcb_layers.has_hidden());
+    let shown_all = messages_on_click(view_panel_for_test(&ctx), WINDOW, "Show all layers");
+    assert!(
+        matches!(
+            shown_all.as_slice(),
+            [PanelMsg::PcbLayers(PcbViewMsg::AllLayersShown)]
+        ),
+        "{shown_all:?}"
+    );
+}
