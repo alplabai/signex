@@ -15,13 +15,13 @@ const SEP: MenuEntry = MenuEntry::Separator;
 
 pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        cmd_item(ctx, cmd("new_document", "New Project", "Ctrl+N")),
+        cmd_item(ctx, cmd("new_document", "New Project", "Mod+N")),
         // A board for the open project (#1312); greyed with no project.
         submenu(
             "New",
             vec![cmd_item_gated(ctx, cmd("new_pcb_document", "PCB", ""))],
         ),
-        cmd_item(ctx, cmd("open_document", "Open...", "Ctrl+O")),
+        cmd_item(ctx, cmd("open_document", "Open...", "Mod+O")),
         submenu("Open Recent", open_recent(ctx)),
         SEP,
         cmd_item_gated(
@@ -30,8 +30,8 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         SEP,
         // Save gating: docs/MENU_BAR.md#file-save
-        cmd_item_gated(ctx, cmd("save_document", "Save", "Ctrl+S")),
-        cmd_item_gated(ctx, cmd("save_document_as", "Save As...", "Ctrl+Shift+S")),
+        cmd_item_gated(ctx, cmd("save_document", "Save", "Mod+S")),
+        cmd_item_gated(ctx, cmd("save_document_as", "Save As...", "Mod+Shift+S")),
         // Greyed when nothing is unsaved; runs the shared Save All flow.
         item_if(
             "Save All",
@@ -46,9 +46,9 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
             "Import",
             vec![item("Altium Project...", MenuMessage::ImportAltium)],
         ),
-        // Export > PDF and File > Print open the same modal; only Print shows Ctrl+P: docs/MENU_BAR.md#file-export-pdf
+        // Export > PDF and File > Print open the same modal; only Print shows Mod+P: docs/MENU_BAR.md#file-export-pdf
         submenu("Export", export(ctx)),
-        cmd_item_gated(ctx, cmd("print", "Print...", "Ctrl+P")),
+        cmd_item_gated(ctx, cmd("print", "Print...", "Mod+P")),
         SEP,
         item("Exit", MenuMessage::Exit),
     ]
@@ -103,21 +103,22 @@ fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        cmd_item_gated(ctx, cmd("undo", "Undo", "Ctrl+Z")),
+        cmd_item_gated(ctx, cmd("undo", "Undo", "Mod+Z")),
         cmd_item_gated(ctx, cmd("redo", "Redo", "Ctrl+Y")),
         SEP,
-        cmd_item_gated(ctx, cmd("cut", "Cut", "Ctrl+X")),
-        cmd_item_gated(ctx, cmd("copy", "Copy", "Ctrl+C")),
-        cmd_item_gated(ctx, cmd("paste", "Paste", "Ctrl+V")),
+        cmd_item_gated(ctx, cmd("cut", "Cut", "Mod+X")),
+        cmd_item_gated(ctx, cmd("copy", "Copy", "Mod+C")),
+        cmd_item_gated(ctx, cmd("paste", "Paste", "Mod+V")),
+        // Trunk spelling kept (not `Mod+`): the fallback is never shown while a keymap is active.
         cmd_item_gated(ctx, cmd("smart_paste", "Paste Special", "Shift+Ctrl+V")),
-        cmd_item_gated(ctx, cmd("duplicate", "Duplicate", "Ctrl+D")),
+        cmd_item_gated(ctx, cmd("duplicate", "Duplicate", "Mod+D")),
         cmd_item_gated(ctx, cmd("delete_selection", "Delete", "Del")),
         submenu("Move", move_menu(ctx)),
         submenu("Arrange", arrange(ctx)),
         SEP,
-        cmd_item_gated(ctx, cmd("select_all", "Select All", "Ctrl+A")),
+        cmd_item_gated(ctx, cmd("select_all", "Select All", "Mod+A")),
         SEP,
-        cmd_item_gated(ctx, cmd("find", "Find", "Ctrl+F")),
+        cmd_item_gated(ctx, cmd("find", "Find", "Mod+F")),
         cmd_item_gated(ctx, cmd("find_and_replace", "Find and Replace", "Ctrl+H")),
     ]
 }
@@ -179,6 +180,7 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("zoom_out_at_cursor", "Zoom Out", "Ctrl+-")),
         cmd_item_gated(ctx, cmd("zoom_to_fit", "Fit All", "Home")),
         SEP,
+        // Trunk spelling kept (not `Mod+`): the fallback is never shown while a keymap is active.
         cmd_item_gated(
             ctx,
             cmd("toggle_visible_grid", "Toggle Grid", "Shift+Ctrl+G"),
@@ -438,7 +440,7 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
             cmd(
                 "toggle_cross_select_mode",
                 "Cross Select Mode",
-                "Ctrl+Shift+X",
+                "Mod+Shift+X",
             ),
             ctx.cross_select,
         ),
@@ -474,7 +476,7 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::OpenPassiveCalculator,
         ),
         SEP,
-        cmd_item(ctx, cmd("open_preferences", "Preferences...", "Ctrl+,")),
+        cmd_item(ctx, cmd("open_preferences", "Preferences...", "Mod+,")),
     ]
 }
 

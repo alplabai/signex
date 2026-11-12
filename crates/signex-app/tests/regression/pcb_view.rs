@@ -153,7 +153,9 @@ fn press(f: &mut Fixture, keys: &str) {
     };
     let task = f.app.update(Message::Ui(UiMsg::KeymapStroke {
         window: None,
-        stroke: strokes.remove(0),
+        stroke: strokes
+            .remove(0)
+            .resolved_for(signex_app::keymap::Platform::current()),
     }));
     drive(&mut f.app, task);
 }

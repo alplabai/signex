@@ -69,12 +69,12 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `center_on_cursor` | Center on cursor | view | — | `F4` |
 | `center_view_at_cursor` | Center/redraw view around cursor | view | `Home` | — |
 | `check_erc` | Check electrical rules | validation | — | — |
-| `close_active_document` | Close active document | file | `Ctrl+F4` | — |
+| `close_active_document` | Close active document | file | `Ctrl+F4`, `Mod+W` (macOS) | — |
 | `close_all_documents` | Close all documents | window | — | — |
-| `copy` | Copy | edit | `Ctrl+C` | `Ctrl+C` |
+| `copy` | Copy | edit | `Mod+C` | `Mod+C` |
 | `copy_attributes_or_add_vertex` | Copy attributes from object under cursor or add vertex while drawing | interactive | `Insert` | — |
 | `cross_probe` | Cross probe the selection to the board or schematic | select | — | — |
-| `cut` | Cut | edit | `Ctrl+X` | `Ctrl+X` |
+| `cut` | Cut | edit | `Mod+X` | `Mod+X` |
 | `cycle_fast_grid` | Cycle fast grid | view | — | `Alt+4` |
 | `cycle_selection_mode` | Cycle selection mode | select | — | — |
 | `cycle_snap_grid_backward` | Cycle backward through snap grids | view | `Shift+G` | — |
@@ -85,55 +85,55 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `delete_selection` | Delete selection | edit | `Delete` | `Delete` |
 | `document_info` | Document info | file | — | — |
 | `drag_keep_connections` | Drag while keeping connections | modify | — | `G` |
-| `duplicate` | Duplicate | edit | `Ctrl+D` | `Ctrl+D` |
+| `duplicate` | Duplicate | edit | `Mod+D` | `Mod+D` |
 | `edit_footprint_field` | Edit footprint field | edit | — | `F` |
-| `edit_library_symbol` | Edit library symbol | library | — | `Ctrl+Shift+E` |
+| `edit_library_symbol` | Edit library symbol | library | — | `Mod+Shift+E` |
 | `edit_object_properties` | Edit properties of object under cursor | edit | `DoubleClick` | — |
 | `edit_reference_designator` | Edit reference designator | edit | — | `U` |
 | `edit_selected_object_properties` | Properties / edit selected object | edit | — | `E` |
-| `edit_selected_symbol_in_symbol_editor` | Edit selected symbol in Symbol Editor | library | — | `Ctrl+E` |
+| `edit_selected_symbol_in_symbol_editor` | Edit selected symbol in Symbol Editor | library | — | `Mod+E` |
 | `edit_text_in_place` | In-place edit selected text | edit | `F2` | — |
 | `edit_value` | Edit value | edit | — | `V` |
 | `fast_grid_1` | Fast grid 1 | view | — | `Alt+1` |
 | `fast_grid_2` | Fast grid 2 | view | — | `Alt+2` |
-| `find` | Find | search | `Ctrl+F` | `Ctrl+F` |
-| `find_and_replace` | Find and replace | search | `Ctrl+H` | — |
+| `find` | Find | search | `Mod+F` | `Mod+F` |
+| `find_and_replace` | Find and replace | search | `Ctrl+H`, `Mod+Alt+F` (macOS) | — |
 | `find_items` | Find documents or items | search | — | — |
 | `find_next` | Find next | search | `F3` | `F3` |
 | `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | — |
 | `find_text` | Find text | search | — | — |
-| `import_graphics` | Import graphics | library | — | `Ctrl+Shift+F` |
+| `import_graphics` | Import graphics | library | — | `Mod+Shift+F` |
 | `list_documents` | List documents | file | — | — |
 | `measure_distance` | Measure distance | view | `Ctrl+M` | — |
 | `mirror_x` | Mirror along X-axis | modify | `X` | `X` |
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
 | `move_object` | Move object | modify | `M M` | — |
 | `move_selection` | Move selection | modify | — | `M` |
-| `new_document` | New | file | `Ctrl+N` | `Ctrl+N` |
+| `new_document` | New | file | `Mod+N` | `Mod+N` |
 | `new_project_with_profile` | New project from a profile | file | — | — |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
-| `open_command_palette` | Open command palette | commands | `Ctrl+Shift+P` | `Ctrl+K`, `Ctrl+Shift+P` |
+| `open_command_palette` | Open command palette | commands | `Mod+Shift+P` | `Ctrl+K`, `Mod+Shift+P` |
 | `open_datasheet` | Open datasheet | edit | — | `D` |
-| `open_document` | Open document | file | `Ctrl+O` | `Ctrl+O` |
+| `open_document` | Open document | file | `Mod+O` | `Mod+O` |
 | `open_grid_picker` | Open grid picker | view | — | — |
 | `open_grid_properties` | Open grid properties | view | — | — |
 | `open_library_browser` | Open library browser | library | — | — |
 | `open_net_inspector` | Open Net Inspector panel | panels | — | — |
-| `open_preferences` | Open preferences | preferences | `Ctrl+,` | `Ctrl+,` |
+| `open_preferences` | Open preferences | preferences | `Mod+,` | `Mod+,` |
 | `open_schematic_preferences` | Open schematic preferences | preferences | `T P` | — |
-| `paste` | Paste | edit | `Ctrl+V` | `Ctrl+V` |
+| `paste` | Paste | edit | `Mod+V` | `Mod+V` |
 | `paste_array` | Paste array | edit | — | — |
-| `paste_special` | Paste special | edit | — | `Ctrl+Shift+V` |
+| `paste_special` | Paste special | edit | — | `Mod+Shift+V` |
 | `placement_accept` | Accept current placement or move stage | interactive | `Enter` | — |
 | `placement_properties` | Edit properties of the object being placed or moved | interactive | `Tab` | — |
 | `previous_document_tab` | Previous open document tab | window | `Ctrl+Shift+Tab` | — |
 | `previous_grid` | Previous grid | view | — | `Shift+N` |
-| `print` | Print | file | `Ctrl+P` | `Ctrl+P` |
+| `print` | Print | file | `Mod+P` | `Mod+P` |
 | `query_pins` | Query pins | file | — | — |
 | `read_document` | Read document | file | — | — |
-| `redo` | Redo | edit | `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Ctrl+Y` |
+| `redo` | Redo | edit | `Mod+Shift+Z` (macOS), `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Mod+Shift+Z` (macOS), `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
 | `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace` | — |
 | `repeat_last_item` | Repeat last item | edit | — | `Insert` |
@@ -143,23 +143,23 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `revert` | Revert an agent's edit step | edit | — | — |
 | `rotate_clockwise` | Rotate clockwise by 90 degrees | modify | `Shift+Space` | `Shift+R` |
 | `rotate_counterclockwise` | Rotate counterclockwise by 90 degrees | modify | `Space` | `R` |
-| `rubber_stamp_copy` | Rubber-stamp copy / repeated paste | edit | `Ctrl+R` | — |
-| `save_document` | Save document | file | `Ctrl+S` | `Ctrl+S` |
-| `save_document_as` | Save as | file | `Ctrl+Shift+S` | `Ctrl+Shift+S` |
-| `select_all` | Select all | select | `Ctrl+A` | `Ctrl+A` |
-| `select_expand_connection` | Select / expand connection | select | — | `Ctrl+4` |
+| `rubber_stamp_copy` | Rubber-stamp copy / repeated paste | edit | `Mod+R` | — |
+| `save_document` | Save document | file | `Mod+S` | `Mod+S` |
+| `save_document_as` | Save as | file | `Mod+Shift+S` | `Mod+Shift+S` |
+| `select_all` | Select all | select | `Mod+A` | `Mod+A` |
+| `select_expand_connection` | Select / expand connection | select | — | `Mod+4` |
 | `select_node_or_connection_item` | Select node / connection item under cursor | select | — | `Alt+3` |
 | `send_drawings_backward` | Send drawings backward | edit | — | — |
 | `send_drawings_to_back` | Send drawings to back | edit | — | — |
 | `show_all_design_objects` | Show all design objects | view | — | — |
 | `show_current_command_hotkeys` | Show graphical editing hotkey list for current command | help | `F1` | — |
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |
-| `smart_paste` | Smart Paste | edit | `Ctrl+Shift+V` | — |
+| `smart_paste` | Smart Paste | edit | `Mod+Shift+V` | — |
 | `switch_segment_posture` | Switch current segment posture | interactive | — | `/` |
 | `tile_windows_horizontally` | Tile windows one above the other | window | — | — |
 | `tile_windows_vertically` | Tile windows side by side | window | — | — |
 | `toggle_auto_focus` | Toggle AutoFocus | view | `F9` | `F9` |
-| `toggle_cross_select_mode` | Toggle Cross Select Mode | select | `Ctrl+Shift+X` | — |
+| `toggle_cross_select_mode` | Toggle Cross Select Mode | select | `Mod+Shift+X` | — |
 | `toggle_electrical_grid` | Toggle electrical grid | view | `Shift+E` | — |
 | `toggle_floating_panels` | Toggle floating panels | window | `F4` | — |
 | `toggle_properties_panel` | Toggle Properties panel | panels | `F11` | — |
@@ -167,10 +167,10 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `toggle_schematic_list_panel` | Toggle schematic list panel | panels | `Shift+F12` | — |
 | `toggle_search_panel` | Show/hide search panel | search | — | `Ctrl+G` |
 | `toggle_selection` | Add/remove object from selection | select | `Shift+Click` | — |
-| `toggle_visible_grid` | Toggle visible grid | view | `Ctrl+Shift+G` | `Ctrl+Shift+G` |
-| `undo` | Undo | edit | `Ctrl+Z` | `Ctrl+Z` |
+| `toggle_visible_grid` | Toggle visible grid | view | `Mod+Shift+G` | `Mod+Shift+G` |
+| `undo` | Undo | edit | `Mod+Z` | `Mod+Z` |
 | `undo_last_segment` | Undo last segment while drawing | interactive | — | `Backspace` |
-| `unselect_all` | Unselect all | select | — | `Ctrl+Shift+A` |
+| `unselect_all` | Unselect all | select | — | `Mod+Shift+A` |
 | `zoom_in_at_cursor` | Zoom in at cursor | view | `PageUp` | `F1` |
 | `zoom_out_at_cursor` | Zoom out at cursor | view | `PageDown` | `F2` |
 | `zoom_to_all_objects` | Zoom to all objects | view | — | `Ctrl+Home` |
@@ -246,7 +246,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_design_block` | Place design block | place | — | `Shift+B` |
 | `place_device_sheet_symbol` | Place device sheet symbol | place | — | — |
 | `place_diff_pair` | Place diff pair | place | — | — |
-| `place_global_label` | Place global label | place | — | `Ctrl+L` |
+| `place_global_label` | Place global label | place | — | `Mod+L` |
 | `place_graphic` | Place graphic | place | — | — |
 | `place_harness_connector` | Place harness connector | place | — | — |
 | `place_harness_entry` | Place harness entry | place | — | — |
@@ -269,7 +269,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_text` | Place text | place | — | `T` |
 | `place_text_frame` | Place text frame | place | — | — |
 | `place_text_string` | Place text string | place | — | — |
-| `place_wire` | Place wire | place | `P W`, `Ctrl+W` | `W` |
+| `place_wire` | Place wire | place | `Ctrl+W`, `P W` | `W` |
 | `place_wire_to_bus_entry` | Place wire-to-bus entry | place | — | `Z` |
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |

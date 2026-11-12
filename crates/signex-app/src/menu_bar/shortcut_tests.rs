@@ -50,9 +50,10 @@ fn a_command_the_keymap_does_not_mention_shows_no_hint() {
 #[test]
 fn without_any_active_keymap_the_fallback_stands_in() {
     let ctx = MenuContext::default();
+    // The fallback is spelled `Mod+S` and shown as this OS writes it.
     assert_eq!(
-        shortcut_for(&ctx, "save_document", "Ctrl+S").as_deref(),
-        Some("Ctrl+S")
+        shortcut_for(&ctx, "save_document", "Mod+S").as_deref(),
+        Some(crate::keymap::shown("Mod+S").as_str())
     );
 }
 

@@ -69,7 +69,10 @@ impl Signex {
         let find = &self.ui_state.find_replace;
         let count = find.matches.len();
         if count == 0 {
-            crate::diagnostics::log_info("Find: there are no results; search with Ctrl+F first.");
+            crate::diagnostics::log_info(format!(
+                "Find: there are no results; search with {} first.",
+                crate::keymap::shown("Mod+F")
+            ));
             return Task::none();
         }
         let next = match (find.selected_index, forward) {
