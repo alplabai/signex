@@ -365,7 +365,7 @@ fn log_unmapped(command: &AppCommandId) {
         crate::diagnostics::log_warning(format!(
             "command '{id}': {} is not available yet",
             // The log is English whatever the UI language.
-            metadata.label_in(signex_i18n::I18n::en_us_ref())
+            metadata.label_in(&signex_i18n::I18n::en_us())
         ));
     } else {
         crate::diagnostics::log_warning(format!(

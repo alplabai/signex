@@ -13,6 +13,7 @@ use crate::library::editor::symbol::state::{
     SymbolSelection, selected_is_deletable, selection_is_join_eligible,
 };
 use crate::library::messages::{SymbolEditorMsg, SymbolSelectionMsg, SymbolToolMsg};
+use signex_i18n::{MessageId, command_ids, ids};
 use signex_library::Symbol;
 
 /// One row of the symbol context menu. `id` is a stable, kebab-case,
@@ -26,14 +27,14 @@ use signex_library::Symbol;
 /// expand-in-place behaviour), not a hover flyout.
 pub struct SymbolMenuRow {
     pub id: &'static str,
-    pub label: &'static str,
+    pub label: MessageId,
     pub enabled: bool,
     pub msg: Option<SymbolEditorMsg>,
     pub submenu: Option<Vec<SymbolMenuRow>>,
 }
 
 impl SymbolMenuRow {
-    fn item(id: &'static str, label: &'static str, enabled: bool, msg: SymbolEditorMsg) -> Self {
+    fn item(id: &'static str, label: MessageId, enabled: bool, msg: SymbolEditorMsg) -> Self {
         Self {
             id,
             label,
@@ -43,7 +44,7 @@ impl SymbolMenuRow {
         }
     }
 
-    fn submenu(id: &'static str, label: &'static str, children: Vec<SymbolMenuRow>) -> Self {
+    fn submenu(id: &'static str, label: MessageId, children: Vec<SymbolMenuRow>) -> Self {
         Self {
             id,
             label,
@@ -68,31 +69,31 @@ pub fn build_symbol_context_menu_rows(
         place_submenu(),
         SymbolMenuRow::item(
             "symbol.join-into-polygon",
-            "Join into Polygon",
+            ids::CTX_SYMBOL_JOIN_POLYGON,
             selection_is_join_eligible(sym, view, selected),
             SymbolEditorMsg::JoinSelectionIntoPolygon,
         ),
         SymbolMenuRow::item(
             "symbol.delete",
-            "Delete",
+            command_ids::CMD_MENU_DELETE_SELECTION,
             selected_is_deletable(selected),
             SymbolEditorMsg::DeleteSelected,
         ),
         SymbolMenuRow::item(
             "symbol.select-all",
-            "Select All",
+            command_ids::CMD_MENU_SELECT_ALL,
             true,
             SymbolEditorMsg::Select(SymbolSelectionMsg::All),
         ),
         SymbolMenuRow::item(
             "symbol.deselect-all",
-            "Deselect All",
+            ids::CTX_DESELECT_ALL,
             selected.is_some(),
             SymbolEditorMsg::Deselect,
         ),
         SymbolMenuRow::item(
             "symbol.fit-to-window",
-            "Fit to Window",
+            ids::CTX_FIT_TO_WINDOW,
             true,
             SymbolEditorMsg::Fit,
         ),
@@ -102,20 +103,40 @@ pub fn build_symbol_context_menu_rows(
 /// `(id, label, tool)` for every `Place ▸` row — one per canvas
 /// placement tool, mirroring the SchLib Place menu / toolbar tool set
 /// (`SymbolTool`).
-pub const PLACE_TOOLS: &[(&str, &str, SymbolToolMsg)] = &[
-    ("symbol.place-pin", "Pin", SymbolToolMsg::AddPin),
-    ("symbol.place-line", "Line", SymbolToolMsg::PlaceLine),
+pub const PLACE_TOOLS: &[(&str, MessageId, SymbolToolMsg)] = &[
+    (
+        "symbol.place-pin",
+        ids::CTX_SYMBOL_PIN,
+        SymbolToolMsg::AddPin,
+    ),
+    (
+        "symbol.place-line",
+        ids::CTX_SYMBOL_LINE,
+        SymbolToolMsg::PlaceLine,
+    ),
     (
         "symbol.place-rectangle",
-        "Rectangle",
+        ids::CTX_SHAPE_RECTANGLE,
         SymbolToolMsg::PlaceRectangle,
     ),
-    ("symbol.place-circle", "Circle", SymbolToolMsg::PlaceCircle),
-    ("symbol.place-arc", "Arc", SymbolToolMsg::PlaceArc),
-    ("symbol.place-text", "Text", SymbolToolMsg::PlaceText),
+    (
+        "symbol.place-circle",
+        ids::CTX_SHAPE_CIRCLE,
+        SymbolToolMsg::PlaceCircle,
+    ),
+    (
+        "symbol.place-arc",
+        ids::CTX_SHAPE_ARC,
+        SymbolToolMsg::PlaceArc,
+    ),
+    (
+        "symbol.place-text",
+        ids::CTX_SYMBOL_TEXT,
+        SymbolToolMsg::PlaceText,
+    ),
     (
         "symbol.place-polygon",
-        "Polygon",
+        ids::CTX_SYMBOL_POLYGON,
         SymbolToolMsg::PlacePolygon,
     ),
 ];
@@ -129,7 +150,7 @@ fn place_submenu() -> SymbolMenuRow {
             SymbolMenuRow::item(id, label, true, SymbolEditorMsg::SetTool(tool))
         })
         .collect();
-    SymbolMenuRow::submenu("symbol.place", "Place", children)
+    SymbolMenuRow::submenu("symbol.place", ids::MENU_PLACE, children)
 }
 
 #[cfg(test)]

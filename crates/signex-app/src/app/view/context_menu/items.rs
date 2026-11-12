@@ -14,6 +14,8 @@
 use super::*;
 
 use iced::widget::svg::Handle;
+use signex_i18n::ids::MENU_PLANNED_TOOLTIP;
+use signex_i18n::{Arg, I18n, MessageId};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
 /// A keyboard-command row: clicking it dispatches `action` through the
@@ -72,25 +74,37 @@ pub(super) fn dd_disabled(
 
 /// Catalog menu text for `command_id`. An id missing from the catalog shows
 /// the bare id, which the catalog-agreement test turns into a failure.
-pub(super) fn command_text(command_id: &str) -> String {
-    // The context menus do not carry an `I18n` yet.
-    crate::keymap::metadata_for_str(command_id).map_or_else(
-        || command_id.to_string(),
-        |meta| meta.menu_label_in(signex_i18n::I18n::en_us_ref()),
-    )
+pub(super) fn command_text(i18n: &I18n, command_id: &str) -> String {
+    crate::keymap::metadata_for_str(command_id)
+        .map_or_else(|| command_id.to_string(), |meta| meta.menu_label_in(i18n))
+}
+
+/// The catalog text of `id` for a row label.
+pub(super) fn text(i18n: &I18n, id: MessageId) -> String {
+    i18n.message(id, &[]).into_string()
+}
+
+/// [`text`] of a message with arguments, Fluent's bidi isolation marks
+/// removed: a row's width is fitted to its characters, and the marks are not
+/// drawn.
+pub(super) fn text_with(i18n: &I18n, id: MessageId, args: &[(&str, Arg)]) -> String {
+    i18n.message(id, args)
+        .into_string()
+        .replace(['\u{2068}', '\u{2069}'], "")
 }
 
 /// A row that runs the catalog command `command_id`: its label is the
 /// command's menu text, so no surface keeps a private copy (#271).
 /// `shortcut` is the active keymap's hint for the same id (empty = none).
 pub(super) fn dd_cmd(
+    i18n: &I18n,
     icon: Option<Handle>,
     command_id: &'static str,
     shortcut: &str,
     message: Message,
 ) -> DropdownEntry<Message> {
     tag_command(
-        dd_msg(icon, &command_text(command_id), shortcut, message),
+        dd_msg(icon, &command_text(i18n, command_id), shortcut, message),
         command_id,
     )
 }
@@ -101,6 +115,7 @@ pub(super) fn dd_cmd(
 /// with `project` when the row stands on a project. An id that fails to
 /// parse gives a greyed row instead of a panic.
 pub(super) fn dd_command(
+    i18n: &I18n,
     icon: Option<Handle>,
     command_id: &'static str,
     shortcut: &str,
@@ -108,6 +123,7 @@ pub(super) fn dd_command(
 ) -> DropdownEntry<Message> {
     match crate::keymap::AppCommandId::new(command_id) {
         Ok(id) => dd_cmd(
+            i18n,
             icon,
             command_id,
             shortcut,
@@ -116,20 +132,21 @@ pub(super) fn dd_command(
                 project,
             })),
         ),
-        Err(_) => dd_cmd_disabled(icon, command_id, shortcut),
+        Err(_) => dd_cmd_disabled(i18n, icon, command_id, shortcut),
     }
 }
 
 /// [`dd_cmd`] greyed because the command cannot run right now. The row
 /// keeps the command's `shortcut` hint in the right-hand column.
 pub(super) fn dd_cmd_disabled(
+    i18n: &I18n,
     icon: Option<Handle>,
     command_id: &'static str,
     shortcut: &str,
 ) -> DropdownEntry<Message> {
     let right = (!shortcut.is_empty()).then_some(shortcut);
     tag_command(
-        dd_disabled(icon, &command_text(command_id), right),
+        dd_disabled(icon, &command_text(i18n, command_id), right),
         command_id,
     )
 }
@@ -148,13 +165,14 @@ pub(super) fn tag_command(
 /// row as [`dd_disabled`], plus the shared "planned" tooltip so the row
 /// reads as unbuilt rather than broken (#1251).
 pub(super) fn dd_planned(
+    i18n: &I18n,
     icon: Option<Handle>,
     label: &str,
     right: Option<&str>,
 ) -> DropdownEntry<Message> {
     match dd_disabled(icon, label, right) {
         DropdownEntry::Item(item) => {
-            DropdownEntry::Item(item.tooltip(crate::active_bar::PLANNED_TOOLTIP))
+            DropdownEntry::Item(item.tooltip(text(i18n, MENU_PLANNED_TOOLTIP)))
         }
         other => other,
     }
@@ -162,8 +180,12 @@ pub(super) fn dd_planned(
 
 /// A greyed launcher for a submenu that does not exist yet: a planned row
 /// with the chevron in the chevron column.
-pub(super) fn dd_planned_submenu(icon: Option<Handle>, label: &str) -> DropdownEntry<Message> {
-    match dd_planned(icon, label, None) {
+pub(super) fn dd_planned_submenu(
+    i18n: &I18n,
+    icon: Option<Handle>,
+    label: &str,
+) -> DropdownEntry<Message> {
+    match dd_planned(i18n, icon, label, None) {
         DropdownEntry::Item(item) => DropdownEntry::Item(item.submenu()),
         other => other,
     }
@@ -172,11 +194,11 @@ pub(super) fn dd_planned_submenu(icon: Option<Handle>, label: &str) -> DropdownE
 /// Save row for the project-root menu — active only when a schematic tab
 /// is open or the project metadata is dirty. Label and `shortcut` come from
 /// the `save_document` command like every other surface.
-pub(super) fn save_entry(enabled: bool, shortcut: &str) -> DropdownEntry<Message> {
+pub(super) fn save_entry(i18n: &I18n, enabled: bool, shortcut: &str) -> DropdownEntry<Message> {
     if enabled {
-        dd_command(None, "save_document", shortcut, None)
+        dd_command(i18n, None, "save_document", shortcut, None)
     } else {
-        dd_cmd_disabled(None, "save_document", shortcut)
+        dd_cmd_disabled(i18n, None, "save_document", shortcut)
     }
 }
 

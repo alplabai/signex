@@ -195,7 +195,7 @@ pub(crate) fn action_label(action: &ActiveBarAction, fallback: &'static str) -> 
     id_for_action(action)
         .and_then(crate::keymap::metadata_for_str)
         // The Active Bar dropdown does not carry an `I18n` yet.
-        .map(|metadata| metadata.menu_label_in(signex_i18n::I18n::en_us_ref()))
+        .map(|metadata| metadata.menu_label_in(&signex_i18n::I18n::en_us()))
         .unwrap_or_else(|| fallback.to_string())
 }
 
@@ -224,7 +224,7 @@ mod tests {
                 .find(|candidate| candidate == id)
                 .and_then(|found| AppCommandId::new(found).ok())
                 .and_then(|command| metadata_for(&command))
-                .map(|metadata| metadata.menu_label_in(signex_i18n::I18n::en_us_ref()))
+                .map(|metadata| metadata.menu_label_in(&signex_i18n::I18n::en_us()))
                 .unwrap_or_else(|| "fallback".to_string());
             assert_eq!(action_label(action, "fallback"), linear, "{id}");
         }
@@ -385,10 +385,10 @@ mod tests {
             let metadata = metadata_for(&command)
                 .unwrap_or_else(|| panic!("`{id}` is in the table but not the catalog"));
             checked += 1;
-            if metadata.menu_label_in(signex_i18n::I18n::en_us_ref()) != literal {
+            if metadata.menu_label_in(&signex_i18n::I18n::en_us()) != literal {
                 drift.push(format!(
                     "`{id}`: catalog says {:?}, dropdown.rs says {literal:?}",
-                    metadata.menu_label_in(signex_i18n::I18n::en_us_ref())
+                    metadata.menu_label_in(&signex_i18n::I18n::en_us())
                 ));
             }
         }

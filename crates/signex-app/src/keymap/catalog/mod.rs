@@ -264,7 +264,7 @@ impl CommandMetadata {
     /// The descriptive label in en-US, for the CLI catalog and other
     /// surfaces that are English by contract.
     pub fn label_en_us(&self) -> String {
-        self.label_in(I18n::en_us_ref())
+        self.label_in(&I18n::en_us())
     }
 
     /// The label a menu surface should display: the terse `menu_label`

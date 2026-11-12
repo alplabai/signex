@@ -5,18 +5,29 @@ use super::*;
 
 use iced::Widget as _;
 
-use super::items::dd_msg;
+use super::items::{dd_msg, text};
 use crate::library::messages::LibraryMessage;
 use crate::library::state::ComponentsRowAction;
+use signex_i18n::{I18n, ids};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 /// Menu rows: pure data, so the labels and messages are tested without a
 /// renderer.
-pub(super) fn components_row_menu_entries() -> Vec<DropdownEntry<Message>> {
+pub(super) fn components_row_menu_entries(i18n: &I18n) -> Vec<DropdownEntry<Message>> {
     let pick = |action| Message::Library(LibraryMessage::ComponentsPanelRowMenuPicked(action));
     vec![
-        dd_msg(None, "Place", "", pick(ComponentsRowAction::Place)),
-        dd_msg(None, "Edit Component", "", pick(ComponentsRowAction::Open)),
+        dd_msg(
+            None,
+            &text(i18n, ids::CTX_COMPONENTS_ROW_PLACE),
+            "",
+            pick(ComponentsRowAction::Place),
+        ),
+        dd_msg(
+            None,
+            &text(i18n, ids::CTX_COMPONENTS_ROW_EDIT),
+            "",
+            pick(ComponentsRowAction::Open),
+        ),
     ]
 }
 
@@ -35,7 +46,7 @@ impl Signex {
         }
         let panel_ctx = &self.document_state.panel_ctx;
         let menu = super::placement::menu_card(
-            components_row_menu_entries(),
+            components_row_menu_entries(&self.ui_state.i18n),
             &panel_ctx.tokens,
             &panel_ctx.ui_font_name,
         );
@@ -128,7 +139,7 @@ mod tests {
 
     #[test]
     fn the_menu_offers_place_and_edit_component() {
-        let labels: Vec<String> = components_row_menu_entries()
+        let labels: Vec<String> = components_row_menu_entries(I18n::en_us_ref())
             .into_iter()
             .filter_map(|e| match e {
                 DropdownEntry::Item(item) => Some(item.label.to_string()),

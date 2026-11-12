@@ -3,29 +3,43 @@
 
 use super::*;
 
-use super::items::dd_msg;
+use super::items::{dd_msg, text};
 use crate::dock::{DockMessage, DockTabAction, PanelPosition};
 use iced::Widget as _;
+use signex_i18n::{I18n, ids};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 /// Pure row data for the menu of a tab docked in `from`. The region it is
 /// already in is left out of the Dock rows.
-pub(super) fn dock_tab_menu_entries(from: PanelPosition) -> Vec<DropdownEntry<Message>> {
+pub(super) fn dock_tab_menu_entries(
+    i18n: &I18n,
+    from: PanelPosition,
+) -> Vec<DropdownEntry<Message>> {
     let pick = |action| Message::Dock(DockMessage::TabMenuActionPicked(action));
     let mut entries = vec![
-        dd_msg(None, "Close", "", pick(DockTabAction::Close)),
-        dd_msg(None, "Undock / Float", "", pick(DockTabAction::Float)),
+        dd_msg(
+            None,
+            &text(i18n, ids::CTX_DOCK_CLOSE),
+            "",
+            pick(DockTabAction::Close),
+        ),
+        dd_msg(
+            None,
+            &text(i18n, ids::CTX_DOCK_FLOAT),
+            "",
+            pick(DockTabAction::Float),
+        ),
         DropdownEntry::Separator,
     ];
     for (position, label) in [
-        (PanelPosition::Left, "Dock Left"),
-        (PanelPosition::Right, "Dock Right"),
-        (PanelPosition::Bottom, "Dock Bottom"),
+        (PanelPosition::Left, ids::CTX_DOCK_LEFT),
+        (PanelPosition::Right, ids::CTX_DOCK_RIGHT),
+        (PanelPosition::Bottom, ids::CTX_DOCK_BOTTOM),
     ] {
         if position != from {
             entries.push(dd_msg(
                 None,
-                label,
+                &text(i18n, label),
                 "",
                 pick(DockTabAction::MoveTo(position)),
             ));
@@ -42,7 +56,7 @@ impl Signex {
         };
         let panel_ctx = &self.document_state.panel_ctx;
         super::placement::menu_card(
-            dock_tab_menu_entries(menu.position),
+            dock_tab_menu_entries(&self.ui_state.i18n, menu.position),
             &panel_ctx.tokens,
             &panel_ctx.ui_font_name,
         )

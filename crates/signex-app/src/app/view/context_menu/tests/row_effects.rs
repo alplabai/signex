@@ -136,7 +136,14 @@ fn canvas_rows(app: &Signex) -> Vec<DropdownEntry<Message>> {
             .expect("the app opens its main window"),
     );
     let sc = CanvasShortcuts::resolve(|id| app.keymap_shortcut_label(id));
-    canvas_menu_entries(TID, selection, None, project_key, &sc)
+    canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        selection,
+        None,
+        project_key,
+        &sc,
+    )
 }
 
 fn hint(app: &Signex) -> impl Fn(&str) -> String + '_ {
@@ -396,7 +403,8 @@ fn arrange_rows_reorder_the_selected_drawing() {
             )],
         );
         open_menu(&mut app);
-        let rows = super::super::submenu::arrange_entries(&hint(&app));
+        let rows =
+            super::super::submenu::arrange_entries(signex_i18n::I18n::en_us_ref(), &hint(&app));
         let _ = app.update(live_row(&rows, id));
         assert_eq!(drawing_order(&app), expected, "{id}");
         assert_menu_closed(&app, id);
@@ -460,7 +468,7 @@ fn armed_by_active_bar(action: A) -> String {
 }
 
 fn place_rows(app: &Signex) -> Vec<DropdownEntry<Message>> {
-    super::super::submenu::place_entries(TID, &hint(app))
+    super::super::submenu::place_entries(signex_i18n::I18n::en_us_ref(), TID, &hint(app))
 }
 
 #[test]
@@ -576,7 +584,12 @@ fn align_rows_move_the_selection_as_the_active_bar_does() {
         let mut app = three_symbols();
         let before = poses(&app);
         open_menu(&mut app);
-        let rows = super::super::submenu::align_entries(TID, 3, &hint(&app));
+        let rows = super::super::submenu::align_entries(
+            signex_i18n::I18n::en_us_ref(),
+            TID,
+            3,
+            &hint(&app),
+        );
         let _ = app.update(live_row(&rows, id));
         let mut direct = three_symbols();
         let _ = direct.update(Message::ActiveBar(ActiveBarMsg::Action(action)));
