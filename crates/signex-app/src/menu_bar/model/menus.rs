@@ -10,7 +10,7 @@ use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_en
 use crate::app::update_pcb::PcbSyncLabel;
 use crate::menu_bar::{MenuContext, enabled};
 use crate::panels::PanelKind;
-use signex_i18n::ids;
+use signex_i18n::{ids, menu_ids};
 
 const SEP: MenuEntry = MenuEntry::Separator;
 
@@ -20,11 +20,11 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         // A board for the open project (#1312); greyed with no project.
         submenu(
             ctx,
-            ids::MENU_FILE_NEW,
+            menu_ids::MENU_FILE_NEW,
             vec![cmd_item_gated(ctx, cmd("new_pcb_document", ""))],
         ),
         cmd_item(ctx, cmd("open_document", "Mod+O")),
-        submenu(ctx, ids::MENU_FILE_OPEN_RECENT, open_recent(ctx)),
+        submenu(ctx, menu_ids::MENU_FILE_OPEN_RECENT, open_recent(ctx)),
         SEP,
         cmd_item_gated(ctx, cmd("close_active_document", "Ctrl+F4")),
         SEP,
@@ -34,28 +34,28 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         // Greyed when nothing is unsaved; runs the shared Save All flow.
         item_if(
             ctx,
-            ids::MENU_FILE_SAVE_ALL,
+            menu_ids::MENU_FILE_SAVE_ALL,
             MenuMessage::SaveAll,
             ctx.commands.has_dirty_documents,
         ),
         SEP,
         // No New Component row here: docs/MENU_BAR.md#file-library
-        submenu(ctx, ids::MENU_FILE_LIBRARY, library(ctx)),
+        submenu(ctx, menu_ids::MENU_FILE_LIBRARY, library(ctx)),
         SEP,
         submenu(
             ctx,
-            ids::MENU_FILE_IMPORT,
+            menu_ids::MENU_FILE_IMPORT,
             vec![item(
                 ctx,
-                ids::MENU_FILE_IMPORT_ALTIUM,
+                menu_ids::MENU_FILE_IMPORT_ALTIUM,
                 MenuMessage::ImportAltium,
             )],
         ),
         // Export > PDF and File > Print open the same modal; only Print shows Mod+P: docs/MENU_BAR.md#file-export-pdf
-        submenu(ctx, ids::MENU_FILE_EXPORT, export(ctx)),
+        submenu(ctx, menu_ids::MENU_FILE_EXPORT, export(ctx)),
         cmd_item_gated(ctx, cmd("print", "Mod+P")),
         SEP,
-        item(ctx, ids::MENU_FILE_EXIT, MenuMessage::Exit),
+        item(ctx, menu_ids::MENU_FILE_EXIT, MenuMessage::Exit),
     ]
 }
 
@@ -75,12 +75,12 @@ fn open_recent(ctx: &MenuContext) -> Vec<MenuEntry> {
         })
         .collect();
     if entries.is_empty() {
-        entries.push(unavailable(ctx, ids::MENU_FILE_NO_RECENT));
+        entries.push(unavailable(ctx, menu_ids::MENU_FILE_NO_RECENT));
     }
     entries.push(SEP);
     entries.push(item_if(
         ctx,
-        ids::MENU_FILE_CLEAR_RECENT,
+        menu_ids::MENU_FILE_CLEAR_RECENT,
         MenuMessage::ClearRecentProjects,
         !ctx.recent_projects.is_empty(),
     ));
@@ -91,13 +91,13 @@ fn library(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         item(
             ctx,
-            ids::MENU_FILE_OPEN_LIBRARY,
+            menu_ids::MENU_FILE_OPEN_LIBRARY,
             MenuMessage::LibraryOpenLibrary,
         ),
         SEP,
         item_if(
             ctx,
-            ids::MENU_FILE_PLACE_COMPONENT,
+            menu_ids::MENU_FILE_PLACE_COMPONENT,
             MenuMessage::LibraryPlaceComponent,
             ctx.commands.has_schematic,
         ),
@@ -110,7 +110,7 @@ fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
         // same modal. Gated like Print.
         item_if(
             ctx,
-            ids::MENU_FILE_EXPORT_PDF,
+            menu_ids::MENU_FILE_EXPORT_PDF,
             MenuMessage::ExportPdf,
             enabled(ctx, "print"),
         ),
@@ -129,8 +129,8 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("smart_paste", "Shift+Ctrl+V")),
         cmd_item_gated(ctx, cmd("duplicate", "Mod+D")),
         cmd_item_gated(ctx, cmd("delete_selection", "Del")),
-        submenu(ctx, ids::MENU_EDIT_MOVE, move_menu(ctx)),
-        submenu(ctx, ids::MENU_EDIT_ARRANGE, arrange(ctx)),
+        submenu(ctx, menu_ids::MENU_EDIT_MOVE, move_menu(ctx)),
+        submenu(ctx, menu_ids::MENU_EDIT_ARRANGE, arrange(ctx)),
         SEP,
         cmd_item_gated(ctx, cmd("select_all", "Mod+A")),
         SEP,
@@ -254,13 +254,13 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
         SEP,
         item_if(
             ctx,
-            ids::MENU_PLACE_TEXT,
+            menu_ids::MENU_PLACE_TEXT,
             MenuMessage::PlaceText,
             ctx.commands.has_schematic,
         ),
         item_if(
             ctx,
-            ids::MENU_PLACE_NO_CONNECT,
+            menu_ids::MENU_PLACE_NO_CONNECT,
             MenuMessage::PlaceNoConnect,
             ctx.commands.has_schematic,
         ),
@@ -328,14 +328,14 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
         // Gated like Close Project: with no project there is no tab to open.
         item_if(
             ctx,
-            ids::MENU_PROJECT_OPTIONS,
+            menu_ids::MENU_PROJECT_OPTIONS,
             MenuMessage::OpenProjectOptions,
             ctx.commands.has_open_project,
         ),
         SEP,
         item_if(
             ctx,
-            ids::MENU_PROJECT_CLOSE,
+            menu_ids::MENU_PROJECT_CLOSE,
             MenuMessage::CloseProject,
             ctx.commands.has_open_project,
         ),
@@ -349,19 +349,19 @@ pub(super) fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         item_if(
             ctx,
-            ids::MENU_REPORTS_BOM,
+            menu_ids::MENU_REPORTS_BOM,
             MenuMessage::ExportBom,
             has_schematic,
         ),
         item_if(
             ctx,
-            ids::MENU_REPORTS_NETLIST,
+            menu_ids::MENU_REPORTS_NETLIST,
             MenuMessage::ExportNetlist,
             has_schematic,
         ),
         item_if(
             ctx,
-            ids::MENU_REPORTS_ERC,
+            menu_ids::MENU_REPORTS_ERC,
             MenuMessage::ExportErcReport,
             has_schematic,
         ),
@@ -375,19 +375,19 @@ fn annotation(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         item_if(
             ctx,
-            ids::MENU_TOOLS_ANNOTATE,
+            menu_ids::MENU_TOOLS_ANNOTATE,
             MenuMessage::Annotate,
             has_schematic,
         ),
         item_if(
             ctx,
-            ids::MENU_TOOLS_RESET_DESIGNATORS,
+            menu_ids::MENU_TOOLS_RESET_DESIGNATORS,
             MenuMessage::AnnotateReset,
             has_schematic,
         ),
         item_if(
             ctx,
-            ids::MENU_TOOLS_RESET_DUPLICATE_DESIGNATORS,
+            menu_ids::MENU_TOOLS_RESET_DUPLICATE_DESIGNATORS,
             MenuMessage::AnnotateResetDuplicates,
             has_schematic,
         ),
@@ -404,7 +404,7 @@ fn annotation(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        submenu(ctx, ids::MENU_TOOLS_ANNOTATION, annotation(ctx)),
+        submenu(ctx, menu_ids::MENU_TOOLS_ANNOTATION, annotation(ctx)),
         SEP,
         // The project's parts and their row's footprints:
         // docs/MENU_BAR.md#tools-assign-footprints
@@ -431,7 +431,7 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         SEP,
         item_if(
             ctx,
-            ids::MENU_TOOLS_UP_HIERARCHY,
+            menu_ids::MENU_TOOLS_UP_HIERARCHY,
             MenuMessage::AscendToParentSheet,
             enabled(ctx, "navigate_up_hierarchy"),
         ),
@@ -440,13 +440,13 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         // Part only on a part after the first.
         item_if(
             ctx,
-            ids::MENU_TOOLS_NEW_PART,
+            menu_ids::MENU_TOOLS_NEW_PART,
             MenuMessage::ToolsNewPart,
             new_part_menu_enabled(&ctx.commands),
         ),
         item_if(
             ctx,
-            ids::MENU_TOOLS_REMOVE_PART,
+            menu_ids::MENU_TOOLS_REMOVE_PART,
             MenuMessage::ToolsRemovePart,
             remove_part_menu_enabled(&ctx.commands),
         ),
@@ -454,14 +454,14 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         // Opens the options of the library the active editor tab is in.
         item_if(
             ctx,
-            ids::MENU_TOOLS_DOCUMENT_OPTIONS,
+            menu_ids::MENU_TOOLS_DOCUMENT_OPTIONS,
             MenuMessage::ToolsDocumentOptions,
             ctx.commands.has_library_editor,
         ),
         SEP,
         item(
             ctx,
-            ids::MENU_TOOLS_PASSIVE_CALCULATOR,
+            menu_ids::MENU_TOOLS_PASSIVE_CALCULATOR,
             MenuMessage::OpenPassiveCalculator,
         ),
         SEP,
@@ -482,16 +482,20 @@ pub(super) fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 pub(super) fn help(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        item(ctx, ids::MENU_HELP_ABOUT, MenuMessage::OpenAbout),
+        item(ctx, menu_ids::MENU_HELP_ABOUT, MenuMessage::OpenAbout),
         item(
             ctx,
-            ids::MENU_HELP_DOCUMENTATION,
+            menu_ids::MENU_HELP_DOCUMENTATION,
             MenuMessage::OpenDocumentation,
         ),
-        item(ctx, ids::MENU_HELP_REPORT_ISSUE, MenuMessage::ReportIssue),
         item(
             ctx,
-            ids::MENU_HELP_SAMPLE_PROJECT,
+            menu_ids::MENU_HELP_REPORT_ISSUE,
+            MenuMessage::ReportIssue,
+        ),
+        item(
+            ctx,
+            menu_ids::MENU_HELP_SAMPLE_PROJECT,
             MenuMessage::OpenSampleProject,
         ),
         SEP,

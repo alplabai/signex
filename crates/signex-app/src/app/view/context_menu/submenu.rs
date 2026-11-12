@@ -17,7 +17,7 @@ use super::items::{
 };
 use crate::app::command::active_bar::id_for_action;
 use crate::icons as ic;
-use signex_i18n::{I18n, MessageId, ids};
+use signex_i18n::{I18n, MessageId, menu_ids};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
@@ -93,22 +93,22 @@ pub(super) fn place_entries(
         // Power ports (the four most common)
         ab(
             ic::icon_dd_gnd(tid),
-            Some(ids::CTX_PLACE_POWER_GND),
+            Some(menu_ids::CTX_PLACE_POWER_GND),
             A::PlacePowerGND,
         ),
         ab(
             ic::icon_dd_vcc(tid),
-            Some(ids::CTX_PLACE_POWER_VCC),
+            Some(menu_ids::CTX_PLACE_POWER_VCC),
             A::PlacePowerVCC,
         ),
         ab(
             ic::icon_dd_pwr_plus5(tid),
-            Some(ids::CTX_PLACE_POWER_PLUS5),
+            Some(menu_ids::CTX_PLACE_POWER_PLUS5),
             A::PlacePowerPlus5,
         ),
         ab(
             ic::icon_dd_pwr_plus12(tid),
-            Some(ids::CTX_PLACE_POWER_PLUS12),
+            Some(menu_ids::CTX_PLACE_POWER_PLUS12),
             A::PlacePowerPlus12,
         ),
         DropdownEntry::Separator,
@@ -234,7 +234,7 @@ pub(super) fn add_new_entries(
 
     v.push(dd_msg(
         Some(ic::icon_dd_wire(tid)),
-        &text(i18n, ids::CTX_ADD_SCHEMATIC),
+        &text(i18n, menu_ids::CTX_ADD_SCHEMATIC),
         "",
         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(P::AddNewSchematic(
             target.clone(),
@@ -244,7 +244,7 @@ pub(super) fn add_new_entries(
     // "Schematic Library" row, wired through the menu bridge.
     v.push(dd_msg(
         Some(ic::icon_component(tid)),
-        &text(i18n, ids::CTX_ADD_COMPONENT_LIBRARY),
+        &text(i18n, menu_ids::CTX_ADD_COMPONENT_LIBRARY),
         "",
         Message::Menu(crate::menu_bar::MenuMessage::AddComponentLibrary),
     ));
@@ -252,7 +252,7 @@ pub(super) fn add_new_entries(
     // project document. Opens a Save-As dialog scoped to the project dir.
     v.push(dd_msg(
         Some(ic::icon_component(tid)),
-        &text(i18n, ids::CTX_ADD_SYMBOL_LIBRARY),
+        &text(i18n, menu_ids::CTX_ADD_SYMBOL_LIBRARY),
         "",
         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
             P::AddProjectSymbolLibrary(target.clone()),
@@ -261,18 +261,18 @@ pub(super) fn add_new_entries(
     // The project's one board, opened unsaved (#1312).
     v.push(dd_msg(
         Some(ic::icon_dd_part_actions(tid)),
-        &text(i18n, ids::CTX_ADD_PCB),
+        &text(i18n, menu_ids::CTX_ADD_PCB),
         "",
         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(P::AddNewPcb(
             target.clone(),
         ))),
     ));
-    // Footprint editor gated off for release; hide the &text(i18n, ids::CTX_ADD_PCB_LIBRARY) create
+    // Footprint editor gated off for release; hide the &text(i18n, menu_ids::CTX_ADD_PCB_LIBRARY) create
     // entry on the project-root menu.
     if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
         v.push(dd_msg(
             Some(ic::icon_component(tid)),
-            &text(i18n, ids::CTX_ADD_PCB_LIBRARY),
+            &text(i18n, menu_ids::CTX_ADD_PCB_LIBRARY),
             "",
             Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                 P::AddProjectFootprintLibrary(target.clone()),
@@ -283,26 +283,26 @@ pub(super) fn add_new_entries(
     v.push(dd_planned(
         i18n,
         Some(ic::icon_dd_text_string(tid)),
-        &text(i18n, ids::CTX_ADD_OUTPUT_JOB),
+        &text(i18n, menu_ids::CTX_ADD_OUTPUT_JOB),
         None,
     ));
     v.push(dd_planned(
         i18n,
         Some(ic::icon_dd_text_frame(tid)),
-        &text(i18n, ids::CTX_ADD_DESIGN_NOTEBOOK),
+        &text(i18n, menu_ids::CTX_ADD_DESIGN_NOTEBOOK),
         None,
     ));
     v.push(DropdownEntry::Separator);
     v.push(dd_planned(
         i18n,
         Some(ic::icon_dd_text_string(tid)),
-        &text(i18n, ids::CTX_ADD_CONSTRAINT_FILE),
+        &text(i18n, menu_ids::CTX_ADD_CONSTRAINT_FILE),
         None,
     ));
     v.push(dd_planned(
         i18n,
         Some(ic::icon_dd_text_string(tid)),
-        &text(i18n, ids::CTX_ADD_VHDL_FILE),
+        &text(i18n, menu_ids::CTX_ADD_VHDL_FILE),
         None,
     ));
 

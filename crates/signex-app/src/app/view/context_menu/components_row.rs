@@ -8,7 +8,7 @@ use iced::Widget as _;
 use super::items::{dd_msg, text};
 use crate::library::messages::LibraryMessage;
 use crate::library::state::ComponentsRowAction;
-use signex_i18n::{I18n, ids};
+use signex_i18n::{I18n, menu_ids};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 /// Menu rows: pure data, so the labels and messages are tested without a
@@ -18,13 +18,13 @@ pub(super) fn components_row_menu_entries(i18n: &I18n) -> Vec<DropdownEntry<Mess
     vec![
         dd_msg(
             None,
-            &text(i18n, ids::CTX_COMPONENTS_ROW_PLACE),
+            &text(i18n, menu_ids::CTX_COMPONENTS_ROW_PLACE),
             "",
             pick(ComponentsRowAction::Place),
         ),
         dd_msg(
             None,
-            &text(i18n, ids::CTX_COMPONENTS_ROW_EDIT),
+            &text(i18n, menu_ids::CTX_COMPONENTS_ROW_EDIT),
             "",
             pick(ComponentsRowAction::Open),
         ),

@@ -6,7 +6,7 @@ use super::*;
 use super::items::{dd_msg, text};
 use crate::dock::{DockMessage, DockTabAction, PanelPosition};
 use iced::Widget as _;
-use signex_i18n::{I18n, ids};
+use signex_i18n::{I18n, menu_ids};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 /// Pure row data for the menu of a tab docked in `from`. The region it is
@@ -19,22 +19,22 @@ pub(super) fn dock_tab_menu_entries(
     let mut entries = vec![
         dd_msg(
             None,
-            &text(i18n, ids::CTX_DOCK_CLOSE),
+            &text(i18n, menu_ids::CTX_DOCK_CLOSE),
             "",
             pick(DockTabAction::Close),
         ),
         dd_msg(
             None,
-            &text(i18n, ids::CTX_DOCK_FLOAT),
+            &text(i18n, menu_ids::CTX_DOCK_FLOAT),
             "",
             pick(DockTabAction::Float),
         ),
         DropdownEntry::Separator,
     ];
     for (position, label) in [
-        (PanelPosition::Left, ids::CTX_DOCK_LEFT),
-        (PanelPosition::Right, ids::CTX_DOCK_RIGHT),
-        (PanelPosition::Bottom, ids::CTX_DOCK_BOTTOM),
+        (PanelPosition::Left, menu_ids::CTX_DOCK_LEFT),
+        (PanelPosition::Right, menu_ids::CTX_DOCK_RIGHT),
+        (PanelPosition::Bottom, menu_ids::CTX_DOCK_BOTTOM),
     ] {
         if position != from {
             entries.push(dd_msg(

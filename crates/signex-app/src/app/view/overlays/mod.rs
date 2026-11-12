@@ -256,9 +256,13 @@ impl Signex {
         // Footer with the hint line, and a note when there are more matches
         // than we render.
         let footer: Element<'_, Message> = if total > 0 {
-            let more = (total > MAX_RESULTS)
-                .then(|| format!("{} more results — refine query", total - MAX_RESULTS));
-            palette::hint_footer(tokens, results.get(selected), more)
+            let more = (total > MAX_RESULTS).then(|| {
+                self.ui_state.i18n.message(
+                    signex_i18n::shortcut_ids::PALETTE_MORE_RESULTS,
+                    &[("count", (total - MAX_RESULTS).to_string().into())],
+                )
+            });
+            palette::hint_footer(&self.ui_state.i18n, tokens, results.get(selected), more)
         } else {
             Space::new().height(0).boxed()
         };
@@ -300,7 +304,12 @@ impl Signex {
                 })
                 .boxed()
             });
-        let input = palette::search_row(tokens, &self.ui_state.command_palette.query, window_input);
+        let input = palette::search_row(
+            &self.ui_state.i18n,
+            tokens,
+            &self.ui_state.command_palette.query,
+            window_input,
+        );
         let card = container(column![input, body, footer])
             .width(card_w)
             .height(Length::Fit.max(360.0))
@@ -368,6 +377,7 @@ impl Signex {
         let has_selection = !interaction.canvas_for_window(window_id).selected.is_empty();
         let has_net_colors = !ui.net_colors.is_empty();
         let dropdown = crate::active_bar::view_dropdown(
+            &self.ui_state.i18n,
             ab_menu,
             &document.panel_ctx.tokens,
             &interaction.selection_filters,

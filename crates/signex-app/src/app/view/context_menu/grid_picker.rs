@@ -4,7 +4,7 @@
 use super::*;
 
 use super::items::text;
-use signex_i18n::{I18n, ids};
+use signex_i18n::{I18n, menu_ids};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
 impl Signex {
@@ -38,19 +38,19 @@ impl Signex {
 /// checked. Clicking a row sends `UiMsg::GridPickerSelect(step_mm)`.
 fn grid_picker_entries(i18n: &I18n, active_step: Option<f64>) -> Vec<DropdownEntry<Message>> {
     const LADDER: &[(signex_i18n::MessageId, f64)] = &[
-        (ids::CTX_GRID_1_MIL, 0.0254),
-        (ids::CTX_GRID_5_MIL, 0.127),
-        (ids::CTX_GRID_10_MIL, 0.254),
-        (ids::CTX_GRID_20_MIL, 0.508),
-        (ids::CTX_GRID_25_MIL, 0.635),
-        (ids::CTX_GRID_50_MIL, 1.27),
-        (ids::CTX_GRID_100_MIL, 2.54),
-        (ids::CTX_GRID_0_025_MM, 0.025),
-        (ids::CTX_GRID_0_100_MM, 0.100),
-        (ids::CTX_GRID_0_250_MM, 0.250),
-        (ids::CTX_GRID_0_500_MM, 0.500),
-        (ids::CTX_GRID_1_000_MM, 1.000),
-        (ids::CTX_GRID_2_500_MM, 2.500),
+        (menu_ids::CTX_GRID_1_MIL, 0.0254),
+        (menu_ids::CTX_GRID_5_MIL, 0.127),
+        (menu_ids::CTX_GRID_10_MIL, 0.254),
+        (menu_ids::CTX_GRID_20_MIL, 0.508),
+        (menu_ids::CTX_GRID_25_MIL, 0.635),
+        (menu_ids::CTX_GRID_50_MIL, 1.27),
+        (menu_ids::CTX_GRID_100_MIL, 2.54),
+        (menu_ids::CTX_GRID_0_025_MM, 0.025),
+        (menu_ids::CTX_GRID_0_100_MM, 0.100),
+        (menu_ids::CTX_GRID_0_250_MM, 0.250),
+        (menu_ids::CTX_GRID_0_500_MM, 0.500),
+        (menu_ids::CTX_GRID_1_000_MM, 1.000),
+        (menu_ids::CTX_GRID_2_500_MM, 2.500),
     ];
     LADDER
         .iter()

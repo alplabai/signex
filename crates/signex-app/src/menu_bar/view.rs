@@ -23,7 +23,7 @@ pub fn view(
     let mc = MenuColors::from_tokens(tokens);
     let planned = ctx
         .i18n
-        .message(signex_i18n::ids::MENU_PLANNED_TOOLTIP, &[]);
+        .message(signex_i18n::menu_ids::MENU_PLANNED_TOOLTIP, &[]);
     let mb = render_menu_bar(&menu_bar_model(&ctx), mc, ui_font, &planned);
 
     iced::advanced::Widget::_boxed(

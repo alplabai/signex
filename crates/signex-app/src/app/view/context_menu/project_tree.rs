@@ -11,7 +11,7 @@ use super::items::{
     command_text, dd_command, dd_disabled, dd_msg, dd_planned, save_entry, submenu_launcher, text,
 };
 use iced::Widget as _;
-use signex_i18n::{I18n, ids};
+use signex_i18n::{I18n, menu_ids};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::TreeIcon;
 
@@ -73,14 +73,14 @@ pub(super) fn refresh_pricing_entry(
     if !any_client_prices {
         return dd_disabled(
             None,
-            &text(i18n, ids::CTX_TREE_REFRESH_PRICING),
-            Some(&text(i18n, ids::CTX_TREE_NO_PRICING_CLIENT)),
+            &text(i18n, menu_ids::CTX_TREE_REFRESH_PRICING),
+            Some(&text(i18n, menu_ids::CTX_TREE_NO_PRICING_CLIENT)),
         );
     }
     match library_ref {
         Some(row) => dd_msg(
             None,
-            &text(i18n, ids::CTX_TREE_REFRESH_PRICING),
+            &text(i18n, menu_ids::CTX_TREE_REFRESH_PRICING),
             "",
             Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                 crate::app::ProjectTreeAction::RefreshLibraryPricing(row),
@@ -88,8 +88,8 @@ pub(super) fn refresh_pricing_entry(
         ),
         None => dd_disabled(
             None,
-            &text(i18n, ids::CTX_TREE_REFRESH_PRICING),
-            Some(&text(i18n, ids::CTX_TREE_LIBRARY_NOT_FOUND)),
+            &text(i18n, menu_ids::CTX_TREE_REFRESH_PRICING),
+            Some(&text(i18n, menu_ids::CTX_TREE_LIBRARY_NOT_FOUND)),
         ),
     }
 }
@@ -197,12 +197,12 @@ impl Signex {
                 v.push(dd_planned(
                     i18n,
                     None,
-                    &text(i18n, ids::CTX_TREE_MAKE_AVAILABLE_ONLINE),
+                    &text(i18n, menu_ids::CTX_TREE_MAKE_AVAILABLE_ONLINE),
                     None,
                 ));
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::CTX_TREE_VALIDATE_PROJECT),
+                    &text(i18n, menu_ids::CTX_TREE_VALIDATE_PROJECT),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ValidateProject(
                         key.clone(),
@@ -210,7 +210,7 @@ impl Signex {
                 ));
                 v.push(submenu_launcher(
                     None,
-                    &text(i18n, ids::CTX_TREE_ADD_NEW),
+                    &text(i18n, menu_ids::CTX_TREE_ADD_NEW),
                     ContextSubmenu::AddNewToProject,
                     active_submenu == Some(ContextSubmenu::AddNewToProject),
                 ));
@@ -226,7 +226,7 @@ impl Signex {
                 ));
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::CTX_TREE_ADD_EXISTING),
+                    &text(i18n, menu_ids::CTX_TREE_ADD_EXISTING),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                         A::AddExistingToProject(key.clone()),
@@ -239,7 +239,7 @@ impl Signex {
                 ));
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::CTX_TREE_RENAME),
+                    &text(i18n, menu_ids::CTX_TREE_RENAME),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                         A::OpenProjectRenameDialog(key.clone()),
@@ -249,18 +249,18 @@ impl Signex {
                 v.push(if has_tabs {
                     dd_msg(
                         None,
-                        &text(i18n, ids::CTX_TREE_CLOSE_DOCUMENTS),
+                        &text(i18n, menu_ids::CTX_TREE_CLOSE_DOCUMENTS),
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                             A::CloseAllDocuments,
                         )),
                     )
                 } else {
-                    dd_disabled(None, &text(i18n, ids::CTX_TREE_CLOSE_DOCUMENTS), None)
+                    dd_disabled(None, &text(i18n, menu_ids::CTX_TREE_CLOSE_DOCUMENTS), None)
                 });
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::MENU_PROJECT_CLOSE),
+                    &text(i18n, menu_ids::MENU_PROJECT_CLOSE),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::CloseProject(
                         key.clone(),
@@ -269,40 +269,40 @@ impl Signex {
                 v.push(if has_project_dir {
                     dd_msg(
                         None,
-                        &text(i18n, ids::CTX_TREE_EXPLORE),
+                        &text(i18n, menu_ids::CTX_TREE_EXPLORE),
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                             A::RevealInExplorer(key.clone()),
                         )),
                     )
                 } else {
-                    dd_disabled(None, &text(i18n, ids::CTX_TREE_EXPLORE), None)
+                    dd_disabled(None, &text(i18n, menu_ids::CTX_TREE_EXPLORE), None)
                 });
                 v.push(DropdownEntry::Separator);
                 v.push(dd_planned(
                     i18n,
                     None,
-                    &text(i18n, ids::CTX_TREE_VARIANTS),
+                    &text(i18n, menu_ids::CTX_TREE_VARIANTS),
                     None,
                 ));
                 v.push(DropdownEntry::Separator);
                 v.push(dd_planned(
                     i18n,
                     None,
-                    &text(i18n, ids::CTX_TREE_PACKAGER),
+                    &text(i18n, menu_ids::CTX_TREE_PACKAGER),
                     None,
                 ));
                 v.push(dd_planned(
                     i18n,
                     None,
-                    &text(i18n, ids::CTX_TREE_RELEASER),
+                    &text(i18n, menu_ids::CTX_TREE_RELEASER),
                     None,
                 ));
                 v.push(DropdownEntry::Separator);
                 v.push(dd_planned(
                     i18n,
                     None,
-                    &text(i18n, ids::CTX_TREE_SHARE),
+                    &text(i18n, menu_ids::CTX_TREE_SHARE),
                     None,
                 ));
                 v.push(dd_command(
@@ -323,7 +323,7 @@ impl Signex {
                 if no_git_yet {
                     v.push(dd_msg(
                         None,
-                        &text(i18n, ids::CTX_TREE_ENABLE_VERSION_CONTROL),
+                        &text(i18n, menu_ids::CTX_TREE_ENABLE_VERSION_CONTROL),
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                             A::OpenEnableVersionControl(key.clone()),
@@ -341,7 +341,7 @@ impl Signex {
                 // actions stay so empty libraries are still navigable.
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::CTX_TREE_ADD_NEW_COMPONENT),
+                    &text(i18n, menu_ids::CTX_TREE_ADD_NEW_COMPONENT),
                     "",
                     Message::Menu(crate::menu_bar::MenuMessage::AddLibraryComponent),
                 ));
@@ -349,7 +349,7 @@ impl Signex {
                 // `.snxsym` file holds many symbols (Altium parity).
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::CTX_TREE_ADD_NEW_SYMBOL_LIBRARY),
+                    &text(i18n, menu_ids::CTX_TREE_ADD_NEW_SYMBOL_LIBRARY),
                     "",
                     Message::Menu(crate::menu_bar::MenuMessage::AddLibrarySymbol),
                 ));
@@ -358,7 +358,7 @@ impl Signex {
                 if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
                     v.push(dd_msg(
                         None,
-                        &text(i18n, ids::CTX_TREE_ADD_NEW_FOOTPRINT_LIBRARY),
+                        &text(i18n, menu_ids::CTX_TREE_ADD_NEW_FOOTPRINT_LIBRARY),
                         "",
                         Message::Menu(crate::menu_bar::MenuMessage::AddLibraryFootprint),
                     ));
@@ -382,7 +382,7 @@ impl Signex {
                 {
                     v.push(dd_msg(
                         None,
-                        &text(i18n, ids::CTX_TREE_ENABLE_VERSION_CONTROL),
+                        &text(i18n, menu_ids::CTX_TREE_ENABLE_VERSION_CONTROL),
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                             A::OpenLibraryEnableVersionControl(library_ref),
@@ -391,9 +391,9 @@ impl Signex {
                     v.push(DropdownEntry::Separator);
                 }
                 let toggle_label = if node.expanded {
-                    text(i18n, ids::CTX_TREE_COLLAPSE)
+                    text(i18n, menu_ids::CTX_TREE_COLLAPSE)
                 } else {
-                    text(i18n, ids::CTX_TREE_EXPAND)
+                    text(i18n, menu_ids::CTX_TREE_EXPAND)
                 };
                 v.push(dd_msg(
                     None,
@@ -405,7 +405,7 @@ impl Signex {
                 ));
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::CTX_TREE_REFRESH),
+                    &text(i18n, menu_ids::CTX_TREE_REFRESH),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::Refresh)),
                 ));
@@ -414,13 +414,13 @@ impl Signex {
                 v.push(match library_ref {
                     Some(library_ref) => dd_msg(
                         None,
-                        &text(i18n, ids::CTX_TREE_REMOVE_LIBRARY),
+                        &text(i18n, menu_ids::CTX_TREE_REMOVE_LIBRARY),
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::RemoveLibrary(
                             library_ref,
                         ))),
                     ),
-                    None => dd_disabled(None, &text(i18n, ids::CTX_TREE_REMOVE_LIBRARY), None),
+                    None => dd_disabled(None, &text(i18n, menu_ids::CTX_TREE_REMOVE_LIBRARY), None),
                 });
             }
             TreeNodeRole::OpenableLeaf => {
@@ -435,7 +435,7 @@ impl Signex {
 
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::CTX_TREE_OPEN),
+                    &text(i18n, menu_ids::CTX_TREE_OPEN),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenNode(
                         key.clone(),
@@ -445,19 +445,19 @@ impl Signex {
                 v.push(if has_project_dir {
                     dd_msg(
                         None,
-                        &text(i18n, ids::CTX_TREE_EXPLORE),
+                        &text(i18n, menu_ids::CTX_TREE_EXPLORE),
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                             A::RevealInExplorer(key.clone()),
                         )),
                     )
                 } else {
-                    dd_disabled(None, &text(i18n, ids::CTX_TREE_EXPLORE), None)
+                    dd_disabled(None, &text(i18n, menu_ids::CTX_TREE_EXPLORE), None)
                 });
                 v.push(DropdownEntry::Separator);
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::CTX_TREE_RENAME),
+                    &text(i18n, menu_ids::CTX_TREE_RENAME),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRenameDialog(
                         key.clone(),
@@ -465,7 +465,7 @@ impl Signex {
                 ));
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::CTX_TREE_REMOVE),
+                    &text(i18n, menu_ids::CTX_TREE_REMOVE),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRemoveDialog(
                         key.clone(),
@@ -488,7 +488,7 @@ impl Signex {
                 v.push(dd_planned(
                     i18n,
                     None,
-                    &text(i18n, ids::CTX_TREE_SHOW_DIFFERENCES),
+                    &text(i18n, menu_ids::CTX_TREE_SHOW_DIFFERENCES),
                     None,
                 ));
             }
@@ -496,9 +496,9 @@ impl Signex {
                 // Source Documents / Libraries / Settings folders. Minimum
                 // useful action is the tree-widget's own expand/collapse.
                 let label = if node.expanded {
-                    text(i18n, ids::CTX_TREE_COLLAPSE)
+                    text(i18n, menu_ids::CTX_TREE_COLLAPSE)
                 } else {
-                    text(i18n, ids::CTX_TREE_EXPAND)
+                    text(i18n, menu_ids::CTX_TREE_EXPAND)
                 };
                 v.push(dd_msg(
                     None,
@@ -510,20 +510,20 @@ impl Signex {
                 ));
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::CTX_TREE_EXPAND_ALL),
+                    &text(i18n, menu_ids::CTX_TREE_EXPAND_ALL),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ExpandAll)),
                 ));
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::CTX_TREE_COLLAPSE_ALL),
+                    &text(i18n, menu_ids::CTX_TREE_COLLAPSE_ALL),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::CollapseAll)),
                 ));
                 v.push(DropdownEntry::Separator);
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::CTX_TREE_REFRESH),
+                    &text(i18n, menu_ids::CTX_TREE_REFRESH),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::Refresh)),
                 ));
@@ -533,7 +533,7 @@ impl Signex {
                 // tree can be rebuilt without restarting.
                 v.push(dd_msg(
                     None,
-                    &text(i18n, ids::CTX_TREE_REFRESH),
+                    &text(i18n, menu_ids::CTX_TREE_REFRESH),
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::Refresh)),
                 ));

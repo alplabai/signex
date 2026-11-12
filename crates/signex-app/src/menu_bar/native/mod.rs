@@ -80,15 +80,15 @@ fn model_row(action: MenuMessage) -> Message {
 /// The app menu. Hide, Hide Others, Show All and Quit are the system's rows:
 /// the iced fork's `Predefined` carries no label, so the OS words them.
 fn app_menu(i18n: &signex_i18n::I18n) -> Item<Message> {
-    use signex_i18n::ids;
+    use signex_i18n::menu_ids;
     let preferences = crate::keymap::AppCommandId::new("open_preferences")
         .ok()
         .map(|id| Message::Menu(MenuMessage::Command(id)));
     iced_menu::submenu(
-        i18n.message(ids::MENU_APP_TITLE, &[]).into_string(),
+        i18n.message(menu_ids::MENU_APP_TITLE, &[]).into_string(),
         [
             iced_menu::item(
-                i18n.message(ids::MENU_HELP_ABOUT, &[]).into_string(),
+                i18n.message(menu_ids::MENU_HELP_ABOUT, &[]).into_string(),
                 Message::Menu(MenuMessage::OpenAbout),
             ),
             iced_menu::separator(),

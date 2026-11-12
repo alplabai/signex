@@ -13,7 +13,7 @@ use crate::library::editor::symbol::state::{
     SymbolSelection, selected_is_deletable, selection_is_join_eligible,
 };
 use crate::library::messages::{SymbolEditorMsg, SymbolSelectionMsg, SymbolToolMsg};
-use signex_i18n::{MessageId, command_ids, ids};
+use signex_i18n::{MessageId, command_ids, menu_ids};
 use signex_library::Symbol;
 
 /// One row of the symbol context menu. `id` is a stable, kebab-case,
@@ -69,7 +69,7 @@ pub fn build_symbol_context_menu_rows(
         place_submenu(),
         SymbolMenuRow::item(
             "symbol.join-into-polygon",
-            ids::CTX_SYMBOL_JOIN_POLYGON,
+            menu_ids::CTX_SYMBOL_JOIN_POLYGON,
             selection_is_join_eligible(sym, view, selected),
             SymbolEditorMsg::JoinSelectionIntoPolygon,
         ),
@@ -87,13 +87,13 @@ pub fn build_symbol_context_menu_rows(
         ),
         SymbolMenuRow::item(
             "symbol.deselect-all",
-            ids::CTX_DESELECT_ALL,
+            menu_ids::CTX_DESELECT_ALL,
             selected.is_some(),
             SymbolEditorMsg::Deselect,
         ),
         SymbolMenuRow::item(
             "symbol.fit-to-window",
-            ids::CTX_FIT_TO_WINDOW,
+            menu_ids::CTX_FIT_TO_WINDOW,
             true,
             SymbolEditorMsg::Fit,
         ),
@@ -106,37 +106,37 @@ pub fn build_symbol_context_menu_rows(
 pub const PLACE_TOOLS: &[(&str, MessageId, SymbolToolMsg)] = &[
     (
         "symbol.place-pin",
-        ids::CTX_SYMBOL_PIN,
+        menu_ids::CTX_SYMBOL_PIN,
         SymbolToolMsg::AddPin,
     ),
     (
         "symbol.place-line",
-        ids::CTX_SYMBOL_LINE,
+        menu_ids::CTX_SYMBOL_LINE,
         SymbolToolMsg::PlaceLine,
     ),
     (
         "symbol.place-rectangle",
-        ids::CTX_SHAPE_RECTANGLE,
+        menu_ids::CTX_SHAPE_RECTANGLE,
         SymbolToolMsg::PlaceRectangle,
     ),
     (
         "symbol.place-circle",
-        ids::CTX_SHAPE_CIRCLE,
+        menu_ids::CTX_SHAPE_CIRCLE,
         SymbolToolMsg::PlaceCircle,
     ),
     (
         "symbol.place-arc",
-        ids::CTX_SHAPE_ARC,
+        menu_ids::CTX_SHAPE_ARC,
         SymbolToolMsg::PlaceArc,
     ),
     (
         "symbol.place-text",
-        ids::CTX_SYMBOL_TEXT,
+        menu_ids::CTX_SYMBOL_TEXT,
         SymbolToolMsg::PlaceText,
     ),
     (
         "symbol.place-polygon",
-        ids::CTX_SYMBOL_POLYGON,
+        menu_ids::CTX_SYMBOL_POLYGON,
         SymbolToolMsg::PlacePolygon,
     ),
 ];
@@ -150,7 +150,7 @@ fn place_submenu() -> SymbolMenuRow {
             SymbolMenuRow::item(id, label, true, SymbolEditorMsg::SetTool(tool))
         })
         .collect();
-    SymbolMenuRow::submenu("symbol.place", ids::MENU_PLACE, children)
+    SymbolMenuRow::submenu("symbol.place", menu_ids::MENU_PLACE, children)
 }
 
 #[cfg(test)]

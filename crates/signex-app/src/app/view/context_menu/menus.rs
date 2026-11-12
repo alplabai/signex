@@ -15,10 +15,10 @@ use super::*;
 
 use super::items::{
     command_text, dd_cmd_disabled, dd_command, dd_disabled, dd_msg, dd_planned, dd_planned_submenu,
-    submenu_launcher, text, text_with,
+    submenu_launcher, text,
 };
 use crate::icons as ic;
-use signex_i18n::{I18n, ids};
+use signex_i18n::{I18n, menu_ids};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
@@ -224,43 +224,43 @@ pub(super) fn canvas_menu_entries(
     v.push(dd_planned(
         i18n,
         Some(ic::icon_dd_clear_filter(tid)),
-        &text(i18n, ids::CTX_CLEAR_FILTER),
+        &text(i18n, menu_ids::CTX_CLEAR_FILTER),
         Some("Shift+C"),
     ));
     v.push(DropdownEntry::Separator);
     v.push(submenu_launcher(
         Some(ic::icon_dd_place_menu(tid)),
-        &text(i18n, ids::MENU_PLACE),
+        &text(i18n, menu_ids::MENU_PLACE),
         ContextSubmenu::Place,
         active_submenu == Some(ContextSubmenu::Place),
     ));
     v.push(dd_planned_submenu(
         i18n,
         Some(ic::icon_dd_part_actions(tid)),
-        &text(i18n, ids::CTX_PART_ACTIONS),
+        &text(i18n, menu_ids::CTX_PART_ACTIONS),
     ));
     v.push(dd_planned_submenu(
         i18n,
         Some(ic::icon_dd_sheet_actions(tid)),
-        &text(i18n, ids::CTX_SHEET_ACTIONS),
+        &text(i18n, menu_ids::CTX_SHEET_ACTIONS),
     ));
 
     if has_selection {
         v.push(dd_planned_submenu(
             i18n,
             Some(ic::icon_dd_references(tid)),
-            &text(i18n, ids::CTX_REFERENCES),
+            &text(i18n, menu_ids::CTX_REFERENCES),
         ));
         v.push(submenu_launcher(
             Some(ic::icon_dd_align_menu(tid)),
-            &text(i18n, ids::CTX_ALIGN),
+            &text(i18n, menu_ids::CTX_ALIGN),
             ContextSubmenu::Align,
             active_submenu == Some(ContextSubmenu::Align),
         ));
         if drawing_selected {
             v.push(submenu_launcher(
                 Some(ic::icon_dd_align_menu(tid)),
-                &text(i18n, ids::MENU_EDIT_ARRANGE),
+                &text(i18n, menu_ids::MENU_EDIT_ARRANGE),
                 ContextSubmenu::Arrange,
                 active_submenu == Some(ContextSubmenu::Arrange),
             ));
@@ -268,12 +268,12 @@ pub(super) fn canvas_menu_entries(
         v.push(dd_planned_submenu(
             i18n,
             Some(ic::icon_dd_unions(tid)),
-            &text(i18n, ids::CTX_UNIONS),
+            &text(i18n, menu_ids::CTX_UNIONS),
         ));
         v.push(dd_planned_submenu(
             i18n,
             Some(ic::icon_dd_snippets(tid)),
-            &text(i18n, ids::CTX_SNIPPETS),
+            &text(i18n, menu_ids::CTX_SNIPPETS),
         ));
     }
 
@@ -362,13 +362,13 @@ pub(super) fn canvas_menu_entries(
     v.push(dd_planned(
         i18n,
         Some(ic::icon_dd_comment(tid)),
-        &text(i18n, ids::CTX_COMMENT),
+        &text(i18n, menu_ids::CTX_COMMENT),
         None,
     ));
     v.push(dd_planned(
         i18n,
         Some(ic::icon_dd_pin_mapping(tid)),
-        &text(i18n, ids::CTX_PIN_MAPPING),
+        &text(i18n, menu_ids::CTX_PIN_MAPPING),
         None,
     ));
     // The project that owns the active sheet, addressed by its tree key the
@@ -411,7 +411,7 @@ pub(super) fn canvas_menu_entries(
         v.push(dd_planned(
             i18n,
             Some(ic::icon_dd_supplier_links(tid)),
-            &text(i18n, ids::CTX_SUPPLIER_LINKS),
+            &text(i18n, menu_ids::CTX_SUPPLIER_LINKS),
             None,
         ));
         // Properties → ensure the Properties panel is visible; it already
@@ -501,21 +501,21 @@ pub(super) fn tab_menu_entries(
 
     v.push(dd_msg(
         None,
-        &text_with(i18n, ids::CTX_TAB_CLOSE, &[("title", title.into())]),
+        &i18n.message_plain(menu_ids::CTX_TAB_CLOSE, &[("title", title.into())]),
         "",
         Message::ContextMenu(ContextMenuMsg::TabAction(A::Close(tab_idx))),
     ));
     if total_tabs > 1 {
         v.push(dd_msg(
             None,
-            &text(i18n, ids::CTX_TAB_CLOSE_OTHERS),
+            &text(i18n, menu_ids::CTX_TAB_CLOSE_OTHERS),
             "",
             Message::ContextMenu(ContextMenuMsg::TabAction(A::CloseAllOthers(tab_idx))),
         ));
     } else {
         v.push(dd_disabled(
             None,
-            &text(i18n, ids::CTX_TAB_CLOSE_OTHERS),
+            &text(i18n, menu_ids::CTX_TAB_CLOSE_OTHERS),
             None,
         ));
     }
@@ -527,11 +527,15 @@ pub(super) fn tab_menu_entries(
     ));
     v.push(DropdownEntry::Separator);
     v.push(if undock_unavailable {
-        dd_disabled(None, &text(i18n, ids::CTX_TAB_OPEN_IN_NEW_WINDOW), None)
+        dd_disabled(
+            None,
+            &text(i18n, menu_ids::CTX_TAB_OPEN_IN_NEW_WINDOW),
+            None,
+        )
     } else {
         dd_msg(
             None,
-            &text(i18n, ids::CTX_TAB_OPEN_IN_NEW_WINDOW),
+            &text(i18n, menu_ids::CTX_TAB_OPEN_IN_NEW_WINDOW),
             "",
             Message::ContextMenu(ContextMenuMsg::TabAction(A::Undock(tab_idx))),
         )

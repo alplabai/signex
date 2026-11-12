@@ -185,7 +185,11 @@ fn variant_name(action: &ActiveBarAction) -> String {
 /// without a second copy of its wording. `fallback` covers the actions
 /// still without an id — the parameterised families awaiting
 /// `CommandArgs` — so no row can lose its label.
-pub(crate) fn action_label(action: &ActiveBarAction, fallback: &'static str) -> String {
+pub(crate) fn action_label(
+    i18n: &signex_i18n::I18n,
+    action: &ActiveBarAction,
+    fallback: &'static str,
+) -> String {
     if AMBIGUOUS_LABELS
         .iter()
         .any(|name| variant_name(action) == *name)
@@ -194,8 +198,7 @@ pub(crate) fn action_label(action: &ActiveBarAction, fallback: &'static str) -> 
     }
     id_for_action(action)
         .and_then(crate::keymap::metadata_for_str)
-        // The Active Bar dropdown does not carry an `I18n` yet.
-        .map(|metadata| metadata.menu_label_in(&signex_i18n::I18n::en_us()))
+        .map(|metadata| metadata.menu_label_in(i18n))
         .unwrap_or_else(|| fallback.to_string())
 }
 
@@ -224,9 +227,13 @@ mod tests {
                 .find(|candidate| candidate == id)
                 .and_then(|found| AppCommandId::new(found).ok())
                 .and_then(|command| metadata_for(&command))
-                .map(|metadata| metadata.menu_label_in(&signex_i18n::I18n::en_us()))
+                .map(|metadata| metadata.menu_label_in(signex_i18n::I18n::en_us_ref()))
                 .unwrap_or_else(|| "fallback".to_string());
-            assert_eq!(action_label(action, "fallback"), linear, "{id}");
+            assert_eq!(
+                action_label(signex_i18n::I18n::en_us_ref(), action, "fallback"),
+                linear,
+                "{id}"
+            );
         }
     }
 
@@ -385,10 +392,10 @@ mod tests {
             let metadata = metadata_for(&command)
                 .unwrap_or_else(|| panic!("`{id}` is in the table but not the catalog"));
             checked += 1;
-            if metadata.menu_label_in(&signex_i18n::I18n::en_us()) != literal {
+            if metadata.menu_label_in(signex_i18n::I18n::en_us_ref()) != literal {
                 drift.push(format!(
                     "`{id}`: catalog says {:?}, dropdown.rs says {literal:?}",
-                    metadata.menu_label_in(&signex_i18n::I18n::en_us())
+                    metadata.menu_label_in(signex_i18n::I18n::en_us_ref())
                 ));
             }
         }

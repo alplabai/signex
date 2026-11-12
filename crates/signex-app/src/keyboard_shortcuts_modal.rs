@@ -6,7 +6,7 @@
 
 use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Element, Length, Widget};
-use signex_i18n::I18n;
+use signex_i18n::{I18n, command_ids, shortcut_ids};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{raw, text};
 
@@ -96,7 +96,7 @@ fn build<'a>(
 
     // ── Header — canonical modal chrome ─────────────────────────
     let header = modal_title_header(
-        "Keyboard Shortcuts",
+        i18n.message_plain(command_ids::CMD_MENU_SHOW_CURRENT_COMMAND_HOTKEYS, &[]),
         Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
         tokens,
     );
@@ -106,9 +106,11 @@ fn build<'a>(
     // because it's what users scan for; Shortcut on the right.
     let column_header = container(
         row![
-            text(raw("Action")).size(TS.caption).color(text_secondary),
+            text(i18n.message(shortcut_ids::KEYMAP_COL_ACTION, &[]))
+                .size(TS.caption)
+                .color(text_secondary),
             Space::new().width(Length::Fill),
-            text(raw("Shortcut"))
+            text(i18n.message(shortcut_ids::KEYMAP_COL_SHORTCUT, &[]))
                 .size(TS.caption)
                 .color(text_secondary)
                 .width(Length::Fixed(KEY_COL_W)),

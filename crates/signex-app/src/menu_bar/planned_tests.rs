@@ -21,7 +21,7 @@ const EXPECTED_STUBS: &[&str] = &[];
 const EXPECTED_DISABLED: &[&str] = &["MENU_FILE_NO_RECENT"];
 
 /// The label key of each `<callee>(` call in `source`: the string literal or
-/// `&cmd_label("id", ..)` it opens with, or the name of the `ids::NAME`
+/// `&cmd_label("id", ..)` it opens with, or the name of the `menu_ids::NAME`
 /// message it labels the row with (after the leading `ctx,`).
 fn call_keys(source: &str, callee: &str) -> Vec<String> {
     let needle = format!("{callee}(");
@@ -39,7 +39,7 @@ fn call_keys(source: &str, callee: &str) -> Vec<String> {
         }
         let arg = rest.trim_start();
         let arg = arg.strip_prefix("ctx,").map_or(arg, str::trim_start);
-        if let Some(named) = arg.strip_prefix("ids::") {
+        if let Some(named) = arg.strip_prefix("menu_ids::") {
             let end = named
                 .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
                 .unwrap_or(named.len());
@@ -97,7 +97,7 @@ fn the_scanner_catches_a_new_inert_row() {
     assert_eq!(call_keys(fake, "stub"), vec!["Brand New Row"]);
     let fake = "unavailable(\n    \"Greyed\",";
     assert_eq!(call_keys(fake, "unavailable"), vec!["Greyed"]);
-    let fake = "unavailable(\n    ctx,\n    ids::MENU_GREYED,";
+    let fake = "unavailable(\n    ctx,\n    menu_ids::MENU_GREYED,";
     assert_eq!(call_keys(fake, "unavailable"), vec!["MENU_GREYED"]);
 }
 
@@ -107,7 +107,7 @@ fn the_scanner_catches_a_new_inert_row() {
 fn disabled_row_label_is_pinned() {
     let i18n = signex_i18n::I18n::en_us_ref();
     assert_eq!(
-        i18n.message(signex_i18n::ids::MENU_FILE_NO_RECENT, &[])
+        i18n.message(signex_i18n::menu_ids::MENU_FILE_NO_RECENT, &[])
             .to_string(),
         "No recent projects"
     );
@@ -129,9 +129,9 @@ fn working_rows_are_wired() {
         "cmd_item_gated(ctx,cmd(\"zoom_in_at_cursor\",\"Ctrl+=\"))",
         "cmd_item_gated(ctx,cmd(\"zoom_out_at_cursor\",\"Ctrl+-\"))",
         "cmd_item_gated(ctx,cmd(\"place_power_symbol\",\"P\"))",
-        "item_if(ctx,ids::MENU_PLACE_TEXT,MenuMessage::PlaceText,",
-        "item_if(ctx,ids::MENU_PLACE_NO_CONNECT,MenuMessage::PlaceNoConnect,",
-        "item_if(ctx,ids::MENU_REPORTS_BOM,MenuMessage::ExportBom,",
+        "item_if(ctx,menu_ids::MENU_PLACE_TEXT,MenuMessage::PlaceText,",
+        "item_if(ctx,menu_ids::MENU_PLACE_NO_CONNECT,MenuMessage::PlaceNoConnect,",
+        "item_if(ctx,menu_ids::MENU_REPORTS_BOM,MenuMessage::ExportBom,",
     ] {
         assert!(source.contains(call), "the row is not wired as `{call}`");
     }
@@ -141,7 +141,7 @@ fn working_rows_are_wired() {
 /// the model source, keep their English.
 #[test]
 fn working_rows_keep_their_labels() {
-    use signex_i18n::{I18n, ids};
+    use signex_i18n::{I18n, menu_ids};
     let i18n = I18n::en_us_ref();
     for (command, label) in [
         ("zoom_in_at_cursor", "Zoom In"),
@@ -151,9 +151,9 @@ fn working_rows_keep_their_labels() {
         assert_eq!(super::cmd_label(i18n, command, "<missing>"), label);
     }
     for (id, label) in [
-        (ids::MENU_PLACE_TEXT, "Text"),
-        (ids::MENU_PLACE_NO_CONNECT, "No Connect"),
-        (ids::MENU_REPORTS_BOM, "Bill of Materials…"),
+        (menu_ids::MENU_PLACE_TEXT, "Text"),
+        (menu_ids::MENU_PLACE_NO_CONNECT, "No Connect"),
+        (menu_ids::MENU_REPORTS_BOM, "Bill of Materials…"),
     ] {
         assert_eq!(i18n.message(id, &[]).to_string(), label);
     }

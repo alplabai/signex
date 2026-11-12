@@ -409,6 +409,7 @@ pub(super) const SHAPES: &[EntrySpec] = &[
 /// the same `dd_item` enable/disable gating every row used before the
 /// table refactor.
 pub(super) fn render(
+    i18n: &signex_i18n::I18n,
     specs: &'static [EntrySpec],
     tid: ThemeId,
     sel: bool,
@@ -422,7 +423,7 @@ pub(super) fn render(
                 icon,
                 label,
                 action,
-            } => dd_item(icon(tid), label, action.clone(), sel, nc),
+            } => dd_item(i18n, icon(tid), label, action.clone(), sel, nc),
         })
         .collect()
 }

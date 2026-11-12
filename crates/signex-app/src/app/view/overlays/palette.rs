@@ -4,7 +4,7 @@
 
 use iced::widget::{Row, Space, column, container, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
-use signex_i18n::I18n;
+use signex_i18n::{I18n, shortcut_ids};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, rich_text, span, text};
 
@@ -48,7 +48,7 @@ pub(super) fn group_header<'a, M: 'a>(
             .spacing(SP.m)
             .align_y(Alignment::Center)
             .push(
-                text(raw(source.group_title()))
+                text(i18n.message(source.group_title(), &[]))
                     .size(TS.section)
                     .style(styles::section_label(theme_tokens))
                     .boxed(),
@@ -70,6 +70,7 @@ pub(super) fn group_header<'a, M: 'a>(
 /// so this echoes the live query (read only); a window palette passes its
 /// real input as `input`.
 pub(super) fn search_row<'a, M: 'a>(
+    i18n: &I18n,
     theme_tokens: &ThemeTokens,
     query: &str,
     input: Option<Element<'a, M>>,
@@ -78,11 +79,13 @@ pub(super) fn search_row<'a, M: 'a>(
     let ink = ti(theme_tokens.text);
     let body: Element<'a, M> = match input {
         Some(input) => input,
-        None if query.is_empty() => text(raw("Search commands, parts, nets"))
-            .size(TS.body)
-            .color(r.ink4)
-            .width(Length::Fill)
-            .boxed(),
+        None if query.is_empty() => {
+            text(i18n.message(signex_i18n::ids::MENU_BAR_SEARCH_PLACEHOLDER, &[]))
+                .size(TS.body)
+                .color(r.ink4)
+                .width(Length::Fill)
+                .boxed()
+        }
         None => text(raw(query.to_string()))
             .size(TS.body)
             .color(ink)
@@ -92,7 +95,10 @@ pub(super) fn search_row<'a, M: 'a>(
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.l).align_y(Alignment::Center);
     line = line.push(text(raw("\u{2315}")).size(TS.body).color(r.ink4).boxed());
     line = line.push(body);
-    line = line.push(cap(theme_tokens, "Esc"));
+    line = line.push(cap(
+        theme_tokens,
+        &i18n.message_plain(shortcut_ids::PALETTE_KEY_ESC, &[]),
+    ));
     let rule = r.line_soft;
     container(line)
         .padding([SP.l, SP.l])
@@ -310,23 +316,32 @@ fn bold() -> iced::Font {
 
 /// Hint footer: navigation caps, the Run cap and what Enter will run.
 pub(super) fn hint_footer<'a, M: 'a>(
+    i18n: &I18n,
     theme_tokens: &ThemeTokens,
     _selected: Option<&CommandEntry>,
-    extra: Option<String>,
+    extra: Option<signex_i18n::Localized>,
 ) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
-    let hint = |s: &'static str| text(raw(s)).size(TS.caption).color(r.ink3).boxed();
+    let hint = |id| {
+        text(i18n.message(id, &[]))
+            .size(TS.caption)
+            .color(r.ink3)
+            .boxed()
+    };
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.m).align_y(Alignment::Center);
     line = line.push(cap(theme_tokens, "\u{2191}"));
     line = line.push(cap(theme_tokens, "\u{2193}"));
-    line = line.push(hint("Navigate"));
-    line = line.push(cap(theme_tokens, "Enter"));
-    line = line.push(hint("Run"));
+    line = line.push(hint(shortcut_ids::PALETTE_HINT_NAVIGATE));
+    line = line.push(cap(
+        theme_tokens,
+        &i18n.message_plain(shortcut_ids::PALETTE_KEY_ENTER, &[]),
+    ));
+    line = line.push(hint(shortcut_ids::PALETTE_HINT_RUN));
     line = line.push(Space::new().width(Length::Fill).boxed());
     // "Enter Run" already says what Enter does; no sentence repeats it.
     if let Some(more) = extra {
         line = line.push(
-            text(raw(more))
+            text(more)
                 .size(TS.caption)
                 .color(r.ink3)
                 .wrapping(iced::widget::text::Wrapping::None)

@@ -51,6 +51,17 @@ impl CommandGroup {
             CommandGroup::ThreeD => "3D",
         }
     }
+
+    /// [`Self::display_name`] as a catalog message.
+    pub fn title(&self) -> MessageId {
+        use signex_i18n::shortcut_ids as ids;
+        match self {
+            CommandGroup::General => ids::KEYMAP_GROUP_GENERAL,
+            CommandGroup::Schematic => ids::KEYMAP_GROUP_SCHEMATIC,
+            CommandGroup::Pcb => ids::KEYMAP_GROUP_PCB,
+            CommandGroup::ThreeD => ids::KEYMAP_GROUP_3D,
+        }
+    }
 }
 
 /// Surface-agnostic icon key. A view surface (menu, toolbar, command

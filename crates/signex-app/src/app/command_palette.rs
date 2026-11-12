@@ -130,13 +130,14 @@ impl CommandSource {
     }
 
     /// Header of the source's group in the Graphite palette.
-    pub fn group_title(self) -> &'static str {
+    pub fn group_title(self) -> signex_i18n::MessageId {
+        use signex_i18n::shortcut_ids as ids;
         match self {
-            Self::Command => "COMMANDS",
-            Self::Symbol => "COMPONENTS",
-            Self::Net => "NETS",
-            Self::Sheet => "SHEETS",
-            Self::File => "FILES",
+            Self::Command => ids::PALETTE_GROUP_COMMANDS,
+            Self::Symbol => ids::PALETTE_GROUP_COMPONENTS,
+            Self::Net => ids::PALETTE_GROUP_NETS,
+            Self::Sheet => ids::PALETTE_GROUP_SHEETS,
+            Self::File => ids::PALETTE_GROUP_FILES,
         }
     }
 }
@@ -256,7 +257,13 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
     for &panel in ALL_PANELS {
         out.push(CommandEntry {
             source: CommandSource::Command,
-            label: format!("Open Panel: {}", panel.label()),
+            label: app.ui_state.i18n.message_plain(
+                signex_i18n::shortcut_ids::PALETTE_OPEN_PANEL,
+                &[(
+                    "panel",
+                    app.ui_state.i18n.message_plain(panel.message(), &[]).into(),
+                )],
+            ),
             detail: String::new(),
             action: CommandAction::Panel(panel),
         });

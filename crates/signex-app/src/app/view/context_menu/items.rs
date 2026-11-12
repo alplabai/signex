@@ -14,8 +14,8 @@
 use super::*;
 
 use iced::widget::svg::Handle;
-use signex_i18n::ids::MENU_PLANNED_TOOLTIP;
-use signex_i18n::{Arg, I18n, MessageId};
+use signex_i18n::menu_ids::MENU_PLANNED_TOOLTIP;
+use signex_i18n::{I18n, MessageId};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
 /// A keyboard-command row: clicking it dispatches `action` through the
@@ -82,15 +82,6 @@ pub(super) fn command_text(i18n: &I18n, command_id: &str) -> String {
 /// The catalog text of `id` for a row label.
 pub(super) fn text(i18n: &I18n, id: MessageId) -> String {
     i18n.message(id, &[]).into_string()
-}
-
-/// [`text`] of a message with arguments, Fluent's bidi isolation marks
-/// removed: a row's width is fitted to its characters, and the marks are not
-/// drawn.
-pub(super) fn text_with(i18n: &I18n, id: MessageId, args: &[(&str, Arg)]) -> String {
-    i18n.message(id, args)
-        .into_string()
-        .replace(['\u{2068}', '\u{2069}'], "")
 }
 
 /// A row that runs the catalog command `command_id`: its label is the

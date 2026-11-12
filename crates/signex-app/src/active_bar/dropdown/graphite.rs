@@ -245,7 +245,13 @@ mod tests {
                 .collect();
             let entry = super::super::custom::filter_entry(&t, &filters, &[]);
             assert!(matches!(entry, DropdownEntry::Custom(_)));
-            let rows = super::super::custom::net_color_entries(&t, id, false, true);
+            let rows = super::super::custom::net_color_entries(
+                signex_i18n::I18n::en_us_ref(),
+                &t,
+                id,
+                false,
+                true,
+            );
             let swatches = rows
                 .iter()
                 .filter(|e| matches!(e, DropdownEntry::Custom(_)))

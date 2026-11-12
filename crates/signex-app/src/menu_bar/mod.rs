@@ -346,7 +346,7 @@ pub(crate) fn cmd_label(i18n: &signex_i18n::I18n, command_id: &str, fallback: &s
 pub(crate) fn erc_menu_path(i18n: &signex_i18n::I18n) -> String {
     format!(
         "{} ▸ {}",
-        i18n.message(signex_i18n::ids::MENU_PROJECT, &[]),
+        i18n.message(signex_i18n::menu_ids::MENU_PROJECT, &[]),
         cmd_label(i18n, "open_erc_dialog", "open_erc_dialog")
     )
 }

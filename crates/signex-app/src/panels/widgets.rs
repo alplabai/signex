@@ -124,9 +124,12 @@ pub fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a,
         column![
             section_title(title, &ctx.tokens, &ctx.i18n),
             separator(&ctx.tokens),
-            text(raw(crate::active_bar::PLANNED_TOOLTIP))
-                .size(TS.caption)
-                .color(theme_ext::text_primary(&ctx.tokens)),
+            text(
+                ctx.i18n
+                    .message(signex_i18n::menu_ids::MENU_PLANNED_TOOLTIP, &[])
+            )
+            .size(TS.caption)
+            .color(theme_ext::text_primary(&ctx.tokens)),
             text(raw(desc.to_string()))
                 .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens)),

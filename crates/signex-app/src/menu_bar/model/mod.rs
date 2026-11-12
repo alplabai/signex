@@ -91,15 +91,15 @@ pub const ROOT_TITLES: [&str; 10] = [
 /// The catalog message of each root title, left to right.
 const ROOT_TITLE_IDS: [signex_i18n::MessageId; 10] = [
     signex_i18n::ids::MENU_FILE,
-    signex_i18n::ids::MENU_EDIT,
-    signex_i18n::ids::MENU_VIEW,
-    signex_i18n::ids::MENU_PROJECT,
-    signex_i18n::ids::MENU_PLACE,
-    signex_i18n::ids::MENU_DESIGN,
-    signex_i18n::ids::MENU_TOOLS,
-    signex_i18n::ids::MENU_REPORTS,
-    signex_i18n::ids::MENU_WINDOW,
-    signex_i18n::ids::MENU_HELP,
+    signex_i18n::menu_ids::MENU_EDIT,
+    signex_i18n::menu_ids::MENU_VIEW,
+    signex_i18n::menu_ids::MENU_PROJECT,
+    signex_i18n::menu_ids::MENU_PLACE,
+    signex_i18n::menu_ids::MENU_DESIGN,
+    signex_i18n::menu_ids::MENU_TOOLS,
+    signex_i18n::menu_ids::MENU_REPORTS,
+    signex_i18n::menu_ids::MENU_WINDOW,
+    signex_i18n::menu_ids::MENU_HELP,
 ];
 
 /// The root titles as the bar draws them under `i18n`.

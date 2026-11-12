@@ -651,7 +651,10 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
         (A::AlignToGrid, "Align To Grid"),
     ] {
         assert!(id_for_action(&action).is_some(), "{action:?} lost its id");
-        assert_eq!(action_label(&action, "<missing>"), row_label);
+        assert_eq!(
+            action_label(signex_i18n::I18n::en_us_ref(), &action, "<missing>"),
+            row_label
+        );
     }
 }
 
