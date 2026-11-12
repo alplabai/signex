@@ -46,7 +46,7 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
             "Import",
             vec![item("Altium Project...", MenuMessage::ImportAltium)],
         ),
-        // Export > PDF and File > Print open the same modal; only Print shows Ctrl+P: docs/MENU_BAR.md#file-export-pdf
+        // Export > PDF and File > Print open the same modal; only Print shows Mod+P: docs/MENU_BAR.md#file-export-pdf
         submenu("Export", export(ctx)),
         cmd_item_gated(ctx, cmd("print", "Print...", "Mod+P")),
         SEP,
@@ -109,7 +109,7 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("cut", "Cut", "Mod+X")),
         cmd_item_gated(ctx, cmd("copy", "Copy", "Mod+C")),
         cmd_item_gated(ctx, cmd("paste", "Paste", "Mod+V")),
-        cmd_item_gated(ctx, cmd("smart_paste", "Paste Special", "Mod+Shift+V")),
+        cmd_item_gated(ctx, cmd("smart_paste", "Paste Special", "Shift+Ctrl+V")),
         cmd_item_gated(ctx, cmd("duplicate", "Duplicate", "Mod+D")),
         cmd_item_gated(ctx, cmd("delete_selection", "Delete", "Del")),
         submenu("Move", move_menu(ctx)),
@@ -181,7 +181,7 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         SEP,
         cmd_item_gated(
             ctx,
-            cmd("toggle_visible_grid", "Toggle Grid", "Mod+Shift+G"),
+            cmd("toggle_visible_grid", "Toggle Grid", "Shift+Ctrl+G"),
         ),
         cmd_item_gated(ctx, cmd("next_grid", "Cycle Grid Size", "")),
         cmd_item_gated(

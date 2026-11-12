@@ -39,15 +39,18 @@ pub fn write_first_run_tour_dismissed(dismissed: bool) {
 /// Has the one-time "Use ⌘ / Keep Control" question been answered? Default
 /// `false`; once answered, either way, it is never asked again.
 pub fn read_keymap_mod_prompt_asked_from(json: Option<&serde_json::Value>) -> bool {
-    json.and_then(|json| json["keymap_mod_prompt_asked"].as_bool())
+    json.and_then(|json| json[KEYMAP_MOD_PROMPT_ASKED_KEY].as_bool())
         .unwrap_or(false)
 }
 
+/// The `prefs.json` key of the one-time question's flag.
+pub const KEYMAP_MOD_PROMPT_ASKED_KEY: &str = "keymap_mod_prompt_asked";
+
 /// Persist that the question was answered, without clobbering other keys.
 pub fn write_keymap_mod_prompt_asked() {
-    update_prefs_json(&prefs_path(), "keymap_mod_prompt_asked", |prefs| {
+    update_prefs_json(&prefs_path(), KEYMAP_MOD_PROMPT_ASKED_KEY, |prefs| {
         prefs.insert(
-            "keymap_mod_prompt_asked".to_string(),
+            KEYMAP_MOD_PROMPT_ASKED_KEY.to_string(),
             serde_json::Value::Bool(true),
         );
     })

@@ -139,11 +139,68 @@ fn golden_labels_and_shortcuts_match_helpers() {
             continue;
         }
         assert_eq!(cmd_label(id, label), label, "label of {id}");
-        let expected = (shortcut != "-").then(|| crate::keymap::shown(shortcut));
+        let expected = (shortcut != "-").then(|| shown_on_host(shortcut));
         assert_eq!(
             shortcut_for(&ctx, id, shortcut),
             expected,
             "shortcut of {id}"
+        );
+    }
+}
+
+/// A fixture fallback as this OS shows it. Only a `Mod` spelling is a
+/// platform chord; every other spelling must come out exactly as written, so
+/// a literal that drifts from the fixture fails on every OS.
+fn shown_on_host(shortcut: &str) -> String {
+    if is_mod_spelled(shortcut) {
+        crate::keymap::shown(shortcut)
+    } else {
+        shortcut.to_string()
+    }
+}
+
+fn is_mod_spelled(shortcut: &str) -> bool {
+    shortcut.split('+').any(|part| part == "Mod")
+}
+
+/// The fixture spells exactly the standard-set rows with `Mod` (so a revert
+/// to `Ctrl+N` fails here on Linux too), and on macOS each shows as Apple
+/// symbols.
+#[test]
+fn golden_mod_fallbacks_are_the_standard_set_and_show_apple_symbols_on_macos() {
+    use crate::keymap::{Platform, ShortcutTrigger};
+    let mod_rows: Vec<(&str, &str)> = rows()
+        .into_iter()
+        .filter(|row| is_mod_spelled(row[4]))
+        .map(|row| (row[3], row[4]))
+        .collect();
+    let ids: Vec<&str> = mod_rows.iter().map(|(id, _)| *id).collect();
+    assert_eq!(
+        ids,
+        [
+            "new_document",
+            "open_document",
+            "save_document",
+            "save_document_as",
+            "print",
+            "undo",
+            "cut",
+            "copy",
+            "paste",
+            "duplicate",
+            "select_all",
+            "find",
+            "toggle_cross_select_mode",
+            "open_preferences",
+        ]
+    );
+    for (id, spelling) in mod_rows {
+        let shown = ShortcutTrigger::parse(spelling)
+            .unwrap()
+            .display_text_for(Platform::MacOs);
+        assert!(
+            shown.contains('\u{2318}') && !shown.contains('+'),
+            "{id}: {shown}"
         );
     }
 }
@@ -335,7 +392,7 @@ fn model_reproduces_golden_menu_bar() {
         .map(|r| {
             let mut cols: Vec<String> = r[..7].iter().map(|c| c.to_string()).collect();
             if cols[4] != "-" {
-                cols[4] = crate::keymap::shown(&cols[4]);
+                cols[4] = shown_on_host(&cols[4]);
             }
             format!("{}\n", cols.join("\t"))
         })

@@ -65,7 +65,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `cancel_current_tool` | Cancel current stage / exit placement mode | interactive | `Escape` | `Escape` |
 | `center_on_cursor` | Center on cursor | view | — | `F4` |
 | `center_view_at_cursor` | Center/redraw view around cursor | view | `Home` | — |
-| `close_active_document` | Close active document | file | `Ctrl+F4`, `Mod+W` | — |
+| `close_active_document` | Close active document | file | `Ctrl+F4`, `Mod+W` (macOS) | — |
 | `close_all_documents` | Close all documents | window | — | — |
 | `copy` | Copy | edit | `Mod+C` | `Mod+C` |
 | `copy_attributes_or_add_vertex` | Copy attributes from object under cursor or add vertex while drawing | interactive | `Insert` | — |
@@ -93,7 +93,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `fast_grid_1` | Fast grid 1 | view | — | `Alt+1` |
 | `fast_grid_2` | Fast grid 2 | view | — | `Alt+2` |
 | `find` | Find | search | `Mod+F` | `Mod+F` |
-| `find_and_replace` | Find and replace | search | `Ctrl+H`, `Mod+Alt+F` | — |
+| `find_and_replace` | Find and replace | search | `Ctrl+H`, `Mod+Alt+F` (macOS) | — |
 | `find_items` | Find documents or items | search | — | — |
 | `find_next` | Find next | search | `F3` | `F3` |
 | `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
@@ -129,7 +129,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `print` | Print | file | `Mod+P` | `Mod+P` |
 | `query_pins` | Query pins | file | — | — |
 | `read_document` | Read document | file | — | — |
-| `redo` | Redo | edit | `Mod+Shift+Z`, `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Mod+Shift+Z`, `Ctrl+Y` |
+| `redo` | Redo | edit | `Mod+Shift+Z` (macOS), `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Mod+Shift+Z` (macOS), `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
 | `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace` | — |
 | `repeat_last_item` | Repeat last item | edit | — | `Insert` |

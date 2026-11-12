@@ -275,7 +275,12 @@ pub enum OverlayMsg {
 /// What a finished `Mod` move of a custom shortcut profile hands back.
 #[derive(Debug, Clone)]
 pub struct KeymapModMigration {
+    /// The profile set the move was computed from: if the live set is no
+    /// longer this one, something (an Apply) changed it in between.
+    pub source: crate::keymap::ShortcutProfileSet,
     pub set: crate::keymap::ShortcutProfileSet,
+    /// `Ctrl` chords left alone because their `Mod` twin was already bound.
+    pub skipped: Vec<String>,
     /// The copy of the file kept before it was rewritten, when there was one.
     pub backup: Option<String>,
 }

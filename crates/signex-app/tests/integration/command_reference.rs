@@ -32,10 +32,25 @@ const DOC_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/COMMANDS
 /// and reading the shipped file verbatim is what keeps it honest. Profile
 /// metadata (`profile_id = "altium"`, `context = "global"`) is excluded
 /// by requiring a quoted key.
-fn bindings(profile: &str) -> BTreeMap<&str, Vec<&str>> {
-    let mut out: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+///
+/// Each trigger is its finished table text: `` `Mod+S` ``, and
+/// `` `Mod+W` (macOS) `` when the section is tagged `platform = "macos"`.
+fn bindings(profile: &str) -> BTreeMap<&str, Vec<String>> {
+    let mut out: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    let mut platform: Option<&str> = None;
     for line in profile.lines() {
         let line = line.trim();
+        if line.starts_with("[[") {
+            platform = None;
+        }
+        if let Some(tag) = line.strip_prefix("platform = ") {
+            platform = match tag.trim_matches('"') {
+                "macos" => Some("macOS"),
+                "windows" => Some("Windows"),
+                "linux" => Some("Linux"),
+                _ => None,
+            };
+        }
         let Some(rest) = line.strip_prefix('"') else {
             continue;
         };
@@ -49,18 +64,18 @@ fn bindings(profile: &str) -> BTreeMap<&str, Vec<&str>> {
         if value.is_empty() || trigger.is_empty() {
             continue;
         }
-        out.entry(value).or_default().push(trigger);
+        let text = match platform {
+            Some(only) => format!("`{trigger}` ({only})"),
+            None => format!("`{trigger}`"),
+        };
+        out.entry(value).or_default().push(text);
     }
     out
 }
 
-fn cell(bound: Option<&Vec<&str>>) -> String {
+fn cell(bound: Option<&Vec<String>>) -> String {
     match bound {
-        Some(triggers) => triggers
-            .iter()
-            .map(|trigger| format!("`{trigger}`"))
-            .collect::<Vec<_>>()
-            .join(", "),
+        Some(triggers) => triggers.join(", "),
         None => "—".to_string(),
     }
 }

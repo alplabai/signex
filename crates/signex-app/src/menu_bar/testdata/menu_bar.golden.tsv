@@ -31,7 +31,7 @@ Edit/---	separator	-	-	-	-	-	-
 Edit/Cut	item	Cut	cut	Mod+X	Cut	01000000	cmd:cut
 Edit/Copy	item	Copy	copy	Mod+C	Copy	01000000	cmd:copy
 Edit/Paste	item	Paste	paste	Mod+V	Paste	01000000	cmd:paste
-Edit/Paste Special	item	Paste Special	smart_paste	Mod+Shift+V	SmartPaste	01000000	cmd:smart_paste
+Edit/Paste Special	item	Paste Special	smart_paste	Shift+Ctrl+V	SmartPaste	01000000	cmd:smart_paste
 Edit/Duplicate	item	Duplicate	duplicate	Mod+D	Duplicate	01000000	cmd:duplicate
 Edit/Delete	item	Delete	delete_selection	Del	Delete	01100010	cmd:delete_selection
 Edit/Move	submenu	Move	-	-	-	-	-
@@ -58,7 +58,7 @@ View/Zoom In	item	Zoom In	zoom_in_at_cursor	Ctrl+=	ZoomIn	01100000	cmd:zoom_in_a
 View/Zoom Out	item	Zoom Out	zoom_out_at_cursor	Ctrl+-	ZoomOut	01100000	cmd:zoom_out_at_cursor
 View/Fit All	item	Fit All	zoom_to_fit	Home	ZoomFit	01100100	cmd:zoom_to_fit
 View/---	separator	-	-	-	-	-	-
-View/Toggle Grid	item	Toggle Grid	toggle_visible_grid	Mod+Shift+G	ToggleGrid	11111111	cmd:toggle_visible_grid
+View/Toggle Grid	item	Toggle Grid	toggle_visible_grid	Shift+Ctrl+G	ToggleGrid	11111111	cmd:toggle_visible_grid
 View/Cycle Grid Size	item	Cycle Grid Size	-	-	CycleGrid	11111111	cmd:next_grid
 View/AutoFocus (dim unselected)	item	AutoFocus (dim unselected)	toggle_auto_focus	F9	ToggleAutoFocus	11111111	cmd:toggle_auto_focus
 View/---	separator	-	-	-	-	-	-

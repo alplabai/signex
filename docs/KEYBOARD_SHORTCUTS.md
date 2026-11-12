@@ -134,20 +134,26 @@ the command palette `Ctrl+Shift+P`). `mod_content_tests.rs` pins those hints.
 
 On macOS, when the active profile is a custom one that still binds standard-set
 chords with plain `Ctrl`, the first launch asks "Use ⌘ / Keep Control" in a
-native dialog (`keymap_mod_prompt_boot`). Either answer persists
-`keymap_mod_prompt_asked` in `prefs.json`, so it is never asked again, and the
-outcome is logged to the Messages panel.
+native dialog (`keymap_mod_prompt_boot`, built by `Signex::boot` only, never
+by a headless boot). The outcome is logged to the Messages panel.
 
 - **Use ⌘** copies `keyboard_shortcuts.toml` aside as `.bak` (never overwriting
   an earlier backup), respells only the standard-set `Ctrl+<k>` rows of the
-  active profile as `Mod+<k>`, and saves atomically. If the backup or the write
-  fails nothing is changed and the reason is logged.
-- **Keep Control** leaves the profile as it is.
+  active profile as `Mod+<k>`, and saves atomically. Only once that succeeded
+  is `keymap_mod_prompt_asked` set in `prefs.json`. If the backup or the write
+  fails nothing is changed, the reason is logged and the question returns next
+  launch. If Preferences was applied while the write ran, the moved copy is not
+  adopted (a warning names the backup) and the question also returns.
+- **Keep Control** leaves the profile as it is and sets the flag at once.
 
 The rewrite is `keymap::migrate_active_to_mod`: it moves single-stroke
 standard-set rows (and `unbind` rows, so they keep matching), and leaves
 collision chords, multi-stroke chords, pointer gestures and platform-tagged
-sections alone, so a second run does nothing.
+sections alone. A row whose `Mod` twin is already bound in the same context is
+skipped and listed in Messages. Redo keeps its `Ctrl+Shift+Z` row and gains a
+`platform = "macos"` `Mod+Shift+Z` row beside it, as the built-ins do. A second
+run does nothing. An open Preferences keymap draft is moved to `Mod` too, so
+Apply cannot write the Control rows back.
 
 ## Chords
 

@@ -42,7 +42,8 @@ pub use editor::{
     BindingSlot, KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource,
 };
 pub use mod_migration::{
-    migrate_active_to_mod, offers_mod_migration, standard_ctrl_rows, with_standard_set_on_mod,
+    ModMigration, ModMove, migrate_active_to_mod, offers_mod_migration, standard_ctrl_rows,
+    with_standard_set_on_mod,
 };
 pub use platform::Platform;
 pub use profile::{

@@ -15,8 +15,9 @@ pub use picker::{FileDialog, HeadlessAnswers, Picker};
 use std::path::Path;
 
 /// Ask a two-answer question in a native dialog; `true` when `yes` is
-/// pressed. Only the GUI boot asks (the one-time macOS shortcut prompt), so a
-/// headless run never reaches it.
+/// pressed. Not an `IoPorts` port: the only caller is the one-time macOS
+/// shortcut prompt, which `Signex::boot` alone builds, so a headless boot
+/// (`boot_headless`) never asks.
 pub(crate) async fn ask_two(title: &str, description: &str, yes: &str, no: &str) -> bool {
     native::ask_two(title, description, yes, no).await
 }

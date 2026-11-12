@@ -7,16 +7,18 @@
 use iced::Task;
 
 use crate::app::{KeymapModMigration, Message, Signex, UiMsg};
-use crate::keymap::{Platform, ShortcutProfileKind, ShortcutProfileSet};
+use crate::fonts::KEYMAP_MOD_PROMPT_ASKED_KEY;
+use crate::keymap::{
+    KeymapEditorModel, ModMigration, Platform, ShortcutProfileKind, ShortcutProfileSet,
+};
 
-const PREFS_KEY: &str = "keymap_mod_prompt_asked";
 const USE_COMMAND: &str = "Use \u{2318}";
 const KEEP_CONTROL: &str = "Keep Control";
 
 /// The question, when this launch must ask it: macOS, a custom profile that
-/// still has standard-set `Ctrl` rows, and not asked before. Built so that
-/// a boot that only constructs the app opens no dialog until the runtime
-/// runs the task.
+/// still has rows to move, and not asked before. Only `Signex::boot` builds
+/// it; a headless boot never does, since the dialog is native and the answer
+/// is persisted.
 pub(in crate::app) fn keymap_mod_prompt_boot(
     set: &ShortcutProfileSet,
     prefs: Option<&serde_json::Value>,
@@ -49,17 +51,29 @@ pub(in crate::app) fn keymap_mod_prompt_boot(
     )
 }
 
-/// Back the file up, then write the moved set; the profile set to adopt
-/// comes back only once both succeeded. A failed backup refuses the write.
-fn write_migration(moved: ShortcutProfileSet) -> Result<KeymapModMigration, String> {
+/// Back the file up, then write the moved set; the result comes back only
+/// once both succeeded. A failed backup refuses the write.
+fn write_migration(
+    source: ShortcutProfileSet,
+    moved: ModMigration,
+) -> Result<KeymapModMigration, String> {
     let backup = crate::keymap::back_up_profile_file().map_err(|error| {
         format!("the file could not be backed up first, so it was left as is ({error})")
     })?;
-    crate::keymap::save_profile_set(&moved)
+    crate::keymap::save_profile_set(&moved.set)
         .map_err(|error| format!("the file could not be written ({error})"))?;
     Ok(KeymapModMigration {
-        set: moved,
+        source,
+        set: moved.set,
+        skipped: moved.skipped,
         backup: backup.map(|path| path.display().to_string()),
+    })
+}
+
+/// Persist that the question was answered. Off the update thread.
+fn remember_asked() -> Task<Message> {
+    crate::fonts::background_pref_write(KEYMAP_MOD_PROMPT_ASKED_KEY, || {
+        crate::fonts::write_keymap_mod_prompt_asked()
     })
 }
 
@@ -68,56 +82,61 @@ fn write_migration(moved: ShortcutProfileSet) -> Result<KeymapModMigration, Stri
 mod tests;
 
 impl Signex {
-    /// The answer to the prompt: remember that it was asked, and for "Use ⌘"
-    /// start the backup-and-write task.
+    /// The answer to the prompt. "Keep Control" is remembered at once. "Use ⌘"
+    /// starts the backup-and-write task and is remembered only once that
+    /// landed, so a failed write asks again next launch.
     pub(crate) fn handle_keymap_mod_prompt_answered(&mut self, use_command: bool) -> Task<Message> {
-        let asked = crate::fonts::background_pref_write(PREFS_KEY, || {
-            crate::fonts::write_keymap_mod_prompt_asked()
-        });
         if !use_command {
             crate::diagnostics::log_info(
                 "Keyboard shortcuts: kept Control for the standard commands; this is asked only once.",
             );
             self.sync_diagnostics_panel_ctx();
-            return asked;
+            return remember_asked();
         }
         // The set as it is now: the user may have edited it since the launch.
-        let Some(moved) = crate::keymap::migrate_active_to_mod(&self.ui_state.keymap_profiles)
-        else {
+        let source = self.ui_state.keymap_profiles.clone();
+        let Some(moved) = crate::keymap::migrate_active_to_mod(&source) else {
             crate::diagnostics::log_info(
                 "Keyboard shortcuts: nothing to move to \u{2318}, no standard Control shortcut is left.",
             );
             self.sync_diagnostics_panel_ctx();
-            return asked;
+            return remember_asked();
         };
-        let write = Task::perform(
+        Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || write_migration(moved))
+                tokio::task::spawn_blocking(move || write_migration(source, moved))
                     .await
                     .map_err(|error| format!("the write task failed ({error})"))
                     .and_then(|result| result)
             },
             |result| Message::Ui(UiMsg::KeymapModMigrationWritten(result)),
-        );
-        Task::batch([asked, write])
+        )
     }
 
     /// The Preferences keymap draft is a copy of the profile as it was when
-    /// Preferences opened. Apply would write that copy over the migrated
-    /// file, so move the draft's own standard-set rows to `Mod` too; its
-    /// other edits are kept. An invalid trigger text the user is still typing
-    /// is dropped by the swap.
+    /// Preferences opened. With Preferences open, Apply would write that copy
+    /// over the migrated file, so move the draft's own standard-set rows to
+    /// `Mod` too; its other edits are kept, and an invalid trigger text still
+    /// being typed is dropped by the swap. With Preferences closed the draft
+    /// is only a stale seed, so it is re-seeded from the live set quietly.
     fn rebase_keymap_draft_onto_mod(&mut self, profile_id: &str) {
+        if !self.ui_state.preferences_open {
+            self.ui_state.preferences_keymap_editor =
+                KeymapEditorModel::new(self.ui_state.keymap_profiles.clone());
+            return;
+        }
         let editor = &mut self.ui_state.preferences_keymap_editor;
         let Some(profile) = editor.profile_set().profile(profile_id).cloned() else {
             return;
         };
-        if profile.kind != ShortcutProfileKind::Custom
-            || crate::keymap::standard_ctrl_rows(&profile) == 0
-        {
+        if profile.kind != ShortcutProfileKind::Custom {
             return;
         }
-        match editor.insert_custom_profile(crate::keymap::with_standard_set_on_mod(&profile)) {
+        let moved = crate::keymap::with_standard_set_on_mod(&profile);
+        if moved.moved == 0 {
+            return;
+        }
+        match editor.insert_custom_profile(moved.profile) {
             Ok(()) => crate::diagnostics::log_info(
                 "Keyboard shortcuts: the open Preferences draft was moved to \u{2318} too; its other edits are kept.",
             ),
@@ -128,13 +147,26 @@ impl Signex {
         }
     }
 
-    /// The move finished: adopt the new set and say so, or report why the
-    /// file was left as it was.
+    /// The move finished: adopt the new set and remember the question, or
+    /// report why the file was left as it was (and ask again next launch).
     pub(crate) fn handle_keymap_mod_migration_written(
         &mut self,
         result: Result<KeymapModMigration, String>,
     ) -> Task<Message> {
-        match result {
+        let follow_up = match result {
+            Ok(done) if self.ui_state.keymap_profiles != done.source => {
+                // An Apply landed between the answer and the write: the moved
+                // copy is built from the older set and would undo it.
+                // Messages cuts a long line, so the point comes first.
+                let backup = done
+                    .backup
+                    .map(|path| format!("earlier file kept as {path}"))
+                    .unwrap_or_else(|| "no earlier file to keep".to_string());
+                crate::diagnostics::log_warning(format!(
+                    "Move to \u{2318} not adopted: shortcuts changed meanwhile; {backup}; asked again next launch."
+                ));
+                Task::none()
+            }
             Ok(done) => {
                 self.ui_state.set_keymap_profiles(done.set);
                 self.ui_state.active_keymap =
@@ -152,13 +184,23 @@ impl Signex {
                 crate::diagnostics::log_info(format!(
                     "Keyboard shortcuts: the standard commands now use \u{2318}.{kept}"
                 ));
+                if !done.skipped.is_empty() {
+                    crate::diagnostics::log_warning(format!(
+                        "Keyboard shortcuts: left on Control because their \u{2318} chord is already bound: {}.",
+                        done.skipped.join(", ")
+                    ));
+                }
+                remember_asked()
             }
-            Err(error) => tracing::error!(
-                target: "signex::keymap",
-                "Shortcuts were not moved to \u{2318}: {error}"
-            ),
-        }
+            Err(error) => {
+                tracing::error!(
+                    target: "signex::keymap",
+                    "Shortcuts were not moved to \u{2318}: {error}"
+                );
+                Task::none()
+            }
+        };
         self.sync_diagnostics_panel_ctx();
-        Task::none()
+        follow_up
     }
 }
