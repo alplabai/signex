@@ -88,6 +88,18 @@ impl Signex {
         }
     }
 
+    /// Whether the footprint tab in `window_id` draws its own layer strip:
+    /// where the Layers panel cannot reach it, in an undocked window (the
+    /// panel follows the main window's tab) or a layout without the panel.
+    pub(crate) fn shows_footprint_layer_strip(&self, window_id: iced::window::Id) -> bool {
+        self.ui_state.main_window_id != Some(window_id)
+            || self
+                .document_state
+                .dock
+                .locate(crate::panels::PanelKind::FootprintLayers)
+                .is_none()
+    }
+
     /// The file of the symbol tab `window_id` is showing: its status bar's
     /// Grid and unit buttons drive that symbol's library.
     pub fn status_symbol_path(&self, window_id: iced::window::Id) -> Option<PathBuf> {

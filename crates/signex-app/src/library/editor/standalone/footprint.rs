@@ -32,7 +32,7 @@ pub fn view_footprint<'a>(
     tokens: &'a ThemeTokens,
     _theme_id: signex_types::theme::ThemeId,
     i18n: &signex_i18n::I18n,
-    undocked: bool,
+    show_layer_strip: bool,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     // v0.16.2.2 — footprint canvas uses Altium PCB-editor colours
@@ -89,9 +89,9 @@ pub fn view_footprint<'a>(
             .boxed(),
         EditorMode::View3d => stack.push(mode_switcher).boxed(),
     };
-    // An undocked window has no dock, and the Layers panel follows the
-    // main window's tab, so the window keeps its own layer strip.
-    if undocked {
+    // The strip stands in for the Layers panel where the panel cannot
+    // reach this editor (see the caller).
+    if show_layer_strip {
         iced::widget::column![body, view_footprint_layers_strip(editor, tokens, i18n)]
             .width(Length::Fill)
             .height(Length::Fill)

@@ -140,11 +140,16 @@ pub(super) fn lock_all_message(all_locked: bool) -> Message {
 /// The Lock column header: a checkbox that locks or unlocks every row.
 pub(super) fn lock_all_header<'a>(
     all_locked: bool,
-    has_rows: bool,
+    enabled: bool,
     theme_tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
+    // Disabled (no rows, loading, or a run busy): drawn dimmed, like the
+    // other read-only boxes in the dialog.
+    if !enabled {
+        return disabled_check_pip(all_locked, theme_tokens);
+    }
     button(ga::checkbox_pip(theme_tokens, all_locked))
-        .on_press_maybe(has_rows.then(|| lock_all_message(all_locked)))
+        .on_press(lock_all_message(all_locked))
         .padding(0.0)
         .style(ga::bare_button_style)
         .boxed()

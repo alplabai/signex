@@ -536,7 +536,7 @@ impl Signex {
                     tokens,
                     theme_id,
                     &self.ui_state.i18n,
-                    self.ui_state.main_window_id != Some(window_id),
+                    self.shows_footprint_layer_strip(window_id),
                 )
                 .map(Message::Library)
                 .boxed();
