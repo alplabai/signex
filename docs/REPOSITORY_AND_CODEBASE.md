@@ -139,7 +139,8 @@ signex/
 │   ├── signex-renderer/            # domain types → render primitives (+ signex-gfx)
 │   ├── signex-library/             # .snxlib library model (+ signex-library-server)
 │   ├── pcb-geom/                   # integer-nm board geometry: R-tree, hit-test, MST (reads signex-types)
-│   ├── signex-drc/                 # PCB design rule check: clearance, shorts, unconnected, keepouts (reads pcb-geom)
+│   ├── signex-drc/                 # PCB design rule check: clearance, shorts, unconnected, keepouts, width, vias (reads pcb-geom)
+│   ├── signex-drc-dsl/             # DRC rule language: rule text → signex-drc rules
 │   ├── signex-widgets/             # reusable iced widgets
 │   ├── signex-i18n/                # UI message catalogs and locale-aware formatting
 │   └── signex-3d-model-importer/   # STEP / WRL importer
@@ -336,7 +337,8 @@ The most likely additions are:
   outline (v0.13+; see `docs/internal/SKETCH_MODE_PLAN.md`)
 - `signex-drc` — *(landed, #2307)* PCB design rule check: clearance,
   shorts, unconnected nets and keepouts, measured with `pcb-geom`
-  (`docs/architecture/pcb-drc.md`)
+  (`docs/architecture/pcb-drc.md`); its rule language is `signex-drc-dsl`
+  (`docs/DRC_RULES.md`)
 - `pcb-geom` — *(landed, #2174)* integer-nm board geometry: R-tree, hit-test,
   union-find, spanning tree, pad world transform. Polygon offset, Delaunay and
   boolean ops are not part of it yet.

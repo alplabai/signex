@@ -31,7 +31,7 @@ change is a small git diff.
 | `name` | string | The profile's identity. Projects find a profile by this name. |
 | `version` | string | Content version chosen by the author; recorded in a project's provenance. |
 | `erc` | object, optional | Same shape as the project's `rules.erc`: `severity` (rule id to `error` / `warning` / `info` / `off`) and `pin_matrix` (`"<row axis>/<column axis>"` to severity, only cells that differ from the factory matrix). Omitted when empty. |
-| `drc` | object, optional | Same shape as the project's `rules.drc` (#2307): `severity` (DRC rule id such as `builtin::clearance` to `error` / `warning` / `info` / `off`) and `dsl` (DRC rule language text, kept but not read until #2307 step 2b). Omitted when empty. Rule ids and layers: [`pcb-drc.md`](pcb-drc.md#rule-ids-and-severities-2307-step-2a). |
+| `drc` | object, optional | Same shape as the project's `rules.drc` (#2307): `severity` (DRC rule id such as `builtin::clearance` to `error` / `warning` / `info` / `off`) and `dsl` (DRC rule language text, [`DRC_RULES.md`](../DRC_RULES.md), read by each DRC run that uses this profile and written back as typed). Omitted when empty. Rule ids and layers: [`pcb-drc.md`](pcb-drc.md#rule-ids-and-severities-2307-step-2a). |
 
 Every key is optional on load (`name` and `version` default to the empty
 string). An explicitly empty `erc` or `drc` is the same as an absent one, and
@@ -137,11 +137,14 @@ canonical-JSON SHA-256 of the `drc` object) exists, but nothing records or
 compares it yet. "Save as profile" (it writes only the project's `erc`),
 "Update from profile", its confirmation diff and the drift note still cover
 `erc` only. Covering `drc` by the hash, the drift check, Update from profile
-and Save as profile is step 2b, with the rule language (maintainer decision,
-https://github.com/alplabai/signex/issues/2307#issuecomment-6824136804).
+and Save as profile is step 2b-2, after the rule language of step 2b-1
+(maintainer decisions,
+https://github.com/alplabai/signex/issues/2307#issuecomment-6824136804 and
+https://github.com/alplabai/signex/issues/2307#issuecomment-6837552967).
 Duplicate in Preferences ▸ Rule Profiles copies the whole profile, `drc`
 included. Save as profile over an existing profile replaces that file with the
-project's `erc` only, so the target profile's `drc` is dropped until step 2b.
+project's `erc` only, so the target profile's `drc` is dropped until step
+2b-2.
 
 The same hash is recorded in two places:
 

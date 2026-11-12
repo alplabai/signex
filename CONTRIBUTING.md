@@ -315,7 +315,7 @@ Each crate maps to an `area:` label (auto-applied to PRs by path — see
 | `signex-bake` | Pad baking, arrays, pad/via numbering. | `bake` |
 | `signex-library` / `signex-library-server` | Component library model + the library server. | `library` |
 | `signex-erc` / `signex-erc-dsl` | ERC rule engine + DSL compiler. | `erc` |
-| `signex-drc` | PCB design rule check (clearance, shorts, unconnected, keepouts), measured with `pcb-geom`. | `pcb` |
+| `signex-drc` / `signex-drc-dsl` | PCB design rule check (clearance, shorts, unconnected, keepouts, track width, via size), measured with `pcb-geom`, + the DRC rule language. | `pcb` |
 | `signex-bom` | Bill-of-materials generation. | `bom` |
 | `signex-output` | PDF / netlist exporters (native and neutral formats). | `output` |
 | `signex-renderer` / `signex-gfx` | Canvas draw routines + GPU rendering. | `rendering` |

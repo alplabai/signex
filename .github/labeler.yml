@@ -42,6 +42,7 @@
       - any-glob-to-any-file:
           - "crates/signex-app/src/pcb_canvas.rs"
           - "crates/signex-drc/**"
+          - "crates/signex-drc-dsl/**"
 
 "area: sketch":
   - changed-files:

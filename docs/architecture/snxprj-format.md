@@ -160,9 +160,11 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   `erc`.
 - `drc` (#2307) holds the project's DRC rules, typed as `DrcRuleSet`:
   `severity` maps a DRC rule id (`builtin::short`, `builtin::clearance`,
-  `builtin::unconnected`, `builtin::keepout`) to `error` / `warning` / `info`
-  / `off`, and `dsl` is the text of the DRC rule language, stored and written
-  back but not read until step 2b. Keys this build does not know stay in its
+  `builtin::unconnected`, `builtin::keepout`, `builtin::track_width`,
+  `builtin::via_diameter`, `builtin::via_drill`, or a written rule's
+  `user::<name>`) to `error` / `warning` / `info` / `off`, and `dsl` is the
+  text of the DRC rule language ([`DRC_RULES.md`](../DRC_RULES.md)), read by
+  each DRC run of the project and written back exactly as stored. Keys this build does not know stay in its
   own unknown-key bag, so a `drc` object written before the section was typed
   re-saves unchanged. It is added without a `schema` bump: an older build
   keeps the whole object in the section's unknown-key bag, and a file without
@@ -171,7 +173,7 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   a first ERC waiver also store the machine's `User Default` DRC severities
   here (the action keeps its ERC name), so DRC keeps the rules it used; with
   no machine DRC rules no `drc` key is written. It is not in the rule-set hash,
-  and nothing records `DrcRuleSet::sha256_hex` until step 2b. See
+  and nothing records `DrcRuleSet::sha256_hex` until step 2b-2. See
   [`pcb-drc.md`](pcb-drc.md#rule-ids-and-severities-2307-step-2a) for the
   layers and [`snxrules-format.md`](snxrules-format.md#what-the-hash-covers)
   for the hash.
