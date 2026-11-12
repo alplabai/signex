@@ -131,13 +131,16 @@ The maps are ordered, so equal rule sets hash equal on every machine. `name`,
 `version`, `schema` and the top-level unknown keys are labels and are not
 hashed, so renaming a profile or bumping its `version` is not drift.
 
-The `drc` section is not in this hash. It has its own,
-`DrcRuleSet::sha256_hex` (the same canonical-JSON SHA-256 of the `drc`
-object), so adding a `drc` section moves no recorded hash, no provenance and
-no drift result. "Save as profile" (it writes only the project's `erc`),
+The `drc` section is not in this hash, so adding one moves no recorded hash,
+no provenance and no drift result. `DrcRuleSet::sha256_hex` (the same
+canonical-JSON SHA-256 of the `drc` object) exists, but nothing records or
+compares it yet. "Save as profile" (it writes only the project's `erc`),
 "Update from profile", its confirmation diff and the drift note still cover
-`erc` only; recording and comparing the DRC hash comes with
-the rule language (#2307 step 2b), when there is DRC content to review.
+`erc` only. Covering `drc` by the hash, the drift check, Update from profile
+and Save as profile is step 2b, with the rule language (maintainer decision,
+https://github.com/alplabai/signex/issues/2307#issuecomment-6824136804).
+Duplicate in Preferences ▸ Rule Profiles copies the whole profile, `drc`
+included.
 
 The same hash is recorded in two places:
 

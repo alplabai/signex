@@ -167,10 +167,14 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   re-saves unchanged. It is added without a `schema` bump: an older build
   keeps the whole object in the section's unknown-key bag, and a file without
   it loads with an empty section and re-saves without a `drc` key. The DRC
-  run reads it when `rules` is present; see
+  run reads it when `rules` is present. "Store ERC rules in this project" and
+  a first ERC waiver also store the machine's `User Default` DRC severities
+  here (the action keeps its ERC name), so DRC keeps the rules it used; with
+  no machine DRC rules no `drc` key is written. It is not in the rule-set hash,
+  and nothing records `DrcRuleSet::sha256_hex` until step 2b. See
   [`pcb-drc.md`](pcb-drc.md#rule-ids-and-severities-2307-step-2a) for the
   layers and [`snxrules-format.md`](snxrules-format.md#what-the-hash-covers)
-  for why it is not in the ERC hash.
+  for the hash.
   ```json
   "drc": {
     "severity": { "builtin::unconnected": "error" },
