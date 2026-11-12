@@ -33,6 +33,11 @@ pub struct DrcRules {
     /// rule that did not compile, or one that names something not checked
     /// yet. Written to Messages with the report.
     pub notes: Vec<String>,
+    /// Written rules not applied (invalid, repeated or not checked yet), and
+    /// rule texts with a syntax error (none of their rules applied): shown
+    /// beside the results, so a typo never passes as a clean board.
+    pub rules_not_applied: usize,
+    pub texts_not_applied: usize,
     /// Rule-language rules, resolved against the board's nets.
     pub(crate) user: Vec<ScopedRule>,
 }
@@ -45,6 +50,8 @@ impl DrcRules {
             from_default: false,
             severities: DrcSeverities::builtin(),
             notes: Vec::new(),
+            rules_not_applied: 0,
+            texts_not_applied: 0,
             user: Vec::new(),
         }
     }
@@ -72,33 +79,38 @@ impl DrcRules {
     }
 
     /// The clearance two copper items of different nets need where they
-    /// share `layers`, and the written rule that set it. Per shared layer
-    /// the most specific written rule applies, the strictest among equals;
-    /// with none, [`Self::required`]. The pair needs the most of its layers.
+    /// share `layers`, and the written rule that set it. Each side is
+    /// resolved for its own net: per shared layer the most specific written
+    /// rule covering that net applies, the strictest among equals, else the
+    /// net's implicit value. The pair needs the stricter side and the most
+    /// of its layers, as [`Self::required`] does without written rules.
     pub(crate) fn required_between(
         &self,
         a: &CopperItem,
         b: &CopperItem,
         layers: u32,
     ) -> (i64, Option<String>) {
-        let implicit = self.required(a.net, b.net);
         if !user_rules::sets(&self.user, LimitKind::MinClearance) {
-            return (implicit, None);
+            return (self.required(a.net, b.net), None);
         }
-        let objects = [CopperObject::of(&a.item), CopperObject::of(&b.item)];
-        let nets = [a.net, b.net];
+        // A fixed side order, so a tie names the same rule whichever item
+        // found the pair.
+        let (first, second) = if a.item <= b.item { (a, b) } else { (b, a) };
+        let objects = [
+            CopperObject::of(&first.item),
+            CopperObject::of(&second.item),
+        ];
         let mut most: (i64, Option<&ScopedRule>) = (i64::MIN, None);
         for bit in (0..32).filter(|bit| layers & (1 << bit) != 0) {
-            let on_layer = user_rules::pick(
-                &self.user,
-                LimitKind::MinClearance,
-                &nets,
-                1 << bit,
-                objects,
-            )
-            .map_or((implicit, None), |(nm, rule)| (nm, Some(rule)));
-            if on_layer.0 > most.0 {
-                most = on_layer;
+            for net in [first.net, second.net] {
+                let side =
+                    user_rules::pick(&self.user, LimitKind::MinClearance, net, 1 << bit, objects)
+                        .map_or((self.required(net, net), None), |(nm, rule)| {
+                            (nm, Some(rule))
+                        });
+                if side.0 > most.0 {
+                    most = side;
+                }
             }
         }
         (most.0, most.1.map(|s| s.rule.id()))
@@ -134,10 +146,11 @@ impl DrcRules {
 
     /// The most any pair with `net` in it can need: how far from an item of
     /// `net` another net's copper can matter. Pairs where the other net's
-    /// class asks for more are found from that other item; a written rule
-    /// can ask for its value from either side, so its largest counts here.
+    /// class asks for more are found from that other item, and so are pairs
+    /// where a written rule covering the other net does; the widest written
+    /// rule covering `net` counts here.
     pub(super) fn reach_of(&self, net: u32) -> i64 {
-        let widest = user_rules::widest_clearance(&self.user);
+        let widest = user_rules::widest_clearance(&self.user, net);
         self.required(net, net).max(widest).min(MAX_ABS_NM)
     }
 
@@ -149,7 +162,7 @@ impl DrcRules {
         net: u32,
         layers: u32,
     ) -> Option<(i64, String)> {
-        user_rules::pick(&self.user, kind, &[net], layers, [None, None])
+        user_rules::pick(&self.user, kind, net, layers, [None, None])
             .map(|(nm, scoped)| (nm, scoped.rule.id()))
     }
 

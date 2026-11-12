@@ -83,30 +83,89 @@ fn with_no_written_rule_the_setup_and_class_values_apply_as_before() {
 
 #[test]
 fn a_rule_for_one_net_beats_its_class_even_when_looser() {
-    let net = clearance("hv_a", NetScope::Net("HV_A".into()), 100_000);
+    let net = clearance("hv_a", NetScope::Net("HV_A".into()), 250_000);
     let class = clearance("hv", NetScope::Class("HV".into()), 600_000);
-    // 0.1 mm: the 0.15 mm gap passes, though the class rule asks 0.6 mm.
-    assert_eq!(verdict(vec![class.clone(), net.clone()]), None);
-    assert_eq!(verdict(vec![net, class]), None);
+    // HV_A's side asks 0.25 mm, though its class rule asks 0.6 mm; GND's
+    // side keeps the 0.2 mm setup value.
+    let want = Some((250_000, Some("user::hv_a".to_string())));
+    assert_eq!(verdict(vec![class.clone(), net.clone()]), want);
+    assert_eq!(verdict(vec![net, class]), want);
 }
 
 #[test]
-fn class_beats_pattern_beats_layer_beats_board() {
-    let board_wide = clearance("all", NetScope::Board, 700_000);
-    let mut layer = clearance("top", NetScope::Board, 650_000);
+fn a_looser_rule_for_one_net_does_not_relax_the_other_nets_stricter_rule() {
+    let gnd = clearance("gnd", NetScope::Net("GND".into()), 100_000);
+    let hv = clearance("hv", NetScope::Class("HV".into()), 600_000);
+    let want = Some((600_000, Some("user::hv".to_string())));
+    assert_eq!(verdict(vec![gnd.clone(), hv.clone()]), want);
+    assert_eq!(verdict(vec![hv, gnd.clone()]), want);
+    // With no written HV rule, HV_A's class still asks its implicit 0.5 mm.
+    assert_eq!(verdict(vec![gnd]), Some((500_000, None)));
+}
+
+/// `(required, rule)` of a min-width violation of one 0.25 mm `HV_A` track
+/// on top.
+fn width_verdict(user: Vec<UserRule>) -> Option<(i64, Option<String>)> {
+    let mut b = widths(0.25);
+    b.segments[0].net = 2;
+    let report = run(&b, &rules_for(&b, user));
+    report
+        .violations
+        .first()
+        .map(|v| (v.required_nm, v.rule.clone()))
+}
+
+fn min_width(name: &str, nets: NetScope, nm: i64) -> UserRule {
+    rule(name, nets, vec![Limit::MinTrackWidth(nm)])
+}
+
+#[test]
+fn net_beats_class_beats_pattern_beats_layer_beats_board() {
+    let board_wide = min_width("all", NetScope::Board, 700_000);
+    let mut layer = min_width("top", NetScope::Board, 650_000);
     layer.layers = Some(1);
-    let pattern = clearance("pat", NetScope::Pattern("HV_*".into()), 600_000);
-    let class = clearance("cls", NetScope::Class("HV".into()), 550_000);
+    let pattern = min_width("pat", NetScope::Pattern("HV_*".into()), 600_000);
+    let class = min_width("cls", NetScope::Class("HV".into()), 550_000);
+    let net = min_width("net", NetScope::Net("HV_A".into()), 500_000);
     let id = |n: &str| Some(format!("user::{n}"));
-    let all = vec![board_wide.clone(), layer.clone(), pattern.clone(), class];
-    assert_eq!(verdict(all), Some((550_000, id("cls"))));
-    let no_class = vec![board_wide.clone(), layer.clone(), pattern];
-    assert_eq!(verdict(no_class), Some((600_000, id("pat"))));
-    assert_eq!(
-        verdict(vec![board_wide.clone(), layer]),
-        Some((650_000, id("top")))
-    );
-    assert_eq!(verdict(vec![board_wide]), Some((700_000, id("all"))));
+    let mut written = vec![board_wide, layer, pattern, class, net];
+    for (nm, name) in [
+        (500_000, "net"),
+        (550_000, "cls"),
+        (600_000, "pat"),
+        (650_000, "top"),
+        (700_000, "all"),
+    ] {
+        assert_eq!(width_verdict(written.clone()), Some((nm, id(name))));
+        written.pop();
+    }
+}
+
+#[test]
+fn a_layer_condition_narrows_a_class_rule_and_wins_on_its_layer() {
+    let everywhere = clearance("hv", NetScope::Class("HV".into()), 600_000);
+    let mut top = clearance("hv_top", NetScope::Class("HV".into()), 250_000);
+    top.layers = Some(1);
+    let want = Some((250_000, Some("user::hv_top".to_string())));
+    assert_eq!(verdict(vec![everywhere.clone(), top.clone()]), want);
+    assert_eq!(verdict(vec![top.clone(), everywhere.clone()]), want);
+    // On another layer only the class-wide rule covers HV_A.
+    top.layers = Some(1 << 31);
+    let want = Some((600_000, Some("user::hv".to_string())));
+    assert_eq!(verdict(vec![everywhere, top]), want);
+}
+
+#[test]
+fn a_written_rule_widens_the_search_only_for_the_nets_it_covers() {
+    let b = pair(0.4);
+    let gnd = clearance("gnd", NetScope::Net("GND".into()), 2_000_000);
+    let rules = rules_for(&b, vec![gnd]);
+    assert_eq!(rules.reach_of(1), 2_000_000);
+    // HV_A: its class's 0.5 mm; SIG: the 0.2 mm setup.
+    assert_eq!(rules.reach_of(2), 500_000);
+    assert_eq!(rules.reach_of(3), RULE);
+    let board_wide = rules_for(&b, vec![clearance("all", NetScope::Board, 900_000)]);
+    assert_eq!(board_wide.reach_of(3), 900_000);
 }
 
 #[test]
