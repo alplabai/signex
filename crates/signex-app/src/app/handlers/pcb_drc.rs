@@ -114,6 +114,9 @@ impl Signex {
             panel.default_clearance_mm =
                 Some(format!("{:.1}", pcb_geom::nm_to_mm(report.rules.clearance)));
         }
+        panel.written_rules = report.rules.user_rules().count() > 0;
+        panel.rules_not_applied = report.rules.rules_not_applied;
+        panel.rule_text_unparsed = report.rules.texts_not_applied > 0;
         panel.clearance = report.count(ViolationKind::Clearance);
         panel.short = report.count(ViolationKind::Short);
         panel.unconnected = report.count(ViolationKind::Unconnected);
@@ -211,6 +214,8 @@ fn run_check(
         .with_user_rules(board, classes, written.rules.iter().cloned());
     rules.severities = signex_drc::resolve_severities_with(profile, project, &written.rules);
     rules.notes = written.messages;
+    rules.rules_not_applied = written.not_applied;
+    rules.texts_not_applied = written.unparsed;
     let report = signex_drc::run(board, &rules);
     let names = board
         .nets
@@ -220,24 +225,39 @@ fn run_check(
     Ok((report, names))
 }
 
-fn log_report(report: &signex_drc::DrcReport, names: &std::collections::BTreeMap<u32, String>) {
+/// The summary line. Its wording changes only when the run has written
+/// rules or rule text it did not apply, so a run without rule text logs
+/// what it always did.
+fn summary_line(report: &signex_drc::DrcReport) -> String {
     let count = |k| report.count(k);
-    let summary = format!(
-        "DRC: {} clearance, {} short, {} unconnected, {} keepout (minimum clearance {} mm){}",
+    let rules = &report.rules;
+    let board_mm = pcb_geom::nm_to_mm(rules.clearance);
+    let clearance = if rules.user_rules().count() > 0 {
+        format!("minimum clearance {board_mm} mm where no written rule applies")
+    } else {
+        format!("minimum clearance {board_mm} mm")
+    };
+    let mut tail = String::new();
+    if !report.skipped.is_empty() {
+        tail += &format!("; {} item(s) could not be checked", report.skipped.len());
+    }
+    if rules.rules_not_applied > 0 {
+        tail += &format!("; {} rule(s) not applied", rules.rules_not_applied);
+    }
+    if rules.texts_not_applied > 0 {
+        tail += "; rule text not applied (syntax error)";
+    }
+    format!(
+        "DRC: {} clearance, {} short, {} unconnected, {} keepout ({clearance}){tail}",
         count(ViolationKind::Clearance),
         count(ViolationKind::Short),
         count(ViolationKind::Unconnected),
         count(ViolationKind::Keepout),
-        pcb_geom::nm_to_mm(report.rules.clearance),
-        if report.skipped.is_empty() {
-            String::new()
-        } else {
-            format!("; {} item(s) could not be checked", report.skipped.len())
-        },
-    );
-    for entry in &report.rules.severities.unrecognised {
-        crate::diagnostics::log_info(format!("DRC rules: ignoring unrecognised entry ({entry})"));
-    }
+    )
+}
+
+/// What the run made of the rule text, before the summary.
+fn log_rule_text(report: &signex_drc::DrcReport) {
     for note in &report.rules.notes {
         crate::diagnostics::log_warning(note.clone());
     }
@@ -250,20 +270,35 @@ fn log_report(report: &signex_drc::DrcReport, names: &std::collections::BTreeMap
         ViolationKind::ViaDiameter,
         ViolationKind::ViaDrill,
     ]
-    .map(count);
+    .map(|k| report.count(k));
     if sizes.iter().any(|&n| n > 0) {
         crate::diagnostics::log_warning(format!(
             "DRC: {} track width, {} via diameter, {} via drill",
             sizes[0], sizes[1], sizes[2]
         ));
     }
-    if report.rules.from_default {
-        crate::diagnostics::log_info(format!(
-            "DRC: No clearance rule set on this board; checked with {} mm. Set it in Board Setup.",
-            pcb_geom::nm_to_mm(report.rules.clearance)
-        ));
+}
+
+fn log_report(report: &signex_drc::DrcReport, names: &std::collections::BTreeMap<u32, String>) {
+    let summary = summary_line(report);
+    for entry in &report.rules.severities.unrecognised {
+        crate::diagnostics::log_info(format!("DRC rules: ignoring unrecognised entry ({entry})"));
     }
-    if report.violations.is_empty() && report.skipped.is_empty() {
+    log_rule_text(report);
+    if report.rules.from_default {
+        let mm = pcb_geom::nm_to_mm(report.rules.clearance);
+        crate::diagnostics::log_info(if report.rules.user_rules().count() > 0 {
+            format!(
+                "DRC: No clearance rule set on this board; {mm} mm applies where no written rule does. Set it in Board Setup."
+            )
+        } else {
+            format!(
+                "DRC: No clearance rule set on this board; checked with {mm} mm. Set it in Board Setup."
+            )
+        });
+    }
+    let unapplied = report.rules.rules_not_applied + report.rules.texts_not_applied > 0;
+    if report.violations.is_empty() && report.skipped.is_empty() && !unapplied {
         crate::diagnostics::log_info(summary);
         return;
     }

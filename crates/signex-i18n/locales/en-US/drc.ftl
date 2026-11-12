@@ -6,6 +6,14 @@ drc-default-clearance = No clearance rule set on this board; checked with { $cle
 drc-idle = Run DRC to check the board against its rules.
 drc-running = Checking the board...
 drc-clean = No violations.
+# With written DRC rules (#2307): the board value holds only where none applies.
+drc-default-clearance-written = No clearance rule set on this board; { $clearance } mm applies where no written rule does. Set it in Board Setup.
+drc-rules-not-applied =
+    { $count ->
+        [one] 1 written rule was not applied; see Messages.
+       *[other] { $count } written rules were not applied; see Messages.
+    }
+drc-rule-text-unparsed = The rule text has a syntax error and was not applied; see Messages.
 drc-stale = The board changed after this check; run it again.
 drc-summary =
     { $clearance ->

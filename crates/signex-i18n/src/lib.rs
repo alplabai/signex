@@ -81,6 +81,9 @@ define_ids! {
     DRC_RUNNING = "drc-running";
     DRC_CLEAN = "drc-clean";
     DRC_STALE = "drc-stale";
+    DRC_DEFAULT_CLEARANCE_WRITTEN = "drc-default-clearance-written";
+    DRC_RULES_NOT_APPLIED = "drc-rules-not-applied";
+    DRC_RULE_TEXT_UNPARSED = "drc-rule-text-unparsed";
     DRC_SUMMARY = "drc-summary";
     DRC_SKIPPED = "drc-skipped";
     DRC_MORE = "drc-more";

@@ -315,9 +315,52 @@ fn rule_text_in_the_profile_is_applied_by_the_run() {
         )),
         "{lines:?}"
     );
+    // With written rules the board value holds only where none applies.
+    assert!(
+        lines.contains(
+            &"DRC: No clearance rule set on this board; 0.19999999999999998 mm applies \
+              where no written rule does. Set it in Board Setup."
+                .to_string()
+        ),
+        "{lines:?}"
+    );
+    assert!(
+        lines.contains(
+            &"DRC: 0 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance \
+              0.19999999999999998 mm where no written rule applies)"
+                .to_string()
+        ),
+        "{lines:?}"
+    );
     let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
     assert_eq!(panel.rows.len(), 3);
     assert!(!panel.rows[0].over_maximum);
+    assert!(panel.written_rules);
+    assert_eq!(
+        (panel.rules_not_applied, panel.rule_text_unparsed),
+        (0, false)
+    );
+}
+
+/// A syntax error drops the whole text: the results say so, not only the
+/// Messages line, so a typo never passes as a clean board.
+#[test]
+fn rule_text_with_a_syntax_error_is_said_beside_the_results() {
+    let (mut app, _tmp, path) = open_board();
+    load_profile_dsl(
+        &mut app,
+        Some("rule tight on clearance require clearance 0.1mm then error"),
+    );
+    let lines = drc_lines_of_a_run(&mut app);
+    assert!(
+        lines.iter().any(|l| l.starts_with("DRC: 1 clearance")
+            && l.ends_with("; rule text not applied (syntax error)")),
+        "{lines:?}"
+    );
+    let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    assert_eq!(done.report.violations.len(), 1);
+    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    assert!(panel.rule_text_unparsed && !panel.written_rules);
 }
 
 /// A rule that does not compile is named in Messages and skipped; the rest
@@ -348,4 +391,13 @@ fn a_rule_that_does_not_compile_is_reported_and_skipped() {
     let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
     // `tight` loosens the 0.2 mm default to 0.1 mm: the 0.15 mm gap passes.
     assert!(done.report.violations.is_empty(), "{:?}", done.report);
+    // A clean board with a skipped rule is a warning, not a clean summary.
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.starts_with("DRC: 0 clearance") && l.ends_with("; 1 rule(s) not applied")),
+        "{lines:?}"
+    );
+    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    assert_eq!(panel.rules_not_applied, 1);
 }

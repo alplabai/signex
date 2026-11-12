@@ -46,6 +46,15 @@ pub struct DrcPanel {
     /// The minimum clearance in mm, when the board set none and the default
     /// was used.
     pub default_clearance_mm: Option<String>,
+    /// The run applied written rules (the default note then says it holds
+    /// only where no written rule does).
+    pub written_rules: bool,
+    /// Written rules the run did not apply, and whether a rule text had a
+    /// syntax error (none of it applied); see Messages for which.
+    pub rules_not_applied: usize,
+    pub rule_text_unparsed: bool,
+    /// Counts for the summary line; track width and via size findings are
+    /// listed as rows but not counted here yet.
     pub clearance: usize,
     pub short: usize,
     pub unconnected: usize,
@@ -168,13 +177,24 @@ fn status<'a>(ctx: &'a PanelContext, drc: &DrcPanel, mut col: Rows<'a>) -> Rows<
         return col.push(note(t!(i18n, ids::DRC_IDLE), muted));
     }
     if let Some(mm) = &drc.default_clearance_mm {
-        col = col.push(note(
-            t!(i18n, ids::DRC_DEFAULT_CLEARANCE, "clearance" => mm.clone()),
-            muted,
-        ));
+        let id = if drc.written_rules {
+            ids::DRC_DEFAULT_CLEARANCE_WRITTEN
+        } else {
+            ids::DRC_DEFAULT_CLEARANCE
+        };
+        col = col.push(note(t!(i18n, id, "clearance" => mm.clone()), muted));
     }
     if drc.stale {
         col = col.push(note(t!(i18n, ids::DRC_STALE), warn));
+    }
+    if drc.rule_text_unparsed {
+        col = col.push(note(t!(i18n, ids::DRC_RULE_TEXT_UNPARSED), warn));
+    }
+    if drc.rules_not_applied > 0 {
+        col = col.push(note(
+            t!(i18n, ids::DRC_RULES_NOT_APPLIED, "count" => drc.rules_not_applied),
+            warn,
+        ));
     }
     col = if drc.rows.is_empty() && drc.skipped == 0 {
         col.push(note(
