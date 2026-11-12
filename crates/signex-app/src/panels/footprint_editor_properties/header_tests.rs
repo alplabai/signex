@@ -5,20 +5,27 @@ use std::path::PathBuf;
 
 use super::selected_pad_heading;
 use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
-use crate::library::editor::footprint::state::EditorPad;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::panels::FootprintEditorPanelContext;
-use signex_library::{Footprint, FootprintFile};
+use signex_library::{Footprint, FootprintFile, Pad};
 
 /// The panel context of a footprint editor with eight pads and pad 3
 /// selected, built the way the app builds it.
 fn ctx_with_pad_3_selected() -> FootprintEditorPanelContext {
     let path = PathBuf::from("pad-heading.snxfpt");
-    let file = FootprintFile::from_footprint(Footprint::empty("SOIC-8"));
-    let mut editor = FootprintDocument::new(path.clone(), file);
-    editor.state.pads = (1..=8)
-        .map(|n| EditorPad::new_default(n.to_string(), (f64::from(n), 0.0)))
+    // Pads go in through the library primitive, as a loaded file brings
+    // them, so the test does not reach into the editor's internals.
+    let mut footprint = Footprint::empty("SOIC-8");
+    footprint.pads = (1..=8)
+        .map(|n| Pad {
+            number: n.to_string(),
+            size: [1.0, 1.0],
+            position: [f64::from(n), 0.0],
+            ..Pad::default()
+        })
         .collect();
+    let file = FootprintFile::from_footprint(footprint);
+    let editor = FootprintDocument::new(path.clone(), file);
     let (mut app, _task) = Signex::new();
     app.document_state
         .footprint_editors
