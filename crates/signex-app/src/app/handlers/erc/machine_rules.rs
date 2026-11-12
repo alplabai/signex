@@ -272,8 +272,9 @@ impl Signex {
             // unreadable profile, so the user's file is never overwritten.
             Err(why) => {
                 crate::diagnostics::log_warning(format!(
-                    "The machine's ERC rules could not be read, so this session uses the \
-                     built-in defaults and the file is left untouched: {why}"
+                    "The machine's rules ({}) could not be read, so this session uses the \
+                     built-in defaults and the file is left untouched: {why}",
+                    rule_profiles::file_name_for(USER_DEFAULT_PROFILE_NAME)
                 ));
                 self.ui_state.machine_rules_problem = Some(why.clone());
             }

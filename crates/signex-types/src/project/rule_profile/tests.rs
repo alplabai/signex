@@ -63,6 +63,18 @@ fn a_profile_without_drc_resaves_without_it() {
     assert_eq!(profile.to_json_bytes(), text);
 }
 
+/// A `drc` of another shape is refused with the whole profile, as any other
+/// shape change is, rather than half-read.
+#[test]
+fn a_profile_with_a_malformed_drc_section_is_refused() {
+    for drc in [r#""legacy""#, "null", "[1]", r#"{"dsl":5}"#] {
+        let text =
+            format!(r#"{{"name":"C","erc":{{"severity":{{"unused_pin":"error"}}}},"drc":{drc}}}"#);
+        let err = RuleProfile::from_json_bytes(text.as_bytes()).unwrap_err();
+        assert!(matches!(err, RuleProfileError::Parse(_)), "{drc}");
+    }
+}
+
 /// The content hash recorded in projects stays the ERC hash: a DRC section
 /// has its own (#2307), so no existing provenance or drift result moves.
 #[test]

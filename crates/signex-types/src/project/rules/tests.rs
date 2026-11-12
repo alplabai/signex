@@ -295,3 +295,24 @@ fn a_drc_section_holding_only_rule_text_is_kept() {
     assert_eq!(data.rules.unwrap().drc.dsl.as_deref(), Some(""));
     assert_eq!(saved["rules"], rules_of(&text));
 }
+
+/// A `drc` of another shape makes the whole section unreadable (#1180), as
+/// any other shape change does: kept byte for byte, not applied.
+#[test]
+fn a_malformed_drc_section_is_kept_and_marks_the_rules_unreadable() {
+    for drc in [
+        r#""legacy""#,
+        "null",
+        "[1]",
+        r#"{"severity":{"builtin::short":1}}"#,
+        r#"{"dsl":5}"#,
+    ] {
+        let text = project_with_rules(&format!(
+            r#"{{"schema":1,"erc":{{"severity":{{"unused_pin":"error"}}}},"drc":{drc}}}"#
+        ));
+        let (data, saved) = open_and_resave(&text);
+        assert!(data.rules.is_none(), "{drc}");
+        assert!(data.has_unreadable_rules(), "{drc}");
+        assert_eq!(saved["rules"], rules_of(&text), "{drc}");
+    }
+}

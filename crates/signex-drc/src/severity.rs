@@ -1,6 +1,6 @@
 //! DRC rule ids and severities on the #1085 rule layers (#2307 step 2a):
 //! built-in defaults, then a profile's `drc` section, then the project's
-//! `rules.drc`, the most specific layer winning. Ids follow ERC's
+//! `rules.drc`, a later layer overriding an earlier one. Ids follow ERC's
 //! `builtin::` / `user::` convention. See `docs/architecture/pcb-drc.md`.
 
 use std::collections::BTreeMap;

@@ -183,10 +183,18 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   the project's unknown-key bag, written back untouched, and not applied; ERC
   uses the machine preferences and says so once per open. A later build may
   therefore change a value's shape only together with a `schema` bump.
+  Behaviour change in #2307: before it, `drc` was reserved and any value rode
+  along verbatim while the ERC rules applied. Now `drc` is typed, so a `drc`
+  of another shape (`"drc": "legacy"`, `null`, a list, a severity or `dsl`
+  that is not a string) makes the whole section opaque the same way. The
+  bytes are kept, but ERC falls back to the machine rules, and storing rules,
+  rule edits and waivers are refused for that project.
 - `schema`, `erc`, `drc` and every `profile` field are optional and omitted
   when absent or empty. An explicitly empty value (`"erc": {}`, `"drc": {}`,
   `"name": ""`) has
-  the same meaning as an absent one and is dropped on re-save.
+  the same meaning as an absent one and is dropped on re-save. A section
+  that already held a `drc` object before #2307 re-saves with equal values,
+  but `drc` may move among the section's keys.
 
 ## Annotation settings (#1232)
 

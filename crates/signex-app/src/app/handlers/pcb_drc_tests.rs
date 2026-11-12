@@ -5,6 +5,60 @@ use signex_types::project::{DrcRuleSet, ProjectRules};
 use signex_types::violation::Severity;
 
 use super::pcb_drc::drc_severities;
+use crate::app::Signex;
+use crate::app::handlers::menu::export::tests::{app_workspace, open_with, sheet_with_net};
+
+/// A project with one open sheet and no stored rules; the machine's User
+/// Default sets `builtin::clearance` to warning.
+fn project_without_rules() -> Signex {
+    let dir = std::env::temp_dir().join(format!("signex-drc-seed-{}", uuid::Uuid::now_v7()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
+    let top = dir.join("top.snxsch");
+    open_with(
+        &mut app.document_state,
+        &top,
+        sheet_with_net("R1", "NET_A", &[]),
+    );
+    app.document_state.active_path = Some(top);
+    app.ui_state.machine_drc_rules = set("builtin::clearance", "warning");
+    app
+}
+
+/// The clearance severity a DRC run of the active project would use.
+fn clearance(app: &Signex) -> Option<Severity> {
+    let rules = app
+        .document_state
+        .active_document_project()
+        .and_then(|p| p.data.rules.as_ref());
+    drc_severities(rules, &app.ui_state.machine_drc_rules).of(ViolationKind::Clearance)
+}
+
+fn stores_rules(app: &Signex) -> bool {
+    app.document_state
+        .active_document_project()
+        .is_some_and(|p| p.data.rules.is_some())
+}
+
+/// An ERC-only action that makes the project store rules must not switch
+/// DRC away from the machine's DRC rules (#2307 review).
+#[test]
+fn storing_erc_rules_in_the_project_keeps_the_drc_severities() {
+    let mut app = project_without_rules();
+    assert!(!stores_rules(&app));
+    assert_eq!(clearance(&app), Some(Severity::Warning));
+    let _ = app.handle_store_erc_rules_in_project();
+    assert!(stores_rules(&app));
+    assert_eq!(clearance(&app), Some(Severity::Warning));
+}
+
+#[test]
+fn a_first_erc_waiver_keeps_the_drc_severities() {
+    let mut app = project_without_rules();
+    assert_eq!(clearance(&app), Some(Severity::Warning));
+    let _ = app.handle_erc_net_waiver_set("user::net_check", "NET_A", true);
+    assert!(stores_rules(&app));
+    assert_eq!(clearance(&app), Some(Severity::Warning));
+}
 
 fn set(id: &str, sev: &str) -> DrcRuleSet {
     let mut s = DrcRuleSet::default();

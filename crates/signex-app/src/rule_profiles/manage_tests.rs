@@ -548,6 +548,19 @@ fn a_new_project_copies_the_profiles_drc_section_and_the_shipped_one_has_none() 
     assert!(shipped.drc.is_empty());
 }
 
+/// A User Default whose `drc` has another shape cannot be read; an edit of
+/// the machine rules refuses to replace it, so its bytes stay (#2307).
+#[test]
+fn a_user_default_with_a_malformed_drc_section_is_never_overwritten() {
+    let tmp = dir();
+    let path = tmp.path().join(file_name_for(USER_DEFAULT_PROFILE_NAME));
+    let bytes = br#"{"name":"User Default","version":"1","drc":"legacy"}"#;
+    std::fs::write(&path, bytes).unwrap();
+    assert!(load_user_default(tmp.path()).is_err());
+    assert!(write_user_default(tmp.path(), rules("unused_pin", "off")).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+}
+
 #[test]
 fn editing_the_machine_rules_keeps_their_drc_section() {
     let tmp = dir();

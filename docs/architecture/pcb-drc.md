@@ -62,7 +62,9 @@ projects and are never renamed.
 | `Unconnected` | `builtin::unconnected` | warning |
 | `Keepout` | `builtin::keepout` | error |
 
-Severities follow the #1085 rule layers, the most specific winning:
+Severities follow the #1085 rule layers, a later layer overriding an earlier
+one (the "most specific wins" precedence of #2307 is between rules of the
+rule language in step 2b: net, net class, pattern, layer):
 
 1. the built-in defaults above (`ViolationKind::default_severity`);
 2. a profile's `drc.severity` (`.snxrules`, see
@@ -86,10 +88,14 @@ the Messages panel and log lines do not show severity yet.
 The app picks the layers the way ERC picks its rules: a project that stores a
 `rules` section uses its own `rules.drc` alone (the project checks the same on
 every machine); a board with no project, or a project without a `rules`
-section, uses the machine's `User Default` profile as the profile layer. A new
-project copies the `drc` section of the profile it is seeded from, as it
-copies `erc`. "Update from profile" and the drift check still compare only
-`erc`; the `drc` section joins them with the rule language (step 2b).
+section, uses the machine's `User Default` profile as the profile layer. Every
+path that makes a project start storing rules carries a `drc` section with it,
+so the DRC layer never changes by itself: a new project copies the `drc`
+section of the profile it is seeded from, and "Store ERC rules in this
+project" and a first ERC waiver copy the machine's `User Default` `drc`
+section along with its ERC rules. "Save as profile", "Update from profile" and
+the drift check still handle only `erc`; the `drc` section joins them with the
+rule language (step 2b).
 
 ## How it stays fast
 
