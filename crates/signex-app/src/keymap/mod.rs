@@ -9,6 +9,7 @@ mod binding;
 mod catalog;
 mod command;
 mod editor;
+mod mod_migration;
 mod physical;
 mod platform;
 mod profile;
@@ -21,6 +22,15 @@ pub use binding::{
     KeyBindingSource, KeyParseError, KeyStroke, KeyToken, Modifiers, ShortcutBinding,
     ShortcutBindingAction, ShortcutContext, ShortcutTrigger, mac_stroke_caps,
 };
+/// A hard-coded shortcut spelling as this OS shows it: `Mod+S` is `⌘S` on
+/// macOS and `Ctrl+S` elsewhere. Text that is not a stroke is returned as is.
+/// For hints that cannot ask the active keymap (fallbacks, prose).
+pub fn shown(spelling: &str) -> String {
+    ShortcutTrigger::parse(spelling)
+        .map(|trigger| trigger.display_text())
+        .unwrap_or_else(|_| spelling.to_string())
+}
+
 #[cfg(test)]
 pub(crate) use catalog::OPERAND_CONVENTION;
 pub use catalog::{
@@ -30,6 +40,10 @@ pub use catalog::{
 pub use command::AppCommandId;
 pub use editor::{
     BindingSlot, KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource,
+};
+pub use mod_migration::{
+    ModMigration, ModMove, migrate_active_to_mod, offers_mod_migration, standard_ctrl_rows,
+    with_standard_set_on_mod,
 };
 pub use platform::Platform;
 pub use profile::{
@@ -48,6 +62,10 @@ mod catalog_golden_tests;
 mod editor_tests;
 #[cfg(test)]
 mod menu_command_tests;
+#[cfg(test)]
+mod mod_content_tests;
+#[cfg(test)]
+mod mod_migration_tests;
 #[cfg(test)]
 mod mod_token_tests;
 #[cfg(test)]

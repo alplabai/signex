@@ -1,15 +1,15 @@
 # path	kind	label	command_id	shortcut	action	enabled[default,full,pcb,symbol,sheets,undocked,footprint,dirty]	gate
 File	menu	File	-	-	-	-	-
-File/New Project	item	New Project	new_document	Ctrl+N	NewProject	11111111	always
+File/New Project	item	New Project	new_document	Mod+N	NewProject	11111111	always
 File/New	submenu	New	-	-	-	-	-
 File/New/PCB	item	PCB	-	-	NewPcb	01001001	cmd:new_pcb_document
-File/Open...	item	Open...	open_document	Ctrl+O	OpenProject	11111111	always
+File/Open...	item	Open...	open_document	Mod+O	OpenProject	11111111	always
 File/Open Recent	submenu	Open Recent	-	-	-	-	-
 File/---	separator	-	-	-	-	-	-
 File/Close Document	item	Close Document	close_active_document	Ctrl+F4	CloseDocument	01110010	cmd:close_active_document
 File/---	separator	-	-	-	-	-	-
-File/Save	item	Save	save_document	Ctrl+S	Save	01010011	cmd:save_document
-File/Save As...	item	Save As...	save_document_as	Ctrl+Shift+S	SaveAs	01010010	cmd:save_document_as
+File/Save	item	Save	save_document	Mod+S	Save	01010011	cmd:save_document
+File/Save As...	item	Save As...	save_document_as	Mod+Shift+S	SaveAs	01010010	cmd:save_document_as
 File/Save All	item	Save All	-	-	SaveAll	01000001	dirty
 File/---	separator	-	-	-	-	-	-
 File/Library	submenu	Library	-	-	-	-	-
@@ -21,18 +21,18 @@ File/Import	submenu	Import	-	-	-	-	-
 File/Import/Altium Project...	item	Altium Project...	-	-	ImportAltium	11111111	always
 File/Export	submenu	Export	-	-	-	-	-
 File/Export/PDF…	item	PDF…	-	-	ExportPdf	01000000	cmd:print
-File/Print...	item	Print...	print	Ctrl+P	Print	01000000	cmd:print
+File/Print...	item	Print...	print	Mod+P	Print	01000000	cmd:print
 File/---	separator	-	-	-	-	-	-
 File/Exit	item	Exit	-	-	Exit	11111111	always
 Edit	menu	Edit	-	-	-	-	-
-Edit/Undo	item	Undo	undo	Ctrl+Z	Undo	01000000	cmd:undo
+Edit/Undo	item	Undo	undo	Mod+Z	Undo	01000000	cmd:undo
 Edit/Redo	item	Redo	redo	Ctrl+Y	Redo	01000000	cmd:redo
 Edit/---	separator	-	-	-	-	-	-
-Edit/Cut	item	Cut	cut	Ctrl+X	Cut	01000000	cmd:cut
-Edit/Copy	item	Copy	copy	Ctrl+C	Copy	01000000	cmd:copy
-Edit/Paste	item	Paste	paste	Ctrl+V	Paste	01000000	cmd:paste
+Edit/Cut	item	Cut	cut	Mod+X	Cut	01000000	cmd:cut
+Edit/Copy	item	Copy	copy	Mod+C	Copy	01000000	cmd:copy
+Edit/Paste	item	Paste	paste	Mod+V	Paste	01000000	cmd:paste
 Edit/Paste Special	item	Paste Special	smart_paste	Shift+Ctrl+V	SmartPaste	01000000	cmd:smart_paste
-Edit/Duplicate	item	Duplicate	duplicate	Ctrl+D	Duplicate	01000000	cmd:duplicate
+Edit/Duplicate	item	Duplicate	duplicate	Mod+D	Duplicate	01000000	cmd:duplicate
 Edit/Delete	item	Delete	delete_selection	Del	Delete	01100010	cmd:delete_selection
 Edit/Move	submenu	Move	-	-	-	-	-
 Edit/Move/Move	item	Move	-	-	MoveObject	01100000	cmd:move_object
@@ -49,9 +49,9 @@ Edit/Arrange/Send to Back	item	Send to Back	-	-	SendDrawingsToBack	00000000	cmd:
 Edit/Arrange/Bring Forward	item	Bring Forward	-	-	BringDrawingsForward	00000000	cmd:bring_drawings_forward
 Edit/Arrange/Send Backward	item	Send Backward	-	-	SendDrawingsBackward	00000000	cmd:send_drawings_backward
 Edit/---	separator	-	-	-	-	-	-
-Edit/Select All	item	Select All	select_all	Ctrl+A	SelectAll	01000000	cmd:select_all
+Edit/Select All	item	Select All	select_all	Mod+A	SelectAll	01000000	cmd:select_all
 Edit/---	separator	-	-	-	-	-	-
-Edit/Find	item	Find	find	Ctrl+F	Find	11111111	cmd:find
+Edit/Find	item	Find	find	Mod+F	Find	11111111	cmd:find
 Edit/Find and Replace	item	Find and Replace	find_and_replace	Ctrl+H	Replace	11111111	cmd:find_and_replace
 View	menu	View	-	-	-	-	-
 View/Zoom In	item	Zoom In	zoom_in_at_cursor	Ctrl+=	ZoomIn	01100000	cmd:zoom_in_at_cursor
@@ -120,7 +120,7 @@ Tools/Re-Annotate Board...	item	Re-Annotate Board...	-	-	ReannotateBoard	0110000
 Tools/Net Inspector	item	Net Inspector	-	-	OpenNetInspector	11111111	cmd:open_net_inspector
 Tools/---	separator	-	-	-	-	-	-
 Tools/Cross Probe	item	Cross Probe	-	-	CrossProbe	01100000	cmd:cross_probe
-Tools/Cross Select Mode	item	Cross Select Mode	toggle_cross_select_mode	Ctrl+Shift+X	ToggleCrossSelectMode	11111111	cmd:toggle_cross_select_mode
+Tools/Cross Select Mode	item	Cross Select Mode	toggle_cross_select_mode	Mod+Shift+X	ToggleCrossSelectMode	11111111	cmd:toggle_cross_select_mode
 Tools/---	separator	-	-	-	-	-	-
 Tools/Up Hierarchy	item	Up Hierarchy	-	-	AscendToParentSheet	01000000	cmd:navigate_up_hierarchy
 Tools/---	separator	-	-	-	-	-	-
@@ -131,7 +131,7 @@ Tools/Document Options...	item	Document Options...	-	-	ToolsDocumentOptions	0000
 Tools/---	separator	-	-	-	-	-	-
 Tools/Passive Network Calculator...	item	Passive Network Calculator...	-	-	OpenPassiveCalculator	11111111	always
 Tools/---	separator	-	-	-	-	-	-
-Tools/Preferences...	item	Preferences...	open_preferences	Ctrl+,	OpenPreferences	11111111	always
+Tools/Preferences...	item	Preferences...	open_preferences	Mod+,	OpenPreferences	11111111	always
 Reports	menu	Reports	-	-	-	-	-
 Reports/Bill of Materials…	item	Bill of Materials…	-	-	ExportBom	01000000	sch
 Reports/Netlist (Protel .NET)...	item	Netlist (Protel .NET)...	-	-	ExportNetlist	01000000	sch

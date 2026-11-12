@@ -15,7 +15,9 @@ fn press(app: &mut Signex, keys: &str) {
     };
     let _ = app.update(Message::Ui(UiMsg::KeymapStroke {
         window: None,
-        stroke: strokes.remove(0),
+        stroke: strokes
+            .remove(0)
+            .resolved_for(signex_app::keymap::Platform::current()),
     }));
 }
 
@@ -38,7 +40,7 @@ fn ctrl_z_still_undoes_in_a_footprint_editor_tab() {
     });
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
 
-    press(&mut app, "Ctrl+Z");
+    press(&mut app, "Mod+Z");
 
     assert!(
         !app.document_state.footprint_editors[&path]

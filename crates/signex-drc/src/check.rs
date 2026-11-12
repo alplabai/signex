@@ -6,10 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::pcb::PcbBoard;
 
-use crate::copper::{CopperItem, collect_copper};
-use crate::index::{BoardIndex, ItemRef};
-use crate::ratsnest::ratsnest;
-use crate::units::PointNm;
+use pcb_geom::{BoardIndex, CopperItem, ItemRef, PointNm, collect_copper, ratsnest};
 
 use super::{DrcReport, DrcRules, Violation, ViolationKind};
 

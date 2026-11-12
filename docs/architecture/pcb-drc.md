@@ -1,8 +1,12 @@
 # PCB design-rule check (#2222)
 
-`pcb_geom::run_drc(&PcbBoard, &DrcRules) -> DrcReport`: a read-only check of
+`signex_drc::run(&PcbBoard, &DrcRules) -> DrcReport`: a read-only check of
 a board in integer nm. Nothing in it edits the board, so it does not wait on
 the document-hosting decision (#661).
+
+The check lives in its own domain crate, `crates/signex-drc` (#2307), the
+DRC twin of `signex-erc`. It measures with `pcb-geom` (index, shapes,
+distances, copper layers, ratsnest); `pcb-geom` does not depend on it.
 
 ## What it reports
 
@@ -49,7 +53,7 @@ the format (#2242).
 
 Candidate pairs come from the `BoardIndex` R-tree: one bounding-box query per
 item, grown by the largest rule, then the exact test on the pairs it returns.
-`crates/pcb-geom/tests/drc_corpus.rs` times a 10,000-track board in both a
+`crates/signex-drc/tests/drc_corpus.rs` times a 10,000-track board in both a
 clean and a 29,502-violation run and asserts a loose bound (10 s in debug CI;
 a debug run takes about 0.35 s).
 

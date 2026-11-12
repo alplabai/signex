@@ -2,12 +2,13 @@
 //! opened from disk: the report, the Messages panel rows, a click on a row
 //! selecting its items, and a board that is never edited.
 
-use pcb_geom::{ItemRef, ViolationKind};
+use pcb_geom::ItemRef;
 use signex_app::app::{FileMsg, Message, PcbMsg, Signex};
 use signex_app::dock::DockMessage;
 use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::panels::PanelMsg;
+use signex_drc::ViolationKind;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{PcbBoard, Point, Segment};
 use uuid::Uuid;

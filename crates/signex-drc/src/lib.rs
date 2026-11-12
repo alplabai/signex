@@ -9,8 +9,7 @@ mod rules;
 
 use uuid::Uuid;
 
-use crate::index::{ItemRef, Rejected};
-use crate::units::PointNm;
+use pcb_geom::{ItemRef, PointNm, Rejected};
 
 pub use check::run;
 pub use rules::{DEFAULT_CLEARANCE_MM, DrcRules};
@@ -42,7 +41,7 @@ pub struct Violation {
     /// keepout (0 for a footprint).
     pub nets: (u32, u32),
     /// Copper layers both items reach, as a bit mask (see
-    /// [`copper_layers`](crate::copper_layers)); 0 for an unconnected link.
+    /// [`copper_layers`](pcb_geom::copper_layers)); 0 for an unconnected link.
     /// For a keepout, the layers the item and the keepout share.
     pub layers: u32,
     /// Where it is: the midpoint of the closest points, the centre of the

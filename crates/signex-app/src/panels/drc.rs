@@ -3,7 +3,7 @@
 //! Rows are data (`DrcRow`); the text is rendered here from the message
 //! catalog, so a language switch needs no new run.
 
-use pcb_geom::ViolationKind;
+use signex_drc::ViolationKind;
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::pcb_layer::CopperLayer;
 

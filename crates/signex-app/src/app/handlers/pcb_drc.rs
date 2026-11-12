@@ -1,13 +1,13 @@
 //! The read-only design-rule check of the board in view (#2222).
 //!
-//! The check is `pcb_geom::run_drc`; it runs in `spawn_blocking` on a copy of
+//! The check is `signex_drc::run`; it runs in `spawn_blocking` on a copy of
 //! the board, so a large board never holds the UI thread, and its report is
 //! applied only if no newer run has begun. Nothing here edits the board.
 
 use std::sync::Arc;
 
 use iced::Task;
-use pcb_geom::{DrcRules, ViolationKind};
+use signex_drc::{DrcRules, ViolationKind};
 
 use crate::app::{DrcRunResult, Message, PcbMsg, Signex};
 
@@ -165,7 +165,7 @@ fn run_check(
 ) -> DrcRunResult {
     let rules = DrcRules::for_board(board, classes)
         .map_err(|e| format!("the board's clearance rules are not usable: {e}"))?;
-    let report = pcb_geom::run_drc(board, &rules);
+    let report = signex_drc::run(board, &rules);
     let names = board
         .nets
         .iter()
@@ -174,7 +174,7 @@ fn run_check(
     Ok((report, names))
 }
 
-fn log_report(report: &pcb_geom::DrcReport, names: &std::collections::BTreeMap<u32, String>) {
+fn log_report(report: &signex_drc::DrcReport, names: &std::collections::BTreeMap<u32, String>) {
     let count = |k| report.count(k);
     let summary = format!(
         "DRC: {} clearance, {} short, {} unconnected, {} keepout (minimum clearance {} mm){}",

@@ -577,11 +577,11 @@ impl Signex {
                 dialog_body(crate::styles::dialog_intro(
                     crate::styles::DialogIcon::Warn,
                     "Reset every designator?",
-                    Some(
+                    Some(format!(
                         "Every reference designator will be reset to '?', then the sheet will be renumbered from 1.
-This cannot be undone through Ctrl+Z alone — consider saving first."
-                            .to_owned()
-                    ),
+This cannot be undone through {} alone — consider saving first.",
+                        crate::keymap::shown("Mod+Z")
+                    )),
                     tokens,
                 )),
                 dialog_footer(vec![
