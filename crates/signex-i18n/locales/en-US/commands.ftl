@@ -335,7 +335,7 @@ cmd-menu-draw-elliptical-arc = Elliptical Arc
 cmd-draw-ellipse = Draw ellipse
 cmd-menu-draw-ellipse = Ellipse
 cmd-draw-line = Draw line
-# Noun: the line tool of the symbol editor, a graphic line (not an electrical wire).
+# Noun: the line tool of the schematic Active Bar, a graphic line (not an electrical wire).
 cmd-menu-draw-line = Line
 cmd-draw-rectangle = Draw rectangle
 cmd-menu-draw-rectangle = Rectangle

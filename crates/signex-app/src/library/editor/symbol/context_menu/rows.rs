@@ -206,6 +206,22 @@ mod tests {
         );
     }
 
+    /// Delete and Select All read their text through a command id
+    /// string; a mistyped id would quietly show "Unnamed command".
+    #[test]
+    fn command_rows_keep_their_english() {
+        let sym = Symbol::empty("T");
+        let rows = build_symbol_context_menu_rows(
+            &sym,
+            crate::library::editor::symbol::state::PartView::normal(1),
+            &None,
+        );
+        let en = signex_i18n::I18n::en_us_ref();
+        let text = |id| en.message(find(&rows, id).label, &[]).to_string();
+        assert_eq!(text("symbol.delete"), "Delete");
+        assert_eq!(text("symbol.select-all"), "Select All");
+    }
+
     /// Empty selection: Join into Polygon, Delete, and Deselect All
     /// are disabled; Select All and Fit to Window stay enabled.
     #[test]
