@@ -90,7 +90,7 @@ fn limit<'src>() -> impl Parser<'src, &'src str, LimitAst, Extra<'src>> + Clone 
     // After a space only a known unit counts, so `0.2 and` is not `0.2and`.
     let spaced_unit = text::inline_whitespace()
         .at_least(1)
-        .ignore_then(unit.clone().try_map(|w: Word, span| {
+        .ignore_then(unit.try_map(|w: Word, span| {
             if KNOWN_UNITS.contains(&w.text.as_str()) {
                 Ok(w)
             } else {

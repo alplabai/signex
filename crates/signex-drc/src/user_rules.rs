@@ -177,13 +177,13 @@ impl ScopedRule {
 /// `layers` (for a clearance, one side of the pair, `objects` naming both
 /// sides' kinds): the most specific rule's, the strictest among equals,
 /// the first written among identical ones. `None` when no rule sets one.
-pub(crate) fn pick<'a>(
-    rules: &'a [ScopedRule],
+pub(crate) fn pick(
+    rules: &[ScopedRule],
     kind: LimitKind,
     net: u32,
     layers: u32,
     objects: [Option<CopperObject>; 2],
-) -> Option<(i64, &'a ScopedRule)> {
+) -> Option<(i64, &ScopedRule)> {
     let mut best: Option<((u8, u8), i64, &ScopedRule)> = None;
     for scoped in rules {
         if !scoped.covers(net, layers) || !scoped.pairs_with(objects) {
