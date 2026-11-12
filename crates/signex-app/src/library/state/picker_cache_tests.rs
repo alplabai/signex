@@ -69,6 +69,33 @@ fn set_filter(state: &mut LibraryState, filter: &str) {
 }
 
 #[test]
+fn the_picker_filter_uses_the_search_fold_and_refolds_on_a_language_change() {
+    let mut state = LibraryState::default();
+    state.open_libraries.push(library(
+        "/tmp/a.snxlib",
+        vec![
+            summary("A", "STRAßE", ""),
+            summary("B", "ISPARTA", ""),
+            summary("C", "İSTANBUL", ""),
+        ],
+    ));
+    state.touch_data();
+    state.picker = Some(PickerState::default());
+    set_filter(&mut state, "strasse");
+    state.sync_view_caches();
+    assert_eq!(visible_pns(&state), ["A"], "`ß` folds to `ss`");
+    let tr = signex_i18n::I18n::with_message_locale_for_test("tr");
+    set_filter(&mut state, "ısparta");
+    state.sync_view_caches_in(&tr);
+    assert_eq!(visible_pns(&state), ["B"], "tr: `ı` finds `I`");
+    state.sync_view_caches();
+    assert!(
+        visible_pns(&state).is_empty(),
+        "back in en-US the keys refold"
+    );
+}
+
+#[test]
 fn syncing_with_unchanged_inputs_recomputes_nothing() {
     let mut state = state_with_picker();
     state.sync_view_caches();

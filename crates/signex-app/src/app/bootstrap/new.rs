@@ -28,9 +28,25 @@ impl Signex {
     /// Everything [`Signex::boot`] does after `new`, split out so a test can
     /// give the app a recovery folder of its own.
     pub(super) fn boot_from(
+        app: Self,
+        boot_task: Task<Message>,
+        startup_paths: Vec<std::path::PathBuf>,
+    ) -> (Self, Task<Message>) {
+        Self::boot_from_on(
+            app,
+            boot_task,
+            startup_paths,
+            crate::keymap::Platform::current(),
+        )
+    }
+
+    /// [`Self::boot_from`] for an explicit OS, so a test can see what a Mac
+    /// launch adds without a Mac.
+    pub(in crate::app) fn boot_from_on(
         mut app: Self,
         boot_task: Task<Message>,
         startup_paths: Vec<std::path::PathBuf>,
+        platform: crate::keymap::Platform,
     ) -> (Self, Task<Message>) {
         let opens = Self::startup_open_messages(startup_paths)
             .into_iter()
@@ -59,6 +75,14 @@ impl Signex {
         app.ui_state.machine_rules_loading = crate::rule_profiles::profiles_dir().is_some();
         let profile_migration = Self::migrate_default_profile_task();
         let controls_probe = Self::detect_window_controls_task();
+        // The one-time macOS shortcut question opens a native dialog and
+        // persists a flag, so only the window the person works in asks it:
+        // not `new` (a headless run boots from it).
+        let keymap_prompt = crate::app::handlers::keymap_mod_prompt::keymap_mod_prompt_boot(
+            &app.ui_state.keymap_profiles,
+            crate::fonts::load_prefs_json().as_ref(),
+            platform,
+        );
         (
             app,
             Task::batch(
@@ -68,6 +92,7 @@ impl Signex {
                     recovery_sweep,
                     profile_migration,
                     controls_probe,
+                    keymap_prompt,
                 ]
                 .into_iter()
                 .chain(opens),

@@ -47,7 +47,7 @@ pub fn tree_style(tokens: &ThemeTokens) -> TreeStyle {
 /// Short kind badge of a document row, with its tint: SCH info, PCB ok,
 /// LIB violet, BOM warn, OUT neutral.
 fn kind_badge(node: &TreeNode) -> Option<(&'static str, BadgeTone)> {
-    // identifier/data folding, never shown
+    // File-extension match, not UI text: ASCII lowercase in every language.
     // ast-grep-ignore: no-case-in-view
     let label = node.label.to_ascii_lowercase();
     let ext = |e: &str| label.contains(e);

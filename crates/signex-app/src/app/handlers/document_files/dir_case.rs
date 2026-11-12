@@ -289,7 +289,8 @@ pub(super) fn aliased_documents_message(spellings: &[&Path]) -> String {
 /// focused: nothing was written.
 pub(super) fn save_skipped_message(path: &Path) -> String {
     format!(
-        "Nothing was saved: focus moved while the folder was checked, press Ctrl+S again: {}",
+        "Nothing was saved: focus moved while the folder was checked, press {} again: {}",
+        crate::keymap::shown("Mod+S"),
         path.display()
     )
 }

@@ -45,6 +45,22 @@ pub(super) async fn save_file(dialog: &FileDialog) -> Option<PathBuf> {
     Some(file.path().to_path_buf())
 }
 
+/// A two-button question; `true` only when the `yes` button was pressed
+/// (closing the dialog or the other button is `false`).
+pub(super) async fn ask_two(title: &str, description: &str, yes: &str, no: &str) -> bool {
+    let answer = rfd::AsyncMessageDialog::new()
+        .set_level(rfd::MessageLevel::Info)
+        .set_title(title)
+        .set_description(description)
+        .set_buttons(rfd::MessageButtons::OkCancelCustom(
+            yes.to_string(),
+            no.to_string(),
+        ))
+        .show()
+        .await;
+    answer == rfd::MessageDialogResult::Custom(yes.to_string())
+}
+
 pub(super) fn browse(url: &str) -> std::io::Result<()> {
     webbrowser::open(url)
 }

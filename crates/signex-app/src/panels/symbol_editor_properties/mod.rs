@@ -75,6 +75,7 @@ pub(super) fn view_symbol_editor_properties<'a>(
                 muted,
                 border_c,
                 sym.graphic_fill_picker,
+                i18n,
             );
         }
         SymbolEditorSelection::FieldReference => {

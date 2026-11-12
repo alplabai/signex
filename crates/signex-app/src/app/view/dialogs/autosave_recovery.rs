@@ -87,11 +87,14 @@ impl Signex {
             );
         }
         body = body.push(dialog_hint(
-            "Restore loads the copy as unsaved edits; nothing is written to the file until \
+            format!(
+                "Restore loads the copy as unsaved edits; nothing is written to the file until \
                  you save. Restoring replaces the open document and cannot be undone with \
-                 Ctrl+Z. Discard deletes the copy. Decide later keeps it for the next time \
+                 {}. Discard deletes the copy. Decide later keeps it for the next time \
                  this file is opened, and pauses autosave for this document for the rest of the \
                  session.",
+                crate::keymap::shown("Mod+Z")
+            ),
             tokens,
         ));
 

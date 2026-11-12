@@ -99,7 +99,8 @@ pub(in crate::app) fn sorted_row_order(
                 .map(|r| {
                     let text = column_value(sort_col, r);
                     let parsed = signex_types::quantity::sort_key_from_value_text(&text);
-                    // Sort key, never shown.
+                    // On-screen order must match the export, so no locale
+                    // collation here (`designator_sort_matches_the_export_order`).
                     // ast-grep-ignore: no-case-in-view
                     (parsed, text.to_ascii_lowercase())
                 })
@@ -121,7 +122,8 @@ pub(in crate::app) fn sorted_row_order(
         _ => {
             let keys: Vec<String> = rows
                 .iter()
-                // Sort key, never shown.
+                // On-screen order must match the export, so no locale
+                // collation here (`designator_sort_matches_the_export_order`).
                 // ast-grep-ignore: no-case-in-view
                 .map(|r| column_value(sort_col, r).to_ascii_lowercase())
                 .collect();

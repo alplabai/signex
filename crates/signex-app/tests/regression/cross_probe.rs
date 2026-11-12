@@ -385,12 +385,13 @@ fn with_cross_select_off_nothing_follows() {
         window: None,
         stroke: KeyStroke {
             modifiers: Modifiers {
-                ctrl: true,
+                primary: true,
                 shift: true,
                 ..Modifiers::default()
             },
             key: KeyToken::Character("x".into()),
-        },
+        }
+        .resolved_for(signex_app::keymap::Platform::current()),
     });
     send(&mut f.app, ctrl_shift_x);
     assert!(

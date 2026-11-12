@@ -45,9 +45,20 @@ fn summary(editor: &SymbolDocument, i18n: &I18n) -> String {
             selection_text(editor, selection, i18n),
             t!(i18n, ids::EDITORS_SYMBOL_STATUS_HINT_SELECTED)
         ),
-        None => t!(i18n, ids::EDITORS_SYMBOL_STATUS_HINT_IDLE).into_string(),
+        None => idle_hint(i18n),
     };
     format!("{part} · {tail}")
+}
+
+/// The key hints with undo and redo as this OS writes the platform chord.
+fn idle_hint(i18n: &I18n) -> String {
+    t!(
+        i18n,
+        ids::EDITORS_SYMBOL_STATUS_HINT_IDLE,
+        "undo" => crate::keymap::shown("Mod+Z"),
+        "redo" => crate::keymap::shown("Mod+Y")
+    )
+    .into_string()
 }
 
 /// "Pin 8 VOUT selected" for one pin, "3 selected" for anything else.
@@ -110,8 +121,14 @@ mod tests {
             "parts" => 2u32,
             "pins" => 2usize
         );
-        let hint = t!(i18n, ids::EDITORS_SYMBOL_STATUS_HINT_IDLE);
-        assert_eq!(segment, format!("{part} · {hint}"));
+        assert_eq!(segment, format!("{part} · {}", idle_hint(&i18n)));
+        // Fluent wraps each placeholder in bidi isolation marks.
+        let shown = idle_hint(&i18n).replace(['\u{2068}', '\u{2069}'], "");
+        assert!(
+            shown.starts_with(&format!("{} undo", crate::keymap::shown("Mod+Z")))
+                && shown.contains(&format!("{} redo", crate::keymap::shown("Mod+Y"))),
+            "{shown}"
+        );
     }
 
     #[test]

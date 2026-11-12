@@ -208,14 +208,16 @@ impl Signex {
             .map(|p| crate::app::state::sheet_refs::file_label(p))
             .collect();
         crate::diagnostics::log_info(format!(
-            "{LABEL}: Ctrl+Z on any of these sheets undoes the whole run: {}.",
+            "{LABEL}: {} on any of these sheets undoes the whole run: {}.",
+            crate::keymap::shown("Mod+Z"),
             crate::app::state::sheet_refs::bounded_names(&names)
         ));
         let active = self.document_state.active_path.as_deref();
         if active.is_some_and(|a| !record.live.iter().any(|p| p == a)) {
             crate::diagnostics::log_warning(format!(
-                "{LABEL}: the active sheet had nothing to re-prefix, so Ctrl+Z here undoes \
-                 your previous edit, not the run. Open or switch to one of the sheets above to undo it."
+                "{LABEL}: the active sheet had nothing to re-prefix, so {} here undoes \
+                 your previous edit, not the run. Open or switch to one of the sheets above to undo it.",
+                crate::keymap::shown("Mod+Z")
             ));
         }
     }

@@ -48,7 +48,7 @@ pub fn view<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
 
-    let needle = state.panel_search.trim().to_lowercase();
+    let needle = i18n.fold_for_search(state.panel_search.trim());
 
     // The search box filters library *names*, not rows. Component-row
     // search lives inside the Library Browser tab (each browser tab
@@ -79,7 +79,7 @@ pub fn view<'a>(
     } else {
         for lib in state.open_libraries.iter() {
             // Apply the library-name filter when a needle is set.
-            if !needle.is_empty() && !lib.display_name.to_lowercase().contains(&needle) {
+            if !needle.is_empty() && !i18n.fold_for_search(&lib.display_name).contains(&needle) {
                 continue;
             }
             let expanded = state.panel_expanded.contains(&lib.root);

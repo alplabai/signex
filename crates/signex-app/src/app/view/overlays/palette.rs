@@ -4,6 +4,7 @@
 
 use iced::widget::{Row, Space, column, container, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
+use signex_i18n::I18n;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, rich_text, span, text};
 
@@ -20,21 +21,23 @@ fn mono() -> iced::Font {
 
 /// Path subtitle of a command row: its catalog category ("Place",
 /// "Modify", ...). Rows of other sources carry their own detail line.
-pub(super) fn path_subtitle(entry: &CommandEntry) -> Option<String> {
+pub(super) fn path_subtitle(i18n: &I18n, entry: &CommandEntry) -> Option<String> {
     let category = match &entry.action {
         CommandAction::Command(id) => metadata_for(id)?.category,
         CommandAction::Panel(_) => "panels",
         _ => return None,
     };
-    let mut chars = category.chars();
-    let first = chars.next()?;
-    // user-visible: migrate to the #2063 casemap
-    // ast-grep-ignore: no-case-in-view
-    Some(first.to_uppercase().chain(chars).collect())
+    let first = category.chars().next()?;
+    let rest = &category[first.len_utf8()..];
+    Some(format!(
+        "{}{rest}",
+        i18n.upper_for_display(&first.to_string())
+    ))
 }
 
 /// Group header: the group's title and how many of its rows are shown.
 pub(super) fn group_header<'a, M: 'a>(
+    i18n: &I18n,
     theme_tokens: &ThemeTokens,
     source: CommandSource,
     count: usize,
@@ -51,7 +54,7 @@ pub(super) fn group_header<'a, M: 'a>(
                     .boxed(),
             )
             .push(
-                text(raw(count.to_string()))
+                text(raw(i18n.count(count as i64)))
                     .size(TS.section)
                     .font(mono())
                     .color(r.ink4)
@@ -126,10 +129,9 @@ pub(super) fn scrollbar_style(
 /// Which characters of `label` the `query` matched: the first contiguous
 /// case-insensitive occurrence (which includes a word prefix), else none. A
 /// scattered subsequence matches the row but is never highlighted.
-pub(super) fn match_mask(label: &str, query: &str) -> Vec<bool> {
-    // identifier/data folding, never shown
-    // ast-grep-ignore: no-case-in-view
-    let low = |c: char| c.to_lowercase().next().unwrap_or(c);
+pub(super) fn match_mask_in(i18n: &I18n, label: &str, query: &str) -> Vec<bool> {
+    // The per-char fold keeps the length, so the mask lines up with `label`.
+    let low = |c: char| i18n.fold_char_for_search(c);
     let chars: Vec<char> = label.chars().map(low).collect();
     let wanted: Vec<char> = query
         .chars()
@@ -148,9 +150,21 @@ pub(super) fn match_mask(label: &str, query: &str) -> Vec<bool> {
     mask
 }
 
-/// The label as runs of plain and highlighted text.
+/// [`match_mask_in`] under en-US.
+#[cfg(test)]
+pub(super) fn match_mask(label: &str, query: &str) -> Vec<bool> {
+    match_mask_in(&I18n::en_us(), label, query)
+}
+
+/// [`label_runs_in`] under en-US.
+#[cfg(test)]
 pub(super) fn label_runs(label: &str, query: &str) -> Vec<(String, bool)> {
-    let mask = match_mask(label, query);
+    label_runs_in(&I18n::en_us(), label, query)
+}
+
+/// The label as runs of plain and highlighted text.
+pub(super) fn label_runs_in(i18n: &I18n, label: &str, query: &str) -> Vec<(String, bool)> {
+    let mask = match_mask_in(i18n, label, query);
     let mut runs: Vec<(String, bool)> = Vec::new();
     for (c, hit) in label.chars().zip(mask) {
         match runs.last_mut() {
@@ -213,6 +227,7 @@ pub(super) fn cap<'a, M: 'a>(theme_tokens: &ThemeTokens, label: &str) -> Element
 
 /// One result row.
 pub(super) fn result_row<'a, M: Clone + 'a>(
+    i18n: &I18n,
     theme_tokens: &ThemeTokens,
     entry: &CommandEntry,
     query: &str,
@@ -222,7 +237,7 @@ pub(super) fn result_row<'a, M: Clone + 'a>(
     let r = tokens::resolve(theme_tokens);
     let (ink, accent) = (ti(theme_tokens.text), r.accent_text);
     let shown_label = ellipsize(&entry.label, LABEL_BUDGET);
-    let spans: Vec<_> = label_runs(&shown_label, query)
+    let spans: Vec<_> = label_runs_in(i18n, &shown_label, query)
         .into_iter()
         .map(|(run, hit)| {
             let s = span::<()>(raw(run)).color(if hit { accent } else { ink });
@@ -238,7 +253,7 @@ pub(super) fn result_row<'a, M: Clone + 'a>(
             .boxed(),
     );
     let is_command = entry.source == CommandSource::Command;
-    if let Some(path) = path_subtitle(entry) {
+    if let Some(path) = path_subtitle(i18n, entry) {
         label_col = label_col.push(
             text(signex_i18n::UserText::new(path))
                 .size(TS.caption)
@@ -356,6 +371,19 @@ mod tests {
         let mask = match_mask("Open Project Options", "proj");
         assert_eq!(mask.iter().filter(|m| **m).count(), 4);
         assert!(mask[5] && mask[8]);
+    }
+
+    #[test]
+    fn a_turkish_query_highlights_dotted_and_dotless_i() {
+        let tr = I18n::with_message_locale_for_test("tr");
+        let mask = match_mask_in(&tr, "İstanbul ILIK", "istanbul");
+        assert_eq!(mask.iter().filter(|m| **m).count(), 8);
+        assert!(mask[0] && mask[7] && !mask[8]);
+        let mask = match_mask_in(&tr, "İstanbul ILIK", "ılık");
+        assert_eq!(mask.len(), "İstanbul ILIK".chars().count());
+        assert!(mask[9..].iter().all(|m| *m));
+        // Under en-US a plain `i` still matches and highlights `İ`.
+        assert!(match_mask("İstanbul", "istanbul").iter().all(|m| *m));
     }
 
     #[test]

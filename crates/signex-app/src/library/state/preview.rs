@@ -9,7 +9,7 @@ pub struct PickerState {
     /// Range filters on parameter columns of the list (#1572).
     pub range_filters: crate::library::range_filter::RangeFilters,
     pub selected: Option<(PathBuf, ComponentSummary)>,
-    /// The list the picker draws; kept current by `sync_view_caches`.
+    /// The list the picker draws; kept current by `sync_view_caches_in`.
     pub rows: PickerRows,
     /// What the modal is for; see [`PickerMode`].
     pub mode: super::placed_part::PickerMode,

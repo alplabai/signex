@@ -104,8 +104,58 @@ Shift-only key is never remapped. The macOS label (`⇧⌘S`) is display only an
 is never parsed back; the Preferences recorder and editor carry the profile-file
 spelling or the parsed stroke.
 
-Existing user profiles are not rewritten: their `Ctrl+…` and `Cmd+…` keep
-their physical meaning.
+Existing user profiles are not rewritten silently: their `Ctrl+…` and `Cmd+…`
+keep their physical meaning. The one exception is the one-time macOS prompt
+below.
+
+## Built-in profiles
+
+Both built-in profiles spell the platform-standard set with `Mod`: `N O S P Z
+X C V A F ,` plus `D R E L 4` and `Shift+S/Z/P/V/G/X/E/F/A`. Windows and Linux
+resolve every row exactly as before (`Mod` is Ctrl there), so the resolved
+golden `builtin_profiles_resolved.golden.tsv` does not change. Chords whose ⌘
+twin is a macOS system shortcut stay on the physical Control key (⌃ on macOS):
+`Ctrl+Q`, `Ctrl+W` (Altium Place Wire), `Ctrl+H`, `Ctrl+M`, `Ctrl+Space`,
+`Ctrl+Tab`, `Ctrl+G` (Classic), `Ctrl+F5`, `Ctrl+Y` (redo), `Ctrl+F4`,
+`Ctrl+PageDown` and `Ctrl+Home`. Redo keeps its plain `Ctrl+Shift+Z` (the
+profile has exactly one raw owner of that chord, and Windows and Linux are
+unchanged) and gains the Mac chord from a `platform = "macos"` section:
+`Mod+Shift+Z` (⇧⌘Z), so ⌃⇧Z also still redoes on macOS. The Altium profile's
+macOS section also has `Mod+Alt+F` (Replace, ⌥⌘F) and `Mod+W` (Close Document,
+⌘W).
+
+Bindings in one section load in alphabetical order of their trigger text, and a
+command's menu hint is its last binding. Respelling `Ctrl+…` as `Mod+…` would
+reorder that, so the global sections of both profiles are split to keep the
+order the all-`Ctrl` spelling had (redo still shows `Ctrl+Y`, Place Wire `P W`,
+the command palette `Ctrl+Shift+P`). `mod_content_tests.rs` pins those hints.
+
+### One-time macOS prompt for a custom profile
+
+On macOS, when the active profile is a custom one that still binds standard-set
+chords with plain `Ctrl`, the first launch asks "Use ⌘ / Keep Control" in a
+native dialog (`keymap_mod_prompt_boot`, built by `Signex::boot` only, never
+by a headless boot). The outcome is logged to the Messages panel.
+
+- **Use ⌘** copies `keyboard_shortcuts.toml` aside as `.bak` (never overwriting
+  an earlier backup), respells only the standard-set `Ctrl+<k>` rows of the
+  active profile as `Mod+<k>`, and saves atomically. Only once that succeeded
+  is `keymap_mod_prompt_asked` set in `prefs.json`. If the backup or the write
+  fails nothing is changed, the reason is logged and the question returns next
+  launch. If Preferences was applied while the write ran, the moved copy is not
+  adopted: a warning names the backup, your live profiles are saved back over
+  the file the write replaced (a failure of that is logged as an error), and
+  the question returns next launch.
+- **Keep Control** leaves the profile as it is and sets the flag at once.
+
+The rewrite is `keymap::migrate_active_to_mod`: it moves single-stroke
+standard-set rows (and `unbind` rows, so they keep matching), and leaves
+collision chords, multi-stroke chords, pointer gestures and platform-tagged
+sections alone. A row whose `Mod` twin is already bound in the same context is
+skipped and listed in Messages. Redo keeps its `Ctrl+Shift+Z` row and gains a
+`platform = "macos"` `Mod+Shift+Z` row beside it, as the built-ins do. A second
+run does nothing. An open Preferences keymap draft is moved to `Mod` too, so
+Apply cannot write the Control rows back.
 
 ## Chords
 
@@ -168,7 +218,9 @@ display text. Existing examples:
 
 A command the active profile does not bind, or has unbound, shows no
 shortcut hint. The hardcoded fallback text in the menu bar applies only when
-there is no active keymap at all. A hint is the last `Command` binding that no
+there is no active keymap at all; it is spelled `Mod+…` for the standard set
+and shown through `keymap::shown`, as are the hints in prose messages and the
+Symbol Editor status line (`⌘Z` on macOS). A hint is the last `Command` binding that no
 later `Unbind` of the same command, context and strokes shadows. Fallback text
 never drives runtime dispatch.
 

@@ -474,7 +474,7 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
                     .size(TS.body)
                     .color(label_color)
                     .width(Length::Fill),
-                text(raw(footprint_row.pad_count.to_string()))
+                text(raw(ctx.i18n.count(footprint_row.pad_count as i64)))
                     .size(TS.body)
                     .color(label_color),
             ]

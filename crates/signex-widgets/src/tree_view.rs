@@ -161,7 +161,7 @@ impl TreeIcon {
     /// family regardless of whether the underlying file is native or
     /// Standard. Unknown extensions fall back to `File`.
     pub fn for_path(filename: &str) -> Self {
-        // identifier/data folding, never shown
+        // File-extension match, not UI text: ASCII lowercase in every language.
         // ast-grep-ignore: no-case-in-view
         let lower = filename.to_ascii_lowercase();
         if let Some(ext) = lower.rsplit('.').next() {

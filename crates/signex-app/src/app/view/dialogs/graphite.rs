@@ -58,6 +58,7 @@ pub(super) fn changed_ink(theme_tokens: &ThemeTokens) -> iced::Color {
 
 /// One severity chip: a large toned count beside its label, in a card.
 fn severity_chip<'a, M: 'a>(
+    i18n: &signex_i18n::I18n,
     theme_tokens: &ThemeTokens,
     count: usize,
     label: &'static str,
@@ -70,7 +71,7 @@ fn severity_chip<'a, M: 'a>(
     };
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.m).align_y(Alignment::Center);
     line = line.push(
-        text(raw(count.to_string()))
+        text(raw(i18n.count(count as i64)))
             .size(TS.display)
             .color(ink)
             .font(mono())
@@ -86,30 +87,34 @@ fn severity_chip<'a, M: 'a>(
 
 /// Error / Warning / Info / Off counts over the rule set.
 pub(super) fn severity_chips<'a, M: 'a>(
+    i18n: &signex_i18n::I18n,
     theme_tokens: &ThemeTokens,
     counts: [usize; 4],
 ) -> Element<'a, M> {
     let [errors, warnings, infos, off] = counts;
     let mut chips: Row<Element<'a, M>> = Row::new().spacing(SP.m);
     chips = chips.push(severity_chip(
+        i18n,
         theme_tokens,
         errors,
         "Errors",
         Some(PillTone::Err),
     ));
     chips = chips.push(severity_chip(
+        i18n,
         theme_tokens,
         warnings,
         "Warnings",
         Some(PillTone::Warn),
     ));
     chips = chips.push(severity_chip(
+        i18n,
         theme_tokens,
         infos,
         "Info",
         Some(PillTone::Info),
     ));
-    chips = chips.push(severity_chip(theme_tokens, off, "Off", None));
+    chips = chips.push(severity_chip(i18n, theme_tokens, off, "Off", None));
     chips.boxed()
 }
 

@@ -272,6 +272,19 @@ pub enum OverlayMsg {
     ToggleAutoFocus,
 }
 
+/// What a finished `Mod` move of a custom shortcut profile hands back.
+#[derive(Debug, Clone)]
+pub struct KeymapModMigration {
+    /// The profile set the move was computed from: if the live set is no
+    /// longer this one, something (an Apply) changed it in between.
+    pub source: crate::keymap::ShortcutProfileSet,
+    pub set: crate::keymap::ShortcutProfileSet,
+    /// `Ctrl` chords left alone because their `Mod` twin was already bound.
+    pub skipped: Vec<String>,
+    /// The copy of the file kept before it was rewritten, when there was one.
+    pub backup: Option<String>,
+}
+
 /// UI / chrome message family (ADR-0001 D3). Namespaced under
 /// `Message::Ui` and routed to `dispatch_ui_message`. Groups theme,
 /// unit + grid toggles, the footprint grid picker, layout drag, main-
@@ -286,6 +299,15 @@ pub enum UiMsg {
     /// already logged its error; this republishes the Messages panel so the
     /// record shows now rather than at the next unrelated message.
     PrefWriteFinished,
+    /// The one-time macOS question about a custom shortcut profile's `Ctrl`
+    /// rows was answered (#1645): `true` is "Use ⌘", `false` is "Keep Control".
+    KeymapModPromptAnswered { use_command: bool },
+    /// The `Mod` move of the active custom profile finished: the profile set
+    /// to adopt and the backup it was saved over, or why nothing was written.
+    KeymapModMigrationWritten(Result<KeymapModMigration, String>),
+    /// A move that was not adopted (shortcuts changed meanwhile) had already
+    /// overwritten the file; the live profiles were saved back over it.
+    KeymapModStaleResaved(Result<(), String>),
     /// Edit → Undo / Redo clicked in an undocked tab's own menu bar. Runs
     /// the command against that window's document, as its shortcut does
     /// (#1550); every other menu row still arrives as `Message::Menu`.

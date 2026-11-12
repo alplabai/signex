@@ -138,6 +138,7 @@ impl Signex {
         };
         Some(
             iced::widget::opaque(crate::keyboard_shortcuts_modal::view(
+                &ui.i18n,
                 &self.document_state.panel_ctx.tokens,
                 sections,
             ))
@@ -157,6 +158,7 @@ impl Signex {
             }
         };
         crate::keyboard_shortcuts_modal::window_view(
+            &ui.i18n,
             &self.document_state.panel_ctx.tokens,
             sections,
         )
@@ -414,6 +416,7 @@ impl Signex {
                 lib,
                 lib.primitive_picker.as_ref()?,
                 tokens,
+                &self.ui_state.i18n,
                 windowed,
             )
             .map(Message::Library)

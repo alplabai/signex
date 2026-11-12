@@ -30,6 +30,7 @@ pub mod erc;
 pub mod find_replace;
 pub mod find_similar;
 mod intro_wrap;
+pub(in crate::app) mod keymap_mod_prompt;
 pub mod library_drift;
 pub mod library_footprint_choice;
 pub mod library_place;
