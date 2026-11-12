@@ -144,6 +144,7 @@ impl Gesture {
                         from: canvas.screen_to_world(press, bounds),
                         to: canvas.screen_to_world(pos, bounds),
                         mode,
+                        view_rotation_deg: f64::from(canvas.view_rotation_deg()),
                     }
                 } else {
                     PcbCanvasMsg::Clicked {
@@ -175,7 +176,7 @@ pub(super) fn pointer_moved(
 ) -> PcbCanvasMsg {
     let (zoom_pct, scale) = {
         let camera = canvas.camera.borrow();
-        (camera.zoom_percent(), camera.scale)
+        (camera.zoom_percent(), camera.scale())
     };
     PcbCanvasMsg::PointerMoved {
         at: canvas.screen_to_world(pos, bounds),
@@ -206,13 +207,14 @@ fn past_threshold(a: iced::Point, b: iced::Point) -> bool {
 }
 
 impl PcbCanvas {
-    pub(super) fn screen_to_world(&self, p: iced::Point, bounds: Rectangle) -> Point {
-        let w = self.camera.borrow().screen_to_world(p, bounds);
+    /// Canvas pixels to board mm under the live camera, its turn included.
+    pub fn screen_to_world(&self, p: iced::Point, _bounds: Rectangle) -> Point {
+        let w = self.camera.borrow().screen_to_world(p);
         Point::new(f64::from(w.x), f64::from(w.y))
     }
 
     pub(super) fn scale(&self) -> f32 {
-        self.camera.borrow().scale
+        self.camera.borrow().scale()
     }
 }
 

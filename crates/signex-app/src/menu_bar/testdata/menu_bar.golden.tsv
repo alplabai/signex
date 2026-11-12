@@ -67,6 +67,10 @@ View/Next Layer	item	Next Layer	-	-	NextLayer	01100000	cmd:next_layer
 View/Previous Layer	item	Previous Layer	-	-	PreviousLayer	01100000	cmd:prev_layer
 View/Toggle Layer Visibility	item	Toggle Layer Visibility	-	-	ToggleLayerVisibility	01100000	cmd:toggle_layer_visibility
 View/Show All Layers	item	Show All Layers	-	-	ShowAllLayers	01100000	cmd:show_all_layers
+View/Rotate View 90° Clockwise	item	Rotate View 90° Clockwise	-	-	RotateView	01100000	cmd:view_rotate
+View/Rotate View 90° Counter-Clockwise	item	Rotate View 90° Counter-Clockwise	-	-	RotateViewCounterClockwise	01100000	cmd:view_rotate_ccw
+View/Rotate View 180°	item	Rotate View 180°	-	-	RotateView180	01100000	cmd:view_rotate_180
+View/Reset View Rotation	item	Reset View Rotation	-	-	ResetViewRotation	00100000	cmd:view_rotate_reset
 View/---	separator	-	-	-	-	-	-
 View/Projects	item	Projects	-	-	OpenProjectsPanel	11111111	always
 View/Components	item	Components	-	-	OpenComponentsPanel	11111111	always

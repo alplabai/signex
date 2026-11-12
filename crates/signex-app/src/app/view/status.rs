@@ -43,6 +43,7 @@ impl Signex {
             altium_import_name.as_deref(),
             activity.as_ref(),
             self.status_active_layer(window_id),
+            self.status_view_angle(window_id),
             &self.ui_state.i18n,
         );
         bar.map(move |req| Signex::status_bar_message(window_id, symbol.as_deref(), req))

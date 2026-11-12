@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+mod camera;
 mod carry;
 mod cull;
 #[cfg(test)]
@@ -7,11 +8,13 @@ mod edge_parity_tests;
 #[cfg(test)]
 mod frame_bench_tests;
 mod gesture;
+mod grid;
 mod highlight;
 pub mod layer_style;
 mod msg;
 mod select;
 
+pub use camera::BoardCamera;
 pub use carry::{CarryKind, PcbCarry, carry_delta};
 pub use highlight::{Highlight, HighlightLayer};
 pub use msg::PcbCanvasMsg;
@@ -54,7 +57,8 @@ pub struct PcbCanvasState {
 pub struct PcbCanvas {
     pub bg_cache: canvas::Cache,
     pub content_cache: canvas::Cache,
-    pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>,
+    /// Offset x, offset y, scale and view angle the content cache was drawn at.
+    pub content_cache_camera: std::cell::Cell<(f32, f32, f32, f32)>,
     /// Cached GPU scene for the `gpu_render` path. The tessellated geometry is
     /// camera-independent — pan/zoom is applied by the shader's ortho
     /// projection at draw time, not baked into the instance data — so the scene
@@ -86,8 +90,9 @@ pub struct PcbCanvas {
     /// while `draw` and `view()` read it through the same cell. With no second
     /// copy in the widget `State`, the CPU background/grid, the CPU content
     /// path and the GPU shader program are read off one value and can never
-    /// drift out of sync.
-    camera: std::cell::RefCell<Camera>,
+    /// drift out of sync. It holds the view's turn too (#2316): view state
+    /// like pan and zoom, never a board edit, never undone, never dirty.
+    camera: std::cell::RefCell<BoardCamera>,
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
     /// Bounds as of the last canvas event — the view centre for menu zoom.
     viewport: std::cell::Cell<Rectangle>,
@@ -140,11 +145,11 @@ impl PcbCanvas {
         Self {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
-            content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
+            content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0, 0.0)),
             scene_cache: std::cell::RefCell::new(None),
             scene_bounds: std::cell::RefCell::new(None),
             scene_generation: std::cell::Cell::new(next_scene_generation()),
-            camera: std::cell::RefCell::new(Camera::default()),
+            camera: std::cell::RefCell::new(BoardCamera::default()),
             pending_fit: std::cell::Cell::new(None),
             viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             grid_visible: true,
@@ -205,7 +210,7 @@ impl PcbCanvas {
         HighlightLayer(self)
     }
 
-    fn camera_ref(&self) -> std::cell::Ref<'_, Camera> {
+    fn camera_ref(&self) -> std::cell::Ref<'_, BoardCamera> {
         self.camera.borrow()
     }
 
@@ -272,7 +277,8 @@ impl PcbCanvas {
             .zoom_at(centre, notch, step, bounds)
     }
 
-    /// Recentre the view on world point `(x, y)` without changing zoom (#525).
+    /// Recentre the view on world point `(x, y)` without changing zoom or
+    /// turn (#525).
     pub fn center_on_world(&self, x: f32, y: f32) {
         let bounds = self.viewport.get();
         self.camera
@@ -309,7 +315,7 @@ impl PcbCanvas {
     /// the CPU background + grid.
     pub fn live_camera(&self) -> (f32, f32, f32) {
         let camera = self.camera.borrow();
-        (camera.offset.x, camera.offset.y, camera.scale)
+        (camera.offset().x, camera.offset().y, camera.scale())
     }
 
     /// Build the `signex_gfx` scene for a board snapshot. Shared by the CPU
@@ -369,8 +375,8 @@ impl PcbCanvas {
     }
 }
 
-fn world_to_screen(camera: &Camera, bounds: Rectangle, point: [f32; 2]) -> iced::Point {
-    camera.world_to_screen(iced::Point::new(point[0], point[1]), bounds)
+fn world_to_screen(camera: &BoardCamera, _bounds: Rectangle, point: [f32; 2]) -> iced::Point {
+    camera.world_to_screen(iced::Point::new(point[0], point[1]))
 }
 
 fn include_world_point(bounds: &mut Option<(f32, f32, f32, f32)>, x: f32, y: f32) {
@@ -476,13 +482,13 @@ fn draw_lines(
     lines: &[LineSegment],
     extents: &[WorldRect],
     view: Option<WorldRect>,
-    camera: &Camera,
+    camera: &BoardCamera,
     bounds: Rectangle,
 ) {
     for line in visible(lines, extents, view) {
         let p0 = world_to_screen(camera, bounds, line.p0);
         let p1 = world_to_screen(camera, bounds, line.p1);
-        let width = crate::renderer_scene_canvas::min_stroke_px(line.width * camera.scale);
+        let width = crate::renderer_scene_canvas::min_stroke_px(line.width * camera.scale());
         let color = color_from_rgba(line.color);
 
         if line.is_dashed() {
@@ -504,15 +510,15 @@ fn draw_circles(
     circles: &[GfxCircle],
     extents: &[WorldRect],
     view: Option<WorldRect>,
-    camera: &Camera,
+    camera: &BoardCamera,
     bounds: Rectangle,
 ) {
     for circle in visible(circles, extents, view) {
         let center = world_to_screen(camera, bounds, circle.center);
         let radius =
-            (circle.radius * camera.scale).max(crate::renderer_scene_canvas::MIN_RADIUS_PX);
+            (circle.radius * camera.scale()).max(crate::renderer_scene_canvas::MIN_RADIUS_PX);
         let stroke_width =
-            crate::renderer_scene_canvas::min_stroke_px(circle.stroke_width * camera.scale);
+            crate::renderer_scene_canvas::min_stroke_px(circle.stroke_width * camera.scale());
         let color = color_from_rgba(circle.color);
         let path = canvas::Path::circle(center, radius);
 
@@ -534,7 +540,7 @@ fn draw_polygons(
     polygons: &[GpuPolygon],
     extents: &[WorldRect],
     view: Option<WorldRect>,
-    camera: &Camera,
+    camera: &BoardCamera,
     bounds: Rectangle,
 ) {
     for polygon in visible(polygons, extents, view) {
@@ -554,7 +560,7 @@ fn draw_polygons(
                 &path,
                 canvas::Stroke::default()
                     .with_width(crate::renderer_scene_canvas::min_stroke_px(
-                        polygon.stroke_width * camera.scale,
+                        polygon.stroke_width * camera.scale(),
                     ))
                     .with_color(color_from_rgba(stroke_color)),
             );
@@ -566,7 +572,7 @@ fn draw_scene(
     frame: &mut canvas::Frame,
     scene: &Scene,
     extents: &SceneBounds,
-    camera: &Camera,
+    camera: &BoardCamera,
     bounds: Rectangle,
 ) {
     // Only primitives touching the visible world rect are stroked.
@@ -758,10 +764,7 @@ impl canvas::Program<Message> for PcbCanvas {
                     }
                     let (world, zoom_pct) = {
                         let camera = self.camera.borrow();
-                        (
-                            camera.screen_to_world(cursor_pos, bounds),
-                            camera.zoom_percent(),
-                        )
+                        (camera.screen_to_world(cursor_pos), camera.zoom_percent())
                     };
                     return Some(canvas::Action::publish(Message::CanvasEvent(
                         CanvasEvent::CursorAt {
@@ -792,42 +795,12 @@ impl canvas::Program<Message> for PcbCanvas {
         let bg = self.bg_cache.draw(renderer, bounds.size(), |frame| {
             frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.theme_bg);
 
-            if let Some(step) = self.grid_step_px(camera.scale) {
-                let mut x = camera.offset.x.rem_euclid(step) - step;
-                while x <= bounds.width + step {
-                    let path = canvas::Path::line(
-                        iced::Point::new(x, 0.0),
-                        iced::Point::new(x, bounds.height),
-                    );
-                    frame.stroke(
-                        &path,
-                        canvas::Stroke::default()
-                            .with_color(Color {
-                                a: 0.18,
-                                ..self.theme_grid
-                            })
-                            .with_width(0.5),
-                    );
-                    x += step;
-                }
-
-                let mut y = camera.offset.y.rem_euclid(step) - step;
-                while y <= bounds.height + step {
-                    let path = canvas::Path::line(
-                        iced::Point::new(0.0, y),
-                        iced::Point::new(bounds.width, y),
-                    );
-                    frame.stroke(
-                        &path,
-                        canvas::Stroke::default()
-                            .with_color(Color {
-                                a: 0.18,
-                                ..self.theme_grid
-                            })
-                            .with_width(0.5),
-                    );
-                    y += step;
-                }
+            if let Some(step) = self.grid_step_px(camera.scale()) {
+                let color = Color {
+                    a: 0.18,
+                    ..self.theme_grid
+                };
+                grid::draw_grid(frame, &camera, bounds.size(), step, color);
             }
         });
 
@@ -840,16 +813,22 @@ impl canvas::Program<Message> for PcbCanvas {
             return vec![bg];
         }
 
-        let (cached_offset_x, cached_offset_y, cached_scale) = self.content_cache_camera.get();
-        let camera_matches_cache = (cached_offset_x - camera.offset.x).abs() < 0.01
-            && (cached_offset_y - camera.offset.y).abs() < 0.01
-            && (cached_scale - camera.scale).abs() < 0.0001;
+        let live = (
+            camera.offset().x,
+            camera.offset().y,
+            camera.scale(),
+            camera.rotation().degrees(),
+        );
+        let cached = self.content_cache_camera.get();
+        let camera_matches_cache = (cached.0 - live.0).abs() < 0.01
+            && (cached.1 - live.1).abs() < 0.01
+            && (cached.2 - live.2).abs() < 0.0001
+            && cached.3 == live.3;
         if !camera_matches_cache {
             self.content_cache.clear();
         }
         let content = self.content_cache.draw(renderer, bounds.size(), |frame| {
-            self.content_cache_camera
-                .set((camera.offset.x, camera.offset.y, camera.scale));
+            self.content_cache_camera.set(live);
             // World-space scene shared with the GPU path: a camera-only
             // redraw re-projects the cached scene instead of re-tessellating.
             if let Some(scene) = self.gpu_scene() {

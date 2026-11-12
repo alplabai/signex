@@ -8,7 +8,7 @@ use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
-use super::Readout;
+use super::{Readout, ViewAngleReadout};
 use crate::app::StatusBarRequest;
 use crate::styles::tokens::resolve;
 use crate::styles::{ChromeMetrics, Radii, Spacing, TypeScale, ti};
@@ -204,6 +204,67 @@ fn mono_button(
         .on_press(request)
 }
 
+/// The board view's angle (#2316): a caption and the value, a click opens a
+/// value field in its place; Enter applies a number.
+fn view_angle<'a>(r: ViewAngleReadout, tokens: &ThemeTokens) -> Element<'a, StatusBarRequest> {
+    let muted = resolve(tokens).ink3;
+    let ink = ti(tokens.text);
+    let caption = text(r.caption).size(TS.body).color(muted);
+    let Some(entry) = r.entry else {
+        let readout = button(
+            row![caption, mono_text(r.value, ink)]
+                .spacing(SP.xs)
+                .align_y(iced::Alignment::Center),
+        )
+        .padding([1.0, SP.s])
+        .style(button::text)
+        .on_press(StatusBarRequest::ViewAngleClicked);
+        let tip = container(text(r.tooltip).size(TS.body))
+            .padding(SP.s)
+            .style(popup(tokens));
+        return signex_widgets::tooltip(readout, tip, signex_widgets::tooltip::Position::Top)
+            .boxed();
+    };
+    let (field_bg, line, accent) = (
+        crate::styles::tokens::input_bg(tokens),
+        crate::styles::tokens::input_border(tokens),
+        ti(tokens.accent),
+    );
+    let field = signex_widgets::text_input(r.placeholder, entry)
+        .on_input(StatusBarRequest::ViewAngleEdited)
+        .on_submit(StatusBarRequest::ViewAngleSubmitted)
+        .font(mono_font())
+        .size(TS.body)
+        .padding([0.0, SP.xs])
+        // Room for "-359.9" in the mono face.
+        .width(TS.body * 5.0)
+        .style(move |_: &Theme, status| signex_widgets::text_input::Style {
+            background: Background::Color(field_bg),
+            border: Border {
+                width: 1.0,
+                color: match status {
+                    signex_widgets::text_input::Status::Focused { .. } => accent,
+                    _ => line,
+                },
+                radius: BAR_CONTROL_RADIUS.into(),
+                ..Border::default()
+            },
+            placeholder: muted,
+            value: ink,
+            selection: Color { a: 0.4, ..accent },
+        });
+    row![
+        button(caption)
+            .padding([1.0, SP.s])
+            .style(button::text)
+            .on_press(StatusBarRequest::ViewAngleClicked),
+        field,
+    ]
+    .spacing(SP.xs)
+    .align_y(iced::Alignment::Center)
+    .boxed()
+}
+
 /// Label of the Snap pill: "Snap on" while snapping, "Snap off" while free.
 pub(super) fn snap_label(snapping: bool) -> MessageId {
     if snapping {
@@ -315,6 +376,9 @@ pub(super) fn view<'a>(
             )
             .boxed(),
         );
+    }
+    if let Some(angle) = r.view_angle.clone() {
+        bar = bar.push(view_angle(angle, tokens));
     }
     let bar = bar
         .push(mono_text(format!("{:.0}%", r.zoom), muted).boxed())

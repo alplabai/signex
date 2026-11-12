@@ -200,6 +200,14 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             cmd("toggle_layer_visibility", "Toggle Layer Visibility", ""),
         ),
         cmd_item_gated(ctx, cmd("show_all_layers", "Show All Layers", "")),
+        // The board view's turn on screen (#2316); greyed without a PCB.
+        cmd_item_gated(ctx, cmd("view_rotate", "Rotate View 90° Clockwise", "")),
+        cmd_item_gated(
+            ctx,
+            cmd("view_rotate_ccw", "Rotate View 90° Counter-Clockwise", ""),
+        ),
+        cmd_item_gated(ctx, cmd("view_rotate_180", "Rotate View 180°", "")),
+        cmd_item_gated(ctx, cmd("view_rotate_reset", "Reset View Rotation", "")),
         SEP,
         // Panels work without an active document (they show an empty
         // state), so these are always available.

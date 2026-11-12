@@ -677,6 +677,8 @@ impl Signex {
         self.clear_schematic_ui_state();
         self.sync_pcb_canvas_from_visible_board();
         if fit_to_board {
+            // A board opened into the tab starts upright (#2316).
+            self.interaction_state.pcb_canvas.set_view_rotation(0.0);
             self.interaction_state.pcb_canvas.fit_to_board();
         }
         self.interaction_state.pcb_canvas.clear_bg_cache();

@@ -37,6 +37,20 @@ pub(crate) struct Readout<'r> {
     pub activity: Option<&'r Activity>,
     /// The active copper layer of an open board: a caption and the name.
     pub active_layer: Option<(Localized, Localized)>,
+    /// The board view's turn on screen (#2316).
+    pub view_angle: Option<ViewAngleReadout>,
+}
+
+/// The board view's angle readout (#2316): a click opens a value field.
+#[derive(Debug, Clone)]
+pub(crate) struct ViewAngleReadout {
+    pub caption: Localized,
+    /// The angle with its degree sign.
+    pub value: String,
+    pub tooltip: Localized,
+    pub placeholder: Localized,
+    /// What the open value field holds; `None` while it is closed.
+    pub entry: Option<String>,
 }
 
 /// The activity segment: what a gesture or editor says, or an error the
@@ -97,7 +111,7 @@ fn selection_summary(selected: &[SelectedItem]) -> Option<String> {
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "15 arguments: the status bar reads fifteen independent slices of app state and owns none of them"
+    reason = "16 arguments: the status bar reads sixteen independent slices of app state and owns none of them"
 )]
 pub(crate) fn view<'a>(
     x: f64,
@@ -114,6 +128,7 @@ pub(crate) fn view<'a>(
     altium_import: Option<&str>,
     activity: Option<&Activity>,
     active_layer: Option<(Localized, Localized)>,
+    view_angle: Option<ViewAngleReadout>,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, StatusBarRequest> {
     graphite::view(
@@ -131,6 +146,7 @@ pub(crate) fn view<'a>(
             altium_import,
             activity,
             active_layer,
+            view_angle,
         },
         tokens,
         i18n,

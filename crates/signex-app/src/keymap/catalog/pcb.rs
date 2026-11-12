@@ -89,6 +89,51 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2316: turn the board view on screen. View state only (no undo step,
+    // no dirty mark). No default keys: no free conventional chord exists.
+    // `view_rotate` takes `degrees` (90 when left out) from an agent or the
+    // CLI, so it is not GUI-only; it acts on the board canvas in view.
+    CommandMetadata {
+        id: "view_rotate",
+        category: "view",
+        label: "Rotate the board view clockwise",
+        menu_label: Some("Rotate View 90° Clockwise"),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::TURN,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "view_rotate_ccw",
+        category: "view",
+        label: "Rotate the board view 90° counter-clockwise",
+        menu_label: Some("Rotate View 90° Counter-Clockwise"),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "view_rotate_180",
+        category: "view",
+        label: "Rotate the board view 180°",
+        menu_label: Some("Rotate View 180°"),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "view_rotate_reset",
+        category: "view",
+        label: "Reset the board view rotation to 0°",
+        menu_label: Some("Reset View Rotation"),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "toggle_layers_panel",
         category: "view",

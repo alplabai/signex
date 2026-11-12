@@ -7,9 +7,8 @@ use iced::widget::canvas::{self, LineCap, LineDash, Path, Stroke};
 use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
 use pcb_geom::{PointNm, Shape, nm_to_mm};
 
-use super::PcbCanvas;
+use super::{BoardCamera, PcbCanvas};
 use crate::app::Message;
-use crate::canvas::Camera;
 
 /// Points per quarter turn of a pad corner or end cap.
 const CORNER_STEPS: usize = 32;
@@ -74,7 +73,7 @@ impl canvas::Program<Message> for HighlightLayer<'_> {
         }
         if let Some((from, to)) = canvas.marquee.get() {
             let at = |p: signex_types::pcb::Point| Point::new(p.x as f32, p.y as f32);
-            let window = is_window(from, to);
+            let window = is_window(from, to, camera.rotation().degrees());
             paint_marquee(&mut frame, &camera, at(from), at(to), window, accent);
         }
         vec![frame.into_geometry()]
@@ -90,24 +89,40 @@ impl canvas::Program<Message> for HighlightLayer<'_> {
     }
 }
 
-fn screen(camera: &Camera, p: PointNm) -> Point {
+fn screen(camera: &BoardCamera, p: PointNm) -> Point {
     let world = Point::new(nm_to_mm(p.x) as f32, nm_to_mm(p.y) as f32);
-    camera.world_to_screen(world, Rectangle::with_size(iced::Size::ZERO))
+    camera.world_to_screen(world)
+}
+
+/// The screen box around a board box: all four corners, since a turned view
+/// (#2316) can put any of them at the top left.
+fn screen_extent(camera: &BoardCamera, min: PointNm, max: PointNm) -> Rectangle {
+    let corners = [
+        min,
+        PointNm::new(max.x, min.y),
+        PointNm::new(min.x, max.y),
+        max,
+    ]
+    .map(|p| screen(camera, p));
+    let (mut lo, mut hi) = (corners[0], corners[0]);
+    for c in &corners[1..] {
+        lo = Point::new(lo.x.min(c.x), lo.y.min(c.y));
+        hi = Point::new(hi.x.max(c.x), hi.y.max(c.y));
+    }
+    Rectangle::new(lo, iced::Size::new(hi.x - lo.x, hi.y - lo.y))
 }
 
 fn paint(
     frame: &mut canvas::Frame,
     shape: &Shape,
-    camera: &Camera,
+    camera: &BoardCamera,
     view: Rectangle,
     accent: Color,
     fill_alpha: f32,
     outline_px: f32,
 ) {
     let aabb = shape.aabb();
-    let (lo, hi) = (screen(camera, aabb.min), screen(camera, aabb.max));
-    let extent = Rectangle::new(lo, iced::Size::new(hi.x - lo.x, hi.y - lo.y));
-    if !view.intersects(&extent) {
+    if !view.intersects(&screen_extent(camera, aabb.min, aabb.max)) {
         return;
     }
     let fill = Color {
@@ -119,13 +134,13 @@ fn paint(
         Shape::Disc { center, radius } => {
             let path = Path::circle(
                 screen(camera, center),
-                (nm_to_mm(radius) as f32 * camera.scale).max(1.0),
+                (nm_to_mm(radius) as f32 * camera.scale()).max(1.0),
             );
             frame.fill(&path, fill);
             frame.stroke(&path, outline);
         }
         Shape::Capsule { a, b, radius } => {
-            let band = (2.0 * nm_to_mm(radius) as f32 * camera.scale).max(MIN_BAND_PX);
+            let band = (2.0 * nm_to_mm(radius) as f32 * camera.scale()).max(MIN_BAND_PX);
             let path = Path::line(screen(camera, a), screen(camera, b));
             let stroke = Stroke::default()
                 .with_width(band)
@@ -149,30 +164,32 @@ fn paint(
     }
 }
 
-/// Whether the box selects as a window, by `pcb_geom`'s own rule.
-fn is_window(from: signex_types::pcb::Point, to: signex_types::pcb::Point) -> bool {
+/// Whether the box selects as a window, by `pcb_geom`'s own rule, judged on
+/// screen for a view turned `view_deg`.
+fn is_window(from: signex_types::pcb::Point, to: signex_types::pcb::Point, view_deg: f32) -> bool {
     match (
         pcb_geom::PointNm::from_mm(from, "marquee.from"),
         pcb_geom::PointNm::from_mm(to, "marquee.to"),
     ) {
-        (Ok(from), Ok(to)) => pcb_geom::marquee_mode(from, to) == pcb_geom::RectSelect::Inside,
+        (Ok(from), Ok(to)) => {
+            pcb_geom::turned_marquee_mode(from, to, f64::from(view_deg))
+                == pcb_geom::RectSelect::Inside
+        }
         _ => false,
     }
 }
 
-/// A window (left to right) is outlined solid, a crossing dashed.
+/// A window (left to right) is outlined solid, a crossing dashed. The box
+/// runs along the screen, whatever the view's turn.
 fn paint_marquee(
     frame: &mut canvas::Frame,
-    camera: &Camera,
+    camera: &BoardCamera,
     from: Point,
     to: Point,
     window: bool,
     accent: Color,
 ) {
-    let (a, b) = (
-        camera.world_to_screen(from, Rectangle::with_size(iced::Size::ZERO)),
-        camera.world_to_screen(to, Rectangle::with_size(iced::Size::ZERO)),
-    );
+    let (a, b) = (camera.world_to_screen(from), camera.world_to_screen(to));
     let top_left = Point::new(a.x.min(b.x), a.y.min(b.y));
     let size = iced::Size::new((a.x - b.x).abs(), (a.y - b.y).abs());
     let path = Path::rectangle(top_left, size);

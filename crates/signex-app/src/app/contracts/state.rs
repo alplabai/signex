@@ -636,4 +636,11 @@ pub enum StatusBarRequest {
     CancelAltiumImport,
     /// Click on the active-layer pill steps to the next copper layer (#2223).
     ActiveLayerStepRequested,
+    /// Click on the board view's angle readout opens or closes its value
+    /// field (#2316).
+    ViewAngleClicked,
+    /// The text in the angle field changed.
+    ViewAngleEdited(String),
+    /// Enter in the angle field.
+    ViewAngleSubmitted,
 }

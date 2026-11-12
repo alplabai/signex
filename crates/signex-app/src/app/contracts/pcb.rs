@@ -44,6 +44,14 @@ pub enum PcbMsg {
         window: iced::window::Id,
         event: PcbViewMsg,
     },
+    /// The turn of the board view on screen (#2316), from a command: it acts
+    /// on the canvas of the window the command runs in.
+    ViewRotation(ViewRotationMsg),
+    /// The turn of the board view of `window` (its status bar readout).
+    ViewRotationInWindow {
+        window: iced::window::Id,
+        event: ViewRotationMsg,
+    },
     /// Board sketch mode of the main window's board (#2234).
     Sketch(BoardSketchMsg),
     /// Tools ▸ Re-Annotate Board and its dialog (#1312).
@@ -86,4 +94,30 @@ pub enum PcbViewMsg {
     MultiLayerVisibilityToggled,
     /// The user asked to show every layer again.
     AllLayersShown,
+}
+
+/// What the user did about the turn of a board view on screen (#2316). View
+/// state like pan and zoom: never a board edit, no undo step, no dirty mark.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ViewRotationMsg {
+    /// The view was turned by this many degrees, clockwise on screen
+    /// (negative: counter-clockwise).
+    TurnedBy(f32),
+    /// The view was set to this angle, clockwise degrees.
+    AngleSet(f32),
+    /// The angle readout in the status bar was clicked: its value field
+    /// opens, or closes when open.
+    AngleEntryToggled,
+    /// The text in that value field changed.
+    AngleEntryEdited(String),
+    /// Enter in that value field: a number sets the angle and closes it.
+    AngleEntrySubmitted,
+}
+
+/// The status bar's angle field while it is open (#2316): the window it is
+/// in and what has been typed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ViewAngleEntry {
+    pub window: iced::window::Id,
+    pub text: String,
 }
