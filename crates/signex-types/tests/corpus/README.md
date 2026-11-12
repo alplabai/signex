@@ -115,7 +115,7 @@ What is checked, and where:
   `PcbSnapshot` and a scene without panic, with every copper layer as the
   active one too; drawn item counts, fill triangles and a hash of the drawn
   geometry (colours excluded) are pinned.
-- DRC and ratsnest (`pcb-geom`, `real_boards`): run against each board's
+- DRC and ratsnest (`signex-drc`, `real_boards`): run against each board's
   own net classes, every board has zero shorts, clearance, unconnected and
   keepout violations and an empty ratsnest; a positive control shows a
   track moved to another net shorts on each board.
