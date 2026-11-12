@@ -92,3 +92,62 @@ fn the_dialog_builds_closed_open_and_with_many_layers() {
     app.ui_state.new_project.as_mut().unwrap().step_layers(30);
     let _ = app.view_new_project_dialog();
 }
+
+/// A rendered message without Fluent's bidi isolation marks.
+fn plain(text: signex_i18n::Localized) -> String {
+    text.into_string()
+        .chars()
+        .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
+        .collect()
+}
+
+fn edit_name(app: &mut crate::app::Signex, name: &str) {
+    let _ = app.update(crate::app::Message::from(
+        crate::app::new_project::NewProjectMsg::NameEdited(name.into()),
+    ));
+}
+
+#[test]
+fn the_folder_label_follows_the_typed_name_and_is_neutral_when_empty() {
+    let (mut app, _t) = crate::app::Signex::new();
+    let _ = app.update(crate::app::Message::Menu(
+        crate::menu_bar::MenuMessage::NewProject,
+    ));
+    let label = |app: &crate::app::Signex| {
+        plain(super::make_folder_label(
+            app.ui_state.new_project.as_ref().unwrap(),
+            &app.ui_state.i18n,
+        ))
+    };
+    edit_name(&mut app, "Motor Driver Rev A");
+    assert_eq!(label(&app), "Create \"Motor Driver Rev A\" folder");
+    edit_name(&mut app, "Motor Driver Rev B ");
+    assert_eq!(label(&app), "Create \"Motor Driver Rev B\" folder");
+    edit_name(&mut app, "  ");
+    assert_eq!(label(&app), "Create a folder named after the project");
+}
+
+#[test]
+fn a_taken_target_shows_its_translated_reason() {
+    use crate::app::new_project::{TargetProblem, TargetStatus};
+    let (mut app, _t) = crate::app::Signex::new();
+    let _ = app.update(crate::app::Message::Menu(
+        crate::menu_bar::MenuMessage::NewProject,
+    ));
+    let path = std::path::PathBuf::from("/work/Busy");
+    let state = app.ui_state.new_project.as_mut().unwrap();
+    state.name = "Busy".into();
+    state.target = TargetStatus::Problem(TargetProblem::FolderNotEmpty(path.clone()));
+    let state = app.ui_state.new_project.as_ref().unwrap();
+    let shown = iced::widget::text::IntoFragment::into_fragment(
+        super::blocker_text(state, &app.ui_state.i18n).expect("a reason"),
+    )
+    .into_owned();
+    let expected = signex_i18n::t!(
+        app.ui_state.i18n,
+        signex_i18n::ids::DIALOG_NEW_PROJECT_ERR_FOLDER_NOT_EMPTY,
+        "path" => path.display().to_string()
+    )
+    .into_string();
+    assert_eq!(shown, expected);
+}

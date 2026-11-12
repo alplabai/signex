@@ -144,9 +144,11 @@ fn pcb_10k_emit_counts_and_draw_calls() {
     let scene = build_scene();
 
     assert_eq!(scene.lines.len(), TRACK_COUNT);
-    assert_eq!(scene.circles.len(), VIA_COUNT);
+    // Each via is its copper ring and its drill opening.
+    assert_eq!(scene.circles.len(), 2 * VIA_COUNT);
     assert_eq!(scene.top_polygons.len(), PAD_COUNT);
-    assert_eq!(scene.polygons.len(), ZONE_COUNT);
+    // The board area under the two pours.
+    assert_eq!(scene.polygons.len(), ZONE_COUNT + 1);
     assert!(scene.arcs.is_empty() && scene.texts.is_empty());
     assert!(scene.drawings.is_empty() && scene.drawings_front.is_empty());
 
@@ -242,7 +244,7 @@ fn pcb_10k_zoomed_viewport_culls_most_tracks() {
     }
     let cull = median(samples);
     eprintln!(
-        "pcb_10k cull (20 x 20 mm): median {cull:?}, kept {} lines, {} vias, {} pads, {} zones",
+        "pcb_10k cull (20 x 20 mm): median {cull:?}, kept {} lines, {} via circles (ring + drill), {} pads, {} zones",
         kept.lines, kept.circles, kept.top_polygons, kept.polygons
     );
 
@@ -252,10 +254,18 @@ fn pcb_10k_zoomed_viewport_culls_most_tracks() {
         "kept {} lines",
         kept.lines
     );
-    assert!(kept.circles <= VIA_COUNT / 10, "kept {} vias", kept.circles);
+    assert!(
+        kept.circles <= 2 * (VIA_COUNT / 10),
+        "kept {} via circles",
+        kept.circles
+    );
     // Pads sit at the board edges; both pours cover the window.
     assert_eq!(kept.top_polygons, 0);
-    assert_eq!(kept.polygons, ZONE_COUNT);
+    assert_eq!(
+        kept.polygons,
+        ZONE_COUNT + 1,
+        "both pours and the board area"
+    );
     assert!(
         cull < CULL_BOUND,
         "cull took {cull:?}, bound {CULL_BOUND:?}"

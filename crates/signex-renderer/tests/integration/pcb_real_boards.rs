@@ -17,7 +17,7 @@ use signex_renderer::pcb::{
 use signex_renderer::schematic::ViewRenderer;
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::format::SnxPcb;
-use signex_types::pcb::PcbBoard;
+use signex_types::pcb::{PadType, PcbBoard};
 
 fn load(name: &str) -> PcbBoard {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -79,6 +79,25 @@ struct Drawn {
     hash: u64,
 }
 
+/// Vias drawn with a drill opening over their ring.
+fn via_drills(snapshot: &PcbSnapshot) -> usize {
+    snapshot
+        .vias
+        .iter()
+        .filter(|v| v.drill_mm > 0.0 && v.drill_mm < v.diameter_mm)
+        .count()
+}
+
+/// Pads drawn with a drill opening over their copper.
+fn pad_drills(snapshot: &PcbSnapshot) -> usize {
+    // A non-plated pad draws its opening alone, in place of its copper.
+    snapshot
+        .pads
+        .iter()
+        .filter(|p| p.drill_mm > 0.0 && p.pad_type != PadType::NpThru)
+        .count()
+}
+
 fn draw(name: &'static str) -> Drawn {
     let board = load(name);
     let snapshot = PcbSnapshot::from_board(&board);
@@ -90,9 +109,22 @@ fn draw(name: &'static str) -> Drawn {
         &mut scene,
     );
     assert_eq!(scene.lines.len(), snapshot.traces.len(), "{name}");
-    assert_eq!(scene.circles.len(), snapshot.vias.len(), "{name}");
-    assert_eq!(scene.top_polygons.len(), snapshot.pads.len(), "{name}");
-    assert_eq!(scene.polygons.len(), snapshot.zones.len(), "{name}");
+    assert_eq!(
+        scene.circles.len(),
+        snapshot.vias.len() + via_drills(&snapshot),
+        "{name}"
+    );
+    assert_eq!(
+        scene.top_polygons.len(),
+        snapshot.pads.len() + pad_drills(&snapshot),
+        "{name}"
+    );
+    let board_area = usize::from(snapshot.board_features.outline.len() >= 3);
+    assert_eq!(
+        scene.polygons.len(),
+        snapshot.zones.len() + board_area,
+        "{name}"
+    );
     let fill_triangles = scene
         .polygons
         .iter()
@@ -126,28 +158,28 @@ const NAMES: [&str; 5] = [
 const EXPECTED: [(&str, [usize; 8], u64); 5] = [
     (
         "linear-regulator",
-        [16, 4, 16, 1, 0, 2, 31, 306],
-        14501496464384911031,
+        [16, 4, 16, 1, 0, 2, 31, 380],
+        9612871360675073348,
     ),
     (
         "usb-c-power-input",
-        [23, 5, 26, 1, 0, 2, 31, 558],
-        15673827995218981839,
+        [23, 5, 26, 1, 0, 2, 31, 692],
+        3808703518822253030,
     ),
     (
         "mcu-breakout-tqfp32",
-        [109, 9, 78, 1, 0, 2, 31, 1526],
-        3554543249757466849,
+        [109, 9, 78, 1, 0, 2, 31, 2104],
+        2086014061127446585,
     ),
     (
         "sensor-4layer",
-        [34, 15, 27, 2, 22, 4, 33, 693],
-        4591899967919963799,
+        [34, 15, 27, 2, 22, 4, 33, 771],
+        15245294992693269580,
     ),
     (
         "mixed-tht-smd",
-        [20, 1, 22, 1, 0, 2, 31, 396],
-        6283896836866658454,
+        [20, 1, 22, 1, 0, 2, 31, 630],
+        8474001603639839080,
     ),
 ];
 
@@ -213,7 +245,11 @@ fn each_copper_layer_of_the_real_boards_renders_as_the_active_layer() {
             assert_eq!(snapshot.pads.len(), all.pads.len(), "{name} {layer:?}");
             let mut scene = Scene::default();
             PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::all(), &mut scene);
-            assert_eq!(scene.top_polygons.len(), all.pads.len(), "{name} {layer:?}");
+            assert_eq!(
+                scene.top_polygons.len(),
+                all.pads.len() + pad_drills(&all),
+                "{name} {layer:?}"
+            );
         }
     }
 }

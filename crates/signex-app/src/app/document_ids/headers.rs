@@ -118,11 +118,19 @@ impl Signex {
 }
 
 impl Signex {
+    /// [`Self::read_wanted_document_headers_said`], naming in Messages each
+    /// file it does not read.
+    #[cfg(test)]
+    pub(crate) fn read_wanted_document_headers_now(&mut self) {
+        self.read_wanted_document_headers_said(true);
+    }
+
     /// Read, now, the heads that are wanted (never read, holding no id, or
     /// forgotten after a write or a close). For the headless entry, whose
     /// answer must name what the files hold at the time it is given; a GUI
-    /// reads them on a worker ([`Self::read_missing_document_headers`]).
-    pub(crate) fn read_wanted_document_headers_now(&mut self) {
+    /// reads them on a worker ([`Self::read_missing_document_headers`]). A
+    /// file it does not read is named in Messages only when `said`.
+    pub(crate) fn read_wanted_document_headers_said(&mut self, said: bool) {
         let docs = &self.document_state;
         let wanted: Vec<PathBuf> = docs
             .projects
@@ -134,7 +142,7 @@ impl Signex {
             })
             .filter(|(_, path)| !docs.engines.contains_key(path))
             .filter(|(_, path)| docs.document_ids.header_wanted(path))
-            .filter(|(project, path)| self.may_read_referenced(project, path))
+            .filter(|(project, path)| self.may_read_referenced_said(project, path, said))
             .map(|(_, path)| path)
             .collect();
         for path in wanted {

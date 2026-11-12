@@ -15,6 +15,7 @@ mod annotate_placements;
 mod annotate_preview;
 #[cfg(test)]
 mod annotate_tests;
+mod erc_check;
 mod erc_job;
 mod erc_run;
 #[cfg(test)]
@@ -30,6 +31,7 @@ mod stale_findings_tests;
 
 pub(crate) use annotate_job::{AnnotateRuns, SheetWrite, SheetsRead};
 pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};
+pub(crate) use erc_check::ERC_CHECK;
 pub(crate) use erc_job::{ErcRunOutcome, PageFrames, WaivedFinding};
 pub(crate) use reprefix_confirm::ReprefixConfirm;
 pub(crate) use reprefix_job::ReprefixSheets;

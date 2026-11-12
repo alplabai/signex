@@ -347,7 +347,7 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
         }
     }
     for via in &board.vias {
-        if !view.shows_any(&via.layers) {
+        if !view.shows_via(&via.layers) {
             hidden.insert(ItemRef::Via(via.uuid));
         }
     }

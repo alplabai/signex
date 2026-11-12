@@ -228,6 +228,20 @@ pub(crate) fn load_sheet_file(path: &Path) -> Result<Option<SchematicSheet>, Str
     load_sheet_with(&|_| None, path)
 }
 
+/// [`load_sheet_with`] reading a sheet that is not open only when `guard`
+/// allows it.
+fn load_sheet_guarded(
+    open: &dyn Fn(&Path) -> Option<SchematicSheet>,
+    guard: ReadGuard<'_>,
+    path: &Path,
+) -> Result<Option<SchematicSheet>, String> {
+    if let Some(sheet) = open(path) {
+        return Ok(Some(sheet));
+    }
+    guard(path)?;
+    load_sheet_with(&|_| None, path)
+}
+
 /// The identity of a sheet path under `fold`, the owning project's key rules.
 pub(crate) fn fold_key(path: &Path, fold: CaseFold) -> String {
     path_key_with(path, fold)
@@ -289,6 +303,7 @@ pub(crate) fn assemble_project_sheets(
         root_path,
         fold,
         true,
+        &read_any,
     )
 }
 
@@ -307,6 +322,7 @@ pub(crate) fn assemble_project_sheets_quiet(
         root_path,
         fold,
         false,
+        &read_any,
     )
 }
 
@@ -385,6 +401,7 @@ impl ProjectSheetPlan {
             &self.root,
             self.fold,
             true,
+            &read_any,
         );
         (set, stamps.into_inner())
     }
@@ -421,7 +438,14 @@ pub(crate) fn assemble_project_sheets_from(
     root_path: &Path,
     fold: CaseFold,
 ) -> ProjectSheetSet {
-    assemble_project_sheets_with(&|p| open.get(p).cloned(), pages, root_path, fold, true)
+    assemble_project_sheets_with(
+        &|p| open.get(p).cloned(),
+        pages,
+        root_path,
+        fold,
+        true,
+        &read_any,
+    )
 }
 
 /// [`assemble_project_sheets_from`] raising no Messages line: an edit's
@@ -432,7 +456,14 @@ pub(crate) fn assemble_project_sheets_quiet_from(
     root_path: &Path,
     fold: CaseFold,
 ) -> ProjectSheetSet {
-    assemble_project_sheets_with(&|p| open.get(p).cloned(), pages, root_path, fold, false)
+    assemble_project_sheets_with(
+        &|p| open.get(p).cloned(),
+        pages,
+        root_path,
+        fold,
+        false,
+        &read_any,
+    )
 }
 
 /// The one walk, started from `seeds` instead of a project's pages: every sheet
@@ -449,8 +480,36 @@ pub(crate) fn assemble_from_seeds(
     let mut set = ProjectSheetSet::empty();
     set.fold = fold;
     let mut visited: HashSet<String> = skip.iter().map(|p| path_key_with(p, fold)).collect();
-    walk(open, seeds, &mut visited, &mut set, fold, true);
+    walk(open, seeds, &mut visited, &mut set, fold, true, &read_any);
     set
+}
+
+/// Why a sheet that is not open may not be read from disk, or `Ok`.
+type ReadGuard<'a> = &'a dyn Fn(&Path) -> Result<(), String>;
+
+/// Every sheet may be read.
+fn read_any(_: &Path) -> Result<(), String> {
+    Ok(())
+}
+
+/// [`assemble_project_sheets_quiet_from`] reading from disk only what `guard`
+/// allows; a refused sheet is in [`ProjectSheetSet::unreadable`] with the
+/// reason (`check_erc` in a headless run or for an agent, #2199).
+pub(crate) fn assemble_project_sheets_guarded_from(
+    open: &OpenSheets,
+    pages: &[PathBuf],
+    root_path: &Path,
+    fold: CaseFold,
+    guard: ReadGuard<'_>,
+) -> ProjectSheetSet {
+    assemble_project_sheets_with(
+        &|p| open.get(p).cloned(),
+        pages,
+        root_path,
+        fold,
+        false,
+        guard,
+    )
 }
 
 fn assemble_project_sheets_with(
@@ -459,6 +518,7 @@ fn assemble_project_sheets_with(
     root_path: &Path,
     fold: CaseFold,
     log_refusals: bool,
+    guard: ReadGuard<'_>,
 ) -> ProjectSheetSet {
     let mut set = ProjectSheetSet {
         sheets: HashMap::new(),
@@ -481,10 +541,19 @@ fn assemble_project_sheets_with(
         &mut set,
         fold,
         log_refusals,
+        guard,
     );
     // Then the declared pages and their own subtrees, so ERC and the children
     // map see the whole project even where the hierarchy does not connect it.
-    walk(open, pages, &mut visited, &mut set, fold, log_refusals);
+    walk(
+        open,
+        pages,
+        &mut visited,
+        &mut set,
+        fold,
+        log_refusals,
+        guard,
+    );
 
     set.pages_outside_the_hierarchy = pages
         .iter()
@@ -504,6 +573,7 @@ fn walk(
     set: &mut ProjectSheetSet,
     fold: CaseFold,
     log_refusals: bool,
+    guard: ReadGuard<'_>,
 ) -> HashSet<String> {
     let mut loaded: HashSet<String> = HashSet::new();
     let mut queue: Vec<PathBuf> = seeds.to_vec();
@@ -517,7 +587,7 @@ fn walk(
             }
             continue;
         }
-        let sheet = match load_sheet_with(open, &path) {
+        let sheet = match load_sheet_guarded(open, guard, &path) {
             Ok(Some(sheet)) => sheet,
             // Absent: the stitcher reports this as the MissingChild it is.
             Ok(None) => {
@@ -850,26 +920,38 @@ pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -
     }
 }
 
+const REFUSED_REFERENCE: &str = "Rejected child-sheet reference outside its resolution root";
+
 fn log_refusal(refusal: &ChildReferenceRefusal) {
-    if let ChildReferenceRefusal::Escapes {
+    if let Some(detail) = refusal_detail(refusal) {
+        crate::diagnostics::log_error(REFUSED_REFERENCE, &anyhow::anyhow!("{detail}"));
+    }
+}
+
+/// The line [`log_refusal`] says for `refusal`, for a caller that reports it
+/// instead of logging it; `None` for a refusal that is not said.
+pub(crate) fn refusal_message(refusal: &ChildReferenceRefusal) -> Option<String> {
+    refusal_detail(refusal).map(|detail| format!("{REFUSED_REFERENCE}: {detail}"))
+}
+
+fn refusal_detail(refusal: &ChildReferenceRefusal) -> Option<String> {
+    let ChildReferenceRefusal::Escapes {
         reference,
         resolved,
         root,
     } = refusal
-    {
-        crate::diagnostics::log_error(
-            "Rejected child-sheet reference outside its resolution root",
-            &anyhow::anyhow!(
-                "'{reference}' resolves to {} which escapes {}",
-                resolved.display(),
-                if root.as_os_str().is_empty() {
-                    "an empty resolution root".to_string()
-                } else {
-                    root.display().to_string()
-                }
-            ),
-        );
-    }
+    else {
+        return None;
+    };
+    Some(format!(
+        "'{reference}' resolves to {} which escapes {}",
+        resolved.display(),
+        if root.as_os_str().is_empty() {
+            "an empty resolution root".to_string()
+        } else {
+            root.display().to_string()
+        }
+    ))
 }
 
 /// Why [`resolve_child_reference_quiet`] gave no path.

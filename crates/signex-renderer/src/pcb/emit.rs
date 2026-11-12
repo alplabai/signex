@@ -9,6 +9,7 @@ pub(super) fn trace_from_segment(segment: &Segment) -> TraceInput {
         width_mm: mm_with_floor(segment.width, PCB_DEFAULT_TRACE_WIDTH_MM, PCB_TRACK_MIN_MM),
         net: segment.net,
         dimmed: false,
+        ink: CopperInk::Unknown,
     }
 }
 
@@ -23,6 +24,7 @@ pub(super) fn via_from_board_via(via: &Via) -> ViaInput {
         drill_mm: mm_with_floor(via.drill, PCB_DEFAULT_VIA_DRILL_MM, PCB_VIA_MIN_DRILL_MM),
         net: via.net,
         dimmed: false,
+        ink: CopperInk::Unknown,
     }
 }
 
@@ -52,7 +54,9 @@ pub(super) fn pad_from_footprint(footprint: &Footprint, pad: &Pad) -> Option<Pad
             .map(|p| point_to_xy(p.to_mm()))
             .collect(),
         pad_type: pad.pad_type,
+        drill_mm: pad_drill_mm(pad),
         dimmed: false,
+        ink: CopperInk::Unknown,
     })
 }
 
@@ -96,6 +100,7 @@ pub(super) fn zone_from_board_zone(
         layer_name,
         source_order,
         dimmed: false,
+        ink: CopperInk::Unknown,
     })
 }
 
@@ -167,8 +172,7 @@ pub(super) fn ellipse_vertices(
 pub(super) fn pad_alpha_mul(pad_type: PadType) -> f32 {
     match pad_type {
         PadType::Connect => 0.8,
-        PadType::NpThru => 0.7,
-        PadType::Thru | PadType::Smd => 1.0,
+        PadType::NpThru | PadType::Thru | PadType::Smd => 1.0,
     }
 }
 
@@ -186,18 +190,40 @@ pub(super) fn with_alpha_mul(mut color: [f32; 4], alpha_mul: f32) -> [f32; 4] {
     color
 }
 
+/// A pad drilled through the board: drawn on the Multi-Layer, with its
+/// drill as an opening.
+pub(super) fn is_through_pad(pad: &Pad) -> bool {
+    matches!(pad.pad_type, PadType::Thru | PadType::NpThru)
+}
+
+/// The diameter of a through-hole pad's drill, 0 when it has none.
+fn pad_drill_mm(pad: &Pad) -> f32 {
+    let through = is_through_pad(pad);
+    match &pad.drill {
+        Some(drill) if through && drill.diameter.is_finite() && drill.diameter > 0.0 => {
+            drill.diameter as f32
+        }
+        _ => 0.0,
+    }
+}
+
+/// The colour of copper drawn in `ink`; `fallback` for copper on no layer
+/// this build knows.
+pub(super) fn copper_color(theme: &ResolvedTheme, ink: CopperInk, fallback: ColorSlot) -> [f32; 4] {
+    theme.color(ink.slot(fallback))
+}
+
 pub(super) fn emit_traces(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &mut Scene) {
     scene.lines.clear();
     scene.lines.reserve(snapshot.traces.len());
 
-    let trace_color = theme.color(ColorSlot::Wire);
-
     for trace in &snapshot.traces {
+        let color = copper_color(theme, trace.ink, ColorSlot::Wire);
         scene.lines.push(LineSegment {
             p0: trace.p0,
             p1: trace.p1,
             width: trace.width_mm,
-            color: dim_if(trace_color, trace.dimmed),
+            color: dim_if(color, trace.dimmed),
             // Bit 0 of `style` is the dash flag. A trace's net, if it is ever
             // encoded here, goes above bit 8 like the ratsnest's.
             style: 0,
@@ -208,22 +234,42 @@ pub(super) fn emit_traces(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: 
 
 pub(super) fn emit_vias(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &mut Scene) {
     scene.circles.clear();
-    scene.circles.reserve(snapshot.vias.len());
+    scene.circles.reserve(snapshot.vias.len() * 2);
 
-    let via_color = theme.color(ColorSlot::Junction);
+    let opening = theme.color(ColorSlot::BoardOpening);
 
     for via in &snapshot.vias {
         let outer = (via.diameter_mm * 0.5).max(0.01);
         let hole = (via.drill_mm * 0.5).clamp(0.0, outer);
+        let color = copper_color(theme, via.ink, ColorSlot::Junction);
 
+        // A drill as wide as the via leaves no copper: all of it is hole.
+        if hole > 0.0 && hole >= outer {
+            scene.circles.push(Circle {
+                center: via.center,
+                radius: outer,
+                stroke_width: 0.0,
+                color: opening,
+            });
+            continue;
+        }
         // Both renderers centre a ring's stroke on its radius, so stroke the
         // annulus at the midpoint between the hole edge and the outer edge.
         scene.circles.push(Circle {
             center: via.center,
             radius: (outer + hole) * 0.5,
             stroke_width: outer - hole,
-            color: dim_if(via_color, via.dimmed),
+            color: dim_if(color, via.dimmed),
         });
+        // The drill shows as an opening, not the trace under it.
+        if hole > 0.0 {
+            scene.circles.push(Circle {
+                center: via.center,
+                radius: hole,
+                stroke_width: 0.0,
+                color: opening,
+            });
+        }
     }
 }
 
@@ -241,36 +287,77 @@ pub(super) fn emit_static_polygons(
     scene.top_polygons.clear();
     scene.top_polygons.reserve(snapshot.pads.len());
 
-    let base_fill = theme.color(ColorSlot::Pin);
-    let stroke_color = theme.color(ColorSlot::SymbolBody);
-    let zone_fill = with_alpha_mul(theme.color(ColorSlot::Ghost), 0.38);
-    let zone_stroke = theme.color(ColorSlot::Bus);
+    // The board area first, under every zone and all copper. Cutouts and
+    // mounting holes stay open: the overlay draws them over it.
+    let outline = &snapshot.board_features.outline;
+    if outline.len() >= 3 {
+        scene.polygons.push(GpuPolygon {
+            vertices: outline.clone(),
+            holes: Vec::new(),
+            fill_color: theme.color(ColorSlot::BoardArea),
+            stroke_color: None,
+            stroke_width: 0.0,
+        });
+    }
+
+    let opening = theme.color(ColorSlot::BoardOpening);
     let rule_area_fill = with_alpha_mul(theme.color(ColorSlot::LassoFill), 0.32);
     let rule_area_stroke = theme.color(ColorSlot::LassoStroke);
 
+    // A pad is its copper outline alone: `pcb-geom` gives the exact shape,
+    // and an outline stroke would widen it.
     for pad in &snapshot.pads {
+        // A non-plated hole has no copper: only its opening is drawn, the
+        // drill, or the pad's own shape when it gives no drill.
+        if pad.pad_type == PadType::NpThru {
+            let vertices = if pad.drill_mm > 0.0 {
+                let radius = pad.drill_mm * 0.5;
+                ellipse_vertices(pad.center, [radius, radius], DRILL_SEGMENTS)
+            } else {
+                pad.outline.clone()
+            };
+            scene.top_polygons.push(GpuPolygon {
+                holes: Vec::new(),
+                vertices,
+                fill_color: opening,
+                stroke_color: None,
+                stroke_width: 0.0,
+            });
+            continue;
+        }
+        let copper = copper_color(theme, pad.ink, ColorSlot::Pin);
         let fill_color = dim_if(
-            with_alpha_mul(base_fill, pad_alpha_mul(pad.pad_type)),
+            with_alpha_mul(copper, pad_alpha_mul(pad.pad_type)),
             pad.dimmed,
         );
-
-        let stroke_width = (pad.size_mm[0].min(pad.size_mm[1]) * 0.08).max(0.02);
-
         scene.top_polygons.push(GpuPolygon {
             holes: Vec::new(),
             vertices: pad.outline.clone(),
             fill_color,
-            stroke_color: Some(dim_if(stroke_color, pad.dimmed)),
-            stroke_width,
+            stroke_color: None,
+            stroke_width: 0.0,
         });
+        // The drill right after its pad, so it draws over the copper.
+        if pad.drill_mm > 0.0 {
+            let radius = pad.drill_mm * 0.5;
+            scene.top_polygons.push(GpuPolygon {
+                holes: Vec::new(),
+                vertices: ellipse_vertices(pad.center, [radius, radius], DRILL_SEGMENTS),
+                fill_color: opening,
+                stroke_color: None,
+                stroke_width: 0.0,
+            });
+        }
     }
 
     for zone in &snapshot.zones {
+        let fill = with_alpha_mul(copper_color(theme, zone.ink, ColorSlot::Ghost), 0.38);
+        let stroke = copper_color(theme, zone.ink, ColorSlot::Bus);
         scene.polygons.push(GpuPolygon {
             vertices: zone.vertices.clone(),
             holes: zone.holes.clone(),
-            fill_color: dim_if(zone_fill, zone.dimmed),
-            stroke_color: Some(dim_if(zone_stroke, zone.dimmed)),
+            fill_color: dim_if(fill, zone.dimmed),
+            stroke_color: Some(dim_if(stroke, zone.dimmed)),
             stroke_width: 0.06,
         });
     }

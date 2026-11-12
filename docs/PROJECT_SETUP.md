@@ -8,9 +8,11 @@ through the `new_project_with_profile` command.
 ## What the dialog asks
 
 - **Project name** and **Location**, with **Browse...**. The checkbox
-  `Create "<name>" folder` is on by default and its label follows the name as
-  it is typed.
-  - On: `<Location>/<name>/<name>.snxprj`.
+  `Create "<name>" folder` sits under Location, is on by default and its label
+  follows the name as it is typed; while the name is empty it reads
+  `Create a folder named after the project`. There is no path preview line
+  (maintainer, 2026-11-09: keep it simple).
+  - On: `<Location>/<name>/<name>.snxprj`, the folder created by Create.
   - Off: `<Location>/<name>.snxprj`, for a folder the user already made.
   - Create is off, with the reason shown inline, when the target `.snxprj`
     (or, with the checkbox off, its `<name>.snxsch`) already exists, when the
@@ -124,6 +126,10 @@ new_project_with_profile name=<text> location=<absolute path>
     [make_folder=true|false] [profile=hobby|standard|hdi|custom]
     [overrides=key=value,key=value]
 ```
+
+`make_folder` is the dialog's folder checkbox and defaults to `true`
+(`<location>/<name>/<name>.snxprj`); `make_folder=false` writes
+`<location>/<name>.snxprj`. The same never-overwrite refusals apply.
 
 `overrides` keys: `layers`, `thickness`, `clearance`, `track`, `via`, `drill`
 (mm), `sheet` (such as `A4` or `ANSI A portrait`), `title_block`

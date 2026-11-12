@@ -107,6 +107,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "check_erc",
+        category: "validation",
+        label: "Check electrical rules",
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::CHECK_ERC,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "close_active_document",
         category: "file",
         label: "Close active document",

@@ -324,6 +324,10 @@ pub struct CanvasColors {
     /// uses the board palette's.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub board_layers: Option<BoardLayerColors>,
+    /// The PCB board area inside the outline (the Altium Board Area
+    /// colour); `None` uses the canvas background.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_area: Option<Color>,
 }
 
 /// The colour each PCB layer family is listed with. The board edge and
@@ -343,6 +347,13 @@ pub struct BoardLayerColors {
     pub drawing: Color,
     /// Every other technical layer (Fab, Assembly, Courtyard, ...).
     pub other: Color,
+    /// Through-hole pads and vias (the Altium Multi-Layer).
+    #[serde(default = "graphite_multi_layer")]
+    pub multi_layer: Color,
+}
+
+fn graphite_multi_layer() -> Color {
+    GRAPHITE_BOARD_LAYERS.multi_layer
 }
 
 impl CanvasColors {
@@ -356,6 +367,12 @@ impl CanvasColors {
     #[must_use]
     pub fn board_edge_color(&self) -> Color {
         self.board_edge.unwrap_or(self.cursor)
+    }
+
+    /// The colour of the PCB board area inside the outline.
+    #[must_use]
+    pub fn board_area_color(&self) -> Color {
+        self.board_area.unwrap_or(self.background)
     }
 
     /// The colour of PCB keepout regions.
@@ -457,6 +474,7 @@ const GRAPHITE_LIGHT_CANVAS: CanvasColors = CanvasColors {
     board_edge: None,
     keepout: None,
     board_layers: None,
+    board_area: None,
 };
 
 const GRAPHITE_DARK_TOKENS: ThemeTokens = ThemeTokens {
@@ -524,6 +542,8 @@ const GRAPHITE_DARK_CANVAS: CanvasColors = CanvasColors {
     board_edge: s(0xE8, 0xC5, 0x47),
     keepout: s(0xFF, 0x40, 0xFF),
     board_layers: Some(GRAPHITE_BOARD_LAYERS),
+    // Altium default Board Area (black), to be checked by Caner.
+    board_area: s(0x00, 0x00, 0x00),
 };
 
 /// Red top and blue bottom copper, as Altium lists them.
@@ -544,6 +564,8 @@ const GRAPHITE_BOARD_LAYERS: BoardLayerColors = BoardLayerColors {
     paste: c(0xA8, 0xA8, 0xB8),
     drawing: c(0x88, 0x88, 0xA0),
     other: c(0x70, 0x90, 0xB0),
+    // Altium default Multi-Layer (silver), to be checked by Caner.
+    multi_layer: c(0xC0, 0xC0, 0xC0),
 };
 
 // ---------------------------------------------------------------------------

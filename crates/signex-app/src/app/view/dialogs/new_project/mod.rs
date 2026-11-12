@@ -178,11 +178,7 @@ fn fields<'a>(
     let make_folder = checkbox(state.make_folder)
         .style(crate::panels::form_look::checkbox_style)
         .size(TS.title)
-        .labelled(t!(
-            i18n,
-            ids::DIALOG_NEW_PROJECT_MAKE_FOLDER,
-            "name" => state.folder_label_name()
-        ))
+        .labelled(make_folder_label(state, i18n))
         .text_size(TS.label)
         .on_toggle(|on| np(NewProjectMsg::MakeFolderToggled(on)));
     let mut col = column![
@@ -225,6 +221,15 @@ fn fields<'a>(
         );
     }
     col.boxed()
+}
+
+/// The folder checkbox's label: `Create "<name>" folder` with the name as
+/// typed, or a neutral wording while the name is empty.
+pub(crate) fn make_folder_label(state: &NewProjectState, i18n: &I18n) -> Localized {
+    match state.folder_label_name() {
+        "" => t!(i18n, ids::DIALOG_NEW_PROJECT_MAKE_FOLDER_UNNAMED),
+        name => t!(i18n, ids::DIALOG_NEW_PROJECT_MAKE_FOLDER, "name" => name),
+    }
 }
 
 /// The inline reason Create is off. A blank name is not nagged about.

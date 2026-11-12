@@ -9,6 +9,7 @@ use super::TabInfo;
 mod agent_edits;
 mod board_sketch;
 mod case_fold;
+pub(crate) mod check_runs;
 pub(crate) mod cross_select;
 pub(crate) mod dir_case;
 mod dirty;
@@ -511,6 +512,8 @@ pub struct DocumentState {
         std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
     /// An agent's edit list in progress, and the labels of its undo steps (#2178).
     pub agent_edits: AgentEdits,
+    /// The last runs of `check_erc`, for a later run's baseline (#2199).
+    pub(crate) check_runs: check_runs::CheckRuns,
     /// The one store of half-typed title-block and paper-edge text (#2027);
     /// every panel context holds a handle to it.
     pub drafts: crate::panels::PanelDrafts,

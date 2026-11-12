@@ -44,8 +44,9 @@ nanometres, so a save and reopen gives the same board back).
 
 ## What the tests hold
 
-- Counts: 10,000 lines, 1,000 circles, 400 top polygons (pads), 2 polygons
-  (pours).
+- Counts: 10,000 lines, 2,000 circles (each via is its copper ring and its
+  drill opening), 400 top polygons (pads), 3 polygons (the board area and
+  the two pours).
 - Draw calls: 4 (pours, traces, vias, pads). The GPU path instances one draw per
   non-empty bucket, so the count does not grow with the board.
 - Culling: a 20 x 20 mm window keeps between 100 and 400 of the tracks.
@@ -125,6 +126,22 @@ p95 in every scenario.
 | AMD Radeon 880M (Vulkan) | gpu | msaa4 | pan | 6.03 | 6.70 | 7.49 | 165.9 | ok |
 | AMD Radeon 880M (Vulkan) | gpu | msaa4 | zoom | 5.81 | 7.34 | 7.41 | 172.0 | ok |
 | AMD Radeon 880M (Vulkan) | gpu | msaa4 | zoom-pan | 5.91 | 6.80 | 7.47 | 169.3 | ok |
+
+Rerun on 2026-11-11, same laptop and settings, after copper took its layer
+colours, drills became openings and the board area was filled (#2262, PR
+#2301: one more circle per via, one more polygon per through-hole pad, one
+board-area polygon):
+
+- CPU mount, MSAAx4: zoom p95 16.60 ms and pan p95 16.36 ms, inside the
+  16.7 ms budget by less than 0.4 ms.
+- CPU mount, no AA: every scenario at or under 14.22 ms p95.
+- GPU mount: 5.3 to 7.7 ms in every scenario.
+
+Known risk: the CPU mount is the default (Preferences GPU render off,
+`gpu_render = false`), and with MSAAx4 its zoom and pan rows now sit at the
+edge of the 60 fps budget. Any further per-item geometry on the CPU path
+(silkscreen, designators, net colours) is likely to push them over unless the
+CPU path gets cheaper or the GPU mount becomes the default.
 
 ## Realistic boards
 
