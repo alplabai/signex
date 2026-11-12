@@ -25,6 +25,7 @@
 
 use iced::widget::{Column, Space, Widget, column, container, row};
 use iced::{Border, Element, Length, Theme};
+use signex_i18n::{ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{button, raw, text, text_input};
@@ -53,7 +54,7 @@ pub fn view<'a>(
     // The search box filters library *names*, not rows. Component-row
     // search lives inside the Library Browser tab (each browser tab
     // has its own search buffer).
-    let search = text_input(raw("Search libraries…"), &state.panel_search)
+    let search = text_input(t!(i18n, ids::LIBRARY_PANEL_SEARCH), &state.panel_search)
         .on_input(|s| LibraryMessage::Picker(PickerMsg::PanelSearchChanged(s)))
         .padding(LIB_PANEL_ROW_PADDING)
         .size(LIB_PANEL_TEXT_SIZE)
@@ -67,11 +68,9 @@ pub fn view<'a>(
     if state.open_libraries.is_empty() {
         col = col.push(
             container(
-                text(raw(
-                    "No libraries open. Use File ▸ Library ▸ Open Library… to open a *.snxlib/.",
-                ))
-                .size(LIB_PANEL_TEXT_SIZE)
-                .color(muted),
+                text(t!(i18n, ids::LIBRARY_PANEL_NONE_OPEN))
+                    .size(LIB_PANEL_TEXT_SIZE)
+                    .color(muted),
             )
             .padding([SP.l, SP.m])
             .boxed(),
@@ -89,14 +88,14 @@ pub fn view<'a>(
                     .boxed(),
             );
             if expanded {
-                col = col.push(component_rows(lib, state, tokens));
+                col = col.push(component_rows(lib, state, tokens, i18n));
             }
         }
     }
     let footer = container(
         row![
             button(
-                text(raw("+ Open Library…"))
+                text(t!(i18n, ids::LIBRARY_PANEL_OPEN_LIBRARY))
                     .size(LIB_PANEL_TEXT_SIZE)
                     .color(text_c)
             )
@@ -144,7 +143,7 @@ fn library_row<'a>(
         crate::styles::tokens::resolve(tokens).ink3,
     );
     let rows_pill = crate::library::editor::kit::toned_pill(
-        format!("{} rows", lib.total_rows()),
+        t!(i18n, ids::LIBRARY_PANEL_ROWS, "count" => lib.total_rows()).into_string(),
         crate::styles::PillTone::Neutral,
         tokens,
     );
@@ -189,6 +188,7 @@ fn component_rows<'a>(
     lib: &'a super::state::OpenLibrary,
     state: &'a LibraryState,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let tables = lib.panel_tables();
@@ -196,7 +196,7 @@ fn component_rows<'a>(
     if tables.is_empty() {
         list = list.push(
             container(
-                text(raw("No tables in this library."))
+                text(t!(i18n, ids::LIBRARY_PANEL_NO_TABLES))
                     .size(LIB_PANEL_TEXT_SIZE)
                     .color(muted),
             )

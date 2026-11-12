@@ -190,15 +190,15 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .size(TS.body)
                 .color(theme_ext::text_primary(&ctx.tokens)),
             Space::new().width(8).height(Length::Shrink),
-            text(raw(format!("{errors} errors")))
+            text(t!(ctx.i18n, ids::PANELS_ERC_COUNT_ERRORS, "count" => errors as i64))
                 .size(TS.caption)
                 .color(theme_ext::error_color(&ctx.tokens)),
             Space::new().width(8).height(Length::Shrink),
-            text(raw(format!("{warnings} warnings")))
+            text(t!(ctx.i18n, ids::PANELS_ERC_COUNT_WARNINGS, "count" => warnings as i64))
                 .size(TS.caption)
                 .color(theme_ext::warning_color(&ctx.tokens)),
             Space::new().width(8).height(Length::Shrink),
-            text(raw(format!("{infos} info")))
+            text(t!(ctx.i18n, ids::PANELS_ERC_COUNT_INFO, "count" => infos as i64))
                 .size(TS.caption)
                 .color(theme_ext::accent(&ctx.tokens)),
             Space::new().width(Length::Fill).height(Length::Shrink),
@@ -362,22 +362,23 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     }
     col = col.push(separator(&ctx.tokens).boxed());
     col = col.push(
-        text(raw(format!("{} waived", ctx.erc_waivers.len())))
+        text(t!(ctx.i18n, ids::PANELS_ERC_WAIVED, "count" => ctx.erc_waivers.len() as i64))
             .size(TS.caption)
             .color(muted)
             .boxed(),
     );
     for w in &ctx.erc_waivers {
-        let note = match w.hidden {
-            0 => "matches no finding".to_string(),
-            1 => "1 finding hidden".to_string(),
-            n => format!("{n} findings hidden"),
-        };
         col = col.push(
             row![
-                text(raw(format!("{}  net {}  ({note})", w.rule_id, w.net)))
-                    .size(TS.caption)
-                    .color(muted),
+                text(t!(
+                    ctx.i18n,
+                    ids::PANELS_ERC_WAIVER_ROW,
+                    "rule" => w.rule_id.as_str(),
+                    "net" => w.net.as_str(),
+                    "hidden" => w.hidden as i64
+                ))
+                .size(TS.caption)
+                .color(muted),
                 Space::new().width(Length::Fill).height(Length::Shrink),
                 signex_widgets::button(
                     text(t!(ctx.i18n, ids::PANELS_ERC_RESTORE))

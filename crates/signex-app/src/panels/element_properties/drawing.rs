@@ -221,7 +221,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                             muted,
                         ));
                         if show_fill {
-                            c = c.push(drawing_fill_row(fill, muted, border_c));
+                            c = c.push(drawing_fill_row(fill, muted, border_c, &ctx.i18n));
                         }
                         c
                     },
@@ -268,7 +268,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                             muted,
                         ));
                         if show_fill {
-                            c = c.push(drawing_fill_row(fill, muted, border_c));
+                            c = c.push(drawing_fill_row(fill, muted, border_c, &ctx.i18n));
                         }
                         c
                     },
@@ -359,7 +359,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                             muted,
                         ));
                         if show_fill {
-                            c = c.push(drawing_fill_row(fill, muted, border_c));
+                            c = c.push(drawing_fill_row(fill, muted, border_c, &ctx.i18n));
                         }
                         c
                     },
@@ -389,8 +389,12 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             | signex_types::schematic::SchDrawing::Arc { stroke_color, .. }
             | signex_types::schematic::SchDrawing::Polyline { stroke_color, .. } => *stroke_color,
         });
-        col = col.push(drawing_stroke_color_row(current_color, muted));
-        col = col.push(drawing_placement_row(ctx.selected_drawing_placement, muted));
+        col = col.push(drawing_stroke_color_row(current_color, muted, &ctx.i18n));
+        col = col.push(drawing_placement_row(
+            ctx.selected_drawing_placement,
+            muted,
+            &ctx.i18n,
+        ));
     }
     col.boxed()
 }
@@ -435,6 +439,7 @@ fn drawing_num_row<'a>(
 fn drawing_stroke_color_row<'a>(
     current: Option<signex_types::schematic::StrokeColor>,
     muted: Color,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     use crate::app::contracts::DrawingFieldEdit as E;
     use iced::widget::row;
@@ -475,10 +480,13 @@ fn drawing_stroke_color_row<'a>(
     };
     let theme_active = current.is_none();
     row![
-        text(raw("Color"))
-            .size(TS.body)
-            .color(muted)
-            .width(Length::FillPortion(2)),
+        text(signex_i18n::t!(
+            i18n,
+            signex_i18n::ids::PANELS_DRAWING_COLOR
+        ))
+        .size(TS.body)
+        .color(muted)
+        .width(Length::FillPortion(2)),
         row![
             tile(
                 "Auto",
@@ -531,25 +539,30 @@ fn drawing_stroke_color_row<'a>(
 fn drawing_placement_row<'a>(
     current: signex_types::schematic::DrawingPlacement,
     muted: Color,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     use crate::app::contracts::DrawingFieldEdit as E;
+    use signex_i18n::{MessageId, ids, t};
     use signex_types::schematic::DrawingPlacement;
-    let tile = |label: &'static str, placement: DrawingPlacement| -> Element<'a, PanelMsg> {
+    let tile = |label: MessageId, placement: DrawingPlacement| -> Element<'a, PanelMsg> {
         let active = current == placement;
-        signex_widgets::button(text(raw(label)).size(TS.body))
+        signex_widgets::button(text(t!(i18n, label)).size(TS.body))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::UpdateDrawingEdit(E::Placement(placement)))
             .style(crate::panels::form_look::option_tile(active))
             .boxed()
     };
     row![
-        text(raw("Placement"))
+        text(t!(i18n, ids::PANELS_DRAWING_PLACEMENT))
             .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
         row![
-            tile("Behind circuit", DrawingPlacement::Behind),
-            tile("Above circuit", DrawingPlacement::Above),
+            tile(
+                ids::PANELS_DRAWING_PLACEMENT_BEHIND,
+                DrawingPlacement::Behind
+            ),
+            tile(ids::PANELS_DRAWING_PLACEMENT_ABOVE, DrawingPlacement::Above),
         ]
         .spacing(SP.s)
         .width(Length::FillPortion(3)),
@@ -564,26 +577,36 @@ fn drawing_fill_row<'a>(
     current: signex_types::schematic::FillType,
     muted: Color,
     _border_c: Color,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     use crate::app::contracts::DrawingFieldEdit as E;
+    use signex_i18n::{MessageId, ids, t};
     use signex_types::schematic::FillType;
-    let tile = |label: &'static str, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
-        signex_widgets::button(text(raw(label)).size(TS.body))
+    let tile = |label: MessageId, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
+        signex_widgets::button(text(t!(i18n, label)).size(TS.body))
             .padding([3.0, SP.m])
             .on_press(PanelMsg::UpdateDrawingEdit(E::Fill(ft)))
             .style(crate::panels::form_look::option_tile(active))
             .boxed()
     };
     row![
-        text(raw("Fill"))
+        text(t!(i18n, ids::PANELS_SHAPE_FILL))
             .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
         row![
-            tile("None", FillType::None, current == FillType::None),
-            tile("Outline", FillType::Outline, current == FillType::Outline),
             tile(
-                "Background",
+                ids::PANELS_SHAPE_FILL_NONE,
+                FillType::None,
+                current == FillType::None
+            ),
+            tile(
+                ids::PANELS_SHAPE_FILL_OUTLINE,
+                FillType::Outline,
+                current == FillType::Outline
+            ),
+            tile(
+                ids::PANELS_SHAPE_FILL_BACKGROUND,
                 FillType::Background,
                 current == FillType::Background,
             ),

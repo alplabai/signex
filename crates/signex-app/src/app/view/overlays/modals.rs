@@ -614,10 +614,12 @@ impl Signex {
         {
             return Vec::new();
         }
-        Self::dismiss_over(
-            Message::CommandPalette(CommandPaletteMsg::Close),
+        // The palette dims the app with the theme's modal scrim, like a dialog.
+        let scrim = crate::app::view::dialogs::dialog_scrim(&self.document_state.panel_ctx.tokens);
+        vec![
+            Self::dismiss_layer_tinted(Message::CommandPalette(CommandPaletteMsg::Close), scrim),
             self.view_command_palette_dropdown(),
-        )
+        ]
     }
 
     pub(in crate::app::view) fn library_updates_overlay(&self) -> Option<Element<'_, Message>> {

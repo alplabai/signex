@@ -158,6 +158,38 @@ fn prop_row_static<'a>(
     .boxed()
 }
 
+/// [`prop_row_static`] for an identifier (the UUID): one line in the mono
+/// face, ending in an ellipsis when the dock is narrower than the value.
+fn prop_row_mono<'a>(
+    label: &str,
+    value: String,
+    muted: Color,
+    primary: Color,
+) -> Element<'a, PanelMsg> {
+    use iced::widget::text::{Ellipsis, Wrapping};
+    container(
+        row![
+            text(raw(label.to_string()))
+                .size(TS.body)
+                .color(muted)
+                .width(Length::FillPortion(2)),
+            text(raw(value))
+                .size(TS.body)
+                .color(primary)
+                .font(crate::fonts::iced_font_for_family(
+                    crate::fonts::CHROME_MONO_FONT,
+                ))
+                .wrapping(Wrapping::None)
+                .ellipsis(Ellipsis::End)
+                .width(Length::FillPortion(3)),
+        ]
+        .spacing(SP.s),
+    )
+    .padding([3.0, SP.m])
+    .width(Length::Fill)
+    .boxed()
+}
+
 /// A section heading: the uppercase label.
 fn section_title<'a>(
     title: &str,
@@ -165,4 +197,35 @@ fn section_title<'a>(
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     form_look::section_label(title, tokens, i18n)
+}
+
+#[cfg(test)]
+mod uuid_row_tests {
+    use super::*;
+    use crate::layout_probe::{find, lay_out_texts, natural};
+
+    const UUID: &str = "a1cf3b2e-4cdd-4cdd-9420-8bdf89c0ffee";
+
+    /// #2262: the UUID wrapped onto a second line and ran past the dock
+    /// edge. It stays on one line inside the row now, cut with an ellipsis.
+    #[test]
+    fn the_uuid_row_stays_on_one_line_inside_a_narrow_dock() {
+        let dock = iced::Size::new(240.0, 400.0);
+        let row = prop_row_mono("UUID", UUID.to_string(), Color::BLACK, Color::BLACK);
+        let value = find(&lay_out_texts(row, dock), UUID).bounds;
+        let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+        let one_line = natural::<PanelMsg>(text(raw(UUID)).size(TS.body).font(mono).boxed(), UUID);
+        assert!(
+            one_line.width > value.width,
+            "the dock must be narrower than the UUID: {value:?}, natural {one_line:?}"
+        );
+        assert!(
+            value.height <= one_line.height + 0.5,
+            "the UUID wraps: {value:?}, one line is {one_line:?}"
+        );
+        assert!(
+            value.x + value.width <= dock.width + 0.5,
+            "the UUID runs past the dock edge: {value:?}"
+        );
+    }
 }

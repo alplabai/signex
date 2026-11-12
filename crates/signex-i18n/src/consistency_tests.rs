@@ -269,3 +269,124 @@ fn moved_graphite_strings_keep_their_english() {
         "Snap off"
     );
 }
+
+/// #2225 part 1, second wave: the strings moved out of the views #2291 had
+/// open keep their English, plural and spacing included.
+#[test]
+fn moved_graphite_strings_of_the_second_wave_keep_their_english() {
+    let i18n = I18n::new(&LanguagePref::Locale(EN_US.into()));
+    let shown = |id, args: &[(&str, crate::Arg)]| {
+        i18n.message(id, args)
+            .to_string()
+            .replace(['\u{2068}', '\u{2069}'], "")
+    };
+    let waiver = |hidden: usize| {
+        shown(
+            ids::PANELS_ERC_WAIVER_ROW,
+            &[
+                ("rule", "E101".into()),
+                ("net", "GND".into()),
+                ("hidden", hidden.into()),
+            ],
+        )
+    };
+    assert_eq!(waiver(0), "E101  net GND  (matches no finding)");
+    assert_eq!(waiver(1), "E101  net GND  (1 finding hidden)");
+    assert_eq!(waiver(3), "E101  net GND  (3 findings hidden)");
+    let breadcrumb = |count: usize| {
+        shown(
+            ids::PANELS_FOOTPRINT_LIBRARY_BREADCRUMB,
+            &[("file", "SOIC-8".into()), ("count", count.into())],
+        )
+    };
+    assert_eq!(breadcrumb(1), "SOIC-8  (1 footprint)");
+    assert_eq!(breadcrumb(0), "SOIC-8  (0 footprints)");
+    assert_eq!(breadcrumb(2), "SOIC-8  (2 footprints)");
+    assert_eq!(
+        shown(
+            ids::PANELS_SCH_LIBRARY_BREADCRUMB_IN_LIBRARY,
+            &[
+                ("library", "passives".into()),
+                ("file", "R.snxsym".into()),
+                ("count", 2usize.into()),
+            ],
+        ),
+        "passives  \u{203A}  R.snxsym  (2 symbols)"
+    );
+    assert_eq!(
+        shown(
+            ids::PANELS_LIBRARY_ROW_SUMMARY,
+            &[
+                ("table", "Resistors".into()),
+                ("class", "Resistor".into()),
+                ("lifecycle", "Draft".into()),
+                ("row", "c0ffee".into()),
+            ],
+        ),
+        "table: Resistors  \u{00B7}  class: Resistor  \u{00B7}  Draft  \u{00B7}  row c0ffee"
+    );
+    assert_eq!(
+        shown(
+            ids::OVERLAY_PALETTE_MORE_RESULTS,
+            &[("count", 181usize.into())]
+        ),
+        "181 more results \u{2014} refine query"
+    );
+    assert_eq!(
+        shown(ids::PANELS_ERC_COUNT_ERRORS, &[("count", 2usize.into())]),
+        "2 errors"
+    );
+    assert_eq!(
+        shown(
+            ids::PREFERENCES_APPEARANCE_ZOOM_STEP_VALUE,
+            &[("percent", 15u32.into())]
+        ),
+        "15% per notch"
+    );
+    assert_eq!(
+        shown(
+            ids::DIALOG_ERC_PROFILE_UPDATE_HEADING,
+            &[("name", "Strict".into()), ("count", 4usize.into())]
+        ),
+        "Update from profile \"Strict\" changes 4 entries:"
+    );
+    assert_eq!(
+        shown(ids::PANELS_FOOTPRINT_LIBRARY_EMPTY, &[]),
+        "Open a `.snxfpt` to see its footprints here. Right-click a `.snxlib` (or a project) \
+         in the project tree and pick `Add New \u{25B8} Footprint Library` to create one."
+    );
+    assert_eq!(shown(ids::OVERLAY_PALETTE_GROUP_COMMANDS, &[]), "COMMANDS");
+}
+
+/// #2262: the Pad Properties header of a selected pad, singular and plural.
+#[test]
+fn the_pad_heading_names_the_pad_and_its_place_among_the_pads() {
+    let i18n = I18n::new(&LanguagePref::Locale(EN_US.into()));
+    let heading = |index: usize, pads: usize| {
+        i18n.message(
+            ids::EDITORS_FOOTPRINT_PAD_HEADING,
+            &[
+                ("number", "11".into()),
+                ("kind", "SMD".into()),
+                ("index", index.into()),
+                ("pads", pads.into()),
+            ],
+        )
+        .to_string()
+        .replace(['\u{2068}', '\u{2069}'], "")
+    };
+    assert_eq!(heading(1, 11), "Pad 11 \u{00B7} SMD \u{00B7} 1 of 11 pads");
+    assert_eq!(heading(1, 1), "Pad 11 \u{00B7} SMD \u{00B7} 1 of 1 pad");
+    // The pad kinds keep the English the header showed as data before.
+    for (id, english) in [
+        (ids::EDITORS_PAD_KIND_SMD, "SMD"),
+        (ids::EDITORS_PAD_KIND_THROUGH_HOLE, "Through-hole"),
+        (ids::EDITORS_PAD_KIND_NPT_HOLE, "NPT hole"),
+        (ids::EDITORS_PAD_KIND_CONNECTOR, "Connector"),
+        (ids::EDITORS_PAD_KIND_CASTELLATED, "Castellated"),
+        (ids::EDITORS_PAD_KIND_FIDUCIAL, "Fiducial"),
+        (ids::EDITORS_PAD_KIND_UNKNOWN, "Unknown"),
+    ] {
+        assert_eq!(i18n.message(id, &[]).to_string(), english);
+    }
+}

@@ -343,11 +343,15 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 PrefMsg::DraftZoomStepPercent,
             )
             .width(140),
-            text(raw(format!("{draft_zoom_step_percent}% per notch")))
-                .size(TS.label)
-                .style(text_primary)
-                .width(100)
-                .align_x(iced::alignment::Horizontal::Right),
+            text(t!(
+                i18n,
+                ids::PREFERENCES_APPEARANCE_ZOOM_STEP_VALUE,
+                "percent" => u32::from(draft_zoom_step_percent)
+            ))
+            .size(TS.label)
+            .style(text_primary)
+            .width(100)
+            .align_x(iced::alignment::Horizontal::Right),
         ]
         .spacing(10)
         .align_y(iced::Alignment::Center)
