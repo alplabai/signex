@@ -1,0 +1,18 @@
+[signex_settings]
+application = "signex"
+file_kind = "keyboard_shortcuts"
+version = 1
+
+[keyboard_shortcuts]
+schema_version = 1
+profile_id = "mine"
+profile_name = "Mine"
+profile_kind = "custom"
+base_profile = "altium"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Ctrl+S" = "save_document"
+"Cmd+O" = "open_document"

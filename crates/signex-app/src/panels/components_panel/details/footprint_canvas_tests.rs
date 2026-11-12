@@ -125,8 +125,13 @@ fn first_event(
 }
 
 fn hold_ctrl(program: &FootprintPreview<'_>, state: &mut PreviewState) {
+    // The platform modifier: Cmd on macOS, Ctrl elsewhere.
     let ctrl = Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
-        iced::keyboard::Modifiers::CTRL,
+        if cfg!(target_os = "macos") {
+            iced::keyboard::Modifiers::LOGO
+        } else {
+            iced::keyboard::Modifiers::CTRL
+        },
     ));
     let _ = Program::<()>::update(program, state, &ctrl, BOX, mouse::Cursor::Unavailable);
 }

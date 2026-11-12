@@ -20,6 +20,7 @@
 use serde::{Deserialize, Serialize};
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
 
+pub mod check;
 pub mod context;
 pub mod diagnostic;
 pub mod engine;

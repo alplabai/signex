@@ -236,6 +236,7 @@ fn a_key_bound_by_the_user_enters() {
         action: ShortcutBindingAction::Command(command("board_sketch")),
         context: ShortcutContext::Pcb,
         triggers: vec![ShortcutTrigger::parse("Ctrl+Alt+K").unwrap()],
+        platform: None,
     });
     profiles.insert_custom_profile(mine).unwrap();
     profiles.set_active_profile("mine").unwrap();

@@ -630,6 +630,7 @@ fn a_bound_key_opens_back_annotate() {
             ),
             context: ShortcutContext::Global,
             triggers: vec![ShortcutTrigger::KeySequence(strokes.clone())],
+            platform: None,
         });
     rig.app.ui_state.active_keymap = rig.app.ui_state.keymap_profiles.compile_active().into();
     settle(

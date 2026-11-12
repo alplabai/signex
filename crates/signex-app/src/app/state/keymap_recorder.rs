@@ -33,8 +33,13 @@ impl KeymapRecorderState {
         // Seed the capture buffer with the binding's current key
         // sequence so the user sees what they are replacing. Pointer
         // gestures aren't keyboard-recordable, so they start empty.
-        let strokes = crate::keymap::ShortcutTrigger::parse(&trigger)
-            .ok()
+        // `trigger` is the binding's profile-file spelling, which parses back
+        // to the same strokes (display text on macOS would not).
+        let parsed = crate::keymap::ShortcutTrigger::parse(&trigger).ok();
+        let original_trigger = parsed
+            .as_ref()
+            .map_or_else(|| trigger.clone(), |parsed| parsed.display_text());
+        let strokes = parsed
             .and_then(|trigger| match trigger {
                 crate::keymap::ShortcutTrigger::KeySequence(strokes) => Some(strokes),
                 crate::keymap::ShortcutTrigger::PointerGesture(_) => None,
@@ -45,14 +50,21 @@ impl KeymapRecorderState {
             command,
             command_label,
             context,
-            original_trigger: trigger,
+            original_trigger,
             strokes,
             modifiers: crate::keymap::Modifiers::default(),
             recording: true,
         }
     }
 
+    /// The recorded strokes as this OS shows them.
     pub fn trigger_text(&self) -> String {
-        crate::keymap::ShortcutTrigger::KeySequence(self.strokes.clone()).display_text()
+        self.trigger().display_text()
+    }
+
+    /// The recorded strokes themselves: what Apply stores, so nothing is
+    /// re-read from display text.
+    pub fn trigger(&self) -> crate::keymap::ShortcutTrigger {
+        crate::keymap::ShortcutTrigger::KeySequence(self.strokes.clone())
     }
 }
