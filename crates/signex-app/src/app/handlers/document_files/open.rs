@@ -43,13 +43,18 @@ impl Signex {
         self.interaction_state.editing_text = None;
         self.interaction_state.context_menu = None;
 
-        self.open_document_path(path).map_err(|error| {
-            crate::diagnostics::log_error("Failed to open document path", &error);
-            let reason = format!("{error:#}");
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::open(reason.clone()));
-            reason
-        })
+        self.open_document_path(path)
+            .map_err(|error| self.report_refused_open(&error))
+    }
+
+    /// Log a refused open and raise it as the Open Failed notice; returns
+    /// the reason.
+    pub(crate) fn report_refused_open(&mut self, error: &anyhow::Error) -> String {
+        crate::diagnostics::log_error("Failed to open document path", error);
+        let reason = format!("{error:#}");
+        self.document_state.error_notice =
+            Some(crate::app::state::ErrorNotice::open(reason.clone()));
+        reason
     }
 
     pub(crate) fn handle_new_project_file(&mut self, path: Option<PathBuf>) -> iced::Task<Message> {

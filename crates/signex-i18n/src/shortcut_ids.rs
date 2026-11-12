@@ -3,17 +3,9 @@
 
 define_ids! {
     pub mod shortcut_ids {
-        PALETTE_GROUP_COMMANDS = "palette-group-commands";
-        PALETTE_GROUP_COMPONENTS = "palette-group-components";
-        PALETTE_GROUP_NETS = "palette-group-nets";
-        PALETTE_GROUP_SHEETS = "palette-group-sheets";
-        PALETTE_GROUP_FILES = "palette-group-files";
         PALETTE_KEY_ESC = "palette-key-esc";
         PALETTE_KEY_ENTER = "palette-key-enter";
-        PALETTE_HINT_NAVIGATE = "palette-hint-navigate";
-        PALETTE_HINT_RUN = "palette-hint-run";
         PALETTE_OPEN_PANEL = "palette-open-panel";
-        PALETTE_MORE_RESULTS = "palette-more-results";
         KEYMAP_COL_ACTION = "keymap-col-action";
         KEYMAP_COL_SHORTCUT = "keymap-col-shortcut";
         KEYMAP_GROUP_GENERAL = "keymap-group-general";

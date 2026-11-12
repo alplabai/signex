@@ -178,3 +178,5 @@ pref-keymap-clear = Clear
 pref-keymap-ok = OK
 # { $display } is the recorded stroke, { $action } the action of the fixed key that takes it.
 pref-keymap-claimed = { $display } is claimed by { $action } and will never reach this binding.
+# Value beside the zoom speed slider. $percent is a whole number.
+preferences-appearance-zoom-step-value = { $percent }% per notch

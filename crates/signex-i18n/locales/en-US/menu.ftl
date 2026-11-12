@@ -32,8 +32,6 @@ menu-file-export = Export
 menu-file-save-all = Save All
 menu-file-import-altium = Altium Project...
 menu-file-exit = Exit
-# Greyed row shown in Open Recent when no project was opened yet.
-menu-file-no-recent = No recent projects
 menu-file-clear-recent = Clear Recent
 menu-file-open-library = Open Library...
 menu-file-place-component = Place Component...
@@ -78,7 +76,6 @@ menu-tools-passive-calculator = Passive Network Calculator...
 menu-help-about = About { -brand-name }
 menu-help-documentation = Documentation
 menu-help-report-issue = Report an Issue
-menu-help-sample-project = Open Sample Project
 
 ## Native app menu and menu chrome (#2057)
 # The product name: a term, so a message names it as { -brand-name }.

@@ -18,7 +18,7 @@ const EXPECTED_STUBS: &[&str] = &[];
 
 /// `unavailable` rows (by label id) that are allowed to stay unexplained.
 /// The label ids are pinned to their English by `disabled_row_label_is_pinned`.
-const EXPECTED_DISABLED: &[&str] = &["MENU_FILE_NO_RECENT"];
+const EXPECTED_DISABLED: &[&str] = &["START_NO_RECENT_TITLE"];
 
 /// The label key of each `<callee>(` call in `source`: the string literal or
 /// `&cmd_label("id", ..)` it opens with, or the name of the `menu_ids::NAME`
@@ -39,7 +39,10 @@ fn call_keys(source: &str, callee: &str) -> Vec<String> {
         }
         let arg = rest.trim_start();
         let arg = arg.strip_prefix("ctx,").map_or(arg, str::trim_start);
-        if let Some(named) = arg.strip_prefix("menu_ids::") {
+        if let Some(named) = arg
+            .strip_prefix("menu_ids::")
+            .or_else(|| arg.strip_prefix("ids::"))
+        {
             let end = named
                 .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
                 .unwrap_or(named.len());
@@ -107,7 +110,7 @@ fn the_scanner_catches_a_new_inert_row() {
 fn disabled_row_label_is_pinned() {
     let i18n = signex_i18n::I18n::en_us_ref();
     assert_eq!(
-        i18n.message(signex_i18n::menu_ids::MENU_FILE_NO_RECENT, &[])
+        i18n.message(signex_i18n::ids::START_NO_RECENT_TITLE, &[])
             .to_string(),
         "No recent projects"
     );

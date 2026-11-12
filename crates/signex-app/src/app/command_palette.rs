@@ -133,13 +133,13 @@ impl CommandSource {
 
     /// Header of the source's group in the Graphite palette.
     pub fn group_title(self) -> signex_i18n::MessageId {
-        use signex_i18n::shortcut_ids as ids;
+        use signex_i18n::ids;
         match self {
-            Self::Command => ids::PALETTE_GROUP_COMMANDS,
-            Self::Symbol => ids::PALETTE_GROUP_COMPONENTS,
-            Self::Net => ids::PALETTE_GROUP_NETS,
-            Self::Sheet => ids::PALETTE_GROUP_SHEETS,
-            Self::File => ids::PALETTE_GROUP_FILES,
+            Self::Command => ids::OVERLAY_PALETTE_GROUP_COMMANDS,
+            Self::Symbol => ids::OVERLAY_PALETTE_GROUP_COMPONENTS,
+            Self::Net => ids::OVERLAY_PALETTE_GROUP_NETS,
+            Self::Sheet => ids::OVERLAY_PALETTE_GROUP_SHEETS,
+            Self::File => ids::OVERLAY_PALETTE_GROUP_FILES,
         }
     }
 }

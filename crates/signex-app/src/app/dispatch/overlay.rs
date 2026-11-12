@@ -92,6 +92,7 @@ impl Signex {
     pub(crate) fn dispatch_project_message(&mut self, msg: ProjectMsg) -> Task<Message> {
         match msg {
             ProjectMsg::Setup(msg) => self.dispatch_new_project_message(msg),
+            ProjectMsg::StartScreen(msg) => self.dispatch_start_screen_message(msg),
             ProjectMsg::SheetNumbering(msg) => self.dispatch_sheet_numbering_message(msg),
             ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
             ProjectMsg::AssignFootprints(msg) => self.dispatch_assign_footprints_message(msg),
@@ -796,12 +797,13 @@ impl Signex {
     }
 
     /// Close every right-click menu (canvas, document tab, project tree,
-    /// dock tab, Components row) and their submenu state. Each menu's open
+    /// dock tab, Components row, Start screen row) and their submenu state. Each menu's open
     /// handler calls this first, so exactly one is ever open.
     pub(crate) fn close_all_context_menus(&mut self) {
         let interaction = &mut self.interaction_state;
         interaction.context_menu = None;
         interaction.tab_context_menu = None;
+        interaction.start_row_menu = None;
         interaction.project_tree_context_menu = None;
         interaction.context_submenu = None;
         interaction.pending_submenu = None;

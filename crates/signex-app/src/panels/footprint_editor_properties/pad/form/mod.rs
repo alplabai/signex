@@ -15,6 +15,7 @@
 
 use iced::widget::{Column, Widget as _, container, pick_list, row};
 use iced::{Color, Length};
+use signex_i18n::{ids, t};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{raw, text, text_input};
 
@@ -372,6 +373,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
     placement_paused: bool,
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
+    i18n: &signex_i18n::I18n,
 ) -> Column<iced::Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
@@ -399,7 +401,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         if placement_paused {
             col = col.push(
                 container(
-                    text(raw("PAUSED — TAB to resume placement"))
+                    text(t!(i18n, ids::EDITORS_PAD_PLACEMENT_PAUSED))
                         .size(TS.caption)
                         .color(Color::from_rgba(1.0, 0.85, 0.30, 1.0)),
                 )
@@ -410,7 +412,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
         } else {
             col = col.push(
                 container(
-                    text(raw("TAB to pause placement and edit defaults"))
+                    text(t!(i18n, ids::EDITORS_PAD_PLACEMENT_PAUSE_HINT))
                         .size(TS.caption)
                         .color(muted),
                 )
@@ -504,6 +506,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
     target: PadEditTarget,
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
+    i18n: &signex_i18n::I18n,
 ) -> Column<iced::Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
@@ -545,10 +548,14 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
     ));
 
     col = col.push(
-        container(text(raw("Testpoint")).size(TS.caption).color(muted))
-            .padding([SP.m, SP.m])
-            .width(Length::Fill)
-            .boxed(),
+        container(
+            text(t!(i18n, ids::EDITORS_PAD_TESTPOINT))
+                .size(TS.caption)
+                .color(muted),
+        )
+        .padding([SP.m, SP.m])
+        .width(Length::Fill)
+        .boxed(),
     );
     col = col.push(pad_check_row_w(
         fw,

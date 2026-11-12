@@ -75,7 +75,7 @@ fn open_recent(ctx: &MenuContext) -> Vec<MenuEntry> {
         })
         .collect();
     if entries.is_empty() {
-        entries.push(unavailable(ctx, menu_ids::MENU_FILE_NO_RECENT));
+        entries.push(unavailable(ctx, ids::START_NO_RECENT_TITLE));
     }
     entries.push(SEP);
     entries.push(item_if(
@@ -493,11 +493,7 @@ pub(super) fn help(ctx: &MenuContext) -> Vec<MenuEntry> {
             menu_ids::MENU_HELP_REPORT_ISSUE,
             MenuMessage::ReportIssue,
         ),
-        item(
-            ctx,
-            menu_ids::MENU_HELP_SAMPLE_PROJECT,
-            MenuMessage::OpenSampleProject,
-        ),
+        item(ctx, ids::START_OPEN_SAMPLE, MenuMessage::OpenSampleProject),
         SEP,
         cmd_item(ctx, cmd("show_current_command_hotkeys", "F1")),
     ]

@@ -8,19 +8,25 @@ overlay-placement-paused-title = Placement Paused
 overlay-placement-paused-body = Editing properties in the panel. Click Resume to keep placing.
 
 ## Command palette (#2057)
-# Group headers of the palette, in capitals; the number of rows follows each.
-palette-group-commands = COMMANDS
-palette-group-components = COMPONENTS
-palette-group-nets = NETS
-palette-group-sheets = SHEETS
-palette-group-files = FILES
 # Key caps of the palette's hint line.
 palette-key-esc = Esc
 palette-key-enter = Enter
-# What the arrow keys and Enter do in the palette.
-palette-hint-navigate = Navigate
-palette-hint-run = Run
 # Row that opens a panel. { $panel } is the panel's name.
 palette-open-panel = Open Panel: { $panel }
-# Footer note when the palette shows only the first rows. { $count } is the number left out.
-palette-more-results = { $count } more results — refine query
+
+## Command palette. The group headings are shown in capitals, so they are
+## written in capitals here.
+overlay-palette-group-commands = COMMANDS
+overlay-palette-group-components = COMPONENTS
+overlay-palette-group-nets = NETS
+overlay-palette-group-sheets = SHEETS
+overlay-palette-group-files = FILES
+# Shown when nothing matches the typed query.
+overlay-palette-no-results = No results
+# Placeholder of the search field of a palette opened in its own window.
+overlay-palette-window-search = Search files, symbols, commands…
+# Footer note: matches beyond the rows shown. $count is a whole number.
+overlay-palette-more-results = { $count } more results — refine query
+# Footer key hints: the arrow keys move the selection, Enter runs it.
+overlay-palette-navigate = Navigate
+overlay-palette-run = Run

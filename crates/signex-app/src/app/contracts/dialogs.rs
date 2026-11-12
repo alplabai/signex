@@ -605,6 +605,9 @@ pub enum ProjectMsg {
     /// The New Project setup dialog (#2232); routed to
     /// `dispatch_new_project_message`.
     Setup(crate::app::NewProjectMsg),
+    /// Start screen project rows: pin, unpin, open a pinned project, the
+    /// row menu (#2305); routed to `dispatch_start_screen_message`.
+    StartScreen(crate::start_screen::StartScreenMsg),
     /// The Number Schematic Sheets dialog (#2247); routed to
     /// `dispatch_sheet_numbering_message`.
     SheetNumbering(crate::app::SheetNumberingMsg),

@@ -20,7 +20,6 @@ define_ids! {
         MENU_FILE_SAVE_ALL = "menu-file-save-all";
         MENU_FILE_IMPORT_ALTIUM = "menu-file-import-altium";
         MENU_FILE_EXIT = "menu-file-exit";
-        MENU_FILE_NO_RECENT = "menu-file-no-recent";
         MENU_FILE_CLEAR_RECENT = "menu-file-clear-recent";
         MENU_FILE_OPEN_LIBRARY = "menu-file-open-library";
         MENU_FILE_PLACE_COMPONENT = "menu-file-place-component";
@@ -45,7 +44,6 @@ define_ids! {
         MENU_HELP_ABOUT = "menu-help-about";
         MENU_HELP_DOCUMENTATION = "menu-help-documentation";
         MENU_HELP_REPORT_ISSUE = "menu-help-report-issue";
-        MENU_HELP_SAMPLE_PROJECT = "menu-help-sample-project";
         MENU_APP_TITLE = "menu-app-title";
         MENU_PLANNED_TOOLTIP = "menu-planned-tooltip";
         CTX_CLEAR_FILTER = "ctx-clear-filter";

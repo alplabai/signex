@@ -64,6 +64,7 @@ pub mod panels;
 pub mod passive_calculator_modal;
 pub mod pcb_canvas;
 pub mod persist;
+pub mod pinned_projects;
 pub(crate) mod polygon_path;
 pub mod preferences;
 pub mod recent_projects;
