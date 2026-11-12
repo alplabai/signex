@@ -70,6 +70,12 @@ fn write_migration(
     })
 }
 
+/// Save the live profiles over the file: undoes a move that was not adopted.
+fn resave_live(live: &ShortcutProfileSet) -> Result<(), String> {
+    crate::keymap::save_profile_set(live)
+        .map_err(|error| format!("the file could not be written ({error})"))
+}
+
 /// Persist that the question was answered. Off the update thread.
 fn remember_asked() -> Task<Message> {
     crate::fonts::background_pref_write(KEYMAP_MOD_PROMPT_ASKED_KEY, || {
@@ -147,6 +153,25 @@ impl Signex {
         }
     }
 
+    /// The stale move's file was replaced by the live profiles again, or that
+    /// failed and the file still holds the older move.
+    pub(crate) fn handle_keymap_mod_stale_resaved(
+        &mut self,
+        result: Result<(), String>,
+    ) -> Task<Message> {
+        match result {
+            Ok(()) => crate::diagnostics::log_info(
+                "Keyboard shortcuts: your saved shortcuts were written back over the stale move.",
+            ),
+            Err(error) => tracing::error!(
+                target: "signex::keymap",
+                "Stale move not undone: {error}; the file holds older shortcuts"
+            ),
+        }
+        self.sync_diagnostics_panel_ctx();
+        Task::none()
+    }
+
     /// The move finished: adopt the new set and remember the question, or
     /// report why the file was left as it was (and ask again next launch).
     pub(crate) fn handle_keymap_mod_migration_written(
@@ -163,9 +188,20 @@ impl Signex {
                     .map(|path| format!("earlier file kept as {path}"))
                     .unwrap_or_else(|| "no earlier file to keep".to_string());
                 crate::diagnostics::log_warning(format!(
-                    "Move to \u{2318} not adopted: shortcuts changed meanwhile; {backup}; asked again next launch."
+                    "Move to \u{2318} not adopted: shortcuts changed meanwhile; {backup}; your saved shortcuts are being written back; asked again next launch."
                 ));
-                Task::none()
+                // The write already replaced the file with the move of the
+                // older set, so put the live profiles back over it.
+                let live = self.ui_state.keymap_profiles.clone();
+                Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || resave_live(&live))
+                            .await
+                            .map_err(|error| format!("the write task failed ({error})"))
+                            .and_then(|result| result)
+                    },
+                    |result| Message::Ui(UiMsg::KeymapModStaleResaved(result)),
+                )
             }
             Ok(done) => {
                 self.ui_state.set_keymap_profiles(done.set);

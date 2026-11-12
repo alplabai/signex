@@ -16,6 +16,7 @@ impl Signex {
             UiMsg::KeymapModMigrationWritten(result) => {
                 self.handle_keymap_mod_migration_written(result)
             }
+            UiMsg::KeymapModStaleResaved(result) => self.handle_keymap_mod_stale_resaved(result),
             UiMsg::MenuInWindow { window, msg } => {
                 let Some(id) = msg.window_command() else {
                     return self.update(Message::Menu(msg));

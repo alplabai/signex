@@ -109,6 +109,7 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("cut", "Cut", "Mod+X")),
         cmd_item_gated(ctx, cmd("copy", "Copy", "Mod+C")),
         cmd_item_gated(ctx, cmd("paste", "Paste", "Mod+V")),
+        // Trunk spelling kept (not `Mod+`): the fallback is never shown while a keymap is active.
         cmd_item_gated(ctx, cmd("smart_paste", "Paste Special", "Shift+Ctrl+V")),
         cmd_item_gated(ctx, cmd("duplicate", "Duplicate", "Mod+D")),
         cmd_item_gated(ctx, cmd("delete_selection", "Delete", "Del")),
@@ -179,6 +180,7 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("zoom_out_at_cursor", "Zoom Out", "Ctrl+-")),
         cmd_item_gated(ctx, cmd("zoom_to_fit", "Fit All", "Home")),
         SEP,
+        // Trunk spelling kept (not `Mod+`): the fallback is never shown while a keymap is active.
         cmd_item_gated(
             ctx,
             cmd("toggle_visible_grid", "Toggle Grid", "Shift+Ctrl+G"),

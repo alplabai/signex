@@ -143,7 +143,9 @@ by a headless boot). The outcome is logged to the Messages panel.
   is `keymap_mod_prompt_asked` set in `prefs.json`. If the backup or the write
   fails nothing is changed, the reason is logged and the question returns next
   launch. If Preferences was applied while the write ran, the moved copy is not
-  adopted (a warning names the backup) and the question also returns.
+  adopted: a warning names the backup, your live profiles are saved back over
+  the file the write replaced (a failure of that is logged as an error), and
+  the question returns next launch.
 - **Keep Control** leaves the profile as it is and sets the flag at once.
 
 The rewrite is `keymap::migrate_active_to_mod`: it moves single-stroke

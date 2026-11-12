@@ -94,7 +94,12 @@ fn a_boot_that_is_not_the_gui_boot_carries_no_prompt() {
     let units_with = {
         let _root = IsolatedConfigRoot::new();
         crate::keymap::save_profile_set(&legacy_set()).unwrap();
-        let (_app, boot) = Signex::new();
+        let (app, boot) = Signex::new();
+        // Positive control: the setup really loaded the legacy custom profile.
+        assert!(crate::keymap::offers_mod_migration(
+            &app.ui_state.keymap_profiles,
+            Platform::MacOs
+        ));
         boot.units()
     };
     let units_without = {
@@ -103,6 +108,26 @@ fn a_boot_that_is_not_the_gui_boot_carries_no_prompt() {
         boot.units()
     };
     assert_eq!(units_with, units_without);
+}
+
+/// The GUI boot on a Mac adds exactly the prompt unit; no task runs, so no
+/// dialog opens. This guards Linux CI, where `Platform::current()` never asks.
+#[test]
+fn a_gui_boot_on_macos_adds_the_prompt_unit_and_on_windows_does_not() {
+    let _root = IsolatedConfigRoot::new();
+    crate::keymap::save_profile_set(&legacy_set()).unwrap();
+    let recovery = tempfile::tempdir().unwrap();
+    let units_on = |platform: Platform| {
+        let (mut app, boot) = Signex::new();
+        // `new` takes the real recovery folder; `boot_from` must not touch it.
+        app.document_state
+            .autosave
+            .set_dir(Some(recovery.path().to_path_buf()));
+        Signex::boot_from_on(app, boot, Vec::new(), platform)
+            .1
+            .units()
+    };
+    assert_eq!(units_on(Platform::MacOs), units_on(Platform::Windows) + 1);
 }
 
 #[test]
@@ -179,7 +204,35 @@ fn a_stale_result_is_not_adopted_and_the_question_stays_open() {
         "the stale set is dropped"
     );
     assert_eq!(crate::diagnostics::logged_count(needle), seen + 1);
-    assert_eq!(task.units(), 0, "the flag stays unset");
+    assert_eq!(
+        task.units(),
+        1,
+        "one task puts the live profiles back over the file; the flag stays unset"
+    );
+}
+
+/// The stale move had already replaced the file; saving the live profiles
+/// back leaves the file equal to them.
+#[test]
+fn the_resave_puts_the_live_profiles_back_over_the_stale_file() {
+    let _root = IsolatedConfigRoot::new();
+    let older = legacy_set();
+    let live = {
+        let mut set = ShortcutProfileSet::built_ins().unwrap();
+        set.set_active_profile("altium").unwrap();
+        set
+    };
+    let stale = migrate_active_to_mod(&older).unwrap();
+    write_migration(older, stale).unwrap();
+
+    resave_live(&live).unwrap();
+
+    let on_disk = crate::keymap::load_profile_set().unwrap();
+    assert_eq!(on_disk.active_profile_id(), live.active_profile_id());
+    assert!(
+        on_disk.profile("mine").is_none(),
+        "the stale profile is gone from the file"
+    );
 }
 
 #[test]

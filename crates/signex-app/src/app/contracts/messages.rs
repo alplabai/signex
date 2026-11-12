@@ -305,6 +305,9 @@ pub enum UiMsg {
     /// The `Mod` move of the active custom profile finished: the profile set
     /// to adopt and the backup it was saved over, or why nothing was written.
     KeymapModMigrationWritten(Result<KeymapModMigration, String>),
+    /// A move that was not adopted (shortcuts changed meanwhile) had already
+    /// overwritten the file; the live profiles were saved back over it.
+    KeymapModStaleResaved(Result<(), String>),
     /// Edit → Undo / Redo clicked in an undocked tab's own menu bar. Runs
     /// the command against that window's document, as its shortcut does
     /// (#1550); every other menu row still arrives as `Message::Menu`.
