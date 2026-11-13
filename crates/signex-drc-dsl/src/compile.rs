@@ -250,14 +250,20 @@ impl Checker<'_> {
         out
     }
 
-    /// Says a limit of 0 (it checks nothing) and a clearance so large it is
-    /// likely a wrong unit: over 10 mm a warning, over 100 mm an error (a
-    /// clearance widens the search around every copper item it covers).
-    /// False when the limit is refused.
+    /// Says a limit of 0 (a minimum of 0 checks nothing, a maximum of 0
+    /// reports every track) and a clearance so large it is likely a wrong
+    /// unit: over 10 mm a warning, over 100 mm an error (a clearance widens
+    /// the search around every copper item it covers). False when the limit
+    /// is refused.
     fn plausible(&mut self, ast: &LimitAst, limit: &Limit, nm: i64) -> bool {
         if nm == 0 {
-            let msg = "a limit of 0 checks nothing for this rule's scope".to_string();
-            self.say(Level::Warning, &ast.number.span, msg);
+            let msg = match limit {
+                Limit::MaxTrackWidth(_) => {
+                    "a maximum of 0 reports every track in this rule's scope"
+                }
+                _ => "a limit of 0 checks nothing for this rule's scope",
+            };
+            self.say(Level::Warning, &ast.number.span, msg.to_string());
         }
         if !matches!(limit, Limit::MinClearance(_)) || nm <= CLEARANCE_WARN_NM {
             return true;

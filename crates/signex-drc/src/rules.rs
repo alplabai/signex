@@ -2,12 +2,12 @@
 //! a net class can raise for its nets (the implicit rules), and the rules
 //! written in the rule language, which rank above them.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use signex_types::net_class::{NetClass, first_matching_class};
 use signex_types::pcb::PcbBoard;
 
-use pcb_geom::{CopperItem, GeomError, MAX_ABS_NM, mm_to_nm};
+use pcb_geom::{CopperItem, GeomError, MAX_ABS_NM, mm_to_nm, nm_to_mm};
 
 use crate::DrcSeverities;
 use crate::user_rules::{self, CopperObject, LimitKind, ScopedRule, UserRule};
@@ -58,7 +58,8 @@ impl DrcRules {
 
     /// Add rule-language rules, resolving their net scopes against
     /// `board`'s nets and `classes` (the first matching class, as for the
-    /// implicit rules).
+    /// implicit rules). A written clearance that wins for a net below its
+    /// class's value is said in [`Self::notes`], never applied silently.
     pub fn with_user_rules(
         mut self,
         board: &PcbBoard,
@@ -70,7 +71,55 @@ impl DrcRules {
                 .into_iter()
                 .map(|rule| ScopedRule::resolve(rule, board, classes)),
         );
+        let lowered = self.lowered_classes(board, classes);
+        self.notes.extend(lowered);
         self
+    }
+
+    /// One note per written rule and net class where the rule, winning for
+    /// a net of the class on some layer or object pair, asks less than the
+    /// class's clearance.
+    fn lowered_classes(&self, board: &PcbBoard, classes: &[NetClass]) -> Vec<String> {
+        let mut pairs: Vec<[Option<CopperObject>; 2]> = vec![[None, None]];
+        pairs.extend(
+            self.user
+                .iter()
+                .filter_map(|s| s.rule.pair.map(|[a, b]| [Some(a), Some(b)])),
+        );
+        let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
+        let mut lines = Vec::new();
+        for net in &board.nets {
+            let Some(&class_nm) = self.net_clearance.get(&net.number) else {
+                continue;
+            };
+            let Some(class) = first_matching_class(classes, &net.name) else {
+                continue;
+            };
+            for bit in 0..32 {
+                for &objects in &pairs {
+                    let picked = user_rules::pick(
+                        &self.user,
+                        LimitKind::MinClearance,
+                        net.number,
+                        1 << bit,
+                        objects,
+                    );
+                    let Some((nm, scoped)) = picked.filter(|(nm, _)| *nm < class_nm) else {
+                        continue;
+                    };
+                    let name = &scoped.rule.name;
+                    if seen.insert((name.clone(), class.name.clone())) {
+                        lines.push(format!(
+                            "DRC rule '{name}' lowers net class '{}' clearance {} \u{2192} {} mm",
+                            class.name,
+                            nm_to_mm(class_nm),
+                            nm_to_mm(nm)
+                        ));
+                    }
+                }
+            }
+        }
+        lines
     }
 
     /// The rule-language rules this run applies, in written order.
@@ -108,7 +157,10 @@ impl DrcRules {
                         .map_or((self.required(net, net), None), |(nm, rule)| {
                             (nm, Some(rule))
                         });
-                if side.0 > most.0 {
+                // On equal values a written rule is named (and its severity
+                // used) rather than the implicit one.
+                let named = side.0 == most.0 && most.1.is_none() && side.1.is_some();
+                if side.0 > most.0 || named {
                     most = side;
                 }
             }

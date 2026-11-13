@@ -126,10 +126,11 @@ fn an_implausible_or_zero_limit_is_said() {
     let got = compile(
         "rule big on clearance require clearance >= 20mm then error\n\
          rule huge on clearance require clearance >= 200mm then error\n\
-         rule none on track require width >= 0mm then error",
+         rule none on track require width >= 0mm then error\n\
+         rule all on track require width <= 0mm then error",
     );
     let names: Vec<_> = got.rules.iter().map(|r| r.name.as_str()).collect();
-    assert_eq!(names, ["big", "none"]);
+    assert_eq!(names, ["big", "none", "all"]);
     let said: Vec<_> = got
         .diagnostics
         .iter()
@@ -149,6 +150,10 @@ fn an_implausible_or_zero_limit_is_said() {
             (
                 Level::Warning,
                 "a limit of 0 checks nothing for this rule's scope"
+            ),
+            (
+                Level::Warning,
+                "a maximum of 0 reports every track in this rule's scope"
             ),
         ]
     );

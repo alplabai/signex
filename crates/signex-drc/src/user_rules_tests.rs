@@ -67,12 +67,59 @@ fn rules_for(b: &PcbBoard, user: Vec<UserRule>) -> DrcRules {
 
 /// `(required, rule)` of the one violation, gap 0.15 mm (pitch 0.4 mm).
 fn verdict(user: Vec<UserRule>) -> Option<(i64, Option<String>)> {
-    let b = pair(0.4);
-    let report = run(&b, &rules_for(&b, user));
+    verdict_of(&pair(0.4), user)
+}
+
+fn verdict_of(b: &PcbBoard, user: Vec<UserRule>) -> Option<(i64, Option<String>)> {
+    let report = run(b, &rules_for(b, user));
     report
         .violations
         .first()
         .map(|v| (v.required_nm, v.rule.clone()))
+}
+
+/// Per-side precedence (#2307 review): a pair needs the stricter of its
+/// two sides, so a rule for one net can loosen that net's own class value
+/// but never the other net's, nor the setup value the other side falls
+/// back to.
+#[test]
+fn a_pair_needs_the_stricter_side_so_a_net_rule_below_the_setup_does_not_loosen_it() {
+    // GND to SIG (no class): 0.15 mm apart, setup 0.2 mm.
+    let mut b = pair(0.4);
+    b.segments[1].net = 3;
+    let gnd = clearance("gnd", NetScope::Net("GND".into()), 100_000);
+    assert_eq!(verdict_of(&b, vec![gnd]), Some((200_000, None)));
+}
+
+#[test]
+fn on_equal_values_the_written_rule_is_named_whichever_side_it_is() {
+    let mut hv = clearance("hv", NetScope::Class("HV".into()), 200_000);
+    hv.severity = Severity::Warning;
+    // GND's side falls back to the 0.2 mm setup; HV_A's side is `hv`.
+    let want = Some((200_000, Some("user::hv".to_string())));
+    assert_eq!(verdict(vec![hv.clone()]), want);
+    let mut swapped = pair(0.4);
+    swapped.segments[0].net = 2;
+    swapped.segments[1].net = 1;
+    assert_eq!(verdict_of(&swapped, vec![hv]), want);
+}
+
+#[test]
+fn a_written_rule_below_a_class_value_is_said_once_per_rule_and_class() {
+    let mut b = pair(0.4);
+    b.nets.push(NetDef {
+        number: 4,
+        name: "HV_B".into(),
+    });
+    let base = clearance("base", NetScope::Board, 150_000);
+    assert_eq!(
+        rules_for(&b, vec![base.clone()]).notes,
+        ["DRC rule 'base' lowers net class 'HV' clearance 0.5 \u{2192} 0.15 mm"]
+    );
+    // A class rule outranks `base` for HV nets: nothing is lowered.
+    let hv = clearance("hv", NetScope::Class("HV".into()), 600_000);
+    assert!(rules_for(&b, vec![base, hv]).notes.is_empty());
+    assert!(rules_for(&b, vec![]).notes.is_empty());
 }
 
 #[test]
