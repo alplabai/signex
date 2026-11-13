@@ -26,12 +26,18 @@ pub use icu_locale_core::Locale;
 pub use locale::LanguagePref;
 pub use types::{Arg, LocalNumber, Localized, MessageId, UserText};
 
-/// Every message id, defined together with the [`ids::ALL`] list so a new
-/// id cannot be left out of the consistency tests. This is the only non-test place
+/// Every message id, defined together with a list of them so a new id cannot
+/// be left out of the consistency tests. This is the only non-test place
 /// `MessageId::new` is called (it is crate-private).
+/// `define_ids! { LIST; … }` defines one area's ids in an `area_ids` file;
+/// `ids` re-exports them.
 macro_rules! define_ids {
-    ($($name:ident = $id:literal;)+) => {
-        define_ids! { pub mod ids { $($name = $id;)+ } }
+    ($list:ident; $($name:ident = $id:literal;)+) => {
+        $(pub const $name: crate::MessageId = crate::MessageId::new($id);)+
+
+        /// Every id above.
+        #[cfg(test)]
+        pub(crate) const $list: &[crate::MessageId] = &[$($name),+];
     };
     (pub mod $module:ident { $($name:ident = $id:literal;)+ }) => {
         /// The message ids; each lives in `locales/en-US/`.
@@ -45,7 +51,23 @@ macro_rules! define_ids {
             pub(crate) const ALL: &[MessageId] = &[$($name),+];
         }
     };
+    ($($name:ident = $id:literal;)+) => {
+        /// The message ids; each lives in `locales/en-US/`.
+        pub mod ids {
+            use crate::MessageId;
+
+            pub use crate::area_ids::*;
+
+            $(pub const $name: MessageId = MessageId::new($id);)+
+
+            /// Every id above.
+            #[cfg(test)]
+            pub(crate) const ALL: &[MessageId] = &[$($name),+];
+        }
+    };
 }
+
+mod area_ids;
 
 define_ids! {
     BOARD_SKETCH_TITLE = "board-sketch-title";
@@ -231,6 +253,10 @@ define_ids! {
     PCB_LAYERS_TECHNICAL = "pcb-layers-technical";
     PCB_LAYERS_MECHANICAL = "pcb-layers-mechanical";
     PCB_STATUS_LAYER = "pcb-status-layer";
+    PCB_STATUS_VIEW_ANGLE = "pcb-status-view-angle";
+    PCB_STATUS_VIEW_ANGLE_TIP = "pcb-status-view-angle-tip";
+    PCB_STATUS_VIEW_ANGLE_PLACEHOLDER = "pcb-status-view-angle-placeholder";
+    PCB_VIEW_ROTATE_TOOLTIP = "pcb-view-rotate-tooltip";
     PCB_LAYER_TOP_COPPER = "pcb-layer-top-copper";
     PCB_LAYER_BOTTOM_COPPER = "pcb-layer-bottom-copper";
     PCB_LAYER_INNER_COPPER = "pcb-layer-inner-copper";

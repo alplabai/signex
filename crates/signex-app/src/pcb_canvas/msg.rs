@@ -19,11 +19,14 @@ pub enum PcbCanvasMsg {
         mode: ClickMode,
     },
     /// The left button was released after dragging a box. Left to right
-    /// is a window, right to left a crossing.
+    /// is a window, right to left a crossing. The box runs along the screen,
+    /// so on a view turned `view_rotation_deg` clockwise (#2316) its sides are
+    /// turned the other way on the board.
     BoxSelected {
         from: Point,
         to: Point,
         mode: ClickMode,
+        view_rotation_deg: f64,
     },
     /// A press on a selected footprint is being dragged from `from` to
     /// `to` (#2240). The board is untouched until the drop.

@@ -65,6 +65,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     let active_bar = |action| Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(action));
     let text_edit = |target| Message::TextEdit(TextEditMsg::Requested(target));
     let pcb_view = |event| Message::Pcb(PcbMsg::View(event));
+    let view_turn = |event| Message::Pcb(PcbMsg::ViewRotation(event));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -289,6 +290,13 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "prev_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: false }),
         "toggle_layer_visibility" => pcb_view(PcbViewMsg::ActiveLayerVisibilityToggled),
         "show_all_layers" => pcb_view(PcbViewMsg::AllLayersShown),
+        // #2316: the board view's turn; `view_rotate` takes `degrees`.
+        "view_rotate" => view_turn(ViewRotationMsg::TurnedBy(
+            super::operand_handlers::view_turn_degrees(args),
+        )),
+        "view_rotate_ccw" => view_turn(ViewRotationMsg::TurnedBy(-90.0)),
+        "view_rotate_180" => view_turn(ViewRotationMsg::TurnedBy(180.0)),
+        "view_rotate_reset" => view_turn(ViewRotationMsg::AngleSet(0.0)),
         "toggle_layers_panel" => {
             Message::Overlay(OverlayMsg::PanelToggled(crate::panels::PanelKind::Layers))
         }

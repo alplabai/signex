@@ -423,10 +423,7 @@ mod tests {
         pending.warning.only_unknown = true;
         pending.warning.checking = true;
         pending.warning.lines = vec!["Checking closed sheets of the open projects…".into()];
-        assert_eq!(
-            pending.warning.heading(),
-            "Checking whether symbol \"A\" is in use"
-        );
+        assert_eq!(heading(&pending), "Checking whether symbol \"A\" is in use");
 
         pending.apply_closed_scan(
             SymbolUsage::default(),
@@ -442,10 +439,7 @@ mod tests {
             ["Closed sheets not checked: x.snxsch could not be read"]
         );
         assert!(pending.warning.only_unknown && !pending.warning.checking);
-        assert_eq!(
-            pending.warning.heading(),
-            "Symbol \"A\" may still be in use"
-        );
+        assert_eq!(heading(&pending), "Symbol \"A\" may still be in use");
 
         pending.apply_closed_scan(
             SymbolUsage::default(),
@@ -455,6 +449,15 @@ mod tests {
             },
         );
         assert!(!pending.warning.only_unknown);
-        assert_eq!(pending.warning.heading(), "Symbol \"A\" is still in use");
+        assert_eq!(heading(&pending), "Symbol \"A\" is still in use");
+    }
+
+    /// The warning heading in English, without Fluent's isolation marks.
+    fn heading(pending: &PendingSymbolDelete) -> String {
+        pending
+            .warning
+            .heading(&signex_i18n::I18n::en_us())
+            .to_string()
+            .replace(['\u{2068}', '\u{2069}'], "")
     }
 }

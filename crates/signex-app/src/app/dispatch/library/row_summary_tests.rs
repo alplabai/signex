@@ -108,6 +108,7 @@ fn shelf(
     )
 }
 
+/// The symbol line as shown, without Fluent's isolation marks.
 fn symbol_summary(app: &Signex) -> String {
     app.document_state
         .panel_ctx
@@ -115,7 +116,8 @@ fn symbol_summary(app: &Signex) -> String {
         .as_ref()
         .expect("a row is selected")
         .symbol_summary
-        .clone()
+        .to_string()
+        .replace(['\u{2068}', '\u{2069}'], "")
 }
 
 #[test]

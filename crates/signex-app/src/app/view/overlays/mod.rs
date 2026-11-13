@@ -84,6 +84,7 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Option<Element<'_, Message>> {
+        use signex_i18n::{Localized, ids, t};
         use signex_widgets::{raw, text};
 
         if self.interaction_state.editing_text.is_some() {
@@ -123,18 +124,26 @@ impl Signex {
         // own when the payload is long. Keeps the rhythm uniform
         // across short (Designator / Value) and long (Footprint /
         // Library) fields without an inline-vs-stacked split.
-        let mut fields: Vec<(&'static str, String)> = Vec::with_capacity(4);
-        fields.push(("Designator", self.shown_designator(symbol).to_string()));
+        let i18n = &self.ui_state.i18n;
+        let mut fields: Vec<(Localized, String)> = Vec::with_capacity(4);
+        let label = |id: signex_i18n::MessageId| t!(i18n, id);
         fields.push((
-            "Value",
+            label(ids::OVERLAY_SYMBOL_CARD_DESIGNATOR),
+            self.shown_designator(symbol).to_string(),
+        ));
+        fields.push((
+            label(ids::OVERLAY_SYMBOL_CARD_VALUE),
             crate::library::part_label::card_value(&symbol.value).to_owned(),
         ));
         if !symbol.footprint.is_empty() {
-            fields.push(("Footprint", symbol.footprint.clone()));
+            fields.push((
+                label(ids::OVERLAY_SYMBOL_CARD_FOOTPRINT),
+                symbol.footprint.clone(),
+            ));
         }
         if !symbol.lib_id.is_empty() {
             fields.push((
-                "Library",
+                label(ids::OVERLAY_SYMBOL_CARD_LIBRARY),
                 self.library
                     .drift
                     .display_name(&symbol.lib_id, &self.library.open_libraries),
@@ -145,9 +154,9 @@ impl Signex {
         // the cap and long values wrap.
         let at_cap = card_w >= SYMBOL_CARD_MAX_W;
         let fill_or_shrink = if at_cap { Length::Fill } else { Length::Shrink };
-        let field = |label: &'static str, value: String| -> Element<'_, Message> {
+        let field = |label: Localized, value: String| -> Element<'_, Message> {
             iced::widget::row![
-                text(raw(label))
+                text(label)
                     .font(canvas_font)
                     .size(TS.body)
                     .color(muted_c)
@@ -654,13 +663,13 @@ const SYMBOL_CARD_PAD_W: f32 = 26.0;
 /// Label column and card width for the symbol hover card `fields`: the
 /// longest label, the gap and the longest value, at most
 /// [`SYMBOL_CARD_MAX_W`].
-fn symbol_card_widths(fields: &[(&str, String)], family: &str) -> (f32, f32) {
+fn symbol_card_widths(fields: &[(signex_i18n::Localized, String)], family: &str) -> (f32, f32) {
     let family = signex_types::font::nonblank_family(family);
     let width =
         |text: &str, size: f32| signex_types::font::estimate_text_width_px(text, size, family);
     let label_w = fields
         .iter()
-        .map(|(label, _)| width(label, TS.body))
+        .map(|(label, _)| width(&label.to_string(), TS.body))
         .fold(0.0, f32::max)
         .ceil();
     let value_w = fields

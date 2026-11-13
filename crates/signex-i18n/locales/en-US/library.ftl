@@ -151,3 +151,31 @@ library-panel-open-library = + Open Library…
 library-panel-no-tables = No tables in this library.
 # Row-count pill of a library. $count is a whole number.
 library-panel-rows = { $count } rows
+
+## Library Browser row in the Properties panel: what the row binds
+library-row-no-symbol = No symbol bound
+# $pins is a whole number.
+library-row-symbol-pins = Symbol bound — { $pins ->
+        [one] { $pins } pin
+       *[other] { $pins } pins
+    }
+library-row-symbol-absent = Symbol unresolved (UUID not in mounted libraries)
+# $error is the reason the library gave.
+library-row-symbol-failed = Symbol could not be read from its library — { $error }
+library-row-symbol-reading = Reading symbol…
+# $summary is one of the symbol lines above; $count is a whole number.
+library-row-alternate-symbols = { $summary } (+{ $count ->
+        [one] { $count } alternate symbol
+       *[other] { $count } alternate symbols
+    })
+library-row-no-footprint = No footprint bound
+library-row-footprint-bound = Footprint bound
+library-row-footprint-absent = Footprint unresolved (UUID not in mounted libraries)
+# $error is the reason the library gave.
+library-row-footprint-failed = Footprint could not be read from its library — { $error }
+library-row-footprint-reading = Reading footprint…
+
+## SCH Library panel: Delete of a symbol that is still in use. $name is the symbol name.
+library-symbol-delete-checking = Checking whether symbol "{ $name }" is in use
+library-symbol-delete-may-be-in-use = Symbol "{ $name }" may still be in use
+library-symbol-delete-in-use = Symbol "{ $name }" is still in use

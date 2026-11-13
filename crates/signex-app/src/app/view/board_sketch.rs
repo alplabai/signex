@@ -113,42 +113,69 @@ impl Signex {
     }
 }
 
-/// The PCB Active Bar's buttons: Board Sketch, which runs the
-/// `board_sketch` command like its menu row.
+/// The PCB Active Bar's buttons, each running its command like its menu
+/// row: Board Sketch (`board_sketch`) and Rotate View (`view_rotate`, a
+/// quarter turn clockwise, #2316).
 pub(in crate::app::view) fn pcb_bar_items(
     tid: ThemeId,
     i18n: &I18n,
 ) -> Vec<ActiveBarItem<Message>> {
-    let run = crate::keymap::AppCommandId::new("board_sketch")
-        .ok()
-        .map(|id| Message::Menu(crate::menu_bar::MenuMessage::Command(id)));
-    vec![ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Svg(crate::icons::icon_board_sketch(tid)),
-        tooltip: t!(i18n, ids::BOARD_SKETCH_TOOLTIP).into_string(),
-        enabled: run.is_some(),
-        selected: false,
-        on_press: run,
-        ..ActiveBarButton::default()
-    })]
+    let button = |command: &str, icon, tooltip| {
+        let run = crate::keymap::AppCommandId::new(command)
+            .ok()
+            .map(|id| Message::Menu(crate::menu_bar::MenuMessage::Command(id)));
+        ActiveBarItem::Button(ActiveBarButton {
+            icon: ActiveBarIcon::Svg(icon),
+            tooltip,
+            enabled: run.is_some(),
+            selected: false,
+            on_press: run,
+            ..ActiveBarButton::default()
+        })
+    };
+    vec![
+        button(
+            "board_sketch",
+            crate::icons::icon_board_sketch(tid),
+            t!(i18n, ids::BOARD_SKETCH_TOOLTIP).into_string(),
+        ),
+        button(
+            "view_rotate",
+            crate::icons::icon_view_rotate(tid),
+            t!(i18n, ids::PCB_VIEW_ROTATE_TOOLTIP).into_string(),
+        ),
+    ]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// #2234: the PCB Active Bar's button runs `board_sketch`.
-    #[test]
-    fn the_pcb_bar_button_runs_board_sketch() {
-        let items = pcb_bar_items(ThemeId::GraphiteDark, &I18n::en_us());
-        let [ActiveBarItem::Button(button)] = items.as_slice() else {
-            panic!("one button");
-        };
-        assert!(matches!(
+    fn runs(button: &ActiveBarButton<Message>, command: &str) -> bool {
+        matches!(
             &button.on_press,
             Some(Message::Menu(crate::menu_bar::MenuMessage::Command(id)))
-                if id.as_str() == "board_sketch"
-        ));
-        assert!(button.enabled);
+                if id.as_str() == command
+        )
+    }
+
+    /// #2234 and #2316: the PCB Active Bar's buttons run `board_sketch` and
+    /// `view_rotate`.
+    #[test]
+    fn the_pcb_bar_buttons_run_board_sketch_and_view_rotate() {
+        let tid = ThemeId::GraphiteDark;
+        let items = pcb_bar_items(tid, &I18n::en_us());
+        let [ActiveBarItem::Button(sketch), ActiveBarItem::Button(rotate)] = items.as_slice()
+        else {
+            panic!("two buttons");
+        };
+        assert!(runs(sketch, "board_sketch") && sketch.enabled);
+        assert!(runs(rotate, "view_rotate") && rotate.enabled);
+        assert_eq!(rotate.tooltip, "Rotate View 90° Clockwise");
+        let ActiveBarIcon::Svg(handle) = &rotate.icon else {
+            panic!("an SVG icon");
+        };
+        assert_eq!(handle, &crate::icons::icon_view_rotate(tid));
     }
 
     /// Round 9 of #2262: the button says what it is, in its tooltip and its
@@ -157,8 +184,8 @@ mod tests {
     fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
         let tid = ThemeId::GraphiteDark;
         let items = pcb_bar_items(tid, &I18n::en_us());
-        let [ActiveBarItem::Button(button)] = items.as_slice() else {
-            panic!("one button");
+        let Some(ActiveBarItem::Button(button)) = items.first() else {
+            panic!("a first button");
         };
         assert!(
             button.tooltip.starts_with("Board Sketch"),

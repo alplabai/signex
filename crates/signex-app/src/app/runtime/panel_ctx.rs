@@ -83,41 +83,42 @@ impl Signex {
         // `.snxsym` or a library server returning 500 sends the user
         // off to re-bind a perfectly good UUID, so the error arm gets
         // its own wording (and a Messages-panel record, once per read).
+        use signex_i18n::{ids, t};
+        let i18n = &self.ui_state.i18n;
         let symbol_summary = if row.is_symbol_unbound() {
-            "No symbol bound".to_string()
+            t!(i18n, ids::LIBRARY_ROW_NO_SYMBOL)
         } else {
             match summaries.and_then(|s| s.symbol.as_ref()) {
-                Some(SymbolOutcome::Pins(pins)) => format!(
-                    "Symbol bound — {pins} pin{}",
-                    if *pins == 1 { "" } else { "s" }
-                ),
-                Some(SymbolOutcome::Absent) => {
-                    "Symbol unresolved (UUID not in mounted libraries)".to_string()
+                Some(SymbolOutcome::Pins(pins)) => {
+                    t!(i18n, ids::LIBRARY_ROW_SYMBOL_PINS, "pins" => *pins)
                 }
+                Some(SymbolOutcome::Absent) => t!(i18n, ids::LIBRARY_ROW_SYMBOL_ABSENT),
                 Some(SymbolOutcome::Failed(e)) => {
-                    format!("Symbol could not be read from its library — {e}")
+                    t!(i18n, ids::LIBRARY_ROW_SYMBOL_FAILED, "error" => e.as_str())
                 }
-                None => "Reading symbol…".to_string(),
+                None => t!(i18n, ids::LIBRARY_ROW_SYMBOL_READING),
             }
         };
         let symbol_summary = match row.alternate_symbols.len() {
             0 => symbol_summary,
-            1 => format!("{symbol_summary} (+1 alternate symbol)"),
-            n => format!("{symbol_summary} (+{n} alternate symbols)"),
+            n => t!(
+                i18n,
+                ids::LIBRARY_ROW_ALTERNATE_SYMBOLS,
+                "summary" => symbol_summary.into_string(),
+                "count" => n
+            ),
         };
         let footprint_summary = match &row.footprint_ref {
-            Some(_) if row.is_footprint_unbound() => "No footprint bound".to_string(),
+            Some(_) if row.is_footprint_unbound() => t!(i18n, ids::LIBRARY_ROW_NO_FOOTPRINT),
             Some(_) => match summaries.and_then(|s| s.footprint.as_ref()) {
-                Some(FootprintOutcome::Found) => "Footprint bound".to_string(),
-                Some(FootprintOutcome::Absent) => {
-                    "Footprint unresolved (UUID not in mounted libraries)".to_string()
-                }
+                Some(FootprintOutcome::Found) => t!(i18n, ids::LIBRARY_ROW_FOOTPRINT_BOUND),
+                Some(FootprintOutcome::Absent) => t!(i18n, ids::LIBRARY_ROW_FOOTPRINT_ABSENT),
                 Some(FootprintOutcome::Failed(e)) => {
-                    format!("Footprint could not be read from its library — {e}")
+                    t!(i18n, ids::LIBRARY_ROW_FOOTPRINT_FAILED, "error" => e.as_str())
                 }
-                None => "Reading footprint…".to_string(),
+                None => t!(i18n, ids::LIBRARY_ROW_FOOTPRINT_READING),
             },
-            None => "No footprint bound".to_string(),
+            None => t!(i18n, ids::LIBRARY_ROW_NO_FOOTPRINT),
         };
 
         let read_only = self.library.is_read_only(&library_path);

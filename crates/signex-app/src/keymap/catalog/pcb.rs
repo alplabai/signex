@@ -90,6 +90,51 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2316: turn the board view on screen. View state only (no undo step,
+    // no dirty mark). No default keys: no free conventional chord exists.
+    // `view_rotate` takes `degrees` (90 when left out) from an agent or the
+    // CLI, so it is not GUI-only; it acts on the board canvas in view.
+    CommandMetadata {
+        id: "view_rotate",
+        category: "view",
+        label: command_ids::CMD_VIEW_ROTATE,
+        menu_label: Some(command_ids::CMD_MENU_VIEW_ROTATE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::TURN,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "view_rotate_ccw",
+        category: "view",
+        label: command_ids::CMD_VIEW_ROTATE_CCW,
+        menu_label: Some(command_ids::CMD_MENU_VIEW_ROTATE_CCW),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "view_rotate_180",
+        category: "view",
+        label: command_ids::CMD_VIEW_ROTATE_180,
+        menu_label: Some(command_ids::CMD_MENU_VIEW_ROTATE_180),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "view_rotate_reset",
+        category: "view",
+        label: command_ids::CMD_VIEW_ROTATE_RESET,
+        menu_label: Some(command_ids::CMD_MENU_VIEW_ROTATE_RESET),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "toggle_layers_panel",
         category: "view",

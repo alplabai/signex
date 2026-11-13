@@ -12,6 +12,15 @@ pcb-layers-technical = Technical
 pcb-layers-mechanical = Mechanical
 # Status bar pill with the active copper layer; the layer's name follows it.
 pcb-status-layer = Layer:
+# Status bar readout of how far the board view is turned on screen; the
+# angle in degrees follows it.
+pcb-status-view-angle = View:
+# Tooltip of that readout.
+pcb-status-view-angle-tip = Board view rotation. Click to type an angle.
+# Placeholder of the angle field the readout opens.
+pcb-status-view-angle-placeholder = Degrees
+# Tooltip of the PCB Active Bar button that turns the view a quarter turn.
+pcb-view-rotate-tooltip = Rotate View 90° Clockwise
 
 # Layer names in the Layers panel, the layer strip and the status bar, as
 # Altium names them. A mechanical layer the user named shows that name instead.

@@ -26,7 +26,7 @@ use crate::panels::{PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION};
 /// One-line hint under the section title.
 const INTRO: &str = "The first document is the primary; the schematic opens it.";
 /// Shown when the row has no document.
-const EMPTY_MESSAGE: &str = "No datasheet on this component yet.";
+const EMPTY_MESSAGE: signex_i18n::MessageId = signex_i18n::ids::EDITORS_COMPONENT_DATASHEETS_EMPTY;
 
 /// Mode picker entries — drives both the visible pick_list and the
 /// inline message routing.
@@ -98,7 +98,7 @@ pub fn view<'a>(
         Column::new().spacing(SP.m).width(Length::Fill);
     if count == 0 {
         list = list.push(kit::card(
-            kit::empty_state(EMPTY_MESSAGE, None, tokens),
+            kit::empty_state(signex_i18n::t!(i18n, EMPTY_MESSAGE), None, tokens),
             tokens,
         ));
     }
@@ -418,7 +418,12 @@ mod tests {
     #[test]
     fn intro_is_a_short_single_line_hint() {
         assert!(INTRO.len() < 80 && !INTRO.contains('\n'));
-        assert!(!EMPTY_MESSAGE.is_empty());
+        assert_eq!(
+            signex_i18n::I18n::en_us()
+                .message(EMPTY_MESSAGE, &[])
+                .to_string(),
+            "No datasheet on this component yet."
+        );
     }
 
     #[test]

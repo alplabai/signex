@@ -32,12 +32,11 @@ pub struct LibraryRowDetail {
     pub class: String,
     /// Pretty `LifecycleState` token ("Draft", "Released", …).
     pub lifecycle_label: String,
-    /// "Symbol bound" / "Symbol unresolved (UUID not mounted)" /
-    /// "Symbol unbound". Same shape as the legacy preview pane's
-    /// `symbol_summary` first line.
-    pub symbol_summary: String,
-    /// Same shape for footprint — "Footprint bound", "unbound", …
-    pub footprint_summary: String,
+    /// "Symbol bound — 4 pins" / "Symbol unresolved (…)" / "No symbol
+    /// bound", rendered for display when the panel context is built.
+    pub symbol_summary: signex_i18n::Localized,
+    /// Same shape for footprint — "Footprint bound", "No footprint bound", …
+    pub footprint_summary: signex_i18n::Localized,
     /// The row lives in a read-only mount (the stock library); the
     /// Pick buttons render disabled.
     pub read_only: bool,
@@ -352,7 +351,7 @@ fn delete_warning_block<'a>(
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     let mut block: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs).push(
-        text(raw(warning.heading()))
+        text(warning.heading(i18n))
             .size(TS.body)
             .color(primary)
             .boxed(),
@@ -691,7 +690,7 @@ pub fn view_library_row_properties<'a>(
             .size(TS.body)
             .color(muted),
         Space::new().height(4),
-        text(raw(d.symbol_summary.clone()))
+        text(d.symbol_summary.clone())
             .size(TS.body)
             .color(if d.symbol_unbound { warning } else { primary }),
         Space::new().height(6),
@@ -701,7 +700,7 @@ pub fn view_library_row_properties<'a>(
             .size(TS.body)
             .color(muted),
         Space::new().height(4),
-        text(signex_i18n::UserText::new(d.footprint_summary.clone()))
+        text(d.footprint_summary.clone())
             .size(TS.body)
             .color(if d.footprint_unbound {
                 warning

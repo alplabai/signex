@@ -90,7 +90,7 @@ pub use contracts::{
     ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg,
     RenameDialogState, RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest,
     TabContextAction, TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem,
-    UiMsg, VersionControlScope, WindowMsg,
+    UiMsg, VersionControlScope, ViewAngleEntry, ViewRotationMsg, WindowMsg,
 };
 pub(crate) use document::{Document, DocumentKey};
 pub use documents::{

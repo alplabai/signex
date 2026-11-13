@@ -93,10 +93,7 @@ pub(super) fn search_row<'a, M: 'a>(
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.l).align_y(Alignment::Center);
     line = line.push(text(raw("\u{2315}")).size(TS.body).color(r.ink4).boxed());
     line = line.push(body);
-    line = line.push(cap(
-        theme_tokens,
-        &i18n.message_plain(shortcut_ids::PALETTE_KEY_ESC, &[]),
-    ));
+    line = line.push(cap(theme_tokens, t!(i18n, shortcut_ids::PALETTE_KEY_ESC)));
     let rule = r.line_soft;
     container(line)
         .padding([SP.l, SP.l])
@@ -202,7 +199,7 @@ pub(super) fn shortcut_keys(label: &str) -> Vec<String> {
 fn caps_row<'a, M: 'a>(theme_tokens: &ThemeTokens, label: &str) -> Element<'a, M> {
     let mut caps: Row<Element<'a, M>> = Row::new().spacing(SP.xs + 1.0);
     for key in shortcut_keys(label) {
-        caps = caps.push(cap(theme_tokens, &key));
+        caps = caps.push(glyph_cap(theme_tokens, &key));
     }
     caps.boxed()
 }
@@ -221,12 +218,20 @@ fn ellipsize(text: &str, budget: usize) -> String {
     cut
 }
 
-/// One key cap.
-pub(super) fn cap<'a, M: 'a>(theme_tokens: &ThemeTokens, label: &str) -> Element<'a, M> {
-    container(text(raw(label.to_string())).size(TS.caption).font(mono()))
+/// One key cap: a key name from the catalog (Esc, Enter).
+pub(super) fn cap<'a, M: 'a>(
+    theme_tokens: &ThemeTokens,
+    label: impl Into<signex_widgets::Label<'a>>,
+) -> Element<'a, M> {
+    container(text(label).size(TS.caption).font(mono()))
         .padding([1.0, SP.s + 1.0])
         .style(styles::key_cap(theme_tokens))
         .boxed()
+}
+
+/// A key cap showing a key as the keymap writes it, or an arrow glyph.
+fn glyph_cap<'a, M: 'a>(theme_tokens: &ThemeTokens, key: &str) -> Element<'a, M> {
+    cap(theme_tokens, raw(key.to_string()))
 }
 
 /// One result row.
@@ -322,13 +327,10 @@ pub(super) fn hint_footer<'a, M: 'a>(
     let r = tokens::resolve(theme_tokens);
     let hint = |s: Localized| text(s).size(TS.caption).color(r.ink3).boxed();
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.m).align_y(Alignment::Center);
-    line = line.push(cap(theme_tokens, "\u{2191}"));
-    line = line.push(cap(theme_tokens, "\u{2193}"));
+    line = line.push(glyph_cap(theme_tokens, "\u{2191}"));
+    line = line.push(glyph_cap(theme_tokens, "\u{2193}"));
     line = line.push(hint(t!(i18n, ids::OVERLAY_PALETTE_NAVIGATE)));
-    line = line.push(cap(
-        theme_tokens,
-        &i18n.message_plain(shortcut_ids::PALETTE_KEY_ENTER, &[]),
-    ));
+    line = line.push(cap(theme_tokens, t!(i18n, shortcut_ids::PALETTE_KEY_ENTER)));
     line = line.push(hint(t!(i18n, ids::OVERLAY_PALETTE_RUN)));
     line = line.push(Space::new().width(Length::Fill).boxed());
     // "Enter Run" already says what Enter does; no sentence repeats it.

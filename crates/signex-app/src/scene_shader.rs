@@ -43,6 +43,7 @@ use signex_gfx::scene::{
     DirtyFlags, GPU_SCENE_DRAW_ORDER, Scene, SceneBucket, TextUploadParams, UploadCulling,
     UploadTracker, apply_dirty_uploads_with_culling,
 };
+use signex_gfx::view_rotation::ViewRotation;
 // iced 0.15 ships wgpu 30; the `Primitive`/`Pipeline` trait signatures use
 // iced's own re-export, so name that one here. `signex_gfx` must be built
 // against the same wgpu major (see migration notes).
@@ -302,6 +303,8 @@ pub struct ScenePrimitive<S: SceneSurface> {
     pub offset_px: [f32; 2],
     /// Zoom in logical pixels per millimetre.
     pub scale_px_per_mm: f32,
+    /// The view's turn on screen (#2316); the board view's only.
+    pub rotation: ViewRotation,
     surface: PhantomData<S>,
 }
 
@@ -320,6 +323,7 @@ impl<S: SceneSurface> ScenePrimitive<S> {
             generation,
             offset_px,
             scale_px_per_mm,
+            rotation: ViewRotation::IDENTITY,
             surface: PhantomData,
         }
     }
@@ -352,10 +356,18 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         // logical pixels and `scale_px` is physical, so they scale by DPI for
         // the same reason `TEXT_SIZE` does — an unscaled floor would be half
         // as thick on a HiDPI display as on a standard one.
+        // A turned board view (#2316) maps through the same transform the
+        // CPU canvas uses (`pcb_canvas::BoardCamera`); every other view keeps
+        // the plain ortho.
+        let camera = if self.rotation.is_identity() {
+            CameraUniform::ortho(vp_px, offset_mm, scale_px)
+        } else {
+            let offset = [self.offset_px[0] * dpi, self.offset_px[1] * dpi];
+            CameraUniform::ortho_turned(vp_px, offset, scale_px, self.rotation)
+        };
         pipeline.camera.update(
             queue,
-            CameraUniform::ortho(vp_px, offset_mm, scale_px)
-                .with_min_feature_px(S::min_stroke_device_px(dpi), S::MIN_RADIUS_PX * dpi),
+            camera.with_min_feature_px(S::min_stroke_device_px(dpi), S::MIN_RADIUS_PX * dpi),
         );
 
         // Upload only what changed, and only what is near the view. The
@@ -364,7 +376,8 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         // need refreshing when the geometry changes or the view leaves the
         // window they were culled to (visible area plus a margin). The tracker
         // plans both; `apply_dirty_uploads_with_culling` executes it.
-        let visible = visible_world_rect(bounds, self.offset_px, self.scale_px_per_mm);
+        let visible =
+            visible_world_rect(bounds, self.offset_px, self.scale_px_per_mm, self.rotation);
         let plan = pipeline.tracker.plan(&self.scene, self.generation, visible);
 
         // Text is NOT guarded: glyphon rasterises glyphs in screen-pixel space
@@ -529,10 +542,19 @@ pub struct SceneShaderProgram<S: SceneSurface> {
     generation: Option<u64>,
     offset_px: [f32; 2],
     scale_px_per_mm: f32,
+    rotation: ViewRotation,
     surface: PhantomData<S>,
 }
 
 impl<S: SceneSurface> SceneShaderProgram<S> {
+    /// The view turned on screen by `rotation` (#2316), as the board canvas
+    /// below it is.
+    #[must_use]
+    pub fn with_rotation(mut self, rotation: ViewRotation) -> Self {
+        self.rotation = rotation;
+        self
+    }
+
     /// Build from an already-tessellated `Scene` and the current screen-space
     /// transform (`offset_px` = pan in logical pixels, `scale_px_per_mm` =
     /// zoom in logical pixels per millimetre). `generation` identifies the
@@ -550,6 +572,7 @@ impl<S: SceneSurface> SceneShaderProgram<S> {
             generation,
             offset_px,
             scale_px_per_mm,
+            rotation: ViewRotation::IDENTITY,
             surface: PhantomData,
         }
     }
@@ -570,6 +593,7 @@ impl<S: SceneSurface> shader::Program<Message> for SceneShaderProgram<S> {
             generation: self.generation,
             offset_px: self.offset_px,
             scale_px_per_mm: self.scale_px_per_mm,
+            rotation: self.rotation,
             surface: PhantomData,
         }
     }
