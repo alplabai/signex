@@ -125,8 +125,9 @@ fn render() -> String {
          one sheet: number, name, electrical type, hidden, unit, shared and the tip\n\
          in mm. `check_erc document=<sheet> [baseline=<run>]` is a query too: it\n\
          runs ERC on the sheet's project, answers with a check report once the run\n\
-         lands and writes nothing to the ERC panel or Messages; rules in\n\
-         [CLI.md](CLI.md), \"Checks on demand\".\n\
+         lands and writes nothing to the ERC panel or Messages;\n\
+         `check_drc document=<board> [baseline=<run>]` does the same for DRC on\n\
+         one board. Rules in [CLI.md](CLI.md), \"Checks on demand\".\n\
          \n\
          A point operand (`at`, `start`, `end`) also takes a pin reference\n\
          `<designator>.<pin>` (`R1.2`) or `<sheet name>.<entry name>` (`Charger.SDA`):\n\

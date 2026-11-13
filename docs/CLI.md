@@ -536,7 +536,8 @@ signex-cli run demo.snxprj check_erc --arg document=main.snxsch
 ```
 
 The answer (`data` of the `answered` line) is a check report, the shape every
-on-demand check shares (`signex_types::check`; DRC adopts it next):
+on-demand check shares (`signex_types::check`; `check_drc` below uses it
+too):
 
 ```json
 {"check": "erc", "run": 2,
@@ -623,6 +624,83 @@ Known limits:
 - A file can change between the check that allows it and its read (a link
   put in its place). The headless queries have the same gap; using it needs
   write access to the project folder.
+
+### `check_drc`
+
+```text
+check_drc document=<board> [baseline=<run>]
+```
+
+`check_drc` (#2199, decisions
+https://github.com/alplabai/signex/issues/2199#issuecomment-6817821301 and
+https://github.com/alplabai/signex/issues/2199#issuecomment-6818011610) runs
+DRC on the one `.snxpcb` named, the way Run DRC does: the same checks, the
+net classes of the board's project, and the same DRC rule layers (the
+project's `rules.drc` when the project stores a rule set, else this machine's
+User Default layer, the rule text compiled for the run). An open board is
+checked as it is in memory; a closed one is read off the UI thread, within the
+same headless read limits as `check_erc`, and the answer comes when the run
+lands. A board that cannot be read is refused with the reason. It writes
+nothing to the DRC panel, the DRC results or Messages; Run DRC is unchanged.
+It is a query on the agent channel, like `check_erc`.
+
+```bash
+signex-cli run demo.snxprj check_drc --arg document=demo.snxpcb
+```
+
+The answer is a check report (above), `"check": "drc"`:
+
+```json
+{"check": "drc", "run": 1,
+ "findings": [{"rule": "builtin::clearance", "severity": "error",
+   "message": "clearance 0.15 mm, needs 0.2 mm, GND / VCC",
+   "evidence": {"nets": ["GND", "VCC"], "layers": ["TopCopper"],
+     "at": [0.0, 0.2], "measured_nm": 150000, "required_nm": 200000,
+     "rule_source": "board_setup"},
+   "items": ["<track uuid>", "<track uuid>"], "sheet": "/abs/demo.snxpcb",
+   "key": "<32 hex>"}],
+ "waived": [], "lapsed": [],
+ "warnings": ["DRC: No clearance rule set on this board; checked with 0.2 mm. Set it in Board Setup."],
+ "rule_set": {"source": "project", "profile": "...", "sha256": "<64 hex>",
+   "clearance_nm": 200000, "from_default": true}}
+```
+
+- `rule`: `builtin::<kind>` (`short`, `clearance`, `unconnected`, `keepout`,
+  `track_width`, `via_diameter`, `via_drill`), or `user::<name>` for a
+  finding of a written rule. `severity` is the rule's resolved severity:
+  built-in defaults, then the profile layer, then the project layer, and a
+  written rule's own `then` severity. A rule switched `off` reports nothing.
+- `sheet` is the board file's path: for DRC it is the document the finding
+  is filed under, not a schematic sheet. `items` are the uuids of the
+  tracks, vias and footprints involved, a pad as `<footprint uuid>/<pad uuid>`
+  (a pad's own uuid repeats across placements of one footprint).
+- `evidence`: `nets` (two names; the same net twice for an unconnected link
+  or a keepout, `net <n>` for a net with no name), `layers` (copper layer
+  names), `at` (mm, board coordinates), `measured_nm` and `required_nm` (as
+  Run DRC's panel shows them), `keepout` (the keepout's uuid) and
+  `rule_source` (`written`, `net_class`, `board_setup` or `default`; for a
+  clearance or a written limit).
+- `key`: a hash of the board path, the rule id, the items and the keepout,
+  so moving an item keeps it.
+- `warnings`: a board in no open project (checked with its own setup rules
+  and this machine's DRC rules, no net classes), then what Run DRC says about
+  its rules in Messages, in its words: unrecognised severity entries, the
+  rule text's notes and remarks, rule text or rules not applied, a clearance
+  taken from the default; then one line per item the run could not check.
+- `rule_set`: `source` (`project` or `machine`), `profile` (as for ERC),
+  `sha256` (the hash of the `drc` section the run used), `clearance_nm` and
+  `from_default` (no clearance set in Board Setup).
+- `waived` and `lapsed` are empty: DRC has no waivers yet.
+- The baseline is scoped to the board file: a run of another board, or an
+  ERC run, is refused as a baseline.
+
+Known limits:
+
+- Keepouts whose outline does not convert are dropped without a warning
+  (#2300); other items that do not convert are in `warnings`.
+- The minimum track width and via sizes of Board Setup are not enforced;
+  only a written rule sets them (`docs/architecture/pcb-drc.md`).
+- The DRC panel does not show severities yet; the report does.
 
 ## Working through a running Signex
 

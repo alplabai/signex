@@ -108,6 +108,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "check_drc",
+        category: "validation",
+        label: command_ids::CMD_CHECK_DRC,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::CHECK_DRC,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "check_erc",
         category: "validation",
         label: command_ids::CMD_CHECK_ERC,
