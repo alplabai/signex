@@ -101,21 +101,39 @@ The GUI is not the only way into signex. `signex-cli` runs catalog commands for 
 
 Some rules in this section are still open decisions in epic #2326, and take effect when both maintainers sign off on this amendment: epic decisions D1 (no selection in the core), D5 (effects as data), D7 (settings as values), D10 (wasm32) and D11 (the shared command crate).
 
+```mermaid
+flowchart LR
+  subgraph driving["Driving adapters (outside)"]
+    gui["GUI (iced)"]
+    cli["signex-cli"]
+    sock["Agent socket<br/>(enters through the GUI loop)"]
+    web["Web / plugin host (later)"]
+  end
+  subgraph hex["Inside the hexagon"]
+    core["AppCore — application layer<br/>thin handlers · CoreOutput { events, effects }"]
+    subgraph domain["Domain"]
+      docs["Documents (aggregates)<br/>engines: Command → DocumentPatch"]
+      svc["Domain crates<br/>net · erc · drc · sketch · bake · bom · output"]
+    end
+    core --> docs
+    core --> svc
+  end
+  subgraph driven["Driven adapters (outside): hosts"]
+    native["Native host<br/>files · git · network · clock"]
+    browser["Browser host<br/>browser storage / remote"]
+    test["Test host<br/>in memory"]
+  end
+  gui -->|"execute / complete / query"| core
+  cli -->|"execute / complete / query"| core
+  sock -.->|"via GUI"| gui
+  web -.-> core
+  core -->|"Effect"| native
+  core -.->|"Effect"| browser
+  core -.->|"Effect"| test
+  native -->|"complete(EffectResult)"| core
 ```
-   driving adapters (outside)                       driven adapters (outside)
-   GUI (iced) · CLI · agent socket (via GUI) · web  host: storage · VCS · net · clock
-              │                                       native: files + git
-              │ execute / complete / query            browser: browser storage / remote
-              ▼                                       test: in memory
-   ┌──────────────────────────────────┐                        ▲
-   │ AppCore (application layer)      │── Effect ──────────────┘
-   │   ┌────────────────────────────┐ │◀─ complete(EffectResult) ── host
-   │   │ domain: documents          │ │
-   │   │ (aggregates), engines,     │ │
-   │   │ domain crates              │ │
-   │   └────────────────────────────┘ │
-   └──────────────────────────────────┘
-```
+
+Arrows into the core are calls. The core returns events and effects to its caller; it publishes nothing. A host is chosen per platform. The core depends on no host and names only the `Effect` / `EffectResult` types it defines.
 
 - **Inside the hexagon:**
   - the domain crates of A2;
