@@ -153,11 +153,12 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   is written by the normal save. Edits keep keys this build does not know.
 - `profile` records which portable profile the rules came from (name,
   `source` of `builtin` / `user` / `file`, the profile's `version` and the
-  `sha256` of its rules; see [`snxrules-format.md`](snxrules-format.md)). It is
-  written by "Store ERC rules in this project" when the snapshot equals the
-  shipped profile, by "Save as profile", and by "Update from profile". It is
-  provenance only: ERC never reads a profile file, only the project's own
-  `erc`.
+  `sha256` of its rules, `erc` plus `drc` when it has one; see
+  [`snxrules-format.md`](snxrules-format.md#what-the-hash-covers)). It is
+  written by "Store ERC rules in this project" when the snapshot (ERC and the
+  machine's DRC section) equals the shipped profile, by "Save as profile", and
+  by "Update from profile". It is provenance only: ERC never reads a profile
+  file, only the project's own `erc`.
 - `drc` (#2307) holds the project's DRC rules, typed as `DrcRuleSet`:
   `severity` maps a DRC rule id (`builtin::short`, `builtin::clearance`,
   `builtin::unconnected`, `builtin::keepout`, `builtin::track_width`,
@@ -172,8 +173,11 @@ that sees the key keeps it in its unknown-key bag. The section has its own
   run reads it when `rules` is present. "Store ERC rules in this project" and
   a first ERC waiver also store the machine's `User Default` DRC severities
   here (the action keeps its ERC name), so DRC keeps the rules it used; with
-  no machine DRC rules no `drc` key is written. It is not in the rule-set hash,
-  and nothing records `DrcRuleSet::sha256_hex` until step 2b-2. See
+  no machine DRC rules no `drc` key is written; with them the shipped profile
+  (which has no `drc`) is not recorded as provenance. A non-empty `drc`
+  enters the rule-set hash `profile.sha256` records (step 2b-2); without one
+  the hash is the ERC hash, as before. Save as profile writes it, Update from
+  profile replaces it with the profile's and lists the changes. See
   [`pcb-drc.md`](pcb-drc.md#rule-ids-and-severities-2307-step-2a) for the
   layers and [`snxrules-format.md`](snxrules-format.md#what-the-hash-covers)
   for the hash.
