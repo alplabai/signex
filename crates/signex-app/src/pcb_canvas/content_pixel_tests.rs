@@ -1,10 +1,15 @@
 //! The CPU board layer (#2321) renders what trunk's CPU mount rendered,
-//! pixel for pixel, after pans it answers from retained geometry, on a canvas
-//! docked off the window origin, turned or not, at whole and fractional
-//! display scales.
+//! within 24/255 per channel (`differing`), after pans it answers from
+//! retained geometry, on a canvas docked off the window origin, turned or
+//! not, at whole and fractional display scales. A 1 px shift fails it; a
+//! sub-pixel shift is pinned for tracks by `content_tests`.
 //!
 //! The reference is trunk's content path: the board tessellated in one frame
-//! of the canvas size at the live camera, culled to the viewport. Rendered
+//! of the canvas size at the live camera, culled to the viewport. It paints
+//! with the same `draw_*` functions the layer uses (moved, not changed), so
+//! it checks the retained and split build, not the painting itself. Whether
+//! the layer split the work into several runs depends on the machine; the
+//! run split is pinned triangle for triangle by `content_tests`. Rendered
 //! through iced's wgpu renderer (the harness of `canvas::gpu_mount_tests`).
 
 use iced::widget::{canvas, stack};

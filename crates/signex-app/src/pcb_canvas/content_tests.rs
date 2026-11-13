@@ -3,7 +3,7 @@
 //! build only while it holds every primitive the live view shows, and the
 //! moved triangles sit where a fresh build puts them. Read off bare wgpu
 //! frames, so no adapter is needed; the pixel twin is
-//! `frame_bench_tests::pcb_cpu_layer_matches_a_fresh_build`.
+//! `pcb_canvas::content_pixel_tests`.
 
 use iced::advanced::graphics::Mesh;
 use iced::advanced::graphics::mesh::SolidVertex2D;

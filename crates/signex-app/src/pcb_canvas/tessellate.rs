@@ -182,8 +182,11 @@ fn paint_in_order<R: geometry::Renderer>(
 }
 
 /// How many workers a build may use on this machine.
+/// Read once: on Linux the query reads affinity and cgroup state.
 pub(super) fn available_workers() -> usize {
-    std::thread::available_parallelism().map_or(1, |n| n.get().min(MAX_RUNS))
+    static WORKERS: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *WORKERS
+        .get_or_init(|| std::thread::available_parallelism().map_or(1, |n| n.get().min(MAX_RUNS)))
 }
 
 /// `items` cut into at most `workers` contiguous runs of about equal cost;
