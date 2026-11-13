@@ -70,9 +70,9 @@ The harness is `crates/signex-app/src/pcb_canvas/frame_bench_tests.rs`, an
 generator above by `#[path]`, so both benches draw the same board.
 
 - **Mount.** The stack `app/view/mod.rs` builds for a board: the `PcbCanvas`
-  canvas (background, grid and, with GPU render off, the board), the
-  `SceneShaderProgram<PcbSurface>` shader when GPU render is on, and the
-  highlight layer. The active bar and the layer strip are left out. `cpu` is
+  canvas (background and grid), the board layer (`BoardContentLayer` with GPU
+  render off, the `SceneShaderProgram<PcbSurface>` shader with it on), and
+  the highlight layer. The active bar and the layer strip are left out. `cpu` is
   the default mount (GPU render off in Preferences), `gpu` the shader mount.
 - **Frame.** `UserInterface::build`, `update` with the frame's mouse events, a
   second build when there were events (the app's `view` runs again after the
@@ -142,6 +142,19 @@ Known risk: the CPU mount is the default (Preferences GPU render off,
 edge of the 60 fps budget. Any further per-item geometry on the CPU path
 (silkscreen, designators, net colours) is likely to push them over unless the
 CPU path gets cheaper or the GPU mount becomes the default.
+
+Rerun on 2026-11-12 on the #2316 branch (trunk 8bd907a07 merged), same
+laptop and settings (#2321): the CPU mount went over the budget at 0°, with
+no AA zoom p95 17.85 ms, and with MSAAx4 pan 21.04 ms and zoom 18.21 ms (at
+37°: pan 17.82 ms, zoom 18.78 ms). The frame's draw phase showed why: every
+pan and zoom frame tessellated the whole board again on one thread (draw p95
+8.5 to 12.0 ms, against 0.01 ms idle).
+
+#2321 moves the CPU board into a layer of its own that a pan only moves and
+that a build tessellates on several threads (`docs/RENDERING_RULES.md`,
+"pcb-cpu-content"). **Numbers pending:** the release bench for this change
+(baseline on trunk and after, `SIGNEX_BENCH_ROTATIONS=0,37`) has not run yet;
+the table goes here when it has.
 
 ## Realistic boards
 

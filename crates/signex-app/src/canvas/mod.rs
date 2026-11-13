@@ -27,6 +27,7 @@ mod hit_cache;
 mod input;
 mod move_pick;
 mod net_highlight;
+pub(crate) mod pan_reuse;
 pub(crate) mod paper;
 pub(crate) mod pin_focus;
 pub mod placement_ghost;
@@ -951,11 +952,11 @@ mod ghost_tests;
 #[cfg(test)]
 mod gpu_mount_drag_tests;
 #[cfg(test)]
-mod gpu_mount_tests;
+pub(crate) mod gpu_mount_tests;
 #[cfg(test)]
 mod gpu_text_reuse_tests;
 #[cfg(test)]
-mod grid_order_tests;
+pub(crate) mod grid_order_tests;
 #[cfg(test)]
 mod halo_cache_tests;
 #[cfg(test)]
@@ -965,7 +966,7 @@ pub(crate) mod overlay_camera_tests;
 #[cfg(test)]
 mod pan_bench_tests;
 #[cfg(test)]
-mod pan_reuse_pixel_tests;
+pub(crate) mod pan_reuse_pixel_tests;
 #[cfg(test)]
 mod pan_reuse_tests;
 #[cfg(test)]

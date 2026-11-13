@@ -40,8 +40,8 @@ const CLEAR: Color = Color::from_rgb(0.0, 0.0, 0.0);
 /// so CI never saw it. Test-only: the app itself makes one device.
 static GPU_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-pub(super) struct Gpu {
-    pub(super) renderer: iced::Renderer,
+pub(crate) struct Gpu {
+    pub(crate) renderer: iced::Renderer,
     is_lavapipe: bool,
     /// Held for as long as the renderer lives; declared last so it is
     /// released after the device drops.
@@ -49,7 +49,7 @@ pub(super) struct Gpu {
 }
 
 /// The renderer. A machine with no adapter fails loudly instead.
-pub(super) fn gpu() -> Gpu {
+pub(crate) fn gpu() -> Gpu {
     // A test that panicked while holding the lock must not fail every later
     // GPU test, so a poisoned lock is taken over.
     let lock = GPU_LOCK
@@ -116,10 +116,10 @@ pub(super) fn gpu() -> Gpu {
 }
 
 /// An RGBA frame, `width` physical pixels across.
-pub(super) struct Frame {
-    pub(super) data: Vec<u8>,
-    pub(super) width: u32,
-    pub(super) height: u32,
+pub(crate) struct Frame {
+    pub(crate) data: Vec<u8>,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
 }
 
 impl Frame {

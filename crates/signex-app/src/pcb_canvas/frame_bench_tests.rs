@@ -3,8 +3,9 @@
 //! by hand, see `docs/architecture/pcb-render-bench.md`, "GPU frames".
 //!
 //! Mounts the widgets `app/view/mod.rs` mounts for a board: the `PcbCanvas`
-//! canvas, the `SceneShaderProgram<PcbSurface>` shader when GPU render is on,
-//! and the highlight layer, in the same stack. Pan and zoom are real mouse
+//! canvas, the board layer (`BoardContentLayer` when GPU render is off, the
+//! `SceneShaderProgram<PcbSurface>` shader when it is on), and the highlight
+//! layer, in the same stack. Pan and zoom are real mouse
 //! events through `UserInterface::update`; a frame with events builds the
 //! tree again, as the app's `view` does after the message. Then `draw`, and
 //! `iced_wgpu::Renderer::screenshot` uploads, renders and reads back, so the
@@ -24,7 +25,7 @@ use iced_runtime::UserInterface;
 use iced_runtime::user_interface::Cache;
 use signex_renderer::pcb::{PcbLayerView, PcbSnapshot};
 
-use super::PcbCanvas;
+use super::{BoardContentLayer, PcbCanvas};
 use crate::app::Message;
 use crate::canvas::render_bench_tests::{Rig, WINDOW, rig};
 use crate::scene_shader::{PcbSurface, SceneShaderProgram};
@@ -54,13 +55,14 @@ const DETAIL_MM: f32 = 20.0;
 
 /// The board's stack as `app/view/mod.rs` builds it, without the active bar
 /// and the layer strip (chrome, not the board).
-fn view(pcb: &PcbCanvas) -> Element<'_, Message> {
+fn view(pcb: &PcbCanvas, dpr: f32) -> Element<'_, Message> {
     let base = canvas(pcb).width(Length::Fill).height(Length::Fill);
     let highlight = canvas(pcb.highlight_layer())
         .width(Length::Fill)
         .height(Length::Fill);
     if !pcb.gpu_render {
-        return stack![base, highlight].boxed();
+        let content = BoardContentLayer::new(pcb, dpr);
+        return stack![base, content, highlight].boxed();
     }
     let scene = pcb.gpu_scene().unwrap_or_default();
     let generation = pcb.scene_generation();
@@ -121,7 +123,7 @@ fn frame(
     let size = Size::new(WINDOW.0, WINDOW.1);
     let t = Instant::now();
     let mut ui = UserInterface::build(
-        view(pcb),
+        view(pcb, dpr),
         size,
         cache.take().unwrap_or_default(),
         &mut rig.renderer,
@@ -148,7 +150,7 @@ fn frame(
     if !events.is_empty() {
         let t = Instant::now();
         let kept = ui.into_cache();
-        ui = UserInterface::build(view(pcb), size, kept, &mut rig.renderer);
+        ui = UserInterface::build(view(pcb, dpr), size, kept, &mut rig.renderer);
         build += t.elapsed();
     }
 
