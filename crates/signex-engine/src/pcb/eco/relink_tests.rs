@@ -1,6 +1,7 @@
 //! #2318 — Update PCB never ticks the removal of a footprint whose part is
-//! still in the design: a re-created sheet symbol relinks by designator, and
-//! a second footprint linked to one part is listed unticked.
+//! still in the design: a footprint whose sheet path changed relinks by shared
+//! unit, and a second footprint linked to (or sharing a unit with) a held
+//! part is listed unticked.
 
 use signex_types::pcb::SymbolLink;
 
@@ -232,4 +233,57 @@ fn second_footprint_linked_to_same_part_is_listed_unticked_with_a_note() {
         EcoNote::ExtraLink { footprint, designator, .. }
             if *footprint == u(0xa9) && designator == "R1"
     )));
+}
+
+#[test]
+fn two_stale_footprints_of_one_moved_part_tick_no_removal() {
+    let mut d = second_link_design();
+    for fp in &mut d.board.footprints {
+        fp.schematic_link = Some(SymbolLink::new(root().child(u(0xa)), [u(0x101)]));
+    }
+    d.parts[0].part.sheet = root().child(u(0xb));
+    let list = d.diff();
+    assert!(
+        removals(&list).iter().all(|r| !r.default_on),
+        "{}",
+        report_text(&list)
+    );
+}
+
+#[test]
+fn a_stale_footprint_beaten_by_a_designator_match_is_not_a_ticked_removal() {
+    let mut f1 = board_fp(0xa1, "R1", "10k", &[], &r0603(), (10.0, 10.0));
+    f1.schematic_link = None;
+    let mut f2 = board_fp(0xa2, "R1", "10k", &[0x101], &r0603(), (20.0, 10.0));
+    f2.schematic_link = Some(SymbolLink::new(root().child(u(0xa)), [u(0x101)]));
+    let mut p = part("R1", &[0x101], "10k", Ok(r0603()));
+    p.part.sheet = root().child(u(0xb));
+    let list = Design::new(board(vec![f1, f2]), vec![p], netlist(&[])).diff();
+    assert!(
+        removals(&list).iter().all(|r| !r.default_on),
+        "{}",
+        report_text(&list)
+    );
+    assert!(
+        list.row(&EcoKey::Link(u(0xa2))).is_none(),
+        "{}",
+        report_text(&list)
+    );
+}
+
+#[test]
+fn a_stale_link_relinks_to_the_on_board_part_when_an_off_board_part_shares_its_unit() {
+    let mut fp = board_fp(0xa1, "R1", "10k", &[0x101], &r0603(), (10.0, 10.0));
+    fp.schematic_link = Some(SymbolLink::new(root().child(u(0xa)), [u(0x101)]));
+    let mut off = part("R1", &[0x101], "10k", Ok(r0603()));
+    off.part.sheet = root().child(u(0xb));
+    off.on_board = false;
+    let mut on = part("R2", &[0x101], "10k", Ok(r0603()));
+    on.part.sheet = root().child(u(0xc));
+    let list = Design::new(board(vec![fp]), vec![off, on], netlist(&[])).diff();
+    let row = list.row(&EcoKey::Link(u(0xa1))).expect("a Link row");
+    let EcoChange::Link { link, .. } = &row.change else {
+        panic!("not a Link change");
+    };
+    assert_eq!(link.sheet, root().child(u(0xc)));
 }

@@ -58,14 +58,14 @@ pub fn diff_board(input: &EcoInput) -> EcoChangeList {
         }
         match &fp.schematic_link {
             Some(link) if input.unreadable.iter().any(|u| is_under(&link.sheet, u)) => {}
-            Some(link) => match input
-                .parts
-                .iter()
-                .find(|p| link.names_part(&p.part.sheet, &p.part.units))
-            {
-                // Another footprint holds a part that is on the board: listed,
-                // never ticked.
-                Some(part) if part.on_board => {
+            Some(link) => match input.parts.iter().enumerate().find(|(pi, p)| {
+                p.on_board
+                    && matched.footprint_of[*pi].is_some()
+                    && link.units.iter().any(|u| p.part.units.contains(u))
+            }) {
+                // Another footprint holds the part the link names or shares a
+                // unit with, and it is on the board: listed, never ticked.
+                Some((_, part)) => {
                     let mut row = remove_row(fp);
                     row.default_on = false;
                     row.on = false;
