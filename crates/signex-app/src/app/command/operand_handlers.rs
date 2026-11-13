@@ -81,7 +81,25 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_sheet_symbol", hierarchy::place_sheet_symbol),
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
+    ("view_rotate", view_rotate),
 ];
+
+/// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
+/// clockwise (#2316).
+pub(super) fn view_turn_degrees(args: &CommandArgs) -> f32 {
+    match args.operand("degrees") {
+        Some(super::OperandValue::Angle(degrees)) => *degrees as f32,
+        _ => 90.0,
+    }
+}
+
+/// `view_rotate` from its operands: the message its menu row and Active Bar
+/// button send, so the board view turns the same way on every surface.
+fn view_rotate(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let turn = crate::app::ViewRotationMsg::TurnedBy(view_turn_degrees(args));
+    let task = app.update(Message::Pcb(crate::app::PcbMsg::ViewRotation(turn)));
+    (CommandOutcome::Ran, task)
+}
 
 /// The handler of `command`, if it runs its operands.
 pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> {

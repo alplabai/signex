@@ -19,6 +19,8 @@ pub struct UiState {
     /// only: never written to the `.snxpcb`.
     pub pcb_layer_views:
         std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>,
+    /// The status bar's view-angle field while it is open (#2316).
+    pub pcb_view_angle_entry: Option<crate::app::ViewAngleEntry>,
     /// The file picker and the opener the returned tasks use (#1931).
     pub io: crate::io_ports::IoPorts,
     pub theme_id: ThemeId,

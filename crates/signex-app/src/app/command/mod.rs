@@ -287,6 +287,16 @@ impl Signex {
                     event,
                 }))
             }
+            // A view turn typed in an undocked PCB window turns that window's
+            // board, the one its enablement read (#2316).
+            (Some(Message::Pcb(PcbMsg::ViewRotation(event))), Some(window_id))
+                if self.undocked_pcb_path(window_id).is_some() =>
+            {
+                self.dispatch_update(Message::Pcb(PcbMsg::ViewRotationInWindow {
+                    window: window_id,
+                    event,
+                }))
+            }
             // Any other command typed in an undocked document window acts on
             // the sheet that window shows (#1966).
             (Some(message), Some(window_id)) if self.is_document_window(window_id) => {

@@ -45,6 +45,8 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         }),
         with(CommandContext {
             has_pcb: true,
+            // Turned, so Reset View Rotation is live (#2316).
+            pcb_view_turned: true,
             has_document: true,
             // An unlocked footprint selected, so the board's rows are live.
             pcb: crate::app::command::enablement::PcbTargets {
@@ -291,6 +293,10 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("prev_layer", "PreviousLayer"),
     ("toggle_layer_visibility", "ToggleLayerVisibility"),
     ("show_all_layers", "ShowAllLayers"),
+    ("view_rotate", "RotateView"),
+    ("view_rotate_ccw", "RotateViewCounterClockwise"),
+    ("view_rotate_180", "RotateView180"),
+    ("view_rotate_reset", "ResetViewRotation"),
     ("place_wire", "PlaceWire"),
     ("place_bus", "PlaceBus"),
     ("place_net_label", "PlaceLabel"),

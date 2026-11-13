@@ -140,11 +140,11 @@ fn class_label(class: &str, has_template: bool) -> String {
 }
 
 /// Empty-grid message.
-fn empty_text(has_template: bool) -> &'static str {
+fn empty_text(has_template: bool) -> signex_i18n::MessageId {
     if has_template {
-        "No parameters yet. Add a custom parameter below."
+        ids::EDITORS_COMPONENT_PARAMETERS_EMPTY
     } else {
-        "No template for this class. Add custom parameters below."
+        ids::EDITORS_COMPONENT_PARAMETERS_NO_TEMPLATE
     }
 }
 
@@ -231,7 +231,7 @@ pub fn view<'a>(
         column![kit::table_header(&COLUMNS, i18n, tokens)];
     if specs.is_empty() {
         grid = grid.push(kit::empty_state(
-            empty_text(template.is_some()),
+            t!(i18n, empty_text(template.is_some())),
             None,
             tokens,
         ));
@@ -803,8 +803,15 @@ mod tests {
         assert_eq!(class_label("", true), "no class");
         assert_eq!(class_label("resistor", true), "class: resistor");
         assert_eq!(class_label("widget", false), "class: widget, no template");
-        assert!(empty_text(false).contains("No template"));
-        assert!(empty_text(true).starts_with("No parameters"));
+        let english = |id| I18n::en_us().message(id, &[]).to_string();
+        assert_eq!(
+            english(empty_text(false)),
+            "No template for this class. Add custom parameters below."
+        );
+        assert_eq!(
+            english(empty_text(true)),
+            "No parameters yet. Add a custom parameter below."
+        );
     }
 
     #[test]

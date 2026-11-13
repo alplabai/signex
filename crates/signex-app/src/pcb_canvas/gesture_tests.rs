@@ -98,6 +98,7 @@ fn a_drag_past_the_threshold_is_a_box_from_the_press() {
             from: rig.world(100.0, 80.0),
             to: rig.world(160.0, 140.0),
             mode: ClickMode::Replace,
+            view_rotation_deg: 0.0,
         }
     );
     assert!(rig.canvas.marquee.get().is_none());

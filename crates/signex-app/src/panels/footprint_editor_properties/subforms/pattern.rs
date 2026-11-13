@@ -2,6 +2,7 @@
 
 use iced::widget::{Column, container, pick_list, row};
 use iced::{Color, Element, Length, Widget};
+use signex_i18n::{I18n, ids, t};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{button, raw, text};
 
@@ -34,6 +35,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
     primary: Color,
     border_c: Color,
     collapsed_sections: &'a CollapsedSections,
+    i18n: &I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     use crate::panels::{ArrayKindSummary, ArrayParamField, NumberingSchemeKindUi};
     let Some(arr) = fp.selected_array.as_ref() else {
@@ -84,7 +86,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             dy_expr,
         } => {
             col = col.push(pad_input_row(
-                "Count",
+                t!(i18n, ids::EDITORS_PATTERN_COUNT),
                 "1",
                 count_expr.clone(),
                 move |v| PanelMsg::FpEditorEditArrayParam {
@@ -95,7 +97,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 muted,
             ));
             col = col.push(pad_input_row(
-                "dX",
+                raw("dX"),
                 "0",
                 dx_expr.clone(),
                 move |v| PanelMsg::FpEditorEditArrayParam {
@@ -106,7 +108,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 muted,
             ));
             col = col.push(pad_input_row(
-                "dY",
+                raw("dY"),
                 "0",
                 dy_expr.clone(),
                 move |v| PanelMsg::FpEditorEditArrayParam {
@@ -128,7 +130,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             ny_value,
         } => {
             col = col.push(pad_input_row(
-                "nx",
+                raw("nx"),
                 "1",
                 nx_expr.clone(),
                 move |v| PanelMsg::FpEditorEditArrayParam {
@@ -139,7 +141,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 muted,
             ));
             col = col.push(pad_input_row(
-                "ny",
+                raw("ny"),
                 "1",
                 ny_expr.clone(),
                 move |v| PanelMsg::FpEditorEditArrayParam {
@@ -150,7 +152,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 muted,
             ));
             col = col.push(pad_input_row(
-                "dX",
+                raw("dX"),
                 "0",
                 dx_expr.clone(),
                 move |v| PanelMsg::FpEditorEditArrayParam {
@@ -161,7 +163,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 muted,
             ));
             col = col.push(pad_input_row(
-                "dY",
+                raw("dY"),
                 "0",
                 dy_expr.clone(),
                 move |v| PanelMsg::FpEditorEditArrayParam {
@@ -172,7 +174,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 muted,
             ));
             col = col.push(pad_input_row(
-                "Mask",
+                t!(i18n, ids::EDITORS_PATTERN_MASK),
                 "i != 0 || j != 0",
                 mask_expr.clone(),
                 move |v| PanelMsg::FpEditorEditArrayParam {
@@ -231,7 +233,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             count_value,
         } => {
             col = col.push(pad_input_row(
-                "Count",
+                t!(i18n, ids::EDITORS_PATTERN_COUNT),
                 "1",
                 count_expr.clone(),
                 move |v| PanelMsg::FpEditorEditArrayParam {
@@ -242,7 +244,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 muted,
             ));
             col = col.push(pad_input_row(
-                "Sweep",
+                t!(i18n, ids::EDITORS_PATTERN_SWEEP),
                 "360deg",
                 sweep_angle_expr.clone(),
                 move |v| PanelMsg::FpEditorEditArrayParam {
@@ -297,7 +299,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 .boxed(),
             );
             col = col.push(pad_input_row(
-                "Mask",
+                t!(i18n, ids::EDITORS_PATTERN_MASK),
                 "i != 0",
                 mask_expr.clone(),
                 move |v| PanelMsg::FpEditorEditArrayParam {
@@ -373,21 +375,21 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
     // letter-skip toggle + the start letter / column inputs.
     if let Some(bga) = arr.bga_config.as_ref() {
         col = col.push(pad_check_row(
-            "Skip I/O/Q/S/X/Z (IPC-7351)",
+            t!(i18n, ids::EDITORS_PATTERN_SKIP_LETTERS),
             bga.skip_letters,
             move |v| PanelMsg::FpEditorSetBgaSkipLetters { array_id, value: v },
             muted,
             primary,
         ));
         col = col.push(pad_input_row(
-            "Start row",
+            t!(i18n, ids::EDITORS_PATTERN_START_ROW),
             "A",
             bga.start_row.to_string(),
             move |v| PanelMsg::FpEditorSetBgaStartRow { array_id, value: v },
             muted,
         ));
         col = col.push(pad_input_row(
-            "Start col",
+            t!(i18n, ids::EDITORS_PATTERN_START_COL),
             "1",
             bga.start_col.to_string(),
             move |v| PanelMsg::FpEditorSetBgaStartCol { array_id, value: v },

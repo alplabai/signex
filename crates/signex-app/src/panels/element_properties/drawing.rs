@@ -7,6 +7,7 @@ use super::super::*;
 use super::drawing_preview::DrawingPreview;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
+use signex_i18n::{ids, t};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -134,35 +135,35 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(drawing_num_row(
-                            "Start X",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_START_X),
                             DrawingFieldId::LineStartX,
                             sx,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "Start Y",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_START_Y),
                             DrawingFieldId::LineStartY,
                             sy,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "End X",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_END_X),
                             DrawingFieldId::LineEndX,
                             ex,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "End Y",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_END_Y),
                             DrawingFieldId::LineEndY,
                             ey,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "Width (mm)",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_WIDTH_MM),
                             DrawingFieldId::LineWidth,
                             stroke_w,
                             buf,
@@ -186,35 +187,35 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(drawing_num_row(
-                            "Position X",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_POSITION_X),
                             DrawingFieldId::RectStartX,
                             px,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "Position Y",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_POSITION_Y),
                             DrawingFieldId::RectStartY,
                             py,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "Width (mm)",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_WIDTH_MM),
                             DrawingFieldId::RectWidth,
                             w_mm,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "Height (mm)",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_HEIGHT_MM),
                             DrawingFieldId::RectHeight,
                             h_mm,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "Border",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_BORDER),
                             DrawingFieldId::RectBorder,
                             stroke_w,
                             buf,
@@ -240,28 +241,28 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(drawing_num_row(
-                            "Center X",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_CENTER_X),
                             DrawingFieldId::CircleCenterX,
                             cx,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "Center Y",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_CENTER_Y),
                             DrawingFieldId::CircleCenterY,
                             cy,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "Radius",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_RADIUS),
                             DrawingFieldId::CircleRadius,
                             radius,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "Border",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_BORDER),
                             DrawingFieldId::CircleBorder,
                             stroke_w,
                             buf,
@@ -289,42 +290,42 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     move || {
                         let mut c = Column::new().spacing(0).width(Length::Fill);
                         c = c.push(drawing_num_row(
-                            "Center X",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_CENTER_X),
                             DrawingFieldId::ArcCenterX,
                             cx,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "Center Y",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_CENTER_Y),
                             DrawingFieldId::ArcCenterY,
                             cy,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "Radius",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_RADIUS),
                             DrawingFieldId::ArcRadius,
                             radius,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "Start Angle",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_START_ANGLE),
                             DrawingFieldId::ArcStartAngle,
                             start_angle,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "End Angle",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_END_ANGLE),
                             DrawingFieldId::ArcEndAngle,
                             end_angle,
                             buf,
                             muted,
                         ));
                         c = c.push(drawing_num_row(
-                            "Width",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_WIDTH),
                             DrawingFieldId::ArcWidth,
                             stroke_w,
                             buf,
@@ -352,7 +353,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                             ink,
                         ));
                         c = c.push(drawing_num_row(
-                            "Border",
+                            t!(ctx.i18n, ids::PANELS_DRAWING_BORDER),
                             DrawingFieldId::PolyBorder,
                             stroke_w,
                             buf,
@@ -404,7 +405,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
 /// on every keystroke; the handler commits to the engine when the
 /// string parses as f64.
 fn drawing_num_row<'a>(
-    label: &'a str,
+    label: signex_i18n::Localized,
     field: DrawingFieldId,
     stored_value: f64,
     buf: &std::collections::HashMap<DrawingFieldId, String>,
@@ -417,7 +418,7 @@ fn drawing_num_row<'a>(
         .cloned()
         .unwrap_or_else(|| format!("{stored_value:.3}"));
     row![
-        text(raw(label))
+        text(label)
             .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
@@ -446,12 +447,17 @@ fn drawing_stroke_color_row<'a>(
     use signex_types::schematic::StrokeColor;
     use signex_widgets::{button, raw, text};
     let rgb = |r: u8, g: u8, b: u8| -> StrokeColor { StrokeColor { r, g, b, a: 255 } };
-    let tile = |label: &'static str,
+    // Only the Auto tile has a label; a colour tile is its swatch.
+    let tile = |label: Option<signex_i18n::MessageId>,
                 stored: Option<StrokeColor>,
                 active: bool,
                 fill_color: Color|
      -> Element<'a, PanelMsg> {
-        button(text(raw(label)).size(TS.body))
+        let face = match label {
+            Some(id) => text(t!(i18n, id)),
+            None => text(raw("")),
+        };
+        button(face.size(TS.body))
             .padding([3, 6])
             .on_press(PanelMsg::UpdateDrawingEdit(E::StrokeColor(stored)))
             .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -489,37 +495,37 @@ fn drawing_stroke_color_row<'a>(
         .width(Length::FillPortion(2)),
         row![
             tile(
-                "Auto",
+                Some(ids::PANELS_DRAWING_COLOR_AUTO),
                 None,
                 theme_active,
                 Color::from_rgba(0.28, 0.28, 0.32, 0.6),
             ),
             tile(
-                "",
+                None,
                 Some(rgb(0xE5, 0x3E, 0x3E)),
                 is_active(Some(rgb(0xE5, 0x3E, 0x3E))),
                 Color::from_rgb(0.90, 0.24, 0.24),
             ),
             tile(
-                "",
+                None,
                 Some(rgb(0x3E, 0xA5, 0x44)),
                 is_active(Some(rgb(0x3E, 0xA5, 0x44))),
                 Color::from_rgb(0.24, 0.65, 0.27),
             ),
             tile(
-                "",
+                None,
                 Some(rgb(0x3C, 0x85, 0xD6)),
                 is_active(Some(rgb(0x3C, 0x85, 0xD6))),
                 Color::from_rgb(0.24, 0.52, 0.84),
             ),
             tile(
-                "",
+                None,
                 Some(rgb(0xE6, 0xB7, 0x1E)),
                 is_active(Some(rgb(0xE6, 0xB7, 0x1E))),
                 Color::from_rgb(0.90, 0.72, 0.12),
             ),
             tile(
-                "",
+                None,
                 Some(rgb(0xE0, 0xE0, 0xE0)),
                 is_active(Some(rgb(0xE0, 0xE0, 0xE0))),
                 Color::from_rgb(0.88, 0.88, 0.88),
@@ -542,7 +548,7 @@ fn drawing_placement_row<'a>(
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     use crate::app::contracts::DrawingFieldEdit as E;
-    use signex_i18n::{MessageId, ids, t};
+    use signex_i18n::MessageId;
     use signex_types::schematic::DrawingPlacement;
     let tile = |label: MessageId, placement: DrawingPlacement| -> Element<'a, PanelMsg> {
         let active = current == placement;
@@ -580,7 +586,7 @@ fn drawing_fill_row<'a>(
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     use crate::app::contracts::DrawingFieldEdit as E;
-    use signex_i18n::{MessageId, ids, t};
+    use signex_i18n::MessageId;
     use signex_types::schematic::FillType;
     let tile = |label: MessageId, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
         signex_widgets::button(text(t!(i18n, label)).size(TS.body))

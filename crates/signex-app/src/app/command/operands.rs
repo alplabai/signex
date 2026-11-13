@@ -183,6 +183,11 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
             .filter(|deg| deg % 90.0 == 0.0 && deg.abs() <= 360.0)
             .map(|deg| OperandValue::Angle(deg.rem_euclid(360.0) + 0.0))
             .ok_or_else(|| invalid("a multiple of 90 degrees")),
+        // A view turn keeps its sign: -90 is a quarter turn counter-clockwise.
+        OperandKind::Turn => number(text)
+            .filter(|deg| deg.abs() <= 360.0)
+            .map(OperandValue::Angle)
+            .ok_or_else(|| invalid("degrees within ±360")),
         OperandKind::Text if text.chars().any(char::is_control) => {
             Err(invalid("text without control characters"))
         }
@@ -424,6 +429,18 @@ mod tests {
         assert!(path.ends_with("a=b.snxsch"), "{path}");
     }
 
+    /// #2316: a view turn takes any angle within ±360 and keeps its sign.
+    #[test]
+    fn a_view_turn_takes_any_angle_and_keeps_its_sign() {
+        for (given, stored) in [("37", 37.0), ("-90", -90.0), ("360", 360.0), ("12.5", 12.5)] {
+            let args = parse("view_rotate", &[&format!("degrees={given}")]).unwrap();
+            assert_eq!(args.operand("degrees"), Some(&OperandValue::Angle(stored)));
+        }
+        for refused in ["degrees=361", "degrees=NaN", "degrees=x"] {
+            assert!(parse("view_rotate", &[refused]).is_err(), "{refused}");
+        }
+    }
+
     #[test]
     fn negative_zero_reads_as_zero_and_right_angles_pass() {
         let args = parse("place_net_label", &["at=-0,-0.0", "text=A", "rotation=-0"]).unwrap();
@@ -487,7 +504,10 @@ mod tests {
                 seen.push(op.name);
                 assert_eq!(
                     op.kind.unit().is_some(),
-                    matches!(op.kind, OperandKind::Point | OperandKind::Angle)
+                    matches!(
+                        op.kind,
+                        OperandKind::Point | OperandKind::Angle | OperandKind::Turn
+                    )
                 );
             }
         }

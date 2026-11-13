@@ -676,7 +676,8 @@ impl Signex {
                     crate::scene_shader::PcbSurface,
                 >::new(
                     scene, Some(generation), [offset_x, offset_y], scale
-                ))
+                )
+                .with_rotation(pcb_canvas.view_rotation()))
                 .width(Length::Fill)
                 .height(Length::Fill);
                 let bar = self.pcb_active_bar(is_main);

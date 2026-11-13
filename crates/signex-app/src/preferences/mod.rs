@@ -440,7 +440,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
 
     let inner = match nav {
         PrefNav::Appearance => content_appearance(v),
-        PrefNav::Annotation => content_annotation(draft_annotate_undo),
+        PrefNav::Annotation => content_annotation(draft_annotate_undo, i18n),
         PrefNav::Editing => content_editing(
             draft_move_keeps_wires,
             draft_net_hover_enabled,
@@ -464,7 +464,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         // `Message::Library` to keep the canonical settings state on
         // `LibraryState.settings`.
         PrefNav::LibraryDistributors => {
-            content_library_distributors(distributor_settings, panel_tokens)
+            content_library_distributors(distributor_settings, panel_tokens, i18n)
         }
         PrefNav::Keyboard => content_keyboard_shortcuts(
             i18n,

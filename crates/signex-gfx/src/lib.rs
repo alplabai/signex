@@ -21,3 +21,4 @@ pub mod primitive;
 pub mod scene;
 pub mod shader;
 pub mod style;
+pub mod view_rotation;

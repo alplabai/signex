@@ -137,6 +137,7 @@ fn drag(app: &mut Signex, from: (f64, f64), to: (f64, f64)) {
         from: pt(from.0, from.1),
         to: pt(to.0, to.1),
         mode: ClickMode::Replace,
+        view_rotation_deg: 0.0,
     };
     send(app, msg);
 }
@@ -208,6 +209,7 @@ fn a_box_with_shift_adds_to_the_selection() {
         from: pt(-1.0, -1.0),
         to: pt(15.0, 14.0),
         mode: ClickMode::Add,
+        view_rotation_deg: 0.0,
     };
     send(&mut f.app, msg);
     assert_eq!(selected(&f.app), vec![PAD, VIA, FOOTPRINT]);

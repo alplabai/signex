@@ -148,6 +148,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 palette,
                 collapsed_sections,
                 &fp.selected_pad_shape_params,
+                i18n,
             );
             col = render_pad_form_pad_features(
                 col,
@@ -207,7 +208,15 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 collapsed_sections,
                 i18n,
             );
-            col = render_pad_form_pad_stack(col, &values, target, palette, collapsed_sections, &[]);
+            col = render_pad_form_pad_stack(
+                col,
+                &values,
+                target,
+                palette,
+                collapsed_sections,
+                &[],
+                i18n,
+            );
             col = render_pad_form_pad_features(
                 col,
                 &values,

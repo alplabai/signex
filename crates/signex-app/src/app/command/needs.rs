@@ -30,6 +30,8 @@ pub(crate) enum Needs {
     FitTarget,
     FootprintEditor,
     Pcb,
+    /// Reset View Rotation: a board in view that is turned (#2316).
+    TurnedPcbView,
     /// Rotate and mirror: on a board, an unlocked footprint selected
     /// (#2240); on a sheet, a selection or something in hand.
     Turn,
@@ -103,6 +105,7 @@ impl Needs {
             // nothing elsewhere.
             Self::FootprintEditor => ctx.has_footprint_editor,
             Self::Pcb => ctx.has_pcb,
+            Self::TurnedPcbView => ctx.has_pcb && ctx.pcb_view_turned,
             // On a sheet, rotate also turns a part on the cursor with
             // nothing selected.
             Self::Turn if ctx.pcb.shown => ctx.pcb.placeable,
@@ -160,6 +163,7 @@ impl Needs {
             Self::FitTarget => "No schematic or PCB is open",
             Self::FootprintEditor => "No footprint editor is open",
             Self::Pcb => "No PCB is open",
+            Self::TurnedPcbView => "The board view is not rotated",
             Self::Turn => {
                 "Nothing is selected or in hand to turn, or a selected footprint is locked"
             }
@@ -262,7 +266,12 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "next_layer"
         | "prev_layer"
         | "toggle_layer_visibility"
-        | "show_all_layers" => Needs::Pcb,
+        | "show_all_layers"
+        | "view_rotate"
+        | "view_rotate_ccw"
+        | "view_rotate_180" => Needs::Pcb,
+        // At 0° Reset has nothing to do, so it is greyed.
+        "view_rotate_reset" => Needs::TurnedPcbView,
         "open_library_browser" => Needs::Library,
         "number_schematic_sheets" => Needs::ProjectSheet,
         "tile_windows_horizontally" | "tile_windows_vertically" => Needs::TileableWindows,

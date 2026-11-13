@@ -1155,6 +1155,26 @@
     "category": "pcb_sync"
   },
   {
+    "id": "view_rotate",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "view_rotate_180",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "view_rotate_ccw",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "view_rotate_reset",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "zoom_in_at_cursor",
     "group": "General",
     "category": "view"

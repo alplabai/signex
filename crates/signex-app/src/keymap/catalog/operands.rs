@@ -10,6 +10,9 @@ pub enum OperandKind {
     /// A multiple of 90 degrees within ±360, stored as 0, 90, 180 or 270:
     /// the pre-placement form's choices.
     Angle,
+    /// Any angle within ±360 degrees, clockwise positive: a turn of the
+    /// view, not the pre-placement form's right angles (#2316).
+    Turn,
     /// Free text (a label text, a net name, a library id).
     Text,
     /// An absolute path on the host running the command (a GUI file dialog's
@@ -28,6 +31,7 @@ impl OperandKind {
         match self {
             Self::Point => "point",
             Self::Angle => "angle",
+            Self::Turn => "turn",
             Self::Text => "text",
             Self::Path => "path",
             Self::Bool => "bool",
@@ -40,7 +44,7 @@ impl OperandKind {
     pub const fn unit(self) -> Option<&'static str> {
         match self {
             Self::Point => Some("mm"),
-            Self::Angle => Some("deg"),
+            Self::Angle | Self::Turn => Some("deg"),
             Self::Text | Self::Path | Self::Bool | Self::Color | Self::Document => None,
         }
     }
@@ -65,6 +69,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("start", OperandKind::Point),
     ("end", OperandKind::Point),
     ("rotation", OperandKind::Angle),
+    ("degrees", OperandKind::Turn),
     ("text", OperandKind::Text),
     ("net_name", OperandKind::Text),
     ("class", OperandKind::Text),
@@ -262,6 +267,10 @@ pub const NEW_SCHEMATIC: &[Operand] = &[
     optional("profile", OperandKind::Text),
     optional("name", OperandKind::Text),
 ];
+
+/// Turn the board view by `degrees` (90 when left out), clockwise positive
+/// (#2316).
+pub const TURN: &[Operand] = &[optional("degrees", OperandKind::Turn)];
 
 /// Colour the net under a point of the named document's sheet.
 pub const COLOR_NET: &[Operand] = &[

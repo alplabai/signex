@@ -2,6 +2,7 @@
 
 use iced::widget::{Column, container};
 use iced::{Color, Element, Length, Widget as _};
+use signex_i18n::{I18n, ids, t};
 use signex_widgets::{raw, text};
 
 use super::super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg};
@@ -28,6 +29,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     primary: Color,
     border_c: Color,
     collapsed_sections: &'a CollapsedSections,
+    i18n: &I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     let Some(p) = fp.selected_sketch_pad.as_ref() else {
         return col;
@@ -50,7 +52,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
 
     // Properties group.
     col = col.push(pad_pick_row(
-        "Electrical Type",
+        t!(i18n, ids::EDITORS_PAD_ELECTRICAL_TYPE),
         signex_sketch::attr::ElectricalType::ALL,
         p.electrical_type,
         move |v: signex_sketch::attr::ElectricalType| {
@@ -59,28 +61,28 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
         muted,
     ));
     col = col.push(pad_input_row(
-        "Net",
+        t!(i18n, ids::EDITORS_PAD_NET),
         "(unassigned)",
         p.net.clone(),
         move |v| PanelMsg::FpEditorSetSketchPadNet { id, value: v },
         muted,
     ));
     col = col.push(pad_check_row(
-        "Locked",
+        t!(i18n, ids::EDITORS_PAD_LOCKED),
         p.locked,
         move |v| PanelMsg::FpEditorToggleSketchPadLocked { id, value: v },
         muted,
         primary,
     ));
     col = col.push(pad_input_row(
-        "Template",
+        t!(i18n, ids::EDITORS_PAD_TEMPLATE),
         "",
         p.template.clone(),
         move |v| PanelMsg::FpEditorSetSketchPadTemplate { id, value: v },
         muted,
     ));
     col = col.push(pad_input_row(
-        "Library",
+        t!(i18n, ids::EDITORS_PAD_TEMPLATE_LIBRARY),
         "",
         p.template_library.clone(),
         move |v| PanelMsg::FpEditorSetSketchPadTemplateLibrary { id, value: v },
@@ -95,7 +97,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
             .boxed(),
     );
     col = col.push(pad_pick_row(
-        "Top Side",
+        t!(i18n, ids::EDITORS_PAD_TOP_SIDE),
         signex_sketch::attr::PadFeature::ALL,
         p.feature_top,
         move |v: signex_sketch::attr::PadFeature| PanelMsg::FpEditorSetSketchPadFeatureTop {
@@ -105,7 +107,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
         muted,
     ));
     col = col.push(pad_pick_row(
-        "Bottom Side",
+        t!(i18n, ids::EDITORS_PAD_BOTTOM_SIDE),
         signex_sketch::attr::PadFeature::ALL,
         p.feature_bottom,
         move |v: signex_sketch::attr::PadFeature| PanelMsg::FpEditorSetSketchPadFeatureBottom {
@@ -123,28 +125,28 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
             .boxed(),
     );
     col = col.push(pad_check_row(
-        "Top Assembly",
+        t!(i18n, ids::EDITORS_PAD_TOP_ASSEMBLY),
         p.testpoint.top_assembly,
         move |v| PanelMsg::FpEditorToggleSketchPadTestpointTopAssembly { id, value: v },
         muted,
         primary,
     ));
     col = col.push(pad_check_row(
-        "Top Fab",
+        t!(i18n, ids::EDITORS_PAD_TOP_FAB),
         p.testpoint.top_fab,
         move |v| PanelMsg::FpEditorToggleSketchPadTestpointTopFab { id, value: v },
         muted,
         primary,
     ));
     col = col.push(pad_check_row(
-        "Bottom Assembly",
+        t!(i18n, ids::EDITORS_PAD_BOTTOM_ASSEMBLY),
         p.testpoint.bottom_assembly,
         move |v| PanelMsg::FpEditorToggleSketchPadTestpointBottomAssembly { id, value: v },
         muted,
         primary,
     ));
     col = col.push(pad_check_row(
-        "Bottom Fab",
+        t!(i18n, ids::EDITORS_PAD_BOTTOM_FAB),
         p.testpoint.bottom_fab,
         move |v| PanelMsg::FpEditorToggleSketchPadTestpointBottomFab { id, value: v },
         muted,
@@ -160,35 +162,35 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
             .boxed(),
     );
     col = col.push(pad_check_row(
-        "Top paste enabled",
+        t!(i18n, ids::EDITORS_PAD_TOP_PASTE_ENABLED),
         p.paste_top_enabled,
         move |v| PanelMsg::FpEditorToggleSketchPadPasteEnabledTop { id, value: v },
         muted,
         primary,
     ));
     col = col.push(pad_check_row(
-        "Bottom paste enabled",
+        t!(i18n, ids::EDITORS_PAD_BOTTOM_PASTE_ENABLED),
         p.paste_bottom_enabled,
         move |v| PanelMsg::FpEditorToggleSketchPadPasteEnabledBottom { id, value: v },
         muted,
         primary,
     ));
     col = col.push(pad_check_row(
-        "Top mask tented",
+        t!(i18n, ids::EDITORS_PAD_TOP_MASK_TENTED),
         p.mask_top_tented,
         move |v| PanelMsg::FpEditorToggleSketchPadMaskTentedTop { id, value: v },
         muted,
         primary,
     ));
     col = col.push(pad_check_row(
-        "Bottom mask tented",
+        t!(i18n, ids::EDITORS_PAD_BOTTOM_MASK_TENTED),
         p.mask_bottom_tented,
         move |v| PanelMsg::FpEditorToggleSketchPadMaskTentedBottom { id, value: v },
         muted,
         primary,
     ));
     col = col.push(pad_check_row(
-        "Thermal relief",
+        t!(i18n, ids::EDITORS_PAD_THERMAL_RELIEF),
         p.thermal_relief,
         move |v| PanelMsg::FpEditorToggleSketchPadThermalRelief { id, value: v },
         muted,
@@ -199,7 +201,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
         .map(|v| format!("{v:.0}"))
         .unwrap_or_default();
     col = col.push(pad_input_row(
-        "Corner radius %",
+        t!(i18n, ids::EDITORS_PAD_CORNER_RADIUS),
         "25",
         corner_buf,
         move |v| PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value: v },
@@ -219,7 +221,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
             .map(|v| format!("{v:.3}"))
             .unwrap_or_default();
         col = col.push(pad_input_row(
-            "Tolerance + (mm)",
+            t!(i18n, ids::EDITORS_PAD_HOLE_TOLERANCE_PLUS),
             "0",
             tol_p_buf,
             move |v| PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value: v },
@@ -230,7 +232,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
             .map(|v| format!("{v:.3}"))
             .unwrap_or_default();
         col = col.push(pad_input_row(
-            "Tolerance − (mm)",
+            t!(i18n, ids::EDITORS_PAD_HOLE_TOLERANCE_MINUS),
             "0",
             tol_m_buf,
             move |v| PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value: v },
@@ -241,7 +243,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
             .map(|v| format!("{v:.1}"))
             .unwrap_or_default();
         col = col.push(pad_input_row(
-            "Hole rotation (°)",
+            t!(i18n, ids::EDITORS_PAD_HOLE_ROTATION),
             "0",
             rot_buf,
             move |v| PanelMsg::FpEditorSetSketchPadHoleRotation { id, value: v },
@@ -252,7 +254,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
             .map(|v| format!("{v:.3}"))
             .unwrap_or_default();
         col = col.push(pad_input_row(
-            "Copper offset X (mm)",
+            t!(i18n, ids::EDITORS_PAD_COPPER_OFFSET_X),
             "0",
             cox_buf,
             move |v| PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value: v },
@@ -263,7 +265,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
             .map(|v| format!("{v:.3}"))
             .unwrap_or_default();
         col = col.push(pad_input_row(
-            "Copper offset Y (mm)",
+            t!(i18n, ids::EDITORS_PAD_COPPER_OFFSET_Y),
             "0",
             coy_buf,
             move |v| PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value: v },

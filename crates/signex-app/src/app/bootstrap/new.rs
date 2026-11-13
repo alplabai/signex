@@ -295,6 +295,7 @@ impl Signex {
                 keymap_profiles,
                 active_keymap,
                 pcb_layer_views: Default::default(),
+                pcb_view_angle_entry: None,
                 keymap_pending_sequence: Vec::new(),
                 keymap_pending_target: None,
                 keymap_chord_wait: None,

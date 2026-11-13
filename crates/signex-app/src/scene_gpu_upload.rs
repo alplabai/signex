@@ -25,6 +25,7 @@ use signex_gfx::primitive::ordered::OrderedItem;
 use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::primitive::text::{TextItem, TextSizePolicy};
 use signex_gfx::scene::{SceneUploadTarget, TextUploadParams, ViewportAabbMm};
+use signex_gfx::view_rotation::ViewRotation;
 use signex_gfx::wgpu;
 
 use crate::scene_shader::world_origin_mm;
@@ -145,26 +146,33 @@ impl SceneUploadTarget for GpuUploadTarget<'_> {
     fn refresh_theme(&mut self) {}
 }
 
-/// The world rectangle (mm) currently visible through `bounds`, or `None`
-/// while the view is degenerate (zero size or non-positive scale), in which
-/// case nothing can be culled.
+/// The world rectangle (mm) currently visible through `bounds` (the box around
+/// it on a view turned by `rotation`, #2316), or `None` while the view is
+/// degenerate (zero size or non-positive scale), in which case nothing can be
+/// culled.
 pub fn visible_world_rect(
     bounds: &Rectangle,
     offset_px: [f32; 2],
     scale_px_per_mm: f32,
+    rotation: ViewRotation,
 ) -> Option<ViewportAabbMm> {
     let finite = scale_px_per_mm.is_finite() && offset_px.iter().all(|v| v.is_finite());
     if !(finite && scale_px_per_mm > 0.0 && bounds.width > 0.0 && bounds.height > 0.0) {
         return None;
     }
-    let origin = world_origin_mm(offset_px, scale_px_per_mm);
-    Some(ViewportAabbMm::new(
-        origin,
-        [
-            origin[0] + bounds.width / scale_px_per_mm,
-            origin[1] + bounds.height / scale_px_per_mm,
-        ],
-    ))
+    if rotation.is_identity() {
+        let origin = world_origin_mm(offset_px, scale_px_per_mm);
+        return Some(ViewportAabbMm::new(
+            origin,
+            [
+                origin[0] + bounds.width / scale_px_per_mm,
+                origin[1] + bounds.height / scale_px_per_mm,
+            ],
+        ));
+    }
+    let size = [bounds.width, bounds.height];
+    let (min, max) = rotation.visible_world_box(size, offset_px, scale_px_per_mm)?;
+    Some(ViewportAabbMm::new(min, max))
 }
 
 #[cfg(test)]
@@ -176,16 +184,26 @@ mod tests {
         // 4 px/mm, panned 80/40 px: top-left shows world (-20, -10); a 400x200
         // widget spans 100 x 50 mm from there.
         let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(400.0, 200.0));
-        let rect = visible_world_rect(&bounds, [80.0, 40.0], 4.0).unwrap();
+        let rect = visible_world_rect(&bounds, [80.0, 40.0], 4.0, ViewRotation::IDENTITY).unwrap();
         assert_eq!(rect, ViewportAabbMm::new([-20.0, -10.0], [80.0, 40.0]));
+    }
+
+    /// A quarter-turned view (#2316) shows the widget's height across x.
+    #[test]
+    fn a_turned_view_culls_by_the_box_around_it() {
+        let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(400.0, 200.0));
+        let quarter = ViewRotation::from_degrees(90.0);
+        let rect = visible_world_rect(&bounds, [0.0, 0.0], 4.0, quarter).unwrap();
+        assert_eq!(rect, ViewportAabbMm::new([0.0, -100.0], [50.0, 0.0]));
     }
 
     #[test]
     fn degenerate_views_are_not_culled() {
         let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(400.0, 200.0));
-        assert!(visible_world_rect(&bounds, [0.0, 0.0], 0.0).is_none());
-        assert!(visible_world_rect(&Rectangle::default(), [0.0, 0.0], 4.0).is_none());
-        assert!(visible_world_rect(&bounds, [0.0, 0.0], f32::NAN).is_none());
-        assert!(visible_world_rect(&bounds, [f32::INFINITY, 0.0], 4.0).is_none());
+        let none = ViewRotation::IDENTITY;
+        assert!(visible_world_rect(&bounds, [0.0, 0.0], 0.0, none).is_none());
+        assert!(visible_world_rect(&Rectangle::default(), [0.0, 0.0], 4.0, none).is_none());
+        assert!(visible_world_rect(&bounds, [0.0, 0.0], f32::NAN, none).is_none());
+        assert!(visible_world_rect(&bounds, [f32::INFINITY, 0.0], 4.0, none).is_none());
     }
 }

@@ -52,6 +52,36 @@ impl CameraUniform {
         }
     }
 
+    /// An orthographic camera for a view turned on screen (#2316): the
+    /// mapping `screen_px = rotation(world_mm) * scale + offset_px`, the one
+    /// the CPU canvas applies, then pixels to clip space. With no turn this is
+    /// [`Self::ortho`] at `offset_mm = -offset_px / scale`.
+    pub fn ortho_turned(
+        viewport_px: [f32; 2],
+        offset_px: [f32; 2],
+        scale_px_per_mm: f32,
+        rotation: crate::view_rotation::ViewRotation,
+    ) -> Self {
+        let [cos, sin] = rotation.factors();
+        let (sx, sy) = (2.0 / viewport_px[0], -2.0 / viewport_px[1]);
+        let s = scale_px_per_mm;
+        let view_proj = glam::Mat4::from_cols(
+            glam::Vec4::new(sx * s * cos, sy * s * sin, 0.0, 0.0),
+            glam::Vec4::new(-sx * s * sin, sy * s * cos, 0.0, 0.0),
+            // `orthographic_rh_gl` with near -1, far 1 sends z to -z.
+            glam::Vec4::new(0.0, 0.0, -1.0, 0.0),
+            glam::Vec4::new(sx * offset_px[0] - 1.0, sy * offset_px[1] + 1.0, 0.0, 1.0),
+        );
+        Self {
+            view_proj: view_proj.to_cols_array_2d(),
+            viewport: viewport_px,
+            mm_per_px: 1.0 / scale_px_per_mm,
+            min_stroke_px: 0.0,
+            min_radius_px: 0.0,
+            _pad: [0.0; 3],
+        }
+    }
+
     /// Keep thin geometry legible when zoomed out, the way the CPU replays do.
     ///
     /// Both CPU paths clamp in screen space — the schematic to 0.6 px and the
@@ -165,5 +195,52 @@ impl CameraGpu {
 
     pub fn bind_group(&self) -> &wgpu::BindGroup {
         &self.bind_group
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::view_rotation::ViewRotation;
+
+    fn clip(camera: &CameraUniform, world: [f32; 2]) -> [f32; 2] {
+        let m = glam::Mat4::from_cols_array_2d(&camera.view_proj);
+        let p = m * glam::Vec4::new(world[0], world[1], 0.0, 1.0);
+        [p.x, p.y]
+    }
+
+    /// With no turn the turned camera is the plain one.
+    #[test]
+    fn an_unturned_camera_matches_ortho() {
+        let (vp, offset, scale) = ([800.0, 600.0], [80.0, -40.0], 4.0);
+        let plain = CameraUniform::ortho(vp, [-offset[0] / scale, -offset[1] / scale], scale);
+        let turned = CameraUniform::ortho_turned(vp, offset, scale, ViewRotation::IDENTITY);
+        for (a, b) in plain
+            .view_proj
+            .iter()
+            .flatten()
+            .zip(turned.view_proj.iter().flatten())
+        {
+            assert!(
+                (a - b).abs() < 1e-5,
+                "{:?} vs {:?}",
+                plain.view_proj,
+                turned.view_proj
+            );
+        }
+    }
+
+    /// A world point lands where the CPU mapping puts it on screen.
+    #[test]
+    fn a_turned_camera_follows_the_screen_mapping() {
+        let (vp, offset, scale) = ([800.0, 600.0], [400.0, 300.0], 2.0);
+        let rotation = ViewRotation::from_degrees(37.0);
+        let camera = CameraUniform::ortho_turned(vp, offset, scale, rotation);
+        let world = [25.0, -10.0];
+        let turned = rotation.apply(world);
+        let screen = [turned[0] * scale + offset[0], turned[1] * scale + offset[1]];
+        let want = [2.0 * screen[0] / vp[0] - 1.0, 1.0 - 2.0 * screen[1] / vp[1]];
+        let got = clip(&camera, world);
+        assert!((got[0] - want[0]).abs() < 1e-5 && (got[1] - want[1]).abs() < 1e-5);
     }
 }

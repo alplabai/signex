@@ -111,6 +111,9 @@ mod pcb_ratsnest;
 #[path = "regression/pcb_view.rs"]
 mod pcb_view;
 
+#[path = "regression/pcb_view_rotation.rs"]
+mod pcb_view_rotation;
+
 // #2240 / #2223 - the board menu's View group: Toggle Ratsnest.
 #[path = "regression/pcb_board_menu_view.rs"]
 mod pcb_board_menu_view;

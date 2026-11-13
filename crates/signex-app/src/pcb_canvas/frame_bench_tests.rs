@@ -65,12 +65,10 @@ fn view(pcb: &PcbCanvas) -> Element<'_, Message> {
     let scene = pcb.gpu_scene().unwrap_or_default();
     let generation = pcb.scene_generation();
     let (offset_x, offset_y, scale) = pcb.live_camera();
-    let content = shader(SceneShaderProgram::<PcbSurface>::new(
-        scene,
-        Some(generation),
-        [offset_x, offset_y],
-        scale,
-    ))
+    let content = shader(
+        SceneShaderProgram::<PcbSurface>::new(scene, Some(generation), [offset_x, offset_y], scale)
+            .with_rotation(pcb.view_rotation()),
+    )
     .width(Length::Fill)
     .height(Length::Fill);
     stack![base, content, highlight].boxed()
@@ -327,12 +325,15 @@ fn camera_note(pcb: &PcbCanvas) -> String {
     )
 }
 
-/// The four scenarios on one canvas, `gpu` choosing the mount.
-fn measure(rig: &mut Rig, dpr: f32, snapshot: &PcbSnapshot, gpu: bool, aa: &str) {
+/// The four scenarios on one canvas, `gpu` choosing the mount, the view
+/// turned `degrees` (#2316).
+fn measure(rig: &mut Rig, dpr: f32, snapshot: &PcbSnapshot, gpu: bool, aa: &str, degrees: f32) {
     let mut pcb = PcbCanvas::new();
     pcb.gpu_render = gpu;
     pcb.set_renderer_snapshot(Some(snapshot.clone()));
-    let path = if gpu { "gpu" } else { "cpu" };
+    pcb.set_view_rotation(degrees);
+    let label = format!("{} {degrees:>3}°", if gpu { "gpu" } else { "cpu" });
+    let path = label.as_str();
     let mut bench = Bench {
         rig,
         dpr,
@@ -408,6 +409,11 @@ fn pcb_frame_bench() {
     };
     let paths = list("SIGNEX_BENCH_PATHS", "cpu,gpu");
     let aas = list("SIGNEX_BENCH_AA", "off,msaa4");
+    // View turns to time (#2316): square and a non-axis angle.
+    let turns: Vec<f32> = list("SIGNEX_BENCH_ROTATIONS", "0,37")
+        .iter()
+        .filter_map(|t| t.trim().parse().ok())
+        .collect();
 
     let board = fixture::board_10k_tracks();
     let t = Instant::now();
@@ -436,10 +442,12 @@ fn pcb_frame_bench() {
             if !paths.iter().any(|p| p == name) {
                 continue;
             }
-            let mut rig = rig(aa, dpr);
-            eprintln!("BENCH adapter (name, backend): {}", rig.adapter);
-            measure(&mut rig, dpr, &snapshot, gpu, aa_name);
-            ran += 1;
+            for &degrees in &turns {
+                let mut rig = rig(aa, dpr);
+                eprintln!("BENCH adapter (name, backend): {}", rig.adapter);
+                measure(&mut rig, dpr, &snapshot, gpu, aa_name, degrees);
+                ran += 1;
+            }
         }
     }
     assert!(

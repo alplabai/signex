@@ -46,10 +46,16 @@ impl Signex {
                 }
                 self.close_context_menu_on_press()
             }
-            PcbCanvasMsg::BoxSelected { from, to, mode } => {
-                if self.with_pcb_selection(|sel, board| sel.box_select(board, from, to, mode))
-                    == Some(true)
-                {
+            PcbCanvasMsg::BoxSelected {
+                from,
+                to,
+                mode,
+                view_rotation_deg,
+            } => {
+                let changed = self.with_pcb_selection(|sel, board| {
+                    sel.box_select(board, from, to, mode, view_rotation_deg)
+                });
+                if changed == Some(true) {
                     self.refresh_pcb_highlight();
                 }
                 self.close_context_menu_on_press()

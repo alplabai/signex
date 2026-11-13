@@ -5,7 +5,7 @@
 use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
-use pcb_geom::{BoardIndex, ClickMode, ItemRef, PointNm, Selection, marquee_select, pick};
+use pcb_geom::{BoardIndex, ClickMode, ItemRef, PointNm, Selection, pick, turned_marquee_select};
 use signex_renderer::pcb::PcbLayerView;
 use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
@@ -122,13 +122,15 @@ impl PcbSelectionState {
         self.selection.apply_click(hit, mode)
     }
 
-    /// A box from `from` to `to`. Whether the selection changed.
+    /// A box from `from` to `to`, drawn along the screen of a view turned
+    /// `view_rotation_deg` (#2316). Whether the selection changed.
     pub fn box_select(
         &mut self,
         board: &PcbBoard,
         from: Point,
         to: Point,
         mode: ClickMode,
+        view_rotation_deg: f64,
     ) -> bool {
         let (Ok(from), Ok(to)) = (
             PointNm::from_mm(from, "box.from"),
@@ -140,7 +142,7 @@ impl PcbSelectionState {
         let Some(index) = &self.index else {
             return false;
         };
-        let hits = marquee_select(index, from, to);
+        let hits = turned_marquee_select(index, from, to, view_rotation_deg);
         self.selection.apply_marquee(&hits, mode)
     }
 
@@ -438,6 +440,7 @@ mod tests {
             Point::new(0.0, 0.0),
             Point::new(2.0, 2.0),
             ClickMode::Add,
+            0.0,
         );
         assert_eq!(state.index_builds(), 1);
 
@@ -505,7 +508,8 @@ mod tests {
             &board,
             Point::new(-1.0, 2.0),
             Point::new(6.0, 4.0),
-            ClickMode::Replace
+            ClickMode::Replace,
+            0.0
         ));
         // The top track is still there.
         assert!(state.click(&board, Point::new(2.0, 0.0), 0.1, ClickMode::Replace));

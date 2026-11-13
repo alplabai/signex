@@ -228,6 +228,10 @@ next_layer	view	Make the next copper layer active	Next Layer	PCB	-	-	RequiresDoc
 prev_layer	view	Make the previous copper layer active	Previous Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 toggle_layer_visibility	view	Show or hide the active layer	Toggle Layer Visibility	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 show_all_layers	view	Show every layer	Show All Layers	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+view_rotate	view	Rotate the board view clockwise	Rotate View 90° Clockwise	PCB	-	-	RequiresDocument(Pcb)	-	degrees:turn/deg?
+view_rotate_ccw	view	Rotate the board view 90° counter-clockwise	Rotate View 90° Counter-Clockwise	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+view_rotate_180	view	Rotate the board view 180°	Rotate View 180°	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+view_rotate_reset	view	Reset the board view rotation to 0°	Reset View Rotation	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 toggle_layers_panel	view	Show or hide the Layers panel	Layers	PCB	-	-	Always	gui_only	-
 new_pcb_document	file	New PCB in the project	PCB	PCB	-	-	Always	mutates_doc	profile:text?
 board_sketch	design	Enter or leave the board sketch	Board Sketch	PCB	-	-	RequiresDocument(Pcb)	gui_only	-

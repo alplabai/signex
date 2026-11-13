@@ -30,6 +30,8 @@ pub(crate) struct CommandContext {
     pub has_schematic: bool,
     /// The main window's active tab is a PCB.
     pub has_pcb: bool,
+    /// The board view of the window is turned on screen (#2316).
+    pub pcb_view_turned: bool,
     /// The undocked tab window the command came from shows a schematic or
     /// a PCB. Fit All acts on that window's own canvas; the per-window
     /// document commands read [`Self::document_is_schematic`] and
@@ -231,6 +233,7 @@ impl Signex {
             // An undocked PCB window is enabled by the board it shows (#2223).
             has_pcb: self.has_active_pcb()
                 || window.is_some_and(|id| self.undocked_pcb_path(id).is_some()),
+            pcb_view_turned: self.pcb_view_turned_in(window),
             undocked_has_canvas: self.undocked_tab_has_canvas(window),
             document_is_schematic: own.is_schematic,
             document_is_editor: own.is_editor,
@@ -713,9 +716,10 @@ mod tests {
 
     #[test]
     fn ids_that_resolve_to_the_same_message_share_their_enablement() {
-        let facts: [fn(&mut CommandContext); 14] = [
+        let facts: [fn(&mut CommandContext); 15] = [
             |c| c.has_schematic = true,
             |c| c.has_pcb = true,
+            |c| c.pcb_view_turned = true,
             |c| c.undocked_has_canvas = true,
             |c| c.has_sheets = true,
             |c| c.has_symbol_editor = true,
