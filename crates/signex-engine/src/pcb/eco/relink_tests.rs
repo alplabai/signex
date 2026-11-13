@@ -287,3 +287,38 @@ fn a_stale_link_relinks_to_the_on_board_part_when_an_off_board_part_shares_its_u
     };
     assert_eq!(link.sheet, root().child(u(0xc)));
 }
+
+#[test]
+fn a_deleted_instance_of_a_reused_sheet_keeps_its_removals_ticked() {
+    // One child sheet placed as /A, /B and /C; the user deleted /C.
+    let fp_at = |id: u128, reference: &str, sheet: u128| {
+        let mut fp = board_fp(id, reference, "10k", &[0x101], &r0603(), (10.0, 10.0));
+        fp.schematic_link = Some(SymbolLink::new(root().child(u(sheet)), [u(0x101)]));
+        fp
+    };
+    let part_at = |designator: &str, sheet: u128| {
+        let mut p = part(designator, &[0x101], "10k", Ok(r0603()));
+        p.part.sheet = root().child(u(sheet));
+        p
+    };
+    let list = Design::new(
+        board(vec![
+            fp_at(0xa1, "R1", 0xa),
+            fp_at(0xb1, "R101", 0xb),
+            fp_at(0xc1, "R201", 0xc),
+        ]),
+        vec![part_at("R1", 0xa), part_at("R101", 0xb)],
+        netlist(&[]),
+    )
+    .diff();
+    let row = list.row(&EcoKey::RemoveFootprint(u(0xc1))).expect("listed");
+    assert!(row.default_on, "{}", report_text(&list));
+    assert!(
+        !list
+            .notes
+            .iter()
+            .any(|n| matches!(n, EcoNote::ExtraLink { .. })),
+        "{}",
+        report_text(&list)
+    );
+}
