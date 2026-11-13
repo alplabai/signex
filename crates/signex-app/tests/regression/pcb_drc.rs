@@ -352,9 +352,15 @@ fn rule_text_with_a_syntax_error_is_said_beside_the_results() {
         Some("rule tight on clearance require clearance 0.1mm then error"),
     );
     let lines = drc_lines_of_a_run(&mut app);
+    // Its own line, so the Messages length cap never cuts it off.
     assert!(
-        lines.iter().any(|l| l.starts_with("DRC: 1 clearance")
-            && l.ends_with("; rule text not applied (syntax error)")),
+        lines.contains(&"DRC rules: the rule text was not applied (syntax error)".to_string()),
+        "{lines:?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.starts_with("DRC: 1 clearance") && l.ends_with("mm)")),
         "{lines:?}"
     );
     let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
@@ -391,11 +397,9 @@ fn a_rule_that_does_not_compile_is_reported_and_skipped() {
     let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
     // `tight` loosens the 0.2 mm default to 0.1 mm: the 0.15 mm gap passes.
     assert!(done.report.violations.is_empty(), "{:?}", done.report);
-    // A clean board with a skipped rule is a warning, not a clean summary.
+    // A clean board with a skipped rule still says so, on its own line.
     assert!(
-        lines
-            .iter()
-            .any(|l| l.starts_with("DRC: 0 clearance") && l.ends_with("; 1 rule(s) not applied")),
+        lines.contains(&"DRC rules: 1 written rule(s) not applied".to_string()),
         "{lines:?}"
     );
     let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();

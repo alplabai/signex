@@ -196,13 +196,13 @@ pub(crate) fn drc_layers<'a>(
 }
 
 /// The rule layers, owned, for the background run.
-struct Layers {
-    profile: Option<DrcRuleSet>,
-    project: Option<DrcRuleSet>,
+pub(super) struct Layers {
+    pub(super) profile: Option<DrcRuleSet>,
+    pub(super) project: Option<DrcRuleSet>,
 }
 
 /// The run itself, off the UI thread: the rule text is compiled here too.
-fn run_check(
+pub(super) fn run_check(
     board: &signex_types::pcb::PcbBoard,
     classes: &[signex_types::net_class::NetClass],
     layers: &Layers,
@@ -213,7 +213,10 @@ fn run_check(
         .map_err(|e| format!("the board's clearance rules are not usable: {e}"))?
         .with_user_rules(board, classes, written.rules.iter().cloned());
     rules.severities = signex_drc::resolve_severities_with(profile, project, &written.rules);
+    // The text's own messages first, then what the rules lower.
+    let lowered = std::mem::take(&mut rules.notes);
     rules.notes = written.messages;
+    rules.notes.extend(lowered);
     rules.rules_not_applied = written.not_applied;
     rules.texts_not_applied = written.unparsed;
     let report = signex_drc::run(board, &rules);
@@ -226,8 +229,7 @@ fn run_check(
 }
 
 /// The summary line. Its wording changes only when the run has written
-/// rules or rule text it did not apply, so a run without rule text logs
-/// what it always did.
+/// rules, so a run without rule text logs what it always did.
 fn summary_line(report: &signex_drc::DrcReport) -> String {
     let count = |k| report.count(k);
     let rules = &report.rules;
@@ -237,16 +239,11 @@ fn summary_line(report: &signex_drc::DrcReport) -> String {
     } else {
         format!("minimum clearance {board_mm} mm")
     };
-    let mut tail = String::new();
-    if !report.skipped.is_empty() {
-        tail += &format!("; {} item(s) could not be checked", report.skipped.len());
-    }
-    if rules.rules_not_applied > 0 {
-        tail += &format!("; {} rule(s) not applied", rules.rules_not_applied);
-    }
-    if rules.texts_not_applied > 0 {
-        tail += "; rule text not applied (syntax error)";
-    }
+    let tail = if report.skipped.is_empty() {
+        String::new()
+    } else {
+        format!("; {} item(s) could not be checked", report.skipped.len())
+    };
     format!(
         "DRC: {} clearance, {} short, {} unconnected, {} keepout ({clearance}){tail}",
         count(ViolationKind::Clearance),
@@ -256,10 +253,21 @@ fn summary_line(report: &signex_drc::DrcReport) -> String {
     )
 }
 
-/// What the run made of the rule text, before the summary.
+/// What the run made of the rule text, before the summary. What was not
+/// applied gets its own short lines, so the Messages length cap never cuts
+/// it off a long summary.
 fn log_rule_text(report: &signex_drc::DrcReport) {
     for note in &report.rules.notes {
         crate::diagnostics::log_warning(note.clone());
+    }
+    if report.rules.texts_not_applied > 0 {
+        crate::diagnostics::log_warning("DRC rules: the rule text was not applied (syntax error)");
+    }
+    if report.rules.rules_not_applied > 0 {
+        crate::diagnostics::log_warning(format!(
+            "DRC rules: {} written rule(s) not applied",
+            report.rules.rules_not_applied
+        ));
     }
     let written = report.rules.user_rules().count();
     if written > 0 {

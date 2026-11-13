@@ -310,6 +310,35 @@ mod tests {
         assert!(messages_on_click(busy_section, window, "Run DRC").is_empty());
     }
 
+    /// #2307: with written rules the default-clearance note says the board
+    /// value holds only where no written rule does; without, it is as before.
+    #[test]
+    fn the_default_clearance_note_follows_whether_written_rules_ran() {
+        let texts = |written_rules: bool| {
+            let mut ctx = context(false);
+            ctx.pcb_drc = Some(DrcPanel {
+                ran: true,
+                default_clearance_mm: Some("0.2".into()),
+                written_rules,
+                ..DrcPanel::default()
+            });
+            let section = section(&ctx).expect("section");
+            crate::layout_probe::lay_out_texts(section, iced::Size::new(1400.0, 300.0))
+                .into_iter()
+                .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+                .collect::<Vec<_>>()
+        };
+        let plain =
+            "No clearance rule set on this board; checked with 0.2 mm. Set it in Board Setup.";
+        let written = "No clearance rule set on this board; 0.2 mm applies where no written rule does. Set it in Board Setup.";
+        let without = texts(false);
+        assert!(without.iter().any(|t| t == plain), "{without:?}");
+        assert!(!without.iter().any(|t| t == written), "{without:?}");
+        let with = texts(true);
+        assert!(with.iter().any(|t| t == written), "{with:?}");
+        assert!(!with.iter().any(|t| t == plain), "{with:?}");
+    }
+
     /// An inner layer's DRC row uses the Layers panel's name (Mid-Layer n).
     #[test]
     fn an_inner_layer_row_uses_the_layers_panel_name() {
