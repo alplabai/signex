@@ -62,6 +62,7 @@ fn rules_for(b: &PcbBoard, user: Vec<UserRule>) -> DrcRules {
     let mut rules = DrcRules::for_board(b, &classes()).unwrap();
     rules.clearance = RULE;
     rules.from_default = false;
+    rules.severities = resolve_severities_with(None, None, &user);
     rules.with_user_rules(b, &classes(), user)
 }
 
@@ -92,16 +93,108 @@ fn a_pair_needs_the_stricter_side_so_a_net_rule_below_the_setup_does_not_loosen_
 }
 
 #[test]
-fn on_equal_values_the_written_rule_is_named_whichever_side_it_is() {
-    let mut hv = clearance("hv", NetScope::Class("HV".into()), 200_000);
-    hv.severity = Severity::Warning;
-    // GND's side falls back to the 0.2 mm setup; HV_A's side is `hv`.
+fn on_equal_values_the_more_severe_side_wins_then_the_written_rule_is_named() {
+    // GND's side falls back to the 0.2 mm setup (an error); HV_A's side is
+    // `hv`, as severe: the written rule is named, whichever side it is.
+    let hv = clearance("hv", NetScope::Class("HV".into()), 200_000);
     let want = Some((200_000, Some("user::hv".to_string())));
     assert_eq!(verdict(vec![hv.clone()]), want);
     let mut swapped = pair(0.4);
     swapped.segments[0].net = 2;
     swapped.segments[1].net = 1;
-    assert_eq!(verdict_of(&swapped, vec![hv]), want);
+    assert_eq!(verdict_of(&swapped, vec![hv.clone()]), want);
+    // A milder written rule never downgrades the other side's error.
+    let mut mild = hv;
+    mild.severity = Severity::Warning;
+    assert_eq!(verdict(vec![mild.clone()]), Some((200_000, None)));
+    assert_eq!(verdict_of(&swapped, vec![mild]), Some((200_000, None)));
+}
+
+#[test]
+fn a_milder_rule_on_one_side_does_not_downgrade_the_other_sides_error() {
+    let mut gnd = clearance("gnd", NetScope::Net("GND".into()), 500_000);
+    gnd.severity = Severity::Info;
+    let b = pair(0.4);
+    let report = run(&b, &rules_for(&b, vec![gnd]));
+    let v = &report.violations[0];
+    assert_eq!(v.required_nm, 500_000);
+    assert_eq!(report.severity_of(v), Some(Severity::Error));
+}
+
+#[test]
+fn a_rule_whose_scope_matches_no_net_is_said() {
+    let b = pair(0.4);
+    let typo = clearance("hv", NetScope::Class("Hv".into()), 600_000);
+    let rules = rules_for(&b, vec![typo]);
+    assert_eq!(
+        rules.notes,
+        ["DRC rule 'hv': there is no net class 'Hv'; the rule checks nothing"]
+    );
+    let absent = vec![
+        clearance("vbus", NetScope::Net("VBUS".into()), 600_000),
+        clearance("usb", NetScope::Pattern("USB_*".into()), 600_000),
+        clearance("all", NetScope::Board, 600_000),
+    ];
+    let rules = rules_for(&b, absent);
+    assert!(rules.notes.is_empty(), "{:?}", rules.notes);
+    assert_eq!(
+        rules.remarks,
+        [
+            "DRC rule 'vbus': no net of this board is 'VBUS'; the rule checks nothing",
+            "DRC rule 'usb': no net of this board matches 'USB_*'; the rule checks nothing",
+        ]
+    );
+    assert!(rules_for(&b, vec![]).remarks.is_empty());
+}
+
+#[test]
+fn an_inner_layer_rule_on_a_two_layer_board_lowers_nothing() {
+    // The test board lists no stackup: it is read as two layers.
+    let mut inner = clearance("inner", NetScope::Board, 150_000);
+    inner.layers = Some(0x7FFF_FFFE);
+    assert!(rules_for(&pair(0.4), vec![inner.clone()]).notes.is_empty());
+    let mut four = pair(0.4);
+    four.layers = ["TopCopper", "Inner1Copper", "Inner2Copper", "BottomCopper"]
+        .into_iter()
+        .enumerate()
+        .map(|(i, name)| signex_types::pcb::LayerDef {
+            id: i as u8,
+            name: name.into(),
+            layer_type: "signal".into(),
+            display_name: String::new(),
+        })
+        .collect();
+    assert_eq!(
+        rules_for(&four, vec![inner]).notes,
+        ["DRC rule 'inner' lowers net class 'HV' clearance 0.5 \u{2192} 0.15 mm"]
+    );
+}
+
+#[test]
+fn a_lowering_to_zero_is_written_as_zero() {
+    let none = clearance("none", NetScope::Board, 0);
+    assert_eq!(
+        rules_for(&pair(0.4), vec![none]).notes,
+        ["DRC rule 'none' lowers net class 'HV' clearance 0.5 \u{2192} 0 mm"]
+    );
+}
+
+#[test]
+fn a_lowering_note_compares_with_what_the_net_would_otherwise_need() {
+    // HV's class asks 0.5 mm; with a 0.6 mm setup the net needs 0.6 mm, so
+    // a 0.55 mm rule lowers it, from 0.6.
+    let b = pair(0.4);
+    let mut rules = DrcRules::for_board(&b, &classes()).unwrap();
+    rules.clearance = 600_000;
+    let rules = rules.with_user_rules(
+        &b,
+        &classes(),
+        vec![clearance("r", NetScope::Board, 550_000)],
+    );
+    assert_eq!(
+        rules.notes,
+        ["DRC rule 'r' lowers net class 'HV' clearance 0.6 \u{2192} 0.55 mm"]
+    );
 }
 
 #[test]

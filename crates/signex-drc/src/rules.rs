@@ -2,12 +2,13 @@
 //! a net class can raise for its nets (the implicit rules), and the rules
 //! written in the rule language, which rank above them.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use signex_types::net_class::{NetClass, first_matching_class};
 use signex_types::pcb::PcbBoard;
+use signex_types::violation::Severity;
 
-use pcb_geom::{CopperItem, GeomError, MAX_ABS_NM, mm_to_nm, nm_to_mm};
+use pcb_geom::{CopperItem, GeomError, MAX_ABS_NM, mm_to_nm};
 
 use crate::DrcSeverities;
 use crate::user_rules::{self, CopperObject, LimitKind, ScopedRule, UserRule};
@@ -29,10 +30,14 @@ pub struct DrcRules {
     /// Severity per rule (#2307); the built-in defaults unless the caller
     /// resolved the profile and project layers. Never filters a violation.
     pub severities: DrcSeverities,
-    /// What the rule-language text said that this run does not apply: a
-    /// rule that did not compile, or one that names something not checked
-    /// yet. Written to Messages with the report.
+    /// What the rule-language text said that this run does not apply (a
+    /// rule that did not compile, names something not checked yet, or a
+    /// net class that does not exist) and the net classes a written rule
+    /// lowers. Written to Messages as warnings with the report.
     pub notes: Vec<String>,
+    /// Written to Messages as info: a rule for a net or pattern no net of
+    /// this board has (a shared profile may name nets a board lacks).
+    pub remarks: Vec<String>,
     /// Written rules not applied (invalid, repeated or not checked yet), and
     /// rule texts with a syntax error (none of their rules applied): shown
     /// beside the results, so a typo never passes as a clean board.
@@ -50,6 +55,7 @@ impl DrcRules {
             from_default: false,
             severities: DrcSeverities::builtin(),
             notes: Vec::new(),
+            remarks: Vec::new(),
             rules_not_applied: 0,
             texts_not_applied: 0,
             user: Vec::new(),
@@ -58,68 +64,33 @@ impl DrcRules {
 
     /// Add rule-language rules, resolving their net scopes against
     /// `board`'s nets and `classes` (the first matching class, as for the
-    /// implicit rules). A written clearance that wins for a net below its
-    /// class's value is said in [`Self::notes`], never applied silently.
+    /// implicit rules). A rule whose scope matches no net, and a written
+    /// clearance that wins for a net below what the net would otherwise
+    /// need, are said ([`Self::notes`], [`Self::remarks`]), never silent.
     pub fn with_user_rules(
         mut self,
         board: &PcbBoard,
         classes: &[NetClass],
         rules: impl IntoIterator<Item = UserRule>,
     ) -> Self {
+        let first = self.user.len();
         self.user.extend(
             rules
                 .into_iter()
                 .map(|rule| ScopedRule::resolve(rule, board, classes)),
         );
-        let lowered = self.lowered_classes(board, classes);
+        let (warnings, infos) = crate::rule_notes::empty_scopes(&self.user[first..], classes);
+        self.notes.extend(warnings);
+        self.remarks.extend(infos);
+        let lowered = crate::rule_notes::lowered_classes(&self, board, classes);
         self.notes.extend(lowered);
         self
     }
 
-    /// One note per written rule and net class where the rule, winning for
-    /// a net of the class on some layer or object pair, asks less than the
-    /// class's clearance.
-    fn lowered_classes(&self, board: &PcbBoard, classes: &[NetClass]) -> Vec<String> {
-        let mut pairs: Vec<[Option<CopperObject>; 2]> = vec![[None, None]];
-        pairs.extend(
-            self.user
-                .iter()
-                .filter_map(|s| s.rule.pair.map(|[a, b]| [Some(a), Some(b)])),
-        );
-        let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
-        let mut lines = Vec::new();
-        for net in &board.nets {
-            let Some(&class_nm) = self.net_clearance.get(&net.number) else {
-                continue;
-            };
-            let Some(class) = first_matching_class(classes, &net.name) else {
-                continue;
-            };
-            for bit in 0..32 {
-                for &objects in &pairs {
-                    let picked = user_rules::pick(
-                        &self.user,
-                        LimitKind::MinClearance,
-                        net.number,
-                        1 << bit,
-                        objects,
-                    );
-                    let Some((nm, scoped)) = picked.filter(|(nm, _)| *nm < class_nm) else {
-                        continue;
-                    };
-                    let name = &scoped.rule.name;
-                    if seen.insert((name.clone(), class.name.clone())) {
-                        lines.push(format!(
-                            "DRC rule '{name}' lowers net class '{}' clearance {} \u{2192} {} mm",
-                            class.name,
-                            nm_to_mm(class_nm),
-                            nm_to_mm(nm)
-                        ));
-                    }
-                }
-            }
-        }
-        lines
+    /// Whether a written rule sets a clearance (the default-clearance note
+    /// and the summary then say the board value holds only where none does).
+    pub fn sets_written_clearance(&self) -> bool {
+        self.sets(LimitKind::MinClearance)
     }
 
     /// The rule-language rules this run applies, in written order.
@@ -157,15 +128,32 @@ impl DrcRules {
                         .map_or((self.required(net, net), None), |(nm, rule)| {
                             (nm, Some(rule))
                         });
-                // On equal values a written rule is named (and its severity
-                // used) rather than the implicit one.
-                let named = side.0 == most.0 && most.1.is_none() && side.1.is_some();
-                if side.0 > most.0 || named {
+                if side.0 > most.0 || (side.0 == most.0 && self.wins_tie(side.1, most.1)) {
                     most = side;
                 }
             }
         }
         (most.0, most.1.map(|s| s.rule.id()))
+    }
+
+    /// Between two sides asking the same clearance: the more severe one
+    /// wins, so a milder rule never downgrades the other side's finding;
+    /// at equal severity a written rule is named over the implicit value.
+    fn wins_tie(&self, side: Option<&ScopedRule>, held: Option<&ScopedRule>) -> bool {
+        let rank = |s: Option<&ScopedRule>| {
+            let severity = match s {
+                Some(scoped) => self.severities.of_written(&scoped.rule),
+                None => self.severities.of(crate::ViolationKind::Clearance),
+            };
+            match severity {
+                Some(Severity::Error) => 3,
+                Some(Severity::Warning) => 2,
+                Some(Severity::Info) => 1,
+                None => 0,
+            }
+        };
+        let (side_rank, held_rank) = (rank(side), rank(held));
+        side_rank > held_rank || (side_rank == held_rank && held.is_none() && side.is_some())
     }
 
     /// The board's rules: `setup.clearance` (or [`DEFAULT_CLEARANCE_MM`]

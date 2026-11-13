@@ -154,6 +154,11 @@ impl ScopedRule {
         ScopedRule { rule, nets }
     }
 
+    /// A net, class or pattern scope that covers no net of the board.
+    pub(crate) fn covers_no_net(&self) -> bool {
+        self.nets.as_ref().is_some_and(BTreeSet::is_empty)
+    }
+
     fn covers_net(&self, net: u32) -> bool {
         self.nets.as_ref().is_none_or(|set| set.contains(&net))
     }

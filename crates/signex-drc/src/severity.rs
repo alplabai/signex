@@ -91,6 +91,15 @@ impl DrcSeverities {
         self.by_kind.get(&kind).copied()
     }
 
+    /// The severity of written `rule`: resolved when these severities were
+    /// resolved with it, else its own `then` severity.
+    pub(crate) fn of_written(&self, rule: &UserRule) -> Option<Severity> {
+        match self.by_rule.get(&rule.id()) {
+            Some(resolved) => *resolved,
+            None => Some(rule.severity),
+        }
+    }
+
     /// The severity of the rule `id`: a written rule's (`user::<name>`) or
     /// a built-in one's; `None` when switched off or unknown.
     pub fn of_rule(&self, id: &str) -> Option<Severity> {

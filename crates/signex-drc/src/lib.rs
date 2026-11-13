@@ -7,6 +7,7 @@
 mod check;
 mod keepout;
 mod limits;
+mod rule_notes;
 mod rules;
 mod severity;
 mod user_rules;
