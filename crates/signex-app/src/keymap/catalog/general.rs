@@ -1,6 +1,5 @@
 //! General-surface command metadata — shared editing / file / view /
-//! transform commands, plus anything without an obvious home. Split
-//! from `keymap/catalog.rs`; entries verbatim.
+//! transform commands, plus anything without an obvious home.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
 use signex_i18n::command_ids;
