@@ -686,9 +686,15 @@ The answer is a check report (above), `"check": "drc"`:
   Run DRC's panel shows them), `keepout` (the keepout's uuid) and
   `rule_source` (`written`, `net_class`, `board_setup` or `default`; for a
   clearance or a written limit).
-- `key`: a hash of the board path, the rule id, the items and the keepout,
-  so moving an item keeps it. A finding that names no item (an unconnected
-  link with no pad at either end) is keyed by its message, as ERC keys one.
+- `key`: a hash of the board path, the rule id (and, for a written rule,
+  the kind of limit broken), the items and the keepout, so moving an item
+  keeps it. The board path is the document entry's own: the tab's path when
+  the board is open, the project folder joined with `pcb_file` when it is
+  closed; another spelling of `document=` resolves to the same entry. A
+  finding that names no item (an unconnected link with no pad at either end)
+  is keyed by its message, as ERC keys one. An unconnected link with one pad
+  that joins two islands can give two findings on the same items; those are
+  told apart by report order (`#2`).
 - `warnings`: a board in no open project (checked with its own setup rules
   and this machine's DRC rules, no net classes), then what Run DRC says about
   its rules in Messages, in its words: unrecognised severity entries, the
@@ -709,12 +715,13 @@ Known limits:
   only a written rule sets them (`docs/architecture/pcb-drc.md`).
 - The DRC panel does not show severities yet; the report does.
 - Over the agent channel a board open in the app is refused: its document
-  entry names no project, so the agent gate
-  answers `<board> is not part of a project open in this app` (#2331). A
-  closed board is checked.
-- The key and the baseline scope use the board path as given, not
-  normalised: the same board named by another path form gets other keys, and
-  a baseline made under the other form is refused (as for `check_erc`).
+  entry names no project, so the agent gate answers `<board> is not part of
+  a project open in this app` (#2331). A closed board is checked.
+- The key uses the document entry's path, which is the tab's path while the
+  board is open and the project folder joined with `pcb_file` while it is
+  closed. A `pcb_file` spelled differently from the tab path (case,
+  `sub/../`) can change the keys between an open and a closed check, and a
+  baseline made in the other state is then refused.
 
 ## Working through a running Signex
 

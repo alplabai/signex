@@ -340,6 +340,25 @@ fn a_baseline_lists_the_new_and_the_gone_findings_of_the_board() {
     assert!(first_keys.contains(&gone[0]));
 }
 
+/// Another spelling of the board's path resolves to the same document
+/// entry, so its findings keep their keys and an earlier run is its baseline.
+#[test]
+fn another_path_form_of_the_board_keeps_its_keys_and_baseline() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    let first = report(&mut app, &path, &[]);
+    let spelled = dir.path().join(".").join(BOARD);
+    let second = report(&mut app, &spelled, &["baseline=1"]);
+    assert!(!findings(&first).is_empty(), "{first}");
+    assert_eq!(findings(&second), findings(&first));
+    assert_eq!(second["baseline"]["new"], serde_json::json!([]), "{second}");
+    assert_eq!(
+        second["baseline"]["gone"],
+        serde_json::json!([]),
+        "{second}"
+    );
+}
+
 #[test]
 fn a_baseline_of_another_board_or_an_erc_run_is_refused() {
     let dir = tempfile::tempdir().unwrap();

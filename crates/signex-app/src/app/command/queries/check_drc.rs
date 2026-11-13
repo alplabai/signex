@@ -4,10 +4,11 @@
 //! DRC on demand. It checks the one board named with Run DRC's rules engine
 //! and layers, in the board's own project (Run DRC takes the active one,
 //! #2332), off the UI thread, and answers with a `signex_types::check`
-//! report once the run lands (`check_run`); the baseline is scoped to the
-//! board file. Nothing
-//! reaches the DRC panel, the DRC state or Messages; `run_drc` is
-//! unchanged. See `docs/CLI.md`, "Checks on demand".
+//! report once the run lands (`check_run`). The baseline is scoped to the
+//! board's document entry path (the tab's path when open, the project folder
+//! joined with `pcb_file` when closed). Nothing reaches the DRC panel, the
+//! DRC state or Messages; `run_drc` is unchanged. See `docs/CLI.md`, "Checks
+//! on demand".
 
 use std::path::Path;
 
@@ -70,6 +71,7 @@ impl Signex {
         if let Some(named) = named {
             return projects.iter().find(|project| project.path == named);
         }
+        // Two open projects listing the same `pcb_file`: the first loaded wins.
         projects.iter().find(|project| {
             let key = |path: &Path| path_key_with(path, project.case_fold);
             referenced_files(project)

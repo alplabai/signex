@@ -1,11 +1,11 @@
 //! The read-only query commands (#2172): `list_documents`, `document_info`,
 //! `resolve`, `find_items`, `read_document`, `query_pins`, and the checks
 //! `check_erc` and `check_drc` (#2199, answered once their run lands). Each
-//! answers with data through
-//! [`CommandOutcome::Answered`], never a bare `Ran`, and reads only the
-//! documents (engines, boards, editors, projects, the library): no active
-//! tab, window, selection or panel is looked at, and none is changed. What it
-//! cannot answer yet it refuses with the reason; it never guesses.
+//! answers with data through [`CommandOutcome::Answered`], never a bare
+//! `Ran`, and reads only the documents (engines, boards, editors, projects,
+//! the library): no active tab, window, selection or panel is looked at, and
+//! none is changed. What it cannot answer yet it refuses with the reason; it
+//! never guesses.
 //!
 //! Which ids the commands print, and where each kind stores one, is in
 //! `docs/DOCUMENT_IDS.md`; the answer shapes are in `docs/COMMANDS.md`.
