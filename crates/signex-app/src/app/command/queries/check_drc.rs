@@ -1,9 +1,11 @@
 //! `check_drc document=<board> [baseline=<run>]` (#2199, decisions
 //! https://github.com/alplabai/signex/issues/2199#issuecomment-6817821301 and
 //! https://github.com/alplabai/signex/issues/2199#issuecomment-6818011610):
-//! DRC on demand. It checks the one board named, as Run DRC does, off the UI
-//! thread, and answers with a `signex_types::check` report once the run
-//! lands (`check_run`); the baseline is scoped to the board file. Nothing
+//! DRC on demand. It checks the one board named with Run DRC's rules engine
+//! and layers, in the board's own project (Run DRC takes the active one,
+//! #2332), off the UI thread, and answers with a `signex_types::check`
+//! report once the run lands (`check_run`); the baseline is scoped to the
+//! board file. Nothing
 //! reaches the DRC panel, the DRC state or Messages; `run_drc` is
 //! unchanged. See `docs/CLI.md`, "Checks on demand".
 

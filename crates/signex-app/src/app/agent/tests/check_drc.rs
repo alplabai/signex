@@ -23,6 +23,32 @@ fn app_with_board(dir: &std::path::Path) -> crate::app::Signex {
     app
 }
 
+/// Today's limit, pinned so #2331 flips it: the held entry of a board open
+/// in the app names no project (ownership follows listed sheets), so the
+/// agent gate refuses a `check_drc` on it at once and no run starts.
+#[test]
+fn a_check_drc_on_a_board_open_in_the_app_is_refused_until_2331() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_board(dir.path());
+    let path = dir.path().join("board.snxpcb");
+    let board = signex_types::project::SetupProfile::Standard
+        .pcb(2)
+        .new_board();
+    app.open_pcb_tab(path.clone(), "board.snxpcb".into(), board);
+    let text = line(
+        &app,
+        "check_drc",
+        json!({"document": path.display().to_string()}),
+    );
+    let reply = super::ask(&mut app, text);
+    assert_eq!(reply["status"], "refused", "{reply}");
+    assert_eq!(
+        reply["reason"], "board.snxpcb is not part of a project open in this app",
+        "{reply}"
+    );
+    assert_eq!(app.document_state.agent_edits.tickets, 0, "no run started");
+}
+
 /// Ask `check_drc` on the board as process `pid`, let `meanwhile` change
 /// the app while the run is under way, land it and read the one reply.
 fn check_with_change_meanwhile(

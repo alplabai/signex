@@ -1,6 +1,8 @@
 //! #2199 (decisions 6817821301, 6818011610): `check_drc` runs DRC on one
 //! board off the UI thread and answers with a check report; it leaves the
-//! DRC panel, the DRC state and Messages alone, and finds what Run DRC finds.
+//! DRC panel, the DRC state and Messages alone. With one project open it
+//! finds what Run DRC finds; it takes the board's own project, where Run DRC
+//! takes the active one (#2332).
 
 use std::path::{Path, PathBuf};
 

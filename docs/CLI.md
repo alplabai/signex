@@ -634,15 +634,21 @@ check_drc document=<board> [baseline=<run>]
 `check_drc` (#2199, decisions
 https://github.com/alplabai/signex/issues/2199#issuecomment-6817821301 and
 https://github.com/alplabai/signex/issues/2199#issuecomment-6818011610) runs
-DRC on the one `.snxpcb` named, the way Run DRC does: the same checks, the
-net classes of the board's project, and the same DRC rule layers (the
-project's `rules.drc` when the project stores a rule set, else this machine's
-User Default layer, the rule text compiled for the run). An open board is
-checked as it is in memory; a closed one is read off the UI thread, within the
-same headless read limits as `check_erc`, and the answer comes when the run
-lands. A board that cannot be read is refused with the reason. It writes
-nothing to the DRC panel, the DRC results or Messages; Run DRC is unchanged.
-It is a query on the agent channel, like `check_erc`.
+DRC on the one `.snxpcb` named, with Run DRC's checks and its choice of rule
+layers (the project's `rules.drc` when the project stores a rule set, else
+this machine's User Default layer, the rule text compiled for the run). The
+project is the board's own: the one that lists it as its `pcb_file`. A board
+in no open project is checked with its own setup rules and this machine's
+layer, and `warnings` says so. Run DRC takes the active project instead, so
+the two can differ for a loose board while a project is active, or for a
+board of a project that is not the active one (#2332). A closed board is read
+off the UI thread, within the same headless read limits as `check_erc`, and
+the answer comes when the run lands; a board open in the app is checked as it
+is in memory (in the app's own process and in a headless run). A board that
+cannot be read is refused with the reason. It writes nothing to the DRC
+panel, the DRC results or Messages; Run DRC is unchanged. It is a query on the
+agent channel, like `check_erc`, but see the known limits for a board open in
+the app.
 
 ```bash
 signex-cli run demo.snxprj check_drc --arg document=demo.snxpcb
@@ -681,7 +687,8 @@ The answer is a check report (above), `"check": "drc"`:
   `rule_source` (`written`, `net_class`, `board_setup` or `default`; for a
   clearance or a written limit).
 - `key`: a hash of the board path, the rule id, the items and the keepout,
-  so moving an item keeps it.
+  so moving an item keeps it. A finding that names no item (an unconnected
+  link with no pad at either end) is keyed by its message, as ERC keys one.
 - `warnings`: a board in no open project (checked with its own setup rules
   and this machine's DRC rules, no net classes), then what Run DRC says about
   its rules in Messages, in its words: unrecognised severity entries, the
@@ -701,6 +708,13 @@ Known limits:
 - The minimum track width and via sizes of Board Setup are not enforced;
   only a written rule sets them (`docs/architecture/pcb-drc.md`).
 - The DRC panel does not show severities yet; the report does.
+- Over the agent channel a board open in the app is refused: its document
+  entry names no project, so the agent gate
+  answers `<board> is not part of a project open in this app` (#2331). A
+  closed board is checked.
+- The key and the baseline scope use the board path as given, not
+  normalised: the same board named by another path form gets other keys, and
+  a baseline made under the other form is refused (as for `check_erc`).
 
 ## Working through a running Signex
 

@@ -1,17 +1,22 @@
 //! The DRC run behind `check_drc` (#2199, decisions
 //! https://github.com/alplabai/signex/issues/2199#issuecomment-6817821301 and
 //! https://github.com/alplabai/signex/issues/2199#issuecomment-6818011610):
-//! the run Run DRC makes (`pcb_drc::run_check`, the same net classes and rule
-//! layers), over one board: an open one from memory, a closed one read off
-//! the UI thread. It changes no DRC state and says nothing in Messages; what
-//! it found comes back as a `signex_types::check` report. See `docs/CLI.md`,
-//! "Checks on demand".
+//! Run DRC's checks and rule-layer choice (`pcb_drc::run_check`,
+//! `drc_layers`) over one board, with the net classes and rules of the
+//! board's own project (else this machine's layer and a loose-board
+//! warning; Run DRC uses the active project, #2332). An open board is read
+//! from memory, in the GUI process and in headless runs; over the agent
+//! channel a board open in the app is refused until #2331. A closed board is
+//! read off the UI thread. It changes no DRC state and says nothing in
+//! Messages; what it found comes back as a `signex_types::check` report. See
+//! `docs/CLI.md`, "Checks on demand".
 
 use std::path::Path;
 
 use serde_json::{Map, Value, json};
 use signex_types::check::CheckReport;
 use signex_types::pcb::PcbBoard;
+use signex_types::project::ProjectRules;
 
 use super::pcb_drc::{Layers, drc_layers, run_check};
 use crate::app::Signex;
@@ -45,7 +50,7 @@ impl Signex {
         };
         let confined = self.headless_answers().is_some() || self.agent.serving;
         let confine = project.filter(|_| confined).map(|p| p.dir().to_path_buf());
-        let rule_set = self.drc_rule_set(project);
+        let rule_set = self.drc_rule_set(project, stored);
         let warnings: Vec<String> = project
             .is_none()
             .then(|| LOOSE_BOARD_WARNING.to_string())
@@ -67,9 +72,12 @@ impl Signex {
 
     /// Where the rule layers came from: the project's stored rules or this
     /// machine's, its profile (as the ERC report names it) and the hash of
-    /// the `drc` section used.
-    fn drc_rule_set(&self, project: Option<&LoadedProject>) -> Map<String, Value> {
-        let stored = project.and_then(|p| p.data.rules.as_ref());
+    /// the `drc` section used. `stored` is `project`'s stored rule set.
+    fn drc_rule_set(
+        &self,
+        project: Option<&LoadedProject>,
+        stored: Option<&ProjectRules>,
+    ) -> Map<String, Value> {
         let (source, section) = match stored {
             Some(rules) => ("project", &rules.drc),
             None => ("machine", &self.ui_state.machine_drc_rules),
