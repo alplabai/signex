@@ -100,6 +100,13 @@ impl DrcSeverities {
         }
     }
 
+    /// Give written `rule` its own `then` severity unless these severities
+    /// already hold one for it, so [`Self::of_rule`] and
+    /// [`Self::of_written`] agree for a caller that never resolved them.
+    pub(crate) fn seed_written(&mut self, rule: &UserRule) {
+        self.by_rule.entry(rule.id()).or_insert(Some(rule.severity));
+    }
+
     /// The severity of the rule `id`: a written rule's (`user::<name>`) or
     /// a built-in one's; `None` when switched off or unknown.
     pub fn of_rule(&self, id: &str) -> Option<Severity> {

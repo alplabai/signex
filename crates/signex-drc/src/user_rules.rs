@@ -80,7 +80,7 @@ impl Limit {
 
 impl LimitKind {
     /// For a maximum the smaller value is the stricter one.
-    fn stricter(self, a: i64, b: i64) -> bool {
+    pub(crate) fn stricter(self, a: i64, b: i64) -> bool {
         match self {
             LimitKind::MaxTrackWidth => a < b,
             _ => a > b,

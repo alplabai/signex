@@ -65,7 +65,7 @@ pub(crate) fn lowered_classes(
     );
     pairs.sort_unstable();
     pairs.dedup();
-    let bits = layer_kinds(&rules.user, board_copper(board));
+    let bits = layer_kinds(&rules.user, rules.copper);
     let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
     let mut lines = Vec::new();
     for net in &board.nets {
@@ -90,9 +90,15 @@ pub(crate) fn lowered_classes(
                 };
                 let name = &scoped.rule.name;
                 if seen.insert((name.clone(), class.name.clone())) {
+                    // Name what the rule lowers: the class value, or the
+                    // board setup's when that is the larger.
+                    let what = if without > rules.net_clearance[&net.number] {
+                        format!("the board setup clearance for net class '{}'", class.name)
+                    } else {
+                        format!("net class '{}' clearance", class.name)
+                    };
                     lines.push(format!(
-                        "DRC rule '{name}' lowers net class '{}' clearance {} \u{2192} {} mm",
-                        class.name,
+                        "DRC rule '{name}' lowers {what} {} \u{2192} {} mm",
                         mm(without),
                         mm(nm)
                     ));
@@ -114,7 +120,7 @@ fn mm(nm: i64) -> String {
 
 /// The board's copper layers as a bit mask; a board that lists none is
 /// read as two layers, top and bottom.
-fn board_copper(board: &PcbBoard) -> u32 {
+pub(crate) fn board_copper(board: &PcbBoard) -> u32 {
     match layer_mask(board.layers.iter().map(|l| l.name.as_str())) {
         0 => 1 | 1 << 31,
         mask => mask,

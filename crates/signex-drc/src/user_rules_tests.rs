@@ -191,10 +191,113 @@ fn a_lowering_note_compares_with_what_the_net_would_otherwise_need() {
         &classes(),
         vec![clearance("r", NetScope::Board, 550_000)],
     );
+    // The 0.6 mm is the setup's, not the class's: the note says so.
     assert_eq!(
         rules.notes,
-        ["DRC rule 'r' lowers net class 'HV' clearance 0.6 \u{2192} 0.55 mm"]
+        ["DRC rule 'r' lowers the board setup clearance for net class 'HV' 0.6 \u{2192} 0.55 mm"]
     );
+}
+
+fn four_layers(mut b: PcbBoard) -> PcbBoard {
+    b.layers = ["TopCopper", "Inner1Copper", "Inner2Copper", "BottomCopper"]
+        .into_iter()
+        .enumerate()
+        .map(|(i, name)| signex_types::pcb::LayerDef {
+            id: i as u8,
+            name: name.into(),
+            layer_type: "signal".into(),
+            display_name: String::new(),
+        })
+        .collect();
+    b
+}
+
+const INNER: u32 = !(1 | 1 << 31);
+
+fn via_findings(b: &PcbBoard, user: Vec<UserRule>) -> Vec<(ViolationKind, i64, Option<String>)> {
+    run(b, &rules_for(b, user))
+        .violations
+        .iter()
+        .map(|v| (v.kind, v.required_nm, v.rule.clone()))
+        .collect()
+}
+
+#[test]
+fn an_inner_layer_via_rule_does_not_lift_a_board_wide_minimum_off_the_outer_layers() {
+    let mut inner = rule(
+        "inner",
+        NetScope::Board,
+        vec![Limit::MinViaDiameter(200_000)],
+    );
+    inner.layers = Some(INNER);
+    let all = rule(
+        "vias",
+        NetScope::Board,
+        vec![Limit::MinViaDiameter(650_000)],
+    );
+    // A through via, 0.6 mm across, on a two-layer board and a four-layer one.
+    let two = named(board(vec![], vec![], vec![via(1, (0.0, 0.0), 1)]));
+    let want = [(
+        ViolationKind::ViaDiameter,
+        650_000,
+        Some("user::vias".to_string()),
+    )];
+    assert_eq!(via_findings(&two, vec![all.clone(), inner.clone()]), want);
+    let four = four_layers(two.clone());
+    assert_eq!(via_findings(&four, vec![all.clone(), inner]), want);
+    // On four layers a stricter inner rule holds on the inner layers.
+    let mut strict = rule(
+        "inner",
+        NetScope::Board,
+        vec![Limit::MinViaDiameter(700_000)],
+    );
+    strict.layers = Some(INNER);
+    assert_eq!(
+        via_findings(&four, vec![all.clone(), strict.clone()]),
+        [(
+            ViolationKind::ViaDiameter,
+            700_000,
+            Some("user::inner".to_string())
+        )]
+    );
+    // On two layers the inner rule has no layer to hold on.
+    assert_eq!(via_findings(&two, vec![all, strict]), want);
+}
+
+#[test]
+fn an_inner_layer_clearance_rule_finds_nothing_on_a_two_layer_board() {
+    let mut inner = clearance("inner", NetScope::Board, 500_000);
+    inner.layers = Some(INNER);
+    // Two through vias of GND and SIG, 0.4 mm apart: over the 0.2 mm setup.
+    let two = named(board(
+        vec![],
+        vec![],
+        vec![via(1, (0.0, 0.0), 1), via(2, (1.0, 0.0), 3)],
+    ));
+    assert!(run(&two, &rules_for(&two, vec![inner.clone()])).is_clean());
+    // With inner layers the rule holds there.
+    let four = four_layers(two);
+    assert_eq!(
+        via_findings(&four, vec![inner]),
+        [(
+            ViolationKind::Clearance,
+            500_000,
+            Some("user::inner".to_string())
+        )]
+    );
+}
+
+#[test]
+fn a_written_rule_keeps_its_own_severity_when_severities_were_not_resolved_with_it() {
+    let b = pair(0.4);
+    let mut hv = clearance("hv", NetScope::Board, 300_000);
+    hv.severity = Severity::Warning;
+    // Built-in severities only, as a caller that never resolved the layers.
+    let rules = DrcRules::new(RULE).with_user_rules(&b, &classes(), vec![hv]);
+    let report = run(&b, &rules);
+    let v = &report.violations[0];
+    assert_eq!(v.rule.as_deref(), Some("user::hv"));
+    assert_eq!(report.severity_of(v), Some(Severity::Warning));
 }
 
 #[test]

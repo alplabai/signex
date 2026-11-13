@@ -45,6 +45,10 @@ pub struct DrcRules {
     pub texts_not_applied: usize,
     /// Rule-language rules, resolved against the board's nets.
     pub(crate) user: Vec<ScopedRule>,
+    /// The board's copper layers, set with the written rules: a through
+    /// item's mask spans every layer, and a written rule is resolved only
+    /// on the layers the board has.
+    pub(crate) copper: u32,
 }
 
 impl DrcRules {
@@ -59,6 +63,16 @@ impl DrcRules {
             rules_not_applied: 0,
             texts_not_applied: 0,
             user: Vec::new(),
+            copper: u32::MAX,
+        }
+    }
+
+    /// `layers` clipped to the board's copper; as given when they share
+    /// none (an item on a layer the stackup does not list).
+    pub(crate) fn on_board(&self, layers: u32) -> u32 {
+        match layers & self.copper {
+            0 => layers,
+            clipped => clipped,
         }
     }
 
@@ -79,6 +93,12 @@ impl DrcRules {
                 .into_iter()
                 .map(|rule| ScopedRule::resolve(rule, board, classes)),
         );
+        self.copper = crate::rule_notes::board_copper(board);
+        // A caller that never resolves the layers still gets each rule's
+        // own severity from the report.
+        for scoped in &self.user[first..] {
+            self.severities.seed_written(&scoped.rule);
+        }
         let (warnings, infos) = crate::rule_notes::empty_scopes(&self.user[first..], classes);
         self.notes.extend(warnings);
         self.remarks.extend(infos);
@@ -121,6 +141,7 @@ impl DrcRules {
             CopperObject::of(&second.item),
         ];
         let mut most: (i64, Option<&ScopedRule>) = (i64::MIN, None);
+        let layers = self.on_board(layers);
         for bit in (0..32).filter(|bit| layers & (1 << bit) != 0) {
             for net in [first.net, second.net] {
                 let side =
@@ -194,16 +215,29 @@ impl DrcRules {
         self.required(net, net).max(widest).min(MAX_ABS_NM)
     }
 
-    /// The limit of `kind` the written rules set for one object, and the
-    /// rule's id.
+    /// The limit of `kind` the written rules set for one object on
+    /// `layers`, and the rule's id. Resolved per copper layer of the board
+    /// the object reaches; the strictest layer's limit holds, so a rule
+    /// for some layers never lifts another rule off the rest.
     pub(crate) fn object_limit(
         &self,
         kind: LimitKind,
         net: u32,
         layers: u32,
     ) -> Option<(i64, String)> {
-        user_rules::pick(&self.user, kind, net, layers, [None, None])
-            .map(|(nm, scoped)| (nm, scoped.rule.id()))
+        let layers = self.on_board(layers);
+        let mut held: Option<(i64, &ScopedRule)> = None;
+        for bit in (0..32).filter(|bit| layers & (1 << bit) != 0) {
+            let Some((nm, scoped)) =
+                user_rules::pick(&self.user, kind, net, 1 << bit, [None, None])
+            else {
+                continue;
+            };
+            if held.is_none_or(|(h, _)| kind.stricter(nm, h)) {
+                held = Some((nm, scoped));
+            }
+        }
+        held.map(|(nm, scoped)| (nm, scoped.rule.id()))
     }
 
     pub(crate) fn sets(&self, kind: LimitKind) -> bool {
