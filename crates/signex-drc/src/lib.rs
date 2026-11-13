@@ -1,12 +1,16 @@
 //! Read-only design-rule check of a board (#2222): clearance, shorts,
-//! unconnected nets and board-sketch keepouts (#2234), in integer nm. Pure:
+//! unconnected nets and board-sketch keepouts (#2234), in integer nm, plus
+//! the track width and via size limits of written rules (#2307). Pure:
 //! the board goes in, a report comes out, and nothing here edits it. Rules
 //! and what is not checked yet: `docs/architecture/pcb-drc.md`.
 
 mod check;
 mod keepout;
+mod limits;
+mod rule_notes;
 mod rules;
 mod severity;
+mod user_rules;
 
 use uuid::Uuid;
 
@@ -15,10 +19,12 @@ use signex_types::violation::Severity;
 
 pub use check::run;
 pub use rules::{DEFAULT_CLEARANCE_MM, DrcRules};
-pub use severity::{DrcSeverities, resolve_severities};
+pub use severity::{DrcSeverities, resolve_severities, resolve_severities_with};
+pub use user_rules::{CopperObject, Limit, NetScope, UserRule};
 
 /// What a violation breaks. Declared most severe first: a report sorts by
-/// kind, so a capped list of rows keeps the shorts.
+/// kind, so a capped list of rows keeps the shorts. A new kind goes after
+/// the existing ones, so their rows keep their order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ViolationKind {
     /// Copper of two nets that touches or overlaps.
@@ -30,6 +36,13 @@ pub enum ViolationKind {
     /// A track, via, pad or footprint inside a board-sketch keepout that
     /// forbids it, on a layer the keepout covers (#2234).
     Keepout,
+    /// A track narrower than a rule's minimum or wider than its maximum
+    /// (`required_nm` is the limit broken).
+    TrackWidth,
+    /// A via whose copper diameter is under a rule's minimum.
+    ViaDiameter,
+    /// A via whose drill is under a rule's minimum.
+    ViaDrill,
 }
 
 /// One finding, sorted by `(kind, items, ..)` in a report.
@@ -58,6 +71,9 @@ pub struct Violation {
     pub required_nm: i64,
     /// The keepout broken, for a [`ViolationKind::Keepout`].
     pub keepout: Option<Uuid>,
+    /// The written rule (`user::<name>`) that set `required_nm`; `None`
+    /// when the board setup or a net class did.
+    pub rule: Option<String>,
 }
 
 /// The result of one run.
@@ -80,8 +96,12 @@ impl DrcReport {
     }
 
     /// The resolved severity of `violation`'s rule; `None` when switched off.
+    /// A violation of a written rule takes that rule's severity.
     pub fn severity_of(&self, violation: &Violation) -> Option<Severity> {
-        self.rules.severities.of(violation.kind)
+        match &violation.rule {
+            Some(id) => self.rules.severities.of_rule(id),
+            None => self.rules.severities.of(violation.kind),
+        }
     }
 }
 
@@ -91,3 +111,5 @@ mod keepout_tests;
 mod severity_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod user_rules_tests;

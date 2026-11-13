@@ -115,10 +115,10 @@ What is checked, and where:
   `PcbSnapshot` and a scene without panic, with every copper layer as the
   active one too; drawn item counts, fill triangles and a hash of the drawn
   geometry (colours excluded) are pinned.
-- DRC and ratsnest (`signex-drc`, `real_boards`): run against each board's
-  own net classes, every board has zero shorts, clearance, unconnected and
-  keepout violations and an empty ratsnest; a positive control shows a
-  track moved to another net shorts on each board.
+- DRC (`signex-drc`, `real_boards`): run against each board's own net
+  classes, every board has zero violations of any kind; a positive control
+  shows a track moved to another net shorts on each board. Ratsnest
+  (`pcb-geom`, `ratsnest_real_boards`): every board's is empty.
 
 Not covered by the format: a slot's length (a drill is one diameter and a
 shape token, so a slot is as long as its oval pad says) and the zone fill

@@ -113,3 +113,69 @@ fn a_project_with_rules_uses_its_own_and_ignores_the_machine() {
     assert_eq!(got.of(ViolationKind::Short), Some(Severity::Info));
     assert_eq!(got.of(ViolationKind::Clearance), Some(Severity::Error));
 }
+
+/// #2307 step 2b: a run keeps the rule text's messages and adds, after
+/// them, the net classes a written rule lowers.
+#[test]
+fn a_run_says_the_text_messages_then_the_classes_a_rule_lowers() {
+    use signex_types::net_class::NetClass;
+    use signex_types::pcb::{NetDef, PcbBoard};
+    let board = PcbBoard {
+        sketch: None,
+        uuid: uuid::Uuid::nil(),
+        version: 1,
+        generator: String::new(),
+        thickness: 1.6,
+        outline: Vec::new(),
+        layers: Vec::new(),
+        setup: None,
+        nets: vec![NetDef {
+            number: 1,
+            name: "HV_A".into(),
+        }],
+        footprints: Vec::new(),
+        segments: Vec::new(),
+        vias: Vec::new(),
+        zones: Vec::new(),
+        graphics: Vec::new(),
+        texts: Vec::new(),
+        unknown: Default::default(),
+    };
+    let mut hv = NetClass::named("HV");
+    hv.patterns = vec!["HV_*".into()];
+    hv.clearance = 0.5;
+    let layers = super::pcb_drc::Layers {
+        profile: Some(DrcRuleSet {
+            dsl: Some(
+                "rule base on clearance require clearance >= 0.15mm then error\nrule bad on via"
+                    .into(),
+            ),
+            ..DrcRuleSet::default()
+        }),
+        project: None,
+    };
+    let (report, _) = super::pcb_drc::run_check(&board, &[hv.clone()], &layers).unwrap();
+    // A syntax error drops the whole text: nothing is lowered.
+    assert_eq!(report.rules.notes.len(), 1, "{:?}", report.rules.notes);
+    assert!(report.rules.notes[0].starts_with("DRC DSL (profile): "));
+
+    let layers = super::pcb_drc::Layers {
+        profile: Some(DrcRuleSet {
+            dsl: Some(
+                "rule base on clearance require clearance >= 0.15mm then error\n\
+                 rule z on track require width >= 0mm then error"
+                    .into(),
+            ),
+            ..DrcRuleSet::default()
+        }),
+        project: None,
+    };
+    let (report, _) = super::pcb_drc::run_check(&board, &[hv], &layers).unwrap();
+    assert_eq!(
+        report.rules.notes,
+        [
+            "DRC DSL (profile): line 2, column 34: rule 'z': a limit of 0 checks nothing for this rule's scope",
+            "DRC rule 'base' lowers net class 'HV' clearance 0.5 \u{2192} 0.15 mm",
+        ]
+    );
+}

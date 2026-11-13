@@ -296,6 +296,18 @@ fn a_drc_section_holding_only_rule_text_is_kept() {
     assert_eq!(saved["rules"], rules_of(&text));
 }
 
+/// #2307 step 2b reads the text; it is still written back exactly as read:
+/// several lines, quotes, tabs, comment-like text and a micro sign.
+#[test]
+fn multi_line_rule_text_round_trips_unchanged() {
+    let dsl = "rule hv on clearance when class == \"HV\"\n\trequire clearance >= 800\u{b5}m\n  then error \"HV # spacing\"\r\n";
+    let rules = serde_json::json!({"schema": 1, "drc": {"dsl": dsl}});
+    let text = project_with_rules(&rules.to_string());
+    let (data, saved) = open_and_resave(&text);
+    assert_eq!(data.rules.unwrap().drc.dsl.as_deref(), Some(dsl));
+    assert_eq!(saved["rules"]["drc"]["dsl"], dsl);
+}
+
 /// A `drc` of another shape makes the whole section unreadable (#1180), as
 /// any other shape change does: kept byte for byte, not applied.
 #[test]

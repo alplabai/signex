@@ -242,7 +242,7 @@ signex/
 │   ├── signex-engine/         # Command / patch / undo engine for schematic edits
 │   ├── signex-net/            # Authoritative netlist + connectivity contract
 │   ├── signex-erc/            # ERC rule engine (+ signex-erc-dsl)
-│   ├── signex-drc/            # PCB design rule check (measures with pcb-geom)
+│   ├── signex-drc/            # PCB design rule check (measures with pcb-geom; + signex-drc-dsl)
 │   ├── signex-sketch/         # Apache-clean Newton-LM constraint solver + sketch schema
 │   ├── signex-bake/           # Sketch → footprint bake (pad / silk / courtyard / mask / …)
 │   ├── signex-output/         # PDF / netlist / BOM export pipeline (+ signex-bom)
