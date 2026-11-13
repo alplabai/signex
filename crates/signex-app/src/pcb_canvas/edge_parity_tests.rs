@@ -23,7 +23,7 @@ const VIEWPORT: Rectangle = Rectangle {
 /// The pour's pull-back from the board edge in the corpus board, in mm.
 const POUR_INSET_MM: f32 = 0.6;
 
-fn mixed_tht_smd() -> PcbBoard {
+pub(super) fn mixed_tht_smd() -> PcbBoard {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../signex-types/tests/corpus/pcb/real/mixed-tht-smd.snxpcb");
     let text = std::fs::read_to_string(path).expect("corpus file");

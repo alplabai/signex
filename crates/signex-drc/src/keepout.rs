@@ -40,7 +40,7 @@ struct Area<'a> {
     keepout: &'a PcbKeepout,
     polygon: Vec<PointNm>,
     bounds: RectNm,
-    /// Bit mask of the copper layers listed (see `copper::layer_bit`).
+    /// Bit mask of the copper layers listed (see `pcb_geom::layer_bit`).
     layers: u32,
 }
 
@@ -150,6 +150,7 @@ impl<'a> Area<'a> {
             measured_nm: 0,
             required_nm: 0,
             keepout: Some(self.keepout.uuid),
+            rule: None,
         });
     }
 }

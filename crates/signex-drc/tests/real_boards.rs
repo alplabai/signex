@@ -1,10 +1,10 @@
-//! The design-rule check and the ratsnest on the five realistic corpus
-//! boards (`signex-types/tests/corpus/pcb/real/`), against each board's own
-//! net classes from its `.snxprj`.
+//! The design-rule check on the five realistic corpus boards
+//! (`signex-types/tests/corpus/pcb/real/`), against each board's own net
+//! classes from its `.snxprj`. Their ratsnest: `pcb-geom`'s
+//! `tests/ratsnest_real_boards.rs`.
 
 use std::path::{Path, PathBuf};
 
-use pcb_geom::ratsnest;
 use signex_drc::{DrcReport, DrcRules, ViolationKind, run as run_drc};
 use signex_types::format::SnxPcb;
 use signex_types::net_class::NetClass;
@@ -33,19 +33,19 @@ fn drc(name: &str) -> DrcReport {
     run_drc(&board, &rules)
 }
 
-/// `(name, clearance, unconnected, keepout, ratsnest lines)`; shorts are
-/// zero on every board.
-const EXPECTED: [(&str, usize, usize, usize, usize); 5] = [
-    ("linear-regulator", 0, 0, 0, 0),
-    ("usb-c-power-input", 0, 0, 0, 0),
-    ("mcu-breakout-tqfp32", 0, 0, 0, 0),
-    ("sensor-4layer", 0, 0, 0, 0),
-    ("mixed-tht-smd", 0, 0, 0, 0),
+/// `(name, clearance, unconnected, keepout)`; shorts are zero on every
+/// board, and so are the width and via kinds (no board has rule text).
+const EXPECTED: [(&str, usize, usize, usize); 5] = [
+    ("linear-regulator", 0, 0, 0),
+    ("usb-c-power-input", 0, 0, 0),
+    ("mcu-breakout-tqfp32", 0, 0, 0),
+    ("sensor-4layer", 0, 0, 0),
+    ("mixed-tht-smd", 0, 0, 0),
 ];
 
 #[test]
 fn every_real_board_is_free_of_shorts_and_matches_its_pinned_drc_counts() {
-    for (name, clearance, unconnected, keepout, _) in EXPECTED {
+    for (name, clearance, unconnected, keepout) in EXPECTED {
         let report = drc(name);
         let listing = || {
             report
@@ -76,16 +76,12 @@ fn every_real_board_is_free_of_shorts_and_matches_its_pinned_drc_counts() {
             "{name}: (clearance, unconnected, keepout)\n{}",
             listing()
         );
-    }
-}
-
-#[test]
-fn every_real_board_builds_its_ratsnest_with_the_pinned_unrouted_count() {
-    for (name, .., lines) in EXPECTED {
-        let (board, _) = load(name);
-        let first = ratsnest(&board);
-        assert_eq!(first.len(), lines, "{name}: {first:?}");
-        assert_eq!(ratsnest(&board), first, "{name}: not deterministic");
+        assert_eq!(
+            report.violations.len(),
+            clearance + unconnected + keepout,
+            "{name}: other kinds\n{}",
+            listing()
+        );
     }
 }
 

@@ -31,7 +31,7 @@ change is a small git diff.
 | `name` | string | The profile's identity. Projects find a profile by this name. |
 | `version` | string | Content version chosen by the author; recorded in a project's provenance. |
 | `erc` | object, optional | Same shape as the project's `rules.erc`: `severity` (rule id to `error` / `warning` / `info` / `off`) and `pin_matrix` (`"<row axis>/<column axis>"` to severity, only cells that differ from the factory matrix). Omitted when empty. |
-| `drc` | object, optional | Same shape as the project's `rules.drc` (#2307): `severity` (DRC rule id such as `builtin::clearance` to `error` / `warning` / `info` / `off`) and `dsl` (DRC rule language text, kept but not read until #2307 step 2b). Omitted when empty. Rule ids and layers: [`pcb-drc.md`](pcb-drc.md#rule-ids-and-severities-2307-step-2a). |
+| `drc` | object, optional | Same shape as the project's `rules.drc` (#2307): `severity` (DRC rule id such as `builtin::clearance` to `error` / `warning` / `info` / `off`) and `dsl` (DRC rule language text, [`DRC_RULES.md`](../DRC_RULES.md), read by each DRC run that uses this profile and written back as typed). Omitted when empty. Enters the content hash when present ([What the hash covers](#what-the-hash-covers)). Rule ids and layers: [`pcb-drc.md`](pcb-drc.md#rule-ids-and-severities-2307-step-2a). |
 
 Every key is optional on load (`name` and `version` default to the empty
 string). An explicitly empty `erc` or `drc` is the same as an absent one, and
@@ -125,32 +125,62 @@ the ERC dialog and an ERC run give.
 
 ## What the hash covers
 
-A profile's content hash is the lower-case hex SHA-256 of the canonical JSON of
-its `erc` object: `severity`, `pin_matrix` and everything in `erc.unknown`.
+A profile's content hash (`RuleProfile::content_sha256`, computed by
+`signex_types::project::rule_set_sha256`) covers the rules that decide check
+results, its `erc` and `drc` sections (#2307 step 2b-2, maintainer decision
+https://github.com/alplabai/signex/issues/2307#issuecomment-6824136804):
+
+- **no `drc` section** (absent or empty): the lower-case hex SHA-256 of the
+  canonical JSON of the `erc` object (`severity`, `pin_matrix` and everything
+  in `erc.unknown`). This is the hash every build before step 2b-2 recorded,
+  so a profile or project without `drc` keeps its exact hash (the shipped
+  `Signex Default` stays `89b152e9…dd76`), and every recorded provenance and
+  drift result stays as it was;
+- **a non-empty `drc` section**: the SHA-256 of the canonical JSON
+  `{"erc": <erc>, "drc": <drc>}`, so a change to a DRC severity, the rule text
+  (`dsl`) or a foreign key under `drc` changes the hash.
+
 The maps are ordered, so equal rule sets hash equal on every machine. `name`,
 `version`, `schema` and the top-level unknown keys are labels and are not
 hashed, so renaming a profile or bumping its `version` is not drift.
+`DrcRuleSet::sha256_hex` (the `drc` object alone) is not recorded anywhere.
 
-The `drc` section is not in this hash, so adding one moves no recorded hash,
-no provenance and no drift result. `DrcRuleSet::sha256_hex` (the same
-canonical-JSON SHA-256 of the `drc` object) exists, but nothing records or
-compares it yet. "Save as profile" (it writes only the project's `erc`),
-"Update from profile", its confirmation diff and the drift note still cover
-`erc` only. Covering `drc` by the hash, the drift check, Update from profile
-and Save as profile is step 2b, with the rule language (maintainer decision,
-https://github.com/alplabai/signex/issues/2307#issuecomment-6824136804).
-Duplicate in Preferences ▸ Rule Profiles copies the whole profile, `drc`
-included. Save as profile over an existing profile replaces that file with the
-project's `erc` only, so the target profile's `drc` is dropped until step 2b.
+**One-time effect on older records.** A profile that already held a `drc`
+section (written by a step 2a or 2b-1 build) now hashes differently from the
+ERC-only value its projects recorded. Such a project reads as drifted once
+("The rule profile … has changed since this project's ERC rules were taken
+from it"), its ERC report names the profile `<profile> (modified)`, and Update
+from profile shows the comparison with no listed differences when the rules
+are equal; applying it changes no rule and records the new hash. Profiles and
+projects without `drc` see none of this.
 
-The same hash is recorded in two places:
+What each profile action does with `drc`:
+
+- **Save as profile** writes the project's `erc` and `drc` (not its waivers);
+  over an existing profile it replaces that file, `drc` included, and a
+  project without `drc` writes a profile without one. The project records the
+  new hash.
+- **Update from profile** adopts the profile's `drc` together with its `erc`
+  as one undo step. A `drc` severity id this build does not know and foreign
+  keys only the project holds are kept; `user::` severities follow the
+  project's rule text, which the profile's replaces. The confirmation lists
+  the DRC changes after the ERC ones: one line per severity
+  (`DRC severity builtin::unconnected: default -> error`), one for the rule
+  text (`DRC rule text: changed (3 lines -> 5 lines)`, `added (…)`,
+  `removed (…)`) and one per foreign key.
+- **Duplicate** in Preferences ▸ Rule Profiles copies the whole profile, `drc`
+  included.
+
+The hash is recorded in two places:
 
 - a project's `rules.profile.sha256` (see [`snxprj-format.md`](snxprj-format.md)),
   taken when the project was seeded from or saved to the profile. If the local
   profile's hash later differs, a one-time note says the profile changed; the
   project's rules are never touched without the user confirming a diff;
 - the ERC report header (`Rule set: <profile> (sha256 <hash>)` in the text
-  report) as the hash of the rules the run actually used. A project whose rules
-  have left the recorded profile is named `<profile> (modified)`. The CSV
-  report carries a `# Rule set,<profile>,<hash>` first row only when the project
-  records a profile; otherwise the CSV is unchanged.
+  report) carries the hash of the `erc` rules the run actually used, which is
+  the profile hash whenever there is no `drc` section. A project whose rules
+  (`erc` or `drc`) have left the recorded profile is named
+  `<profile> (modified)`. The CSV report carries a `# Rule set,<profile>,<hash>`
+  first row only when the project records a profile; otherwise the CSV is
+  unchanged.

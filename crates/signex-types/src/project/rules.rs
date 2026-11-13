@@ -143,8 +143,8 @@ pub struct DrcRuleSet {
     /// `info` / `off`), for rules set away from the built-in default.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub severity: BTreeMap<String, String>,
-    /// Text in the DRC rule language (#2307 step 2b). Stored and written
-    /// back as is; this build does not read it.
+    /// Text in the DRC rule language (#2307 step 2b), compiled by
+    /// `signex-drc-dsl` for each run. Stored and written back as is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dsl: Option<String>,
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -157,10 +157,27 @@ impl DrcRuleSet {
         self.severity.is_empty() && self.dsl.is_none() && self.unknown.is_empty()
     }
 
-    /// Lower-case hex SHA-256 of the section's canonical JSON. Separate from
-    /// [`ErcRules::sha256_hex`], so no recorded ERC hash moves.
+    /// Lower-case hex SHA-256 of the section's canonical JSON alone. Profile
+    /// provenance records [`rule_set_sha256`], which covers this section.
     pub fn sha256_hex(&self) -> String {
         canonical_sha256(self)
+    }
+}
+
+/// The rule-set hash profile provenance records (#2307 step 2b): the ERC hash
+/// alone while `drc` is empty, so every hash recorded before DRC rules
+/// existed stays valid; otherwise the hash of `{"erc": .., "drc": ..}`.
+/// See `docs/architecture/snxrules-format.md`, "What the hash covers".
+pub fn rule_set_sha256(erc: &ErcRules, drc: &DrcRuleSet) -> String {
+    #[derive(Serialize)]
+    struct RuleSet<'a> {
+        erc: &'a ErcRules,
+        drc: &'a DrcRuleSet,
+    }
+    if drc.is_empty() {
+        erc.sha256_hex()
+    } else {
+        canonical_sha256(&RuleSet { erc, drc })
     }
 }
 

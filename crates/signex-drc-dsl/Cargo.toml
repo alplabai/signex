@@ -1,0 +1,20 @@
+[package]
+name = "signex-drc-dsl"
+description = "The DRC rule language: parse, validate and compile rule text into signex-drc rules"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# UI-free: rule text in, signex-drc rules and diagnostics out.
+[dependencies]
+pcb-geom = { path = "../pcb-geom" }
+signex-drc.workspace = true
+signex-types.workspace = true
+chumsky.workspace = true
+
+[dev-dependencies]
+uuid.workspace = true
+
+[lints]
+workspace = true

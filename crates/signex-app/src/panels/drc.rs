@@ -27,6 +27,8 @@ pub struct DrcRow {
     pub b: String,
     pub measured_mm: String,
     pub required_mm: String,
+    /// Over a maximum rather than under a minimum (a track width).
+    pub over_maximum: bool,
     pub x_mm: String,
     pub y_mm: String,
     /// The first copper layer the two items share.
@@ -44,6 +46,15 @@ pub struct DrcPanel {
     /// The minimum clearance in mm, when the board set none and the default
     /// was used.
     pub default_clearance_mm: Option<String>,
+    /// The run applied a written clearance rule (the default note then says
+    /// it holds only where no written rule does).
+    pub written_clearance: bool,
+    /// Written rules the run did not apply, and whether a rule text had a
+    /// syntax error (none of it applied); see Messages for which.
+    pub rules_not_applied: usize,
+    pub rule_text_unparsed: bool,
+    /// Counts for the summary line; track width and via size findings are
+    /// listed as rows but not counted here yet.
     pub clearance: usize,
     pub short: usize,
     pub unconnected: usize,
@@ -69,6 +80,15 @@ fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
         ViolationKind::Short => t!(i18n, ids::DRC_KIND_SHORT),
         ViolationKind::Unconnected => t!(i18n, ids::DRC_KIND_UNCONNECTED),
         ViolationKind::Keepout => t!(i18n, ids::DRC_KIND_KEEPOUT),
+        ViolationKind::TrackWidth => t!(i18n, ids::DRC_KIND_TRACK_WIDTH),
+        ViolationKind::ViaDiameter => t!(i18n, ids::DRC_KIND_VIA_DIAMETER),
+        ViolationKind::ViaDrill => t!(i18n, ids::DRC_KIND_VIA_DRILL),
+    };
+    let limit = |id| {
+        t!(
+            i18n, id, "net" => row.a.clone(),
+            "measured" => row.measured_mm.clone(), "required" => row.required_mm.clone()
+        )
     };
     let detail = match row.kind {
         ViolationKind::Clearance => t!(
@@ -84,6 +104,10 @@ fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
             "net" => row.a.clone(), "length" => row.measured_mm.clone()
         ),
         ViolationKind::Keepout => t!(i18n, ids::DRC_DETAIL_KEEPOUT, "net" => row.a.clone()),
+        ViolationKind::TrackWidth if row.over_maximum => limit(ids::DRC_DETAIL_AT_MOST),
+        ViolationKind::TrackWidth | ViolationKind::ViaDiameter | ViolationKind::ViaDrill => {
+            limit(ids::DRC_DETAIL_AT_LEAST)
+        }
     };
     let place = t!(i18n, ids::DRC_LOCATION, "x" => row.x_mm.clone(), "y" => row.y_mm.clone());
     (kind, detail, place)
@@ -153,13 +177,24 @@ fn status<'a>(ctx: &'a PanelContext, drc: &DrcPanel, mut col: Rows<'a>) -> Rows<
         return col.push(note(t!(i18n, ids::DRC_IDLE), muted));
     }
     if let Some(mm) = &drc.default_clearance_mm {
-        col = col.push(note(
-            t!(i18n, ids::DRC_DEFAULT_CLEARANCE, "clearance" => mm.clone()),
-            muted,
-        ));
+        let id = if drc.written_clearance {
+            ids::DRC_DEFAULT_CLEARANCE_WRITTEN
+        } else {
+            ids::DRC_DEFAULT_CLEARANCE
+        };
+        col = col.push(note(t!(i18n, id, "clearance" => mm.clone()), muted));
     }
     if drc.stale {
         col = col.push(note(t!(i18n, ids::DRC_STALE), warn));
+    }
+    if drc.rule_text_unparsed {
+        col = col.push(note(t!(i18n, ids::DRC_RULE_TEXT_UNPARSED), warn));
+    }
+    if drc.rules_not_applied > 0 {
+        col = col.push(note(
+            t!(i18n, ids::DRC_RULES_NOT_APPLIED, "count" => drc.rules_not_applied),
+            warn,
+        ));
     }
     col = if drc.rows.is_empty() && drc.skipped == 0 {
         col.push(note(
@@ -275,6 +310,35 @@ mod tests {
         assert!(messages_on_click(busy_section, window, "Run DRC").is_empty());
     }
 
+    /// #2307: with written rules the default-clearance note says the board
+    /// value holds only where no written rule does; without, it is as before.
+    #[test]
+    fn the_default_clearance_note_follows_whether_written_rules_ran() {
+        let texts = |written_clearance: bool| {
+            let mut ctx = context(false);
+            ctx.pcb_drc = Some(DrcPanel {
+                ran: true,
+                default_clearance_mm: Some("0.2".into()),
+                written_clearance,
+                ..DrcPanel::default()
+            });
+            let section = section(&ctx).expect("section");
+            crate::layout_probe::lay_out_texts(section, iced::Size::new(1400.0, 300.0))
+                .into_iter()
+                .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+                .collect::<Vec<_>>()
+        };
+        let plain =
+            "No clearance rule set on this board; checked with 0.2 mm. Set it in Board Setup.";
+        let written = "No clearance rule set on this board; 0.2 mm applies where no written rule does. Set it in Board Setup.";
+        let without = texts(false);
+        assert!(without.iter().any(|t| t == plain), "{without:?}");
+        assert!(!without.iter().any(|t| t == written), "{without:?}");
+        let with = texts(true);
+        assert!(with.iter().any(|t| t == written), "{with:?}");
+        assert!(!with.iter().any(|t| t == plain), "{with:?}");
+    }
+
     /// An inner layer's DRC row uses the Layers panel's name (Mid-Layer n).
     #[test]
     fn an_inner_layer_row_uses_the_layers_panel_name() {
@@ -286,5 +350,41 @@ mod tests {
         let panel = crate::pcb_canvas::layer_style::copper_name(&i18n, inner).into_string();
         assert_eq!(label, panel);
         assert!(label.contains("Mid-Layer"), "{label}");
+    }
+
+    /// #2307 step 2b: a width or via-size row says which limit it breaks.
+    #[test]
+    fn a_size_row_says_the_limit_it_breaks() {
+        let i18n = I18n::en_us();
+        let row = |kind, over_maximum| DrcRow {
+            index: 0,
+            kind,
+            a: "GND".into(),
+            b: "GND".into(),
+            measured_mm: "0.100".into(),
+            required_mm: "0.150".into(),
+            over_maximum,
+            x_mm: "0".into(),
+            y_mm: "0".into(),
+            layer: None,
+        };
+        let text = |kind, over| {
+            let (kind, detail, _) = row_text(&i18n, &row(kind, over));
+            format!("{} | {}", kind.into_string(), detail.into_string())
+                .replace(['\u{2068}', '\u{2069}'], "")
+        };
+        assert_eq!(
+            text(ViolationKind::TrackWidth, false),
+            "Track width | GND: 0.100 mm, needs at least 0.150 mm"
+        );
+        assert_eq!(
+            text(ViolationKind::TrackWidth, true),
+            "Track width | GND: 0.100 mm, needs at most 0.150 mm"
+        );
+        assert_eq!(
+            text(ViolationKind::ViaDrill, false),
+            "Via drill | GND: 0.100 mm, needs at least 0.150 mm"
+        );
+        assert!(text(ViolationKind::ViaDiameter, false).starts_with("Via diameter | "));
     }
 }

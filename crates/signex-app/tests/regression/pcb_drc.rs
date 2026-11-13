@@ -235,3 +235,229 @@ fn the_default_clearance_is_said_and_a_set_rule_is_not() {
     assert!(panel.ran);
     assert_eq!(panel.default_clearance_mm, None);
 }
+
+/// Load a `User Default` profile whose `drc` layer holds `dsl`.
+fn load_profile_dsl(app: &mut Signex, dsl: Option<&str>) {
+    use signex_app::app::ErcMsg;
+    let mut profile = signex_types::project::RuleProfile::new("User Default", "1", <_>::default());
+    profile.drc.dsl = dsl.map(str::to_string);
+    let task = app.update(Message::Erc(ErcMsg::UserDefaultLoaded(
+        std::sync::Arc::new(Ok(Some(profile))),
+    )));
+    crate::drive::drive(app, task);
+}
+
+/// The Messages lines of one DRC run, in order.
+fn drc_lines_of_a_run(app: &mut Signex) -> Vec<String> {
+    let _ = signex_app::diagnostics::init_logging();
+    let since = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
+    run_drc(app);
+    signex_app::diagnostics::recent_entries()
+        .into_iter()
+        .filter(|e| e.id > since && e.message.contains("DRC"))
+        .map(|e| e.message)
+        .collect()
+}
+
+/// #2307 step 2b: with no rule text (none, or an empty one) a run reports
+/// and says exactly what it did before the rule language.
+#[test]
+fn without_rule_text_the_report_and_its_messages_are_unchanged() {
+    // As trunk writes them, float formatting included.
+    let pinned = [
+        "DRC: No clearance rule set on this board; checked with 0.19999999999999998 mm. Set it in Board Setup.",
+        "DRC: 1 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance 0.19999999999999998 mm)",
+        "DRC: clearance 0.15 mm, needs 0.19999999999999998 mm, net 1 / net 2 at (0, 0.19999999999999998) mm",
+    ];
+    for dsl in [None, Some(""), Some("  \n")] {
+        let (mut app, _tmp, path) = open_board();
+        load_profile_dsl(&mut app, dsl);
+        assert_eq!(drc_lines_of_a_run(&mut app), pinned, "{dsl:?}");
+        let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+        assert_eq!(done.report.violations.len(), 1);
+        assert_eq!(done.report.violations[0].rule, None);
+        assert_eq!(done.report.rules.user_rules().count(), 0);
+        let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+        assert!(
+            !panel.written_clearance && panel.rules_not_applied == 0 && !panel.rule_text_unparsed,
+            "{dsl:?}"
+        );
+    }
+}
+
+/// A rule whose scope matches no net is said, not silently idle: a class
+/// that does not exist as a warning, a net the board lacks as info.
+#[test]
+fn a_rule_that_matches_no_net_is_said() {
+    let (mut app, _tmp, _path) = open_board();
+    load_profile_dsl(
+        &mut app,
+        Some(
+            "rule hv on clearance when class == \"Hv\" require clearance >= 0.6mm then error\n\
+             rule vbus on track when net == \"VBUS\" require width >= 0.5mm then error",
+        ),
+    );
+    let lines = drc_lines_of_a_run(&mut app);
+    for want in [
+        "DRC rule 'hv': there is no net class 'Hv'; the rule checks nothing",
+        "DRC rule 'vbus': no net of this board is 'VBUS'; the rule checks nothing",
+    ] {
+        assert!(lines.contains(&want.to_string()), "{want}\n{lines:?}");
+    }
+}
+
+/// Rule text that sets no clearance (a width rule only) leaves the
+/// clearance wording as it was.
+#[test]
+fn rule_text_without_a_clearance_rule_keeps_the_clearance_wording() {
+    let (mut app, _tmp, _path) = open_board();
+    load_profile_dsl(
+        &mut app,
+        Some("rule wide on track require width >= 0.1mm then warning"),
+    );
+    let lines = drc_lines_of_a_run(&mut app);
+    assert!(
+        lines.contains(
+            &"DRC: No clearance rule set on this board; checked with 0.19999999999999998 mm. \
+              Set it in Board Setup."
+                .to_string()
+        ),
+        "{lines:?}"
+    );
+    assert!(
+        lines.contains(
+            &"DRC: 1 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance \
+              0.19999999999999998 mm)"
+                .to_string()
+        ),
+        "{lines:?}"
+    );
+    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    assert!(!panel.written_clearance);
+}
+
+/// A rule in the machine profile's text loosens the clearance and adds a
+/// width check; both are said in Messages, with each finding's rule.
+#[test]
+fn rule_text_in_the_profile_is_applied_by_the_run() {
+    use signex_types::violation::Severity;
+    let (mut app, _tmp, path) = open_board();
+    load_profile_dsl(
+        &mut app,
+        Some(
+            "rule tight on clearance require clearance >= 0.1mm then error\n\
+             rule wide on track require width >= 0.3mm then warning \"too thin\"",
+        ),
+    );
+    let lines = drc_lines_of_a_run(&mut app);
+    let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    let kinds: Vec<_> = done.report.violations.iter().map(|v| v.kind).collect();
+    assert_eq!(kinds, [ViolationKind::TrackWidth; 3], "{lines:?}");
+    let v = &done.report.violations[0];
+    assert_eq!((v.measured_nm, v.required_nm), (250_000, 300_000));
+    assert_eq!(v.rule.as_deref(), Some("user::wide"));
+    assert_eq!(done.report.severity_of(v), Some(Severity::Warning));
+    assert!(
+        lines.contains(&"DRC DSL: applying 2 rule(s)".to_string()),
+        "{lines:?}"
+    );
+    assert!(
+        lines.contains(&"DRC: 3 track width, 0 via diameter, 0 via drill".to_string()),
+        "{lines:?}"
+    );
+    assert!(
+        lines.iter().any(|l| l.starts_with(
+            "DRC: track width 0.25 mm, needs at least 0.3 mm (user::wide), net 1 / net 1"
+        )),
+        "{lines:?}"
+    );
+    // With written rules the board value holds only where none applies.
+    assert!(
+        lines.contains(
+            &"DRC: No clearance rule set on this board; 0.19999999999999998 mm applies \
+              where no written rule does. Set it in Board Setup."
+                .to_string()
+        ),
+        "{lines:?}"
+    );
+    assert!(
+        lines.contains(
+            &"DRC: 0 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance \
+              0.19999999999999998 mm where no written rule applies)"
+                .to_string()
+        ),
+        "{lines:?}"
+    );
+    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    assert_eq!(panel.rows.len(), 3);
+    assert!(!panel.rows[0].over_maximum);
+    assert!(panel.written_clearance);
+    assert_eq!(
+        (panel.rules_not_applied, panel.rule_text_unparsed),
+        (0, false)
+    );
+}
+
+/// A syntax error drops the whole text: the results say so, not only the
+/// Messages line, so a typo never passes as a clean board.
+#[test]
+fn rule_text_with_a_syntax_error_is_said_beside_the_results() {
+    let (mut app, _tmp, path) = open_board();
+    load_profile_dsl(
+        &mut app,
+        Some("rule tight on clearance require clearance 0.1mm then error"),
+    );
+    let lines = drc_lines_of_a_run(&mut app);
+    // Its own line, so the Messages length cap never cuts it off.
+    assert!(
+        lines.contains(&"DRC rules: the rule text was not applied (syntax error)".to_string()),
+        "{lines:?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.starts_with("DRC: 1 clearance") && l.ends_with("mm)")),
+        "{lines:?}"
+    );
+    let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    assert_eq!(done.report.violations.len(), 1);
+    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    assert!(panel.rule_text_unparsed && !panel.written_clearance);
+}
+
+/// A rule that does not compile is named in Messages and skipped; the rest
+/// of the text still applies.
+#[test]
+fn a_rule_that_does_not_compile_is_reported_and_skipped() {
+    let (mut app, _tmp, path) = open_board();
+    load_profile_dsl(
+        &mut app,
+        Some(
+            "rule bad on track require width >= 1in then error\n\
+             rule tight on clearance require clearance >= 0.1mm then error",
+        ),
+    );
+    let lines = drc_lines_of_a_run(&mut app);
+    assert!(
+        lines.contains(
+            &"DRC DSL (profile): line 1, column 37: rule 'bad': unknown unit 'in' \
+              (mm, mil, um or nm); the rule is skipped"
+                .to_string()
+        ),
+        "{lines:?}"
+    );
+    assert!(
+        lines.contains(&"DRC DSL: applying 1 rule(s)".to_string()),
+        "{lines:?}"
+    );
+    let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    // `tight` loosens the 0.2 mm default to 0.1 mm: the 0.15 mm gap passes.
+    assert!(done.report.violations.is_empty(), "{:?}", done.report);
+    // A clean board with a skipped rule still says so, on its own line.
+    assert!(
+        lines.contains(&"DRC rules: 1 written rule(s) not applied".to_string()),
+        "{lines:?}"
+    );
+    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    assert_eq!(panel.rules_not_applied, 1);
+}
