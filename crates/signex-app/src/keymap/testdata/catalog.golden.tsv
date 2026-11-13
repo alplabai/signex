@@ -9,6 +9,7 @@ break_wire	modify	Break wire	-	General	-	-	Always	gui_only,mutates_doc,undoable	
 cancel_current_tool	interactive	Cancel current stage / exit placement mode	-	General	-	-	Always	gui_only	-
 center_on_cursor	view	Center on cursor	-	General	-	-	Always	gui_only	-
 center_view_at_cursor	view	Center/redraw view around cursor	-	General	-	-	Always	gui_only	-
+check_drc	validation	Check design rules	-	General	-	-	Always	-	document:document,baseline:text?
 check_erc	validation	Check electrical rules	-	General	-	-	Always	-	document:document,baseline:text?
 close_active_document	file	Close active document	Close Document	General	-	-	Always	-	document:document
 close_all_documents	window	Close all documents	Close All Documents	General	-	-	Always	gui_only	-

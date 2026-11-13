@@ -1,6 +1,5 @@
 //! General-surface command metadata — shared editing / file / view /
-//! transform commands, plus anything without an obvious home. Split
-//! from `keymap/catalog.rs`; entries verbatim.
+//! transform commands, plus anything without an obvious home.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
 use signex_i18n::command_ids;
@@ -105,6 +104,17 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "check_drc",
+        category: "validation",
+        label: command_ids::CMD_CHECK_DRC,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::CHECK_DRC,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
