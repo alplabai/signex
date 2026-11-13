@@ -107,9 +107,32 @@ path that makes a project start storing rules carries a `drc` section with it,
 so the DRC layer never changes by itself: a new project copies the `drc`
 section of the profile it is seeded from, and "Store ERC rules in this
 project" and a first ERC waiver copy the machine's `User Default` `drc`
-section along with its ERC rules. "Save as profile", "Update from profile" and
-the drift check still handle only `erc`; the `drc` section joins them in
-step 2b-2.
+section along with its ERC rules.
+
+### Rule profiles
+
+Since step 2b-2 the `drc` section travels with the profile actions, as `erc`
+does (maintainer decision
+https://github.com/alplabai/signex/issues/2307#issuecomment-6824136804):
+
+- the rule-set hash a project's `rules.profile.sha256` records covers `drc`
+  when it is non-empty; without one the hash is the ERC hash, unchanged
+  ([`snxrules-format.md`](snxrules-format.md#what-the-hash-covers));
+- so a profile whose `drc` changed is reported as drifted, and a project whose
+  own `drc` left the profile's is named `<profile> (modified)` in the ERC
+  report header;
+- "Update from profile" adopts the profile's `drc` with its `erc` in one undo
+  step and lists the DRC changes in its confirmation;
+- "Save as profile" writes the project's `drc` with its `erc`.
+
+Where the code lives: the hash is `signex_types::project::rule_set_sha256`;
+the DRC half of adopt and diff (`adopt_profile_drc`,
+`diff_drc_against_profile`, `DrcRuleChange`) is `signex-drc`'s `profile`
+module, beside the ERC half in `signex-erc`'s `project_rules::profile`; the
+app's rule-profile handlers call both and show the lines in one list. Adopt
+keeps a project severity id this build cannot place (neither a built-in DRC id
+nor `user::`) and foreign keys only the project holds; `user::` severities
+follow the rule text, which the profile's replaces.
 
 ## Rule language (#2307 step 2b)
 

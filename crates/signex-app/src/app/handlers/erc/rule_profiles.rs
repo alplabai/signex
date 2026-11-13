@@ -10,10 +10,11 @@
 use std::sync::Arc;
 
 use iced::Task;
+use signex_drc::{DrcRuleChange, adopt_profile_drc, diff_drc_against_profile};
 use signex_erc::project_rules::profile::{
     RuleChange, adopt_profile, diff_against_profile, has_drifted, profile_ref,
 };
-use signex_types::project::RuleProfileRef;
+use signex_types::project::{RuleProfileRef, rule_set_sha256};
 
 use super::super::super::state::PendingProfileUpdate;
 use super::super::super::state::rule_profile_ui::SaveProfileDialog;
@@ -75,14 +76,16 @@ impl Signex {
         match stored {
             Some(rules) => {
                 let sha256 = rules.erc.sha256_hex();
+                let rule_set = rule_set_sha256(&rules.erc, &rules.drc);
                 let profile_name = rules
                     .profile
                     .as_ref()
                     .filter(|r| !r.name.is_empty())
                     .map(|r| {
                         // The record names where the rules came from; only a
-                        // matching hash says they still are that profile.
-                        if r.sha256.is_empty() || r.sha256 == sha256 {
+                        // matching rule-set hash (ERC and DRC) says they
+                        // still are that profile.
+                        if r.sha256.is_empty() || r.sha256 == rule_set {
                             r.name.clone()
                         } else {
                             format!("{} (modified)", r.name)
@@ -170,6 +173,19 @@ impl Signex {
         self.start_profile_save(true)
     }
 
+    /// What Save as profile writes for `project` while it is the active one:
+    /// its `erc` and `drc` rule sets; `None` when it stores no rules.
+    pub(crate) fn profile_to_save(
+        &self,
+        project: ProjectId,
+    ) -> Option<signex_types::project::RuleProfile> {
+        self.document_state
+            .active_document_project()
+            .filter(|p| p.id == project)
+            .and_then(|p| p.data.rules.as_ref())
+            .map(rule_profiles::profile_of_project_rules)
+    }
+
     /// Validate the dialog and write on a worker. `overwrite` is honoured only
     /// after the dialog has asked, so a stray message cannot replace a file.
     fn start_profile_save(&mut self, overwrite: bool) -> Task<Message> {
@@ -192,13 +208,7 @@ impl Signex {
             dialog.error = Some("This platform has no config folder for rule profiles.".into());
             return Task::none();
         };
-        let Some(erc) = self
-            .document_state
-            .active_document_project()
-            .filter(|p| p.id == project)
-            .and_then(|p| p.data.rules.as_ref())
-            .map(|r| r.erc.clone())
-        else {
+        let Some(profile) = self.profile_to_save(project) else {
             self.ui_state.save_profile_dialog = None;
             crate::diagnostics::log_warning(
                 "Save as profile: the project it was opened for no longer stores ERC rules.",
@@ -210,7 +220,7 @@ impl Signex {
             dialog.error = None;
         }
         blocking(
-            move || rule_profiles::save_named_profile(&dir, &name, &version, erc, overwrite),
+            move || rule_profiles::save_profile_as(&dir, profile, &name, &version, overwrite),
             move |joined| {
                 Message::Erc(ErcMsg::ProfileSaved {
                     project,
@@ -331,10 +341,14 @@ impl Signex {
             }
         };
         let changes = diff_against_profile(&rules.erc, &profile.erc);
+        let drc_changes = diff_drc_against_profile(&rules.drc, &profile.drc);
         let recorded = rules.profile.as_ref().map(|r| r.sha256.as_str());
-        if changes.is_empty() && recorded == Some(profile.content_sha256().as_str()) {
+        if changes.is_empty()
+            && drc_changes.is_empty()
+            && recorded == Some(profile.content_sha256().as_str())
+        {
             crate::diagnostics::log_info(format!(
-                "Project ERC rules already match profile \"{}\".",
+                "Project rules already match profile \"{}\".",
                 profile.name
             ));
             return Task::none();
@@ -344,6 +358,7 @@ impl Signex {
             profile,
             source,
             changes,
+            drc_changes,
         });
         self.refresh_panel_ctx();
         Task::none()
@@ -412,15 +427,18 @@ impl Signex {
         };
         // Belt and braces: whatever changed the rules, Apply never writes a
         // result the user was not shown.
-        if diff_against_profile(&rules.erc, &pending.profile.erc) != pending.changes {
+        if diff_against_profile(&rules.erc, &pending.profile.erc) != pending.changes
+            || diff_drc_against_profile(&rules.drc, &pending.profile.drc) != pending.drc_changes
+        {
             crate::diagnostics::log_warning(format!(
-                "Update from profile \"{}\" was not applied: the project's ERC rules changed \
-                 after the differences were shown. Choose Update from profile again.",
+                "Update from profile \"{}\" was not applied: the project's rules changed after \
+                 the differences were shown. Choose Update from profile again.",
                 pending.profile.name
             ));
             return Task::none();
         }
         rules.erc = adopt_profile(&rules.erc, &pending.profile.erc);
+        rules.drc = adopt_profile_drc(&rules.drc, &pending.profile.drc);
         // Apply refreshes the content hash; it does not reclassify where the
         // project's rules came from, so a recorded source (a hand-written
         // `"file"`, say) is kept. Only a record without one takes the
@@ -443,7 +461,9 @@ impl Signex {
         if Some(pending.project) != active {
             return None;
         }
-        let lines = pending.changes.iter().map(RuleChange::describe).collect();
+        let erc = pending.changes.iter().map(RuleChange::describe);
+        let drc = pending.drc_changes.iter().map(DrcRuleChange::describe);
+        let lines = erc.chain(drc).collect();
         Some((pending.profile.name.clone(), lines))
     }
 

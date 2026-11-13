@@ -92,12 +92,12 @@ impl RuleProfile {
         bytes
     }
 
-    /// Hash of the content that decides ERC results (the `erc` rule set). The
+    /// Hash of the content that decides check results: the `erc` rule set
+    /// and, when present, the `drc` section ([`super::rule_set_sha256`]). The
     /// name and version are labels and do not enter it, so renaming a profile
-    /// is not drift. The `drc` section has its own hash
-    /// ([`DrcRuleSet::sha256_hex`]), so adding one never moves this value.
+    /// is not drift.
     pub fn content_sha256(&self) -> String {
-        self.erc.sha256_hex()
+        super::rule_set_sha256(&self.erc, &self.drc)
     }
 }
 

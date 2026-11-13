@@ -46,6 +46,29 @@ fn profile_ref_records_name_source_and_content_hash() {
     assert!(!has_drifted(&no_hash, &changed));
 }
 
+/// A change to the profile's `drc` section alone is drift (#2307 step 2b),
+/// and a project recorded against a profile with `drc` before the section
+/// entered the hash (the ERC hash only) reads as drifted once.
+#[test]
+fn a_drc_only_profile_change_is_drift() {
+    let mut p = builtin_profile();
+    p.drc.dsl = Some("rule a on clearance then error".into());
+    let r = profile_ref(&p, SOURCE_USER);
+    assert!(!has_drifted(&r, &p));
+    let mut changed = p.clone();
+    changed
+        .drc
+        .severity
+        .insert("builtin::unconnected".into(), "error".into());
+    assert!(has_drifted(&r, &changed));
+
+    let recorded_before = RuleProfileRef {
+        sha256: p.erc.sha256_hex(),
+        ..r
+    };
+    assert!(has_drifted(&recorded_before, &p));
+}
+
 #[test]
 fn diff_lists_only_differences_and_leaves_foreign_ids_alone() {
     let mut current = builtin_profile().erc;
