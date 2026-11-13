@@ -155,6 +155,13 @@ fn note_text(note: &EcoNote) -> String {
         EcoNote::KeptUnlinked { reference, .. } => {
             format!("{reference} is not linked to a part and is kept")
         }
+        EcoNote::ExtraLink {
+            reference,
+            designator,
+            ..
+        } => format!(
+            "{reference} is linked to {designator} too, which another footprint holds; its removal is not ticked"
+        ),
         EcoNote::Net(text) => text.clone(),
     }
 }

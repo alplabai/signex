@@ -56,6 +56,8 @@ mod net_tests;
 #[cfg(test)]
 mod reannotate_tests;
 #[cfg(test)]
+mod relink_tests;
+#[cfg(test)]
 mod sync_guard_tests;
 #[cfg(test)]
 mod tests;

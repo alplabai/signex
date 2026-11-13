@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use pcb_geom::{PointNm, RectNm, footprint_extent, nm_to_mm, stage};
 use signex_types::part::{FootprintSourceRef, ResolvedFootprint};
 use signex_types::pcb::{Footprint, PcbBoard, Point, SymbolLink};
+use signex_types::schematic::InstancePath;
 
 use super::change::{
     ChangeReason, EcoBlock, EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow,
@@ -32,7 +33,7 @@ pub fn diff_board(input: &EcoInput) -> EcoChangeList {
             .collect(),
     };
     let duplicates = duplicate_designators(input.parts);
-    let matched = match_parts(board, input.parts, &duplicates);
+    let matched = match_parts(board, input.parts, input.unreadable, &duplicates);
 
     let mut adds: Vec<(usize, EcoRow)> = Vec::new();
     for (pi, part) in input.parts.iter().enumerate() {
@@ -57,7 +58,25 @@ pub fn diff_board(input: &EcoInput) -> EcoChangeList {
         }
         match &fp.schematic_link {
             Some(link) if input.unreadable.iter().any(|u| is_under(&link.sheet, u)) => {}
-            Some(_) => list.rows.push(remove_row(fp)),
+            Some(link) => match input
+                .parts
+                .iter()
+                .find(|p| link.names_part(&p.part.sheet, &p.part.units))
+            {
+                // Another footprint holds the part: listed, never ticked.
+                Some(part) => {
+                    let mut row = remove_row(fp);
+                    row.default_on = false;
+                    row.on = false;
+                    list.rows.push(row);
+                    list.notes.push(EcoNote::ExtraLink {
+                        footprint: fp.uuid,
+                        reference: fp.reference.trim().to_string(),
+                        designator: part.part.designator.clone(),
+                    });
+                }
+                None => list.rows.push(remove_row(fp)),
+            },
             None => list.notes.push(EcoNote::KeptUnlinked {
                 footprint: fp.uuid,
                 reference: fp.reference.clone(),
@@ -91,11 +110,24 @@ struct Matched {
     by_designator: HashSet<usize>,
 }
 
+/// Whether `link` names some part of the design.
+fn names_any_part(link: &SymbolLink, parts: &[EcoPart]) -> bool {
+    parts
+        .iter()
+        .any(|p| link.names_part(&p.part.sheet, &p.part.units))
+}
+
 /// Match parts to footprints: by stored link first (same sheet, a shared
-/// unit), then an unlinked footprint to the one part its designator names,
-/// when no other unlinked footprint or annotated part shares that
-/// designator.
-fn match_parts(board: &PcbBoard, parts: &[EcoPart], duplicates: &HashSet<String>) -> Matched {
+/// unit), then an unlinked footprint, or one whose link names no part of the
+/// design (its sheet symbol was re-created), to the one part its designator
+/// names, when no other such footprint or annotated part shares that
+/// designator. A link under an unreadable sheet is left alone.
+fn match_parts(
+    board: &PcbBoard,
+    parts: &[EcoPart],
+    unreadable: &[InstancePath],
+    duplicates: &HashSet<String>,
+) -> Matched {
     let mut m = Matched {
         footprint_of: vec![None; parts.len()],
         part_of: HashMap::new(),
@@ -104,10 +136,10 @@ fn match_parts(board: &PcbBoard, parts: &[EcoPart], duplicates: &HashSet<String>
     for (pi, part) in parts.iter().enumerate() {
         let hit = board.footprints.iter().enumerate().position(|(fi, fp)| {
             !m.part_of.contains_key(&fi)
-                && fp.schematic_link.as_ref().is_some_and(|l| {
-                    l.sheet == part.part.sheet
-                        && l.units.iter().any(|u| part.part.units.contains(u))
-                })
+                && fp
+                    .schematic_link
+                    .as_ref()
+                    .is_some_and(|l| l.names_part(&part.part.sheet, &part.part.units))
         });
         if let Some(fi) = hit {
             m.footprint_of[pi] = Some(fi);
@@ -116,7 +148,10 @@ fn match_parts(board: &PcbBoard, parts: &[EcoPart], duplicates: &HashSet<String>
     }
     let mut unlinked: HashMap<&str, Vec<usize>> = HashMap::new();
     for (fi, fp) in board.footprints.iter().enumerate() {
-        if fp.schematic_link.is_none() {
+        let dangling = fp.schematic_link.as_ref().is_some_and(|l| {
+            !names_any_part(l, parts) && !unreadable.iter().any(|u| is_under(&l.sheet, u))
+        });
+        if fp.schematic_link.is_none() || dangling {
             unlinked.entry(fp.reference.trim()).or_default().push(fi);
         }
     }
