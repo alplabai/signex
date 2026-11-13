@@ -160,7 +160,7 @@ fn note_text(note: &EcoNote) -> String {
             designator,
             ..
         } => format!(
-            "{reference} is linked to {designator} too, which another footprint holds; its removal is not ticked"
+            "{reference} is linked to {designator} too, which another footprint holds; removing it is listed but not ticked"
         ),
         EcoNote::Net(text) => text.clone(),
     }

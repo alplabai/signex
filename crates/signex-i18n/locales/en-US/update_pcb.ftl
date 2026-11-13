@@ -73,7 +73,7 @@ update-pcb-note-part-not-read = Part { $designator } could not be read back from
 update-pcb-note-footprint-unresolved = The footprint of { $designator } could not be resolved ({ $why }); its pads keep their nets.
 update-pcb-note-kept-unlinked = { $designator } is not linked to a part and is kept.
 update-pcb-note-extra-link = { $reference } is linked to { $designator } too, which another footprint holds; removing it is listed but not ticked.
-update-pcb-note-net ={ $text }
+update-pcb-note-net = { $text }
 
 # Validate, and the footer buttons.
 update-pcb-valid = Validate: every ticked change applies to the board.

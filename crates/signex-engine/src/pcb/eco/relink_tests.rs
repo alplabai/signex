@@ -65,7 +65,7 @@ fn new_sheet_symbol_uuid_does_not_tick_removal_of_still_present_parts() {
 }
 
 #[test]
-fn new_sheet_symbol_uuid_relinks_by_designator_without_add_rows() {
+fn new_sheet_symbol_uuid_relinks_by_unit_without_add_rows() {
     let list = moved_sheet_design(["R1", "R2"]).diff();
     let new = root().child(u(0xb));
     for id in [0xa1, 0xa2] {
@@ -88,19 +88,101 @@ fn new_sheet_symbol_uuid_relinks_by_designator_without_add_rows() {
 }
 
 #[test]
-fn new_sheet_symbol_uuid_with_ambiguous_designator_keeps_removal_and_add() {
-    // Both dangling footprints say R1: no unique match, so today's rows stay.
+fn a_moved_sheet_relinks_by_unit_whatever_the_board_designators_say() {
+    // Both board footprints say R1, but each shares a unit with one part:
+    // both relink, and the second is renamed to its part's designator.
     let list = moved_sheet_design(["R1", "R1"]).diff();
-    assert!(list.row(&EcoKey::Link(u(0xa1))).is_none());
-    assert!(list.row(&EcoKey::Link(u(0xa2))).is_none());
-    let rows = removals(&list);
-    assert_eq!(rows.len(), 2, "{}", report_text(&list));
-    assert!(rows.iter().all(|r| r.default_on));
+    assert!(list.row(&EcoKey::Link(u(0xa1))).is_some());
+    assert!(list.row(&EcoKey::Link(u(0xa2))).is_some());
+    assert!(list.row(&EcoKey::SetDesignator(u(0xa2))).is_some());
+    assert!(removals(&list).is_empty(), "{}", report_text(&list));
     assert!(
-        list.rows
+        !list
+            .rows
             .iter()
             .any(|r| matches!(r.change, EcoChange::AddFootprint { .. }))
     );
+}
+
+#[test]
+fn a_deleted_part_replaced_under_its_designator_is_not_relinked() {
+    let d = Design::new(
+        board(vec![board_fp(
+            0xa1,
+            "R5",
+            "10k",
+            &[0x101],
+            &r0603(),
+            (10.0, 10.0),
+        )]),
+        vec![part("R5", &[0x201], "100n", Ok(sot23()))],
+        netlist(&[]),
+    );
+    let list = d.diff();
+    assert!(
+        list.row(&EcoKey::Link(u(0xa1))).is_none(),
+        "{}",
+        report_text(&list)
+    );
+}
+
+#[test]
+fn a_stale_link_does_not_take_an_unlinked_footprints_relink() {
+    let mut f1 = board_fp(0xa1, "R1", "10k", &[], &r0603(), (10.0, 10.0));
+    f1.schematic_link = None;
+    let f2 = board_fp(0xa2, "R1", "10k", &[0x999], &r0603(), (20.0, 10.0));
+    let d = Design::new(
+        board(vec![f1, f2]),
+        vec![part("R1", &[0x101], "10k", Ok(r0603()))],
+        netlist(&[]),
+    );
+    let list = d.diff();
+    assert!(
+        list.row(&EcoKey::Link(u(0xa1))).is_some(),
+        "{}",
+        report_text(&list)
+    );
+}
+
+#[test]
+fn a_stale_link_whose_units_match_two_parts_is_not_relinked() {
+    // A child sheet placed twice: the same unit uuid under two paths.
+    let mut fp = board_fp(0xa1, "R1", "10k", &[0x101], &r0603(), (10.0, 10.0));
+    fp.schematic_link = Some(SymbolLink::new(root().child(u(0xa)), [u(0x101)]));
+    let mut first = part("R1", &[0x101], "10k", Ok(r0603()));
+    first.part.sheet = root().child(u(0xb));
+    let mut second = part("R2", &[0x101], "10k", Ok(r0603()));
+    second.part.sheet = root().child(u(0xc));
+    let list = Design::new(board(vec![fp]), vec![first, second], netlist(&[])).diff();
+    assert!(
+        list.row(&EcoKey::Link(u(0xa1))).is_none(),
+        "{}",
+        report_text(&list)
+    );
+    let removal = list
+        .row(&EcoKey::RemoveFootprint(u(0xa1)))
+        .expect("removal");
+    assert!(removal.default_on);
+}
+
+#[test]
+fn a_stale_link_under_an_unreadable_sheet_is_left_alone() {
+    let gone = root().child(u(0xa));
+    let mut fp = board_fp(0xa1, "R1", "10k", &[0x101], &r0603(), (10.0, 10.0));
+    fp.schematic_link = Some(SymbolLink::new(gone.clone(), [u(0x101)]));
+    let mut design = Design::new(
+        board(vec![fp]),
+        vec![part("R1", &[0x101], "10k", Ok(r0603()))],
+        netlist(&[]),
+    );
+    design.unreadable = vec![gone];
+    let list = design.diff();
+    assert!(
+        list.row(&EcoKey::Link(u(0xa1))).is_none(),
+        "{}",
+        report_text(&list)
+    );
+    assert!(list.row(&EcoKey::RemoveFootprint(u(0xa1))).is_none());
 }
 
 fn second_link_design() -> Design {
@@ -126,6 +208,17 @@ fn second_footprint_linked_to_same_part_is_not_a_ticked_removal() {
         "ticked RemoveFootprint rows:\n{}",
         report_text(&list)
     );
+}
+
+#[test]
+fn second_footprint_linked_to_a_part_off_the_board_keeps_both_removals_ticked() {
+    let mut design = second_link_design();
+    design.parts[0].on_board = false;
+    let list = design.diff();
+    for id in [0xa1, 0xa9] {
+        let row = list.row(&EcoKey::RemoveFootprint(u(id))).expect("removal");
+        assert!(row.default_on, "{}", report_text(&list));
+    }
 }
 
 #[test]
