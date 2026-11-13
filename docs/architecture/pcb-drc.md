@@ -192,9 +192,18 @@ implicit value, so the finding carries its id and severity.
 A written rule that wins for a net of a net class below what that net would
 otherwise need (the larger of the setup and class values) is applied and
 said, never silently clamped: one Messages warning per rule and class,
-`DRC rule 'base' lowers net class 'HV' clearance 0.8 → 0.15 mm`. It is
-checked on the board's own copper layers (a board listing none is read as
-two layers) and for each object pair a rule names.
+`DRC rule 'base' lowers net class 'HV' clearance 0.8 → 0.15 mm` (or `lowers
+the board setup clearance for net class 'HV'` when the setup value is the
+larger). It is checked for each object pair a rule names.
+
+Written rules are resolved only on the board's own copper layers (the
+stackup's copper; a board listing none is read as two layers, top and
+bottom). A through via or through-hole pad reaches every layer bit, so its
+layers are first clipped to the board's: a `layer == inner` rule touches
+nothing on a two-layer board. A clearance is resolved per shared layer, and
+a track or via limit per layer the object reaches, the strictest layer's
+limit holding: a rule for the inner layers never lifts a board-wide via
+minimum off the outer ones.
 
 A rule whose net, class or pattern scope covers no net checks nothing and
 is said: a class that does not exist is a warning (`DRC rule 'hv': there is
