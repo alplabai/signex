@@ -114,7 +114,7 @@ impl Signex {
             panel.default_clearance_mm =
                 Some(format!("{:.1}", pcb_geom::nm_to_mm(report.rules.clearance)));
         }
-        panel.written_rules = report.rules.user_rules().count() > 0;
+        panel.written_clearance = report.rules.sets_written_clearance();
         panel.rules_not_applied = report.rules.rules_not_applied;
         panel.rule_text_unparsed = report.rules.texts_not_applied > 0;
         panel.clearance = report.count(ViolationKind::Clearance);
@@ -234,7 +234,7 @@ fn summary_line(report: &signex_drc::DrcReport) -> String {
     let count = |k| report.count(k);
     let rules = &report.rules;
     let board_mm = pcb_geom::nm_to_mm(rules.clearance);
-    let clearance = if rules.user_rules().count() > 0 {
+    let clearance = if rules.sets_written_clearance() {
         format!("minimum clearance {board_mm} mm where no written rule applies")
     } else {
         format!("minimum clearance {board_mm} mm")
@@ -259,6 +259,9 @@ fn summary_line(report: &signex_drc::DrcReport) -> String {
 fn log_rule_text(report: &signex_drc::DrcReport) {
     for note in &report.rules.notes {
         crate::diagnostics::log_warning(note.clone());
+    }
+    for remark in &report.rules.remarks {
+        crate::diagnostics::log_info(remark.clone());
     }
     if report.rules.texts_not_applied > 0 {
         crate::diagnostics::log_warning("DRC rules: the rule text was not applied (syntax error)");
@@ -295,7 +298,7 @@ fn log_report(report: &signex_drc::DrcReport, names: &std::collections::BTreeMap
     log_rule_text(report);
     if report.rules.from_default {
         let mm = pcb_geom::nm_to_mm(report.rules.clearance);
-        crate::diagnostics::log_info(if report.rules.user_rules().count() > 0 {
+        crate::diagnostics::log_info(if report.rules.sets_written_clearance() {
             format!(
                 "DRC: No clearance rule set on this board; {mm} mm applies where no written rule does. Set it in Board Setup."
             )

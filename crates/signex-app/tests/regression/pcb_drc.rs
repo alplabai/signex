@@ -277,7 +277,63 @@ fn without_rule_text_the_report_and_its_messages_are_unchanged() {
         assert_eq!(done.report.violations.len(), 1);
         assert_eq!(done.report.violations[0].rule, None);
         assert_eq!(done.report.rules.user_rules().count(), 0);
+        let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+        assert!(
+            !panel.written_clearance && panel.rules_not_applied == 0 && !panel.rule_text_unparsed,
+            "{dsl:?}"
+        );
     }
+}
+
+/// A rule whose scope matches no net is said, not silently idle: a class
+/// that does not exist as a warning, a net the board lacks as info.
+#[test]
+fn a_rule_that_matches_no_net_is_said() {
+    let (mut app, _tmp, _path) = open_board();
+    load_profile_dsl(
+        &mut app,
+        Some(
+            "rule hv on clearance when class == \"Hv\" require clearance >= 0.6mm then error\n\
+             rule vbus on track when net == \"VBUS\" require width >= 0.5mm then error",
+        ),
+    );
+    let lines = drc_lines_of_a_run(&mut app);
+    for want in [
+        "DRC rule 'hv': there is no net class 'Hv'; the rule checks nothing",
+        "DRC rule 'vbus': no net of this board is 'VBUS'; the rule checks nothing",
+    ] {
+        assert!(lines.contains(&want.to_string()), "{want}\n{lines:?}");
+    }
+}
+
+/// Rule text that sets no clearance (a width rule only) leaves the
+/// clearance wording as it was.
+#[test]
+fn rule_text_without_a_clearance_rule_keeps_the_clearance_wording() {
+    let (mut app, _tmp, _path) = open_board();
+    load_profile_dsl(
+        &mut app,
+        Some("rule wide on track require width >= 0.1mm then warning"),
+    );
+    let lines = drc_lines_of_a_run(&mut app);
+    assert!(
+        lines.contains(
+            &"DRC: No clearance rule set on this board; checked with 0.19999999999999998 mm. \
+              Set it in Board Setup."
+                .to_string()
+        ),
+        "{lines:?}"
+    );
+    assert!(
+        lines.contains(
+            &"DRC: 1 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance \
+              0.19999999999999998 mm)"
+                .to_string()
+        ),
+        "{lines:?}"
+    );
+    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    assert!(!panel.written_clearance);
 }
 
 /// A rule in the machine profile's text loosens the clearance and adds a
@@ -335,7 +391,7 @@ fn rule_text_in_the_profile_is_applied_by_the_run() {
     let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
     assert_eq!(panel.rows.len(), 3);
     assert!(!panel.rows[0].over_maximum);
-    assert!(panel.written_rules);
+    assert!(panel.written_clearance);
     assert_eq!(
         (panel.rules_not_applied, panel.rule_text_unparsed),
         (0, false)
@@ -366,7 +422,7 @@ fn rule_text_with_a_syntax_error_is_said_beside_the_results() {
     let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
     assert_eq!(done.report.violations.len(), 1);
     let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
-    assert!(panel.rule_text_unparsed && !panel.written_rules);
+    assert!(panel.rule_text_unparsed && !panel.written_clearance);
 }
 
 /// A rule that does not compile is named in Messages and skipped; the rest

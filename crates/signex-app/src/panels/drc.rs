@@ -46,9 +46,9 @@ pub struct DrcPanel {
     /// The minimum clearance in mm, when the board set none and the default
     /// was used.
     pub default_clearance_mm: Option<String>,
-    /// The run applied written rules (the default note then says it holds
-    /// only where no written rule does).
-    pub written_rules: bool,
+    /// The run applied a written clearance rule (the default note then says
+    /// it holds only where no written rule does).
+    pub written_clearance: bool,
     /// Written rules the run did not apply, and whether a rule text had a
     /// syntax error (none of it applied); see Messages for which.
     pub rules_not_applied: usize,
@@ -177,7 +177,7 @@ fn status<'a>(ctx: &'a PanelContext, drc: &DrcPanel, mut col: Rows<'a>) -> Rows<
         return col.push(note(t!(i18n, ids::DRC_IDLE), muted));
     }
     if let Some(mm) = &drc.default_clearance_mm {
-        let id = if drc.written_rules {
+        let id = if drc.written_clearance {
             ids::DRC_DEFAULT_CLEARANCE_WRITTEN
         } else {
             ids::DRC_DEFAULT_CLEARANCE
@@ -314,12 +314,12 @@ mod tests {
     /// value holds only where no written rule does; without, it is as before.
     #[test]
     fn the_default_clearance_note_follows_whether_written_rules_ran() {
-        let texts = |written_rules: bool| {
+        let texts = |written_clearance: bool| {
             let mut ctx = context(false);
             ctx.pcb_drc = Some(DrcPanel {
                 ran: true,
                 default_clearance_mm: Some("0.2".into()),
-                written_rules,
+                written_clearance,
                 ..DrcPanel::default()
             });
             let section = section(&ctx).expect("section");
