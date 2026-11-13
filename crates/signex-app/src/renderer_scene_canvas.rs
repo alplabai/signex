@@ -194,8 +194,8 @@ pub(crate) fn color_from_rgba(rgba: [f32; 4]) -> Color {
     Color::from_rgba(rgba[0], rgba[1], rgba[2], rgba[3])
 }
 
-pub(crate) fn draw_dashed_line(
-    frame: &mut canvas::Frame,
+pub(crate) fn draw_dashed_line<R: iced::advanced::graphics::geometry::Renderer>(
+    frame: &mut canvas::Frame<R>,
     p0: Point,
     p1: Point,
     width: f32,
