@@ -587,7 +587,7 @@ This cannot be undone through {} alone — consider saving first.",
                 )),
                 dialog_footer(vec![
                     dialog_button(
-                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                        t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::Annotate(AnnotateMsg::CloseResetConfirm)),
                         tokens,

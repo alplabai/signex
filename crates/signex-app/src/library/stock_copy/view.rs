@@ -104,11 +104,7 @@ pub fn view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
-                cancel,
-                tokens,
-            ),
+            cancel_btn(t!(i18n, ids::DIALOG_BUTTON_CANCEL), cancel, tokens),
             primary_btn(
                 t!(i18n, ids::LIBRARY_STOCK_COPY_NEW_LIBRARY),
                 LibraryMessage::StockCopy(StockCopyMsg::NewLibraryRequested),

@@ -24,7 +24,7 @@ use iced::widget::{column, container, row};
 use iced::{Element, Length, Widget};
 use signex_widgets::{button, raw, text};
 
-use signex_i18n::{ids, shortcut_ids, t};
+use signex_i18n::{ids, t};
 use signex_types::theme::ThemeTokens;
 
 use crate::styles::{Spacing, TypeScale};
@@ -123,12 +123,12 @@ pub fn view_align_modal<'a>(
         Vec::new(),
         vec![
             modal_chrome::cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 cancel_msg(&path),
                 tokens,
             ),
             modal_chrome::primary_btn(
-                t!(i18n, shortcut_ids::PREF_KEYMAP_OK),
+                t!(i18n, ids::DIALOG_BUTTON_OK),
                 LibraryMessage::PrimitiveEditorEvent {
                     path,
                     msg: PrimitiveEdit::Footprint(FootprintEditorMsg::AlignConfirm),

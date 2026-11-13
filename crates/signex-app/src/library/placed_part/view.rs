@@ -189,12 +189,12 @@ pub fn change_preview_view<'a>(
     }
     let buttons = vec![
         secondary_btn(
-            t!(i18n, ids::DIALOG_BACK),
+            t!(i18n, ids::DIALOG_BUTTON_BACK),
             LibraryMessage::PlacedPart(PlacedPartMsg::ChangePreviewBackedOut),
             tokens,
         ),
         cancel_btn(
-            t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
             LibraryMessage::ClosePicker,
             tokens,
         ),
@@ -238,7 +238,7 @@ pub fn datasheet_choice_view<'a>(
         ));
     }
     let buttons = vec![cancel_btn(
-        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+        t!(i18n, ids::DIALOG_BUTTON_CANCEL),
         LibraryMessage::ClosePicker,
         tokens,
     )];

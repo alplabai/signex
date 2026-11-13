@@ -59,7 +59,7 @@ pub fn view<'a>(
     digikey_actions = digikey_actions.push(Space::new().width(Length::Fill).boxed());
     if settings.digikey_in_flight {
         digikey_actions = digikey_actions.push(secondary_btn(
-            t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
             LibraryMessage::Settings(SettingsMsg::DigiKeyCancel),
             tokens,
         ));

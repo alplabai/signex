@@ -80,7 +80,7 @@ impl Signex {
             )
         } else {
             dialog_button(
-                t!(i18n, ids::LIBRARY_BROWSER_CREATE_TABLE),
+                t!(i18n, ids::DIALOG_BUTTON_CREATE),
                 DialogButtonKind::Primary,
                 Some(create),
                 tokens,

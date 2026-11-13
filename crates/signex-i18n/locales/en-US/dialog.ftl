@@ -136,6 +136,13 @@ dialog-annotate-reprefix = Re-prefix to standard
 dialog-annotate-reset-all = Reset All
 dialog-annotate-reset-renumber = Reset & Renumber
 dialog-annotate-accept = Accept Changes
+# Re-prefix confirm button. $count is how many parts change (a whole number);
+# the English keeps "part(s)" for every count.
+dialog-annotate-reprefix-parts =
+    { $count ->
+        [one] Re-prefix { $count } part(s)
+       *[other] Re-prefix { $count } part(s)
+    }
 # Autosave recovery: load the recovered copy as unsaved edits.
 dialog-autosave-recovery-restore = Restore
 dialog-autosave-recovery-later = Decide later
@@ -153,7 +160,6 @@ dialog-erc-run = Run ERC
 dialog-erc-apply-update = Apply update
 # Replace an existing file or profile.
 dialog-overwrite = Overwrite
-dialog-back = Back
 dialog-rename-submit = Rename
 dialog-version-control-enable = Enable
 dialog-version-control-enabling = Enabling…
@@ -164,3 +170,20 @@ dialog-disk-conflict-reload = Reload from disk
 dialog-disk-conflict-recreate = Re-create
 dialog-netlist-export-anyway = Export anyway (incomplete)
 dialog-print-preview-export-pdf = Export PDF
+
+## Shared by dialog footer buttons (#2225): one id per common action, so
+## every dialog's Cancel, OK, Save … translates the same way.
+dialog-button-cancel = Cancel
+dialog-button-ok = OK
+dialog-button-apply = Apply
+dialog-button-close = Close
+dialog-button-save = Save
+dialog-button-save-all = Save All
+dialog-button-discard = Discard
+dialog-button-delete = Delete
+dialog-button-create = Create
+dialog-button-back = Back
+dialog-button-copy = Copy
+dialog-button-undo = Undo
+dialog-button-redo = Redo
+dialog-button-place = Place

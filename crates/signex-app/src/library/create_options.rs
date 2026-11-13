@@ -135,7 +135,7 @@ pub fn view<'a>(
         Vec::new(),
         vec![
             cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::LibraryCreateOptionsCancel,
                 tokens,
             ),

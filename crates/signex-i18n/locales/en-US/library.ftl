@@ -202,7 +202,7 @@ library-distributor-connect-oauth = Connect via OAuth
 library-distributor-test = Test
 library-stock-copy-new-library = New Library…
 library-updates-skip-all = Skip All
-# $count is how many components are ticked, already written out.
+# $count is how many components are ticked (a whole number).
 library-updates-apply = Update Selected Components ({ $count })
 # Change Component: confirm; "anyway" when the change loses connections or data.
 library-change-part-confirm = Change

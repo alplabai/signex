@@ -522,7 +522,6 @@ fn moved_dialog_button_labels_keep_their_english() {
         (ids::DIALOG_ERC_RUN, "Run ERC"),
         (ids::DIALOG_ERC_APPLY_UPDATE, "Apply update"),
         (ids::DIALOG_OVERWRITE, "Overwrite"),
-        (ids::DIALOG_BACK, "Back"),
         (ids::DIALOG_RENAME_SUBMIT, "Rename"),
         (ids::DIALOG_VERSION_CONTROL_ENABLE, "Enable"),
         (ids::DIALOG_VERSION_CONTROL_ENABLING, "Enabling\u{2026}"),
@@ -564,37 +563,53 @@ fn moved_dialog_button_labels_keep_their_english() {
         (ids::LIBRARY_UPDATES_SKIP_ALL, "Skip All"),
         (ids::LIBRARY_CHANGE_PART_CONFIRM, "Change"),
         (ids::LIBRARY_CHANGE_PART_CONFIRM_ANYWAY, "Change anyway"),
-        // Reused for the buttons with the same English and meaning.
-        (ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL, "Cancel"),
-        (ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY, "Apply"),
-        (ids::UPDATE_PCB_CLOSE, "Close"),
-        (ids::BOARD_SKETCH_DISCARD, "Discard"),
-        (ids::LIBRARY_BROWSER_CREATE_TABLE, "Create"),
-        (ids::PANELS_SCH_LIBRARY_PLACE, "Place"),
-        (ids::PANELS_SCH_LIBRARY_DELETE, "Delete"),
-        (ids::PANELS_NET_CLASSES_UNDO, "Undo"),
-        (ids::PANELS_NET_CLASSES_REDO, "Redo"),
+        // Shared by dialog footer buttons.
+        (ids::DIALOG_BUTTON_CANCEL, "Cancel"),
+        (ids::DIALOG_BUTTON_OK, "OK"),
+        (ids::DIALOG_BUTTON_APPLY, "Apply"),
+        (ids::DIALOG_BUTTON_CLOSE, "Close"),
+        (ids::DIALOG_BUTTON_SAVE, "Save"),
+        (ids::DIALOG_BUTTON_SAVE_ALL, "Save All"),
+        (ids::DIALOG_BUTTON_DISCARD, "Discard"),
+        (ids::DIALOG_BUTTON_DELETE, "Delete"),
+        (ids::DIALOG_BUTTON_CREATE, "Create"),
+        (ids::DIALOG_BUTTON_BACK, "Back"),
+        (ids::DIALOG_BUTTON_COPY, "Copy"),
+        (ids::DIALOG_BUTTON_UNDO, "Undo"),
+        (ids::DIALOG_BUTTON_REDO, "Redo"),
+        (ids::DIALOG_BUTTON_PLACE, "Place"),
+        // Reused: the same action under its own surface.
         (ids::EDITORS_SYMBOL_COPY_AGAIN, "Copy Again"),
         (ids::PANELS_LIBRARY_ROW_PICK_SYMBOL, "Pick Symbol\u{2026}"),
         (
             ids::PANELS_LIBRARY_ROW_PICK_FOOTPRINT,
             "Pick Footprint\u{2026}",
         ),
-        (crate::shortcut_ids::PREF_KEYMAP_OK, "OK"),
-        (crate::menu_ids::MENU_FILE_SAVE_ALL, "Save All"),
-        (crate::command_ids::CMD_MENU_SAVE_DOCUMENT, "Save"),
-        (crate::command_ids::CMD_COPY, "Copy"),
     ] {
         assert_eq!(shown(id, &[]), english, "{}", id.as_str());
     }
-    // The count is passed already written out, so it is never regrouped.
+    // Counts are grouped like every catalog count (#2291): 1,156, not 1156.
     for (count, english) in [
-        ("0", "Update Selected Components (0)"),
-        ("3", "Update Selected Components (3)"),
-        ("1156", "Update Selected Components (1156)"),
+        (0_usize, "Update Selected Components (0)"),
+        (3, "Update Selected Components (3)"),
+        (1156, "Update Selected Components (1,156)"),
     ] {
         assert_eq!(
             shown(ids::LIBRARY_UPDATES_APPLY, &[("count", count.into())]),
+            english
+        );
+    }
+    // The re-prefix count keeps "part(s)" for one part and many.
+    for (count, english) in [
+        (1_usize, "Re-prefix 1 part(s)"),
+        (4, "Re-prefix 4 part(s)"),
+        (1156, "Re-prefix 1,156 part(s)"),
+    ] {
+        assert_eq!(
+            shown(
+                ids::DIALOG_ANNOTATE_REPREFIX_PARTS,
+                &[("count", count.into())]
+            ),
             english
         );
     }

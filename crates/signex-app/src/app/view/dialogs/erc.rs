@@ -8,7 +8,7 @@
 use super::*;
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
-use signex_i18n::{command_ids, ids, t};
+use signex_i18n::{ids, t};
 use signex_widgets::{raw, text, text_input};
 
 use super::rule_editor::{RuleEditor, rule_editor};
@@ -135,11 +135,11 @@ impl Signex {
                 ));
             }
             extras.push(secondary(
-                t!(i18n, ids::PANELS_NET_CLASSES_UNDO),
+                t!(i18n, ids::DIALOG_BUTTON_UNDO),
                 can_undo.then_some(Message::Erc(ErcMsg::RulesUndone)),
             ));
             extras.push(secondary(
-                t!(i18n, ids::PANELS_NET_CLASSES_REDO),
+                t!(i18n, ids::DIALOG_BUTTON_REDO),
                 can_redo.then_some(Message::Erc(ErcMsg::RulesRedone)),
             ));
         }
@@ -147,7 +147,7 @@ impl Signex {
             extras,
             vec![
                 dialog_button(
-                    t!(i18n, ids::UPDATE_PCB_CLOSE),
+                    t!(i18n, ids::DIALOG_BUTTON_CLOSE),
                     DialogButtonKind::Cancel,
                     Some(Message::Erc(ErcMsg::CloseDialog)),
                     tokens,
@@ -264,7 +264,7 @@ impl Signex {
                 tokens,
             ),
             dialog_button(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 DialogButtonKind::Cancel,
                 Some(Message::Erc(ErcMsg::ProfileUpdateCancelled)),
                 tokens,
@@ -322,7 +322,7 @@ impl Signex {
                             tokens,
                         ),
                         dialog_button(
-                            t!(i18n, ids::DIALOG_BACK),
+                            t!(i18n, ids::DIALOG_BUTTON_BACK),
                             DialogButtonKind::Secondary,
                             Some(Message::Erc(ErcMsg::ProfileSaveCancelled)),
                             tokens,
@@ -381,13 +381,13 @@ impl Signex {
             panel = panel.push(
                 row![
                     dialog_button(
-                        t!(i18n, command_ids::CMD_MENU_SAVE_DOCUMENT),
+                        t!(i18n, ids::DIALOG_BUTTON_SAVE),
                         DialogButtonKind::Primary,
                         editable.then(submit),
                         tokens,
                     ),
                     dialog_button(
-                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                        t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::Erc(ErcMsg::ProfileSaveCancelled)),
                         tokens,

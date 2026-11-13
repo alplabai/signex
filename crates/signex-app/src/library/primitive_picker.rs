@@ -23,7 +23,7 @@
 
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Border, Element, Length, Theme, Widget};
-use signex_i18n::{command_ids, ids, t};
+use signex_i18n::{ids, t};
 use signex_library::{PrimitiveKind, PrimitiveRef, PrimitiveSummary};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -367,7 +367,7 @@ pub fn view<'a>(
             tokens,
         )],
         vec![cancel_btn(
-            t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
             LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel),
             tokens,
         )],
@@ -427,7 +427,7 @@ fn copy_confirm_row<'a>(
         row![
             text(raw("Opening library…")).size(TS.body),
             cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyDeclined),
                 tokens,
             ),
@@ -443,7 +443,7 @@ fn copy_confirm_row<'a>(
                 tokens,
             ),
             cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyDeclined),
                 tokens,
             ),
@@ -455,7 +455,7 @@ fn copy_confirm_row<'a>(
     } else {
         row![
             primary_btn(
-                t!(i18n, command_ids::CMD_COPY),
+                t!(i18n, ids::DIALOG_BUTTON_COPY),
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyConfirmed),
                 tokens,
             ),

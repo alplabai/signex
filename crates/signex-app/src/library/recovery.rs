@@ -217,7 +217,7 @@ fn library_missing_view<'a>(
         Vec::new(),
         vec![
             cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
                 tokens,
             ),
@@ -320,7 +320,7 @@ fn git_missing_view<'a>(
         Vec::new(),
         vec![
             cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
                 tokens,
             ),
@@ -400,7 +400,7 @@ fn broken_binding_view<'a>(
         Vec::new(),
         vec![
             cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
                 tokens,
             ),

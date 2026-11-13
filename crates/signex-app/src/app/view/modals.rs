@@ -62,13 +62,13 @@ impl Signex {
 
         let footer = dialog_footer(vec![
             dialog_button(
-                t!(self.ui_state.i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(self.ui_state.i18n, ids::DIALOG_BUTTON_CANCEL),
                 DialogButtonKind::Cancel,
                 Some(Message::MoveSelection(MoveSelectionMsg::Close)),
                 tokens,
             ),
             dialog_button(
-                t!(self.ui_state.i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY),
+                t!(self.ui_state.i18n, ids::DIALOG_BUTTON_APPLY),
                 DialogButtonKind::Primary,
                 (selection_count > 0).then_some(Message::MoveSelection(MoveSelectionMsg::Apply)),
                 tokens,
@@ -498,7 +498,7 @@ impl Signex {
 
         let footer = dialog_footer(vec![
             dialog_button(
-                t!(self.ui_state.i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(self.ui_state.i18n, ids::DIALOG_BUTTON_CANCEL),
                 DialogButtonKind::Cancel,
                 Some(Message::NetColor(NetColorMsg::CustomShow(false))),
                 &self.document_state.panel_ctx.tokens,

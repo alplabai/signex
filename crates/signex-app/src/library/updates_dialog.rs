@@ -332,7 +332,7 @@ pub fn view<'a>(
         )],
         vec![
             cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::LibraryUpdatesCancel,
                 tokens,
             ),
@@ -340,7 +340,7 @@ pub fn view<'a>(
                 t!(
                     i18n,
                     ids::LIBRARY_UPDATES_APPLY,
-                    "count" => selected.to_string()
+                    "count" => selected
                 ),
                 LibraryMessage::LibraryUpdatesApply,
                 selected > 0,

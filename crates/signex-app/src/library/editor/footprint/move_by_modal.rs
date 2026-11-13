@@ -21,7 +21,7 @@ use iced::widget::{column, container, row};
 use iced::{Background, Border, Element, Length, Widget as _};
 use signex_widgets::{raw, text, text_input};
 
-use signex_i18n::{ids, shortcut_ids, t};
+use signex_i18n::{ids, t};
 use signex_types::theme::ThemeTokens;
 
 use crate::styles::{Spacing, TypeScale};
@@ -126,7 +126,7 @@ pub fn view_move_by_modal<'a>(
         Vec::new(),
         vec![
             modal_chrome::cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::PrimitiveEditorEvent {
                     path: path.clone(),
                     msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByCancel),
@@ -134,7 +134,7 @@ pub fn view_move_by_modal<'a>(
                 tokens,
             ),
             modal_chrome::primary_btn(
-                t!(i18n, shortcut_ids::PREF_KEYMAP_OK),
+                t!(i18n, ids::DIALOG_BUTTON_OK),
                 LibraryMessage::PrimitiveEditorEvent {
                     path,
                     msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByConfirm),

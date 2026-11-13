@@ -168,7 +168,7 @@ pub(crate) fn danger_btn<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_i18n::{ids, shortcut_ids, t};
+    use signex_i18n::{ids, t};
     use signex_types::theme::ThemeId;
 
     /// The chrome builds from tokens alone for every built-in theme; no
@@ -189,23 +189,23 @@ mod tests {
                 &tokens,
             );
             let _ = cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::ClosePicker,
                 &tokens,
             );
             let _ = primary_btn(
-                t!(i18n, shortcut_ids::PREF_KEYMAP_OK),
+                t!(i18n, ids::DIALOG_BUTTON_OK),
                 LibraryMessage::ClosePicker,
                 &tokens,
             );
             let _ = primary_btn_if(
-                t!(i18n, shortcut_ids::PREF_KEYMAP_OK),
+                t!(i18n, ids::DIALOG_BUTTON_OK),
                 LibraryMessage::ClosePicker,
                 false,
                 &tokens,
             );
             let _ = danger_btn(
-                t!(i18n, ids::PANELS_SCH_LIBRARY_DELETE),
+                t!(i18n, ids::DIALOG_BUTTON_DELETE),
                 LibraryMessage::ClosePicker,
                 &tokens,
             );

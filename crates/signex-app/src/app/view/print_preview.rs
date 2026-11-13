@@ -10,7 +10,7 @@ use crate::styles::{
     dialog_message,
 };
 use iced::widget::Widget;
-use signex_i18n::{I18n, Localized, ids, shortcut_ids, t};
+use signex_i18n::{I18n, Localized, ids, t};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -35,7 +35,7 @@ impl Signex {
         // A lone OK is the primary; beside choices it is the leading Cancel.
         if buttons.is_empty() {
             buttons.push(dialog_button(
-                t!(i18n, shortcut_ids::PREF_KEYMAP_OK),
+                t!(i18n, ids::DIALOG_BUTTON_OK),
                 DialogButtonKind::Primary,
                 Some(Message::Overlay(OverlayMsg::DismissErrorNotice)),
                 tokens,
@@ -44,7 +44,7 @@ impl Signex {
             buttons.insert(
                 0,
                 dialog_button(
-                    t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                    t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                     DialogButtonKind::Cancel,
                     Some(Message::Overlay(OverlayMsg::DismissErrorNotice)),
                     tokens,
@@ -157,7 +157,7 @@ impl Signex {
             // deliberate, risky choice, so it takes the danger style.
             dialog_footer(vec![
                 dialog_button(
-                    t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                    t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                     DialogButtonKind::Cancel,
                     Some(Message::Export(ExportMsg::NetlistCancelIncomplete)),
                     tokens,

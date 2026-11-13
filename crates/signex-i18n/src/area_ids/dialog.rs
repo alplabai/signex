@@ -6,6 +6,7 @@ define_ids! {
     DIALOG_ANNOTATE_RESET_ALL = "dialog-annotate-reset-all";
     DIALOG_ANNOTATE_RESET_RENUMBER = "dialog-annotate-reset-renumber";
     DIALOG_ANNOTATE_ACCEPT = "dialog-annotate-accept";
+    DIALOG_ANNOTATE_REPREFIX_PARTS = "dialog-annotate-reprefix-parts";
     DIALOG_AUTOSAVE_RECOVERY_RESTORE = "dialog-autosave-recovery-restore";
     DIALOG_AUTOSAVE_RECOVERY_LATER = "dialog-autosave-recovery-later";
     DIALOG_BOM_EXPORT = "dialog-bom-export";
@@ -19,7 +20,6 @@ define_ids! {
     DIALOG_ERC_RUN = "dialog-erc-run";
     DIALOG_ERC_APPLY_UPDATE = "dialog-erc-apply-update";
     DIALOG_OVERWRITE = "dialog-overwrite";
-    DIALOG_BACK = "dialog-back";
     DIALOG_RENAME_SUBMIT = "dialog-rename-submit";
     DIALOG_VERSION_CONTROL_ENABLE = "dialog-version-control-enable";
     DIALOG_VERSION_CONTROL_ENABLING = "dialog-version-control-enabling";
@@ -29,4 +29,18 @@ define_ids! {
     DIALOG_DISK_CONFLICT_RECREATE = "dialog-disk-conflict-recreate";
     DIALOG_NETLIST_EXPORT_ANYWAY = "dialog-netlist-export-anyway";
     DIALOG_PRINT_PREVIEW_EXPORT_PDF = "dialog-print-preview-export-pdf";
+    DIALOG_BUTTON_CANCEL = "dialog-button-cancel";
+    DIALOG_BUTTON_OK = "dialog-button-ok";
+    DIALOG_BUTTON_APPLY = "dialog-button-apply";
+    DIALOG_BUTTON_CLOSE = "dialog-button-close";
+    DIALOG_BUTTON_SAVE = "dialog-button-save";
+    DIALOG_BUTTON_SAVE_ALL = "dialog-button-save-all";
+    DIALOG_BUTTON_DISCARD = "dialog-button-discard";
+    DIALOG_BUTTON_DELETE = "dialog-button-delete";
+    DIALOG_BUTTON_CREATE = "dialog-button-create";
+    DIALOG_BUTTON_BACK = "dialog-button-back";
+    DIALOG_BUTTON_COPY = "dialog-button-copy";
+    DIALOG_BUTTON_UNDO = "dialog-button-undo";
+    DIALOG_BUTTON_REDO = "dialog-button-redo";
+    DIALOG_BUTTON_PLACE = "dialog-button-place";
 }

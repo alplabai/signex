@@ -177,7 +177,7 @@ pub fn view<'a>(
         Vec::new(),
         vec![
             cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::ClosePicker,
                 tokens,
             ),
@@ -187,7 +187,7 @@ pub fn view<'a>(
                     if changing {
                         ids::LIBRARY_PICKER_NEXT
                     } else {
-                        ids::PANELS_SCH_LIBRARY_PLACE
+                        ids::DIALOG_BUTTON_PLACE
                     }
                 ),
                 if changing {

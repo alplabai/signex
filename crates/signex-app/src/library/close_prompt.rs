@@ -14,7 +14,7 @@
 
 use iced::widget::{Space, column, container};
 use iced::{Element, Length, Widget};
-use signex_i18n::{ids, menu_ids, t};
+use signex_i18n::{ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{raw, text};
 
@@ -117,7 +117,7 @@ pub fn view<'a>(
         Vec::new(),
         vec![
             cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::Cancel),
                 tokens,
             ),
@@ -127,7 +127,7 @@ pub fn view<'a>(
                 tokens,
             ),
             primary_btn(
-                t!(i18n, menu_ids::MENU_FILE_SAVE_ALL),
+                t!(i18n, ids::DIALOG_BUTTON_SAVE_ALL),
                 LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::SaveAll),
                 tokens,
             ),

@@ -5,7 +5,7 @@
 
 use iced::widget::{Space, Widget, column, container, pick_list, row, scrollable};
 use iced::{Element, Length};
-use signex_i18n::{Localized, command_ids, ids, t};
+use signex_i18n::{Localized, ids, t};
 use signex_library::{ComponentClass, DatasheetRef, LifecycleState, ParameterTemplate};
 use signex_types::object_id::short_id;
 use signex_types::theme::ThemeTokens;
@@ -343,12 +343,12 @@ pub fn view<'a>(
         vec![reload],
         vec![
             cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 send.clone()(BrowserEditMsg::Cancel),
                 tokens,
             ),
             primary_btn(
-                t!(i18n, command_ids::CMD_MENU_SAVE_DOCUMENT),
+                t!(i18n, ids::DIALOG_BUTTON_SAVE),
                 send(BrowserEditMsg::Save),
                 tokens,
             ),
@@ -405,14 +405,14 @@ pub fn view_delete_confirm<'a>(
         Vec::new(),
         vec![
             cancel_btn(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::BrowserDeleteRowCancel {
                     library_path: library_path.to_path_buf(),
                 },
                 tokens,
             ),
             danger_btn(
-                t!(i18n, ids::PANELS_SCH_LIBRARY_DELETE),
+                t!(i18n, ids::DIALOG_BUTTON_DELETE),
                 LibraryMessage::BrowserDeleteRowConfirm {
                     library_path: library_path.to_path_buf(),
                     table: confirm.table.clone(),

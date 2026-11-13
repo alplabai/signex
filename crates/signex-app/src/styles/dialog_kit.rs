@@ -3,7 +3,6 @@
 //! drift. Generic over the message type; sizes derive from the type scale.
 //! Header and close come from the header helpers of each dialog family.
 
-use iced::advanced::text::IntoFragment;
 use iced::widget::{Space, Widget, column, container, row, scrollable};
 use iced::{Alignment, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
@@ -127,7 +126,7 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     let disabled = on_press.is_none();
     let color = label_color(kind, disabled, tokens);
     let label: Label<'a> = label.into();
-    let (height, size, width) = button_metrics(&visible_text(&label), kind);
+    let (height, size, width) = button_metrics(label.as_str(), kind);
     let face = text(label)
         .size(size)
         .color(color)
@@ -160,9 +159,14 @@ const DENSE_PAD: f32 = 14.0 * 12.0 / 11.0;
 const DENSE_GHOST_PAD: f32 = 10.0 * 12.0 / 11.0;
 
 /// `(height, label size, width)` of a dialog button. The buttons are dense:
-/// one height for every role, the width hugging the label.
+/// one height for every role, the width hugging the label. The isolation
+/// marks catalog text carries around its values are invisible and do not
+/// count.
 fn button_metrics(label: &str, kind: DialogButtonKind) -> (f32, f32, f32) {
-    let chars = label.chars().count() as f32;
+    let chars = label
+        .chars()
+        .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
+        .count() as f32;
     let size = TS.label;
     let pad = if kind == DialogButtonKind::Ghost {
         DENSE_GHOST_PAD
@@ -171,17 +175,6 @@ fn button_metrics(label: &str, kind: DialogButtonKind) -> (f32, f32, f32) {
     };
     let width = (chars * size * GLYPH_ADVANCE_EM + 2.0 * pad).ceil();
     (ChromeMetrics::DEFAULT.button, size, width)
-}
-
-/// The text of `label` without the invisible isolation marks catalog text
-/// carries around its values, so they do not widen the button.
-fn visible_text(label: &Label<'_>) -> String {
-    label
-        .clone()
-        .into_fragment()
-        .chars()
-        .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
-        .collect()
 }
 
 /// Label colour of a dialog button: muted when it has no action, whatever its role.
@@ -271,7 +264,7 @@ mod tests {
                 DialogButtonKind::Ghost,
                 DialogButtonKind::Cancel,
             ] {
-                let ok = || signex_i18n::t!(i18n, signex_i18n::shortcut_ids::PREF_KEYMAP_OK);
+                let ok = || signex_i18n::t!(i18n, signex_i18n::ids::DIALOG_BUTTON_OK);
                 let _: Element<'_, ()> = dialog_button(ok(), kind, Some(()), &tokens);
                 let _: Element<'_, ()> = dialog_button(ok(), kind, None, &tokens);
             }
@@ -311,13 +304,19 @@ mod tests {
     /// toward a button's width; the catalog English is drawn unchanged.
     #[test]
     fn isolation_marks_do_not_widen_a_button() {
-        let isolated = Label::from(signex_i18n::UserText::new("Save \u{2068}R1\u{2069}"));
-        assert_eq!(visible_text(&isolated), "Save R1");
+        for kind in [DialogButtonKind::Primary, DialogButtonKind::Ghost] {
+            assert_eq!(
+                button_metrics("Save \u{2068}R1\u{2069}", kind),
+                button_metrics("Save R1", kind),
+                "{kind:?}"
+            );
+        }
         let ok = signex_i18n::t!(
             signex_i18n::I18n::en_us_ref(),
-            signex_i18n::shortcut_ids::PREF_KEYMAP_OK
+            signex_i18n::ids::DIALOG_BUTTON_OK
         );
-        assert_eq!(visible_text(&Label::from(ok)), "OK");
+        let ok = Label::from(ok);
+        assert_eq!(ok.as_str(), "OK");
     }
 
     /// Footer buttons are dense: every role has the same height and the

@@ -109,7 +109,7 @@ impl Signex {
             tokens,
         );
         let discard = dialog_button(
-            t!(i18n, ids::BOARD_SKETCH_DISCARD),
+            t!(i18n, ids::DIALOG_BUTTON_DISCARD),
             DialogButtonKind::Danger,
             Some(Message::Autosave(AutosaveMsg::Recovery(
                 RecoveryChoice::Discard,

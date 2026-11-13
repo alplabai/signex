@@ -87,13 +87,13 @@ impl Signex {
                 dialog_body(body),
                 dialog_footer(vec![
                     dialog_button(
-                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                        t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::Annotate(AnnotateMsg::ReprefixCancelled)),
                         tokens,
                     ),
                     dialog_button(
-                        raw(confirm.button_label.clone()),
+                        t!(i18n, ids::DIALOG_ANNOTATE_REPREFIX_PARTS, "count" => confirm.parts),
                         DialogButtonKind::Primary,
                         Some(Message::Annotate(AnnotateMsg::ReprefixConfirmed)),
                         tokens,

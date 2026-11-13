@@ -107,7 +107,7 @@ impl Signex {
                 dialog_body(body),
                 dialog_footer(vec![
                     dialog_button(
-                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                        t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::Rename(RenameMsg::Close)),
                         tokens
@@ -261,7 +261,7 @@ impl Signex {
                 dialog_body(body_col),
                 dialog_footer(vec![
                     dialog_button(
-                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                        t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::EnableVersionControl(
                             EnableVersionControlMsg::Close
@@ -441,13 +441,13 @@ impl Signex {
                 dialog_body(body),
                 dialog_footer(vec![
                     dialog_button(
-                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                        t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::GridProperties(GridPropertiesMsg::Close)),
                         tokens
                     ),
                     dialog_button(
-                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY),
+                        t!(i18n, ids::DIALOG_BUTTON_APPLY),
                         DialogButtonKind::Primary,
                         Some(Message::GridProperties(GridPropertiesMsg::Apply)),
                         tokens
@@ -554,13 +554,13 @@ impl Signex {
                 dialog_body(body),
                 dialog_footer(vec![
                     dialog_button(
-                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                        t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::SelectionFilter(SelectionFilterMsg::CloseCustom)),
                         tokens
                     ),
                     dialog_button(
-                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY),
+                        t!(i18n, ids::DIALOG_BUTTON_APPLY),
                         DialogButtonKind::Primary,
                         Some(Message::SelectionFilter(SelectionFilterMsg::ApplyCustom)),
                         tokens

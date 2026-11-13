@@ -8,7 +8,7 @@
 use super::*;
 use iced::widget::{Space, column, container};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
-use signex_i18n::{I18n, command_ids, ids, menu_ids, t};
+use signex_i18n::{I18n, ids, t};
 use signex_widgets::{button, raw, text};
 
 use super::widgets::modal_title_header;
@@ -239,7 +239,7 @@ impl Signex {
                 header,
                 dialog_body(column![prompt, remove_options].spacing(SP.m)),
                 dialog_footer(vec![dialog_button(
-                    t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                    t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                     DialogButtonKind::Cancel,
                     Some(Message::Remove(RemoveMsg::Close)),
                     tokens,
@@ -267,14 +267,14 @@ impl Signex {
     ) -> Element<'a, Message> {
         // Discard is withheld when another open project shares the target.
         let mut buttons = vec![dialog_button(
-            t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
             DialogButtonKind::Cancel,
             Some(Message::Remove(RemoveMsg::Close)),
             tokens,
         )];
         if can_discard {
             buttons.push(dialog_button(
-                t!(i18n, ids::BOARD_SKETCH_DISCARD),
+                t!(i18n, ids::DIALOG_BUTTON_DISCARD),
                 DialogButtonKind::Danger,
                 Some(Message::Remove(RemoveMsg::ExcludeDirty(
                     crate::app::ExcludeDirtyChoice::Discard,
@@ -283,7 +283,7 @@ impl Signex {
             ));
         }
         buttons.push(dialog_button(
-            t!(i18n, command_ids::CMD_MENU_SAVE_DOCUMENT),
+            t!(i18n, ids::DIALOG_BUTTON_SAVE),
             DialogButtonKind::Primary,
             Some(Message::Remove(RemoveMsg::ExcludeDirty(
                 crate::app::ExcludeDirtyChoice::Save,
@@ -377,7 +377,7 @@ impl Signex {
         }
 
         let mut buttons = vec![dialog_button(
-            t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
             DialogButtonKind::Cancel,
             Some(Message::Project(ProjectMsg::CloseConfirm(
                 ProjectCloseChoice::Cancel,
@@ -395,7 +395,7 @@ impl Signex {
             ));
         }
         buttons.push(dialog_button(
-            t!(i18n, menu_ids::MENU_FILE_SAVE_ALL),
+            t!(i18n, ids::DIALOG_BUTTON_SAVE_ALL),
             DialogButtonKind::Primary,
             Some(Message::Project(ProjectMsg::CloseConfirm(
                 ProjectCloseChoice::SaveAll,
@@ -518,7 +518,7 @@ impl Signex {
         let choose = |choice| Message::Project(ProjectMsg::AppQuitConfirm(choice));
         let buttons = vec![
             dialog_button(
-                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 DialogButtonKind::Cancel,
                 Some(choose(ProjectCloseChoice::Cancel)),
                 tokens,
@@ -530,7 +530,7 @@ impl Signex {
                 tokens,
             ),
             dialog_button(
-                t!(i18n, menu_ids::MENU_FILE_SAVE_ALL),
+                t!(i18n, ids::DIALOG_BUTTON_SAVE_ALL),
                 DialogButtonKind::Primary,
                 Some(choose(ProjectCloseChoice::SaveAll)),
                 tokens,
