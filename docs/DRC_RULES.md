@@ -35,7 +35,11 @@ In order: `PWR_MAIN` asks 0.6 mm instead of the 1.0 mm of its class `Power`
 (the rule for one net beats its own class; a neighbour that asks more still
 gets its own value); every net of class `HV` keeps 0.8 mm; `DDR_*` tracks on
 the outer layers are 0.1 mm to 12 mil wide; every via is at least 450 µm
-across with a 0.2 mm drill; tracks keep 0.25 mm from pads.
+across with a 0.2 mm drill; `SIG_*` tracks keep 0.25 mm from pads. Run
+DRC says once that `pwr_main` lowers class `Power` for `PWR_MAIN`; nothing
+else lowers a class. (A `track_pad` rule without its `SIG_*` condition would
+apply to every net's track–pad pairs and lower `Power` too, and Run DRC
+would say so.) A test reads this block and checks these outcomes.
 
 ```text
 rule pwr_main on clearance when net == "PWR_MAIN" require clearance >= 0.6mm then warning
@@ -44,7 +48,8 @@ rule hv_spacing on clearance when class == "HV" require clearance >= 0.8mm
 rule ddr_width on track when net matches "DDR_*" and layer == outer
   require width >= 0.1mm and width <= 12mil then warning
 rule vias on via require diameter >= 450um and drill >= 0.2mm then error
-rule track_pad on clearance between track and pad require clearance >= 0.25mm then error
+rule track_pad on clearance between track and pad when net matches "SIG_*"
+  require clearance >= 0.25mm then error
 ```
 
 The language has no comments yet.
@@ -130,6 +135,14 @@ some rule text was not applied:
 - an unknown target, field, condition, object or unit, a missing unit, a
   repeated name or limit: that rule is skipped, the others apply;
 - a `hole` or `edge` pair: the rule is not checked yet.
+
+A rule that compiles but whose condition matches no net checks nothing, and
+Run DRC says so: a net class that does not exist (`class == "Hv"` for `HV`)
+is a warning; a net or pattern this board does not have is an info line.
+
+When two nets ask the same clearance, a finding keeps the more severe of the
+two rules: a `then info` rule for one net never turns another net's error
+into info.
 
 ## Not in this version
 

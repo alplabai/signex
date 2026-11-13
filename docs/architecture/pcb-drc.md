@@ -184,13 +184,23 @@ implicit, exactly as the implicit tier has always combined two nets' class
 values. Since a side with no written rule falls back to at least the setup
 value, a rule for one net below the setup value loosens no pair. This
 per-side reading of decision 6837552967 §1 is an implementation choice
-pending the maintainer's confirmation. On equal values a written rule is
-named over the implicit one, so the finding carries its id and severity.
+pending the maintainer's confirmation. When both sides ask the same value,
+the more severe side wins (a milder written rule never downgrades the other
+side's finding); at equal severity a written rule is named over the
+implicit value, so the finding carries its id and severity.
 
-A written rule that wins for a net below that net's class clearance is
-applied and said, never silently clamped: one Messages warning per rule and
-class, `DRC rule 'base' lowers net class 'HV' clearance 0.8 → 0.15 mm`,
-checked on every copper layer and object pair a rule names.
+A written rule that wins for a net of a net class below what that net would
+otherwise need (the larger of the setup and class values) is applied and
+said, never silently clamped: one Messages warning per rule and class,
+`DRC rule 'base' lowers net class 'HV' clearance 0.8 → 0.15 mm`. It is
+checked on the board's own copper layers (a board listing none is read as
+two layers) and for each object pair a rule names.
+
+A rule whose net, class or pattern scope covers no net checks nothing and
+is said: a class that does not exist is a warning (`DRC rule 'hv': there is
+no net class 'Hv'; the rule checks nothing`), while a net or pattern the
+board lacks, or a class without nets on it, is an info line, since a shared
+profile may name nets a board does not have.
 
 Today's values are the lowest, implicit rules, below every written rule: the
 board setup clearance (or the 0.2 mm default) and the net-class clearances.
@@ -237,9 +247,9 @@ a typo never passes as a clean board: a short warning line of its own
 (`DRC rules: N written rule(s) not applied`, `DRC rules: the rule text was
 not applied (syntax error)`, kept apart from the summary so the Messages
 length cap never cuts it off), and a warning line in the DRC panel above
-the results. With
-written rules the default-clearance note and the summary say the board value
-holds only where no written rule applies. All of these appear only when rule
+the results. When a written rule sets a clearance, the default-clearance
+note and the summary say the board value holds only where no written rule
+applies (rule text with only width or via rules leaves them as they were). All of these appear only when rule
 text is present, so a run without it logs and shows what it always did.
 
 Known limit: the panel's summary counts clearance, shorts and unconnected
