@@ -81,7 +81,7 @@ fn the_diff_lists_severities_text_and_foreign_keys_readably() {
         [
             "DRC severity builtin::clearance: warning -> default",
             "DRC severity builtin::unconnected: default -> error",
-            "DRC severity user::mine: off -> default",
+            "DRC severity user::mine: off -> the rule's own",
             "DRC rule text: changed (1 line -> 2 lines)",
             "DRC other setting shared: 1 -> 2",
         ]

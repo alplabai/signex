@@ -173,6 +173,19 @@ impl Signex {
         self.start_profile_save(true)
     }
 
+    /// What Save as profile writes for `project` while it is the active one:
+    /// its `erc` and `drc` rule sets; `None` when it stores no rules.
+    pub(crate) fn profile_to_save(
+        &self,
+        project: ProjectId,
+    ) -> Option<signex_types::project::RuleProfile> {
+        self.document_state
+            .active_document_project()
+            .filter(|p| p.id == project)
+            .and_then(|p| p.data.rules.as_ref())
+            .map(rule_profiles::profile_of_project_rules)
+    }
+
     /// Validate the dialog and write on a worker. `overwrite` is honoured only
     /// after the dialog has asked, so a stray message cannot replace a file.
     fn start_profile_save(&mut self, overwrite: bool) -> Task<Message> {
@@ -195,13 +208,7 @@ impl Signex {
             dialog.error = Some("This platform has no config folder for rule profiles.".into());
             return Task::none();
         };
-        let Some(profile) = self
-            .document_state
-            .active_document_project()
-            .filter(|p| p.id == project)
-            .and_then(|p| p.data.rules.as_ref())
-            .map(rule_profiles::profile_of_project_rules)
-        else {
+        let Some(profile) = self.profile_to_save(project) else {
             self.ui_state.save_profile_dialog = None;
             crate::diagnostics::log_warning(
                 "Save as profile: the project it was opened for no longer stores ERC rules.",
@@ -341,7 +348,7 @@ impl Signex {
             && recorded == Some(profile.content_sha256().as_str())
         {
             crate::diagnostics::log_info(format!(
-                "Project ERC rules already match profile \"{}\".",
+                "Project rules already match profile \"{}\".",
                 profile.name
             ));
             return Task::none();
@@ -424,8 +431,8 @@ impl Signex {
             || diff_drc_against_profile(&rules.drc, &pending.profile.drc) != pending.drc_changes
         {
             crate::diagnostics::log_warning(format!(
-                "Update from profile \"{}\" was not applied: the project's ERC rules changed \
-                 after the differences were shown. Choose Update from profile again.",
+                "Update from profile \"{}\" was not applied: the project's rules changed after \
+                 the differences were shown. Choose Update from profile again.",
                 pending.profile.name
             ));
             return Task::none();

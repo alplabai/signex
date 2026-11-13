@@ -113,6 +113,20 @@ fn the_drc_section_enters_the_profile_content_hash() {
     assert_ne!(only_drc.content_sha256(), ErcRules::default().sha256_hex());
 }
 
+/// The combined form is recorded in users' `.snxprj` files, so its bytes are
+/// a format contract: the SHA-256 of `{"erc":{},"drc":{"dsl":"rule x"}}`.
+#[test]
+fn the_erc_and_drc_hash_form_is_pinned() {
+    let drc = DrcRuleSet {
+        dsl: Some("rule x".into()),
+        ..Default::default()
+    };
+    assert_eq!(
+        crate::project::rule_set_sha256(&ErcRules::default(), &drc),
+        "54cdfc61e94044e7ddb6872ccf4363d849b05a528d25c0a405af03a733a678db"
+    );
+}
+
 #[test]
 fn a_newer_schema_is_refused() {
     let err = RuleProfile::from_json_bytes(br#"{"schema": 2, "name": "x"}"#).unwrap_err();

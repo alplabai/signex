@@ -59,12 +59,21 @@ impl DrcRuleChange {
     /// `DRC rule text: changed (3 lines -> 5 lines)`.
     pub fn describe(&self) -> String {
         match self.section {
-            DrcRuleSection::Severity => format!(
-                "DRC severity {}: {} -> {}",
-                self.id,
-                self.from.as_deref().unwrap_or("default"),
-                self.to.as_deref().unwrap_or("default")
-            ),
+            DrcRuleSection::Severity => {
+                // An absent entry leaves a written rule at its own `then`
+                // severity and a built-in one at its default.
+                let absent = if self.id.starts_with(crate::USER_RULE_ID_PREFIX) {
+                    "the rule's own"
+                } else {
+                    "default"
+                };
+                format!(
+                    "DRC severity {}: {} -> {}",
+                    self.id,
+                    self.from.as_deref().unwrap_or(absent),
+                    self.to.as_deref().unwrap_or(absent)
+                )
+            }
             DrcRuleSection::RuleText => {
                 let size = |text: &str| match text.lines().count() {
                     1 => "1 line".to_string(),

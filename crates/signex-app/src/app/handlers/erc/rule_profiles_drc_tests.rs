@@ -196,7 +196,8 @@ fn save_as_profile_carries_the_drc_section_and_records_its_hash() {
     rules_mut(&mut app).drc = drc_profile("save").drc;
     let lib = tempfile::tempdir().unwrap();
     let project = app.document_state.projects[0].id;
-    let profile = crate::rule_profiles::profile_of_project_rules(&rules(&app));
+    // The profile the Save-as handler hands its worker, then the worker body.
+    let profile = app.profile_to_save(project).expect("rules stored");
     let result = crate::rule_profiles::save_profile_as(lib.path(), profile, "Mine", "1.0", false);
     let _ = app.handle_profile_saved(project, &result);
 
@@ -213,4 +214,31 @@ fn save_as_profile_carries_the_drc_section_and_records_its_hash() {
         app.current_rule_set_identity().profile_name.as_deref(),
         Some("Mine")
     );
+}
+
+/// The accepted cost of Update adopting `drc`: a profile without one removes
+/// the project's, but only after the confirmation lists each removal, and one
+/// undo brings it back.
+#[test]
+fn a_profile_without_drc_lists_and_removes_the_projects_drc_with_one_undo() {
+    let mut profile = drc_profile("nodrc");
+    profile.drc = DrcRuleSet::default();
+    let mut app = project_recorded_against("nodrc", &profile);
+    rules_mut(&mut app).drc = drc_profile("nodrc-p").drc;
+    let before = rules(&app);
+    let id = app.document_state.projects[0].id;
+
+    let _ = app.handle_profile_loaded_for_update(id, &found(profile));
+    let (_, lines) = app.pending_profile_update_lines().expect("diff shown");
+    assert_eq!(
+        lines,
+        [
+            "DRC severity builtin::unconnected: error -> default",
+            "DRC rule text: removed (1 line)",
+        ]
+    );
+    let _ = app.handle_profile_update_confirmed();
+    assert!(rules(&app).drc.is_empty());
+    assert!(app.undo_project_rules());
+    assert_eq!(rules(&app), before);
 }
