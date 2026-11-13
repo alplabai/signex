@@ -166,7 +166,9 @@ Specificity first, strictness only between equals (maintainer, 2026-11-13).
 A rule's specificity is its net-scope rank, then the number of narrowing
 conditions it adds (a layer condition, an object pair): `class == "HV" and
 layer == inner` is more specific than `class == "HV"`, and a layer-only rule
-is above a board-wide one. The most specific written rule that covers an
+is above a board-wide one. A layer condition and an object pair count the
+same, so a layer-only and a pair-only rule are equally specific and the
+stricter decides. The most specific written rule that covers an
 object applies, even when it is looser than a less specific one: a rule for
 one net beats its class. Among rules of equal specificity the strictest wins
 (the largest minimum, the smallest maximum); identical ones go to the first
@@ -176,9 +178,19 @@ Specificity is per object. A clearance has two sides: for each side's net, on
 each shared copper layer, the most specific written rule covering that net
 (and the pair's object kinds) gives the side's value, else the net's implicit
 value; the pair needs the stricter of its two sides and the most of its
-layers. So a looser rule for one net never relaxes the other net's stricter
-rule, written or implicit, exactly as the implicit tier has always combined
-two nets' class values.
+layers. **A pair needs the stricter of its two sides; a rule for one net can
+loosen that net's own class value but never the other net's**, written or
+implicit, exactly as the implicit tier has always combined two nets' class
+values. Since a side with no written rule falls back to at least the setup
+value, a rule for one net below the setup value loosens no pair. This
+per-side reading of decision 6837552967 §1 is an implementation choice
+pending the maintainer's confirmation. On equal values a written rule is
+named over the implicit one, so the finding carries its id and severity.
+
+A written rule that wins for a net below that net's class clearance is
+applied and said, never silently clamped: one Messages warning per rule and
+class, `DRC rule 'base' lowers net class 'HV' clearance 0.8 → 0.15 mm`,
+checked on every copper layer and object pair a rule names.
 
 Today's values are the lowest, implicit rules, below every written rule: the
 board setup clearance (or the 0.2 mm default) and the net-class clearances.
@@ -221,9 +233,11 @@ summary when any is found, and the rule id after each logged finding of a
 written rule.
 
 Rule text that was not applied is also said where the results are read, so
-a typo never passes as a clean board: the summary line ends with `; N rule(s)
-not applied` or `; rule text not applied (syntax error)` (and is a warning
-then), and the DRC panel shows a warning line above the results. With
+a typo never passes as a clean board: a short warning line of its own
+(`DRC rules: N written rule(s) not applied`, `DRC rules: the rule text was
+not applied (syntax error)`, kept apart from the summary so the Messages
+length cap never cuts it off), and a warning line in the DRC panel above
+the results. With
 written rules the default-clearance note and the summary say the board value
 holds only where no written rule applies. All of these appear only when rule
 text is present, so a run without it logs and shows what it always did.

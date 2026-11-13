@@ -31,13 +31,14 @@ Spaces and line breaks between words are free. Names are letters, digits and
 
 ### Examples
 
-In order: `GND` may sit 0.1 mm from other copper, closer than its class asks
-(the rule for one net wins); every net of class `HV` keeps 0.8 mm; `DDR_*`
-tracks on the outer layers are 0.1 mm to 12 mil wide; every via is at least
-450 µm across with a 0.2 mm drill; tracks keep 0.25 mm from pads.
+In order: `PWR_MAIN` asks 0.6 mm instead of the 1.0 mm of its class `Power`
+(the rule for one net beats its own class; a neighbour that asks more still
+gets its own value); every net of class `HV` keeps 0.8 mm; `DDR_*` tracks on
+the outer layers are 0.1 mm to 12 mil wide; every via is at least 450 µm
+across with a 0.2 mm drill; tracks keep 0.25 mm from pads.
 
 ```text
-rule gnd_close on clearance when net == "GND" require clearance >= 0.1mm then warning
+rule pwr_main on clearance when net == "PWR_MAIN" require clearance >= 0.6mm then warning
 rule hv_spacing on clearance when class == "HV" require clearance >= 0.8mm
   then error "HV nets need 0.8 mm"
 rule ddr_width on track when net matches "DDR_*" and layer == outer
@@ -57,7 +58,8 @@ The language has no comments yet.
 | `via` | `diameter >= <length>`, `drill >= <length>` |
 
 A length is a number with its unit: `0.2mm` or `0.2 mm`, `8mil`, `150um`
-(or `150µm`), `125000nm`. A limit of 0 is reported (it checks nothing). A
+(or `150µm`), `125000nm`. A limit of 0 is reported: a minimum of 0 checks
+nothing, and `width <= 0mm` reports every track in scope. A
 clearance over 10 mm is reported as a likely wrong unit, and one over 100 mm
 is not applied.
 
@@ -93,12 +95,23 @@ For each net, the most specific rule wins, even when it is looser:
 
 Within each level, a rule with more conditions (a layer, an object pair) is
 more specific: `class == "HV" and layer == inner` wins over `class == "HV"`
-on inner layers. Between two rules of the same specificity, the stricter one
-wins.
+on inner layers. A layer condition and an object pair count the same: a
+rule with only a layer condition and one with only an object pair are
+equally specific, and the stricter one wins. Between two rules of the same
+specificity, the stricter one wins.
 
-A clearance is between two nets, and each net keeps its own rule: the pair
-needs the stricter of the two. A looser rule for `GND` never lowers what an
-`HV` net asks of its neighbours.
+A clearance is between two nets, and each net keeps its own rule: **a pair
+needs the stricter of its two sides; a rule for one net can loosen that
+net's own class value but never the other net's.** A side with no written
+rule asks the board setup clearance or its own class's value, whichever is
+larger, so a rule for one net below the board setup clearance does not
+loosen any pair. A looser rule for `GND` never lowers what an `HV` net asks
+of its neighbours.
+
+When a written rule asks less than a net class's clearance for that class's
+nets (a board-wide `clearance >= 0.15mm` over a class asking 0.8 mm, say),
+Run DRC applies it and says so in Messages, once per rule and class:
+`DRC rule 'base' lowers net class 'HV' clearance 0.8 → 0.15 mm`.
 
 ## Severity
 
@@ -110,8 +123,8 @@ not hide findings yet.
 ## Mistakes in the text
 
 Run DRC says in Messages what it could not apply, with the line and column,
-and the DRC panel and the summary line say that some rule text was not
-applied:
+then a short `DRC rules: …` line with the count, and the DRC panel says that
+some rule text was not applied:
 
 - a syntax error: no rule of that text is applied;
 - an unknown target, field, condition, object or unit, a missing unit, a
