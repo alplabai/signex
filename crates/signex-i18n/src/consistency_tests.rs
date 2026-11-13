@@ -450,6 +450,8 @@ fn moved_graphite_strings_of_the_third_wave_keep_their_english() {
     assert_eq!(pins(0), "Symbol bound \u{2014} 0 pins");
     assert_eq!(pins(1), "Symbol bound \u{2014} 1 pin");
     assert_eq!(pins(4), "Symbol bound \u{2014} 4 pins");
+    // Counts are grouped like every catalog count (#2291): 1,156, not 1156.
+    assert_eq!(pins(1156), "Symbol bound \u{2014} 1,156 pins");
     let alternates = |count: usize| {
         shown(
             ids::LIBRARY_ROW_ALTERNATE_SYMBOLS,
