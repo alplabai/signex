@@ -16,7 +16,7 @@ use super::super::state::{ComponentPreviewState, EditorAddress, PrimitivePickerT
 use super::kit::{self, SP, TS};
 
 /// Shown when the row has no alternate drawings.
-const EMPTY_MESSAGE: &str = "No alternate drawings; the row uses its default symbol only.";
+const EMPTY_MESSAGE: signex_i18n::MessageId = signex_i18n::ids::EDITORS_COMPONENT_ALTERNATES_EMPTY;
 
 const COLUMNS: [Length; 3] = [
     Length::FillPortion(3),
@@ -51,7 +51,7 @@ pub fn view<'a>(
 
     let count = state.row.alternate_symbols.len();
     if count == 0 {
-        col = col.push(kit::empty_state(EMPTY_MESSAGE, None, tokens));
+        col = col.push(kit::empty_state(t!(i18n, EMPTY_MESSAGE), None, tokens));
     } else {
         let mut table: Column<Element<'a, LibraryMessage>> = column![kit::table_header(
             &[
@@ -151,7 +151,13 @@ mod tests {
 
     #[test]
     fn empty_message_is_plain_language() {
-        assert!(EMPTY_MESSAGE.starts_with("No alternate"));
-        assert!(!EMPTY_MESSAGE.contains("uuid"));
+        let message = signex_i18n::I18n::en_us()
+            .message(EMPTY_MESSAGE, &[])
+            .to_string();
+        assert_eq!(
+            message,
+            "No alternate drawings; the row uses its default symbol only."
+        );
+        assert!(!message.contains("uuid"));
     }
 }

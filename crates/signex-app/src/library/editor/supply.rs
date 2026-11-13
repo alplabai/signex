@@ -143,11 +143,11 @@ fn role_label(alternate_idx: Option<usize>) -> String {
 }
 
 /// Empty-state text for the alternates / listings grids.
-fn empty_text(listings: bool) -> &'static str {
+fn empty_text(listings: bool) -> signex_i18n::MessageId {
     if listings {
-        "No distributor listings yet."
+        ids::EDITORS_COMPONENT_LISTINGS_EMPTY
     } else {
-        "No alternates yet."
+        ids::EDITORS_COMPONENT_PARTS_EMPTY
     }
 }
 
@@ -281,7 +281,7 @@ fn parts_section<'a>(
         grid = grid.push(alternate_row(idx, alt, tokens, address));
     }
     if state.row.alternates.is_empty() {
-        grid = grid.push(kit::empty_state(empty_text(false), None, tokens));
+        grid = grid.push(kit::empty_state(t!(i18n, empty_text(false)), None, tokens));
     }
 
     column![
@@ -377,7 +377,7 @@ fn listings_section<'a>(
         ));
     }
     if state.row.supply.is_empty() {
-        grid = grid.push(kit::empty_state(empty_text(true), None, tokens));
+        grid = grid.push(kit::empty_state(t!(i18n, empty_text(true)), None, tokens));
     }
     column![
         kit::section_header(
@@ -465,9 +465,12 @@ mod tests {
 
     #[test]
     fn empty_state_text_has_no_glyph_hacks() {
+        let english = |listings| I18n::en_us().message(empty_text(listings), &[]).to_string();
+        assert_eq!(english(false), "No alternates yet.");
+        assert_eq!(english(true), "No distributor listings yet.");
         for listings in [false, true] {
-            let t = empty_text(listings);
-            assert!(t.is_ascii() && !t.contains('+'), "{t}");
+            let text = english(listings);
+            assert!(text.is_ascii() && !text.contains('+'), "{text}");
         }
     }
 

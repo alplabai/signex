@@ -294,3 +294,82 @@ editors-footprint-silk-from-sketch = From sketch: edit in Sketch mode
 editors-pad-placement-paused = PAUSED — TAB to resume placement
 editors-pad-placement-pause-hint = TAB to pause placement and edit defaults
 editors-pad-testpoint = Testpoint
+
+## Pad Properties form rows (Pads mode and the sketch pad attributes)
+editors-pad-designator = Designator
+editors-pad-layer = Layer
+editors-pad-electrical-type = Electrical Type
+editors-pad-net = Net
+editors-pad-rotation = Rotation (°)
+editors-pad-locked = Locked
+editors-pad-template = Template
+# The library the pad template comes from.
+editors-pad-template-library = Library
+# Pad features of each board side.
+editors-pad-top-side = Top Side
+editors-pad-bottom-side = Bottom Side
+# Testpoint flags: assembly and fabrication testpoints on each side.
+editors-pad-top-assembly = Top Assembly
+editors-pad-top-fab = Top Fab
+editors-pad-bottom-assembly = Bottom Assembly
+editors-pad-bottom-fab = Bottom Fab
+editors-pad-shape = Shape
+editors-pad-size-x = X-Size
+editors-pad-size-y = Y-Size
+editors-pad-corner-radius = Corner radius %
+# Thermal relief toggle of the Simple pad stack.
+editors-pad-relief = Relief
+editors-pad-hole-details = Hole Details
+editors-pad-hole-tolerance-plus = Tolerance + (mm)
+editors-pad-hole-tolerance-minus = Tolerance − (mm)
+editors-pad-hole-rotation = Hole rotation (°)
+editors-pad-copper-offset-x = Copper offset X (mm)
+editors-pad-copper-offset-y = Copper offset Y (mm)
+editors-pad-top-paste-enabled = Top paste enabled
+editors-pad-bottom-paste-enabled = Bottom paste enabled
+editors-pad-top-mask-tented = Top mask tented
+editors-pad-bottom-mask-tented = Bottom mask tented
+editors-pad-thermal-relief = Thermal relief
+
+## Silk graphic rows of the footprint Properties panel
+editors-silk-from-x = From X (mm)
+editors-silk-from-y = From Y (mm)
+editors-silk-to-x = To X (mm)
+editors-silk-to-y = To Y (mm)
+# The text of a silk text graphic.
+editors-silk-content = Content
+editors-silk-position-x = Position X (mm)
+editors-silk-position-y = Position Y (mm)
+editors-silk-size = Size (mm)
+editors-silk-stroke-width = Stroke width (mm)
+editors-silk-filled = Filled
+editors-silk-use-sketch = Use Sketch mode for parametric editing
+
+## Pattern (array) rows of the footprint Properties panel
+# Number of instances in the array.
+editors-pattern-count = Count
+# Expression that keeps or drops an instance.
+editors-pattern-mask = Mask
+# Total angle a polar array covers.
+editors-pattern-sweep = Sweep
+# Letters left out of grid row names, as IPC-7351 asks.
+editors-pattern-skip-letters = Skip I/O/Q/S/X/Z (IPC-7351)
+editors-pattern-start-row = Start row
+editors-pattern-start-col = Start col
+
+## Component editor empty states
+editors-component-alternates-empty = No alternate drawings; the row uses its default symbol only.
+editors-component-datasheets-empty = No datasheet on this component yet.
+editors-component-parameters-empty = No parameters yet. Add a custom parameter below.
+editors-component-parameters-no-template = No template for this class. Add custom parameters below.
+editors-component-no-symbol-bound = No symbol bound
+editors-component-no-footprint-bound = No footprint bound
+editors-component-symbol-not-loaded = The symbol could not be loaded. It may be missing from the open libraries.
+editors-component-footprint-not-loaded = The footprint could not be loaded. It may be missing from the open libraries.
+editors-component-pin-map-pending = The pin map shows once the symbol is loaded.
+editors-component-pin-map-no-pins = This symbol has no pins yet. Open the Symbol Editor to add some.
+editors-component-model-empty = No SPICE model is bound to this component.
+editors-component-pin-node-pending = Open the Symbol tab first to list the pins.
+editors-component-pin-node-no-pins = The symbol has no pins yet.
+editors-component-parts-empty = No alternates yet.
+editors-component-listings-empty = No distributor listings yet.

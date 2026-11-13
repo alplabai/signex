@@ -185,7 +185,10 @@ pub(super) fn content_editing<'a>(
     .align_y(iced::Alignment::Center);
 
     column![
-        section_title("Schematic — Editing"),
+        section_title(signex_i18n::t!(
+            i18n,
+            signex_i18n::ids::PREFERENCES_SECTION_EDITING
+        )),
         Space::new().height(10),
         setting,
         Space::new().height(14),

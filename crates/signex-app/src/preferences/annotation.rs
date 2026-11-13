@@ -18,7 +18,10 @@ fn annotate_undo_help() -> String {
     )
 }
 
-pub(super) fn content_annotation<'a>(draft: AnnotateUndo) -> Element<'a, PrefMsg> {
+pub(super) fn content_annotation<'a>(
+    draft: AnnotateUndo,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, PrefMsg> {
     let setting = row![
         column![
             text(raw("Annotate undo"))
@@ -39,7 +42,10 @@ pub(super) fn content_annotation<'a>(draft: AnnotateUndo) -> Element<'a, PrefMsg
     .align_y(iced::Alignment::Center);
 
     column![
-        section_title("Schematic — Annotation"),
+        section_title(signex_i18n::t!(
+            i18n,
+            signex_i18n::ids::PREFERENCES_SECTION_ANNOTATION
+        )),
         Space::new().height(10),
         setting,
     ]

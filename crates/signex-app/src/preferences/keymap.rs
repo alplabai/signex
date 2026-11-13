@@ -69,9 +69,9 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     };
 
     let header = column![
-        section_title(&crate::keymap::command_menu_text(
-            i18n,
-            "show_current_command_hotkeys"
+        section_title(i18n.message(
+            crate::keymap::command_menu_message("show_current_command_hotkeys"),
+            &[]
         )),
         Space::new().height(4),
         text(i18n.message(ids::PREF_KEYMAP_INTRO, &[]))
@@ -291,7 +291,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
             continue;
         }
         content = content.push(Space::new().height(6).boxed());
-        content = content.push(section_title(&i18n.message_plain(group.title(), &[])));
+        content = content.push(section_title(i18n.message(group.title(), &[])));
         content = content.push(Column::with_children(group_rows).spacing(SP.xs).boxed());
     }
 

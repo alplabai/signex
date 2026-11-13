@@ -180,3 +180,17 @@ pref-keymap-ok = OK
 pref-keymap-claimed = { $display } is claimed by { $action } and will never reach this binding.
 # Value beside the zoom speed slider. $percent is a whole number.
 preferences-appearance-zoom-step-value = { $percent }% per notch
+
+## Section titles of the pages
+preferences-section-font = Font
+preferences-section-window-controls = Window controls
+preferences-section-schematic-editor = Schematic Editor
+preferences-section-pcb-editor = PCB Editor
+preferences-section-rendering = Rendering
+preferences-section-symbol-editor = Symbol Editor
+preferences-section-interface-scale = Interface scale
+preferences-section-navigation = Navigation
+preferences-section-window = Window
+preferences-section-annotation = Schematic — Annotation
+preferences-section-editing = Schematic — Editing
+preferences-section-distributors = Library — Distributor APIs

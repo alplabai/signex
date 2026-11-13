@@ -208,16 +208,12 @@ fn header_row<'a>(
 }
 
 /// What a pane shows when it has no drawing.
-fn pane_message(kind: PaneKind, unbound: bool) -> &'static str {
+fn pane_message(kind: PaneKind, unbound: bool) -> signex_i18n::MessageId {
     match (kind, unbound) {
-        (PaneKind::Symbol, true) => "No symbol bound",
-        (PaneKind::Footprint, true) => "No footprint bound",
-        (PaneKind::Symbol, false) => {
-            "The symbol could not be loaded. It may be missing from the open libraries."
-        }
-        (PaneKind::Footprint, false) => {
-            "The footprint could not be loaded. It may be missing from the open libraries."
-        }
+        (PaneKind::Symbol, true) => ids::EDITORS_COMPONENT_NO_SYMBOL_BOUND,
+        (PaneKind::Footprint, true) => ids::EDITORS_COMPONENT_NO_FOOTPRINT_BOUND,
+        (PaneKind::Symbol, false) => ids::EDITORS_COMPONENT_SYMBOL_NOT_LOADED,
+        (PaneKind::Footprint, false) => ids::EDITORS_COMPONENT_FOOTPRINT_NOT_LOADED,
     }
 }
 
@@ -317,7 +313,7 @@ fn render_panes<'a>(
     let symbol_pane = render_pane(
         t!(i18n, ids::EDITORS_COMPONENT_SYMBOL_HEADING),
         symbol_drawing,
-        pane_message(PaneKind::Symbol, symbol_unbound),
+        t!(i18n, pane_message(PaneKind::Symbol, symbol_unbound)),
         symbol_msg,
         symbol_btn_label,
         tokens,
@@ -340,7 +336,7 @@ fn render_panes<'a>(
     let footprint_pane = render_pane(
         t!(i18n, ids::EDITORS_COMPONENT_FOOTPRINT_HEADING),
         footprint_drawing,
-        pane_message(PaneKind::Footprint, footprint_unbound),
+        t!(i18n, pane_message(PaneKind::Footprint, footprint_unbound)),
         footprint_msg,
         footprint_btn_label,
         tokens,
@@ -358,7 +354,7 @@ fn render_panes<'a>(
 fn render_pane<'a>(
     label: Localized,
     drawing: Option<Element<'a, LibraryMessage>>,
-    empty_message: &'static str,
+    empty_message: Localized,
     open_msg: Option<LibraryMessage>,
     button_label: &'a str,
     tokens: &ThemeTokens,
@@ -481,7 +477,11 @@ fn pin_map_subsection<'a>(
     let Some(sym) = state.symbol.as_ref() else {
         return column![
             header,
-            kit::empty_state("The pin map shows once the symbol is loaded.", None, tokens),
+            kit::empty_state(
+                t!(i18n, ids::EDITORS_COMPONENT_PIN_MAP_PENDING),
+                None,
+                tokens
+            ),
         ]
         .boxed();
     };
@@ -489,7 +489,7 @@ fn pin_map_subsection<'a>(
         return column![
             header,
             kit::empty_state(
-                "This symbol has no pins yet. Open the Symbol Editor to add some.",
+                t!(i18n, ids::EDITORS_COMPONENT_PIN_MAP_NO_PINS),
                 None,
                 tokens,
             ),
@@ -748,9 +748,17 @@ mod tests {
 
     #[test]
     fn pane_message_is_plain_language() {
-        assert_eq!(pane_message(PaneKind::Symbol, true), "No symbol bound");
-        let missing = pane_message(PaneKind::Footprint, false);
-        assert!(missing.contains("could not be loaded"));
+        let english = |kind, unbound| {
+            I18n::en_us()
+                .message(pane_message(kind, unbound), &[])
+                .to_string()
+        };
+        assert_eq!(english(PaneKind::Symbol, true), "No symbol bound");
+        let missing = english(PaneKind::Footprint, false);
+        assert_eq!(
+            missing,
+            "The footprint could not be loaded. It may be missing from the open libraries."
+        );
         assert!(!missing.contains("uuid"));
     }
 

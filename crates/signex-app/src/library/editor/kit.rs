@@ -383,12 +383,12 @@ pub(crate) fn lifecycle_tone(state: signex_library::LifecycleState) -> styles::P
 
 /// Centred message with an optional call-to-action under it.
 pub(crate) fn empty_state<'a, M: 'a>(
-    message: &'a str,
+    message: signex_i18n::Localized,
     action: Option<Element<'a, M>>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let mut col: iced::widget::Column<Element<'a, M>> = column![
-        text(raw(message))
+        text(message)
             .size(TS.label)
             .color(theme_ext::text_secondary(tokens))
             .boxed()
