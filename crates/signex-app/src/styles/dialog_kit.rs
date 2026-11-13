@@ -3,10 +3,11 @@
 //! drift. Generic over the message type; sizes derive from the type scale.
 //! Header and close come from the header helpers of each dialog family.
 
+use iced::advanced::text::IntoFragment;
 use iced::widget::{Space, Widget, column, container, row, scrollable};
 use iced::{Alignment, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text};
+use signex_widgets::{Label, button, raw, text};
 
 use super::{
     ChromeMetrics, RADIUS, Spacing, TypeScale, accent_button_rounded, danger_button, ghost_button,
@@ -114,9 +115,10 @@ pub fn dialog_list<'a, M: 'a>(items: Vec<Element<'a, M>>, tokens: &ThemeTokens) 
 }
 
 /// A dialog button of the given role: compact, height and min width from
-/// the type scale. `on_press: None` draws it disabled.
+/// the type scale. `on_press: None` draws it disabled. `label` is catalog
+/// text, or data the caller wraps in `raw`.
 pub fn dialog_button<'a, M: Clone + 'a>(
-    label: &str,
+    label: impl Into<Label<'a>>,
     kind: DialogButtonKind,
     on_press: Option<M>,
     tokens: &ThemeTokens,
@@ -124,8 +126,9 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     let kind = kind.resolved();
     let disabled = on_press.is_none();
     let color = label_color(kind, disabled, tokens);
-    let (height, size, width) = button_metrics(label, kind);
-    let face = text(raw(label.to_string()))
+    let label: Label<'a> = label.into();
+    let (height, size, width) = button_metrics(&visible_text(&label), kind);
+    let face = text(label)
         .size(size)
         .color(color)
         .width(Length::Fill)
@@ -168,6 +171,17 @@ fn button_metrics(label: &str, kind: DialogButtonKind) -> (f32, f32, f32) {
     };
     let width = (chars * size * GLYPH_ADVANCE_EM + 2.0 * pad).ceil();
     (ChromeMetrics::DEFAULT.button, size, width)
+}
+
+/// The text of `label` without the invisible isolation marks catalog text
+/// carries around its values, so they do not widen the button.
+fn visible_text(label: &Label<'_>) -> String {
+    label
+        .clone()
+        .into_fragment()
+        .chars()
+        .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
+        .collect()
 }
 
 /// Label colour of a dialog button: muted when it has no action, whatever its role.
@@ -246,6 +260,7 @@ mod tests {
     /// footer height follows the button height.
     #[test]
     fn kit_builds_for_every_theme() {
+        let i18n = signex_i18n::I18n::en_us_ref();
         for id in ThemeId::BUILTINS {
             let tokens = signex_types::theme::theme_tokens(*id);
             for kind in [
@@ -256,8 +271,9 @@ mod tests {
                 DialogButtonKind::Ghost,
                 DialogButtonKind::Cancel,
             ] {
-                let _: Element<'_, ()> = dialog_button("OK", kind, Some(()), &tokens);
-                let _: Element<'_, ()> = dialog_button("OK", kind, None, &tokens);
+                let ok = || signex_i18n::t!(i18n, signex_i18n::shortcut_ids::PREF_KEYMAP_OK);
+                let _: Element<'_, ()> = dialog_button(ok(), kind, Some(()), &tokens);
+                let _: Element<'_, ()> = dialog_button(ok(), kind, None, &tokens);
             }
             let _: Element<'_, ()> = dialog_message("message", &tokens);
             let _: Element<'_, ()> = dialog_hint("hint", &tokens);
@@ -289,6 +305,19 @@ mod tests {
         ] {
             assert_eq!(kind.resolved(), kind);
         }
+    }
+
+    /// The isolation marks catalog text puts around a value do not count
+    /// toward a button's width; the catalog English is drawn unchanged.
+    #[test]
+    fn isolation_marks_do_not_widen_a_button() {
+        let isolated = Label::from(signex_i18n::UserText::new("Save \u{2068}R1\u{2069}"));
+        assert_eq!(visible_text(&isolated), "Save R1");
+        let ok = signex_i18n::t!(
+            signex_i18n::I18n::en_us_ref(),
+            signex_i18n::shortcut_ids::PREF_KEYMAP_OK
+        );
+        assert_eq!(visible_text(&Label::from(ok)), "OK");
     }
 
     /// Footer buttons are dense: every role has the same height and the

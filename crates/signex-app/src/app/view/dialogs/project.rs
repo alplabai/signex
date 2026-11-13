@@ -46,6 +46,7 @@ impl Signex {
         };
 
         let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = self.ui_state.i18n.as_ref();
         let error_c = crate::styles::tokens::danger(tokens);
 
         let title = if st.is_project_rename {
@@ -106,13 +107,13 @@ impl Signex {
                 dialog_body(body),
                 dialog_footer(vec![
                     dialog_button(
-                        "Cancel",
+                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::Rename(RenameMsg::Close)),
                         tokens
                     ),
                     dialog_button(
-                        "Rename",
+                        t!(i18n, ids::DIALOG_RENAME_SUBMIT),
                         DialogButtonKind::Primary,
                         Some(Message::Rename(RenameMsg::Submit)),
                         tokens
@@ -260,7 +261,7 @@ impl Signex {
                 dialog_body(body_col),
                 dialog_footer(vec![
                     dialog_button(
-                        "Cancel",
+                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::EnableVersionControl(
                             EnableVersionControlMsg::Close
@@ -268,7 +269,14 @@ impl Signex {
                         tokens
                     ),
                     dialog_button(
-                        if st.working { "Enabling…" } else { "Enable" },
+                        t!(
+                            i18n,
+                            if st.working {
+                                ids::DIALOG_VERSION_CONTROL_ENABLING
+                            } else {
+                                ids::DIALOG_VERSION_CONTROL_ENABLE
+                            }
+                        ),
                         DialogButtonKind::Primary,
                         (!st.working && !st.scanning).then_some(Message::EnableVersionControl(
                             EnableVersionControlMsg::Confirm
@@ -433,13 +441,13 @@ impl Signex {
                 dialog_body(body),
                 dialog_footer(vec![
                     dialog_button(
-                        "Cancel",
+                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::GridProperties(GridPropertiesMsg::Close)),
                         tokens
                     ),
                     dialog_button(
-                        "Apply",
+                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY),
                         DialogButtonKind::Primary,
                         Some(Message::GridProperties(GridPropertiesMsg::Apply)),
                         tokens
@@ -546,13 +554,13 @@ impl Signex {
                 dialog_body(body),
                 dialog_footer(vec![
                     dialog_button(
-                        "Cancel",
+                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::SelectionFilter(SelectionFilterMsg::CloseCustom)),
                         tokens
                     ),
                     dialog_button(
-                        "Apply",
+                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY),
                         DialogButtonKind::Primary,
                         Some(Message::SelectionFilter(SelectionFilterMsg::ApplyCustom)),
                         tokens

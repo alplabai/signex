@@ -10,6 +10,7 @@ use crate::styles::{
     dialog_message,
 };
 use iced::widget::Widget;
+use signex_i18n::{I18n, Localized, ids, shortcut_ids, t};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -28,12 +29,13 @@ impl Signex {
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let panel_bg = crate::styles::ti(tokens.panel_bg);
+        let i18n = self.ui_state.i18n.as_ref();
 
-        let mut buttons = notice_choice_buttons(notice, tokens);
+        let mut buttons = notice_choice_buttons(i18n, notice, tokens);
         // A lone OK is the primary; beside choices it is the leading Cancel.
         if buttons.is_empty() {
             buttons.push(dialog_button(
-                "OK",
+                t!(i18n, shortcut_ids::PREF_KEYMAP_OK),
                 DialogButtonKind::Primary,
                 Some(Message::Overlay(OverlayMsg::DismissErrorNotice)),
                 tokens,
@@ -42,7 +44,7 @@ impl Signex {
             buttons.insert(
                 0,
                 dialog_button(
-                    "Cancel",
+                    t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                     DialogButtonKind::Cancel,
                     Some(Message::Overlay(OverlayMsg::DismissErrorNotice)),
                     tokens,
@@ -117,6 +119,7 @@ impl Signex {
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let panel_bg = crate::styles::ti(tokens.panel_bg);
+        let i18n = self.ui_state.i18n.as_ref();
         let text_muted = crate::styles::ti(tokens.text_secondary);
         // The sibling export-error modal's severity cue — reused verbatim so
         // the netlist-incomplete prompt reads as the same modal family.
@@ -154,13 +157,13 @@ impl Signex {
             // deliberate, risky choice, so it takes the danger style.
             dialog_footer(vec![
                 dialog_button(
-                    "Cancel",
+                    t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                     DialogButtonKind::Cancel,
                     Some(Message::Export(ExportMsg::NetlistCancelIncomplete)),
                     tokens,
                 ),
                 dialog_button(
-                    "Export anyway (incomplete)",
+                    t!(i18n, ids::DIALOG_NETLIST_EXPORT_ANYWAY),
                     DialogButtonKind::Danger,
                     Some(Message::Export(ExportMsg::NetlistExportAnyway)),
                     tokens,
@@ -240,6 +243,7 @@ impl Signex {
             None => return iced::widget::Space::new().boxed(),
         };
 
+        let i18n = self.ui_state.i18n.as_ref();
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
@@ -282,7 +286,7 @@ impl Signex {
                     .boxed(),
             ],
             vec![dialog_button(
-                "Export PDF",
+                t!(i18n, ids::DIALOG_PRINT_PREVIEW_EXPORT_PDF),
                 DialogButtonKind::Primary,
                 Some(Message::PrintPreview(PrintPreviewMsg::Export)),
                 tokens,
@@ -309,6 +313,7 @@ impl Signex {
 
 /// The extra buttons a notice offers before its dismiss button (#1826).
 fn notice_choice_buttons<'a>(
+    i18n: &I18n,
     notice: &crate::app::state::ErrorNotice,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Vec<Element<'a, Message>> {
@@ -317,27 +322,25 @@ fn notice_choice_buttons<'a>(
     let Some(NoticeAction::DiskChanged { drift, .. }) = &notice.action else {
         return Vec::new();
     };
-    let choice = |label: &'static str,
-                  kind: DialogButtonKind,
-                  message: OverlayMsg|
-     -> Element<'a, Message> {
-        dialog_button(label, kind, Some(Message::Overlay(message)), tokens)
-    };
+    let choice =
+        |label: Localized, kind: DialogButtonKind, message: OverlayMsg| -> Element<'a, Message> {
+            dialog_button(label, kind, Some(Message::Overlay(message)), tokens)
+        };
     match drift {
         DiskDrift::Changed => vec![
             choice(
-                "Reload from disk",
+                t!(i18n, ids::DIALOG_DISK_CONFLICT_RELOAD),
                 DialogButtonKind::Danger,
                 OverlayMsg::DiskConflictReloadChosen,
             ),
             choice(
-                "Overwrite",
+                t!(i18n, ids::DIALOG_OVERWRITE),
                 DialogButtonKind::Danger,
                 OverlayMsg::DiskConflictOverwriteChosen,
             ),
         ],
         DiskDrift::Missing => vec![choice(
-            "Re-create",
+            t!(i18n, ids::DIALOG_DISK_CONFLICT_RECREATE),
             DialogButtonKind::Primary,
             OverlayMsg::DiskConflictOverwriteChosen,
         )],

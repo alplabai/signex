@@ -491,6 +491,115 @@ fn moved_graphite_strings_of_the_third_wave_keep_their_english() {
     );
 }
 
+/// #2225 part 1, last wave: the dialog button labels keep their English,
+/// ellipses and the computed Update count included.
+#[test]
+fn moved_dialog_button_labels_keep_their_english() {
+    let i18n = I18n::new(&LanguagePref::Locale(EN_US.into()));
+    let shown = |id, args: &[(&str, crate::Arg)]| {
+        i18n.message(id, args)
+            .to_string()
+            .replace(['\u{2068}', '\u{2069}'], "")
+    };
+    for (id, english) in [
+        (ids::DIALOG_ANNOTATE_REPREFIX, "Re-prefix to standard"),
+        (ids::DIALOG_ANNOTATE_RESET_ALL, "Reset All"),
+        (ids::DIALOG_ANNOTATE_RESET_RENUMBER, "Reset & Renumber"),
+        (ids::DIALOG_ANNOTATE_ACCEPT, "Accept Changes"),
+        (ids::DIALOG_AUTOSAVE_RECOVERY_RESTORE, "Restore"),
+        (ids::DIALOG_AUTOSAVE_RECOVERY_LATER, "Decide later"),
+        (ids::DIALOG_BOM_EXPORT, "Export\u{2026}"),
+        (ids::DIALOG_UNSAVED_DISCARD_ALL, "Discard All"),
+        (ids::DIALOG_CREATE_CHILD_SHEET_OPEN_EXISTING, "Open it"),
+        (ids::DIALOG_CREATE_CHILD_SHEET_BROWSE, "Browse..."),
+        (ids::DIALOG_CREATE_CHILD_SHEET_LATER, "Later"),
+        (
+            ids::DIALOG_ERC_STORE_RULES,
+            "Store ERC rules in this project",
+        ),
+        (ids::DIALOG_ERC_SAVE_AS_PROFILE, "Save as profile"),
+        (ids::DIALOG_ERC_UPDATE_FROM_PROFILE, "Update from profile"),
+        (ids::DIALOG_ERC_RUN, "Run ERC"),
+        (ids::DIALOG_ERC_APPLY_UPDATE, "Apply update"),
+        (ids::DIALOG_OVERWRITE, "Overwrite"),
+        (ids::DIALOG_BACK, "Back"),
+        (ids::DIALOG_RENAME_SUBMIT, "Rename"),
+        (ids::DIALOG_VERSION_CONTROL_ENABLE, "Enable"),
+        (ids::DIALOG_VERSION_CONTROL_ENABLING, "Enabling\u{2026}"),
+        (ids::DIALOG_NET_COLOR_USE, "Use Color"),
+        (ids::DIALOG_PARAMETER_MANAGER_ADD_COLUMN, "Add column"),
+        (ids::DIALOG_DISK_CONFLICT_RELOAD, "Reload from disk"),
+        (ids::DIALOG_DISK_CONFLICT_RECREATE, "Re-create"),
+        (
+            ids::DIALOG_NETLIST_EXPORT_ANYWAY,
+            "Export anyway (incomplete)",
+        ),
+        (ids::DIALOG_PRINT_PREVIEW_EXPORT_PDF, "Export PDF"),
+        (ids::OVERLAY_PLACEMENT_PAUSED_RESUME, "Resume Placement"),
+        (ids::PREFERENCES_RESTORE_DEFAULTS, "Restore defaults"),
+        (ids::LIBRARY_CREATE_OPTIONS_CREATE, "Create Library"),
+        (ids::LIBRARY_EDIT_ROW_RELOAD, "Reload"),
+        (ids::LIBRARY_EDIT_ROW_KEEP_EDITING, "Keep editing"),
+        (ids::LIBRARY_EDIT_ROW_RELOAD_SAVED, "Reload saved version"),
+        (ids::LIBRARY_PICKER_NEXT, "Next"),
+        (
+            ids::LIBRARY_PRIMITIVE_PICKER_BROWSE,
+            "Browse filesystem\u{2026}",
+        ),
+        (ids::LIBRARY_PRIMITIVE_PICKER_OPEN_LIBRARY, "Open library"),
+        (ids::LIBRARY_PRIMITIVE_PICKER_DONT_COPY, "Don't copy"),
+        (
+            ids::LIBRARY_RECOVERY_REMOVE_FROM_PROJECT,
+            "Remove from project",
+        ),
+        (ids::LIBRARY_RECOVERY_LOCATE, "Locate\u{2026}"),
+        (ids::LIBRARY_RECOVERY_RESTORE_REMOTE, "Restore from remote"),
+        (ids::LIBRARY_RECOVERY_SKIP_READ_ONLY, "Skip (read-only)"),
+        (ids::LIBRARY_RECOVERY_REINIT, "Re-init (lose history)"),
+        (ids::LIBRARY_RECOVERY_REMOVE_ROW, "Remove row"),
+        (ids::LIBRARY_RECOVERY_REBIND, "Re-bind\u{2026}"),
+        (ids::LIBRARY_DISTRIBUTOR_CONNECT_OAUTH, "Connect via OAuth"),
+        (ids::LIBRARY_DISTRIBUTOR_TEST, "Test"),
+        (ids::LIBRARY_STOCK_COPY_NEW_LIBRARY, "New Library\u{2026}"),
+        (ids::LIBRARY_UPDATES_SKIP_ALL, "Skip All"),
+        (ids::LIBRARY_CHANGE_PART_CONFIRM, "Change"),
+        (ids::LIBRARY_CHANGE_PART_CONFIRM_ANYWAY, "Change anyway"),
+        // Reused for the buttons with the same English and meaning.
+        (ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL, "Cancel"),
+        (ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY, "Apply"),
+        (ids::UPDATE_PCB_CLOSE, "Close"),
+        (ids::BOARD_SKETCH_DISCARD, "Discard"),
+        (ids::LIBRARY_BROWSER_CREATE_TABLE, "Create"),
+        (ids::PANELS_SCH_LIBRARY_PLACE, "Place"),
+        (ids::PANELS_SCH_LIBRARY_DELETE, "Delete"),
+        (ids::PANELS_NET_CLASSES_UNDO, "Undo"),
+        (ids::PANELS_NET_CLASSES_REDO, "Redo"),
+        (ids::EDITORS_SYMBOL_COPY_AGAIN, "Copy Again"),
+        (ids::PANELS_LIBRARY_ROW_PICK_SYMBOL, "Pick Symbol\u{2026}"),
+        (
+            ids::PANELS_LIBRARY_ROW_PICK_FOOTPRINT,
+            "Pick Footprint\u{2026}",
+        ),
+        (crate::shortcut_ids::PREF_KEYMAP_OK, "OK"),
+        (crate::menu_ids::MENU_FILE_SAVE_ALL, "Save All"),
+        (crate::command_ids::CMD_MENU_SAVE_DOCUMENT, "Save"),
+        (crate::command_ids::CMD_COPY, "Copy"),
+    ] {
+        assert_eq!(shown(id, &[]), english, "{}", id.as_str());
+    }
+    // The count is passed already written out, so it is never regrouped.
+    for (count, english) in [
+        ("0", "Update Selected Components (0)"),
+        ("3", "Update Selected Components (3)"),
+        ("1156", "Update Selected Components (1156)"),
+    ] {
+        assert_eq!(
+            shown(ids::LIBRARY_UPDATES_APPLY, &[("count", count.into())]),
+            english
+        );
+    }
+}
+
 /// #2262: the Pad Properties header of a selected pad, singular and plural.
 #[test]
 fn the_pad_heading_names_the_pad_and_its_place_among_the_pads() {

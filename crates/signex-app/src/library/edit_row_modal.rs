@@ -5,6 +5,7 @@
 
 use iced::widget::{Space, Widget, column, container, pick_list, row, scrollable};
 use iced::{Element, Length};
+use signex_i18n::{Localized, command_ids, ids, t};
 use signex_library::{ComponentClass, DatasheetRef, LifecycleState, ParameterTemplate};
 use signex_types::object_id::short_id;
 use signex_types::theme::ThemeTokens;
@@ -60,6 +61,7 @@ pub fn view<'a>(
     library_path: &'a std::path::Path,
     edit: &'a EditRowModalState,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
     windowed: bool,
     classes: Vec<crate::fonts::ComponentClassEntry>,
     template: Option<&'a ParameterTemplate>,
@@ -195,7 +197,7 @@ pub fn view<'a>(
         format!("symbol uuid {}", symbol_short)
     };
     let symbol_btn = secondary_btn(
-        "Pick Symbol…",
+        t!(i18n, ids::PANELS_LIBRARY_ROW_PICK_SYMBOL),
         send.clone()(BrowserEditMsg::OpenSymbolPicker),
         tokens,
     );
@@ -205,7 +207,7 @@ pub fn view<'a>(
         None => "Unbound (optional)".to_string(),
     };
     let footprint_btn = secondary_btn(
-        "Pick Footprint…",
+        t!(i18n, ids::PANELS_LIBRARY_ROW_PICK_FOOTPRINT),
         send.clone()(BrowserEditMsg::OpenFootprintPicker),
         tokens,
     );
@@ -308,7 +310,7 @@ pub fn view<'a>(
     // Offered once a save was refused because the row changed on the
     // server; discarding the draft asks first.
     let plain_btn =
-        |label: &'static str, msg: BrowserEditMsg| secondary_btn(label, send.clone()(msg), tokens);
+        |label: Localized, msg: BrowserEditMsg| secondary_btn(label, send.clone()(msg), tokens);
     let reload: Element<'_, LibraryMessage> = if !edit.stale_base {
         Space::new().width(0).boxed()
     } else if edit.reload_confirming {
@@ -317,25 +319,39 @@ pub fn view<'a>(
                 .size(TS.body)
                 .color(text_c),
             crate::styles::dialog_button(
-                "Reload",
+                t!(i18n, ids::LIBRARY_EDIT_ROW_RELOAD),
                 crate::styles::DialogButtonKind::Danger,
                 Some(send.clone()(BrowserEditMsg::ReloadConfirmed)),
                 tokens,
             ),
-            plain_btn("Keep editing", BrowserEditMsg::ReloadCancelled),
+            plain_btn(
+                t!(i18n, ids::LIBRARY_EDIT_ROW_KEEP_EDITING),
+                BrowserEditMsg::ReloadCancelled
+            ),
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
         .boxed()
     } else {
-        plain_btn("Reload saved version", BrowserEditMsg::ReloadRequested)
+        plain_btn(
+            t!(i18n, ids::LIBRARY_EDIT_ROW_RELOAD_SAVED),
+            BrowserEditMsg::ReloadRequested,
+        )
     };
 
     let footer = footer_strip(
         vec![reload],
         vec![
-            cancel_btn("Cancel", send.clone()(BrowserEditMsg::Cancel), tokens),
-            primary_btn("Save", send(BrowserEditMsg::Save), tokens),
+            cancel_btn(
+                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                send.clone()(BrowserEditMsg::Cancel),
+                tokens,
+            ),
+            primary_btn(
+                t!(i18n, command_ids::CMD_MENU_SAVE_DOCUMENT),
+                send(BrowserEditMsg::Save),
+                tokens,
+            ),
         ],
         tokens,
     );
@@ -365,6 +381,7 @@ pub fn view_delete_confirm<'a>(
     library_path: &'a std::path::Path,
     confirm: &'a DeleteConfirmState,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let header = header_title_only("Delete Component?", windowed, tokens);
@@ -388,14 +405,14 @@ pub fn view_delete_confirm<'a>(
         Vec::new(),
         vec![
             cancel_btn(
-                "Cancel",
+                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                 LibraryMessage::BrowserDeleteRowCancel {
                     library_path: library_path.to_path_buf(),
                 },
                 tokens,
             ),
             danger_btn(
-                "Delete",
+                t!(i18n, ids::PANELS_SCH_LIBRARY_DELETE),
                 LibraryMessage::BrowserDeleteRowConfirm {
                     library_path: library_path.to_path_buf(),
                     table: confirm.table.clone(),

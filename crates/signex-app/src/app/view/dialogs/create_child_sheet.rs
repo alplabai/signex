@@ -4,6 +4,7 @@
 
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
+use signex_i18n::{ids, t};
 use signex_widgets::{raw, text, text_input};
 
 use super::widgets::modal_title_header;
@@ -26,6 +27,7 @@ impl Signex {
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_muted = crate::styles::ti(tokens.text_secondary);
+        let i18n = self.ui_state.i18n.as_ref();
         fn msg(m: ProjectMsg) -> Message {
             Message::Project(m)
         }
@@ -71,13 +73,18 @@ impl Signex {
         };
         let confirm_button: Element<'_, Message> = if confirm.exists {
             dialog_button(
-                "Open it",
+                t!(i18n, ids::DIALOG_CREATE_CHILD_SHEET_OPEN_EXISTING),
                 DialogButtonKind::Primary,
                 Some(msg(ProjectMsg::CreateChildSheetOpenExisting)),
                 tokens,
             )
         } else {
-            dialog_button("Create", DialogButtonKind::Primary, Some(create), tokens)
+            dialog_button(
+                t!(i18n, ids::LIBRARY_BROWSER_CREATE_TABLE),
+                DialogButtonKind::Primary,
+                Some(create),
+                tokens,
+            )
         };
 
         // In the main window the card is its design width and as tall as its
@@ -113,7 +120,7 @@ impl Signex {
                         row![
                             field,
                             dialog_button(
-                                "Browse...",
+                                t!(i18n, ids::DIALOG_CREATE_CHILD_SHEET_BROWSE),
                                 DialogButtonKind::Secondary,
                                 Some(msg(ProjectMsg::CreateChildSheetBrowse)),
                                 tokens,
@@ -126,7 +133,12 @@ impl Signex {
                     .spacing(SP.m),
                 ),
                 dialog_footer(vec![
-                    dialog_button("Later", DialogButtonKind::Cancel, Some(later), tokens),
+                    dialog_button(
+                        t!(i18n, ids::DIALOG_CREATE_CHILD_SHEET_LATER),
+                        DialogButtonKind::Cancel,
+                        Some(later),
+                        tokens
+                    ),
                     confirm_button,
                 ]),
             ]

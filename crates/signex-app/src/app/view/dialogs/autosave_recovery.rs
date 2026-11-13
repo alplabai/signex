@@ -6,6 +6,7 @@
 use super::*;
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
+use signex_i18n::{ids, t};
 use signex_widgets::{raw, text};
 
 use super::widgets::modal_title_header;
@@ -42,6 +43,7 @@ impl Signex {
         offer: &RecoveryOffer,
         windowed: bool,
     ) -> Element<'_, Message> {
+        let i18n = self.ui_state.i18n.as_ref();
         let tokens = &self.document_state.panel_ctx.tokens;
         let later = Message::Autosave(AutosaveMsg::Recovery(RecoveryChoice::Later));
 
@@ -99,7 +101,7 @@ impl Signex {
         ));
 
         let restore = dialog_button(
-            "Restore",
+            t!(i18n, ids::DIALOG_AUTOSAVE_RECOVERY_RESTORE),
             DialogButtonKind::Primary,
             Some(Message::Autosave(AutosaveMsg::Recovery(
                 RecoveryChoice::Restore,
@@ -107,7 +109,7 @@ impl Signex {
             tokens,
         );
         let discard = dialog_button(
-            "Discard",
+            t!(i18n, ids::BOARD_SKETCH_DISCARD),
             DialogButtonKind::Danger,
             Some(Message::Autosave(AutosaveMsg::Recovery(
                 RecoveryChoice::Discard,
@@ -119,7 +121,7 @@ impl Signex {
         let footer = dialog_footer_split(
             vec![restore, discard],
             vec![dialog_button(
-                "Decide later",
+                t!(i18n, ids::DIALOG_AUTOSAVE_RECOVERY_LATER),
                 DialogButtonKind::Ghost,
                 Some(later),
                 tokens,

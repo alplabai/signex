@@ -24,6 +24,7 @@ use iced::widget::{column, container, row};
 use iced::{Element, Length, Widget};
 use signex_widgets::{button, raw, text};
 
+use signex_i18n::{ids, shortcut_ids, t};
 use signex_types::theme::ThemeTokens;
 
 use crate::styles::{Spacing, TypeScale};
@@ -62,6 +63,7 @@ const VERTICAL_OPTIONS: [(&str, Option<AlignOp>); 5] = [
 pub fn view_align_modal<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Option<Element<'a, LibraryMessage>> {
     let ts = TypeScale::default();
     let sp = Spacing::default();
@@ -120,9 +122,13 @@ pub fn view_align_modal<'a>(
     let footer = modal_chrome::footer_strip(
         Vec::new(),
         vec![
-            modal_chrome::cancel_btn("Cancel", cancel_msg(&path), tokens),
+            modal_chrome::cancel_btn(
+                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                cancel_msg(&path),
+                tokens,
+            ),
             modal_chrome::primary_btn(
-                "OK",
+                t!(i18n, shortcut_ids::PREF_KEYMAP_OK),
                 LibraryMessage::PrimitiveEditorEvent {
                     path,
                     msg: PrimitiveEdit::Footprint(FootprintEditorMsg::AlignConfirm),

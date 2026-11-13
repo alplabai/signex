@@ -64,19 +64,19 @@ impl Signex {
             .and_then(sketch);
         bar = bar
             .push(dialog_button(
-                &t!(i18n, ids::BOARD_SKETCH_APPLY).into_string(),
+                t!(i18n, ids::BOARD_SKETCH_APPLY),
                 DialogButtonKind::Primary,
                 apply,
                 tokens,
             ))
             .push(dialog_button(
-                &t!(i18n, ids::BOARD_SKETCH_LEAVE).into_string(),
+                t!(i18n, ids::BOARD_SKETCH_LEAVE),
                 DialogButtonKind::Secondary,
                 sketch(BoardSketchMsg::LeaveRequested),
                 tokens,
             ))
             .push(dialog_button(
-                &t!(i18n, ids::BOARD_SKETCH_DISCARD).into_string(),
+                t!(i18n, ids::BOARD_SKETCH_DISCARD),
                 DialogButtonKind::Danger,
                 sketch(BoardSketchMsg::DiscardRequested),
                 tokens,

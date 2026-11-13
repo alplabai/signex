@@ -4,6 +4,7 @@
 use super::*;
 use iced::widget::{Space, column, container};
 use iced::{Element, Length, Widget};
+use signex_i18n::{ids, t};
 use signex_widgets::{raw, text};
 
 use super::super::widgets::{draggable_header, modal_title_header, os_title_bar_slot};
@@ -31,6 +32,7 @@ impl Signex {
         let Some(confirm) = &self.ui_state.reprefix_confirm else {
             return container(Space::new()).boxed();
         };
+        let i18n = self.ui_state.i18n.as_ref();
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -85,13 +87,13 @@ impl Signex {
                 dialog_body(body),
                 dialog_footer(vec![
                     dialog_button(
-                        "Cancel",
+                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::Annotate(AnnotateMsg::ReprefixCancelled)),
                         tokens,
                     ),
                     dialog_button(
-                        &confirm.button_label,
+                        raw(confirm.button_label.clone()),
                         DialogButtonKind::Primary,
                         Some(Message::Annotate(AnnotateMsg::ReprefixConfirmed)),
                         tokens,

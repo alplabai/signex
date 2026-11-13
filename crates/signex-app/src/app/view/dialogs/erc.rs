@@ -8,7 +8,7 @@
 use super::*;
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
-use signex_i18n::{ids, t};
+use signex_i18n::{command_ids, ids, t};
 use signex_widgets::{raw, text, text_input};
 
 use super::rule_editor::{RuleEditor, rule_editor};
@@ -44,6 +44,7 @@ impl Signex {
 
     fn view_erc_dialog_body_inner(&self, draggable: bool) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = self.ui_state.i18n.as_ref();
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
         let header_content: Element<'_, Message> = super::graphite::titled_header(
@@ -110,7 +111,7 @@ impl Signex {
                     .boxed(),
             );
         }
-        let secondary = |label: &str, message: Option<Message>| {
+        let secondary = |label: signex_i18n::Localized, message: Option<Message>| {
             dialog_button(label, DialogButtonKind::Secondary, message, tokens)
         };
         let mut extras: Vec<Element<'_, Message>> = vec![scope.boxed()];
@@ -118,27 +119,27 @@ impl Signex {
         // would replace it on save, so the action is not offered.
         if has_project && stored.is_none() && !unreadable {
             extras.push(secondary(
-                "Store ERC rules in this project",
+                t!(i18n, ids::DIALOG_ERC_STORE_RULES),
                 Some(Message::Erc(ErcMsg::StoreRulesInProject)),
             ));
         }
         if stored.is_some() {
             extras.push(secondary(
-                "Save as profile",
+                t!(i18n, ids::DIALOG_ERC_SAVE_AS_PROFILE),
                 Some(Message::Erc(ErcMsg::ProfileSaveDialogOpened)),
             ));
             if self.active_project_has_profile() {
                 extras.push(secondary(
-                    "Update from profile",
+                    t!(i18n, ids::DIALOG_ERC_UPDATE_FROM_PROFILE),
                     Some(Message::Erc(ErcMsg::ProfileUpdateRequested)),
                 ));
             }
             extras.push(secondary(
-                "Undo",
+                t!(i18n, ids::PANELS_NET_CLASSES_UNDO),
                 can_undo.then_some(Message::Erc(ErcMsg::RulesUndone)),
             ));
             extras.push(secondary(
-                "Redo",
+                t!(i18n, ids::PANELS_NET_CLASSES_REDO),
                 can_redo.then_some(Message::Erc(ErcMsg::RulesRedone)),
             ));
         }
@@ -146,13 +147,13 @@ impl Signex {
             extras,
             vec![
                 dialog_button(
-                    "Close",
+                    t!(i18n, ids::UPDATE_PCB_CLOSE),
                     DialogButtonKind::Cancel,
                     Some(Message::Erc(ErcMsg::CloseDialog)),
                     tokens,
                 ),
                 dialog_button(
-                    "Run ERC",
+                    t!(i18n, ids::DIALOG_ERC_RUN),
                     DialogButtonKind::Primary,
                     Some(Message::Erc(ErcMsg::Run)),
                     tokens,
@@ -257,13 +258,13 @@ impl Signex {
         }
         let buttons = row![
             dialog_button(
-                "Apply update",
+                t!(i18n, ids::DIALOG_ERC_APPLY_UPDATE),
                 DialogButtonKind::Primary,
                 Some(Message::Erc(ErcMsg::ProfileUpdateConfirmed)),
                 tokens,
             ),
             dialog_button(
-                "Cancel",
+                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                 DialogButtonKind::Cancel,
                 Some(Message::Erc(ErcMsg::ProfileUpdateCancelled)),
                 tokens,
@@ -314,14 +315,14 @@ impl Signex {
                 .push(
                     row![
                         dialog_button(
-                            "Overwrite",
+                            t!(i18n, ids::DIALOG_OVERWRITE),
                             PROFILE_OVERWRITE_KIND,
                             (!dialog.busy)
                                 .then_some(Message::Erc(ErcMsg::ProfileSaveOverwriteConfirmed)),
                             tokens,
                         ),
                         dialog_button(
-                            "Back",
+                            t!(i18n, ids::DIALOG_BACK),
                             DialogButtonKind::Secondary,
                             Some(Message::Erc(ErcMsg::ProfileSaveCancelled)),
                             tokens,
@@ -380,13 +381,13 @@ impl Signex {
             panel = panel.push(
                 row![
                     dialog_button(
-                        "Save",
+                        t!(i18n, command_ids::CMD_MENU_SAVE_DOCUMENT),
                         DialogButtonKind::Primary,
                         editable.then(submit),
                         tokens,
                     ),
                     dialog_button(
-                        "Cancel",
+                        t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::Erc(ErcMsg::ProfileSaveCancelled)),
                         tokens,

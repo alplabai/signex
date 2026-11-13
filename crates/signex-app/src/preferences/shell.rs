@@ -9,7 +9,7 @@ use crate::app::view::dialogs::{PREFERENCES_HEADER_H, graphite_header};
 use crate::styles::{self, DialogButtonKind, PillTone, Radii, dialog_button, ti, tokens};
 use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{I18n, ids, shortcut_ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text};
 
@@ -198,24 +198,34 @@ fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
     let buttons = row![
         note,
         dialog_button(
-            "Cancel",
+            t!(v.i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
             DialogButtonKind::Cancel,
             Some(PrefMsg::DiscardAndClose),
             t
         ),
         dialog_button(
-            "Apply",
+            t!(v.i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY),
             DialogButtonKind::Secondary,
             v.dirty.then_some(PrefMsg::Save),
             t
         ),
-        dialog_button("OK", DialogButtonKind::Primary, Some(ok_msg), t),
+        dialog_button(
+            t!(v.i18n, shortcut_ids::PREF_KEYMAP_OK),
+            DialogButtonKind::Primary,
+            Some(ok_msg),
+            t
+        ),
     ]
     .spacing(SP.m)
     .align_y(Alignment::Center);
     container(
         row![
-            dialog_button("Restore defaults", DialogButtonKind::Ghost, None, t),
+            dialog_button(
+                t!(v.i18n, ids::PREFERENCES_RESTORE_DEFAULTS),
+                DialogButtonKind::Ghost,
+                None,
+                t
+            ),
             Space::new().width(Length::Fill).boxed(),
             buttons.boxed(),
         ]

@@ -411,7 +411,7 @@ fn view_pre_placement<'a>(
                 text(raw(tool_name.clone())).size(TS.label).color(primary),
                 Space::new().width(Length::Fill),
                 crate::styles::dialog_button(
-                    "OK",
+                    t!(ctx.i18n, signex_i18n::shortcut_ids::PREF_KEYMAP_OK),
                     crate::styles::DialogButtonKind::Primary,
                     Some(PanelMsg::ConfirmPrePlacement),
                     &ctx.tokens,

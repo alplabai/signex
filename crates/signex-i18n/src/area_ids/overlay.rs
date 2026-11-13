@@ -6,4 +6,5 @@ define_ids! {
     OVERLAY_SYMBOL_CARD_VALUE = "overlay-symbol-card-value";
     OVERLAY_SYMBOL_CARD_FOOTPRINT = "overlay-symbol-card-footprint";
     OVERLAY_SYMBOL_CARD_LIBRARY = "overlay-symbol-card-library";
+    OVERLAY_PLACEMENT_PAUSED_RESUME = "overlay-placement-paused-resume";
 }

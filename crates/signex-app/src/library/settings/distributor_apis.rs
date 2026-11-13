@@ -10,6 +10,7 @@
 
 use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Theme, Widget};
+use signex_i18n::{ids, t};
 use signex_library::DistributorSource;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text, text_input};
@@ -26,6 +27,7 @@ use super::super::state::DistributorSettings;
 pub fn view<'a>(
     settings: &'a DistributorSettings,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, LibraryMessage> {
     let ts = TypeScale::default();
     let sp = Spacing::default();
@@ -57,13 +59,13 @@ pub fn view<'a>(
     digikey_actions = digikey_actions.push(Space::new().width(Length::Fill).boxed());
     if settings.digikey_in_flight {
         digikey_actions = digikey_actions.push(secondary_btn(
-            "Cancel",
+            t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
             LibraryMessage::Settings(SettingsMsg::DigiKeyCancel),
             tokens,
         ));
     } else {
         digikey_actions = digikey_actions.push(primary_btn(
-            "Connect via OAuth",
+            t!(i18n, ids::LIBRARY_DISTRIBUTOR_CONNECT_OAUTH),
             LibraryMessage::Settings(SettingsMsg::DigiKeyConnect),
             tokens,
         ));
@@ -108,7 +110,7 @@ pub fn view<'a>(
                 .size(ts.label),
             Space::new().width(sp.m),
             primary_btn(
-                "Test",
+                t!(i18n, ids::LIBRARY_DISTRIBUTOR_TEST),
                 LibraryMessage::Settings(SettingsMsg::MouserTest),
                 tokens
             ),

@@ -8,6 +8,7 @@
 use super::*;
 use iced::widget::{Space, column, container};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use signex_i18n::{I18n, command_ids, ids, menu_ids, t};
 use signex_widgets::{button, raw, text};
 
 use super::widgets::modal_title_header;
@@ -38,6 +39,7 @@ impl Signex {
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
+        let i18n = self.ui_state.i18n.as_ref();
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
 
@@ -61,7 +63,7 @@ impl Signex {
                 crate::app::state::ModalId::RemoveDialog,
                 super::sizes::REMOVE,
             );
-            return Self::exclude_dirty_card(body, can_discard, header, width, tokens);
+            return Self::exclude_dirty_card(i18n, body, can_discard, header, width, tokens);
         }
 
         let option_card =
@@ -237,7 +239,7 @@ impl Signex {
                 header,
                 dialog_body(column![prompt, remove_options].spacing(SP.m)),
                 dialog_footer(vec![dialog_button(
-                    "Cancel",
+                    t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                     DialogButtonKind::Cancel,
                     Some(Message::Remove(RemoveMsg::Close)),
                     tokens,
@@ -256,6 +258,7 @@ impl Signex {
     /// Unsaved-edits stage of the Remove modal (#738): Save / Discard / Cancel.
     /// Cancel is `RemoveMsg::Close`, the same message Esc resolves to.
     fn exclude_dirty_card<'a>(
+        i18n: &I18n,
         body: String,
         can_discard: bool,
         header: Element<'a, Message>,
@@ -264,14 +267,14 @@ impl Signex {
     ) -> Element<'a, Message> {
         // Discard is withheld when another open project shares the target.
         let mut buttons = vec![dialog_button(
-            "Cancel",
+            t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
             DialogButtonKind::Cancel,
             Some(Message::Remove(RemoveMsg::Close)),
             tokens,
         )];
         if can_discard {
             buttons.push(dialog_button(
-                "Discard",
+                t!(i18n, ids::BOARD_SKETCH_DISCARD),
                 DialogButtonKind::Danger,
                 Some(Message::Remove(RemoveMsg::ExcludeDirty(
                     crate::app::ExcludeDirtyChoice::Discard,
@@ -280,7 +283,7 @@ impl Signex {
             ));
         }
         buttons.push(dialog_button(
-            "Save",
+            t!(i18n, command_ids::CMD_MENU_SAVE_DOCUMENT),
             DialogButtonKind::Primary,
             Some(Message::Remove(RemoveMsg::ExcludeDirty(
                 crate::app::ExcludeDirtyChoice::Save,
@@ -318,6 +321,7 @@ impl Signex {
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
+        let i18n = self.ui_state.i18n.as_ref();
 
         let header_content: Element<'_, Message> = modal_title_header(
             "Close Project — Unsaved Edits",
@@ -373,7 +377,7 @@ impl Signex {
         }
 
         let mut buttons = vec![dialog_button(
-            "Cancel",
+            t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
             DialogButtonKind::Cancel,
             Some(Message::Project(ProjectMsg::CloseConfirm(
                 ProjectCloseChoice::Cancel,
@@ -382,7 +386,7 @@ impl Signex {
         )];
         if discard_blocked.is_none() {
             buttons.push(dialog_button(
-                "Discard All",
+                t!(i18n, ids::DIALOG_UNSAVED_DISCARD_ALL),
                 DialogButtonKind::Danger,
                 Some(Message::Project(ProjectMsg::CloseConfirm(
                     ProjectCloseChoice::DiscardAll,
@@ -391,7 +395,7 @@ impl Signex {
             ));
         }
         buttons.push(dialog_button(
-            "Save All",
+            t!(i18n, menu_ids::MENU_FILE_SAVE_ALL),
             DialogButtonKind::Primary,
             Some(Message::Project(ProjectMsg::CloseConfirm(
                 ProjectCloseChoice::SaveAll,
@@ -461,6 +465,7 @@ impl Signex {
 
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
+        let i18n = self.ui_state.i18n.as_ref();
 
         let header_content: Element<'_, Message> = modal_title_header(
             format!(
@@ -513,19 +518,19 @@ impl Signex {
         let choose = |choice| Message::Project(ProjectMsg::AppQuitConfirm(choice));
         let buttons = vec![
             dialog_button(
-                "Cancel",
+                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                 DialogButtonKind::Cancel,
                 Some(choose(ProjectCloseChoice::Cancel)),
                 tokens,
             ),
             dialog_button(
-                "Discard All",
+                t!(i18n, ids::DIALOG_UNSAVED_DISCARD_ALL),
                 DialogButtonKind::Danger,
                 Some(choose(ProjectCloseChoice::DiscardAll)),
                 tokens,
             ),
             dialog_button(
-                "Save All",
+                t!(i18n, menu_ids::MENU_FILE_SAVE_ALL),
                 DialogButtonKind::Primary,
                 Some(choose(ProjectCloseChoice::SaveAll)),
                 tokens,

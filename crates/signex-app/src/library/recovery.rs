@@ -43,6 +43,7 @@ use std::path::PathBuf;
 
 use iced::widget::{Space, column, container};
 use iced::{Element, Widget};
+use signex_i18n::{I18n, ids, t};
 use signex_library::PrimitiveKind;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -146,15 +147,25 @@ fn binding_kind_label(kind: PrimitiveKind) -> &'static str {
 pub fn view<'a>(
     dialog: &'a RecoveryDialog,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     match dialog {
-        RecoveryDialog::LibraryMissing { path } => library_missing_view(path, tokens, windowed),
+        RecoveryDialog::LibraryMissing { path } => {
+            library_missing_view(path, tokens, i18n, windowed)
+        }
         RecoveryDialog::GitMissing {
             path,
             remote,
             error,
-        } => git_missing_view(path, remote.as_deref(), error.as_deref(), tokens, windowed),
+        } => git_missing_view(
+            path,
+            remote.as_deref(),
+            error.as_deref(),
+            tokens,
+            i18n,
+            windowed,
+        ),
         RecoveryDialog::BrokenPrimitiveBinding {
             library_path,
             table,
@@ -168,6 +179,7 @@ pub fn view<'a>(
             *kind,
             *missing_uuid,
             tokens,
+            i18n,
             windowed,
         ),
     }
@@ -176,6 +188,7 @@ pub fn view<'a>(
 fn library_missing_view<'a>(
     path: &'a std::path::Path,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let header = header(
@@ -204,17 +217,17 @@ fn library_missing_view<'a>(
         Vec::new(),
         vec![
             cancel_btn(
-                "Cancel",
+                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
                 tokens,
             ),
             danger_btn(
-                "Remove from project",
+                t!(i18n, ids::LIBRARY_RECOVERY_REMOVE_FROM_PROJECT),
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::RemoveFromProject),
                 tokens,
             ),
             primary_btn(
-                "Locate\u{2026}",
+                t!(i18n, ids::LIBRARY_RECOVERY_LOCATE),
                 LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Locate),
                 tokens,
             ),
@@ -236,6 +249,7 @@ fn git_missing_view<'a>(
     remote: Option<&'a str>,
     error: Option<&'a str>,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let danger = theme_ext::error_color(tokens);
@@ -289,13 +303,13 @@ fn git_missing_view<'a>(
     // then it is drawn disabled.
     let restore_button: Element<'a, LibraryMessage> = if remote.is_some() {
         primary_btn(
-            "Restore from remote",
+            t!(i18n, ids::LIBRARY_RECOVERY_RESTORE_REMOTE),
             LibraryMessage::RecoveryGitMissing(GitMissingChoice::RestoreFromRemote),
             tokens,
         )
     } else {
         dialog_button(
-            "Restore from remote",
+            t!(i18n, ids::LIBRARY_RECOVERY_RESTORE_REMOTE),
             DialogButtonKind::Secondary,
             None,
             tokens,
@@ -306,18 +320,18 @@ fn git_missing_view<'a>(
         Vec::new(),
         vec![
             cancel_btn(
-                "Cancel",
+                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                 LibraryMessage::RecoveryGitMissing(GitMissingChoice::Cancel),
                 tokens,
             ),
             secondary_btn(
-                "Skip (read-only)",
+                t!(i18n, ids::LIBRARY_RECOVERY_SKIP_READ_ONLY),
                 LibraryMessage::RecoveryGitMissing(GitMissingChoice::Skip),
                 tokens,
             ),
             restore_button,
             danger_btn(
-                "Re-init (lose history)",
+                t!(i18n, ids::LIBRARY_RECOVERY_REINIT),
                 LibraryMessage::RecoveryGitMissing(GitMissingChoice::ReInit),
                 tokens,
             ),
@@ -339,6 +353,10 @@ fn git_missing_view<'a>(
     .boxed()
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the variant's five fields plus the shared tokens, catalog and window flag"
+)]
 fn broken_binding_view<'a>(
     library_path: &'a std::path::Path,
     table: &'a str,
@@ -346,6 +364,7 @@ fn broken_binding_view<'a>(
     kind: PrimitiveKind,
     missing_uuid: Uuid,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let kind_label = binding_kind_label(kind);
@@ -381,17 +400,17 @@ fn broken_binding_view<'a>(
         Vec::new(),
         vec![
             cancel_btn(
-                "Cancel",
+                t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                 LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
                 tokens,
             ),
             danger_btn(
-                "Remove row",
+                t!(i18n, ids::LIBRARY_RECOVERY_REMOVE_ROW),
                 LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::RemoveRow),
                 tokens,
             ),
             primary_btn(
-                "Re-bind\u{2026}",
+                t!(i18n, ids::LIBRARY_RECOVERY_REBIND),
                 LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Rebind),
                 tokens,
             ),
