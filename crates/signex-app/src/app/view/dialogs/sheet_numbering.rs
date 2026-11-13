@@ -77,13 +77,13 @@ impl Signex {
             vec![auto],
             vec![
                 dialog_button(
-                    &s(i18n, ids::DIALOG_SHEET_NUMBERING_CANCEL),
+                    t!(i18n, ids::DIALOG_SHEET_NUMBERING_CANCEL),
                     DialogButtonKind::Cancel,
                     cancel,
                     tokens,
                 ),
                 dialog_button(
-                    &s(i18n, ids::DIALOG_SHEET_NUMBERING_APPLY),
+                    t!(i18n, ids::DIALOG_SHEET_NUMBERING_APPLY),
                     super::graphite::call_to_action(tokens),
                     state
                         .can_apply()

@@ -57,13 +57,13 @@ impl Signex {
             Vec::new(),
             vec![
                 dialog_button(
-                    &s(i18n, ids::PCB_REANNOTATE_CANCEL),
+                    t!(i18n, ids::PCB_REANNOTATE_CANCEL),
                     DialogButtonKind::Cancel,
                     cancel,
                     tokens,
                 ),
                 dialog_button(
-                    &s(i18n, ids::PCB_REANNOTATE_EXECUTE),
+                    t!(i18n, ids::PCB_REANNOTATE_EXECUTE),
                     super::graphite::call_to_action(tokens),
                     state
                         .can_execute()

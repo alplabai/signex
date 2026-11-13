@@ -109,19 +109,19 @@ impl Signex {
             warning,
             vec![
                 dialog_button(
-                    &s(i18n, ids::BACK_ANNOTATE_CLOSE),
+                    t!(i18n, ids::BACK_ANNOTATE_CLOSE),
                     DialogButtonKind::Cancel,
                     close,
                     tokens,
                 ),
                 dialog_button(
-                    &s(i18n, ids::BACK_ANNOTATE_VALIDATE),
+                    t!(i18n, ids::BACK_ANNOTATE_VALIDATE),
                     DialogButtonKind::Secondary,
                     ready.then(|| ba(BackAnnotateMsg::ValidateRequested)),
                     tokens,
                 ),
                 dialog_button(
-                    &s(i18n, ids::BACK_ANNOTATE_EXECUTE),
+                    t!(i18n, ids::BACK_ANNOTATE_EXECUTE),
                     super::graphite::call_to_action(tokens),
                     can_execute.then(|| ba(BackAnnotateMsg::ExecuteRequested)),
                     tokens,

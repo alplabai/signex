@@ -462,6 +462,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "read_document",
                     "query_pins",
                     "check_erc",
+                    "check_drc",
                     "find_items",
                     "apply_edits",
                     "revert",

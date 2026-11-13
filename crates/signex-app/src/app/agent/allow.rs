@@ -73,6 +73,7 @@ mod tests {
             [
                 "apply_edits",
                 "assign_net_class",
+                "check_drc",
                 "check_erc",
                 "clear_all_net_colors",
                 "close_active_document",

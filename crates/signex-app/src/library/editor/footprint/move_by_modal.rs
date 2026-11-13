@@ -21,6 +21,7 @@ use iced::widget::{column, container, row};
 use iced::{Background, Border, Element, Length, Widget as _};
 use signex_widgets::{raw, text, text_input};
 
+use signex_i18n::{ids, t};
 use signex_types::theme::ThemeTokens;
 
 use crate::styles::{Spacing, TypeScale};
@@ -37,6 +38,7 @@ use crate::styles::tokens::{self, Overlay};
 pub fn view_move_by_modal<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Option<Element<'a, LibraryMessage>> {
     let ts = TypeScale::default();
     let sp = Spacing::default();
@@ -124,7 +126,7 @@ pub fn view_move_by_modal<'a>(
         Vec::new(),
         vec![
             modal_chrome::cancel_btn(
-                "Cancel",
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::PrimitiveEditorEvent {
                     path: path.clone(),
                     msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByCancel),
@@ -132,7 +134,7 @@ pub fn view_move_by_modal<'a>(
                 tokens,
             ),
             modal_chrome::primary_btn(
-                "OK",
+                t!(i18n, ids::DIALOG_BUTTON_OK),
                 LibraryMessage::PrimitiveEditorEvent {
                     path,
                     msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByConfirm),

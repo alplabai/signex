@@ -11,7 +11,7 @@ use iced::widget::{Space, container};
 use iced::{Element, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
-use signex_widgets::{raw, text};
+use signex_widgets::{Label, raw, text};
 
 use super::messages::LibraryMessage;
 use crate::styles::{DialogButtonKind, TypeScale, dialog_button, dialog_footer_split};
@@ -102,7 +102,7 @@ pub(crate) fn header_title_only<'a>(
 
 /// Bordered secondary footer action (Cancel, Skip, ...).
 pub(crate) fn secondary_btn<'a>(
-    label: &str,
+    label: impl Into<Label<'a>>,
     message: LibraryMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
@@ -112,7 +112,7 @@ pub(crate) fn secondary_btn<'a>(
 /// The dismissing footer action (Cancel): Ghost on Graphite, bordered
 /// elsewhere. It goes first in the right-aligned button row.
 pub(crate) fn cancel_btn<'a>(
-    label: &str,
+    label: impl Into<Label<'a>>,
     message: LibraryMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
@@ -121,7 +121,7 @@ pub(crate) fn cancel_btn<'a>(
 
 /// Accent-filled primary footer action.
 pub(crate) fn primary_btn<'a>(
-    label: &str,
+    label: impl Into<Label<'a>>,
     message: LibraryMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
@@ -131,7 +131,7 @@ pub(crate) fn primary_btn<'a>(
 /// Primary footer action that is inert (and drawn disabled) while
 /// `enabled` is false.
 pub(crate) fn primary_btn_if<'a>(
-    label: &str,
+    label: impl Into<Label<'a>>,
     message: LibraryMessage,
     enabled: bool,
     tokens: &ThemeTokens,
@@ -158,7 +158,7 @@ pub(crate) fn footer_strip<'a>(
 
 /// Destructive footer action (Delete, Discard): error-coloured outline.
 pub(crate) fn danger_btn<'a>(
-    label: &str,
+    label: impl Into<Label<'a>>,
     message: LibraryMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
@@ -168,12 +168,14 @@ pub(crate) fn danger_btn<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use signex_i18n::{ids, t};
     use signex_types::theme::ThemeId;
 
     /// The chrome builds from tokens alone for every built-in theme; no
     /// hard-coded colour path remains to diverge per theme.
     #[test]
     fn chrome_builds_for_every_theme() {
+        let i18n = signex_i18n::I18n::en_us_ref();
         for id in ThemeId::BUILTINS {
             let tokens = signex_types::theme::theme_tokens(*id);
             for windowed in [false, true] {
@@ -181,11 +183,32 @@ mod tests {
                 let _ = header_with_note("Title", "note".into(), windowed, &tokens);
                 let _ = header_title_only("Title", windowed, &tokens);
             }
-            let _ = secondary_btn("Skip", LibraryMessage::ClosePicker, &tokens);
-            let _ = cancel_btn("Cancel", LibraryMessage::ClosePicker, &tokens);
-            let _ = primary_btn("OK", LibraryMessage::ClosePicker, &tokens);
-            let _ = primary_btn_if("OK", LibraryMessage::ClosePicker, false, &tokens);
-            let _ = danger_btn("Delete", LibraryMessage::ClosePicker, &tokens);
+            let _ = secondary_btn(
+                t!(i18n, ids::LIBRARY_UPDATES_SKIP_ALL),
+                LibraryMessage::ClosePicker,
+                &tokens,
+            );
+            let _ = cancel_btn(
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+                LibraryMessage::ClosePicker,
+                &tokens,
+            );
+            let _ = primary_btn(
+                t!(i18n, ids::DIALOG_BUTTON_OK),
+                LibraryMessage::ClosePicker,
+                &tokens,
+            );
+            let _ = primary_btn_if(
+                t!(i18n, ids::DIALOG_BUTTON_OK),
+                LibraryMessage::ClosePicker,
+                false,
+                &tokens,
+            );
+            let _ = danger_btn(
+                t!(i18n, ids::DIALOG_BUTTON_DELETE),
+                LibraryMessage::ClosePicker,
+                &tokens,
+            );
         }
     }
 }

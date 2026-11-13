@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_message};
+use signex_i18n::{ids, t};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -61,13 +62,13 @@ impl Signex {
 
         let footer = dialog_footer(vec![
             dialog_button(
-                "Cancel",
+                t!(self.ui_state.i18n, ids::DIALOG_BUTTON_CANCEL),
                 DialogButtonKind::Cancel,
                 Some(Message::MoveSelection(MoveSelectionMsg::Close)),
                 tokens,
             ),
             dialog_button(
-                "Apply",
+                t!(self.ui_state.i18n, ids::DIALOG_BUTTON_APPLY),
                 DialogButtonKind::Primary,
                 (selection_count > 0).then_some(Message::MoveSelection(MoveSelectionMsg::Apply)),
                 tokens,
@@ -497,13 +498,13 @@ impl Signex {
 
         let footer = dialog_footer(vec![
             dialog_button(
-                "Cancel",
+                t!(self.ui_state.i18n, ids::DIALOG_BUTTON_CANCEL),
                 DialogButtonKind::Cancel,
                 Some(Message::NetColor(NetColorMsg::CustomShow(false))),
                 &self.document_state.panel_ctx.tokens,
             ),
             dialog_button(
-                "Use Color",
+                t!(self.ui_state.i18n, ids::DIALOG_NET_COLOR_USE),
                 DialogButtonKind::Primary,
                 Some(Message::NetColor(NetColorMsg::CustomSubmit(draft))),
                 &self.document_state.panel_ctx.tokens,
