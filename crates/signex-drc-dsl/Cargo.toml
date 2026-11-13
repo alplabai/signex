@@ -13,5 +13,8 @@ signex-drc.workspace = true
 signex-types.workspace = true
 chumsky.workspace = true
 
+[dev-dependencies]
+uuid.workspace = true
+
 [lints]
 workspace = true

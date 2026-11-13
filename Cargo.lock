@@ -5744,6 +5744,7 @@ dependencies = [
  "pcb-geom",
  "signex-drc",
  "signex-types",
+ "uuid",
 ]
 
 [[package]]
