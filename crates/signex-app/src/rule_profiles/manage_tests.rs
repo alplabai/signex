@@ -531,3 +531,70 @@ fn a_chosen_profile_that_is_gone_or_unreadable_falls_back_loudly() {
         b"{nope"
     );
 }
+
+#[test]
+fn a_new_project_copies_the_profiles_drc_section_and_the_shipped_one_has_none() {
+    let tmp = dir();
+    let mut profile = company(tmp.path());
+    profile
+        .drc
+        .severity
+        .insert("builtin::unconnected".into(), "error".into());
+    profile.drc.dsl = Some("rule a".into());
+    std::fs::write(tmp.path().join("company.snxrules"), profile.to_json_bytes()).unwrap();
+    let (seeded, _) = rules_for_new_project(Some(tmp.path()), Some("Company"));
+    assert_eq!(seeded.drc, profile.drc);
+    let (shipped, _) = rules_for_new_project(None, None);
+    assert!(shipped.drc.is_empty());
+}
+
+#[test]
+fn duplicating_a_profile_copies_its_drc_section() {
+    let tmp = dir();
+    let mut source = builtin_profile();
+    source
+        .drc
+        .severity
+        .insert("builtin::unconnected".into(), "error".into());
+    source.drc.dsl = Some("rule a".into());
+    create_profile_from(tmp.path(), &source, "Copy").unwrap();
+    let copy = read(&tmp.path().join("copy.snxrules"));
+    assert_eq!(copy.drc, source.drc);
+
+    let extra =
+        RuleProfile::from_json_bytes(br#"{"name":"S","version":"2","future":[1]}"#).unwrap();
+    create_profile_from(tmp.path(), &extra, "Copy Two").unwrap();
+    let copy = read(&tmp.path().join("copy-two.snxrules"));
+    assert_eq!(
+        (copy.name.as_str(), copy.version.as_str()),
+        ("Copy Two", "2")
+    );
+    assert_eq!(copy.unknown, extra.unknown);
+}
+
+/// A User Default whose `drc` has another shape cannot be read; an edit of
+/// the machine rules refuses to replace it, so its bytes stay (#2307).
+#[test]
+fn a_user_default_with_a_malformed_drc_section_is_never_overwritten() {
+    let tmp = dir();
+    let path = tmp.path().join(file_name_for(USER_DEFAULT_PROFILE_NAME));
+    let bytes = br#"{"name":"User Default","version":"1","drc":"legacy"}"#;
+    std::fs::write(&path, bytes).unwrap();
+    assert!(load_user_default(tmp.path()).is_err());
+    assert!(write_user_default(tmp.path(), rules("unused_pin", "off")).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+}
+
+#[test]
+fn editing_the_machine_rules_keeps_their_drc_section() {
+    let tmp = dir();
+    write_user_default(tmp.path(), rules("unused_pin", "off")).unwrap();
+    let path = tmp.path().join(file_name_for(USER_DEFAULT_PROFILE_NAME));
+    let mut stored = read(&path);
+    stored.drc.dsl = Some("rule keep".into());
+    std::fs::write(&path, stored.to_json_bytes()).unwrap();
+    write_user_default(tmp.path(), rules("unused_pin", "error")).unwrap();
+    let after = read(&path);
+    assert_eq!(after.erc.severity["unused_pin"], "error");
+    assert_eq!(after.drc.dsl.as_deref(), Some("rule keep"));
+}

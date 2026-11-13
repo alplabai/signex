@@ -3,12 +3,13 @@
 //! from `keymap/catalog.rs`; entries verbatim.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
+use signex_i18n::command_ids;
 
 pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "apply_edits",
         category: "edit",
-        label: "Apply edits (agent)",
+        label: command_ids::CMD_APPLY_EDITS,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -19,7 +20,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "autoplace_fields",
         category: "edit",
-        label: "Autoplace fields",
+        label: command_ids::CMD_AUTOPLACE_FIELDS,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
@@ -29,8 +30,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "bring_drawings_forward",
         category: "edit",
-        label: "Bring drawings forward",
-        menu_label: Some("Bring Forward"),
+        label: command_ids::CMD_BRING_DRAWINGS_FORWARD,
+        menu_label: Some(command_ids::CMD_MENU_BRING_DRAWINGS_FORWARD),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
@@ -39,8 +40,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "bring_drawings_to_front",
         category: "edit",
-        label: "Bring drawings to front",
-        menu_label: Some("Bring to Front"),
+        label: command_ids::CMD_BRING_DRAWINGS_TO_FRONT,
+        menu_label: Some(command_ids::CMD_MENU_BRING_DRAWINGS_TO_FRONT),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
@@ -49,8 +50,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "send_drawings_backward",
         category: "edit",
-        label: "Send drawings backward",
-        menu_label: Some("Send Backward"),
+        label: command_ids::CMD_SEND_DRAWINGS_BACKWARD,
+        menu_label: Some(command_ids::CMD_MENU_SEND_DRAWINGS_BACKWARD),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
@@ -59,8 +60,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "send_drawings_to_back",
         category: "edit",
-        label: "Send drawings to back",
-        menu_label: Some("Send to Back"),
+        label: command_ids::CMD_SEND_DRAWINGS_TO_BACK,
+        menu_label: Some(command_ids::CMD_MENU_SEND_DRAWINGS_TO_BACK),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
@@ -69,7 +70,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "break_wire",
         category: "modify",
-        label: "Break wire",
+        label: command_ids::CMD_BREAK_WIRE,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -79,7 +80,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "cancel_current_tool",
         category: "interactive",
-        label: "Cancel current stage / exit placement mode",
+        label: command_ids::CMD_CANCEL_CURRENT_TOOL,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -89,7 +90,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "center_on_cursor",
         category: "view",
-        label: "Center on cursor",
+        label: command_ids::CMD_CENTER_ON_CURSOR,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -99,7 +100,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "center_view_at_cursor",
         category: "view",
-        label: "Center/redraw view around cursor",
+        label: command_ids::CMD_CENTER_VIEW_AT_CURSOR,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -109,7 +110,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "check_erc",
         category: "validation",
-        label: "Check electrical rules",
+        label: command_ids::CMD_CHECK_ERC,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -120,8 +121,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "close_active_document",
         category: "file",
-        label: "Close active document",
-        menu_label: Some("Close Document"),
+        label: command_ids::CMD_CLOSE_ACTIVE_DOCUMENT,
+        menu_label: Some(command_ids::CMD_MENU_CLOSE_ACTIVE_DOCUMENT),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
@@ -131,8 +132,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "close_all_documents",
         category: "window",
-        label: "Close all documents",
-        menu_label: Some("Close All Documents"),
+        label: command_ids::CMD_CLOSE_ALL_DOCUMENTS,
+        menu_label: Some(command_ids::CMD_MENU_CLOSE_ALL_DOCUMENTS),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -141,7 +142,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "copy",
         category: "edit",
-        label: "Copy",
+        label: command_ids::CMD_COPY,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
@@ -151,7 +152,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "copy_attributes_or_add_vertex",
         category: "interactive",
-        label: "Copy attributes from object under cursor or add vertex while drawing",
+        label: command_ids::CMD_COPY_ATTRIBUTES_OR_ADD_VERTEX,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -163,8 +164,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "cross_probe",
         category: "select",
-        label: "Cross probe the selection to the board or schematic",
-        menu_label: Some("Cross Probe"),
+        label: command_ids::CMD_CROSS_PROBE,
+        menu_label: Some(command_ids::CMD_MENU_CROSS_PROBE),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::GUI_ONLY,
@@ -173,7 +174,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "cut",
         category: "edit",
-        label: "Cut",
+        label: command_ids::CMD_CUT,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
@@ -183,7 +184,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "cycle_fast_grid",
         category: "view",
-        label: "Cycle fast grid",
+        label: command_ids::CMD_CYCLE_FAST_GRID,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -193,7 +194,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "cycle_unit",
         category: "view",
-        label: "Cycle display unit",
+        label: command_ids::CMD_CYCLE_UNIT,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -203,7 +204,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "cycle_snap_grid_backward",
         category: "view",
-        label: "Cycle backward through snap grids",
+        label: command_ids::CMD_CYCLE_SNAP_GRID_BACKWARD,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -213,7 +214,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "cycle_selection_mode",
         category: "select",
-        label: "Cycle selection mode",
+        label: command_ids::CMD_CYCLE_SELECTION_MODE,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -225,7 +226,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         category: "view",
         // The key opens the snap-grid picker (Altium's G popup, footprint
         // editor only); it does not step through sizes (#525).
-        label: "Open the snap grid picker (footprint editor)",
+        label: command_ids::CMD_CYCLE_SNAP_GRID_FORWARD,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -235,7 +236,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "cycle_wire_bus_graphic_mode",
         category: "interactive",
-        label: "Cycle wire/bus/graphic-line mode: free, 90 degrees, 45 degrees",
+        label: command_ids::CMD_CYCLE_WIRE_BUS_GRAPHIC_MODE,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -245,7 +246,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "cycle_wiring_mode",
         category: "interactive",
-        label: "Change wiring mode while dragging connected electrical objects",
+        label: command_ids::CMD_CYCLE_WIRING_MODE,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -255,8 +256,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "delete_selection",
         category: "edit",
-        label: "Delete selection",
-        menu_label: Some("Delete"),
+        label: command_ids::CMD_DELETE_SELECTION,
+        menu_label: Some(command_ids::CMD_MENU_DELETE_SELECTION),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
@@ -265,7 +266,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "document_info",
         category: "file",
-        label: "Document info",
+        label: command_ids::CMD_DOCUMENT_INFO,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -276,7 +277,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "drag_keep_connections",
         category: "modify",
-        label: "Drag while keeping connections",
+        label: command_ids::CMD_DRAG_KEEP_CONNECTIONS,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -286,7 +287,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "duplicate",
         category: "edit",
-        label: "Duplicate",
+        label: command_ids::CMD_DUPLICATE,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
@@ -296,7 +297,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "edit_footprint_field",
         category: "edit",
-        label: "Edit footprint field",
+        label: command_ids::CMD_EDIT_FOOTPRINT_FIELD,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
@@ -306,7 +307,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "edit_library_symbol",
         category: "library",
-        label: "Edit library symbol",
+        label: command_ids::CMD_EDIT_LIBRARY_SYMBOL,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
@@ -316,7 +317,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "edit_object_properties",
         category: "edit",
-        label: "Edit properties of object under cursor",
+        label: command_ids::CMD_EDIT_OBJECT_PROPERTIES,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
@@ -326,7 +327,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "edit_reference_designator",
         category: "edit",
-        label: "Edit reference designator",
+        label: command_ids::CMD_EDIT_REFERENCE_DESIGNATOR,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
@@ -336,8 +337,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "edit_selected_object_properties",
         category: "edit",
-        label: "Properties / edit selected object",
-        menu_label: Some("Properties..."),
+        label: command_ids::CMD_EDIT_SELECTED_OBJECT_PROPERTIES,
+        menu_label: Some(command_ids::CMD_MENU_EDIT_SELECTED_OBJECT_PROPERTIES),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::GUI_MUTATES,
@@ -346,8 +347,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "edit_selected_symbol_in_symbol_editor",
         category: "library",
-        label: "Edit selected symbol in Symbol Editor",
-        menu_label: Some("Edit Symbol"),
+        label: command_ids::CMD_EDIT_SELECTED_SYMBOL_IN_SYMBOL_EDITOR,
+        menu_label: Some(command_ids::CMD_MENU_EDIT_SELECTED_SYMBOL_IN_SYMBOL_EDITOR),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::GUI_ONLY,
@@ -356,7 +357,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "edit_text_in_place",
         category: "edit",
-        label: "In-place edit selected text",
+        label: command_ids::CMD_EDIT_TEXT_IN_PLACE,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
@@ -366,7 +367,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "edit_value",
         category: "edit",
-        label: "Edit value",
+        label: command_ids::CMD_EDIT_VALUE,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
@@ -376,7 +377,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "fast_grid_1",
         category: "view",
-        label: "Fast grid 1",
+        label: command_ids::CMD_FAST_GRID_1,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -386,7 +387,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "fast_grid_2",
         category: "view",
-        label: "Fast grid 2",
+        label: command_ids::CMD_FAST_GRID_2,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -396,7 +397,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "find",
         category: "search",
-        label: "Find",
+        label: command_ids::CMD_FIND,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -406,7 +407,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "find_items",
         category: "search",
-        label: "Find documents or items",
+        label: command_ids::CMD_FIND_ITEMS,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -417,8 +418,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "find_and_replace",
         category: "search",
-        label: "Find and replace",
-        menu_label: Some("Find and Replace"),
+        label: command_ids::CMD_FIND_AND_REPLACE,
+        menu_label: Some(command_ids::CMD_MENU_FIND_AND_REPLACE),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -427,7 +428,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "find_next",
         category: "search",
-        label: "Find next",
+        label: command_ids::CMD_FIND_NEXT,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -437,7 +438,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "find_previous",
         category: "search",
-        label: "Find previous",
+        label: command_ids::CMD_FIND_PREVIOUS,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -447,8 +448,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "find_similar_objects",
         category: "select",
-        label: "Find Similar Objects",
-        menu_label: Some("Find Similar Objects..."),
+        label: command_ids::CMD_FIND_SIMILAR_OBJECTS,
+        menu_label: Some(command_ids::CMD_MENU_FIND_SIMILAR_OBJECTS),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::GUI_ONLY,
@@ -457,7 +458,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "find_text",
         category: "search",
-        label: "Find text",
+        label: command_ids::CMD_FIND_TEXT,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -467,7 +468,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "import_graphics",
         category: "library",
-        label: "Import graphics",
+        label: command_ids::CMD_IMPORT_GRAPHICS,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -477,7 +478,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "list_documents",
         category: "file",
-        label: "List documents",
+        label: command_ids::CMD_LIST_DOCUMENTS,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -488,7 +489,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "measure_distance",
         category: "view",
-        label: "Measure distance",
+        label: command_ids::CMD_MEASURE_DISTANCE,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -498,8 +499,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "mirror_x",
         category: "modify",
-        label: "Mirror along X-axis",
-        menu_label: Some("Mirror X"),
+        label: command_ids::CMD_MIRROR_X,
+        menu_label: Some(command_ids::CMD_MENU_MIRROR_X),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
@@ -508,8 +509,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "mirror_y",
         category: "modify",
-        label: "Mirror along Y-axis",
-        menu_label: Some("Mirror Y"),
+        label: command_ids::CMD_MIRROR_Y,
+        menu_label: Some(command_ids::CMD_MENU_MIRROR_Y),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
@@ -518,8 +519,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "move_object",
         category: "modify",
-        label: "Move object",
-        menu_label: Some("Move"),
+        label: command_ids::CMD_MOVE_OBJECT,
+        menu_label: Some(command_ids::CMD_MENU_MOVE_OBJECT),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_MUTATES,
@@ -528,8 +529,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "move_selection",
         category: "modify",
-        label: "Move selection",
-        menu_label: Some("Move Selection"),
+        label: command_ids::CMD_MOVE_SELECTION,
+        menu_label: Some(command_ids::CMD_MENU_MOVE_SELECTION),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::GUI_MUTATES,
@@ -538,8 +539,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "new_document",
         category: "file",
-        label: "New",
-        menu_label: Some("New Project"),
+        label: command_ids::CMD_NEW_DOCUMENT,
+        menu_label: Some(command_ids::CMD_MENU_NEW_DOCUMENT),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
@@ -549,7 +550,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "new_project_with_profile",
         category: "file",
-        label: "New project from a profile",
+        label: command_ids::CMD_NEW_PROJECT_WITH_PROFILE,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -560,7 +561,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "next_document_tab",
         category: "window",
-        label: "Next open document tab",
+        label: command_ids::CMD_NEXT_DOCUMENT_TAB,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -570,8 +571,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "next_grid",
         category: "view",
-        label: "Next grid",
-        menu_label: Some("Cycle Grid Size"),
+        label: command_ids::CMD_NEXT_GRID,
+        menu_label: Some(command_ids::CMD_MENU_NEXT_GRID),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -580,7 +581,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "open_command_palette",
         category: "commands",
-        label: "Open command palette",
+        label: command_ids::CMD_OPEN_COMMAND_PALETTE,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -590,8 +591,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "open_datasheet",
         category: "edit",
-        label: "Open datasheet",
-        menu_label: Some("Open Datasheet"),
+        label: command_ids::CMD_OPEN_DATASHEET,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_DATASHEET),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::GUI_ONLY,
@@ -600,8 +601,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "open_document",
         category: "file",
-        label: "Open document",
-        menu_label: Some("Open..."),
+        label: command_ids::CMD_OPEN_DOCUMENT,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_DOCUMENT),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
@@ -611,7 +612,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "open_grid_picker",
         category: "view",
-        label: "Open grid picker",
+        label: command_ids::CMD_OPEN_GRID_PICKER,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -621,7 +622,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "open_grid_properties",
         category: "view",
-        label: "Open grid properties",
+        label: command_ids::CMD_OPEN_GRID_PROPERTIES,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -631,8 +632,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "open_library_browser",
         category: "library",
-        label: "Open library browser",
-        menu_label: Some("Library Editor"),
+        label: command_ids::CMD_OPEN_LIBRARY_BROWSER,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_LIBRARY_BROWSER),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -641,8 +642,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "open_net_inspector",
         category: "panels",
-        label: "Open Net Inspector panel",
-        menu_label: Some("Net Inspector"),
+        label: command_ids::CMD_OPEN_NET_INSPECTOR,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_NET_INSPECTOR),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -651,8 +652,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "open_preferences",
         category: "preferences",
-        label: "Open preferences",
-        menu_label: Some("Preferences..."),
+        label: command_ids::CMD_OPEN_PREFERENCES,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_PREFERENCES),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -661,7 +662,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "open_schematic_preferences",
         category: "preferences",
-        label: "Open schematic preferences",
+        label: command_ids::CMD_OPEN_SCHEMATIC_PREFERENCES,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -671,7 +672,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "paste",
         category: "edit",
-        label: "Paste",
+        label: command_ids::CMD_PASTE,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -681,7 +682,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "paste_array",
         category: "edit",
-        label: "Paste array",
+        label: command_ids::CMD_PASTE_ARRAY,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -691,7 +692,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "paste_special",
         category: "edit",
-        label: "Paste special",
+        label: command_ids::CMD_PASTE_SPECIAL,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -701,7 +702,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "placement_accept",
         category: "interactive",
-        label: "Accept current placement or move stage",
+        label: command_ids::CMD_PLACEMENT_ACCEPT,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -711,7 +712,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "placement_properties",
         category: "interactive",
-        label: "Edit properties of the object being placed or moved",
+        label: command_ids::CMD_PLACEMENT_PROPERTIES,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -721,7 +722,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "previous_document_tab",
         category: "window",
-        label: "Previous open document tab",
+        label: command_ids::CMD_PREVIOUS_DOCUMENT_TAB,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -731,7 +732,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "previous_grid",
         category: "view",
-        label: "Previous grid",
+        label: command_ids::CMD_PREVIOUS_GRID,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -741,8 +742,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "print",
         category: "file",
-        label: "Print",
-        menu_label: Some("Print..."),
+        label: command_ids::CMD_PRINT,
+        menu_label: Some(command_ids::CMD_MENU_PRINT),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -751,7 +752,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "query_pins",
         category: "file",
-        label: "Query pins",
+        label: command_ids::CMD_QUERY_PINS,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -762,7 +763,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "read_document",
         category: "file",
-        label: "Read document",
+        label: command_ids::CMD_READ_DOCUMENT,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -773,7 +774,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "redo",
         category: "edit",
-        label: "Redo",
+        label: command_ids::CMD_REDO,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -784,7 +785,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "refresh_view",
         category: "view",
-        label: "Refresh/redraw",
+        label: command_ids::CMD_REFRESH_VIEW,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -794,7 +795,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "remove_last_vertex",
         category: "interactive",
-        label: "Remove last placed vertex while drawing",
+        label: command_ids::CMD_REMOVE_LAST_VERTEX,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -804,7 +805,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "repeat_last_item",
         category: "edit",
-        label: "Repeat last item",
+        label: command_ids::CMD_REPEAT_LAST_ITEM,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -814,7 +815,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "report_manager_bom",
         category: "reports",
-        label: "Report Manager / BOM",
+        label: command_ids::CMD_REPORT_MANAGER_BOM,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -824,7 +825,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "reset_local_coordinates",
         category: "view",
-        label: "Reset local coordinates",
+        label: command_ids::CMD_RESET_LOCAL_COORDINATES,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -834,7 +835,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "resolve",
         category: "file",
-        label: "Resolve id",
+        label: command_ids::CMD_RESOLVE,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -845,7 +846,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "revert",
         category: "edit",
-        label: "Revert an agent's edit step",
+        label: command_ids::CMD_REVERT,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -856,8 +857,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "rotate_clockwise",
         category: "modify",
-        label: "Rotate clockwise by 90 degrees",
-        menu_label: Some("Rotate Clockwise"),
+        label: command_ids::CMD_ROTATE_CLOCKWISE,
+        menu_label: Some(command_ids::CMD_MENU_ROTATE_CLOCKWISE),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
@@ -866,8 +867,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "rotate_counterclockwise",
         category: "modify",
-        label: "Rotate counterclockwise by 90 degrees",
-        menu_label: Some("Rotate"),
+        label: command_ids::CMD_ROTATE_COUNTERCLOCKWISE,
+        menu_label: Some(command_ids::CMD_MENU_ROTATE_COUNTERCLOCKWISE),
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
@@ -876,7 +877,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "rubber_stamp_copy",
         category: "edit",
-        label: "Rubber-stamp copy / repeated paste",
+        label: command_ids::CMD_RUBBER_STAMP_COPY,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
@@ -886,8 +887,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "save_document",
         category: "file",
-        label: "Save document",
-        menu_label: Some("Save"),
+        label: command_ids::CMD_SAVE_DOCUMENT,
+        menu_label: Some(command_ids::CMD_MENU_SAVE_DOCUMENT),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
@@ -897,8 +898,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "save_document_as",
         category: "file",
-        label: "Save as",
-        menu_label: Some("Save As..."),
+        label: command_ids::CMD_SAVE_DOCUMENT_AS,
+        menu_label: Some(command_ids::CMD_MENU_SAVE_DOCUMENT_AS),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
@@ -908,8 +909,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "select_all",
         category: "select",
-        label: "Select all",
-        menu_label: Some("Select All"),
+        label: command_ids::CMD_SELECT_ALL,
+        menu_label: Some(command_ids::CMD_MENU_SELECT_ALL),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::RUNS_HEADLESS,
@@ -918,7 +919,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "select_expand_connection",
         category: "select",
-        label: "Select / expand connection",
+        label: command_ids::CMD_SELECT_EXPAND_CONNECTION,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -928,7 +929,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "select_node_or_connection_item",
         category: "select",
-        label: "Select node / connection item under cursor",
+        label: command_ids::CMD_SELECT_NODE_OR_CONNECTION_ITEM,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -938,7 +939,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "show_all_design_objects",
         category: "view",
-        label: "Show all design objects",
+        label: command_ids::CMD_SHOW_ALL_DESIGN_OBJECTS,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -948,8 +949,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "show_current_command_hotkeys",
         category: "help",
-        label: "Show graphical editing hotkey list for current command",
-        menu_label: Some("Keyboard Shortcuts"),
+        label: command_ids::CMD_SHOW_CURRENT_COMMAND_HOTKEYS,
+        menu_label: Some(command_ids::CMD_MENU_SHOW_CURRENT_COMMAND_HOTKEYS),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -958,7 +959,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "show_current_command_shortcuts",
         category: "help",
-        label: "Show valid shortcuts for the current interactive command",
+        label: command_ids::CMD_SHOW_CURRENT_COMMAND_SHORTCUTS,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -968,8 +969,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "smart_paste",
         category: "edit",
-        label: "Smart Paste",
-        menu_label: Some("Paste Special"),
+        label: command_ids::CMD_SMART_PASTE,
+        menu_label: Some(command_ids::CMD_MENU_SMART_PASTE),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES,
@@ -978,7 +979,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "switch_segment_posture",
         category: "interactive",
-        label: "Switch current segment posture",
+        label: command_ids::CMD_SWITCH_SEGMENT_POSTURE,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -988,8 +989,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "tile_windows_horizontally",
         category: "window",
-        label: "Tile windows one above the other",
-        menu_label: Some("Tile Horizontally"),
+        label: command_ids::CMD_TILE_WINDOWS_HORIZONTALLY,
+        menu_label: Some(command_ids::CMD_MENU_TILE_WINDOWS_HORIZONTALLY),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -998,8 +999,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "tile_windows_vertically",
         category: "window",
-        label: "Tile windows side by side",
-        menu_label: Some("Tile Vertically"),
+        label: command_ids::CMD_TILE_WINDOWS_VERTICALLY,
+        menu_label: Some(command_ids::CMD_MENU_TILE_WINDOWS_VERTICALLY),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -1008,8 +1009,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "toggle_cross_select_mode",
         category: "select",
-        label: "Toggle Cross Select Mode",
-        menu_label: Some("Cross Select Mode"),
+        label: command_ids::CMD_TOGGLE_CROSS_SELECT_MODE,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_CROSS_SELECT_MODE),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -1018,7 +1019,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "toggle_electrical_grid",
         category: "view",
-        label: "Toggle electrical grid",
+        label: command_ids::CMD_TOGGLE_ELECTRICAL_GRID,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -1028,7 +1029,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "toggle_floating_panels",
         category: "window",
-        label: "Toggle floating panels",
+        label: command_ids::CMD_TOGGLE_FLOATING_PANELS,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -1038,7 +1039,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "toggle_properties_panel",
         category: "panels",
-        label: "Toggle Properties panel",
+        label: command_ids::CMD_TOGGLE_PROPERTIES_PANEL,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -1048,7 +1049,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "toggle_schematic_filter_panel",
         category: "panels",
-        label: "Toggle schematic filter panel",
+        label: command_ids::CMD_TOGGLE_SCHEMATIC_FILTER_PANEL,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -1058,7 +1059,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "toggle_schematic_list_panel",
         category: "panels",
-        label: "Toggle schematic list panel",
+        label: command_ids::CMD_TOGGLE_SCHEMATIC_LIST_PANEL,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -1068,7 +1069,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "toggle_search_panel",
         category: "search",
-        label: "Show/hide search panel",
+        label: command_ids::CMD_TOGGLE_SEARCH_PANEL,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -1078,8 +1079,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "toggle_selection",
         category: "select",
-        label: "Add/remove object from selection",
-        menu_label: Some("Toggle Selection"),
+        label: command_ids::CMD_TOGGLE_SELECTION,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_SELECTION),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -1088,8 +1089,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "toggle_auto_focus",
         category: "view",
-        label: "Toggle AutoFocus",
-        menu_label: Some("AutoFocus (dim unselected)"),
+        label: command_ids::CMD_TOGGLE_AUTO_FOCUS,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_AUTO_FOCUS),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -1098,8 +1099,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "toggle_visible_grid",
         category: "view",
-        label: "Toggle visible grid",
-        menu_label: Some("Toggle Grid"),
+        label: command_ids::CMD_TOGGLE_VISIBLE_GRID,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_VISIBLE_GRID),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -1108,7 +1109,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "undo",
         category: "edit",
-        label: "Undo",
+        label: command_ids::CMD_UNDO,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -1119,7 +1120,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "undo_last_segment",
         category: "interactive",
-        label: "Undo last segment while drawing",
+        label: command_ids::CMD_UNDO_LAST_SEGMENT,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -1129,7 +1130,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "unselect_all",
         category: "select",
-        label: "Unselect all",
+        label: command_ids::CMD_UNSELECT_ALL,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -1139,8 +1140,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "zoom_in_at_cursor",
         category: "view",
-        label: "Zoom in at cursor",
-        menu_label: Some("Zoom In"),
+        label: command_ids::CMD_ZOOM_IN_AT_CURSOR,
+        menu_label: Some(command_ids::CMD_MENU_ZOOM_IN_AT_CURSOR),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -1149,8 +1150,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "zoom_out_at_cursor",
         category: "view",
-        label: "Zoom out at cursor",
-        menu_label: Some("Zoom Out"),
+        label: command_ids::CMD_ZOOM_OUT_AT_CURSOR,
+        menu_label: Some(command_ids::CMD_MENU_ZOOM_OUT_AT_CURSOR),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -1159,7 +1160,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "zoom_to_all_objects",
         category: "view",
-        label: "Zoom to all objects",
+        label: command_ids::CMD_ZOOM_TO_ALL_OBJECTS,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
@@ -1169,8 +1170,8 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "zoom_to_fit",
         category: "view",
-        label: "Zoom to fit",
-        menu_label: Some("Fit All"),
+        label: command_ids::CMD_ZOOM_TO_FIT,
+        menu_label: Some(command_ids::CMD_MENU_ZOOM_TO_FIT),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
@@ -1179,7 +1180,7 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "zoom_to_selection_area",
         category: "view",
-        label: "Zoom to selection area",
+        label: command_ids::CMD_ZOOM_TO_SELECTION_AREA,
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,

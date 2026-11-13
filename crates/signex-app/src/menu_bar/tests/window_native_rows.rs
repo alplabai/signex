@@ -7,7 +7,11 @@ use crate::menu_bar::native::{build, probe::row_message};
 /// Press the native menu row `path` the way the macOS bar does: the message
 /// the row of the bar, as it stands, sends.
 fn native_click(app: &mut Signex, path: &str) -> Task<Message> {
-    let menu = build(&menu_bar_model(&menu_context(app)), false);
+    let menu = build(
+        &menu_bar_model(&menu_context(app)),
+        &app.ui_state.i18n,
+        false,
+    );
     let message = row_message(&menu, path).unwrap_or_else(|| panic!("{path} is not live"));
     app.update(message)
 }

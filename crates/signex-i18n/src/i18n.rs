@@ -197,6 +197,16 @@ impl I18n {
         Localized::new(id.as_str().to_owned())
     }
 
+    /// [`Self::message`] as plain text, without Fluent's bidi isolation marks
+    /// (U+2068, U+2069) around the arguments: for a label that is measured by
+    /// character count or drawn by a native widget. The bundle still isolates,
+    /// so the marks stay for text that mixes scripts.
+    pub fn message_plain(&self, id: MessageId, args: &[(&str, Arg)]) -> String {
+        self.message(id, args)
+            .into_string()
+            .replace(['\u{2068}', '\u{2069}'], "")
+    }
+
     fn finish(&self, id: MessageId, done: bundle::Rendered) -> Localized {
         if let Some(problems) = &done.problems {
             self.report_once(Problem::BadFormat, id, || {

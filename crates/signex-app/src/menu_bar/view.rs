@@ -21,7 +21,10 @@ pub fn view(
     ctx: MenuContext<'_>,
 ) -> Element<'static, MenuMessage> {
     let mc = MenuColors::from_tokens(tokens);
-    let mb = render_menu_bar(&menu_bar_model(&ctx), mc, ui_font);
+    let planned = ctx
+        .i18n
+        .message(signex_i18n::menu_ids::MENU_PLANNED_TOOLTIP, &[]);
+    let mb = render_menu_bar(&menu_bar_model(&ctx), mc, ui_font, &planned);
 
     iced::advanced::Widget::_boxed(
         row![graphite::mark(), mb]
@@ -34,12 +37,13 @@ fn render_menu_bar(
     model: &MenuBarModel,
     mc: MenuColors,
     ui_font: &str,
+    planned: &signex_i18n::Localized,
 ) -> MenuBar<'static, MenuMessage, Theme, iced::Renderer> {
     MenuBar::new(
         model
             .menus
             .iter()
-            .map(|menu| render_root(menu, mc, ui_font))
+            .map(|menu| render_root(menu, mc, ui_font, planned))
             .collect(),
     )
     .spacing(1.0)
@@ -55,28 +59,39 @@ fn render_menu_bar(
     .style(move |_theme: &Theme, _status| graphite::bar_style(mc))
 }
 
-fn render_root(menu: &MenuModel, mc: MenuColors, ui_font: &str) -> MenuItemView {
+fn render_root(
+    menu: &MenuModel,
+    mc: MenuColors,
+    ui_font: &str,
+    planned: &signex_i18n::Localized,
+) -> MenuItemView {
     Item::with_menu(
         graphite::root_btn(&menu.title, mc),
-        render_dropdown(menu, mc, ui_font),
+        render_dropdown(menu, mc, ui_font, planned),
     )
 }
 
-fn render_submenu(menu: &MenuModel, mc: MenuColors, ui_font: &str) -> MenuItemView {
+fn render_submenu(
+    menu: &MenuModel,
+    mc: MenuColors,
+    ui_font: &str,
+    planned: &signex_i18n::Localized,
+) -> MenuItemView {
     let launcher = graphite::submenu_btn(&menu.title, mc);
-    Item::with_menu(launcher, render_dropdown(menu, mc, ui_font))
+    Item::with_menu(launcher, render_dropdown(menu, mc, ui_font, planned))
 }
 
 fn render_dropdown(
     menu: &MenuModel,
     mc: MenuColors,
     ui_font: &str,
+    planned: &signex_i18n::Localized,
 ) -> Menu<'static, MenuMessage, Theme, iced::Renderer> {
     let shape = graphite::RowShape::of(menu);
     let items = menu
         .entries
         .iter()
-        .map(|entry| render_entry(entry, mc, shape, ui_font))
+        .map(|entry| render_entry(entry, mc, shape, ui_font, planned))
         .collect();
     // Fitted to its rows, 28 px rows with no gaps between them, so every
     // hover fill touches the next and the card pads its rows evenly.
@@ -92,17 +107,23 @@ fn render_entry(
     mc: MenuColors,
     shape: graphite::RowShape,
     ui_font: &str,
+    planned: &signex_i18n::Localized,
 ) -> MenuItemView {
     match entry {
-        MenuEntry::Item(item) => render_item(item, mc, shape),
-        MenuEntry::Submenu(menu) => render_submenu(menu, mc, ui_font),
+        MenuEntry::Item(item) => render_item(item, mc, shape, planned),
+        MenuEntry::Submenu(menu) => render_submenu(menu, mc, ui_font, planned),
         MenuEntry::Separator => Item::new(graphite::separator(mc)),
     }
 }
 
 /// A row dispatches only when it has a handler and is enabled; otherwise it
 /// renders greyed out with no press handler.
-fn render_item(item: &MenuItem, mc: MenuColors, shape: graphite::RowShape) -> MenuItemView {
+fn render_item(
+    item: &MenuItem,
+    mc: MenuColors,
+    shape: graphite::RowShape,
+    planned: &signex_i18n::Localized,
+) -> MenuItemView {
     let shortcut = item.shortcut.as_ref().map(|s| s.text.clone());
     let row = graphite::item_btn(
         &item.label,
@@ -117,7 +138,7 @@ fn render_item(item: &MenuItem, mc: MenuColors, shape: graphite::RowShape) -> Me
     }
     // A planned feature reads as planned rather than broken (#1251).
     let hint = container(
-        text(raw(crate::active_bar::PLANNED_TOOLTIP))
+        text(planned.clone())
             .size(MENU_SHORTCUT_SIZE)
             .color(mc.text),
     )

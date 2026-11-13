@@ -14,9 +14,4 @@ define_ids! {
     PREFERENCES_SECTION_ANNOTATION = "preferences-section-annotation";
     PREFERENCES_SECTION_EDITING = "preferences-section-editing";
     PREFERENCES_SECTION_DISTRIBUTORS = "preferences-section-distributors";
-    PREFERENCES_SECTION_KEYBOARD_SHORTCUTS = "preferences-section-keyboard-shortcuts";
-    PREFERENCES_KEYMAP_GROUP_GENERAL = "preferences-keymap-group-general";
-    PREFERENCES_KEYMAP_GROUP_SCHEMATIC = "preferences-keymap-group-schematic";
-    PREFERENCES_KEYMAP_GROUP_PCB = "preferences-keymap-group-pcb";
-    PREFERENCES_KEYMAP_GROUP_THREE_D = "preferences-keymap-group-three-d";
 }

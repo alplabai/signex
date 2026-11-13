@@ -27,9 +27,10 @@ pub use locale::LanguagePref;
 pub use types::{Arg, LocalNumber, Localized, MessageId, UserText};
 
 /// Every message id, defined together with a list of them so a new id cannot
-/// be left out of the consistency tests (`ids::all` joins the lists). This
-/// is the only non-test place `MessageId::new` is called (it is crate-private).
-/// `define_ids! { LIST; … }` defines one area's ids in an `area_ids` file.
+/// be left out of the consistency tests. This is the only non-test place
+/// `MessageId::new` is called (it is crate-private).
+/// `define_ids! { LIST; … }` defines one area's ids in an `area_ids` file;
+/// `ids` re-exports them.
 macro_rules! define_ids {
     ($list:ident; $($name:ident = $id:literal;)+) => {
         $(pub const $name: crate::MessageId = crate::MessageId::new($id);)+
@@ -37,6 +38,18 @@ macro_rules! define_ids {
         /// Every id above.
         #[cfg(test)]
         pub(crate) const $list: &[crate::MessageId] = &[$($name),+];
+    };
+    (pub mod $module:ident { $($name:ident = $id:literal;)+ }) => {
+        /// The message ids; each lives in `locales/en-US/`.
+        pub mod $module {
+            use crate::MessageId;
+
+            $(pub const $name: MessageId = MessageId::new($id);)+
+
+            /// Every id above.
+            #[cfg(test)]
+            pub(crate) const ALL: &[MessageId] = &[$($name),+];
+        }
     };
     ($($name:ident = $id:literal;)+) => {
         /// The message ids; each lives in `locales/en-US/`.
@@ -49,15 +62,7 @@ macro_rules! define_ids {
 
             /// Every id above.
             #[cfg(test)]
-            const ALL: &[MessageId] = &[$($name),+];
-
-            /// Every id: the list above and the `area_ids` lists.
-            #[cfg(test)]
-            pub(crate) fn all() -> Vec<MessageId> {
-                let mut all = ALL.to_vec();
-                all.extend(crate::area_ids::area_lists());
-                all
-            }
+            pub(crate) const ALL: &[MessageId] = &[$($name),+];
         }
     };
 }
@@ -1115,6 +1120,10 @@ define_ids! {
     LIBRARY_PANEL_ROWS = "library-panel-rows";
     LIBRARY_PREVIEW_WHERE_USED = "library-preview-where-used";
 }
+
+include!("command_ids.rs");
+include!("menu_ids.rs");
+include!("shortcut_ids.rs");
 
 /// Render a message: `t!(i18n, ids::MENU_FILE)` or, with arguments,
 /// `t!(i18n, ID, "count" => 3_i64, "name" => "R1")`.

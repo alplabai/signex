@@ -49,6 +49,54 @@ the format (#2242).
   as everywhere else. A class value of 0 is unset.
 - a value that is not a finite length is an error, not a silent default.
 
+## Rule ids and severities (#2307 step 2a)
+
+Each violation kind is a rule with a stable id, following ERC's `builtin::` /
+`user::` convention (`ViolationKind::rule_id`). Ids are stored in profiles and
+projects and are never renamed.
+
+| Kind | Rule id | Built-in severity |
+|---|---|---|
+| `Short` | `builtin::short` | error |
+| `Clearance` | `builtin::clearance` | error |
+| `Unconnected` | `builtin::unconnected` | warning |
+| `Keepout` | `builtin::keepout` | error |
+
+Severities follow the #1085 rule layers, a later layer overriding an earlier
+one (the "most specific wins" precedence of #2307 is between rules of the
+rule language in step 2b: net, net class, pattern, layer):
+
+1. the built-in defaults above (`ViolationKind::default_severity`);
+2. a profile's `drc.severity` (`.snxrules`, see
+   [`snxrules-format.md`](snxrules-format.md));
+3. the project's `rules.drc.severity` (`.snxprj`, see
+   [`snxprj-format.md`](snxprj-format.md)).
+
+`signex_drc::resolve_severities(profile, project)` applies them. A layer maps
+a rule id to `error`, `warning`, `info` or `off`; `off` leaves the rule
+without a severity and a later layer can set one again. An id or a severity
+word this build does not know is listed in `DrcSeverities::unrecognised`,
+kept in the file and not applied; the app logs one line per entry
+(`DRC rules: ignoring unrecognised entry (...)`).
+
+The resolved table travels in `DrcRules::severities` (the built-in layer
+unless the caller resolved others), so `DrcReport::severity_of(violation)`
+gives each violation its severity. A severity never filters or reorders
+violations: the report finds the same violations whatever the layers say, and
+the Messages panel and log lines do not show severity yet.
+
+The app picks the layers the way ERC picks its rules: a project that stores a
+`rules` section uses its own `rules.drc` alone (the project checks the same on
+every machine); a board with no project, or a project without a `rules`
+section, uses the machine's `User Default` profile as the profile layer. Every
+path that makes a project start storing rules carries a `drc` section with it,
+so the DRC layer never changes by itself: a new project copies the `drc`
+section of the profile it is seeded from, and "Store ERC rules in this
+project" and a first ERC waiver copy the machine's `User Default` `drc`
+section along with its ERC rules. "Save as profile", "Update from profile" and
+the drift check still handle only `erc`; the `drc` section joins them with the
+rule language (step 2b).
+
 ## How it stays fast
 
 Candidate pairs come from the `BoardIndex` R-tree: one bounding-box query per

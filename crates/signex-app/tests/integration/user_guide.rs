@@ -7,11 +7,10 @@
 //! been resolved.
 
 const GUIDE: &str = include_str!("../../../../docs/USER_GUIDE.md");
-const MENU_SRC: &str = include_str!("../../src/menu_bar/model/menus.rs");
 const PANELS_FTL: &str = include_str!("../../../signex-i18n/locales/en-US/panels.ftl");
 
 /// Menu labels the guide's walkthrough tells the user to click, as spelled in
-/// `menu_bar/model/menus.rs` (ASCII `...`; the guide writes the ellipsis character).
+/// the menu model (ASCII `...`; the guide writes the ellipsis character).
 const WALKTHROUGH_MENU_LABELS: &[&str] = &[
     "New Project",
     "Open Library...",
@@ -43,15 +42,37 @@ fn guide_drops_resolved_stock_library_caveat() {
     );
 }
 
+/// Every row label of the menu bar as the en-US model shows it: the labels
+/// are catalog text, no longer literals in the menu source.
+fn menu_labels() -> Vec<String> {
+    use signex_app::menu_bar::MenuContext;
+    use signex_app::menu_bar::model::{Menu, MenuEntry, menu_bar_model};
+    fn collect(menu: &Menu, out: &mut Vec<String>) {
+        for entry in &menu.entries {
+            match entry {
+                MenuEntry::Item(item) => out.push(item.label.clone()),
+                MenuEntry::Submenu(sub) => collect(sub, out),
+                MenuEntry::Separator => {}
+            }
+        }
+    }
+    let mut labels = Vec::new();
+    for menu in &menu_bar_model(&MenuContext::default()).menus {
+        collect(menu, &mut labels);
+    }
+    labels
+}
+
 #[test]
 fn walkthrough_menu_labels_exist_in_the_menu_source() {
+    let menu_labels = menu_labels();
     for label in WALKTHROUGH_MENU_LABELS {
         assert!(
             GUIDE.contains(&label.replace("...", "\u{2026}")) || GUIDE.contains(label),
             "guide does not mention {label:?}"
         );
         assert!(
-            MENU_SRC.contains(label),
+            menu_labels.iter().any(|shown| shown == label),
             "menu source no longer has {label:?}; update docs/USER_GUIDE.md"
         );
     }

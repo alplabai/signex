@@ -23,6 +23,7 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// as ordinary items. The Clear rows grey out when no net carries a
 /// custom colour (`requires_net_color`).
 pub(super) fn net_color_entries(
+    i18n: &signex_i18n::I18n,
     tokens: &ThemeTokens,
     tid: ThemeId,
     sel: bool,
@@ -100,6 +101,7 @@ pub(super) fn net_color_entries(
         )),
         DropdownEntry::Separator,
         dd_item(
+            i18n,
             ic::icon_dd_net_color_custom(tid),
             "Custom Color...",
             ActiveBarAction::NetColorCustom,
@@ -108,6 +110,7 @@ pub(super) fn net_color_entries(
         ),
         DropdownEntry::Separator,
         dd_item(
+            i18n,
             ic::icon_dd_net_color_clear(tid),
             "Clear Net Color",
             ActiveBarAction::ClearNetColor,
@@ -115,6 +118,7 @@ pub(super) fn net_color_entries(
             nc,
         ),
         dd_item(
+            i18n,
             ic::icon_dd_net_color_clear_all(tid),
             "Clear All Net Colors",
             ActiveBarAction::ClearAllNetColors,

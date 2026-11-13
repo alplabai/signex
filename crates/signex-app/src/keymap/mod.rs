@@ -35,12 +35,12 @@ pub fn shown(spelling: &str) -> String {
 pub(crate) use catalog::OPERAND_CONVENTION;
 pub use catalog::{
     CommandGroup, CommandMetadata, HeadlessUse, Operand, OperandKind, all_command_ids,
-    fallback_label, metadata_for, metadata_for_str, offered_in,
+    category_title, command_menu_message, command_menu_text, fallback_label, metadata_for,
+    metadata_for_str, offered_in,
 };
 pub use command::AppCommandId;
 pub use editor::{
     BindingSlot, KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource,
-    category_title_case,
 };
 pub use mod_migration::{
     ModMigration, ModMove, migrate_active_to_mod, offers_mod_migration, standard_ctrl_rows,

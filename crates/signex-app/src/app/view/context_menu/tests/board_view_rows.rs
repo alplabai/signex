@@ -25,7 +25,7 @@ fn the_board_menu_ends_with_a_live_toggle_ratsnest_row() {
             any,
             ..PcbTargets::default()
         };
-        let rows = pcb_canvas_menu_entries(TID, board, &sc);
+        let rows = pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, board, &sc);
         assert!(runs_toggle_ratsnest(row_message(&rows, "Toggle Ratsnest")));
         // Its own group: a separator above it, and it is the last row.
         let n = rows.len();
@@ -44,7 +44,7 @@ fn the_board_menu_properties_row_is_live_with_a_selection() {
         any: true,
         ..PcbTargets::default()
     };
-    let rows = pcb_canvas_menu_entries(TID, picked, &sc);
+    let rows = pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, picked, &sc);
     assert!(matches!(
         row_message(&rows, "Properties..."),
         Some(Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, project: None })))
@@ -54,6 +54,6 @@ fn the_board_menu_properties_row_is_live_with_a_selection() {
         shown: true,
         ..PcbTargets::default()
     };
-    let rows = pcb_canvas_menu_entries(TID, empty, &sc);
+    let rows = pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, empty, &sc);
     assert!(row_message(&rows, "Properties...").is_none());
 }

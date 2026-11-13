@@ -236,9 +236,23 @@ pub fn save_named_profile(
     erc: ErcRules,
     overwrite: bool,
 ) -> Result<SaveOutcome, String> {
+    let profile = RuleProfile::new(String::new(), String::new(), erc);
+    save_profile_as(dir, profile, name, version, overwrite)
+}
+
+/// Save `profile` under `name`/`version`, keeping everything else it holds
+/// (`drc`, keys from a newer build). Same rules as [`save_named_profile`].
+fn save_profile_as(
+    dir: &Path,
+    mut profile: RuleProfile,
+    name: &str,
+    version: &str,
+    overwrite: bool,
+) -> Result<SaveOutcome, String> {
     let (name, version) = validate_profile_input(name, version)?;
     std::fs::create_dir_all(dir).map_err(|e| io_error("save", &name, &e))?;
-    let profile = RuleProfile::new(name.clone(), version, erc);
+    profile.name = name.clone();
+    profile.version = version;
     let path = match locate(dir, &name)? {
         Slot::Holds(_) if !overwrite => return Ok(SaveOutcome::Exists),
         Slot::Holds(path) => {
@@ -261,10 +275,11 @@ pub fn save_named_profile(
     }))
 }
 
-/// A new profile named `name` that starts as a copy of `source`'s rules and
-/// version. Fails when the name is taken; never replaces.
+/// A new profile named `name` that starts as a copy of `source`: its rules
+/// (`erc` and `drc`), version and keys from a newer build. Fails when the
+/// name is taken; never replaces.
 pub fn create_profile_from(dir: &Path, source: &RuleProfile, name: &str) -> Result<String, String> {
-    match save_named_profile(dir, name, &source.version, source.erc.clone(), false)? {
+    match save_profile_as(dir, source.clone(), name, &source.version, false)? {
         SaveOutcome::Saved(saved) => Ok(saved.summary),
         SaveOutcome::Exists => Err(format!(
             "A profile named \"{}\" already exists.",

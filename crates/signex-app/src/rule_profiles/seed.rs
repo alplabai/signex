@@ -54,6 +54,7 @@ pub fn rules_for_new_project(
     let (profile, source) = found.unwrap_or_else(|| (builtin_profile(), SOURCE_BUILTIN));
     let rules = ProjectRules {
         erc: profile.erc.clone(),
+        drc: profile.drc.clone(),
         profile: Some(profile_ref(&profile, source)),
         ..ProjectRules::default()
     };

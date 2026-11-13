@@ -8,10 +8,12 @@ use signex_types::pcb::PcbBoard;
 
 use pcb_geom::{GeomError, MAX_ABS_NM, mm_to_nm};
 
+use crate::DrcSeverities;
+
 /// The clearance used when the board's setup holds none (0 is "unset").
 pub const DEFAULT_CLEARANCE_MM: f64 = 0.2;
 
-/// Minimum clearances in nm.
+/// Minimum clearances in nm, and the severity of each rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DrcRules {
     /// Between any two nets.
@@ -22,6 +24,9 @@ pub struct DrcRules {
     /// [`Self::clearance`] is [`DEFAULT_CLEARANCE_MM`] because the board set
     /// none; a report says so rather than apply it silently.
     pub from_default: bool,
+    /// Severity per rule (#2307); the built-in defaults unless the caller
+    /// resolved the profile and project layers. Never filters a violation.
+    pub severities: DrcSeverities,
 }
 
 impl DrcRules {
@@ -30,6 +35,7 @@ impl DrcRules {
             clearance,
             net_clearance: BTreeMap::new(),
             from_default: false,
+            severities: DrcSeverities::builtin(),
         }
     }
 

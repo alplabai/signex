@@ -117,10 +117,22 @@ fn language_name_ids() -> BTreeSet<String> {
         .collect()
 }
 
+/// Every defined id, across the id modules.
+fn all_ids() -> Vec<crate::MessageId> {
+    ids::ALL
+        .iter()
+        .chain(crate::command_ids::ALL)
+        .chain(crate::menu_ids::ALL)
+        .chain(crate::shortcut_ids::ALL)
+        .copied()
+        .chain(crate::area_ids::area_lists())
+        .collect()
+}
+
 #[test]
 fn every_defined_id_exists_in_en_us() {
     let en_us = messages_of(EN_US);
-    for id in ids::all() {
+    for id in all_ids() {
         assert!(
             en_us.contains_key(id.as_str()),
             "{} is not in en-US",
@@ -131,7 +143,7 @@ fn every_defined_id_exists_in_en_us() {
 
 #[test]
 fn every_en_us_message_is_a_defined_id() {
-    let defined: BTreeSet<String> = ids::all()
+    let defined: BTreeSet<String> = all_ids()
         .iter()
         .map(|id| id.as_str().to_owned())
         .chain(language_name_ids())
@@ -146,9 +158,8 @@ fn every_en_us_message_is_a_defined_id() {
 
 #[test]
 fn the_id_registry_has_no_duplicates() {
-    let all = ids::all();
-    let unique: BTreeSet<_> = all.iter().map(|id| id.as_str()).collect();
-    assert_eq!(unique.len(), all.len());
+    let unique: BTreeSet<_> = all_ids().iter().map(|id| id.as_str()).collect();
+    assert_eq!(unique.len(), all_ids().len());
 }
 
 #[test]
@@ -172,7 +183,7 @@ fn every_locale_on_disk_parses_and_its_variables_are_in_the_source() {
 #[test]
 fn every_id_renders_from_the_embedded_en_us_catalog() {
     let i18n = I18n::new(&LanguagePref::Locale(EN_US.into()));
-    for id in ids::all() {
+    for id in all_ids() {
         let text = i18n.message(id, &[]).to_string();
         assert_ne!(
             text,
@@ -417,11 +428,6 @@ fn moved_graphite_strings_of_the_third_wave_keep_their_english() {
         (ids::EDITORS_COMPONENT_PARTS_EMPTY, "No alternates yet."),
         (ids::OVERLAY_SYMBOL_CARD_DESIGNATOR, "Designator"),
         (ids::OVERLAY_SYMBOL_CARD_LIBRARY, "Library"),
-        (ids::OVERLAY_KEY_ESC, "Esc"),
-        (ids::OVERLAY_KEY_ENTER, "Enter"),
-        (ids::MENU_EDIT, "Edit"),
-        (ids::MENU_REPORTS, "Reports"),
-        (ids::MENU_HELP, "Help"),
         (
             ids::PREFERENCES_SECTION_ANNOTATION,
             "Schematic \u{2014} Annotation",
@@ -430,11 +436,6 @@ fn moved_graphite_strings_of_the_third_wave_keep_their_english() {
             ids::PREFERENCES_SECTION_DISTRIBUTORS,
             "Library \u{2014} Distributor APIs",
         ),
-        (
-            ids::PREFERENCES_SECTION_KEYBOARD_SHORTCUTS,
-            "Keyboard Shortcuts",
-        ),
-        (ids::PREFERENCES_KEYMAP_GROUP_THREE_D, "3D"),
         (ids::LIBRARY_ROW_NO_SYMBOL, "No symbol bound"),
         (
             ids::LIBRARY_ROW_SYMBOL_ABSENT,

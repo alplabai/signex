@@ -365,6 +365,7 @@ impl Signex {
             path,
             document.pad_clipboard.is_some(),
             &self.ui_state.active_keymap,
+            &self.ui_state.i18n,
         ) else {
             return Vec::new();
         };
@@ -499,9 +500,12 @@ impl Signex {
         let Some(menu_state) = editor.context_menu.as_ref() else {
             return Vec::new();
         };
-        let Some(card) =
-            crate::library::editor::symbol::context_menu::view_context_menu(editor, tokens, path)
-        else {
+        let Some(card) = crate::library::editor::symbol::context_menu::view_context_menu(
+            editor,
+            tokens,
+            path,
+            &self.ui_state.i18n,
+        ) else {
             return Vec::new();
         };
         let close_msg = Message::Library(
