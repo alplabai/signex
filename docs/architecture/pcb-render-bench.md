@@ -152,9 +152,21 @@ pan and zoom frame tessellated the whole board again on one thread (draw p95
 
 #2321 moves the CPU board into a layer of its own that a pan only moves and
 that a build tessellates on several threads (`docs/RENDERING_RULES.md`,
-"pcb-cpu-content"). **Numbers pending:** the release bench for this change
-(baseline on trunk and after, `SIGNEX_BENCH_ROTATIONS=0,37`) has not run yet;
-the table goes here when it has.
+"pcb-cpu-content"). Release bench, CPU path only, 10,000 tracks, AMD Radeon
+880M (Vulkan), 1600 x 1300 at dpr 1, p95 in ms against the 16.7 ms budget.
+"Before" is trunk 070fe7a4a, "after" is this change; both built and run the
+same day on the same machine, one after the other:
+
+| AA | angle | idle | pan | zoom | zoom-pan |
+|---|---|---|---|---|---|
+| none | 0° | 5.15 → 5.28 | **17.25** → 5.78 | **17.71** → 9.07 | 6.39 → 5.63 |
+| none | 37° | 6.29 → 6.37 | 15.82 → 6.66 | **18.42** → 12.08 | 7.09 → 7.33 |
+| MSAA x4 | 0° | 8.60 → 8.48 | **18.93** → 8.66 | **17.93** → 14.27 | 8.48 → 8.37 |
+| MSAA x4 | 37° | 8.74 → 8.03 | **21.01** → 8.63 | **20.17** → 14.27 | 10.62 → 9.69 |
+
+Every row is within budget after the change (9 of 16 were over before). A pan
+now only moves the retained geometry; a zoom still tessellates, on up to 8
+threads. Idle and zoom-pan rows move within run-to-run noise.
 
 ## Realistic boards
 

@@ -36,7 +36,7 @@ use crate::scene_shader::{PcbSurface, SceneShaderProgram};
     reason = "this bench reads only some of the fixture's counts"
 )]
 #[path = "../../../signex-renderer/tests/integration/pcb_10k_track_fixture.rs"]
-mod fixture;
+pub(super) mod fixture;
 
 /// A 60 fps frame budget, in ms.
 const BUDGET_MS: f64 = 16.7;

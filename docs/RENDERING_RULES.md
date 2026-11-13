@@ -321,8 +321,8 @@ the bound says so, and the in-order fallback is the same runs on one thread.
 Checks: `pcb_canvas::content_tests` (one run against eight, triangle for
 triangle; moved tracks against a fresh build; what a build holds; the reuse
 rule) and `pcb_canvas::content_pixel_tests` (the layer against trunk's single
-frame at the live camera, within 24/255 per channel, after reused pans,
-turned, at fractional display scales).
+frame at the live camera, within 24/255 per channel and at most 4 edge
+pixels, after reused pans, turned, at fractional display scales).
 
 ## What this document is *not*
 

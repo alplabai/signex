@@ -17,12 +17,7 @@ use super::{BoardCamera, PcbCanvas};
 use crate::canvas::grid_order_tests::MeshOnly;
 use crate::canvas::pan_reuse::clip_rect;
 
-#[allow(
-    dead_code,
-    reason = "these tests read only some of the fixture's counts"
-)]
-#[path = "../../../signex-renderer/tests/integration/pcb_10k_track_fixture.rs"]
-mod fixture;
+use super::frame_bench_tests::fixture;
 
 const VIEWPORT: Size = Size {
     width: 1600.0,

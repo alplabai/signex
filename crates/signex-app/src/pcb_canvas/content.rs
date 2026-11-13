@@ -237,6 +237,6 @@ impl Widget<Message, Theme, Renderer> for BoardContentLayer<'_> {
 
 impl<'a> From<BoardContentLayer<'a>> for Element<'a, Message> {
     fn from(layer: BoardContentLayer<'a>) -> Self {
-        Element::new(layer)
+        layer._boxed()
     }
 }
