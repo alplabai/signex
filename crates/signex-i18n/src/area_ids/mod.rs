@@ -2,12 +2,14 @@
 //! added after the list in `lib.rs` reached the file-size cap. `ids`
 //! re-exports them, so callers write `ids::NAME` either way.
 
+mod dialog;
 mod editors;
 mod library;
 mod overlay;
 mod panels;
 mod preferences;
 
+pub use dialog::*;
 pub use editors::*;
 pub use library::*;
 pub use overlay::*;
@@ -18,6 +20,7 @@ pub use preferences::*;
 #[cfg(test)]
 pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
+        dialog::DIALOG,
         editors::EDITORS,
         library::LIBRARY,
         overlay::OVERLAY,

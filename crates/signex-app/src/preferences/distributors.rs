@@ -38,7 +38,7 @@ pub(super) fn content_library_distributors<'a>(
     // map to `PrefMsg::LibrarySettings` for every Settings sub-
     // variant; non-Settings library messages are ignored (they're
     // never produced by `distributor_apis::view`).
-    let pane = crate::library::settings::distributor_apis::view(settings, tokens)
+    let pane = crate::library::settings::distributor_apis::view(settings, tokens, i18n)
         .map(wrap_library_message)
         .boxed();
 

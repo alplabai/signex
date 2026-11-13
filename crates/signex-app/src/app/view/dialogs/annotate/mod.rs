@@ -8,7 +8,7 @@
 use super::*;
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Color, Element, Length, Theme, Widget};
-use signex_i18n::{ids, t};
+use signex_i18n::{Localized, ids, t};
 use signex_widgets::{button, raw, text};
 
 use super::widgets::{draggable_header, fit_modal_size, modal_title_header, os_title_bar_slot};
@@ -428,7 +428,7 @@ impl Signex {
         // start another stay off until it ends (#1753).
         let busy = self.ui_state.annotate_runs.is_running();
         let idle = |message: Message| (!busy).then_some(message);
-        let secondary = |label: &str, message: Option<Message>| {
+        let secondary = |label: Localized, message: Option<Message>| {
             dialog_button(label, DialogButtonKind::Secondary, message, tokens)
         };
 
@@ -437,7 +437,7 @@ impl Signex {
         let title_row = row![
             container(right_title).width(Length::Fill),
             secondary(
-                "Re-prefix to standard",
+                t!(i18n, ids::DIALOG_ANNOTATE_REPREFIX),
                 (standard.is_some() && !self.ui_state.annotate_preview.loading && !busy)
                     .then_some(Message::Annotate(AnnotateMsg::ReprefixPressed)),
             ),
@@ -472,13 +472,13 @@ impl Signex {
         let footer = dialog_footer_split(
             vec![
                 secondary(
-                    "Reset All",
+                    t!(i18n, ids::DIALOG_ANNOTATE_RESET_ALL),
                     idle(Message::Annotate(AnnotateMsg::Run(
                         signex_engine::AnnotateMode::ResetOnly,
                     ))),
                 ),
                 secondary(
-                    "Reset & Renumber",
+                    t!(i18n, ids::DIALOG_ANNOTATE_RESET_RENUMBER),
                     idle(Message::Annotate(AnnotateMsg::Run(
                         signex_engine::AnnotateMode::ResetAndRenumber,
                     ))),
@@ -487,7 +487,7 @@ impl Signex {
             vec![
                 status,
                 dialog_button(
-                    "Accept Changes",
+                    t!(i18n, ids::DIALOG_ANNOTATE_ACCEPT),
                     gr::call_to_action(tokens),
                     if changes == 0 || self.ui_state.annotate_preview.loading || busy {
                         None
@@ -556,6 +556,7 @@ impl Signex {
 
     fn view_annotate_reset_confirm_body_inner(&self, draggable: bool) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = self.ui_state.i18n.as_ref();
 
         let header_content: Element<'_, Message> = modal_title_header(
             "Reset All Annotations",
@@ -586,13 +587,13 @@ This cannot be undone through {} alone — consider saving first.",
                 )),
                 dialog_footer(vec![
                     dialog_button(
-                        "Cancel",
+                        t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                         DialogButtonKind::Cancel,
                         Some(Message::Annotate(AnnotateMsg::CloseResetConfirm)),
                         tokens,
                     ),
                     dialog_button(
-                        "Reset & Renumber",
+                        t!(i18n, ids::DIALOG_ANNOTATE_RESET_RENUMBER),
                         DialogButtonKind::Danger,
                         (!self.ui_state.annotate_runs.is_running()).then_some(Message::Annotate(
                             AnnotateMsg::Run(signex_engine::AnnotateMode::ResetAndRenumber),

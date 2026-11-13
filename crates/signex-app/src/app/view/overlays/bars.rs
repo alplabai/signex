@@ -200,7 +200,10 @@ impl Signex {
                 .color(muted),
                 iced::widget::Space::new().height(SP.xs),
                 crate::styles::dialog_button(
-                    "Resume Placement",
+                    signex_i18n::t!(
+                        self.ui_state.i18n,
+                        signex_i18n::ids::OVERLAY_PLACEMENT_PAUSED_RESUME
+                    ),
                     crate::styles::DialogButtonKind::Primary,
                     Some(Message::Tool(ToolMessage::ResumePlacement)),
                     tokens,
@@ -397,9 +400,11 @@ impl Signex {
             return Vec::new();
         };
         let tokens = &document.panel_ctx.tokens;
-        let Some(card) =
-            crate::library::editor::footprint::move_by_modal::view_move_by_modal(editor, tokens)
-        else {
+        let Some(card) = crate::library::editor::footprint::move_by_modal::view_move_by_modal(
+            editor,
+            tokens,
+            &self.ui_state.i18n,
+        ) else {
             return Vec::new();
         };
         let close_msg = Message::Library(
@@ -426,9 +431,11 @@ impl Signex {
             return Vec::new();
         };
         let tokens = &document.panel_ctx.tokens;
-        let Some(card) =
-            crate::library::editor::footprint::align_modal::view_align_modal(editor, tokens)
-        else {
+        let Some(card) = crate::library::editor::footprint::align_modal::view_align_modal(
+            editor,
+            tokens,
+            &self.ui_state.i18n,
+        ) else {
             return Vec::new();
         };
         let close_msg = Message::Library(

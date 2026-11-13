@@ -198,24 +198,34 @@ fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
     let buttons = row![
         note,
         dialog_button(
-            "Cancel",
+            t!(v.i18n, ids::DIALOG_BUTTON_CANCEL),
             DialogButtonKind::Cancel,
             Some(PrefMsg::DiscardAndClose),
             t
         ),
         dialog_button(
-            "Apply",
+            t!(v.i18n, ids::DIALOG_BUTTON_APPLY),
             DialogButtonKind::Secondary,
             v.dirty.then_some(PrefMsg::Save),
             t
         ),
-        dialog_button("OK", DialogButtonKind::Primary, Some(ok_msg), t),
+        dialog_button(
+            t!(v.i18n, ids::DIALOG_BUTTON_OK),
+            DialogButtonKind::Primary,
+            Some(ok_msg),
+            t
+        ),
     ]
     .spacing(SP.m)
     .align_y(Alignment::Center);
     container(
         row![
-            dialog_button("Restore defaults", DialogButtonKind::Ghost, None, t),
+            dialog_button(
+                t!(v.i18n, ids::PREFERENCES_RESTORE_DEFAULTS),
+                DialogButtonKind::Ghost,
+                None,
+                t
+            ),
             Space::new().width(Length::Fill).boxed(),
             buttons.boxed(),
         ]

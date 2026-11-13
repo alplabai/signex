@@ -6,7 +6,7 @@
 use iced::widget::{Space, Widget, column, container, row, scrollable};
 use iced::{Alignment, Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text};
+use signex_widgets::{Label, button, raw, text};
 
 use super::{
     ChromeMetrics, RADIUS, Spacing, TypeScale, accent_button_rounded, danger_button, ghost_button,
@@ -114,9 +114,10 @@ pub fn dialog_list<'a, M: 'a>(items: Vec<Element<'a, M>>, tokens: &ThemeTokens) 
 }
 
 /// A dialog button of the given role: compact, height and min width from
-/// the type scale. `on_press: None` draws it disabled.
+/// the type scale. `on_press: None` draws it disabled. `label` is catalog
+/// text, or data the caller wraps in `raw`.
 pub fn dialog_button<'a, M: Clone + 'a>(
-    label: &str,
+    label: impl Into<Label<'a>>,
     kind: DialogButtonKind,
     on_press: Option<M>,
     tokens: &ThemeTokens,
@@ -124,8 +125,9 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     let kind = kind.resolved();
     let disabled = on_press.is_none();
     let color = label_color(kind, disabled, tokens);
-    let (height, size, width) = button_metrics(label, kind);
-    let face = text(raw(label.to_string()))
+    let label: Label<'a> = label.into();
+    let (height, size, width) = button_metrics(label.as_str(), kind);
+    let face = text(label)
         .size(size)
         .color(color)
         .width(Length::Fill)
@@ -157,9 +159,14 @@ const DENSE_PAD: f32 = 14.0 * 12.0 / 11.0;
 const DENSE_GHOST_PAD: f32 = 10.0 * 12.0 / 11.0;
 
 /// `(height, label size, width)` of a dialog button. The buttons are dense:
-/// one height for every role, the width hugging the label.
+/// one height for every role, the width hugging the label. The isolation
+/// marks catalog text carries around its values are invisible and do not
+/// count.
 fn button_metrics(label: &str, kind: DialogButtonKind) -> (f32, f32, f32) {
-    let chars = label.chars().count() as f32;
+    let chars = label
+        .chars()
+        .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
+        .count() as f32;
     let size = TS.label;
     let pad = if kind == DialogButtonKind::Ghost {
         DENSE_GHOST_PAD
@@ -246,6 +253,7 @@ mod tests {
     /// footer height follows the button height.
     #[test]
     fn kit_builds_for_every_theme() {
+        let i18n = signex_i18n::I18n::en_us_ref();
         for id in ThemeId::BUILTINS {
             let tokens = signex_types::theme::theme_tokens(*id);
             for kind in [
@@ -256,8 +264,9 @@ mod tests {
                 DialogButtonKind::Ghost,
                 DialogButtonKind::Cancel,
             ] {
-                let _: Element<'_, ()> = dialog_button("OK", kind, Some(()), &tokens);
-                let _: Element<'_, ()> = dialog_button("OK", kind, None, &tokens);
+                let ok = || signex_i18n::t!(i18n, signex_i18n::ids::DIALOG_BUTTON_OK);
+                let _: Element<'_, ()> = dialog_button(ok(), kind, Some(()), &tokens);
+                let _: Element<'_, ()> = dialog_button(ok(), kind, None, &tokens);
             }
             let _: Element<'_, ()> = dialog_message("message", &tokens);
             let _: Element<'_, ()> = dialog_hint("hint", &tokens);
@@ -289,6 +298,25 @@ mod tests {
         ] {
             assert_eq!(kind.resolved(), kind);
         }
+    }
+
+    /// The isolation marks catalog text puts around a value do not count
+    /// toward a button's width; the catalog English is drawn unchanged.
+    #[test]
+    fn isolation_marks_do_not_widen_a_button() {
+        for kind in [DialogButtonKind::Primary, DialogButtonKind::Ghost] {
+            assert_eq!(
+                button_metrics("Save \u{2068}R1\u{2069}", kind),
+                button_metrics("Save R1", kind),
+                "{kind:?}"
+            );
+        }
+        let ok = signex_i18n::t!(
+            signex_i18n::I18n::en_us_ref(),
+            signex_i18n::ids::DIALOG_BUTTON_OK
+        );
+        let ok = Label::from(ok);
+        assert_eq!(ok.as_str(), "OK");
     }
 
     /// Footer buttons are dense: every role has the same height and the

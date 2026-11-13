@@ -14,6 +14,7 @@
 
 use iced::widget::{Space, column, container};
 use iced::{Element, Length, Widget};
+use signex_i18n::{ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{raw, text};
 
@@ -59,6 +60,7 @@ pub fn view<'a>(
     state: &'a LibraryState,
     confirm: &'a CloseLibraryConfirmState,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let ts = TypeScale::default();
@@ -115,17 +117,17 @@ pub fn view<'a>(
         Vec::new(),
         vec![
             cancel_btn(
-                "Cancel",
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::Cancel),
                 tokens,
             ),
             danger_btn(
-                "Discard All",
+                t!(i18n, ids::DIALOG_UNSAVED_DISCARD_ALL),
                 LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::DiscardAll),
                 tokens,
             ),
             primary_btn(
-                "Save All",
+                t!(i18n, ids::DIALOG_BUTTON_SAVE_ALL),
                 LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::SaveAll),
                 tokens,
             ),
