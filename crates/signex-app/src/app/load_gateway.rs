@@ -610,6 +610,10 @@ impl Signex {
             .map(|p| self.document_state.engines.contains_key(p))
             .unwrap_or(false);
         let is_pcb = matches!(self.active_tab_cached_document(), Some(TabDocument::Pcb(_)));
+        if !is_pcb {
+            // The status bar's board angle field goes with the board (#2316).
+            self.close_view_angle_entry_in(None);
+        }
 
         if is_schematic {
             // Selection UUIDs belong to the document they were picked in;
@@ -677,6 +681,10 @@ impl Signex {
         self.clear_schematic_ui_state();
         self.sync_pcb_canvas_from_visible_board();
         if fit_to_board {
+            // A board opened into the tab starts upright (#2316).
+            if self.interaction_state.pcb_canvas.set_view_rotation(0.0) {
+                self.close_view_angle_entry_in(None);
+            }
             self.interaction_state.pcb_canvas.fit_to_board();
         }
         self.interaction_state.pcb_canvas.clear_bg_cache();

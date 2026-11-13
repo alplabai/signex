@@ -35,6 +35,11 @@ impl Signex {
     ) -> Task<Message> {
         // #1378 - Esc abandons a pending chord, a waiting `T A` included.
         self.cancel_pending_chord();
+        // Esc in the status bar's angle field closes it and goes no further
+        // (#2316): the board's tool and selection stay.
+        if self.close_view_angle_entry_in(window) {
+            return Task::none();
+        }
         // Esc mid-drag drops the panel where it floats and clears the preview.
         if self.cancel_floating_drag() {
             return Task::none();

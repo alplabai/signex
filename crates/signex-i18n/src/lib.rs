@@ -245,6 +245,10 @@ define_ids! {
     PCB_LAYERS_TECHNICAL = "pcb-layers-technical";
     PCB_LAYERS_MECHANICAL = "pcb-layers-mechanical";
     PCB_STATUS_LAYER = "pcb-status-layer";
+    PCB_STATUS_VIEW_ANGLE = "pcb-status-view-angle";
+    PCB_STATUS_VIEW_ANGLE_TIP = "pcb-status-view-angle-tip";
+    PCB_STATUS_VIEW_ANGLE_PLACEHOLDER = "pcb-status-view-angle-placeholder";
+    PCB_VIEW_ROTATE_TOOLTIP = "pcb-view-rotate-tooltip";
     PCB_LAYER_TOP_COPPER = "pcb-layer-top-copper";
     PCB_LAYER_BOTTOM_COPPER = "pcb-layer-bottom-copper";
     PCB_LAYER_INNER_COPPER = "pcb-layer-inner-copper";

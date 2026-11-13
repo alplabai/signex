@@ -35,8 +35,28 @@ pub(crate) struct Readout<'r> {
     pub pending_git_commits: usize,
     pub altium_import: Option<&'r str>,
     pub activity: Option<&'r Activity>,
-    /// The active copper layer of an open board: a caption and the name.
+    pub board: BoardReadout,
+}
+
+/// What the status bar shows of the board in view; empty without one.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct BoardReadout {
+    /// The active copper layer: a caption and the name.
     pub active_layer: Option<(Localized, Localized)>,
+    /// The view's turn on screen (#2316).
+    pub view_angle: Option<ViewAngleReadout>,
+}
+
+/// The board view's angle readout (#2316): a click opens a value field.
+#[derive(Debug, Clone)]
+pub(crate) struct ViewAngleReadout {
+    pub caption: Localized,
+    /// The angle with its degree sign.
+    pub value: String,
+    pub tooltip: Localized,
+    pub placeholder: Localized,
+    /// What the open value field holds; `None` while it is closed.
+    pub entry: Option<String>,
 }
 
 /// The activity segment: what a gesture or editor says, or an error the
@@ -113,7 +133,7 @@ pub(crate) fn view<'a>(
     pending_git_commits: usize,
     altium_import: Option<&str>,
     activity: Option<&Activity>,
-    active_layer: Option<(Localized, Localized)>,
+    board: BoardReadout,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, StatusBarRequest> {
     graphite::view(
@@ -130,7 +150,7 @@ pub(crate) fn view<'a>(
             pending_git_commits,
             altium_import,
             activity,
-            active_layer,
+            board,
         },
         tokens,
         i18n,

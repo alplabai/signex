@@ -357,6 +357,14 @@ define_ids! {
         CMD_MENU_TOGGLE_LAYER_VISIBILITY = "cmd-menu-toggle-layer-visibility";
         CMD_SHOW_ALL_LAYERS = "cmd-show-all-layers";
         CMD_MENU_SHOW_ALL_LAYERS = "cmd-menu-show-all-layers";
+        CMD_VIEW_ROTATE = "cmd-view-rotate";
+        CMD_MENU_VIEW_ROTATE = "cmd-menu-view-rotate";
+        CMD_VIEW_ROTATE_CCW = "cmd-view-rotate-ccw";
+        CMD_MENU_VIEW_ROTATE_CCW = "cmd-menu-view-rotate-ccw";
+        CMD_VIEW_ROTATE_180 = "cmd-view-rotate-180";
+        CMD_MENU_VIEW_ROTATE_180 = "cmd-menu-view-rotate-180";
+        CMD_VIEW_ROTATE_RESET = "cmd-view-rotate-reset";
+        CMD_MENU_VIEW_ROTATE_RESET = "cmd-menu-view-rotate-reset";
         CMD_TOGGLE_LAYERS_PANEL = "cmd-toggle-layers-panel";
         CMD_MENU_TOGGLE_LAYERS_PANEL = "cmd-menu-toggle-layers-panel";
         CMD_NEW_PCB_DOCUMENT = "cmd-new-pcb-document";

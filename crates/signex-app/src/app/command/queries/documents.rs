@@ -93,6 +93,7 @@ impl Signex {
         let kind_details = match (&entry.key, entry.kind) {
             (Some(DocumentKey::Project(id)), _) => self.project_details(*id),
             (_, DocumentKind::Schematic) => self.sheet_details(entry),
+            (_, DocumentKind::Pcb) => self.board_view_details(entry),
             _ => Value::Null,
         };
         if let (Value::Object(map), Value::Object(extra)) = (&mut details, kind_details) {
@@ -111,6 +112,27 @@ impl Signex {
             map.insert("save_writes".into(), json!(writes));
         }
         details
+    }
+
+    /// How a board in view is turned on screen (#2316): the main window's
+    /// canvas while it shows the board, else an undocked window's; `null`
+    /// while no window shows it.
+    fn board_view_details(&self, entry: &DocumentEntry) -> Value {
+        let Some(path) = entry.path.as_deref() else {
+            return Value::Null;
+        };
+        let shown_in_main =
+            self.has_active_pcb() && self.active_tab_path().as_deref() == Some(path);
+        let angle = if shown_in_main {
+            Some(self.interaction_state.pcb_canvas.view_rotation_deg())
+        } else {
+            self.interaction_state
+                .pcb_canvases
+                .iter()
+                .find(|(id, _)| self.undocked_pcb_path(**id).as_deref() == Some(path))
+                .map(|(_, canvas)| canvas.view_rotation_deg())
+        };
+        json!({ "view_rotation_deg": angle })
     }
 
     fn sheet_details(&self, entry: &DocumentEntry) -> Value {

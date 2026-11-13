@@ -205,6 +205,16 @@ impl Signex {
                 .dispatch_pcb_message(PcbMsg::View(PcbViewMsg::ActiveLayerStepped {
                     forward: true,
                 })),
+            // `status_bar_message` routes these to the window's board; a bare
+            // one acts on the main window's.
+            UiMsg::StatusBar(StatusBarRequest::ViewAngleClicked) => {
+                self.dispatch_pcb_message(PcbMsg::ViewRotation(ViewRotationMsg::AngleEntryToggled))
+            }
+            UiMsg::StatusBar(StatusBarRequest::ViewAngleEdited(text)) => self.dispatch_pcb_message(
+                PcbMsg::ViewRotation(ViewRotationMsg::AngleEntryEdited(text)),
+            ),
+            UiMsg::StatusBar(StatusBarRequest::ViewAngleSubmitted) => self
+                .dispatch_pcb_message(PcbMsg::ViewRotation(ViewRotationMsg::AngleEntrySubmitted)),
             UiMsg::StatusBar(StatusBarRequest::CancelAltiumImport) => {
                 self.handle_altium_import_cancel();
                 Task::none()
@@ -461,11 +471,23 @@ impl Signex {
                 msg: PrimitiveEdit::Symbol(msg),
             })
         };
+        // The angle readout turns the board that window shows (#2316).
+        let view_angle =
+            |window, event| Message::Pcb(PcbMsg::ViewRotationInWindow { window, event });
         match (request, symbol) {
             (StatusBarRequest::ActiveLayerStepRequested, _) => Message::Pcb(PcbMsg::ViewInWindow {
                 window,
                 event: PcbViewMsg::ActiveLayerStepped { forward: true },
             }),
+            (StatusBarRequest::ViewAngleClicked, _) => {
+                view_angle(window, ViewRotationMsg::AngleEntryToggled)
+            }
+            (StatusBarRequest::ViewAngleEdited(text), _) => {
+                view_angle(window, ViewRotationMsg::AngleEntryEdited(text))
+            }
+            (StatusBarRequest::ViewAngleSubmitted, _) => {
+                view_angle(window, ViewRotationMsg::AngleEntrySubmitted)
+            }
             (StatusBarRequest::ToggleGrid, Some(path)) => {
                 symbol_edit(path, SymbolEditorMsg::ToggleGrid)
             }

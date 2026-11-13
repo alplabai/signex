@@ -49,33 +49,17 @@ impl WorldRect {
                 && self.max[1] >= view.min[1])
     }
 
-    /// The world rect shown in a `size`-pixel frame under `camera`, grown by
-    /// `margin_px` of screen space (covers the minimum 0.5 px stroke/radius
-    /// floors and anti-aliasing). `None` when the camera is degenerate, in
-    /// which case nothing is culled.
+    /// The world rect shown in a `size`-pixel frame under `camera` (the box
+    /// around it on a turned view), grown by `margin_px` of screen space
+    /// (covers the minimum 0.5 px stroke/radius floors and anti-aliasing).
+    /// `None` when the camera is degenerate, in which case nothing is culled.
     pub(super) fn visible(
-        camera: &crate::canvas::Camera,
+        camera: &super::BoardCamera,
         size: iced::Size,
         margin_px: f32,
     ) -> Option<Self> {
-        if !(camera.scale.is_finite() && camera.scale > 0.0) {
-            return None;
-        }
-        let world = |x: f32, y: f32| {
-            [
-                (x - camera.offset.x) / camera.scale,
-                (y - camera.offset.y) / camera.scale,
-            ]
-        };
-        let a = world(0.0, 0.0);
-        let b = world(size.width, size.height);
-        Some(
-            Self {
-                min: [a[0].min(b[0]), a[1].min(b[1])],
-                max: [a[0].max(b[0]), a[1].max(b[1])],
-            }
-            .grown(margin_px / camera.scale),
-        )
+        let (min, max) = camera.visible_world_bounds(size)?;
+        Some(Self { min, max }.grown(margin_px / camera.scale()))
     }
 }
 
@@ -233,7 +217,24 @@ mod tests {
     }
 
     fn view_of(camera: &Camera, w: f32, h: f32) -> Option<WorldRect> {
-        WorldRect::visible(camera, iced::Size::new(w, h), CULL_MARGIN_PX)
+        let camera = super::super::BoardCamera::from(camera.clone());
+        WorldRect::visible(&camera, iced::Size::new(w, h), CULL_MARGIN_PX)
+    }
+
+    /// A turned view keeps what its corners reach (#2316).
+    #[test]
+    fn a_turned_view_culls_by_the_box_around_it() {
+        let scene = scene();
+        let bounds = SceneBounds::from_scene(&scene);
+        let mut camera = super::super::BoardCamera::from(unit_camera());
+        let frame = iced::Rectangle::with_size(iced::Size::new(100.0, 100.0));
+        camera.set_rotation(
+            signex_gfx::view_rotation::ViewRotation::from_degrees(45.0),
+            frame,
+        );
+        let view = WorldRect::visible(&camera, frame.size(), CULL_MARGIN_PX);
+        // The far line and the far circle stay out; the near geometry stays in.
+        assert_eq!(bounds.visible_count(view.as_ref()), 5);
     }
 
     fn unit_camera() -> Camera {

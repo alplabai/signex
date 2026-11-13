@@ -348,7 +348,7 @@ fn sample_operands(id: &str) -> Vec<String> {
         .map(|op| {
             let value = match op.kind {
                 OperandKind::Point => "1,2".to_string(),
-                OperandKind::Angle => "0".to_string(),
+                OperandKind::Angle | OperandKind::Turn => "0".to_string(),
                 OperandKind::Text => "x".to_string(),
                 OperandKind::Path => std::env::temp_dir().join("x.snxsch").display().to_string(),
                 OperandKind::Bool => "true".to_string(),
@@ -420,4 +420,52 @@ fn every_operand_command_has_a_handler_or_is_refused() {
         "a handler names no catalog row"
     );
     assert!(handled >= 2);
+}
+
+/// An app with an empty board open in its tab.
+fn board_app() -> Signex {
+    let (mut app, _task) = Signex::new();
+    let board: signex_types::pcb::PcbBoard =
+        serde_json::from_value(serde_json::json!({ "uuid": Uuid::nil() })).expect("a board");
+    let path = std::env::temp_dir().join("operands.snxpcb");
+    app.open_pcb_tab(path, "board".into(), board);
+    app
+}
+
+/// #2316: `view_rotate degrees=..` turns the board view as its View row
+/// does, and a turn makes no undo step.
+#[test]
+fn view_rotate_by_operands_is_the_view_row() {
+    let mut by_row = board_app();
+    let mut by_operands = board_app();
+    let row = crate::menu_bar::MenuMessage::Command(id("view_rotate"));
+    let _ = by_row.update(crate::app::Message::Menu(row));
+
+    let (outcome, _) = by_operands.run_operands(&id("view_rotate"), &parse("view_rotate", &[]));
+    assert_eq!(outcome, CommandOutcome::Ran);
+    let angle = |app: &Signex| app.interaction_state.pcb_canvas.view_rotation_deg();
+    assert_eq!(angle(&by_row), 90.0);
+    assert_eq!(angle(&by_operands), 90.0, "no `degrees` is a quarter turn");
+
+    let args = parse("view_rotate", &["degrees=-127"]);
+    let (outcome, _) = by_operands.run_operands(&id("view_rotate"), &args);
+    assert_eq!(outcome, CommandOutcome::Ran);
+    assert_eq!(angle(&by_operands), 323.0);
+    let docs = &by_operands.document_state;
+    let board = docs.tabs[docs.active_tab]
+        .cached_document
+        .as_ref()
+        .and_then(crate::app::TabDocument::as_pcb_engine);
+    assert!(!board.expect("a board").can_undo());
+}
+
+/// Without a board in view the turn is refused, and says why.
+#[test]
+fn view_rotate_without_a_board_is_refused() {
+    let (mut app, _task) = Signex::new();
+    let (outcome, _) = app.run_operands(&id("view_rotate"), &parse("view_rotate", &[]));
+    assert!(
+        matches!(outcome, CommandOutcome::Disabled { .. }),
+        "{outcome:?}"
+    );
 }
