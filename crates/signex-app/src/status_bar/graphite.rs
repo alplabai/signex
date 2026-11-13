@@ -231,6 +231,7 @@ fn view_angle<'a>(r: ViewAngleReadout, tokens: &ThemeTokens) -> Element<'a, Stat
         ti(tokens.accent),
     );
     let field = signex_widgets::text_input(r.placeholder, entry)
+        .id(crate::app::contracts::VIEW_ANGLE_INPUT_ID.clone())
         .on_input(StatusBarRequest::ViewAngleEdited)
         .on_submit(StatusBarRequest::ViewAngleSubmitted)
         .font(mono_font())
@@ -331,7 +332,7 @@ pub(super) fn view<'a>(
         bar = bar.push(mono_text(activity.text.clone(), ink).boxed());
     }
     // The active copper layer of an open board; a click steps to the next.
-    if let Some((caption, name)) = r.active_layer.clone() {
+    if let Some((caption, name)) = r.board.active_layer.clone() {
         bar = bar.push(
             button(
                 row![
@@ -377,7 +378,7 @@ pub(super) fn view<'a>(
             .boxed(),
         );
     }
-    if let Some(angle) = r.view_angle.clone() {
+    if let Some(angle) = r.board.view_angle.clone() {
         bar = bar.push(view_angle(angle, tokens));
     }
     let bar = bar

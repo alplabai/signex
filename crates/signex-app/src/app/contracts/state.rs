@@ -49,6 +49,11 @@ pub enum ContextSubmenu {
 pub static TEXT_EDIT_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("signex.text_edit"));
 
+/// Widget id of the status bar's board angle field, so opening it can focus
+/// it (#2316).
+pub static VIEW_ANGLE_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::widget::Id::new("signex.view_angle"));
+
 /// The in-place editor. `kind` says which text of `uuid` it edits: a label
 /// or text note, a part's designator (`SymbolRefField`) or value
 /// (`SymbolValField`), or, as `Symbol`, the part's footprint, which has no

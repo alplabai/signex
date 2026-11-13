@@ -7,11 +7,15 @@
 use iced::widget::canvas::Program;
 use iced::{Event, Point as ScreenPoint, Rectangle, mouse};
 use pcb_geom::{ClickMode, ItemRef};
-use signex_app::app::{CommandPaletteMsg, FileMsg, Message, Signex, StatusBarRequest, TabDocument};
+use signex_app::app::{
+    CommandPaletteMsg, FileMsg, InputMsg, Message, Signex, StatusBarRequest, TabDocument, UiMsg,
+    WindowMsg,
+};
 use signex_app::canvas::CanvasEvent;
 use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::pcb_canvas::{PcbCanvasMsg, PcbCanvasState};
+use signex_app::tab_bar::TabMessage;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{
     Footprint, Pad, PadShape, PadType, PcbBoard, Point, Segment, Via, ViaType,
@@ -408,4 +412,112 @@ fn fit_at_90_degrees_frames_the_whole_board() {
         );
     }
     assert_eq!(f.angle(), 90.0, "fit keeps the turn");
+}
+
+/// A second board, B, opened from disk into its own tab of the main window.
+fn open_second_board(f: &mut Fixture) -> std::path::PathBuf {
+    let b = f._tmp.path().join("b.snxpcb");
+    std::fs::write(&b, SnxPcb::new(board()).write_string().unwrap()).unwrap();
+    f.send(Message::File(FileMsg::Opened(Some(b.clone()))));
+    b
+}
+
+/// Board A (the fixture's) in its own window, B shown in the main one.
+fn undock_the_first_board(f: &mut Fixture) -> iced::window::Id {
+    let b = open_second_board(f);
+    let index_of = |app: &Signex, path: &std::path::Path| {
+        app.document_state
+            .tabs
+            .iter()
+            .position(|t| t.path == path)
+            .expect("an open tab")
+    };
+    let a = index_of(&f.app, &f.path);
+    let before: Vec<iced::window::Id> = f.app.ui_state.windows.keys().copied().collect();
+    let _ = f.app.update(Message::Window(WindowMsg::UndockTab(a)));
+    let window = *f
+        .app
+        .ui_state
+        .windows
+        .keys()
+        .find(|id| !before.contains(id))
+        .expect("an undocked window");
+    let path = f.path.clone();
+    let _ = f.app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path,
+        id: window,
+    }));
+    let b_index = index_of(&f.app, &b);
+    let window_id = f.main;
+    f.send(Message::Tab {
+        window_id,
+        msg: TabMessage::Select(b_index),
+    });
+    window
+}
+
+fn window_angle(f: &Fixture, window: iced::window::Id) -> f32 {
+    f.app.interaction_state.pcb_canvases[&window].view_rotation_deg()
+}
+
+#[test]
+fn a_board_opened_into_a_tab_starts_upright() {
+    let mut f = open_board();
+    f.menu("view_rotate");
+    assert_eq!(f.angle(), 90.0);
+    open_second_board(&mut f);
+    assert_eq!(f.angle(), 0.0, "the new board's tab starts at 0°");
+}
+
+/// The View row used in an undocked board window turns that window's board
+/// and leaves the main window's as it is.
+#[test]
+fn the_view_row_in_a_board_window_turns_that_windows_board_only() {
+    let mut f = open_board();
+    let window = undock_the_first_board(&mut f);
+    let row = MenuMessage::Command(AppCommandId::new("view_rotate").unwrap());
+    f.send(Message::Ui(UiMsg::MenuInWindow { window, msg: row }));
+    assert_eq!(window_angle(&f, window), 90.0);
+    assert_eq!(f.angle(), 0.0, "the main window's board is untouched");
+}
+
+/// The status bar field of an undocked board window sets that window's angle.
+#[test]
+fn the_angle_field_of_a_board_window_turns_that_windows_board_only() {
+    let mut f = open_board();
+    let window = undock_the_first_board(&mut f);
+    let bar = |f: &mut Fixture, request| {
+        let message = Signex::status_bar_message(window, None, request);
+        f.send(message);
+    };
+    bar(&mut f, StatusBarRequest::ViewAngleClicked);
+    let entry = f.app.ui_state.pcb_view_angle_entry.clone().expect("open");
+    assert_eq!((entry.window, entry.text.as_str()), (window, "0"));
+    bar(&mut f, StatusBarRequest::ViewAngleEdited("45".into()));
+    bar(&mut f, StatusBarRequest::ViewAngleSubmitted);
+    assert_eq!(window_angle(&f, window), 45.0);
+    assert_eq!(f.angle(), 0.0, "the main window's board is untouched");
+    assert!(f.app.ui_state.pcb_view_angle_entry.is_none());
+}
+
+/// Esc closes an open angle field and nothing else; a turn by another route
+/// closes it too, so it never shows a stale angle.
+#[test]
+fn esc_or_another_turn_closes_the_angle_field() {
+    let mut f = open_board();
+    f.status_bar(StatusBarRequest::ViewAngleClicked);
+    f.send(Message::Input(InputMsg::EscapePressed { window: None }));
+    assert!(
+        f.app.ui_state.pcb_view_angle_entry.is_none(),
+        "Esc closed it"
+    );
+    assert_eq!(f.angle(), 0.0);
+
+    f.status_bar(StatusBarRequest::ViewAngleClicked);
+    f.menu("view_rotate");
+    assert_eq!(f.angle(), 90.0);
+    assert!(
+        f.app.ui_state.pcb_view_angle_entry.is_none(),
+        "the turn closed it"
+    );
 }

@@ -150,8 +150,7 @@ mod tests {
             0,
             None,
             None,
-            None,
-            None,
+            Default::default(),
             &signex_i18n::I18n::en_us(),
         );
         let real = crate::layout_probe::root_size::<crate::app::StatusBarRequest>(

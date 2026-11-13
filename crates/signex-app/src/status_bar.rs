@@ -35,9 +35,15 @@ pub(crate) struct Readout<'r> {
     pub pending_git_commits: usize,
     pub altium_import: Option<&'r str>,
     pub activity: Option<&'r Activity>,
-    /// The active copper layer of an open board: a caption and the name.
+    pub board: BoardReadout,
+}
+
+/// What the status bar shows of the board in view; empty without one.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct BoardReadout {
+    /// The active copper layer: a caption and the name.
     pub active_layer: Option<(Localized, Localized)>,
-    /// The board view's turn on screen (#2316).
+    /// The view's turn on screen (#2316).
     pub view_angle: Option<ViewAngleReadout>,
 }
 
@@ -111,7 +117,7 @@ fn selection_summary(selected: &[SelectedItem]) -> Option<String> {
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "16 arguments: the status bar reads sixteen independent slices of app state and owns none of them"
+    reason = "15 arguments: the status bar reads fifteen independent slices of app state and owns none of them"
 )]
 pub(crate) fn view<'a>(
     x: f64,
@@ -127,8 +133,7 @@ pub(crate) fn view<'a>(
     pending_git_commits: usize,
     altium_import: Option<&str>,
     activity: Option<&Activity>,
-    active_layer: Option<(Localized, Localized)>,
-    view_angle: Option<ViewAngleReadout>,
+    board: BoardReadout,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, StatusBarRequest> {
     graphite::view(
@@ -145,8 +150,7 @@ pub(crate) fn view<'a>(
             pending_git_commits,
             altium_import,
             activity,
-            active_layer,
-            view_angle,
+            board,
         },
         tokens,
         i18n,

@@ -232,12 +232,15 @@ impl BoardIndex {
 
     /// The items a convex polygon `poly` selects: those wholly inside it, or
     /// those sharing a point with it (a marquee on a turned view, #2316).
+    ///
+    /// A corner beyond four times [`MAX_ABS_NM`] selects nothing: no drag
+    /// reaches there, and clamping a turned box corner by corner, as
+    /// [`Self::hit_rect`] does to its two corners, would bend it out of shape.
     pub fn hit_polygon(&self, poly: &[PointNm], mode: RectSelect) -> Vec<ItemRef> {
         let far = 4 * MAX_ABS_NM;
-        let poly: Vec<PointNm> = poly
-            .iter()
-            .map(|p| PointNm::new(p.x.clamp(-far, far), p.y.clamp(-far, far)))
-            .collect();
+        if poly.iter().any(|p| p.x.abs() > far || p.y.abs() > far) {
+            return Vec::new();
+        }
         let Some(first) = poly.first() else {
             return Vec::new();
         };
@@ -253,8 +256,8 @@ impl BoardIndex {
         sorted(
             candidates
                 .filter(|entry| match mode {
-                    RectSelect::Inside => entry.shape.is_inside_convex(&poly),
-                    RectSelect::Touching => entry.shape.overlaps_polygon(&poly),
+                    RectSelect::Inside => entry.shape.is_inside_convex(poly),
+                    RectSelect::Touching => entry.shape.overlaps_polygon(poly),
                 })
                 .map(|entry| entry.item),
         )

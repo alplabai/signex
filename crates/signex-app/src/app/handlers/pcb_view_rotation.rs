@@ -2,9 +2,12 @@
 //! it lives in the canvas camera (`pcb_canvas::BoardCamera`), so nothing here
 //! touches the board, its undo history or its dirty mark.
 
+use iced::Task;
+use iced::widget::operation;
 use signex_i18n::{ids, t};
 
-use crate::app::{Signex, ViewAngleEntry, ViewRotationMsg};
+use crate::app::contracts::VIEW_ANGLE_INPUT_ID;
+use crate::app::{Message, Signex, ViewAngleEntry, ViewRotationMsg};
 use crate::status_bar::ViewAngleReadout;
 
 impl Signex {
@@ -15,7 +18,7 @@ impl Signex {
         &mut self,
         window: Option<iced::window::Id>,
         event: ViewRotationMsg,
-    ) {
+    ) -> Task<Message> {
         let window = window.or(self.ui_state.main_window_id);
         match event {
             ViewRotationMsg::TurnedBy(degrees) => {
@@ -35,6 +38,13 @@ impl Signex {
                     }),
                     _ => None,
                 };
+                if entry.is_some() {
+                    let input = VIEW_ANGLE_INPUT_ID.clone();
+                    return Task::batch([
+                        operation::focus(input.clone()),
+                        operation::text_input::select_all(input),
+                    ]);
+                }
             }
             ViewRotationMsg::AngleEntryEdited(text) => {
                 if let Some(entry) = self.angle_entry_of(window) {
@@ -52,6 +62,22 @@ impl Signex {
                 }
             }
         }
+        Task::none()
+    }
+
+    /// Close the status bar's angle field when it is open in `window`
+    /// (`None`: the main window). Whether it was: Esc then stops there.
+    pub(crate) fn close_view_angle_entry_in(&mut self, window: Option<iced::window::Id>) -> bool {
+        let window = window.or(self.ui_state.main_window_id);
+        let open_here = self
+            .ui_state
+            .pcb_view_angle_entry
+            .as_ref()
+            .is_some_and(|e| Some(e.window) == window);
+        if open_here {
+            self.ui_state.pcb_view_angle_entry = None;
+        }
+        open_here
     }
 
     fn angle_entry_of(&mut self, window: Option<iced::window::Id>) -> Option<&mut ViewAngleEntry> {
@@ -64,8 +90,9 @@ impl Signex {
     /// Turn the board view in the main slot to `degrees`; nothing without a
     /// board in view.
     fn turn_pcb_view(&mut self, degrees: f32) {
-        if self.has_active_pcb() {
-            self.interaction_state.pcb_canvas.set_view_rotation(degrees);
+        if self.has_active_pcb() && self.interaction_state.pcb_canvas.set_view_rotation(degrees) {
+            // An open field would show the angle it was opened at.
+            self.ui_state.pcb_view_angle_entry = None;
         }
     }
 

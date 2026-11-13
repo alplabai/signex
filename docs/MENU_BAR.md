@@ -460,12 +460,15 @@ maintainer in #2316: Rotate View 90° Clockwise (`view_rotate`), Rotate View
 90° Counter-Clockwise (`view_rotate_ccw`), Rotate View 180°
 (`view_rotate_180`) and Reset View Rotation (`view_rotate_reset`). They are
 greyed without a board, Reset also while the view is at 0°, and they have no
-default keys. Any other angle is typed in
-the status bar: a click on its View readout opens a field, and Enter applies
-the number. The turn is view state like pan and zoom: it lives in the board
-canvas's camera, makes no undo step and does not mark the board dirty. In an
-undocked PCB window the rows act on that window's board. See
-`docs/DECISIONS.md` (2026-11-12).
+default keys. Any other angle is typed in the status bar: a click on its View
+readout opens a focused field, Enter applies a number (other text keeps the
+field open), and Esc or a second click closes it. The field also closes when
+the view turns by another route and when the tab leaves the board. The turn
+is view state like pan and zoom: it lives in the board canvas's camera, makes
+no undo step and does not mark the board dirty; a board opened into a tab
+starts at 0°. In an undocked PCB window the rows, the palette, the keys and
+its own status bar act on that window's board and leave the main window's as
+it is. See `docs/DECISIONS.md` (2026-11-12).
 
 ## Native macOS menu {#native-macos-menu}
 

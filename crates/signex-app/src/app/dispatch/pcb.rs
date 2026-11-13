@@ -33,14 +33,10 @@ impl Signex {
                 self.apply_pcb_view_event(Some(window), event);
                 Task::none()
             }
-            PcbMsg::ViewRotation(event) => {
-                self.apply_view_rotation(None, event);
-                Task::none()
-            }
+            PcbMsg::ViewRotation(event) => self.apply_view_rotation(None, event),
             PcbMsg::ViewRotationInWindow { window, event } => {
                 self.run_in_window(window, false, |app| {
-                    app.apply_view_rotation(Some(window), event);
-                    Task::none()
+                    app.apply_view_rotation(Some(window), event)
                 })
             }
             PcbMsg::Sketch(event) => self.handle_board_sketch(event),
