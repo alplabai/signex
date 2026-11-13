@@ -180,7 +180,9 @@ fn item_label(item: &ItemRef) -> String {
     format!("{kind} {}", item_id(item))
 }
 
-/// The board file, the rule, the items and the keepout: not the nets,
+/// The board file (the document entry's own path: the tab's path when open,
+/// the project folder joined with `pcb_file` when closed), the rule (and,
+/// for a written rule, the kind), the items and the keepout: not the nets,
 /// layers, position or gap, so moving an item keeps the key. A finding that
 /// names no object (an unconnected link with no pad at either end) is keyed
 /// by its `message` instead, as ERC keys one.
@@ -189,6 +191,12 @@ fn key(v: &Violation, board: &str, message: &str) -> String {
     hasher.update(board.as_bytes());
     hasher.update(b"\n");
     hasher.update(rule_of(v).as_bytes());
+    // One written rule can set several limits; the kind tells them apart.
+    // A built-in rule's id is its kind already, so its key is unchanged.
+    if v.rule.is_some() {
+        hasher.update(b"\nkind:");
+        hasher.update(v.kind.rule_id().as_bytes());
+    }
     for item in &v.items {
         hasher.update(b"\nitem:");
         hasher.update(item_label(item).as_bytes());

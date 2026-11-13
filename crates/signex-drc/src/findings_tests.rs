@@ -12,7 +12,7 @@ use signex_types::project::DrcRuleSet;
 use signex_types::sketch::attr::KeepoutKinds;
 
 use super::findings::{DRC_CHECK, check_report};
-use super::tests::{board, footprint, id, pad, track};
+use super::tests::{board, footprint, id, pad, track, via};
 use super::*;
 
 const BOARD: &str = "/p/board.snxpcb";
@@ -243,6 +243,37 @@ fn a_keepout_is_part_of_the_key() {
 /// A key as the finding's own hash: 32 hex digits, no repeat number.
 fn is_own_key(key: &str) -> bool {
     key.len() == 32 && key.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// Keys go into stored baselines: a built-in rule's key is pinned, so a
+/// change to the key's inputs that moves it shows up here.
+#[test]
+fn a_builtin_rule_key_is_pinned() {
+    let report = checked(&pair(0.0, 0.4));
+    assert_eq!(report.keys(), ["a1edfcc89aeb52cc0eae1957b188d2c9"]);
+}
+
+/// The kind is part of a written rule's key: one rule with two via limits
+/// gives a via under both two findings with two keys of their own, so a
+/// baseline tells which limit was fixed.
+#[test]
+fn a_via_under_two_limits_of_one_rule_has_two_own_keys() {
+    // The via is 0.6 mm across with a 0.3 mm drill.
+    let b = board(vec![], vec![], vec![via(1, (0.0, 0.0), 1)]);
+    let rule = UserRule {
+        name: "vias".into(),
+        severity: Severity::Error,
+        message: None,
+        nets: NetScope::Board,
+        layers: None,
+        pair: None,
+        limits: vec![Limit::MinViaDiameter(800_000), Limit::MinViaDrill(400_000)],
+    };
+    let rules = DrcRules::new(RULE).with_user_rules(&b, &[], [rule]);
+    let report = checked_with(&b, &rules);
+    let keys = report.keys();
+    assert_eq!(keys.len(), 2, "{report:?}");
+    assert!(keys.iter().all(|k| is_own_key(k)), "{keys:?}");
 }
 
 /// The items are part of the key: two findings of one rule on one board
