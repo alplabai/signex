@@ -60,14 +60,15 @@ fn finding(
 ) -> Option<Finding> {
     let severity = report.severity_of(v)?;
     let (a, b) = (net_name(net_names, v.nets.0), net_name(net_names, v.nets.1));
+    let message = format!("{}, {a} / {b}", describe(v));
     Some(Finding {
         rule: rule_of(v).to_string(),
         severity,
-        message: format!("{}, {a} / {b}", describe(v)),
+        key: key(v, board, &message),
+        message,
         evidence: evidence(&report.rules, v, &a, &b),
         items: v.items.iter().map(item_id).collect(),
         sheet: board.to_string(),
-        key: key(v, board),
     })
 }
 
@@ -180,8 +181,10 @@ fn item_label(item: &ItemRef) -> String {
 }
 
 /// The board file, the rule, the items and the keepout: not the nets,
-/// layers, position or gap, so moving an item keeps the key.
-fn key(v: &Violation, board: &str) -> String {
+/// layers, position or gap, so moving an item keeps the key. A finding that
+/// names no object (an unconnected link with no pad at either end) is keyed
+/// by its `message` instead, as ERC keys one.
+fn key(v: &Violation, board: &str, message: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(board.as_bytes());
     hasher.update(b"\n");
@@ -193,6 +196,10 @@ fn key(v: &Violation, board: &str) -> String {
     if let Some(keepout) = v.keepout {
         hasher.update(b"\nkeepout:");
         hasher.update(keepout.to_string().as_bytes());
+    }
+    if v.items.is_empty() && v.keepout.is_none() {
+        hasher.update(b"\nmessage:");
+        hasher.update(message.as_bytes());
     }
     let mut hex = format!("{:x}", hasher.finalize());
     hex.truncate(KEY_HEX_DIGITS);

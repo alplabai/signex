@@ -240,6 +240,67 @@ fn a_keepout_is_part_of_the_key() {
     assert_ne!(fenced(0x900), fenced(0x901));
 }
 
+/// A key as the finding's own hash: 32 hex digits, no repeat number.
+fn is_own_key(key: &str) -> bool {
+    key.len() == 32 && key.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// The items are part of the key: two findings of one rule on one board
+/// have two keys of their own, not one key and its repeat (`#2`).
+#[test]
+fn two_findings_of_one_rule_have_two_keys() {
+    let b = board(
+        vec![],
+        vec![
+            track(1, (0.0, 0.0), (10.0, 0.0), 1, "TopCopper"),
+            track(2, (0.0, 0.4), (10.0, 0.4), 2, "TopCopper"),
+            track(3, (50.0, 0.0), (60.0, 0.0), 1, "TopCopper"),
+            track(4, (50.0, 0.4), (60.0, 0.4), 2, "TopCopper"),
+        ],
+        vec![],
+    );
+    let report = checked(&b);
+    let keys = report.keys();
+    assert_eq!(keys.len(), 2, "{report:?}");
+    assert!(
+        report
+            .findings
+            .iter()
+            .all(|f| f.rule == "builtin::clearance"),
+        "{report:?}"
+    );
+    assert!(keys.iter().all(|k| is_own_key(k)), "{keys:?}");
+    assert_ne!(keys[0], keys[1]);
+}
+
+/// A finding that names no item (an unconnected link with no pad at
+/// either end) is keyed by its message, as ERC keys one: two such links
+/// have two keys of their own.
+#[test]
+fn findings_that_name_no_item_are_keyed_by_their_message() {
+    let link = |net: u32, length: i64| Violation {
+        kind: ViolationKind::Unconnected,
+        items: Vec::new(),
+        nets: (net, net),
+        layers: 0,
+        at: pcb_geom::PointNm::new(0, 0),
+        measured_nm: length,
+        required_nm: 0,
+        keepout: None,
+        rule: None,
+    };
+    let report = DrcReport {
+        rules: DrcRules::new(RULE),
+        violations: vec![link(1, 1_000_000), link(2, 3_000_000)],
+        skipped: Vec::new(),
+    };
+    let checked = check_report(&report, &names(), BOARD, Vec::new(), Map::new());
+    let keys = checked.keys();
+    assert_eq!(keys.len(), 2, "{checked:?}");
+    assert!(keys.iter().all(|k| is_own_key(k)), "{keys:?}");
+    assert_ne!(keys[0], keys[1]);
+}
+
 #[test]
 fn an_item_that_could_not_be_checked_is_a_warning() {
     let mut bad = track(1, (0.0, 0.0), (1.0, 0.0), 1, "TopCopper");
