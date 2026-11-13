@@ -75,17 +75,42 @@ fn a_profile_with_a_malformed_drc_section_is_refused() {
     }
 }
 
-/// The content hash recorded in projects stays the ERC hash: a DRC section
-/// has its own (#2307), so no existing provenance or drift result moves.
+/// A profile without a `drc` section keeps the hash it had before DRC rules
+/// entered the hash (#2307 step 2b): the ERC hash, so no recorded
+/// provenance or drift result moves.
 #[test]
-fn the_drc_section_does_not_enter_the_profile_content_hash() {
-    let a = RuleProfile::from_json_bytes(SAMPLE.as_bytes()).unwrap();
-    let mut b = a.clone();
-    b.drc.severity.insert("builtin::short".into(), "off".into());
-    b.drc.dsl = Some("rule x".into());
-    assert_eq!(a.content_sha256(), b.content_sha256());
+fn a_profile_without_drc_hashes_as_its_erc_section() {
+    let mut a = RuleProfile::from_json_bytes(SAMPLE.as_bytes()).unwrap();
+    a.drc = DrcRuleSet::default();
     assert_eq!(a.content_sha256(), a.erc.sha256_hex());
-    assert_ne!(a.drc.sha256_hex(), b.drc.sha256_hex());
+    assert_eq!(
+        crate::project::rule_set_sha256(&a.erc, &a.drc),
+        a.erc.sha256_hex()
+    );
+}
+
+/// Every part of a `drc` section enters the content hash (#2307 step 2b,
+/// decision 6824136804): severities, the rule text and foreign keys.
+#[test]
+fn the_drc_section_enters_the_profile_content_hash() {
+    let a = RuleProfile::from_json_bytes(SAMPLE.as_bytes()).unwrap();
+    assert_ne!(a.content_sha256(), a.erc.sha256_hex());
+    let edits: [fn(&mut DrcRuleSet); 3] = [
+        |d| {
+            d.severity.insert("builtin::short".into(), "off".into());
+        },
+        |d| d.dsl = Some("rule x".into()),
+        |d| d.unknown = serde_json::from_str(r#"{"clearance_nm": 1}"#).unwrap(),
+    ];
+    for edit in edits {
+        let mut b = a.clone();
+        edit(&mut b.drc);
+        assert_ne!(a.content_sha256(), b.content_sha256(), "{:?}", b.drc);
+    }
+    let mut only_drc = a.clone();
+    only_drc.erc = ErcRules::default();
+    assert_ne!(only_drc.content_sha256(), a.content_sha256());
+    assert_ne!(only_drc.content_sha256(), ErcRules::default().sha256_hex());
 }
 
 #[test]

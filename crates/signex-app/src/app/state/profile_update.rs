@@ -16,4 +16,6 @@ pub struct PendingProfileUpdate {
     pub source: &'static str,
     /// Empty when only the provenance record is out of date.
     pub changes: Vec<RuleChange>,
+    /// The same for the `drc` section (#2307 step 2b).
+    pub drc_changes: Vec<signex_drc::DrcRuleChange>,
 }
