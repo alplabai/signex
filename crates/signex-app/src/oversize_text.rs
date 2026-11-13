@@ -196,7 +196,7 @@ fn reach_in(
 
 /// The viewport inside `frame`: the screen origin, with the frame's margin
 /// cut off every side. The retained layer's clip reaches the same distance
-/// past each side (`canvas::draw::retained::clip_rect`); a frame that starts
+/// past each side (`canvas::pan_reuse::clip_rect`); a frame that starts
 /// at the origin is all viewport.
 fn viewport_of(frame: iced::Rectangle) -> iced::Rectangle {
     iced::Rectangle::new(

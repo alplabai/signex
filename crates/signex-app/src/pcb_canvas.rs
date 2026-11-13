@@ -2,6 +2,11 @@ use std::sync::Arc;
 
 mod camera;
 mod carry;
+mod content;
+#[cfg(test)]
+mod content_pixel_tests;
+#[cfg(test)]
+mod content_tests;
 mod cull;
 #[cfg(test)]
 mod edge_parity_tests;
@@ -13,31 +18,28 @@ mod highlight;
 pub mod layer_style;
 mod msg;
 mod select;
+mod tessellate;
 
 pub use camera::BoardCamera;
 pub use carry::{CarryKind, PcbCarry, carry_delta};
+pub use content::BoardContentLayer;
 pub use highlight::{Highlight, HighlightLayer};
 pub use msg::PcbCanvasMsg;
 pub use select::PcbSelectionState;
 
-use crate::polygon_path::polygon_path_and_fill;
-use crate::renderer_scene_canvas::color_from_rgba;
 use crate::scene_generation::next_scene_generation;
 use iced::event::Event;
 use iced::mouse;
 use iced::widget::canvas;
 use iced::{Color, Rectangle, Renderer, Theme};
-use signex_gfx::primitive::circle::Circle as GfxCircle;
-use signex_gfx::primitive::line::LineSegment;
-use signex_gfx::primitive::polygon::GpuPolygon;
-use signex_gfx::scene::{CPU_PCB_DRAW_ORDER, DirtyFlags, Scene, SceneBucket};
+use signex_gfx::scene::{DirtyFlags, Scene};
 use signex_renderer::pcb::{PcbRenderer, PcbSnapshot};
 use signex_renderer::schematic::ViewRenderer;
 use signex_renderer::theme::ResolvedTheme;
 
 use crate::app::{ContextMenuMsg, Message};
 use crate::canvas::{Camera, CanvasEvent};
-use cull::{CULL_MARGIN_PX, SceneBounds, WorldRect, visible};
+use cull::SceneBounds;
 
 #[derive(Debug, Default)]
 pub struct PcbCanvasState {
@@ -56,9 +58,9 @@ pub struct PcbCanvasState {
 
 pub struct PcbCanvas {
     pub bg_cache: canvas::Cache,
-    pub content_cache: canvas::Cache,
-    /// Offset x, offset y, scale and view angle the content cache was drawn at.
-    pub content_cache_camera: std::cell::Cell<(f32, f32, f32, f32)>,
+    /// The board tessellated for the CPU mount ([`BoardContentLayer`]),
+    /// retained across pans; dropped on every content change.
+    content: std::cell::RefCell<Option<content::RetainedBoard>>,
     /// Cached GPU scene for the `gpu_render` path. The tessellated geometry is
     /// camera-independent — pan/zoom is applied by the shader's ortho
     /// projection at draw time, not baked into the instance data — so the scene
@@ -97,9 +99,8 @@ pub struct PcbCanvas {
     /// Bounds as of the last canvas event — the view centre for menu zoom.
     viewport: std::cell::Cell<Rectangle>,
     pub grid_visible: bool,
-    /// Effective (live) PCB GPU-render flag. When true, `draw` skips the CPU
-    /// content tessellation (a `shader` stacked above draws it on the GPU) and
-    /// `view()` mounts the shader stack. Synced from the Preferences toggle —
+    /// Effective (live) PCB GPU-render flag. When true, `view()` mounts the
+    /// shader stack in place of [`BoardContentLayer`]. Synced from the Preferences toggle —
     /// updated immediately on draft change for live preview, committed/reverted
     /// on Save/Discard. Mirrors `UiState::pcb_gpu_render` (the saved value).
     pub gpu_render: bool,
@@ -144,8 +145,7 @@ impl PcbCanvas {
         let colors = crate::styles::board_canvas_colors();
         Self {
             bg_cache: canvas::Cache::default(),
-            content_cache: canvas::Cache::default(),
-            content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0, 0.0)),
+            content: std::cell::RefCell::new(None),
             scene_cache: std::cell::RefCell::new(None),
             scene_bounds: std::cell::RefCell::new(None),
             scene_generation: std::cell::Cell::new(next_scene_generation()),
@@ -221,6 +221,7 @@ impl PcbCanvas {
     pub fn set_renderer_snapshot(&mut self, renderer_snapshot: Option<PcbSnapshot>) {
         self.renderer_snapshot = renderer_snapshot;
         // The board changed — the cached GPU scene no longer matches.
+        *self.content.get_mut() = None;
         *self.scene_cache.get_mut() = None;
         *self.scene_bounds.get_mut() = None;
         *self.scene_generation.get_mut() = next_scene_generation();
@@ -253,7 +254,7 @@ impl PcbCanvas {
     }
 
     pub fn clear_content_cache(&mut self) {
-        self.content_cache.clear();
+        *self.content.get_mut() = None;
         // GPU scene shares this content-changed signal (theme + geometry).
         *self.scene_cache.get_mut() = None;
         *self.scene_bounds.get_mut() = None;
@@ -375,6 +376,7 @@ impl PcbCanvas {
     }
 }
 
+#[cfg(test)]
 fn world_to_screen(camera: &BoardCamera, _bounds: Rectangle, point: [f32; 2]) -> iced::Point {
     camera.world_to_screen(iced::Point::new(point[0], point[1]))
 }
@@ -475,176 +477,6 @@ fn renderer_snapshot_bounds(snapshot: &PcbSnapshot) -> Option<Rectangle> {
             iced::Size::new((max_x - min_x).max(0.1), (max_y - min_y).max(0.1)),
         )
     })
-}
-
-fn draw_lines(
-    frame: &mut canvas::Frame,
-    lines: &[LineSegment],
-    extents: &[WorldRect],
-    view: Option<WorldRect>,
-    camera: &BoardCamera,
-    bounds: Rectangle,
-) {
-    for line in visible(lines, extents, view) {
-        let p0 = world_to_screen(camera, bounds, line.p0);
-        let p1 = world_to_screen(camera, bounds, line.p1);
-        let width = crate::renderer_scene_canvas::min_stroke_px(line.width * camera.scale());
-        let color = color_from_rgba(line.color);
-
-        if line.is_dashed() {
-            crate::renderer_scene_canvas::draw_dashed_line(frame, p0, p1, width, color, (8.0, 5.0));
-        } else {
-            let path = canvas::Path::line(p0, p1);
-            frame.stroke(
-                &path,
-                canvas::Stroke::default()
-                    .with_width(width)
-                    .with_color(color),
-            );
-        }
-    }
-}
-
-fn draw_circles(
-    frame: &mut canvas::Frame,
-    circles: &[GfxCircle],
-    extents: &[WorldRect],
-    view: Option<WorldRect>,
-    camera: &BoardCamera,
-    bounds: Rectangle,
-) {
-    for circle in visible(circles, extents, view) {
-        let center = world_to_screen(camera, bounds, circle.center);
-        let radius =
-            (circle.radius * camera.scale()).max(crate::renderer_scene_canvas::MIN_RADIUS_PX);
-        let stroke_width =
-            crate::renderer_scene_canvas::min_stroke_px(circle.stroke_width * camera.scale());
-        let color = color_from_rgba(circle.color);
-        let path = canvas::Path::circle(center, radius);
-
-        if circle.is_filled() {
-            frame.fill(&path, color);
-        } else {
-            frame.stroke(
-                &path,
-                canvas::Stroke::default()
-                    .with_width(stroke_width)
-                    .with_color(color),
-            );
-        }
-    }
-}
-
-fn draw_polygons(
-    frame: &mut canvas::Frame,
-    polygons: &[GpuPolygon],
-    extents: &[WorldRect],
-    view: Option<WorldRect>,
-    camera: &BoardCamera,
-    bounds: Rectangle,
-) {
-    for polygon in visible(polygons, extents, view) {
-        if polygon.vertices.len() < 3 {
-            continue;
-        }
-
-        let (path, fill) = polygon_path_and_fill(
-            polygon,
-            |vertex| world_to_screen(camera, bounds, vertex),
-            color_from_rgba(polygon.fill_color),
-        );
-        frame.fill(&path, fill);
-
-        if let Some(stroke_color) = polygon.stroke_color {
-            frame.stroke(
-                &path,
-                canvas::Stroke::default()
-                    .with_width(crate::renderer_scene_canvas::min_stroke_px(
-                        polygon.stroke_width * camera.scale(),
-                    ))
-                    .with_color(color_from_rgba(stroke_color)),
-            );
-        }
-    }
-}
-
-fn draw_scene(
-    frame: &mut canvas::Frame,
-    scene: &Scene,
-    extents: &SceneBounds,
-    camera: &BoardCamera,
-    bounds: Rectangle,
-) {
-    // Only primitives touching the visible world rect are stroked.
-    let view = WorldRect::visible(camera, bounds.size(), CULL_MARGIN_PX);
-    // Walk the shared `CPU_PCB_DRAW_ORDER` so this CPU path and the GPU
-    // `scene_shader` cannot silently drift apart; the `scene::order` parity test
-    // diffs the two orders. Main geometry first, then the overlay pass.
-    for &bucket in CPU_PCB_DRAW_ORDER {
-        match bucket {
-            SceneBucket::Lines => {
-                draw_lines(frame, &scene.lines, &extents.lines, view, camera, bounds)
-            }
-            SceneBucket::Circles => draw_circles(
-                frame,
-                &scene.circles,
-                &extents.circles,
-                view,
-                camera,
-                bounds,
-            ),
-            SceneBucket::Polygons => draw_polygons(
-                frame,
-                &scene.polygons,
-                &extents.polygons,
-                view,
-                camera,
-                bounds,
-            ),
-            SceneBucket::TopPolygons => draw_polygons(
-                frame,
-                &scene.top_polygons,
-                &extents.top_polygons,
-                view,
-                camera,
-                bounds,
-            ),
-            SceneBucket::OverlayLines => draw_lines(
-                frame,
-                &scene.overlay_lines,
-                &extents.overlay_lines,
-                view,
-                camera,
-                bounds,
-            ),
-            SceneBucket::OverlayCircles => draw_circles(
-                frame,
-                &scene.overlay_circles,
-                &extents.overlay_circles,
-                view,
-                camera,
-                bounds,
-            ),
-            SceneBucket::OverlayPolygons => draw_polygons(
-                frame,
-                &scene.overlay_polygons,
-                &extents.overlay_polygons,
-                view,
-                camera,
-                bounds,
-            ),
-            // The PCB CPU path emits no arc, drawings, text, or ERC buckets.
-            // Handled for exhaustiveness so adding a Scene bucket forces a
-            // decision here.
-            SceneBucket::Arcs
-            | SceneBucket::Drawings
-            | SceneBucket::DrawingsFront
-            | SceneBucket::Texts
-            | SceneBucket::ErcMarkerLines
-            | SceneBucket::ErcMarkerCircles
-            | SceneBucket::ErcMarkerPolygons => {}
-        }
-    }
 }
 
 impl canvas::Program<Message> for PcbCanvas {
@@ -789,8 +621,7 @@ impl canvas::Program<Message> for PcbCanvas {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        // Single read of the sole camera home; both the background/grid cache
-        // and the content cache below project from this one value.
+        // Single read of the sole camera home for the background and grid.
         let camera = self.camera.borrow();
         let bg = self.bg_cache.draw(renderer, bounds.size(), |frame| {
             frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.theme_bg);
@@ -804,40 +635,10 @@ impl canvas::Program<Message> for PcbCanvas {
             }
         });
 
-        // GPU mode: a `shader` stacked above this canvas draws the board
-        // content on the GPU (see `Self::gpu_render` / `Self::gpu_scene`). The
-        // CPU canvas then contributes only the background + grid (`bg`), which
-        // sits *behind* the shader — iced's shader primitive composites over
-        // whatever is already there and never clears its own region.
-        if self.gpu_render {
-            return vec![bg];
-        }
-
-        let live = (
-            camera.offset().x,
-            camera.offset().y,
-            camera.scale(),
-            camera.rotation().degrees(),
-        );
-        let cached = self.content_cache_camera.get();
-        let camera_matches_cache = (cached.0 - live.0).abs() < 0.01
-            && (cached.1 - live.1).abs() < 0.01
-            && (cached.2 - live.2).abs() < 0.0001
-            && cached.3 == live.3;
-        if !camera_matches_cache {
-            self.content_cache.clear();
-        }
-        let content = self.content_cache.draw(renderer, bounds.size(), |frame| {
-            self.content_cache_camera.set(live);
-            // World-space scene shared with the GPU path: a camera-only
-            // redraw re-projects the cached scene instead of re-tessellating.
-            if let Some(scene) = self.gpu_scene() {
-                let extents = self.cull_bounds(&scene);
-                draw_scene(frame, &scene, &extents, &camera, bounds);
-            }
-        });
-
-        vec![bg, content]
+        // The board is a layer of its own stacked above this canvas: the
+        // `shader` on the GPU mount, [`BoardContentLayer`] on the CPU mount
+        // (#2321). This canvas draws the background and grid behind it.
+        vec![bg]
     }
 
     fn mouse_interaction(

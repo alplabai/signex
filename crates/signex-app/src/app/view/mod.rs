@@ -683,8 +683,14 @@ impl Signex {
                 let bar = self.pcb_active_bar(is_main);
                 pcb_strip::with_strip(stack![base, content_shader, highlight, bar].boxed(), strip)
             } else {
+                // The CPU mount: the board as its own layer where the GPU
+                // mount has its shader, retained across pans (#2321).
+                let content = crate::pcb_canvas::BoardContentLayer::new(
+                    pcb_canvas,
+                    self.ui_state.device_px_per_logical_px(window_id),
+                );
                 let bar = self.pcb_active_bar(is_main);
-                pcb_strip::with_strip(stack![base, highlight, bar].boxed(), strip)
+                pcb_strip::with_strip(stack![base, content, highlight, bar].boxed(), strip)
             }
         } else {
             // "Nothing loaded" gets the actionable start screen; "project

@@ -285,6 +285,45 @@ plain canvas keeps the old `draw_background`. Over the larger clip a grid dot th
 canvas edge shows its inside part; the plain canvas drops it. `canvas::background_reuse_tests` pins a panned
 frame to a fresh one pixel for pixel and to the plain canvas away from the edge.
 
+## pcb-cpu-content — The CPU board layer (#2321)
+
+The CPU PCB mount draws the board in a layer of its own,
+`pcb_canvas::BoardContentLayer`, stacked where the GPU mount has its shader:
+the `PcbCanvas` canvas below it draws only the background and grid, the
+highlight layer sits above it. Two things make a frame cheap without changing
+what it shows.
+
+**Pans reuse the build.** The geometry is built over the clip rectangle of
+`canvas::pan_reuse` (the viewport plus one viewport on each side, in whole
+device pixels) and drawn under a translation while the camera pans, with the
+whole-device-pixel rule of "sch-pan-reuse". What a build holds:
+
+- a build after a zoom, a turn, a new scene, a new display scale or viewport,
+  or a pan off the pixel grid is culled to the viewport, as trunk's was, so a
+  zoom costs no more than before;
+- a build asked for by a pan that left the held area is culled to the whole
+  clip rectangle, so the pans after it are drawn from it;
+- a build that culled nothing holds the whole clip rectangle.
+
+A frame reuses the build only while the live viewport, moved back by the
+pan, lies inside what the build holds. The key is the scale, turn, display
+scale, viewport and scene generation (`content::BuiltAt`);
+`clear_content_cache`, a new snapshot and a turn drop the build.
+
+**The build is split across threads.** The visible primitives are listed in
+`CPU_PCB_DRAW_ORDER`, cut into up to eight contiguous runs of about equal
+work and tessellated one frame per run on scoped threads
+(`pcb_canvas::tessellate`); a small view is one run on the calling thread.
+The frames are drawn in run order, so the GPU gets the same triangles in the
+same order, in more meshes. Threads need the renderer's frame to be `Send`;
+the bound says so, and the in-order fallback is the same runs on one thread.
+
+Checks: `pcb_canvas::content_tests` (one run against eight, triangle for
+triangle; moved tracks against a fresh build; what a build holds; the reuse
+rule) and `pcb_canvas::content_pixel_tests` (the layer against trunk's single
+frame at the live camera, within 24/255 per channel and at most 4 edge
+pixels, after reused pans, turned, at fractional display scales).
+
 ## What this document is *not*
 
 - **Not** a reverse-engineering of any third-party EDA tool's

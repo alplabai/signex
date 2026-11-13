@@ -162,7 +162,7 @@ impl super::PcbCanvas {
             .set_rotation(ViewRotation::from_degrees(degrees), viewport);
         if turned {
             self.bg_cache.clear();
-            self.content_cache.clear();
+            *self.content.get_mut() = None;
         }
         turned
     }
