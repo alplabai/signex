@@ -69,6 +69,8 @@ mod primitive_copy;
 #[cfg(test)]
 mod primitive_copy_tests;
 mod primitive_picker;
+#[cfg(test)]
+mod range_filter_tests;
 mod read_only;
 mod recovery;
 #[cfg(test)]
@@ -107,9 +109,9 @@ impl Signex {
     /// Library arms that can queue a git commit (a primitive Save) or log a
     /// diagnostic run `finish_update` so the queue drains and the Messages
     /// panel republishes in the same frame (#111). Per-event traffic
-    /// (editor cursor / drag ticks, search keystrokes, non-Save primitive
-    /// edits) cannot queue a commit, so it only does the cheap diagnostics
-    /// republish instead of the full `finish_update`.
+    /// (editor cursor / drag ticks, search and range-filter keystrokes,
+    /// non-Save primitive edits) cannot queue a commit, so it only does the
+    /// cheap diagnostics republish instead of the full `finish_update`.
     pub(crate) fn dispatch_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
         if let Some(refusal) = self.library_write_refusal(&msg) {
             crate::diagnostics::log_warning(&refusal);
@@ -126,6 +128,7 @@ impl Signex {
             &msg,
             LibraryMessage::EditorEvent { .. }
                 | LibraryMessage::BrowserSearchChanged { .. }
+                | LibraryMessage::BrowserRangeFilter { .. }
                 | LibraryMessage::PrimitiveEditorEvent {
                     msg: PrimitiveEdit::Symbol(_) | PrimitiveEdit::Footprint(_),
                     ..
