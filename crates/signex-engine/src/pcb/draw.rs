@@ -10,6 +10,7 @@ use signex_types::pcb::{
     PcbSetup, Point, Segment, Via, ViaType, Zone,
 };
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::zone_keepout::{KEEPOUT_FILL, keepout_copper};
 use uuid::Uuid;
 
 use super::command::BoardCommand;
@@ -149,6 +150,33 @@ pub fn new_copper_area(
         holes: Vec::new(),
         priority: 0,
         fill_type: "solid".into(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        unknown: Default::default(),
+    })
+}
+
+/// A keepout over `outline` drawn on `layer` (#2373): a zone with the
+/// keepout fill and no net, which keeps all copper off the copper layer
+/// `layer` stands for (`zone_keepout::keepout_copper`). `None` for a layer
+/// that keeps no copper clear, or an outline with no area.
+pub fn new_keepout(id: Uuid, outline: Vec<Point>, layer: PcbLayer) -> Option<Zone> {
+    keepout_copper(layer)?;
+    if !has_area(&outline) {
+        return None;
+    }
+    Some(Zone {
+        uuid: id,
+        net: 0,
+        net_name: String::new(),
+        layer: pcb_layer_token(layer),
+        outline,
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: KEEPOUT_FILL.into(),
         thermal_relief: false,
         thermal_gap: 0.0,
         thermal_width: 0.0,

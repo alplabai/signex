@@ -183,7 +183,9 @@ impl Signex {
                 self.run_placement("Via", Ok(vec![command]));
             }
             BoardPlaceTool::Track => self.route_clicked(at),
-            BoardPlaceTool::Fill | BoardPlaceTool::SolidRegion => self.area_clicked(tool, at),
+            BoardPlaceTool::Fill | BoardPlaceTool::SolidRegion | BoardPlaceTool::Keepout => {
+                self.area_clicked(tool, at);
+            }
             _ => return false,
         }
         if let Some(session) = self.own_board_tool_mut() {
@@ -203,7 +205,7 @@ impl Signex {
         match session.tool {
             BoardPlaceTool::Via => preview.vias.push(draw::new_via(board, Uuid::nil(), cursor)),
             BoardPlaceTool::Track => self.route_preview(session, board, cursor, &mut preview),
-            BoardPlaceTool::Fill | BoardPlaceTool::SolidRegion => {
+            BoardPlaceTool::Fill | BoardPlaceTool::SolidRegion | BoardPlaceTool::Keepout => {
                 self.area_preview(session, board, cursor, &mut preview);
             }
             _ => return None,

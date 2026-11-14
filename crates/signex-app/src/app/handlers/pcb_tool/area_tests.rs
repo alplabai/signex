@@ -69,3 +69,40 @@ fn a_solid_region_closes_on_its_first_corner_or_a_right_click() {
     undo(&mut app);
     assert_eq!(live(&app, &path), before);
 }
+
+fn make_active(app: &mut crate::app::Signex, layer: signex_types::pcb_layer::PcbLayer) {
+    use crate::app::{Message, PcbMsg, PcbViewMsg};
+    let _ = app.update(Message::Pcb(PcbMsg::View(PcbViewMsg::ActiveLayerPicked(
+        layer,
+    ))));
+}
+
+#[test]
+fn a_keepout_is_drawn_on_a_keep_out_layer_and_read_as_one() {
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let before = live(&app, &path);
+    make_active(&mut app, PcbLayer::Technical(TechnicalLayer::SilkscreenTop));
+    run(&mut app, "place_board_keepout");
+    for (x, y) in [(1.0, -1.0), (4.0, -1.0), (4.0, 1.0)] {
+        click(&mut app, x, y);
+    }
+    right_click(&mut app);
+    assert_eq!(live(&app, &path), before, "not on an overlay layer");
+
+    make_active(&mut app, PcbLayer::Technical(TechnicalLayer::KeepoutTop));
+    run(&mut app, "place_board_keepout");
+    for (x, y) in [(1.0, -1.0), (4.0, -1.0), (4.0, 1.0)] {
+        click(&mut app, x, y);
+    }
+    right_click(&mut app);
+    let zones = &board_of(&app, &path).zones;
+    assert_eq!(zones.len(), 1);
+    assert_eq!((zones[0].layer.as_str(), zones[0].net), ("TopKeepout", 0));
+    let keepout = zones[0].as_keepout().expect("a keepout the check reads");
+    assert_eq!(keepout.layers, [PcbLayer::Copper(CopperLayer::Top)]);
+    undo(&mut app);
+    assert_eq!(live(&app, &path), before);
+}

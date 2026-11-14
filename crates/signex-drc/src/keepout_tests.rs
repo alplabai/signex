@@ -286,3 +286,27 @@ fn a_body_that_does_not_convert_inside_a_component_keepout_is_skipped_once() {
     );
     assert!(run(&routing_only, &DrcRules::new(200_000)).is_clean());
 }
+
+/// #2373: a keepout drawn on the board (a zone with the keepout fill) on
+/// the top keep-out layer keeps copper off the top layer, as a sketch
+/// keepout forbidding all copper does.
+#[test]
+fn a_keepout_drawn_on_the_board_is_checked_on_its_sides_copper() {
+    use signex_types::pcb::Zone;
+    use signex_types::zone_keepout::KEEPOUT_FILL;
+
+    let crossing = track(1, (15.0, 25.0), (35.0, 25.0), 0, "TopCopper");
+    let below = track(2, (15.0, 25.0), (35.0, 25.0), 0, "BottomCopper");
+    let mut b = board(vec![], vec![crossing, below], vec![]);
+    let corners = [(20.0, 20.0), (30.0, 20.0), (30.0, 30.0), (20.0, 30.0)];
+    let mut zone: Zone = serde_json::from_value(serde_json::json!({
+        "uuid": id(KEEPOUT), "layer": "TopKeepout", "fill_type": KEEPOUT_FILL
+    }))
+    .unwrap();
+    zone.outline = corners.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    b.zones.push(zone);
+    let hits = keepout_hits(&b);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0].items, vec![ItemRef::Track(id(2001))]);
+    assert_eq!(hits[0].keepout, Some(id(KEEPOUT)));
+}

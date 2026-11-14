@@ -68,3 +68,17 @@ non-copper layer active the tool says so and draws nothing.
   or a right-click once there are three, closes it; Esc drops it.
 - A shape whose corners are on one line has no area (checked in integer nm)
   and is not added; the Messages panel says so.
+
+## Keepout
+
+`place_board_keepout` (no default key). Drawn like a Solid Region, on the
+active layer when it is a copper layer or a keep-out layer (Top or Bottom
+Keep-Out Layer); on any other layer the tool says so and draws nothing.
+
+It is stored as a zone with `fill_type = "keepout"` and no net, on the layer
+it was drawn on, and drawn as a rule area. It keeps all copper (tracks, vias,
+pads, pours) off one copper layer: the layer itself for a copper layer, the
+side's outer copper for a keep-out layer (`zone_keepout::keepout_copper`).
+The design rule check reads it through `Zone::as_keepout` exactly as it reads
+a board-sketch keepout forbidding all copper, so a violation names the
+keepout zone's id.

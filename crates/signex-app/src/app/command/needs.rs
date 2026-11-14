@@ -283,9 +283,11 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
         "run_drc" | "reannotate_board" => Needs::Pcb,
         // #2373: the board placement tools.
-        "place_board_via" | "place_board_track" | "place_board_fill" | "place_board_region" => {
-            Needs::Pcb
-        }
+        "place_board_via"
+        | "place_board_track"
+        | "place_board_fill"
+        | "place_board_region"
+        | "place_board_keepout" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
         "new_pcb_document" => Needs::OpenProject,

@@ -386,6 +386,8 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_FILL = "cmd-menu-place-board-fill";
         CMD_PLACE_BOARD_REGION = "cmd-place-board-region";
         CMD_MENU_PLACE_BOARD_REGION = "cmd-menu-place-board-region";
+        CMD_PLACE_BOARD_KEEPOUT = "cmd-place-board-keepout";
+        CMD_MENU_PLACE_BOARD_KEEPOUT = "cmd-menu-place-board-keepout";
         CMD_FOOTPRINT_MODE_PADS = "cmd-footprint-mode-pads";
         CMD_FOOTPRINT_MODE_SKETCH = "cmd-footprint-mode-sketch";
         CMD_FOOTPRINT_MODE_VIEW_3D = "cmd-footprint-mode-view-3d";

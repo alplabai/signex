@@ -142,3 +142,20 @@ fn a_copper_area_is_solid_copper_on_the_net_under_its_first_point() {
     let two = vec![Point::new(0.0, 0.0), Point::new(1.0, 1.0)];
     assert!(new_copper_area(engine.board(), id, two, CopperLayer::Top).is_none());
 }
+
+#[test]
+fn a_keepout_is_drawn_on_copper_or_a_keep_out_layer_only() {
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
+
+    let outline = rectangle(Point::new(1.0, 1.0), Point::new(4.0, 3.0));
+    let id = Uuid::from_u128(0x80);
+    let top = PcbLayer::Technical(TechnicalLayer::KeepoutTop);
+    let zone = new_keepout(id, outline.clone(), top).unwrap();
+    assert_eq!((zone.layer.as_str(), zone.net), ("TopKeepout", 0));
+    let keepout = zone.as_keepout().expect("DRC reads it as a keepout");
+    assert_eq!(keepout.layers, [PcbLayer::Copper(CopperLayer::Top)]);
+    let inner = PcbLayer::Copper(CopperLayer::Bottom);
+    assert!(new_keepout(id, outline.clone(), inner).is_some());
+    let overlay = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+    assert!(new_keepout(id, outline, overlay).is_none());
+}
