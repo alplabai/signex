@@ -143,6 +143,9 @@ impl Signex {
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
         self.sync_undo_depth();
+        // A resize, a dock collapsed or expanded, or a panel docked into an
+        // empty side all change the room beside the canvas (#2347).
+        self.fit_side_docks_to_window();
         // A Save completed behind the quit prompt must not leave it listing
         // files that are no longer unsaved (#1833).
         tasks.push(self.prune_settled_quit_confirm());

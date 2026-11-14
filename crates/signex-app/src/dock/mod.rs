@@ -9,6 +9,7 @@ mod graphite;
 mod layout_sync;
 mod measure;
 mod placement;
+mod side_width;
 mod state;
 mod tab_fit;
 mod types;
@@ -20,6 +21,7 @@ pub use layout_sync::{
     DockLayoutStore, DockLayoutSync, DockLayoutWrite, RegionLayout,
 };
 pub use placement::{DropGeometry, RegionExtent, drop_target};
+pub use side_width::{DOCK_HANDLE, MIN_CANVAS_WIDTH, MIN_SIDE_DOCK_WIDTH};
 pub use types::{
     DockArea, DockMessage, DockTabAction, DockTabMenu, EditorContext, FloatingPanel, PanelPosition,
     PanelSite,

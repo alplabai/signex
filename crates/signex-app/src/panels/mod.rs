@@ -135,7 +135,8 @@ pub use projects_graphite::{ProjectsMsg, ProjectsView};
 pub(crate) use properties::pre_placement_readout;
 pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind, PrePlacementStyle};
 pub(super) use properties::{
-    PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION, PROPERTY_ROW_PAD_X, view_properties,
+    PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN, PROPERTY_LABEL_WIDTH, PROPERTY_ROW_GAP,
+    PROPERTY_ROW_PAD_X, view_properties,
 };
 pub use status::{ErcDiagnosticEntry, ErcSeverityLite, ErcWaiverEntry};
 pub(super) use status::{view_erc, view_messages};
@@ -145,7 +146,7 @@ pub use symbol_context::{
     SymbolPinSummary,
 };
 pub(super) use widgets::{
-    LabelInk, collapsible_section_header, form_edit_row_f64, is_section_collapsed, part_tree_row,
+    collapsible_section_header, form_edit_row_f64, is_section_collapsed, part_tree_row,
     prop_kv_row, property_label, section_title, separator, shape_fill_row, shape_icon_handle,
     view_stub,
 };

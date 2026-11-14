@@ -10,7 +10,7 @@ pub(crate) mod dialogs;
 pub(crate) mod overlay_id;
 
 mod board_sketch;
-mod canvas_region;
+pub(in crate::app) mod canvas_region;
 mod chrome;
 mod context_menu;
 mod modals;
