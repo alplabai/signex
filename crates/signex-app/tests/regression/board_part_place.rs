@@ -249,12 +249,13 @@ fn a_part_the_board_cannot_hold_is_refused_with_its_reason() {
         .path
         .clone();
     let since = diagnostics::newest_entry_id().unwrap_or(0);
+    let arm_epoch = app.interaction_state.placement_epoch;
     settle(
         &mut app,
         Message::Library(LibraryMessage::BoardPartResolved {
             board,
             window: None,
-            arm_epoch: app.interaction_state.placement_epoch,
+            arm_epoch,
             result: Err(BoardPartError::Refused {
                 part: "STOCK-X".into(),
                 reason: "the part binds no footprint".into(),

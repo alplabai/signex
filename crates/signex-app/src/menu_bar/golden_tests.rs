@@ -57,6 +57,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
                 deletable: true,
                 copyable: true,
                 pasteable: true,
+                part_in_hand: false,
             },
             ..base
         }),

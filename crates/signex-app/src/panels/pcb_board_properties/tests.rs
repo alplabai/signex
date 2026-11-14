@@ -195,18 +195,18 @@ fn the_search_keeps_matching_rows() {
     if let Some(board) = ctx.pcb_board.as_mut() {
         board.view.search = "pad".into();
     }
-    let texts = texts(&ctx);
+    let shown = texts(&ctx);
     for wanted in ["Pad Centers", "Pads", "Pad/Via Holes"] {
-        assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
+        assert!(shown.iter().any(|t| t == wanted), "{wanted} in {shown:?}");
     }
-    assert!(!texts.iter().any(|t| t == "Horizontal"), "{texts:?}");
+    assert!(!shown.iter().any(|t| t == "Horizontal"), "{shown:?}");
     if let Some(board) = ctx.pcb_board.as_mut() {
         board.view.search = "zzzz".into();
     }
-    let texts = texts(&ctx);
+    let shown = texts(&ctx);
     assert!(
-        texts.iter().any(|t| t == "Nothing matches the search."),
-        "{texts:?}"
+        shown.iter().any(|t| t == "Nothing matches the search."),
+        "{shown:?}"
     );
 }
 

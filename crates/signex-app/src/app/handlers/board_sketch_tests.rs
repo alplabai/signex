@@ -87,7 +87,8 @@ fn the_canvas_cursor_follows_the_pointer() {
             &app.document_state.panel_ctx.tokens,
             &app.ui_state.i18n,
         )
-        .map(Message::Library);
+        .map(Message::Library)
+        .boxed();
         layout_probe::messages_for_moves(view, WINDOW, &moves)
     };
     let mut seen: Vec<(f64, f64)> = Vec::new();
