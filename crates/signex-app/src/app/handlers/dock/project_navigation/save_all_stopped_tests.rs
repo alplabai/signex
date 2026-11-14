@@ -8,8 +8,9 @@ use super::save_all::STOP_WRITE_OF;
 use super::save_all_tests::{
     app_with_two_dirty_documents, feed, feed_then_settle, quit_settle, write_that_panics,
 };
-use crate::app::contracts::{SaveAllNext, SaveAllWrite};
-use crate::app::{Message, Signex, TabInfo, TabKind};
+use crate::app::contracts::{SaveAllNext, SaveAllPlan, SaveAllWrite};
+use crate::app::handlers::menu::export::tests::app_workspace;
+use crate::app::{Message, ProjectMsg, Signex, TabInfo, TabKind};
 use crate::library::state::EditorAddress;
 use crate::persist::run_task::outputs;
 
@@ -186,6 +187,10 @@ fn a_stopped_row_write_leaves_the_batch_rows_still_writing_alone() {
             .contains_key(&batch),
         "the settle waits for the running row"
     );
+    assert!(
+        app.document_state.stopped_save_all_batches.contains(&batch),
+        "a parked batch is kept until its settle finishes"
+    );
     let parked = &app.document_state.parked_save_all_settles[&batch];
     assert!(
         parked
@@ -196,4 +201,50 @@ fn a_stopped_row_write_leaves_the_batch_rows_still_writing_alone() {
         "{:?}",
         parked.failed
     );
+}
+
+/// A Ctrl+S of the `.snxprj` asked while the Save All's write of it runs is
+/// queued behind that write; when the write stops, the queued save still
+/// runs and writes what the project holds.
+#[test]
+fn a_project_save_queued_behind_a_stopped_save_all_write_still_runs() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut app = app_workspace(dir.path().to_str().expect("utf8"), &[]);
+    let (id, prj) = {
+        let project = &app.document_state.projects[0];
+        (project.id, project.path.clone())
+    };
+    app.document_state.mark_document_dirty(&prj);
+
+    STOP_WRITE_OF.with(|stop| *stop.borrow_mut() = Some(prj.clone()));
+    let save_all = app.begin_save_all_planned(SaveAllPlan {
+        context: "Save All".into(),
+        paths: vec![prj.clone()],
+        rows: Vec::new(),
+        next: SaveAllNext::Nothing,
+        probes: Default::default(),
+        undecided: Vec::new(),
+    });
+    assert!(
+        STOP_WRITE_OF.with(|stop| stop.borrow().is_none()),
+        "the stopped write was started"
+    );
+    app.document_state.projects[0].data.description = Some("typed meanwhile".into());
+    let queued = app.begin_project_save(id).expect("queued");
+    assert_eq!(queued.units(), 0, "queued behind the running write");
+
+    let after = feed_then_settle(&mut app, outputs(save_all));
+
+    let messages = outputs(after);
+    let writes = messages
+        .iter()
+        .filter(|m| matches!(m, Message::Project(ProjectMsg::FileSaved(_))))
+        .count();
+    assert_eq!(writes, 1, "the queued save runs once");
+    feed(&mut app, messages);
+    assert!(!app.document_state.is_document_dirty(&prj));
+    assert!(!app.document_state.document_saves.is_saving(&prj));
+    let on_disk = signex_types::project::parse_project(&prj).expect("project on disk");
+    assert_eq!(on_disk.description.as_deref(), Some("typed meanwhile"));
 }

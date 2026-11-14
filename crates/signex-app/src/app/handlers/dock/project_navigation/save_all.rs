@@ -308,6 +308,10 @@ impl Signex {
                 .insert(settle.batch, settle);
             return Task::none();
         }
+        // No row of the batch is in flight, so no report of it can follow.
+        self.document_state
+            .stopped_save_all_batches
+            .remove(&settle.batch);
         let SaveAllSettle {
             next,
             items,
@@ -434,7 +438,8 @@ impl Signex {
                 } => {
                     let saves = &mut self.document_state.document_saves;
                     saves.finish(&path);
-                    saves.record_failure(path, WRITE_STOPPED_REASON.to_string());
+                    saves.record_failure(path.clone(), WRITE_STOPPED_REASON.to_string());
+                    tasks.push(self.drain_released_write(&path));
                 }
                 SaveAllWrite::Row(address) => {
                     self.stop_row_write(&address, settle.batch);
@@ -449,6 +454,19 @@ impl Signex {
             }
         }
         Task::batch(tasks)
+    }
+
+    /// The stopped write of `path` is released: run what its completion would
+    /// have, the project save asked for meanwhile, or the warning for the
+    /// spellings it superseded.
+    fn drain_released_write(&mut self, path: &std::path::Path) -> Task<Message> {
+        if let Some(DocumentKey::Project(project_id)) =
+            self.document_state.document_key_for_path(path)
+        {
+            return self.start_project_follow_up(project_id, path);
+        }
+        self.warn_unwritten_spellings(path);
+        Task::none()
     }
 
     /// The batch write of the row at `address` stopped without a result:
@@ -570,6 +588,7 @@ pub(super) fn writes_then_settle(
 ) -> Task<Message> {
     use iced::futures::{StreamExt as _, stream};
     let settled = |settle: SaveAllSettle| Message::File(FileMsg::SaveAllSettled(Box::new(settle)));
+    // Assumes no panic between a write's spawn_blocking start and its join.
     let guarded: Vec<_> = writes
         .into_iter()
         .filter_map(|(write, task)| {
