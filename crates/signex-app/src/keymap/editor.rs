@@ -98,9 +98,11 @@ impl KeymapEditorModel {
                             binding: binding_index,
                             trigger: trigger_index,
                         };
-                        let trigger_text = self
-                            .trigger_drafts
-                            .get(&slot)
+                        let draft = self.trigger_drafts.get(&slot);
+                        let trigger_text = draft
+                            .cloned()
+                            .unwrap_or_else(|| trigger.display_text_in(self.platform, i18n));
+                        let trigger_english = draft
                             .cloned()
                             .unwrap_or_else(|| trigger.display_text_for(self.platform));
                         let trigger_valid = !self.invalid_trigger_drafts.contains(&slot);
@@ -126,6 +128,7 @@ impl KeymapEditorModel {
                                 .unwrap_or_else(|| "No action".to_string()),
                             context: binding.context,
                             trigger: trigger_text,
+                            trigger_english,
                             trigger_config,
                             trigger_valid,
                             keyboard_editable: matches!(trigger, ShortcutTrigger::KeySequence(_)),
@@ -254,6 +257,8 @@ impl KeymapEditorModel {
             ));
         }
         self.apply_active_trigger(slot, trigger)?;
+        // Applied: the row renders the trigger itself, in the language in force.
+        self.trigger_drafts.remove(&slot);
         self.invalid_trigger_drafts.remove(&slot);
         Ok(())
     }
@@ -331,6 +336,9 @@ pub struct KeymapEditorRow {
     /// The trigger as shown on this OS (Apple symbols on macOS), or the
     /// draft the user typed.
     pub trigger: String,
+    /// `trigger` with the key names in en-US, so search finds a key by its
+    /// English name under any language.
+    pub trigger_english: String,
     /// The trigger in profile-file spelling, the form that parses back to
     /// the same strokes; `trigger` does not on macOS.
     pub trigger_config: String,
@@ -358,6 +366,7 @@ impl KeymapEditorRow {
         let has_key = |text: &str| text.to_lowercase().contains(&key_needle);
         i18n.fold_for_search(&self.label).contains(&needle)
             || has_key(&self.trigger)
+            || has_key(&self.trigger_english)
             || self
                 .command
                 .as_ref()

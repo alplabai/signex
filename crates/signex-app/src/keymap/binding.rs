@@ -122,29 +122,9 @@ impl Modifiers {
 
     /// The held modifiers as `platform` writes them, without a key: Apple
     /// symbols in Apple order on macOS (`⇧⌘`), `Ctrl+Shift` elsewhere.
+    /// In en-US; the UI uses [`Self::display_in`].
     pub fn display_for(self, platform: Platform) -> String {
-        let m = self.resolved_for(platform);
-        if platform == Platform::MacOs {
-            return [
-                (m.ctrl, '\u{2303}'),
-                (m.alt, '\u{2325}'),
-                (m.shift, '\u{21e7}'),
-                (m.command, '\u{2318}'),
-            ]
-            .into_iter()
-            .filter_map(|(on, symbol)| on.then_some(symbol))
-            .collect();
-        }
-        [
-            (m.ctrl, "Ctrl"),
-            (m.command, platform.logo_key_name()),
-            (m.alt, "Alt"),
-            (m.shift, "Shift"),
-        ]
-        .into_iter()
-        .filter_map(|(on, name)| on.then_some(name))
-        .collect::<Vec<_>>()
-        .join("+")
+        self.display_in(platform, &signex_i18n::I18n::en_us())
     }
 
     /// The form the Preferences recorder stores: on macOS a Cmd press is
@@ -292,14 +272,9 @@ impl KeyStroke {
 
     /// The label shown in the UI on `platform`: Apple symbols in Apple
     /// order without `+` on macOS (`⇧⌘S`), text elsewhere (`Ctrl+Shift+S`).
+    /// In en-US; the UI uses [`Self::display_in`].
     pub fn display_for(&self, platform: Platform) -> String {
-        let stroke = self.resolved_for(platform);
-        if platform != Platform::MacOs {
-            return stroke.labelled(platform.logo_key_name());
-        }
-        let mut text = stroke.modifiers.display_for(platform);
-        text.push_str(&stroke.key.to_string());
-        text
+        self.display_in(platform, &signex_i18n::I18n::en_us())
     }
 
     fn labelled(&self, command_name: &str) -> String {
@@ -400,14 +375,7 @@ impl ShortcutTrigger {
 
     /// [`Self::display_text`] for an explicit platform.
     pub fn display_text_for(&self, platform: Platform) -> String {
-        match self {
-            Self::KeySequence(strokes) => strokes
-                .iter()
-                .map(|stroke| stroke.display_for(platform))
-                .collect::<Vec<_>>()
-                .join(" "),
-            Self::PointerGesture(gesture) => gesture.clone(),
-        }
+        self.display_text_in(platform, &signex_i18n::I18n::en_us())
     }
 }
 

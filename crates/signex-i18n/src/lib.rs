@@ -1136,6 +1136,7 @@ define_ids! {
 include!("command_ids.rs");
 include!("menu_ids.rs");
 include!("shortcut_ids.rs");
+include!("key_ids.rs");
 
 /// Render a message: `t!(i18n, ids::MENU_FILE)` or, with arguments,
 /// `t!(i18n, ID, "count" => 3_i64, "name" => "R1")`.

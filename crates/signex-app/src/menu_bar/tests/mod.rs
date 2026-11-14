@@ -14,6 +14,7 @@ mod annotation_tile_rows;
 mod edit_rows;
 mod file_rows;
 mod help_tools_rows;
+mod key_names;
 mod language_switch;
 mod library_window_rows;
 mod place_design_rows;
