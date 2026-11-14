@@ -114,6 +114,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::PreviousRequested)
         }
         "next_grid" => Message::Ui(UiMsg::GridCycle),
+        "fast_grid_1" => Message::Ui(UiMsg::FastGridPicked(0)),
+        "fast_grid_2" => Message::Ui(UiMsg::FastGridPicked(1)),
+        "cycle_fast_grid" => Message::Ui(UiMsg::FastGridCycled),
         "cycle_snap_grid_forward" | "open_grid_picker" => Message::Ui(UiMsg::GridPickerOpen),
         "cycle_unit" => Message::Ui(UiMsg::UnitCycled),
         "cycle_wire_bus_graphic_mode" => Message::Tool(ToolMessage::CycleDrawMode),
@@ -543,9 +546,8 @@ mod tests {
     #[rustfmt::skip]
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
         "autoplace_fields", "center_on_cursor",
-        "copy_attributes_or_add_vertex", "cycle_fast_grid",
+        "copy_attributes_or_add_vertex",
         "cycle_wiring_mode",
-        "fast_grid_1", "fast_grid_2",
         "import_graphics",
         "place_design_block",
         "refresh_view",
@@ -685,6 +687,19 @@ mod tests {
         assert!(matches!(
             resolve("center_view_at_cursor"),
             Message::CanvasEvent(CanvasEvent::CenterAtCursor)
+        ));
+        // #1672: the fast grids.
+        assert!(matches!(
+            resolve("fast_grid_1"),
+            Message::Ui(UiMsg::FastGridPicked(0))
+        ));
+        assert!(matches!(
+            resolve("fast_grid_2"),
+            Message::Ui(UiMsg::FastGridPicked(1))
+        ));
+        assert!(matches!(
+            resolve("cycle_fast_grid"),
+            Message::Ui(UiMsg::FastGridCycled)
         ));
     }
 

@@ -8,6 +8,7 @@ pub(crate) mod language;
 mod profiles;
 #[cfg(test)]
 mod profiles_tests;
+mod save_guard;
 #[cfg(test)]
 mod theme_repaint_tests;
 
@@ -127,6 +128,7 @@ impl Signex {
         // committed fields there was nothing to seed them from, so a
         // Discard left them showing (and rendering) the abandoned value.
         self.ui_state.preferences_draft_symbol_grid_size_mm = self.ui_state.symbol_grid_size_mm;
+        self.ui_state.seed_fast_grid_drafts();
         self.ui_state.preferences_draft_symbol_grid_style = self.ui_state.symbol_grid_style;
         self.ui_state.preferences_draft_symbol_pin_selection = self.ui_state.symbol_pin_selection;
         self.ui_state.preferences_draft_zoom_step_percent = self.ui_state.zoom_step_percent;
@@ -304,17 +306,9 @@ impl Signex {
                 return Task::batch([saved, self.handle_preferences_close_requested()]);
             }
             PrefMsg::Save => {
-                // Refuse to commit while any keymap trigger draft is
-                // unparseable — surface the reason and keep the dialog
-                // dirty/open rather than persisting a broken profile.
-                if self
-                    .ui_state
-                    .preferences_keymap_editor
-                    .has_invalid_trigger_drafts()
-                {
-                    self.ui_state.preferences_keymap_status =
-                        "Fix invalid keyboard shortcuts before saving.".to_string();
-                    self.recompute_preferences_dirty();
+                // A draft that cannot be committed stops Save before
+                // anything is committed; the dialog stays dirty and open.
+                if self.refuse_invalid_save_drafts() {
                     return Task::none();
                 }
                 self.ui_state.theme_id = self.ui_state.preferences_draft_theme;
@@ -343,6 +337,7 @@ impl Signex {
                 // themselves to disk the moment the picker moved.
                 self.ui_state.symbol_grid_size_mm =
                     self.ui_state.preferences_draft_symbol_grid_size_mm;
+                self.ui_state.commit_fast_grid_drafts();
                 self.ui_state.symbol_grid_style = self.ui_state.preferences_draft_symbol_grid_style;
                 self.ui_state.symbol_pin_selection =
                     self.ui_state.preferences_draft_symbol_pin_selection;
@@ -603,6 +598,12 @@ impl Signex {
             // update the draft, preview it, and let Save persist it.
             PrefMsg::DraftSymbolGridSize(size) => {
                 self.ui_state.preferences_draft_symbol_grid_size_mm = size;
+                self.recompute_preferences_dirty();
+            }
+            PrefMsg::DraftFastGrid(index, text) => {
+                if let Some(field) = self.ui_state.preferences_draft_fast_grids.get_mut(index) {
+                    *field = text;
+                }
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftSymbolGridStyle(style) => {

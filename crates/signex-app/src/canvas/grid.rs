@@ -11,6 +11,51 @@ use crate::render_config::GridStyle;
 /// Range: 0.635 mm (¼ grid) → 5.08 mm (2× grid). Default: 1.27 mm (Altium default, 50 mil).
 pub const GRID_SIZES_MM: &[f32] = &[0.635, 1.27, 2.54, 5.08];
 
+/// The default fast grids `fast_grid_1` / `fast_grid_2` snap to and
+/// `cycle_fast_grid` steps between: 50 and 100 mil, both presets of
+/// [`GRID_SIZES_MM`]. The user sets their own in Preferences (#1672).
+pub const FAST_GRIDS_MM: [f32; 2] = [1.27, 2.54];
+
+/// The finest fast grid: 1 nm, the resolution of the saved files. A finer
+/// grid would snap to points no file can hold.
+pub(crate) const FAST_GRID_MIN_MM: f32 = 1e-6;
+
+/// Why a fast-grid field is refused on Save.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum FastGridRefusal {
+    /// Not a finite number above zero, with the Grid Properties Step reason.
+    Invalid(String),
+    /// Finer than [`FAST_GRID_MIN_MM`].
+    BelowMinimum,
+}
+
+/// A fast grid as its Preferences field shows it. `f32` `Display` writes
+/// the shortest digits that read back as the same `f32` (`1.27`, not the
+/// widened `1.2699999…`), so a saved grid never drifts on a later Save.
+pub(crate) fn fast_grid_field_text(mm: f32) -> String {
+    mm.to_string()
+}
+
+/// A fast-grid field's text as the grid it sets, or why it is refused.
+pub(crate) fn parse_fast_grid_field(text: &str) -> Result<f32, FastGridRefusal> {
+    crate::numeric_field::validated_grid_step(text)
+        .map_err(FastGridRefusal::Invalid)
+        .and_then(fast_grid_mm)
+}
+
+/// A fast grid in mm: the Grid Properties Step rule (finite, above zero,
+/// survives the `f32` narrowing) plus the [`FAST_GRID_MIN_MM`] floor. The
+/// floor is checked on the `f32`, so a saved minimum reads back as valid.
+pub(crate) fn fast_grid_mm(step: f64) -> Result<f32, FastGridRefusal> {
+    let mm =
+        crate::numeric_field::positive_grid_step_f32(step).map_err(FastGridRefusal::Invalid)?;
+    if mm < FAST_GRID_MIN_MM {
+        Err(FastGridRefusal::BelowMinimum)
+    } else {
+        Ok(mm)
+    }
+}
+
 /// The grid pitch as the exact `f64` millimetre value the user sees.
 ///
 /// The pitch is stored as `f32`, and widening it with `f64::from` turns
@@ -704,5 +749,15 @@ mod pitch_tests {
                 );
             }
         }
+    }
+
+    /// #1672 - each fast grid is a grid preset, so the pickers and
+    /// `next_grid` still find it, and the two differ.
+    #[test]
+    fn fast_grids_are_distinct_grid_presets() {
+        for mm in super::FAST_GRIDS_MM {
+            assert!(super::GRID_SIZES_MM.contains(&mm), "{mm}");
+        }
+        assert_ne!(super::FAST_GRIDS_MM[0], super::FAST_GRIDS_MM[1]);
     }
 }

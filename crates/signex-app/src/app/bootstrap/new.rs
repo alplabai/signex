@@ -147,6 +147,7 @@ impl Signex {
         // Reading twice would be harmless today but invites the two to be
         // seeded from different parses of a file edited mid-launch.
         let symbol_grid_size_mm = crate::fonts::read_symbol_grid_size_mm_pref_from(prefs);
+        let fast_grids_mm = crate::fonts::read_fast_grids_mm_pref_from(prefs);
         let component_classes = crate::fonts::read_component_classes_pref_from(prefs);
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref_from(prefs);
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref_from(prefs);
@@ -386,6 +387,10 @@ impl Signex {
                 preferences_draft_agent_connections_enabled: agent_connections_enabled,
                 symbol_grid_size_mm,
                 preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
+                fast_grids_mm,
+                preferences_draft_fast_grids: fast_grids_mm
+                    .map(crate::canvas::grid::fast_grid_field_text),
+                preferences_fast_grid_status: String::new(),
                 symbol_grid_style,
                 preferences_draft_symbol_grid_style: symbol_grid_style,
                 symbol_pin_selection,
