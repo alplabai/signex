@@ -63,9 +63,9 @@ impl Signex {
     }
 
     /// The project of `board`: the one its entry names (`named`), else the
-    /// open project whose `pcb_file` is the board. The document entry of an
-    /// open board names no project (ownership follows listed sheets only),
-    /// while a closed one's does.
+    /// open project whose `pcb_file` is the board. An open board's
+    /// entry names its project too (#2331); the fallback covers an entry
+    /// that names none.
     fn board_project(&self, board: &Path, named: Option<&Path>) -> Option<&LoadedProject> {
         let projects = &self.document_state.projects;
         if let Some(named) = named {

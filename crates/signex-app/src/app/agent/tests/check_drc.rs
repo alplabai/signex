@@ -23,11 +23,32 @@ fn app_with_board(dir: &std::path::Path) -> crate::app::Signex {
     app
 }
 
-/// Today's limit, pinned so #2331 flips it: the held entry of a board open
-/// in the app names no project (ownership follows listed sheets), so the
-/// agent gate refuses a `check_drc` on it at once and no run starts.
+/// Ask `check_drc` on `path` as process `pid`, land the run and read the
+/// one reply.
+fn check_settled(app: &mut crate::app::Signex, pid: u32, path: &std::path::Path) -> Value {
+    let text = line(
+        app,
+        "check_drc",
+        json!({"document": path.display().to_string()}),
+    );
+    let (reply, mut answer) = AgentReply::channel();
+    let call = AgentCall {
+        pid: Some(pid),
+        input: Input::Line(text),
+        reply,
+    };
+    let task = app.update(Message::Agent(AgentMsg::Request(call)));
+    crate::task_driver::TaskDriver::new()
+        .settle(app, task)
+        .expect("the run lands");
+    let reply = answer.try_recv().unwrap().expect("answered");
+    serde_json::from_str(&reply).expect("JSON")
+}
+
+/// #2331: the held entry of a board open in the app names the project that
+/// lists it as `pcb_file`, so the agent gate lets a `check_drc` on it run.
 #[test]
-fn a_check_drc_on_a_board_open_in_the_app_is_refused_until_2331() {
+fn a_check_drc_on_a_board_open_in_the_app_is_answered() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = app_with_board(dir.path());
     let path = dir.path().join("board.snxpcb");
@@ -35,6 +56,25 @@ fn a_check_drc_on_a_board_open_in_the_app_is_refused_until_2331() {
         .pcb(2)
         .new_board();
     app.open_pcb_tab(path.clone(), "board.snxpcb".into(), board);
+    let reply = check_settled(&mut app, 4265, &path);
+    assert_eq!(reply["status"], "answered", "{reply}");
+    assert_eq!(reply["data"]["check"], "drc", "{reply}");
+    assert_eq!(reply["data"]["run"], 1, "{reply}");
+    let loose = json!(crate::app::handlers::LOOSE_BOARD_WARNING);
+    let warnings = reply["data"]["warnings"].as_array().expect("warnings");
+    assert!(!warnings.contains(&loose), "not a loose board: {reply}");
+}
+
+/// A board open in the app that no open project names stays refused.
+#[test]
+fn a_check_drc_on_an_open_board_of_no_project_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_in(dir.path());
+    let path = dir.path().join("loose.snxpcb");
+    let board = signex_types::project::SetupProfile::Standard
+        .pcb(2)
+        .new_board();
+    app.open_pcb_tab(path.clone(), "loose.snxpcb".into(), board);
     let text = line(
         &app,
         "check_drc",
@@ -43,7 +83,7 @@ fn a_check_drc_on_a_board_open_in_the_app_is_refused_until_2331() {
     let reply = super::ask(&mut app, text);
     assert_eq!(reply["status"], "refused", "{reply}");
     assert_eq!(
-        reply["reason"], "board.snxpcb is not part of a project open in this app",
+        reply["reason"], "loose.snxpcb is not part of a project open in this app",
         "{reply}"
     );
     assert_eq!(app.document_state.agent_edits.tickets, 0, "no run started");
