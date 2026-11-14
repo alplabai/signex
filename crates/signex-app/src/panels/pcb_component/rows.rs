@@ -113,12 +113,12 @@ pub(super) fn row<'a>(
     .boxed()
 }
 
+/// What an editable input sends: a message per keystroke, then one on Enter.
+pub(super) type InputEdit<'a> = (Box<dyn Fn(String) -> PanelMsg + 'a>, PanelMsg);
+
 /// A text input showing `shown`. With `edit`, typing sends its first message
 /// and Enter the second; without it the input is disabled.
-pub(super) fn input<'a>(
-    shown: String,
-    edit: Option<(Box<dyn Fn(String) -> PanelMsg + 'a>, PanelMsg)>,
-) -> Element<'a, PanelMsg> {
+pub(super) fn input<'a>(shown: String, edit: Option<InputEdit<'a>>) -> Element<'a, PanelMsg> {
     let mut field = text_input(UserText::new(String::new()), shown)
         .size(TS.body)
         .padding(SP.s)
