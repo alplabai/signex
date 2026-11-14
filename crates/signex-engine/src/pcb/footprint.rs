@@ -93,7 +93,7 @@ pub(super) fn set_component(
         });
     }
     let fp = find(board, id)?;
-    let previous = std::mem::replace(&mut fp.component, component);
+    let previous = std::mem::replace(&mut *fp.component, component);
     Ok(Applied {
         inverse: BoardCommand::SetFootprintComponent {
             footprint: id,

@@ -105,7 +105,7 @@ pub fn setting_commands(
         if let Some(field) = component.invalid_field() {
             return Err(ComponentRefusal::OutOfRange(field));
         }
-        if component != fp.component {
+        if component != *fp.component {
             commands.push(BoardCommand::SetFootprintComponent {
                 footprint: fp.uuid,
                 component,

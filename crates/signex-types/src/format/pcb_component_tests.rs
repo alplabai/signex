@@ -23,7 +23,7 @@ fn footprint(n: u128, component: ComponentAttributes) -> Footprint {
         properties: Vec::new(),
         schematic_link: None,
         library_ref: None,
-        component,
+        component: Box::new(component),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
@@ -52,8 +52,8 @@ fn every_component_setting_round_trips() {
     ];
     let text = SnxPcb::new(board.clone()).write_string().unwrap();
     let back = SnxPcb::parse(&text).unwrap().board;
-    assert_eq!(back.footprints[0].component, every_field_set());
-    assert_eq!(back.footprints[1].component, ComponentAttributes::default());
+    assert_eq!(*back.footprints[0].component, every_field_set());
+    assert_eq!(*back.footprints[1].component, ComponentAttributes::default());
     assert_eq!(SnxPcb::new(back).write_string().unwrap(), text, "stable");
 }
 

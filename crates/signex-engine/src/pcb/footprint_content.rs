@@ -67,7 +67,10 @@ pub(super) fn replace(
     new.position = old.position;
     new.rotation = old.rotation;
     new.locked = old.locked;
-    new.component = carried_component(&old.component, std::mem::take(&mut new.component));
+    new.component = Box::new(carried_component(
+        &old.component,
+        std::mem::take(&mut *new.component),
+    ));
     new.schematic_link = old.schematic_link.clone();
     new.reference = old.reference.clone();
     new.value = old.value.clone();

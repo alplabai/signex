@@ -632,7 +632,7 @@ impl FootprintExtras {
             locked: fp.locked,
             graphics: fp.graphics.clone(),
             properties: fp.properties.clone(),
-            component: fp.component.clone(),
+            component: (*fp.component).clone(),
             unknown: fp.unknown.clone(),
         }
     }

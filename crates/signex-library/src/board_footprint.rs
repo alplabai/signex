@@ -111,7 +111,7 @@ fn top_side_footprint(
         ],
         schematic_link: None,
         library_ref: None,
-        component: component_attributes(footprint),
+        component: Box::new(component_attributes(footprint)),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

@@ -197,7 +197,8 @@ fn a_parameter_is_removed_and_undo_puts_it_back_in_its_place() {
     b.footprints[1].properties.push(extra("MPN"));
     let before = snapshot(&b);
     let both = ids(&[FP_A, FP_B]);
-    let inverses = run(&mut b, remove_parameter_commands(&b, &both, "MPN").unwrap());
+    let commands = remove_parameter_commands(&b, &both, "MPN").unwrap();
+    let inverses = run(&mut b, commands);
     assert_eq!(fp(&b, FP_A).properties[0].key, "Reference");
     assert_eq!(fp(&b, FP_A).properties.len(), 2, "only the first MPN goes");
     assert!(fp(&b, FP_B).properties.is_empty());
@@ -216,7 +217,8 @@ fn one_comment_overwrites_every_footprint_and_keeps_the_designators() {
     b.footprints[1].value = "4k7".into();
     let before = snapshot(&b);
     let both = ids(&[FP_A, FP_B]);
-    let inverses = run(&mut b, comment_commands(&b, &both, "22k").unwrap());
+    let commands = comment_commands(&b, &both, "22k").unwrap();
+    let inverses = run(&mut b, commands);
     assert_eq!(fp(&b, FP_A).value, "22k");
     assert_eq!(fp(&b, FP_B).value, "22k");
     assert_eq!(fp(&b, FP_A).reference, "U1");
@@ -228,7 +230,7 @@ fn one_comment_overwrites_every_footprint_and_keeps_the_designators() {
 #[test]
 fn a_replaced_footprint_keeps_board_choices_and_takes_library_facts() {
     let mut b = board();
-    b.footprints[0].component = signex_types::pcb::ComponentAttributes {
+    *b.footprints[0].component = signex_types::pcb::ComponentAttributes {
         component_type: ComponentType::Graphical,
         lock_primitives: true,
         body_opacity: 0.5,
@@ -240,7 +242,7 @@ fn a_replaced_footprint_keeps_board_choices_and_takes_library_facts() {
     template.uuid = Uuid::from_u128(0xfeed);
     template.pads.clear();
     template.layer = "TopCopper".into();
-    template.component = signex_types::pcb::ComponentAttributes {
+    *template.component = signex_types::pcb::ComponentAttributes {
         component_type: ComponentType::Standard,
         height_mm: 2.0,
         description: "new".into(),

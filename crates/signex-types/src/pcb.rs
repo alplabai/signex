@@ -310,9 +310,10 @@ pub struct Footprint {
     /// `lib_ref` footprint column. See ADR-0005 section 13.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub library_ref: Option<FootprintSourceRef>,
-    /// Type, height, locks and the other component settings (#2365).
+    /// Type, height, locks and the other component settings (#2365). Boxed
+    /// so a footprint stays small beside the other board items.
     #[serde(default, skip_serializing_if = "ComponentAttributes::is_default")]
-    pub component: ComponentAttributes,
+    pub component: Box<ComponentAttributes>,
     /// Keys in this footprint's `[extras.footprints.<uuid>]` table that
     /// this build does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]

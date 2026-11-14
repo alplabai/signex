@@ -538,7 +538,7 @@ fn the_type_height_and_description_come_to_the_board() {
     fp.description = "Standoff M3".into();
     let board = board_footprint(&fp).unwrap();
     assert_eq!(
-        board.component,
+        *board.component,
         pcb::ComponentAttributes {
             component_type: pcb::ComponentType::Mechanical,
             height_mm: 1.8,
