@@ -439,3 +439,79 @@ fn tools_back_annotate_is_live_on_a_project_sheet() {
     let label = update_schematics_row(&app).label;
     assert_eq!(label, "Update Schematics", "{label}");
 }
+
+/// The Place menu's rows on the main window's bar, top to bottom.
+fn place_rows(app: &Signex) -> Vec<MenuItem> {
+    let model = menu_bar_model(&menu_context(app));
+    let place = model
+        .menus
+        .iter()
+        .find(|menu| menu.title == "Place")
+        .expect("a Place menu");
+    place
+        .entries
+        .iter()
+        .filter_map(|entry| match entry {
+            MenuEntry::Item(item) => Some(item.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// #2360: on a board, Place lists the board's tools. The ones the board
+/// editor cannot run yet are greyed with the PCB Active Bar's reason, and
+/// Board Sketch runs its command.
+#[test]
+fn place_on_a_board_lists_the_boards_tools() {
+    let mut app = loaded_board_app();
+    let rows = place_rows(&app);
+    let labels: Vec<&str> = rows.iter().map(|row| row.label.as_str()).collect();
+    assert_eq!(
+        labels,
+        [
+            "Component",
+            "Pad",
+            "Via",
+            "Interactive Routing",
+            "Track",
+            "Arc",
+            "Fill",
+            "Solid Region",
+            "Polygon Pour",
+            "String",
+            "Dimension",
+            "Keepout",
+            "Board Sketch",
+        ]
+    );
+    for row in &rows[..12] {
+        let ItemState::Placeholder {
+            reason: Some(reason),
+        } = &row.state
+        else {
+            panic!("{} is not greyed with a reason", row.label);
+        };
+        assert!(!row.is_enabled());
+        assert!(
+            reason.ends_with(": not available on boards yet"),
+            "{reason}"
+        );
+    }
+    let live: Vec<&MenuItem> = rows.iter().filter(|row| row.is_enabled()).collect();
+    assert_eq!(live.len(), 1);
+    assert!(matches!(
+        live[0].dispatches(),
+        Some(crate::menu_bar::MenuMessage::Command(id)) if id.as_str() == "board_sketch"
+    ));
+    let _ = click(&mut app, "Place/Board Sketch");
+    assert!(app.board_sketch_in_view().is_some(), "sketch mode is on");
+}
+
+/// #2360: a sheet keeps its Place menu.
+#[test]
+fn place_on_a_sheet_keeps_the_sheets_rows() {
+    let app = one_symbol_selected();
+    let labels: Vec<String> = place_rows(&app).into_iter().map(|row| row.label).collect();
+    assert_eq!(labels.first().map(String::as_str), Some("Wire"));
+    assert!(!labels.iter().any(|label| label == "Board Sketch"));
+}

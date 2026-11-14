@@ -50,6 +50,7 @@ pub mod palette_index;
 #[cfg(test)]
 mod palette_index_tests;
 mod pcb_dirty_adapter;
+pub(crate) mod pcb_tools;
 pub(crate) mod project_sheets;
 mod read_only_refusal;
 pub mod restore_job;
@@ -85,12 +86,13 @@ pub use contracts::{
     EnableVersionControlState, ErcMsg, ExcludeDirtyChoice, ExportMsg, FileMsg, GitCommitFailure,
     GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg, KeymapModMigration,
     LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, NetNavMsg, OverlayMsg,
-    ParameterManagerMsg, PasteIntent, PasteRequest, PcbMsg, PcbViewMsg, PreferencesMsg,
-    PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob,
-    ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg,
-    RenameDialogState, RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest,
-    TabContextAction, TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem,
-    UiMsg, VersionControlScope, ViewAngleEntry, ViewRotationMsg, WindowMsg,
+    ParameterManagerMsg, PasteIntent, PasteRequest, PcbBarMenu, PcbBarMsg, PcbMsg, PcbViewMsg,
+    PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg,
+    ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
+    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
+    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
+    TextEditState, TextEditTarget, TrackItem, UiMsg, VersionControlScope, ViewAngleEntry,
+    ViewRotationMsg, WindowMsg,
 };
 pub(crate) use document::{Document, DocumentKey};
 pub use documents::{

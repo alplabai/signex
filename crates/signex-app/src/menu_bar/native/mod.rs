@@ -128,7 +128,7 @@ fn model_menu(menu: &Menu, is_root: bool, locked: bool) -> Item<Message> {
 
 fn model_item(item: &MenuItem, locked: bool) -> Item<Message> {
     let message = match &item.state {
-        ItemState::Placeholder | ItemState::Unavailable => None,
+        ItemState::Placeholder { .. } | ItemState::Unavailable => None,
         ItemState::Live { action, is_enabled } => {
             (*is_enabled && !locked).then(|| model_row(action.clone()))
         }

@@ -3,7 +3,8 @@
 The bar is plain data: `menu_bar_model(&MenuContext)` in
 `crates/signex-app/src/menu_bar/model/` builds it, and `menu_bar/view.rs`
 renders it as iced_aw menus. Its content is pinned by
-`menu_bar/testdata/menu_bar.golden.tsv`; changing a menu, label, shortcut,
+`menu_bar/testdata/menu_bar.golden.tsv` (Place on a board in
+`menu_bar_place_board.golden.tsv`, [below](#place-board)); changing a menu, label, shortcut,
 order or message is a content change and needs the maintainers' sign-off.
 
 ## How a row runs {#row-routing}
@@ -296,6 +297,27 @@ three has a default key).
   tree's Close Project Documents: every tab closes, and an unsaved document is
   parked as a draft exactly as the tab menu's Close All Documents does. Greyed
   when no tab is open.
+
+## Place on a board {#place-board}
+
+Place follows the document in view (#2360). While the window shows a board
+(`CommandContext::pcb.shown`), it lists the board's tools: Component, Pad,
+Via, Interactive Routing, Track, Arc, Fill, Solid Region, Polygon Pour,
+String, Dimension and Keepout, then Board Sketch (`board_sketch`, the same
+command as Design ▸ Board Sketch and the PCB Active Bar's button). Every other
+tab keeps the sheet's Place rows.
+
+The board editor has no command for those twelve tools yet. Each row is an
+`ItemState::Placeholder` whose `reason` is its tooltip ("Place Via: not
+available on boards yet"). The rows and their reasons come from one table,
+`app/pcb_tools.rs` (`UnavailableBoardTool`), which the PCB Active Bar greys
+its buttons by (#2352), so the two surfaces grey the same set and say the
+same thing. A tool that gets a command leaves the table and both surfaces run
+it.
+
+The golden fixture marks the sheet's Place rows `-` in the `pcb` column: that
+variant's bar does not have them. `menu_bar/testdata/menu_bar_place_board.golden.tsv`
+pins the board's Place rows instead.
 
 ## Tools ▸ Assign Footprints {#tools-assign-footprints}
 

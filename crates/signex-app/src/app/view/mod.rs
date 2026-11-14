@@ -16,6 +16,7 @@ mod context_menu;
 mod modals;
 mod overlays;
 mod parameter_manager;
+mod pcb_active_bar;
 mod pcb_strip;
 mod pdf_preview;
 mod print_preview;
