@@ -48,12 +48,12 @@ mod pcb_drc_check;
 pub(crate) use pcb_drc_check::DRC_CHECK;
 pub(crate) use pcb_drc_check::LOOSE_BOARD_WARNING;
 mod pcb_board_panel;
-pub(crate) mod pcb_component;
-#[cfg(test)]
-mod pcb_drc_tests;
 mod pcb_clipboard;
 #[cfg(test)]
 mod pcb_clipboard_tests;
+pub(crate) mod pcb_component;
+#[cfg(test)]
+mod pcb_drc_tests;
 mod pcb_edit;
 #[cfg(test)]
 mod pcb_edit_tests;
