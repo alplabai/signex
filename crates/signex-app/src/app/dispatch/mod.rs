@@ -145,10 +145,15 @@ impl Signex {
                 // modal + undocked-tab windows have their own sizes
                 // that would otherwise clobber the main-window state.
                 if self.ui_state.main_window_id == Some(id) {
+                    let resized = self.ui_state.window_size != (w, h);
                     self.ui_state.window_size = (w, h);
+                    if resized {
+                        self.follow_main_window_resize();
+                    }
                     return Task::batch([settle, self.main_window_mode_task(id)]);
                 }
                 // An undocked tab window's own size places its overlays.
+                self.follow_undocked_window_resize(id, (w, h));
                 self.ui_state.set_undocked_window_size(id, (w, h));
                 settle
             }
