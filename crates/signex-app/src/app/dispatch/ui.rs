@@ -115,7 +115,9 @@ impl Signex {
                 }
             }
             UiMsg::WindowResized(w, h) => {
+                let before = self.canvas_bounds();
                 self.ui_state.window_size = (w, h);
+                self.follow_main_canvas_resize(before);
                 self.finish_update()
             }
             UiMsg::DragEnd(released_in) => {

@@ -46,6 +46,8 @@ pub(crate) mod placement_tests;
 mod power_ghost_text_tests;
 mod status_activity;
 mod status_readout;
+#[cfg(test)]
+mod symbol_resize_tests;
 mod sync_sheet_pins;
 #[cfg(test)]
 mod tests;

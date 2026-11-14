@@ -29,6 +29,8 @@ mod preview_model;
 #[cfg(test)]
 mod chrome_fit_tests;
 #[cfg(test)]
+mod resize_tests;
+#[cfg(test)]
 mod tests;
 
 // `draw_pads_tool_preview` is the one sub-draw still invoked inline by
@@ -78,6 +80,11 @@ pub struct FootprintCanvasState {
     /// Auto-fit on the first draw — toggled false once we've seen
     /// non-zero bounds at least once.
     pub did_initial_fit: bool,
+    /// The canvas size as of the last event (zero before the first).
+    laid_out: iced::Size,
+    /// The document last fitted, its fit and the camera it left; a resize
+    /// refits while the camera is still that one (#2345).
+    fitted: Option<(EditorAddress, crate::canvas::FittedView)>,
     /// The document this camera last showed and the last
     /// [`super::state::ZoomRequest`] it applied for it. The canvas widget
     /// keeps this state across a tab switch, so a request is only compared
@@ -162,6 +169,8 @@ impl Default for FootprintCanvasState {
             scale: DEFAULT_PX_PER_MM,
             offset: Point::new(0.0, 0.0),
             did_initial_fit: false,
+            laid_out: iced::Size::ZERO,
+            fitted: None,
             applied_zoom: None,
             panning: false,
             last_pan_pos: None,
@@ -291,11 +300,14 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
-        // First-draw camera placement + one-shot Fit-to-Window (see
+        // A resize refit, first-draw camera placement + one-shot Fit-to-Window (see
         // `input::camera`). Both mutate the camera and publish the scale
         // they settled on, consuming the event tick. That is the canvas's
         // first event (normally a redraw or cursor move), and the next one
         // carries the same information, so nothing is lost.
+        if let Some(action) = self.follow_resize(cstate, bounds) {
+            return Some(action);
+        }
         if let Some(action) = self.apply_initial_fit(cstate, bounds) {
             return Some(action);
         }

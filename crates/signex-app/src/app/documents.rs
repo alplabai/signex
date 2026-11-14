@@ -325,6 +325,11 @@ pub struct SymbolDocument {
     /// `ViewportMeasured` applies it. Mirrors the footprint editor's
     /// `fit_pending`, but carries which placement to apply.
     pub pending_view: Option<SymbolViewRequest>,
+    /// Canvas size at the last `ViewportMeasured` (zero before it).
+    pub viewport: iced::Size,
+    /// The last fit and the camera it left; a resize refits while the
+    /// camera is still that one (#2345).
+    pub fitted: Option<crate::canvas::FittedView>,
     /// v0.13 — SchLib selection filter. Per-kind selectable flags
     /// gate which entities the canvas hit-tester considers. Mirrors
     /// the footprint editor's `selection_filter`.
@@ -448,6 +453,8 @@ impl SymbolDocument {
             wheel_mode: Default::default(),
             cursor_mm: None,
             pending_view: None,
+            viewport: iced::Size::ZERO,
+            fitted: None,
             selection_filter: Default::default(),
             active_bar_menu: None,
             placement_paused: false,
@@ -469,6 +476,7 @@ impl SymbolDocument {
     /// default symbol-canvas viewport.
     pub(crate) fn reset_camera_origin_center(&mut self) {
         self.camera = crate::canvas::Camera::default();
+        self.fitted = None;
         self.camera.offset = Point::new(
             Self::DEFAULT_SYMBOL_VIEWPORT_WIDTH * 0.5,
             Self::DEFAULT_SYMBOL_VIEWPORT_HEIGHT * 0.5,

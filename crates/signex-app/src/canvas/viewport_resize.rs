@@ -42,3 +42,11 @@ impl CanvasSlot {
         true
     }
 }
+
+#[cfg(test)]
+impl CanvasSlot {
+    /// Whether a fit (deferred or whole-sheet) waits for the next canvas event.
+    pub fn has_pending_fit(&self) -> bool {
+        self.pending_fit.get().is_some() || self.pending_sheet_fit.get()
+    }
+}

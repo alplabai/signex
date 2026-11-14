@@ -61,6 +61,15 @@ fn maximising_refits_a_fitted_view() {
 
     let followed = camera(&app);
     assert_ne!(followed, fitted_small, "the view stayed where it was");
+    // `update` cannot see the laid-out canvas: it adds the growth of
+    // `canvas_bounds()` to the size last laid out, and the next canvas
+    // event records the real one. Laid out at `canvas_bounds()` here, the
+    // two agree.
+    assert_eq!(
+        app.interaction_state.active_canvas().viewport_size(),
+        app.canvas_bounds().size(),
+        "the recorded viewport is the new canvas size"
+    );
     fit_all(&mut app);
     assert_eq!(followed, camera(&app), "not the fit of the new size");
 }
@@ -97,6 +106,8 @@ fn maximising_keeps_the_centre_and_zoom_of_a_zoomed_view() {
 #[test]
 fn a_view_never_fitted_keeps_its_centre_too() {
     let (mut app, main) = app();
+    // No sheet fit owed either: an owed fit would win over the follow.
+    assert!(!app.interaction_state.active_canvas().has_pending_fit());
     let (centre, scale) = (centre_world(&app), camera(&app).2);
 
     resize(&mut app, main, MAXIMISED);
@@ -137,4 +148,106 @@ fn maximising_refits_a_fitted_board_view() {
         app.interaction_state.pcb_canvas.live_camera(),
         expected.live_camera()
     );
+}
+
+/// Drag the left dock's splitter `dx` px wider, through `Signex::update`.
+fn drag_left_dock(app: &mut Signex, main: iced::window::Id, dx: f32) {
+    let before = app.canvas_bounds().width;
+    let _ = app.update(Message::Ui(UiMsg::DragStart(DragTarget::LeftPanel)));
+    let _ = app.update(Message::Ui(UiMsg::DragMove(300.0, 400.0)));
+    let _ = app.update(Message::Ui(UiMsg::DragMove(300.0 + dx, 400.0)));
+    let _ = app.update(Message::Ui(UiMsg::DragEnd(main)));
+    assert_ne!(
+        app.canvas_bounds().width,
+        before,
+        "the drag resized the canvas"
+    );
+}
+
+#[test]
+fn dragging_a_dock_refits_a_fitted_view() {
+    let (mut app, main) = app();
+    fit_all(&mut app);
+    let fitted_before = camera(&app);
+
+    drag_left_dock(&mut app, main, 120.0);
+
+    let followed = camera(&app);
+    assert_ne!(followed, fitted_before, "the view stayed where it was");
+    fit_all(&mut app);
+    assert_eq!(followed, camera(&app), "not the fit of the new size");
+}
+
+#[test]
+fn dragging_a_dock_keeps_the_centre_and_zoom_of_a_zoomed_view() {
+    let (mut app, main) = app();
+    let _ = app.update(Message::Menu(MenuMessage::ZoomIn));
+    let (centre, scale) = (centre_world(&app), camera(&app).2);
+
+    drag_left_dock(&mut app, main, 120.0);
+
+    let after = centre_world(&app);
+    assert!(
+        (after.x - centre.x).abs() < 1e-3 && (after.y - centre.y).abs() < 1e-3,
+        "the centre moved: {centre:?} -> {after:?}"
+    );
+    assert_eq!(camera(&app).2, scale, "the zoom changed");
+}
+
+const UNDOCKED: (f32, f32) = (1000.0, 700.0);
+const UNDOCKED_VIEW: iced::Size = iced::Size::new(800.0, 600.0);
+
+/// A main window plus an undocked schematic window whose canvas is laid out
+/// at `UNDOCKED_VIEW` and zoomed in.
+fn undocked_window(recorded: bool) -> (Signex, iced::window::Id) {
+    let (mut app, _) = app();
+    let window = iced::window::Id::unique();
+    let slot = crate::canvas::CanvasSlot::new();
+    slot.set_viewport(iced::Rectangle::with_size(UNDOCKED_VIEW));
+    assert!(slot.zoom_about_centre(true, 1.5));
+    app.interaction_state.canvases.insert(window, slot);
+    if recorded {
+        app.ui_state.set_undocked_window_size(window, UNDOCKED);
+    }
+    (app, window)
+}
+
+fn undocked_centre(app: &Signex, window: iced::window::Id) -> (Point, f32) {
+    let slot = &app.interaction_state.canvases[&window];
+    let size = slot.viewport_size();
+    let centre = slot.screen_to_world(Point::new(size.width / 2.0, size.height / 2.0));
+    (centre, slot.live_camera().2)
+}
+
+#[test]
+fn resizing_an_undocked_window_keeps_its_centre_and_zoom() {
+    let (mut app, window) = undocked_window(true);
+    let (centre, scale) = undocked_centre(&app, window);
+
+    resize(&mut app, window, (UNDOCKED.0 + 300.0, UNDOCKED.1 + 200.0));
+
+    let slot = &app.interaction_state.canvases[&window];
+    assert_eq!(
+        slot.viewport_size(),
+        iced::Size::new(UNDOCKED_VIEW.width + 300.0, UNDOCKED_VIEW.height + 200.0),
+        "the canvas grew by the window's growth"
+    );
+    let (after, after_scale) = undocked_centre(&app, window);
+    assert!(
+        (after.x - centre.x).abs() < 1e-3 && (after.y - centre.y).abs() < 1e-3,
+        "the centre moved: {centre:?} -> {after:?}"
+    );
+    assert_eq!(after_scale, scale);
+}
+
+#[test]
+fn an_undocked_window_with_no_earlier_size_leaves_its_camera() {
+    let (mut app, window) = undocked_window(false);
+    let before = app.interaction_state.canvases[&window].live_camera();
+
+    resize(&mut app, window, (UNDOCKED.0 + 300.0, UNDOCKED.1 + 200.0));
+
+    let slot = &app.interaction_state.canvases[&window];
+    assert_eq!(slot.live_camera(), before);
+    assert_eq!(slot.viewport_size(), UNDOCKED_VIEW);
 }
