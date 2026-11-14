@@ -4,10 +4,90 @@ use std::fs;
 use std::path::Path;
 
 use super::helpers::{stage_and_commit, stage_and_commit_with};
-use super::index_lock::set_index_update_hook;
+use super::index_lock::{LockHook, set_index_update_hook};
+use super::{LibraryInitOptions, LocalGitAdapter};
 
 fn signature() -> git2::Signature<'static> {
     git2::Signature::now("Test", "test@example.test").unwrap()
+}
+
+fn manifest() -> crate::library_file::SnxlibManifest {
+    crate::library_file::SnxlibManifest {
+        format: crate::library_file::FORMAT_TOKEN.into(),
+        library_id: uuid::Uuid::now_v7(),
+        library: crate::library_file::LibrarySection {
+            name: "lib".into(),
+            description: None,
+        },
+        mode: crate::manifest::LibraryMode::default(),
+        workflow: crate::manifest::WorkflowConfig::default(),
+        users: crate::manifest::UsersConfig::default(),
+        classes: Vec::new(),
+    }
+}
+
+/// Hold `index.lock` in `root` as another git process would. The first
+/// index update that finds it held lets it go, so the update succeeds only
+/// by retrying. True once that happened.
+fn hold_index_lock_until_met(root: &Path) -> std::rc::Rc<std::cell::Cell<bool>> {
+    let lock = root.join(".git").join("index.lock");
+    fs::write(&lock, b"").unwrap();
+    let met = std::rc::Rc::new(std::cell::Cell::new(false));
+    let flag = met.clone();
+    set_index_update_hook(LockHook::FoundHeld, move || {
+        fs::remove_file(&lock).unwrap();
+        flag.set(true);
+    });
+    met
+}
+
+fn index_has(root: &Path, name: &str) -> bool {
+    let repo = git2::Repository::open(root).unwrap();
+    let index = repo.index().unwrap();
+    index.get_path(Path::new(name), 0).is_some()
+}
+
+/// A library made in a repo whose `index.lock` another git process holds
+/// waits for it, then stages its files.
+#[test]
+fn init_waits_for_an_index_lock_it_found_held() {
+    crate::git_identity::test_identity::install();
+    let dir = tempfile::tempdir().unwrap();
+    git2::Repository::init(dir.path()).unwrap();
+    let met = hold_index_lock_until_met(dir.path());
+
+    let options = LibraryInitOptions {
+        enable_git: true,
+        use_lfs: false,
+    };
+    LocalGitAdapter::init(dir.path().join("lib.snxlib"), manifest(), options).expect("init");
+
+    assert!(met.get(), "the index update never met the held lock");
+    assert!(index_has(dir.path(), "lib.snxlib"));
+    assert!(!dir.path().join(".git/index.lock").exists());
+}
+
+/// Re-init while another git process holds `index.lock` waits for it,
+/// then records the library's files in the index.
+#[test]
+fn recover_init_waits_for_an_index_lock_it_found_held() {
+    crate::git_identity::test_identity::install();
+    let dir = tempfile::tempdir().unwrap();
+    let lib = dir.path().join("lib.snxlib");
+    let plain = LibraryInitOptions {
+        enable_git: false,
+        use_lfs: false,
+    };
+    LocalGitAdapter::init(&lib, manifest(), plain).expect("plain library");
+    LocalGitAdapter::recover_init(&lib).expect("first re-init");
+    fs::create_dir_all(dir.path().join("symbols")).unwrap();
+    fs::write(dir.path().join("symbols/r.snxsym"), "sym").unwrap();
+    let met = hold_index_lock_until_met(dir.path());
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    assert!(met.get(), "the index update never met the held lock");
+    assert!(index_has(dir.path(), "symbols/r.snxsym"));
 }
 
 /// Commit the files `contents` names on top of HEAD (or as the first
@@ -59,7 +139,7 @@ fn an_index_published_by_the_lock_holder_keeps_its_staged_path() {
     fs::write(git.join("index.lock"), b"").unwrap();
 
     let holder_git = git.clone();
-    set_index_update_hook(move || {
+    set_index_update_hook(LockHook::BeforeTake, move || {
         fs::write(holder_git.join("index.new"), &published).unwrap();
         fs::rename(holder_git.join("index.new"), holder_git.join("index")).unwrap();
         fs::remove_file(holder_git.join("index.lock")).unwrap();

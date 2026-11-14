@@ -179,7 +179,10 @@ file this call made, points the repository at its own index again and drops
 the unpublished edits. Resolve-undo records the edit creates are not carried
 over: git2 has no API for them.
 
-The lock is held from step 1 to step 5, so slow work stays outside it:
-Re-init hashes its files (`staged_entry`) and installs the LFS hook before
-taking the lock, and applies the prepared entries under it. A hold past the
-stale limit would tell a waiting writer to delete a live lock.
+The lock is held from step 1 to step 5, so large hashing stays outside it:
+Re-init and a library's first commit hash their files (`staged_entries`),
+and Re-init installs the LFS hook, before taking the lock; under it they
+only apply the prepared entries. A save still stages its own few files with
+`add_path` under the lock. A hold past the stale limit makes a waiting
+writer give up with an error asking the user to remove a lock that is still
+in use.

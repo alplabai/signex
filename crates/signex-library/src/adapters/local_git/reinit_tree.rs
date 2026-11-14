@@ -398,10 +398,15 @@ fn snapshot_entries<'s>(
     repo: &git2::Repository,
     snapshot: &'s Snapshot,
 ) -> Result<Vec<(&'s str, git2::IndexEntry)>, LibraryError> {
+    let paths: Vec<&Path> = snapshot
+        .files
+        .iter()
+        .map(|(name, _, _)| Path::new(name))
+        .collect();
+    let staged = staged_entries(repo, &paths).map_err(backend("git add"))?;
     let mut entries = Vec::with_capacity(snapshot.files.len());
     let mut lfs_paths = false;
-    for (name, id, mode) in &snapshot.files {
-        let mut staged = staged_entry(repo, Path::new(name)).map_err(backend("git add"))?;
+    for ((name, id, mode), mut staged) in snapshot.files.iter().zip(staged) {
         // Where links are not real (`core.symlinks=false`), `add_path` reads a
         // link as a plain file; the index takes the link the commit holds.
         if *mode == LINK_MODE && (staged.mode != LINK_MODE || staged.id != *id) {

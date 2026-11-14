@@ -57,13 +57,17 @@ impl<'r> IndexLock<'r> {
         let own = repo.index()?;
         let lock = repo.path().join("index.lock");
         #[cfg(test)]
-        run_index_update_hook();
+        run_index_update_hook(LockHook::BeforeTake);
         fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&lock)
             .map_err(|e| match e.kind() {
-                ErrorKind::AlreadyExists => locked(&lock, &e),
+                ErrorKind::AlreadyExists => {
+                    #[cfg(test)]
+                    run_index_update_hook(LockHook::FoundHeld);
+                    locked(&lock, &e)
+                }
                 _ => io_error("take index.lock", &e),
             })?;
         Ok(Self {
@@ -263,24 +267,49 @@ fn assert_lock_held(lock: &Path) {
     );
 }
 
+/// Where in an index update a test hook runs.
+#[cfg(test)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum LockHook {
+    /// Right before the attempt to create `index.lock`.
+    BeforeTake,
+    /// Right after an attempt found `index.lock` held by someone else.
+    FoundHeld,
+}
+
+/// A test hook and the point it runs at.
+#[cfg(test)]
+type ArmedHook = (LockHook, Box<dyn FnOnce()>);
+
 #[cfg(test)]
 thread_local! {
-    /// Runs once, on this thread, right before the next index update tries
-    /// to create `index.lock`: where a test lets another lock holder finish.
-    static INDEX_UPDATE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+    /// Runs once, on this thread, at its [`LockHook`] point of the next
+    /// index update that reaches it: where a test lets another lock holder
+    /// finish.
+    static INDEX_UPDATE: std::cell::RefCell<Option<ArmedHook>> =
         const { std::cell::RefCell::new(None) };
 }
 
-/// Arrange for `hook` to run once inside the next index update this
+/// Arrange for `hook` to run once at `at` inside an index update this
 /// thread makes (see [`INDEX_UPDATE`]).
 #[cfg(test)]
-pub(super) fn set_index_update_hook(hook: impl FnOnce() + 'static) {
-    INDEX_UPDATE.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+pub(super) fn set_index_update_hook(at: LockHook, hook: impl FnOnce() + 'static) {
+    INDEX_UPDATE.with(|slot| *slot.borrow_mut() = Some((at, Box::new(hook))));
 }
 
 #[cfg(test)]
-fn run_index_update_hook() {
-    if let Some(hook) = INDEX_UPDATE.with(|slot| slot.borrow_mut().take()) {
+fn run_index_update_hook(at: LockHook) {
+    let hook = INDEX_UPDATE.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        match slot.take() {
+            Some((point, hook)) if point == at => Some(hook),
+            other => {
+                *slot = other;
+                None
+            }
+        }
+    });
+    if let Some(hook) = hook {
         hook();
     }
 }

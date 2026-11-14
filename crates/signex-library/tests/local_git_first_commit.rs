@@ -237,60 +237,53 @@ fn index_has(dir: &Path, name: &str) -> bool {
     index.get_path(Path::new(name), 0).is_some()
 }
 
-/// Hold `.git/index.lock` in `dir` as another git process would, and let it
-/// go from another thread after a moment. The thread returns when it did.
-fn hold_index_lock_briefly(dir: &Path) -> std::thread::JoinHandle<std::time::Instant> {
-    let lock = dir.join(".git/index.lock");
-    std::fs::write(&lock, b"").unwrap();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        std::fs::remove_file(lock).unwrap();
-        std::time::Instant::now()
-    })
-}
-
-/// The call that just returned at `finished` waited for the lock `release`
-/// let go of: it could not have updated the index before.
-fn waited_for(release: std::thread::JoinHandle<std::time::Instant>, finished: std::time::Instant) {
-    let released = release.join().unwrap();
-    assert!(
-        finished >= released,
-        "the call returned before the lock was released"
-    );
-}
-
-/// #2337: a library made in a repo whose `index.lock` another git process
-/// holds for a moment waits for it, then stages its files.
+/// #2337: Re-init of a library file left conflicted in the index records it
+/// resolved: no unmerged stages stay behind.
 #[test]
-fn init_waits_out_a_briefly_held_index_lock() {
-    signex_library::git_identity::test_identity::install();
-    let tmp = tempfile::tempdir().unwrap();
-    Repository::init(tmp.path()).unwrap();
-    let release = hold_index_lock_briefly(tmp.path());
-
-    LocalGitAdapter::init(tmp.path().join("lib.snxlib"), manifest(), GIT).expect("init");
-
-    waited_for(release, std::time::Instant::now());
-    assert!(index_has(tmp.path(), "lib.snxlib"));
-    assert!(!tmp.path().join(".git/index.lock").exists());
-}
-
-/// #2337: Re-init while another git process holds `index.lock` for a
-/// moment waits for it, then records the library's files in the index.
-#[test]
-fn recover_init_waits_out_a_briefly_held_index_lock() {
+fn recover_init_resolves_a_conflicted_library_path() {
     let tmp = tempfile::tempdir().unwrap();
     let lib = plain_library(tmp.path());
-    LocalGitAdapter::recover_init(&lib).expect("first re-init");
     std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
-    std::fs::write(tmp.path().join("symbols/r.snxsym"), "sym").unwrap();
-    let release = hold_index_lock_briefly(tmp.path());
+    std::fs::write(tmp.path().join("symbols/r.snxsym"), "base").unwrap();
+    LocalGitAdapter::recover_init(&lib).expect("first re-init");
+    let path = Path::new("symbols/r.snxsym");
+    {
+        let repo = Repository::open(tmp.path()).unwrap();
+        let mut index = repo.index().unwrap();
+        // Stages 1-3 (base, ours, theirs) in place of the stage-0 entry.
+        let staged = [None, Some(&b"ours"[..]), Some(&b"theirs"[..])];
+        let stages: Vec<git2::IndexEntry> = (1u16..=3)
+            .zip(staged)
+            .map(|(stage, content)| {
+                let mut entry = index.get_path(path, 0).unwrap();
+                if let Some(content) = content {
+                    entry.id = repo.blob(content).unwrap();
+                }
+                entry.flags = (entry.flags & !0x3000) | (stage << 12);
+                entry
+            })
+            .collect();
+        index.remove_path(path).unwrap();
+        for entry in &stages {
+            index.add(entry).unwrap();
+        }
+        index.write().unwrap();
+        assert!(index.has_conflicts(), "the path is conflicted");
+    }
+    std::fs::write(tmp.path().join("symbols/r.snxsym"), "resolved").unwrap();
 
     LocalGitAdapter::recover_init(&lib).expect("re-init");
 
-    waited_for(release, std::time::Instant::now());
-    assert!(head_tracks(tmp.path(), "symbols/r.snxsym"));
+    let repo = Repository::open(tmp.path()).unwrap();
+    let index = repo.index().unwrap();
+    assert!(!index.has_conflicts(), "unmerged stages left behind");
     assert!(index_has(tmp.path(), "symbols/r.snxsym"));
+    assert!(
+        !repo
+            .status_file(path)
+            .unwrap()
+            .contains(git2::Status::CONFLICTED)
+    );
 }
 
 /// #2337: Re-init records an LFS model in the index as the pointer it

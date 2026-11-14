@@ -229,16 +229,33 @@ fn run_before_commit_hook() {
 /// The index entry `add_path` makes for `rel_path` from the working tree
 /// (its blob, the clean-filtered disk bytes, hashed and stored; its stat
 /// taken), without writing the index.
-pub(super) fn staged_entry(
+fn staged_entry(repo: &git2::Repository, rel_path: &Path) -> Result<git2::IndexEntry, git2::Error> {
+    let mut entries = staged_entries(repo, &[rel_path])?;
+    entries
+        .pop()
+        .ok_or_else(|| git2::Error::from_str("staged entry missing"))
+}
+
+/// [`staged_entry`] for each of `rel_paths`, in one pass over the
+/// repository's own index (so its case and file-mode settings apply). Done
+/// before taking `index.lock`, so the hashing never runs under it.
+pub(super) fn staged_entries(
     repo: &git2::Repository,
-    rel_path: &Path,
-) -> Result<git2::IndexEntry, git2::Error> {
+    rel_paths: &[&Path],
+) -> Result<Vec<git2::IndexEntry>, git2::Error> {
     let mut index = repo.index()?;
-    index.add_path(rel_path)?;
-    let entry = index.get_path(rel_path, 0);
-    // `repo.index()` is shared: drop the in-memory addition again.
+    let entries: Result<Vec<_>, _> = rel_paths
+        .iter()
+        .map(|path| {
+            index.add_path(path)?;
+            index
+                .get_path(path, 0)
+                .ok_or_else(|| git2::Error::from_str("staged entry missing"))
+        })
+        .collect();
+    // `repo.index()` is shared: drop the in-memory additions again.
     index.read(true)?;
-    entry.ok_or_else(|| git2::Error::from_str("staged entry missing"))
+    entries
 }
 
 /// `base` without the entry at `path`, written as new trees up to the
@@ -721,14 +738,19 @@ pub(super) fn commit_initial(
         &parents,
     )
     .map_err(backend("git initial commit"))?;
+    let paths: Vec<&Path> = names.iter().map(Path::new).collect();
+    let entries = staged_entries(repo, &paths).map_err(backend("git add"))?;
     retry_on_git_lock(repo.path(), || {
         super::index_lock::update_index_locked(repo, |index| {
-            names
-                .iter()
-                .try_for_each(|name| index.add_path(Path::new(name)).map_err(backend("git add")))
+            for (path, entry) in paths.iter().zip(&entries) {
+                super::index_lock::resolve_conflict(index, path)?;
+                index.add(entry)?;
+            }
+            Ok(())
         })
     })
-    .map_err(backend("git index write"))?
+    .and_then(|edited| edited)
+    .map_err(backend("git index write"))
 }
 
 /// Slugify a human-facing name into a safe filename component.
