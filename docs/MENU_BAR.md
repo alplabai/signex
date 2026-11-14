@@ -307,13 +307,13 @@ String, Dimension and Keepout, then Board Sketch (`board_sketch`, the same
 command as Design ▸ Board Sketch and the PCB Active Bar's button). Every other
 tab keeps the sheet's Place rows.
 
-The board editor has no command for those twelve tools yet. Each row is an
-`ItemState::Placeholder` whose `reason` is its tooltip ("Place Via: not
-available on boards yet"). The rows and their reasons come from one table,
-`app/pcb_tools.rs` (`UnavailableBoardTool`), which the PCB Active Bar greys
-its buttons by (#2352), so the two surfaces grey the same set and say the
-same thing. A tool that gets a command leaves the table and both surfaces run
-it.
+The rows come from one table, `app/pcb_tools.rs` (`BoardPlaceTool::state`),
+which the PCB Active Bar builds its buttons from (#2352), so the two surfaces
+run and grey the same set. A live tool (#2373) is a command row that runs the
+same command as its Active Bar button and arms the tool on the board in view;
+see "Board placement tools" in `docs/PCB_TOOLS.md`. A tool the board editor
+cannot run yet is an `ItemState::Placeholder` whose `reason` is its tooltip
+("Place Pad: not available on boards yet").
 
 The golden fixture marks the sheet's Place rows `-` in the `pcb` column: that
 variant's bar does not have them. `menu_bar/testdata/menu_bar_place_board.golden.tsv`

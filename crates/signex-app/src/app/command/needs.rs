@@ -280,6 +280,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "assign_footprints" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
         "run_drc" | "reannotate_board" => Needs::Pcb,
+        // #2373: the board placement tools.
+        "place_board_via" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
         "new_pcb_document" => Needs::OpenProject,

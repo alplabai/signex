@@ -100,8 +100,9 @@ fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
     assert_ne!(handle, &ic::icon_dd_rect(tid));
 }
 
-/// #2352: the groups in the PCB editor's order, three live buttons, and every
-/// other button greyed with a tooltip that says it is not on boards yet.
+/// #2352, #2373: the groups in the PCB editor's order, Move, Board Sketch,
+/// View and the live placement tools live, and every other button greyed
+/// with a tooltip that says it is not on boards yet.
 #[test]
 fn the_pcb_bar_has_the_footprint_layout_and_greys_what_boards_cannot_do() {
     let items = pcb_bar_items(ThemeId::GraphiteDark, &I18n::en_us(), None);
@@ -113,8 +114,13 @@ fn the_pcb_bar_has_the_footprint_layout_and_greys_what_boards_cannot_do() {
         .count();
     assert_eq!(separators, 4);
     let live: Vec<_> = all.iter().filter(|button| button.enabled).collect();
-    assert_eq!(live.len(), 3);
+    let live_tools = BoardPlaceTool::PLACE_MENU
+        .iter()
+        .filter(|tool| tool.command().is_some())
+        .count();
+    assert_eq!(live.len(), 3 + live_tools, "move, sketch, view and the live tools");
     assert!(runs(all[1], "move_object"), "Move follows the filter");
+    assert!(runs(all[5], "place_board_via"), "#2373: Via is live");
     assert!(runs(all[15], "board_sketch"));
     assert!(runs(all[16], "view_rotate"), "View closes the bar");
     for button in all.iter().filter(|button| !button.enabled) {
@@ -143,9 +149,12 @@ fn the_bar_greys_the_place_menus_board_tools() {
         .map(|button| button.tooltip.clone())
         .collect();
     greyed.sort();
-    let mut place: Vec<String> = UnavailableBoardTool::PLACE_MENU
+    let mut place: Vec<String> = BoardPlaceTool::PLACE_MENU
         .iter()
-        .map(|tool| t!(&i18n, tool.reason()).into_string())
+        .filter_map(|tool| match tool.state() {
+            ToolState::Unavailable(reason) => Some(t!(&i18n, reason).into_string()),
+            ToolState::Live(_) => None,
+        })
         .chain([
             t!(&i18n, ids::PCB_BAR_FILTER_UNAVAILABLE).into_string(),
             t!(&i18n, ids::PCB_BAR_ALIGN_UNAVAILABLE).into_string(),

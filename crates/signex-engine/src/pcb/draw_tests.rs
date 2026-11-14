@@ -1,0 +1,50 @@
+use signex_types::pcb::{PcbBoard, Point};
+use uuid::Uuid;
+
+use super::*;
+use crate::pcb::BoardEngine;
+
+/// A board with a net-3 track along y = 0 on the top layer and a setup
+/// whose via is 0.8 mm with a 0.4 mm drill.
+fn board() -> PcbBoard {
+    serde_json::from_value(serde_json::json!({
+        "uuid": Uuid::from_u128(1),
+        "setup": {"grid_size": 1.0, "trace_width": 0.3, "via_diameter": 0.8,
+                  "via_drill": 0.4, "clearance": 0.2},
+        "nets": [{"number": 3, "name": "GND"}],
+        "segments": [{"uuid": Uuid::from_u128(2), "start": {"x": 0.0, "y": 0.0},
+                      "end": {"x": 10.0, "y": 0.0}, "width": 0.5,
+                      "layer": "TopCopper", "net": 3}]
+    }))
+    .unwrap()
+}
+
+#[test]
+fn a_via_takes_the_setup_size_and_the_net_it_lands_on_in_one_step() {
+    let mut engine = BoardEngine::new(board(), 1);
+    let before = serde_json::to_string(engine.board()).unwrap();
+    let on_track = Uuid::from_u128(0x10);
+    let bare = Uuid::from_u128(0x11);
+    let command = place_via(engine.board(), on_track, Point::new(5.0, 0.0));
+    engine.execute(command).unwrap();
+    let command = place_via(engine.board(), bare, Point::new(5.0, 5.0));
+    engine.execute(command).unwrap();
+
+    let via = |id| engine.board().vias.iter().find(|v| v.uuid == id).unwrap();
+    assert_eq!((via(on_track).diameter, via(on_track).drill), (0.8, 0.4));
+    assert_eq!(via(on_track).net, 3, "the via joins the track's net");
+    assert_eq!(via(bare).net, 0, "bare board has no net");
+    assert_eq!(via(bare).layers, ["TopCopper", "BottomCopper"]);
+
+    engine.undo().unwrap();
+    engine.undo().unwrap();
+    assert_eq!(serde_json::to_string(engine.board()).unwrap(), before);
+}
+
+#[test]
+fn a_board_without_setup_sizes_takes_the_pcb_defaults() {
+    let board: PcbBoard = serde_json::from_value(serde_json::json!({"uuid": Uuid::nil()})).unwrap();
+    let via = new_via(&board, Uuid::from_u128(5), Point::new(1.0, 1.0));
+    assert_eq!(via.diameter, signex_types::pcb::PCB_DEFAULT_VIA_DIAMETER_MM);
+    assert_eq!(via.drill, signex_types::pcb::PCB_DEFAULT_VIA_DRILL_MM);
+}

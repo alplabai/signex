@@ -236,6 +236,10 @@ impl Signex {
             self.end_pcb_carry();
             return Task::none();
         }
+        // A board placement tool ends its shape, then itself (#2373).
+        if self.step_back_board_tool() {
+            return Task::none();
+        }
         let canvas = self.interaction_state.active_canvas();
         let placement_active = self.interaction_state.current_tool != Tool::Select
             || canvas.ghost_label.is_some()

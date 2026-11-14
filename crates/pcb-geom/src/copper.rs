@@ -139,3 +139,67 @@ pub fn copper_layers(mask: u32) -> Vec<CopperLayer> {
         .filter(|&layer| mask & (1 << layer_bit(layer)) != 0)
         .collect()
 }
+
+/// The net of the netted copper under `at` on any copper layer in `layers`
+/// (a [`layer_bit`] mask): the net a new track or via there joins. `None`
+/// over bare board or copper of no net. Where copper of two nets overlaps,
+/// the first one listed by [`collect_copper`] wins: pads, then tracks, then
+/// vias.
+pub fn net_at(board: &PcbBoard, at: PointNm, layers: u32) -> Option<u32> {
+    collect_copper(board)
+        .into_iter()
+        .find(|item| item.layers & layers != 0 && item.shape.contains(at, 0))
+        .map(|item| item.net)
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_types::pcb::{Point, Segment};
+    use uuid::Uuid;
+
+    use super::*;
+
+    fn board() -> PcbBoard {
+        let track = Segment {
+            uuid: Uuid::from_u128(2),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(10.0, 0.0),
+            width: 0.5,
+            layer: "TopCopper".into(),
+            net: 3,
+            unknown_columns: Default::default(),
+        };
+        PcbBoard {
+            sketch: None,
+            uuid: Uuid::nil(),
+            version: 1,
+            generator: String::new(),
+            thickness: 1.6,
+            outline: Vec::new(),
+            layers: Vec::new(),
+            setup: None,
+            nets: Vec::new(),
+            footprints: Vec::new(),
+            segments: vec![track],
+            vias: Vec::new(),
+            zones: Vec::new(),
+            graphics: Vec::new(),
+            texts: Vec::new(),
+            unknown: Default::default(),
+        }
+    }
+
+    fn at(x: f64, y: f64) -> PointNm {
+        PointNm::from_mm(Point::new(x, y), "at").unwrap()
+    }
+
+    #[test]
+    fn net_at_finds_the_copper_under_the_point_on_the_layers_asked() {
+        let board = board();
+        let top = 1 << layer_bit(CopperLayer::Top);
+        let bottom = 1 << layer_bit(CopperLayer::Bottom);
+        assert_eq!(net_at(&board, at(5.0, 0.2), top), Some(3));
+        assert_eq!(net_at(&board, at(5.0, 0.2), bottom), None, "other layer");
+        assert_eq!(net_at(&board, at(5.0, 1.0), top), None, "bare board");
+    }
+}

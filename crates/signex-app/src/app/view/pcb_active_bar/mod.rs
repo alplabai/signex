@@ -18,7 +18,7 @@ use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem, 
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, MenuMetrics};
 
 use crate::app::command::{CommandContext, is_enabled};
-use crate::app::pcb_tools::UnavailableBoardTool;
+use crate::app::pcb_tools::{BoardPlaceTool, ToolState};
 use crate::app::{Message, PcbBarMenu, PcbBarMsg, PcbMsg, Signex};
 use crate::icons as ic;
 use crate::keymap::AppCommandId;
@@ -163,6 +163,18 @@ fn unavailable_button(
     })
 }
 
+/// The button of a board placement tool: it arms the tool, or is greyed
+/// with why while the board editor cannot run it (#2373).
+fn tool_button(tool: BoardPlaceTool, tid: ThemeId, i18n: &I18n) -> ActiveBarItem<Message> {
+    let icon = tool_icon(tool, tid);
+    match tool.state() {
+        ToolState::Live(command) => {
+            command_button(command, icon, t!(i18n, tool.texts().0).into_string())
+        }
+        ToolState::Unavailable(reason) => unavailable_button(icon, reason, i18n),
+    }
+}
+
 /// The PCB Active Bar's slots in order. `open` is the open dropdown, whose
 /// button is drawn selected.
 pub(in crate::app::view) fn pcb_bar_items(
@@ -172,7 +184,7 @@ pub(in crate::app::view) fn pcb_bar_items(
 ) -> Vec<ActiveBarItem<Message>> {
     let svg = ActiveBarIcon::Svg;
     let off = |icon, tooltip| unavailable_button(icon, tooltip, i18n);
-    let tool = |tool: UnavailableBoardTool| off(tool_icon(tool, tid), tool.reason());
+    let tool = |tool: BoardPlaceTool| tool_button(tool, tid, i18n);
     let mut items = vec![
         off(svg(ic::icon_filter(tid)), ids::PCB_BAR_FILTER_UNAVAILABLE),
         menu_button(
@@ -189,7 +201,7 @@ pub(in crate::app::view) fn pcb_bar_items(
     items.extend(BAR_PLACE_TOOLS.into_iter().map(&tool));
     items.extend([
         ActiveBarItem::Separator,
-        tool(UnavailableBoardTool::InteractiveRouting),
+        tool(BoardPlaceTool::InteractiveRouting),
         ActiveBarItem::Separator,
         command_button(
             "board_sketch",
@@ -209,26 +221,26 @@ pub(in crate::app::view) fn pcb_bar_items(
     items
 }
 
-/// The place group's greyed tools, in the PCB editor's order; Interactive
-/// Routing has a group of its own.
-const BAR_PLACE_TOOLS: [UnavailableBoardTool; 11] = [
-    UnavailableBoardTool::Component,
-    UnavailableBoardTool::Pad,
-    UnavailableBoardTool::Via,
-    UnavailableBoardTool::Track,
-    UnavailableBoardTool::Arc,
-    UnavailableBoardTool::Fill,
-    UnavailableBoardTool::SolidRegion,
-    UnavailableBoardTool::PolygonPour,
-    UnavailableBoardTool::TextString,
-    UnavailableBoardTool::Dimension,
-    UnavailableBoardTool::Keepout,
+/// The place group's tools, in the PCB editor's order; Interactive Routing
+/// has a group of its own.
+const BAR_PLACE_TOOLS: [BoardPlaceTool; 11] = [
+    BoardPlaceTool::Component,
+    BoardPlaceTool::Pad,
+    BoardPlaceTool::Via,
+    BoardPlaceTool::Track,
+    BoardPlaceTool::Arc,
+    BoardPlaceTool::Fill,
+    BoardPlaceTool::SolidRegion,
+    BoardPlaceTool::PolygonPour,
+    BoardPlaceTool::TextString,
+    BoardPlaceTool::Dimension,
+    BoardPlaceTool::Keepout,
 ];
 
 /// The button icon of `tool`: the footprint editor's where one fits, its
 /// glyphs for pad and via.
-fn tool_icon(tool: UnavailableBoardTool, tid: ThemeId) -> ActiveBarIcon {
-    use UnavailableBoardTool as T;
+fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
+    use BoardPlaceTool as T;
     let svg = ActiveBarIcon::Svg;
     match tool {
         T::Component => svg(ic::icon_component(tid)),

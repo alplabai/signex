@@ -15,6 +15,7 @@ mod clipboard;
 mod command;
 pub mod component;
 pub mod designators;
+pub mod draw;
 pub mod eco;
 mod engine;
 mod error;

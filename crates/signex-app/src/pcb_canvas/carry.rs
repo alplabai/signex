@@ -152,6 +152,29 @@ pub fn carry_delta(
     }
 }
 
+/// Where a placement tool's point at `to` lands (#2373): an object point
+/// within the snap distance, else the nearest point of the board's grid when
+/// grid snapping is on, else `to` itself. `active` is the active copper
+/// layer.
+pub fn snap_point(board: &PcbBoard, to: Point, snap: &PcbSnapOptions, active: CopperLayer) -> Point {
+    if let Some(layers) = snap.layer_mask(active) {
+        let none = BTreeSet::new();
+        let query = SnapQuery {
+            objects: &snap.objects,
+            layers,
+            skip: &none,
+            radius_mm: snap.distance.factor() * grid_step_mm(board),
+        };
+        if let Some(target) = object_snap_point(board, to, &query) {
+            return target;
+        }
+    }
+    if !snap.to_grids {
+        return to;
+    }
+    snap_delta(Point::new(0.0, 0.0), to, grid_step_mm(board))
+}
+
 /// `board` without `footprints`: what a drag preview leaves in place.
 pub fn board_without(board: &PcbBoard, footprints: &BTreeSet<Uuid>) -> PcbBoard {
     let mut rest = PcbBoard {

@@ -6,6 +6,7 @@
 //! palette, and a future CLI all route a command id through here on
 //! their way to `update`.
 
+use crate::app::pcb_tools::BoardPlaceTool;
 use crate::keymap::AppCommandId;
 
 use super::CommandArgs;
@@ -66,6 +67,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     let text_edit = |target| Message::TextEdit(TextEditMsg::Requested(target));
     let pcb_view = |event| Message::Pcb(PcbMsg::View(event));
     let view_turn = |event| Message::Pcb(PcbMsg::ViewRotation(event));
+    let board_tool = |tool| Message::Pcb(PcbMsg::PlaceToolPicked(tool));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -291,6 +293,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "toggle_ratsnest" => pcb_view(PcbViewMsg::RatsnestVisibilityToggled),
         "toggle_origin_marker" => pcb_view(PcbViewMsg::OriginMarkerVisibilityToggled),
         "board_sketch" => Message::Pcb(PcbMsg::Sketch(crate::app::BoardSketchMsg::ModeToggled)),
+        "place_board_via" => board_tool(BoardPlaceTool::Via),
         "next_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: true }),
         "prev_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: false }),
         "next_signal_layer" => pcb_view(PcbViewMsg::SignalLayerStepped { forward: true }),

@@ -62,6 +62,9 @@ pub enum PcbMsg {
     BackAnnotate(crate::app::BackAnnotateMsg),
     /// The PCB Active Bar's dropdowns (#2352).
     Bar(PcbBarMsg),
+    /// A board placement tool was picked (its command ran, #2373): it is
+    /// armed on the board in view of the window the command ran in.
+    PlaceToolPicked(crate::app::pcb_tools::BoardPlaceTool),
 }
 
 /// A dropdown of the PCB Active Bar (#2352).

@@ -25,7 +25,9 @@ mod tessellate;
 mod viewport_resize;
 
 pub use camera::BoardCamera;
-pub use carry::{CarryKind, PasteLoad, PcbCarry, board_without, carried_board, carry_delta};
+pub use carry::{
+    CarryKind, PasteLoad, PcbCarry, board_without, carried_board, carry_delta, snap_point,
+};
 pub use content::BoardContentLayer;
 pub use highlight::{Highlight, HighlightLayer};
 pub use msg::PcbCanvasMsg;

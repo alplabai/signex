@@ -458,9 +458,9 @@ fn place_rows(app: &Signex) -> Vec<MenuItem> {
         .collect()
 }
 
-/// #2360: on a board, Place lists the board's tools. The ones the board
-/// editor cannot run yet are greyed with the PCB Active Bar's reason, and
-/// Board Sketch runs its command.
+/// #2360, #2373: on a board, Place lists the board's tools. A live tool runs
+/// its command, the ones the board editor cannot run yet are greyed with the
+/// PCB Active Bar's reason, and Board Sketch runs its command.
 #[test]
 fn place_on_a_board_lists_the_boards_tools() {
     let mut app = loaded_board_app();
@@ -484,7 +484,17 @@ fn place_on_a_board_lists_the_boards_tools() {
             "Board Sketch",
         ]
     );
-    for row in &rows[..12] {
+    let tools = crate::app::pcb_tools::BoardPlaceTool::PLACE_MENU;
+    for (row, tool) in rows[..12].iter().zip(tools) {
+        if let Some(command) = tool.command() {
+            // #2373: a live tool runs the command its Active Bar button runs.
+            assert!(row.is_enabled(), "{} is live", row.label);
+            assert!(matches!(
+                row.dispatches(),
+                Some(crate::menu_bar::MenuMessage::Command(id)) if id.as_str() == command
+            ));
+            continue;
+        }
         let ItemState::Placeholder {
             reason: Some(reason),
         } = &row.state
@@ -498,9 +508,10 @@ fn place_on_a_board_lists_the_boards_tools() {
         );
     }
     let live: Vec<&MenuItem> = rows.iter().filter(|row| row.is_enabled()).collect();
-    assert_eq!(live.len(), 1);
+    let live_tools = tools.iter().filter(|tool| tool.command().is_some()).count();
+    assert_eq!(live.len(), 1 + live_tools);
     assert!(matches!(
-        live[0].dispatches(),
+        live[live_tools].dispatches(),
         Some(crate::menu_bar::MenuMessage::Command(id)) if id.as_str() == "board_sketch"
     ));
     let _ = click(&mut app, "Place/Board Sketch");
