@@ -198,7 +198,9 @@ fn a_drc_pick_on_a_hidden_layer_selects_nothing_and_delete_deletes_nothing() {
     let path = write_board(tmp.path(), "board.snxpcb", board);
     let mut app = new_app();
     open(&mut app, &path);
+    let serial = crate::pcb_drc::drc_serial();
     send(&mut app, Message::Pcb(PcbMsg::DrcRequested));
+    drop(serial);
     let violations = app
         .interaction_state
         .pcb_drc
