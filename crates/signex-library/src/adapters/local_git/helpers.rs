@@ -140,56 +140,59 @@ pub(super) fn stage_and_commit_with(
     let oid = repo.commit(Some("HEAD"), signature, signature, message, &tree, &parents)?;
     // Best effort: a failure here leaves the index stale for this one path
     // (shown as a change by `git status`), never a wrong commit.
-    // The index is re-read on every attempt, so an entry another process
-    // staged while we waited for its `index.lock` is kept (#900).
+    // The index is read only while we hold `index.lock`, so an entry another
+    // process staged while we waited for its lock is kept (#900, #2337).
     let mut main_entry = main_entry;
     if let (Some(entry), Some(blob)) = (main_entry.as_mut(), blob) {
         // An LFS path's entry records the pointer that was committed.
         entry.id = blob;
     }
     let updated = retry_on_git_lock(repo.path(), || {
-        let mut index = repo.index()?;
-        index.read(true)?;
-        for removed in removed_rel_paths {
-            if index.get_path(removed, 0).is_some() {
-                index.remove_path(removed)?;
-            }
-        }
-        for (path, blob) in &staged {
-            if Some(*path) == rel_path
-                && let Some(entry) = &main_entry
-            {
-                index.add(entry)?;
-                continue;
-            }
-            index.add_path(path)?;
-            // `add_path` stores the raw bytes of the working file together
-            // with its stat data; an LFS path's entry records the pointer
-            // that was committed. When the caller supplied the bytes for
-            // `rel_path`, the working file may have moved on since: pairing
-            // the committed blob id with that file's stat would make git trust
-            // the cache and call it clean, hiding the file's real content from
-            // every later checkout or reset. Zeroed stat data forces git to
-            // re-hash the file and report it modified. The extra files are
-            // always committed from the working tree, so they match.
-            let working_differs = content.is_some()
-                && Some(*path) == rel_path
-                && super::lfs::working_blob_id(repo, workdir, path).ok() != Some(*blob);
-            if let Some(mut entry) = index.get_path(path, 0)
-                && (entry.id != *blob || working_differs)
-            {
-                entry.id = *blob;
-                if working_differs {
-                    entry.ctime = git2::IndexTime::new(0, 0);
-                    entry.mtime = git2::IndexTime::new(0, 0);
-                    entry.file_size = 0;
-                    entry.ino = 0;
+        super::index_lock::update_index_locked(repo, |index| {
+            for removed in removed_rel_paths {
+                super::index_lock::resolve_conflict(index, removed)?;
+                if index.get_path(removed, 0).is_some() {
+                    index.remove_path(removed)?;
                 }
-                index.add(&entry)?;
             }
-        }
-        index.write()
-    });
+            for (path, blob) in &staged {
+                if Some(*path) == rel_path
+                    && let Some(entry) = &main_entry
+                {
+                    super::index_lock::resolve_conflict(index, path)?;
+                    index.add(entry)?;
+                    continue;
+                }
+                index.add_path(path)?;
+                // `add_path` stores the raw bytes of the working file together
+                // with its stat data; an LFS path's entry records the pointer
+                // that was committed. When the caller supplied the bytes for
+                // `rel_path`, the working file may have moved on since: pairing
+                // the committed blob id with that file's stat would make git trust
+                // the cache and call it clean, hiding the file's real content from
+                // every later checkout or reset. Zeroed stat data forces git to
+                // re-hash the file and report it modified. The extra files are
+                // always committed from the working tree, so they match.
+                let working_differs = content.is_some()
+                    && Some(*path) == rel_path
+                    && super::lfs::working_blob_id(repo, workdir, path).ok() != Some(*blob);
+                if let Some(mut entry) = index.get_path(path, 0)
+                    && (entry.id != *blob || working_differs)
+                {
+                    entry.id = *blob;
+                    if working_differs {
+                        entry.ctime = git2::IndexTime::new(0, 0);
+                        entry.mtime = git2::IndexTime::new(0, 0);
+                        entry.file_size = 0;
+                        entry.ino = 0;
+                    }
+                    index.add(&entry)?;
+                }
+            }
+            Ok(())
+        })
+    })
+    .and_then(|edited| edited);
     if let Err(e) = updated {
         tracing::warn!(
             target: "signex::library",
@@ -227,12 +230,32 @@ fn run_before_commit_hook() {
 /// (its blob, the clean-filtered disk bytes, hashed and stored; its stat
 /// taken), without writing the index.
 fn staged_entry(repo: &git2::Repository, rel_path: &Path) -> Result<git2::IndexEntry, git2::Error> {
+    let mut entries = staged_entries(repo, &[rel_path])?;
+    entries
+        .pop()
+        .ok_or_else(|| git2::Error::from_str("staged entry missing"))
+}
+
+/// [`staged_entry`] for each of `rel_paths`, in one pass over the
+/// repository's own index (so its case and file-mode settings apply). Done
+/// before taking `index.lock`, so the hashing never runs under it.
+pub(super) fn staged_entries(
+    repo: &git2::Repository,
+    rel_paths: &[&Path],
+) -> Result<Vec<git2::IndexEntry>, git2::Error> {
     let mut index = repo.index()?;
-    index.add_path(rel_path)?;
-    let entry = index.get_path(rel_path, 0);
-    // `repo.index()` is shared: drop the in-memory addition again.
+    let entries: Result<Vec<_>, _> = rel_paths
+        .iter()
+        .map(|path| {
+            index.add_path(path)?;
+            index
+                .get_path(path, 0)
+                .ok_or_else(|| git2::Error::from_str("staged entry missing"))
+        })
+        .collect();
+    // `repo.index()` is shared: drop the in-memory additions again.
     index.read(true)?;
-    entry.ok_or_else(|| git2::Error::from_str("staged entry missing"))
+    entries
 }
 
 /// `base` without the entry at `path`, written as new trees up to the
@@ -715,14 +738,19 @@ pub(super) fn commit_initial(
         &parents,
     )
     .map_err(backend("git initial commit"))?;
-    let mut index = repo.index().map_err(backend("git index"))?;
-    for name in &names {
-        index
-            .add_path(Path::new(name))
-            .map_err(backend("git add"))?;
-    }
-    index.write().map_err(backend("git index write"))?;
-    Ok(())
+    let paths: Vec<&Path> = names.iter().map(Path::new).collect();
+    let entries = staged_entries(repo, &paths).map_err(backend("git add"))?;
+    retry_on_git_lock(repo.path(), || {
+        super::index_lock::update_index_locked(repo, |index| {
+            for (path, entry) in paths.iter().zip(&entries) {
+                super::index_lock::resolve_conflict(index, path)?;
+                index.add(entry)?;
+            }
+            Ok(())
+        })
+    })
+    .and_then(|edited| edited)
+    .map_err(backend("git index write"))
 }
 
 /// Slugify a human-facing name into a safe filename component.

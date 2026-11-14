@@ -147,3 +147,42 @@ its batch has one is parked in `DocumentState.parked_save_all_settles`; the last
 write to end resumes it, so a late failure lands in that Save All's listing
 and a closed editor or abandoned save cannot leave it parked. Plain rows are
 unaffected: their write task is in the chain.
+
+## The git index after a commit (#2337)
+
+A commit is built from trees, never from the shared index. Afterwards the
+index is updated so `git status` agrees with the commit, through
+`index_lock::update_index_locked`. libgit2's `Index::write` takes
+`index.lock` only for the write, so an index read before it can be one that
+another git process replaced in the meantime, and writing it back drops what
+that process staged. The update therefore follows git's own lock protocol:
+
+1. Create `index.lock` with create-new. If it exists another process holds
+   it: the update fails as `Locked` and `retry_on_git_lock` waits, refusing
+   a lock older than 10 s as stale.
+2. Read the repository's own index again (`read(true)`), now that nobody
+   else can publish one. It is the repository's object, so
+   `core.ignorecase`, `core.filemode` and `core.symlinks` apply to every
+   `add_path` and lookup.
+3. Apply the edit.
+4. Copy the on-disk index to `index.signex-scratch`, carry over only the
+   entries that differ (so the tree cache and resolve-undo records of other
+   paths survive), and write it with the repository as owner, so libgit2
+   smudges racily clean entries. libgit2 writes an index only to its own
+   path, hence the scratch file.
+5. Rename the scratch file onto `index.lock`, then `index.lock` onto
+   `index`: one rename publishes and unlocks. On Windows a sharing violation
+   on a rename is reported as `Locked` and the update retried.
+
+If anything fails, or the edit panics, a guard removes the lock and scratch
+file this call made, points the repository at its own index again and drops
+the unpublished edits. Resolve-undo records the edit creates are not carried
+over: git2 has no API for them.
+
+The lock is held from step 1 to step 5, so large hashing stays outside it:
+Re-init and a library's first commit hash their files (`staged_entries`),
+and Re-init installs the LFS hook, before taking the lock; under it they
+only apply the prepared entries. A save still stages its own few files with
+`add_path` under the lock. A hold past the stale limit makes a waiting
+writer give up with an error asking the user to remove a lock that is still
+in use.
