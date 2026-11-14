@@ -212,9 +212,12 @@ impl Signex {
         Task::perform(
             async move {
                 use signex_i18n::ids;
-                let title = i18n.message_plain(ids::FILE_DIALOG_EXPORT_ERC_REPORT, &[]);
                 target
-                    .dialog(picker, &title)
+                    .dialog(
+                        picker
+                            .dialog()
+                            .title_in(&i18n, ids::FILE_DIALOG_EXPORT_ERC_REPORT),
+                    )
                     .await
                     .filter_in(&i18n, ids::FILE_FILTER_HTML_EXT, &["html", "htm"])
                     .filter_in(&i18n, ids::FILE_FILTER_PDF_EXT, &["pdf"])

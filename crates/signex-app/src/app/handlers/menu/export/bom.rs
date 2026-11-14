@@ -243,10 +243,10 @@ impl Signex {
         let default_name_owned = target.file_name("bom", "-bom", ext);
         // The filter name is the BOM format's own label (#2060).
         let filter_label_owned = filter_label.to_string();
-        let title = self
-            .ui_state
-            .i18n
-            .message_plain(signex_i18n::ids::FILE_DIALOG_EXPORT_BOM, &[]);
+        let base = picker.dialog().title_in(
+            &self.ui_state.i18n,
+            signex_i18n::ids::FILE_DIALOG_EXPORT_BOM,
+        );
         let filter_exts_owned: Vec<String> = filter_exts.iter().map(|s| s.to_string()).collect();
 
         // The options and source ride inside `BomFinished`, so a second
@@ -260,7 +260,7 @@ impl Signex {
             async move {
                 let exts_refs: Vec<&str> = filter_exts_owned.iter().map(String::as_str).collect();
                 target
-                    .dialog(picker, &title)
+                    .dialog(base)
                     .await
                     .add_filter(filter_label_owned.as_str(), &exts_refs)
                     .set_file_name(default_name_owned.as_str())

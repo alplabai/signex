@@ -89,6 +89,7 @@ impl Picker {
         FileDialog {
             picker: self.clone(),
             title: String::new(),
+            log_title: None,
             filters: Vec::new(),
             directory: None,
             file_name: None,
@@ -101,6 +102,9 @@ impl Picker {
 pub struct FileDialog {
     picker: Picker,
     pub(super) title: String,
+    /// The en-US title for log lines, which stay locale-invariant; `None`
+    /// when the title was not set from the catalog.
+    log_title: Option<String>,
     pub(super) filters: Vec<(String, Vec<String>)>,
     pub(super) directory: Option<PathBuf>,
     pub(super) file_name: Option<String>,
@@ -109,6 +113,7 @@ pub struct FileDialog {
 impl FileDialog {
     pub fn set_title(mut self, title: impl Into<String>) -> Self {
         self.title = title.into();
+        self.log_title = None;
         self
     }
 
@@ -121,7 +126,9 @@ impl FileDialog {
     /// The window title from the catalog, in `i18n`'s language (#2058). Plain
     /// text: the OS draws it.
     pub fn title_in(self, i18n: &signex_i18n::I18n, id: signex_i18n::MessageId) -> Self {
-        self.set_title(i18n.message_plain(id, &[]))
+        let mut dialog = self.set_title(i18n.message_plain(id, &[]));
+        dialog.log_title = Some(signex_i18n::I18n::en_us().message_plain(id, &[]));
+        dialog
     }
 
     /// A filter named from the catalog, in `i18n`'s language (#2058).
@@ -231,7 +238,9 @@ impl FileDialog {
     }
 
     fn title_or_default(&self) -> &str {
-        if self.title.is_empty() {
+        if let Some(english) = &self.log_title {
+            english
+        } else if self.title.is_empty() {
             "File dialog"
         } else {
             &self.title

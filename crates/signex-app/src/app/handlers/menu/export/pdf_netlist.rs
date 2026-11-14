@@ -121,15 +121,15 @@ impl Signex {
         let target = self.save_target(Some(&source));
         let picker = self.ui_state.io.picker.clone();
         let file_name = format.file_name(target.stem().unwrap_or("schematic"));
-        let title = self
-            .ui_state
-            .i18n
-            .message_plain(signex_i18n::ids::FILE_DIALOG_EXPORT_NETLIST, &[]);
+        let base = picker.dialog().title_in(
+            &self.ui_state.i18n,
+            signex_i18n::ids::FILE_DIALOG_EXPORT_NETLIST,
+        );
         Some(Task::perform(
             async move {
                 // The filter name is the netlist format's own label (#2060).
                 target
-                    .dialog(picker, &title)
+                    .dialog(base)
                     .await
                     .add_filter(format.label(), &[format.extension()])
                     .set_file_name(file_name)

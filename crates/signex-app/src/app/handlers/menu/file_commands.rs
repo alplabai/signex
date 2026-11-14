@@ -67,9 +67,12 @@ impl Signex {
                 let i18n = self.ui_state.i18n.clone();
                 Some(Task::perform(
                     async move {
-                        let title = i18n.message_plain(ids::FILE_DIALOG_NEW_PROJECT, &[]);
                         target
-                            .new_project_dialog(picker, &title)
+                            .new_project_dialog(
+                                picker
+                                    .dialog()
+                                    .title_in(&i18n, ids::FILE_DIALOG_NEW_PROJECT),
+                            )
                             .await
                             .set_file_name("Untitled.snxprj")
                             .filter_in(&i18n, ids::FILE_FILTER_PROJECT, &["snxprj"])
@@ -294,8 +297,10 @@ impl Signex {
                 let i18n = self.ui_state.i18n.clone();
                 Task::perform(
                     async move {
-                        let title = i18n.message_plain(ids::FILE_DIALOG_SAVE_SCHEMATIC_AS, &[]);
-                        let dialog = target.save_as_dialog(picker, &title).await.filter_in(
+                        let base = picker
+                            .dialog()
+                            .title_in(&i18n, ids::FILE_DIALOG_SAVE_SCHEMATIC_AS);
+                        let dialog = target.save_as_dialog(base).await.filter_in(
                             &i18n,
                             ids::FILE_FILTER_SCHEMATIC,
                             &["snxsch"],

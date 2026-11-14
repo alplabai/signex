@@ -235,6 +235,24 @@ fn an_answer_is_used_once_and_must_be_absolute() {
     assert_refused(&mut app, task, "Import Altium Project", "path");
 }
 
+/// #2058: the refusal is a log line, and logs stay locale-invariant, so it
+/// names the dialog by its English title whatever the UI language.
+#[test]
+fn a_refusal_names_the_dialog_in_english_under_any_language() {
+    let (mut app, _serial) = headless_app(&HeadlessAnswers::default());
+    let pref = signex_i18n::LanguagePref::Locale("en-XA".to_owned());
+    let _ = app.update(Message::Ui(crate::app::UiMsg::LanguageChanged(pref)));
+    let task = app.update(Message::Menu(MenuMessage::OpenProject));
+    assert_refused(&mut app, task, "Open Project or Schematic", "path");
+    let task = app.update(Message::Menu(MenuMessage::NewProject));
+    assert_refused(
+        &mut app,
+        task,
+        "New Signex Project (a folder named after the project is created)",
+        "path",
+    );
+}
+
 #[test]
 fn a_headless_link_is_refused_and_reported() {
     let (mut app, _serial) = headless_app(&HeadlessAnswers::default());

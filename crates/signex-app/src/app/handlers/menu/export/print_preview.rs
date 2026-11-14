@@ -291,9 +291,8 @@ impl Signex {
         Some(Task::perform(
             async move {
                 use signex_i18n::ids;
-                let title = i18n.message_plain(ids::FILE_DIALOG_EXPORT_PDF, &[]);
                 target
-                    .dialog(picker, &title)
+                    .dialog(picker.dialog().title_in(&i18n, ids::FILE_DIALOG_EXPORT_PDF))
                     .await
                     .filter_in(&i18n, ids::FILE_FILTER_PDF, &["pdf"])
                     .set_file_name(file_name)
