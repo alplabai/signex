@@ -99,16 +99,18 @@ Decision: define **one** authoritative `Netlist` type in `signex-types` — the 
 
 The GUI is not the only way into signex: `signex-cli` runs catalog commands for scripts and agents, and it must have the same effect as the GUI for the same command. Today that parity is bought by booting the whole GUI model without a window (`boot_headless`). A4 replaces this with one core behind ports. (Attach mode is not part of the motivation: its requests already enter the GUI's `update` loop, and A4 keeps that.)
 
-Some rules in this section are still open decisions in epic #2326, and take effect when both maintainers sign off on this amendment: epic decisions D1 (no selection in the core), D2 (the core grows in place and is lifted into a crate last), D3 (no dialog in the core; file dialogs stay with the front end), D5 (effects as data), D7 (settings as values) and D11 (the shared command crate). Epic D10 (web) is decided: not now (see "A web front end" below).
+Some rules in this section are still open decisions in epic #2326, and take effect when both maintainers sign off on this amendment: epic decisions D1 (no selection in the core), D2 (the core grows in place and is lifted into a crate last), D3 (no dialog in the core; file dialogs stay with the front end), D5 (effects as data), D7 (settings as values) and D11 (the shared command crate). Epic D10 (web) is decided, [not now](https://github.com/alplabai/signex/issues/2326#issuecomment-6884693348) (see "A web front end" below).
 
 **The problem, measured** (origin/trunk content, 2026-11-15, macOS arm64, cold release build). Commands and method: [the research note](research/hexagonal-ddd.md), §12.
 
 | Claim | Measured | Reproduce |
 |---|---|---|
-| The CLI builds the GUI | `signex-cli` pulls 518 distinct crates; the domain crates it needs pull 115. GUI/GPU crates are about 26–32% of the summed compile-unit time of a cold release build, depending on which crates count as GUI; `signex-app` itself adds about 6 points. The binary is 47 MB. | `cargo tree -p signex-cli -e normal --prefix none \| awk 'NF{print $1" "$2}' \| sort -u \| wc -l`; `cargo build --release -p signex-cli --timings` |
+| The CLI builds the GUI | `signex-cli` pulls 518 distinct crates; the domain crates it needs pull 115. GUI/GPU crates are about 26% of the summed compile-unit time of a cold release build, about 32% with `signex-app` itself. The binary is 47 MB. | `cargo tree -p signex-cli -e normal --prefix none \| awk 'NF{print $1" "$2}' \| sort -u \| wc -l`; `cargo build --release -p signex-cli --timings` |
 | The CLI boots the GUI | A run with no commands takes 1.29 s (median of 5 warm runs); `--help` takes 0.026 s. The split inside the boot is not measured. The log shows `dropped an iced action a headless run does not perform kind="window"` three times. | `time signex-cli run <project>.snxprj` |
-| Parity costs work | About ten closed issues and PRs exist only to drive the GUI model headless: #1926, #1927, #1929, #1931, #1932, #1934, #2170, #2172, #2243, and #2155 in part. `gui_only` appears on 175 lines in 6 files of `signex-app`, 157 of them rows of the golden catalog. | `git grep -c gui_only -- crates/signex-app` |
+| Parity costs every new command | Today a command with a headless form is handled twice: a GUI arm in `app/command/bridge.rs` (id → `Message`) and an operand handler in `app/command/operand_handlers.rs`. 20 of the 34 operand-handled ids have both. Every command also carries a `gui_only` flag that headless runs are fenced by (`headless_refusal`, also read by the agent allowlist `allow::refusal`), a required-operand check (`missing_headless_operand`) and, in the CLI, a status correction for dropped windows and refused dialogs (`honest_status`), plus golden rows in `catalog.golden.tsv` (240 commands), `tests/golden/commands.json` and, when bound, the three `builtin_profiles*.golden.tsv`. Under A4 a command is one catalog row (the golden rows stay) and one core handler, or one GUI-only table entry; `gui_only` goes in slice 6 and `honest_status` in slice 9, while the agent allowlist stays as policy.¹ | research note §12 |
 | IO runs on the update path | 156 production `std::fs::` call sites under `crates/signex-app/src/app`. In a sample of 15, about half run synchronously inside a `&mut self` handler (for example `canonicalize` in `handlers/document_identity.rs`, `load_sheet` in the Sync Sheet Pins menu action, the agent registry and journal). That half is a sample estimate. | research note §12 |
+
+¹ Headless-parity work so far, some of which A4 reuses (#1934, #2172): #1926, #1927, #1929, #1931, #1932, #1934, #2170, #2172, #2243, and #2155 in part.
 
 **#2325 is a symptom, not the reason.** The Windows stack overflow sits on the CLI path, but boxing `Signex` or running the session on a thread with a bigger stack fixes it. It does not by itself justify A4.
 
@@ -217,8 +219,8 @@ A rule about document content belongs in the engine or a domain crate, never in 
 
 | # | What ships | First payoff | Stopping here is fine | Revert path |
 |---|---|---|---|---|
-| 0 | #2325: box `Signex` / run the CLI session on a thread with an explicit stack | Windows CLI runs again | yes (this is alternative (a)) | revert the PR |
-| 1 | `signex-commands` crate and `app/core/` behind the boundary guard, one command ported end to end (the research note's minimum, §11) | the guard holds; the CLI path for that command no longer needs `Signex` | yes | revert; the catalog golden files are byte-equal, so nothing else moves |
+| 0 | #2325: box `Signex` / run the CLI session on a thread with an explicit stack | Windows CLI runs again | yes (the first part of alternative (a)) | revert the PR |
+| 1 | Extract `signex-commands`: `Modifiers` / `ShortcutContext` out of `binding.rs` (`from_iced` stays in the app), `DocumentTarget` and `PcbTargets`; catalog JSON and `catalog.golden.tsv` byte-equal. The boundary guard script lands here. Low risk. | the command vocabulary is an iced-free crate that the CLI and a later core can depend on, and the guard holds from the start. `OperandKind` and the wire types follow in S-A; the CLI still boots `boot_headless` until slice 9. | yes | revert; the golden files are byte-equal, so nothing else moves |
 | C | `CoreEvent` / `Effect` / `EffectResult`, `CoreContext`, the (id, form) parity skeleton and the test adapter | a frozen contract for later moves | yes | revert; no behaviour moved |
 | 2 | Event seam: edit tails split into a core half that returns events, plus a projector | dirty marks and notices have one source | yes | revert restores the inline tails; the removed-call list in the PR says what comes back |
 | 3 | `load_gateway` split | load and restore run without the GUI | yes | revert both PRs together |
@@ -230,7 +232,7 @@ A rule about document content belongs in the engine or a domain crate, never in 
 | S-A | Agent wire protocol and `OperandKind` in `signex-commands` | the CLI no longer imports `signex_app` for attach | yes | revert |
 | S-L | Library, pricing, editors and 3D import onto the core | the largest untouched area joins | yes | revert per sub-area |
 | 9 | Lift `app/core/` into `signex-workspace`; the CLI drops `signex-app` | the CLI stops building the GUI crates | yes | revert the move; the module stays in place |
-| S-IO, S-P | Domain IO out for wasm32; the plugin host | — | not scheduled: S-IO waits on a web decision (epic D10), S-P on #1707 | — |
+| S-IO, S-P | Domain IO out for wasm32; the plugin host | — | not scheduled: S-IO waits on a future web front end being scheduled, S-P on #1707 | — |
 
 **Safety net before the high-risk slices.** The epic rates slices 2, 3 and 5 (and S-L) high or medium-high, and the research note (§10, item 1) names the reason: the persistence invariants become state machines across `complete`. Before slice 2 starts, these tests run against the test adapter, not only against the ledger:
 - **Per-path write order (#997):** an older write never lands after a newer one to the same path. Today it is pinned at the ledger level (`persist/document_save.rs`, `an_older_snapshot_scheduled_last_never_overwrites_a_newer_one`).
@@ -239,7 +241,7 @@ A rule about document content belongs in the engine or a domain crate, never in 
 
 Before slice 2 also lands the event-granularity benchmark of the research note (§10, item 4): a drag must not over-invalidate the projector.
 
-**A web front end (epic D10).** Maintainer decision 2026-11-15: not now; native first. Keeping the core free of iced and of native IO keeps a web front end possible later. That is an option, not a commitment: there is no `wasm32` build gate now, and S-IO is not scheduled.
+**A web front end (epic D10).** [Maintainer decision 2026-11-15](https://github.com/alplabai/signex/issues/2326#issuecomment-6884693348): not now; native first; a browser host only if a web front end is scheduled. Keeping the core free of iced and of native IO keeps a web front end possible later. That is an option, not a commitment: there is no `wasm32` build gate now, and S-IO is not scheduled.
 
 ---
 

@@ -329,11 +329,29 @@ cargo tree -e normal --prefix none -p signex-types -p signex-net -p signex-erc -
 
 Counting lines of `cargo tree --prefix none | sort -u` instead gives 685, because the `(*)` repeat markers make duplicate lines; 518 is the distinct count.
 
-**Build time.** `cargo build --release -p signex-cli --timings` took 6 min 01 s of wall time from cold. Summed over the compile units of the timing report, GUI/GPU crates (iced, wgpu, winit, naga, the font and text-shaping stack, the platform windowing crates, `signex-gfx`, `signex-widgets`, `signex-renderer`) take about 26% with a narrow name list and about 32% with a broader one; `signex-app` itself adds about 6 points. Summed unit time is not wall time, since units build in parallel. The release binary is 47 MB.
+**Build time.** `cargo build --release -p signex-cli --timings` took 6 min 01 s of wall time from cold. Summed over the compile units of the timing report (`unit-durations`: one `name seconds` line per unit, 2475 s in total), the GUI/GPU crates matched by the list below take 655 s, about 26%; with `signex-app` (151 s) it is about 32%. A broader list (image codecs, more of the platform stack) gives somewhat more. Summed unit time is not wall time, since units build in parallel. The release binary is 47 MB.
+
+```sh
+GUI='^(iced|wgpu|winit|naga|glyphon|cosmic-text|softbuffer|tiny-skia|metal|ash|gpu-|glow|glutin|khronos|raw-window|objc|block2|core-graphics|core-text|window_clipboard|clipboard|lyon|resvg|usvg|kurbo|signex-gfx|signex-widgets|signex-renderer|muda|rfd|dpi|sctk|smithay|wayland|x11|xkb|calloop|cursor-icon|d3d12|windows|etagere|guillotiere|font-types|skrifa|swash|fontdb|ttf-parser|rustybuzz|harfbuzz)'
+rg "$GUI" unit-durations.txt | awk '{t+=$2} END{print t}'        # 655
+awk '{t+=$2} END{print t}' unit-durations.txt                     # 2475
+```
 
 **Boot time.** `time signex-cli run <project>.snxprj` with no commands, on a one-sheet project: first run 2.26 s, then 1.29, 1.29, 1.29, 1.29, 1.28 s (median of the warm runs 1.29 s). `signex-cli --help` takes 0.026 s, and so does `run` on a missing project. How the 1.29 s splits inside the boot (model construction, keymap load, font catalog, icon decode) is not measured. The run log shows `dropped an iced action a headless run does not perform kind="window"` three times.
 
-**Parity work.** Closed issues and PRs that exist only to drive the GUI model headless: #1926 (runtime config root), #1927 (task driver for iced actions), #1929 (text measurer and font catalog), #1931 (file-dialog seams), #1932 (diagnostics and pref writes), #1934 (operand schema), #2170 (refuse GUI-only commands), #2172 (address documents without UI state), #2243 (attach or run headless); #2155 (run operands) in part. `git grep -c gui_only -- crates/signex-app` gives 175 lines in 6 files, 157 of them rows of `keymap/testdata/catalog.golden.tsv`.
+**Parity per command.** Ids with an operand handler, and how many of them also have a GUI arm in the bridge:
+
+```sh
+cd crates/signex-app/src/app/command
+rg -o '^\s*\("([a-z_]+)",' -r '$1' operand_handlers.rs | sort -u > /tmp/oh.txt; wc -l < /tmp/oh.txt   # 34
+rg -o '"([a-z_]+)"' -r '$1' bridge.rs | sort -u > /tmp/br.txt
+comm -12 /tmp/oh.txt /tmp/br.txt | wc -l                                                            # 20
+rg -c '"id"' ../../../tests/golden/commands.json                                                   # 240
+```
+
+The guards a command passes are `CommandMetadata::headless_refusal` (`keymap/catalog/mod.rs`), `missing_headless_operand` (`app/command/operands.rs`), `honest_status` (`signex-cli/src/session.rs`) and, on the agent channel, `allow::refusal` (`app/agent/allow.rs`).
+
+**Parity work so far.** Closed issues and PRs that exist only to drive the GUI model headless: #1926 (runtime config root), #1927 (task driver for iced actions), #1929 (text measurer and font catalog), #1931 (file-dialog seams), #1932 (diagnostics and pref writes), #1934 (operand schema), #2170 (refuse GUI-only commands), #2172 (address documents without UI state), #2243 (attach or run headless); #2155 (run operands) in part. `git grep -c gui_only -- crates/signex-app` gives 175 lines in 6 files, 157 of them rows of `keymap/testdata/catalog.golden.tsv`.
 
 **IO on the update path.** Production `std::fs::` call sites under `crates/signex-app/src/app`: test files, comment lines and lines after a `#[cfg(test)]` in their file are excluded.
 
