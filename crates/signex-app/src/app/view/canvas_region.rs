@@ -275,9 +275,10 @@ mod tests {
 
     #[test]
     fn fitting_takes_the_rest_from_the_other_dock_down_to_its_minimum() {
-        let (left, right) = fit_side_docks(700.0, dock(400.0), dock(600.0));
+        let (left, right) = fit_side_docks(900.0, dock(400.0), dock(600.0));
         assert_eq!(right, MIN_SIDE_DOCK_WIDTH);
-        let canvas = 700.0 - (left + HANDLE) - (right + HANDLE);
+        assert!(left > MIN_SIDE_DOCK_WIDTH && left < 400.0, "left {left}");
+        let canvas = 900.0 - (left + HANDLE) - (right + HANDLE);
         assert!((canvas - MIN_CANVAS_WIDTH).abs() < 0.01, "canvas {canvas}");
         let (left, right) = fit_side_docks(300.0, dock(400.0), dock(600.0));
         assert_eq!((left, right), (MIN_SIDE_DOCK_WIDTH, MIN_SIDE_DOCK_WIDTH));
