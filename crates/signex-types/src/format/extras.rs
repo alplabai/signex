@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use super::page_extras::PageExtras;
 use super::unknown::UnknownFields;
-use crate::pcb::{Footprint, Pad, PcbBoard, Point as PcbPoint};
+use crate::pcb::{ComponentAttributes, Footprint, Pad, PcbBoard, Point as PcbPoint};
 use crate::schematic::{Junction, RowStamp, SchematicSheet, Symbol};
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -608,6 +608,9 @@ pub(in crate::format) struct FootprintExtras {
     pub(in crate::format) graphics: Vec<crate::pcb::FpGraphic>,
     #[serde(default)]
     pub(in crate::format) properties: Vec<crate::property::PcbProperty>,
+    /// The component settings (#2365); no table when all are defaults.
+    #[serde(default, skip_serializing_if = "ComponentAttributes::is_default")]
+    pub(in crate::format) component: ComponentAttributes,
     /// Keys this build does not recognise (`[extras.footprints.<uuid>]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -619,6 +622,7 @@ impl FootprintExtras {
             && !self.locked
             && self.graphics.is_empty()
             && self.properties.is_empty()
+            && self.component.is_default()
             && self.unknown.is_empty()
     }
 
@@ -628,6 +632,7 @@ impl FootprintExtras {
             locked: fp.locked,
             graphics: fp.graphics.clone(),
             properties: fp.properties.clone(),
+            component: fp.component.clone(),
             unknown: fp.unknown.clone(),
         }
     }

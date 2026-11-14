@@ -2,6 +2,7 @@
 //! leaves rows out, fields the board cannot store are still listed, and the
 //! Parameters tab lists the shared parameters.
 
+use signex_types::pcb::ComponentType;
 use signex_types::pcb_layer::BoardSide;
 
 use super::*;
@@ -29,6 +30,9 @@ pub(crate) fn one_component(designator: &str, footprint: &str) -> PcbComponentFa
         footprint_name: Shared::Same(footprint.into()),
         library: Shared::Same(None),
         schematic_path: Shared::Same(None),
+        settings: ComponentSettingFacts::defaults(),
+        identity: Shared::Same(PartIdentity::NotLinked),
+        designator_mismatches: 0,
         parameters: vec![ParameterFacts {
             key: "MPN".into(),
             value: Shared::Same("RC0603".into()),
@@ -151,4 +155,71 @@ fn the_library_row_shows_the_library_name_or_that_it_is_not_open() {
     facts.library = Shared::Same(Some(super::FootprintLibrary::NotOpen(id)));
     let texts = texts_of(facts, 0);
     assert!(has(&texts, &format!("{id} (not open)")), "{texts:?}");
+}
+
+#[test]
+fn the_stored_settings_show_their_values() {
+    let mut facts = one_component("R7", "R_0603");
+    facts.settings.component_type = Shared::Same(ComponentType::Mechanical);
+    facts.settings.description = Shared::Same("Chip resistor".into());
+    let texts = texts_of(facts, 0);
+    for wanted in ["Mechanical", "Lock Primitives", "Lock Strings", "Chip resistor"] {
+        assert!(has(&texts, wanted), "{wanted} in {texts:?}");
+    }
+}
+
+#[test]
+fn a_read_part_shows_its_identity_and_a_designator_mismatch() {
+    let mut facts = one_component("R7", "R_0603");
+    facts.identity = Shared::Same(PartIdentity::Read {
+        designator: "R9".into(),
+        design_item_id: Some("RES-10K-0603".into()),
+        source: Some("Passives".into()),
+    });
+    facts.designator_mismatches = 1;
+    let texts = texts_of(facts, 0);
+    for wanted in ["RES-10K-0603", "Passives", "R9"] {
+        assert!(has(&texts, wanted), "{wanted} in {texts:?}");
+    }
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.contains("schematic names this component R9, the board R7")),
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn an_unread_part_says_to_open_its_sheet() {
+    let mut facts = one_component("R7", "R_0603");
+    facts.identity = Shared::Same(PartIdentity::NotRead);
+    let texts = texts_of(facts, 0);
+    assert!(
+        has(&texts, "Open the schematic sheet to read this"),
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn differing_comments_get_a_note_that_enter_sets_all() {
+    let mut facts = one_component("R7", "R_0603");
+    facts.footprints.push(Uuid::from_u128(2));
+    facts.designator = Shared::Mixed;
+    facts.comment = Shared::Mixed;
+    let texts = texts_of(facts, 0);
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.contains("Enter sets the typed comment on all 2")),
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn the_parameters_tab_offers_an_add_row_while_editable() {
+    let texts = texts_of(one_component("R7", "R_0603"), 1);
+    assert!(has(&texts, "Add"), "{texts:?}");
+    let mut locked = one_component("R7", "R_0603");
+    locked.locked = Shared::Same(true);
+    assert!(!has(&texts_of(locked, 1), "Add"));
 }

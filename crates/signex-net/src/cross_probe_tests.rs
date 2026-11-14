@@ -59,6 +59,7 @@ fn footprint(uuid: Uuid, link: Option<SymbolLink>, pads: Vec<Pad>) -> Footprint 
         properties: Vec::new(),
         schematic_link: link,
         library_ref: None,
+        component: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

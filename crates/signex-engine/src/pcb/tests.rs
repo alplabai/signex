@@ -129,6 +129,33 @@ pub(super) fn commands() -> Vec<(&'static str, BoardCommand)> {
             },
         ),
         (
+            "add a parameter",
+            BoardCommand::InsertFootprintProperty {
+                footprint: id(FP_A),
+                index: 0,
+                property: signex_types::property::PcbProperty {
+                    key: "MPN".into(),
+                    value: "RC0603".into(),
+                    hidden: true,
+                    ..Default::default()
+                },
+            },
+        ),
+        (
+            "component settings",
+            BoardCommand::SetFootprintComponent {
+                footprint: id(FP_B),
+                component: signex_types::pcb::ComponentAttributes {
+                    component_type: signex_types::pcb::ComponentType::NetTie,
+                    height_mm: 1.0 / 3.0,
+                    body_opacity: 0.1,
+                    lock_strings: true,
+                    channel_offset: 7,
+                    ..Default::default()
+                },
+            },
+        ),
+        (
             "outline",
             BoardCommand::SetBoardOutline {
                 outline: vec![Point { x: 1.1, y: 2.2 }, Point { x: 3.3, y: 4.4 }],

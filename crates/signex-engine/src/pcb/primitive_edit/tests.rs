@@ -73,3 +73,16 @@ fn a_pad_of_a_locked_footprint_or_without_a_hole_is_refused() {
         Err(PrimitiveEditRefusal::Locked("U1".into()))
     );
 }
+
+#[test]
+fn a_pad_of_a_footprint_that_locks_its_primitives_is_refused() {
+    let mut b = board();
+    let pad = [(id(FP_A), id(PAD_A1))];
+    b.footprints[0].component.lock_primitives = true;
+    assert_eq!(
+        pad_edit_command(&b, &pad, &PadEdit::SizeX(2.0)),
+        Err(PrimitiveEditRefusal::PrimitivesLocked("U1".into()))
+    );
+    b.footprints[0].component.lock_primitives = false;
+    assert!(pad_edit_command(&b, &pad, &PadEdit::SizeX(2.0)).unwrap().is_some());
+}

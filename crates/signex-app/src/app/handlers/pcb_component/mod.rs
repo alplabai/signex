@@ -1,11 +1,14 @@
-//! The board Component view's edits (#2354). Each edit builds its commands
-//! with `signex_engine::pcb::component`, which refuses a locked footprint for
-//! everything but an unlock, and runs them as one labelled board undo step
-//! through `execute_board_commands`. A refusal changes nothing and says why
-//! in the Messages panel. Typed numbers and parameter values are drafts until
-//! Enter, kept per field for the footprints they were typed for.
+//! The board Component view's edits (#2354, #2365, #2369). Each edit builds
+//! its commands with `signex_engine::pcb::component` or `component_edit`,
+//! which refuse a locked footprint for everything but an unlock, and runs
+//! them as one labelled board undo step through `execute_board_commands`. A
+//! refusal changes nothing and says why in the Messages panel. Typed numbers
+//! and parameter values are drafts until Enter, kept per field for the
+//! footprints they were typed for.
 
+mod edits;
 mod facts;
+mod identity;
 mod swap;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -14,6 +17,7 @@ use std::path::{Path, PathBuf};
 use iced::Task;
 use signex_engine::pcb::BoardCommand;
 use signex_engine::pcb::component::{self, ComponentRefusal, LocationField};
+use signex_engine::pcb::component_edit;
 use signex_engine::pcb::designators::FootprintTextField;
 use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::PcbBoard;
@@ -129,6 +133,34 @@ impl Signex {
                     component::text_shown_commands(b, ids, *field, *shown)
                 });
             }
+            PcbComponentMsg::SettingPicked {
+                board,
+                footprints,
+                setting,
+            } => {
+                let what = self.catalog(edits::setting_label(setting));
+                self.run_component_edit(board, footprints, &what, |b, ids| {
+                    component_edit::setting_commands(b, ids, setting)
+                });
+            }
+            PcbComponentMsg::ParameterAdded { board, footprints } => {
+                self.add_component_parameter(board, footprints);
+            }
+            PcbComponentMsg::ParameterRemoved {
+                board,
+                footprints,
+                key,
+            } => {
+                let what = t!(
+                    self.ui_state.i18n,
+                    ids::PCB_COMPONENT_PARAMETER_REMOVED,
+                    "key" => key.as_str()
+                )
+                .into_string();
+                self.run_component_edit(board, footprints, &what, |b, ids| {
+                    component_edit::remove_parameter_commands(b, ids, key)
+                });
+            }
         }
         self.sync_pcb_board_summary();
         Task::none()
@@ -163,6 +195,22 @@ impl Signex {
                     component::parameter_commands(b, ids, key, text)
                 });
             }
+            ComponentField::Setting(typed) => {
+                let what = self.catalog(edits::typed_label(*typed));
+                self.run_component_edit(board, footprints, &what, |b, ids| {
+                    let setting = component_edit::parse_setting(*typed, text)?;
+                    component_edit::setting_commands(b, ids, &setting)
+                });
+            }
+            ComponentField::Comment => {
+                let what = self.catalog(ids::PCB_COMPONENT_COMMENT);
+                self.run_component_edit(board, footprints, &what, |b, ids| {
+                    component_edit::comment_commands(b, ids, text)
+                });
+            }
+            // A new parameter's fields are applied together by the Add
+            // button (`ParameterAdded`), never one at a time.
+            ComponentField::NewParameterName | ComponentField::NewParameterValue => {}
         }
     }
 

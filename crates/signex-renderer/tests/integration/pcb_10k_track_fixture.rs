@@ -248,6 +248,7 @@ fn two_pad_part(
         properties: Vec::new(),
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

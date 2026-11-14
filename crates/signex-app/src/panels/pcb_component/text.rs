@@ -11,7 +11,7 @@ use signex_i18n::{I18n, Localized, ids, t};
 use uuid::Uuid;
 
 use super::rows::{self, Form};
-use super::{PcbComponentFacts, PcbComponentMsg, Shared};
+use super::{ComponentField, PcbComponentFacts, PcbComponentMsg, Shared};
 use crate::panels::PanelMsg;
 use crate::styles::Spacing;
 
@@ -64,7 +64,8 @@ pub enum PcbFootprintTextMsg {
 }
 
 /// The Designator or Comment row: the text, editable for one component, and
-/// the eye. Several components show a shared text and edit it one at a time.
+/// the eye. Several components share one Comment; their designators are
+/// edited one at a time.
 pub(super) fn text_row<'a>(
     form: &Form<'a>,
     facts: &'a PcbComponentFacts,
@@ -87,9 +88,14 @@ pub(super) fn text_row<'a>(
     if !form.shows(&label) {
         return None;
     }
-    let input = match single {
-        Some(fp) => single_input(fp, field),
-        None => form.with_tip(
+    let input = match (single, field) {
+        (Some(fp), _) => single_input(fp, field),
+        // One Comment for every selected component (#2369).
+        (None, FootprintTextField::Value) => {
+            super::general::draft_input(facts, ComponentField::Comment, shared.same().cloned())
+        }
+        // Designators are one per component.
+        (None, FootprintTextField::Designator) => form.with_tip(
             rows::input(shared.same().cloned().unwrap_or_default(), None),
             ids::PCB_COMPONENT_ONE_AT_A_TIME,
         ),
@@ -109,6 +115,26 @@ pub(super) fn text_row<'a>(
         .align_y(iced::Alignment::Center)
         .boxed();
     Some(rows::row(form, label, control))
+}
+
+/// The note under the Comment row when several components with different
+/// comments are selected: Enter overwrites all of them.
+pub(super) fn comment_note<'a>(
+    form: &Form<'a>,
+    facts: &'a PcbComponentFacts,
+    single: Option<&'a PcbFootprintFacts>,
+) -> Option<Element<'a, PanelMsg>> {
+    let label = form.text(ids::PCB_COMPONENT_COMMENT);
+    let several = single.is_none() && facts.footprints.len() > 1;
+    (several && facts.comment == Shared::Mixed && facts.is_editable() && form.shows(&label)).then(
+        || {
+            let line = t!(
+                form.ctx.i18n, ids::PCB_COMPONENT_COMMENT_ALL,
+                "count" => facts.footprints.len()
+            );
+            rows::note(form, line, true)
+        },
+    )
 }
 
 /// The input of one footprint's text: its draft, else the stored text;

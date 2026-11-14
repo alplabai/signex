@@ -134,6 +134,7 @@ mod tests {
             locked: false,
             schematic_link: None,
             library_ref: None,
+            component: Default::default(),
             pads: xs
                 .iter()
                 .enumerate()

@@ -558,6 +558,7 @@ pub(in crate::format) fn row_to_footprint(
         properties: extras.properties,
         schematic_link,
         library_ref,
+        component: extras.component,
         unknown: extras.unknown,
         unknown_columns: row.unknown_columns,
     })

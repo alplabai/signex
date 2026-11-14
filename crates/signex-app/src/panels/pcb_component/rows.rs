@@ -5,7 +5,7 @@
 
 use iced::widget::{Column, Row, container, svg};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
-use signex_i18n::{MessageId, UserText, ids, t};
+use signex_i18n::{Localized, MessageId, UserText, ids, t};
 use signex_widgets::{button, text, text_input, tooltip};
 
 use super::super::form_look;
@@ -223,6 +223,20 @@ pub(super) fn eye<'a>(
         eye = eye.on_press(message);
     }
     form.with_tip(eye.boxed(), tip)
+}
+
+/// A line of explanation under a row, in the warning ink when `warning`.
+pub(super) fn note<'a>(form: &Form<'a>, line: Localized, warning: bool) -> Element<'a, PanelMsg> {
+    let tokens = &form.ctx.tokens;
+    let ink = if warning {
+        crate::styles::pill_colors(tokens, crate::styles::PillTone::Warn).1
+    } else {
+        resolve(tokens).ink3
+    };
+    container(text(line).size(TS.dense).color(ink))
+        .padding([SP.xs, SP.l])
+        .width(Length::Fill)
+        .boxed()
 }
 
 /// `value` without trailing zeros: `12.7`, `90`, `-0.3333`.

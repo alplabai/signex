@@ -67,6 +67,17 @@ pub enum BoardCommandError {
          set those with a text edit"
     )]
     PropertyTextOwned { footprint: Uuid, key: String },
+    #[error("footprint {footprint} already has a parameter {key}")]
+    PropertyKeyTaken { footprint: Uuid, key: String },
+    #[error("a parameter needs a name")]
+    PropertyKeyEmpty,
+    #[error("the texts of footprint {0} are locked")]
+    StringsLocked(Uuid),
+    #[error("the component {field} of footprint {footprint} is out of range")]
+    ComponentFieldInvalid {
+        footprint: Uuid,
+        field: &'static str,
+    },
     #[error("{0:?} cannot be replaced in place; footprints have their own edits")]
     NotReplaceable(BoardItemId),
     #[error("{field} must be greater than zero")]

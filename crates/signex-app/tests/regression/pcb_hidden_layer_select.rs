@@ -296,6 +296,7 @@ fn linked() -> Linked {
         properties: Vec::new(),
         schematic_link: Some(SymbolLink::new(InstancePath::root(), [R5])),
         library_ref: None,
+        component: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }];

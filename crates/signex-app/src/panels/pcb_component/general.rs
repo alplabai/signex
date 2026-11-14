@@ -145,6 +145,7 @@ fn properties<'a>(
     for field in [FootprintTextField::Designator, FootprintTextField::Value] {
         rows.extend(super::text::text_row(form, facts, single, field));
     }
+    rows.extend(super::text::comment_note(form, facts, single));
     let label = form.text(ids::PCB_COMPONENT_AREA);
     if form.shows(&label) {
         let area = match facts.area_mm2 {
@@ -158,23 +159,9 @@ fn properties<'a>(
         rows.push(rows::row(form, label, rows::value(area)));
     }
     rows.extend(description(form, facts));
-    // The board model has no field for these yet (#2354 follow-up).
-    let not_stored: [MessageId; 7] = [
-        ids::PCB_COMPONENT_TYPE,
-        ids::PCB_COMPONENT_DESIGN_ITEM_ID,
-        ids::PCB_COMPONENT_SOURCE,
-        ids::PCB_COMPONENT_HEIGHT,
-        ids::PCB_COMPONENT_BODY_OPACITY,
-        ids::PCB_COMPONENT_LOCK_PRIMITIVES,
-        ids::PCB_COMPONENT_LOCK_STRINGS,
-    ];
-    for label in not_stored {
-        rows.extend(rows::unsupported(
-            form,
-            label,
-            ids::PCB_COMPONENT_NOT_STORED,
-        ));
-    }
+    rows.extend(super::settings::type_row(form, facts));
+    rows.extend(super::identity::library_rows(form, facts));
+    rows.extend(super::settings::property_rows(form, facts));
     rows
 }
 

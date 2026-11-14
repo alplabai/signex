@@ -65,8 +65,6 @@ pcb-component-channel-offset = Channel Offset
 pcb-component-not-linked = Not linked to a schematic part
 
 # Tooltips of rows that cannot be edited yet.
-pcb-component-not-stored = The board does not store this yet.
-pcb-component-needs-schematic = This is read from the schematic, which the board panel cannot read yet.
 pcb-component-one-at-a-time = Edit this on one component at a time.
 pcb-component-no-description = This component has no Description parameter.
 pcb-component-read-only-tip = This board opened read-only; it cannot be edited.
@@ -83,3 +81,40 @@ pcb-component-picker-own-footprints = This component's footprints ({ $count })
 # component, $pad the pad number, $net the net the pad was on.
 pcb-component-swap-pad-net-dropped = { $designator }: pad { $pad } has no match on the new footprint and was removed with its net { $net }
 pcb-component-swap-pad-dropped = { $designator }: pad { $pad } has no match on the new footprint and was removed
+
+# Placeholders of the fields of a parameter to add.
+pcb-component-parameter-name = Name
+pcb-component-parameter-value = Value
+pcb-component-parameter-add = Add
+# Undo step names; $key is the parameter's name.
+pcb-component-parameter-added = Add parameter { $key }
+pcb-component-parameter-removed = Remove parameter { $key }
+pcb-component-parameter-remove-tip = Remove this parameter from the selected components
+
+# Component types (#2365).
+pcb-component-type-standard = Standard
+pcb-component-type-standard-no-bom = Standard (No BOM)
+pcb-component-type-mechanical = Mechanical
+pcb-component-type-graphical = Graphical
+pcb-component-type-net-tie = Net Tie (No BOM)
+pcb-component-type-net-tie-in-bom = Net Tie (In BOM)
+pcb-component-type-jumper = Jumper
+
+# Tooltips of the component settings.
+pcb-component-height-tip = The component's height above the board, in millimetres.
+pcb-component-body-opacity-tip = 0 draws the 3D body clear, 1 solid; a percentage works too.
+pcb-component-lock-primitives-tip = The pads and graphics of the component cannot be edited on their own.
+pcb-component-lock-strings-tip = The texts of the component cannot be moved.
+
+# Comment with several components selected; $count is how many.
+pcb-component-comment-all = The selected components have different comments. Enter sets the typed comment on all { $count }.
+
+# What the schematic says about the component (#2367).
+pcb-component-sch-not-read = Open the schematic sheet to read this
+pcb-component-source-not-open = No open library holds this part
+# $schematic and $board are designators.
+pcb-component-sch-mismatch = The schematic names this component { $schematic }, the board { $board }. Update PCB sets the board designator to match.
+pcb-component-sch-mismatch-count = { $count ->
+    [one] 1 component carries a designator the schematic does not. Update PCB sets it to match.
+   *[other] { $count } components carry a designator the schematic does not. Update PCB sets them to match.
+}

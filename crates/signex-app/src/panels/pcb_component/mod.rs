@@ -6,14 +6,16 @@
 //! the board; every edit is a message the board handler runs as one
 //! `BoardCommand` undo step.
 //!
-//! Rows the board model cannot store or act on yet are drawn disabled with a
+//! Rows the board cannot act on yet are drawn disabled with a
 //! tooltip saying why, never with a made-up value.
 
 mod footprint;
 mod general;
 mod header;
+mod identity;
 mod parameters;
 mod rows;
+mod settings;
 mod text;
 
 use std::collections::BTreeMap;
@@ -22,7 +24,9 @@ use std::path::PathBuf;
 use iced::widget::{Column, scrollable};
 use iced::{Element, Length, Widget as _};
 use signex_engine::pcb::component::LocationField;
+use signex_engine::pcb::component_edit::{ComponentSetting, TypedSetting};
 use signex_engine::pcb::designators::FootprintTextField;
+use signex_types::pcb::{ComponentAttributes, ComponentType};
 use signex_types::pcb_layer::BoardSide;
 use uuid::Uuid;
 
@@ -64,6 +68,14 @@ pub enum ComponentField {
     Location(LocationField),
     /// The parameter of this key; the Description row is one too.
     Parameter(String),
+    /// A component setting typed as text (#2365).
+    Setting(TypedSetting),
+    /// The Comment of several components at once (#2369).
+    Comment,
+    /// The name of a parameter to add; applied by the Add button (#2369).
+    NewParameterName,
+    /// The value of a parameter to add.
+    NewParameterValue,
 }
 
 /// The library a board footprint came from, as the Library row names it.
@@ -80,6 +92,57 @@ pub enum FootprintLibrary {
 pub struct ParameterFacts {
     pub key: String,
     pub value: Shared<String>,
+}
+
+/// What the schematic says about a component, read through its link
+/// (#2367).
+#[derive(Debug, Clone, PartialEq)]
+pub enum PartIdentity {
+    /// The footprint has no schematic link.
+    NotLinked,
+    /// The linked part's sheet is not open, so it cannot be read.
+    NotRead,
+    Read {
+        /// The designator on the schematic sheet.
+        designator: String,
+        /// The library part it came from: the row's part number, else the
+        /// symbol's library name; `None` when it has neither.
+        design_item_id: Option<String>,
+        /// The open library holding the part; `None` when none does.
+        source: Option<String>,
+    },
+}
+
+/// The component settings as the panel shows them (#2365).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ComponentSettingFacts {
+    pub component_type: Shared<ComponentType>,
+    pub height_mm: Shared<f64>,
+    pub body_opacity: Shared<f64>,
+    pub lock_primitives: Shared<bool>,
+    pub lock_strings: Shared<bool>,
+    pub pin_swapping: Shared<bool>,
+    pub part_swapping: Shared<bool>,
+    pub channel_offset: Shared<u32>,
+    pub description: Shared<String>,
+}
+
+impl ComponentSettingFacts {
+    /// Every setting at its default, as a component without any has them.
+    pub fn defaults() -> Self {
+        let d = ComponentAttributes::default();
+        Self {
+            component_type: Shared::Same(d.component_type),
+            height_mm: Shared::Same(d.height_mm),
+            body_opacity: Shared::Same(d.body_opacity),
+            lock_primitives: Shared::Same(d.lock_primitives),
+            lock_strings: Shared::Same(d.lock_strings),
+            pin_swapping: Shared::Same(d.pin_swapping),
+            part_swapping: Shared::Same(d.part_swapping),
+            channel_offset: Shared::Same(d.channel_offset),
+            description: Shared::Same(d.description),
+        }
+    }
 }
 
 /// The selected components as the panel shows them.
@@ -107,6 +170,13 @@ pub struct PcbComponentFacts {
     pub library: Shared<Option<FootprintLibrary>>,
     /// The schematic sheet path and part link; `None` inside when unlinked.
     pub schematic_path: Shared<Option<String>>,
+    /// Type, height, locks and the other component settings.
+    pub settings: ComponentSettingFacts,
+    /// What the schematic says about the components.
+    pub identity: Shared<PartIdentity>,
+    /// How many selected components carry a designator other than the one
+    /// the schematic gives them.
+    pub designator_mismatches: usize,
     /// The keys every selected component has, in the first one's order.
     pub parameters: Vec<ParameterFacts>,
     /// Text typed and not applied yet, per field.
@@ -177,6 +247,24 @@ pub enum PcbComponentMsg {
     FootprintPickRequested {
         board: PathBuf,
         footprints: Vec<Uuid>,
+    },
+    /// A type was picked or a settings checkbox ticked (#2365).
+    SettingPicked {
+        board: PathBuf,
+        footprints: Vec<Uuid>,
+        setting: ComponentSetting,
+    },
+    /// The Add button of the Parameters tab, or Enter in its fields (#2369):
+    /// adds the typed name and value.
+    ParameterAdded {
+        board: PathBuf,
+        footprints: Vec<Uuid>,
+    },
+    /// A parameter row's remove button (#2369).
+    ParameterRemoved {
+        board: PathBuf,
+        footprints: Vec<Uuid>,
+        key: String,
     },
 }
 

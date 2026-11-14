@@ -58,6 +58,7 @@ fn footprint(uuid: Uuid, reference: &str, x: f64, locked: bool, pads: Vec<Pad>) 
         locked,
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         pads,
         graphics: Vec::new(),
         properties: Vec::new(),
