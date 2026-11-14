@@ -12,6 +12,14 @@
 //! Tracks current stroke colour/width/alpha to avoid redundant ops.
 //! Coordinates in PDF points (bottom-left origin).
 
+use std::collections::BTreeSet;
+
+use pdf_writer::Name;
+use pdf_writer::writers::{ExtGraphicsState, Resources};
+
+use super::embed::FontUsage;
+use super::font::font_for_alias;
+
 /// An RGB colour (each channel 0.0-1.0). Groups the three channels that
 /// travel together as a single fill colour — built at the `fill_rect` call
 /// site (currently reserved for the v0.9 template backgrounds/fills) instead
@@ -21,14 +29,6 @@ pub struct RgbColor {
     pub g: f32,
     pub b: f32,
 }
-
-use std::collections::BTreeSet;
-
-use pdf_writer::Name;
-use pdf_writer::writers::{ExtGraphicsState, Resources};
-
-use super::embed::FontUsage;
-use super::font::font_for_alias;
 
 /// The stroke opacity a PDF draws with by default.
 const OPAQUE_LEVEL: u8 = u8::MAX;
@@ -99,7 +99,12 @@ impl<'a> PdfSurface<'a> {
     }
 
     /// Finish and return the encoded Content stream bytes.
+    /// A stream that set a stroke alpha must use `finish_page()` instead.
     pub fn finish(self) -> Vec<u8> {
+        debug_assert!(
+            self.stroke_alphas.is_empty(),
+            "stroke alpha set on a surface finished with finish(); use finish_page()"
+        );
         self.bytes
     }
 
