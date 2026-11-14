@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use iced::Task;
-use signex_drc::{DrcRules, ViolationKind};
+use signex_drc::{DrcRules, ViolationKind, findings};
 use signex_types::project::DrcRuleSet;
 
 use crate::app::{DrcRunResult, Message, PcbMsg, Signex};
@@ -120,7 +120,9 @@ impl Signex {
         panel.clearance = report.count(ViolationKind::Clearance);
         panel.short = report.count(ViolationKind::Short);
         panel.unconnected = report.count(ViolationKind::Unconnected);
+        panel.keepout = report.count(ViolationKind::Keepout);
         panel.skipped = report.skipped.len();
+        panel.skipped_keepouts = report.skipped_keepouts.len();
         panel.hidden = report
             .violations
             .len()
@@ -233,17 +235,21 @@ pub(super) fn run_check(
 fn summary_line(report: &signex_drc::DrcReport) -> String {
     let count = |k| report.count(k);
     let rules = &report.rules;
-    let board_mm = pcb_geom::nm_to_mm(rules.clearance);
+    let board_mm = findings::mm(rules.clearance);
     let clearance = if rules.sets_written_clearance() {
         format!("minimum clearance {board_mm} mm where no written rule applies")
     } else {
         format!("minimum clearance {board_mm} mm")
     };
-    let tail = if report.skipped.is_empty() {
-        String::new()
-    } else {
-        format!("; {} item(s) could not be checked", report.skipped.len())
-    };
+    let mut tail = String::new();
+    if !report.skipped_keepouts.is_empty() {
+        let n = report.skipped_keepouts.len();
+        tail.push_str(&format!("; {n} keepout(s) could not be checked"));
+    }
+    if !report.skipped.is_empty() {
+        let n = report.skipped.len();
+        tail.push_str(&format!("; {n} item(s) could not be checked"));
+    }
     format!(
         "DRC: {} clearance, {} short, {} unconnected, {} keepout ({clearance}){tail}",
         count(ViolationKind::Clearance),
@@ -290,77 +296,27 @@ fn log_rule_text(report: &signex_drc::DrcReport) {
     }
 }
 
+/// The run's Messages lines. A finding is worded by `signex_drc::findings`,
+/// as `check_drc` words it (#2334).
 fn log_report(report: &signex_drc::DrcReport, names: &std::collections::BTreeMap<u32, String>) {
     let summary = summary_line(report);
     for entry in &report.rules.severities.unrecognised {
         crate::diagnostics::log_info(format!("DRC rules: ignoring unrecognised entry ({entry})"));
     }
     log_rule_text(report);
-    if report.rules.from_default {
-        let mm = pcb_geom::nm_to_mm(report.rules.clearance);
-        crate::diagnostics::log_info(if report.rules.sets_written_clearance() {
-            format!(
-                "DRC: No clearance rule set on this board; {mm} mm applies where no written rule does. Set it in Board Setup."
-            )
-        } else {
-            format!(
-                "DRC: No clearance rule set on this board; checked with {mm} mm. Set it in Board Setup."
-            )
-        });
+    if let Some(note) = findings::default_clearance_note(&report.rules) {
+        crate::diagnostics::log_info(note);
     }
     let unapplied = report.rules.rules_not_applied + report.rules.texts_not_applied > 0;
-    if report.violations.is_empty() && report.skipped.is_empty() && !unapplied {
+    if report.is_clean() && !unapplied {
         crate::diagnostics::log_info(summary);
         return;
     }
     crate::diagnostics::log_warning(summary);
-    let name = |net: u32| {
-        names
-            .get(&net)
-            .cloned()
-            .unwrap_or_else(|| format!("net {net}"))
-    };
-    for v in report.violations.iter().take(LOGGED_VIOLATIONS) {
-        let what = match v.kind {
-            ViolationKind::Clearance => format!(
-                "clearance {} mm, needs {} mm",
-                pcb_geom::nm_to_mm(v.measured_nm),
-                pcb_geom::nm_to_mm(v.required_nm)
-            ),
-            ViolationKind::Short => "short".to_string(),
-            ViolationKind::Unconnected => format!(
-                "link of {} mm not routed",
-                pcb_geom::nm_to_mm(v.measured_nm)
-            ),
-            ViolationKind::Keepout => "inside a keepout that forbids it".to_string(),
-            ViolationKind::TrackWidth => size_text("track width", v),
-            ViolationKind::ViaDiameter => size_text("via diameter", v),
-            ViolationKind::ViaDrill => size_text("via drill", v),
-        };
-        let rule = v
-            .rule
-            .as_ref()
-            .map_or_else(String::new, |id| format!(" ({id})"));
-        crate::diagnostics::log_warning(format!(
-            "DRC: {what}{rule}, {} / {} at ({}, {}) mm",
-            name(v.nets.0),
-            name(v.nets.1),
-            pcb_geom::nm_to_mm(v.at.x),
-            pcb_geom::nm_to_mm(v.at.y)
-        ));
+    for skipped in &report.skipped_keepouts {
+        crate::diagnostics::log_warning(findings::skipped_keepout_warning(skipped));
     }
-}
-
-/// `track width 0.1 mm, needs at least 0.15 mm` (or `at most`).
-fn size_text(what: &str, v: &signex_drc::Violation) -> String {
-    let bound = if v.measured_nm < v.required_nm {
-        "at least"
-    } else {
-        "at most"
-    };
-    format!(
-        "{what} {} mm, needs {bound} {} mm",
-        pcb_geom::nm_to_mm(v.measured_nm),
-        pcb_geom::nm_to_mm(v.required_nm)
-    )
+    for v in report.violations.iter().take(LOGGED_VIOLATIONS) {
+        crate::diagnostics::log_warning(findings::messages_line(v, names));
+    }
 }

@@ -108,6 +108,7 @@ define_ids! {
     DRC_RULE_TEXT_UNPARSED = "drc-rule-text-unparsed";
     DRC_SUMMARY = "drc-summary";
     DRC_SKIPPED = "drc-skipped";
+    DRC_KEEPOUTS_SKIPPED = "drc-keepouts-skipped";
     DRC_MORE = "drc-more";
     DRC_PICK_HIDDEN = "drc-pick-hidden";
     DRC_KIND_CLEARANCE = "drc-kind-clearance";

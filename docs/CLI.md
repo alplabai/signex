@@ -699,7 +699,8 @@ The answer is a check report (above), `"check": "drc"`:
   and this machine's DRC rules, no net classes), then what Run DRC says about
   its rules in Messages, in its words: unrecognised severity entries, the
   rule text's notes and remarks, rule text or rules not applied, a clearance
-  taken from the default; then one line per item the run could not check.
+  taken from the default; then one line per keepout and per item the run
+  could not check (#2300).
 - `rule_set`: `source` (`project` or `machine`), `profile` (as for ERC),
   `sha256` (the hash of the `drc` section the run used), `clearance_nm` and
   `from_default` (no clearance set in Board Setup).
@@ -709,8 +710,6 @@ The answer is a check report (above), `"check": "drc"`:
 
 Known limits:
 
-- Keepouts whose outline does not convert are dropped without a warning
-  (#2300); other items that do not convert are in `warnings`.
 - The minimum track width and via sizes of Board Setup are not enforced;
   only a written rule sets them (`docs/architecture/pcb-drc.md`).
 - The DRC panel does not show severities yet; the report does.

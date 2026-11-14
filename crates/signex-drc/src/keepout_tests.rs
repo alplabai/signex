@@ -203,3 +203,86 @@ fn a_board_without_a_sketch_has_no_keepout_rows() {
     );
     assert!(keepout_hits(&b).is_empty());
 }
+
+/// #2300: a keepout whose boundary does not convert is reported, not
+/// dropped, so the board is not called clean.
+#[test]
+fn a_keepout_with_a_non_finite_corner_is_reported_as_not_checked() {
+    let mut b = keep_out(
+        board(vec![], vec![], vec![]),
+        routing(),
+        &[CopperLayer::Top],
+    );
+    let sketch = b.sketch.as_mut().expect("sketch");
+    sketch.keepouts[0].boundary[2] = Point::new(f64::INFINITY, 30.0);
+    let report = run(&b, &DrcRules::new(200_000));
+    assert!(report.violations.is_empty(), "{report:?}");
+    assert_eq!(report.skipped_keepouts.len(), 1, "{report:?}");
+    assert_eq!(report.skipped_keepouts[0].keepout, id(KEEPOUT));
+    assert!(!report.is_clean());
+}
+
+/// A keepout with no copper layer forbids nothing this check sees: a bad
+/// corner on it is not reported either.
+#[test]
+fn a_keepout_without_copper_layers_is_neither_checked_nor_reported() {
+    let mut b = keep_out(board(vec![], vec![], vec![]), routing(), &[]);
+    let sketch = b.sketch.as_mut().expect("sketch");
+    sketch.keepouts[0].boundary[2] = Point::new(f64::NAN, 30.0);
+    let report = run(&b, &DrcRules::new(200_000));
+    assert!(report.is_clean(), "{report:?}");
+}
+
+/// A courtyard graphic whose width is not a finite length.
+fn broken_courtyard() -> signex_types::pcb::FpGraphic {
+    signex_types::pcb::FpGraphic {
+        graphic_type: "rect".into(),
+        layer: "TopCourtyard".into(),
+        width: f64::NAN,
+        start: Some(Point::new(24.0, 24.0)),
+        end: Some(Point::new(26.0, 26.0)),
+        center: None,
+        mid: None,
+        radius: 0.0,
+        points: Vec::new(),
+        text: String::new(),
+        font_size: 0.0,
+        position: None,
+        rotation: 0.0,
+        fill: String::new(),
+    }
+}
+
+/// #2300: a footprint body that does not convert, where a `no_components`
+/// keepout needs it, is listed as skipped once, however many keepouts.
+#[test]
+fn a_body_that_does_not_convert_inside_a_component_keepout_is_skipped_once() {
+    let mut fp = footprint(1, vec![pad(11, (25.0, 25.0), 1, PadType::Smd, "TopCopper")]);
+    fp.graphics.push(broken_courtyard());
+    let components = KeepoutKinds {
+        no_components: true,
+        ..KeepoutKinds::default()
+    };
+    let mut b = keep_out(
+        board(vec![fp], vec![], vec![]),
+        components,
+        &[CopperLayer::Top],
+    );
+    let sketch = b.sketch.as_mut().expect("sketch");
+    let mut second = sketch.keepouts[0].clone();
+    second.uuid = id(KEEPOUT + 1);
+    sketch.keepouts.push(second);
+    let report = run(&b, &DrcRules::new(200_000));
+    assert!(report.violations.is_empty(), "{report:?}");
+    let bodies: Vec<_> = report.skipped.iter().map(|r| r.item).collect();
+    assert_eq!(bodies, vec![ItemRef::Footprint(id(1001))]);
+    assert!(!report.is_clean());
+
+    // Without a component keepout the body is not needed, so not reported.
+    let routing_only = keep_out(
+        board(vec![b.footprints[0].clone()], vec![], vec![]),
+        routing(),
+        &[CopperLayer::Top],
+    );
+    assert!(run(&routing_only, &DrcRules::new(200_000)).is_clean());
+}

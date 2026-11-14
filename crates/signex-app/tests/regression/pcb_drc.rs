@@ -263,11 +263,11 @@ fn drc_lines_of_a_run(app: &mut Signex) -> Vec<String> {
 /// and says exactly what it did before the rule language.
 #[test]
 fn without_rule_text_the_report_and_its_messages_are_unchanged() {
-    // As trunk writes them, float formatting included.
+    // As trunk writes them; numbers read round since #2334.
     let pinned = [
-        "DRC: No clearance rule set on this board; checked with 0.19999999999999998 mm. Set it in Board Setup.",
-        "DRC: 1 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance 0.19999999999999998 mm)",
-        "DRC: clearance 0.15 mm, needs 0.19999999999999998 mm, net 1 / net 2 at (0, 0.19999999999999998) mm",
+        "DRC: No clearance rule set on this board; checked with 0.2 mm. Set it in Board Setup.",
+        "DRC: 1 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance 0.2 mm)",
+        "DRC: clearance 0.15 mm, needs 0.2 mm, net 1 / net 2 at (0, 0.2) mm",
     ];
     for dsl in [None, Some(""), Some("  \n")] {
         let (mut app, _tmp, path) = open_board();
@@ -318,7 +318,7 @@ fn rule_text_without_a_clearance_rule_keeps_the_clearance_wording() {
     let lines = drc_lines_of_a_run(&mut app);
     assert!(
         lines.contains(
-            &"DRC: No clearance rule set on this board; checked with 0.19999999999999998 mm. \
+            &"DRC: No clearance rule set on this board; checked with 0.2 mm. \
               Set it in Board Setup."
                 .to_string()
         ),
@@ -327,7 +327,7 @@ fn rule_text_without_a_clearance_rule_keeps_the_clearance_wording() {
     assert!(
         lines.contains(
             &"DRC: 1 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance \
-              0.19999999999999998 mm)"
+              0.2 mm)"
                 .to_string()
         ),
         "{lines:?}"
@@ -374,7 +374,7 @@ fn rule_text_in_the_profile_is_applied_by_the_run() {
     // With written rules the board value holds only where none applies.
     assert!(
         lines.contains(
-            &"DRC: No clearance rule set on this board; 0.19999999999999998 mm applies \
+            &"DRC: No clearance rule set on this board; 0.2 mm applies \
               where no written rule does. Set it in Board Setup."
                 .to_string()
         ),
@@ -383,7 +383,7 @@ fn rule_text_in_the_profile_is_applied_by_the_run() {
     assert!(
         lines.contains(
             &"DRC: 0 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance \
-              0.19999999999999998 mm where no written rule applies)"
+              0.2 mm where no written rule applies)"
                 .to_string()
         ),
         "{lines:?}"
@@ -460,4 +460,95 @@ fn a_rule_that_does_not_compile_is_reported_and_skipped() {
     );
     let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
     assert_eq!(panel.rules_not_applied, 1);
+}
+
+/// A routing keepout on top copper with the given corners.
+fn routing_keepout(n: u128, corners: &[(f64, f64)]) -> signex_types::pcb_sketch::PcbKeepout {
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+    signex_types::pcb_sketch::PcbKeepout {
+        uuid: Uuid::from_u128(n),
+        boundary: corners.iter().map(|&(x, y)| Point::new(x, y)).collect(),
+        layers: vec![PcbLayer::Copper(CopperLayer::Top)],
+        forbids: signex_types::sketch::attr::KeepoutKinds {
+            no_routing: true,
+            ..Default::default()
+        },
+    }
+}
+
+/// #2300: keepout findings are counted in the panel summary, and a keepout
+/// whose outline does not convert (a corner 5 km out) is said in the panel
+/// and in Messages instead of silently dropped.
+#[test]
+fn keepouts_are_counted_and_an_unchecked_keepout_is_said() {
+    let mut b = board();
+    let crossed = routing_keepout(0x900, &[(4.0, 4.0), (6.0, 4.0), (6.0, 6.0), (4.0, 6.0)]);
+    let far = routing_keepout(0x901, &[(0.0, 0.0), (5_000_000.0, 0.0), (0.0, 1.0)]);
+    b.sketch = Some(signex_types::pcb_sketch::BoardSketch {
+        keepouts: vec![crossed, far],
+        ..Default::default()
+    });
+    let (mut app, _tmp, path) = open(b);
+    let lines = drc_lines_of_a_run(&mut app);
+
+    let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    assert_eq!(
+        done.report.count(ViolationKind::Keepout),
+        1,
+        "{:?}",
+        done.report
+    );
+    assert_eq!(done.report.skipped_keepouts.len(), 1);
+    assert_eq!(
+        done.report.skipped_keepouts[0].keepout,
+        Uuid::from_u128(0x901)
+    );
+    assert!(!done.report.is_clean());
+
+    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    assert_eq!(
+        (panel.clearance, panel.keepout, panel.skipped_keepouts),
+        (1, 1, 1)
+    );
+    let unchecked = format!(
+        "DRC: keepout {} could not be checked: keepout.boundary is not a finite length within 1 km of the origin",
+        Uuid::from_u128(0x901)
+    );
+    assert!(lines.contains(&unchecked), "{lines:?}");
+    assert!(
+        lines.iter().any(
+            |l| l.starts_with("DRC: 1 clearance, 0 short, 0 unconnected, 1 keepout")
+                && l.ends_with("; 1 keepout(s) could not be checked")
+        ),
+        "{lines:?}"
+    );
+}
+
+/// #2300: a board whose only violation is a keepout shows it in the panel
+/// count, so the summary never reads all zeros above a keepout row.
+#[test]
+fn a_keepout_only_board_counts_its_keepout() {
+    let mut b = board();
+    b.segments = vec![track(3, 5.0, 3)];
+    b.sketch = Some(signex_types::pcb_sketch::BoardSketch {
+        keepouts: vec![routing_keepout(
+            0x900,
+            &[(4.0, 4.0), (6.0, 4.0), (6.0, 6.0), (4.0, 6.0)],
+        )],
+        ..Default::default()
+    });
+    let (mut app, _tmp, _path) = open(b);
+    run_drc(&mut app);
+    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    assert_eq!(
+        (
+            panel.clearance,
+            panel.short,
+            panel.unconnected,
+            panel.keepout
+        ),
+        (0, 0, 0, 1)
+    );
+    assert_eq!(panel.rows.len(), 1);
+    assert_eq!(panel.rows[0].kind, ViolationKind::Keepout);
 }

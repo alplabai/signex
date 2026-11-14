@@ -284,9 +284,13 @@ note and the summary say the board value holds only where no written rule
 applies (rule text with only width or via rules leaves them as they were). All of these appear only when rule
 text is present, so a run without it logs and shows what it always did.
 
-Known limit: the panel's summary counts clearance, shorts and unconnected
-links only; keepout (#2300), track width and via size findings are listed as
-rows but not counted there yet.
+Known limit: the panel's summary counts clearance, shorts, unconnected links
+and keepouts (#2300); track width and via size findings are listed as rows
+but not counted there yet.
+
+A rule whose minimum is above its maximum for the same field (`width >=
+0.3mm and width <= 0.2mm`) can never be met and is refused like any other
+invalid rule (#2335), so one track never gives two findings of one rule.
 
 ## How it stays fast
 
@@ -305,8 +309,11 @@ The board is copied and checked in `spawn_blocking`; a result is applied only
 if no newer run began. The Messages panel lists the violations (first 500)
 above the log, and clicking a row selects its items with the #2191
 selection. The summary and the first 20 violations are also logged, which is
-what a headless run reports. A report is marked stale when the board's
-revision moved after it.
+what a headless run reports. A logged violation is worded by
+`signex_drc::findings` (`messages_line`, `describe`), the same words as a
+`check_drc` finding, with lengths divided into mm so a round value reads
+round (`0.2`, #2334). A report is marked stale when the board's revision
+moved after it.
 
 ## Zones
 
@@ -332,7 +339,12 @@ copper, not a net.
 
 An item meets a keepout when its copper touches the keepout polygon or lies
 inside it (`Shape::overlaps_polygon`). A keepout that lists no copper layer
-forbids nothing this check sees. Each keepout is tested against every item,
+forbids nothing this check sees. A keepout whose outline does not convert
+(a corner that is not a finite length within 1 km of the origin) is not
+checked and is reported in `DrcReport::skipped_keepouts`; a footprint body
+that does not convert where a `no_components` keepout needs it is in
+`skipped`, once. Either keeps `is_clean()` false, and the DRC panel and
+Messages say it (#2300). Each keepout is tested against every item,
 with a bounding-box test first; an index lookup is a follow-up if boards with
 many keepouts make it slow.
 
