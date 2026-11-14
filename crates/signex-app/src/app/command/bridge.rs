@@ -291,6 +291,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "toggle_ratsnest" => pcb_view(PcbViewMsg::RatsnestVisibilityToggled),
         "toggle_origin_marker" => pcb_view(PcbViewMsg::OriginMarkerVisibilityToggled),
         "board_sketch" => Message::Pcb(PcbMsg::Sketch(crate::app::BoardSketchMsg::ModeToggled)),
+        "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(crate::app::FootprintSwapMsg::Requested)),
         "next_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: true }),
         "prev_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: false }),
         "next_signal_layer" => pcb_view(PcbViewMsg::SignalLayerStepped { forward: true }),

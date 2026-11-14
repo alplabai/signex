@@ -81,7 +81,7 @@ pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateP
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BoardSketchMsg, BomPreviewMsg, CommandPaletteMsg,
     ContextAction, ContextMenuMsg, ContextMenuState, ContextSubmenu, CrossProbeMsg, DragTarget,
-    DrcRunResult, EditMsg, EnableVersionControlMsg, EnableVersionControlOutcome,
+    DrcRunResult, EditMsg, EnableVersionControlMsg, EnableVersionControlOutcome, FootprintSwapMsg,
     EnableVersionControlState, ErcMsg, ExcludeDirtyChoice, ExportMsg, FileMsg, GitCommitFailure,
     GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg, KeymapModMigration,
     LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, NetNavMsg, OverlayMsg,

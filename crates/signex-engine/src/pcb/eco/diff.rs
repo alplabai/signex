@@ -12,7 +12,7 @@ use super::change::{
     ChangeReason, EcoBlock, EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow,
 };
 use super::{EcoInput, EcoPart, is_under, stable_uuid};
-use crate::pcb::footprint_content::carry_would_lose;
+use crate::pcb::footprint_content::{carry_would_lose, unmatched_pads};
 
 const REFERENCE_KEY: &str = "Reference";
 const VALUE_KEY: &str = "Value";
@@ -318,11 +318,7 @@ fn change_row(
     let mut with = resolved.footprint.clone();
     with.library_ref = Some(resolved.source.clone());
     remint_pads(&mut with, fp.uuid, &resolved.source);
-    let new_numbers: HashSet<&str> = with.pads.iter().map(|p| p.number.as_str()).collect();
-    for pad in &fp.pads {
-        if new_numbers.contains(pad.number.as_str()) {
-            continue;
-        }
+    for pad in unmatched_pads(fp, &with) {
         if pad.net_locked {
             list.notes.push(EcoNote::PadLosesLock {
                 footprint: fp.uuid,
@@ -519,7 +515,7 @@ fn new_footprint_uuid(key: &EcoKey) -> uuid::Uuid {
 
 /// Give `fp`'s pads uuids that depend only on the board footprint they are
 /// for, the library footprint they come from and their place in it.
-fn remint_pads(fp: &mut Footprint, owner: uuid::Uuid, source: &FootprintSourceRef) {
+pub(crate) fn remint_pads(fp: &mut Footprint, owner: uuid::Uuid, source: &FootprintSourceRef) {
     let source = source.to_string();
     for (i, pad) in fp.pads.iter_mut().enumerate() {
         pad.uuid = stable_uuid(&[

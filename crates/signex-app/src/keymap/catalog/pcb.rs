@@ -40,6 +40,18 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    // #2366: pick a library footprint for the selected footprints; the swap
+    // is one board undo step. No default key.
+    CommandMetadata {
+        id: "change_footprint",
+        category: "modify",
+        label: command_ids::CMD_CHANGE_FOOTPRINT,
+        menu_label: Some(command_ids::CMD_MENU_CHANGE_FOOTPRINT),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "toggle_ratsnest",
         category: "view",

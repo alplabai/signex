@@ -44,9 +44,15 @@ define_ids! {
     PCB_COMPONENT_CHANNEL_OFFSET = "pcb-component-channel-offset";
     PCB_COMPONENT_NOT_LINKED = "pcb-component-not-linked";
     PCB_COMPONENT_NOT_STORED = "pcb-component-not-stored";
-    PCB_COMPONENT_SWAP_NOT_READY = "pcb-component-swap-not-ready";
     PCB_COMPONENT_NEEDS_SCHEMATIC = "pcb-component-needs-schematic";
     PCB_COMPONENT_ONE_AT_A_TIME = "pcb-component-one-at-a-time";
     PCB_COMPONENT_NO_DESCRIPTION = "pcb-component-no-description";
     PCB_COMPONENT_PARAMETERS_NONE = "pcb-component-parameters-none";
+    PCB_COMPONENT_FOOTPRINT_PICK_TIP = "pcb-component-footprint-pick-tip";
+    PCB_COMPONENT_READ_ONLY_TIP = "pcb-component-read-only-tip";
+    PCB_COMPONENT_LIBRARY_NOT_OPEN = "pcb-component-library-not-open";
+    PCB_COMPONENT_FOOTPRINT_SWAP = "pcb-component-footprint-swap";
+    PCB_COMPONENT_SWAP_PAD_NET_DROPPED = "pcb-component-swap-pad-net-dropped";
+    PCB_COMPONENT_SWAP_PAD_DROPPED = "pcb-component-swap-pad-dropped";
+    PCB_COMPONENT_PICKER_OWN_FOOTPRINTS = "pcb-component-picker-own-footprints";
 }

@@ -8,7 +8,7 @@ use signex_engine::pcb::designators::FootprintTextField;
 use signex_types::pcb::{Footprint, PcbBoard, SymbolLink};
 
 use crate::app::Signex;
-use crate::panels::{ParameterFacts, PcbComponentFacts, Shared};
+use crate::panels::{FootprintLibrary, ParameterFacts, PcbComponentFacts, Shared};
 
 /// The value every footprint gives, or mixed. Only called on a non-empty
 /// list, where it always has an answer.
@@ -103,7 +103,11 @@ impl Signex {
             comment_shown: text_shown(fps, FootprintTextField::Value),
             area_mm2: shared(fps, component::body_area_mm2),
             footprint_name: shared(fps, |fp| fp.footprint_id.clone()),
-            library: shared(fps, |fp| fp.library_ref.as_ref().map(ToString::to_string)),
+            library: shared(fps, |fp| {
+                fp.library_ref
+                    .as_ref()
+                    .map(|source| self.footprint_library(source.library))
+            }),
             schematic_path: shared(fps, |fp| fp.schematic_link.as_ref().map(hierarchical_path)),
             parameters: parameters(fps),
             drafts,
@@ -111,6 +115,18 @@ impl Signex {
             search: state.search.clone(),
             footprints: ids,
         })
+    }
+
+    /// The library `id` as the Library row names it: an open library by its
+    /// display name, else by its id.
+    fn footprint_library(&self, id: uuid::Uuid) -> FootprintLibrary {
+        self.library
+            .open_libraries
+            .iter()
+            .find(|lib| lib.library_id == id)
+            .map_or(FootprintLibrary::NotOpen(id), |lib| {
+                FootprintLibrary::Open(lib.display_name.clone())
+            })
     }
 }
 

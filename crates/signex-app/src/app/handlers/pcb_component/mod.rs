@@ -6,6 +6,7 @@
 //! Enter, kept per field for the footprints they were typed for.
 
 mod facts;
+mod swap;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -15,9 +16,10 @@ use signex_engine::pcb::component::{self, ComponentRefusal, LocationField};
 use signex_engine::pcb::designators::FootprintTextField;
 use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::PcbBoard;
+use iced::Task;
 use uuid::Uuid;
 
-use crate::app::Signex;
+use crate::app::{Message, Signex};
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::panels::{ComponentField, PcbComponentFacts, PcbComponentMsg};
 
@@ -46,8 +48,11 @@ impl PcbComponentDraft {
 }
 
 impl Signex {
-    pub(crate) fn handle_pcb_component(&mut self, msg: &PcbComponentMsg) {
+    pub(crate) fn handle_pcb_component(&mut self, msg: &PcbComponentMsg) -> Task<Message> {
         match msg {
+            PcbComponentMsg::FootprintPickRequested { board, footprints } => {
+                return self.open_footprint_swap_picker(board, footprints);
+            }
             PcbComponentMsg::SearchChanged(query) => {
                 self.interaction_state
                     .pcb_component
@@ -126,6 +131,7 @@ impl Signex {
             }
         }
         self.sync_pcb_board_summary();
+        Task::none()
     }
 
     fn catalog(&self, id: MessageId) -> String {
@@ -161,14 +167,14 @@ impl Signex {
     }
 
     /// Build the commands of one edit from the board at `board` and run them
-    /// as one step labelled `what`, or say why not.
+    /// as one step labelled `what`, or say why not. Whether the step ran.
     fn run_component_edit(
         &mut self,
         board: &Path,
         footprints: &[Uuid],
         what: &str,
         build: impl FnOnce(&PcbBoard, &BTreeSet<Uuid>) -> Result<Vec<BoardCommand>, ComponentRefusal>,
-    ) {
+    ) -> bool {
         let refused = |app: &Self, why: String| {
             let line = t!(
                 app.ui_state.i18n,
@@ -181,7 +187,7 @@ impl Signex {
         let Some(engine) = self.document_state.board_engine(board) else {
             let line = t!(self.ui_state.i18n, ids::PCB_FOOTPRINT_BOARD_GONE, "what" => what);
             crate::diagnostics::log_warning(line.into_string());
-            return;
+            return false;
         };
         let revision = engine.revision();
         let ids: BTreeSet<Uuid> = footprints.iter().copied().collect();
@@ -189,18 +195,22 @@ impl Signex {
             Ok(commands) => commands,
             Err(refusal) => {
                 refused(self, refusal.to_string());
-                return;
+                return false;
             }
         };
         if commands.is_empty() {
-            return;
+            return false;
         }
         let step = CheckedStep {
             label: what,
             expected_revision: revision,
         };
-        if let Err(error) = self.execute_board_commands(board, commands, Some(step)) {
-            refused(self, error.to_string());
+        match self.execute_board_commands(board, commands, Some(step)) {
+            Ok(_) => true,
+            Err(error) => {
+                refused(self, error.to_string());
+                false
+            }
         }
     }
 

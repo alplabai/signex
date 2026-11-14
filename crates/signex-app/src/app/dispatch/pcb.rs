@@ -47,6 +47,7 @@ impl Signex {
             PcbMsg::Reannotate(msg) => self.dispatch_board_reannotate_message(msg),
             PcbMsg::BackAnnotate(msg) => self.dispatch_back_annotate_message(msg),
             PcbMsg::Bar(event) => self.handle_pcb_bar(event),
+            PcbMsg::FootprintSwap(event) => self.handle_footprint_swap(event),
         }
     }
 

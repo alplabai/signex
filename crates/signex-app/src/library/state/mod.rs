@@ -488,6 +488,13 @@ pub enum PrimitivePickerTarget {
         sheet: signex_types::schematic::InstancePath,
         part: Uuid,
     },
+    /// A board footprint swap (#2366): the footprints of `board` to replace,
+    /// and the footprints their library parts offer, listed first.
+    BoardFootprint {
+        board: std::path::PathBuf,
+        footprints: Vec<Uuid>,
+        suggested: Vec<signex_library::PrimitiveRef>,
+    },
 }
 
 impl PrimitivePickerTarget {
@@ -498,7 +505,7 @@ impl PrimitivePickerTarget {
             | Self::EditRowModal(a)
             | Self::BrowserRow(a)
             | Self::PreviewAlternate(a) => Some(a),
-            Self::DesignPart { .. } => None,
+            Self::DesignPart { .. } | Self::BoardFootprint { .. } => None,
         }
     }
 

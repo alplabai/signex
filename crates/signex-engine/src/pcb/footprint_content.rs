@@ -3,7 +3,7 @@
 //! the forward-annotation edits of Update PCB from schematic (#1312). One
 //! property's value or visibility is the Properties panel's edit (#2354).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{Footprint, Pad, PadNet, PcbBoard, SymbolLink};
@@ -271,6 +271,17 @@ fn carry_pad_nets(old: &Footprint, new: &mut Footprint) -> Result<(), BoardComma
         pad.net_locked = locked;
     }
     Ok(())
+}
+
+/// The pads of `old` whose number `new` lacks: a replace of `old` by `new`
+/// drops them, with their nets and locks. Shared by the ECO notes and the
+/// board's footprint swap report.
+pub(crate) fn unmatched_pads<'a>(old: &'a Footprint, new: &Footprint) -> Vec<&'a Pad> {
+    let numbers: HashSet<&str> = new.pads.iter().map(|p| p.number.as_str()).collect();
+    old.pads
+        .iter()
+        .filter(|pad| !numbers.contains(pad.number.as_str()))
+        .collect()
 }
 
 /// The refusal a replace of `old` by `new` would meet, if any: `new` has
