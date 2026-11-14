@@ -50,6 +50,17 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2351: the board origin marker, shown by default. No default key.
+    CommandMetadata {
+        id: "toggle_origin_marker",
+        category: "view",
+        label: command_ids::CMD_TOGGLE_ORIGIN_MARKER,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_ORIGIN_MARKER),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "next_layer",
         category: "view",

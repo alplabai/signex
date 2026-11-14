@@ -28,24 +28,6 @@ pub const GRID_SIZE_LABELS: &[&str] = &["0.635 mm", "1.27 mm", "2.54 mm", "5.08 
 /// 0.635 mm = 25 mil, 1.27 mm = 50 mil, 2.54 mm = 100 mil, 5.08 mm = 200 mil.
 pub const GRID_SIZE_LABELS_MIL: &[&str] = &["25 mil", "50 mil", "100 mil", "200 mil"];
 
-/// Smallest `grid_mm * 5^k` (k = 0..=4) whose on-screen distance at `scale`
-/// px/mm is at least `min_px`, or `None` when even the coarsest level is too
-/// dense to draw. The result is always an integer multiple of `grid_mm`, so a
-/// drawn line never lands off a real grid point (a plain pixel clamp would).
-pub fn adaptive_pitch_mm(grid_mm: f32, scale: f32, min_px: f32) -> Option<f32> {
-    if grid_mm <= 0.0 || scale <= 0.0 {
-        return None;
-    }
-    let mut pitch = grid_mm;
-    for _ in 0..5 {
-        if pitch * scale >= min_px {
-            return Some(pitch);
-        }
-        pitch *= 5.0;
-    }
-    None
-}
-
 /// Smallest on-screen distance between two grid lines or dots, in logical px.
 pub(crate) const MIN_GRID_PITCH_PX: f32 = 6.0;
 /// The same floor in device px, so a high-DPI screen never draws a pitch
@@ -552,10 +534,7 @@ mod snap_tests {
 
 #[cfg(test)]
 mod pitch_tests {
-    use super::{
-        adaptive_pitch_mm, axis_stops, min_grid_pitch_px, paper_clip, pitch_mm_exact,
-        visible_pitch_mm,
-    };
+    use super::{axis_stops, min_grid_pitch_px, paper_clip, pitch_mm_exact, visible_pitch_mm};
     use crate::canvas::camera::Camera;
     use iced::{Point, Rectangle, Size};
 
@@ -659,24 +638,6 @@ mod pitch_tests {
         // the cell cap; it steps coarser instead of dropping the grid.
         let p = visible_pitch_mm(1.27, 5.6, 6.0, 2000.0 / 5.6, 1500.0 / 5.6).unwrap();
         assert!(p >= 1.27);
-    }
-
-    #[test]
-    fn default_pcb_zoom_draws_a_multiple_of_the_grid() {
-        // 3.0 px/mm, 2.54 mm grid: 7.62 px < 8, so step to 5 x 2.54.
-        let p = adaptive_pitch_mm(2.54, 3.0, 8.0).unwrap();
-        assert!((p / 2.54 - 5.0).abs() < 1e-4, "{p}");
-    }
-
-    #[test]
-    fn dense_enough_grid_keeps_its_own_pitch() {
-        assert_eq!(adaptive_pitch_mm(1.27, 10.0, 8.0), Some(1.27));
-    }
-
-    #[test]
-    fn too_dense_even_at_coarsest_level_hides() {
-        assert_eq!(adaptive_pitch_mm(0.635, 0.01, 8.0), None);
-        assert_eq!(adaptive_pitch_mm(0.0, 3.0, 8.0), None);
     }
 
     /// #1057 - a snapped point is an exact multiple of the pitch in nm, for

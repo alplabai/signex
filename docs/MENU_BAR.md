@@ -451,6 +451,11 @@ undocked PCB window the keys and rows act on that window's board. What a row
 changes is the board view in `UiState::pcb_layer_views`: never the board,
 never its file. See `docs/DECISIONS.md` (2026-11-09).
 
+Toggle Origin Marker (`toggle_origin_marker`, #2351) sits under Toggle
+Ratsnest: it shows or hides the circle-and-X marker at the board origin,
+which is shown by default. It is greyed without a board, has no default key,
+and like the rows above it changes only the board view.
+
 The board canvas menu ends with a View group holding the same Toggle
 Ratsnest row (#2240, #2223); the menu opens only on a board, so the row is
 always live there.

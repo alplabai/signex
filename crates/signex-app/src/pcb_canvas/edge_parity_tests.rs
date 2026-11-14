@@ -7,7 +7,6 @@
 use iced::{Point, Rectangle};
 use signex_gfx::style::ColorSlot;
 use signex_renderer::pcb::PcbSnapshot;
-use signex_renderer::theme::ResolvedTheme;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::PcbBoard;
 
@@ -71,7 +70,7 @@ fn board_edge_overlay_lands_on_the_edge_cuts_graphics_after_fit_and_zoom() {
 
     let canvas = fitted_canvas(&board);
     let scene = canvas.gpu_scene().expect("scene");
-    let theme = ResolvedTheme::from_canvas_colors(canvas.canvas_colors);
+    let theme = canvas.content_theme();
     let edge_color = theme.color(ColorSlot::BoardEdge);
     let board_area = theme.color(ColorSlot::BoardArea);
     let overlay_edge: Vec<[f32; 2]> = scene

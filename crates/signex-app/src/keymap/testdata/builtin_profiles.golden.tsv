@@ -311,6 +311,7 @@ altium	hint	-	-	run_drc
 altium	hint	-	-	reannotate_board
 altium	hint	-	-	flip_selection
 altium	hint	-	-	toggle_ratsnest
+altium	hint	-	-	toggle_origin_marker
 altium	hint	-	Shift++	next_layer
 altium	hint	-	"-"	prev_layer
 altium	hint	-	-	toggle_layer_visibility
@@ -648,6 +649,7 @@ classic	hint	-	-	run_drc
 classic	hint	-	-	reannotate_board
 classic	hint	-	-	flip_selection
 classic	hint	-	-	toggle_ratsnest
+classic	hint	-	-	toggle_origin_marker
 classic	hint	-	Shift++	next_layer
 classic	hint	-	"-"	prev_layer
 classic	hint	-	-	toggle_layer_visibility

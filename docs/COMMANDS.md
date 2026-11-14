@@ -302,6 +302,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `show_all_layers` | Show every layer | view | — | — |
 | `toggle_layer_visibility` | Show or hide the active layer | view | — | — |
 | `toggle_layers_panel` | Show or hide the Layers panel | view | — | — |
+| `toggle_origin_marker` | Show or hide the board origin marker | view | — | — |
 | `toggle_ratsnest` | Show or hide the ratsnest | view | — | — |
 | `view_rotate` | Rotate the board view clockwise | view | — | — |
 | `view_rotate_180` | Rotate the board view 180° | view | — | — |

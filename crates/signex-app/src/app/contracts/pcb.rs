@@ -81,6 +81,8 @@ pub enum BoardSketchMsg {
 pub enum PcbViewMsg {
     /// The user asked to show or hide the whole ratsnest.
     RatsnestVisibilityToggled,
+    /// The user asked to show or hide the board origin marker (#2351).
+    OriginMarkerVisibilityToggled,
     /// The user stepped the active copper layer to the next or previous one.
     ActiveLayerStepped { forward: bool },
     /// The user made one copper layer the active one (a Layers panel row).

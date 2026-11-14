@@ -135,6 +135,7 @@ impl Signex {
 fn apply_event(view: &mut PcbLayerView, copper: &[CopperLayer], event: PcbViewMsg) {
     match event {
         PcbViewMsg::RatsnestVisibilityToggled => view.toggle_ratsnest(),
+        PcbViewMsg::OriginMarkerVisibilityToggled => view.toggle_origin_marker(),
         PcbViewMsg::ActiveLayerStepped { forward } => view.step_active(copper, forward),
         PcbViewMsg::ActiveLayerPicked(layer) => view.set_active(layer),
         PcbViewMsg::LayerVisibilityToggled(layer) => view.toggle_visibility(layer),
