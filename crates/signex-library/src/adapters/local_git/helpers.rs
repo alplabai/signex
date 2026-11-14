@@ -150,6 +150,7 @@ pub(super) fn stage_and_commit_with(
     let updated = retry_on_git_lock(repo.path(), || {
         super::index_lock::update_index_locked(repo, |index| {
             for removed in removed_rel_paths {
+                super::index_lock::resolve_conflict(index, removed)?;
                 if index.get_path(removed, 0).is_some() {
                     index.remove_path(removed)?;
                 }

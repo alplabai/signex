@@ -89,6 +89,192 @@ fn an_index_published_by_the_lock_holder_keeps_its_staged_path() {
     );
 }
 
+/// Only a sharing violation on Windows is a held lock worth retrying.
+#[test]
+fn a_rename_is_retried_only_for_a_windows_sharing_violation() {
+    use super::index_lock::{RenameFailure, rename_failure};
+    use std::io::ErrorKind;
+    assert_eq!(
+        rename_failure(ErrorKind::PermissionDenied, true),
+        RenameFailure::Locked
+    );
+    assert_eq!(
+        rename_failure(ErrorKind::PermissionDenied, false),
+        RenameFailure::Failed
+    );
+    assert_eq!(
+        rename_failure(ErrorKind::NotFound, true),
+        RenameFailure::Failed
+    );
+    assert_eq!(
+        rename_failure(ErrorKind::Other, false),
+        RenameFailure::Failed
+    );
+}
+
+/// An edit that panics leaves no `index.lock` behind and the repository on
+/// its own index, with the half-made edit dropped.
+#[test]
+fn a_panicking_edit_releases_the_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = git2::Repository::init(dir.path()).unwrap();
+    commit_files(&repo, "HEAD", &[], &[("file.txt", "one\n")]);
+    fs::write(dir.path().join("new.txt"), "new\n").unwrap();
+
+    let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        super::index_lock::update_index_locked(&repo, |index| -> Result<(), git2::Error> {
+            index.add_path(Path::new("new.txt")).unwrap();
+            panic!("edit panics")
+        })
+    }));
+
+    assert!(panicked.is_err());
+    assert!(!repo.path().join("index.lock").exists(), "index.lock left");
+    assert!(!repo.path().join("index.signex-scratch").exists());
+    let index = repo.index().unwrap();
+    assert_eq!(index.path(), Some(repo.path().join("index").as_path()));
+    assert!(index.get_path(Path::new("new.txt"), 0).is_none());
+}
+
+/// A repo at a fresh temp dir with `config` set, opened again so its index
+/// takes the capabilities that config names.
+fn repo_with_config(config: &[(&str, bool)]) -> (tempfile::TempDir, git2::Repository) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = git2::Repository::init(dir.path()).unwrap();
+    let mut cfg = repo.config().unwrap();
+    for (key, value) in config {
+        cfg.set_bool(key, *value).unwrap();
+    }
+    let repo = git2::Repository::open(dir.path()).unwrap();
+    (dir, repo)
+}
+
+fn index_paths(root: &Path) -> Vec<String> {
+    let repo = git2::Repository::open(root).unwrap();
+    let index = repo.index().unwrap();
+    index
+        .iter()
+        .map(|e| String::from_utf8_lossy(&e.path).into_owned())
+        .collect()
+}
+
+/// With `core.ignorecase`, a save naming a tracked file in another case
+/// updates its entry, kept in its original case, as `git add` does.
+#[test]
+fn with_ignorecase_a_case_variant_save_keeps_one_entry_in_its_original_case() {
+    let (dir, repo) = repo_with_config(&[("core.ignorecase", true)]);
+    commit_files(&repo, "HEAD", &[], &[("Foo.txt", "one\n")]);
+    fs::write(dir.path().join("foo.txt"), "two\n").unwrap();
+
+    let sig = signature();
+    stage_and_commit_with(
+        &repo,
+        &[],
+        None,
+        None,
+        &[Path::new("foo.txt")],
+        &sig,
+        "save",
+    )
+    .unwrap()
+    .expect("a commit");
+
+    let variants: Vec<String> = index_paths(dir.path())
+        .into_iter()
+        .filter(|p| p.eq_ignore_ascii_case("foo.txt"))
+        .collect();
+    assert_eq!(variants, ["Foo.txt"]);
+}
+
+/// With `core.ignorecase`, removing a tracked file named in another case
+/// drops its entry.
+#[test]
+fn with_ignorecase_a_removal_in_another_case_drops_the_entry() {
+    let (dir, repo) = repo_with_config(&[("core.ignorecase", true)]);
+    commit_files(
+        &repo,
+        "HEAD",
+        &[],
+        &[("Foo.txt", "one\n"), ("bar.txt", "one\n")],
+    );
+    fs::write(dir.path().join("bar.txt"), "two\n").unwrap();
+
+    let sig = signature();
+    let removed = [Path::new("foo.txt")];
+    stage_and_commit_with(
+        &repo,
+        &removed,
+        Some(Path::new("bar.txt")),
+        None,
+        &[],
+        &sig,
+        "move",
+    )
+    .unwrap()
+    .expect("a commit");
+
+    let left: Vec<String> = index_paths(dir.path())
+        .into_iter()
+        .filter(|p| p.eq_ignore_ascii_case("foo.txt"))
+        .collect();
+    assert!(
+        left.is_empty(),
+        "the removed path is still staged: {left:?}"
+    );
+}
+
+/// With `core.filemode=false`, a save keeps an executable entry's mode
+/// rather than taking it from the file on disk.
+#[test]
+fn with_filemode_off_a_save_keeps_the_executable_mode() {
+    let (dir, repo) = repo_with_config(&[("core.filemode", false)]);
+    fs::write(dir.path().join("run.sh"), "one\n").unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new("run.sh")).unwrap();
+    let mut entry = index.get_path(Path::new("run.sh"), 0).unwrap();
+    entry.mode = 0o100755;
+    index.add(&entry).unwrap();
+    index.write().unwrap();
+    let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+    let sig = signature();
+    repo.commit(Some("HEAD"), &sig, &sig, "exec", &tree, &[])
+        .unwrap();
+    fs::write(dir.path().join("run.sh"), "two\n").unwrap();
+
+    stage_and_commit_with(&repo, &[], None, None, &[Path::new("run.sh")], &sig, "save")
+        .unwrap()
+        .expect("a commit");
+
+    let after = git2::Repository::open(dir.path()).unwrap();
+    let mode = after
+        .index()
+        .unwrap()
+        .get_path(Path::new("run.sh"), 0)
+        .unwrap()
+        .mode;
+    assert_eq!(mode, 0o100755, "mode {mode:o}");
+}
+
+/// After a save the repository handle that made it still has its own
+/// index, and sees the saved file as clean.
+#[test]
+fn a_save_leaves_the_repository_on_its_own_index() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = git2::Repository::init(dir.path()).unwrap();
+    let sig = signature();
+    fs::write(dir.path().join("file.txt"), "one\n").unwrap();
+    stage_and_commit(&repo, &[], Path::new("file.txt"), None, &sig, "first")
+        .unwrap()
+        .expect("a commit");
+
+    let index = repo.index().unwrap();
+    assert_eq!(index.path(), Some(repo.path().join("index").as_path()));
+    assert_eq!(
+        repo.status_file(Path::new("file.txt")).unwrap(),
+        git2::Status::CURRENT
+    );
+}
+
 /// A save of files left conflicted by a merge resolves them in the index,
 /// for the saved path and for an extra path committed with it.
 #[test]

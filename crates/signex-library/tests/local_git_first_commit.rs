@@ -237,6 +237,51 @@ fn index_has(dir: &Path, name: &str) -> bool {
     index.get_path(Path::new(name), 0).is_some()
 }
 
+/// Hold `.git/index.lock` in `dir` as another git process would, and let it
+/// go from another thread after a moment.
+fn hold_index_lock_briefly(dir: &Path) -> std::thread::JoinHandle<()> {
+    let lock = dir.join(".git/index.lock");
+    std::fs::write(&lock, b"").unwrap();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::fs::remove_file(lock).unwrap();
+    })
+}
+
+/// #2337: a library made in a repo whose `index.lock` another git process
+/// holds for a moment waits for it, then stages its files.
+#[test]
+fn init_waits_out_a_briefly_held_index_lock() {
+    signex_library::git_identity::test_identity::install();
+    let tmp = tempfile::tempdir().unwrap();
+    Repository::init(tmp.path()).unwrap();
+    let release = hold_index_lock_briefly(tmp.path());
+
+    LocalGitAdapter::init(tmp.path().join("lib.snxlib"), manifest(), GIT).expect("init");
+
+    release.join().unwrap();
+    assert!(index_has(tmp.path(), "lib.snxlib"));
+    assert!(!tmp.path().join(".git/index.lock").exists());
+}
+
+/// #2337: Re-init while another git process holds `index.lock` for a
+/// moment waits for it, then records the library's files in the index.
+#[test]
+fn recover_init_waits_out_a_briefly_held_index_lock() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    LocalGitAdapter::recover_init(&lib).expect("first re-init");
+    std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+    std::fs::write(tmp.path().join("symbols/r.snxsym"), "sym").unwrap();
+    let release = hold_index_lock_briefly(tmp.path());
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    release.join().unwrap();
+    assert!(head_tracks(tmp.path(), "symbols/r.snxsym"));
+    assert!(index_has(tmp.path(), "symbols/r.snxsym"));
+}
+
 /// #2337: Re-init records an LFS model in the index as the pointer it
 /// committed, not the raw file, so `git status` reports it clean.
 #[test]
