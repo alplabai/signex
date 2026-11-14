@@ -124,7 +124,9 @@ pub use paper::{
     PageFormatMode, PageOrigin, SchematicSheetColor, SheetColor, paper_dimensions,
     paper_size_options,
 };
-pub use pcb_board_properties::PcbBoardSummary;
+pub use pcb_board_properties::{
+    BoardTab, ComponentSide, PcbBoardMsg, PcbBoardPanelView, PcbBoardSummary,
+};
 pub use pcb_footprint_properties::{FootprintEditability, PcbFootprintFacts, PcbFootprintTextMsg};
 pub use pcb_layers::PcbLayersPanel;
 pub use pcb_nets::PcbNetsSummary;

@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 
 use crate::index::{BoardIndex, IndexedItem, ItemRef, RectSelect};
+use crate::pick_filter::PickFilter;
 use crate::rect::RectNm;
 use crate::units::PointNm;
 
@@ -103,9 +104,21 @@ impl Selection {
 /// body, then the lowest
 /// [`ItemRef`], so the answer does not depend on how the tree was built.
 pub fn pick(index: &BoardIndex, p: PointNm, tolerance: i64) -> Option<&IndexedItem> {
+    pick_filtered(index, p, tolerance, &PickFilter::default())
+}
+
+/// [`pick`] among the items `filter` allows: an item of a kind turned off
+/// is passed over for the one under it (#2353).
+pub fn pick_filtered<'a>(
+    index: &'a BoardIndex,
+    p: PointNm,
+    tolerance: i64,
+    filter: &PickFilter,
+) -> Option<&'a IndexedItem> {
     index
         .items_at(p, tolerance)
         .into_iter()
+        .filter(|i| filter.allows(i.item))
         .min_by_key(|i| (rank(i.item), i.item))
 }
 

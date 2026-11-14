@@ -583,7 +583,11 @@ pub fn props_tab_btn(
 
 /// Graphite filter chip: accent-soft fill when on, hairline outline when
 /// off, radius 7.
-fn graphite_filter_chip(theme: &Theme, on: bool, hovered: bool) -> iced::widget::button::Style {
+pub(crate) fn graphite_filter_chip(
+    theme: &Theme,
+    on: bool,
+    hovered: bool,
+) -> iced::widget::button::Style {
     let l = form_look::FormLook::of(theme);
     let fill = if on {
         Some(Background::Color(l.accent_soft))
@@ -606,7 +610,7 @@ fn graphite_filter_chip(theme: &Theme, on: bool, hovered: bool) -> iced::widget:
 }
 
 /// Label of a filter tab or chip: the Graphite ink pair resolved from the theme.
-fn chip_label<'a>(label: Label<'a>, on: bool) -> iced::widget::Text<'a> {
+pub(crate) fn chip_label<'a>(label: Label<'a>, on: bool) -> iced::widget::Text<'a> {
     text(label)
         .size(TS.body)
         .style(move |theme: &Theme| iced::widget::text::Style {

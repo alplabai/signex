@@ -6,7 +6,7 @@ pub(crate) const EN_US: &str = "en-US";
 /// that are hardcoded or that overflow.
 pub(crate) const EN_XA: &str = "en-XA";
 
-pub(crate) const EN_US_SOURCES: [&str; 20] = [
+pub(crate) const EN_US_SOURCES: [&str; 21] = [
     include_str!("../locales/en-US/back_annotate.ftl"),
     include_str!("../locales/en-US/board_sketch.ftl"),
     include_str!("../locales/en-US/cross_probe.ftl"),
@@ -14,6 +14,7 @@ pub(crate) const EN_US_SOURCES: [&str; 20] = [
     include_str!("../locales/en-US/menu.ftl"),
     include_str!("../locales/en-US/commands.ftl"),
     include_str!("../locales/en-US/pcb.ftl"),
+    include_str!("../locales/en-US/pcb-board.ftl"),
     include_str!("../locales/en-US/language.ftl"),
     include_str!("../locales/en-US/dialog.ftl"),
     include_str!("../locales/en-US/overlay.ftl"),

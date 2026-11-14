@@ -36,6 +36,23 @@ impl PcbRatsnest {
         &self.lines
     }
 
+    /// How many nets still have a ratsnest line, if the lines held are the
+    /// ones of `key` (#2353); `None` before they are computed for it.
+    pub(crate) fn unrouted_nets(&self, key: &RatsnestKey) -> Option<usize> {
+        (self.key.as_ref() == Some(key)).then(|| {
+            self.lines
+                .iter()
+                .map(|line| line.net)
+                .collect::<BTreeSet<u32>>()
+                .len()
+        })
+    }
+
+    /// How many nets of `board` have their ratsnest hidden.
+    pub(crate) fn hidden_net_count(&self, board: &Path) -> usize {
+        self.hidden_nets.get(board).map_or(0, BTreeSet::len)
+    }
+
     pub fn is_net_hidden(&self, board: &Path, net: u32) -> bool {
         self.hidden_nets
             .get(board)

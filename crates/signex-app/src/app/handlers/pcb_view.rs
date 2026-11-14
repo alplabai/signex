@@ -37,6 +37,13 @@ impl Signex {
             .unwrap_or_default()
     }
 
+    /// The active copper layer of the board in view; the top layer without
+    /// one. Object snapping on the current layer reads it (#2353).
+    pub(crate) fn pcb_active_layer(&self) -> CopperLayer {
+        self.active_tab_path()
+            .map_or(CopperLayer::Top, |path| self.pcb_layer_view(&path).active())
+    }
+
     /// The snapshot of `board` as the view of `path` shows it, without the
     /// ratsnest.
     pub(crate) fn pcb_snapshot_for(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {

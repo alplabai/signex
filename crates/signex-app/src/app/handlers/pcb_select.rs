@@ -134,6 +134,7 @@ impl Signex {
                 .get(&tab.path)
                 .unwrap_or(&Default::default()),
         );
+        selection.set_filter(&self.ui_state.pcb_pick_filter);
         let out = f(selection, board);
         for line in selection.take_report() {
             crate::diagnostics::log_warning(line);

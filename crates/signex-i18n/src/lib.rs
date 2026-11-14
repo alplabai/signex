@@ -302,14 +302,8 @@ define_ids! {
     PCB_LAYERS_SHOW = "pcb-layers-show";
     PCB_PROPERTIES_TITLE = "pcb-properties-title";
     PCB_PROPERTIES_SECTION = "pcb-properties-section";
-    PCB_PROPERTIES_SIZE = "pcb-properties-size";
-    PCB_PROPERTIES_SIZE_VALUE = "pcb-properties-size-value";
     PCB_PROPERTIES_NO_OUTLINE = "pcb-properties-no-outline";
-    PCB_PROPERTIES_LAYERS = "pcb-properties-layers";
-    PCB_PROPERTIES_LAYERS_VALUE = "pcb-properties-layers-value";
     PCB_PROPERTIES_THICKNESS = "pcb-properties-thickness";
-    PCB_PROPERTIES_THICKNESS_VALUE = "pcb-properties-thickness-value";
-    PCB_PROPERTIES_NETS = "pcb-properties-nets";
     PCB_PROPERTIES_SELECTION = "pcb-properties-selection";
     PCB_PROPERTIES_SELECTION_HINT = "pcb-properties-selection-hint";
     PCB_FOOTPRINT_TITLE = "pcb-footprint-title";

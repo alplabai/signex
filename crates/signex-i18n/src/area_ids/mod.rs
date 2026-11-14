@@ -8,6 +8,7 @@ mod library;
 mod overlay;
 mod panels;
 mod pcb;
+mod pcb_board;
 mod preferences;
 mod update_pcb;
 
@@ -17,6 +18,7 @@ pub use library::*;
 pub use overlay::*;
 pub use panels::*;
 pub use pcb::*;
+pub use pcb_board::*;
 pub use preferences::*;
 pub use update_pcb::*;
 
@@ -30,6 +32,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         overlay::OVERLAY,
         panels::PANELS,
         pcb::PCB,
+        pcb_board::PCB_BOARD,
         preferences::PREFERENCES,
         update_pcb::UPDATE_PCB,
     ]

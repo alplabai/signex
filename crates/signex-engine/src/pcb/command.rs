@@ -92,6 +92,11 @@ pub enum BoardCommand {
     /// the edit [`BoardNetEdit::apply`] returns. Refused whole when a change
     /// names a footprint, pad or zone that is gone, or one twice.
     SetNets(BoardNetEdit),
+    /// Set the board's snap grid step in mm, `PcbSetup::grid_size` (#2353).
+    /// `0` is the PCB default step. Refused for a negative or non-finite
+    /// step and on a board without a setup. The inverse is another one
+    /// holding the old step.
+    SetGridSize { grid_mm: f64 },
 }
 
 /// What a command changed, for a consumer that redraws or re-derives only
@@ -121,6 +126,8 @@ pub enum BoardPatchKind {
     /// The board sketch and its baked geometry, the outline included when
     /// the command carried one. Names no items.
     BoardSketchReplaced,
+    /// The setup's snap grid step. Names no items.
+    GridChanged,
 }
 
 /// The result of applying a command: the command that undoes it and the
@@ -169,6 +176,7 @@ impl BoardCommand {
                 link,
             } => footprint_content::set_link(board, id, link),
             Self::SetNets(edit) => batch::set_nets(board, edit),
+            Self::SetGridSize { grid_mm } => set_grid_size(board, grid_mm),
         }
     }
 }
@@ -185,6 +193,24 @@ fn set_outline(board: &mut PcbBoard, outline: Vec<Point>) -> Result<Applied, Boa
         inverse: BoardCommand::SetBoardOutline { outline: previous },
         patch: BoardPatch {
             kind: BoardPatchKind::OutlineReplaced,
+            items: Vec::new(),
+        },
+    })
+}
+
+fn set_grid_size(board: &mut PcbBoard, grid_mm: f64) -> Result<Applied, BoardCommandError> {
+    if !grid_mm.is_finite() {
+        return Err(BoardCommandError::NonFinite { field: "grid_size" });
+    }
+    if grid_mm < 0.0 {
+        return Err(BoardCommandError::NegativeGridStep(grid_mm));
+    }
+    let setup = board.setup.as_mut().ok_or(BoardCommandError::NoSetup)?;
+    let previous = std::mem::replace(&mut setup.grid_size, grid_mm);
+    Ok(Applied {
+        inverse: BoardCommand::SetGridSize { grid_mm: previous },
+        patch: BoardPatch {
+            kind: BoardPatchKind::GridChanged,
             items: Vec::new(),
         },
     })

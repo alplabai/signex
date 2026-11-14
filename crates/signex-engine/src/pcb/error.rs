@@ -62,6 +62,10 @@ pub enum BoardCommandError {
     NonFinite { field: &'static str },
     #[error("the board sketch holds a number that is not finite at {0}")]
     NonFiniteSketch(String),
+    #[error("the grid step must not be negative, not {0} mm")]
+    NegativeGridStep(f64),
+    #[error("the board has no setup to hold a grid step")]
+    NoSetup,
     #[error("the board outline belongs to the board sketch; edit the sketch instead")]
     OutlineOwnedBySketch,
     #[error(

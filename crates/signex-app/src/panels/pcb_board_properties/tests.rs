@@ -1,12 +1,13 @@
 //! Round 9 of #2262: a PCB tab's Properties show the board, not a schematic
-//! hint.
+//! hint; #2353: the board panel's sections.
 
 use super::*;
 use crate::app::Signex;
 use crate::layout_probe::lay_out_texts;
 use signex_types::pcb::{LayerDef, Point};
 
-const WINDOW: iced::Size = iced::Size::new(320.0, 900.0);
+// Tall enough to lay out every section of the board panel.
+const WINDOW: iced::Size = iced::Size::new(320.0, 4000.0);
 
 fn board() -> PcbBoard {
     let layer = |id: u8, name: &str| LayerDef {
@@ -40,6 +41,7 @@ fn context(selected: usize) -> PanelContext {
     let (app, _boot) = Signex::new();
     let mut ctx = app.document_state.panel_ctx.clone();
     ctx.has_pcb = true;
+    ctx.unit = Unit::Mm;
     ctx.pcb_board = Some(PcbBoardSummary::of(
         &board(),
         "mixed-tht-smd".into(),
@@ -76,11 +78,22 @@ fn an_unselected_board_shows_its_own_properties() {
     for wanted in [
         "Board",
         "mixed-tht-smd",
-        "Size",
-        "50.00 × 40.00 mm",
-        "2 copper layers",
-        "1.60 mm",
+        "Board Size",
+        "Horizontal",
+        "50.000 mm",
+        "Vertical",
+        "40.000 mm",
+        "Area",
+        "2000.00 mm²",
+        "Signal",
+        "1.600 mm",
         "Nets",
+        "SELECTION FILTER",
+        "SNAP OPTIONS",
+        "BOARD INFORMATION",
+        "GRID MANAGER",
+        "GUIDE MANAGER",
+        "OTHER",
     ] {
         assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
     }
@@ -99,7 +112,7 @@ fn a_selection_shows_a_card_naming_the_board() {
             .any(|t| t == "3 items selected on mixed-tht-smd"),
         "{texts:?}"
     );
-    assert!(!texts.iter().any(|t| t == "Size"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "Board Size"), "{texts:?}");
 }
 
 fn footprint_context(
@@ -166,5 +179,47 @@ fn the_footprint_rows_say_why_they_are_read_only_and_warn_of_a_shared_designator
             .iter()
             .any(|t| t == "Press Enter to apply the change."),
         "{shared:?}"
+    );
+}
+
+/// #2353: the search keeps the rows whose label holds the text, and says so
+/// when none does.
+#[test]
+fn the_search_keeps_matching_rows() {
+    let mut ctx = context(0);
+    if let Some(board) = ctx.pcb_board.as_mut() {
+        board.view.search = "pad".into();
+    }
+    let texts = texts(&ctx);
+    for wanted in ["Pad Centers", "Pads", "Pad/Via Holes"] {
+        assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
+    }
+    assert!(!texts.iter().any(|t| t == "Horizontal"), "{texts:?}");
+    if let Some(board) = ctx.pcb_board.as_mut() {
+        board.view.search = "zzzz".into();
+    }
+    let texts = texts(&ctx);
+    assert!(
+        texts.iter().any(|t| t == "Nothing matches the search."),
+        "{texts:?}"
+    );
+}
+
+/// #2353: the header sums up the Selection Filter.
+#[test]
+fn the_header_sums_up_the_selection_filter() {
+    let mut ctx = context(0);
+    let texts_all = texts(&ctx);
+    assert!(
+        texts_all.iter().any(|t| t == "Components (and 12 more)"),
+        "{texts_all:?}"
+    );
+    if let Some(board) = ctx.pcb_board.as_mut() {
+        board.filter.toggle(PickKind::Components);
+    }
+    let texts = texts(&ctx);
+    assert!(
+        texts.iter().any(|t| t == "3D Bodies (and 11 more)"),
+        "{texts:?}"
     );
 }

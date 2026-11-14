@@ -200,10 +200,32 @@ impl Signex {
             0
         };
         let footprint = self.pcb_footprint_facts(&tab.path, board);
-        Some(
-            crate::panels::PcbBoardSummary::of(board, tab.title.clone(), selected)
-                .with_footprint(footprint),
-        )
+        // The totals are counted once per board revision (#2353).
+        let revision = self
+            .document_state
+            .pcb_revisions
+            .get(&tab.path)
+            .copied()
+            .unwrap_or(0);
+        let key = (tab.path.clone(), revision);
+        let stats = self
+            .document_state
+            .panel_ctx
+            .pcb_board
+            .as_ref()
+            .filter(|s| s.stats_key.as_ref() == Some(&key))
+            .map_or_else(|| pcb_geom::BoardStats::of(board), |s| s.stats.clone());
+        let ratsnest = &self.interaction_state.pcb_ratsnest;
+        let summary = crate::panels::PcbBoardSummary {
+            unrouted_nets: ratsnest.unrouted_nets(&key),
+            hidden_nets: ratsnest.hidden_net_count(&tab.path),
+            filter: self.ui_state.pcb_pick_filter.clone(),
+            snap: self.ui_state.pcb_snap.clone(),
+            view: self.ui_state.pcb_board_panel.clone(),
+            stats_key: Some(key),
+            ..crate::panels::PcbBoardSummary::with_stats(board, tab.title.clone(), selected, stats)
+        };
+        Some(summary.with_footprint(footprint))
     }
 
     /// Bring the board summary in step with a selection change, without a

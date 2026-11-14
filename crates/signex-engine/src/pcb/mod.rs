@@ -20,6 +20,7 @@ mod footprint;
 mod footprint_content;
 mod items;
 pub mod placement;
+pub mod snap;
 
 #[cfg(test)]
 mod board_sketch_tests;
@@ -27,6 +28,8 @@ mod board_sketch_tests;
 mod content_tests;
 #[cfg(test)]
 mod engine_tests;
+#[cfg(test)]
+mod grid_tests;
 #[cfg(test)]
 mod pad_shape_tests;
 #[cfg(test)]

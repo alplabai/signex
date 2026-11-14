@@ -294,7 +294,14 @@ impl Signex {
         else {
             return;
         };
-        let delta = carry_delta(board, &carry.footprints, from, to);
+        let delta = carry_delta(
+            board,
+            &carry.footprints,
+            from,
+            to,
+            &self.ui_state.pcb_snap,
+            self.pcb_active_layer(),
+        );
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
             && carry.delta != delta
         {
@@ -317,8 +324,16 @@ impl Signex {
             self.end_pcb_carry();
             return;
         }
+        let active = self.pcb_active_layer();
         let built = self.active_pcb().map(|board| {
-            let delta = carry_delta(board, &carry.footprints, from, to);
+            let delta = carry_delta(
+                board,
+                &carry.footprints,
+                from,
+                to,
+                &self.ui_state.pcb_snap,
+                active,
+            );
             placement::move_commands(board, &carry.footprints, delta)
         });
         self.end_pcb_carry();
