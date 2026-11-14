@@ -21,6 +21,17 @@ fn quit_save_all_stopping(
     paths: &[PathBuf],
     stopped: &Path,
 ) -> iced::Task<Message> {
+    let messages = start_quit_save_all_stopping(app, paths, stopped);
+    feed_then_settle(app, messages)
+}
+
+/// The writes of [`quit_save_all_stopping`] started, not yet run: the
+/// messages the settle is fed.
+fn start_quit_save_all_stopping(
+    app: &mut Signex,
+    paths: &[PathBuf],
+    stopped: &Path,
+) -> Vec<Message> {
     STOP_WRITE_OF.with(|stop| *stop.borrow_mut() = Some(stopped.to_path_buf()));
     let probe = app.begin_save_all("Quit", paths, &[], SaveAllNext::Quit);
     let mut messages = Vec::new();
@@ -31,7 +42,7 @@ fn quit_save_all_stopping(
         STOP_WRITE_OF.with(|stop| stop.borrow().is_none()),
         "the stopped write was started"
     );
-    feed_then_settle(app, messages)
+    messages
 }
 
 /// The two dirty documents, the symbol also open in a tab so its editor
@@ -257,18 +268,36 @@ fn a_stopped_sheet_write_rereads_the_dirty_marker_from_the_history() {
     let _ = crate::diagnostics::init_logging();
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _symbol, sheet) = app_with_open_symbol(dir.path());
+    // Dirty through the history alone: the setup's plain mark is one only a
+    // save clears, so drop it and record an edit past the save point.
+    app.document_state.clear_document_dirty(&sheet);
+    let engine = app.document_state.engines.get_mut(&sheet).expect("engine");
+    engine.mark_saved();
+    let colors = [(
+        uuid::Uuid::now_v7(),
+        signex_types::theme::Color::new(9, 0, 0, 255),
+    )]
+    .into_iter()
+    .collect();
+    engine
+        .execute(signex_engine::Command::SetNetColors { colors })
+        .expect("colour");
+    app.document_state.mark_history_edit_dirty(&sheet);
+    assert!(app.document_state.is_document_dirty(&sheet));
+
+    let messages = start_quit_save_all_stopping(&mut app, std::slice::from_ref(&sheet), &sheet);
     app.document_state
         .engines
         .get_mut(&sheet)
         .expect("engine")
-        .mark_saved();
-    assert!(app.document_state.is_document_dirty(&sheet));
-
-    drop(quit_save_all_stopping(
-        &mut app,
-        std::slice::from_ref(&sheet),
-        &sheet,
-    ));
+        .undo()
+        .expect("undo");
+    app.document_state.sync_history_dirty(&sheet);
+    assert!(
+        app.document_state.is_document_dirty(&sheet),
+        "the running write holds the sheet dirty"
+    );
+    drop(feed_then_settle(&mut app, messages));
 
     assert!(!app.document_state.document_saves.is_saving(&sheet));
     assert!(
