@@ -8,6 +8,7 @@ mod content_pixel_tests;
 #[cfg(test)]
 mod content_tests;
 mod cull;
+mod drag_preview;
 #[cfg(test)]
 mod edge_parity_tests;
 #[cfg(test)]
@@ -21,7 +22,7 @@ mod select;
 mod tessellate;
 
 pub use camera::BoardCamera;
-pub use carry::{CarryKind, PcbCarry, carry_delta};
+pub use carry::{CarryKind, PcbCarry, board_without, carried_board, carry_delta};
 pub use content::BoardContentLayer;
 pub use highlight::{Highlight, HighlightLayer};
 pub use msg::PcbCanvasMsg;
@@ -121,11 +122,13 @@ pub struct PcbCanvas {
     highlight: Highlight,
     /// Box being dragged, in board mm; transient, read by the highlight layer.
     marquee: std::cell::Cell<Option<(signex_types::pcb::Point, signex_types::pcb::Point)>>,
-    /// The body and pads of the selected footprints, set by the app: a
-    /// press on one drags them instead of starting a box (#2240).
+    /// The body and pads of every footprint, set by the app: a press on one
+    /// drags it instead of starting a box (#2240, #2358).
     grab: Vec<pcb_geom::Shape>,
     /// A footprint drag is live; Esc clears it and the gesture quits.
     carry: std::cell::Cell<bool>,
+    /// The board without the carried footprints, and them at their offset.
+    drag_preview: Option<drag_preview::DragPreview>,
     /// Whether this canvas reports clicks and hovers.
     pub selectable: bool,
 }
@@ -166,6 +169,7 @@ impl PcbCanvas {
             marquee: std::cell::Cell::new(None),
             grab: Vec::new(),
             carry: std::cell::Cell::new(false),
+            drag_preview: None,
             selectable: true,
         }
     }
@@ -218,7 +222,14 @@ impl PcbCanvas {
         self.renderer_snapshot.as_ref()
     }
 
+    /// The board to draw. A drag preview in progress ends: the app starts
+    /// it again over the new board if the carry is still live.
     pub fn set_renderer_snapshot(&mut self, renderer_snapshot: Option<PcbSnapshot>) {
+        self.drag_preview = None;
+        self.replace_snapshot(renderer_snapshot);
+    }
+
+    fn replace_snapshot(&mut self, renderer_snapshot: Option<PcbSnapshot>) {
         self.renderer_snapshot = renderer_snapshot;
         // The board changed — the cached GPU scene no longer matches.
         *self.content.get_mut() = None;

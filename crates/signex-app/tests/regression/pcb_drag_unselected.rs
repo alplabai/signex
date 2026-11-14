@@ -1,12 +1,14 @@
 //! #2358 — a press on an unselected footprint and a drag select it and move
 //! it in one gesture, driven by real pointer events through the board
 //! canvas program: one undo step, grid snap, a locked part stays put, a
-//! plain click only selects and a press on empty space draws a box.
+//! plain click only selects and a press on empty space draws a box. While
+//! the drag is in progress the board is drawn without the footprint at its
+//! old place; it is drawn only where it is going.
 
 use iced::widget::canvas::Program;
 use iced::{Event, Point as ScreenPoint, Rectangle, mouse};
 use pcb_geom::ItemRef;
-use signex_app::app::{EditMsg, FileMsg, Message, Signex, TabDocument};
+use signex_app::app::{EditMsg, FileMsg, InputMsg, Message, Signex, TabDocument};
 use signex_app::diagnostics;
 use signex_app::pcb_canvas::PcbCanvasState;
 use signex_types::format::SnxPcb;
@@ -290,4 +292,96 @@ fn a_press_on_empty_space_still_draws_a_box() {
         "the box selected U1: {selected:?}"
     );
     assert!(!selected.contains(&ItemRef::Footprint(U2)));
+}
+
+/// Whether the board content the canvas draws (the snapshot both the CPU
+/// layer and the GPU scene are built from) has a pad centred at (`x`, `y`).
+fn draws_pad_at(f: &Fixture, x: f32, y: f32) -> bool {
+    let canvas = &f.app.interaction_state.pcb_canvas;
+    let snapshot = canvas.active_renderer_snapshot().expect("a board snapshot");
+    snapshot
+        .pads
+        .iter()
+        .any(|p| (p.center[0] - x).abs() < 1e-4 && (p.center[1] - y).abs() < 1e-4)
+}
+
+/// Press on U1 and move 2.6 mm to the right, without releasing.
+fn drag_u1_in_progress(f: &mut Fixture) -> ScreenPoint {
+    let grab = f.screen(12.7, 12.7);
+    let to = ScreenPoint::new(grab.x + 2.6 * f.scale(), grab.y);
+    f.pointer(mouse::Event::ButtonPressed(mouse::Button::Left), grab);
+    f.pointer(mouse::Event::CursorMoved { position: to }, to);
+    assert!(f.app.interaction_state.pcb_canvas.is_carrying());
+    to
+}
+
+#[test]
+fn during_a_drag_the_footprint_is_drawn_only_where_it_is_going() {
+    let mut f = open_board();
+    let before = f.snapshot();
+    assert!(draws_pad_at(&f, 12.7, 12.7), "U1 is drawn where it is");
+    let to = drag_u1_in_progress(&mut f);
+    assert_eq!(f.snapshot(), before, "a drag in progress edits nothing");
+    assert!(
+        !draws_pad_at(&f, 12.7, 12.7),
+        "the board content no longer holds U1 at its old place"
+    );
+    assert!(draws_pad_at(&f, 25.4, 12.7), "U2 is still drawn");
+    let canvas = &f.app.interaction_state.pcb_canvas;
+    let scene = canvas.gpu_scene().expect("a GPU scene");
+    let moving = canvas.drag_preview_scene().expect("U1 drawn on the move");
+    // U1's pad spans x 11.7..13.7 at its old place, 14.24..16.24 on the move.
+    let spans = |polygons: &[signex_gfx::primitive::polygon::GpuPolygon], lo: f32, hi: f32| {
+        polygons.iter().any(|p| {
+            p.vertices
+                .iter()
+                .all(|v| v[0] >= lo - 0.01 && v[0] <= hi + 0.01 && (v[1] - 12.7).abs() <= 0.51)
+        })
+    };
+    assert!(
+        !spans(&scene.polygons, 11.7, 13.7),
+        "the GPU scene holds no U1 pad at its old place"
+    );
+    assert!(spans(&scene.polygons, 24.4, 26.4), "but U2's pad");
+    assert!(
+        spans(&moving.polygons, 14.24, 16.24),
+        "U1's pad is drawn at the snapped offset"
+    );
+    // The selection outline goes with it, not left behind.
+    let highlight = canvas.highlight();
+    assert!(highlight.selected.is_empty() && highlight.bodies.is_empty());
+    assert!(!highlight.ghost.is_empty());
+
+    f.pointer(mouse::Event::ButtonReleased(mouse::Button::Left), to);
+    assert!(
+        f.app
+            .interaction_state
+            .pcb_canvas
+            .drag_preview_scene()
+            .is_none()
+    );
+    assert!(
+        draws_pad_at(&f, 15.24, 12.7),
+        "U1 is drawn at its new place"
+    );
+    assert!(!draws_pad_at(&f, 12.7, 12.7), "and not at its old one");
+}
+
+#[test]
+fn escape_during_a_drag_puts_the_footprint_back_in_the_drawing() {
+    let mut f = open_board();
+    let before = f.snapshot();
+    drag_u1_in_progress(&mut f);
+    assert!(!draws_pad_at(&f, 12.7, 12.7));
+    f.send(Message::Input(InputMsg::EscapePressed { window: None }));
+    assert!(
+        f.app
+            .interaction_state
+            .pcb_canvas
+            .drag_preview_scene()
+            .is_none()
+    );
+    assert!(draws_pad_at(&f, 12.7, 12.7), "U1 is drawn where it was");
+    assert_eq!(f.snapshot(), before, "nothing moved");
+    assert!(!f.can_undo());
 }

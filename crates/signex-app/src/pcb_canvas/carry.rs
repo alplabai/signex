@@ -76,6 +76,54 @@ pub fn carry_delta(board: &PcbBoard, footprints: &BTreeSet<Uuid>, from: Point, t
     }
 }
 
+/// `board` without `footprints`: what a drag preview leaves in place.
+pub fn board_without(board: &PcbBoard, footprints: &BTreeSet<Uuid>) -> PcbBoard {
+    let mut rest = PcbBoard {
+        footprints: Vec::new(),
+        ..board.clone()
+    };
+    rest.footprints = board
+        .footprints
+        .iter()
+        .filter(|fp| !footprints.contains(&fp.uuid))
+        .cloned()
+        .collect();
+    rest
+}
+
+/// Only `footprints` of `board`, moved by `delta`, on its layers: what a
+/// drag preview draws where they are going. No copper of the board's own.
+pub fn carried_board(board: &PcbBoard, footprints: &BTreeSet<Uuid>, delta: Point) -> PcbBoard {
+    let moved = board
+        .footprints
+        .iter()
+        .filter(|fp| footprints.contains(&fp.uuid))
+        .map(|fp| {
+            let mut fp = fp.clone();
+            fp.position = Point::new(fp.position.x + delta.x, fp.position.y + delta.y);
+            fp
+        })
+        .collect();
+    PcbBoard {
+        uuid: board.uuid,
+        version: board.version,
+        generator: String::new(),
+        thickness: board.thickness,
+        outline: Vec::new(),
+        layers: board.layers.clone(),
+        setup: board.setup.clone(),
+        nets: board.nets.clone(),
+        footprints: moved,
+        segments: Vec::new(),
+        vias: Vec::new(),
+        zones: Vec::new(),
+        graphics: Vec::new(),
+        texts: Vec::new(),
+        sketch: None,
+        unknown: Default::default(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

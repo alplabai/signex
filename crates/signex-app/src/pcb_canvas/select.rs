@@ -175,6 +175,12 @@ impl PcbSelectionState {
     /// The copper to paint for the selection and the hover. A selected
     /// footprint paints its body outline and all its pads.
     pub fn highlight(&mut self, board: &PcbBoard) -> Highlight {
+        self.highlight_except(board, &BTreeSet::new())
+    }
+
+    /// [`Self::highlight`] without the footprints in `moving`: a drag or
+    /// Move draws them, and their outline, where they are going (#2358).
+    fn highlight_except(&mut self, board: &PcbBoard, moving: &BTreeSet<Uuid>) -> Highlight {
         if self.selection.is_empty() && self.hover.is_none() {
             return Highlight::default();
         }
@@ -191,7 +197,11 @@ impl PcbSelectionState {
             })
             .collect();
         let mut highlight = Highlight::default();
-        for indexed in index.items() {
+        let is_moving = |item: ItemRef| match item {
+            ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => moving.contains(&id),
+            ItemRef::Track(_) | ItemRef::Via(_) => false,
+        };
+        for indexed in index.items().filter(|i| !is_moving(i.item)) {
             match indexed.item {
                 ItemRef::Footprint(id) if whole.contains(&id) => {
                     highlight.bodies.push(indexed.shape);
@@ -203,7 +213,7 @@ impl PcbSelectionState {
                 _ => {}
             }
         }
-        if let Some(hovered) = self.hover
+        if let Some(hovered) = self.hover.filter(|h| !is_moving(*h))
             && let Some(found) = index.items().find(|i| i.item == hovered)
         {
             match hovered {
@@ -224,7 +234,10 @@ impl PcbSelectionState {
         board: &PcbBoard,
         carry: Option<&super::PcbCarry>,
     ) -> (Highlight, Vec<pcb_geom::Shape>) {
-        let mut highlight = self.highlight(board);
+        let anchored = carry.filter(|c| c.anchor.is_some());
+        let none = BTreeSet::new();
+        let carried = anchored.map_or(&none, |c| &c.footprints);
+        let mut highlight = self.highlight_except(board, carried);
         let moving = carry.is_some_and(|c| c.kind == super::CarryKind::Move);
         let grab = if moving {
             Vec::new()
