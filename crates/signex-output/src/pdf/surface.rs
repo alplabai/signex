@@ -7,9 +7,10 @@
 //! - `text_at(x, y, font_name, size_pt, text)` — `BT` + `Tf` + `Td` + `Tj` + `ET`
 //!   (text is shown as 2-byte glyph ids for the Identity-H Type0 fonts)
 //! - `set_stroke_color(r, g, b)` — `RG`
+//! - `set_stroke_alpha(alpha)` — `gs` with a page `/ExtGState` holding `/CA`
 //!
-//! Tracks current stroke colour/width to avoid redundant ops. Coordinates in
-//! PDF points (bottom-left origin).
+//! Tracks current stroke colour/width/alpha to avoid redundant ops.
+//! Coordinates in PDF points (bottom-left origin).
 
 /// An RGB colour (each channel 0.0-1.0). Groups the three channels that
 /// travel together as a single fill colour — built at the `fill_rect` call
@@ -21,13 +22,55 @@ pub struct RgbColor {
     pub b: f32,
 }
 
+use std::collections::BTreeSet;
+
+use pdf_writer::Name;
+use pdf_writer::writers::{ExtGraphicsState, Resources};
+
 use super::embed::FontUsage;
 use super::font::font_for_alias;
+
+/// The stroke opacity a PDF draws with by default.
+const OPAQUE_LEVEL: u8 = u8::MAX;
+
+/// A finished page: its content stream and the stroke-alpha levels the
+/// stream names with `gs`, which the page's `/ExtGState` must define.
+pub struct PageContent {
+    pub bytes: Vec<u8>,
+    pub stroke_alphas: BTreeSet<u8>,
+}
+
+/// Stroke alpha (0.0-1.0) as a 0-255 level, the precision a wire colour has.
+fn alpha_level(alpha: f32) -> u8 {
+    (alpha.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
+/// The `/ExtGState` resource name of a stroke-alpha level, e.g. `CA128`.
+fn stroke_alpha_name(level: u8) -> String {
+    format!("CA{level}")
+}
+
+/// Define one `/ExtGState` entry per stroke-alpha level a page uses.
+pub(super) fn write_stroke_alpha_states(resources: &mut Resources<'_>, levels: &BTreeSet<u8>) {
+    if levels.is_empty() {
+        return;
+    }
+    let mut states = resources.ext_g_states();
+    for &level in levels {
+        let name = stroke_alpha_name(level);
+        states
+            .insert(Name(name.as_bytes()))
+            .start::<ExtGraphicsState<'_>>()
+            .stroking_alpha(f32::from(level) / 255.0);
+    }
+}
 
 /// `PdfSurface` emits PDF content-stream operators into a buffer.
 pub struct PdfSurface<'a> {
     bytes: Vec<u8>,
     fonts: &'a mut FontUsage,
+    current_stroke_alpha: u8,
+    stroke_alphas: BTreeSet<u8>,
     current_stroke_r: f32,
     current_stroke_g: f32,
     current_stroke_b: f32,
@@ -43,6 +86,8 @@ impl<'a> PdfSurface<'a> {
         Self {
             bytes: Vec::new(),
             fonts,
+            current_stroke_alpha: OPAQUE_LEVEL,
+            stroke_alphas: BTreeSet::new(),
             current_stroke_r: 0.0,
             current_stroke_g: 0.0,
             current_stroke_b: 0.0,
@@ -56,6 +101,25 @@ impl<'a> PdfSurface<'a> {
     /// Finish and return the encoded Content stream bytes.
     pub fn finish(self) -> Vec<u8> {
         self.bytes
+    }
+
+    /// Finish a page that may stroke with alpha: the stream plus the
+    /// `/ExtGState` levels it names.
+    pub fn finish_page(self) -> PageContent {
+        PageContent {
+            bytes: self.bytes,
+            stroke_alphas: self.stroke_alphas,
+        }
+    }
+
+    /// Set stroke opacity (0.0-1.0). Emits `gs` only if the level changed.
+    pub fn set_stroke_alpha(&mut self, alpha: f32) {
+        let level = alpha_level(alpha);
+        if level != self.current_stroke_alpha {
+            self.write_operator(&format!("/{} gs\n", stroke_alpha_name(level)));
+            self.stroke_alphas.insert(level);
+            self.current_stroke_alpha = level;
+        }
     }
 
     /// Set stroke color (0.0-1.0 per channel). Emits `RG` operator only if changed.
@@ -180,5 +244,32 @@ mod tests {
         assert!((surf.current_stroke_r - 1.0).abs() < 1e-5);
         assert!((surf.current_stroke_g - 0.0).abs() < 1e-5);
         assert!((surf.current_stroke_b - 0.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn stroke_alpha_switches_graphics_state_only_on_change() {
+        let mut fonts = FontUsage::new();
+        let mut surf = PdfSurface::new(&mut fonts);
+        surf.set_stroke_alpha(1.0);
+        surf.set_stroke_alpha(128.0 / 255.0);
+        surf.set_stroke_alpha(128.0 / 255.0);
+        surf.set_stroke_alpha(1.0);
+        let page = surf.finish_page();
+        let ops = String::from_utf8(page.bytes).unwrap();
+        assert_eq!(ops, "/CA128 gs\n/CA255 gs\n", "opaque is the default state");
+        assert_eq!(
+            page.stroke_alphas.into_iter().collect::<Vec<_>>(),
+            [128, 255]
+        );
+    }
+
+    #[test]
+    fn an_opaque_page_defines_no_graphics_state() {
+        let mut fonts = FontUsage::new();
+        let mut surf = PdfSurface::new(&mut fonts);
+        surf.set_stroke_alpha(1.0);
+        let page = surf.finish_page();
+        assert!(page.bytes.is_empty());
+        assert!(page.stroke_alphas.is_empty());
     }
 }
