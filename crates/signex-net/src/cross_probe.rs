@@ -30,7 +30,7 @@ pub fn footprints_for_parts(board: &PcbBoard, parts: &[PartOccurrence]) -> Vec<U
             fp.schematic_link.as_ref().is_some_and(|link| {
                 parts
                     .iter()
-                    .any(|p| p.sheet == link.sheet && link.units.contains(&p.symbol))
+                    .any(|p| link.names_part(&p.sheet, std::slice::from_ref(&p.symbol)))
             })
         })
         .map(|fp| fp.uuid)

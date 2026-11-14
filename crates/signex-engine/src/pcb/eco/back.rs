@@ -343,10 +343,10 @@ pub fn diff_schematic(input: &BackInput) -> BackChangeList {
             });
             continue;
         };
-        let found = input.parts.iter().position(|p| {
-            p.eco.part.sheet == link.sheet
-                && link.units.iter().any(|u| p.eco.part.units.contains(u))
-        });
+        let found = input
+            .parts
+            .iter()
+            .position(|p| link.names_part(&p.eco.part.sheet, &p.eco.part.units));
         if let Some(index) = found
             && !matched.insert(index)
         {

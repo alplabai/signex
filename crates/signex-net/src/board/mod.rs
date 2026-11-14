@@ -6,7 +6,8 @@
 //! multi-unit part ([`SymbolPadKey`]). Sync never reads a designator. A
 //! footprint with no stored link is reported
 //! ([`PadNetIssue::FootprintNotLinked`]) and left completely untouched;
-//! [`link_footprints_by_designator`] links old boards once, on request. See
+//! Update PCB (`diff_board`) links such a footprint by designator;
+//! [`link_footprints_by_designator`] does the same once, on request. See
 //! ADR-0005 section 11.
 //!
 //! The schematic is the source of truth for pads it links to, except a pad
