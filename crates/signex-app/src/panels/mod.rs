@@ -49,6 +49,7 @@ mod paper;
 pub mod pcb_board_properties;
 pub mod pcb_component;
 pub mod pcb_nets;
+pub mod pcb_primitive_properties;
 mod projects;
 mod projects_graphite;
 mod properties;
@@ -133,6 +134,7 @@ pub use pcb_component::{
 };
 pub use pcb_layers::PcbLayersPanel;
 pub use pcb_nets::PcbNetsSummary;
+pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};
 pub use projects_graphite::{ProjectsMsg, ProjectsView};

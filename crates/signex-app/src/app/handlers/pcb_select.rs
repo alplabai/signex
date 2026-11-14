@@ -40,7 +40,9 @@ impl Signex {
                 tolerance_mm,
                 mode,
             } => {
-                if self.pcb_move_clicked(at, tolerance_mm) {
+                if self.pcb_move_clicked(at, tolerance_mm)
+                    || self.pcb_net_pick_clicked(at, tolerance_mm)
+                {
                     return self.close_context_menu_on_press();
                 }
                 if self.with_pcb_selection(|sel, board| sel.click(board, at, tolerance_mm, mode))
@@ -94,6 +96,8 @@ impl Signex {
     /// a drag or Move in progress.
     pub(crate) fn clear_pcb_selection(&mut self) {
         self.interaction_state.pcb_canvas.cancel_marquee();
+        // Esc also ends a Properties net pick (#2355).
+        self.interaction_state.pcb_primitive.net_pick = None;
         let carried = self.has_own_pcb_carry();
         if carried {
             self.interaction_state.pcb_carry = None;

@@ -67,6 +67,16 @@ pub enum BoardCommandError {
          set those with a text edit"
     )]
     PropertyTextOwned { footprint: Uuid, key: String },
+    #[error("{0:?} cannot be replaced in place; footprints have their own edits")]
+    NotReplaceable(BoardItemId),
+    #[error("{field} must be greater than zero")]
+    NotPositive { field: &'static str },
+    #[error("{0} is not a copper layer")]
+    NotCopperLayer(String),
+    #[error("net {0} is not in the board's net table")]
+    UnknownNet(u32),
+    #[error("the hole ({hole} mm) must fit inside the copper around it ({diameter} mm)")]
+    HoleTooLarge { hole: f64, diameter: f64 },
     #[error("{field} must be a finite number")]
     NonFinite { field: &'static str },
     #[error("the board sketch holds a number that is not finite at {0}")]

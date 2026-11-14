@@ -47,6 +47,7 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::PcbFootprintText(..)
                 // And its Component view's edits (#2354).
                 | P::PcbComponent(..)
+                | P::PcbPrimitive(..)
                 | P::EditSymbolValue(..)
                 | P::EditSymbolFootprint(..)
                 | P::SwitchSymbolChoice(..)

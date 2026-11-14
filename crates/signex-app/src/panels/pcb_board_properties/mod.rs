@@ -1,7 +1,9 @@
 //! Properties panel of the active PCB (#2353): with nothing selected, the
 //! board itself (a header with search and tabs, then Selection Filter, Snap
 //! Options, Board Information, Grid Manager, Guide Manager and Other); the
-//! Component view when only footprints are selected (`pcb_component`); a card
+//! Component view when only footprints are selected (`pcb_component`); the
+//! track, via or pad panel when only one such kind is selected
+//! (`pcb_primitive_properties`); a card
 //! naming the board for any other selection. A pure view over data the panel context copies from the board
 //! and the editor settings.
 //!
@@ -121,6 +123,9 @@ pub struct PcbBoardSummary {
     pub footprint: Option<super::PcbFootprintFacts>,
     /// The selected footprints, when the selection holds nothing else.
     pub component: Option<super::PcbComponentFacts>,
+    /// The selected tracks, vias or pads, when the selection is only those
+    /// of one kind (#2355).
+    pub primitive: Option<super::PcbPrimitiveFacts>,
 }
 
 impl PcbBoardSummary {
@@ -164,6 +169,11 @@ impl PcbBoardSummary {
     pub fn with_component(self, component: Option<super::PcbComponentFacts>) -> Self {
         Self { component, ..self }
     }
+
+    /// This summary showing the selected tracks', vias' or pads' panel.
+    pub fn with_primitive(self, primitive: Option<super::PcbPrimitiveFacts>) -> Self {
+        Self { primitive, ..self }
+    }
 }
 
 /// The unit the panel shows and reads lengths in: mm or mil, as its Units
@@ -180,6 +190,9 @@ pub fn view<'a>(ctx: &'a PanelContext, board: &'a PcbBoardSummary) -> Element<'a
     let i18n = &*ctx.i18n;
     if let Some(component) = board.component.as_ref() {
         return super::pcb_component::view(ctx, component, board.footprint.as_ref());
+    }
+    if let Some(primitive) = board.primitive.as_ref() {
+        return super::pcb_primitive_properties::view(ctx, primitive);
     }
     if board.selected > 0 {
         return container(super::empty_state::empty_state_card(

@@ -140,6 +140,12 @@ impl PcbSelectionState {
         self.selection.apply_click(hit, mode)
     }
 
+    /// The item a click at `at` would pick, without selecting it (the
+    /// Properties net pick, #2355).
+    pub fn item_at(&mut self, board: &PcbBoard, at: Point, tolerance_mm: f64) -> Option<ItemRef> {
+        self.pick_at(board, at, tolerance_mm).map(|(item, _)| item)
+    }
+
     /// A box from `from` to `to`, drawn along the screen of a view turned
     /// `view_rotation_deg` (#2316). Whether the selection changed.
     pub fn box_select(

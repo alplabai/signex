@@ -16,6 +16,7 @@ mod copper;
 mod flip;
 mod index;
 mod mst;
+mod net_length;
 mod pick_filter;
 mod ratsnest;
 mod rect;
@@ -37,6 +38,9 @@ pub use copper::{
 pub use flip::flip_footprint;
 pub use index::{BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected, track_shape, via_shape};
 pub use mst::{Edge, euclidean_mst, spanning_forest};
+pub use net_length::{
+    item_net, net_items, net_routed_length_mm, track_length_mm, tracks_length_mm, via_span,
+};
 pub use pick_filter::{PickFilter, PickKind};
 pub use ratsnest::{RatLine, ratsnest};
 pub use rect::RectNm;

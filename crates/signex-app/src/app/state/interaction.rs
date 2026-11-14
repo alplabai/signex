@@ -51,6 +51,9 @@ pub struct InteractionState {
     pub pcb_footprint_draft: Option<crate::app::handlers::pcb_footprint_text::PcbFootprintDraft>,
     /// The board Component view's search and unapplied field text (#2354).
     pub pcb_component: crate::app::handlers::pcb_component::PcbComponentPanelState,
+    /// The track, via and pad panel's drafts, search, Show More and net
+    /// pick (#2355).
+    pub pcb_primitive: crate::app::handlers::pcb_primitive::PcbPrimitivePanel,
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,

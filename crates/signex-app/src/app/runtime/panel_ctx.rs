@@ -226,10 +226,12 @@ impl Signex {
             ..crate::panels::PcbBoardSummary::with_stats(board, tab.title.clone(), selected, stats)
         };
         let component = self.pcb_component_facts(&tab.path, board);
+        let primitive = self.pcb_primitive_facts(&tab.path, board);
         Some(
             summary
                 .with_footprint(footprint)
-                .with_component(component),
+                .with_component(component)
+                .with_primitive(primitive),
         )
     }
 
@@ -257,6 +259,13 @@ impl Signex {
             self.interaction_state.pcb_footprint_draft = None;
         }
         self.drop_moved_pcb_component_draft(summary.as_ref().and_then(|s| s.component.as_ref()));
+        if let Some(board) = in_view.as_deref() {
+            let shown = summary.as_ref().and_then(|s| s.primitive.as_ref());
+            let target = shown.map(|p| &p.common().target);
+            self.interaction_state
+                .pcb_primitive
+                .keep_only(board, target);
+        }
         self.document_state.panel_ctx.pcb_board = summary;
     }
 
