@@ -1,7 +1,9 @@
-//! Graphite start screen: a 232 px navigation column and a main column with
-//! the "What are you building?" hero, the specification box (a shell: the AI
+//! Graphite start screen: a navigation column and a main column with the
+//! "What are you building?" hero, the specification box (a shell: the AI
 //! backend is not built), the bundled sample project and the project lists
-//! (`projects.rs`).
+//! (`projects.rs`). When the main column would be narrower than
+//! [`MAIN_MIN_W`], the navigation collapses to the icon strip of
+//! `nav_strip.rs` (#2346).
 //! Every real control dispatches the same messages as the legacy screen.
 
 use std::path::PathBuf;
@@ -9,10 +11,10 @@ use std::path::PathBuf;
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Color, Element, Length, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
-use signex_types::theme::ThemeTokens;
+use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::{button, text, text_input, tooltip};
 
-use super::{Action, project_sections};
+use super::{Action, nav_strip, project_sections};
 use crate::app::Message;
 use crate::panels::signal::coming_soon;
 use crate::pinned_projects::PinnedProjects;
@@ -35,12 +37,31 @@ pub(super) fn semibold() -> iced::Font {
         ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
     }
 }
-/// Width of the navigation column (the mock's 232 px).
-const NAV_W: f32 = 232.0;
+/// Width of the navigation column (the mock's 232 px, from the body size).
+pub(super) const NAV_W: f32 = TS.body * 19.5;
+/// Narrowest the area beside the full navigation may get (480 px at the
+/// default base); below it the navigation collapses to the icon strip.
+pub(super) const MAIN_MIN_W: f32 = TS.body * 40.0;
 /// Widest the main column gets.
 const MAIN_MAX_W: f32 = 880.0;
 /// Horizontal padding of the main column.
-const MAIN_PAD_X: f32 = 32.0;
+pub(super) const MAIN_PAD_X: f32 = 32.0;
+
+/// Whether the navigation collapses to its icon strip in a start screen
+/// `width` wide: the area beside the full navigation would be under
+/// [`MAIN_MIN_W`].
+pub(super) fn nav_collapsed(width: f32) -> bool {
+    width - NAV_W < MAIN_MIN_W
+}
+
+/// Width the navigation takes in a start screen `width` wide.
+pub(super) fn nav_width(width: f32) -> f32 {
+    if nav_collapsed(width) {
+        nav_strip::STRIP_W
+    } else {
+        NAV_W
+    }
+}
 
 pub(super) fn mono() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
@@ -90,6 +111,47 @@ pub(super) fn outline_button(
     }
 }
 
+/// Look of a navigation row, full or in the icon strip; `active` marks the
+/// current page.
+pub(super) fn nav_row_style(
+    tokens: &ThemeTokens,
+    active: bool,
+) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
+    // The current page is a neutral chip, not the copper selection tint.
+    let (hover, selected, ink) = (
+        hover_overlay(tokens),
+        resolve(tokens).sunken,
+        ti(tokens.text),
+    );
+    move |_: &iced::Theme, status| button::Style {
+        background: if active {
+            Some(Background::Color(selected))
+        } else if matches!(status, button::Status::Hovered | button::Status::Pressed) {
+            Some(Background::Color(hover))
+        } else {
+            None
+        },
+        text_color: ink,
+        border: Border {
+            radius: Radii::GRAPHITE.control.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
+}
+
+/// Fill and right-hand rule of the navigation column.
+pub(super) fn nav_chrome(
+    tokens: &ThemeTokens,
+) -> impl Fn(&iced::Theme) -> container::Style + 'static {
+    let chrome = ti(tokens.panel_bg);
+    let line = rule(ti(tokens.border), true);
+    move |theme: &iced::Theme| container::Style {
+        background: Some(Background::Color(chrome)),
+        ..line(theme)
+    }
+}
+
 /// A navigation row; `active` marks the current page (not pressable).
 fn nav_row<'a>(
     tokens: &ThemeTokens,
@@ -97,30 +159,10 @@ fn nav_row<'a>(
     action: Option<Message>,
     active: bool,
 ) -> Element<'a, Message> {
-    // The current page is a neutral chip, not the copper selection tint.
-    let (hover, selected, ink) = (
-        hover_overlay(tokens),
-        resolve(tokens).sunken,
-        ti(tokens.text),
-    );
     let mut b = button(text(label).size(TS.label))
         .width(Length::Fill)
         .padding([6.0, 14.0])
-        .style(move |_: &iced::Theme, status| button::Style {
-            background: if active {
-                Some(Background::Color(selected))
-            } else if matches!(status, button::Status::Hovered | button::Status::Pressed) {
-                Some(Background::Color(hover))
-            } else {
-                None
-            },
-            text_color: ink,
-            border: Border {
-                radius: Radii::GRAPHITE.control.into(),
-                ..Border::default()
-            },
-            ..button::Style::default()
-        });
+        .style(nav_row_style(tokens, active));
     if let Some(message) = action {
         b = b.on_press(message);
     }
@@ -227,19 +269,12 @@ fn nav<'a>(
     .padding([14.0, 10.0])
     .width(NAV_W)
     .height(Length::Fill)
-    .style({
-        let chrome = ti(tokens.panel_bg);
-        let line = rule(ti(tokens.border), true);
-        move |theme: &iced::Theme| container::Style {
-            background: Some(Background::Color(chrome)),
-            ..line(theme)
-        }
-    })
+    .style(nav_chrome(tokens))
     .boxed()
 }
 
 /// The hairline between the page rows and the other navigation rows.
-fn nav_divider<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+pub(super) fn nav_divider<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let line = ti(tokens.border);
     container(Space::new().height(styles::HAIRLINE))
         .width(Length::Fill)
@@ -485,6 +520,7 @@ fn sample_card<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Message> {
 /// The Graphite start screen.
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
+    theme: ThemeId,
     i18n: &'a I18n,
     open_shortcut: &str,
     recent: &'a [PathBuf],
@@ -493,30 +529,32 @@ pub fn view<'a>(
 ) -> Element<'a, Message> {
     let open_shortcut = open_shortcut.to_owned();
     let libraries = libraries.to_vec();
-    // This iced fork has no max-width; the main column takes the room left
-    // beside the navigation, up to `MAIN_MAX_W`.
+    // The width decides the navigation's form, so the screen is laid out
+    // per size.
     iced::widget::responsive(move |size| {
-        let room = (size.width - NAV_W - 2.0 * MAIN_PAD_X).max(0.0);
         view_sized(
-            tokens,
+            (tokens, theme),
             i18n,
             &open_shortcut,
             (recent, pinned),
             &libraries,
-            room.min(MAIN_MAX_W),
+            size.width,
         )
     })
     .boxed()
 }
 
 fn view_sized<'a>(
-    tokens: &'a ThemeTokens,
+    (tokens, theme): (&'a ThemeTokens, ThemeId),
     i18n: &I18n,
     open_shortcut: &str,
     (recent, pinned): (&'a [PathBuf], &'a PinnedProjects),
     libraries: &[super::LoadedLibrary],
-    main_w: f32,
+    width: f32,
 ) -> Element<'a, Message> {
+    // This iced fork has no max-width; the main column takes the room left
+    // beside the navigation, up to `MAIN_MAX_W`.
+    let main_w = (width - nav_width(width) - 2.0 * MAIN_PAD_X).clamp(0.0, MAIN_MAX_W);
     let sections = project_sections(recent, pinned);
     let listed = sections.pinned.len() + sections.recent.len();
     let mut main = column![
@@ -543,8 +581,13 @@ fn view_sized<'a>(
             .padding([40.0, MAIN_PAD_X])
             .center_x(Length::Fill),
     );
+    let navigation = if nav_collapsed(width) {
+        nav_strip::view(tokens, theme, i18n, open_shortcut)
+    } else {
+        nav(tokens, i18n, open_shortcut, listed, libraries)
+    };
     row![
-        nav(tokens, i18n, open_shortcut, listed, libraries,),
+        navigation,
         container(body)
             .width(Length::Fill)
             .height(Length::Fill)

@@ -717,6 +717,7 @@ impl Signex {
                         .collect();
                     start_screen::view(
                         tokens,
+                        self.ui_state.effective_theme_id(),
                         &self.ui_state.i18n,
                         &open_shortcut,
                         self.ui_state.recent_projects.entries(),
@@ -806,3 +807,5 @@ mod editor_bar_wheel_tests;
 mod hover_through_tests;
 #[cfg(test)]
 mod overlay_paint_tests;
+#[cfg(test)]
+mod start_nav_tests;

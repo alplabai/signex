@@ -26,6 +26,7 @@ use crate::pinned_projects::PinnedProjects;
 use crate::styles;
 
 mod graphite;
+mod nav_strip;
 mod projects;
 
 /// Base text size every other measure on this screen is derived from.
@@ -168,15 +169,25 @@ fn recent_label(path: &Path) -> String {
 /// components it holds.
 pub type LoadedLibrary = (String, usize);
 
+/// The start screen; `theme` picks the icons of the collapsed navigation.
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
+    theme: signex_types::theme::ThemeId,
     i18n: &'a signex_i18n::I18n,
     open_shortcut: &str,
     recent: &'a [PathBuf],
     pinned: &'a PinnedProjects,
     libraries: &[LoadedLibrary],
 ) -> Element<'a, Message> {
-    graphite::view(tokens, i18n, open_shortcut, recent, pinned, libraries)
+    graphite::view(
+        tokens,
+        theme,
+        i18n,
+        open_shortcut,
+        recent,
+        pinned,
+        libraries,
+    )
 }
 
 pub fn hint_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
@@ -201,13 +212,26 @@ fn region<'a>(tokens: &'a ThemeTokens, content: Element<'a, Message>) -> Element
         .boxed()
 }
 
+/// Where the middle of the collapsed navigation strip is, given the left
+/// edge of the laid-out hero title (#2346).
+#[cfg(test)]
+pub(crate) fn strip_centre_from_hero(hero_left: f32) -> f32 {
+    hero_left - graphite::MAIN_PAD_X - nav_strip::STRIP_W / 2.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::layout_probe::{find, lay_out_texts};
 
     /// A small but plausible window; the centre region is narrower still.
+    /// The navigation is the icon strip at this width (#2346).
     const SMALL_WINDOW: iced::Size = iced::Size::new(640.0, 360.0);
+    /// The narrowest start screen that keeps the full navigation (#2346),
+    /// as short as `SMALL_WINDOW`.
+    const NARROWEST_FULL_NAV: iced::Size =
+        iced::Size::new(graphite::NAV_W + graphite::MAIN_MIN_W, SMALL_WINDOW.height);
+    const DARK: signex_types::theme::ThemeId = signex_types::theme::ThemeId::GraphiteDark;
 
     fn paths(n: usize) -> Vec<PathBuf> {
         (0..n)
@@ -268,6 +292,7 @@ mod tests {
         let texts = lay_out_texts(
             view(
                 &tokens,
+                DARK,
                 &signex_i18n::I18n::en_us(),
                 "Ctrl+O",
                 &recent,
@@ -283,6 +308,7 @@ mod tests {
         let empty = lay_out_texts(
             view(
                 &tokens,
+                DARK,
                 &signex_i18n::I18n::en_us(),
                 "Ctrl+O",
                 &[],
@@ -304,7 +330,7 @@ mod tests {
         let i18n = signex_i18n::I18n::en_us();
         let recent = paths(3);
         let texts = lay_out_texts(
-            view(&tokens, &i18n, "Ctrl+O", &recent, &NO_PINS, &[]),
+            view(&tokens, DARK, &i18n, "Ctrl+O", &recent, &NO_PINS, &[]),
             MOCK_WINDOW,
         );
         assert!(texts.iter().all(|t| t.text != "PINNED PROJECTS"));
@@ -314,7 +340,7 @@ mod tests {
         pinned.pin(&PathBuf::from("gone.snxprj"));
         pinned.set_missing(&PathBuf::from("gone.snxprj"), true);
         let texts = lay_out_texts(
-            view(&tokens, &i18n, "Ctrl+O", &recent, &pinned, &[]),
+            view(&tokens, DARK, &i18n, "Ctrl+O", &recent, &pinned, &[]),
             MOCK_WINDOW,
         );
         let top = |label: &str| find(&texts, label).bounds.y;
@@ -352,7 +378,7 @@ mod tests {
         assert!(remove_label.y < path_line.y + path_line.height + BASE);
         assert!(remove_label.y + remove_label.height > gone_lines[0].bounds.y);
         let remove = crate::layout_probe::messages_on_click(
-            view(&tokens, &i18n, "Ctrl+O", &recent, &pinned, &[]),
+            view(&tokens, DARK, &i18n, "Ctrl+O", &recent, &pinned, &[]),
             MOCK_WINDOW,
             "Remove",
         );
@@ -373,6 +399,7 @@ mod tests {
         let empty = lay_out_texts(
             view(
                 &tokens,
+                DARK,
                 &signex_i18n::I18n::en_us(),
                 "Ctrl+O",
                 &[],
@@ -387,6 +414,7 @@ mod tests {
         let texts = lay_out_texts(
             view(
                 &tokens,
+                DARK,
                 &signex_i18n::I18n::en_us(),
                 "Ctrl+O",
                 &some,
@@ -410,30 +438,46 @@ mod tests {
         signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark)
     }
 
+    /// The keycap is drawn by the full navigation, so it is checked at the
+    /// narrowest window that keeps it (#2346); at `SMALL_WINDOW` the strip
+    /// draws no keycap and still no blank text.
     #[test]
     fn an_unbound_open_shortcut_leaves_no_empty_keycap() {
         let tokens = graphite();
         let bound = lay_out_texts(
             view(
                 &tokens,
+                DARK,
                 &signex_i18n::I18n::en_us(),
                 "F2",
                 &[],
                 &NO_PINS,
                 &[],
             ),
-            SMALL_WINDOW,
+            NARROWEST_FULL_NAV,
         );
         assert!(bound.iter().any(|t| t.text == "F2"));
-        let unbound = lay_out_texts(
-            view(&tokens, &signex_i18n::I18n::en_us(), "", &[], &NO_PINS, &[]),
-            SMALL_WINDOW,
-        );
-        assert!(unbound.iter().any(|t| t.text == "Open\u{2026}"));
-        assert!(
-            unbound.iter().all(|t| !t.text.trim().is_empty()),
-            "an unbound shortcut leaves a blank keycap: {unbound:#?}"
-        );
+        for window in [NARROWEST_FULL_NAV, SMALL_WINDOW] {
+            let unbound = lay_out_texts(
+                view(
+                    &tokens,
+                    DARK,
+                    &signex_i18n::I18n::en_us(),
+                    "",
+                    &[],
+                    &NO_PINS,
+                    &[],
+                ),
+                window,
+            );
+            if window == NARROWEST_FULL_NAV {
+                assert!(unbound.iter().any(|t| t.text == "Open\u{2026}"));
+            }
+            assert!(
+                unbound.iter().all(|t| !t.text.trim().is_empty()),
+                "an unbound shortcut leaves a blank keycap at {window:?}: {unbound:#?}"
+            );
+        }
     }
 
     /// Font size the Graphite screen draws `label` at.
@@ -446,23 +490,45 @@ mod tests {
         }
     }
 
+    /// The navigation labels at the narrowest window that keeps the full
+    /// navigation, the project list also at `SMALL_WINDOW`, where the
+    /// navigation is an icon strip (#2346).
     #[test]
     fn labels_stay_on_one_line_and_inside_a_small_window() {
         let tokens = graphite();
         let recent = paths(MAX_START_RECENT + 2);
+        let checks: [(iced::Size, &[&str]); 2] = [
+            (
+                NARROWEST_FULL_NAV,
+                &["New project", "Open Sample Project", "proj0.snxprj"],
+            ),
+            (SMALL_WINDOW, &["proj0.snxprj"]),
+        ];
+        for (window, labels) in checks {
+            assert_labels_fit(&tokens, &recent, window, labels);
+        }
+    }
+
+    fn assert_labels_fit(
+        tokens: &ThemeTokens,
+        recent: &[PathBuf],
+        window: iced::Size,
+        labels: &[&str],
+    ) {
         let texts = lay_out_texts(
             view(
-                &tokens,
+                tokens,
+                DARK,
                 &signex_i18n::I18n::en_us(),
                 "Ctrl+O",
-                &recent,
+                recent,
                 &NO_PINS,
                 &[],
             ),
-            SMALL_WINDOW,
+            window,
         );
         let one_line = BASE * 2.0;
-        for label in ["New project", "Open Sample Project", "proj0.snxprj"] {
+        for &label in labels {
             let bounds = find(&texts, label).bounds;
             // The primary button's label fills the button's height, so its
             // box is the button's, not a line's; wrapping shows as a
@@ -472,15 +538,18 @@ mod tests {
                 label,
             );
             if label != "New project" {
-                assert!(bounds.height < one_line, "{label:?} wrapped: {bounds:?}");
+                assert!(
+                    bounds.height < one_line,
+                    "{label:?} wrapped at {window:?}: {bounds:?}"
+                );
             }
             assert!(
                 bounds.width + 0.5 >= natural.width,
-                "{label:?} is narrower than its text: {bounds:?}, natural {natural:?}"
+                "{label:?} is narrower than its text at {window:?}: {bounds:?}, natural {natural:?}"
             );
             assert!(
-                bounds.x >= 0.0 && bounds.x + bounds.width <= SMALL_WINDOW.width,
-                "{label:?} overflows the window: {bounds:?}"
+                bounds.x >= 0.0 && bounds.x + bounds.width <= window.width,
+                "{label:?} overflows {window:?}: {bounds:?}"
             );
         }
     }
@@ -495,7 +564,7 @@ mod tests {
         let tokens = graphite();
         let i18n = signex_i18n::I18n::en_us();
         let texts = lay_out_texts(
-            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            view(&tokens, DARK, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
             MOCK_WINDOW,
         );
         let title = "What are you building?";
@@ -534,7 +603,7 @@ mod tests {
         let tokens = graphite();
         let i18n = signex_i18n::I18n::en_us();
         let texts = lay_out_texts(
-            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            view(&tokens, DARK, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
             MOCK_WINDOW,
         );
         let top = |label: &str| find(&texts, label).bounds.y;
@@ -548,7 +617,7 @@ mod tests {
         assert!(top("Keyboard Shortcuts (F1)") > top("Open Sample Project"));
 
         let sample = crate::layout_probe::messages_on_click(
-            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            view(&tokens, DARK, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
             MOCK_WINDOW,
             "Open Sample Project",
         );
@@ -559,7 +628,7 @@ mod tests {
             "{sample:?}"
         );
         let keys = crate::layout_probe::messages_on_click(
-            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            view(&tokens, DARK, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
             MOCK_WINDOW,
             "Keyboard Shortcuts (F1)",
         );
@@ -574,30 +643,37 @@ mod tests {
     /// verified at 800 x 500 (floor) and 640 x 360 (stress).
     const MIN_SENSIBLE_WINDOW: iced::Size = iced::Size::new(800.0, 500.0);
 
-    /// Every label at both window sizes: at least its natural width, one
+    /// Every label at each window size: at least its natural width, one
     /// line high, horizontally inside the window, with the full recent list
     /// present. Vertically the list may exceed a short window only because it
-    /// sits in a `scrollable`.
+    /// sits in a `scrollable`. Where the navigation is the icon strip
+    /// (#2346) its labels are tooltips, so only the project list is laid out.
     #[test]
     fn every_button_label_fits_at_small_window_sizes() {
         let tokens = graphite();
         let ts = crate::styles::TypeScale::DEFAULT;
         let recent = paths(MAX_START_RECENT + 2);
-        let mut labels: Vec<(String, f32)> = vec![
+        let nav_labels: Vec<(String, f32)> = vec![
             ("New project".into(), ts.dense),
             ("Open Sample Project".into(), ts.label),
             ("Keyboard Shortcuts (F1)".into(), ts.label),
         ];
-        labels.extend(
-            visible_recent(&recent)
-                .iter()
-                .map(|p| (recent_label(p), ts.label)),
-        );
+        let list_labels: Vec<(String, f32)> = visible_recent(&recent)
+            .iter()
+            .map(|p| (recent_label(p), ts.label))
+            .collect();
 
-        for window in [MIN_SENSIBLE_WINDOW, SMALL_WINDOW] {
+        for window in [MIN_SENSIBLE_WINDOW, NARROWEST_FULL_NAV, SMALL_WINDOW] {
+            let collapsed = graphite::nav_collapsed(window.width);
+            let labels: Vec<&(String, f32)> = if collapsed {
+                list_labels.iter().collect()
+            } else {
+                nav_labels.iter().chain(&list_labels).collect()
+            };
             let texts = lay_out_texts(
                 view(
                     &tokens,
+                    DARK,
                     &signex_i18n::I18n::en_us(),
                     "Ctrl+O",
                     &recent,
@@ -640,5 +716,99 @@ mod tests {
                 "the recent list is complete at {window:?}"
             );
         }
+    }
+
+    /// The navigation's own texts, none of which the main column draws.
+    const NAV_TEXTS: [&str; 8] = [
+        "New project",
+        "Open\u{2026}",
+        "Home",
+        "Projects",
+        "Libraries",
+        "Parts search",
+        "Open Sample Project",
+        "Keyboard Shortcuts (F1)",
+    ];
+
+    /// #2346: the navigation is full while the area beside it is at least
+    /// 480 px (40 body heights), an icon strip below that, and the main
+    /// column takes the room the strip frees.
+    #[test]
+    fn the_navigation_collapses_to_an_icon_strip_when_the_main_area_is_narrow() {
+        let body = crate::styles::TypeScale::DEFAULT.body;
+        assert_eq!(graphite::MAIN_MIN_W, body * 40.0);
+        assert_eq!(graphite::NAV_W, body * 19.5);
+        assert!(!graphite::nav_collapsed(NARROWEST_FULL_NAV.width));
+        assert!(graphite::nav_collapsed(NARROWEST_FULL_NAV.width - 1.0));
+        assert!(nav_strip::STRIP_W < graphite::NAV_W / 3.0);
+
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        let lay_out = |window| {
+            lay_out_texts(
+                view(&tokens, DARK, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+                window,
+            )
+        };
+        let full = lay_out(NARROWEST_FULL_NAV);
+        for label in NAV_TEXTS {
+            assert!(
+                full.iter().any(|t| t.text == label),
+                "{label:?} missing from the full navigation"
+            );
+        }
+        let strip = lay_out(SMALL_WINDOW);
+        for label in NAV_TEXTS {
+            assert!(
+                strip.iter().all(|t| t.text != label),
+                "{label:?} is drawn in the icon strip; it belongs in the tooltip"
+            );
+        }
+        let hero = "What are you building?";
+        let left = find(&strip, hero).bounds.x;
+        let expected = nav_strip::STRIP_W + graphite::MAIN_PAD_X;
+        assert!(
+            (left - expected).abs() < 1.0,
+            "the main column starts at {left}, not beside the strip at {expected}"
+        );
+        // Wider again: the full navigation is back.
+        let wide = lay_out(MOCK_WINDOW);
+        assert!(wide.iter().any(|t| t.text == "Parts search"));
+    }
+
+    /// #2346: every strip row sends the message of its full row; the
+    /// current page and the planned Parts search send none.
+    #[test]
+    fn the_icon_strip_rows_send_their_full_rows_messages() {
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        let step = crate::styles::Spacing::DEFAULT.m;
+        let sent: Vec<String> = (0..)
+            .map(|i| i as f32 * step)
+            .take_while(|y| *y < SMALL_WINDOW.height)
+            .flat_map(|y| {
+                crate::layout_probe::messages_on_click_at(
+                    view(&tokens, DARK, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+                    SMALL_WINDOW,
+                    None,
+                    iced::Point::new(nav_strip::STRIP_W / 2.0, y),
+                )
+            })
+            .map(|m| format!("{m:?}"))
+            .collect();
+        let actions: Vec<String> = Action::ALL
+            .iter()
+            .map(|a| format!("{:?}", a.message()))
+            .collect();
+        for action in &actions {
+            assert!(
+                sent.contains(action),
+                "no strip row sends {action}: {sent:?}"
+            );
+        }
+        assert!(
+            sent.iter().all(|m| actions.contains(m)),
+            "a strip row sends something no full row sends: {sent:?}"
+        );
     }
 }
