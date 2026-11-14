@@ -366,6 +366,8 @@ impl KeymapEditorRow {
         let has_key = |text: &str| text.to_lowercase().contains(&key_needle);
         i18n.fold_for_search(&self.label).contains(&needle)
             || has_key(&self.trigger)
+            // A translated key name is language text: `SİL` folds to `sil`.
+            || i18n.fold_for_search(&self.trigger).contains(&needle)
             || has_key(&self.trigger_english)
             || self
                 .command

@@ -1,7 +1,7 @@
 # Keyboard key names in shortcut labels (#2314): menus, the command palette,
 # the shortcuts sheet and Preferences show them joined with "+", such as
 # "Ctrl+Shift+S" or "Ctrl+DEL". Use the name printed on keyboards in your
-# language; never put "+" or a space in a name, since labels are split on them
+# language; never put "+", "," or a space in a name, since labels are split on them
 # into key caps. Profile files keep the English spellings whatever the
 # language.
 
@@ -9,7 +9,8 @@
 key-ctrl = Ctrl
 key-alt = Alt
 key-shift = Shift
-# The logo key: Cmd on macOS, Win on Windows, Super on Linux.
+# The logo key: Win on Windows, Super on Linux. key-cmd is not shown today
+# (macOS shows the ⌘ symbol); it is kept so every platform's logo key has a name.
 key-cmd = Cmd
 key-win = Win
 key-super = Super
