@@ -206,8 +206,16 @@ fn undocked_window(recorded: bool) -> (Signex, iced::window::Id) {
     slot.set_viewport(iced::Rectangle::with_size(UNDOCKED_VIEW));
     assert!(slot.zoom_about_centre(true, 1.5));
     app.interaction_state.canvases.insert(window, slot);
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: std::path::PathBuf::from("halo-camera.snxsch"),
+            title: String::new(),
+        },
+    );
     if recorded {
         app.ui_state.set_undocked_window_size(window, UNDOCKED);
+        assert_eq!(app.ui_state.size_of_window(window), UNDOCKED);
     }
     (app, window)
 }
