@@ -124,6 +124,63 @@ Some rules in this section are still open decisions in epic #2326, and take effe
 
 A4 is (b) and (c) together, plus moving the handlers into the core; each slice below is a stopping point.
 
+**Today.** The CLI boots the whole GUI model without a window and drives it through `update`:
+
+```mermaid
+flowchart LR
+  subgraph app["signex-app (iced)"]
+    model["Signex model<br/>UiState · DocumentState · InteractionState"]
+    update["Signex::update(Message)"]
+    bridge["app/command/bridge.rs<br/>id → Message"]
+    headless["headless.rs<br/>boot_headless · dispatch_command_headless<br/>gui_only refusal"]
+    driver["task_driver.rs: TaskDriver<br/>runs iced Tasks"]
+  end
+  gui["iced window"] --> update
+  update <--> model
+  bridge --> update
+  cli["signex-cli"] -->|"boots the whole model"| headless
+  headless --> model
+  headless --> bridge
+  cli --> driver
+  cli -.->|"attach.rs imports headless::agent_client"| app
+  model --> domain["Domain crates<br/>engine · erc · drc · net · library · output"]
+```
+
+**Target.** Names marked *planned* do not exist on trunk yet.
+
+```mermaid
+flowchart TB
+  subgraph domain["Domain crates: no iced; native IO moves out (S-IO, not scheduled)"]
+    types["signex-types"] --- engine["signex-engine"]
+    engine --- erc["signex-erc / signex-erc-dsl"]
+    engine --- drc["signex-drc / signex-drc-dsl"]
+    engine --- net["signex-net"]
+    output["signex-output / signex-bom"] --- library["signex-library"]
+    history["signex-history"] --- i18n["signex-i18n"]
+  end
+  commands["signex-commands (planned, slice 1)<br/>catalog · operands · outcome · wire types"]
+  core["AppCore (planned)<br/>app/core/ now, signex-workspace after slice 9<br/>execute · complete · query → events + effects"]
+  domain --> core
+  commands --> core
+  subgraph hosts["Driven: hosts, outside the core"]
+    native["Native host<br/>files · git · network · clock"]
+    testhost["Test host<br/>in memory"]
+  end
+  core -.->|"Effect"| native
+  core -.->|"Effect"| testhost
+  subgraph adapters["Driving adapters"]
+    gui["GUI adapter (signex-app, iced)<br/>translator · projector · GUI-only table"]
+    cli["CLI adapter (signex-cli)<br/>Box of AppCore · inline host"]
+    sock["Agent socket<br/>enters through the GUI loop"]
+  end
+  gui --> core
+  cli --> core
+  sock --> gui
+  gui --> ui["signex-widgets · signex-renderer · signex-gfx"]
+```
+
+No `wasm32` gate now (epic D10, decided 2026-11-15): the core is kept free of iced and native IO so that a web front end stays possible later, as an option.
+
 ```mermaid
 flowchart LR
   subgraph driving["Driving adapters (outside)"]
@@ -194,6 +251,38 @@ Arrows into the core are calls. The core returns events and effects to its calle
   - the agent socket;
   - later, a web front end or a plugin host.
 
+**Command flow.** Effects come back as data; the caller's host runs them and reports each one through `complete`.
+
+```mermaid
+sequenceDiagram
+  participant P as Person
+  participant G as GUI adapter
+  participant A as Agent socket
+  participant L as CLI adapter
+  participant C as AppCore
+  participant H as Host
+  P->>G: key, menu or palette
+  A->>G: request through the D8 channel and Subscription
+  G->>G: fill implicit operands: document, targets, form defaults, person-busy data
+  G->>C: execute(id, args, origin)
+  Note over C: a boundary command first finishes or settles owed work (ADR-0003 D2)
+  C-->>G: outcome + events + effects
+  G->>G: project events into GUI-only state
+  G-->>A: reply + events
+  G->>H: run effects off the UI thread as a Task
+  H-->>G: EffectResult
+  G->>C: complete(effect id, result)
+  Note over C: applied only to the same document instance and generation (ADR-0003 D4)
+  C-->>G: events + follow-up effects, e.g. a git commit after its write
+  L->>C: execute(id, args, origin)
+  C-->>L: outcome + events + effects
+  L->>H: run effects inline
+  H-->>L: EffectResult
+  L->>C: complete(effect id, result)
+```
+
+Two writes to one path never run out of order, whichever caller runs them (the #997 ledger is core state).
+
 **How DDD (A2) maps onto it.** A2 stays. A4 names the layer above the engines and makes the engine's role precise.
 
 | DDD element | In signex |
@@ -233,6 +322,30 @@ A rule about document content belongs in the engine or a domain crate, never in 
 | S-L | Library, pricing, editors and 3D import onto the core | the largest untouched area joins | yes | revert per sub-area |
 | 9 | Lift `app/core/` into `signex-workspace`; the CLI drops `signex-app` | the CLI stops building the GUI crates | yes | revert the move; the module stays in place |
 | S-IO, S-P | Domain IO out for wasm32; the plugin host | — | not scheduled: S-IO waits on a future web front end being scheduled, S-P on #1707 | — |
+
+```mermaid
+flowchart LR
+  S0["0 · CLI stack fix, issue 2325"]
+  S1["1 · signex-commands extraction<br/>+ guard script"]
+  SC["C · contract slice<br/>CoreEvent · Effect · CoreContext"]
+  S2["2 · event seam<br/>high risk"]
+  S3["3 · load_gateway split<br/>high risk"]
+  S4["4 · state partition<br/>4a · 4b · 4c"]
+  S5["5 · effects as data<br/>high risk"]
+  S7["7 · Needs Core/Ui split"]
+  S6["6 · handler table into the core<br/>+ Targets operand"]
+  S8["8 · queries"]
+  SA["S-A · agent protocol<br/>into signex-commands"]
+  SL["S-L · library · editors · 3D"]
+  S9["9 · lift the crate<br/>CLI drops signex-app"]
+  SIO["S-IO · domain IO out<br/>not scheduled"]
+  SP["S-P · plugin host<br/>not scheduled"]
+  S0 --> S1 --> SC --> S2 --> S3 --> S4 --> S5 --> S7 --> S6 --> S8 --> S9
+  S1 --> SA --> S9
+  S5 --> SL --> S9
+  SC -.-> SIO
+  S9 -.-> SP
+```
 
 **Safety net before the high-risk slices.** The epic rates slices 2, 3 and 5 (and S-L) high or medium-high, and the research note (§10, item 1) names the reason: the persistence invariants become state machines across `complete`. Before slice 2 starts, these tests run against the test adapter, not only against the ledger:
 - **Per-path write order (#997):** an older write never lands after a newer one to the same path. Today it is pinned at the ledger level (`persist/document_save.rs`, `an_older_snapshot_scheduled_last_never_overwrites_a_newer_one`).
