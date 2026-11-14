@@ -101,7 +101,7 @@ fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
 }
 
 /// #2352, #2373: the groups in the PCB editor's order, the Selection
-/// Filter, Move, Board Sketch, View and the live placement tools live, and
+/// Filter, Move, Align, Board Sketch, View and the live placement tools live, and
 /// every other button greyed with a tooltip that says it is not on boards
 /// yet.
 #[test]
@@ -121,8 +121,8 @@ fn the_pcb_bar_has_the_footprint_layout_and_greys_what_boards_cannot_do() {
         .count();
     assert_eq!(
         live.len(),
-        4 + live_tools,
-        "filter, move, sketch, view and the live tools"
+        5 + live_tools,
+        "filter, move, align, sketch, view and the live tools"
     );
     assert!(runs(all[1], "move_object"), "Move follows the filter");
     assert!(runs(all[5], "place_board_via"), "#2373: Via is live");
@@ -142,7 +142,7 @@ fn the_pcb_bar_has_the_footprint_layout_and_greys_what_boards_cannot_do() {
 }
 
 /// #2352 / #2360: the bar greys exactly the tools the Place menu greys on a
-/// board, with the same reason, plus Align, which has no board command yet.
+/// board, with the same reason, and nothing else.
 #[test]
 fn the_bar_greys_the_place_menus_board_tools() {
     let i18n = I18n::en_us();
@@ -159,9 +159,6 @@ fn the_bar_greys_the_place_menus_board_tools() {
             ToolState::Unavailable(reason) => Some(t!(&i18n, reason).into_string()),
             ToolState::Live(_) => None,
         })
-        .chain([
-            t!(&i18n, ids::PCB_BAR_ALIGN_UNAVAILABLE).into_string(),
-        ])
         .collect();
     place.sort();
     assert_eq!(greyed, place);

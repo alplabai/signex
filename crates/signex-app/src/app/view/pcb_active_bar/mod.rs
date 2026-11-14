@@ -156,6 +156,26 @@ fn menu_button(
     })
 }
 
+/// A button whose click, like its right-click, opens `menu`.
+fn dropdown_button(
+    menu: PcbBarMenu,
+    open: Option<PcbBarMenu>,
+    icon: ActiveBarIcon,
+    tooltip: String,
+    tid: ThemeId,
+) -> ActiveBarItem<Message> {
+    let toggle = bar_message(PcbBarMsg::MenuToggled(menu));
+    ActiveBarItem::Button(ActiveBarButton {
+        icon,
+        tooltip,
+        enabled: true,
+        selected: open == Some(menu),
+        on_press: Some(toggle.clone()),
+        on_right_press: Some(toggle),
+        dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
+    })
+}
+
 /// A greyed button for a tool the board editor cannot run yet; its tooltip
 /// says so.
 fn unavailable_button(
@@ -191,7 +211,6 @@ pub(in crate::app::view) fn pcb_bar_items(
     open: Option<PcbBarMenu>,
 ) -> Vec<ActiveBarItem<Message>> {
     let svg = ActiveBarIcon::Svg;
-    let off = |icon, tooltip| unavailable_button(icon, tooltip, i18n);
     let tool = |tool: BoardPlaceTool| tool_button(tool, tid, i18n);
     let mut items = vec![
         filter::filter_button(open, tid, i18n),
@@ -203,7 +222,13 @@ pub(in crate::app::view) fn pcb_bar_items(
             t!(i18n, ids::PCB_BAR_MOVE_TOOLTIP).into_string(),
             tid,
         ),
-        off(svg(ic::icon_align(tid)), ids::PCB_BAR_ALIGN_UNAVAILABLE),
+        dropdown_button(
+            PcbBarMenu::Align,
+            open,
+            svg(ic::icon_align(tid)),
+            t!(i18n, ids::PCB_BAR_ALIGN_TOOLTIP).into_string(),
+            tid,
+        ),
         ActiveBarItem::Separator,
     ];
     items.extend(BAR_PLACE_TOOLS.into_iter().map(&tool));
@@ -278,6 +303,19 @@ const MOVE_ROWS: &[MenuRow] = &[
     ("flip_selection", ic::icon_dd_flip_x),
 ];
 
+/// The Align dropdown: the Align rows, which line footprints up on a board.
+const ALIGN_ROWS: &[MenuRow] = &[
+    ("align_left", ic::icon_dd_align_left),
+    ("align_right", ic::icon_dd_align_right),
+    ("align_horizontal_centers", ic::icon_dd_align_hcenter),
+    ("distribute_horizontally", ic::icon_dd_dist_horiz),
+    ("align_top", ic::icon_dd_align_top),
+    ("align_bottom", ic::icon_dd_align_bottom),
+    ("align_vertical_centers", ic::icon_dd_align_vcenter),
+    ("distribute_vertically", ic::icon_dd_dist_vert),
+    ("align_to_grid", ic::icon_dd_align_grid),
+];
+
 /// The View dropdown: the board view turns of the View menu.
 const VIEW_ROWS: &[MenuRow] = &[
     ("view_rotate", ic::icon_dd_rotate_cw),
@@ -290,6 +328,7 @@ fn menu_commands(menu: PcbBarMenu) -> &'static [MenuRow] {
     match menu {
         PcbBarMenu::Move => MOVE_ROWS,
         PcbBarMenu::View => VIEW_ROWS,
+        PcbBarMenu::Align => ALIGN_ROWS,
         PcbBarMenu::Filter => &[],
     }
 }

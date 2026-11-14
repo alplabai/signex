@@ -7,11 +7,11 @@
 use pcb_geom::{PickFilter, PickKind};
 use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeId;
-use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
+use signex_widgets::active_bar::{ActiveBarIcon, ActiveBarItem};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
-use super::bar_message;
-use crate::app::{Message, PcbBarMenu, PcbBarMsg};
+use super::dropdown_button;
+use crate::app::{Message, PcbBarMenu};
 use crate::dock::DockMessage;
 use crate::icons as ic;
 use crate::panels::pcb_board_properties::pick_kind_label;
@@ -23,16 +23,13 @@ pub(super) fn filter_button(
     tid: ThemeId,
     i18n: &I18n,
 ) -> ActiveBarItem<Message> {
-    let toggle = bar_message(PcbBarMsg::MenuToggled(PcbBarMenu::Filter));
-    ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Svg(ic::icon_filter(tid)),
-        tooltip: t!(i18n, ids::PCB_BAR_FILTER_TOOLTIP).into_string(),
-        enabled: true,
-        selected: open == Some(PcbBarMenu::Filter),
-        on_press: Some(toggle.clone()),
-        on_right_press: Some(toggle),
-        dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
-    })
+    dropdown_button(
+        PcbBarMenu::Filter,
+        open,
+        ActiveBarIcon::Svg(ic::icon_filter(tid)),
+        t!(i18n, ids::PCB_BAR_FILTER_TOOLTIP).into_string(),
+        tid,
+    )
 }
 
 fn panel(msg: PcbBoardMsg) -> Message {

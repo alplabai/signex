@@ -7,7 +7,7 @@ use signex_i18n::{MessageId, ids};
 
 /// A board placement tool, in the Place menu's order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum BoardPlaceTool {
+pub enum BoardPlaceTool {
     Component,
     Pad,
     Via,

@@ -92,3 +92,15 @@ edits the same filter as the board Properties panel's chips (#2353),
 through the same `PcbBoardMsg` messages, so the two always show the same
 state. Kinds the board editor cannot pick yet are greyed with why, as their
 chips are.
+
+## Align
+
+The PCB Active Bar's Align button opens a dropdown of the Align rows (Align
+Left, Right, Horizontal Centers, Distribute Horizontally, Top, Bottom,
+Vertical Centers, Distribute Vertically, Align To Grid). They run the same
+commands as on a sheet; on a board they line the selected footprints up by
+their origins, as a sheet lines symbols up by their anchors
+(`signex_engine::pcb::align`), as one undo step. A selected pad stands for
+its footprint. Two footprints are needed (three to distribute; one for Align
+To Grid, which snaps each origin to the board's grid). A locked footprint
+refuses the whole run and the Messages panel says which.

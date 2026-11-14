@@ -4,7 +4,7 @@ define_ids! {
     PCB;
     PCB_BAR_MOVE_TOOLTIP = "pcb-bar-move-tooltip";
     PCB_BAR_FILTER_TOOLTIP = "pcb-bar-filter-tooltip";
-    PCB_BAR_ALIGN_UNAVAILABLE = "pcb-bar-align-unavailable";
+    PCB_BAR_ALIGN_TOOLTIP = "pcb-bar-align-tooltip";
     PCB_BAR_COMPONENT_UNAVAILABLE = "pcb-bar-component-unavailable";
     PCB_BAR_PAD_UNAVAILABLE = "pcb-bar-pad-unavailable";
     PCB_BAR_ARC_UNAVAILABLE = "pcb-bar-arc-unavailable";

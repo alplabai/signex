@@ -259,6 +259,10 @@ impl Signex {
     pub(crate) fn align_selected(&mut self, action: &crate::active_bar::ActiveBarAction) {
         use crate::active_bar::ActiveBarAction;
 
+        // On a board the footprints line up instead (#2373).
+        if self.align_pcb_selection(action) {
+            return;
+        }
         if self.interaction_state.active_canvas().selected.len() < 2
             && !matches!(action, ActiveBarAction::AlignToGrid)
         {
