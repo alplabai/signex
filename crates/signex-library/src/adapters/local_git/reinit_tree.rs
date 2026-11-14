@@ -368,39 +368,32 @@ pub(super) fn record_in_index(
 ) -> Result<(), LibraryError> {
     let backend =
         |what: &'static str| move |e: git2::Error| LibraryError::Backend(format!("{what}: {e}"));
-    let mut index = repo.index().map_err(backend("git index"))?;
-    for path in &snapshot.removed {
-        index
-            .remove_path(Path::new(path))
-            .map_err(backend("git index remove"))?;
-    }
+    let mut entries = Vec::with_capacity(snapshot.files.len());
     let mut lfs_paths = false;
     for (name, id, mode) in &snapshot.files {
-        index
-            .add_path(Path::new(name))
-            .map_err(backend("git add"))?;
+        let mut staged = staged_entry(repo, Path::new(name)).map_err(backend("git add"))?;
         // Where links are not real (`core.symlinks=false`), `add_path` reads a
         // link as a plain file; the index takes the link the commit holds.
-        if *mode == LINK_MODE
-            && let Some(mut staged) = index.get_path(Path::new(name), 0)
-            && (staged.mode != LINK_MODE || staged.id != *id)
-        {
+        if *mode == LINK_MODE && (staged.mode != LINK_MODE || staged.id != *id) {
             staged.mode = LINK_MODE;
             staged.id = *id;
-            index.add(&staged).map_err(backend("git add"))?;
         }
         // An LFS path is recorded as its pointer, as the commit holds it.
-        if lfs::is_lfs_path(repo, Path::new(name)).unwrap_or(false)
-            && let Some(mut staged) = index.get_path(Path::new(name), 0)
-        {
+        if lfs::is_lfs_path(repo, Path::new(name)).unwrap_or(false) {
             staged.id = *id;
-            index.add(&staged).map_err(backend("git add"))?;
             lfs_paths = true;
         }
+        entries.push(staged);
     }
     if lfs_paths {
         lfs::install_pre_push_hook(repo).map_err(backend("git lfs hook"))?;
     }
-    index.write().map_err(backend("git index write"))?;
+    super::index_lock::update_index_locked(repo, |index| {
+        for path in &snapshot.removed {
+            index.remove_path(Path::new(path))?;
+        }
+        entries.iter().try_for_each(|entry| index.add(entry))
+    })
+    .map_err(backend("git index write"))?;
     Ok(())
 }

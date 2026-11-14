@@ -517,6 +517,7 @@ pub use write_lock::{
 };
 mod helpers;
 mod ignore_rules;
+mod index_lock;
 mod reinit_tree;
 pub use helpers::component_to_library_row;
 #[cfg(test)]
