@@ -488,19 +488,26 @@ that feature back on, so the lint is the real guard.)
 Signex is source-available under the
 [Functional Source License 1.1, Apache 2.0 Future License (FSL-1.1-ALv2)](LICENSE).
 Any use is allowed, including designing and selling your own products with
-Signex, except a Competing Use: offering a rival product or service built
-from this code. Each release becomes Apache-2.0 two years after it ships.
-Releases published before the change stay Apache-2.0.
+Signex, except a Competing Use: making Signex available to others in a
+commercial product or service that substitutes for Signex or offers the same
+or substantially similar functionality. Free, non-commercial redistribution
+is allowed. Each release becomes Apache-2.0 two years after it ships.
+Releases published before the change stay Apache-2.0, and contributions made
+before it (#2344) remain licensed under Apache-2.0
+([LICENSE-APACHE](LICENSE-APACHE)).
 
-Contributions are accepted under the same FSL-1.1-ALv2 terms (inbound =
-outbound): by submitting a pull request, you license your contribution under
-the terms of the rest of the project, including its later Apache-2.0
-conversion. The licence self-declaration in the pull request template and
-the license-guard checks described below apply to every pull request.
+Contributions are made under Apache-2.0 (inbound), while Signex is
+distributed under FSL-1.1-ALv2 (outbound): by submitting a pull request, you
+license your contribution to Alp Lab AB and to every recipient of Signex
+under the Apache License, Version 2.0. The inbound grant is Apache-2.0
+rather than FSL so that a contribution can ship in every Signex edition,
+including Signex Pro. The licence self-declaration in the pull request
+template and the license-guard checks described below apply to every pull
+request.
 
 A Contributor License Agreement is planned. Once it is published, a bot will
-ask for it on each pull request and enforce it, and contributions are
-accepted under it.
+ask for it on each pull request and enforce it, and it replaces the
+Apache-2.0 inbound grant above.
 
 ## License compliance for contributions
 

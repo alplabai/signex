@@ -14,13 +14,23 @@ trail behind it, and what it means for users and contributors.
 
 - **Allowed:** any use, including companies designing and selling their
   own products with Signex. Designs you make with Signex are yours.
-- **Not allowed:** a Competing Use, which means offering a rival product
-  or service built from this code (selling, hosting or distributing it).
+- **Not allowed:** a Competing Use. As the licence defines it, that is
+  making Signex available to others in a commercial product or service
+  that substitutes for Signex (or for a product or service Alp Lab offers
+  using it), or that offers the same or substantially similar
+  functionality. Free, non-commercial redistribution is allowed.
 - **Later:** each release becomes Apache-2.0 two years after it ships.
 
 Signex moved from Apache-2.0 to FSL-1.1-ALv2 in November 2026 (issue
 #2344). Releases published before the change stay Apache-2.0. The full
 text is in [`LICENSE`](../LICENSE).
+
+Contributions made before #2344 were licensed under Apache-2.0, and those
+grants remain in effect: that code stays available under Apache-2.0 to
+everyone who received it. The project as a whole is distributed under
+FSL-1.1-ALv2. A copy of the Apache-2.0 text, which code received under it
+must keep, is in [`LICENSE-APACHE`](../LICENSE-APACHE); [`NOTICE`](../NOTICE)
+records the same.
 
 ## TL;DR
 
@@ -169,11 +179,15 @@ Patches to the main `signex` repo must not contain KiCad-derived code.
 The repository is clean-room; KiCad I/O lives in the GPL-3.0 companion
 repo.
 
-Contributions are accepted under Signex's own FSL-1.1-ALv2 terms
-(inbound = outbound), including the later Apache-2.0 conversion, and
-under the Contributor License Agreement once it is published. Signex's
-non-compete term applies to Signex itself; it does not widen what a
-contribution may bring in. Third-party code must still be permissive.
+Contributions are made under Apache-2.0 (inbound): by submitting a pull
+request, you license your contribution to Alp Lab AB and to every
+recipient of Signex under the Apache License, Version 2.0. Signex is
+distributed (outbound) under FSL-1.1-ALv2. The inbound grant is Apache-2.0
+rather than FSL so that Alp Lab can ship a contribution in every Signex
+edition, including Signex Pro. The Contributor License Agreement, once
+published, replaces this. Signex's non-compete term applies to Signex
+itself; it does not widen what a contribution may bring in. Third-party
+code must still be permissive.
 
 Opening a PR affirms **no license-gated source files** were used —
 nothing under GPL/copyleft or otherwise incompatible. A

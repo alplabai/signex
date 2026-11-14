@@ -53,7 +53,7 @@ formats one-way. Run it once against your project; open the resulting
 
 **Migrating from Altium?** Install the optional
 [signex-altium-import](https://github.com/alplabai/signex-altium-import)
-companion (Apache-2.0, clean-room). Then **File › Import › Altium Project…**
+companion (FSL-1.1-ALv2, clean-room). Then **File › Import › Altium Project…**
 converts a `.PrjPcb`, `.SchDoc`, `.PcbDoc`, `.SchLib` or `.PcbLib` into a sibling
 `<name>-signex/` folder and opens it. The import lists everything it had to
 approximate or skip; review that list before you fabricate an imported
@@ -136,7 +136,7 @@ designs are never used for AI training unless the customer opts in.
   per-sheet stroke/fill colours
 - **TabPill chrome refactor (v0.8)** — 3-sided shared borders, theme-aware
   inactive fill, drag accent from theme
-- **Apache-clean native formats (v0.9)** — `.snxsch` / `.snxpcb` are the
+- **Clean-room native formats (v0.9)** — `.snxsch` / `.snxpcb` are the
   canonical format; import of GPL-based EDA tool formats moved to the optional companion tool
 - **Component library subsystem (v0.10–v0.11)** — Library Browser tab, DBLib
   row model, SCH Library editor, Component Preview, Pick Symbol/Footprint +
@@ -453,11 +453,17 @@ Signex Community Edition is source-available under the
 
 - **Allowed:** any use, including companies designing and selling their own
   products with Signex.
-- **Not allowed:** a Competing Use, which means offering a rival product or
-  service built from this code.
+- **Not allowed:** a Competing Use, which means making Signex available to
+  others in a commercial product or service that substitutes for Signex or
+  offers the same or substantially similar functionality. Free,
+  non-commercial redistribution is allowed.
 - **Later:** each release becomes Apache-2.0 two years after it ships.
 
 Releases published before the licence change stay Apache-2.0.
+Contributions made before the change (#2344) were licensed under Apache-2.0
+and those grants remain; the project as a whole is distributed under
+FSL-1.1-ALv2. A copy of the Apache-2.0 text is in
+[LICENSE-APACHE](LICENSE-APACHE) (see [NOTICE](NOTICE)).
 
 The main repository contains no GPL-derived code, so there is no GPL
 aggregation in your build closure, before or after the Apache-2.0 conversion.
