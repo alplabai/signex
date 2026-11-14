@@ -114,13 +114,9 @@ pcb-properties-selection = { $count ->
 }
 pcb-properties-selection-hint = Press Esc to clear the selection and see the board's properties.
 
-# Properties panel while one footprint is selected on a board (#1312). The
-# title is followed by the footprint's designator.
-pcb-footprint-title = Footprint
+# Properties panel while one footprint is selected on a board (#1312).
 pcb-footprint-designator = Designator
 pcb-footprint-value = Value
-# The library footprint the board footprint was made from.
-pcb-footprint-name = Footprint
 # Shown as the footprint name when the footprint has none.
 pcb-footprint-no-name = Not named
 pcb-footprint-locked = This footprint is locked, so its designator and value cannot be changed.

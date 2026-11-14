@@ -107,6 +107,28 @@ pub(super) fn commands() -> Vec<(&'static str, BoardCommand)> {
             },
         ),
         (
+            "lock",
+            BoardCommand::SetFootprintLocked {
+                footprint: id(FP_A),
+                locked: true,
+            },
+        ),
+        (
+            "hide the designator text",
+            BoardCommand::SetFootprintProperty {
+                footprint: id(FP_A),
+                index: 0,
+                property: signex_types::property::PcbProperty {
+                    key: "Reference".into(),
+                    value: "U1".into(),
+                    position: Some(Point { x: 0.7, y: -2.0 }),
+                    layer: Some("TopSilkscreen".into()),
+                    hidden: true,
+                    ..Default::default()
+                },
+            },
+        ),
+        (
             "outline",
             BoardCommand::SetBoardOutline {
                 outline: vec![Point { x: 1.1, y: 2.2 }, Point { x: 3.3, y: 4.4 }],

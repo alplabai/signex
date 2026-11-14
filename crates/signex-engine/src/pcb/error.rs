@@ -58,6 +58,15 @@ pub enum BoardCommandError {
     FaceMismatch(Uuid),
     #[error("footprint {0} no longer has the properties the text was taken from")]
     TextMismatch(Uuid),
+    #[error("footprint {footprint} has no property at index {index}")]
+    PropertyNotFound { footprint: Uuid, index: usize },
+    #[error("property {index} of footprint {footprint} would change its key")]
+    PropertyKeyChanged { footprint: Uuid, index: usize },
+    #[error(
+        "the {key} text of footprint {footprint} shows its designator or value; \
+         set those with a text edit"
+    )]
+    PropertyTextOwned { footprint: Uuid, key: String },
     #[error("{field} must be a finite number")]
     NonFinite { field: &'static str },
     #[error("the board sketch holds a number that is not finite at {0}")]

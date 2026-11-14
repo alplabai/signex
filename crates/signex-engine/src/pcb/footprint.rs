@@ -1,4 +1,4 @@
-//! Move, rotate and flip one footprint. Pads, graphics and property texts
+//! Move, rotate, flip and lock one footprint. Pads, graphics and property texts
 //! are stored in the footprint's local frame, so none of the three rewrites
 //! their positions. The flip itself is `pcb_geom::flip_footprint`. Lock state
 //! is the caller's check, not this module's.
@@ -60,6 +60,22 @@ pub(super) fn rotate_to(
             degrees: previous,
         },
         patch: patch(BoardPatchKind::FootprintRotated, id),
+    })
+}
+
+pub(super) fn set_locked(
+    board: &mut PcbBoard,
+    id: Uuid,
+    locked: bool,
+) -> Result<Applied, BoardCommandError> {
+    let fp = find(board, id)?;
+    let previous = std::mem::replace(&mut fp.locked, locked);
+    Ok(Applied {
+        inverse: BoardCommand::SetFootprintLocked {
+            footprint: id,
+            locked: previous,
+        },
+        patch: patch(BoardPatchKind::FootprintLockSet, id),
     })
 }
 

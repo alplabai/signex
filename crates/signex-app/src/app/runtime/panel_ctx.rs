@@ -225,7 +225,12 @@ impl Signex {
             stats_key: Some(key),
             ..crate::panels::PcbBoardSummary::with_stats(board, tab.title.clone(), selected, stats)
         };
-        Some(summary.with_footprint(footprint))
+        let component = self.pcb_component_facts(&tab.path, board);
+        Some(
+            summary
+                .with_footprint(footprint)
+                .with_component(component),
+        )
     }
 
     /// Bring the board summary in step with a selection change, without a
@@ -251,6 +256,7 @@ impl Signex {
         }) {
             self.interaction_state.pcb_footprint_draft = None;
         }
+        self.drop_moved_pcb_component_draft(summary.as_ref().and_then(|s| s.component.as_ref()));
         self.document_state.panel_ctx.pcb_board = summary;
     }
 

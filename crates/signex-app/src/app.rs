@@ -143,6 +143,7 @@ impl Signex {
         tasks.push(self.sync_back_annotate());
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
+        self.prune_pcb_component_draft();
         self.sync_undo_depth();
         // A resize, a dock collapsed or expanded, or a panel docked into an
         // empty side all change the room beside the canvas (#2347).

@@ -1,9 +1,8 @@
 //! Properties panel of the active PCB (#2353): with nothing selected, the
 //! board itself (a header with search and tabs, then Selection Filter, Snap
-//! Options, Board Information, Grid Manager, Guide Manager and Other); one
-//! footprint's designator and value when only it is selected
-//! (`pcb_footprint_properties`); a card naming the board for any other
-//! selection. A pure view over data the panel context copies from the board
+//! Options, Board Information, Grid Manager, Guide Manager and Other); the
+//! Component view when only footprints are selected (`pcb_component`); a card
+//! naming the board for any other selection. A pure view over data the panel context copies from the board
 //! and the editor settings.
 //!
 //! What the board model cannot store, or the editor cannot act on, yet is
@@ -120,6 +119,8 @@ pub struct PcbBoardSummary {
     pub selected: usize,
     /// The one selected footprint, when the selection is exactly one.
     pub footprint: Option<super::PcbFootprintFacts>,
+    /// The selected footprints, when the selection holds nothing else.
+    pub component: Option<super::PcbComponentFacts>,
 }
 
 impl PcbBoardSummary {
@@ -158,6 +159,11 @@ impl PcbBoardSummary {
     pub fn with_footprint(self, footprint: Option<super::PcbFootprintFacts>) -> Self {
         Self { footprint, ..self }
     }
+
+    /// This summary showing the selected components.
+    pub fn with_component(self, component: Option<super::PcbComponentFacts>) -> Self {
+        Self { component, ..self }
+    }
 }
 
 /// The unit the panel shows and reads lengths in: mm or mil, as its Units
@@ -172,8 +178,8 @@ pub fn shown_unit(unit: Unit) -> Unit {
 /// The panel body for `board`.
 pub fn view<'a>(ctx: &'a PanelContext, board: &'a PcbBoardSummary) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
-    if let Some(footprint) = board.footprint.as_ref() {
-        return super::pcb_footprint_properties::view(ctx, footprint);
+    if let Some(component) = board.component.as_ref() {
+        return super::pcb_component::view(ctx, component, board.footprint.as_ref());
     }
     if board.selected > 0 {
         return container(super::empty_state::empty_state_card(
