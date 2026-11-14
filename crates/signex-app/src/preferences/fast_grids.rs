@@ -30,7 +30,7 @@ pub(super) fn fast_grid_rows<'a>(
     t: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, PrefMsg> {
-    let mut rows: iced::widget::Column<'a, PrefMsg> = column![].spacing(SP.l);
+    let mut rows = column![].spacing(SP.l);
     for (index, (draft, messages)) in drafts.iter().zip(ROWS).enumerate() {
         rows = rows.push(fast_grid_row(index, draft, messages, t, i18n));
     }
