@@ -21,7 +21,7 @@
 //! These types are the canonical Signex schema. Standard I/O — when it
 //! returns via the `signex-standard-import` companion repo (GPL-3.0) —
 //! translates to/from these types at the file-format boundary; no
-//! Standard-shaped types live in this Apache codebase.
+//! Standard-shaped types live in this codebase.
 
 use std::collections::BTreeMap;
 

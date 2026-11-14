@@ -53,7 +53,7 @@ missed. This file is the fix, and it is tracked by issue #306.
 | Formula + document rendering | **typst** | Apache-2.0 | Rust crate, linked | Design Notebook |
 | 3D kernel / STEP import | **OpenCascade** + **truck-modeling** | LGPL / Apache-2.0 | OpenCascade via a `step-to-gltf` conversion step; `truck-modeling` linked | 3D Viewer |
 | Router geometry | **rstar**, **spade**, **kurbo**, **parry2d** | MIT / Apache-2.0 | Cargo dependencies of `pcb-geom` | PCB Routing |
-| 2D constraint solving | **our own Newton-LM solver** (`crates/signex-sketch`) | Apache-2.0 | In-tree | shipped (v0.13.0) |
+| 2D constraint solving | **our own Newton-LM solver** (`crates/signex-sketch`) | FSL-1.1-ALv2 | In-tree | shipped (v0.13.0) |
 
 ### Notes per domain
 
@@ -136,7 +136,7 @@ The rules, imperatively:
   solver as a subprocess, and reads results back:
 
 ```
-signex (Apache-2.0)                        ‖   solver (GPL / LGPL)
+signex (FSL-1.1-ALv2)                      ‖   solver (GPL / LGPL)
                                            ‖
   write .csx / .sif / mesh input   ────────╫──►  openEMS | ElmerSolver
                                            ‖         (separate process,
@@ -146,7 +146,7 @@ signex (Apache-2.0)                        ‖   solver (GPL / LGPL)
 ```
 
 The bridge crates (`openems-bridge`, `elmer-bridge`, and their kin) are
-Apache-2.0. They contain file writers, file readers, and a process
+FSL-1.1-ALv2, like the rest of Signex. They contain file writers, file readers, and a process
 spawner. They contain no solver code. If a patch to a bridge crate adds a
 `links =` key, a `-sys` dependency, or a copied solver source file, it is
 wrong regardless of how well it works.
@@ -155,7 +155,7 @@ ngspice is the one FFI case, and it is FFI precisely because its licensing
 is not GPL-style copyleft. That is a licence-specific exception, not a
 precedent. Do not generalise it to OpenEMS or Elmer.
 
-The Apache-2.0 surface of this repository is a promise to downstream
+The GPL-free surface of this repository is a promise to downstream
 users and redistributors. See [`docs/LICENSING.md`](LICENSING.md) for the
 full statement and the audit trail behind it.
 
@@ -215,7 +215,7 @@ with a contemporaneous audit trail. Sources are cited in the source
 comments. If you are improving the solver, cite the maths, never another
 tool's implementation.
 
-**GPL-based EDA tools — no code, in either direction.** This repository is Apache-clean
+**GPL-based EDA tools — no code, in either direction.** This repository is clean-room
 and CI enforces it. Interoperability with those tools ships as a separate
 GPL-3.0-or-later import companion repository. The full history is in
 [`docs/LICENSING.md`](LICENSING.md); read it before proposing anything
@@ -262,7 +262,7 @@ Honestly open. Input is genuinely wanted here — open an issue.
   layer above it is unchosen.
 - **IBIS parsing.** No tool chosen. Candidates exist; none evaluated.
 - **Gerber / ODB++ / IPC-2581 writers.** Currently assumed in-tree and
-  Apache-2.0. No external library has been ruled in.
+  FSL-1.1-ALv2. No external library has been ruled in.
 - **Plot rendering inside the compute layer.** Matplotlib → SVG is the
   current assumption. It works; it may not be the best answer for
   interactive plots.

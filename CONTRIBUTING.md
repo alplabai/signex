@@ -37,7 +37,7 @@ Import of files from GPL-based EDA tools lives in the optional [import companion
 (GPL-3.0-or-later). PRs that improve parsing
 fidelity, fix migration round-trip issues, or expand the converter's
 coverage belong **there**, not in the main signex repo. The main repo
-is Apache-2.0 clean and contains no code derived from GPL-based EDA tools by design — see
+is clean-room and contains no code derived from GPL-based EDA tools by design — see
 [docs/LICENSING.md](docs/LICENSING.md).
 
 ### Add Test Fixtures
@@ -485,36 +485,45 @@ that feature back on, so the lint is the real guard.)
 
 ## Contribution terms
 
-Today, contributions are accepted under the [Apache-2.0 license](LICENSE)
-(inbound = outbound): by submitting a pull request, you license your
-contribution under the same terms as the rest of the project. The licence
-self-declaration in the pull request template and the license-guard checks
-described below apply to every pull request.
+Signex is source-available under the
+[Functional Source License 1.1, Apache 2.0 Future License (FSL-1.1-ALv2)](LICENSE).
+Any use is allowed, including designing and selling your own products with
+Signex, except a Competing Use: offering a rival product or service built
+from this code. Each release becomes Apache-2.0 two years after it ships.
+Releases published before the change stay Apache-2.0.
+
+Contributions are accepted under the same FSL-1.1-ALv2 terms (inbound =
+outbound): by submitting a pull request, you license your contribution under
+the terms of the rest of the project, including its later Apache-2.0
+conversion. The licence self-declaration in the pull request template and
+the license-guard checks described below apply to every pull request.
 
 A Contributor License Agreement is planned. Once it is published, a bot will
-ask for it on each pull request and enforce it.
+ask for it on each pull request and enforce it, and contributions are
+accepted under it.
 
 ## License compliance for contributions
 
-The main signex repo is **Apache-2.0 clean**. Patches must not introduce
-code, data, or dependencies under any licence incompatible with
-Apache-2.0 — which is a wider net than GPL, and the next section defines
-it. Import from GPL-based EDA tools lives in the
+The main signex repo is **clean-room**. Patches must not introduce code,
+data, or dependencies under any licence incompatible with Signex's terms:
+FSL-1.1-ALv2 now and Apache-2.0 after two years. That is a wider net than
+GPL, and the next section defines it. Signex's own non-compete term does not
+widen what you may bring in: third-party code still has to be permissive. Import from GPL-based EDA tools lives in the
 [import companion repository](https://github.com/alplabai/signex-kicad-import)
 (GPL-3.0-or-later) — that's where work on those formats
 belongs. See [docs/LICENSING.md](docs/LICENSING.md) for the full statement
 and the rationale behind the two-repo split.
 
-### What "otherwise Apache-incompatible" means
+### What "otherwise incompatible" means
 
 Opening a PR affirms that **no license-gated source files** were used —
-nothing under GPL/copyleft **or otherwise Apache-incompatible**. We asked
+nothing under GPL/copyleft **or otherwise incompatible**. We asked
 that for a long time without ever saying what the second half meant, which
 was our omission, not a contributor's problem to guess at.
 
 It cost someone. [PR #304](https://github.com/alplabai/signex/pull/304)
 arrived as a skilled, careful Rust rewrite of a project licensed
-"CC BY 4.0 … You may not resell this tool". That is Apache-incompatible on
+"CC BY 4.0 … You may not resell this tool". That is incompatible on
 two counts, and it passed all twelve of our licence CI jobs plus
 `cargo deny` green. The declaration was answered honestly — CC BY reads as
 permissive, and the resale restriction is a trailing sentence that isn't
@@ -550,7 +559,8 @@ you wrote it, not how much the output diverges.
   "you may not resell this tool", "personal use only", "not for commercial
   use". See below; this class is fatal here specifically.
 - **Source-available / open-core / "fair source"** — BUSL, SSPL, Elastic,
-  Commons Clause, PolyForm. Not open source, whatever the marketing says.
+  Commons Clause, PolyForm, and other projects' FSL. Their use restrictions
+  bind Alp Lab too, and would block the Apache-2.0 conversion.
 - **The text, tables, and figures of paywalled standards** — IPC, IEC,
   JEDEC, ISO. Important distinction: the **formulas and physical facts** in
   a standard are facts, not copyrightable, and implementing them from your
@@ -562,10 +572,10 @@ MIT, BSD, ISC, Zlib, Unlicense, CC0, and Apache-2.0 are fine. Anything on
 neither list: ask.
 
 **Why "no resale" is fatal here in particular.** Signex Community is
-Apache-2.0 and free; **Signex Pro is a paid commercial edition built on top
+FSL-1.1-ALv2 and free; **Signex Pro is a paid commercial edition built on top
 of this tree** from a separate private workspace. A field-of-use restriction on any code in `crates/` would
-be violated the day Pro ships, and would break the Apache-2.0 surface we
-promise every downstream redistributor and embedder. Plenty of projects
+be violated the day Pro ships, and would break the Apache-2.0 conversion we
+promise every downstream user two years after each release. Plenty of projects
 could live with a non-commercial clause. We cannot. That's a property of
 our business model, not a judgement about the licence.
 
@@ -597,7 +607,7 @@ Why this matters: large-language-model assistants that have been
 trained on GPL-based EDA tool source can inadvertently produce structurally
 derivative code even when generating "from scratch." If your LLM has
 been exposed to such source, route the contribution to the GPL
-companion (where derivation is fine) rather than the Apache main repo.
+companion (where derivation is fine) rather than the main repo.
 
 For reference, the License Guard CI also fails any push that
 introduces the GPL-based EDA tool's name, matched case-insensitively as a

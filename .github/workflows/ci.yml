@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: FSL-1.1-ALv2
 #
 # Primary PR gate for the signex workspace: compile, test, format, and
 # the license/dependency audit. Runs on every PR + push to main / trunk.
