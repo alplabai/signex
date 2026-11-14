@@ -30,6 +30,12 @@ use signex_types::schematic::shown_on;
 const ANCHOR_AVOID_RADIUS_MM: f64 = 1.27;
 const ANCHOR_PENALTY: u32 = 1;
 
+/// Gap between a part's pins-and-body extent and its autoplaced fields: one
+/// text height, so one 1.27 mm grid step at the default text size (#2370).
+fn field_gap(font_size: f64) -> f64 {
+    font_size.max(0.762)
+}
+
 /// Place the reference / value fields of `symbol`, a part about to be placed
 /// from `lib`, clear of its body, as a turn or mirror of it would. The fields
 /// of a part dropped on the sheet start where the autoplacer would put them,
@@ -185,7 +191,7 @@ pub(super) fn autoplace_fields(
 
     let font_size = fields[0].font_size.max(0.1);
     let line_height = font_size * 1.5;
-    let margin = (font_size * 1.5).max(0.762);
+    let margin = field_gap(font_size);
     let n = fields.len() as f64;
 
     let (anchor_x, anchor_y_first, justify_h, justify_v): (f64, f64, HAlign, VAlign) = match chosen
