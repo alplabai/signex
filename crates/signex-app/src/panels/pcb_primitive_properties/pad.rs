@@ -6,8 +6,8 @@ use signex_i18n::{UserText, ids};
 use signex_widgets::text;
 
 use super::rows::{
-    Look, Section, chip, dropdown, field, fixed_checkbox, fixed_tiles, fixed_value, labelled,
-    lock, mm_field, net_row, pair, stack, template_rows, testpoint_section, value_box, with_tip,
+    Look, Section, chip, dropdown, field, fixed_checkbox, fixed_tiles, fixed_value, labelled, lock,
+    mm_field, net_row, pair, stack, template_rows, testpoint_section, value_box, with_tip,
 };
 use super::{PadFacts, PcbPrimitiveMsg, PrimitiveField as F, SP, TS, format_number, net_info};
 use crate::panels::{PanelContext, PanelMsg};
@@ -40,17 +40,24 @@ fn properties<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMs
         Some((name, colour_of)) => {
             let shown = value_box(look, UserText::new(name.clone()));
             let content = match colour_of {
-                Some(layer) => row![chip(layer_style::layer_colour(*layer, look.tokens())), shown]
-                    .spacing(SP.s)
-                    .align_y(iced::Alignment::Center)
-                    .boxed(),
+                Some(layer) => row![
+                    chip(layer_style::layer_colour(*layer, look.tokens())),
+                    shown
+                ]
+                .spacing(SP.s)
+                .align_y(iced::Alignment::Center)
+                .boxed(),
                 None => shown,
             };
             with_tip(look, content, ids::PCB_PRIM_PAD_LAYER_UNSUPPORTED)
         }
         None => value_box(look, UserText::new(String::new())),
     };
-    s.push(common, ids::PCB_PRIM_LAYER, labelled(look, ids::PCB_PRIM_LAYER, layer));
+    s.push(
+        common,
+        ids::PCB_PRIM_LAYER,
+        labelled(look, ids::PCB_PRIM_LAYER, layer),
+    );
     s.push(common, ids::PCB_PRIM_NET, net_row(look, common));
     s.push(
         common,
@@ -95,7 +102,11 @@ fn properties<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMs
         labelled(
             look,
             ids::PCB_PRIM_JUMPER,
-            fixed_value(look, UserText::new("0".to_string()), ids::PCB_PRIM_JUMPER_UNSUPPORTED),
+            fixed_value(
+                look,
+                UserText::new("0".to_string()),
+                ids::PCB_PRIM_JUMPER_UNSUPPORTED,
+            ),
         ),
     );
     template_rows(look, common, &mut s);
@@ -123,7 +134,11 @@ fn properties<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMs
     s.push(
         common,
         ids::PCB_PRIM_LOCK,
-        labelled(look, ids::PCB_PRIM_LOCK, lock(look, locked, ids::PCB_PRIM_PAD_LOCK_TIP)),
+        labelled(
+            look,
+            ids::PCB_PRIM_LOCK,
+            lock(look, locked, ids::PCB_PRIM_PAD_LOCK_TIP),
+        ),
     );
     s.finish()
 }
@@ -134,7 +149,11 @@ fn pad_stack<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMsg
     s.push(
         common,
         ids::PCB_PRIM_SHOW_PREVIEW,
-        fixed_value(look, look.t(ids::PCB_PRIM_SHOW_PREVIEW), ids::PCB_PRIM_PREVIEW_UNSUPPORTED),
+        fixed_value(
+            look,
+            look.t(ids::PCB_PRIM_SHOW_PREVIEW),
+            ids::PCB_PRIM_PREVIEW_UNSUPPORTED,
+        ),
     );
     s.push(
         common,
@@ -150,16 +169,28 @@ fn pad_stack<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMsg
             ids::PCB_PRIM_STACK_UNSUPPORTED,
         ),
     );
-    s.push(common, ids::PCB_PRIM_COPPER, group(look, ids::PCB_PRIM_COPPER));
+    s.push(
+        common,
+        ids::PCB_PRIM_COPPER,
+        group(look, ids::PCB_PRIM_COPPER),
+    );
     s.push(
         common,
         ids::PCB_PRIM_X_SIZE,
-        labelled(look, ids::PCB_PRIM_X_SIZE, mm_field(common, F::SizeX, f.size_x, look)),
+        labelled(
+            look,
+            ids::PCB_PRIM_X_SIZE,
+            mm_field(common, F::SizeX, f.size_x, look),
+        ),
     );
     s.push(
         common,
         ids::PCB_PRIM_Y_SIZE,
-        labelled(look, ids::PCB_PRIM_Y_SIZE, mm_field(common, F::SizeY, f.size_y, look)),
+        labelled(
+            look,
+            ids::PCB_PRIM_Y_SIZE,
+            mm_field(common, F::SizeY, f.size_y, look),
+        ),
     );
     let target = common.target.clone();
     let shapes = dropdown(common, &f.shapes, f.shape.clone(), move |choice| {
@@ -168,14 +199,23 @@ fn pad_stack<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMsg
             shape: choice.shape,
         }
     });
-    s.push(common, ids::PCB_PRIM_SHAPE, labelled(look, ids::PCB_PRIM_SHAPE, shapes));
+    s.push(
+        common,
+        ids::PCB_PRIM_SHAPE,
+        labelled(look, ids::PCB_PRIM_SHAPE, shapes),
+    );
     s.push(
         common,
         ids::PCB_PRIM_RELIEF,
         labelled(
             look,
             ids::PCB_PRIM_RELIEF,
-            fixed_checkbox(look, ids::PCB_PRIM_DIRECT, false, ids::PCB_PRIM_RELIEF_UNSUPPORTED),
+            fixed_checkbox(
+                look,
+                ids::PCB_PRIM_DIRECT,
+                false,
+                ids::PCB_PRIM_RELIEF_UNSUPPORTED,
+            ),
         ),
     );
     let hole = if f.has_hole {
@@ -183,16 +223,37 @@ fn pad_stack<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMsg
     } else {
         value_box(look, look.t(ids::PCB_PRIM_NO_HOLE))
     };
-    s.push(common, ids::PCB_PRIM_HOLE_SIZE, labelled(look, ids::PCB_PRIM_HOLE_SIZE, hole));
-    let rule = || fixed_value(look, look.t(ids::PCB_PRIM_RULE), ids::PCB_PRIM_MASK_UNSUPPORTED);
-    s.push(common, ids::PCB_PRIM_PASTE, group(look, ids::PCB_PRIM_PASTE));
+    s.push(
+        common,
+        ids::PCB_PRIM_HOLE_SIZE,
+        labelled(look, ids::PCB_PRIM_HOLE_SIZE, hole),
+    );
+    let rule = || {
+        fixed_value(
+            look,
+            look.t(ids::PCB_PRIM_RULE),
+            ids::PCB_PRIM_MASK_UNSUPPORTED,
+        )
+    };
+    s.push(
+        common,
+        ids::PCB_PRIM_PASTE,
+        group(look, ids::PCB_PRIM_PASTE),
+    );
     s.push(
         common,
         ids::PCB_PRIM_EXPANSION,
         labelled(
             look,
             ids::PCB_PRIM_EXPANSION,
-            pair(rule(), fixed_value(look, look.t(ids::PCB_PRIM_PERCENT), ids::PCB_PRIM_MASK_UNSUPPORTED)),
+            pair(
+                rule(),
+                fixed_value(
+                    look,
+                    look.t(ids::PCB_PRIM_PERCENT),
+                    ids::PCB_PRIM_MASK_UNSUPPORTED,
+                ),
+            ),
         ),
     );
     s.push(
@@ -201,10 +262,19 @@ fn pad_stack<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMsg
         labelled(
             look,
             ids::PCB_PRIM_ENABLED,
-            fixed_checkbox(look, ids::PCB_PRIM_ENABLED, true, ids::PCB_PRIM_MASK_UNSUPPORTED),
+            fixed_checkbox(
+                look,
+                ids::PCB_PRIM_ENABLED,
+                true,
+                ids::PCB_PRIM_MASK_UNSUPPORTED,
+            ),
         ),
     );
-    s.push(common, ids::PCB_PRIM_SOLDER, group(look, ids::PCB_PRIM_SOLDER));
+    s.push(
+        common,
+        ids::PCB_PRIM_SOLDER,
+        group(look, ids::PCB_PRIM_SOLDER),
+    );
     s.push(
         common,
         ids::PCB_PRIM_EXPANSION,
@@ -216,7 +286,12 @@ fn pad_stack<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMsg
         labelled(
             look,
             ids::PCB_PRIM_TENTED,
-            fixed_checkbox(look, ids::PCB_PRIM_TENTED, false, ids::PCB_PRIM_MASK_UNSUPPORTED),
+            fixed_checkbox(
+                look,
+                ids::PCB_PRIM_TENTED,
+                false,
+                ids::PCB_PRIM_MASK_UNSUPPORTED,
+            ),
         ),
     );
     s.finish()

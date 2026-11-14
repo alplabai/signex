@@ -89,17 +89,20 @@ fn net_items_and_item_net_agree() {
 fn a_via_spans_the_stack_or_the_layers_it_lists() {
     let inner = |n| CopperLayer::Inner(InnerCopper::new(n).unwrap());
     let stack = [CopperLayer::Top, inner(1), inner(2), CopperLayer::Bottom];
-    assert_eq!(
-        via_span(&stack, &via(ViaType::Through, &[])),
-        Some((1, 4))
-    );
+    assert_eq!(via_span(&stack, &via(ViaType::Through, &[])), Some((1, 4)));
     assert_eq!(
         via_span(&stack, &via(ViaType::Blind, &["TopCopper", "Inner1Copper"])),
         Some((1, 2))
     );
     assert_eq!(
-        via_span(&stack, &via(ViaType::Micro, &["Inner2Copper", "BottomCopper"])),
+        via_span(
+            &stack,
+            &via(ViaType::Micro, &["Inner2Copper", "BottomCopper"])
+        ),
         Some((3, 4))
     );
-    assert_eq!(via_span(&stack, &via(ViaType::Blind, &["TopSilkscreen"])), None);
+    assert_eq!(
+        via_span(&stack, &via(ViaType::Blind, &["TopSilkscreen"])),
+        None
+    );
 }

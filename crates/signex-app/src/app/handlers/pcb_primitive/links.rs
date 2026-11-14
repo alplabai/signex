@@ -64,7 +64,9 @@ impl Signex {
             })
             .flatten();
         match net {
-            Some(net) => self.apply_primitive_edit(&target, PrimitiveEdit::Net(net), ids::PCB_PRIM_NET),
+            Some(net) => {
+                self.apply_primitive_edit(&target, PrimitiveEdit::Net(net), ids::PCB_PRIM_NET)
+            }
             None => {
                 let line = t!(self.ui_state.i18n, ids::PCB_PRIM_NO_NET_THERE);
                 crate::diagnostics::log_warning(line.into_string());

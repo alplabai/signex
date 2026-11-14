@@ -108,7 +108,13 @@ impl Signex {
             .map(|i| item_on_board(board, *i).then(|| pcb_geom::item_net(board, *i).unwrap_or(0)))
             .collect();
         let shared_net = shared(nets?.into_iter());
-        let name_of = |n: u32| board.nets.iter().find(|d| d.number == n).map(|d| d.name.clone());
+        let name_of = |n: u32| {
+            board
+                .nets
+                .iter()
+                .find(|d| d.number == n)
+                .map(|d| d.name.clone())
+        };
         let name = shared_net.filter(|n| *n != 0).and_then(name_of);
         let class = name.as_deref().and_then(|name| {
             let classes = self.active_net_classes()?;
@@ -132,9 +138,18 @@ impl Signex {
             class,
             selected_length_mm,
             total_length_mm: shared_net.and_then(|n| pcb_geom::net_routed_length_mm(board, n)),
-            tracks: on_net.iter().filter(|i| matches!(i, ItemRef::Track(_))).count(),
-            vias: on_net.iter().filter(|i| matches!(i, ItemRef::Via(_))).count(),
-            pads: on_net.iter().filter(|i| matches!(i, ItemRef::Pad { .. })).count(),
+            tracks: on_net
+                .iter()
+                .filter(|i| matches!(i, ItemRef::Track(_)))
+                .count(),
+            vias: on_net
+                .iter()
+                .filter(|i| matches!(i, ItemRef::Via(_)))
+                .count(),
+            pads: on_net
+                .iter()
+                .filter(|i| matches!(i, ItemRef::Pad { .. }))
+                .count(),
         };
         let no_net = NetChoice {
             number: 0,
@@ -281,7 +296,10 @@ fn pad_facts(
         }
     };
     let layer = shared(pads.iter().map(|(fp, pad)| pad_layer(fp, pad))).map(|layer| match layer {
-        Some(layer) => (layer_style::layer_name(i18n, layer).into_string(), Some(layer)),
+        Some(layer) => (
+            layer_style::layer_name(i18n, layer).into_string(),
+            Some(layer),
+        ),
         None => (t!(i18n, ids::PCB_LAYER_MULTI_LAYER).into_string(), None),
     });
     PadFacts {
@@ -297,13 +315,22 @@ fn pad_facts(
         .flatten(),
         size_x: shared(pads.iter().map(|(_, p)| p.size.x)),
         size_y: shared(pads.iter().map(|(_, p)| p.size.y)),
-        hole: shared(pads.iter().map(|(_, p)| p.drill.as_ref().map(|d| d.diameter))).flatten(),
+        hole: shared(
+            pads.iter()
+                .map(|(_, p)| p.drill.as_ref().map(|d| d.diameter)),
+        )
+        .flatten(),
         has_hole: pads.iter().all(|(_, p)| p.drill.is_some()),
         shape: shared(pads.iter().map(|(_, p)| p.shape)).map(shape_label),
-        shapes: [PadShape::Circle, PadShape::Rect, PadShape::RoundRect, PadShape::Oval]
-            .into_iter()
-            .map(shape_label)
-            .collect(),
+        shapes: [
+            PadShape::Circle,
+            PadShape::Rect,
+            PadShape::RoundRect,
+            PadShape::Oval,
+        ]
+        .into_iter()
+        .map(shape_label)
+        .collect(),
         common,
     }
 }
@@ -315,5 +342,7 @@ fn pad_layer(fp: &signex_types::pcb::Footprint, pad: &Pad) -> Option<PcbLayer> {
         return None;
     }
     let mask = pcb_geom::pad_layers(fp, pad);
-    pcb_geom::copper_layers(mask).first().map(|c| PcbLayer::Copper(*c))
+    pcb_geom::copper_layers(mask)
+        .first()
+        .map(|c| PcbLayer::Copper(*c))
 }

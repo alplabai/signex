@@ -278,7 +278,11 @@ fn editing_the_width_is_one_undo_step() {
             text: "0.4".into(),
         }),
     );
-    assert_eq!(segment(&live(&f.app), T1).width, 0.25, "typing edits nothing");
+    assert_eq!(
+        segment(&live(&f.app), T1).width,
+        0.25,
+        "typing edits nothing"
+    );
     let edited = assert_one_step(&mut f, |f| {
         send(
             &mut f.app,
@@ -360,7 +364,11 @@ fn a_net_picked_on_the_board_is_one_undo_step() {
         .selection()
         .items()
         .collect();
-    assert_eq!(selected, vec![ItemRef::Track(T1)], "the pick did not select");
+    assert_eq!(
+        selected,
+        vec![ItemRef::Track(T1)],
+        "the pick did not select"
+    );
 }
 
 #[test]

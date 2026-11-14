@@ -31,7 +31,11 @@ pub(super) fn section<'a>(
         (Some(0), _) => value_box(look, look.t(ids::PCB_PRIM_NO_NET)),
         _ => value_box(look, UserText::new(String::new())),
     };
-    s.push(common, ids::PCB_PRIM_NET, labelled(look, ids::PCB_PRIM_NET, net));
+    s.push(
+        common,
+        ids::PCB_PRIM_NET,
+        labelled(look, ids::PCB_PRIM_NET, net),
+    );
     let class = match info.class.as_ref() {
         Some(class) => link(
             look,
@@ -45,7 +49,11 @@ pub(super) fn section<'a>(
         None if info.net.is_some() => value_box(look, look.t(ids::PCB_PRIM_NO_CLASS)),
         None => value_box(look, UserText::new(String::new())),
     };
-    s.push(common, ids::PCB_PRIM_CLASS, labelled(look, ids::PCB_PRIM_CLASS, class));
+    s.push(
+        common,
+        ids::PCB_PRIM_CLASS,
+        labelled(look, ids::PCB_PRIM_CLASS, class),
+    );
     // Delay needs the stackup's dielectric, which the board does not
     // record: both columns stay blank, and say why on hover.
     let blank = || value_box(look, UserText::new(String::new()));
@@ -54,13 +62,21 @@ pub(super) fn section<'a>(
         two_columns(look, blank(), blank()),
         ids::PCB_PRIM_DELAY_UNKNOWN,
     );
-    s.push(common, ids::PCB_PRIM_DELAY, labelled(look, ids::PCB_PRIM_DELAY, delay));
+    s.push(
+        common,
+        ids::PCB_PRIM_DELAY,
+        labelled(look, ids::PCB_PRIM_DELAY, delay),
+    );
     let length = two_columns(
         look,
         value_box(look, mm_or_na(look, info.selected_length_mm)),
         value_box(look, mm_or_na(look, info.total_length_mm)),
     );
-    s.push(common, ids::PCB_PRIM_LENGTH, labelled(look, ids::PCB_PRIM_LENGTH, length));
+    s.push(
+        common,
+        ids::PCB_PRIM_LENGTH,
+        labelled(look, ids::PCB_PRIM_LENGTH, length),
+    );
     if common.show_more {
         for (id, count) in [
             (ids::PCB_PRIM_NET_TRACKS, info.tracks),

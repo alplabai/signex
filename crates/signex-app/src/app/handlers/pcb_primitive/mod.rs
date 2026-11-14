@@ -97,13 +97,21 @@ impl Signex {
                 }
             }
             M::LayerPicked { target, layer } => {
-                self.apply_primitive_edit(target, PrimitiveEdit::Layer(*layer), ids::PCB_PRIM_LAYER);
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::Layer(*layer),
+                    ids::PCB_PRIM_LAYER,
+                );
             }
             M::NetPicked { target, net } => {
                 self.apply_primitive_edit(target, PrimitiveEdit::Net(*net), ids::PCB_PRIM_NET);
             }
             M::ShapePicked { target, shape } => {
-                self.apply_primitive_edit(target, PrimitiveEdit::Shape(*shape), ids::PCB_PRIM_SHAPE);
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::Shape(*shape),
+                    ids::PCB_PRIM_SHAPE,
+                );
             }
             M::NetPickStarted { target } => {
                 panel.net_pick = if panel.net_pick.as_ref() == Some(target) {
@@ -121,7 +129,12 @@ impl Signex {
     }
 
     /// Enter in `field`: read the typed text and apply it.
-    fn submit_primitive_text(&mut self, target: &PrimitiveTarget, field: PrimitiveField, text: &str) {
+    fn submit_primitive_text(
+        &mut self,
+        target: &PrimitiveTarget,
+        field: PrimitiveField,
+        text: &str,
+    ) {
         let what = field_name(field);
         let edit = if field.is_text() {
             PrimitiveEdit::Designator(text.to_string())

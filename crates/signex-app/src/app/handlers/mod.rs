@@ -54,13 +54,13 @@ mod pcb_edit;
 #[cfg(test)]
 mod pcb_edit_tests;
 pub(crate) mod pcb_footprint_text;
-pub(crate) mod pcb_primitive;
 mod pcb_parking;
 pub(crate) mod pcb_placement;
 #[cfg(test)]
 mod pcb_placement_tests;
 #[cfg(test)]
 mod pcb_placement_window_tests;
+pub(crate) mod pcb_primitive;
 pub mod pcb_select;
 pub mod pcb_view;
 pub mod pcb_view_rotation;

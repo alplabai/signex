@@ -18,7 +18,11 @@ fn with_nets() -> PcbBoard {
 }
 
 fn segment(b: &PcbBoard, uuid: &str) -> Segment {
-    b.segments.iter().find(|s| s.uuid == id(uuid)).unwrap().clone()
+    b.segments
+        .iter()
+        .find(|s| s.uuid == id(uuid))
+        .unwrap()
+        .clone()
 }
 
 fn via(b: &PcbBoard) -> Via {
@@ -45,9 +49,12 @@ fn replacing_tracks_and_a_via_keeps_their_place_and_undoes_exactly() {
     v.diameter = 0.8;
     v.drill = 0.4;
     v.net = 7;
-    let applied = replace(vec![BoardItem::Segment(s1.clone()), BoardItem::Via(v.clone())])
-        .apply(&mut b)
-        .unwrap();
+    let applied = replace(vec![
+        BoardItem::Segment(s1.clone()),
+        BoardItem::Via(v.clone()),
+    ])
+    .apply(&mut b)
+    .unwrap();
     assert_eq!(b.segments[0], s1, "the first track stays first");
     assert_eq!(b.vias[0], v);
     assert_eq!(applied.patch.kind, BoardPatchKind::ItemsReplaced);
@@ -171,7 +178,10 @@ fn replacing_a_pad_undoes_exactly_and_refuses_a_stray_net() {
     let mut b = with_nets();
     let before = snapshot(&b);
     let mut pad = b.footprints[0].pads[1].clone();
-    pad.size = Point { x: 1.2, y: 0.1 + 0.9 };
+    pad.size = Point {
+        x: 1.2,
+        y: 0.1 + 0.9,
+    };
     pad.net = Some(signex_types::pcb::PadNet {
         number: 7,
         name: "GND".into(),

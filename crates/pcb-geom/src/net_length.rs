@@ -74,16 +74,18 @@ pub fn item_net(board: &PcbBoard, item: ItemRef) -> Option<u32> {
     let net = match item {
         ItemRef::Track(id) => board.segments.iter().find(|s| s.uuid == id)?.net,
         ItemRef::Via(id) => board.vias.iter().find(|v| v.uuid == id)?.net,
-        ItemRef::Pad { footprint, pad } => board
-            .footprints
-            .iter()
-            .find(|fp| fp.uuid == footprint)?
-            .pads
-            .iter()
-            .find(|p| p.uuid == pad)?
-            .net
-            .as_ref()?
-            .number,
+        ItemRef::Pad { footprint, pad } => {
+            board
+                .footprints
+                .iter()
+                .find(|fp| fp.uuid == footprint)?
+                .pads
+                .iter()
+                .find(|p| p.uuid == pad)?
+                .net
+                .as_ref()?
+                .number
+        }
         ItemRef::Footprint(_) => return None,
     };
     (net != 0).then_some(net)

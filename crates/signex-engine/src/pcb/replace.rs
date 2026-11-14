@@ -186,7 +186,12 @@ fn check_pad(board: &PcbBoard, old: &Pad, new: &Pad) -> Result<(), BoardCommandE
     }
     match new.net.as_ref() {
         None => Ok(()),
-        Some(net) if board.nets.iter().any(|n| n.number == net.number && n.name == net.name) => {
+        Some(net)
+            if board
+                .nets
+                .iter()
+                .any(|n| n.number == net.number && n.name == net.name) =>
+        {
             Ok(())
         }
         Some(net) => Err(BoardCommandError::UnknownNet(net.number)),

@@ -7,8 +7,8 @@ use signex_i18n::ids;
 use signex_types::pcb_layer::PcbLayer;
 
 use super::rows::{
-    Look, Section, dropdown, chip, labelled, lock, mask_section, mm_field, mm_or_na, net_row,
-    pair, stack, value_box,
+    Look, Section, chip, dropdown, labelled, lock, mask_section, mm_field, mm_or_na, net_row, pair,
+    stack, value_box,
 };
 use super::{PcbPrimitiveMsg, PrimitiveField as F, SP, TrackFacts, net_info};
 use crate::panels::{PanelContext, PanelMsg};
@@ -64,8 +64,17 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
         }
     });
     let swatch = f.layer.as_ref().map_or_else(
-        || container(iced::widget::Space::new()).width(Length::Fixed(super::TS.body)).boxed(),
-        |l| chip(layer_style::layer_colour(PcbLayer::Copper(l.layer), look.tokens())),
+        || {
+            container(iced::widget::Space::new())
+                .width(Length::Fixed(super::TS.body))
+                .boxed()
+        },
+        |l| {
+            chip(layer_style::layer_colour(
+                PcbLayer::Copper(l.layer),
+                look.tokens(),
+            ))
+        },
     );
     s.push(
         common,
@@ -82,7 +91,11 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
     s.push(
         common,
         ids::PCB_PRIM_WIDTH,
-        labelled(look, ids::PCB_PRIM_WIDTH, mm_field(common, F::Width, f.width, look)),
+        labelled(
+            look,
+            ids::PCB_PRIM_WIDTH,
+            mm_field(common, F::Width, f.width, look),
+        ),
     );
     s.push(
         common,
@@ -111,7 +124,11 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
     s.push(
         common,
         ids::PCB_PRIM_LENGTH,
-        labelled(look, ids::PCB_PRIM_LENGTH, value_box(look, mm_or_na(look, f.length_mm))),
+        labelled(
+            look,
+            ids::PCB_PRIM_LENGTH,
+            value_box(look, mm_or_na(look, f.length_mm)),
+        ),
     );
     s.finish()
 }

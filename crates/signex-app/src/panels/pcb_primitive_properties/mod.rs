@@ -61,11 +61,19 @@ pub enum PcbPrimitiveMsg {
         shape: PadShape,
     },
     /// The pick button: the next click on the board names the net.
-    NetPickStarted { target: PrimitiveTarget },
+    NetPickStarted {
+        target: PrimitiveTarget,
+    },
     /// The net name link: select the net's copper.
-    NetLinkPressed { board: PathBuf, net: u32 },
+    NetLinkPressed {
+        board: PathBuf,
+        net: u32,
+    },
     /// The class link: select the copper of every net of the class.
-    ClassLinkPressed { board: PathBuf, class: String },
+    ClassLinkPressed {
+        board: PathBuf,
+        class: String,
+    },
     ShowMoreToggled,
     SearchTyped(String),
 }
@@ -126,7 +134,10 @@ fn header<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<'a
         ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
     };
     let title_row = row![
-        text(t!(i18n, title)).size(TS.body).font(semibold).color(ink),
+        text(t!(i18n, title))
+            .size(TS.body)
+            .font(semibold)
+            .color(ink),
         text(summary)
             .size(TS.dense)
             .color(muted)

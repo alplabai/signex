@@ -234,7 +234,9 @@ impl Signex {
         if let Some(board) = in_view.as_deref() {
             let shown = summary.as_ref().and_then(|s| s.primitive.as_ref());
             let target = shown.map(|p| &p.common().target);
-            self.interaction_state.pcb_primitive.keep_only(board, target);
+            self.interaction_state
+                .pcb_primitive
+                .keep_only(board, target);
         }
         self.document_state.panel_ctx.pcb_board = summary;
     }

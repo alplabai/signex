@@ -35,7 +35,11 @@ fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMs
         labelled(
             look,
             ids::PCB_PRIM_VIA_NAME,
-            with_tip(look, value_box(look, span), ids::PCB_PRIM_VIA_SPAN_UNSUPPORTED),
+            with_tip(
+                look,
+                value_box(look, span),
+                ids::PCB_PRIM_VIA_SPAN_UNSUPPORTED,
+            ),
         ),
     );
     s.push(
@@ -44,7 +48,11 @@ fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMs
         labelled(
             look,
             ids::PCB_PRIM_PROPAGATION_DELAY,
-            fixed_value(look, UserText::new(String::new()), ids::PCB_PRIM_DELAY_UNKNOWN),
+            fixed_value(
+                look,
+                UserText::new(String::new()),
+                ids::PCB_PRIM_DELAY_UNKNOWN,
+            ),
         ),
     );
     template_rows(look, common, &mut s);
@@ -76,7 +84,11 @@ fn via_stack<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg
     s.push(
         common,
         ids::PCB_PRIM_SHOW_PREVIEW,
-        fixed_value(look, look.t(ids::PCB_PRIM_SHOW_PREVIEW), ids::PCB_PRIM_PREVIEW_UNSUPPORTED),
+        fixed_value(
+            look,
+            look.t(ids::PCB_PRIM_SHOW_PREVIEW),
+            ids::PCB_PRIM_PREVIEW_UNSUPPORTED,
+        ),
     );
     s.push(
         common,
@@ -107,7 +119,12 @@ fn via_stack<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg
         labelled(
             look,
             ids::PCB_PRIM_THERMAL_RELIEF,
-            fixed_checkbox(look, ids::PCB_PRIM_DIRECT, false, ids::PCB_PRIM_RELIEF_UNSUPPORTED),
+            fixed_checkbox(
+                look,
+                ids::PCB_PRIM_DIRECT,
+                false,
+                ids::PCB_PRIM_RELIEF_UNSUPPORTED,
+            ),
         ),
     );
     s.push(
@@ -126,8 +143,16 @@ fn via_stack<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg
             look,
             ids::PCB_PRIM_TOLERANCE,
             super::rows::pair(
-                fixed_value(look, UserText::new("+".to_string()), ids::PCB_PRIM_TOLERANCE_UNSUPPORTED),
-                fixed_value(look, UserText::new("−".to_string()), ids::PCB_PRIM_TOLERANCE_UNSUPPORTED),
+                fixed_value(
+                    look,
+                    UserText::new("+".to_string()),
+                    ids::PCB_PRIM_TOLERANCE_UNSUPPORTED,
+                ),
+                fixed_value(
+                    look,
+                    UserText::new("−".to_string()),
+                    ids::PCB_PRIM_TOLERANCE_UNSUPPORTED,
+                ),
             ),
         ),
     );
@@ -143,7 +168,11 @@ fn via_types<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg
         labelled(
             look,
             ids::PCB_PRIM_IPC_VIA_TYPE,
-            fixed_value(look, look.t(ids::PCB_PRIM_NONE), ids::PCB_PRIM_VIA_TYPE_UNSUPPORTED),
+            fixed_value(
+                look,
+                look.t(ids::PCB_PRIM_NONE),
+                ids::PCB_PRIM_VIA_TYPE_UNSUPPORTED,
+            ),
         ),
     );
     s.finish()

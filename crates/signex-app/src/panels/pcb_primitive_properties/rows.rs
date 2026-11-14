@@ -9,9 +9,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{CheckboxLabel as _, Label, button, checkbox, text, text_input, tooltip};
 
-use super::{
-    PcbPrimitiveMsg, PrimitiveCommon, PrimitiveField, SP, TS, format_number,
-};
+use super::{PcbPrimitiveMsg, PrimitiveCommon, PrimitiveField, SP, TS, format_number};
 use crate::panels::{PROPERTY_ROW_PAD_X, PanelContext, PanelMsg, form_look};
 use crate::styles::{ti, tokens::resolve};
 
@@ -223,7 +221,10 @@ pub(super) fn mm_field<'a>(
 }
 
 /// Two fields side by side, X then Y.
-pub(super) fn pair<'a>(a: Element<'a, PanelMsg>, b: Element<'a, PanelMsg>) -> Element<'a, PanelMsg> {
+pub(super) fn pair<'a>(
+    a: Element<'a, PanelMsg>,
+    b: Element<'a, PanelMsg>,
+) -> Element<'a, PanelMsg> {
     row![a, b].spacing(SP.s).boxed()
 }
 
@@ -342,26 +343,22 @@ pub(super) fn fixed_value<'a>(
     value: impl Into<Label<'a>>,
     tip: MessageId,
 ) -> Element<'a, PanelMsg> {
-    let boxed = container(
-        text(value)
-            .size(TS.body)
-            .color(resolve(look.tokens()).ink4),
-    )
-    .padding([SP.xs, SP.s])
-    .width(Length::Fill)
-    .style(|theme: &Theme| {
-        let (bg, line, radius) = form_look::value_box(theme);
-        container::Style {
-            background: Some(Background::Color(Color { a: 0.5, ..bg })),
-            border: Border {
-                width: 1.0,
-                radius: radius.into(),
-                color: line,
-                ..Border::default()
-            },
-            ..container::Style::default()
-        }
-    });
+    let boxed = container(text(value).size(TS.body).color(resolve(look.tokens()).ink4))
+        .padding([SP.xs, SP.s])
+        .width(Length::Fill)
+        .style(|theme: &Theme| {
+            let (bg, line, radius) = form_look::value_box(theme);
+            container::Style {
+                background: Some(Background::Color(Color { a: 0.5, ..bg })),
+                border: Border {
+                    width: 1.0,
+                    radius: radius.into(),
+                    color: line,
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            }
+        });
     with_tip(look, boxed.boxed(), tip)
 }
 
@@ -388,11 +385,23 @@ pub(super) fn mask_section<'a>(
     );
     if sides {
         for side in [ids::PCB_PRIM_TOP, ids::PCB_PRIM_BOTTOM] {
-            s.push(common, side, labelled(look, side, fixed_value(look, look.t(ids::PCB_PRIM_RULE), tip)));
+            s.push(
+                common,
+                side,
+                labelled(
+                    look,
+                    side,
+                    fixed_value(look, look.t(ids::PCB_PRIM_RULE), tip),
+                ),
+            );
             s.push(
                 common,
                 ids::PCB_PRIM_TENTED,
-                labelled(look, ids::PCB_PRIM_TENTED, fixed_checkbox(look, side, false, tip)),
+                labelled(
+                    look,
+                    ids::PCB_PRIM_TENTED,
+                    fixed_checkbox(look, side, false, tip),
+                ),
             );
         }
         s.push(
@@ -445,7 +454,11 @@ pub(super) fn template_rows<'a>(look: Look<'a>, common: &PrimitiveCommon, s: &mu
     s.push(
         common,
         ids::PCB_PRIM_TEMPLATE,
-        labelled(look, ids::PCB_PRIM_TEMPLATE, fixed_value(look, look.t(ids::PCB_PRIM_NONE), tip)),
+        labelled(
+            look,
+            ids::PCB_PRIM_TEMPLATE,
+            fixed_value(look, look.t(ids::PCB_PRIM_NONE), tip),
+        ),
     );
     s.push(
         common,
