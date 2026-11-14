@@ -6,9 +6,9 @@ use super::{PrefMsg, SP, TS};
 use crate::styles::{self, ti, tokens};
 use iced::widget::{Space, column, container, row};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
-use signex_i18n::{I18n, MessageId, ids, t};
+use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{raw, text, text_input};
+use signex_widgets::{text, text_input};
 
 /// Label and help of each fast-grid row, in field order.
 const ROWS: [(MessageId, MessageId); 2] = [
@@ -36,7 +36,7 @@ pub(super) fn fast_grid_rows<'a>(
     }
     if !status.is_empty() {
         rows = rows.push(
-            text(raw(status.to_string()))
+            text(UserText::new(status.to_string()))
                 .size(TS.caption)
                 .style(text_warning),
         );
@@ -79,7 +79,7 @@ fn mm_field<'a>(index: usize, draft: &'a str, t: &ThemeTokens) -> Element<'a, Pr
         .get(index)
         .map(|&mm| crate::canvas::grid::fast_grid_field_text(mm))
         .unwrap_or_default();
-    let input = text_input(raw(placeholder), draft)
+    let input = text_input(UserText::new(placeholder), draft)
         .on_input(move |typed| PrefMsg::DraftFastGrid(index, typed))
         .padding(Padding::ZERO)
         .size(TS.label)
