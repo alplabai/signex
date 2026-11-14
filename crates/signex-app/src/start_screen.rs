@@ -714,7 +714,7 @@ mod tests {
         assert_eq!(graphite::NAV_W, body * 19.5);
         assert!(!graphite::nav_collapsed(NARROWEST_FULL_NAV.width));
         assert!(graphite::nav_collapsed(NARROWEST_FULL_NAV.width - 1.0));
-        assert!(nav_strip::STRIP_W < graphite::NAV_W / 3.0);
+        const { assert!(nav_strip::STRIP_W < graphite::NAV_W / 3.0) };
 
         let tokens = graphite();
         let i18n = signex_i18n::I18n::en_us();
