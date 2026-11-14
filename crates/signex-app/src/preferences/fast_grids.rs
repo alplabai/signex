@@ -39,7 +39,7 @@ pub(super) fn fast_grid_rows<'a>(
             text(UserText::new(status.to_string()))
                 .size(TS.caption)
                 .style(text_warning)
-                .into(),
+                .boxed(),
         );
     }
     rows.boxed()
