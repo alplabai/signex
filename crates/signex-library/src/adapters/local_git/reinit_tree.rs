@@ -366,41 +366,62 @@ pub(super) fn record_in_index(
     repo: &git2::Repository,
     snapshot: &Snapshot,
 ) -> Result<(), LibraryError> {
-    let backend =
-        |what: &'static str| move |e: git2::Error| LibraryError::Backend(format!("{what}: {e}"));
-    let mut index = repo.index().map_err(backend("git index"))?;
-    for path in &snapshot.removed {
-        index
-            .remove_path(Path::new(path))
-            .map_err(backend("git index remove"))?;
-    }
+    // Hashing every file and installing the hook happen before the lock:
+    // a long hold reads as a stale lock to another waiting writer.
+    let entries = snapshot_entries(repo, snapshot)?;
+    retry_on_git_lock(repo.path(), || {
+        super::index_lock::update_index_locked(repo, |index| {
+            for path in &snapshot.removed {
+                index
+                    .remove_path(Path::new(path))
+                    .map_err(backend("git index remove"))?;
+            }
+            for (name, entry) in &entries {
+                super::index_lock::resolve_conflict(index, Path::new(name))
+                    .map_err(backend("git add"))?;
+                index.add(entry).map_err(backend("git add"))?;
+            }
+            Ok(())
+        })
+    })
+    .map_err(backend("git index write"))?
+}
+
+fn backend(what: &'static str) -> impl Fn(git2::Error) -> LibraryError {
+    move |e| LibraryError::Backend(format!("{what}: {e}"))
+}
+
+/// The index entries of the snapshot's files, as `add_path` makes them
+/// through the repository's own index (so its case and file-mode settings
+/// apply), carrying the blob the commit holds for a link or an LFS path.
+fn snapshot_entries<'s>(
+    repo: &git2::Repository,
+    snapshot: &'s Snapshot,
+) -> Result<Vec<(&'s str, git2::IndexEntry)>, LibraryError> {
+    let paths: Vec<&Path> = snapshot
+        .files
+        .iter()
+        .map(|(name, _, _)| Path::new(name))
+        .collect();
+    let staged = staged_entries(repo, &paths).map_err(backend("git add"))?;
+    let mut entries = Vec::with_capacity(snapshot.files.len());
     let mut lfs_paths = false;
-    for (name, id, mode) in &snapshot.files {
-        index
-            .add_path(Path::new(name))
-            .map_err(backend("git add"))?;
+    for ((name, id, mode), mut staged) in snapshot.files.iter().zip(staged) {
         // Where links are not real (`core.symlinks=false`), `add_path` reads a
         // link as a plain file; the index takes the link the commit holds.
-        if *mode == LINK_MODE
-            && let Some(mut staged) = index.get_path(Path::new(name), 0)
-            && (staged.mode != LINK_MODE || staged.id != *id)
-        {
+        if *mode == LINK_MODE && (staged.mode != LINK_MODE || staged.id != *id) {
             staged.mode = LINK_MODE;
             staged.id = *id;
-            index.add(&staged).map_err(backend("git add"))?;
         }
         // An LFS path is recorded as its pointer, as the commit holds it.
-        if lfs::is_lfs_path(repo, Path::new(name)).unwrap_or(false)
-            && let Some(mut staged) = index.get_path(Path::new(name), 0)
-        {
+        if lfs::is_lfs_path(repo, Path::new(name)).unwrap_or(false) {
             staged.id = *id;
-            index.add(&staged).map_err(backend("git add"))?;
             lfs_paths = true;
         }
+        entries.push((name.as_str(), staged));
     }
     if lfs_paths {
         lfs::install_pre_push_hook(repo).map_err(backend("git lfs hook"))?;
     }
-    index.write().map_err(backend("git index write"))?;
-    Ok(())
+    Ok(entries)
 }

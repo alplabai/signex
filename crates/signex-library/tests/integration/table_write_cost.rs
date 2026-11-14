@@ -371,8 +371,8 @@ fn project_repo() -> (tempfile::TempDir, LocalGitProjectAdapter) {
     (dir, project)
 }
 
-/// The index is re-read on every write attempt: a path another process
-/// staged while our save waited on its `index.lock` stays staged.
+/// The index is read only while the save holds `index.lock`: a path another
+/// process staged while our save waited on its lock stays staged (#2337).
 #[test]
 fn a_save_waiting_on_the_index_lock_keeps_what_the_holder_staged() {
     let (dir, project) = project_repo();
