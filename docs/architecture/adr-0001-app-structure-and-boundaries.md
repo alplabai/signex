@@ -110,6 +110,16 @@ Some rules in this section are still open decisions in epic #2326, and take effe
 | Parity costs every new command | Today a command with a headless form is handled twice: a GUI arm in `app/command/bridge.rs` (id → `Message`) and an operand handler in `app/command/operand_handlers.rs`. 20 of the 34 operand-handled ids have both. Every command also carries a `gui_only` flag that headless runs are fenced by (`headless_refusal`, also read by the agent allowlist `allow::refusal`), a required-operand check (`missing_headless_operand`) and, in the CLI, a status correction for dropped windows and refused dialogs (`honest_status`), plus golden rows in `catalog.golden.tsv` (240 commands), `tests/golden/commands.json` and, when bound, the three `builtin_profiles*.golden.tsv`. Under A4 a command is one catalog row (the golden rows stay) and one core handler, or one GUI-only table entry; `gui_only` goes in slice 6 and `honest_status` in slice 9, while the agent allowlist stays as policy.¹ | research note §12 |
 | IO runs on the update path | 156 production `std::fs::` call sites under `crates/signex-app/src/app`. In a sample of 15, about half run synchronously inside a `&mut self` handler (for example `canonicalize` in `handlers/document_identity.rs`, `load_sheet` in the Sync Sheet Pins menu action, the agent registry and journal). That half is a sample estimate. | research note §12 |
 
+**The cost of waiting.** The surface A4 has to move grows with every feature. Counted in `crates/signex-app/src` on the first-parent history of trunk:
+
+| Trunk on | `ui_state.` uses | `document_state.` uses | `spawn_blocking` / `run_blocking` sites |
+|---|---|---|---|
+| 2026-10-23 (`f901a48ab`) | 766 | 1022 | 34 |
+| 2026-11-04 (`8985a1c02`) | 2085 | 4029 | 148 |
+| 2026-11-15 (`fee721ea3`) | 2893 | 5507 | 179 |
+
+In 23 days the state accesses that move into the core grew almost fourfold and the background jobs that each become an `Effect` plus a `complete` grew fivefold. This is feature work, not a rename: the jump was spread over about 450 commits (the largest steps were the native macOS menu and dialog windows, +164 `ui_state.` uses, and the keymap rework, +75), while the `.rs` file count in `signex-app/src` went from 496 to 920. Not every access changes when its state moves, but each one is a site a slice has to read and review. Slices 0 and 1 cost the same now or later; slices 2, 3 and 5 get dearer every week. Reproduce: `git grep -h -o 'ui_state\.' <commit> -- crates/signex-app/src | wc -l` (and the same for `document_state\.` and `spawn_blocking|run_blocking`).
+
 ¹ Headless-parity work so far, some of which A4 reuses (#1934, #2172): #1926, #1927, #1929, #1931, #1932, #1934, #2170, #2172, #2243, and #2155 in part.
 
 **#2325 is a symptom, not the reason.** The Windows stack overflow sits on the CLI path, but boxing `Signex` or running the session on a thread with a bigger stack fixes it. It does not by itself justify A4.
