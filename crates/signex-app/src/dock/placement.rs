@@ -143,7 +143,6 @@ impl PanelPosition {
             PanelKind::Projects
             | PanelKind::Components
             | PanelKind::Library
-            | PanelKind::FootprintLayers
             | PanelKind::PcbNets
             | PanelKind::SignexAi => PanelPosition::Left,
             PanelKind::Erc | PanelKind::SymbolPins => PanelPosition::Bottom,
@@ -184,7 +183,7 @@ impl DockArea {
         match context {
             EditorContext::Footprint if self.editor_seeds.footprint => {
                 self.editor_seeds.footprint = false;
-                self.add_panel(PanelPosition::Left, PanelKind::FootprintLayers);
+                self.add_panel(PanelPosition::Left, PanelKind::Layers);
                 self.show_panel_at(PanelPosition::Left, PanelKind::FootprintLibrary);
             }
             EditorContext::Symbol if self.editor_seeds.symbol => {
@@ -362,7 +361,7 @@ mod tests {
         let mut dock = crate::dock::graphite_first_run();
         dock.seed_for_editor(EditorContext::Footprint);
         assert!(matches!(
-            dock.locate(PanelKind::FootprintLayers),
+            dock.locate(PanelKind::Layers),
             Some(crate::dock::PanelSite::Docked(PanelPosition::Left, _))
         ));
         dock.seed_for_editor(EditorContext::Symbol);
@@ -406,7 +405,7 @@ mod tests {
         assert!(!dock.is_collapsed(PanelPosition::Left));
         dock.seed_for_editor(EditorContext::Footprint);
         dock.seed_for_editor(EditorContext::Symbol);
-        assert!(dock.locate(PanelKind::FootprintLayers).is_none());
+        assert!(dock.locate(PanelKind::Layers).is_none());
         assert!(dock.locate(PanelKind::SymbolPins).is_none());
         assert!(dock.locate(PanelKind::SchLibrary).is_none());
     }

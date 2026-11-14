@@ -356,6 +356,10 @@ define_ids! {
         CMD_MENU_NEXT_LAYER = "cmd-menu-next-layer";
         CMD_PREV_LAYER = "cmd-prev-layer";
         CMD_MENU_PREV_LAYER = "cmd-menu-prev-layer";
+        CMD_NEXT_SIGNAL_LAYER = "cmd-next-signal-layer";
+        CMD_MENU_NEXT_SIGNAL_LAYER = "cmd-menu-next-signal-layer";
+        CMD_TOGGLE_SINGLE_LAYER_MODE = "cmd-toggle-single-layer-mode";
+        CMD_MENU_TOGGLE_SINGLE_LAYER_MODE = "cmd-menu-toggle-single-layer-mode";
         CMD_TOGGLE_LAYER_VISIBILITY = "cmd-toggle-layer-visibility";
         CMD_MENU_TOGGLE_LAYER_VISIBILITY = "cmd-menu-toggle-layer-visibility";
         CMD_SHOW_ALL_LAYERS = "cmd-show-all-layers";

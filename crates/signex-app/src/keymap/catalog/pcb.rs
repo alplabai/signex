@@ -81,6 +81,28 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2357: `*` steps through the signal layers only, `+` through every
+    // layer the board lists.
+    CommandMetadata {
+        id: "next_signal_layer",
+        category: "view",
+        label: command_ids::CMD_NEXT_SIGNAL_LAYER,
+        menu_label: Some(command_ids::CMD_MENU_NEXT_SIGNAL_LAYER),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "toggle_single_layer_mode",
+        category: "view",
+        label: command_ids::CMD_TOGGLE_SINGLE_LAYER_MODE,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_SINGLE_LAYER_MODE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "toggle_layer_visibility",
         category: "view",

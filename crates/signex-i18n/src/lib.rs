@@ -256,8 +256,15 @@ define_ids! {
     PCB_LAYERS_TITLE = "pcb-layers-title";
     PCB_LAYERS_EMPTY = "pcb-layers-empty";
     PCB_LAYERS_SHOW_ALL = "pcb-layers-show-all";
-    PCB_LAYERS_COPPER = "pcb-layers-copper";
-    PCB_LAYERS_TECHNICAL = "pcb-layers-technical";
+    PCB_LAYERS_SIGNAL = "pcb-layers-signal";
+    PCB_LAYERS_PLANE = "pcb-layers-plane";
+    PCB_LAYERS_OVERLAY = "pcb-layers-overlay";
+    PCB_LAYERS_MASK = "pcb-layers-mask";
+    PCB_LAYERS_DRILL = "pcb-layers-drill";
+    PCB_LAYERS_GROUP_SHOW_ALL = "pcb-layers-group-show-all";
+    PCB_LAYERS_GROUP_HIDE_ALL = "pcb-layers-group-hide-all";
+    PCB_LAYERS_SINGLE_LAYER = "pcb-layers-single-layer";
+    PCB_LAYERS_SINGLE_LAYER_TIP = "pcb-layers-single-layer-tip";
     PCB_LAYERS_MECHANICAL = "pcb-layers-mechanical";
     PCB_STATUS_LAYER = "pcb-status-layer";
     PCB_STATUS_VIEW_ANGLE = "pcb-status-view-angle";
@@ -831,7 +838,6 @@ define_ids! {
     PANELS_KIND_LIBRARY = "panels-kind-library";
     PANELS_KIND_SCH_LIBRARY = "panels-kind-sch-library";
     PANELS_KIND_FOOTPRINT_LIBRARY = "panels-kind-footprint-library";
-    PANELS_KIND_FOOTPRINT_LAYERS = "panels-kind-footprint-layers";
     PANELS_KIND_SYMBOL_PINS = "panels-kind-symbol-pins";
     PANELS_KIND_PCB_NETS = "panels-kind-pcb-nets";
     PANELS_KIND_LAYERS = "panels-kind-layers";

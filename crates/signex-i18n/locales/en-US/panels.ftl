@@ -196,8 +196,6 @@ panels-kind-library = Library
 # Schematic symbol library.
 panels-kind-sch-library = SCH Library
 panels-kind-footprint-library = Footprint Library
-# The footprint editor's layer list.
-panels-kind-footprint-layers = Layers
 # The symbol editor's pin table.
 panels-kind-symbol-pins = Pins
 # The board's net list.

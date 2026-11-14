@@ -1,4 +1,7 @@
 use super::*;
+use crate::pcb::{
+    LayerRow, board_copper_layers, board_layers, group_layers, layer_rows, signal_layers,
+};
 use crate::schematic::ViewRenderer;
 use crate::theme::ResolvedTheme;
 use signex_gfx::scene::{DirtyFlags, Scene};
@@ -99,18 +102,18 @@ fn dimmed_copper_is_emitted_fainter() {
 #[test]
 fn stepping_wraps_through_the_copper_layers() {
     let inner = CopperLayer::Inner(InnerCopper::new(1).unwrap());
-    let copper = [CopperLayer::Top, inner, CopperLayer::Bottom];
+    let copper = [TOP, PcbLayer::Copper(inner), BOTTOM];
     let mut view = PcbLayerView::default();
     view.step_active(&copper, true);
-    assert_eq!(view.active(), inner);
+    assert_eq!(view.active(), PcbLayer::Copper(inner));
     view.step_active(&copper, true);
     view.step_active(&copper, true);
-    assert_eq!(view.active(), CopperLayer::Top, "wraps forward");
+    assert_eq!(view.active(), TOP, "wraps forward");
     view.step_active(&copper, false);
-    assert_eq!(view.active(), CopperLayer::Bottom, "wraps back");
+    assert_eq!(view.active(), BOTTOM, "wraps back");
     view.set_active(inner);
-    view.step_active(&[CopperLayer::Top, CopperLayer::Bottom], true);
-    assert_eq!(view.active(), CopperLayer::Top, "a layer the board lacks");
+    view.step_active(&[TOP, BOTTOM], true);
+    assert_eq!(view.active(), TOP, "a layer the board lacks");
 }
 
 #[test]
@@ -127,21 +130,23 @@ fn a_name_this_build_does_not_know_cannot_be_hidden() {
 #[test]
 fn rows_list_the_boards_copper_every_technical_layer_and_named_mechanical_layers() {
     let rows = layer_rows(&board().layers);
-    let copper: Vec<_> = rows
-        .iter()
-        .filter(|r| r.group == LayerGroup::Copper)
-        .collect();
-    assert_eq!(copper.len(), 2);
-    assert_eq!(copper[0].layer, TOP);
-    assert!(copper.iter().all(|r| r.user_name.is_none()));
+    let in_group = |group| -> Vec<&LayerRow> { rows.iter().filter(|r| r.group == group).collect() };
+    let signal = in_group(LayerGroup::Signal);
+    assert_eq!(signal.len(), 2);
+    assert_eq!(signal[0].layer, TOP);
+    assert!(signal.iter().all(|r| r.user_name.is_none()));
+    assert!(
+        in_group(LayerGroup::Plane).is_empty(),
+        "no plane in the stackup"
+    );
     let technical = rows
         .iter()
-        .filter(|r| r.group == LayerGroup::Technical)
+        .filter(|r| matches!(r.layer, PcbLayer::Technical(_)))
         .count();
     assert_eq!(technical, TechnicalLayer::ALL.len());
-    let mechanical: Vec<_> = rows
-        .iter()
-        .filter(|r| r.group == LayerGroup::Mechanical)
+    let mechanical: Vec<_> = in_group(LayerGroup::Mechanical)
+        .into_iter()
+        .filter(|r| matches!(r.layer, PcbLayer::Mechanical(_)))
         .collect();
     assert_eq!(mechanical.len(), 1);
     assert_eq!(mechanical[0].user_name.as_deref(), Some("Assembly notes"));
@@ -154,6 +159,134 @@ fn rows_list_the_boards_copper_every_technical_layer_and_named_mechanical_layers
         board_copper_layers(&[]),
         vec![CopperLayer::Top, CopperLayer::Bottom]
     );
+}
+
+/// #2359: the panel groups the technical layers as overlay, mask, drill
+/// and mechanical (the board outline among them); a plane in the stackup
+/// lists under Plane and is not a signal layer.
+#[test]
+fn technical_layers_and_planes_fall_in_their_groups() {
+    let group_of = |rows: &[LayerRow], layer: PcbLayer| {
+        rows.iter().find(|r| r.layer == layer).map(|r| r.group)
+    };
+    let rows = layer_rows(&board().layers);
+    let tech = |t| PcbLayer::Technical(t);
+    for (layer, group) in [
+        (tech(TechnicalLayer::SilkscreenTop), LayerGroup::Overlay),
+        (tech(TechnicalLayer::SolderMaskBottom), LayerGroup::Mask),
+        (tech(TechnicalLayer::PasteTop), LayerGroup::Mask),
+        (tech(TechnicalLayer::DrillDrawing), LayerGroup::Drill),
+        (BOARD_OUTLINE, LayerGroup::Mechanical),
+    ] {
+        assert_eq!(group_of(&rows, layer), Some(group), "{layer:?}");
+    }
+
+    let mut layers = board().layers;
+    layers.insert(
+        1,
+        LayerDef {
+            id: 1,
+            name: "Inner1Copper".to_owned(),
+            layer_type: "plane".to_owned(),
+            display_name: String::new(),
+        },
+    );
+    let inner = PcbLayer::Copper(CopperLayer::Inner(InnerCopper::new(1).unwrap()));
+    assert_eq!(
+        group_of(&layer_rows(&layers), inner),
+        Some(LayerGroup::Plane)
+    );
+    assert_eq!(signal_layers(&layers), vec![TOP, BOTTOM]);
+    assert_eq!(group_layers(&layers, LayerGroup::Signal), vec![TOP, BOTTOM]);
+}
+
+/// #2357: the strip and `+`/`-` follow the board's own layer list; a board
+/// that lists no copper still has Top and Bottom.
+#[test]
+fn board_layers_keep_the_boards_order() {
+    let mechanical = PcbLayer::Mechanical(MechanicalLayer::new(3).unwrap());
+    assert_eq!(board_layers(&board().layers), vec![TOP, BOTTOM, mechanical]);
+    let only_overlay = [LayerDef {
+        id: 0,
+        name: "TopSilkscreen".to_owned(),
+        layer_type: String::new(),
+        display_name: String::new(),
+    }];
+    assert_eq!(
+        board_layers(&only_overlay),
+        vec![
+            TOP,
+            BOTTOM,
+            PcbLayer::Technical(TechnicalLayer::SilkscreenTop)
+        ]
+    );
+}
+
+/// #2357: a non-copper active layer (a tab like Top Overlay) dims no copper;
+/// stepping walks every listed layer, hidden ones skipped.
+#[test]
+fn an_overlay_can_be_the_active_layer() {
+    let board = board();
+    let overlay = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+    let mut view = PcbLayerView::default();
+    view.set_active(overlay);
+    assert_eq!(view.shown_active(), Some(overlay));
+    assert_eq!(view.active_copper(), None);
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &view);
+    assert!(
+        snapshot.traces.iter().all(|t| !t.dimmed),
+        "no copper dimmed"
+    );
+
+    let layers = [TOP, overlay, BOTTOM];
+    view.set_active(TOP);
+    view.step_active(&layers, true);
+    assert_eq!(view.active(), overlay);
+    view.toggle_visibility(overlay);
+    view.set_active(TOP);
+    view.step_active(&layers, true);
+    assert_eq!(view.active(), BOTTOM, "the hidden overlay is skipped");
+}
+
+/// #2357/#2359: single-layer mode draws the active layer alone, with the
+/// board outline and the vias that reach it; the eyes keep their state.
+#[test]
+fn single_layer_mode_draws_only_the_active_layer() {
+    let board = board();
+    let mut view = PcbLayerView::default();
+    view.toggle_single_layer();
+    assert!(view.single_layer());
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &view);
+    let nets: Vec<u32> = snapshot.traces.iter().map(|t| t.net).collect();
+    assert_eq!(nets, vec![3, 1], "the unknown layer's trace and Top's");
+    assert_eq!(snapshot.vias.len(), 1, "the via reaches Top");
+    assert!(view.is_visible(BOARD_OUTLINE));
+    assert!(!view.is_visible(BOTTOM));
+    assert!(!view.is_hidden(BOTTOM), "the eye is not touched");
+
+    view.set_active(PcbLayer::Technical(TechnicalLayer::SilkscreenTop));
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &view);
+    assert_eq!(snapshot.traces.len(), 1, "no copper but the unknown layer");
+    assert!(snapshot.vias.is_empty(), "a via reaches no overlay");
+
+    view.toggle_single_layer();
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &view);
+    assert_eq!(snapshot.traces.len(), 3, "off again, everything is drawn");
+}
+
+/// #2359: a group's show/hide all; the Drill group carries the vias.
+#[test]
+fn a_group_hides_and_shows_as_one() {
+    let board = board();
+    let mut view = PcbLayerView::default();
+    view.set_group_visible(&board.layers, LayerGroup::Signal, false);
+    assert!(view.is_hidden(TOP) && view.is_hidden(BOTTOM));
+    assert!(!view.is_hidden(BOARD_OUTLINE), "another group is untouched");
+    view.set_group_visible(&board.layers, LayerGroup::Drill, false);
+    assert!(!view.multi_layer_visible());
+    view.set_group_visible(&board.layers, LayerGroup::Signal, true);
+    view.set_group_visible(&board.layers, LayerGroup::Drill, true);
+    assert!(!view.has_hidden());
 }
 
 fn smd_pad_board() -> PcbBoard {
@@ -206,11 +339,14 @@ fn a_mask_and_paste_pad_follows_its_copper_layer() {
 #[test]
 fn a_hidden_active_layer_moves_on_or_lifts_the_dimming() {
     let board = board();
-    let copper = board_copper_layers(&board.layers);
+    let copper: Vec<PcbLayer> = board_copper_layers(&board.layers)
+        .into_iter()
+        .map(PcbLayer::Copper)
+        .collect();
     let mut view = PcbLayerView::default();
     view.toggle_visibility(TOP);
     view.settle_active(&copper);
-    assert_eq!(view.active(), CopperLayer::Bottom);
+    assert_eq!(view.active(), BOTTOM);
     let snapshot = PcbSnapshot::from_board_with_view(&board, &view);
     assert!(
         snapshot.traces.iter().all(|t| !t.dimmed),
@@ -230,20 +366,16 @@ fn a_hidden_active_layer_moves_on_or_lifts_the_dimming() {
 #[test]
 fn stepping_skips_hidden_layers() {
     let inner = CopperLayer::Inner(InnerCopper::new(1).unwrap());
-    let copper = [CopperLayer::Top, inner, CopperLayer::Bottom];
+    let copper = [TOP, PcbLayer::Copper(inner), BOTTOM];
     let mut view = PcbLayerView::default();
     view.toggle_visibility(PcbLayer::Copper(inner));
     view.step_active(&copper, true);
-    assert_eq!(view.active(), CopperLayer::Bottom);
+    assert_eq!(view.active(), BOTTOM);
     view.step_active(&copper, false);
-    assert_eq!(view.active(), CopperLayer::Top);
+    assert_eq!(view.active(), TOP);
     view.toggle_visibility(BOTTOM);
     view.step_active(&copper, true);
-    assert_eq!(
-        view.active(),
-        CopperLayer::Top,
-        "the only shown layer stays"
-    );
+    assert_eq!(view.active(), TOP, "the only shown layer stays");
 }
 
 /// Review #2233: a through via listed as Top and Bottom passes through an
