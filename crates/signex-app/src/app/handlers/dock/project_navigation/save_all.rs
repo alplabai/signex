@@ -308,10 +308,6 @@ impl Signex {
                 .insert(settle.batch, settle);
             return Task::none();
         }
-        // No row of the batch is in flight, so no report of it can follow.
-        self.document_state
-            .stopped_save_all_batches
-            .remove(&settle.batch);
         let SaveAllSettle {
             next,
             items,
@@ -443,9 +439,6 @@ impl Signex {
                 }
                 SaveAllWrite::Row(address) => {
                     self.stop_row_write(&address, settle.batch);
-                    self.document_state
-                        .stopped_save_all_batches
-                        .insert(settle.batch);
                     settle.failed.push((
                         self.library.editor_label(&address),
                         WRITE_STOPPED_REASON.to_string(),
@@ -457,7 +450,8 @@ impl Signex {
     }
 
     /// The stopped write of `path` is released: run what its completion would
-    /// have, the project save asked for meanwhile, or the warning for the
+    /// have, the project save asked for meanwhile, or, for a sheet or board,
+    /// the dirty marker re-read from its history and the warning for the
     /// spellings it superseded.
     fn drain_released_write(&mut self, path: &std::path::Path) -> Task<Message> {
         if let Some(DocumentKey::Project(project_id)) =
@@ -465,6 +459,9 @@ impl Signex {
         {
             return self.start_project_follow_up(project_id, path);
         }
+        // The file is unchanged, so an Undo back to the save point that the
+        // write was holding dirty may now read clean.
+        self.document_state.sync_history_dirty(path);
         self.warn_unwritten_spellings(path);
         Task::none()
     }

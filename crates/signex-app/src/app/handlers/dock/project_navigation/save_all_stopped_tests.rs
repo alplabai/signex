@@ -97,7 +97,10 @@ fn a_write_that_panics_next_to_a_primitive_save_leaves_both_files_saveable() {
     let saves = &app.document_state.document_saves;
     assert!(!saves.is_saving(&symbol), "the symbol's write reported");
     assert!(!saves.is_saving(&sheet), "the stopped write is released");
-    assert!(app.document_state.is_document_dirty(&sheet));
+    assert!(
+        app.document_state.is_document_dirty(&sheet),
+        "the sheet's history is not at a save point, so it stays dirty"
+    );
 
     rename_symbol(&mut app, &symbol, "Sym2");
     let task = app.save_primitive_tab_at(&symbol).expect("save starts");
@@ -187,10 +190,6 @@ fn a_stopped_row_write_leaves_the_batch_rows_still_writing_alone() {
             .contains_key(&batch),
         "the settle waits for the running row"
     );
-    assert!(
-        app.document_state.stopped_save_all_batches.contains(&batch),
-        "a parked batch is kept until its settle finishes"
-    );
     let parked = &app.document_state.parked_save_all_settles[&batch];
     assert!(
         parked
@@ -247,4 +246,33 @@ fn a_project_save_queued_behind_a_stopped_save_all_write_still_runs() {
     assert!(!app.document_state.document_saves.is_saving(&prj));
     let on_disk = signex_types::project::parse_project(&prj).expect("project on disk");
     assert_eq!(on_disk.description.as_deref(), Some("typed meanwhile"));
+}
+
+/// The sheet's history was back at its save point (an Undo while its write
+/// ran) and the running write held it dirty. Once the stopped write is
+/// released the marker is re-read from the history, as after a failed
+/// write, and the sheet reads clean.
+#[test]
+fn a_stopped_sheet_write_rereads_the_dirty_marker_from_the_history() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _symbol, sheet) = app_with_open_symbol(dir.path());
+    app.document_state
+        .engines
+        .get_mut(&sheet)
+        .expect("engine")
+        .mark_saved();
+    assert!(app.document_state.is_document_dirty(&sheet));
+
+    drop(quit_save_all_stopping(
+        &mut app,
+        std::slice::from_ref(&sheet),
+        &sheet,
+    ));
+
+    assert!(!app.document_state.document_saves.is_saving(&sheet));
+    assert!(
+        !app.document_state.is_document_dirty(&sheet),
+        "back at the save point with nothing written"
+    );
 }

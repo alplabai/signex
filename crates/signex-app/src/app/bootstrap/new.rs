@@ -501,7 +501,6 @@ impl Signex {
                 search_prefs,
                 document_saves: crate::persist::DocumentSaves::default(),
                 parked_save_all_settles: Default::default(),
-                stopped_save_all_batches: Default::default(),
                 document_ids: Default::default(),
                 autosave: crate::autosave::AutosaveState::new(
                     crate::autosave::default_recovery_dir(),

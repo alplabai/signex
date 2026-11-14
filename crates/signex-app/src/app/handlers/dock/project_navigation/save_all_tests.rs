@@ -787,10 +787,6 @@ fn a_quit_save_all_whose_write_panics_declines_the_quit() {
     crate::task_driver::assert_quit_declined(after);
     assert!(!app.library.batch_has_rows_in_flight(batch));
     assert!(app.document_state.parked_save_all_settles.is_empty());
-    assert!(
-        !app.document_state.stopped_save_all_batches.contains(&batch),
-        "the batch is forgotten once it settled"
-    );
     let notice = format!("{:?}", app.document_state.error_notice.as_ref());
     assert!(
         notice.contains("Sheet.snxsch")

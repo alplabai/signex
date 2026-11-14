@@ -359,26 +359,15 @@ impl Signex {
         match batch {
             // A Save All is waiting on this row: its settle step
             // reports the failure and keeps the window / library open.
-            Some(batch) if self.save_all_awaits_rows(batch) => {
+            Some(batch) => {
                 let label = self.library.editor_label(address);
                 crate::diagnostics::log_error(&format!("Save All: could not save {label}"), e);
                 self.library
                     .batch_row_failures
                     .insert((batch, address.clone()), (label, format!("{e:#}")));
             }
-            // No settle will read it: nothing waits, or the Save All already
-            // settled after one of its writes stopped (#2269).
-            Some(_) | None => self.report_save_row_failure(e),
+            None => self.report_save_row_failure(e),
         }
-    }
-
-    /// Whether a Save All settle can still read `batch`'s row failures: it
-    /// has not run yet, or it is parked waiting for rows. A batch with a
-    /// stopped write that was not parked has settled already (#2269).
-    fn save_all_awaits_rows(&self, batch: u64) -> bool {
-        let document = &self.document_state;
-        !document.stopped_save_all_batches.contains(&batch)
-            || document.parked_save_all_settles.contains_key(&batch)
     }
 
     /// Run the Save All settle parked for `batch` once none of its rows has
