@@ -8,7 +8,7 @@ use super::{BoardCommand, BoardCommandError, BoardEngine};
 fn board(setup: bool) -> PcbBoard {
     let mut board: PcbBoard =
         serde_json::from_value(serde_json::json!({ "uuid": Uuid::nil() })).unwrap();
-    board.setup = setup.then(|| PcbSetup {
+    board.setup = setup.then_some(PcbSetup {
         grid_size: 1.27,
         trace_width: 0.25,
         via_diameter: 0.6,
