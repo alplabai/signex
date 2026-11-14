@@ -28,3 +28,11 @@ board-sketch-hole-drill = Drill (empty: circle diameter)
 board-sketch-hole-plated = Plated
 board-sketch-hole-net = Net
 board-sketch-roles-hint = Keepouts and cutouts are set with Role above.
+# Rows of the Board section when nothing is selected (#2356): the board's
+# name and its outline. The size rows reuse the board Properties strings.
+board-sketch-name = Name
+board-sketch-area = Area
+# Area the outline encloses; $area is a square-millimetre number.
+board-sketch-area-value = { $area } mm²
+board-sketch-entities = Sketch entities
+board-sketch-constraints = Constraints

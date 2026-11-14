@@ -27,6 +27,7 @@
 
 mod background;
 mod board_backdrop;
+mod cursor_ink;
 mod ghosts;
 mod graphite;
 mod grid;
