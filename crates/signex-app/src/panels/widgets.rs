@@ -284,9 +284,13 @@ mod label_tests {
     /// gives its extra width to the field, not the label.
     #[test]
     fn property_labels_take_the_fixed_column() {
-        let label: Element<'_, ()> = property_label("Designator", Color::BLACK);
-        let size = label.as_widget().size();
-        assert_eq!(size.width, Length::Fixed(PROPERTY_LABEL_WIDTH));
-        assert_eq!(size.width, PROPERTY_LABEL_COLUMN);
+        for window_w in [400.0, 1600.0] {
+            let label: Element<'_, ()> = property_label("Designator", Color::BLACK);
+            let size = crate::layout_probe::root_size(label, iced::Size::new(window_w, 100.0));
+            assert_eq!(
+                size.width, PROPERTY_LABEL_WIDTH,
+                "in a {window_w} px window"
+            );
+        }
     }
 }
