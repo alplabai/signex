@@ -160,7 +160,14 @@ pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
 /// (#2240): the menu greys it, but its keystroke still reaches the handler,
 /// which says which footprint is locked instead of doing nothing silently.
 pub(crate) fn explains_refusal_in(command: &AppCommandId, ctx: &CommandContext) -> bool {
-    ctx.pcb.shown && ctx.pcb.any && super::needs::is_placement_command(command)
+    let pastes = matches!(
+        super::needs::needs(command),
+        Some(super::needs::Needs::PasteTarget)
+    );
+    ctx.pcb.shown
+        && ((ctx.pcb.any && super::needs::is_placement_command(command))
+            // A paste with no board objects on the clipboard says why (#2361).
+            || pastes)
 }
 
 /// An Active Bar command whose tool is a planned placeholder (#1249). It is

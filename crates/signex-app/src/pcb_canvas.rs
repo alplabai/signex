@@ -21,7 +21,7 @@ mod select;
 mod tessellate;
 
 pub use camera::BoardCamera;
-pub use carry::{CarryKind, PcbCarry, carry_delta};
+pub use carry::{CarryKind, PasteLoad, PcbCarry, carry_delta};
 pub use content::BoardContentLayer;
 pub use highlight::{Highlight, HighlightLayer};
 pub use msg::PcbCanvasMsg;

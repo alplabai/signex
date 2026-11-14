@@ -48,12 +48,15 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
             // Turned, so Reset View Rotation is live (#2316).
             pcb_view_turned: true,
             has_document: true,
-            // An unlocked footprint selected, so the board's rows are live.
+            // An unlocked footprint selected and a board copy on the
+            // clipboard, so the board's rows are live.
             pcb: crate::app::command::enablement::PcbTargets {
                 shown: true,
                 any: true,
                 placeable: true,
                 deletable: true,
+                copyable: true,
+                pasteable: true,
             },
             ..base
         }),

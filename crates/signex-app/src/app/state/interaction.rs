@@ -72,6 +72,9 @@ pub struct InteractionState {
     /// that reads the same text keeps `clipboard` as it is instead of
     /// parsing it back (which would re-anchor it to the current grid).
     pub clipboard_text: Option<String>,
+    /// The last Copy or Cut on a board (#2361). One clipboard serves sheets
+    /// and boards: a copy on one clears the other, so at most one is set.
+    pub pcb_clipboard: Option<signex_engine::pcb::BoardClipboard>,
     pub draw_mode: DrawMode,
     pub editing_text: Option<TextEditState>,
     pub context_menu: Option<ContextMenuState>,

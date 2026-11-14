@@ -17,7 +17,17 @@ pub(crate) enum Needs {
     Document,
     Undo,
     Redo,
-    Selection,
+    /// Copy and Duplicate: a board selection Copy carries, or a selection on
+    /// a sheet (#2361).
+    CopyTarget,
+    /// Cut: a board selection with no locked footprint, or a selection on a
+    /// sheet.
+    CutTarget,
+    /// Paste and Paste Special: board objects on the clipboard on a board,
+    /// a sheet otherwise.
+    PasteTarget,
+    /// Select All: a sheet or a board.
+    SelectAllTarget,
     DrawingSelection,
     SelectedObject,
     Schematic,
@@ -69,7 +79,13 @@ impl Needs {
             Self::Document => ctx.has_document,
             Self::Undo => ctx.can_undo,
             Self::Redo => ctx.can_redo,
-            Self::Selection => ctx.has_selection,
+            Self::CopyTarget if ctx.pcb.shown => ctx.pcb.copyable,
+            Self::CopyTarget => ctx.has_selection,
+            Self::CutTarget if ctx.pcb.shown => ctx.pcb.deletable,
+            Self::CutTarget => ctx.has_selection,
+            Self::PasteTarget if ctx.pcb.shown => ctx.pcb.pasteable,
+            Self::PasteTarget => ctx.has_schematic,
+            Self::SelectAllTarget => ctx.has_schematic || ctx.pcb.shown,
             // Arrange acts on drawings only; a selection of circuit elements
             // leaves it nothing to do (#1583).
             Self::DrawingSelection => ctx.has_schematic && ctx.has_drawing_selection,
@@ -148,7 +164,12 @@ impl Needs {
             Self::Document => "No document is open",
             Self::Undo => "Nothing to undo",
             Self::Redo => "Nothing to redo",
-            Self::Selection => "Nothing is selected",
+            Self::CopyTarget => "Nothing is selected to copy",
+            Self::CutTarget => "Nothing is selected to cut, or a selected footprint is locked",
+            Self::PasteTarget => {
+                "Nothing to paste here: no schematic is open, or the clipboard holds no board objects"
+            }
+            Self::SelectAllTarget => "No schematic or PCB is open",
             Self::DrawingSelection => "No drawing is selected",
             Self::SelectedObject => "No object is selected",
             Self::Schematic => "No schematic is open",
@@ -184,7 +205,13 @@ impl Needs {
 pub(crate) fn is_placement_command(command: &AppCommandId) -> bool {
     matches!(
         needs(command),
-        Some(Needs::Turn | Needs::MoveSelection | Needs::PcbPlacement | Needs::DeleteTarget)
+        Some(
+            Needs::Turn
+                | Needs::MoveSelection
+                | Needs::PcbPlacement
+                | Needs::DeleteTarget
+                | Needs::CutTarget
+        )
     )
 }
 
@@ -201,7 +228,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "close_active_document" | "close_all_documents" => Needs::Document,
         "undo" => Needs::Undo,
         "redo" => Needs::Redo,
-        "cut" | "copy" | "duplicate" => Needs::Selection,
+        "copy" | "duplicate" => Needs::CopyTarget,
+        "cut" => Needs::CutTarget,
+        "paste" | "smart_paste" | "paste_special" => Needs::PasteTarget,
+        "select_all" => Needs::SelectAllTarget,
         "bring_drawings_to_front"
         | "send_drawings_to_back"
         | "bring_drawings_forward"
@@ -224,13 +254,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "move_object" => Needs::MoveObject,
         "flip_selection" => Needs::PcbPlacement,
         "remove_last_vertex" => Needs::VertexTarget,
-        "paste"
-        | "smart_paste"
-        | "paste_special"
-        | "paste_array"
+        "paste_array"
         | "repeat_last_item"
         | "rubber_stamp_copy"
-        | "select_all"
         | "place_wire"
         | "draw_wire"
         | "place_bus"

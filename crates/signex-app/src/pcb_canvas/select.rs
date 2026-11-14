@@ -172,6 +172,30 @@ impl PcbSelectionState {
         }
     }
 
+    /// Select All (#2361): every footprint, track and via the view lets be
+    /// picked. A pad comes with its footprint and is selected alone only
+    /// when its footprint's body cannot be picked. Whether the selection
+    /// changed.
+    pub fn select_all(&mut self, board: &PcbBoard) -> bool {
+        self.ensure_index(board);
+        let Some(index) = &self.index else {
+            return false;
+        };
+        let bodies: HashSet<Uuid> = index
+            .items()
+            .filter_map(|i| match i.item {
+                ItemRef::Footprint(id) => Some(id),
+                _ => None,
+            })
+            .collect();
+        let all: Vec<ItemRef> = index
+            .items()
+            .map(|i| i.item)
+            .filter(|item| !matches!(item, ItemRef::Pad { footprint, .. } if bodies.contains(footprint)))
+            .collect();
+        self.selection.apply_marquee(&all, ClickMode::Replace)
+    }
+
     /// The copper to paint for the selection and the hover. A selected
     /// footprint paints its body outline and all its pads.
     pub fn highlight(&mut self, board: &PcbBoard) -> Highlight {
@@ -224,8 +248,9 @@ impl PcbSelectionState {
         carry: Option<&super::PcbCarry>,
     ) -> (Highlight, Vec<pcb_geom::Shape>) {
         let mut highlight = self.highlight(board);
-        let moving = carry.is_some_and(|c| c.kind == super::CarryKind::Move);
-        let grab = if moving {
+        // A Move or a paste waits for clicks: nothing is grabbed.
+        let waiting = carry.is_some_and(|c| c.kind != super::CarryKind::Drag);
+        let grab = if waiting {
             Vec::new()
         } else {
             let selected = self.selection.footprints();
@@ -234,8 +259,11 @@ impl PcbSelectionState {
         if let Some(carry) = carry.filter(|c| c.anchor.is_some())
             && let Ok(by) = PointNm::from_mm(carry.delta, "carry")
         {
-            highlight.ghost = self
-                .footprint_shapes(board, &carry.footprints)
+            let shapes = match &carry.paste {
+                Some(load) => load.ghost.clone(),
+                None => self.footprint_shapes(board, &carry.footprints),
+            };
+            highlight.ghost = shapes
                 .into_iter()
                 .map(|shape| shape.translated(by))
                 .collect();

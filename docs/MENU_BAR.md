@@ -438,6 +438,24 @@ and vias that end on a moved, rotated, flipped or deleted footprint stay
 where they are. Flip Selection has no default key and
 is greyed outside a board.
 
+## Edit clipboard on a board {#edit-clipboard-board}
+
+On a PCB tab (#2361) Cut, Copy, Paste, Paste Special, Duplicate and Select
+All act on the board, from the Edit menu, their keys and the board's
+right-click menu. Copy and Duplicate are live with footprints, tracks or vias
+selected; Cut also needs no selected footprint to be locked. Paste and Paste
+Special are live once board objects were copied. Select All is live on any
+board and selects every footprint, track and via on a shown layer.
+
+Paste puts the copy on the pointer, on the board grid, and a click places it;
+Esc or a right-click drops it. Paste Special and Duplicate place the copy at
+once, shifted from where it was copied. Each edit is one undo step, and the
+placed copy is selected. A pasted footprint whose designator is taken gets
+one by the paste designator preference, as on a sheet; a pasted pad, track or
+via keeps its net only when the board has a net of that name. One clipboard
+serves sheets and boards: a copy on one replaces the other's, and pasting
+the other kind does nothing and says why in the Messages panel.
+
 ## View: board view {#view-board}
 
 Five View rows act on the board in view and are greyed without one (#2223):

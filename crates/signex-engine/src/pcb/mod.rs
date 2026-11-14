@@ -11,6 +11,7 @@
 
 mod batch;
 mod board_sketch;
+mod clipboard;
 mod command;
 pub mod designators;
 pub mod eco;
@@ -33,6 +34,7 @@ mod pad_shape_tests;
 mod tests;
 
 pub use batch::BatchRefusal;
+pub use clipboard::BoardClipboard;
 pub use command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
 pub use engine::BoardEngine;
 pub use error::BoardCommandError;
