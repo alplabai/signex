@@ -6,12 +6,8 @@
 //! in `docs/RENDERING_RULES.md`, "sch-pan-reuse".
 
 use super::super::*;
-use crate::schematic_runtime::{ScreenTransform, pan_reach};
-
-/// Tolerance, in device pixels, for a pan to count as a whole number of them.
-/// Widened to the f32 resolution of the offsets when they are large (a sheet
-/// zoomed far in), where 1e-3 is below one step of the camera.
-const WHOLE_PX_TOLERANCE: f64 = 1e-3;
+use crate::canvas::pan_reuse::{clip_margin, clip_rect, whole_pixel_shift};
+use crate::schematic_runtime::ScreenTransform;
 
 /// What the retained geometry was built from.
 #[derive(Clone, Copy)]
@@ -59,40 +55,13 @@ impl RetainedContent {
         {
             return None;
         }
-        let reach = clip_margin(viewport, dpr);
-        let axis = |from: f32, to: f32, limit: f32| {
-            // Exact: the difference of two f32 fits an f64.
-            let moved = (f64::from(to) - f64::from(from)) * f64::from(dpr);
-            let whole = moved.round();
-            let step = f64::from(f32::EPSILON) * f64::from(to.abs().max(from.abs()));
-            let tolerance = WHOLE_PX_TOLERANCE.max(2.0 * step * f64::from(dpr));
-            let shift = (whole / f64::from(dpr)) as f32;
-            ((moved - whole).abs() < tolerance && shift.abs() <= limit).then_some(shift)
-        };
-        Some(iced::Vector::new(
-            axis(built.offset.0, live.offset_x, reach.x)?,
-            axis(built.offset.1, live.offset_y, reach.y)?,
-        ))
+        whole_pixel_shift(
+            built.offset,
+            (live.offset_x, live.offset_y),
+            dpr,
+            clip_margin(viewport, dpr),
+        )
     }
-}
-
-/// How far the clip rectangle reaches past the viewport on each side: the
-/// pan reach cut down to whole device pixels.
-fn clip_margin(viewport: iced::Size, device_px_per_logical_px: f32) -> iced::Vector {
-    let reach = pan_reach(viewport);
-    let whole = |v: f32| (v * device_px_per_logical_px).floor() / device_px_per_logical_px;
-    iced::Vector::new(whole(reach.x), whole(reach.y))
-}
-
-fn clip_rect(viewport: iced::Size, device_px_per_logical_px: f32) -> Rectangle {
-    let margin = clip_margin(viewport, device_px_per_logical_px);
-    Rectangle::new(
-        iced::Point::new(-margin.x, -margin.y),
-        iced::Size::new(
-            viewport.width + 2.0 * margin.x,
-            viewport.height + 2.0 * margin.y,
-        ),
-    )
 }
 
 /// The retained layer and the translation to draw it under.

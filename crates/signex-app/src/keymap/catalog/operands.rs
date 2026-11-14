@@ -320,6 +320,12 @@ pub const CHECK_ERC: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("baseline", OperandKind::Text),
 ];
+/// `check_drc` (#2199): DRC on the named board, answered as a check report;
+/// `baseline` is an earlier answer's `run` on the same board.
+pub const CHECK_DRC: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("baseline", OperandKind::Text),
+];
 /// Put a net, by its name in the project netlist, in a class of the project
 /// the named sheet belongs to; no `class` takes it out of its listed class.
 pub const ASSIGN_NET_CLASS: &[Operand] = &[

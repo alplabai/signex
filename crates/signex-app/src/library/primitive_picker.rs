@@ -23,6 +23,7 @@
 
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Border, Element, Length, Theme, Widget};
+use signex_i18n::{ids, t};
 use signex_library::{PrimitiveKind, PrimitiveRef, PrimitiveSummary};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -346,7 +347,7 @@ pub fn view<'a>(
     .padding([6, 0])
     .height(Length::Fill);
 
-    let confirm_row = copy_confirm_row(state, picker, tokens);
+    let confirm_row = copy_confirm_row(state, picker, tokens, i18n);
     let error_row: Element<'_, LibraryMessage> = if let Some(err) = picker.error.as_ref() {
         container(
             text(raw(err.clone()))
@@ -361,12 +362,12 @@ pub fn view<'a>(
 
     let footer = footer_strip(
         vec![secondary_btn(
-            "Browse filesystem…",
+            t!(i18n, ids::LIBRARY_PRIMITIVE_PICKER_BROWSE),
             LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Browse),
             tokens,
         )],
         vec![cancel_btn(
-            "Cancel",
+            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
             LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Cancel),
             tokens,
         )],
@@ -401,6 +402,7 @@ fn copy_confirm_row<'a>(
     state: &'a LibraryState,
     picker: &'a PrimitivePickerState,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, LibraryMessage> {
     let Some(symbol) = picker.copy_confirm.as_ref() else {
         return Space::new().height(0).boxed();
@@ -425,7 +427,7 @@ fn copy_confirm_row<'a>(
         row![
             text(raw("Opening library…")).size(TS.body),
             cancel_btn(
-                "Cancel",
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyDeclined),
                 tokens,
             ),
@@ -436,12 +438,12 @@ fn copy_confirm_row<'a>(
     } else if symbol.library.is_some() {
         row![
             primary_btn(
-                "Open library",
+                t!(i18n, ids::LIBRARY_PRIMITIVE_PICKER_OPEN_LIBRARY),
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::OpenLibraryConfirmed),
                 tokens,
             ),
             cancel_btn(
-                "Cancel",
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyDeclined),
                 tokens,
             ),
@@ -453,12 +455,12 @@ fn copy_confirm_row<'a>(
     } else {
         row![
             primary_btn(
-                "Copy",
+                t!(i18n, ids::DIALOG_BUTTON_COPY),
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyConfirmed),
                 tokens,
             ),
             secondary_btn(
-                "Don't copy",
+                t!(i18n, ids::LIBRARY_PRIMITIVE_PICKER_DONT_COPY),
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyDeclined),
                 tokens,
             ),

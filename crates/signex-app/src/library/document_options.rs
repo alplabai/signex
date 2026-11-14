@@ -11,6 +11,7 @@
 
 use iced::widget::{column, container, pick_list, row};
 use iced::{Element, Length, Widget};
+use signex_i18n::{ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{button, raw, text};
@@ -26,6 +27,7 @@ use crate::panels::SheetColor;
 pub fn view<'a>(
     state: &'a DocumentOptionsModalState,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let ts = TypeScale::default();
@@ -102,8 +104,16 @@ pub fn view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            cancel_btn("Cancel", LibraryMessage::DocumentOptionsCancel, tokens),
-            primary_btn("Apply", LibraryMessage::DocumentOptionsApply, tokens),
+            cancel_btn(
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+                LibraryMessage::DocumentOptionsCancel,
+                tokens,
+            ),
+            primary_btn(
+                t!(i18n, ids::DIALOG_BUTTON_APPLY),
+                LibraryMessage::DocumentOptionsApply,
+                tokens,
+            ),
         ],
         tokens,
     );

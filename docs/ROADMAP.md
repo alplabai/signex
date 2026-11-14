@@ -550,6 +550,7 @@ orbitable 3D in place, no separate window. See `PCB_3D_RENDER_PLAN.md`.
 | Plan | Scope |
 |------|-------|
 | **Advanced PCB** | Full layer stack editor (εr, tan δ, copper weight, material library); stackup templates (2 / 4 / 6 / 8 layer, HDI, MCPCB); DRC rule profiles (fab-house and IPC presets, save / load); formal ECO dialog with change review |
+| **Partial & Embedded Heavy Copper** | Copper weight per region, not only per layer: heavy-copper areas (power, high current, heat spreading) beside standard-weight fine-pitch routing on the same layer, and heavy-copper inlays or bars embedded in the stackup. Region copper weight in the stack editor and the `.snxpcb` format; DRC clearance, width and spacing rules that follow the local copper weight (fab-house profiles); current capacity and temperature rise per trace and region; region thickness in the 3D view; fab outputs that carry the regions (separate region layer, stackup report and fab notes). Needs the Advanced PCB stack editor |
 | **Impedance & DRC Rules** | Impedance profile per layer pair + built-in calculator; impedance-controlled routing (Z0 display, width-from-impedance); additional DRC rules (silk-silk, acute angle, component clearance, height) |
 | **Routing Polish & Geometry** | Route completion (loop removal) and glossing; split planes (negative plane layers); via-in-pad, paste / mask expansion rules; per-layer keepout, board cutouts, castellated holes |
 | **Constraint Manager & HUD** | Constraint Manager (schematic-side spreadsheet rule editor); query-based rule scoping (InNet, InNetClass, OnLayer, boolean); Board Insight HUD (clearance, net name under cursor) |
@@ -823,6 +824,14 @@ What that promotion does and does not mean:
 - **Sub-version boundaries within a band are the softest thing on this
   page.** Scope may move between adjacent sub-versions of the same band
   without amending this document. It may not move between bands.
+
+### 2026-11-13 — Partial and embedded heavy copper
+
+Maintainer request (Caner): some fabs offer partial or embedded heavy
+copper in the stackup, and Signex should support designing for it. Added
+as its own plan, **Partial & Embedded Heavy Copper**, under Advanced PCB
+(P3), after the stack editor it builds on. No scope was moved out of
+another plan.
 
 ### 2026-11-08 — Commercial model
 

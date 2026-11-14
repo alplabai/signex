@@ -14,4 +14,5 @@ define_ids! {
     PREFERENCES_SECTION_ANNOTATION = "preferences-section-annotation";
     PREFERENCES_SECTION_EDITING = "preferences-section-editing";
     PREFERENCES_SECTION_DISTRIBUTORS = "preferences-section-distributors";
+    PREFERENCES_RESTORE_DEFAULTS = "preferences-restore-defaults";
 }

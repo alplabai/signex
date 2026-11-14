@@ -5,6 +5,7 @@
 //! and what is not checked yet: `docs/architecture/pcb-drc.md`.
 
 mod check;
+pub mod findings;
 mod keepout;
 mod limits;
 mod profile;
@@ -108,6 +109,8 @@ impl DrcReport {
     }
 }
 
+#[cfg(test)]
+mod findings_tests;
 #[cfg(test)]
 mod keepout_tests;
 #[cfg(test)]

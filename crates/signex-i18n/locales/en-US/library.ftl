@@ -179,3 +179,31 @@ library-row-footprint-reading = Reading footprint…
 library-symbol-delete-checking = Checking whether symbol "{ $name }" is in use
 library-symbol-delete-may-be-in-use = Symbol "{ $name }" may still be in use
 library-symbol-delete-in-use = Symbol "{ $name }" is still in use
+
+## Library dialog buttons (#2225)
+library-create-options-create = Create Library
+# Edit Component: the row changed on disk while it was being edited.
+library-edit-row-reload = Reload
+library-edit-row-keep-editing = Keep editing
+library-edit-row-reload-saved = Reload saved version
+# Change Component: go on to the pin preview.
+library-picker-next = Next
+library-primitive-picker-browse = Browse filesystem…
+library-primitive-picker-open-library = Open library
+library-primitive-picker-dont-copy = Don't copy
+library-recovery-remove-from-project = Remove from project
+library-recovery-locate = Locate…
+library-recovery-restore-remote = Restore from remote
+library-recovery-skip-read-only = Skip (read-only)
+library-recovery-reinit = Re-init (lose history)
+library-recovery-remove-row = Remove row
+library-recovery-rebind = Re-bind…
+library-distributor-connect-oauth = Connect via OAuth
+library-distributor-test = Test
+library-stock-copy-new-library = New Library…
+library-updates-skip-all = Skip All
+# $count is how many components are ticked (a whole number).
+library-updates-apply = Update Selected Components ({ $count })
+# Change Component: confirm; "anyway" when the change loses connections or data.
+library-change-part-confirm = Change
+library-change-part-confirm-anyway = Change anyway

@@ -93,7 +93,10 @@ impl Signex {
                 .size(TS.body)
                 .width(iced::Length::Fixed(180.0)),
             crate::styles::dialog_button(
-                "Add column",
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::DIALOG_PARAMETER_MANAGER_ADD_COLUMN
+                ),
                 crate::styles::DialogButtonKind::Secondary,
                 Some(Message::ParameterManager(ParameterManagerMsg::ColumnAdded)),
                 tokens,
