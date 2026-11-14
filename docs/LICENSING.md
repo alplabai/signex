@@ -47,10 +47,10 @@ For users:
   `.snxprj` in Signex from then on.
 
 For redistributors and embedders:
-- Signex Community itself has zero GPL transitive dependencies. You can
-  embed, link against, or redistribute it under FSL-1.1-ALv2 (for any
-  purpose other than a Competing Use), or under Apache-2.0 once a release
-  has converted, without inheriting any reciprocal-license obligations.
+- Signex Community itself has zero GPL transitive dependencies, so its
+  dependencies add no copyleft obligations. Signex itself, and any copy,
+  modification or derivative of it, stays under FSL-1.1-ALv2 (any purpose
+  other than a Competing Use) until that release converts to Apache-2.0.
 - The companion converter is GPL-3.0-or-later and is **not** linked into
   Signex Community. Users install it separately if they need KiCad
   migration. Consumers of Signex see no GPL aggregation in their build

@@ -454,8 +454,9 @@ Signex Community Edition is source-available under the
 - **Allowed:** any use, including companies designing and selling their own
   products with Signex.
 - **Not allowed:** a Competing Use, which means making Signex available to
-  others in a commercial product or service that substitutes for Signex or
-  offers the same or substantially similar functionality. Free,
+  others in a commercial product or service that substitutes for Signex (or
+  for a product or service Alp Lab offers using it), or that offers the same
+  or substantially similar functionality. Free,
   non-commercial redistribution is allowed.
 - **Later:** each release becomes Apache-2.0 two years after it ships.
 

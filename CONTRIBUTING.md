@@ -489,8 +489,9 @@ Signex is source-available under the
 [Functional Source License 1.1, Apache 2.0 Future License (FSL-1.1-ALv2)](LICENSE).
 Any use is allowed, including designing and selling your own products with
 Signex, except a Competing Use: making Signex available to others in a
-commercial product or service that substitutes for Signex or offers the same
-or substantially similar functionality. Free, non-commercial redistribution
+commercial product or service that substitutes for Signex (or for a product
+or service Alp Lab offers using it), or that offers the same or substantially
+similar functionality. Free, non-commercial redistribution
 is allowed. Each release becomes Apache-2.0 two years after it ships.
 Releases published before the change stay Apache-2.0, and contributions made
 before it (#2344) remain licensed under Apache-2.0
