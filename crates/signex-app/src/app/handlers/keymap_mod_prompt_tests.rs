@@ -68,9 +68,17 @@ fn mark() -> Option<u64> {
 }
 
 /// How many lines logged after `mark` contain `needle`. Lines older than the
-/// mark, which the ring may drop meanwhile, never move the count.
+/// mark, which the ring may drop meanwhile, never move the count. A line
+/// logged after the mark but evicted before the read fails the test, since
+/// the count would silently miss it.
 fn lines_since(mark: Option<u64>, needle: &str) -> usize {
-    crate::diagnostics::entries_since(mark)
+    let delta = crate::diagnostics::entries_since(mark);
+    assert_eq!(
+        delta.missed, 0,
+        "diagnostics ring overflowed: {} lines logged after the mark were evicted before the count",
+        delta.missed
+    );
+    delta
         .entries
         .iter()
         .filter(|entry| entry.message.contains(needle))
