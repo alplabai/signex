@@ -148,6 +148,7 @@ pub(super) fn value_box<'a>(look: Look<'a>, value: impl Into<Label<'a>>) -> Elem
                 width: 1.0,
                 radius: radius.into(),
                 color: line,
+                ..Border::default()
             },
             ..container::Style::default()
         }
@@ -258,6 +259,7 @@ pub(super) fn chip<'a>(colour: Color) -> Element<'a, PanelMsg> {
                 width: 1.0,
                 color: Color { a: 0.5, ..colour },
                 radius: (TS.body / 5.0).into(),
+                ..Border::default()
             },
             ..container::Style::default()
         })
@@ -353,6 +355,7 @@ pub(super) fn fixed_value<'a>(
                 width: 1.0,
                 radius: radius.into(),
                 color: line,
+                ..Border::default()
             },
             ..container::Style::default()
         }
