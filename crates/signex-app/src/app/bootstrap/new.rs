@@ -673,6 +673,7 @@ impl Signex {
                 pending_opens: Default::default(),
                 pending_restores: Default::default(),
                 pending_path_ops: crate::app::path_ops::PendingPathOps::default(),
+                new_project_writes: std::collections::HashSet::new(),
                 dir_case: Default::default(),
                 altium_import_running: None,
                 project_folder_renames: std::collections::HashSet::new(),

@@ -851,8 +851,21 @@ impl Signex {
 
     /// Quitting between a file move and its completion would leave the
     /// project naming the old file with no prompt, so a quit is held (and
-    /// says why) while a rename or delete runs.
+    /// says why) while a rename or delete runs. So is a quit while a New
+    /// Project is still being written: exiting then leaves a half-made
+    /// project folder (#2280).
     fn hold_quit_while_path_op(&mut self) -> bool {
+        if !self.document_state.new_project_writes.is_empty() {
+            let detail = signex_i18n::t!(
+                self.ui_state.i18n,
+                signex_i18n::ids::DIALOG_NEW_PROJECT_QUIT_HELD
+            )
+            .into_string();
+            crate::diagnostics::log_warning(detail.clone());
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::quit_held(detail));
+            return true;
+        }
         if self.document_state.pending_path_ops.is_empty() {
             return false;
         }

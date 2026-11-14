@@ -22,6 +22,9 @@ use std::collections::HashMap;
 /// The reason Save All records for a spelling it kept unsaved.
 const CASE_RULE_UNKNOWN_REASON: &str = "folder case rule unknown, save it separately";
 
+/// The reason Save All gives for a row whose write stopped without a result.
+const WRITE_STOPPED_REASON: &str = "its save stopped unexpectedly; save it again";
+
 impl Signex {
     /// Start the write of one dirty file, matching `path` to the spelling it
     /// is held under by the volume rule `fold`; see [`Self::begin_held_save`].
@@ -258,7 +261,7 @@ impl Signex {
                 }
             }
         }
-        let settled = Message::File(FileMsg::SaveAllSettled(Box::new(SaveAllSettle {
+        let settle = SaveAllSettle {
             next,
             items: begun.len() + rows.len(),
             paths: paths.to_vec(),
@@ -266,14 +269,15 @@ impl Signex {
             rows: rows.to_vec(),
             batch,
             case_variants,
-        })));
-        Task::batch(writes).chain(Task::done(settled))
+            interrupted: false,
+        };
+        writes_then_settle(writes, settle)
     }
 
     /// Every write of a Save All completed: continue into the close / quit,
     /// or stay open and name what did not save.
     pub(crate) fn handle_save_all_settled(&mut self, settle: SaveAllSettle) -> Task<Message> {
-        if self.library.batch_has_rows_in_flight(settle.batch) {
+        if !settle.interrupted && self.library.batch_has_rows_in_flight(settle.batch) {
             let waiting = self.library.batch_rows_in_flight_labels(settle.batch);
             crate::diagnostics::log_warning(format!(
                 "Save All: waiting for {waiting} to finish saving before it continues"
@@ -291,6 +295,7 @@ impl Signex {
             rows,
             batch,
             case_variants,
+            interrupted,
         } = settle;
         self.clear_saved_case_variants(&case_variants);
         // Drop the dirty dots of everything that DID save.
@@ -319,6 +324,9 @@ impl Signex {
                 .batch_row_failures
                 .remove(&(batch, address.clone()))
         }));
+        if interrupted {
+            failed.extend(self.take_stranded_rows(batch));
+        }
         if failed.is_empty() {
             // Everything saved, so no recovery copy of it is worth
             // keeping: remove them before the close / quit takes over.
@@ -381,6 +389,34 @@ impl Signex {
             return Self::decline_quit();
         }
         Task::none()
+    }
+
+    /// The rows of `batch` still marked in flight after its writes were cut
+    /// short by a panic: they will never report, so each is dropped from the
+    /// in-flight set and named as not saved.
+    fn take_stranded_rows(&mut self, batch: u64) -> Vec<(String, String)> {
+        let generations: Vec<u64> = self
+            .library
+            .batch_rows_in_flight
+            .iter()
+            .filter(|(_, (b, _))| *b == batch)
+            .map(|(generation, _)| *generation)
+            .collect();
+        let stranded: Vec<_> = generations
+            .into_iter()
+            .filter_map(|generation| self.library.batch_rows_in_flight.remove(&generation))
+            .collect();
+        let mut named: Vec<(String, String)> = stranded
+            .into_iter()
+            .map(|(_, address)| {
+                (
+                    self.library.editor_label(&address),
+                    WRITE_STOPPED_REASON.to_string(),
+                )
+            })
+            .collect();
+        named.sort();
+        named
     }
 
     /// `path` as it is now: the pair `mark_saved` guards for the written one.
@@ -460,6 +496,62 @@ impl Signex {
             .collect::<Vec<_>>()
             .join("\n  ")
     }
+}
+
+/// Run Save All's `writes`, then send `settle`. The runtime runs a task as
+/// one stream, so a panicking write would end it and drop the settle, leaving
+/// a quit request unanswered. The panic is caught instead: the writes end and
+/// the settle still arrives, marked `interrupted` (#2269). The writes are
+/// futures whose only actions are their completion messages.
+pub(super) fn writes_then_settle(
+    writes: Vec<Task<Message>>,
+    settle: SaveAllSettle,
+) -> Task<Message> {
+    use iced::futures::{StreamExt as _, stream};
+    let settled = |settle: SaveAllSettle| Message::File(FileMsg::SaveAllSettled(Box::new(settle)));
+    let Some(writes) = iced_runtime::task::into_stream(Task::batch(writes)) else {
+        return Task::done(settled(settle));
+    };
+    // Each write's item, then `None` once they ended.
+    let steps = std::panic::AssertUnwindSafe(writes)
+        .catch_unwind()
+        .map(Some)
+        .chain(stream::once(std::future::ready(None)));
+    let messages = steps
+        .scan(Some(settle), move |settle, step| {
+            let message = match step {
+                Some(Ok(iced_runtime::Action::Output(message))) => Some(message),
+                Some(Ok(_)) => {
+                    crate::diagnostics::log_warning(
+                        "Save All: a write asked the runtime for more than its result; ignored",
+                    );
+                    None
+                }
+                Some(Err(panic)) => {
+                    crate::diagnostics::log_error(
+                        "Save All: a write stopped unexpectedly",
+                        &anyhow::anyhow!(panic_text(panic.as_ref())),
+                    );
+                    if let Some(settle) = settle.as_mut() {
+                        settle.interrupted = true;
+                    }
+                    None
+                }
+                None => settle.take().map(settled),
+            };
+            std::future::ready(Some(message))
+        })
+        .filter_map(std::future::ready);
+    Task::stream(messages)
+}
+
+/// The text of a caught panic, when it carries one.
+fn panic_text(panic: &(dyn std::any::Any + Send)) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|s| (*s).to_string())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "a panic with no message".to_string())
 }
 
 /// Whether two path lists hold the same paths, whatever their order.

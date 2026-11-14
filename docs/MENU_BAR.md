@@ -511,7 +511,9 @@ otherwise the prompt opens. A request stays pending until it is answered, and
 macOS waits (at logout only for a limited time), so every path that keeps the
 app open answers it with `iced::system::cancel_quit()` (a no-op when nothing
 is pending): the prompt's Cancel, a quit held back by a running rename or
-delete, a Save All that left files unsaved, and the prompt closing itself
+delete or by a New Project still being written (#2280), a Save All that left
+files unsaved (also when a write task panicked and ended the writes early: the
+settle still arrives, #2269), and the prompt closing itself
 because everything was saved behind it, and a prompt window that vanishes
 without a close request (treated as Cancel). Each decision is logged to the
 Messages panel ("Quit: the system asked Signex to quit", "Quit: not quitting,

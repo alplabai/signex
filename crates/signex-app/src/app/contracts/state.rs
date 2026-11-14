@@ -283,6 +283,9 @@ pub struct SaveAllSettle {
     /// was written, and the others it stands for. The others' dirty markers
     /// go once the written one is clean.
     pub case_variants: Vec<CaseVariants>,
+    /// A write task panicked and ended the writes early (#2269): a row still
+    /// marked in flight will never report, so the settle does not wait.
+    pub interrupted: bool,
 }
 
 /// A file held under several case-variant spellings: the one written and

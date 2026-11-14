@@ -3,10 +3,11 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::app::contracts::{SaveAllNext, SaveAllPlan};
+use crate::app::contracts::{SaveAllNext, SaveAllPlan, SaveAllSettle};
 use crate::app::state::project_case::CaseProbeOutcome;
 use crate::app::state::scope::CaseFold;
 use crate::app::{FileMsg, Message, Signex, SymbolDocument, TabInfo, TabKind};
+use crate::library::state::EditorAddress;
 use crate::persist::run_task::outputs;
 
 /// An app with a dirty symbol draft at `dir/Lib.snxsym` and a dirty
@@ -714,4 +715,72 @@ fn a_colour_during_a_running_save_all_keeps_the_sheet_dirty() {
         "the file lacks colour 2"
     );
     assert_eq!(colours_on_disk(&sheet).get(&wire), Some(&colour(1)));
+}
+
+/// A write whose task panics instead of reporting back.
+async fn write_that_panics() -> Message {
+    panic!("the write blew up")
+}
+
+fn quit_settle(paths: Vec<PathBuf>, rows: Vec<EditorAddress>, batch: u64) -> SaveAllSettle {
+    SaveAllSettle {
+        next: SaveAllNext::Quit,
+        items: paths.len() + rows.len(),
+        paths,
+        failed: Vec::new(),
+        rows,
+        batch,
+        case_variants: Vec::new(),
+        interrupted: false,
+    }
+}
+
+/// #2269: a panicking write ends the writes, not the settle: it still
+/// arrives, marked interrupted.
+#[test]
+fn a_panicking_write_still_ends_with_the_settle() {
+    let task = super::save_all::writes_then_settle(
+        vec![iced::Task::future(write_that_panics())],
+        quit_settle(Vec::new(), Vec::new(), 1),
+    );
+    match outputs(task).as_slice() {
+        [Message::File(FileMsg::SaveAllSettled(settle))] => assert!(settle.interrupted),
+        other => panic!("expected only the settle, got {other:?}"),
+    }
+}
+
+/// #2269: the quit's Save All with a write that panicked answers the system
+/// quit request with a cancel, names what did not save, and does not wait for
+/// a row that will never report.
+#[test]
+fn a_quit_save_all_whose_write_panics_declines_the_quit() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _symbol, sheet) = app_with_two_dirty_documents(dir.path());
+    let row = EditorAddress::new(
+        dir.path().join("Parts.snxlib"),
+        "resistors".into(),
+        signex_library::RowId::new(),
+    );
+    let batch = 41;
+    app.library
+        .batch_rows_in_flight
+        .insert(7, (batch, row.clone()));
+
+    let task = super::save_all::writes_then_settle(
+        vec![iced::Task::future(write_that_panics())],
+        quit_settle(vec![sheet], vec![row], batch),
+    );
+    let after = feed_then_settle(&mut app, outputs(task));
+
+    crate::task_driver::assert_quit_declined(after);
+    assert!(!app.library.batch_has_rows_in_flight(batch));
+    assert!(app.document_state.parked_save_all_settles.is_empty());
+    let notice = format!("{:?}", app.document_state.error_notice.as_ref());
+    assert!(
+        notice.contains("Sheet.snxsch")
+            && notice.contains("resistors")
+            && notice.contains("stopped unexpectedly"),
+        "{notice}"
+    );
 }
