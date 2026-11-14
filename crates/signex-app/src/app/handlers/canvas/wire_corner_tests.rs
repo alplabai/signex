@@ -200,6 +200,78 @@ fn committed_wires_follow_the_chosen_corner_and_the_flip_persists() {
     assert!(app.interaction_state.corner_rule.is_flipped);
 }
 
+/// Press `Space` in the main window through the real key path, so the
+/// active (default) keymap profile resolves it.
+fn press_space(app: &mut Signex, modifiers: iced::keyboard::Modifiers) {
+    use iced::keyboard;
+    let window = app.ui_state.main_window_id.expect("main window");
+    let key = keyboard::Key::Named(keyboard::key::Named::Space);
+    let event = keyboard::Event::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: keyboard::key::Physical::Code(keyboard::key::Code::Space),
+        location: keyboard::Location::Standard,
+        modifiers,
+        text: None,
+        repeat: false,
+    };
+    let _ = app.handle_key_input(window, event);
+}
+
+#[test]
+fn space_mid_wire_in_the_default_profile_bends_the_run_without_an_undo_step() {
+    let mut app = app_with_tool(Tool::Wire);
+    click(&mut app, at(grid(0.0, 0.0)));
+
+    press_space(&mut app, iced::keyboard::Modifiers::default());
+    assert!(app.interaction_state.corner_rule.is_flipped, "Space flips");
+    let legs = rubber(&app, grid(10.0, 6.0));
+    assert!(is_vertical(legs[0]), "{legs:?}");
+
+    press_space(&mut app, iced::keyboard::Modifiers::SHIFT);
+    assert_eq!(
+        app.interaction_state.corner_rule.mode,
+        CornerMode::Angle45Start,
+        "Shift+Space steps the mode"
+    );
+
+    let engine = app.document_state.active_engine().expect("engine");
+    assert!(!engine.can_undo(), "bending the run is not an edit");
+    assert!(app.interaction_state.wire_drawing, "the run is still open");
+}
+
+#[test]
+fn space_with_a_selection_and_no_run_still_rotates() {
+    use signex_types::schematic::{SelectedItem, SelectedKind};
+    let mut app = app_with_tool(Tool::Wire);
+    let rule = app.interaction_state.corner_rule;
+    let (_, placed) = app.place_wire_at(grid(0.0, 0.0), grid(10.0, 0.0), rule);
+    assert!(placed);
+    let wire = app
+        .document_state
+        .active_engine()
+        .expect("engine")
+        .document()
+        .wires[0]
+        .uuid;
+    app.interaction_state.current_tool = Tool::Select;
+    app.interaction_state.active_canvas_mut().selected =
+        vec![SelectedItem::new(wire, SelectedKind::Wire)];
+    let before = wire_ends(&app);
+
+    press_space(&mut app, iced::keyboard::Modifiers::default());
+    let after = wire_ends(&app);
+    assert_eq!(after.len(), 1);
+    assert!(
+        (after[0].0.x - after[0].1.x).abs() < 1e-6,
+        "the horizontal wire turned vertical: {before:?} -> {after:?}"
+    );
+    assert_eq!(
+        app.interaction_state.corner_rule, rule,
+        "no run, so the corner is left alone"
+    );
+}
+
 #[test]
 fn a_45_degree_commit_matches_its_preview() {
     let mut app = app_with_tool(Tool::Bus);

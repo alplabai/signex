@@ -205,8 +205,12 @@ While a wire or bus is drawn, `switch_segment_posture` flips the corner
 (horizontal first or vertical first; in a 45° mode, diagonal first or last) and
 `cycle_wire_bus_graphic_mode` steps the corner mode: 90°, 45° start, 45° end,
 any angle (#2372). The choice holds for later segments, and the status bar names
-it. The Classic profile binds them to `/` and `Shift+Space`. The Altium profile
-leaves them unbound for now, because `Space` and `Shift+Space` rotate there.
+it. The Classic profile binds them to `/` and `Shift+Space`. In the Altium
+profile `Space` and `Shift+Space` stay bound to `rotate_counterclockwise` and
+`rotate_clockwise`; while a wire or bus run is open (its first point placed),
+the rotate handler bends the run instead: `rotate_counterclockwise` flips the
+corner and `rotate_clockwise` steps the corner mode. Outside a run they rotate
+as usual. Neither adds an undo step; only a committed segment does.
 `Alt+Click` is reserved in `altium.toml` for `highlight_related_net_objects`. The
 command is wired (it highlights the selected net and selects its members), but the
 Alt+Click gesture itself is not dispatched yet; when it is, an Alt-press that turns
