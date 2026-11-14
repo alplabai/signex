@@ -97,9 +97,30 @@ Decision: define **one** authoritative `Netlist` type in `signex-types` — the 
 
 ### A4. One application core, many front ends (ports and adapters, #2326)
 
-The GUI is not the only way into signex. `signex-cli` runs catalog commands for scripts and agents, the agent socket lets an agent work in a running window, and a web or plugin front end may follow. All of them must have the same effect for the same command. Today that parity is bought by booting the whole GUI model without a window (`boot_headless`). A4 replaces this with one core behind ports.
+The GUI is not the only way into signex: `signex-cli` runs catalog commands for scripts and agents, and it must have the same effect as the GUI for the same command. Today that parity is bought by booting the whole GUI model without a window (`boot_headless`). A4 replaces this with one core behind ports. (Attach mode is not part of the motivation: its requests already enter the GUI's `update` loop, and A4 keeps that.)
 
-Some rules in this section are still open decisions in epic #2326, and take effect when both maintainers sign off on this amendment: epic decisions D1 (no selection in the core), D2 (the core grows in place and is lifted into a crate last), D3 (no dialog in the core; file dialogs stay with the front end), D5 (effects as data), D7 (settings as values), D10 (wasm32) and D11 (the shared command crate).
+Some rules in this section are still open decisions in epic #2326, and take effect when both maintainers sign off on this amendment: epic decisions D1 (no selection in the core), D2 (the core grows in place and is lifted into a crate last), D3 (no dialog in the core; file dialogs stay with the front end), D5 (effects as data), D7 (settings as values) and D11 (the shared command crate). Epic D10 (web) is decided: not now (see "A web front end" below).
+
+**The problem, measured** (origin/trunk content, 2026-11-15, macOS arm64, cold release build). Commands and method: [the research note](research/hexagonal-ddd.md), §12.
+
+| Claim | Measured | Reproduce |
+|---|---|---|
+| The CLI builds the GUI | `signex-cli` pulls 518 distinct crates; the domain crates it needs pull 115. GUI/GPU crates are about 26–32% of the summed compile-unit time of a cold release build, depending on which crates count as GUI; `signex-app` itself adds about 6 points. The binary is 47 MB. | `cargo tree -p signex-cli -e normal --prefix none \| awk 'NF{print $1" "$2}' \| sort -u \| wc -l`; `cargo build --release -p signex-cli --timings` |
+| The CLI boots the GUI | A run with no commands takes 1.29 s (median of 5 warm runs); `--help` takes 0.026 s. The split inside the boot is not measured. The log shows `dropped an iced action a headless run does not perform kind="window"` three times. | `time signex-cli run <project>.snxprj` |
+| Parity costs work | About ten closed issues and PRs exist only to drive the GUI model headless: #1926, #1927, #1929, #1931, #1932, #1934, #2170, #2172, #2243, and #2155 in part. `gui_only` appears on 175 lines in 6 files of `signex-app`, 157 of them rows of the golden catalog. | `git grep -c gui_only -- crates/signex-app` |
+| IO runs on the update path | 156 production `std::fs::` call sites under `crates/signex-app/src/app`. In a sample of 15, about half run synchronously inside a `&mut self` handler (for example `canonicalize` in `handlers/document_identity.rs`, `load_sheet` in the Sync Sheet Pins menu action, the agent registry and journal). That half is a sample estimate. | research note §12 |
+
+**#2325 is a symptom, not the reason.** The Windows stack overflow sits on the CLI path, but boxing `Signex` or running the session on a thread with a bigger stack fixes it. It does not by itself justify A4.
+
+**Alternatives considered.**
+
+| Alternative | What it fixes | Why it stops short |
+|---|---|---|
+| (a) Status quo, plus a lazy `UiState` and boxing the large fields | #2325; part of the headless boot cost | The CLI keeps all 518 crates, the parity heuristics (`gui_only`, `headless_refusal`, `honest_status`) and the IO in `update`. **This is the fallback if the epic stops early.** |
+| (b) Extract only a command-catalog crate | The CLI and agents get the catalog, operands and outcomes without `signex-app` types | Running a command still needs `Signex`, so the CLI still builds and boots the GUI. |
+| (c) Turn only persistence and git IO into effects | The data-loss-prone IO leaves `update`; ADR-0003's invariants get one home | The handlers still live in the GUI model, so the CLI still boots it and parity stays heuristic. |
+
+A4 is (b) and (c) together, plus moving the handlers into the core; each slice below is a stopping point.
 
 ```mermaid
 flowchart LR
@@ -149,7 +170,7 @@ Arrows into the core are calls. The core returns events and effects to its calle
 - **Driven ports:** IO is a set of pluggable driven adapters, the mirror of the driving side.
   - **Who defines what.** The core defines the port types: `Effect`, `EffectResult`, and the storage, version-control, network and clock capabilities they name. A *host* implements them, owns the adapters and runs `perform(Effect) -> EffectResult`.
   - **Where the host lives.** The host is outside the core and depends on it, never the reverse. `perform` takes no `&AppCore`.
-  - **Swappable per platform.** A host is composed per platform: native (files, git), browser (browser storage, or a remote server), test (in memory). Swapping a host changes where documents are stored without touching the core or the front end.
+  - **Swappable per platform.** A host is composed per platform: native (files, git) and test (in memory) now; a browser host (browser storage, or a remote server) only if a web front end is ever scheduled. Swapping a host changes where documents are stored without touching the core or the front end.
   - **How hosts are run.** The GUI runs the host off the UI thread as a `Task`; the CLI runs it inline.
   - **A3.2 tool ports** (`LibraryAdapter`, `DistributorAdapter`, a future `Simulator`) are called by the host, never by the core.
   - **What is not an effect.** Pure CPU work (netlist building, ERC, DRC) does no IO, so it is not an effect and the host is not involved. A short pure call runs inside `execute`. A long pure job (a full ERC or DRC run) must not block the UI thread. Phase 1 of the epic keeps such a job on its existing `Task`. How the core hands such a job out later is an open decision of epic #2326, not a rule here. One candidate is a compute job (an input snapshot and a pure function) that the front end runs off the UI thread and feeds back through `complete`; [the research note](research/hexagonal-ddd.md), §7.3, argues this is compute, not an effect.
@@ -191,6 +212,34 @@ Arrows into the core are calls. The core returns events and effects to its calle
 A rule about document content belongs in the engine or a domain crate, never in a handler. Examples: the next free designator, where a wire splits, what a paste renames. A handler that grows such a rule is the D4 leak one level down, and review treats it the same way. This keeps the core from becoming a transaction script.
 
 **The shared command crate.** The command catalog, its arguments and outcomes live in a small crate that the core and every front end depend on. It is the driving port's vocabulary, so it gets the core's checks (D5). Agent wire framing kept there is only a serialization of those types; the core never names it.
+
+**Slices.** Numbering follows epic #2326; one PR at a time. Each is reverted by reverting its PR, so the revert column names only what a revert must also undo.
+
+| # | What ships | First payoff | Stopping here is fine | Revert path |
+|---|---|---|---|---|
+| 0 | #2325: box `Signex` / run the CLI session on a thread with an explicit stack | Windows CLI runs again | yes (this is alternative (a)) | revert the PR |
+| 1 | `signex-commands` crate and `app/core/` behind the boundary guard, one command ported end to end (the research note's minimum, §11) | the guard holds; the CLI path for that command no longer needs `Signex` | yes | revert; the catalog golden files are byte-equal, so nothing else moves |
+| C | `CoreEvent` / `Effect` / `EffectResult`, `CoreContext`, the (id, form) parity skeleton and the test adapter | a frozen contract for later moves | yes | revert; no behaviour moved |
+| 2 | Event seam: edit tails split into a core half that returns events, plus a projector | dirty marks and notices have one source | yes | revert restores the inline tails; the removed-call list in the PR says what comes back |
+| 3 | `load_gateway` split | load and restore run without the GUI | yes | revert both PRs together |
+| 4 | State partition (4a documents, 4b ERC/DRC/profiles, 4c settings) | core state is private | yes, after any sub-step | the ast-grep renames are reversible by the inverse rule |
+| 5 | Effects as data and the native host: 5a save/journal, 5b load, 5c git, 5d export, 5e the rest | persistence and git IO leave `update` | yes, after 5a–5c (alternative (c)) | revert brings back the `Task` path for that group |
+| 7 | `Needs` split into Core and Ui | enablement without UI state | yes | revert |
+| 6 | Handler table into the core, the `Targets` operand, `gui_only` deleted | parity by structure for the moved areas | yes, per area | revert per area |
+| 8 | Queries on `core.query` | typed read answers | yes | revert |
+| S-A | Agent wire protocol and `OperandKind` in `signex-commands` | the CLI no longer imports `signex_app` for attach | yes | revert |
+| S-L | Library, pricing, editors and 3D import onto the core | the largest untouched area joins | yes | revert per sub-area |
+| 9 | Lift `app/core/` into `signex-workspace`; the CLI drops `signex-app` | the CLI stops building the GUI crates | yes | revert the move; the module stays in place |
+| S-IO, S-P | Domain IO out for wasm32; the plugin host | — | not scheduled: S-IO waits on a web decision (epic D10), S-P on #1707 | — |
+
+**Safety net before the high-risk slices.** The epic rates slices 2, 3 and 5 (and S-L) high or medium-high, and the research note (§10, item 1) names the reason: the persistence invariants become state machines across `complete`. Before slice 2 starts, these tests run against the test adapter, not only against the ledger:
+- **Per-path write order (#997):** an older write never lands after a newer one to the same path. Today it is pinned at the ledger level (`persist/document_save.rs`, `an_older_snapshot_scheduled_last_never_overwrites_a_newer_one`).
+- **The `SaveBarrier` wait:** a synchronous write or file move waits for every write in flight (`the_barrier_waits_for_an_unfinished_job`, same file).
+- **The `complete` generation check (ADR-0003 D4):** a result for a closed, reopened or re-keyed document is dropped. This one does not exist yet, because `complete` does not; it lands with slice C.
+
+Before slice 2 also lands the event-granularity benchmark of the research note (§10, item 4): a drag must not over-invalidate the projector.
+
+**A web front end (epic D10).** Maintainer decision 2026-11-15: not now; native first. Keeping the core free of iced and of native IO keeps a web front end possible later. That is an option, not a commitment: there is no `wasm32` build gate now, and S-IO is not scheduled.
 
 ---
 
@@ -267,7 +316,7 @@ Cargo blocks the big violations (a domain crate physically cannot import Iced �
   - **After the lift.** Clippy `disallowed-methods` / `disallowed-types` keep the same calls out of the core. They are modelled on the `io_ports` precedent in `clippy.toml`.
     - The lint reaches the domain crates only after the epic's S-IO slice, because `signex-types` and `signex-engine` still call `std::fs` today.
     - Clippy reads the nearest `clippy.toml` and does not merge it with the workspace file, so a per-crate file must repeat the workspace bans.
-  - **`wasm32-unknown-unknown` build.** The core and the crates below it must build for it, which keeps OS-bound dependencies (git2, tokio's IO and multi-thread runtime) out. That build alone does not catch `std::fs` or `std::thread`: they compile there and fail only at run time. The lint above is what keeps them out.
+  - **No `wasm32-unknown-unknown` gate now** (epic D10, decided 2026-11-15: native first). If a web front end is ever scheduled, a wasm32 build of the core and the crates below it would keep OS-bound dependencies (git2, tokio's IO and multi-thread runtime) out. That build alone would not catch `std::fs` or `std::thread`: they compile there and fail only at run time. The lint above is what keeps them out either way.
   - **Stack frames (recommendation, open).** Run Clippy `large_stack_frames` on the core, against the stack overflow of #2325. This comes from the research note (§7.6), not from an epic decision.
 
 ### D6. Reusable views/widgets use three tiers with promotion-by-need

@@ -272,7 +272,7 @@ This section keeps only the recommendations that are still relevant to ADR-0001 
 | # | Element | Verdict | Why | Recommendation | Status in ADR-0001 | Counter-argument: when the recommendation is wrong for signex |
 |---|---|---|---|---|---|---|
 | 2 | Documents as aggregates, mutated only through the engine command path | **P** | It fits Evans's root and transaction rule [7]. Two gaps: (a) only schematics go through `signex-engine` today, while symbol, footprint and Component rows use app-local history; (b) ECO, Update PCB, back-annotation and hierarchy renames change several documents at once, which breaks Vernon's one-aggregate-per-transaction rule [9]. | Record that cross-document commands are one undo group, justified by Vernon's user-aggregate affinity (one person per desktop session) [9], and that the aggregate rule covers schematics only until #661's `History<S>` slice lands. | Adopted: the A4 DDD table states both. | Attach mode puts a second actor on the same documents, which weakens affinity. The person-busy targets passed as data in the arguments are what keep the exception honest. |
-| 8 | The wasm32 constraint (epic D10) | **P** (the build alone is weaker than it sounds) | No hexagonal source requires it. It is enforcement, like rust-analyzer's "never does IO" invariant [21]. On `wasm32-unknown-unknown`, `std::fs` compiles and "always return[s] errors" at run time, and `std::thread::spawn` compiles and "will panic" [30]. The build catches native dependencies (libgit2, mio and the like), not `std::fs`. | Add `disallowed-methods` and `disallowed-types` for `std::fs::*`, `std::thread::spawn`, `std::process`, `std::net` and `tokio::*` on the core and domain crates [31]. Keep the wasm32 check, described as "no native-only dependencies". | Adopted in ADR-0001 D5: a source guard while the core lives in `signex-app`, the clippy lint after the lift, and the wasm32 build described as catching OS-bound dependencies only. | YAGNI: no web front end is scheduled. The lint alone gives the IO-free guarantee now. The wasm32 job can wait until slice S-IO actually begins. |
+| 8 | The wasm32 constraint (epic D10) | **P** (the build alone is weaker than it sounds) | No hexagonal source requires it. It is enforcement, like rust-analyzer's "never does IO" invariant [21]. On `wasm32-unknown-unknown`, `std::fs` compiles and "always return[s] errors" at run time, and `std::thread::spawn` compiles and "will panic" [30]. The build catches native dependencies (libgit2, mio and the like), not `std::fs`. | Add `disallowed-methods` and `disallowed-types` for `std::fs::*`, `std::thread::spawn`, `std::process`, `std::net` and `tokio::*` on the core and domain crates [31]. Keep the wasm32 check, described as "no native-only dependencies". | Lint adopted in ADR-0001 D5: a source guard while the core lives in `signex-app`, the clippy lint after the lift. No wasm32 gate now: epic D10 was decided 2026-11-15 as "not now, native first". | YAGNI: no web front end is scheduled. The lint alone gives the IO-free guarantee now. The wasm32 job can wait until slice S-IO actually begins. |
 | 10 | Risk that command handlers moved into `AppCore` become a transaction script | **P** (a real risk) | Fowler's definition of Transaction Script is literally "each procedure handles a single request from the presentation" [11]. Per-command handlers *are* procedures, and that is fine for an application layer as long as they hold no rules [6][10]. The risk is that defaults, designator assignment, connectivity or placement maths drift into handlers. | Add a review rule and a ratchet. A core handler only (a) resolves operands, (b) calls engine or domain functions, (c) groups the undo, and (d) assembles events and effects. A loop over document items, or any geometry arithmetic, in a handler is a smell that moves into an engine. Extend `check_layer_ratchet.sh` to count such patterns under `app/core/`. | Review rule adopted ("Handlers stay thin" in A4). The ratchet is not adopted; it stays open. | A ratchet on heuristics produces false positives. Review discipline may be enough for two maintainers. |
 | 11 | `signex-types` as the "shared kernel" | **P** | Evans's shared kernel is a small subset of the model shared *between bounded contexts or teams*, changed only after consultation [7]. `signex-types` is the whole model's data, shared inside one team. | Either call it "the common domain types", or keep "shared kernel" only for the schematic-to-PCB contract of A3.1 (`Netlist`), which is a genuine context seam. | Not addressed: the A4 table keeps "Shared kernel: `signex-types` (unchanged)". Open. | — |
 
@@ -282,9 +282,9 @@ This section keeps only the recommendations that are still relevant to ADR-0001 
 
 - **One process, one user, two maintainers.** Vernon's small-aggregate and eventual-consistency rules exist for scalability and locks [9]. Microsoft's guide calls real messaging "overkill" for in-process events [13]. None of that pressure applies here. *(analysis)* The epic is right not to add a bus. It should resist adding anything else justified only by "DDD says so".
 - **Ports count.** The three driving entry points plus one effect enum are already minimal [1][3]. Adding trait ports per subsystem, such as a `GitPort` or a `LibraryPort`, would recreate the over-abstraction Petrov describes [3].
-- **Effects for all 181 sites.** This is the most expensive slice, and it buys mostly the web option. xi's experience says async seams cost more than expected [23]. *(analysis)* Convert only the persistence and git effects, where the invariants live. Leave pure compute on its existing `Task` until a web front end is real.
+- **Effects for every IO site.** There are 156 production `std::fs::` call sites under `crates/signex-app/src/app` alone (§12). This is the most expensive slice, and it buys mostly the web option. xi's experience says async seams cost more than expected [23]. *(analysis)* Convert only the persistence and git effects, where the invariants live. Leave pure compute on its existing `Task` until a web front end is real.
 - **A crate is not the goal.** Cockburn's goal is symmetric drivers and testability without devices [1]. For signex, that means a CLI that does not build UI, and parity by structure. Both are reached once the CLI calls the core module, before any crate is lifted.
-- **The cheapest alternative**, for comparison. Keep `Signex`, make `UiState` lazy so the headless boot does not construct it, and box the large fields. That fixes #2325 and the build cost of the CLI. It does **not** remove the parity heuristics (`gui_only`, `honest_status`), so it is a stopgap, not a substitute.
+- **The cheapest alternative**, for comparison. Keep `Signex`, make `UiState` lazy so the headless boot does not construct it, and box the large fields. That fixes #2325 and part of the boot cost. The CLI still compiles every GUI crate, and it does **not** remove the parity heuristics (`gui_only`, `honest_status`), so it is a stopgap, not a substitute.
 
 ---
 
@@ -311,6 +311,41 @@ This section keeps only the recommendations that are still relevant to ADR-0001 
 5. **The CLI uses the core module** through a thin crate split only when a dependency cut is needed (slice 9). The web front end (S-IO and the wasm32 job), the full effect conversion (5e) and the plugin host are deferred until each is scheduled.
 
 This keeps every structural benefit Cockburn's intent asks for [1] and drops the parts that pay off only for a web or plugin future.
+
+---
+
+## 12. Measurements (2026-11-15)
+
+Measured on origin/trunk content, macOS arm64, Rust 1.97.0, cold release build. ADR-0001 A4 cites these in short form.
+
+**Dependency tree.** Distinct crate versions on the normal-dependency edge:
+
+```sh
+cargo tree -p signex-cli -e normal --prefix none | awk 'NF{print $1" "$2}' | sort -u | wc -l   # 518
+cargo tree -e normal --prefix none -p signex-types -p signex-net -p signex-erc -p signex-engine \
+  -p signex-drc -p signex-library -p signex-output -p signex-bom -p signex-history \
+  | awk 'NF{print $1" "$2}' | sort -u | wc -l                                                 # 115
+```
+
+Counting lines of `cargo tree --prefix none | sort -u` instead gives 685, because the `(*)` repeat markers make duplicate lines; 518 is the distinct count.
+
+**Build time.** `cargo build --release -p signex-cli --timings` took 6 min 01 s of wall time from cold. Summed over the compile units of the timing report, GUI/GPU crates (iced, wgpu, winit, naga, the font and text-shaping stack, the platform windowing crates, `signex-gfx`, `signex-widgets`, `signex-renderer`) take about 26% with a narrow name list and about 32% with a broader one; `signex-app` itself adds about 6 points. Summed unit time is not wall time, since units build in parallel. The release binary is 47 MB.
+
+**Boot time.** `time signex-cli run <project>.snxprj` with no commands, on a one-sheet project: first run 2.26 s, then 1.29, 1.29, 1.29, 1.29, 1.28 s (median of the warm runs 1.29 s). `signex-cli --help` takes 0.026 s, and so does `run` on a missing project. How the 1.29 s splits inside the boot (model construction, keymap load, font catalog, icon decode) is not measured. The run log shows `dropped an iced action a headless run does not perform kind="window"` three times.
+
+**Parity work.** Closed issues and PRs that exist only to drive the GUI model headless: #1926 (runtime config root), #1927 (task driver for iced actions), #1929 (text measurer and font catalog), #1931 (file-dialog seams), #1932 (diagnostics and pref writes), #1934 (operand schema), #2170 (refuse GUI-only commands), #2172 (address documents without UI state), #2243 (attach or run headless); #2155 (run operands) in part. `git grep -c gui_only -- crates/signex-app` gives 175 lines in 6 files, 157 of them rows of `keymap/testdata/catalog.golden.tsv`.
+
+**IO on the update path.** Production `std::fs::` call sites under `crates/signex-app/src/app`: test files, comment lines and lines after a `#[cfg(test)]` in their file are excluded.
+
+```sh
+git grep -nE 'std::fs::' -- crates/signex-app/src/app ':!**/tests/**' ':!**/*tests.rs' \
+  | rg -v ':\s*//' \
+  | awk -F: '{f=$1; l=$2; c=0; t=0; while((getline line < f)>0){c++; if(line ~ /#\[cfg\(test\)\]/ && c<l) t=1; if(c>=l) break} close(f); if(!t) n++} END{print n}'   # 156
+```
+
+This counts `std::fs::` paths only, not `use std::fs;` followed by `fs::…` calls, nor IO in other crates. A sample of 15 of these sites, read by hand, found about half running synchronously inside a `&mut self` handler on the update path: for example `std::fs::canonicalize` in `handlers/document_identity.rs` (`rekey_document`), `project_sheets::load_sheet` in the Sync Sheet Pins menu action (`handlers/canvas/sync_sheet_pins.rs`; the operand form of the command reads off the UI thread, #2199), and the agent registry and journal. The half is a sample estimate, not a count.
+
+**#2325.** The Windows stack overflow is on the CLI path, but boxing `Signex` or a bigger thread stack fixes it. It is a symptom, not by itself a reason for the epic.
 
 ---
 
