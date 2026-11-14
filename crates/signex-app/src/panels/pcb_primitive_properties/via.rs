@@ -1,0 +1,150 @@
+//! The Via panel: Net Information, Definition, Via Stack, Solder Mask
+//! Expansion, Via Types & Features and Testpoint.
+
+use iced::Element;
+use signex_i18n::{UserText, ids};
+
+use super::rows::{
+    Look, Section, fixed_checkbox, fixed_tiles, fixed_value, labelled, lock, mask_section,
+    mm_field, net_row, stack, template_rows, testpoint_section, value_box, with_tip,
+};
+use super::{PrimitiveField as F, ViaFacts, net_info};
+use crate::panels::{PanelContext, PanelMsg};
+
+pub(super) fn view<'a>(ctx: &'a PanelContext, f: &'a ViaFacts) -> Element<'a, PanelMsg> {
+    let look = Look::of(ctx);
+    let common = &f.common;
+    stack(vec![
+        net_info::section(look, common),
+        definition(look, f),
+        via_stack(look, f),
+        mask_section(look, common, ids::PCB_PRIM_SOLDER_MASK, true),
+        via_types(look, f),
+        testpoint_section(look, common),
+    ])
+}
+
+fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg>> {
+    let common = &f.common;
+    let mut s = Section::new(look, ids::PCB_PRIM_DEFINITION);
+    s.push(common, ids::PCB_PRIM_NET, net_row(look, common));
+    let span = UserText::new(f.span.clone().unwrap_or_default());
+    s.push(
+        common,
+        ids::PCB_PRIM_VIA_NAME,
+        labelled(
+            look,
+            ids::PCB_PRIM_VIA_NAME,
+            with_tip(look, value_box(look, span), ids::PCB_PRIM_VIA_SPAN_UNSUPPORTED),
+        ),
+    );
+    s.push(
+        common,
+        ids::PCB_PRIM_PROPAGATION_DELAY,
+        labelled(
+            look,
+            ids::PCB_PRIM_PROPAGATION_DELAY,
+            fixed_value(look, UserText::new(String::new()), ids::PCB_PRIM_DELAY_UNKNOWN),
+        ),
+    );
+    template_rows(look, common, &mut s);
+    s.push(
+        common,
+        ids::PCB_PRIM_X,
+        labelled(look, ids::PCB_PRIM_X, mm_field(common, F::X, f.x, look)),
+    );
+    s.push(
+        common,
+        ids::PCB_PRIM_Y,
+        labelled(look, ids::PCB_PRIM_Y, mm_field(common, F::Y, f.y, look)),
+    );
+    s.push(
+        common,
+        ids::PCB_PRIM_LOCK,
+        labelled(
+            look,
+            ids::PCB_PRIM_LOCK,
+            lock(look, false, ids::PCB_PRIM_LOCK_UNSUPPORTED),
+        ),
+    );
+    s.finish()
+}
+
+fn via_stack<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg>> {
+    let common = &f.common;
+    let mut s = Section::new(look, ids::PCB_PRIM_VIA_STACK);
+    s.push(
+        common,
+        ids::PCB_PRIM_SHOW_PREVIEW,
+        fixed_value(look, look.t(ids::PCB_PRIM_SHOW_PREVIEW), ids::PCB_PRIM_PREVIEW_UNSUPPORTED),
+    );
+    s.push(
+        common,
+        ids::PCB_PRIM_STACK_SIMPLE,
+        fixed_tiles(
+            look,
+            &[
+                ids::PCB_PRIM_STACK_SIMPLE,
+                ids::PCB_PRIM_STACK_TOP_MIDDLE_BOTTOM,
+                ids::PCB_PRIM_STACK_FULL,
+            ],
+            0,
+            ids::PCB_PRIM_STACK_UNSUPPORTED,
+        ),
+    );
+    s.push(
+        common,
+        ids::PCB_PRIM_DIAMETER,
+        labelled(
+            look,
+            ids::PCB_PRIM_DIAMETER,
+            mm_field(common, F::Diameter, f.diameter, look),
+        ),
+    );
+    s.push(
+        common,
+        ids::PCB_PRIM_THERMAL_RELIEF,
+        labelled(
+            look,
+            ids::PCB_PRIM_THERMAL_RELIEF,
+            fixed_checkbox(look, ids::PCB_PRIM_DIRECT, false, ids::PCB_PRIM_RELIEF_UNSUPPORTED),
+        ),
+    );
+    s.push(
+        common,
+        ids::PCB_PRIM_HOLE_SIZE,
+        labelled(
+            look,
+            ids::PCB_PRIM_HOLE_SIZE,
+            mm_field(common, F::HoleSize, f.hole, look),
+        ),
+    );
+    s.push(
+        common,
+        ids::PCB_PRIM_TOLERANCE,
+        labelled(
+            look,
+            ids::PCB_PRIM_TOLERANCE,
+            super::rows::pair(
+                fixed_value(look, UserText::new("+".to_string()), ids::PCB_PRIM_TOLERANCE_UNSUPPORTED),
+                fixed_value(look, UserText::new("−".to_string()), ids::PCB_PRIM_TOLERANCE_UNSUPPORTED),
+            ),
+        ),
+    );
+    s.finish()
+}
+
+fn via_types<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg>> {
+    let common = &f.common;
+    let mut s = Section::new(look, ids::PCB_PRIM_VIA_TYPES);
+    s.push(
+        common,
+        ids::PCB_PRIM_IPC_VIA_TYPE,
+        labelled(
+            look,
+            ids::PCB_PRIM_IPC_VIA_TYPE,
+            fixed_value(look, look.t(ids::PCB_PRIM_NONE), ids::PCB_PRIM_VIA_TYPE_UNSUPPORTED),
+        ),
+    );
+    s.finish()
+}

@@ -30,6 +30,9 @@ pub struct PcbBoardSummary {
     pub selected: usize,
     /// The one selected footprint, when the selection is exactly one.
     pub footprint: Option<super::PcbFootprintFacts>,
+    /// The selected tracks, vias or pads, when the selection is only those
+    /// of one kind (#2355).
+    pub primitive: Option<super::PcbPrimitiveFacts>,
 }
 
 impl PcbBoardSummary {
@@ -49,12 +52,18 @@ impl PcbBoardSummary {
             thickness_mm: board.thickness,
             selected,
             footprint: None,
+            primitive: None,
         }
     }
 
     /// This summary showing `footprint`'s properties.
     pub fn with_footprint(self, footprint: Option<super::PcbFootprintFacts>) -> Self {
         Self { footprint, ..self }
+    }
+
+    /// This summary showing the selected tracks', vias' or pads' panel.
+    pub fn with_primitive(self, primitive: Option<super::PcbPrimitiveFacts>) -> Self {
+        Self { primitive, ..self }
     }
 }
 
@@ -65,6 +74,9 @@ pub fn view<'a>(ctx: &'a PanelContext, board: &'a PcbBoardSummary) -> Element<'a
     let i18n = &*ctx.i18n;
     if let Some(footprint) = board.footprint.as_ref() {
         return super::pcb_footprint_properties::view(ctx, footprint);
+    }
+    if let Some(primitive) = board.primitive.as_ref() {
+        return super::pcb_primitive_properties::view(ctx, primitive);
     }
     if board.selected > 0 {
         return container(super::empty_state::empty_state_card(

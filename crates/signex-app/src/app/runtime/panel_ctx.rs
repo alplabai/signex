@@ -200,9 +200,11 @@ impl Signex {
             0
         };
         let footprint = self.pcb_footprint_facts(&tab.path, board);
+        let primitive = self.pcb_primitive_facts(&tab.path, board);
         Some(
             crate::panels::PcbBoardSummary::of(board, tab.title.clone(), selected)
-                .with_footprint(footprint),
+                .with_footprint(footprint)
+                .with_primitive(primitive),
         )
     }
 
@@ -228,6 +230,11 @@ impl Signex {
             in_view.as_deref() == Some(d.board.as_path()) && shown != Some(d.footprint)
         }) {
             self.interaction_state.pcb_footprint_draft = None;
+        }
+        if let Some(board) = in_view.as_deref() {
+            let shown = summary.as_ref().and_then(|s| s.primitive.as_ref());
+            let target = shown.map(|p| &p.common().target);
+            self.interaction_state.pcb_primitive.keep_only(board, target);
         }
         self.document_state.panel_ctx.pcb_board = summary;
     }

@@ -44,17 +44,13 @@ fn a_pad_moves_and_turns_on_the_board_through_its_footprint() {
     b.footprints[0].rotation = 90.0;
     b.footprints[0].position = Point::new(10.0, 20.0);
     let pad = [(id(FP_A), id(PAD_A1))];
-    run(
-        &mut b,
-        pad_edit_command(&b, &pad, &PadEdit::X(12.0)).unwrap(),
-    );
+    let command = pad_edit_command(&b, &pad, &PadEdit::X(12.0)).unwrap();
+    run(&mut b, command);
     let fp = &b.footprints[0];
     let world = pcb_geom::pad_world_center(fp, &fp.pads[0]).unwrap().to_mm();
     assert!((world.x - 12.0).abs() < 1e-6, "{world:?}");
-    run(
-        &mut b,
-        pad_edit_command(&b, &pad, &PadEdit::Rotation(135.0)).unwrap(),
-    );
+    let command = pad_edit_command(&b, &pad, &PadEdit::Rotation(135.0)).unwrap();
+    run(&mut b, command);
     let fp = &b.footprints[0];
     assert_eq!(fp.pads[0].rotation, 45.0);
     assert_eq!(

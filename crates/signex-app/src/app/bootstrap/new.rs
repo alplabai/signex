@@ -694,6 +694,7 @@ impl Signex {
                 cross_select: Default::default(),
                 board_sketch: None,
                 pcb_footprint_draft: None,
+                pcb_primitive: Default::default(),
                 dragging: None,
                 drag_start_pos: None,
                 drag_start_size: 0.0,

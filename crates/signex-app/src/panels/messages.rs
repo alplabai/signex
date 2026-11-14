@@ -656,6 +656,8 @@ pub enum PanelMsg {
     PcbLayers(crate::app::PcbViewMsg),
     /// The selected board footprint's Designator or Value field (#1312).
     PcbFootprintText(super::PcbFootprintTextMsg),
+    /// The selected tracks', vias' or pads' panel (#2355).
+    PcbPrimitive(super::PcbPrimitiveMsg),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active
     /// `PanelContext.library_row_detail`. Routes to
