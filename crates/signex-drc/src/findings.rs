@@ -286,7 +286,9 @@ pub fn skipped_keepout_warning(skipped: &SkippedKeepout) -> String {
     )
 }
 
-fn skipped_warning(rejected: &Rejected) -> String {
+/// An item (a track, via, pad or footprint body) that did not convert;
+/// shared with Run DRC's Messages.
+pub fn skipped_warning(rejected: &Rejected) -> String {
     format!(
         "DRC: {} could not be checked: {}",
         item_label(&rejected.item),

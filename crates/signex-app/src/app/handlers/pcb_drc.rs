@@ -316,6 +316,9 @@ fn log_report(report: &signex_drc::DrcReport, names: &std::collections::BTreeMap
     for skipped in &report.skipped_keepouts {
         crate::diagnostics::log_warning(findings::skipped_keepout_warning(skipped));
     }
+    for skipped in &report.skipped {
+        crate::diagnostics::log_warning(findings::skipped_warning(skipped));
+    }
     for v in report.violations.iter().take(LOGGED_VIOLATIONS) {
         crate::diagnostics::log_warning(findings::messages_line(v, names));
     }

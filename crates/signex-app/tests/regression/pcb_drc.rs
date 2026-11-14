@@ -552,3 +552,34 @@ fn a_keepout_only_board_counts_its_keepout() {
     assert_eq!(panel.rows.len(), 1);
     assert_eq!(panel.rows[0].kind, ViolationKind::Keepout);
 }
+
+/// An item that does not convert (a track ending 5 km out) is named on its
+/// own Messages line, not only counted in the summary.
+#[test]
+fn an_unchecked_item_is_named_in_messages() {
+    let mut b = board();
+    let mut far = track(4, 8.0, 4);
+    far.end = Point::new(5_000_000.0, 8.0);
+    b.segments.push(far);
+    let (mut app, _tmp, path) = open(b);
+    let lines = drc_lines_of_a_run(&mut app);
+
+    let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    assert_eq!(done.report.skipped.len(), 1, "{:?}", done.report);
+    assert_eq!(
+        done.report.skipped[0].item,
+        ItemRef::Track(Uuid::from_u128(4))
+    );
+    let named = format!("DRC: track {} could not be checked: ", Uuid::from_u128(4));
+    assert!(
+        lines.iter().any(|l| l.starts_with(&named)
+            && l.ends_with("is not a finite length within 1 km of the origin")),
+        "{lines:?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.ends_with("; 1 item(s) could not be checked")),
+        "{lines:?}"
+    );
+}
