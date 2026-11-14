@@ -645,10 +645,18 @@ impl Signex {
                 base.map(move |msg| overlay_id::scope_pcb_canvas_message(window_id, msg))
                     .boxed()
             };
-            // The board's layers as a strip under the canvas.
+            // The board's layers as tabs under the canvas; a tab click acts
+            // on this window's board (#2357).
             let strip = self.pcb_for_window(window_id).and_then(|board| {
+                let undocked = self.undocked_pcb_path(window_id);
+                let path = undocked.clone().or_else(|| self.active_tab_path())?;
+                let view = self.pcb_layer_view(&path);
                 pcb_strip::layer_strip(
-                    board,
+                    pcb_strip::StripBoard {
+                        board,
+                        view: &view,
+                        window: undocked.map(|_| window_id),
+                    },
                     &self.ui_state.i18n,
                     &self.document_state.panel_ctx.tokens,
                 )

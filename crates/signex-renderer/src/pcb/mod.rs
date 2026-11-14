@@ -164,14 +164,16 @@ impl PcbSnapshot {
 
 mod board_features;
 mod emit;
+mod layer_rows;
 mod layer_view;
 mod ratsnest;
 pub use board_features::{BoardFeaturesInput, HoleInput};
 use emit::*;
-pub use layer_view::{
-    BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, LayerGroup, LayerRow, PcbLayerView, board_copper_layers,
-    layer_rows,
+pub use layer_rows::{
+    LayerGroup, LayerRow, board_copper_layers, board_layers, group_layers, layer_rows,
+    signal_layers,
 };
+pub use layer_view::{BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, PcbLayerView};
 pub use ratsnest::ratsnest_inputs;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

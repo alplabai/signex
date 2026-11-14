@@ -265,6 +265,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "board_sketch"
         | "next_layer"
         | "prev_layer"
+        | "next_signal_layer"
+        | "toggle_single_layer_mode"
         | "toggle_layer_visibility"
         | "show_all_layers"
         | "view_rotate"

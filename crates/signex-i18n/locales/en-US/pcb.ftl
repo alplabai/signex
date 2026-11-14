@@ -2,15 +2,25 @@
 
 # Title of the Layers panel.
 pcb-layers-title = Layers
-# Shown in the Layers panel while no board is open.
-pcb-layers-empty = Open a PCB to see its layers.
+# Shown in the Layers panel while neither a board nor a footprint is in view.
+pcb-layers-empty = Open a board or a footprint to see its layers.
 # Button that shows every hidden layer again.
 pcb-layers-show-all = Show all layers
 # Group headers of the Layers panel.
-pcb-layers-copper = Copper
-pcb-layers-technical = Technical
+pcb-layers-signal = Signal
+pcb-layers-plane = Plane
 pcb-layers-mechanical = Mechanical
-# Status bar pill with the active copper layer; the layer's name follows it.
+pcb-layers-overlay = Overlay
+pcb-layers-mask = Mask
+pcb-layers-drill = Drill
+# Buttons at the top of a Layers panel group: show or hide all its layers.
+pcb-layers-group-show-all = Show all
+pcb-layers-group-hide-all = Hide all
+# Toggle button of the Layers panel: draw only the active layer.
+pcb-layers-single-layer = Single layer
+# Tooltip of that button.
+pcb-layers-single-layer-tip = Draw only the active layer, with the board outline and the vias and through-hole pads that reach it
+# Status bar pill with the active layer; the layer's name follows it.
 pcb-status-layer = Layer:
 # Status bar readout of how far the board view is turned on screen; the
 # angle in degrees follows it.

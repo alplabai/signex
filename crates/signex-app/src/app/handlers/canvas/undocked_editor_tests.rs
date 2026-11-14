@@ -327,16 +327,14 @@ fn the_footprint_layer_strip_stands_in_for_a_missing_layers_panel() {
     use crate::panels::PanelKind;
     let path = PathBuf::from("main.snxfpt");
     let (mut app, window) = main_showing(TabKind::FootprintEditor(path.clone()), &path);
-    app.document_state
-        .dock
-        .close_panel(PanelKind::FootprintLayers);
+    app.document_state.dock.close_panel(PanelKind::Layers);
     assert!(
         app.shows_footprint_layer_strip(window),
         "a layout without the Layers panel keeps the strip"
     );
     app.document_state
         .dock
-        .add_panel(PanelPosition::Left, PanelKind::FootprintLayers);
+        .add_panel(PanelPosition::Left, PanelKind::Layers);
     assert!(
         !app.shows_footprint_layer_strip(window),
         "with the panel docked, the strip is gone"

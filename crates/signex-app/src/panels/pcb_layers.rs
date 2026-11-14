@@ -1,6 +1,7 @@
-//! The Layers panel (#2223): one row per board layer with an eye, a colour
-//! swatch and the name; a click on a copper row makes it the active layer.
-//! The rows are data (`PcbLayersPanel`); `view` only draws them.
+//! The Layers panel of a board (#2223, #2359): its layers in groups, each
+//! row with an eye, a colour swatch and the name; a click on a row makes
+//! that layer the active one, as a tab under the canvas does. The rows are
+//! data (`PcbLayersPanel`); `view` only draws them.
 
 use std::collections::HashSet;
 use std::sync::{Arc, OnceLock};
@@ -8,15 +9,15 @@ use std::sync::{Arc, OnceLock};
 use iced::widget::button::{Status, Style as ButtonStyle};
 use iced::widget::{Column, Space, container, row, svg};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{I18n, MessageId, ids, t};
 use signex_renderer::pcb::{DIMMED_ALPHA, LayerGroup, LayerRow, PcbLayerView, layer_rows};
 use signex_types::pcb::LayerDef;
-use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::pcb_layer::PcbLayer;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{Label, button, text, tooltip};
+use signex_widgets::{Label, button, text};
 
 use super::form_look::{FormLook, ghost_button};
-use super::graphite::{active_fill, wash_fn};
+use super::graphite::{active_fill, hint_tooltip, wash_fn};
 use super::{PanelContext, PanelMsg, empty_state_card};
 use crate::app::PcbViewMsg;
 use crate::pcb_canvas::layer_style;
@@ -44,15 +45,18 @@ fn eye_handle(hidden: bool) -> svg::Handle {
 #[derive(Clone)]
 pub struct PcbLayersPanel {
     pub rows: Vec<LayerRow>,
+    /// The layers the user hid (their eyes).
     pub hidden: HashSet<PcbLayer>,
-    /// The active copper layer as drawn; `None` while every copper layer is
-    /// hidden or no board is open.
-    pub active: Option<CopperLayer>,
+    /// The active layer as drawn; `None` while it is hidden or no board is
+    /// open.
+    pub active: Option<PcbLayer>,
     /// The Multi-Layer row (vias and through-hole pads) is hidden.
     pub multi_layer_hidden: bool,
     /// The view hides something (`PcbLayerView::has_hidden`), so Show all
     /// layers has work to do.
     pub any_hidden: bool,
+    /// Single-layer mode is on.
+    pub single_layer: bool,
     /// A board is open; without one the panel shows its empty state.
     pub board_open: bool,
     pub i18n: Arc<I18n>,
@@ -66,6 +70,7 @@ impl Default for PcbLayersPanel {
             active: None,
             multi_layer_hidden: false,
             any_hidden: false,
+            single_layer: false,
             board_open: false,
             i18n: I18n::en_us(),
         }
@@ -78,7 +83,7 @@ impl PcbLayersPanel {
         let hidden = rows
             .iter()
             .map(|row| row.layer)
-            .filter(|layer| !view.is_visible(*layer))
+            .filter(|layer| view.is_hidden(*layer))
             .collect();
         Self {
             rows,
@@ -86,6 +91,7 @@ impl PcbLayersPanel {
             active: view.shown_active(),
             multi_layer_hidden: !view.multi_layer_visible(),
             any_hidden: view.has_hidden(),
+            single_layer: view.single_layer(),
             board_open: true,
             i18n,
         }
@@ -98,23 +104,37 @@ impl PcbLayersPanel {
     pub fn has_hidden(&self) -> bool {
         self.any_hidden
     }
+
+    fn group_rows(&self, group: LayerGroup) -> impl Iterator<Item = &LayerRow> {
+        self.rows.iter().filter(move |r| r.group == group)
+    }
+
+    /// Whether every layer of `group` is shown (the Drill group's
+    /// Multi-Layer row too): its button then hides them all.
+    pub fn group_all_shown(&self, group: LayerGroup) -> bool {
+        let rows_shown = self.group_rows(group).all(|r| !self.is_hidden(r.layer));
+        rows_shown && (group != LayerGroup::Drill || !self.multi_layer_hidden)
+    }
 }
 
-fn group_key(group: LayerGroup) -> &'static str {
+/// The section key (collapsed state) and the header of a group.
+fn group_section(group: LayerGroup) -> (&'static str, MessageId) {
     match group {
-        LayerGroup::Copper => "pcb_layers_copper",
-        LayerGroup::Technical => "pcb_layers_technical",
-        LayerGroup::Mechanical => "pcb_layers_mechanical",
+        LayerGroup::Signal => ("pcb_layers_signal", ids::PCB_LAYERS_SIGNAL),
+        LayerGroup::Plane => ("pcb_layers_plane", ids::PCB_LAYERS_PLANE),
+        LayerGroup::Mechanical => ("pcb_layers_mechanical", ids::PCB_LAYERS_MECHANICAL),
+        LayerGroup::Overlay => ("pcb_layers_overlay", ids::PCB_LAYERS_OVERLAY),
+        LayerGroup::Mask => ("pcb_layers_mask", ids::PCB_LAYERS_MASK),
+        LayerGroup::Drill => ("pcb_layers_drill", ids::PCB_LAYERS_DRILL),
     }
 }
 
 pub(super) fn view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
     let panel = &ctx.pcb_layers;
-    let tokens = &ctx.tokens;
     let i18n = &panel.i18n;
     if !panel.board_open {
         return empty_state_card(
-            tokens,
+            &ctx.tokens,
             t!(i18n, ids::PCB_LAYERS_TITLE),
             t!(i18n, ids::PCB_LAYERS_EMPTY),
             None,
@@ -122,43 +142,61 @@ pub(super) fn view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
     }
     let title = text(t!(i18n, ids::PCB_LAYERS_TITLE))
         .size(TS.label)
-        .color(ti(tokens.text));
-    let mut body = Column::<Element<'_, PanelMsg>>::new()
+        .color(ti(ctx.tokens.text));
+    Column::<Element<'_, PanelMsg>>::new()
         .spacing(SP.xs)
-        .width(Length::Fill);
-    body = body.push(container(title).padding([SP.s, SP.m]).boxed());
-    body = body.push(
-        container(
-            button(text(t!(i18n, ids::PCB_LAYERS_SHOW_ALL)).size(TS.body))
-                .padding([SP.xs, SP.m])
-                .style(show_all_button)
-                .on_press_maybe(
-                    panel
-                        .has_hidden()
-                        .then_some(PanelMsg::PcbLayers(PcbViewMsg::AllLayersShown)),
-                ),
-        )
-        .padding([0.0, SP.m])
-        .boxed(),
+        .width(Length::Fill)
+        .push(container(title).padding([SP.s, SP.m]).boxed())
+        .push(layers_list(panel, ctx))
+        .boxed()
+}
+
+/// The layer list: the view-wide buttons, then one section per group.
+fn layers_list<'a>(panel: &'a PcbLayersPanel, ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    let i18n = &panel.i18n;
+    let show_all = button(text(t!(i18n, ids::PCB_LAYERS_SHOW_ALL)).size(TS.body))
+        .padding([SP.xs, SP.m])
+        .style(show_all_button)
+        .on_press_maybe(
+            panel
+                .has_hidden()
+                .then_some(PanelMsg::PcbLayers(PcbViewMsg::AllLayersShown)),
+        );
+    let single = hint_tooltip(
+        button(text(t!(i18n, ids::PCB_LAYERS_SINGLE_LAYER)).size(TS.body))
+            .padding([SP.xs, SP.m])
+            .style(toggle_button(&ctx.tokens, panel.single_layer))
+            .on_press(PanelMsg::PcbLayers(PcbViewMsg::SingleLayerModeToggled))
+            .boxed(),
+        t!(i18n, ids::PCB_LAYERS_SINGLE_LAYER_TIP),
+        &ctx.tokens,
+        iced::widget::tooltip::Position::Bottom,
     );
-    for (group, header) in [
-        (LayerGroup::Copper, ids::PCB_LAYERS_COPPER),
-        (LayerGroup::Technical, ids::PCB_LAYERS_TECHNICAL),
-        (LayerGroup::Mechanical, ids::PCB_LAYERS_MECHANICAL),
-    ] {
-        let rows: Vec<&LayerRow> = panel.rows.iter().filter(|r| r.group == group).collect();
+    let mut body = Column::<Element<'a, PanelMsg>>::new()
+        .spacing(SP.xs)
+        .width(Length::Fill)
+        .push(
+            container(row![show_all, single].spacing(SP.s))
+                .padding([0.0, SP.m])
+                .boxed(),
+        );
+    for group in LayerGroup::ALL {
+        let rows: Vec<&LayerRow> = panel.group_rows(group).collect();
         if rows.is_empty() {
             continue;
         }
+        let (key, header) = group_section(group);
         let header = t!(i18n, header).into_string();
         body = body.push(
-            ctx.collapsible(group_key(group), &header, &ctx.collapsed_sections, || {
-                let col = rows.iter().fold(
-                    Column::<Element<'_, PanelMsg>>::new().spacing(0),
-                    |col, layer| col.push(layer_row(panel, layer, ctx)),
-                );
-                // Vias and through-hole pads list under the copper rows.
-                if group == LayerGroup::Copper {
+            ctx.collapsible(key, &header, &ctx.collapsed_sections, || {
+                let col = Column::<Element<'_, PanelMsg>>::new()
+                    .spacing(0)
+                    .push(group_button(panel, group, ctx));
+                let col = rows
+                    .iter()
+                    .fold(col, |col, layer| col.push(layer_row(panel, layer, ctx)));
+                // Vias and through-hole pads list with the drill layers.
+                if group == LayerGroup::Drill {
                     col.push(multi_layer_row(panel, ctx))
                 } else {
                     col
@@ -170,6 +208,36 @@ pub(super) fn view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
     body.boxed()
 }
 
+/// A group's Show all / Hide all: hides every layer of the group while all
+/// are shown, else shows them all.
+fn group_button<'a>(
+    panel: &PcbLayersPanel,
+    group: LayerGroup,
+    ctx: &PanelContext,
+) -> Element<'a, PanelMsg> {
+    let all_shown = panel.group_all_shown(group);
+    let label = if all_shown {
+        t!(panel.i18n, ids::PCB_LAYERS_GROUP_HIDE_ALL)
+    } else {
+        t!(panel.i18n, ids::PCB_LAYERS_GROUP_SHOW_ALL)
+    };
+    container(
+        button(
+            text(label)
+                .size(TS.caption)
+                .color(resolve(&ctx.tokens).ink3),
+        )
+        .padding([SP.xs, SP.s])
+        .style(row_button(&ctx.tokens))
+        .on_press(PanelMsg::PcbLayers(PcbViewMsg::LayerGroupVisibilitySet {
+            group,
+            visible: !all_shown,
+        })),
+    )
+    .padding([0.0, SP.s])
+    .boxed()
+}
+
 /// What one row of the panel shows and does.
 struct RowLook {
     label: Label<'static>,
@@ -178,7 +246,7 @@ struct RowLook {
     is_active: bool,
     /// What its eye sends.
     toggled: PcbViewMsg,
-    /// What a click on its name sends: a copper row makes its layer active.
+    /// What a click on its name sends: a layer row makes its layer active.
     picked: Option<PcbViewMsg>,
 }
 
@@ -191,9 +259,9 @@ fn layer_row<'a>(
         label: layer_style::row_label(&panel.i18n, layer),
         swatch: layer_style::layer_colour(layer.layer, &ctx.tokens),
         hidden: panel.is_hidden(layer.layer),
-        is_active: panel.active.is_some() && layer.layer.copper() == panel.active,
+        is_active: panel.active == Some(layer.layer),
         toggled: PcbViewMsg::LayerVisibilityToggled(layer.layer),
-        picked: layer.layer.copper().map(PcbViewMsg::ActiveLayerPicked),
+        picked: Some(PcbViewMsg::ActiveLayerPicked(layer.layer)),
     };
     row_view(panel, look, ctx)
 }
@@ -248,10 +316,12 @@ fn row_view<'a>(
     .padding([SP.xs, SP.s])
     .style(row_button(tokens))
     .on_press(PanelMsg::PcbLayers(toggled));
-    let eye = tooltip(
-        eye,
-        text(eye_tip).size(TS.body),
-        iced::widget::tooltip::Position::Bottom,
+    // Above the eye, so the hint never covers this row's name.
+    let eye = hint_tooltip(
+        eye.boxed(),
+        eye_tip,
+        tokens,
+        iced::widget::tooltip::Position::Top,
     );
     let swatch = container(Space::new())
         .width(12)
@@ -318,6 +388,21 @@ fn row_button(tokens: &ThemeTokens) -> impl Fn(&Theme, Status) -> ButtonStyle + 
             ..Border::default()
         },
         ..ButtonStyle::default()
+    }
+}
+
+/// A two-state button (Single layer): the active fill while on.
+fn toggle_button(
+    tokens: &ThemeTokens,
+    on: bool,
+) -> impl Fn(&Theme, Status) -> ButtonStyle + 'static {
+    let on_fill = active_fill(tokens);
+    move |theme: &Theme, status| {
+        let mut style = ghost_button(theme, status);
+        if on {
+            style.background = Some(Background::Color(on_fill));
+        }
+        style
     }
 }
 

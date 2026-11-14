@@ -12,7 +12,7 @@ pub type DrcRunResult = Result<
     String,
 >;
 
-use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::pcb_layer::PcbLayer;
 
 /// Board-view events, namespaced under `Message::Pcb` (ADR-0001 D3) and
 /// routed to `dispatch_pcb_message`.
@@ -81,10 +81,23 @@ pub enum BoardSketchMsg {
 pub enum PcbViewMsg {
     /// The user asked to show or hide the whole ratsnest.
     RatsnestVisibilityToggled,
-    /// The user stepped the active copper layer to the next or previous one.
+    /// The user stepped the active layer to the next or previous one of the
+    /// board's layers (`+`, `-`, the status bar pill).
     ActiveLayerStepped { forward: bool },
-    /// The user made one copper layer the active one (a Layers panel row).
-    ActiveLayerPicked(CopperLayer),
+    /// The user stepped the active layer to the next or previous signal
+    /// layer (`*`).
+    SignalLayerStepped { forward: bool },
+    /// The user made one layer the active one (a tab under the canvas or a
+    /// Layers panel row).
+    ActiveLayerPicked(PcbLayer),
+    /// The user turned single-layer mode on or off (Shift+S, the Layers
+    /// panel button).
+    SingleLayerModeToggled,
+    /// The user showed or hid every layer of one Layers panel group.
+    LayerGroupVisibilitySet {
+        group: signex_renderer::pcb::LayerGroup,
+        visible: bool,
+    },
     /// The user asked to show or hide one layer (its eye in the Layers panel).
     LayerVisibilityToggled(PcbLayer),
     /// The user asked to show or hide the active layer.

@@ -290,6 +290,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("toggle_ratsnest", "ToggleRatsnest"),
     ("next_layer", "NextLayer"),
     ("prev_layer", "PreviousLayer"),
+    ("next_signal_layer", "NextSignalLayer"),
+    ("toggle_single_layer_mode", "ToggleSingleLayerMode"),
     ("toggle_layer_visibility", "ToggleLayerVisibility"),
     ("show_all_layers", "ShowAllLayers"),
     ("view_rotate", "RotateView"),
