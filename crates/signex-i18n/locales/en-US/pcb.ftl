@@ -21,6 +21,38 @@ pcb-status-view-angle-tip = Board view rotation. Click to type an angle.
 pcb-status-view-angle-placeholder = Degrees
 # Tooltip of the PCB Active Bar button that turns the view a quarter turn.
 pcb-view-rotate-tooltip = Rotate View 90° Clockwise
+# Tooltip of the PCB Active Bar's Move button (#2352).
+pcb-bar-move-tooltip = Move (right-click for the move and transform menu)
+# Tooltips of the PCB Active Bar's greyed buttons: tools the board editor
+# cannot run yet (#2352).
+pcb-bar-filter-unavailable = Selection Filter: not available on boards yet
+pcb-bar-align-unavailable = Align: not available on boards yet
+pcb-bar-component-unavailable = Place Component: not available on boards yet
+pcb-bar-pad-unavailable = Place Pad: not available on boards yet
+pcb-bar-via-unavailable = Place Via: not available on boards yet
+pcb-bar-track-unavailable = Place Track: not available on boards yet
+pcb-bar-arc-unavailable = Place Arc: not available on boards yet
+pcb-bar-fill-unavailable = Place Fill: not available on boards yet
+pcb-bar-region-unavailable = Place Solid Region: not available on boards yet
+pcb-bar-polygon-pour-unavailable = Place Polygon Pour: not available on boards yet
+pcb-bar-text-unavailable = Place String: not available on boards yet
+pcb-bar-dimension-unavailable = Place Dimension: not available on boards yet
+pcb-bar-keepout-unavailable = Place Keepout: not available on boards yet
+pcb-bar-route-unavailable = Interactive Routing: not available on boards yet
+# Rows of the Place menu on a board (#2360). The ones the board editor cannot
+# run yet are greyed, with the tooltip above as the reason.
+pcb-tool-component = Component
+pcb-tool-pad = Pad
+pcb-tool-via = Via
+pcb-tool-route = Interactive Routing
+pcb-tool-track = Track
+pcb-tool-arc = Arc
+pcb-tool-fill = Fill
+pcb-tool-region = Solid Region
+pcb-tool-polygon-pour = Polygon Pour
+pcb-tool-string = String
+pcb-tool-dimension = Dimension
+pcb-tool-keepout = Keepout
 
 # Layer names in the Layers panel, the layer strip and the status bar, as
 # Altium names them. A mechanical layer the user named shows that name instead.

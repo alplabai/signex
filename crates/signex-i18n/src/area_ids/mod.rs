@@ -7,6 +7,7 @@ mod editors;
 mod library;
 mod overlay;
 mod panels;
+mod pcb;
 mod preferences;
 
 pub use dialog::*;
@@ -14,6 +15,7 @@ pub use editors::*;
 pub use library::*;
 pub use overlay::*;
 pub use panels::*;
+pub use pcb::*;
 pub use preferences::*;
 
 /// Every id of every area list.
@@ -25,6 +27,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         library::LIBRARY,
         overlay::OVERLAY,
         panels::PANELS,
+        pcb::PCB,
         preferences::PREFERENCES,
     ]
     .concat()

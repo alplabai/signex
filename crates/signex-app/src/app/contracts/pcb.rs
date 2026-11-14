@@ -60,6 +60,31 @@ pub enum PcbMsg {
     Reannotate(crate::app::BoardReannotateMsg),
     /// Back Annotate and its dialog (#1312).
     BackAnnotate(crate::app::BackAnnotateMsg),
+    /// The PCB Active Bar's dropdowns (#2352).
+    Bar(PcbBarMsg),
+}
+
+/// A dropdown of the PCB Active Bar (#2352).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PcbBarMenu {
+    /// Move and transform the board selection.
+    Move,
+    /// Turn the board view.
+    View,
+}
+
+/// What the user did on the PCB Active Bar's dropdowns (#2352). Its buttons
+/// run their commands through the menu bar's own message.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PcbBarMsg {
+    /// A group button was right-clicked: its dropdown opens, or closes when
+    /// it is the open one.
+    MenuToggled(PcbBarMenu),
+    /// The user clicked outside the open dropdown.
+    MenuDismissed,
+    /// A dropdown row was picked: the dropdown closes and the command runs
+    /// as its menu row runs it.
+    CommandPicked(crate::keymap::AppCommandId),
 }
 
 /// What the user did about board sketch mode (#2234). The drawing itself

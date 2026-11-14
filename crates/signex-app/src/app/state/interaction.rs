@@ -130,6 +130,8 @@ pub struct InteractionState {
     /// The undocked window `active_bar_menu` was opened in; `None` for the
     /// main window. Only that window paints the dropdown (#1910).
     pub active_bar_menu_window: Option<iced::window::Id>,
+    /// The open dropdown of the main window's PCB Active Bar (#2352).
+    pub pcb_bar_menu: Option<crate::app::PcbBarMenu>,
     /// The undocked window whose action is running inside `run_in_window`;
     /// `None` for the main window. Stamps what the action opens (a Components
     /// drag) and keeps the app-wide refreshes on the main window.

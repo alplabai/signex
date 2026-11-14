@@ -116,6 +116,13 @@ fn rows() -> Vec<Vec<&'static str>> {
         .collect()
 }
 
+/// Place on a board lists the board's rows (#2360), so the sheet's Place
+/// rows are not in that variant's bar; `menu_bar_place_board.golden.tsv`
+/// pins the board's.
+fn omits_row(ctx: &MenuContext, path: &str) -> bool {
+    ctx.commands.pcb.shown && path.starts_with("Place/")
+}
+
 #[test]
 fn golden_enablement_matches_live_predicates() {
     let ctxs = variants();
@@ -126,7 +133,15 @@ fn golden_enablement_matches_live_predicates() {
         }
         let got: String = ctxs
             .iter()
-            .map(|c| if eval_gate(gate, c) { '1' } else { '0' })
+            .map(|c| {
+                if omits_row(c, path) {
+                    '-'
+                } else if eval_gate(gate, c) {
+                    '1'
+                } else {
+                    '0'
+                }
+            })
             .collect();
         assert_eq!(got, bits, "enablement of {path} (gate {gate})");
     }
@@ -350,7 +365,9 @@ fn flatten(menu: &Menu, parent: Option<&str>, out: &mut Vec<(String, char)>) {
             MenuEntry::Submenu(sub) => flatten(sub, Some(&path), out),
             MenuEntry::Item(item) => {
                 let (kind, action) = match &item.state {
-                    ItemState::Placeholder | ItemState::Unavailable => ("stub", "-".to_string()),
+                    ItemState::Placeholder { .. } | ItemState::Unavailable => {
+                        ("stub", "-".to_string())
+                    }
                     ItemState::Live { action, .. } => ("item", action_name(action)),
                 };
                 let (id, text) = item
@@ -377,19 +394,71 @@ fn flat_rows(ctx: &MenuContext) -> Vec<(String, char)> {
 
 const RECENT_PREFIX: &str = "File/Open Recent/";
 
+/// The path column of a flattened row.
+fn row_path(cols: &str) -> &str {
+    cols.split('\t').next().unwrap_or(cols)
+}
+
+const PLACE_BOARD_GOLDEN: &str = include_str!("testdata/menu_bar_place_board.golden.tsv");
+
+/// #2360: Place on a board lists the board's tools, greyed with the PCB
+/// Active Bar's reason, then Board Sketch, live.
+#[test]
+fn model_reproduces_golden_board_place_menu() {
+    let ctxs = variants();
+    let board = ctxs
+        .iter()
+        .find(|ctx| ctx.commands.pcb.shown)
+        .expect("a board variant");
+    let got: Vec<String> = flat_rows(board)
+        .into_iter()
+        .filter(|(cols, _)| row_path(cols).starts_with("Place/"))
+        .map(|(cols, bit)| format!("{cols}\t{bit}"))
+        .collect();
+    let want: Vec<&str> = PLACE_BOARD_GOLDEN
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect();
+    assert_eq!(got, want);
+}
+
 #[test]
 fn model_reproduces_golden_menu_bar() {
-    let per_variant: Vec<Vec<(String, char)>> = variants().iter().map(flat_rows).collect();
-    let keep = |(cols, _): &(String, char)| !cols.starts_with(RECENT_PREFIX);
-    let first: Vec<&(String, char)> = per_variant[0].iter().filter(|r| keep(r)).collect();
+    let ctxs = variants();
+    // Each variant's rows, less Open Recent and the rows `omits_row` leaves
+    // out of that variant.
+    let mut per_variant: Vec<std::vec::IntoIter<(String, char)>> = ctxs
+        .iter()
+        .map(|ctx| {
+            flat_rows(ctx)
+                .into_iter()
+                .filter(|(cols, _)| {
+                    !cols.starts_with(RECENT_PREFIX) && !omits_row(ctx, row_path(cols))
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+        })
+        .collect();
+    let first: Vec<(String, char)> = flat_rows(&ctxs[0])
+        .into_iter()
+        .filter(|(cols, _)| !cols.starts_with(RECENT_PREFIX))
+        .collect();
+    assert!(
+        !omits_row(&ctxs[0], "Place/"),
+        "the first variant has every row"
+    );
     let mut got = String::new();
-    for (i, (cols, _)) in first.iter().enumerate() {
+    for (cols, _) in &first {
         let bits: String = per_variant
-            .iter()
-            .map(|rows| rows.iter().filter(|r| keep(r)).nth(i).expect("same shape"))
-            .map(|(other, bit)| {
-                assert_eq!(other, cols, "row shape must not depend on context");
-                *bit
+            .iter_mut()
+            .zip(&ctxs)
+            .map(|(rows, ctx)| {
+                if omits_row(ctx, row_path(cols)) {
+                    return '-';
+                }
+                let (other, bit) = rows.next().expect("same shape");
+                assert_eq!(&other, cols, "row shape must not depend on context");
+                bit
             })
             .collect();
         let bits = if bits.chars().all(|c| c == '-') {
