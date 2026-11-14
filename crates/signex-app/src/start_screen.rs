@@ -26,6 +26,7 @@ use crate::pinned_projects::PinnedProjects;
 use crate::styles;
 
 mod graphite;
+mod nav_strip;
 mod projects;
 
 /// Base text size every other measure on this screen is derived from.
@@ -201,13 +202,25 @@ fn region<'a>(tokens: &'a ThemeTokens, content: Element<'a, Message>) -> Element
         .boxed()
 }
 
+/// Where the middle of the collapsed navigation strip is, given the left
+/// edge of the laid-out hero title (#2346).
+#[cfg(test)]
+pub(crate) fn strip_centre_from_hero(hero_left: f32) -> f32 {
+    hero_left - graphite::MAIN_PAD_X - nav_strip::STRIP_W / 2.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::layout_probe::{find, lay_out_texts};
 
     /// A small but plausible window; the centre region is narrower still.
+    /// The navigation is the icon strip at this width (#2346).
     const SMALL_WINDOW: iced::Size = iced::Size::new(640.0, 360.0);
+    /// The narrowest start screen that keeps the full navigation (#2346),
+    /// as short as `SMALL_WINDOW`.
+    const NARROWEST_FULL_NAV: iced::Size =
+        iced::Size::new(graphite::NAV_W + graphite::MAIN_MIN_W, SMALL_WINDOW.height);
 
     fn paths(n: usize) -> Vec<PathBuf> {
         (0..n)
@@ -410,6 +423,9 @@ mod tests {
         signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark)
     }
 
+    /// The keycap is drawn by the full navigation, so it is checked at the
+    /// narrowest window that keeps it (#2346); at `SMALL_WINDOW` the strip
+    /// draws no keycap and still no blank text.
     #[test]
     fn an_unbound_open_shortcut_leaves_no_empty_keycap() {
         let tokens = graphite();
@@ -422,18 +438,22 @@ mod tests {
                 &NO_PINS,
                 &[],
             ),
-            SMALL_WINDOW,
+            NARROWEST_FULL_NAV,
         );
         assert!(bound.iter().any(|t| t.text == "F2"));
-        let unbound = lay_out_texts(
-            view(&tokens, &signex_i18n::I18n::en_us(), "", &[], &NO_PINS, &[]),
-            SMALL_WINDOW,
-        );
-        assert!(unbound.iter().any(|t| t.text == "Open\u{2026}"));
-        assert!(
-            unbound.iter().all(|t| !t.text.trim().is_empty()),
-            "an unbound shortcut leaves a blank keycap: {unbound:#?}"
-        );
+        for window in [NARROWEST_FULL_NAV, SMALL_WINDOW] {
+            let unbound = lay_out_texts(
+                view(&tokens, &signex_i18n::I18n::en_us(), "", &[], &NO_PINS, &[]),
+                window,
+            );
+            if window == NARROWEST_FULL_NAV {
+                assert!(unbound.iter().any(|t| t.text == "Open\u{2026}"));
+            }
+            assert!(
+                unbound.iter().all(|t| !t.text.trim().is_empty()),
+                "an unbound shortcut leaves a blank keycap at {window:?}: {unbound:#?}"
+            );
+        }
     }
 
     /// Font size the Graphite screen draws `label` at.
@@ -446,23 +466,44 @@ mod tests {
         }
     }
 
+    /// The navigation labels at the narrowest window that keeps the full
+    /// navigation, the project list also at `SMALL_WINDOW`, where the
+    /// navigation is an icon strip (#2346).
     #[test]
     fn labels_stay_on_one_line_and_inside_a_small_window() {
         let tokens = graphite();
         let recent = paths(MAX_START_RECENT + 2);
+        let checks: [(iced::Size, &[&str]); 2] = [
+            (
+                NARROWEST_FULL_NAV,
+                &["New project", "Open Sample Project", "proj0.snxprj"],
+            ),
+            (SMALL_WINDOW, &["proj0.snxprj"]),
+        ];
+        for (window, labels) in checks {
+            assert_labels_fit(&tokens, &recent, window, labels);
+        }
+    }
+
+    fn assert_labels_fit(
+        tokens: &ThemeTokens,
+        recent: &[PathBuf],
+        window: iced::Size,
+        labels: &[&str],
+    ) {
         let texts = lay_out_texts(
             view(
-                &tokens,
+                tokens,
                 &signex_i18n::I18n::en_us(),
                 "Ctrl+O",
-                &recent,
+                recent,
                 &NO_PINS,
                 &[],
             ),
-            SMALL_WINDOW,
+            window,
         );
         let one_line = BASE * 2.0;
-        for label in ["New project", "Open Sample Project", "proj0.snxprj"] {
+        for &label in labels {
             let bounds = find(&texts, label).bounds;
             // The primary button's label fills the button's height, so its
             // box is the button's, not a line's; wrapping shows as a
@@ -472,15 +513,18 @@ mod tests {
                 label,
             );
             if label != "New project" {
-                assert!(bounds.height < one_line, "{label:?} wrapped: {bounds:?}");
+                assert!(
+                    bounds.height < one_line,
+                    "{label:?} wrapped at {window:?}: {bounds:?}"
+                );
             }
             assert!(
                 bounds.width + 0.5 >= natural.width,
-                "{label:?} is narrower than its text: {bounds:?}, natural {natural:?}"
+                "{label:?} is narrower than its text at {window:?}: {bounds:?}, natural {natural:?}"
             );
             assert!(
-                bounds.x >= 0.0 && bounds.x + bounds.width <= SMALL_WINDOW.width,
-                "{label:?} overflows the window: {bounds:?}"
+                bounds.x >= 0.0 && bounds.x + bounds.width <= window.width,
+                "{label:?} overflows {window:?}: {bounds:?}"
             );
         }
     }
@@ -574,27 +618,33 @@ mod tests {
     /// verified at 800 x 500 (floor) and 640 x 360 (stress).
     const MIN_SENSIBLE_WINDOW: iced::Size = iced::Size::new(800.0, 500.0);
 
-    /// Every label at both window sizes: at least its natural width, one
+    /// Every label at each window size: at least its natural width, one
     /// line high, horizontally inside the window, with the full recent list
     /// present. Vertically the list may exceed a short window only because it
-    /// sits in a `scrollable`.
+    /// sits in a `scrollable`. Where the navigation is the icon strip
+    /// (#2346) its labels are tooltips, so only the project list is laid out.
     #[test]
     fn every_button_label_fits_at_small_window_sizes() {
         let tokens = graphite();
         let ts = crate::styles::TypeScale::DEFAULT;
         let recent = paths(MAX_START_RECENT + 2);
-        let mut labels: Vec<(String, f32)> = vec![
+        let nav_labels: Vec<(String, f32)> = vec![
             ("New project".into(), ts.dense),
             ("Open Sample Project".into(), ts.label),
             ("Keyboard Shortcuts (F1)".into(), ts.label),
         ];
-        labels.extend(
-            visible_recent(&recent)
-                .iter()
-                .map(|p| (recent_label(p), ts.label)),
-        );
+        let list_labels: Vec<(String, f32)> = visible_recent(&recent)
+            .iter()
+            .map(|p| (recent_label(p), ts.label))
+            .collect();
 
-        for window in [MIN_SENSIBLE_WINDOW, SMALL_WINDOW] {
+        for window in [MIN_SENSIBLE_WINDOW, NARROWEST_FULL_NAV, SMALL_WINDOW] {
+            let collapsed = graphite::nav_collapsed(window.width);
+            let labels: Vec<&(String, f32)> = if collapsed {
+                list_labels.iter().collect()
+            } else {
+                nav_labels.iter().chain(&list_labels).collect()
+            };
             let texts = lay_out_texts(
                 view(
                     &tokens,
@@ -640,5 +690,197 @@ mod tests {
                 "the recent list is complete at {window:?}"
             );
         }
+    }
+
+    /// The navigation's own texts, none of which the main column draws.
+    const NAV_TEXTS: [&str; 8] = [
+        "New project",
+        "Open\u{2026}",
+        "Home",
+        "Projects",
+        "Libraries",
+        "Parts search",
+        "Open Sample Project",
+        "Keyboard Shortcuts (F1)",
+    ];
+
+    /// #2346: the navigation is full while the area beside it is at least
+    /// 480 px (40 body heights), an icon strip below that, and the main
+    /// column takes the room the strip frees.
+    #[test]
+    fn the_navigation_collapses_to_an_icon_strip_when_the_main_area_is_narrow() {
+        let body = crate::styles::TypeScale::DEFAULT.body;
+        assert_eq!(graphite::MAIN_MIN_W, body * 40.0);
+        assert_eq!(graphite::NAV_W, body * 19.5);
+        assert!(!graphite::nav_collapsed(NARROWEST_FULL_NAV.width));
+        assert!(graphite::nav_collapsed(NARROWEST_FULL_NAV.width - 1.0));
+        assert!(nav_strip::STRIP_W < graphite::NAV_W / 3.0);
+
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        let lay_out =
+            |window| lay_out_texts(view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]), window);
+        let full = lay_out(NARROWEST_FULL_NAV);
+        for label in NAV_TEXTS {
+            assert!(
+                full.iter().any(|t| t.text == label),
+                "{label:?} missing from the full navigation"
+            );
+        }
+        let strip = lay_out(SMALL_WINDOW);
+        for label in NAV_TEXTS {
+            assert!(
+                strip.iter().all(|t| t.text != label),
+                "{label:?} is drawn in the icon strip; it belongs in the tooltip"
+            );
+        }
+        let hero = "What are you building?";
+        let left = find(&strip, hero).bounds.x;
+        let expected = nav_strip::STRIP_W + graphite::MAIN_PAD_X;
+        assert!(
+            (left - expected).abs() < 1.0,
+            "the main column starts at {left}, not beside the strip at {expected}"
+        );
+        // Wider again: the full navigation is back.
+        let wide = lay_out(MOCK_WINDOW);
+        assert!(wide.iter().any(|t| t.text == "Parts search"));
+    }
+
+    /// #2346: every strip row sends the message of its full row; the
+    /// current page and the planned Parts search send none.
+    #[test]
+    fn the_icon_strip_rows_send_their_full_rows_messages() {
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        let step = crate::styles::Spacing::DEFAULT.m;
+        let sent: Vec<String> = (0..)
+            .map(|i| i as f32 * step)
+            .take_while(|y| *y < SMALL_WINDOW.height)
+            .flat_map(|y| {
+                crate::layout_probe::messages_on_click_at(
+                    view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+                    SMALL_WINDOW,
+                    None,
+                    iced::Point::new(nav_strip::STRIP_W / 2.0, y),
+                )
+            })
+            .map(|m| format!("{m:?}"))
+            .collect();
+        let actions: Vec<String> = Action::ALL
+            .iter()
+            .map(|a| format!("{:?}", a.message()))
+            .collect();
+        for action in &actions {
+            assert!(
+                sent.contains(action),
+                "no strip row sends {action}: {sent:?}"
+            );
+        }
+        assert!(
+            sent.iter().all(|m| actions.contains(m)),
+            "a strip row sends something no full row sends: {sent:?}"
+        );
+    }
+
+    /// Whether a click at (`x`, `y`) in a `window` start screen opens
+    /// Keyboard Shortcuts.
+    fn click_opens_shortcuts(window: iced::Size, x: f32, y: f32) -> bool {
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        let shortcuts = format!("{:?}", Action::KeyboardShortcuts.message());
+        crate::layout_probe::messages_on_click_at(
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            window,
+            None,
+            iced::Point::new(x, y),
+        )
+        .iter()
+        .any(|m| format!("{m:?}") == shortcuts)
+    }
+
+    /// Height of the Keyboard Shortcuts row at `x`, found by clicking
+    /// every quarter pixel from `from` for `reach` pixels.
+    fn shortcuts_row_height(window: iced::Size, x: f32, from: f32, reach: f32) -> f32 {
+        const STEP: f32 = 0.25;
+        let hits = (0..)
+            .map(|i| from + i as f32 * STEP)
+            .take_while(|y| *y < from + reach)
+            .filter(|y| click_opens_shortcuts(window, x, *y))
+            .count();
+        hits as f32 * STEP
+    }
+
+    /// #2346: a strip row is as tall as a full navigation row.
+    #[test]
+    fn a_strip_row_is_as_tall_as_a_full_navigation_row() {
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        let row_h = graphite::NAV_ROW_H;
+        let full_texts = lay_out_texts(
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            NARROWEST_FULL_NAV,
+        );
+        let label = find(&full_texts, "Keyboard Shortcuts (F1)").bounds;
+        let full = shortcuts_row_height(
+            NARROWEST_FULL_NAV,
+            label.center_x(),
+            label.center_y() - row_h,
+            2.0 * row_h,
+        );
+        let x = nav_strip::STRIP_W / 2.0;
+        let step = crate::styles::Spacing::DEFAULT.m;
+        let inside = (0..)
+            .map(|i| i as f32 * step)
+            .take_while(|y| *y < SMALL_WINDOW.height)
+            .find(|y| click_opens_shortcuts(SMALL_WINDOW, x, *y))
+            .expect("no strip row opens Keyboard Shortcuts");
+        let strip = shortcuts_row_height(SMALL_WINDOW, x, inside - row_h, 2.0 * row_h);
+        assert!(
+            (full - row_h).abs() <= 1.0,
+            "the full row is {full} tall, not {row_h}"
+        );
+        assert!(
+            (strip - full).abs() <= 1.0,
+            "a strip row is {strip} tall, a full row {full}"
+        );
+    }
+
+    /// #2346: in a window too short for every strip row the strip scrolls,
+    /// so the last row is reached by scrolling. A pixel delta (a touchpad)
+    /// scrolls at once; a wheel line is animated over later frames.
+    #[test]
+    fn the_icon_strip_scrolls_in_a_short_window() {
+        let short = iced::Size::new(SMALL_WINDOW.width, SMALL_WINDOW.height / 2.0);
+        assert!(graphite::nav_collapsed(short.width));
+        let x = nav_strip::STRIP_W / 2.0;
+        // The last row's place once the strip is scrolled to its end.
+        let y = short.height - crate::styles::Spacing::DEFAULT.l - graphite::NAV_ROW_H / 2.0;
+        assert!(
+            !click_opens_shortcuts(short, x, y),
+            "the strip fits a {short:?} window; the test needs it taller"
+        );
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        let shortcuts = format!("{:?}", Action::KeyboardShortcuts.message());
+        let scrolled = crate::layout_probe::messages_for_events(
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            short,
+            iced::Point::new(x, y),
+            &[
+                iced::mouse::Event::WheelScrolled {
+                    delta: iced::mouse::ScrollDelta::Pixels {
+                        x: 0.0,
+                        y: -SMALL_WINDOW.height,
+                    },
+                },
+                iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left),
+                iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left),
+            ]
+            .map(iced::Event::Mouse),
+        );
+        assert!(
+            scrolled.iter().any(|m| format!("{m:?}") == shortcuts),
+            "scrolled to its end, the strip's last row is not under the cursor: {scrolled:?}"
+        );
     }
 }
