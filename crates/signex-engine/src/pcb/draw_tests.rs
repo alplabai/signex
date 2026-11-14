@@ -48,3 +48,70 @@ fn a_board_without_setup_sizes_takes_the_pcb_defaults() {
     assert_eq!(via.diameter, signex_types::pcb::PCB_DEFAULT_VIA_DIAMETER_MM);
     assert_eq!(via.drill, signex_types::pcb::PCB_DEFAULT_VIA_DRILL_MM);
 }
+
+#[test]
+fn a_track_run_bends_by_the_corner_rule_on_the_net_it_starts_on() {
+    use signex_types::corner::{CornerMode, CornerRule};
+    use signex_types::pcb_layer::CopperLayer;
+
+    let board = board();
+    let from = Point::new(2.0, 0.0);
+    let style = TrackStyle::starting_at(&board, from, CopperLayer::Top);
+    assert_eq!((style.width_mm, style.net), (0.3, 3), "setup width, track net");
+    let bottom = TrackStyle::starting_at(&board, from, CopperLayer::Bottom);
+    assert_eq!(bottom.net, 0, "no copper under it on the bottom layer");
+
+    let mut next = 0x40;
+    let mut ids = || {
+        next += 1;
+        Uuid::from_u128(next)
+    };
+    let ortho = CornerRule::default();
+    let tracks = track_run(from, Point::new(5.0, 4.0), ortho, style, &mut ids);
+    let legs: Vec<_> = tracks.iter().map(|t| (t.start, t.end)).collect();
+    assert_eq!(
+        legs,
+        [
+            (from, Point::new(5.0, 0.0)),
+            (Point::new(5.0, 0.0), Point::new(5.0, 4.0))
+        ],
+        "horizontal first, then vertical"
+    );
+    assert!(tracks.iter().all(|t| t.layer == "TopCopper" && t.net == 3));
+    let free = CornerRule {
+        mode: CornerMode::FreeAngle,
+        is_flipped: false,
+    };
+    assert_eq!(track_run(from, Point::new(5.0, 4.0), free, style, &mut ids).len(), 1);
+    assert!(track_run(from, from, ortho, style, &mut ids).is_empty());
+    assert!(place_route(Vec::new(), None).is_none());
+}
+
+#[test]
+fn a_layer_change_adds_its_via_and_tracks_as_one_step() {
+    use signex_types::corner::CornerRule;
+    use signex_types::pcb_layer::CopperLayer;
+
+    let mut engine = BoardEngine::new(board(), 1);
+    let before = serde_json::to_string(engine.board()).unwrap();
+    let at = Point::new(5.0, 0.0);
+    let via = new_via(engine.board(), Uuid::from_u128(0x50), at);
+    let style = TrackStyle {
+        layer: CopperLayer::Bottom,
+        width_mm: 0.3,
+        net: via.net,
+    };
+    let mut n = 0x60;
+    let tracks = track_run(at, Point::new(5.0, 3.0), CornerRule::default(), style, || {
+        n += 1;
+        Uuid::from_u128(n)
+    });
+    engine
+        .execute(place_route(tracks, Some(via)).unwrap())
+        .unwrap();
+    assert_eq!(engine.board().vias.len(), 1);
+    assert_eq!(engine.board().segments.last().unwrap().layer, "BottomCopper");
+    assert_eq!(engine.board().segments.last().unwrap().net, 3);
+    engine.undo().unwrap();
+    assert_eq!(serde_json::to_string(engine.board()).unwrap(), before);
+}

@@ -7,7 +7,6 @@ define_ids! {
     PCB_BAR_ALIGN_UNAVAILABLE = "pcb-bar-align-unavailable";
     PCB_BAR_COMPONENT_UNAVAILABLE = "pcb-bar-component-unavailable";
     PCB_BAR_PAD_UNAVAILABLE = "pcb-bar-pad-unavailable";
-    PCB_BAR_TRACK_UNAVAILABLE = "pcb-bar-track-unavailable";
     PCB_BAR_ARC_UNAVAILABLE = "pcb-bar-arc-unavailable";
     PCB_BAR_FILL_UNAVAILABLE = "pcb-bar-fill-unavailable";
     PCB_BAR_REGION_UNAVAILABLE = "pcb-bar-region-unavailable";
@@ -30,4 +29,7 @@ define_ids! {
     PCB_TOOL_KEEPOUT = "pcb-tool-keepout";
     PCB_BAR_VIA_TOOLTIP = "pcb-bar-via-tooltip";
     PCB_TOOL_HINT_VIA = "pcb-tool-hint-via";
+    PCB_BAR_TRACK_TOOLTIP = "pcb-bar-track-tooltip";
+    PCB_TOOL_HINT_TRACK = "pcb-tool-hint-track";
+    PCB_TOOL_TRACK_NEEDS_COPPER = "pcb-tool-track-needs-copper";
 }

@@ -214,4 +214,14 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    CommandMetadata {
+        id: "place_board_track",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_TRACK,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_TRACK),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
 ];

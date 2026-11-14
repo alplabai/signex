@@ -380,6 +380,8 @@ define_ids! {
         CMD_MENU_BOARD_SKETCH = "cmd-menu-board-sketch";
         CMD_PLACE_BOARD_VIA = "cmd-place-board-via";
         CMD_MENU_PLACE_BOARD_VIA = "cmd-menu-place-board-via";
+        CMD_PLACE_BOARD_TRACK = "cmd-place-board-track";
+        CMD_MENU_PLACE_BOARD_TRACK = "cmd-menu-place-board-track";
         CMD_FOOTPRINT_MODE_PADS = "cmd-footprint-mode-pads";
         CMD_FOOTPRINT_MODE_SKETCH = "cmd-footprint-mode-sketch";
         CMD_FOOTPRINT_MODE_VIEW_3D = "cmd-footprint-mode-view-3d";

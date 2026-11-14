@@ -124,7 +124,9 @@ impl Needs {
             Self::TurnedPcbView => ctx.has_pcb && ctx.pcb_view_turned,
             // On a sheet, rotate also turns a part on the cursor with
             // nothing selected; on a board too (#2364).
-            Self::Turn if ctx.pcb.shown => ctx.pcb.placeable || ctx.pcb.part_in_hand,
+            Self::Turn if ctx.pcb.shown => {
+                ctx.pcb.placeable || ctx.pcb.part_in_hand || ctx.pcb.routing
+            }
             Self::Turn => ctx.has_schematic && (ctx.has_selection || ctx.turn_in_hand),
             Self::MoveSelection if ctx.pcb.shown => ctx.pcb.placeable,
             Self::MoveSelection => ctx.has_schematic && ctx.has_selection,
@@ -281,7 +283,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
         "run_drc" | "reannotate_board" => Needs::Pcb,
         // #2373: the board placement tools.
-        "place_board_via" => Needs::Pcb,
+        "place_board_via" | "place_board_track" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
         "new_pcb_document" => Needs::OpenProject,

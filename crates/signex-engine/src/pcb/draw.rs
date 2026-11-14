@@ -2,10 +2,14 @@
 //! function builds what one `BoardCommand::AddItems` adds as one undo step,
 //! with the board's own defaults and the net of the copper it lands on.
 
-use pcb_geom::{PointNm, net_at};
+use pcb_geom::{PointNm, layer_bit, net_at};
+use signex_types::corner::CornerRule;
+use signex_types::format::pcb_layer_token;
 use signex_types::pcb::{
-    PCB_DEFAULT_VIA_DIAMETER_MM, PCB_DEFAULT_VIA_DRILL_MM, PcbBoard, PcbSetup, Point, Via, ViaType,
+    PCB_DEFAULT_TRACE_WIDTH_MM, PCB_DEFAULT_VIA_DIAMETER_MM, PCB_DEFAULT_VIA_DRILL_MM, PcbBoard,
+    PcbSetup, Point, Segment, Via, ViaType,
 };
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use uuid::Uuid;
 
 use super::command::BoardCommand;
@@ -53,6 +57,63 @@ pub fn place_via(board: &PcbBoard, id: Uuid, at: Point) -> BoardCommand {
     BoardCommand::AddItems {
         items: vec![BoardItem::Via(new_via(board, id, at))],
     }
+}
+
+/// How a track run is drawn: its copper layer, width and net.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TrackStyle {
+    pub layer: CopperLayer,
+    pub width_mm: f64,
+    pub net: u32,
+}
+
+impl TrackStyle {
+    /// A run starting at `at` on `layer`: the board's track width
+    /// (`PcbSetup::trace_width`, else the PCB default) and the net of the
+    /// copper under `at` on that layer.
+    pub fn starting_at(board: &PcbBoard, at: Point, layer: CopperLayer) -> Self {
+        Self {
+            layer,
+            width_mm: setup_or(board, |s| s.trace_width, PCB_DEFAULT_TRACE_WIDTH_MM),
+            net: net_under(board, at, 1 << layer_bit(layer)),
+        }
+    }
+}
+
+/// The tracks of a run from `from` to `to`, bent by `rule` into one or two
+/// legs (#2372); none when the points are the same. `ids` names each new
+/// track.
+pub fn track_run(
+    from: Point,
+    to: Point,
+    rule: CornerRule,
+    style: TrackStyle,
+    mut ids: impl FnMut() -> Uuid,
+) -> Vec<Segment> {
+    let layer = pcb_layer_token(PcbLayer::Copper(style.layer));
+    rule.legs(from, to)
+        .into_iter()
+        .map(|(start, end)| Segment {
+            uuid: ids(),
+            start,
+            end,
+            width: style.width_mm,
+            layer: layer.clone(),
+            net: style.net,
+            unknown_columns: Default::default(),
+        })
+        .collect()
+}
+
+/// Add a run's tracks, with the via that takes it to another layer first
+/// when there is one: one undo step. `None` when there is nothing to add.
+pub fn place_route(tracks: Vec<Segment>, via: Option<Via>) -> Option<BoardCommand> {
+    let items: Vec<BoardItem> = via
+        .map(BoardItem::Via)
+        .into_iter()
+        .chain(tracks.into_iter().map(BoardItem::Segment))
+        .collect();
+    (!items.is_empty()).then_some(BoardCommand::AddItems { items })
 }
 
 #[cfg(test)]

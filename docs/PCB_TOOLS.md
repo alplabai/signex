@@ -31,3 +31,26 @@ are both built from it (see `MENU_BAR.md`, "Place on a board").
 `place_board_via` (Altium profile: `P V` on a board). Each click places a
 through via (top to bottom copper) with the board's via size
 (`PcbSetup::via_diameter` and `via_drill`, else 0.6 mm and 0.3 mm).
+
+## Track
+
+`place_board_track` (Altium profile: `P T` on a board). A run is drawn on
+the active copper layer; with a non-copper layer active the tool says so and
+draws nothing.
+
+- The first click starts the run on the net of the copper under it. A run
+  started over bare board takes the net of the copper its next point lands
+  on.
+- Each later click adds the legs from the run's end to the point, bent by
+  the corner rule wires use (#2372): Space flips the bend, Shift+Space steps
+  the corner mode (90°, 45° start, 45° end, any angle). The rule is shared
+  with wires and buses, and kept across runs.
+- Width: `PcbSetup::trace_width`, else 0.25 mm. Net-class and rule widths
+  are not read yet.
+- Making another copper layer active mid-run (a layer tab, `+`, `-`, `*`)
+  puts a via at the run's end in the same undo step as the next legs, and
+  the run goes on on the new layer.
+- A click on the run's end, Esc or a right-click ends the run; the next Esc
+  or right-click ends the tool.
+- No walk-around, shove or ratsnest following: that is Interactive Routing,
+  still greyed.

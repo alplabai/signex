@@ -19,8 +19,12 @@ use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::pcb_canvas::{carried_board, snap_point};
 
+mod route;
+
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod route_tests;
 
 /// A placement tool armed on one board in one window, and the shape it is
 /// drawing.
@@ -36,12 +40,19 @@ pub struct BoardToolSession {
     /// Where the next click lands; `None` until the pointer is over the
     /// board.
     pub cursor: Option<Point>,
+    /// The layer, width and net of the track run being drawn.
+    pub route: Option<draw::TrackStyle>,
 }
 
 impl BoardToolSession {
     /// Whether the tool belongs to the board at `path` shown in `window`.
     pub fn is_for(&self, path: Option<&std::path::Path>, window: Option<iced::window::Id>) -> bool {
         path == Some(self.path.as_path()) && window == self.window
+    }
+
+    /// Whether a track run is being drawn: Space and Shift+Space bend it.
+    pub fn is_routing(&self) -> bool {
+        self.tool == BoardPlaceTool::Track && !self.points.is_empty()
     }
 }
 
@@ -64,6 +75,7 @@ impl Signex {
             window: self.interaction_state.acting_window,
             points: Vec::new(),
             cursor: None,
+            route: None,
         });
         crate::diagnostics::log_info(t!(self.ui_state.i18n, tool.texts().1).into_string());
         self.refresh_pcb_highlight();
@@ -106,6 +118,7 @@ impl Signex {
             self.end_board_tool();
         } else {
             session.points.clear();
+            session.route = None;
             self.refresh_pcb_highlight();
         }
         true
@@ -145,6 +158,7 @@ impl Signex {
                 let command = draw::place_via(board, Uuid::now_v7(), at);
                 self.run_placement("Via", Ok(vec![command]));
             }
+            BoardPlaceTool::Track => self.route_clicked(at),
             _ => return false,
         }
         if let Some(session) = self.own_board_tool_mut() {
@@ -163,6 +177,7 @@ impl Signex {
         let mut preview = carried_board(board, &Default::default(), Point::new(0.0, 0.0));
         match session.tool {
             BoardPlaceTool::Via => preview.vias.push(draw::new_via(board, Uuid::nil(), cursor)),
+            BoardPlaceTool::Track => self.route_preview(session, board, cursor, &mut preview),
             _ => return None,
         }
         Some(self.pcb_snapshot_for(&session.path, &preview))

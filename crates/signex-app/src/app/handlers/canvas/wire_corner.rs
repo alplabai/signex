@@ -15,6 +15,10 @@ impl Signex {
         self.interaction_state
             .active_canvas_mut()
             .clear_overlay_cache();
+        // A board track run bends by the same rule (#2373).
+        if self.is_routing_board_track() {
+            self.refresh_pcb_highlight();
+        }
     }
 
     /// Whether a wire or bus run is open: its first point is placed and the
@@ -27,7 +31,9 @@ impl Signex {
     /// The status bar note while the Wire or Bus tool is active: the corner
     /// the next click will draw.
     pub(crate) fn corner_status(&self) -> Option<String> {
-        if !crate::active_bar::shows_draw_mode_pill(self.interaction_state.current_tool) {
+        if !crate::active_bar::shows_draw_mode_pill(self.interaction_state.current_tool)
+            && !self.is_routing_board_track()
+        {
             return None;
         }
         let id = match self.interaction_state.corner_rule.bend() {

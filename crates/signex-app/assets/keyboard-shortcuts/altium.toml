@@ -176,6 +176,7 @@ context = "pcb"
 "*" = "next_signal_layer"
 "Shift+*" = "next_signal_layer"
 "-" = "prev_layer"
+"P T" = "place_board_track"
 "P V" = "place_board_via"
 "Shift+S" = "toggle_single_layer_mode"
 
