@@ -17,6 +17,7 @@ mod i18n;
 mod locale;
 mod numbers;
 mod text;
+mod translatable;
 mod types;
 
 pub use format::{DateLength, ListKind};
@@ -24,6 +25,7 @@ pub use i18n::{I18n, LanguageOption};
 /// The locale type [`I18n::format_locale`] returns, for callers that keep one.
 pub use icu_locale_core::Locale;
 pub use locale::LanguagePref;
+pub use translatable::Translatable;
 pub use types::{Arg, LocalNumber, Localized, MessageId, UserText};
 
 /// Every message id, defined together with a list of them so a new id cannot
