@@ -115,7 +115,7 @@ pub use state::{
     PreviewState, ProjectId, Signex, UiState,
 };
 pub use symbol_history::SymbolHistorySnapshot;
-pub use update_pcb::{UpdatePcbMsg, UpdatePcbState};
+pub use update_pcb::{RowAction, RowFilter, TableGroup, UpdatePcbMsg, UpdatePcbState};
 
 // Re-exported so modal dialogs outside `state` can reference the type.
 pub use state::AnnotateOrder;

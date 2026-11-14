@@ -8,6 +8,7 @@ mod library;
 mod overlay;
 mod panels;
 mod preferences;
+mod update_pcb;
 
 pub use dialog::*;
 pub use editors::*;
@@ -15,6 +16,7 @@ pub use library::*;
 pub use overlay::*;
 pub use panels::*;
 pub use preferences::*;
+pub use update_pcb::*;
 
 /// Every id of every area list.
 #[cfg(test)]
@@ -26,6 +28,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         overlay::OVERLAY,
         panels::PANELS,
         preferences::PREFERENCES,
+        update_pcb::UPDATE_PCB,
     ]
     .concat()
 }
