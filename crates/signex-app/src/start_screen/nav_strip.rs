@@ -198,7 +198,7 @@ pub(super) fn view<'a>(
     for row in pages {
         items = items.push(strip_row(tokens, row));
     }
-    items = items.push(container(nav_divider(tokens)).padding([SP.m, 0.0]));
+    items = items.push(container(nav_divider(tokens)).padding([SP.m, 0.0]).boxed());
     for row in app_rows {
         items = items.push(strip_row(tokens, row));
     }
