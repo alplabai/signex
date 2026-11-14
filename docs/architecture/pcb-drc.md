@@ -305,6 +305,10 @@ a debug run takes about 0.35 s).
 `run_drc` (command catalog, group PCB, enabled with a PCB document), the
 Tools > Design Rule Check menu row (greyed with no PCB), the command palette
 and the Run DRC button in the Messages panel send `Message::Pcb(PcbMsg::DrcRequested)`.
+The run reads the net classes and rule layers of the board's own project
+(`DocumentState::board_project`: the open project whose `pcb_file` is the
+board), as `check_drc` does, whichever project is active; a board in no open
+project is checked with this machine's layer and no net classes (#2332).
 The board is copied and checked in `spawn_blocking`; a result is applied only
 if no newer run began. The Messages panel lists the violations (first 500)
 above the log, and clicking a row selects its items with the #2191

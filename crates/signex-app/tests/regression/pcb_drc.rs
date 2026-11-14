@@ -583,3 +583,82 @@ fn an_unchecked_item_is_named_in_messages() {
         "{lines:?}"
     );
 }
+
+/// A project at `dir` with the board file `pcb_file` and `dsl` as its
+/// stored DRC rule text, open in `app` and made the active project.
+fn add_project(
+    app: &mut Signex,
+    dir: &std::path::Path,
+    pcb_file: Option<&str>,
+    dsl: &str,
+) -> signex_app::app::ProjectId {
+    use signex_types::project::{DrcRuleSet, ProjectRules};
+    let path = dir.join("demo.snxprj");
+    let mut data = signex_types::project::parse_project_bytes(&path, b"").expect("empty project");
+    data.pcb_file = pcb_file.map(str::to_string);
+    data.rules = Some(ProjectRules {
+        drc: DrcRuleSet {
+            dsl: Some(dsl.to_string()),
+            ..Default::default()
+        },
+        ..ProjectRules::default()
+    });
+    let id = app.document_state.mint_project_id();
+    app.document_state
+        .projects
+        .push(signex_app::app::LoadedProject {
+            id,
+            path,
+            data,
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        });
+    app.document_state.active_project = Some(id);
+    id
+}
+
+/// Rule text that loosens the clearance to 0.1 mm: the 0.15 mm gap passes.
+const LOOSE_CLEARANCE: &str = "rule tight on clearance require clearance >= 0.1mm then error";
+/// Rule text that adds a 0.3 mm track width check: each 0.25 mm track fails.
+const WIDE_TRACKS: &str = "rule wide on track require width >= 0.3mm then warning";
+
+/// #2332: Run DRC reads the rules of the board's own project, the one whose
+/// `pcb_file` is the board, not those of the active project.
+#[test]
+fn run_drc_uses_the_boards_own_project_not_the_active_one() {
+    let (mut app, tmp, path) = open_board();
+    let own = add_project(&mut app, tmp.path(), Some("board.snxpcb"), LOOSE_CLEARANCE);
+    let other_dir = tmp.path().join("other");
+    std::fs::create_dir(&other_dir).unwrap();
+    let other = add_project(&mut app, &other_dir, None, WIDE_TRACKS);
+    assert_eq!(app.document_state.active_project, Some(other));
+    assert_ne!(own, other);
+
+    run_drc(&mut app);
+    let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    // The own project's rule loosens the clearance; the active project's
+    // width rule is not applied.
+    assert!(done.report.violations.is_empty(), "{:?}", done.report);
+    assert_eq!(done.report.rules.user_rules().count(), 1);
+    assert_eq!(done.report.count(ViolationKind::TrackWidth), 0);
+}
+
+/// #2332: a loose board is checked with this machine's layer, as
+/// `check_drc` checks it, even while another project is active.
+#[test]
+fn run_drc_on_a_loose_board_ignores_the_active_projects_rules() {
+    let (mut app, tmp, path) = open_board();
+    let other_dir = tmp.path().join("other");
+    std::fs::create_dir(&other_dir).unwrap();
+    let other = add_project(&mut app, &other_dir, None, LOOSE_CLEARANCE);
+    assert_eq!(app.document_state.active_project, Some(other));
+
+    run_drc(&mut app);
+    let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    // The active project's 0.1 mm rule would pass the 0.15 mm gap.
+    assert_eq!(done.report.violations.len(), 1, "{:?}", done.report);
+    assert_eq!(done.report.violations[0].kind, ViolationKind::Clearance);
+    assert_eq!(done.report.rules.user_rules().count(), 0);
+}

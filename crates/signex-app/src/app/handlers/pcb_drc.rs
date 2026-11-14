@@ -38,7 +38,9 @@ impl Signex {
             crate::diagnostics::log_info("DRC: a check of this board is already running");
             return Task::none();
         }
-        let project = self.document_state.active_document_project();
+        // The board's own project, as `check_drc` takes it (#2332): a loose
+        // board gets this machine's layer and no net classes.
+        let project = self.document_state.board_project(&path, None);
         let classes = project
             .map(|p| p.data.net_classes.clone())
             .unwrap_or_default();

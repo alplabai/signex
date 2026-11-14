@@ -639,9 +639,8 @@ layers (the project's `rules.drc` when the project stores a rule set, else
 this machine's User Default layer, the rule text compiled for the run). The
 project is the board's own: the one that lists it as its `pcb_file`. A board
 in no open project is checked with its own setup rules and this machine's
-layer, and `warnings` says so. Run DRC takes the active project instead, so
-the two can differ for a loose board while a project is active, or for a
-board of a project that is not the active one (#2332). A closed board is read
+layer, and `warnings` says so. Run DRC takes the same project, whichever
+project is active (#2332). A closed board is read
 off the UI thread, within the same headless read limits as `check_erc`, and
 the answer comes when the run lands; a board open in the app is checked as it
 is in memory (in the app's own process and in a headless run). A board that

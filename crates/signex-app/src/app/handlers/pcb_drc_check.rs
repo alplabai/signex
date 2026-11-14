@@ -4,7 +4,7 @@
 //! Run DRC's checks and rule-layer choice (`pcb_drc::run_check`,
 //! `drc_layers`) over one board, with the net classes and rules of the
 //! board's own project (else this machine's layer and a loose-board
-//! warning; Run DRC uses the active project, #2332). An open board is read
+//! warning; Run DRC takes the same project, #2332). An open board is read
 //! from memory, in the GUI process and in headless runs; over the agent
 //! channel a board open in the app is refused until #2331. A closed board is
 //! read off the UI thread. It changes no DRC state and says nothing in
