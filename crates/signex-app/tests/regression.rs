@@ -132,6 +132,11 @@ mod board_sketch;
 #[path = "regression/board_sketch_persist.rs"]
 mod board_sketch_persist;
 
+// #2331 review - a project's open board is its project's: Close Project
+// applies or waits for its sketch, and its window asks for the project.
+#[path = "regression/board_sketch_project.rs"]
+mod board_sketch_project;
+
 // #1245 - the Parameter Manager opens from a catalog command.
 #[path = "regression/parameter_manager_open.rs"]
 mod parameter_manager_open;

@@ -644,11 +644,11 @@ the two can differ for a loose board while a project is active, or for a
 board of a project that is not the active one (#2332). A closed board is read
 off the UI thread, within the same headless read limits as `check_erc`, and
 the answer comes when the run lands; a board open in the app is checked as it
-is in memory (in the app's own process and in a headless run). A board that
-cannot be read is refused with the reason. It writes nothing to the DRC
-panel, the DRC results or Messages; Run DRC is unchanged. It is a query on the
-agent channel, like `check_erc`, but see the known limits for a board open in
-the app.
+is in memory (in the app's own process, in a headless run and over the agent
+channel, #2331). A board that cannot be read is refused with the reason. It
+writes nothing to the DRC panel, the DRC results or Messages; Run DRC is
+unchanged. It is a query on the agent channel, like `check_erc`; a board no
+open project names is refused there, as a loose sheet is.
 
 ```bash
 signex-cli run demo.snxprj check_drc --arg document=demo.snxpcb
@@ -714,9 +714,6 @@ Known limits:
 - The minimum track width and via sizes of Board Setup are not enforced;
   only a written rule sets them (`docs/architecture/pcb-drc.md`).
 - The DRC panel does not show severities yet; the report does.
-- Over the agent channel a board open in the app is refused: its document
-  entry names no project, so the agent gate answers `<board> is not part of
-  a project open in this app` (#2331). A closed board is checked.
 - The key uses the document entry's path, which is the tab's path while the
   board is open and the project folder joined with `pcb_file` while it is
   closed. A `pcb_file` spelled differently from the tab path (case,

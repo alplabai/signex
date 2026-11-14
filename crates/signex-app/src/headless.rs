@@ -196,7 +196,9 @@ impl Signex {
                 .map(|spec| spec.lib_path.clone())
                 .collect();
         }
-        let Some(project) = docs.document_project(path).filter(|_| as_copy) else {
+        // A board's Save As does not re-point its project (#2331).
+        let sheet_copy = as_copy && !crate::app::is_pcb_path(path);
+        let Some(project) = docs.document_project(path).filter(|_| sheet_copy) else {
             return Vec::new();
         };
         let Some(idx) = docs.projects.iter().position(|p| p.id == project.id) else {
