@@ -19,6 +19,9 @@ mod info;
 mod other;
 mod snap;
 
+// The PCB Active Bar's Selection Filter names the kinds as the chips do.
+pub(crate) use filter::kind_label as pick_kind_label;
+
 use std::path::PathBuf;
 
 use iced::widget::{Column, container};

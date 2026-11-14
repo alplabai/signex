@@ -82,3 +82,13 @@ side's outer copper for a keep-out layer (`zone_keepout::keepout_copper`).
 The design rule check reads it through `Zone::as_keepout` exactly as it reads
 a board-sketch keepout forbidding all copper, so a violation names the
 keepout zone's id.
+
+## Selection Filter
+
+The PCB Active Bar's first button. A click (or right-click) opens a
+dropdown with `All - On` and a row per object kind, checked when on. A row
+toggles its kind and the dropdown stays open; a click outside closes it. It
+edits the same filter as the board Properties panel's chips (#2353),
+through the same `PcbBoardMsg` messages, so the two always show the same
+state. Kinds the board editor cannot pick yet are greyed with why, as their
+chips are.

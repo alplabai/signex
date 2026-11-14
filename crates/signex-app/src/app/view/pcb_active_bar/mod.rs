@@ -7,7 +7,8 @@
 //! a click is the menu row. A tool the board editor cannot run yet is greyed
 //! and its tooltip says so, from the table Place on a board greys by
 //! (`app/pcb_tools.rs`). Move and View open a dropdown on right-click; its
-//! rows are greyed by the same gate as their menu rows.
+//! rows are greyed by the same gate as their menu rows. The Selection Filter
+//! opens its dropdown of object kinds on a click (`filter.rs`).
 
 use iced::alignment::Horizontal;
 use iced::widget::{Space, column, container, mouse_area, row, stack, svg};
@@ -23,6 +24,8 @@ use crate::app::{Message, PcbBarMenu, PcbBarMsg, PcbMsg, Signex};
 use crate::icons as ic;
 use crate::keymap::AppCommandId;
 use crate::menu_bar::MenuMessage;
+
+mod filter;
 
 #[cfg(test)]
 mod tests;
@@ -56,8 +59,13 @@ impl Signex {
             ]
             .boxed();
         };
-        let entries =
-            pcb_bar_menu_entries(menu, &self.ui_state.i18n, tid, &self.command_context(None));
+        let entries = pcb_bar_menu_entries(
+            menu,
+            &self.ui_state.i18n,
+            tid,
+            &self.command_context(None),
+            &self.ui_state.pcb_pick_filter,
+        );
         let panel_width = MenuMetrics::GRAPHITE.fitted_width(
             &entries,
             bar_width,
@@ -186,7 +194,7 @@ pub(in crate::app::view) fn pcb_bar_items(
     let off = |icon, tooltip| unavailable_button(icon, tooltip, i18n);
     let tool = |tool: BoardPlaceTool| tool_button(tool, tid, i18n);
     let mut items = vec![
-        off(svg(ic::icon_filter(tid)), ids::PCB_BAR_FILTER_UNAVAILABLE),
+        filter::filter_button(open, tid, i18n),
         menu_button(
             "move_object",
             PcbBarMenu::Move,
@@ -282,17 +290,23 @@ fn menu_commands(menu: PcbBarMenu) -> &'static [MenuRow] {
     match menu {
         PcbBarMenu::Move => MOVE_ROWS,
         PcbBarMenu::View => VIEW_ROWS,
+        PcbBarMenu::Filter => &[],
     }
 }
 
 /// The rows of `menu`: each runs its command, labelled and greyed as its
-/// menu row is in `ctx`.
+/// menu row is in `ctx`. The Selection Filter's rows toggle the kinds of
+/// `filter` instead.
 pub(in crate::app::view) fn pcb_bar_menu_entries(
     menu: PcbBarMenu,
     i18n: &I18n,
     tid: ThemeId,
     ctx: &CommandContext,
+    filter: &pcb_geom::PickFilter,
 ) -> Vec<DropdownEntry<Message>> {
+    if menu == PcbBarMenu::Filter {
+        return filter::entries(i18n, filter);
+    }
     menu_commands(menu)
         .iter()
         .filter_map(|&(id, icon)| {

@@ -33,9 +33,10 @@ pcb-status-view-angle-placeholder = Degrees
 pcb-view-rotate-tooltip = Rotate View 90° Clockwise
 # Tooltip of the PCB Active Bar's Move button (#2352).
 pcb-bar-move-tooltip = Move (right-click for the move and transform menu)
+# Tooltip of the PCB Active Bar's Selection Filter button (#2373).
+pcb-bar-filter-tooltip = Selection Filter (click for the object kinds a click or box picks)
 # Tooltips of the PCB Active Bar's greyed buttons: tools the board editor
 # cannot run yet (#2352).
-pcb-bar-filter-unavailable = Selection Filter: not available on boards yet
 pcb-bar-align-unavailable = Align: not available on boards yet
 pcb-bar-component-unavailable = Place Component: not available on boards yet
 pcb-bar-pad-unavailable = Place Pad: not available on boards yet

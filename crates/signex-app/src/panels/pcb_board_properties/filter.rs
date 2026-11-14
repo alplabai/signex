@@ -70,7 +70,7 @@ pub(super) fn summary(i18n: &I18n, filter: &PickFilter) -> Localized {
     )
 }
 
-pub(super) fn kind_label(kind: PickKind) -> MessageId {
+pub(crate) fn kind_label(kind: PickKind) -> MessageId {
     match kind {
         PickKind::Components => ids::PCB_BOARD_KIND_COMPONENTS,
         PickKind::Bodies3d => ids::PCB_BOARD_KIND_BODIES,

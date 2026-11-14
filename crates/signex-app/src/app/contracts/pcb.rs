@@ -70,6 +70,8 @@ pub enum PcbMsg {
 /// A dropdown of the PCB Active Bar (#2352).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PcbBarMenu {
+    /// The object kinds a click or a box picks (#2373).
+    Filter,
     /// Move and transform the board selection.
     Move,
     /// Turn the board view.
