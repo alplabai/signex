@@ -87,9 +87,9 @@ impl HeldBack {
                 .collect()
         };
         let linked = |f: &Footprint, p: &super::EcoPart| {
-            f.schematic_link.as_ref().is_some_and(|l| {
-                l.sheet == p.part.sheet && l.units.iter().any(|u| p.part.units.contains(u))
-            })
+            f.schematic_link
+                .as_ref()
+                .is_some_and(|l| l.names_part(&p.part.sheet, &p.part.units))
         };
         let mut units: HashSet<(InstancePath, Uuid)> = HashSet::new();
         let mut footprints: HashSet<Uuid> = HashSet::new();

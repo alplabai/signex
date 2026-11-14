@@ -187,6 +187,13 @@ pub enum EcoNote {
     },
     /// A footprint with no link and no part of its designator; it is kept.
     KeptUnlinked { footprint: Uuid, reference: String },
+    /// A second footprint linked to a part another footprint already holds:
+    /// its remove row is listed but not ticked.
+    ExtraLink {
+        footprint: Uuid,
+        reference: String,
+        designator: String,
+    },
     /// Net sync left a pad or terminal as it was (from `assign_pad_nets`).
     Net(String),
 }
