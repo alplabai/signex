@@ -237,6 +237,52 @@ fn index_has(dir: &Path, name: &str) -> bool {
     index.get_path(Path::new(name), 0).is_some()
 }
 
+/// Stage the working file at `path` in the repo at `dir`, then replace that
+/// entry with conflict stages 1-3 (base, ours, theirs), as a merge leaves it.
+fn conflict_in_index(dir: &Path, path: &Path) {
+    let repo = Repository::open(dir).unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(path).unwrap();
+    let staged = [None, Some(&b"ours"[..]), Some(&b"theirs"[..])];
+    let stages: Vec<git2::IndexEntry> = (1u16..=3)
+        .zip(staged)
+        .map(|(stage, content)| {
+            let mut entry = index.get_path(path, 0).unwrap();
+            if let Some(content) = content {
+                entry.id = repo.blob(content).unwrap();
+            }
+            entry.flags = (entry.flags & !0x3000) | (stage << 12);
+            entry
+        })
+        .collect();
+    index.remove_path(path).unwrap();
+    for entry in &stages {
+        index.add(entry).unwrap();
+    }
+    index.write().unwrap();
+    assert!(index.has_conflicts(), "the path is conflicted");
+}
+
+/// #2337: a library made in a repo whose index has its `.gitignore`
+/// conflicted stages it resolved: no unmerged stages stay behind.
+#[test]
+fn init_resolves_a_conflicted_gitignore() {
+    signex_library::git_identity::test_identity::install();
+    let tmp = tempfile::tempdir().unwrap();
+    Repository::init(tmp.path()).unwrap();
+    std::fs::write(tmp.path().join(".gitignore"), "target/\n").unwrap();
+    conflict_in_index(tmp.path(), Path::new(".gitignore"));
+
+    LocalGitAdapter::init(tmp.path().join("lib.snxlib"), manifest(), GIT).expect("init");
+
+    let repo = Repository::open(tmp.path()).unwrap();
+    assert!(
+        !repo.index().unwrap().has_conflicts(),
+        "unmerged stages left behind"
+    );
+    assert!(index_has(tmp.path(), ".gitignore"));
+}
+
 /// #2337: Re-init of a library file left conflicted in the index records it
 /// resolved: no unmerged stages stay behind.
 #[test]
@@ -247,29 +293,7 @@ fn recover_init_resolves_a_conflicted_library_path() {
     std::fs::write(tmp.path().join("symbols/r.snxsym"), "base").unwrap();
     LocalGitAdapter::recover_init(&lib).expect("first re-init");
     let path = Path::new("symbols/r.snxsym");
-    {
-        let repo = Repository::open(tmp.path()).unwrap();
-        let mut index = repo.index().unwrap();
-        // Stages 1-3 (base, ours, theirs) in place of the stage-0 entry.
-        let staged = [None, Some(&b"ours"[..]), Some(&b"theirs"[..])];
-        let stages: Vec<git2::IndexEntry> = (1u16..=3)
-            .zip(staged)
-            .map(|(stage, content)| {
-                let mut entry = index.get_path(path, 0).unwrap();
-                if let Some(content) = content {
-                    entry.id = repo.blob(content).unwrap();
-                }
-                entry.flags = (entry.flags & !0x3000) | (stage << 12);
-                entry
-            })
-            .collect();
-        index.remove_path(path).unwrap();
-        for entry in &stages {
-            index.add(entry).unwrap();
-        }
-        index.write().unwrap();
-        assert!(index.has_conflicts(), "the path is conflicted");
-    }
+    conflict_in_index(tmp.path(), path);
     std::fs::write(tmp.path().join("symbols/r.snxsym"), "resolved").unwrap();
 
     LocalGitAdapter::recover_init(&lib).expect("re-init");
