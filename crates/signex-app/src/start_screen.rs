@@ -846,7 +846,8 @@ mod tests {
     }
 
     /// #2346: in a window too short for every strip row the strip scrolls,
-    /// so the last row is reached with the wheel.
+    /// so the last row is reached by scrolling. A pixel delta (a touchpad)
+    /// scrolls at once; a wheel line is animated over later frames.
     #[test]
     fn the_icon_strip_scrolls_in_a_short_window() {
         let short = iced::Size::new(SMALL_WINDOW.width, SMALL_WINDOW.height / 2.0);
@@ -867,7 +868,10 @@ mod tests {
             iced::Point::new(x, y),
             &[
                 iced::mouse::Event::WheelScrolled {
-                    delta: iced::mouse::ScrollDelta::Lines { x: 0.0, y: -100.0 },
+                    delta: iced::mouse::ScrollDelta::Pixels {
+                        x: 0.0,
+                        y: -SMALL_WINDOW.height,
+                    },
                 },
                 iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left),
                 iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left),
