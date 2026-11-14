@@ -20,7 +20,7 @@ valid:
   - 'fn v() { Pin::new(a); Float::new(a); Sensor::new(a); Sticky::new(a); Hover::new(a, b); SymbolPin::new("1", "A"); }'
   - 'fn v() { stack([a, b]); grid([text(raw("X"))]); keyed_column([(1, a)]); keyed_column([("k", a)]); }'
   - 'fn v() { Stack::new().push(a); names.push("X"); Column::new().push(a); }'
-  - 'fn v() { container(label); container(Self::LABEL); vec.push(MAX); }'
+  - 'fn v() { container(label); container(Self::Label); vec.push(MAX); vec.push(Self::MAX); }'
 invalid:
   - 'fn v() { right_center("X"); }'
   - 'fn v() { bottom_center("X"); }'
@@ -43,6 +43,8 @@ invalid:
   - 'fn v() { container(LABEL); }'
   - 'fn v() { button(TITLE); }'
   - 'fn v() { Text::from(LABEL); }'
+  - 'fn v() { container(Self::LABEL); }'
+  - 'fn v() { iced::widget::button(consts::TITLE); }'
   - 'fn v() { center("X"); }'
   - 'fn v() { center_x("X"); }'
   - 'fn v() { center_y("X"); }'

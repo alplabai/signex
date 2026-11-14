@@ -10,7 +10,8 @@ note: |
   user content, so `UserText::new("X")` is refused too: UserText wraps what the
   user wrote. `row!`, `column!`, `stack!`, `grid!` and `rich_text!` hold unparsed token trees that this
   rule cannot see; scripts/check_raw_labels.sh checks those. A SCREAMING_CASE
-  const passed as the content is refused the same way. Known limits (no type
+  const passed as the content, bare or path-qualified (Self::LABEL), is
+  refused the same way. Known limits (no type
   information): a `let` bound to a literal, and `.push("X")` on a Column or
   Row, or on a Stack or Grid not built in the same chain (#2193).
   A `"X".into()` that is not a widget (a String, a PathBuf) takes
@@ -112,7 +113,8 @@ rule:
                 has:
                   nthChild: 1
                   kind: string_literal
-        # A SCREAMING_CASE const used as a widget: container(LABEL).
+        # A SCREAMING_CASE const used as a widget, bare or path-qualified:
+        # container(LABEL), container(Self::LABEL), container(consts::LABEL).
         - all:
             - kind: call_expression
             - has:
@@ -122,8 +124,13 @@ rule:
                 field: arguments
                 has:
                   nthChild: 1
-                  kind: identifier
-                  regex: '^[A-Z][A-Z0-9_]*$'
+                  any:
+                    - kind: identifier
+                      regex: '^[A-Z][A-Z0-9_]*$'
+                    - kind: scoped_identifier
+                      has:
+                        field: name
+                        regex: '^[A-Z][A-Z0-9_]*$'
         # hover(base, top) takes a widget in both arguments.
         - all:
             - kind: call_expression
