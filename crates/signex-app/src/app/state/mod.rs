@@ -18,6 +18,7 @@ mod dirty_tests;
 #[cfg(test)]
 mod draft_ownership_tests;
 mod error_notice;
+mod fast_grids;
 mod interaction;
 mod keymap_recorder;
 pub(crate) mod library_entry;

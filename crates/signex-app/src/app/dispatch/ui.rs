@@ -392,7 +392,10 @@ impl Signex {
                 // with its reason in the Messages panel; the previous
                 // value is kept and the dialog stays open so the user can
                 // correct it (#972).
-                let step = match draft.as_ref().map(|s| validated_grid_step(&s.step_mm)) {
+                let step = match draft
+                    .as_ref()
+                    .map(|s| crate::numeric_field::validated_grid_step(&s.step_mm))
+                {
                     Some(Ok(step)) => Some(step),
                     Some(Err(reason)) => {
                         crate::diagnostics::log_warning(format!(
@@ -723,15 +726,5 @@ impl Signex {
             Ok(task) => task,
             Err(payload) => resume_unwind(payload),
         }
-    }
-}
-
-/// Parse a Grid Properties step field: it must be a finite number above
-/// zero. The error is the user-facing reason for the refusal.
-fn validated_grid_step(text: &str) -> Result<f64, String> {
-    match signex_types::numeric::parse_finite_f64(text) {
-        Ok(step) if step > 0.0 => Ok(step),
-        Ok(step) => Err(format!("{step} is not above zero")),
-        Err(err) => Err(err.to_string()),
     }
 }

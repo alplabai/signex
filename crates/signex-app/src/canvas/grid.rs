@@ -11,9 +11,23 @@ use crate::render_config::GridStyle;
 /// Range: 0.635 mm (¼ grid) → 5.08 mm (2× grid). Default: 1.27 mm (Altium default, 50 mil).
 pub const GRID_SIZES_MM: &[f32] = &[0.635, 1.27, 2.54, 5.08];
 
-/// The fast grids `fast_grid_1` / `fast_grid_2` snap to and `cycle_fast_grid`
-/// steps between: 50 and 100 mil, both presets of [`GRID_SIZES_MM`].
+/// The default fast grids `fast_grid_1` / `fast_grid_2` snap to and
+/// `cycle_fast_grid` steps between: 50 and 100 mil, both presets of
+/// [`GRID_SIZES_MM`]. The user sets their own in Preferences (#1672).
 pub const FAST_GRIDS_MM: [f32; 2] = [1.27, 2.54];
+
+/// A fast grid as its Preferences field shows it (`1.27`, not the widened
+/// `f32` digits).
+pub(crate) fn fast_grid_field_text(mm: f32) -> String {
+    pitch_mm_exact(mm).to_string()
+}
+
+/// A fast-grid field's text as the grid it sets, or the reason it is
+/// refused: the same rule as the Grid Properties Step field.
+pub(crate) fn parse_fast_grid_field(text: &str) -> Result<f32, String> {
+    crate::numeric_field::validated_grid_step(text)
+        .and_then(crate::numeric_field::positive_grid_step_f32)
+}
 
 /// The grid pitch as the exact `f64` millimetre value the user sees.
 ///

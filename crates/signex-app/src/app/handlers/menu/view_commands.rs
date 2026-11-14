@@ -27,9 +27,10 @@ impl Signex {
         self.set_snap_grid(next)
     }
 
-    /// Snap to fast grid `index` of `FAST_GRIDS_MM` (`fast_grid_1` / `fast_grid_2`).
+    /// Snap to the user's fast grid `index` (`fast_grid_1` / `fast_grid_2`),
+    /// set in Preferences (#1672).
     pub(crate) fn pick_fast_grid(&mut self, index: usize) -> Task<Message> {
-        match crate::canvas::grid::FAST_GRIDS_MM.get(index) {
+        match self.ui_state.fast_grids_mm.get(index) {
             Some(&size) => self.set_snap_grid(size),
             None => Task::none(),
         }
@@ -38,7 +39,7 @@ impl Signex {
     /// `cycle_fast_grid`: step to the next fast grid, wrapping; from a grid
     /// that is not a fast grid, land on fast grid 1.
     pub(crate) fn cycle_fast_grid(&mut self) -> Task<Message> {
-        let fast = crate::canvas::grid::FAST_GRIDS_MM;
+        let fast = self.ui_state.fast_grids_mm;
         let current = self.ui_state.grid_size_mm;
         let next = fast
             .iter()

@@ -279,6 +279,11 @@ pub struct UiState {
     pub symbol_grid_size_mm: f32,
     /// Draft mirror of [`Self::symbol_grid_size_mm`].
     pub preferences_draft_symbol_grid_size_mm: f32,
+    /// Fast grid 1 and Fast grid 2 (mm): the snap grids `fast_grid_1` /
+    /// `fast_grid_2` pick and `cycle_fast_grid` steps between (#1672).
+    pub fast_grids_mm: [f32; 2],
+    /// Draft text of the two fast-grid fields, checked on Save.
+    pub preferences_draft_fast_grids: [String; 2],
     /// Symbol-editor grid display style (Dots / Crosses / Lines).
     pub symbol_grid_style: crate::render_config::GridStyle,
     /// Draft mirror of [`Self::symbol_grid_style`]. The only one of the
@@ -708,6 +713,7 @@ impl UiState {
             // same constant unless the user actually moved it. A tolerance
             // here would let a real change read as clean.
             || self.preferences_draft_symbol_grid_size_mm != self.symbol_grid_size_mm
+            || self.fast_grid_drafts_differ()
             || self.preferences_draft_symbol_pin_selection != self.symbol_pin_selection
             || self.preferences_draft_zoom_step_percent != self.zoom_step_percent
             || self.preferences_draft_ui_scale_percent

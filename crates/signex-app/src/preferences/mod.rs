@@ -20,6 +20,7 @@ mod appearance;
 mod component_classes;
 mod distributors;
 mod editing;
+mod fast_grids;
 mod graphite_fields;
 mod keycaps;
 mod keymap;
@@ -173,6 +174,9 @@ pub enum PrefMsg {
     DraftAgentConnectionsEnabled(bool),
     /// Update the default symbol-editor grid size. Persisted on Save.
     DraftSymbolGridSize(f32),
+    /// Text typed into the Fast grid 1 (`0`) or Fast grid 2 (`1`) field,
+    /// in mm. Checked and persisted on Save (#1672).
+    DraftFastGrid(usize, String),
     /// Update the symbol-editor grid style (applies immediately, persisted).
     DraftSymbolGridStyle(GridStyle),
     /// Update the wheel-zoom speed (percent per notch, 5..=50) shared by
@@ -318,6 +322,8 @@ pub struct PrefsView<'a> {
     /// The language the labels read in.
     pub i18n: &'a signex_i18n::I18n,
     pub draft_symbol_grid_size_mm: f32,
+    /// Text of the Fast grid 1 and Fast grid 2 fields (#1672).
+    pub draft_fast_grids: &'a [String; 2],
     pub draft_symbol_grid_style: GridStyle,
     pub draft_symbol_pin_selection: PinSelectionMode,
     pub draft_zoom_step_percent: u8,

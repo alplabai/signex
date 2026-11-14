@@ -445,6 +445,11 @@ define_ids! {
     PREFERENCES_APPEARANCE_UI_FONT_HELP = "preferences-appearance-ui-font-help";
     PREFERENCES_APPEARANCE_GRID_STYLE = "preferences-appearance-grid-style";
     PREFERENCES_APPEARANCE_SCHEMATIC_GRID_STYLE_HELP = "preferences-appearance-schematic-grid-style-help";
+    PREFERENCES_APPEARANCE_FAST_GRID_1 = "preferences-appearance-fast-grid-1";
+    PREFERENCES_APPEARANCE_FAST_GRID_1_HELP = "preferences-appearance-fast-grid-1-help";
+    PREFERENCES_APPEARANCE_FAST_GRID_2 = "preferences-appearance-fast-grid-2";
+    PREFERENCES_APPEARANCE_FAST_GRID_2_HELP = "preferences-appearance-fast-grid-2-help";
+    PREFERENCES_APPEARANCE_FAST_GRID_UNIT = "preferences-appearance-fast-grid-unit";
     PREFERENCES_APPEARANCE_GPU_RENDER = "preferences-appearance-gpu-render";
     PREFERENCES_APPEARANCE_GPU_RENDER_HELP = "preferences-appearance-gpu-render-help";
     PREFERENCES_APPEARANCE_ANTIALIASING = "preferences-appearance-antialiasing";

@@ -342,7 +342,7 @@ pub enum UiMsg {
     /// The reverse of [`UiMsg::GridCycle`]: step to the previous grid preset.
     GridCycleBackward,
     /// A fast grid was picked (`fast_grid_1` / `fast_grid_2`): the index
-    /// into `canvas::grid::FAST_GRIDS_MM`.
+    /// into `UiState::fast_grids_mm`.
     FastGridPicked(usize),
     /// Step to the other fast grid (`cycle_fast_grid`).
     FastGridCycled,

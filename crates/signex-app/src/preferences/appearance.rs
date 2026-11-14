@@ -25,6 +25,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_pcb_gpu_render,
         draft_antialiasing,
         draft_symbol_grid_size_mm,
+        draft_fast_grids,
         draft_symbol_grid_style,
         draft_symbol_pin_selection,
         draft_zoom_step_percent,
@@ -133,6 +134,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         .align_y(iced::Alignment::Center)
         .boxed(),
     );
+    col = col.push(Space::new().height(16).boxed());
+    col = col.push(super::fast_grids::fast_grid_rows(
+        draft_fast_grids,
+        v.panel_tokens,
+        i18n,
+    ));
     col = col.push(Space::new().height(20).boxed());
 
     // ── Section: PCB Editor ──
