@@ -28,6 +28,18 @@ impl Signex {
         {
             return;
         }
+        // Mid wire or bus run, the rotate keys bend the run instead (#2372):
+        // counter-clockwise (Space) flips the corner, clockwise
+        // (Shift+Space) steps the corner mode.
+        if self.is_drawing_wire_run() {
+            let rule = self.interaction_state.corner_rule;
+            self.set_corner_rule(if clockwise {
+                rule.with_next_mode()
+            } else {
+                rule.flipped()
+            });
+            return;
+        }
         // A part on the cursor turns instead of the selection.
         if self.rotate_placement(clockwise) {
             return;

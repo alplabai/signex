@@ -17,6 +17,13 @@ impl Signex {
             .clear_overlay_cache();
     }
 
+    /// Whether a wire or bus run is open: its first point is placed and the
+    /// next click commits a segment.
+    pub(crate) fn is_drawing_wire_run(&self) -> bool {
+        self.interaction_state.wire_drawing
+            && crate::active_bar::shows_draw_mode_pill(self.interaction_state.current_tool)
+    }
+
     /// The status bar note while the Wire or Bus tool is active: the corner
     /// the next click will draw.
     pub(crate) fn corner_status(&self) -> Option<String> {
