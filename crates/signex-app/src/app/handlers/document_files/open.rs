@@ -88,6 +88,7 @@ impl Signex {
                 if !self.document_state.pending_opens.insert(path.clone()) {
                     return Err(format!("{} is already being created", path.display()));
                 }
+                self.document_state.new_project_writes.insert(path.clone());
                 let seed = RuleSeed {
                     dir: crate::rule_profiles::profiles_dir(),
                     selected: self.ui_state.default_rule_profile.clone(),
@@ -132,6 +133,7 @@ impl Signex {
         self.document_state
             .pending_opens
             .remove_untracked(&project_path);
+        self.document_state.new_project_writes.remove(&project_path);
         if self.finish_dialog_create(&project_path, &result) {
             return iced::Task::none();
         }

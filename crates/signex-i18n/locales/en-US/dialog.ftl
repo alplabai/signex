@@ -149,6 +149,11 @@ dialog-autosave-recovery-later = Decide later
 dialog-bom-export = Export…
 # Closing a project or quitting with unsaved documents.
 dialog-unsaved-discard-all = Discard All
+# Messages line and notice when a quit waits for a running rename or delete;
+# the app stays open.
+dialog-quit-held-path-op = A rename or delete is still running, so the app was not closed. Try again once it finishes.
+# The same, for a running Annotate or Reset Duplicate Designators.
+dialog-quit-held-rewrite = Annotate or Reset Duplicate Designators is still running, so the app was not closed. Try again once it finishes.
 # Create Sheet: the file already exists; open it instead.
 dialog-create-child-sheet-open-existing = Open it
 dialog-create-child-sheet-browse = Browse...

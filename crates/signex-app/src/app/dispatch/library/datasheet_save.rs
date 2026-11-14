@@ -371,7 +371,8 @@ impl Signex {
     }
 
     /// Run the Save All settle parked for `batch` once none of its rows has
-    /// a write in flight (#1728).
+    /// a write in flight (#1728). A report arriving after the batch settled
+    /// finds no parked settle and runs nothing.
     pub(super) fn resume_parked_settle(&mut self, batch: Option<u64>) -> Task<Message> {
         let Some(batch) = batch else {
             return Task::none();

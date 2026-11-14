@@ -317,7 +317,7 @@ impl Signex {
     /// own, so it must be saved again. A same-document rapid Ctrl+S loser is
     /// not listed: its winner's completion has cleaned it by now. Runs from
     /// both completions, so the warning fires in either completion order.
-    fn warn_unwritten_spellings(&mut self, path: &std::path::Path) {
+    pub(crate) fn warn_unwritten_spellings(&mut self, path: &std::path::Path) {
         for path in self.document_state.document_saves.take_superseded(path) {
             if self.document_state.is_document_dirty(&path) {
                 crate::diagnostics::log_warning(format!(
