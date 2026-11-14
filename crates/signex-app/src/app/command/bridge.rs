@@ -117,6 +117,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "cycle_snap_grid_forward" | "open_grid_picker" => Message::Ui(UiMsg::GridPickerOpen),
         "cycle_unit" => Message::Ui(UiMsg::UnitCycled),
         "cycle_wire_bus_graphic_mode" => Message::Tool(ToolMessage::CycleDrawMode),
+        "switch_segment_posture" => Message::Tool(ToolMessage::CornerFlipRequested),
         "cut" => Message::Edit(EditMsg::Cut),
         "delete_selection" => Message::Edit(EditMsg::DeleteSelected),
         "remove_last_vertex" => Message::Tool(ToolMessage::RemoveLastVertex),
@@ -551,7 +552,7 @@ mod tests {
         "refresh_view",
         "reset_local_coordinates", "select_expand_connection",
         "select_node_or_connection_item",
-        "switch_segment_posture", "toggle_floating_panels",
+        "toggle_floating_panels",
         "toggle_search_panel",
         "undo_last_segment",
     ];

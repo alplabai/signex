@@ -15,7 +15,6 @@ use super::project_names::{aliases_of, needing_merge, project_change_refusal};
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::Signex;
 use crate::app::handlers::canvas::{bus_commands, wire_commands};
-use crate::app::helpers::constrain_segments;
 
 /// How many touched items a refusal names before it says "and N more".
 const NAMED_EXTRAS: usize = 3;
@@ -128,7 +127,7 @@ impl Signex {
         end: Point,
         what: &str,
     ) -> Result<Segments, String> {
-        let segments = constrain_segments(start, end, self.interaction_state.draw_mode);
+        let segments = self.interaction_state.corner_rule.legs(start, end);
         if segments.is_empty() {
             return Err("`start` and `end` are the same point".to_string());
         }

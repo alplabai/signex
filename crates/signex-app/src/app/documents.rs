@@ -101,24 +101,6 @@ impl TabKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum DrawMode {
-    #[default]
-    Ortho90,
-    Angle45,
-    FreeAngle,
-}
-
-impl DrawMode {
-    pub fn next(self) -> Self {
-        match self {
-            DrawMode::Ortho90 => DrawMode::Angle45,
-            DrawMode::Angle45 => DrawMode::FreeAngle,
-            DrawMode::FreeAngle => DrawMode::Ortho90,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct SchematicTabSession {
     title: String,

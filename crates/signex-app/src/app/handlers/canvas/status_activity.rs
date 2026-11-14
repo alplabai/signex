@@ -41,6 +41,7 @@ impl Signex {
         }
         self.move_status(window_id)
             .or_else(|| self.measure_status(window_id))
+            .or_else(|| self.corner_status())
             .map(Activity::note)
     }
 }

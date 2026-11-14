@@ -361,56 +361,8 @@ impl SchematicCanvas<'_> {
             let start = signex_types::schematic::Point::new(last.x, last.y);
             let end = signex_types::schematic::Point::new(snap_x, snap_y);
 
-            let segments = match self.prefs.draw_mode {
-                crate::app::DrawMode::FreeAngle => {
-                    vec![(start, end)]
-                }
-                crate::app::DrawMode::Ortho90 => {
-                    let dx = end.x - start.x;
-                    let dy = end.y - start.y;
-                    if dx.abs() < 0.01 || dy.abs() < 0.01 {
-                        vec![(start, end)]
-                    } else {
-                        let corner = signex_types::schematic::Point::new(end.x, start.y);
-                        vec![(start, corner), (corner, end)]
-                    }
-                }
-                crate::app::DrawMode::Angle45 => {
-                    let dx = end.x - start.x;
-                    let dy = end.y - start.y;
-                    let adx = dx.abs();
-                    let ady = dy.abs();
-                    if adx < 0.01 || ady < 0.01 {
-                        vec![(start, end)]
-                    } else if (adx - ady).abs() < adx * 0.4 {
-                        let d = adx.min(ady);
-                        let sx = if dx > 0.0 { 1.0 } else { -1.0 };
-                        let sy = if dy > 0.0 { 1.0 } else { -1.0 };
-                        let diag_end =
-                            signex_types::schematic::Point::new(start.x + d * sx, start.y + d * sy);
-                        if adx > ady {
-                            vec![
-                                (start, diag_end),
-                                (
-                                    diag_end,
-                                    signex_types::schematic::Point::new(end.x, diag_end.y),
-                                ),
-                            ]
-                        } else {
-                            vec![
-                                (start, diag_end),
-                                (
-                                    diag_end,
-                                    signex_types::schematic::Point::new(diag_end.x, end.y),
-                                ),
-                            ]
-                        }
-                    } else {
-                        let corner = signex_types::schematic::Point::new(end.x, start.y);
-                        vec![(start, corner), (corner, end)]
-                    }
-                }
-            };
+            // The same rule the click commits with (#2372).
+            let segments = self.prefs.corner_rule.legs(start, end);
 
             for (p1, p2) in &segments {
                 let line = self.placed_wire_line(to_screen(p1), to_screen(p2), cam.scale);

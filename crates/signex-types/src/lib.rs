@@ -3,6 +3,7 @@ pub mod anchor2d;
 pub mod atomic_io;
 pub mod check;
 pub mod coord;
+pub mod corner;
 pub mod designator;
 pub mod document_id;
 pub mod font;

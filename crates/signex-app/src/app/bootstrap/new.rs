@@ -705,7 +705,7 @@ impl Signex {
                 shape_anchor: None,
                 clipboard: None,
                 clipboard_text: None,
-                draw_mode: DrawMode::default(),
+                corner_rule: Default::default(),
                 editing_text: None,
                 context_menu: None,
                 project_tree_context_menu: None,

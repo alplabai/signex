@@ -11,8 +11,11 @@ pub enum ToolMessage {
     /// Resume placement after TAB paused it — clears `pre_placement`
     /// and `placement_paused`. Wired to the on-canvas "Resume" overlay.
     ResumePlacement,
-    /// Cycle the freeform draw mode (line / arc / …).
+    /// Step the wire/bus corner mode: 90°, 45° start, 45° end, any angle.
     CycleDrawMode,
+    /// The wire/bus corner was asked to flip: horizontal-first becomes
+    /// vertical-first and back (#2372).
+    CornerFlipRequested,
     /// Cancel an in-progress wire/bus draw and reset to the select tool.
     CancelDrawing,
     /// Backspace/Delete: drop the pending wire vertex while drawing,
