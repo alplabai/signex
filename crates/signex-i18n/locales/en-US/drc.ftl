@@ -25,11 +25,20 @@ drc-summary =
     }, { $unconnected ->
         [one] 1 unconnected link
        *[other] { $unconnected } unconnected links
+    }, { $keepout ->
+        [one] 1 keepout violation
+       *[other] { $keepout } keepout violations
     }
 drc-skipped =
     { $count ->
         [one] 1 item could not be checked.
        *[other] { $count } items could not be checked.
+    }
+# A keepout whose outline does not convert was not checked (#2300).
+drc-keepouts-skipped =
+    { $count ->
+        [one] 1 keepout could not be checked; see Messages.
+       *[other] { $count } keepouts could not be checked; see Messages.
     }
 drc-more = and { $count } more not shown
 # A violation row was clicked while some of its items sit on hidden layers.

@@ -16,7 +16,7 @@ mod user_rules;
 
 use uuid::Uuid;
 
-use pcb_geom::{ItemRef, PointNm, Rejected};
+use pcb_geom::{GeomError, ItemRef, PointNm, Rejected};
 use signex_types::violation::Severity;
 
 pub use check::run;
@@ -86,8 +86,19 @@ pub struct DrcReport {
     /// The rules the run used, so the report says what it checked against.
     pub rules: DrcRules,
     pub violations: Vec<Violation>,
-    /// Items left unchecked because their geometry did not convert.
+    /// Items left unchecked because their geometry did not convert; a
+    /// footprint body a `no_components` keepout needed is one (#2300).
     pub skipped: Vec<Rejected>,
+    /// Keepouts left unchecked because their boundary did not convert.
+    pub skipped_keepouts: Vec<SkippedKeepout>,
+}
+
+/// A keepout whose boundary did not convert, so nothing was checked
+/// against it (#2300).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SkippedKeepout {
+    pub keepout: Uuid,
+    pub error: GeomError,
 }
 
 impl DrcReport {
@@ -96,7 +107,7 @@ impl DrcReport {
     }
 
     pub fn is_clean(&self) -> bool {
-        self.violations.is_empty() && self.skipped.is_empty()
+        self.violations.is_empty() && self.skipped.is_empty() && self.skipped_keepouts.is_empty()
     }
 
     /// The resolved severity of `violation`'s rule; `None` when switched off.

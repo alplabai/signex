@@ -60,6 +60,11 @@ fn every_real_board_is_free_of_shorts_and_matches_its_pinned_drc_counts() {
             "{name}: skipped {:?}",
             report.skipped
         );
+        assert!(
+            report.skipped_keepouts.is_empty(),
+            "{name}: skipped keepouts {:?}",
+            report.skipped_keepouts
+        );
         assert_eq!(
             report.count(ViolationKind::Short),
             0,

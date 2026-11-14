@@ -134,6 +134,8 @@ some rule text was not applied:
 - a syntax error: no rule of that text is applied;
 - an unknown target, field, condition, object or unit, a missing unit, a
   repeated name or limit: that rule is skipped, the others apply;
+- a minimum above the maximum of the same field (`width >= 0.3mm and
+  width <= 0.2mm`, which no track can meet): that rule is skipped;
 - a `hole` or `edge` pair: the rule is not checked yet.
 
 A rule that compiles but whose condition matches no net checks nothing, and
@@ -149,5 +151,5 @@ into info.
 Region-scoped rules, clearance to holes and the board edge, annular ring,
 differential pairs, arithmetic in lengths, and checking the board setup's
 minimum track width and via sizes without a written rule. The DRC panel's
-summary counts clearance, shorts and unconnected links only; width and via
-findings are listed as rows.
+summary counts clearance, shorts, unconnected links and keepouts only; width
+and via findings are listed as rows.

@@ -14,8 +14,12 @@ impl Signex {
                 Task::none()
             }
             PcbMsg::DrcRequested => self.handle_pcb_drc_requested(),
-            PcbMsg::DrcFinished { generation, result } => {
-                self.handle_pcb_drc_finished(generation, &result);
+            PcbMsg::DrcFinished {
+                generation,
+                loose,
+                result,
+            } => {
+                self.handle_pcb_drc_finished(generation, loose, &result);
                 Task::none()
             }
             PcbMsg::DrcViolationPicked(index) => {

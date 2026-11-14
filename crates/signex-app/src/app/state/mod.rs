@@ -7,6 +7,7 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod agent_edits;
+mod board_project;
 mod board_sketch;
 mod case_fold;
 pub(crate) mod check_runs;

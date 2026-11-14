@@ -639,9 +639,8 @@ layers (the project's `rules.drc` when the project stores a rule set, else
 this machine's User Default layer, the rule text compiled for the run). The
 project is the board's own: the one that lists it as its `pcb_file`. A board
 in no open project is checked with its own setup rules and this machine's
-layer, and `warnings` says so. Run DRC takes the active project instead, so
-the two can differ for a loose board while a project is active, or for a
-board of a project that is not the active one (#2332). A closed board is read
+layer, and `warnings` says so. Run DRC takes the same project, whichever
+project is active (#2332). A closed board is read
 off the UI thread, within the same headless read limits as `check_erc`, and
 the answer comes when the run lands; a board open in the app is checked as it
 is in memory (in the app's own process, in a headless run and over the agent
@@ -699,7 +698,8 @@ The answer is a check report (above), `"check": "drc"`:
   and this machine's DRC rules, no net classes), then what Run DRC says about
   its rules in Messages, in its words: unrecognised severity entries, the
   rule text's notes and remarks, rule text or rules not applied, a clearance
-  taken from the default; then one line per item the run could not check.
+  taken from the default; then one line per keepout and per item the run
+  could not check (#2300).
 - `rule_set`: `source` (`project` or `machine`), `profile` (as for ERC),
   `sha256` (the hash of the `drc` section the run used), `clearance_nm` and
   `from_default` (no clearance set in Board Setup).
@@ -709,8 +709,6 @@ The answer is a check report (above), `"check": "drc"`:
 
 Known limits:
 
-- Keepouts whose outline does not convert are dropped without a warning
-  (#2300); other items that do not convert are in `warnings`.
 - The minimum track width and via sizes of Board Setup are not enforced;
   only a written rule sets them (`docs/architecture/pcb-drc.md`).
 - The DRC panel does not show severities yet; the report does.
