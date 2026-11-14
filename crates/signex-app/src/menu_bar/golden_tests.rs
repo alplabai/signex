@@ -540,7 +540,8 @@ fn model_shortcuts_follow_the_active_keymap() {
     // Edit ▸ Move adds Move, Rotate, Rotate Clockwise, Mirror X and Mirror Y (#2240).
     // View ▸ Next Layer and Previous Layer add two more (#2223).
     // Tools ▸ Cross Select Mode adds Ctrl+Shift+X (#1312).
-    assert_eq!(checked, 38, "the Altium profile labels 38 menu rows");
+    // View ▸ Next Signal Layer and Single Layer Mode add two more (#2357).
+    assert_eq!(checked, 40, "the Altium profile labels 40 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {

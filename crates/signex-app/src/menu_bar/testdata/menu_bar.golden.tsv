@@ -67,6 +67,8 @@ View/Toggle Ratsnest	item	Toggle Ratsnest	-	-	ToggleRatsnest	01100000	cmd:toggle
 View/Toggle Origin Marker	item	Toggle Origin Marker	-	-	ToggleOriginMarker	01100000	cmd:toggle_origin_marker
 View/Next Layer	item	Next Layer	-	-	NextLayer	01100000	cmd:next_layer
 View/Previous Layer	item	Previous Layer	-	-	PreviousLayer	01100000	cmd:prev_layer
+View/Next Signal Layer	item	Next Signal Layer	-	-	NextSignalLayer	01100000	cmd:next_signal_layer
+View/Single Layer Mode	item	Single Layer Mode	-	-	ToggleSingleLayerMode	01100000	cmd:toggle_single_layer_mode
 View/Toggle Layer Visibility	item	Toggle Layer Visibility	-	-	ToggleLayerVisibility	01100000	cmd:toggle_layer_visibility
 View/Show All Layers	item	Show All Layers	-	-	ShowAllLayers	01100000	cmd:show_all_layers
 View/Rotate View 90° Clockwise	item	Rotate View 90° Clockwise	-	-	RotateView	01100000	cmd:view_rotate
