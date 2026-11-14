@@ -118,7 +118,7 @@ Some rules in this section are still open decisions in epic #2326, and take effe
 
 | Alternative | What it fixes | Why it stops short |
 |---|---|---|
-| (a) Status quo, plus a lazy `UiState` and boxing the large fields | #2325; part of the headless boot cost | The CLI keeps all 518 crates, the parity heuristics (`gui_only`, `headless_refusal`, `honest_status`) and the IO in `update`. **This is the fallback if the epic stops early.** |
+| (a) Status quo, plus a lazy `UiState` and boxing the large fields | #2325; part of the headless boot cost | The CLI keeps all 518 crates, the parity heuristics (`gui_only`, `headless_refusal`, `honest_status`) and the IO in `update`. Rejected; slice 0 still lands its first part, so a pause after slice 0 is never worse than today. |
 | (b) Extract only a command-catalog crate | The CLI and agents get the catalog, operands and outcomes without `signex-app` types | Running a command still needs `Signex`, so the CLI still builds and boots the GUI. |
 | (c) Turn only persistence and git IO into effects | The data-loss-prone IO leaves `update`; ADR-0003's invariants get one home | The handlers still live in the GUI model, so the CLI still boots it and parity stays heuristic. |
 
