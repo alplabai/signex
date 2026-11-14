@@ -4,11 +4,15 @@
 
 use iced::Task;
 use signex_i18n::{ids, t};
+use signex_renderer::pcb::{PcbLayerView, PcbSnapshot};
 use signex_types::pcb::PcbBoard;
 
+use crate::app::state::PcbRatsnest;
 use crate::app::{ContextMenuMsg, Message, Signex, TabDocument};
 use crate::canvas::CanvasEvent;
-use crate::pcb_canvas::{PcbCanvasMsg, PcbSelectionState};
+use crate::pcb_canvas::{
+    PcbCanvas, PcbCanvasMsg, PcbCarry, PcbSelectionState, board_without, carried_board,
+};
 
 impl Signex {
     pub(crate) fn dispatch_pcb_canvas_message(&mut self, msg: PcbCanvasMsg) -> Task<Message> {
@@ -60,8 +64,12 @@ impl Signex {
                 }
                 self.close_context_menu_on_press()
             }
-            PcbCanvasMsg::FootprintDragged { from, to } => {
-                self.pcb_footprints_dragged(from, to);
+            PcbCanvasMsg::FootprintDragged {
+                from,
+                to,
+                tolerance_mm,
+            } => {
+                self.pcb_footprints_dragged(from, to, tolerance_mm);
                 Task::none()
             }
             PcbCanvasMsg::FootprintDropped { from, to } => {
@@ -161,9 +169,25 @@ impl Signex {
             .filter(|_| self.has_own_pcb_carry());
         let painted = self.with_pcb_selection(|sel, board| sel.paint(board, carry.as_ref()));
         let (highlight, grab) = painted.unwrap_or_default();
-        let canvas = &mut self.interaction_state.pcb_canvas;
+        let path = self.active_tab_path().unwrap_or_default();
+        let view = self.pcb_layer_view(&path);
+        let docs = &self.document_state;
+        let board = docs
+            .tabs
+            .get(docs.active_tab)
+            .and_then(|tab| tab.cached_document.as_ref())
+            .and_then(TabDocument::as_pcb);
+        let interaction = &mut self.interaction_state;
+        let canvas = &mut interaction.pcb_canvas;
         canvas.set_highlight(highlight);
         canvas.set_grab(grab);
+        let ratsnest = view
+            .ratsnest_visible()
+            .then_some((&interaction.pcb_ratsnest, path.as_path()));
+        match board {
+            Some(board) => sync_drag_preview(canvas, board, &view, ratsnest, carry.as_ref()),
+            None => canvas.end_drag_preview(),
+        }
         // The Properties panel switches between the board and the selection.
         self.sync_pcb_board_summary();
     }
@@ -211,7 +235,43 @@ impl Signex {
             if let Some(canvas) = interaction.pcb_canvases.get_mut(&id) {
                 canvas.set_highlight(highlight);
                 canvas.set_grab(grab);
+                let ratsnest = view
+                    .ratsnest_visible()
+                    .then_some((&interaction.pcb_ratsnest, path));
+                sync_drag_preview(canvas, board, &view, ratsnest, carry);
             }
         }
     }
+}
+
+/// Bring `canvas`'s drag preview in line with `carry` on `board` (#2358):
+/// while the carry is anchored, the board is drawn without the carried
+/// footprints and they are drawn at its offset; otherwise the whole board.
+/// `ratsnest` is the cache and the board path when the view shows it.
+fn sync_drag_preview(
+    canvas: &mut PcbCanvas,
+    board: &PcbBoard,
+    view: &PcbLayerView,
+    ratsnest: Option<(&PcbRatsnest, &std::path::Path)>,
+    carry: Option<&PcbCarry>,
+) {
+    let live = carry.filter(|c| c.anchor.is_some() && !c.footprints.is_empty());
+    let Some(carry) = live else {
+        canvas.end_drag_preview();
+        return;
+    };
+    if !canvas.previews_drag_of(&carry.footprints) {
+        // Once per carry: the board without what it carries.
+        let rest = board_without(board, &carry.footprints);
+        let base = PcbSnapshot::from_board_with_view(&rest, view);
+        let base = match ratsnest {
+            Some((cache, path)) => cache.apply_uncached(path, &rest, base),
+            None => base,
+        };
+        canvas.begin_drag_preview(carry.footprints.clone(), base);
+    }
+    canvas.move_drag_preview(carry.delta, || {
+        let moved = carried_board(board, &carry.footprints, carry.delta);
+        PcbSnapshot::from_board_with_view(&moved, view)
+    });
 }

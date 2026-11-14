@@ -175,6 +175,12 @@ impl PcbSelectionState {
     /// The copper to paint for the selection and the hover. A selected
     /// footprint paints its body outline and all its pads.
     pub fn highlight(&mut self, board: &PcbBoard) -> Highlight {
+        self.highlight_except(board, &BTreeSet::new())
+    }
+
+    /// [`Self::highlight`] without the footprints in `moving`: a drag or
+    /// Move draws them, and their outline, where they are going (#2358).
+    fn highlight_except(&mut self, board: &PcbBoard, moving: &BTreeSet<Uuid>) -> Highlight {
         if self.selection.is_empty() && self.hover.is_none() {
             return Highlight::default();
         }
@@ -191,7 +197,11 @@ impl PcbSelectionState {
             })
             .collect();
         let mut highlight = Highlight::default();
-        for indexed in index.items() {
+        let is_moving = |item: ItemRef| match item {
+            ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => moving.contains(&id),
+            ItemRef::Track(_) | ItemRef::Via(_) => false,
+        };
+        for indexed in index.items().filter(|i| !is_moving(i.item)) {
             match indexed.item {
                 ItemRef::Footprint(id) if whole.contains(&id) => {
                     highlight.bodies.push(indexed.shape);
@@ -203,7 +213,7 @@ impl PcbSelectionState {
                 _ => {}
             }
         }
-        if let Some(hovered) = self.hover
+        if let Some(hovered) = self.hover.filter(|h| !is_moving(*h))
             && let Some(found) = index.items().find(|i| i.item == hovered)
         {
             match hovered {
@@ -216,20 +226,23 @@ impl PcbSelectionState {
 
     /// What a canvas paints and grabs for this selection: the highlight, the
     /// preview of `carry` once it is anchored, and the shapes a press grabs
-    /// to drag the selected footprints. While a Move waits for its clicks
-    /// nothing is grabbed, so a jiggled click stays a click (#2240).
+    /// to drag: every footprint, selected or not (#2358). While a Move waits
+    /// for its clicks nothing is grabbed, so a jiggled click stays a click
+    /// (#2240).
     pub fn paint(
         &mut self,
         board: &PcbBoard,
         carry: Option<&super::PcbCarry>,
     ) -> (Highlight, Vec<pcb_geom::Shape>) {
-        let mut highlight = self.highlight(board);
+        let anchored = carry.filter(|c| c.anchor.is_some());
+        let none = BTreeSet::new();
+        let carried = anchored.map_or(&none, |c| &c.footprints);
+        let mut highlight = self.highlight_except(board, carried);
         let moving = carry.is_some_and(|c| c.kind == super::CarryKind::Move);
         let grab = if moving {
             Vec::new()
         } else {
-            let selected = self.selection.footprints();
-            self.footprint_shapes(board, &selected)
+            self.shapes_of_footprints(board, |_| true)
         };
         if let Some(carry) = carry.filter(|c| c.anchor.is_some())
             && let Ok(by) = PointNm::from_mm(carry.delta, "carry")
@@ -243,8 +256,8 @@ impl PcbSelectionState {
         (highlight, grab)
     }
 
-    /// The body and pads of each footprint in `footprints`: what a press
-    /// grabs to drag them, and what the drag preview paints.
+    /// The body and pads of each footprint in `footprints`: what the drag
+    /// preview paints.
     pub fn footprint_shapes(
         &mut self,
         board: &PcbBoard,
@@ -253,6 +266,57 @@ impl PcbSelectionState {
         if footprints.is_empty() {
             return Vec::new();
         }
+        self.shapes_of_footprints(board, |id| footprints.contains(&id))
+    }
+
+    /// The footprints a drag pressed at `at` carries (#2358). A press on a
+    /// selected footprint, or on one of its pads, carries the selection;
+    /// a press on an unselected one selects that footprint alone and
+    /// carries it. Off every footprint it carries nothing.
+    pub fn grab_for_drag(
+        &mut self,
+        board: &PcbBoard,
+        at: Point,
+        tolerance_mm: f64,
+    ) -> BTreeSet<Uuid> {
+        let selected = self.selection.footprints();
+        let (Ok(p), Ok(tol)) = (
+            PointNm::from_mm(at, "press"),
+            pcb_geom::mm_to_nm(tolerance_mm, "reach"),
+        ) else {
+            return BTreeSet::new();
+        };
+        self.ensure_index(board);
+        let Some(index) = &self.index else {
+            return BTreeSet::new();
+        };
+        // A pad outranks the body it sits on, as a click picks.
+        let under: Vec<(bool, ItemRef, Uuid)> = index
+            .items_at(p, tol)
+            .into_iter()
+            .filter_map(|i| match i.item {
+                ItemRef::Pad { footprint, .. } => Some((false, i.item, footprint)),
+                ItemRef::Footprint(id) => Some((true, i.item, id)),
+                ItemRef::Track(_) | ItemRef::Via(_) => None,
+            })
+            .collect();
+        if under.iter().any(|(_, _, id)| selected.contains(id)) {
+            return selected;
+        }
+        let Some(&(_, _, id)) = under.iter().min_by_key(|(body, item, _)| (*body, *item)) else {
+            return BTreeSet::new();
+        };
+        self.selection
+            .apply_click(Some(ItemRef::Footprint(id)), ClickMode::Replace);
+        BTreeSet::from([id])
+    }
+
+    /// The body and pads of each footprint `keep` accepts.
+    fn shapes_of_footprints(
+        &mut self,
+        board: &PcbBoard,
+        keep: impl Fn(Uuid) -> bool,
+    ) -> Vec<pcb_geom::Shape> {
         self.ensure_index(board);
         let Some(index) = &self.index else {
             return Vec::new();
@@ -260,9 +324,7 @@ impl PcbSelectionState {
         index
             .items()
             .filter(|i| match i.item {
-                ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => {
-                    footprints.contains(&id)
-                }
+                ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => keep(id),
                 ItemRef::Track(_) | ItemRef::Via(_) => false,
             })
             .map(|i| i.shape)

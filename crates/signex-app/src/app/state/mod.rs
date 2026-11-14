@@ -63,7 +63,7 @@ pub use error_notice::{ErrorNotice, NoticeAction};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use parameter_table::ParameterTableState;
-pub(crate) use pcb_ratsnest::RatsnestKey;
+pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey};
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
