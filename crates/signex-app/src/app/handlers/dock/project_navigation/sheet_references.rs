@@ -19,7 +19,7 @@ use crate::app::state::scope::path_key_with;
 pub(super) use crate::app::path_ops::{ParentSheets, ReferencePlan, ReferenceRewrite};
 
 /// The refusal text for a rename whose parents cannot be re-pointed.
-pub(super) fn read_only_parents_detail(parents: &[PathBuf]) -> String {
+pub(super) fn read_only_parents_detail(parents: &[PathBuf]) -> signex_i18n::Translatable {
     let names: Vec<String> = parents
         .iter()
         .map(|p| {
@@ -29,10 +29,8 @@ pub(super) fn read_only_parents_detail(parents: &[PathBuf]) -> String {
             )
         })
         .collect();
-    format!(
-        "Not renamed: {} reference this sheet but are read-only (written by a newer Signex), so the reference cannot be updated. Edit them in that version first.",
-        names.join(", ")
-    )
+    signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_RENAME_READ_ONLY_PARENTS)
+        .arg("parents", names.join(", "))
 }
 
 /// What a Save As left unchanged among the other sheets.
@@ -62,25 +60,21 @@ impl RewriteOutcome {
 /// Detail text for the "Rename Incomplete" card: the file moved, but some
 /// parent references were not re-pointed (`failed`, known stale) or could
 /// not be checked at all (`unchecked`, unknown).
-pub(super) fn rename_incomplete_detail(failed: &[String], unchecked: &[String]) -> String {
-    let mut parts = Vec::new();
-    if !failed.is_empty() {
-        parts.push(format!(
-            "The file was renamed, but {} sheet reference(s) could not be updated \
-             and still point at the old name:\n  {}",
-            failed.len(),
-            failed.join("\n  ")
-        ));
-    }
-    if !unchecked.is_empty() {
-        parts.push(format!(
-            "The file was renamed, but {} sheet(s) could not be read, so it is unknown \
-             whether they reference the old name:\n  {}",
-            unchecked.len(),
-            unchecked.join("\n  ")
-        ));
-    }
-    parts.join("\n\n")
+pub(super) fn rename_incomplete_detail(
+    failed: &[String],
+    unchecked: &[String],
+) -> signex_i18n::Translatable {
+    use signex_i18n::{Translatable, ids};
+    let id = match (failed.is_empty(), unchecked.is_empty()) {
+        (false, true) => ids::NOTICE_RENAME_REFS_FAILED,
+        (true, false) => ids::NOTICE_RENAME_REFS_UNCHECKED,
+        _ => ids::NOTICE_RENAME_REFS_FAILED_AND_UNCHECKED,
+    };
+    Translatable::new(id)
+        .arg("failed_count", failed.len())
+        .arg("failed", failed.join("\n  "))
+        .arg("unchecked_count", unchecked.len())
+        .arg("unchecked", unchecked.join("\n  "))
 }
 
 impl Signex {
@@ -512,7 +506,8 @@ mod tests {
         let detail = rename_incomplete_detail(
             &["a.snxsch — x".to_string(), "b.snxsch — y".to_string()],
             &[],
-        );
+        )
+        .render_en_us();
         assert_eq!(
             detail,
             "The file was renamed, but 2 sheet reference(s) could not be updated \
@@ -527,7 +522,7 @@ mod tests {
 
     #[test]
     fn unchecked_sheets_get_their_own_wording() {
-        let detail = rename_incomplete_detail(&[], &["c.snxsch — bad".to_string()]);
+        let detail = rename_incomplete_detail(&[], &["c.snxsch — bad".to_string()]).render_en_us();
         assert_eq!(
             detail,
             "The file was renamed, but 1 sheet(s) could not be read, so it is unknown \
@@ -615,7 +610,7 @@ mod tests {
             .as_ref()
             .expect("error card");
         assert!(
-            format!("{notice:?}").contains("Parent.snxsch"),
+            notice.detail.render_en_us().contains("Parent.snxsch"),
             "{notice:?}"
         );
         assert!(!app.document_state.is_document_dirty(&parent));

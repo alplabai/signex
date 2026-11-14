@@ -50,10 +50,10 @@ impl Signex {
             match super::build_page_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
-                    self.refuse_export(format!(
-                        "PDF export refused: the source document {} is no longer open.",
-                        source.display()
-                    ));
+                    self.refuse_export(
+                        signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_PDF_SOURCE_CLOSED)
+                            .arg("path", source.display().to_string()),
+                    );
                     return Task::none();
                 }
             };
@@ -84,7 +84,7 @@ impl Signex {
                 .retain(|s| files.contains(&(s.path.clone(), s.placement.clone())));
         }
         if ctx.sheets.is_empty() {
-            self.refuse_export("Cannot export PDF: no files selected in the Settings tab.");
+            self.refuse_export(signex_i18n::ids::NOTICE_PDF_NO_FILES);
             return Task::none();
         }
         // Apply the variant override the user picked in the modal.
@@ -121,10 +121,15 @@ impl Signex {
         let target = self.save_target(Some(&source));
         let picker = self.ui_state.io.picker.clone();
         let file_name = format.file_name(target.stem().unwrap_or("schematic"));
+        let base = picker.dialog().title_in(
+            &self.ui_state.i18n,
+            signex_i18n::ids::FILE_DIALOG_EXPORT_NETLIST,
+        );
         Some(Task::perform(
             async move {
+                // The filter name is the netlist format's own label (#2060).
                 target
-                    .dialog(picker, "Export Netlist")
+                    .dialog(base)
                     .await
                     .add_filter(format.label(), &[format.extension()])
                     .set_file_name(file_name)
@@ -172,7 +177,7 @@ impl Signex {
 
         // Not a hole the user can accept: the file would be wrong, not partial.
         if let Some(refusal) = issues.shared_reference_refusal(&ctx) {
-            self.refuse_export(refusal);
+            self.refuse_export(crate::app::state::untranslated(refusal));
             return Task::none();
         }
 
@@ -222,7 +227,10 @@ impl Signex {
                 );
             }
             Err(e) => {
-                self.report_export_failure(format!("Netlist export failed: {e}"));
+                self.report_export_failure(
+                    signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_NETLIST_EXPORT_FAILED)
+                        .arg("error", e.to_string()),
+                );
             }
         }
 
@@ -277,7 +285,10 @@ impl Signex {
                 );
             }
             Err(e) => {
-                self.report_export_failure(format!("Netlist export failed: {e}"));
+                self.report_export_failure(
+                    signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_NETLIST_EXPORT_FAILED)
+                        .arg("error", e.to_string()),
+                );
             }
         }
 

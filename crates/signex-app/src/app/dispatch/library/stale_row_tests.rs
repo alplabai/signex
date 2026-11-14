@@ -147,9 +147,12 @@ fn a_stale_preview_save_is_refused_visibly_and_keeps_the_edit() {
         .as_ref()
         .expect("a refused save raises the Save Failed card");
     assert!(
-        notice.detail.contains("reload to see their version"),
+        notice
+            .detail
+            .render_en_us()
+            .contains("reload to see their version"),
         "{}",
-        notice.detail
+        notice.detail.render_en_us()
     );
     assert!(editor(&app, &address).dirty, "the edit is kept");
 }

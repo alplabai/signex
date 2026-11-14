@@ -210,13 +210,13 @@ impl Signex {
         let target = self.document_state.active_path.clone()?;
         let sheet = self.document_state.engines.get(&target)?.document();
         if sheet.unknown.newer_minor_source.is_some() {
-            let detail = format!(
-                "The sheet {} was written by a newer Signex and is read-only in this build; nothing was pasted.",
-                target.display()
-            );
-            crate::diagnostics::log_warning(format!("Paste failed: {detail}"));
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::new("Paste Failed", detail));
+            let detail = signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_PASTE_READ_ONLY)
+                .arg("path", target.display().to_string());
+            crate::diagnostics::log_warning(format!("Paste failed: {}", detail.render_en_us()));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::new(
+                signex_i18n::ids::NOTICE_PASTE_FAILED,
+                detail,
+            ));
             return None;
         }
         let payload = copied.payload.clone();

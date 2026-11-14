@@ -187,3 +187,62 @@ dialog-button-copy = Copy
 dialog-button-undo = Undo
 dialog-button-redo = Redo
 dialog-button-place = Place
+
+## Create Sheet (#1275): the file of a sheet symbol that has none yet.
+dialog-create-child-sheet-title = Create Sheet
+# $name is the sheet symbol's name.
+dialog-create-child-sheet-intro = Create a file for sheet '{ $name }'
+# $name is the sheet symbol's name.
+dialog-create-child-sheet-question = Sheet '{ $name }' has no file yet. Where should it be created?
+# $folder is a folder path, relative to the project folder, ending in "/".
+dialog-create-child-sheet-relative-to = Relative to { $folder }
+dialog-create-child-sheet-relative-to-project = Relative to the project folder
+dialog-create-child-sheet-linked-folder = The sheet must be inside the project folder (a linked folder leaves it)
+# $symbol is the name of the other sheet symbol.
+dialog-create-child-sheet-file-placed = A file with that name already exists, and sheet symbol '{ $symbol }' already points at it. A sheet file is placed by one sheet symbol; pick another name.
+dialog-create-child-sheet-file-exists = A file with that name already exists. Open it, or pick another name.
+dialog-create-child-sheet-symbol-gone = The sheet symbol is no longer there
+## Native title bar of a dialog shown in its own window: the name the OS
+## window switcher shows.
+dialog-title-annotate = Annotate
+dialog-title-erc = Electrical Rules Check
+dialog-title-annotate-reset = Reset All Annotations
+dialog-title-reprefix = Re-prefix to Standard
+dialog-title-move-selection = Move Selection
+dialog-title-net-colors = Net Colors
+dialog-title-parameters = Parameters
+dialog-title-preferences = Preferences
+dialog-title-find-replace = Find and Replace
+dialog-title-rename = Rename
+dialog-title-remove = Remove
+dialog-title-export-pdf = Export PDF
+dialog-title-bom = Bill of Materials
+dialog-title-enable-version-control = Enable Version Control
+dialog-title-grid-properties = Grid Properties
+dialog-title-selection-filter = Custom Selection Filter
+dialog-title-new-project = New Project
+dialog-title-about = About { -brand-name }
+dialog-title-keyboard-shortcuts = Keyboard Shortcuts
+dialog-title-passive-calculator = Passive Network Calculator
+dialog-title-first-run-tour = Welcome to { -brand-name }
+# The error notice window carries only the product name.
+dialog-title-error-notice = { -brand-name }
+dialog-title-netlist-incomplete = Netlist is incomplete
+dialog-title-autosave-recovery = Recover Unsaved Edits
+dialog-title-close-project = Close Project
+# macOS names leaving the app "Quit", other systems "Exit".
+dialog-title-quit = Quit { -brand-name }
+dialog-title-exit = Exit { -brand-name }
+dialog-title-open-library = Open Library
+dialog-title-edit-component = Edit Component Details
+dialog-title-pick-primitive = Pick Primitive
+dialog-title-document-options = Document Options
+dialog-title-library-options = Library Options
+dialog-title-copy-to-library = Copy to Library
+dialog-title-library-updates = Library Updates Available
+dialog-title-close-library = Close Library
+dialog-title-delete-component = Delete Component
+dialog-title-library-recovery = Library Recovery
+dialog-title-net-color-custom = Custom Net Colour
+# $path is the parent sheet's file.
+dialog-create-child-sheet-not-focused = The sheet's File field was not updated: { $path } could not be focused

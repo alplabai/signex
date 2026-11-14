@@ -408,7 +408,9 @@ impl Signex {
     /// so the click is not silently ignored (#110).
     fn report_restore_failure(&mut self, message: String) {
         crate::diagnostics::log_warning(format!("[git] restore: {message}"));
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::restore(message));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::restore(
+            crate::app::state::untranslated(message),
+        ));
     }
 
     /// Install the restored file into the tab at `idx` (the restored file's

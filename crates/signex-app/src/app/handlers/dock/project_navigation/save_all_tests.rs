@@ -139,8 +139,14 @@ fn a_failed_write_keeps_signex_open_and_names_the_file_and_the_reason() {
     assert!(symbol.exists(), "the other file still saved");
     assert!(app.document_state.is_document_dirty(&blocked));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
-    assert!(format!("{notice:?}").contains("stayed open"), "{notice:?}");
-    assert!(format!("{notice:?}").contains("Sheet.snxsch"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("stayed open"),
+        "{notice:?}"
+    );
+    assert!(
+        notice.detail.render_en_us().contains("Sheet.snxsch"),
+        "{notice:?}"
+    );
     let path_text = blocked.display().to_string();
     assert!(
         app.document_state
@@ -167,7 +173,10 @@ fn a_draft_edited_during_save_all_is_reported_unsaved() {
 
     assert!(app.document_state.is_document_dirty(&symbol));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
-    assert!(format!("{notice:?}").contains("Lib.snxsym"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("Lib.snxsym"),
+        "{notice:?}"
+    );
 }
 
 #[test]
@@ -281,7 +290,10 @@ fn a_save_all_write_superseded_by_a_later_ctrl_s_does_not_quit_before_that_save_
     crate::task_driver::assert_quit_declined(after);
     assert!(app.document_state.is_document_dirty(&sheet));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
-    assert!(format!("{notice:?}").contains("Sheet.snxsch"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("Sheet.snxsch"),
+        "{notice:?}"
+    );
 
     feed(&mut app, ctrl_s_done);
     assert!(!app.document_state.is_document_dirty(&sheet));
@@ -299,7 +311,10 @@ fn save_all_over_a_running_primitive_ctrl_s_keeps_signex_open_until_it_lands() {
     crate::task_driver::assert_quit_declined(after);
     assert!(app.document_state.is_document_dirty(&symbol));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
-    assert!(format!("{notice:?}").contains("Lib.snxsym"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("Lib.snxsym"),
+        "{notice:?}"
+    );
 
     feed(&mut app, outputs(ctrl_s));
     assert!(symbol.exists());
@@ -600,7 +615,10 @@ fn an_undecided_directory_writes_once_and_keeps_the_other_spelling_dirty() {
     // Exactly one cancelled system quit request: no exit, no window close.
     crate::task_driver::assert_quit_declined(after);
     let notice = app.document_state.error_notice.as_ref().expect("notice");
-    assert!(format!("{notice:?}").contains("lib.snxsch"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("lib.snxsch"),
+        "{notice:?}"
+    );
 }
 
 /// A project whose own volume probe did not decide gives no decided rule:

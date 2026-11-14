@@ -4,7 +4,7 @@
 
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
-use signex_i18n::{ids, t};
+use signex_i18n::{UserText, ids, t};
 use signex_widgets::{raw, text, text_input};
 
 use super::widgets::modal_title_header;
@@ -34,8 +34,11 @@ impl Signex {
         let later = msg(ProjectMsg::CreateChildSheetAnswered { create: false });
         let create = msg(ProjectMsg::CreateChildSheetAnswered { create: true });
 
-        let header_content: Element<'_, Message> =
-            modal_title_header("Create Sheet", later.clone(), tokens);
+        let header_content: Element<'_, Message> = modal_title_header(
+            t!(i18n, ids::DIALOG_CREATE_CHILD_SHEET_TITLE).into_string(),
+            later.clone(),
+            tokens,
+        );
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::CreateChildSheet,
@@ -53,9 +56,19 @@ impl Signex {
             parent_dir,
             fold,
         ) {
-            Some(rel) if rel.as_os_str().is_empty() => "the project folder".to_owned(),
-            Some(rel) => format!("{}/", rel.display()),
-            None => full_folder.clone(),
+            Some(rel) if rel.as_os_str().is_empty() => {
+                t!(i18n, ids::DIALOG_CREATE_CHILD_SHEET_RELATIVE_TO_PROJECT)
+            }
+            Some(rel) => t!(
+                i18n,
+                ids::DIALOG_CREATE_CHILD_SHEET_RELATIVE_TO,
+                "folder" => format!("{}/", rel.display())
+            ),
+            None => t!(
+                i18n,
+                ids::DIALOG_CREATE_CHILD_SHEET_RELATIVE_TO,
+                "folder" => full_folder.clone()
+            ),
         };
         let field = text_input(raw("sheet.snxsch"), &confirm.path_text)
             .style(crate::panels::form_look::text_input_style)
@@ -65,7 +78,7 @@ impl Signex {
             .size(TS.label)
             .width(Length::Fill);
         let note: Element<'_, Message> = match &confirm.error {
-            Some(error) => text(raw(error.clone()))
+            Some(error) => text(error.localized(i18n))
                 .size(TS.body)
                 .color(crate::styles::tokens::danger(tokens))
                 .boxed(),
@@ -103,18 +116,25 @@ impl Signex {
                     column![
                         crate::styles::dialog_intro(
                             crate::styles::DialogIcon::File,
-                            format!("Create a file for sheet '{}'", confirm.name),
-                            Some(format!(
-                                "Sheet '{}' has no file yet. Where should it be created?",
-                                confirm.name
-                            )),
+                            t!(
+                                i18n,
+                                ids::DIALOG_CREATE_CHILD_SHEET_INTRO,
+                                "name" => confirm.name.as_str()
+                            )
+                            .into_string(),
+                            Some(
+                                t!(
+                                    i18n,
+                                    ids::DIALOG_CREATE_CHILD_SHEET_QUESTION,
+                                    "name" => confirm.name.as_str()
+                                )
+                                .into_string()
+                            ),
                             tokens,
                         ),
                         signex_widgets::tooltip(
-                            text(raw(format!("Relative to {folder}")))
-                                .size(TS.caption)
-                                .color(text_muted),
-                            text(raw(full_folder)).size(TS.caption),
+                            text(folder).size(TS.caption).color(text_muted),
+                            text(UserText::new(full_folder)).size(TS.caption),
                             iced::widget::tooltip::Position::Bottom,
                         ),
                         row![

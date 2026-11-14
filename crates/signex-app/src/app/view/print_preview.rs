@@ -53,7 +53,7 @@ impl Signex {
         }
         let lead: Element<'_, Message> = crate::styles::dialog_intro(
             crate::styles::DialogIcon::Error,
-            notice.title.clone(),
+            notice.title_text(i18n),
             None,
             tokens,
         );
@@ -62,7 +62,7 @@ impl Signex {
                 column![
                     lead,
                     container(iced::widget::scrollable(dialog_message(
-                        notice.detail.clone(),
+                        notice.detail_text(i18n),
                         tokens
                     )))
                     .height(Length::Fit.max(200.0)),

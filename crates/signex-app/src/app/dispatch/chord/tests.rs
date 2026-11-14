@@ -67,7 +67,9 @@ fn wait_generation(app: &Signex) -> u64 {
 }
 
 fn block_with_modal(app: &mut Signex) {
-    app.document_state.error_notice = Some(crate::app::state::ErrorNotice::export("disk full"));
+    app.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+        crate::app::state::verbatim("disk full"),
+    ));
 }
 
 #[test]

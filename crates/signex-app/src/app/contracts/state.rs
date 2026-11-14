@@ -190,7 +190,7 @@ pub enum ChildSheetWriteError {
 /// exist, and the user picks where to write it. Held by the parent sheet's
 /// path and the symbol's id, so the answer acts on THAT document whatever tab
 /// is active by then.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateChildSheetConfirmState {
     pub symbol: uuid::Uuid,
     /// The symbol's name, for the dialog text.
@@ -203,7 +203,7 @@ pub struct CreateChildSheetConfirmState {
     /// The editable file path: relative to the parent's folder, or absolute.
     pub path_text: String,
     /// Why Create refused, shown under the field.
-    pub error: Option<String>,
+    pub error: Option<signex_i18n::Translatable>,
     /// The typed path names a file that already exists: offer to open it.
     pub exists: bool,
 }

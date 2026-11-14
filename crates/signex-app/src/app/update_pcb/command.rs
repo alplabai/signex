@@ -27,6 +27,6 @@ pub(crate) fn update_pcb_from_schematic(app: &mut Signex, args: &CommandArgs) ->
     }
     match app.open_update_pcb_from_view(true) {
         Ok(task) => (CommandOutcome::Ran, task),
-        Err(why) => refused(why),
+        Err(why) => refused(app.update_pcb_text(why)),
     }
 }

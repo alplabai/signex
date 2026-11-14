@@ -419,11 +419,10 @@ impl Signex {
         {
             return;
         }
-        let message = format!(
-            "Version control is paused for {}: {reason}",
-            project_root.display()
-        );
-        crate::diagnostics::log_warning(format!("[git] {message}"));
+        let message = signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_VCS_PAUSED)
+            .arg("path", project_root.display().to_string())
+            .arg("reason", reason);
+        crate::diagnostics::log_warning(format!("[git] {}", message.render_en_us()));
         self.document_state.error_notice = Some(
             crate::app::state::ErrorNotice::version_control_paused(message),
         );

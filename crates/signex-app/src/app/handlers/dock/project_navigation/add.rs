@@ -6,6 +6,7 @@
 use super::*;
 use crate::app::project_entry_disk::EntryPatch;
 use crate::app::state::ProjectId;
+use signex_i18n::ids;
 
 impl Signex {
     /// `Add Existing to Project…` — open a multi-select file picker
@@ -16,26 +17,26 @@ impl Signex {
         let Some(project_id) = self.project_id_for_tree_path(&tree_path) else {
             return iced::Task::none();
         };
-        let picker = self.ui_state.io.picker.clone();
-        iced::Task::perform(
-            async move {
-                picker
-                    .dialog()
-                    .set_title("Add Existing to Project")
-                    .add_filter(
-                        "All Supported",
-                        &["snxsch", "snxpcb", "snxlib", "snxsym", "snxfpt"],
-                    )
-                    .add_filter("Signex Schematic", &["snxsch"])
-                    .add_filter("Signex PCB", &["snxpcb"])
-                    .add_filter("Signex Library", &["snxlib"])
-                    .add_filter("Signex Symbol", &["snxsym"])
-                    .add_filter("Signex Footprint", &["snxfpt"])
-                    .pick_files()
-                    .await
-            },
-            move |paths| Message::Project(ProjectMsg::AddExistingFilePicked { project_id, paths }),
-        )
+        let i18n = &self.ui_state.i18n;
+        let dialog = self
+            .ui_state
+            .io
+            .picker
+            .dialog()
+            .title_in(i18n, ids::FILE_DIALOG_ADD_EXISTING)
+            .filter_in(
+                i18n,
+                ids::FILE_FILTER_ALL_SUPPORTED,
+                &["snxsch", "snxpcb", "snxlib", "snxsym", "snxfpt"],
+            )
+            .filter_in(i18n, ids::FILE_FILTER_SCHEMATIC, &["snxsch"])
+            .filter_in(i18n, ids::FILE_FILTER_PCB, &["snxpcb"])
+            .filter_in(i18n, ids::FILE_FILTER_LIBRARY, &["snxlib"])
+            .filter_in(i18n, ids::FILE_FILTER_SYMBOL, &["snxsym"])
+            .filter_in(i18n, ids::FILE_FILTER_FOOTPRINT, &["snxfpt"]);
+        iced::Task::perform(async move { dialog.pick_files().await }, move |paths| {
+            Message::Project(ProjectMsg::AddExistingFilePicked { project_id, paths })
+        })
     }
 
     /// `Add New ▸ Schematic` — Save-As dialog scoped to the project
@@ -57,14 +58,15 @@ impl Signex {
         };
         let default_name = unique_name_in(&project_dir, "Sheet", "snxsch");
         let picker = self.ui_state.io.picker.clone();
+        let i18n = self.ui_state.i18n.clone();
         iced::Task::perform(
             async move {
                 picker
                     .dialog()
-                    .set_title("Add New Schematic to Project")
+                    .title_in(&i18n, ids::FILE_DIALOG_ADD_NEW_SCHEMATIC)
                     .set_directory(&project_dir)
                     .set_file_name(&default_name)
-                    .add_filter("Signex Schematic", &["snxsch"])
+                    .filter_in(&i18n, ids::FILE_FILTER_SCHEMATIC, &["snxsch"])
                     .save_file()
                     .await
             },
@@ -93,14 +95,15 @@ impl Signex {
         };
         let default_name = unique_name_in(&project_dir, "SymbolLibrary", "snxsym");
         let picker = self.ui_state.io.picker.clone();
+        let i18n = self.ui_state.i18n.clone();
         iced::Task::perform(
             async move {
                 picker
                     .dialog()
-                    .set_title("New Symbol Library")
+                    .title_in(&i18n, ids::FILE_DIALOG_NEW_SYMBOL_LIBRARY)
                     .set_directory(&project_dir)
                     .set_file_name(&default_name)
-                    .add_filter("Signex Symbol Library", &["snxsym"])
+                    .filter_in(&i18n, ids::FILE_FILTER_SYMBOL_LIBRARY, &["snxsym"])
                     .save_file()
                     .await
             },
@@ -135,14 +138,15 @@ impl Signex {
         };
         let default_name = unique_name_in(&project_dir, "FootprintLibrary", "snxfpt");
         let picker = self.ui_state.io.picker.clone();
+        let i18n = self.ui_state.i18n.clone();
         iced::Task::perform(
             async move {
                 picker
                     .dialog()
-                    .set_title("New PCB Library")
+                    .title_in(&i18n, ids::FILE_DIALOG_NEW_PCB_LIBRARY)
                     .set_directory(&project_dir)
                     .set_file_name(&default_name)
-                    .add_filter("Signex Footprint Library", &["snxfpt"])
+                    .filter_in(&i18n, ids::FILE_FILTER_FOOTPRINT_LIBRARY, &["snxfpt"])
                     .save_file()
                     .await
             },

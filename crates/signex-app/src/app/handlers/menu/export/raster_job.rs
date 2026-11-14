@@ -200,7 +200,7 @@ impl Signex {
             // `RasterFailed` (#1092).
             log::warn!("Print preview: no pages rendered");
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                "Preview has no pages for the selected range. Check page range input.".to_string(),
+                signex_i18n::ids::NOTICE_PREVIEW_NO_PAGES,
             ));
         }
         self.rasterize_selected_preview_page()
@@ -263,9 +263,10 @@ impl Signex {
             "Print preview render failed",
             &anyhow::anyhow!(reason.to_string()),
         );
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(format!(
-            "The preview could not be rendered: {reason}"
-        )));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+            signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_PREVIEW_RENDER_FAILED)
+                .arg("reason", reason.to_string()),
+        ));
     }
 }
 
@@ -323,11 +324,8 @@ mod tests {
             .error_notice
             .as_ref()
             .expect("error card");
-        assert!(
-            notice.detail.contains(reason),
-            "card names the reason: {}",
-            notice.detail
-        );
+        let detail = notice.detail.render_en_us();
+        assert!(detail.contains(reason), "card names the reason: {detail}");
         assert_eq!(
             crate::diagnostics::logged_count(reason),
             before + 1,

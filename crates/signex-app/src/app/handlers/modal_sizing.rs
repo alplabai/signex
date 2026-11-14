@@ -144,7 +144,8 @@ impl Signex {
                     }
             }),
             ModalId::ErrorNotice => self.document_state.error_notice.as_ref().map(|n| {
-                130.0 + (wrapped_lines(&n.detail, 64) as f32 * MESSAGE_LINE).min(MESSAGE_MAX)
+                let detail = n.detail_text(&self.ui_state.i18n);
+                130.0 + (wrapped_lines(&detail, 64) as f32 * MESSAGE_LINE).min(MESSAGE_MAX)
             }),
             ModalId::NetlistIncompletePrompt => self
                 .document_state

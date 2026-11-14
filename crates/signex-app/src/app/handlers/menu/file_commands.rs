@@ -1,24 +1,31 @@
 use iced::Task;
+use signex_i18n::ids;
 
 use super::super::super::*;
 use crate::app::document::DocumentKey;
 
 impl Signex {
+    /// File ▸ Open: its title and filter names in the language in force.
+    pub(crate) fn open_project_dialog(&self) -> crate::io_ports::FileDialog {
+        let i18n = &self.ui_state.i18n;
+        self.ui_state
+            .io
+            .picker
+            .dialog()
+            .title_in(i18n, ids::FILE_DIALOG_OPEN_PROJECT)
+            .filter_in(i18n, ids::FILE_FILTER_PROJECT, &["snxprj"])
+            .filter_in(i18n, ids::FILE_FILTER_SCHEMATIC, &["snxsch"])
+            .filter_in(i18n, ids::FILE_FILTER_ALL_SUPPORTED, &["snxprj", "snxsch"])
+            .filter_in(i18n, ids::FILE_FILTER_ALL_FILES, &["*"])
+    }
+
     pub(super) fn handle_menu_file_command(&mut self, msg: &MenuMessage) -> Option<Task<Message>> {
         match msg {
-            MenuMessage::OpenProject => Some(Task::perform(
-                self.ui_state
-                    .io
-                    .picker
-                    .dialog()
-                    .set_title("Open Project or Schematic")
-                    .add_filter("Signex Project", &["snxprj"])
-                    .add_filter("Signex Schematic", &["snxsch"])
-                    .add_filter("All Supported", &["snxprj", "snxsch"])
-                    .add_filter("All files", &["*"])
-                    .pick_file(),
-                |p| Message::File(FileMsg::Opened(p)),
-            )),
+            MenuMessage::OpenProject => {
+                Some(Task::perform(self.open_project_dialog().pick_file(), |p| {
+                    Message::File(FileMsg::Opened(p))
+                }))
+            }
             MenuMessage::OpenRecentProject(path) => {
                 Some(self.handle_open_recent_project(path.clone()))
             }
@@ -28,10 +35,18 @@ impl Signex {
                     .io
                     .picker
                     .dialog()
-                    .set_title("Import Altium Project")
-                    .add_filter("Altium Design", &["PrjPcb", "SchDoc", "PcbDoc"])
-                    .add_filter("Altium Library", &["SchLib", "PcbLib"])
-                    .add_filter("All files", &["*"])
+                    .title_in(&self.ui_state.i18n, ids::FILE_DIALOG_IMPORT_ALTIUM)
+                    .filter_in(
+                        &self.ui_state.i18n,
+                        ids::FILE_FILTER_ALTIUM_DESIGN,
+                        &["PrjPcb", "SchDoc", "PcbDoc"],
+                    )
+                    .filter_in(
+                        &self.ui_state.i18n,
+                        ids::FILE_FILTER_ALTIUM_LIBRARY,
+                        &["SchLib", "PcbLib"],
+                    )
+                    .filter_in(&self.ui_state.i18n, ids::FILE_FILTER_ALL_FILES, &["*"])
                     .pick_file(),
                 |p| Message::File(FileMsg::AltiumImportPicked(p)),
             )),
@@ -49,16 +64,18 @@ impl Signex {
             MenuMessage::NewProject => {
                 let target = self.save_target(None);
                 let picker = self.ui_state.io.picker.clone();
+                let i18n = self.ui_state.i18n.clone();
                 Some(Task::perform(
                     async move {
                         target
                             .new_project_dialog(
-                                picker,
-                                "New Signex Project (a folder named after the project is created)",
+                                picker
+                                    .dialog()
+                                    .title_in(&i18n, ids::FILE_DIALOG_NEW_PROJECT),
                             )
                             .await
                             .set_file_name("Untitled.snxprj")
-                            .add_filter("Signex Project", &["snxprj"])
+                            .filter_in(&i18n, ids::FILE_FILTER_PROJECT, &["snxprj"])
                             .save_file()
                             .await
                     },
@@ -277,12 +294,17 @@ impl Signex {
                 let target = self.save_target(Some(&from_path));
                 let save_as_name = target.save_as_suggested_name();
                 let picker = self.ui_state.io.picker.clone();
+                let i18n = self.ui_state.i18n.clone();
                 Task::perform(
                     async move {
-                        let dialog = target
-                            .save_as_dialog(picker, "Save Schematic As")
-                            .await
-                            .add_filter("Signex Schematic", &["snxsch"]);
+                        let base = picker
+                            .dialog()
+                            .title_in(&i18n, ids::FILE_DIALOG_SAVE_SCHEMATIC_AS);
+                        let dialog = target.save_as_dialog(base).await.filter_in(
+                            &i18n,
+                            ids::FILE_FILTER_SCHEMATIC,
+                            &["snxsch"],
+                        );
                         let dialog = match save_as_name {
                             Some(name) => dialog.set_file_name(name),
                             None => dialog,
@@ -303,6 +325,7 @@ impl Signex {
             Some(DocumentKey::Symbol(path) | DocumentKey::Footprint(path)) => {
                 super::super::document_files::spawn_save_as_for_primitive(
                     self.ui_state.io.picker.clone(),
+                    &self.ui_state.i18n,
                     path,
                 )
             }
@@ -313,5 +336,50 @@ impl Signex {
                 Task::none()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_i18n::LanguagePref;
+
+    use super::*;
+
+    type Filters = Vec<(String, Vec<String>)>;
+
+    fn switch(app: &mut Signex, tag: &str) {
+        let pref = LanguagePref::Locale(tag.to_owned());
+        let _ = app.update(Message::Ui(UiMsg::LanguageChanged(pref)));
+    }
+
+    fn shown(app: &Signex) -> (String, Filters) {
+        let dialog = app.open_project_dialog();
+        let (title, filters) = dialog.shown_for_test();
+        (title.to_owned(), filters.to_vec())
+    }
+
+    fn extensions(filters: &Filters) -> Vec<Vec<String>> {
+        filters.iter().map(|(_, e)| e.clone()).collect()
+    }
+
+    /// #2058: the native Open dialog's title and filter names follow the
+    /// language; the extensions do not.
+    #[test]
+    fn the_open_dialog_title_and_filter_names_follow_the_language() {
+        let (mut app, _task) = Signex::new();
+        switch(&mut app, "en-US");
+        let (title, filters) = shown(&app);
+        assert_eq!(title, "Open Project or Schematic");
+        assert_eq!(filters[0].0, "Signex Project");
+        assert_eq!(filters[3].0, "All files");
+
+        switch(&mut app, "en-XA");
+        let (pseudo_title, pseudo_filters) = shown(&app);
+        assert_ne!(pseudo_title, title);
+        assert_ne!(pseudo_filters[0].0, filters[0].0);
+        assert_eq!(extensions(&pseudo_filters), extensions(&filters));
+
+        switch(&mut app, "en-US");
+        assert_eq!(shown(&app), (title, filters));
     }
 }

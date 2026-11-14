@@ -196,16 +196,25 @@ fn write_attempts_on_a_read_only_mount_explain_and_leave_disk_untouched() {
             .error_notice
             .as_ref()
             .unwrap_or_else(|| panic!("{label}: no explanation reached the user"));
-        assert_eq!(notice.title, "Library Is Read-Only", "{label}");
+        assert_eq!(
+            notice.title.render_en_us(),
+            "Library Is Read-Only",
+            "{label}"
+        );
         assert!(
             notice
                 .detail
+                .render_en_us()
                 .contains("ships with Signex and is not editable"),
             "{label}: {}",
-            notice.detail
+            notice.detail.render_en_us()
         );
         assert!(
-            !notice.detail.to_lowercase().contains("permission"),
+            !notice
+                .detail
+                .render_en_us()
+                .to_lowercase()
+                .contains("permission"),
             "{label}: no permission error may reach the user"
         );
     }
@@ -283,7 +292,11 @@ fn opening_a_primitive_picker_on_a_read_only_row_explains_and_opens_nothing() {
             .error_notice
             .as_ref()
             .unwrap_or_else(|| panic!("{label}: no explanation reached the user"));
-        assert_eq!(notice.title, "Library Is Read-Only", "{label}");
+        assert_eq!(
+            notice.title.render_en_us(),
+            "Library Is Read-Only",
+            "{label}"
+        );
     }
     assert_eq!(before, bytes_of(tmp.path()));
 }
@@ -337,7 +350,7 @@ fn a_component_preview_save_on_a_read_only_library_explains() {
         .error_notice
         .as_ref()
         .expect("save refusal must reach the user");
-    assert_eq!(notice.title, "Library Is Read-Only");
+    assert_eq!(notice.title.render_en_us(), "Library Is Read-Only");
     assert_eq!(before, bytes_of(tmp.path()));
 }
 
@@ -386,7 +399,7 @@ fn scrolling_the_spice_deck_on_a_read_only_row_is_not_refused() {
         .error_notice
         .as_ref()
         .expect("an edit must still be refused");
-    assert_eq!(notice.title, "Library Is Read-Only");
+    assert_eq!(notice.title.render_en_us(), "Library Is Read-Only");
     assert!(refusals() > warned_before);
     assert_eq!(before, bytes_of(tmp.path()));
 }

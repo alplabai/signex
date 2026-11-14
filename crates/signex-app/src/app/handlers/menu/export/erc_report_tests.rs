@@ -58,9 +58,12 @@ fn menu_entry_refuses_with_a_message_when_erc_never_ran() {
     let _ = app.update(Message::Menu(MenuMessage::ExportErcReport));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(
-        notice.detail.contains("ERC has not been run"),
+        notice
+            .detail
+            .render_en_us()
+            .contains("ERC has not been run"),
         "{}",
-        notice.detail
+        notice.detail.render_en_us()
     );
 }
 
@@ -72,14 +75,27 @@ fn refusal_names_the_real_menu_path() {
     assert!(
         notice
             .detail
+            .render_en_us()
             .contains(&crate::menu_bar::erc_menu_path(&app.ui_state.i18n)),
         "{}",
-        notice.detail
+        notice.detail.render_en_us()
     );
     // ERC moved from Design to the Project menu (maintainer decision 2026-11-07).
-    assert!(notice.detail.contains("Project"), "{}", notice.detail);
-    assert!(!notice.detail.contains("Design"), "{}", notice.detail);
-    assert!(!notice.detail.contains("Tools"), "{}", notice.detail);
+    assert!(
+        notice.detail.render_en_us().contains("Project"),
+        "{}",
+        notice.detail.render_en_us()
+    );
+    assert!(
+        !notice.detail.render_en_us().contains("Design"),
+        "{}",
+        notice.detail.render_en_us()
+    );
+    assert!(
+        !notice.detail.render_en_us().contains("Tools"),
+        "{}",
+        notice.detail.render_en_us()
+    );
 }
 
 #[test]
@@ -90,9 +106,9 @@ fn picking_a_path_without_erc_surfaces_the_refusal() {
     ))));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert!(
-        notice.detail.contains("has not been run"),
+        notice.detail.render_en_us().contains("has not been run"),
         "{}",
-        notice.detail
+        notice.detail.render_en_us()
     );
 }
 

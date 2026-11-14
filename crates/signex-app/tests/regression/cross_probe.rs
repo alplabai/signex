@@ -475,6 +475,36 @@ fn the_board_menu_row_brings_the_sheet_forward() {
     );
 }
 
+/// #2058: a refused Cross Probe says why in Messages in English whatever the
+/// UI language; logs stay locale-invariant. The card follows the language.
+#[test]
+fn a_refused_probe_logs_english_under_any_language() {
+    const WHY: &str = "This project has no board to cross probe to.";
+    let mut f = fixture(false);
+    select_all_on_the_sheet(&mut f);
+    f.app.document_state.projects[0].data.pcb_file = None;
+    let pref = signex_i18n::LanguagePref::Locale("en-XA".to_owned());
+    send(&mut f.app, Message::Ui(UiMsg::LanguageChanged(pref)));
+    let logged = || {
+        diagnostics::recent_entries()
+            .iter()
+            .filter(|e| e.message == WHY)
+            .count()
+    };
+    let before = logged();
+    send(
+        &mut f.app,
+        Message::Menu(MenuMessage::Command(command("cross_probe"))),
+    );
+    assert_eq!(logged(), before + 1, "the Messages line is English");
+    let notice = f.app.document_state.error_notice.as_ref().expect("a card");
+    assert_ne!(
+        notice.detail_text(&f.app.ui_state.i18n),
+        WHY,
+        "the card is en-XA"
+    );
+}
+
 /// Cross Probe runs from the command palette too.
 #[test]
 fn the_palette_runs_cross_probe() {

@@ -198,9 +198,11 @@ fn a_late_result_for_another_project_leaves_the_open_dialog_alone() {
 
 #[test]
 fn the_setup_failure_notice_names_version_control() {
-    let notice = crate::app::state::ErrorNotice::version_control("auto-commit is off");
-    assert_eq!(notice.title, "Version Control Setup Failed");
-    assert!(notice.detail.contains("auto-commit is off"));
+    let notice = crate::app::state::ErrorNotice::version_control(crate::app::state::verbatim(
+        "auto-commit is off",
+    ));
+    assert_eq!(notice.title.render_en_us(), "Version Control Setup Failed");
+    assert!(notice.detail.render_en_us().contains("auto-commit is off"));
 }
 
 /// #1098: a successful Enable records `.git` in the Model at once, so the
@@ -268,9 +270,9 @@ fn a_run_finishing_after_its_project_closed_raises_the_notice() {
         .error_notice
         .as_ref()
         .expect("a closed project must raise the version-control notice");
-    assert_eq!(notice.title, "Version Control Setup Failed");
+    assert_eq!(notice.title.render_en_us(), "Version Control Setup Failed");
     assert_eq!(
-        notice.detail,
+        notice.detail.render_en_us(),
         format!(
             "The repository at {} was created, but its project was closed \
              before auto-commit could be enabled. Delete the project's \

@@ -15,8 +15,9 @@ use super::child_sheet_path::{
     escapes_through_symlink, reference_from, relative_within, resolve_new_sheet_path,
 };
 use crate::app::contracts::CreateChildSheetConfirmState;
-use crate::app::state::ProjectId;
+use crate::app::state::{ProjectId, untranslated};
 use add_io::ChildSheetWriteError;
+use signex_i18n::{Translatable, ids};
 
 /// What creating a child sheet writes, decided in `update`, written on a worker.
 pub(crate) struct ChildSheetPlan {
@@ -36,14 +37,11 @@ impl Signex {
             return;
         };
         let Some(parent) = self.saved_parent_sheet() else {
-            let detail = format!(
-                "Sheet '{name}' has no file yet, and its parent sheet is not saved, so there is \
-                 no folder to create it in. Save the parent sheet first."
-            );
+            let detail = Translatable::new(ids::NOTICE_CHILD_SHEET_NO_FOLDER).arg("name", name);
             if loud {
                 self.refuse_child_sheet(detail);
             } else {
-                crate::diagnostics::log_warning(detail);
+                crate::diagnostics::log_warning(detail.render_en_us());
             }
             return;
         };
@@ -93,8 +91,8 @@ impl Signex {
     }
 
     /// Say why nothing was created, on screen and in the Messages panel.
-    fn refuse_child_sheet(&mut self, detail: String) {
-        crate::diagnostics::log_warning(&detail);
+    fn refuse_child_sheet(&mut self, detail: Translatable) {
+        crate::diagnostics::log_warning(detail.render_en_us());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(detail));
     }
 
@@ -117,12 +115,13 @@ impl Signex {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         let picker = self.ui_state.io.picker.clone();
+        let i18n = self.ui_state.i18n.clone();
         Task::perform(
             async move {
                 let mut dialog = picker
                     .dialog()
-                    .set_title("Create Sheet")
-                    .add_filter("Signex Schematic", &["snxsch"])
+                    .title_in(&i18n, ids::FILE_DIALOG_CREATE_SHEET)
+                    .filter_in(&i18n, ids::FILE_FILTER_SCHEMATIC, &["snxsch"])
                     .set_file_name(&name);
                 if let Some(dir) = dir {
                     dialog = dialog.set_directory(dir);
@@ -229,7 +228,7 @@ impl Signex {
     fn resolve_dialog_path(
         &self,
         confirm: &CreateChildSheetConfirmState,
-    ) -> Result<std::path::PathBuf, String> {
+    ) -> Result<std::path::PathBuf, Translatable> {
         let parent_dir = confirm
             .parent
             .parent()
@@ -237,13 +236,12 @@ impl Signex {
         let fold = crate::app::state::project_case::fold_of(
             self.document_state.document_project(&confirm.parent),
         );
+        // The path rules also answer the command line, in English (#2061).
         let path =
-            resolve_new_sheet_path(parent_dir, &confirm.project_dir, &confirm.path_text, fold)?;
+            resolve_new_sheet_path(parent_dir, &confirm.project_dir, &confirm.path_text, fold)
+                .map_err(untranslated)?;
         if escapes_through_symlink(&confirm.project_dir, &path) {
-            return Err(
-                "The sheet must be inside the project folder (a linked folder leaves it)"
-                    .to_owned(),
-            );
+            return Err(ids::DIALOG_CREATE_CHILD_SHEET_LINKED_FOLDER.into());
         }
         Ok(path)
     }
@@ -266,7 +264,7 @@ impl Signex {
             return None;
         }
         if let Err(why) = self.refuse_while_project_moves(&path, "create") {
-            self.set_dialog_error(why.to_string(), false);
+            self.set_dialog_error(untranslated(why.to_string()), false);
             return None;
         }
         let symbol = self
@@ -315,7 +313,7 @@ impl Signex {
         &self,
         confirm: &CreateChildSheetConfirmState,
         path: &std::path::Path,
-    ) -> (String, bool) {
+    ) -> (Translatable, bool) {
         let fold = crate::app::state::project_case::fold_of(
             self.document_state.document_project(&confirm.parent),
         );
@@ -334,20 +332,14 @@ impl Signex {
             });
         match taken_by {
             Some(other) => (
-                format!(
-                    "A file with that name already exists, and sheet symbol '{other}' already \
-                     points at it. A sheet file is placed by one sheet symbol; pick another name."
-                ),
+                Translatable::new(ids::DIALOG_CREATE_CHILD_SHEET_FILE_PLACED).arg("symbol", other),
                 false,
             ),
-            None => (
-                "A file with that name already exists. Open it, or pick another name.".to_owned(),
-                true,
-            ),
+            None => (ids::DIALOG_CREATE_CHILD_SHEET_FILE_EXISTS.into(), true),
         }
     }
 
-    fn set_dialog_error(&mut self, why: String, exists: bool) {
+    fn set_dialog_error(&mut self, why: Translatable, exists: bool) {
         if let Some(confirm) = self.ui_state.create_child_sheet_confirm.as_mut() {
             confirm.error = Some(why);
             confirm.exists = exists;
@@ -386,7 +378,8 @@ impl Signex {
             )),
             Err(ChildSheetWriteError::Failed(e)) => {
                 crate::diagnostics::log_error("Create child sheet", &anyhow::anyhow!("{e}"));
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(e));
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::create(untranslated(e)));
                 return Task::none();
             }
         }
@@ -408,7 +401,7 @@ impl Signex {
         parent: &std::path::Path,
         symbol: Uuid,
         path: std::path::PathBuf,
-    ) -> Result<Task<Message>, String> {
+    ) -> Result<Task<Message>, Translatable> {
         self.point_symbol_at_file(parent, symbol, &path)?;
         if let Some(id) = project_id {
             self.register_child_sheet_in_project(id, &path);
@@ -434,7 +427,7 @@ impl Signex {
         parent: &std::path::Path,
         symbol: Uuid,
         path: &std::path::Path,
-    ) -> Result<(), String> {
+    ) -> Result<(), Translatable> {
         let Some(dir) = parent.parent() else {
             return Ok(());
         };
@@ -448,16 +441,16 @@ impl Signex {
             .and_then(|e| e.document().child_sheets.iter().find(|c| c.uuid == symbol))
             .map(|c| c.filename.clone());
         let Some(current) = current else {
-            return Err("The sheet symbol is no longer there".to_owned());
+            return Err(ids::DIALOG_CREATE_CHILD_SHEET_SYMBOL_GONE.into());
         };
         if current == reference {
             return Ok(());
         }
         if self.active_tab_path().as_deref() != Some(parent) && !self.focus_open_sheet(parent) {
-            return Err(format!(
-                "The sheet's File field was not updated: {} could not be focused",
-                parent.display()
-            ));
+            return Err(
+                Translatable::new(ids::DIALOG_CREATE_CHILD_SHEET_NOT_FOCUSED)
+                    .arg("path", parent.display().to_string()),
+            );
         }
         let (_, refused) = self.apply_engine_command_reporting(
             signex_engine::Command::ModifyChildSheet {
@@ -468,7 +461,8 @@ impl Signex {
             false,
             true,
         );
-        refused.map_or(Ok(()), Err)
+        // The engine words its own refusals (#2060).
+        refused.map_or(Ok(()), |why| Err(untranslated(why)))
     }
 
     /// Open `path`, the child of `symbol` of `parent`: through the symbol when

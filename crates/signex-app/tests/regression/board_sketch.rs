@@ -449,16 +449,19 @@ fn a_refused_bake_keeps_the_board_and_the_mode_and_says_why() {
         .as_ref()
         .expect("the notice card says why");
     assert!(
-        notice.detail.contains("closed profile"),
+        notice.detail.render_en_us().contains("closed profile"),
         "{}",
-        notice.detail
+        notice.detail.render_en_us()
     );
     let session = f.app.interaction_state.board_sketch.as_ref().unwrap();
-    assert_eq!(session.refusal.as_deref(), Some(notice.detail.as_str()));
+    assert_eq!(
+        session.refusal.as_deref(),
+        Some(notice.detail.render_en_us().as_str())
+    );
     assert!(
         signex_app::diagnostics::recent_entries()
             .iter()
-            .any(|e| e.message.contains(&notice.detail)),
+            .any(|e| e.message.contains(&notice.detail.render_en_us())),
         "Messages says why too"
     );
 
