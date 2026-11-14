@@ -355,8 +355,18 @@ fn a_rename_whose_move_back_also_fails_tells_the_user_where_the_file_is() {
         .error_notice
         .as_ref()
         .expect("the stranded file raises a card");
-    assert!(notice.detail.contains("could not be moved back (denied)"));
-    assert!(notice.detail.contains("Move it back by hand"));
-    assert!(notice.detail.contains("Third.snxsch"));
-    assert!(!notice.detail.contains("Nothing was changed"));
+    assert!(
+        notice
+            .detail
+            .render_en_us()
+            .contains("could not be moved back (denied)")
+    );
+    assert!(
+        notice
+            .detail
+            .render_en_us()
+            .contains("Move it back by hand")
+    );
+    assert!(notice.detail.render_en_us().contains("Third.snxsch"));
+    assert!(!notice.detail.render_en_us().contains("Nothing was changed"));
 }

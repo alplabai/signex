@@ -210,7 +210,7 @@ impl Signex {
             None => self.paste_numbering(&target).apply(&session.payload),
         };
         if let Err(detail) = self.place_part_at(&payload, Point::new(x, y)) {
-            self.report_place_failure(&detail);
+            self.report_place_failure(crate::app::state::untranslated(detail));
             return Task::none();
         }
         self.after_placement_commit(reference.as_deref());

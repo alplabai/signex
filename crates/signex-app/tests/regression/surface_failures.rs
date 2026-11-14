@@ -45,7 +45,7 @@ fn ctrl_s_on_a_primitive_that_cannot_be_written_shows_the_save_failed_card() {
         .error_notice
         .as_ref()
         .expect("a failed save must raise the error card");
-    assert_eq!(notice.title, "Save Failed");
+    assert_eq!(notice.title.render_en_us(), "Save Failed");
     assert!(app.document_state.is_document_dirty(&path), "still dirty");
 }
 
@@ -64,7 +64,7 @@ fn saving_a_component_row_that_cannot_be_written_shows_the_save_failed_card() {
     crate::drive::drive(&mut app, task);
 
     let notice = app.document_state.error_notice.as_ref().expect("a card");
-    assert_eq!(notice.title, "Save Failed");
+    assert_eq!(notice.title.render_en_us(), "Save Failed");
     assert!(app.library.editors[&address].dirty, "the draft stays dirty");
 }
 
@@ -337,7 +337,7 @@ fn close_library_save_all_with_a_failing_row_keeps_the_library_and_drafts() {
 
     assert!(app.library.editors[&address].dirty, "the draft survives");
     let notice = app.document_state.error_notice.as_ref().expect("a card");
-    assert_eq!(notice.title, "Save Failed");
+    assert_eq!(notice.title.render_en_us(), "Save Failed");
 }
 
 #[test]

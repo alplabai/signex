@@ -131,8 +131,11 @@ fn export_with_issues_still_writes_and_reports_the_summary() {
         .error_notice
         .as_ref()
         .expect("summary must be surfaced, not dropped");
-    assert!(notice.title.contains("Issues"), "{notice:?}");
-    assert!(notice.detail.contains("1 error, 1 warning"), "{notice:?}");
+    assert!(notice.title.render_en_us().contains("Issues"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("1 error, 1 warning"),
+        "{notice:?}"
+    );
     std::fs::remove_dir_all(&dir).expect("cleanup");
 }
 
@@ -248,6 +251,9 @@ fn a_failed_bom_write_reaches_the_user_after_the_task_runs() {
         .error_notice
         .as_ref()
         .expect("a failed write must be reported");
-    assert!(notice.detail.contains("could not write BOM"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("could not write BOM"),
+        "{notice:?}"
+    );
     assert!(!out.exists());
 }

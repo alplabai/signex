@@ -94,8 +94,9 @@ fn open(app: &mut Signex, modal: ModalId) {
         ModalId::PassiveCalculator => ui.passive_calculator_open = true,
         ModalId::FirstRunTour => ui.first_run_tour_open = true,
         ModalId::ErrorNotice => {
-            app.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::create("it failed"))
+            app.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(
+                crate::app::state::verbatim("it failed"),
+            ))
         }
         ModalId::AutosaveRecovery => {
             app.document_state

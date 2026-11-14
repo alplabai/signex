@@ -246,9 +246,9 @@ fn the_pdf_is_built_off_the_ui_thread() {
     crate::app::handlers::menu::export::settle(&mut app, task);
     let notice = app.document_state.error_notice.as_ref().expect("failure");
     assert!(
-        notice.detail.contains("PDF export failed"),
+        notice.detail.render_en_us().contains("PDF export failed"),
         "{}",
-        notice.detail
+        notice.detail.render_en_us()
     );
     assert!(!out.exists());
 }

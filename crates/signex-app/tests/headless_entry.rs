@@ -340,9 +340,9 @@ fn run() {
         .take()
         .expect("the open was tried");
     assert!(
-        notice.detail.contains("zq-missing.snxsch"),
+        notice.detail.render_en_us().contains("zq-missing.snxsch"),
         "{}",
-        notice.detail
+        notice.detail.render_en_us()
     );
 
     let (outcome, _task) =

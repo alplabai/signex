@@ -10,17 +10,13 @@ impl Signex {
     /// File ▸ Library ▸ Open Library… — runs the file picker on
     /// the directory level and lands in [`LibraryMessage::OpenLibraryAt`].
     pub(super) fn handle_open_library_dialog(&mut self) -> Task<Message> {
-        let picker = self.ui_state.io.picker.clone();
-        Task::perform(
-            async move {
-                picker
-                    .dialog()
-                    .set_title("Open Library (*.snxlib/)")
-                    .pick_folder()
-                    .await
-            },
-            |path| Message::Library(LibraryMessage::OpenLibraryAt(path)),
-        )
+        let dialog = self.ui_state.io.picker.dialog().title_in(
+            &self.ui_state.i18n,
+            signex_i18n::ids::FILE_DIALOG_OPEN_LIBRARY,
+        );
+        Task::perform(async move { dialog.pick_folder().await }, |path| {
+            Message::Library(LibraryMessage::OpenLibraryAt(path))
+        })
     }
 
     /// Result of the `rfd` directory pick — mount the library at `path`,
@@ -48,8 +44,12 @@ impl Signex {
             // Recoverable failures open their recovery dialog; anything
             // else must still reach the user, so raise the error card.
             if !route_open_error(&mut self.library, &path, &e) {
-                self.document_state.error_notice =
-                    Some(open_error_notice(&self.library, &path, "open library", &e));
+                self.document_state.error_notice = Some(open_error_notice(
+                    &self.library,
+                    &path,
+                    signex_i18n::ids::NOTICE_LIBRARY_CANNOT_OPEN,
+                    &e,
+                ));
             }
         }
         Task::none()
@@ -176,8 +176,9 @@ impl Signex {
                     return;
                 }
                 if matches!(intent, crate::library::mount::MountIntent::OpenBrowserTab) {
-                    this.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
+                    this.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+                        crate::app::state::verbatim(format!("{error:#}")),
+                    ));
                 }
             };
         match result {

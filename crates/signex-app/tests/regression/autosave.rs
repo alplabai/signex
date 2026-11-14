@@ -1027,9 +1027,9 @@ fn a_restore_of_a_copy_that_is_gone_resumes_autosave_and_says_so() {
     assert!(next.document_state.autosave.current_offer().is_none());
     let notice = next.document_state.error_notice.as_ref().expect("notice");
     assert!(
-        notice.detail.contains("is gone"),
+        notice.detail.render_en_us().contains("is gone"),
         "the dialog says the copy is gone: {}",
-        notice.detail
+        notice.detail.render_en_us()
     );
     edit_and_tick(&mut next, &f.doc);
     assert!(

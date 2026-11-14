@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_engine::pcb::BoardEngine;
-use signex_i18n::{ids, t};
+use signex_i18n::{Translatable, ids, t};
 use signex_types::pcb::PcbBoard;
 use signex_types::project::SetupProfile;
 
@@ -25,7 +25,7 @@ impl Signex {
     /// names but that is neither open nor on disk is made at that path.
     pub(super) fn request_new_pcb(&mut self, project: Option<ProjectId>) -> Task<Message> {
         let Some(project) = project.or_else(|| self.project_in_view()) else {
-            self.refuse_new_pcb(self.update_pcb_text(ids::NEW_PCB_NO_PROJECT));
+            self.refuse_new_pcb(ids::NEW_PCB_NO_PROJECT.into());
             return Task::none();
         };
         let Some(loaded) = self.document_state.project_by_id(project) else {
@@ -79,13 +79,11 @@ impl Signex {
         let taken = self.document_state.holds_pcb(&path) || self.is_board_opening(&path);
         match exists {
             Err(why) => {
-                let why = t!(
-                    self.ui_state.i18n,
-                    ids::NEW_PCB_CHECK_FAILED,
-                    "file" => file_name(&path),
-                    "why" => why
+                self.refuse_new_pcb(
+                    Translatable::new(ids::NEW_PCB_CHECK_FAILED)
+                        .arg("file", file_name(&path))
+                        .arg("why", why),
                 );
-                self.refuse_new_pcb(why.into_string());
                 return;
             }
             Ok(true) => {
@@ -156,17 +154,16 @@ impl Signex {
     /// in the way of a new one.
     fn refuse_new_pcb_taken(&mut self, path: &Path, named: bool) {
         let why = if named {
-            t!(self.ui_state.i18n, ids::NEW_PCB_HAS_BOARD, "board" => file_name(path))
+            Translatable::new(ids::NEW_PCB_HAS_BOARD).arg("board", file_name(path))
         } else {
-            t!(self.ui_state.i18n, ids::NEW_PCB_EXISTS, "file" => file_name(path))
+            Translatable::new(ids::NEW_PCB_EXISTS).arg("file", file_name(path))
         };
-        self.refuse_new_pcb(why.into_string());
+        self.refuse_new_pcb(why);
     }
 
-    fn refuse_new_pcb(&mut self, why: String) {
-        crate::diagnostics::log_warning(why.clone());
-        let title = self.update_pcb_text(ids::NEW_PCB_TITLE);
-        self.document_state.error_notice = Some(ErrorNotice::new(title, why));
+    fn refuse_new_pcb(&mut self, why: Translatable) {
+        crate::diagnostics::log_warning(why.render(&self.ui_state.i18n));
+        self.document_state.error_notice = Some(ErrorNotice::new(ids::NEW_PCB_TITLE, why));
     }
 }
 

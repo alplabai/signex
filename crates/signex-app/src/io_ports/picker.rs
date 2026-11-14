@@ -118,6 +118,28 @@ impl FileDialog {
         self
     }
 
+    /// The window title from the catalog, in `i18n`'s language (#2058). Plain
+    /// text: the OS draws it.
+    pub fn title_in(self, i18n: &signex_i18n::I18n, id: signex_i18n::MessageId) -> Self {
+        self.set_title(i18n.message_plain(id, &[]))
+    }
+
+    /// A filter named from the catalog, in `i18n`'s language (#2058).
+    pub fn filter_in(
+        self,
+        i18n: &signex_i18n::I18n,
+        id: signex_i18n::MessageId,
+        extensions: &[impl ToString],
+    ) -> Self {
+        self.add_filter(i18n.message_plain(id, &[]), extensions)
+    }
+
+    /// The window title and the filters as set (tests).
+    #[cfg(test)]
+    pub fn shown_for_test(&self) -> (&str, &[(String, Vec<String>)]) {
+        (&self.title, &self.filters)
+    }
+
     pub fn set_directory(mut self, dir: impl AsRef<Path>) -> Self {
         self.directory = Some(dir.as_ref().to_path_buf());
         self

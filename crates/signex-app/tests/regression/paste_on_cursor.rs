@@ -280,8 +280,12 @@ fn paste_is_refused_on_a_newer_minor_sheet() {
 
     assert!(app.interaction_state.placement.is_none());
     let notice = app.document_state.error_notice.as_ref().expect("says why");
-    assert_eq!(notice.title, "Paste Failed");
-    assert!(notice.detail.contains("read-only"), "{}", notice.detail);
+    assert_eq!(notice.title.render_en_us(), "Paste Failed");
+    assert!(
+        notice.detail.render_en_us().contains("read-only"),
+        "{}",
+        notice.detail.render_en_us()
+    );
     assert!(doc(&app).symbols.is_empty());
 }
 

@@ -18,6 +18,8 @@ mod dirty_tests;
 #[cfg(test)]
 mod draft_ownership_tests;
 mod error_notice;
+#[cfg(test)]
+mod error_notice_tests;
 mod interaction;
 mod keymap_recorder;
 pub(crate) mod library_entry;
@@ -57,7 +59,7 @@ mod window_tab;
 pub use agent_edits::AgentEdits;
 pub use board_sketch::BoardSketchSession;
 pub use case_fold::CaseFold;
-pub use error_notice::{ErrorNotice, NoticeAction};
+pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use parameter_table::ParameterTableState;

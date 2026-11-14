@@ -45,7 +45,7 @@ impl Signex {
             ..BomOptions::default()
         };
         let Some((table, validation_report)) = self.rebuild_bom_table(&opts) else {
-            self.refuse_export("Cannot build BOM: no active schematic.");
+            self.refuse_export(signex_i18n::ids::NOTICE_BOM_NO_SHEET);
             return Task::none();
         };
         // Default sort: ascending by the Designator column when it
@@ -241,7 +241,12 @@ impl Signex {
         let target = self.save_target(Some(&source));
         let picker = self.ui_state.io.picker.clone();
         let default_name_owned = target.file_name("bom", "-bom", ext);
+        // The filter name is the BOM format's own label (#2060).
         let filter_label_owned = filter_label.to_string();
+        let title = self
+            .ui_state
+            .i18n
+            .message_plain(signex_i18n::ids::FILE_DIALOG_EXPORT_BOM, &[]);
         let filter_exts_owned: Vec<String> = filter_exts.iter().map(|s| s.to_string()).collect();
 
         // The options and source ride inside `BomFinished`, so a second
@@ -255,7 +260,7 @@ impl Signex {
             async move {
                 let exts_refs: Vec<&str> = filter_exts_owned.iter().map(String::as_str).collect();
                 target
-                    .dialog(picker, "Export Bill of Materials")
+                    .dialog(picker, &title)
                     .await
                     .add_filter(filter_label_owned.as_str(), &exts_refs)
                     .set_file_name(default_name_owned.as_str())
@@ -333,10 +338,10 @@ impl Signex {
             match super::build_bom_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
-                    self.refuse_export(format!(
-                        "Cannot export BOM: the source document {} is no longer open.",
-                        source.display()
-                    ));
+                    self.refuse_export(
+                        signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_BOM_SOURCE_CLOSED)
+                            .arg("path", source.display().to_string()),
+                    );
                     return Task::none();
                 }
             };
@@ -385,7 +390,10 @@ impl Signex {
                 );
             }
             Err(e) => {
-                self.report_export_failure(format!("BOM export failed: {e}"));
+                self.report_export_failure(
+                    signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_BOM_EXPORT_FAILED)
+                        .arg("error", e.to_string()),
+                );
             }
         }
 
@@ -399,21 +407,27 @@ fn bom_validation_notice(
     report: &signex_output::BomValidationReport,
     saved: &std::path::Path,
 ) -> Option<crate::app::state::ErrorNotice> {
+    use signex_i18n::{Translatable, ids};
+    const SHOWN: usize = 8;
     let summary = report.summary()?;
-    let mut detail = format!("Wrote {} with {summary}.", saved.display());
-    for issue in report.issues.iter().take(8) {
-        detail.push_str(&format!(
-            "
-- {}",
-            issue.message
-        ));
-    }
-    if report.issues.len() > 8 {
-        detail.push_str(&format!(
-            "
-... and {} more",
-            report.issues.len() - 8
-        ));
-    }
-    Some(crate::app::state::ErrorNotice::export_advisory(detail))
+    // The issue lines are the validator's own English (#2061).
+    let issues: String = report
+        .issues
+        .iter()
+        .take(SHOWN)
+        .map(|issue| format!("\n- {}", issue.message))
+        .collect();
+    let more = report.issues.len().saturating_sub(SHOWN);
+    let id = if more > 0 {
+        ids::NOTICE_BOM_ISSUES_MORE
+    } else {
+        ids::NOTICE_BOM_ISSUES
+    };
+    Some(crate::app::state::ErrorNotice::export_advisory(
+        Translatable::new(id)
+            .arg("path", saved.display().to_string())
+            .arg("summary", summary)
+            .arg("issues", issues)
+            .arg("more", more),
+    ))
 }

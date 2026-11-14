@@ -8,6 +8,7 @@
 
 use crate::app::project_sheets::ownership_reference;
 use crate::app::state::ErrorNotice;
+use signex_i18n::{Translatable, ids};
 
 use super::super::super::*;
 
@@ -27,9 +28,9 @@ impl Signex {
             return;
         };
         if let Some(taken) = self.name_used_by_another_open_sheet(id, name.trim()) {
-            self.refuse_child_sheet_edit(format!(
-                "Another sheet symbol in this project is already named '{taken}'."
-            ));
+            self.refuse_child_sheet_edit(
+                Translatable::new(ids::NOTICE_SHEET_NAME_TAKEN).arg("name", taken),
+            );
             return;
         }
         self.apply_child_sheet_edit(id, Some(name), None);
@@ -47,16 +48,15 @@ impl Signex {
         // everything else must stay inside the sheet's folder first, by the
         // same resolver navigation and the netlist use.
         if !trimmed.is_empty() && self.resolve_child_sheet_path(trimmed).is_none() {
-            self.refuse_child_sheet_edit(format!(
-                "'{trimmed}' points outside the sheet's folder. \
-                 A sheet file must live beside, or below, the sheet that references it."
-            ));
+            self.refuse_child_sheet_edit(
+                Translatable::new(ids::NOTICE_SHEET_FILE_OUTSIDE).arg("file", trimmed),
+            );
             return;
         }
         if let Some(taken) = self.file_used_by_another_open_sheet(id, trimmed) {
-            self.refuse_child_sheet_edit(format!(
-                "Another sheet symbol in this project already references '{taken}'."
-            ));
+            self.refuse_child_sheet_edit(
+                Translatable::new(ids::NOTICE_SHEET_FILE_TAKEN).arg("file", taken),
+            );
             return;
         }
         self.apply_child_sheet_edit(id, None, Some(filename));
@@ -77,12 +77,13 @@ impl Signex {
             true,
             true,
         );
+        // The engine words its own refusals (#2060).
         if let Some(reason) = refusal {
-            self.refuse_child_sheet_edit(reason);
+            self.refuse_child_sheet_edit(crate::app::state::untranslated(reason));
         }
     }
 
-    fn refuse_child_sheet_edit(&mut self, detail: String) {
+    fn refuse_child_sheet_edit(&mut self, detail: Translatable) {
         self.document_state.error_notice = Some(ErrorNotice::sheet_edit(detail));
     }
 

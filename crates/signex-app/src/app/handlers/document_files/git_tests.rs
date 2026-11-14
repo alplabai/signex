@@ -58,7 +58,10 @@ fn a_paused_repository_is_reported_once_per_project_not_every_save() {
     let task = app.drain_pending_git_commits();
     crate::app::handlers::menu::export::settle(&mut app, task);
     let notice = app.document_state.error_notice.take().expect("reported");
-    assert!(notice.detail.contains("paused"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("paused"),
+        "{notice:?}"
+    );
     assert!(!dir.path().join(".git").exists(), "no repository was made");
 
     app.commit_save_to_project_git(&file, "Save 2");

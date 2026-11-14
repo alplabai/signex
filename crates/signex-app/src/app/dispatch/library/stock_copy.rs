@@ -66,7 +66,7 @@ impl Signex {
         match msg {
             StockCopyMsg::TargetPicked(root) => self.handle_stock_copy_target_picked(root),
             StockCopyMsg::NewLibraryRequested => {
-                new_library_dialog(self.ui_state.io.picker.clone())
+                new_library_dialog(self.ui_state.io.picker.clone(), &self.ui_state.i18n)
             }
             StockCopyMsg::NewLibraryPathChosen(Some(path)) => {
                 let path =
@@ -242,10 +242,12 @@ impl Signex {
                     "Failed to copy a stock primitive",
                     &anyhow::anyhow!(reason.clone()),
                 );
-                self.document_state.error_notice = Some(ErrorNotice::open(format!(
-                    "The stock {noun} could not be copied into {}: {reason}",
-                    outcome.library.display()
-                )));
+                self.document_state.error_notice = Some(ErrorNotice::open(
+                    signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_STOCK_COPY_FAILED)
+                        .arg("kind", noun)
+                        .arg("library", outcome.library.display().to_string())
+                        .arg("error", reason),
+                ));
                 return Task::batch(tasks);
             }
         };
@@ -276,17 +278,14 @@ impl Signex {
 }
 
 /// The save dialog that names the library to create.
-fn new_library_dialog(picker: crate::io_ports::Picker) -> Task<Message> {
+fn new_library_dialog(picker: crate::io_ports::Picker, i18n: &signex_i18n::I18n) -> Task<Message> {
+    use signex_i18n::ids;
+    let dialog = picker
+        .dialog()
+        .title_in(i18n, ids::FILE_DIALOG_NEW_LIBRARY)
+        .filter_in(i18n, ids::FILE_FILTER_LIBRARY, &["snxlib"]);
     Task::perform(
-        async move {
-            picker
-                .dialog()
-                .set_title("New Library")
-                .add_filter("Signex Library", &["snxlib"])
-                .set_file_name("MyLibrary.snxlib")
-                .save_file()
-                .await
-        },
+        async move { dialog.set_file_name("MyLibrary.snxlib").save_file().await },
         |picked| {
             Message::Library(LibraryMessage::StockCopy(
                 StockCopyMsg::NewLibraryPathChosen(picked),

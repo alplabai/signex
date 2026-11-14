@@ -243,7 +243,11 @@ fn a_headless_link_is_refused_and_reported() {
     )));
     TaskDriver::new().settle(&mut app, task).expect("settled");
     let notice = app.document_state.error_notice.as_ref().expect("a notice");
-    assert!(notice.detail.contains("headless"), "{}", notice.detail);
+    assert!(
+        notice.detail.render_en_us().contains("headless"),
+        "{}",
+        notice.detail.render_en_us()
+    );
 }
 
 #[test]

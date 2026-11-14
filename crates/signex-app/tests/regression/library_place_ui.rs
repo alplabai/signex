@@ -113,6 +113,10 @@ fn placing_without_an_active_schematic_shows_the_notice() {
         .error_notice
         .as_ref()
         .expect("placing with nothing open must say so");
-    assert_eq!(notice.title, "Place Failed");
-    assert!(notice.detail.contains("schematic"), "{:?}", notice.detail);
+    assert_eq!(notice.title.render_en_us(), "Place Failed");
+    assert!(
+        notice.detail.render_en_us().contains("schematic"),
+        "{:?}",
+        notice.detail.render_en_us()
+    );
 }

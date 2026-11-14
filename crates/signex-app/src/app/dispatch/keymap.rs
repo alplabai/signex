@@ -391,7 +391,9 @@ mod tests {
     #[test]
     fn a_plain_stroke_is_dropped_while_a_blocking_modal_is_open() {
         let mut app = app_with_footprint_tab();
-        app.document_state.error_notice = Some(crate::app::state::ErrorNotice::export("disk full"));
+        app.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+            crate::app::state::verbatim("disk full"),
+        ));
         let before = app.ui_state.auto_focus;
 
         let _ = app.resolve_keymap_stroke(None, f9());

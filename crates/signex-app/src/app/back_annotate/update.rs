@@ -258,8 +258,7 @@ impl Signex {
     fn refuse_back_annotate(&mut self, id: MessageId) -> Task<Message> {
         let why = t!(self.ui_state.i18n, id).into_string();
         crate::diagnostics::log_warning(format!("Back Annotate: {why}"));
-        let title = t!(self.ui_state.i18n, ids::BACK_ANNOTATE_TITLE).into_string();
-        self.document_state.error_notice = Some(ErrorNotice::new(title, why));
+        self.document_state.error_notice = Some(ErrorNotice::new(ids::BACK_ANNOTATE_TITLE, id));
         Task::none()
     }
 
