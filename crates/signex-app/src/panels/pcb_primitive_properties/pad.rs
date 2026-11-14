@@ -225,7 +225,7 @@ fn pad_stack<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMsg
 /// The caption over a layer group of the pad stack.
 fn group<'a>(look: Look<'a>, id: signex_i18n::MessageId) -> Element<'a, PanelMsg> {
     column![text(look.t(id)).size(TS.dense).color(look.ink)]
-        .padding([SP.xs, crate::panels::PROPERTY_ROW_PAD_X])
+        .padding([SP.xs, super::rows::PAD_X])
         .width(Length::Fill)
         .boxed()
 }

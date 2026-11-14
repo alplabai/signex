@@ -88,7 +88,7 @@ pub(super) fn section<'a>(
         common,
         toggle_label,
         iced::widget::container(toggle)
-            .padding([SP.xs, crate::panels::PROPERTY_ROW_PAD_X])
+            .padding([SP.xs, super::rows::PAD_X])
             .boxed(),
     );
     s.finish()

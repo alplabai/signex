@@ -15,6 +15,8 @@ use super::{
 use crate::panels::{PROPERTY_ROW_PAD_X, PanelContext, PanelMsg, form_look};
 use crate::styles::{ti, tokens::resolve};
 
+/// The row inset every Properties row uses.
+pub(super) const PAD_X: f32 = PROPERTY_ROW_PAD_X as f32;
 const LABEL_PORTION: u16 = 4;
 const VALUE_PORTION: u16 = 6;
 
@@ -79,7 +81,7 @@ impl<'a> Section<'a> {
                 self.look.tokens(),
                 &self.look.ctx.i18n
             ))
-            .padding([SP.s, PROPERTY_ROW_PAD_X])
+            .padding([SP.s, PAD_X])
         ]
         .spacing(SP.xs);
         for r in self.rows {
@@ -124,7 +126,7 @@ pub(super) fn labelled<'a>(
         .spacing(SP.m)
         .align_y(iced::Alignment::Center),
     )
-    .padding([SP.xs, PROPERTY_ROW_PAD_X])
+    .padding([SP.xs, PAD_X])
     .width(Length::Fill)
     .boxed()
 }
