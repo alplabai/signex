@@ -159,6 +159,41 @@ fn a_right_press_outside_the_projects_menu_closes_it_and_reaches_the_canvas() {
     );
 }
 
+/// An open Active Bar dropdown closes on a left click on the canvas beside
+/// it, and the canvas never sees that click.
+#[test]
+fn an_outside_left_click_closes_an_active_bar_dropdown() {
+    use crate::active_bar::{ActiveBarMenu, ActiveBarMsg};
+    let (mut app, main) = app();
+    let canvas = app.canvas_bounds();
+    // Below-left of the bar's dropdowns, clear of the bottom-right zoom pill.
+    let outside = Point::new(
+        canvas.x + canvas.width * 0.2,
+        canvas.y + canvas.height * 0.85,
+    );
+    let _ = app.update(Message::ActiveBar(ActiveBarMsg::ToggleMenu(
+        ActiveBarMenu::Align,
+    )));
+    assert!(app.interaction_state.active_bar_menu.is_some());
+
+    let left_click = [press(Button::Left), release(Button::Left)];
+    let messages = messages_for_events(app.view(main), WINDOW, outside, &left_click);
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::ActiveBar(ActiveBarMsg::CloseMenus))),
+        "the click outside did not close the dropdown: {messages:?}"
+    );
+    assert!(
+        !clicked_the_canvas(&messages),
+        "the click went through to the canvas: {messages:?}"
+    );
+    for message in messages {
+        let _ = app.update(message);
+    }
+    assert!(app.interaction_state.active_bar_menu.is_none());
+}
+
 /// The menu's backdrop still stops the wheel beside the card (#562): the
 /// scroll guard no longer wraps menu layers, so the backdrop does it.
 #[test]

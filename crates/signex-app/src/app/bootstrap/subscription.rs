@@ -94,11 +94,12 @@ struct OpenOverlays {
     /// The `.snxlib` whose Library Browser has the Edit Component
     /// Details modal open, if any. Per-library, like `delete_confirm`.
     edit_row_modal: Option<std::path::PathBuf>,
-    /// The canvas, document-tab and Projects-tree right-click menus: Esc
-    /// closes the menu and leaves the tool alone (#2349).
+    /// The canvas, document-tab and Projects-tree right-click menus and the
+    /// grid picker: Esc closes the popup and leaves the tool alone (#2349).
     canvas_context_menu_open: bool,
     tab_context_menu_open: bool,
     project_tree_context_menu_open: bool,
+    grid_picker_open: bool,
 }
 
 // `KeyContext` used to live here — the slice of modal state the
@@ -242,6 +243,9 @@ impl OpenOverlays {
             OverlayId::ProjectTreeContextMenu => self
                 .project_tree_context_menu_open
                 .then(|| Message::ContextMenu(ContextMenuMsg::CloseProjectTree)),
+            OverlayId::GridPicker => self
+                .grid_picker_open
+                .then_some(Message::Ui(UiMsg::GridPickerClose)),
 
             // ── Editor chrome, menus, pickers, panels: no rung ───────
             // None of these is a modal. The symbol editor's menu closes from
@@ -267,7 +271,6 @@ impl OpenOverlays {
             | OverlayId::ActiveBarMenu
             | OverlayId::ComponentsRowContextMenu
             | OverlayId::StartRowContextMenu
-            | OverlayId::GridPicker
             | OverlayId::PanelList
             | OverlayId::DockDragZone
             | OverlayId::ComponentsRowDragLabel
@@ -718,6 +721,7 @@ impl Signex {
                 .interaction_state
                 .project_tree_context_menu
                 .is_some(),
+            grid_picker_open: self.interaction_state.grid_picker.is_some(),
         }
     }
 
@@ -1765,6 +1769,7 @@ mod tests {
             canvas_context_menu_open,
             tab_context_menu_open,
             project_tree_context_menu_open,
+            grid_picker_open,
         ];
 
         type EscapeSetter = fn(&mut OpenOverlays);
@@ -1868,6 +1873,7 @@ mod tests {
             ("project_tree_context_menu_open", |o| {
                 o.project_tree_context_menu_open = true
             }),
+            ("grid_picker_open", |o| o.grid_picker_open = true),
         ];
 
         // Where a notice lives, not a modal of its own: no rung.
