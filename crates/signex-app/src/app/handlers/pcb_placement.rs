@@ -390,6 +390,10 @@ pub(crate) struct PcbTargets {
     pub placeable: bool,
     /// The selection names something to delete and no locked footprint.
     pub deletable: bool,
+    /// The selection names something Copy carries (#2361).
+    pub copyable: bool,
+    /// The clipboard holds board objects to paste (#2361).
+    pub pasteable: bool,
 }
 
 impl Signex {
@@ -422,20 +426,24 @@ impl Signex {
         let selection = state
             .filter(|s| s.document().is_some() && s.document() == path.as_deref())
             .map(|s| s.selection());
+        let pasteable = self.interaction_state.pcb_clipboard.is_some();
         let Some(selection) = selection.filter(|s| !s.is_empty()) else {
             return PcbTargets {
                 shown: true,
+                pasteable,
                 ..PcbTargets::default()
             };
         };
         let footprints = selection.footprints();
         let unlocked = placement::editable_footprints(board, &footprints).is_ok();
+        let copyable = !deletable_items(selection).is_empty();
         PcbTargets {
             shown: true,
             any: true,
             placeable: unlocked,
-            deletable: (footprints.is_empty() || unlocked)
-                && !deletable_items(selection).is_empty(),
+            deletable: (footprints.is_empty() || unlocked) && copyable,
+            copyable,
+            pasteable,
         }
     }
 }

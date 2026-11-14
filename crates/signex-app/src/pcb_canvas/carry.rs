@@ -1,10 +1,13 @@
-//! Footprints on their way to a new place (#2240): a drag in progress, or
-//! an armed Edit ▸ Move waiting for its clicks. Pure state; the board is
-//! untouched until the drop commits one `MoveFootprint` batch.
+//! Footprints on their way to a new place (#2240): a drag in progress, an
+//! armed Edit ▸ Move waiting for its clicks, or a paste on the cursor
+//! (#2361). Pure state; the board is untouched until the drop commits one
+//! batch.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use signex_engine::pcb::BoardClipboard;
 use signex_engine::pcb::placement::{grid_step_mm, snap_delta};
 use signex_engine::pcb::snap::{SnapQuery, object_snap_point};
 use signex_types::pcb::{PcbBoard, Point};
@@ -12,6 +15,14 @@ use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
 use super::PcbSnapOptions;
+
+/// What a paste on the cursor places, and the shapes its preview draws
+/// with the copy's origin at (0, 0).
+#[derive(Debug, PartialEq)]
+pub struct PasteLoad {
+    pub copy: BoardClipboard,
+    pub ghost: Vec<pcb_geom::Shape>,
+}
 
 /// How the carry started, which decides what a click does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +32,9 @@ pub enum CarryKind {
     /// Edit ▸ Move: the first click is the reference point (and, with
     /// nothing selected, picks the footprint), the second the drop.
     Move,
+    /// Paste: the copy follows the pointer, on the grid, until a click
+    /// places it.
+    Paste,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -35,8 +49,11 @@ pub struct PcbCarry {
     pub footprints: BTreeSet<Uuid>,
     /// The reference point, board mm; `None` until a Move's first click.
     pub anchor: Option<Point>,
-    /// The snapped offset the preview shows.
+    /// The snapped offset the preview shows. For a paste, where the copy's
+    /// origin lands.
     pub delta: Point,
+    /// What a paste places; `None` for a drag or Move.
+    pub paste: Option<Arc<PasteLoad>>,
 }
 
 impl PcbCarry {
@@ -53,6 +70,22 @@ impl PcbCarry {
             footprints,
             anchor: None,
             delta: Point::new(0.0, 0.0),
+            paste: None,
+        }
+    }
+
+    /// A paste of `load` on the cursor, its origin at `at`.
+    pub fn paste(
+        path: PathBuf,
+        window: Option<iced::window::Id>,
+        load: PasteLoad,
+        at: Point,
+    ) -> Self {
+        Self {
+            anchor: Some(Point::new(0.0, 0.0)),
+            delta: at,
+            paste: Some(Arc::new(load)),
+            ..Self::new(CarryKind::Paste, path, window, BTreeSet::new())
         }
     }
 

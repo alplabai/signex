@@ -77,6 +77,9 @@ pub struct InteractionState {
     /// that reads the same text keeps `clipboard` as it is instead of
     /// parsing it back (which would re-anchor it to the current grid).
     pub clipboard_text: Option<String>,
+    /// The last Copy or Cut on a board (#2361). One clipboard serves sheets
+    /// and boards: a copy on one clears the other, so at most one is set.
+    pub pcb_clipboard: Option<signex_engine::pcb::BoardClipboard>,
     /// How a wire or bus run bends at its corner. Kept across segments and
     /// tools until the user flips it or changes the mode (#2372).
     pub corner_rule: signex_types::corner::CornerRule,

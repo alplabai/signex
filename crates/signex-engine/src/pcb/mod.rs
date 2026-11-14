@@ -11,6 +11,7 @@
 
 mod batch;
 mod board_sketch;
+mod clipboard;
 mod command;
 pub mod component;
 pub mod designators;
@@ -41,6 +42,7 @@ mod replace_tests;
 mod tests;
 
 pub use batch::BatchRefusal;
+pub use clipboard::BoardClipboard;
 pub use command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
 pub use engine::BoardEngine;
 pub use error::BoardCommandError;

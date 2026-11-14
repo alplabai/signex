@@ -716,6 +716,7 @@ impl Signex {
                 shape_anchor: None,
                 clipboard: None,
                 clipboard_text: None,
+                pcb_clipboard: None,
                 corner_rule: Default::default(),
                 editing_text: None,
                 context_menu: None,

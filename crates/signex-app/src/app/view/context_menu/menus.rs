@@ -30,6 +30,8 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "copy",
     "paste",
     "smart_paste",
+    "duplicate",
+    "select_all",
     "rotate_counterclockwise",
     "rotate_clockwise",
     "move_selection",
@@ -448,7 +450,20 @@ pub(super) fn pcb_canvas_menu_entries(
         }
     };
     let placeable = board.placeable;
+    let duplicate = if board.copyable {
+        dd_command(i18n, None, "duplicate", sc.of("duplicate"), None)
+    } else {
+        dd_cmd_disabled(i18n, None, "duplicate", sc.of("duplicate"))
+    };
     vec![
+        // The clipboard group (#2361), as on a sheet.
+        row(ic::icon_dd_cut(tid), "cut", board.deletable),
+        row(ic::icon_dd_copy(tid), "copy", board.copyable),
+        row(ic::icon_dd_paste(tid), "paste", board.pasteable),
+        row(ic::icon_dd_smart_paste(tid), "smart_paste", board.pasteable),
+        duplicate,
+        row(ic::icon_dd_select_all(tid), "select_all", true),
+        DropdownEntry::Separator,
         row(ic::icon_dd_move_sel(tid), "move_selection", placeable),
         DropdownEntry::Separator,
         row(

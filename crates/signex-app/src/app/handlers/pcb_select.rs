@@ -28,6 +28,7 @@ impl Signex {
                     self.refresh_pcb_highlight();
                 }
                 self.pcb_move_followed(at);
+                self.pcb_paste_followed(at);
                 // The status readout follows the pointer as before.
                 self.update(Message::CanvasEvent(CanvasEvent::CursorAt {
                     x: at.x as f32,
@@ -40,7 +41,8 @@ impl Signex {
                 tolerance_mm,
                 mode,
             } => {
-                if self.pcb_move_clicked(at, tolerance_mm)
+                if self.pcb_paste_clicked(at)
+                    || self.pcb_move_clicked(at, tolerance_mm)
                     || self.pcb_net_pick_clicked(at, tolerance_mm)
                 {
                     return self.close_context_menu_on_press();

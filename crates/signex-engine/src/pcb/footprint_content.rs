@@ -336,7 +336,7 @@ fn merge_properties(old: &[PcbProperty], template: Vec<PcbProperty>) -> Vec<PcbP
     merged
 }
 
-fn sync_text_properties(fp: &mut Footprint) {
+pub(super) fn sync_text_properties(fp: &mut Footprint) {
     for property in &mut fp.properties {
         if property.key == REFERENCE_KEY {
             property.value.clone_from(&fp.reference);
