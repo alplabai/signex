@@ -107,13 +107,13 @@ impl Needs {
             Self::Pcb => ctx.has_pcb,
             Self::TurnedPcbView => ctx.has_pcb && ctx.pcb_view_turned,
             // On a sheet, rotate also turns a part on the cursor with
-            // nothing selected.
-            Self::Turn if ctx.pcb.shown => ctx.pcb.placeable,
+            // nothing selected; on a board too (#2364).
+            Self::Turn if ctx.pcb.shown => ctx.pcb.placeable || ctx.pcb.part_in_hand,
             Self::Turn => ctx.has_schematic && (ctx.has_selection || ctx.turn_in_hand),
             Self::MoveSelection if ctx.pcb.shown => ctx.pcb.placeable,
             Self::MoveSelection => ctx.has_schematic && ctx.has_selection,
             Self::MoveObject => ctx.has_schematic || ctx.pcb.shown,
-            Self::PcbPlacement => ctx.pcb.shown && ctx.pcb.placeable,
+            Self::PcbPlacement => ctx.pcb.shown && (ctx.pcb.placeable || ctx.pcb.part_in_hand),
             Self::ProbeTarget if ctx.pcb.shown => ctx.pcb.any,
             Self::ProbeTarget => ctx.has_schematic && ctx.has_selection,
             Self::PcbSync => {

@@ -97,7 +97,7 @@ impl Signex {
     /// sheets count. A free-standing sheet only looks at itself. Annotate
     /// still does the full renumber.
     pub(crate) fn next_designator_in_sheet(&self, sheet: &std::path::Path, prefix: &str) -> String {
-        next_designator(prefix, self.used_designators(sheet).into_iter())
+        signex_types::designator::next_reference(prefix, self.used_designators(sheet))
     }
 
     /// [`Self::next_designator_in_sheet`] numbered against `scan`, an edit's
@@ -108,7 +108,7 @@ impl Signex {
         prefix: &str,
         scan: &super::designator_scan::DesignatorScan,
     ) -> String {
-        next_designator(prefix, self.used_designators_in(sheet, scan).into_iter())
+        signex_types::designator::next_reference(prefix, self.used_designators_in(sheet, scan))
     }
 
     /// Cancel the in-flight placement session and every armed mode.
@@ -370,22 +370,6 @@ impl Signex {
             );
         }
     }
-}
-
-/// `prefix` followed by one more than the highest number any of `references`
-/// carries under that prefix.
-fn next_designator<'a>(prefix: &str, references: impl Iterator<Item = &'a str>) -> String {
-    let next_index = references
-        .filter_map(|reference| {
-            let reference = reference.trim();
-            reference
-                .strip_prefix(prefix)
-                .and_then(|n| n.parse::<u32>().ok())
-        })
-        .max()
-        .unwrap_or(0)
-        .saturating_add(1);
-    format!("{prefix}{next_index}")
 }
 
 #[cfg(test)]

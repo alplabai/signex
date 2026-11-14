@@ -313,7 +313,7 @@ impl Signex {
 
     /// Run a built placement edit on the board in view as one step, or say
     /// why not. Whether the board changed.
-    fn run_placement(
+    pub(crate) fn run_placement(
         &mut self,
         what: &str,
         built: Result<Vec<BoardCommand>, PlacementRefusal>,
@@ -359,6 +359,8 @@ pub(crate) struct PcbTargets {
     pub placeable: bool,
     /// The selection names something to delete and no locked footprint.
     pub deletable: bool,
+    /// A library part is on the cursor, for Space and the flip (#2364).
+    pub part_in_hand: bool,
 }
 
 impl Signex {
@@ -388,12 +390,18 @@ impl Signex {
         let Some(board) = board else {
             return PcbTargets::default();
         };
+        let part_in_hand = self
+            .interaction_state
+            .pcb_carry
+            .as_ref()
+            .is_some_and(|c| c.kind == CarryKind::Place && c.is_for(path.as_deref(), undocked));
         let selection = state
             .filter(|s| s.document().is_some() && s.document() == path.as_deref())
             .map(|s| s.selection());
         let Some(selection) = selection.filter(|s| !s.is_empty()) else {
             return PcbTargets {
                 shown: true,
+                part_in_hand,
                 ..PcbTargets::default()
             };
         };
@@ -405,6 +413,7 @@ impl Signex {
             placeable: unlocked,
             deletable: (footprints.is_empty() || unlocked)
                 && !deletable_items(selection).is_empty(),
+            part_in_hand,
         }
     }
 }

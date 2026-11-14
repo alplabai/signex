@@ -55,6 +55,7 @@ mod pcb_edit;
 mod pcb_edit_tests;
 pub(crate) mod pcb_footprint_text;
 mod pcb_parking;
+mod pcb_part_place;
 pub(crate) mod pcb_placement;
 #[cfg(test)]
 mod pcb_placement_tests;

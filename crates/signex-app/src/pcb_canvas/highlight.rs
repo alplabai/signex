@@ -68,6 +68,7 @@ impl canvas::Program<Message> for HighlightLayer<'_> {
         if let Some(shape) = &canvas.highlight.hover_body {
             paint(&mut frame, shape, &camera, view, accent, 0.04, 1.0);
         }
+        canvas.paint_part_ghost(&mut frame);
         for shape in &canvas.highlight.ghost {
             paint(&mut frame, shape, &camera, view, accent, 0.3, 1.0);
         }

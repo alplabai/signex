@@ -251,6 +251,12 @@ impl Signex {
             LibraryMessage::LibraryUpdateSymbolsRead(read) => {
                 self.handle_library_update_symbols_read(*read)
             }
+            LibraryMessage::BoardPartResolved {
+                board,
+                window,
+                arm_epoch,
+                result,
+            } => self.handle_board_part_resolved(board, window, arm_epoch, result),
             LibraryMessage::LibraryComponentResolved {
                 target_sheet,
                 arm_epoch,

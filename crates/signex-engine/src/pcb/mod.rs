@@ -19,6 +19,7 @@ mod error;
 mod footprint;
 mod footprint_content;
 mod items;
+pub mod part_place;
 pub mod placement;
 
 #[cfg(test)]

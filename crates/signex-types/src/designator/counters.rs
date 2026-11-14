@@ -37,9 +37,33 @@ pub fn take_next(prefix: &str, counters: &mut HashMap<String, u32>) -> Option<St
     Some(format!("{prefix}{highest}"))
 }
 
+/// `prefix` followed by one more than the highest number any of `references`
+/// carries right after that prefix: what a part placed on a sheet or a board
+/// is numbered (#1381, #2364).
+pub fn next_reference<'a>(prefix: &str, references: impl IntoIterator<Item = &'a str>) -> String {
+    let next = references
+        .into_iter()
+        .filter_map(|reference| {
+            reference
+                .trim()
+                .strip_prefix(prefix)
+                .and_then(|n| n.parse::<u32>().ok())
+        })
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
+    format!("{prefix}{next}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_next_reference_follows_the_highest_number_of_its_prefix() {
+        assert_eq!(next_reference("D", ["D1", " D7 ", "DS9", "R12"]), "D8");
+        assert_eq!(next_reference("D", ["R1"]), "D1");
+    }
 
     #[test]
     fn the_counter_starts_after_the_highest_number_in_use() {

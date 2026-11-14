@@ -212,6 +212,19 @@ fn runs<'s, 'a>(items: &'s [Item<'a>], workers: usize) -> Vec<&'s [Item<'a>]> {
     runs
 }
 
+/// Every primitive of `scene`, in draw order, onto `frame` on this thread:
+/// for a scene small enough to draw whole each frame, as the part on the
+/// cursor (#2364).
+pub(super) fn paint_scene<R: geometry::Renderer>(
+    frame: &mut canvas::Frame<R>,
+    scene: &Scene,
+    camera: &BoardCamera,
+) {
+    let extents = SceneBounds::from_scene(scene);
+    let (items, _) = visible_items(scene, &extents, None);
+    paint(frame, &items, camera);
+}
+
 fn paint<R: geometry::Renderer>(
     frame: &mut canvas::Frame<R>,
     items: &[Item<'_>],

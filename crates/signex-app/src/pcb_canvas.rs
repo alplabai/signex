@@ -17,6 +17,7 @@ mod grid;
 mod highlight;
 pub mod layer_style;
 mod msg;
+mod part_ghost;
 mod select;
 mod tessellate;
 
@@ -126,6 +127,8 @@ pub struct PcbCanvas {
     grab: Vec<pcb_geom::Shape>,
     /// A footprint drag is live; Esc clears it and the gesture quits.
     carry: std::cell::Cell<bool>,
+    /// The library part on the cursor, dimmed, set by the app (#2364).
+    part_ghost: Option<Arc<Scene>>,
     /// Whether this canvas reports clicks and hovers.
     pub selectable: bool,
 }
@@ -166,6 +169,7 @@ impl PcbCanvas {
             marquee: std::cell::Cell::new(None),
             grab: Vec::new(),
             carry: std::cell::Cell::new(false),
+            part_ghost: None,
             selectable: true,
         }
     }

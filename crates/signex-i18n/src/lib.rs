@@ -392,6 +392,9 @@ define_ids! {
     PCB_REANNOTATE_NO_PCB = "pcb-reannotate-no-pcb";
     PCB_REANNOTATE_BOARD_GONE = "pcb-reannotate-board-gone";
     PCB_REANNOTATE_DONE = "pcb-reannotate-done";
+    PCB_PLACE_PART_HINT = "pcb-place-part-hint";
+    PCB_PLACE_PART_REFUSED = "pcb-place-part-refused";
+    PCB_PLACE_PART_BOARD_GONE = "pcb-place-part-board-gone";
     LIBRARY_BROWSER_SEARCH = "library-browser-search";
     LIBRARY_BROWSER_ADD_COMPONENT = "library-browser-add-component";
     LIBRARY_BROWSER_SUMMARY = "library-browser-summary";

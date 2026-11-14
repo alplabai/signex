@@ -76,6 +76,10 @@ impl Signex {
         // A newer pick supersedes any read still in flight, even one that
         // fails the checks below.
         self.interaction_state.placement_epoch += 1;
+        // On a board the part goes on as its footprint (#2364).
+        if self.has_active_pcb() {
+            return self.start_board_part_placement(library_path, table, row_id, footprint);
+        }
         let Some(target_sheet) = self.document_state.active_path.clone() else {
             self.report_place_failure("Open a schematic sheet before placing a library part.");
             return Task::none();

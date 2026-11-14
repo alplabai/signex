@@ -1,10 +1,12 @@
-//! Footprints on their way to a new place (#2240): a drag in progress, or
-//! an armed Edit ▸ Move waiting for its clicks. Pure state; the board is
-//! untouched until the drop commits one `MoveFootprint` batch.
+//! Footprints on their way to a new place (#2240): a drag in progress, an
+//! armed Edit ▸ Move waiting for its clicks, or a library part on the cursor
+//! (#2364). Pure state; the board is untouched until a click or drop
+//! commits one batch.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
+use signex_engine::pcb::part_place::PartToPlace;
 use signex_engine::pcb::placement::{grid_step_mm, snap_delta};
 use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
@@ -17,6 +19,9 @@ pub enum CarryKind {
     /// Edit ▸ Move: the first click is the reference point (and, with
     /// nothing selected, picks the footprint), the second the drop.
     Move,
+    /// A library part on the cursor: each click places a copy, until Esc or
+    /// a right-click.
+    Place,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -33,9 +38,20 @@ pub struct PcbCarry {
     pub anchor: Option<Point>,
     /// The snapped offset the preview shows.
     pub delta: Point,
+    /// The part a Place carries; its origin is at `anchor` once the pointer
+    /// has been over the board.
+    pub part: Option<Box<PartToPlace>>,
 }
 
 impl PcbCarry {
+    /// A Place of `part` on the board at `path` in `window`.
+    pub fn place(path: PathBuf, window: Option<iced::window::Id>, part: PartToPlace) -> Self {
+        Self {
+            part: Some(Box::new(part)),
+            ..Self::new(CarryKind::Place, path, window, BTreeSet::new())
+        }
+    }
+
     pub fn new(
         kind: CarryKind,
         path: PathBuf,
@@ -49,6 +65,7 @@ impl PcbCarry {
             footprints,
             anchor: None,
             delta: Point::new(0.0, 0.0),
+            part: None,
         }
     }
 

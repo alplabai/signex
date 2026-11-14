@@ -24,6 +24,7 @@ impl Signex {
                     self.refresh_pcb_highlight();
                 }
                 self.pcb_move_followed(at);
+                self.pcb_place_followed(at);
                 // The status readout follows the pointer as before.
                 self.update(Message::CanvasEvent(CanvasEvent::CursorAt {
                     x: at.x as f32,
@@ -36,7 +37,7 @@ impl Signex {
                 tolerance_mm,
                 mode,
             } => {
-                if self.pcb_move_clicked(at, tolerance_mm) {
+                if self.pcb_place_clicked(at) || self.pcb_move_clicked(at, tolerance_mm) {
                     return self.close_context_menu_on_press();
                 }
                 if self.with_pcb_selection(|sel, board| sel.click(board, at, tolerance_mm, mode))
@@ -161,9 +162,11 @@ impl Signex {
             .filter(|_| self.has_own_pcb_carry());
         let painted = self.with_pcb_selection(|sel, board| sel.paint(board, carry.as_ref()));
         let (highlight, grab) = painted.unwrap_or_default();
+        let ghost = self.pcb_part_ghost(carry.as_ref());
         let canvas = &mut self.interaction_state.pcb_canvas;
         canvas.set_highlight(highlight);
         canvas.set_grab(grab);
+        canvas.set_part_ghost(ghost.as_ref());
         // The Properties panel switches between the board and the selection.
         self.sync_pcb_board_summary();
     }
@@ -196,6 +199,12 @@ impl Signex {
             .copied()
             .unwrap_or(0);
         let view = self.pcb_layer_view(path);
+        let ghost = self
+            .interaction_state
+            .pcb_carry
+            .as_ref()
+            .filter(|c| c.path.as_path() == path && c.window.is_some_and(|w| windows.contains(&w)))
+            .and_then(|c| Some((c.window?, self.pcb_part_ghost(Some(c))?)));
         let interaction = &mut self.interaction_state;
         for id in windows {
             let carry = interaction
@@ -211,6 +220,8 @@ impl Signex {
             if let Some(canvas) = interaction.pcb_canvases.get_mut(&id) {
                 canvas.set_highlight(highlight);
                 canvas.set_grab(grab);
+                let own = ghost.as_ref().filter(|(owner, _)| *owner == id);
+                canvas.set_part_ghost(own.map(|(_, snapshot)| snapshot));
             }
         }
     }

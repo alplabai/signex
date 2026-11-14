@@ -216,15 +216,16 @@ impl PcbSelectionState {
 
     /// What a canvas paints and grabs for this selection: the highlight, the
     /// preview of `carry` once it is anchored, and the shapes a press grabs
-    /// to drag the selected footprints. While a Move waits for its clicks
-    /// nothing is grabbed, so a jiggled click stays a click (#2240).
+    /// to drag the selected footprints. While a Move waits for its clicks or
+    /// a part is on the cursor nothing is grabbed, so a jiggled click stays
+    /// a click (#2240, #2364).
     pub fn paint(
         &mut self,
         board: &PcbBoard,
         carry: Option<&super::PcbCarry>,
     ) -> (Highlight, Vec<pcb_geom::Shape>) {
         let mut highlight = self.highlight(board);
-        let moving = carry.is_some_and(|c| c.kind == super::CarryKind::Move);
+        let moving = carry.is_some_and(|c| c.kind != super::CarryKind::Drag);
         let grab = if moving {
             Vec::new()
         } else {
