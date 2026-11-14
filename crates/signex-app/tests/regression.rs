@@ -377,6 +377,7 @@ mod dead_schematic_controls;
 
 #[path = "regression/fast_grids.rs"]
 mod fast_grids;
+
 #[path = "regression/file_menu_close.rs"]
 mod file_menu_close;
 
