@@ -327,5 +327,5 @@ impl Signex {
 }
 
 #[cfg(test)]
-#[path = "window_action_tests.rs"]
+#[path = "window_action_tests/mod.rs"]
 mod tests;
