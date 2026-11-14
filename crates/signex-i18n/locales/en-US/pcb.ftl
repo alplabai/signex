@@ -40,8 +40,6 @@ pcb-bar-align-unavailable = Align: not available on boards yet
 pcb-bar-component-unavailable = Place Component: not available on boards yet
 pcb-bar-pad-unavailable = Place Pad: not available on boards yet
 pcb-bar-arc-unavailable = Place Arc: not available on boards yet
-pcb-bar-fill-unavailable = Place Fill: not available on boards yet
-pcb-bar-region-unavailable = Place Solid Region: not available on boards yet
 pcb-bar-polygon-pour-unavailable = Place Polygon Pour: not available on boards yet
 pcb-bar-text-unavailable = Place String: not available on boards yet
 pcb-bar-dimension-unavailable = Place Dimension: not available on boards yet
@@ -64,11 +62,18 @@ pcb-tool-keepout = Keepout
 # Tooltips of the PCB Active Bar's live placement tools (#2373).
 pcb-bar-via-tooltip = Place Via
 pcb-bar-track-tooltip = Place Track (Space flips the corner, Shift+Space changes the corner mode)
+pcb-bar-fill-tooltip = Place Fill
+pcb-bar-region-tooltip = Place Solid Region (right-click to close)
 # What the Messages panel says when a board placement tool is armed (#2373).
 pcb-tool-hint-via = Via: click to place a via on the net under it; Esc or a right-click ends the tool
 pcb-tool-hint-track = Track: click to start a run on the active copper layer, then click each corner; change the layer to add a via. Click the run's end, Esc or a right-click to end the run
-# The Track tool was clicked while the active layer is not a copper layer.
-pcb-tool-track-needs-copper = Track: make a copper layer active to route on it
+pcb-tool-hint-fill = Fill: click two opposite corners of solid copper on the active copper layer; Esc or a right-click ends the tool
+pcb-tool-hint-region = Solid Region: click each corner, then the first corner or a right-click to close it; Esc drops the shape, then ends the tool
+# A Track, Fill or Solid Region click while the active layer is not copper;
+# $tool is the tool's name.
+pcb-tool-needs-copper = { $tool }: make a copper layer active to draw on it
+# A Fill or Solid Region closed with no area (its corners on one line).
+pcb-tool-no-area = { $tool }: the shape has no area, so nothing was added
 
 # Layer names in the Layers panel, the layer strip and the status bar, as
 # Altium names them. A mechanical layer the user named shows that name instead.

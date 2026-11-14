@@ -382,6 +382,10 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_VIA = "cmd-menu-place-board-via";
         CMD_PLACE_BOARD_TRACK = "cmd-place-board-track";
         CMD_MENU_PLACE_BOARD_TRACK = "cmd-menu-place-board-track";
+        CMD_PLACE_BOARD_FILL = "cmd-place-board-fill";
+        CMD_MENU_PLACE_BOARD_FILL = "cmd-menu-place-board-fill";
+        CMD_PLACE_BOARD_REGION = "cmd-place-board-region";
+        CMD_MENU_PLACE_BOARD_REGION = "cmd-menu-place-board-region";
         CMD_FOOTPRINT_MODE_PADS = "cmd-footprint-mode-pads";
         CMD_FOOTPRINT_MODE_SKETCH = "cmd-footprint-mode-sketch";
         CMD_FOOTPRINT_MODE_VIEW_3D = "cmd-footprint-mode-view-3d";

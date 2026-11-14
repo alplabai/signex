@@ -54,3 +54,17 @@ draws nothing.
   or right-click ends the tool.
 - No walk-around, shove or ratsnest following: that is Interactive Routing,
   still greyed.
+
+## Fill and Solid Region
+
+`place_board_fill` (`P F`) and `place_board_region` (`P R`). Both add solid
+copper on the active copper layer, stored as a zone (`fill_type = "solid"`)
+on the net of the copper under its first point, or no net. With a
+non-copper layer active the tool says so and draws nothing.
+
+- **Fill:** the first click is one corner, the second the opposite corner of
+  the rectangle.
+- **Solid Region:** each click adds a corner. A click on the first corner,
+  or a right-click once there are three, closes it; Esc drops it.
+- A shape whose corners are on one line has no area (checked in integer nm)
+  and is not added; the Messages panel says so.

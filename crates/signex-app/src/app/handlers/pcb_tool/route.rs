@@ -7,22 +7,15 @@
 //! on there. A click on the run's end, Esc or a right-click ends the run.
 
 use signex_engine::pcb::draw::{self, TrackStyle};
-use signex_i18n::{ids, t};
 use signex_types::pcb::{PcbBoard, Point, Via};
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
 use super::BoardToolSession;
 use crate::app::Signex;
+use crate::app::pcb_tools::BoardPlaceTool;
 
 impl Signex {
-    /// The copper layer a run on the board in view is drawn on: the active
-    /// layer, when it is copper.
-    fn route_layer(&self) -> Option<CopperLayer> {
-        let path = self.active_tab_path()?;
-        self.pcb_layer_view(&path).active().copper()
-    }
-
     /// Whether a track run is being drawn on the board this window shows:
     /// Space and Shift+Space bend it.
     pub(crate) fn is_routing_board_track(&self) -> bool {
@@ -47,10 +40,7 @@ impl Signex {
 
     /// A Track click at `at` (already on the grid or an object point).
     pub(super) fn route_clicked(&mut self, at: Point) {
-        let Some(layer) = self.route_layer() else {
-            crate::diagnostics::log_warning(
-                t!(self.ui_state.i18n, ids::PCB_TOOL_TRACK_NEEDS_COPPER).into_string(),
-            );
+        let Some(layer) = self.tool_copper_layer(BoardPlaceTool::Track) else {
             return;
         };
         let Some(board) = self.active_pcb() else {
@@ -99,7 +89,7 @@ impl Signex {
         cursor: Point,
         preview: &mut PcbBoard,
     ) {
-        let (Some(anchor), Some(layer)) = (session.points.last().copied(), self.route_layer())
+        let (Some(anchor), Some(layer)) = (session.points.last().copied(), self.active_copper_layer())
         else {
             return;
         };

@@ -7,7 +7,7 @@ use signex_types::corner::CornerRule;
 use signex_types::format::pcb_layer_token;
 use signex_types::pcb::{
     PCB_DEFAULT_TRACE_WIDTH_MM, PCB_DEFAULT_VIA_DIAMETER_MM, PCB_DEFAULT_VIA_DRILL_MM, PcbBoard,
-    PcbSetup, Point, Segment, Via, ViaType,
+    PcbSetup, Point, Segment, Via, ViaType, Zone,
 };
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use uuid::Uuid;
@@ -114,6 +114,75 @@ pub fn place_route(tracks: Vec<Segment>, via: Option<Via>) -> Option<BoardComman
         .chain(tracks.into_iter().map(BoardItem::Segment))
         .collect();
     (!items.is_empty()).then_some(BoardCommand::AddItems { items })
+}
+
+/// The corners of the rectangle spanned by `a` and `b`, in drawing order.
+pub fn rectangle(a: Point, b: Point) -> Vec<Point> {
+    vec![a, Point::new(b.x, a.y), b, Point::new(a.x, b.y)]
+}
+
+/// Solid copper over `outline` on `layer` (a Fill or a Solid Region, stored
+/// as a zone), on the net of the copper under its first point. `None` for an
+/// outline with no area or a point the geometry cannot hold.
+pub fn new_copper_area(
+    board: &PcbBoard,
+    id: Uuid,
+    outline: Vec<Point>,
+    layer: CopperLayer,
+) -> Option<Zone> {
+    if !has_area(&outline) {
+        return None;
+    }
+    let net = net_under(board, *outline.first()?, 1 << layer_bit(layer));
+    let net_name = board
+        .nets
+        .iter()
+        .find(|n| n.number == net)
+        .map(|n| n.name.clone())
+        .unwrap_or_default();
+    Some(Zone {
+        uuid: id,
+        net,
+        net_name,
+        layer: pcb_layer_token(PcbLayer::Copper(layer)),
+        outline,
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: "solid".into(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        unknown: Default::default(),
+    })
+}
+
+/// Add `zone`: one undo step.
+pub fn place_zone(zone: Zone) -> BoardCommand {
+    BoardCommand::AddItems {
+        items: vec![BoardItem::Zone(zone)],
+    }
+}
+
+/// Whether the polygon encloses any area, in integer nm (exact): false for
+/// fewer than three points, points on one line, or a point the geometry
+/// cannot hold.
+fn has_area(points: &[Point]) -> bool {
+    let Ok(nm) = points
+        .iter()
+        .map(|p| PointNm::from_mm(*p, "outline"))
+        .collect::<Result<Vec<_>, _>>()
+    else {
+        return false;
+    };
+    let next = nm.iter().cycle().skip(1);
+    let twice_area: i128 = nm
+        .iter()
+        .zip(next)
+        .map(|(a, b)| i128::from(a.x) * i128::from(b.y) - i128::from(b.x) * i128::from(a.y))
+        .sum();
+    nm.len() >= 3 && twice_area != 0
 }
 
 #[cfg(test)]

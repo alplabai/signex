@@ -224,4 +224,24 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    CommandMetadata {
+        id: "place_board_fill",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_FILL,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_FILL),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_region",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_REGION,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_REGION),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
 ];

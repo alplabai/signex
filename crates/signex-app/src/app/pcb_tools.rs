@@ -54,12 +54,12 @@ impl BoardPlaceTool {
         match self {
             Self::Via => Live("place_board_via"),
             Self::Track => Live("place_board_track"),
+            Self::Fill => Live("place_board_fill"),
+            Self::SolidRegion => Live("place_board_region"),
             Self::Component => Unavailable(ids::PCB_BAR_COMPONENT_UNAVAILABLE),
             Self::Pad => Unavailable(ids::PCB_BAR_PAD_UNAVAILABLE),
             Self::InteractiveRouting => Unavailable(ids::PCB_BAR_ROUTE_UNAVAILABLE),
             Self::Arc => Unavailable(ids::PCB_BAR_ARC_UNAVAILABLE),
-            Self::Fill => Unavailable(ids::PCB_BAR_FILL_UNAVAILABLE),
-            Self::SolidRegion => Unavailable(ids::PCB_BAR_REGION_UNAVAILABLE),
             Self::PolygonPour => Unavailable(ids::PCB_BAR_POLYGON_POUR_UNAVAILABLE),
             Self::TextString => Unavailable(ids::PCB_BAR_TEXT_UNAVAILABLE),
             Self::Dimension => Unavailable(ids::PCB_BAR_DIMENSION_UNAVAILABLE),
@@ -100,6 +100,8 @@ impl BoardPlaceTool {
         match self {
             Self::Via => (ids::PCB_BAR_VIA_TOOLTIP, ids::PCB_TOOL_HINT_VIA),
             Self::Track => (ids::PCB_BAR_TRACK_TOOLTIP, ids::PCB_TOOL_HINT_TRACK),
+            Self::Fill => (ids::PCB_BAR_FILL_TOOLTIP, ids::PCB_TOOL_HINT_FILL),
+            Self::SolidRegion => (ids::PCB_BAR_REGION_TOOLTIP, ids::PCB_TOOL_HINT_REGION),
             other => (other.name(), other.name()),
         }
     }

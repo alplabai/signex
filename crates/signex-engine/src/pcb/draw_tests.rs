@@ -115,3 +115,30 @@ fn a_layer_change_adds_its_via_and_tracks_as_one_step() {
     engine.undo().unwrap();
     assert_eq!(serde_json::to_string(engine.board()).unwrap(), before);
 }
+
+#[test]
+fn a_copper_area_is_solid_copper_on_the_net_under_its_first_point() {
+    use signex_types::pcb_layer::CopperLayer;
+
+    let mut engine = BoardEngine::new(board(), 1);
+    let before = serde_json::to_string(engine.board()).unwrap();
+    let outline = rectangle(Point::new(1.0, 0.0), Point::new(4.0, 3.0));
+    assert_eq!(outline.len(), 4);
+    assert_eq!(outline[2], Point::new(4.0, 3.0));
+    let id = Uuid::from_u128(0x70);
+    let zone = new_copper_area(engine.board(), id, outline, CopperLayer::Top).unwrap();
+    assert_eq!((zone.net, zone.net_name.as_str()), (3, "GND"));
+    assert_eq!((zone.layer.as_str(), zone.fill_type.as_str()), ("TopCopper", "solid"));
+    engine.execute(place_zone(zone)).unwrap();
+    assert_eq!(engine.board().zones.len(), 1);
+    engine.undo().unwrap();
+    assert_eq!(serde_json::to_string(engine.board()).unwrap(), before);
+
+    let bottom = rectangle(Point::new(1.0, 0.0), Point::new(4.0, 3.0));
+    let zone = new_copper_area(engine.board(), id, bottom, CopperLayer::Bottom).unwrap();
+    assert_eq!(zone.net, 0, "no bottom copper under it");
+    let flat = rectangle(Point::new(1.0, 1.0), Point::new(4.0, 1.0));
+    assert!(new_copper_area(engine.board(), id, flat, CopperLayer::Top).is_none());
+    let two = vec![Point::new(0.0, 0.0), Point::new(1.0, 1.0)];
+    assert!(new_copper_area(engine.board(), id, two, CopperLayer::Top).is_none());
+}

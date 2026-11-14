@@ -8,8 +8,6 @@ define_ids! {
     PCB_BAR_COMPONENT_UNAVAILABLE = "pcb-bar-component-unavailable";
     PCB_BAR_PAD_UNAVAILABLE = "pcb-bar-pad-unavailable";
     PCB_BAR_ARC_UNAVAILABLE = "pcb-bar-arc-unavailable";
-    PCB_BAR_FILL_UNAVAILABLE = "pcb-bar-fill-unavailable";
-    PCB_BAR_REGION_UNAVAILABLE = "pcb-bar-region-unavailable";
     PCB_BAR_POLYGON_POUR_UNAVAILABLE = "pcb-bar-polygon-pour-unavailable";
     PCB_BAR_TEXT_UNAVAILABLE = "pcb-bar-text-unavailable";
     PCB_BAR_DIMENSION_UNAVAILABLE = "pcb-bar-dimension-unavailable";
@@ -31,5 +29,10 @@ define_ids! {
     PCB_TOOL_HINT_VIA = "pcb-tool-hint-via";
     PCB_BAR_TRACK_TOOLTIP = "pcb-bar-track-tooltip";
     PCB_TOOL_HINT_TRACK = "pcb-tool-hint-track";
-    PCB_TOOL_TRACK_NEEDS_COPPER = "pcb-tool-track-needs-copper";
+    PCB_TOOL_NEEDS_COPPER = "pcb-tool-needs-copper";
+    PCB_TOOL_NO_AREA = "pcb-tool-no-area";
+    PCB_BAR_FILL_TOOLTIP = "pcb-bar-fill-tooltip";
+    PCB_TOOL_HINT_FILL = "pcb-tool-hint-fill";
+    PCB_BAR_REGION_TOOLTIP = "pcb-bar-region-tooltip";
+    PCB_TOOL_HINT_REGION = "pcb-tool-hint-region";
 }

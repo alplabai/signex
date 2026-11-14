@@ -10,21 +10,25 @@
 use std::path::PathBuf;
 
 use signex_engine::pcb::draw;
-use signex_i18n::t;
+use signex_i18n::{ids, t};
 use signex_renderer::pcb::PcbSnapshot;
 use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::pcb_canvas::{carried_board, snap_point};
 
+mod area;
 mod route;
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod route_tests;
+#[cfg(test)]
+mod area_tests;
 
 /// A placement tool armed on one board in one window, and the shape it is
 /// drawing.
@@ -124,6 +128,26 @@ impl Signex {
         true
     }
 
+    /// The active layer of the board in view, when it is copper: where a
+    /// track or a copper area is drawn.
+    fn active_copper_layer(&self) -> Option<CopperLayer> {
+        let path = self.active_tab_path()?;
+        self.pcb_layer_view(&path).active().copper()
+    }
+
+    /// [`Self::active_copper_layer`], or `None` after saying in the Messages
+    /// panel that `tool` draws on copper only.
+    fn tool_copper_layer(&self, tool: BoardPlaceTool) -> Option<CopperLayer> {
+        let layer = self.active_copper_layer();
+        if layer.is_none() {
+            let i18n = &self.ui_state.i18n;
+            let name = t!(i18n, tool.name()).into_string();
+            let note = t!(i18n, ids::PCB_TOOL_NEEDS_COPPER, "tool" => name.as_str());
+            crate::diagnostics::log_warning(note.into_string());
+        }
+        layer
+    }
+
     /// Where a tool click at `at` lands on the board in view.
     fn board_tool_point(&self, board: &PcbBoard, at: Point) -> Point {
         snap_point(board, at, &self.ui_state.pcb_snap, self.pcb_active_layer())
@@ -159,6 +183,7 @@ impl Signex {
                 self.run_placement("Via", Ok(vec![command]));
             }
             BoardPlaceTool::Track => self.route_clicked(at),
+            BoardPlaceTool::Fill | BoardPlaceTool::SolidRegion => self.area_clicked(tool, at),
             _ => return false,
         }
         if let Some(session) = self.own_board_tool_mut() {
@@ -178,6 +203,9 @@ impl Signex {
         match session.tool {
             BoardPlaceTool::Via => preview.vias.push(draw::new_via(board, Uuid::nil(), cursor)),
             BoardPlaceTool::Track => self.route_preview(session, board, cursor, &mut preview),
+            BoardPlaceTool::Fill | BoardPlaceTool::SolidRegion => {
+                self.area_preview(session, board, cursor, &mut preview);
+            }
             _ => return None,
         }
         Some(self.pcb_snapshot_for(&session.path, &preview))

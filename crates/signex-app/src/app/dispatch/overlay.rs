@@ -236,8 +236,9 @@ impl Signex {
             self.end_pcb_carry();
             return Task::none();
         }
-        // A board placement tool ends its shape, then itself (#2373).
-        if self.step_back_board_tool() {
+        // A board placement tool closes a Solid Region, or ends its shape and
+        // then itself (#2373).
+        if self.close_board_region() || self.step_back_board_tool() {
             return Task::none();
         }
         let canvas = self.interaction_state.active_canvas();
