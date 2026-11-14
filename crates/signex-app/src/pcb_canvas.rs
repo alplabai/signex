@@ -20,6 +20,7 @@ pub mod layer_style;
 mod msg;
 mod select;
 mod tessellate;
+mod viewport_resize;
 
 pub use camera::BoardCamera;
 pub use carry::{CarryKind, PcbCarry, board_without, carried_board, carry_delta};
@@ -97,6 +98,8 @@ pub struct PcbCanvas {
     /// like pan and zoom, never a board edit, never undone, never dirty.
     camera: std::cell::RefCell<BoardCamera>,
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
+    /// The last fit applied and the camera it left (#2345).
+    fitted: std::cell::Cell<Option<crate::canvas::FittedView>>,
     /// Bounds as of the last canvas event — the view centre for menu zoom.
     viewport: std::cell::Cell<Rectangle>,
     pub grid_visible: bool,
@@ -154,6 +157,7 @@ impl PcbCanvas {
             scene_generation: std::cell::Cell::new(next_scene_generation()),
             camera: std::cell::RefCell::new(BoardCamera::default()),
             pending_fit: std::cell::Cell::new(None),
+            fitted: std::cell::Cell::new(None),
             viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             grid_visible: true,
             gpu_render: false,
@@ -502,8 +506,7 @@ impl canvas::Program<Message> for PcbCanvas {
     ) -> Option<canvas::Action<Message>> {
         // Remember the bounds so menu zoom (no cursor) can find the view centre.
         self.viewport.set(bounds);
-        if let Some(target) = self.pending_fit.take() {
-            self.camera.borrow_mut().fit_rect(target, bounds);
+        if self.resolve_pending_fit(bounds) {
             return Some(canvas::Action::publish(Message::CanvasEvent(
                 CanvasEvent::CursorMoved,
             )));

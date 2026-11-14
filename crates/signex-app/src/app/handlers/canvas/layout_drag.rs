@@ -167,6 +167,7 @@ impl Signex {
                     new_val.round()
                 };
                 if (current - new_val).abs() >= 1.0 {
+                    let before = self.canvas_bounds();
                     match target {
                         DragTarget::LeftPanel => self.ui_state.left_width = new_val,
                         DragTarget::RightPanel => self.ui_state.right_width = new_val,
@@ -175,6 +176,8 @@ impl Signex {
                             self.library.components_panel.list_height = new_val
                         }
                     }
+                    // A dock splitter resizes the canvas like a window resize.
+                    self.follow_main_canvas_resize(before);
                 }
             }
         }

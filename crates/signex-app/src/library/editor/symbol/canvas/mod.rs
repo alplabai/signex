@@ -120,6 +120,10 @@ pub struct SymbolCanvas<'a> {
     /// queued Fit / centre-origin camera request: the canvas reports
     /// its measured bounds once via [`CanvasAction::ViewportMeasured`].
     pub view_pending: bool,
+    /// The canvas size the editor last measured; bounds of another size
+    /// are reported too, so the camera follows a resize (#2345). `None`
+    /// does not track the size.
+    pub measured_size: Option<iced::Size>,
     pub bg_color: Color,
     pub grid_color: Color,
     pub body_color: Color,
@@ -187,6 +191,7 @@ impl<'a> SymbolCanvas<'a> {
             pin_label_grab,
             selection_filter: state::SymbolSelectionFilter::default(),
             view_pending: false,
+            measured_size: None,
             bg_color: sheet_color,
             grid_color: palette.grid,
             body_color: palette.body,
@@ -233,6 +238,12 @@ impl<'a> SymbolCanvas<'a> {
     /// its real bounds on the next event.
     pub fn with_view_pending(mut self, pending: bool) -> Self {
         self.view_pending = pending;
+        self
+    }
+
+    /// The canvas size the editor last measured, so a resize is reported.
+    pub fn with_measured_size(mut self, size: iced::Size) -> Self {
+        self.measured_size = Some(size);
         self
     }
 
@@ -478,8 +489,10 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         // size, which only the widget knows. Report it, and carry the
         // event's own action along so the dispatcher applies the view
         // AND still processes the event (a mid-drag release must not
-        // be swallowed by the measurement).
-        if self.view_pending && bounds.width > 0.0 && bounds.height > 0.0 {
+        // be swallowed by the measurement). A new size is reported the
+        // same way, so the camera follows a resize.
+        let resized = self.measured_size.is_some_and(|size| size != bounds.size());
+        if (self.view_pending || resized) && bounds.width > 0.0 && bounds.height > 0.0 {
             let (then, status) = routed.map_or((None, iced::event::Status::Ignored), |action| {
                 let (message, _, status) = action.into_inner();
                 (message, status)

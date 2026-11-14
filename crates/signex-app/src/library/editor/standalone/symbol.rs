@@ -281,7 +281,7 @@ const ZOOM_BUTTON_STEP: f32 = 1.25;
 
 /// The canvas program the view draws: the editor's document and the window's
 /// display scale (#1887).
-fn symbol_canvas<'a>(
+pub(crate) fn symbol_canvas<'a>(
     editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
@@ -312,6 +312,7 @@ fn symbol_canvas<'a>(
     .with_graphite(tokens)
     .with_selection_filter(editor.selection_filter)
     .with_view_pending(editor.pending_view.is_some())
+    .with_measured_size(editor.viewport)
     .with_trackpad_pan(editor.trackpad_pan)
     .with_wheel_mode(editor.wheel_mode)
     .with_device_px_per_logical_px(device_px_per_logical_px)
