@@ -112,8 +112,7 @@ fn a_text_with_no_layer_takes_its_sides_overlay() {
     let mut board = board();
     board.footprints[0].properties[0].layer = None;
     assert_eq!(
-        designator(&texts(&board, &PcbLayerView::default()))
-            .map(|t| t.layer),
+        designator(&texts(&board, &PcbLayerView::default())).map(|t| t.layer),
         Some(TOP_OVERLAY)
     );
     board.footprints[0].layer = "BottomCopper".into();
