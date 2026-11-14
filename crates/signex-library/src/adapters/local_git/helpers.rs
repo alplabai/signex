@@ -229,7 +229,10 @@ fn run_before_commit_hook() {
 /// The index entry `add_path` makes for `rel_path` from the working tree
 /// (its blob, the clean-filtered disk bytes, hashed and stored; its stat
 /// taken), without writing the index.
-fn staged_entry(repo: &git2::Repository, rel_path: &Path) -> Result<git2::IndexEntry, git2::Error> {
+pub(super) fn staged_entry(
+    repo: &git2::Repository,
+    rel_path: &Path,
+) -> Result<git2::IndexEntry, git2::Error> {
     let mut index = repo.index()?;
     index.add_path(rel_path)?;
     let entry = index.get_path(rel_path, 0);

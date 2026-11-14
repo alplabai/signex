@@ -11,23 +11,12 @@ use std::path::{Path, PathBuf};
 /// then moved onto `index.lock`. Only the holder of `index.lock` touches it.
 const SCRATCH_INDEX: &str = "index.signex-scratch";
 
-/// Apply `edit` to the repository's on-disk index under git's lock
-/// protocol, so the index `edit` changes is the one it replaces.
-/// libgit2's `Index::write` locks only for the write; an index read before
-/// it can be one another process replaced meanwhile, and writing it back
-/// drops what that process staged.
-///
-/// `index.lock` is created first (create-new, as git does). `edit` then
-/// gets the repository's own index, read again under the lock, so
-/// `core.ignorecase`, `core.filemode` and `core.symlinks` apply as for any
-/// `add_path`. The result is written into `index.lock`, which is renamed
-/// onto `index`: one step that publishes and unlocks.
-///
-/// `Err` is a failure of the update itself; a held lock is
-/// `ErrorCode::Locked`, which `retry_on_git_lock` waits out. `Ok(Err(_))`
-/// is `edit`'s own failure. Unless the index was published, the lock and
-/// the scratch file this call made are removed and the in-memory edits
-/// dropped, even when `edit` panics.
+/// Apply `edit` to the repository's own index, read while we hold
+/// `index.lock`, and publish it through that lock. `Err` is the update's
+/// failure (a held lock is `ErrorCode::Locked`); `Ok(Err(_))` is `edit`'s.
+/// Keep slow work (hashing, hooks) out of `edit`: it runs under the lock.
+/// Protocol: see docs/architecture/library-writes.md, "The git index after
+/// a commit".
 pub(super) fn update_index_locked<E>(
     repo: &git2::Repository,
     edit: impl FnOnce(&mut git2::Index) -> Result<(), E>,

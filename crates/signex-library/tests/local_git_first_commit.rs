@@ -238,14 +238,25 @@ fn index_has(dir: &Path, name: &str) -> bool {
 }
 
 /// Hold `.git/index.lock` in `dir` as another git process would, and let it
-/// go from another thread after a moment.
-fn hold_index_lock_briefly(dir: &Path) -> std::thread::JoinHandle<()> {
+/// go from another thread after a moment. The thread returns when it did.
+fn hold_index_lock_briefly(dir: &Path) -> std::thread::JoinHandle<std::time::Instant> {
     let lock = dir.join(".git/index.lock");
     std::fs::write(&lock, b"").unwrap();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(100));
         std::fs::remove_file(lock).unwrap();
+        std::time::Instant::now()
     })
+}
+
+/// The call that just returned at `finished` waited for the lock `release`
+/// let go of: it could not have updated the index before.
+fn waited_for(release: std::thread::JoinHandle<std::time::Instant>, finished: std::time::Instant) {
+    let released = release.join().unwrap();
+    assert!(
+        finished >= released,
+        "the call returned before the lock was released"
+    );
 }
 
 /// #2337: a library made in a repo whose `index.lock` another git process
@@ -259,7 +270,7 @@ fn init_waits_out_a_briefly_held_index_lock() {
 
     LocalGitAdapter::init(tmp.path().join("lib.snxlib"), manifest(), GIT).expect("init");
 
-    release.join().unwrap();
+    waited_for(release, std::time::Instant::now());
     assert!(index_has(tmp.path(), "lib.snxlib"));
     assert!(!tmp.path().join(".git/index.lock").exists());
 }
@@ -277,7 +288,7 @@ fn recover_init_waits_out_a_briefly_held_index_lock() {
 
     LocalGitAdapter::recover_init(&lib).expect("re-init");
 
-    release.join().unwrap();
+    waited_for(release, std::time::Instant::now());
     assert!(head_tracks(tmp.path(), "symbols/r.snxsym"));
     assert!(index_has(tmp.path(), "symbols/r.snxsym"));
 }

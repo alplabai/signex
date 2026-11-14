@@ -275,6 +275,49 @@ fn a_save_leaves_the_repository_on_its_own_index() {
     );
 }
 
+/// The published index keeps a tree cache that still matches: a tree
+/// written from it is the commit's tree after a save that changes, adds
+/// and removes files.
+#[test]
+fn the_published_index_writes_the_committed_tree() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = git2::Repository::init(dir.path()).unwrap();
+    fs::create_dir_all(dir.path().join("dir")).unwrap();
+    commit_files(
+        &repo,
+        "HEAD",
+        &[],
+        &[
+            ("dir/a.txt", "a\n"),
+            ("dir/b.txt", "b\n"),
+            ("top.txt", "t\n"),
+        ],
+    );
+    // Store the tree cache in the on-disk index.
+    let mut index = repo.index().unwrap();
+    index.write_tree().unwrap();
+    index.write().unwrap();
+    fs::write(dir.path().join("dir/a.txt"), "a2\n").unwrap();
+    fs::write(dir.path().join("dir/c.txt"), "c\n").unwrap();
+
+    let sig = signature();
+    stage_and_commit_with(
+        &repo,
+        &[Path::new("top.txt")],
+        Some(Path::new("dir/a.txt")),
+        None,
+        &[Path::new("dir/c.txt")],
+        &sig,
+        "save",
+    )
+    .unwrap()
+    .expect("a commit");
+
+    let committed = repo.head().unwrap().peel_to_tree().unwrap().id();
+    let mut published = git2::Index::open(&repo.path().join("index")).unwrap();
+    assert_eq!(published.write_tree_to(&repo).unwrap(), committed);
+}
+
 /// A save of files left conflicted by a merge resolves them in the index,
 /// for the saved path and for an extra path committed with it.
 #[test]
