@@ -66,8 +66,8 @@ pub(super) fn view<'a>(form: &Form<'a>, board: &'a PcbBoardSummary) -> Element<'
     let mut col: Column<Element<'a, PanelMsg>> = Column::new()
         .spacing(SP.s)
         .width(Length::Fill)
-        .push(title.into())
-        .push(tools.into());
+        .push(title.boxed())
+        .push(tools.boxed());
     if board.view.filter_menu_open {
         col = col.push(filter::chips(form, &board.filter));
     }
@@ -107,7 +107,7 @@ fn tabs<'a>(form: &Form<'a>, active: BoardTab) -> Element<'a, PanelMsg> {
     row![general, parameters, health]
         .spacing(SP.xs)
         .align_y(Alignment::Center)
-        .into()
+        .boxed()
 }
 
 /// One tab chip; `msg: None` draws it disabled. `badge` is a warning count.

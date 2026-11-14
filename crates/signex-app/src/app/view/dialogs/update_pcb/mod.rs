@@ -83,7 +83,7 @@ impl Signex {
         top = top.push(self.update_pcb_banner(state, i18n, tokens));
         let mut card = Column::new()
             .push(header)
-            .push(container(top).padding([SP.l, SP.xl]));
+            .push(container(top).padding([SP.l, SP.xl]).boxed());
         if let Some(list) = state.list.as_ref().filter(|l| !l.rows.is_empty()) {
             let scrolled = column![
                 table::body(state, list, i18n, tokens),
@@ -91,9 +91,9 @@ impl Signex {
             ];
             card = card
                 .push(table::headings(i18n, tokens))
-                .push(scrollable(scrolled).height(Length::Fill));
+                .push(scrollable(scrolled).height(Length::Fill).boxed());
         } else {
-            card = card.push(Space::new().height(Length::Fill));
+            card = card.push(Space::new().height(Length::Fill).boxed());
         }
         let footer = dialog_footer_split(
             validation_line(state, i18n, tokens).into_iter().collect(),

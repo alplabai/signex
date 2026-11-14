@@ -62,8 +62,8 @@ pub(super) fn bar<'a>(
         .text_size(TS.body)
         .style(crate::panels::form_look::checkbox_style)
         .on_toggle(|on| up(UpdatePcbMsg::ProblemsOnlyToggled(on)));
-    bar.push(Space::new().width(Length::Fill))
-        .push(problems_only)
+    bar.push(Space::new().width(Length::Fill).boxed())
+        .push(problems_only.boxed())
         .boxed()
 }
 
@@ -89,6 +89,7 @@ fn chip<'a>(
                 width: 1.0,
                 color: outline,
                 radius: Radii::GRAPHITE.pill.into(),
+                ..Border::default()
             },
             ..iced::widget::button::Style::default()
         });
@@ -99,5 +100,5 @@ fn chip<'a>(
             r.raised,
             r.line_strong,
         ));
-    tooltip(pressed, hint, tip::Position::Bottom).into()
+    tooltip(pressed, hint, tip::Position::Bottom).boxed()
 }

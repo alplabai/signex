@@ -74,7 +74,8 @@ pub(super) fn body<'a>(
                     .size(TS.body)
                     .color(tokens::muted_text(tokens)),
             )
-            .padding([SP.m, SP.xl]),
+            .padding([SP.m, SP.xl])
+            .boxed(),
         );
     }
     col.boxed()
@@ -204,7 +205,7 @@ fn row_view<'a>(
         });
     mouse_area(line)
         .on_press(up(UpdatePcbMsg::RowFocused(r.key.clone())))
-        .into()
+        .boxed()
 }
 
 /// The Status cell: a problem in short with its fixes, else ✓ after a
@@ -229,7 +230,7 @@ fn status<'a>(
             hint(t!(i18n, ids::UPDATE_PCB_ROW_SKIPPED), tokens),
             tip::Position::Bottom,
         )
-        .into();
+        .boxed();
     }
     if matches!(state.validation, Some(Ok(()))) && list.applies(r) {
         return tooltip(
@@ -240,7 +241,7 @@ fn status<'a>(
             hint(t!(i18n, ids::UPDATE_PCB_STATUS_OK_TOOLTIP), tokens),
             tip::Position::Bottom,
         )
-        .into();
+        .boxed();
     }
     Space::new().boxed()
 }
@@ -281,11 +282,14 @@ fn problem_cell<'a>(
         .padding([0.0, SP.xs])
         .on_press(up(UpdatePcbMsg::CrossProbeRequested(key.clone())))
         .style(ghost_button);
-        cell = cell.push(tooltip(
-            probe,
-            hint(t!(i18n, ids::UPDATE_PCB_FIX_CROSS_PROBE), tokens),
-            tip::Position::Bottom,
-        ));
+        cell = cell.push(
+            tooltip(
+                probe,
+                hint(t!(i18n, ids::UPDATE_PCB_FIX_CROSS_PROBE), tokens),
+                tip::Position::Bottom,
+            )
+            .boxed(),
+        );
     }
     cell.boxed()
 }

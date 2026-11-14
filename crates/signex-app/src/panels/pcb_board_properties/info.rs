@@ -2,7 +2,7 @@
 //! component counts select those components; the DRC count opens the
 //! design rule check results.
 
-use iced::Element;
+use iced::{Element, Widget as _};
 use signex_i18n::{LocalNumber, Localized, MessageId, ids, t};
 use signex_types::coord::Unit;
 use signex_types::measure::{format_length_mm, mm_per};
@@ -28,7 +28,7 @@ pub(super) fn section<'a>(
     );
     let button = iced::widget::container(button)
         .padding([super::SP.s, super::SP.l])
-        .into();
+        .boxed();
     rows.push(form.row(&[&reports], button));
     form.section("pcb_board_info", ids::PCB_BOARD_SECTION_INFO, rows)
 }
