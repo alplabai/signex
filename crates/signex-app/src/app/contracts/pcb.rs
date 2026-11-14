@@ -23,9 +23,11 @@ pub enum PcbMsg {
     /// A design-rule check of the board in view was asked for (the
     /// `run_drc` command or the Messages panel button).
     DrcRequested,
-    /// The check begun as run `generation` finished.
+    /// The check begun as run `generation` finished; `loose` when the board
+    /// was in no open project.
     DrcFinished {
         generation: u64,
+        loose: bool,
         result: Arc<DrcRunResult>,
     },
     /// A violation row (by its position in the report) was clicked.

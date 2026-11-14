@@ -259,12 +259,18 @@ fn drc_lines_of_a_run(app: &mut Signex) -> Vec<String> {
         .collect()
 }
 
+/// What a run of a board in no open project says, as `check_drc` says it.
+const LOOSE_BOARD_LINE: &str = "The board is in no open project: it was checked with its own \
+     setup rules and this machine's DRC rules, without net classes";
+
 /// #2307 step 2b: with no rule text (none, or an empty one) a run reports
 /// and says exactly what it did before the rule language.
 #[test]
 fn without_rule_text_the_report_and_its_messages_are_unchanged() {
-    // As trunk writes them; numbers read round since #2334.
+    // As trunk writes them; numbers read round since #2334. The board is in
+    // no open project, which the run says first, as `check_drc` does (#2332).
     let pinned = [
+        LOOSE_BOARD_LINE,
         "DRC: No clearance rule set on this board; checked with 0.2 mm. Set it in Board Setup.",
         "DRC: 1 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance 0.2 mm)",
         "DRC: clearance 0.15 mm, needs 0.2 mm, net 1 / net 2 at (0, 0.2) mm",
@@ -592,17 +598,35 @@ fn add_project(
     pcb_file: Option<&str>,
     dsl: &str,
 ) -> signex_app::app::ProjectId {
-    use signex_types::project::{DrcRuleSet, ProjectRules};
+    use signex_types::project::{DrcRuleSet, ProjectData, ProjectRules};
     let path = dir.join("demo.snxprj");
-    let mut data = signex_types::project::parse_project_bytes(&path, b"").expect("empty project");
-    data.pcb_file = pcb_file.map(str::to_string);
-    data.rules = Some(ProjectRules {
-        drc: DrcRuleSet {
-            dsl: Some(dsl.to_string()),
-            ..Default::default()
-        },
-        ..ProjectRules::default()
-    });
+    let data = ProjectData {
+        document_id: None,
+        name: "demo".to_string(),
+        description: None,
+        dir: dir.to_string_lossy().into_owned(),
+        schematic_root: None,
+        pcb_file: pcb_file.map(str::to_string),
+        sheets: Vec::new(),
+        variant_definitions: Vec::new(),
+        active_variant: None,
+        libraries: Vec::new(),
+        enable_git: false,
+        net_classes: Vec::new(),
+        rules: Some(ProjectRules {
+            drc: DrcRuleSet {
+                dsl: Some(dsl.to_string()),
+                ..Default::default()
+            },
+            ..ProjectRules::default()
+        }),
+        annotation: None,
+        parameters: Default::default(),
+        schematic_defaults: Default::default(),
+        project_defaults: Default::default(),
+        agent_journal: Default::default(),
+        unknown: Default::default(),
+    };
     let id = app.document_state.mint_project_id();
     app.document_state
         .projects
@@ -636,13 +660,14 @@ fn run_drc_uses_the_boards_own_project_not_the_active_one() {
     assert_eq!(app.document_state.active_project, Some(other));
     assert_ne!(own, other);
 
-    run_drc(&mut app);
+    let lines = drc_lines_of_a_run(&mut app);
     let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
     // The own project's rule loosens the clearance; the active project's
     // width rule is not applied.
     assert!(done.report.violations.is_empty(), "{:?}", done.report);
     assert_eq!(done.report.rules.user_rules().count(), 1);
     assert_eq!(done.report.count(ViolationKind::TrackWidth), 0);
+    assert!(!lines.iter().any(|l| l == LOOSE_BOARD_LINE), "{lines:?}");
 }
 
 /// #2332: a loose board is checked with this machine's layer, as
@@ -655,10 +680,11 @@ fn run_drc_on_a_loose_board_ignores_the_active_projects_rules() {
     let other = add_project(&mut app, &other_dir, None, LOOSE_CLEARANCE);
     assert_eq!(app.document_state.active_project, Some(other));
 
-    run_drc(&mut app);
+    let lines = drc_lines_of_a_run(&mut app);
     let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
     // The active project's 0.1 mm rule would pass the 0.15 mm gap.
     assert_eq!(done.report.violations.len(), 1, "{:?}", done.report);
     assert_eq!(done.report.violations[0].kind, ViolationKind::Clearance);
     assert_eq!(done.report.rules.user_rules().count(), 0);
+    assert_eq!(lines.first().map(String::as_str), Some(LOOSE_BOARD_LINE));
 }

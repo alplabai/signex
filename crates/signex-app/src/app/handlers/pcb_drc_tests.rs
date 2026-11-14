@@ -24,7 +24,8 @@ fn project_without_rules() -> Signex {
     app
 }
 
-/// The clearance severity a DRC run of the active project would use.
+/// The clearance severity a DRC run would use for a board of the active
+/// sheet's project (Run DRC reads the board's own project, #2332).
 fn clearance(app: &Signex) -> Option<Severity> {
     let rules = app
         .document_state

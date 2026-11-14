@@ -39,8 +39,9 @@ impl Signex {
             return Task::none();
         }
         // The board's own project, as `check_drc` takes it (#2332): a loose
-        // board gets this machine's layer and no net classes.
+        // board gets this machine's layer and no net classes, and says so.
         let project = self.document_state.board_project(&path, None);
+        let loose = project.is_none();
         let classes = project
             .map(|p| p.data.net_classes.clone())
             .unwrap_or_default();
@@ -63,14 +64,21 @@ impl Signex {
             move |result| {
                 Message::Pcb(PcbMsg::DrcFinished {
                     generation,
+                    loose,
                     result: Arc::new(result),
                 })
             },
         )
     }
 
-    /// Apply a finished run, unless a newer one superseded it.
-    pub(crate) fn handle_pcb_drc_finished(&mut self, generation: u64, result: &DrcRunResult) {
+    /// Apply a finished run, unless a newer one superseded it. A `loose`
+    /// board's run says first that it was in no open project.
+    pub(crate) fn handle_pcb_drc_finished(
+        &mut self,
+        generation: u64,
+        loose: bool,
+        result: &DrcRunResult,
+    ) {
         match result {
             Err(reason) => {
                 if self.interaction_state.pcb_drc.abandon(generation) {
@@ -83,6 +91,10 @@ impl Signex {
                     report.clone(),
                     net_names.clone(),
                 ) {
+                    if loose {
+                        // As `check_drc` words it in its report's warnings.
+                        crate::diagnostics::log_warning(super::LOOSE_BOARD_WARNING);
+                    }
                     log_report(report, net_names);
                 }
             }
