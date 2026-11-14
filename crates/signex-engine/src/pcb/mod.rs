@@ -20,6 +20,8 @@ mod footprint;
 mod footprint_content;
 mod items;
 pub mod placement;
+pub mod primitive_edit;
+mod replace;
 
 #[cfg(test)]
 mod board_sketch_tests;
@@ -30,6 +32,8 @@ mod engine_tests;
 #[cfg(test)]
 mod pad_shape_tests;
 #[cfg(test)]
+mod replace_tests;
+#[cfg(test)]
 mod tests;
 
 pub use batch::BatchRefusal;
@@ -39,3 +43,4 @@ pub use error::BoardCommandError;
 pub use footprint::FootprintFace;
 pub use footprint_content::FootprintText;
 pub use items::{BoardItem, BoardItemId, RemovedItem};
+pub use replace::FootprintPad;

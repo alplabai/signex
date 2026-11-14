@@ -9,6 +9,7 @@ use super::error::BoardCommandError;
 use super::footprint::{self, FootprintFace};
 use super::footprint_content::{self, FootprintText};
 use super::items::{self, BoardItem, BoardItemId, RemovedItem};
+use super::replace::{self, FootprintPad};
 
 /// One edit of a board. Targets are absolute so the inverse is exact.
 #[derive(Debug, Clone, PartialEq)]
@@ -53,6 +54,21 @@ pub enum BoardCommand {
     /// not a number, or when a pad uuid is already on the board. The inverse is a
     /// [`BoardCommand::DeleteItems`].
     AddItems { items: Vec<BoardItem> },
+    /// Put each item over the board item with its id, at the same list
+    /// index: a track's or via's edited fields (#2355). Refused whole for a
+    /// footprint, an id named twice or gone, a number that is not finite, a
+    /// width or size that is not positive, a via hole not inside its via, a
+    /// track moved to a layer that is not copper, or a net not in the table.
+    /// The inverse is another one holding the items it replaced.
+    ReplaceItems { items: Vec<BoardItem> },
+    /// Put each pad over the pad with its uuid on its footprint, at the same
+    /// index: a pad's edited fields (#2355). Refused whole for a footprint or
+    /// pad that is gone, a pad named twice, a number that is not finite, a
+    /// size that is not positive, a hole larger than the pad, or a net not
+    /// in the table under its name. The caller enforces `Footprint::locked`
+    /// and `Pad::net_locked`. The inverse is another one holding the pads it
+    /// replaced.
+    ReplacePads { pads: Vec<FootprintPad> },
     /// Swap the footprint's pads, graphics and name for those of `with`, a
     /// library footprint in its top-side form. The board footprint keeps its
     /// uuid, position, rotation, side (a bottom one flips the template), lock,
@@ -112,6 +128,10 @@ pub enum BoardPatchKind {
     ItemsDeleted,
     ItemsRestored,
     ItemsAdded,
+    /// Tracks, vias, zones or texts replaced in place.
+    ItemsReplaced,
+    /// Pads replaced in place. The items are their footprints.
+    PadsReplaced,
     FootprintReplaced,
     FootprintTextSet,
     FootprintLinkSet,
@@ -150,6 +170,8 @@ impl BoardCommand {
             Self::DeleteItems { items: ids } => items::delete(board, &ids),
             Self::RestoreItems { items: removed } => items::restore(board, removed),
             Self::AddItems { items: added } => items::add(board, added),
+            Self::ReplaceItems { items: new } => replace::replace(board, new),
+            Self::ReplacePads { pads } => replace::replace_pads(board, pads),
             Self::ReplaceFootprint {
                 footprint: id,
                 with,

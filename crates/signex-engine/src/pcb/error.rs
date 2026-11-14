@@ -58,6 +58,16 @@ pub enum BoardCommandError {
     FaceMismatch(Uuid),
     #[error("footprint {0} no longer has the properties the text was taken from")]
     TextMismatch(Uuid),
+    #[error("{0:?} cannot be replaced in place; footprints have their own edits")]
+    NotReplaceable(BoardItemId),
+    #[error("{field} must be greater than zero")]
+    NotPositive { field: &'static str },
+    #[error("{0} is not a copper layer")]
+    NotCopperLayer(String),
+    #[error("net {0} is not in the board's net table")]
+    UnknownNet(u32),
+    #[error("the hole ({hole} mm) must fit inside the copper around it ({diameter} mm)")]
+    HoleTooLarge { hole: f64, diameter: f64 },
     #[error("{field} must be a finite number")]
     NonFinite { field: &'static str },
     #[error("the board sketch holds a number that is not finite at {0}")]

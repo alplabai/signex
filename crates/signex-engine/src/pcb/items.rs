@@ -71,7 +71,7 @@ impl BoardItemId {
     }
 }
 
-fn position(board: &PcbBoard, id: BoardItemId) -> Option<usize> {
+pub(super) fn position(board: &PcbBoard, id: BoardItemId) -> Option<usize> {
     let (list, uuid) = id.split();
     match list {
         ListKind::Footprints => board.footprints.iter().position(|x| x.uuid == uuid),
@@ -109,6 +109,22 @@ fn put(board: &mut PcbBoard, index: usize, item: BoardItem) {
         BoardItem::Via(x) => board.vias.insert(index, x),
         BoardItem::Zone(x) => board.zones.insert(index, x),
         BoardItem::Text(x) => board.texts.insert(index, x),
+    }
+}
+
+/// Put `item` at `index` of its list, returning what was there. The caller
+/// found `index` with [`position`].
+pub(super) fn swap_at(board: &mut PcbBoard, index: usize, item: BoardItem) -> BoardItem {
+    match item {
+        BoardItem::Footprint(x) => {
+            BoardItem::Footprint(std::mem::replace(&mut board.footprints[index], x))
+        }
+        BoardItem::Segment(x) => {
+            BoardItem::Segment(std::mem::replace(&mut board.segments[index], x))
+        }
+        BoardItem::Via(x) => BoardItem::Via(std::mem::replace(&mut board.vias[index], x)),
+        BoardItem::Zone(x) => BoardItem::Zone(std::mem::replace(&mut board.zones[index], x)),
+        BoardItem::Text(x) => BoardItem::Text(std::mem::replace(&mut board.texts[index], x)),
     }
 }
 
@@ -238,7 +254,7 @@ fn check_item_uuids(board: &PcbBoard, ids: &[BoardItemId]) -> Result<(), BoardCo
 }
 
 /// A new item's position and angle must be numbers, as for a move or turn.
-fn check_finite(item: &BoardItem) -> Result<(), BoardCommandError> {
+pub(super) fn check_finite(item: &BoardItem) -> Result<(), BoardCommandError> {
     let finite = |p: Point| p.x.is_finite() && p.y.is_finite();
     let (position_ok, rotation_ok) = match item {
         BoardItem::Footprint(fp) => {
