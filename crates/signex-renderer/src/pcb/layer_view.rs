@@ -42,6 +42,8 @@ pub struct PcbLayerView {
     ratsnest_visible: bool,
     /// The Multi-Layer row: vias and through-hole pads.
     multi_layer_visible: bool,
+    /// The board origin marker (#2351).
+    origin_marker_visible: bool,
 }
 
 impl Default for PcbLayerView {
@@ -51,6 +53,7 @@ impl Default for PcbLayerView {
             active: CopperLayer::Top,
             ratsnest_visible: true,
             multi_layer_visible: true,
+            origin_marker_visible: true,
         }
     }
 }
@@ -154,6 +157,18 @@ impl PcbLayerView {
 
     pub fn toggle_ratsnest(&mut self) {
         self.ratsnest_visible = !self.ratsnest_visible;
+    }
+
+    pub fn origin_marker_visible(&self) -> bool {
+        self.origin_marker_visible
+    }
+
+    pub fn set_origin_marker_visible(&mut self, visible: bool) {
+        self.origin_marker_visible = visible;
+    }
+
+    pub fn toggle_origin_marker(&mut self) {
+        self.origin_marker_visible = !self.origin_marker_visible;
     }
 
     /// Whether an item on `names` is drawn and hit. A name this build does

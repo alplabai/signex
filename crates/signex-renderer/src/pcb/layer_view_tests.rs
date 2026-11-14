@@ -289,3 +289,15 @@ fn hiding_board_outline_removes_the_edge_overlay_and_showing_it_brings_it_back()
     view.toggle_visibility(BOARD_OUTLINE);
     assert_eq!(edge_lines(&view), 4, "shown again, the edge is back");
 }
+
+#[test]
+fn the_origin_marker_is_shown_by_default_and_toggles() {
+    let mut view = PcbLayerView::default();
+    assert!(view.origin_marker_visible());
+    view.toggle_origin_marker();
+    assert!(!view.origin_marker_visible());
+    view.toggle_origin_marker();
+    assert!(view.origin_marker_visible());
+    view.set_origin_marker_visible(false);
+    assert!(!view.origin_marker_visible());
+}

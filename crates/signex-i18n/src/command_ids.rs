@@ -350,6 +350,8 @@ define_ids! {
         CMD_MENU_FLIP_SELECTION = "cmd-menu-flip-selection";
         CMD_TOGGLE_RATSNEST = "cmd-toggle-ratsnest";
         CMD_MENU_TOGGLE_RATSNEST = "cmd-menu-toggle-ratsnest";
+        CMD_TOGGLE_ORIGIN_MARKER = "cmd-toggle-origin-marker";
+        CMD_MENU_TOGGLE_ORIGIN_MARKER = "cmd-menu-toggle-origin-marker";
         CMD_NEXT_LAYER = "cmd-next-layer";
         CMD_MENU_NEXT_LAYER = "cmd-menu-next-layer";
         CMD_PREV_LAYER = "cmd-prev-layer";

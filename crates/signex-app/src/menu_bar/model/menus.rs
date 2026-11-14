@@ -185,6 +185,7 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         SEP,
         // The board view: greyed unless a PCB is open.
         cmd_item_gated(ctx, cmd("toggle_ratsnest", "")),
+        cmd_item_gated(ctx, cmd("toggle_origin_marker", "")),
         cmd_item_gated(ctx, cmd("next_layer", "")),
         cmd_item_gated(ctx, cmd("prev_layer", "")),
         cmd_item_gated(ctx, cmd("toggle_layer_visibility", "")),

@@ -328,6 +328,17 @@ pub struct CanvasColors {
     /// colour); `None` uses the canvas background.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub board_area: Option<Color>,
+    /// The PCB fine grid lines; `None` uses the canvas grid colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_grid: Option<Color>,
+    /// Every fifth PCB grid line, a step brighter than the fine grid;
+    /// `None` uses the fine grid colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_grid_major: Option<Color>,
+    /// The PCB workspace outside the board shape, drawn with no grid;
+    /// `None` uses the canvas background.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_workspace: Option<Color>,
 }
 
 /// The colour each PCB layer family is listed with. The board edge and
@@ -407,6 +418,25 @@ impl CanvasColors {
     #[must_use]
     pub fn ratsnest_color(&self) -> Color {
         self.ratsnest.unwrap_or(self.selection)
+    }
+
+    /// The colour of the PCB fine grid lines.
+    #[must_use]
+    pub fn board_grid_color(&self) -> Color {
+        self.board_grid.unwrap_or(self.grid)
+    }
+
+    /// The colour of the brighter PCB major grid lines.
+    #[must_use]
+    pub fn board_grid_major_color(&self) -> Color {
+        self.board_grid_major
+            .unwrap_or_else(|| self.board_grid_color())
+    }
+
+    /// The colour of the PCB workspace outside the board shape.
+    #[must_use]
+    pub fn board_workspace_color(&self) -> Color {
+        self.board_workspace.unwrap_or(self.background)
     }
 }
 
@@ -499,6 +529,9 @@ const GRAPHITE_LIGHT_CANVAS: CanvasColors = CanvasColors {
     keepout: None,
     board_layers: None,
     board_area: None,
+    board_grid: None,
+    board_grid_major: None,
+    board_workspace: None,
 };
 
 const GRAPHITE_DARK_TOKENS: ThemeTokens = ThemeTokens {
@@ -569,6 +602,11 @@ const GRAPHITE_DARK_CANVAS: CanvasColors = CanvasColors {
     board_layers: Some(GRAPHITE_BOARD_LAYERS),
     // Altium default Board Area (black), to be checked by Caner.
     board_area: s(0x00, 0x00, 0x00),
+    // Drawn on the board area only: quiet, but readable at full opacity.
+    board_grid: s(0x2C, 0x2F, 0x36),
+    board_grid_major: s(0x45, 0x49, 0x52),
+    // Neutral mid-grey workspace around the board, no grid.
+    board_workspace: s(0x5C, 0x5E, 0x63),
 };
 
 /// Red top and blue bottom copper, as Altium lists them.

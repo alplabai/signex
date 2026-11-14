@@ -64,6 +64,7 @@ View/Cycle Grid Size	item	Cycle Grid Size	-	-	CycleGrid	11111111	cmd:next_grid
 View/AutoFocus (dim unselected)	item	AutoFocus (dim unselected)	toggle_auto_focus	F9	ToggleAutoFocus	11111111	cmd:toggle_auto_focus
 View/---	separator	-	-	-	-	-	-
 View/Toggle Ratsnest	item	Toggle Ratsnest	-	-	ToggleRatsnest	01100000	cmd:toggle_ratsnest
+View/Toggle Origin Marker	item	Toggle Origin Marker	-	-	ToggleOriginMarker	01100000	cmd:toggle_origin_marker
 View/Next Layer	item	Next Layer	-	-	NextLayer	01100000	cmd:next_layer
 View/Previous Layer	item	Previous Layer	-	-	PreviousLayer	01100000	cmd:prev_layer
 View/Toggle Layer Visibility	item	Toggle Layer Visibility	-	-	ToggleLayerVisibility	01100000	cmd:toggle_layer_visibility

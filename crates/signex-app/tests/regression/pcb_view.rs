@@ -199,6 +199,22 @@ fn toggle_ratsnest_hides_and_shows_the_lines() {
     assert_eq!(snapshot(&f).ratsnest_lines.len(), 1);
 }
 
+/// #2351: the origin marker is shown by default; View > Toggle Origin
+/// Marker hides it on the board's canvas and shows it again.
+#[test]
+fn toggle_origin_marker_hides_and_shows_the_marker() {
+    let mut f = open_board();
+    let shown = |f: &Fixture| f.app.interaction_state.pcb_canvas.origin_marker_visible();
+    assert!(view(&f).origin_marker_visible());
+    assert!(shown(&f));
+    run(&mut f, "toggle_origin_marker");
+    assert!(!view(&f).origin_marker_visible());
+    assert!(!shown(&f));
+    run(&mut f, "toggle_origin_marker");
+    assert!(view(&f).origin_marker_visible());
+    assert!(shown(&f));
+}
+
 #[test]
 fn next_and_prev_layer_step_through_the_boards_copper_and_wrap() {
     let mut f = open_board();
@@ -308,6 +324,7 @@ fn the_board_view_commands_are_off_without_a_pcb() {
     let (mut app, _boot) = Signex::new();
     for command in [
         "toggle_ratsnest",
+        "toggle_origin_marker",
         "next_layer",
         "prev_layer",
         "show_all_layers",

@@ -303,6 +303,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("toggle_visible_grid", "ToggleGrid"),
     ("toggle_auto_focus", "ToggleAutoFocus"),
     ("toggle_ratsnest", "ToggleRatsnest"),
+    ("toggle_origin_marker", "ToggleOriginMarker"),
     ("next_layer", "NextLayer"),
     ("prev_layer", "PreviousLayer"),
     ("toggle_layer_visibility", "ToggleLayerVisibility"),

@@ -619,11 +619,7 @@ impl Signex {
         // the chrome follow the theme.
         let colors = crate::styles::board_canvas_colors();
         for canvas in self.interaction_state.all_pcb_canvases_mut() {
-            canvas.set_theme_colors(
-                crate::render_config::to_iced(&colors.background),
-                crate::render_config::to_iced(&colors.grid),
-            );
-            canvas.canvas_colors = colors;
+            canvas.set_theme_colors(colors);
             canvas.clear_content_cache();
         }
         for editor in self.document_state.symbol_editors.values_mut() {
@@ -718,8 +714,24 @@ mod tests {
             // Board views: the dark board palette, whichever theme is on.
             let pcb = &app.interaction_state.pcb_canvas;
             assert_eq!(pcb.canvas_colors, board, "{id:?}");
-            assert_eq!(pcb.theme_bg, board_bg, "{id:?}");
-            assert_eq!(pcb.theme_grid, crate::render_config::to_iced(&board.grid));
+            // The backdrop (workspace, board area, grid) reads the same
+            // palette, so it is the same in both themes.
+            for (got, want) in [
+                (
+                    pcb.canvas_colors.board_workspace_color(),
+                    board.board_workspace_color(),
+                ),
+                (
+                    pcb.canvas_colors.board_area_color(),
+                    board.board_area_color(),
+                ),
+                (
+                    pcb.canvas_colors.board_grid_color(),
+                    board.board_grid_color(),
+                ),
+            ] {
+                assert_eq!(got, want, "{id:?}");
+            }
             assert_eq!(
                 FootprintPreview::new(&model)
                     .with_theme_tokens(tokens)

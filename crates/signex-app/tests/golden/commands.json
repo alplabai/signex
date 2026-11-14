@@ -1095,6 +1095,11 @@
     "category": "view"
   },
   {
+    "id": "toggle_origin_marker",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "toggle_properties_panel",
     "group": "General",
     "category": "panels"
