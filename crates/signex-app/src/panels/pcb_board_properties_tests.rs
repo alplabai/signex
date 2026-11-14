@@ -119,16 +119,21 @@ fn footprint_context(
         editability,
         also_on,
     };
-    ctx.pcb_board = ctx.pcb_board.map(|b| b.with_footprint(Some(facts)));
+    let component = super::super::pcb_component::tests::one_component("R7", "R_0603");
+    ctx.pcb_board = ctx.pcb_board.map(|b| {
+        b.with_footprint(Some(facts))
+            .with_component(Some(component))
+    });
     ctx
 }
 
-/// #1312: one selected footprint shows its own rows, not the card.
+/// #1312: one selected footprint shows its own rows, not the card. Since
+/// #2354 they are the Component view's: its title, and the value is Comment.
 #[test]
 fn one_selected_footprint_shows_its_designator_value_and_name() {
     use super::super::FootprintEditability as E;
     let texts = texts(&footprint_context(E::Editable, 0, false));
-    for wanted in ["Footprint", "R7", "Designator", "Value", "R_0603"] {
+    for wanted in ["Component", "R7", "Designator", "Comment", "R_0603"] {
         assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
     }
     assert!(

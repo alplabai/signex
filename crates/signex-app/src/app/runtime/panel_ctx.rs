@@ -200,9 +200,11 @@ impl Signex {
             0
         };
         let footprint = self.pcb_footprint_facts(&tab.path, board);
+        let component = self.pcb_component_facts(&tab.path, board);
         Some(
             crate::panels::PcbBoardSummary::of(board, tab.title.clone(), selected)
-                .with_footprint(footprint),
+                .with_footprint(footprint)
+                .with_component(component),
         )
     }
 
@@ -229,6 +231,7 @@ impl Signex {
         }) {
             self.interaction_state.pcb_footprint_draft = None;
         }
+        self.drop_moved_pcb_component_draft(summary.as_ref().and_then(|s| s.component.as_ref()));
         self.document_state.panel_ctx.pcb_board = summary;
     }
 

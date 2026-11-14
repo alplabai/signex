@@ -1,6 +1,7 @@
 use signex_net::board::BoardNetEdit;
 use signex_types::pcb::{Footprint, PcbBoard, Point, SymbolLink};
 use signex_types::pcb_sketch::BoardSketch;
+use signex_types::property::PcbProperty;
 use uuid::Uuid;
 
 use super::batch;
@@ -88,6 +89,21 @@ pub enum BoardCommand {
         footprint: Uuid,
         link: Option<SymbolLink>,
     },
+    /// Lock or unlock the footprint. The inverse sets the state it replaced.
+    /// The caller decides which edits a lock refuses; this one it never does,
+    /// or a locked footprint could not be unlocked.
+    SetFootprintLocked { footprint: Uuid, locked: bool },
+    /// Replace the footprint's property at `index` with `property`: its
+    /// value, visibility or placement. Refused when the key would change,
+    /// when a number in it is not finite, and when it would change the text
+    /// of the Reference or Value property, which follows the designator and
+    /// value ([`BoardCommand::SetFootprintText`] sets those). The inverse is
+    /// another one holding the property it replaced.
+    SetFootprintProperty {
+        footprint: Uuid,
+        index: usize,
+        property: PcbProperty,
+    },
     /// Write a net table and pad nets (`signex_net::board`); its inverse is
     /// the edit [`BoardNetEdit::apply`] returns. Refused whole when a change
     /// names a footprint, pad or zone that is gone, or one twice.
@@ -115,6 +131,8 @@ pub enum BoardPatchKind {
     FootprintReplaced,
     FootprintTextSet,
     FootprintLinkSet,
+    FootprintLockSet,
+    FootprintPropertySet,
     /// The net table, and pad and zone nets. The items are the footprints
     /// and zones written; a table-only change names none.
     NetsChanged,
@@ -168,6 +186,15 @@ impl BoardCommand {
                 footprint: id,
                 link,
             } => footprint_content::set_link(board, id, link),
+            Self::SetFootprintLocked {
+                footprint: id,
+                locked,
+            } => footprint::set_locked(board, id, locked),
+            Self::SetFootprintProperty {
+                footprint: id,
+                index,
+                property,
+            } => footprint_content::set_property(board, id, index, property),
             Self::SetNets(edit) => batch::set_nets(board, edit),
         }
     }

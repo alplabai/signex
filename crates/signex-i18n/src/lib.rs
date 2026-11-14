@@ -305,10 +305,8 @@ define_ids! {
     PCB_PROPERTIES_NETS = "pcb-properties-nets";
     PCB_PROPERTIES_SELECTION = "pcb-properties-selection";
     PCB_PROPERTIES_SELECTION_HINT = "pcb-properties-selection-hint";
-    PCB_FOOTPRINT_TITLE = "pcb-footprint-title";
     PCB_FOOTPRINT_DESIGNATOR = "pcb-footprint-designator";
     PCB_FOOTPRINT_VALUE = "pcb-footprint-value";
-    PCB_FOOTPRINT_NAME = "pcb-footprint-name";
     PCB_FOOTPRINT_NO_NAME = "pcb-footprint-no-name";
     PCB_FOOTPRINT_LOCKED = "pcb-footprint-locked";
     PCB_FOOTPRINT_READ_ONLY = "pcb-footprint-read-only";

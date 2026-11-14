@@ -1,6 +1,7 @@
 //! Rewrite what a footprint is, keeping where it is: swap in a new library
 //! footprint, set its designator and value, set its schematic link. These are
-//! the forward-annotation edits of Update PCB from schematic (#1312).
+//! the forward-annotation edits of Update PCB from schematic (#1312). One
+//! property's value or visibility is the Properties panel's edit (#2354).
 
 use std::collections::HashMap;
 
@@ -158,6 +159,80 @@ pub(super) fn set_link(
         },
         patch: patch(BoardPatchKind::FootprintLinkSet, id),
     })
+}
+
+/// Replace property `index` of footprint `id` with `property`, see
+/// [`BoardCommand::SetFootprintProperty`]. Every check runs before the write.
+pub(super) fn set_property(
+    board: &mut PcbBoard,
+    id: Uuid,
+    index: usize,
+    property: PcbProperty,
+) -> Result<Applied, BoardCommandError> {
+    check_property_finite(&property)?;
+    let fp = find(board, id)?;
+    let Some(old) = fp.properties.get(index) else {
+        return Err(BoardCommandError::PropertyNotFound {
+            footprint: id,
+            index,
+        });
+    };
+    if old.key != property.key {
+        return Err(BoardCommandError::PropertyKeyChanged {
+            footprint: id,
+            index,
+        });
+    }
+    if is_text_key(&old.key) && old.value != property.value {
+        return Err(BoardCommandError::PropertyTextOwned {
+            footprint: id,
+            key: old.key.clone(),
+        });
+    }
+    let previous = std::mem::replace(&mut fp.properties[index], property);
+    Ok(Applied {
+        inverse: BoardCommand::SetFootprintProperty {
+            footprint: id,
+            index,
+            property: previous,
+        },
+        patch: patch(BoardPatchKind::FootprintPropertySet, id),
+    })
+}
+
+/// Whether a property of `key` shows the designator or the value.
+pub(super) fn is_text_key(key: &str) -> bool {
+    key == REFERENCE_KEY || key == VALUE_KEY
+}
+
+/// The key of the property that shows `field` on the board.
+pub(super) fn text_key(field: super::designators::FootprintTextField) -> &'static str {
+    match field {
+        super::designators::FootprintTextField::Designator => REFERENCE_KEY,
+        super::designators::FootprintTextField::Value => VALUE_KEY,
+    }
+}
+
+fn check_property_finite(property: &PcbProperty) -> Result<(), BoardCommandError> {
+    let position_ok = property
+        .position
+        .is_none_or(|p| p.x.is_finite() && p.y.is_finite());
+    if !position_ok {
+        return Err(BoardCommandError::NonFinite {
+            field: "property.position",
+        });
+    }
+    if !property.rotation.is_finite() {
+        return Err(BoardCommandError::NonFinite {
+            field: "property.rotation",
+        });
+    }
+    if property.font_size.is_some_and(|size| !size.is_finite()) {
+        return Err(BoardCommandError::NonFinite {
+            field: "property.font_size",
+        });
+    }
+    Ok(())
 }
 
 /// Give the n-th pad of `new` with a number the net and lock of the n-th pad

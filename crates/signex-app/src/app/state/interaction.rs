@@ -49,6 +49,8 @@ pub struct InteractionState {
     /// Text typed into the selected board footprint's Designator or Value
     /// field and not yet applied with Enter (#1312).
     pub pcb_footprint_draft: Option<crate::app::handlers::pcb_footprint_text::PcbFootprintDraft>,
+    /// The board Component view's search and unapplied field text (#2354).
+    pub pcb_component: crate::app::handlers::pcb_component::PcbComponentPanelState,
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,

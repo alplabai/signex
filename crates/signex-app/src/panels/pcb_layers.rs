@@ -29,7 +29,8 @@ const EYE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height
 const EYE_OFF: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><path d="M1 7c1.6-3 3.6-4.5 6-4.5S11.4 4 13 7c-1.6 3-3.6 4.5-6 4.5S2.6 10 1 7z" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.4"/><path d="M2 12L12 2" stroke="currentColor" stroke-width="1.4"/></svg>"#;
 
 /// The eye icons, built once (the shared icon set will take them over).
-fn eye_handle(hidden: bool) -> svg::Handle {
+/// The Component Properties' text eyes draw the same icons.
+pub(in crate::panels) fn eye_handle(hidden: bool) -> svg::Handle {
     static OPEN: OnceLock<svg::Handle> = OnceLock::new();
     static SHUT: OnceLock<svg::Handle> = OnceLock::new();
     let (cell, bytes) = if hidden {

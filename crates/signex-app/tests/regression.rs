@@ -161,6 +161,9 @@ mod pcb_placement;
 // #1312 PR 1: board designators in Properties and Re-Annotate Board.
 #[path = "regression/board_designators.rs"]
 mod board_designators;
+// #2354: the board Component Properties view.
+#[path = "regression/pcb_component_properties.rs"]
+mod pcb_component_properties;
 // #1312 PR 2: Back Annotate.
 #[path = "regression/back_annotate.rs"]
 mod back_annotate;

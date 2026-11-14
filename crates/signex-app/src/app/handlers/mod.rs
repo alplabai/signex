@@ -48,6 +48,7 @@ mod pcb_drc_check;
 pub(crate) use pcb_drc_check::DRC_CHECK;
 #[cfg(test)]
 pub(crate) use pcb_drc_check::LOOSE_BOARD_WARNING;
+pub(crate) mod pcb_component;
 #[cfg(test)]
 mod pcb_drc_tests;
 mod pcb_edit;

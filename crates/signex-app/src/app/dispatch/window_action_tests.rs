@@ -1099,6 +1099,12 @@ fn every_properties_message_that_writes_the_shown_sheet_or_its_context_is_scoped
             footprint: id,
             field: signex_engine::pcb::designators::FootprintTextField::Value,
         }),
+        // #2354: a board window's Component view edits that window's board.
+        P::PcbComponent(crate::panels::PcbComponentMsg::LockToggled {
+            board: "b.snxpcb".into(),
+            footprints: vec![id],
+            locked: true,
+        }),
     ];
     for message in scoped {
         let wrapped = typed_in_window(&f, message.clone());
