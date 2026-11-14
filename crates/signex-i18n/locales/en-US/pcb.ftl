@@ -191,3 +191,13 @@ pcb-reannotate-done = Re-Annotate: { $count ->
     [one] 1 footprint renamed
    *[other] { $count } footprints renamed
 } on { $board }; save the board to keep them.
+
+# A library part placed on a board from the Components panel (#2364).
+# Messages line when its footprint is on the cursor; $part is the component's
+# part number, $footprint the footprint's name.
+pcb-place-part-hint = Place { $part } ({ $footprint }): click to place, Space to turn, Y to flip, Esc to stop
+# Messages line when the part cannot go on a board; $reason says why.
+pcb-place-part-refused = { $part } cannot be placed on a board: { $reason }. Nothing was placed.
+# Messages line when the board was closed or switched away from while the
+# part was being read.
+pcb-place-part-board-gone = The board { $board } is no longer active; { $part } was not placed.

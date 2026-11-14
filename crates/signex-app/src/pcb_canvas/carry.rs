@@ -1,13 +1,14 @@
 //! Footprints on their way to a new place (#2240): a drag in progress, an
-//! armed Edit ▸ Move waiting for its clicks, or a paste on the cursor
-//! (#2361). Pure state; the board is untouched until the drop commits one
-//! batch.
+//! armed Edit ▸ Move waiting for its clicks, a paste on the cursor (#2361),
+//! or a library part on the cursor (#2364). Pure state; the board is
+//! untouched until a click or drop commits one batch.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use signex_engine::pcb::BoardClipboard;
+use signex_engine::pcb::part_place::PartToPlace;
 use signex_engine::pcb::placement::{grid_step_mm, snap_delta};
 use signex_engine::pcb::snap::{SnapQuery, object_snap_point};
 use signex_types::pcb::{PcbBoard, Point};
@@ -35,6 +36,9 @@ pub enum CarryKind {
     /// Paste: the copy follows the pointer, on the grid, until a click
     /// places it.
     Paste,
+    /// A library part on the cursor: each click places a copy, until Esc or
+    /// a right-click.
+    Place,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,11 +56,22 @@ pub struct PcbCarry {
     /// The snapped offset the preview shows. For a paste, where the copy's
     /// origin lands.
     pub delta: Point,
-    /// What a paste places; `None` for a drag or Move.
+    /// What a paste places; `None` for a drag, Move or Place.
     pub paste: Option<Arc<PasteLoad>>,
+    /// The part a Place carries; its origin is at `anchor` once the pointer
+    /// has been over the board.
+    pub part: Option<Box<PartToPlace>>,
 }
 
 impl PcbCarry {
+    /// A Place of `part` on the board at `path` in `window`.
+    pub fn place(path: PathBuf, window: Option<iced::window::Id>, part: PartToPlace) -> Self {
+        Self {
+            part: Some(Box::new(part)),
+            ..Self::new(CarryKind::Place, path, window, BTreeSet::new())
+        }
+    }
+
     pub fn new(
         kind: CarryKind,
         path: PathBuf,
@@ -71,6 +86,7 @@ impl PcbCarry {
             anchor: None,
             delta: Point::new(0.0, 0.0),
             paste: None,
+            part: None,
         }
     }
 

@@ -18,6 +18,7 @@ mod grid;
 mod highlight;
 pub mod layer_style;
 mod msg;
+mod part_ghost;
 mod select;
 mod snap_options;
 mod tessellate;
@@ -140,6 +141,8 @@ pub struct PcbCanvas {
     carry: std::cell::Cell<bool>,
     /// The board without the carried footprints, and them at their offset.
     drag_preview: Option<drag_preview::DragPreview>,
+    /// The library part on the cursor, dimmed, set by the app (#2364).
+    part_ghost: Option<Arc<Scene>>,
     /// Whether this canvas reports clicks and hovers.
     pub selectable: bool,
 }
@@ -178,6 +181,7 @@ impl PcbCanvas {
             grab: Vec::new(),
             carry: std::cell::Cell::new(false),
             drag_preview: None,
+            part_ghost: None,
             selectable: true,
         }
     }

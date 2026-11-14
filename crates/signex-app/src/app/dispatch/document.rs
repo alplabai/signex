@@ -69,7 +69,7 @@ impl Signex {
             }
             EditMsg::FlipSelection => {
                 let flip = signex_engine::pcb::placement::PlacementTransform::FlipLeftRight;
-                if !self.transform_pcb_selection(flip) {
+                if !self.flip_pcb_part() && !self.transform_pcb_selection(flip) {
                     crate::diagnostics::log_info("Flip Selection works on a PCB");
                 }
                 self.finish_update()

@@ -336,6 +336,7 @@ fn merge_properties(old: &[PcbProperty], template: Vec<PcbProperty>) -> Vec<PcbP
     merged
 }
 
+/// Write the designator and value into the Reference and Value property texts.
 pub(super) fn sync_text_properties(fp: &mut Footprint) {
     for property in &mut fp.properties {
         if property.key == REFERENCE_KEY {

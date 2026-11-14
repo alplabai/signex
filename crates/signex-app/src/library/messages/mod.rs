@@ -31,7 +31,9 @@ mod library_message;
 mod placed_part;
 mod range_filter;
 pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
-pub use library_message::{LibraryMessage, ResolvedPlacement, ResolvedSymbolChoice};
+pub use library_message::{
+    BoardPartError, LibraryMessage, ResolvedBoardPart, ResolvedPlacement, ResolvedSymbolChoice,
+};
 pub use placed_part::{PlacedPartAction, PlacedPartMsg, PlacedPartTarget};
 pub use range_filter::{RangeBound, RangeFilterMsg};
 

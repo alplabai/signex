@@ -29,6 +29,7 @@ impl Signex {
                 }
                 self.pcb_move_followed(at);
                 self.pcb_paste_followed(at);
+                self.pcb_place_followed(at);
                 // The status readout follows the pointer as before.
                 self.update(Message::CanvasEvent(CanvasEvent::CursorAt {
                     x: at.x as f32,
@@ -41,7 +42,8 @@ impl Signex {
                 tolerance_mm,
                 mode,
             } => {
-                if self.pcb_paste_clicked(at)
+                if self.pcb_place_clicked(at)
+                    || self.pcb_paste_clicked(at)
                     || self.pcb_move_clicked(at, tolerance_mm)
                     || self.pcb_net_pick_clicked(at, tolerance_mm)
                 {
@@ -176,6 +178,7 @@ impl Signex {
             .filter(|_| self.has_own_pcb_carry());
         let painted = self.with_pcb_selection(|sel, board| sel.paint(board, carry.as_ref()));
         let (highlight, grab) = painted.unwrap_or_default();
+        let ghost = self.pcb_part_ghost(carry.as_ref());
         let path = self.active_tab_path().unwrap_or_default();
         let view = self.pcb_layer_view(&path);
         let docs = &self.document_state;
@@ -188,6 +191,7 @@ impl Signex {
         let canvas = &mut interaction.pcb_canvas;
         canvas.set_highlight(highlight);
         canvas.set_grab(grab);
+        canvas.set_part_ghost(ghost.as_ref());
         let ratsnest = view
             .ratsnest_visible()
             .then_some((&interaction.pcb_ratsnest, path.as_path()));
@@ -227,6 +231,12 @@ impl Signex {
             .copied()
             .unwrap_or(0);
         let view = self.pcb_layer_view(path);
+        let ghost = self
+            .interaction_state
+            .pcb_carry
+            .as_ref()
+            .filter(|c| c.path.as_path() == path && c.window.is_some_and(|w| windows.contains(&w)))
+            .and_then(|c| Some((c.window?, self.pcb_part_ghost(Some(c))?)));
         let interaction = &mut self.interaction_state;
         for id in windows {
             let carry = interaction
@@ -242,6 +252,8 @@ impl Signex {
             if let Some(canvas) = interaction.pcb_canvases.get_mut(&id) {
                 canvas.set_highlight(highlight);
                 canvas.set_grab(grab);
+                let own = ghost.as_ref().filter(|(owner, _)| *owner == id);
+                canvas.set_part_ghost(own.map(|(_, snapshot)| snapshot));
                 let ratsnest = view
                     .ratsnest_visible()
                     .then_some((&interaction.pcb_ratsnest, path));

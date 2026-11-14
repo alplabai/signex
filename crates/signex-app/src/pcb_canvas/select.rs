@@ -276,8 +276,8 @@ impl PcbSelectionState {
     /// What a canvas paints and grabs for this selection: the highlight, the
     /// preview of `carry` once it is anchored, and the shapes a press grabs
     /// to drag: every footprint, selected or not (#2358). While a Move or a
-    /// paste waits for its clicks nothing is grabbed, so a jiggled click
-    /// stays a click (#2240).
+    /// paste waits for its clicks, or a part is on the cursor, nothing is
+    /// grabbed, so a jiggled click stays a click (#2240, #2364).
     pub fn paint(
         &mut self,
         board: &PcbBoard,
@@ -287,7 +287,7 @@ impl PcbSelectionState {
         let none = BTreeSet::new();
         let carried = anchored.map_or(&none, |c| &c.footprints);
         let mut highlight = self.highlight_except(board, carried);
-        // A Move or a paste waits for clicks: nothing is grabbed.
+        // A Move, a paste or a Place waits for clicks: nothing is grabbed.
         let waiting = carry.is_some_and(|c| c.kind != super::CarryKind::Drag);
         let grab = if waiting {
             Vec::new()
