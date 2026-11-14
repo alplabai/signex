@@ -210,6 +210,13 @@ Two canvas modifiers are hard-wired rather than profile bindings: `Ctrl+Click`
 toggles an item in the selection, and `Alt` held through a drag flips
 "Keep wires connected when moving" for that drag only (#1266). The status bar
 names the behaviour while the drag is live.
+
+While a wire or bus is drawn, `switch_segment_posture` flips the corner
+(horizontal first or vertical first; in a 45° mode, diagonal first or last) and
+`cycle_wire_bus_graphic_mode` steps the corner mode: 90°, 45° start, 45° end,
+any angle (#2372). The choice holds for later segments, and the status bar names
+it. The Classic profile binds them to `/` and `Shift+Space`. The Altium profile
+leaves them unbound for now, because `Space` and `Shift+Space` rotate there.
 `Alt+Click` is reserved in `altium.toml` for `highlight_related_net_objects`. The
 command is wired (it highlights the selected net and selects its members), but the
 Alt+Click gesture itself is not dispatched yet; when it is, an Alt-press that turns

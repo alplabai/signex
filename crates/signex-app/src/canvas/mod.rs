@@ -592,7 +592,8 @@ pub struct CanvasViewPrefs<'a> {
     /// Preview rubber-banded wires while a selection floats (mirrors the
     /// "Keep wires connected when moving" preference).
     pub move_keeps_wires: bool,
-    pub draw_mode: crate::app::DrawMode,
+    /// How the rubber-band preview of a wire or bus bends.
+    pub corner_rule: signex_types::corner::CornerRule,
     /// Active tool; decides whether the Active Bar shows the draw-mode pill,
     /// which widens the bar the right-click hit-test must centre.
     pub current_tool: crate::app::Tool,
@@ -1026,7 +1027,7 @@ mod tests {
             trackpad_pan: false,
             wheel_mode: WheelMode::Zoom,
             move_keeps_wires: true,
-            draw_mode: crate::app::DrawMode::Ortho90,
+            corner_rule: Default::default(),
             current_tool: crate::app::Tool::Select,
             window_width: 1400.0,
             wire_color_overrides: overrides,

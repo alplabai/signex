@@ -27,7 +27,6 @@ pub mod document_read;
 mod documents;
 pub(crate) mod file_extension;
 mod handlers;
-mod helpers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;
 mod library_delete;
@@ -96,7 +95,7 @@ pub use contracts::{
 };
 pub(crate) use document::{Document, DocumentKey};
 pub use documents::{
-    ComponentEditorTab, DrawMode, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
+    ComponentEditorTab, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
     LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolDocument, SymbolViewRequest,
     TabDocument, TabInfo, TabKind, Tool,
 };

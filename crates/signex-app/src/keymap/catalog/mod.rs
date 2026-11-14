@@ -452,7 +452,8 @@ pub fn required_contexts(command: &AppCommandId) -> Option<&'static [ShortcutCon
         "break_wire"
         | "drag_keep_connections"
         | "cycle_wire_bus_graphic_mode"
-        | "cycle_wiring_mode" => return Some(&[ShortcutContext::Schematic]),
+        | "cycle_wiring_mode"
+        | "switch_segment_posture" => return Some(&[ShortcutContext::Schematic]),
         "open_grid_picker" | "cycle_snap_grid_forward" => {
             return Some(&[ShortcutContext::Footprint]);
         }

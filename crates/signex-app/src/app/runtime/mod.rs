@@ -584,7 +584,7 @@ impl Signex {
             trackpad_pan: self.ui_state.trackpad_pan,
             wheel_mode: self.ui_state.wheel_mode,
             move_keeps_wires: self.ui_state.move_keeps_wires,
-            draw_mode: self.interaction_state.draw_mode,
+            corner_rule: self.interaction_state.corner_rule,
             current_tool: self.interaction_state.current_tool,
             window_width: self.ui_state.size_of_window(window).0,
             wire_color_overrides: self.net_colors_shown_in(window),

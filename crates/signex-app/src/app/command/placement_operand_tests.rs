@@ -315,7 +315,7 @@ fn a_wire_point_a_click_would_pull_onto_a_connection_is_refused() {
     let wire_end = Point::new(near.x + 0.2, near.y);
     let far = grid(10.0, 20.0);
     let with_wire = |app: &mut Signex| {
-        let mode = app.interaction_state.draw_mode;
+        let mode = app.interaction_state.corner_rule;
         let (_, placed) = app.place_wire_at(grid(0.0, 10.0), wire_end, mode);
         assert!(placed);
     };

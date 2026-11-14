@@ -2,6 +2,7 @@
 //! and the geometry rules, the escapes, the dry run, and the click it equals.
 
 use serde_json::{Value, json};
+use signex_types::corner::CornerMode;
 use signex_types::schematic::{
     Bus, BusEntry, LabelType, LibGraphic, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle,
     Point, SchematicSheet, Symbol,
@@ -10,7 +11,7 @@ use uuid::Uuid;
 
 use super::{CommandArgs, CommandOutcome};
 use crate::app::handlers::canvas::placement_tests::{app_with_tool, click, grid, sheet_shape};
-use crate::app::{DrawMode, Signex, Tool};
+use crate::app::{Signex, Tool};
 use crate::keymap::AppCommandId;
 
 /// A resistor with a 2.54 x 1.016 body and pins 1 and 2 at x = -3.81 and +3.81.
@@ -1012,13 +1013,14 @@ fn a_start_on_a_wire_interior_is_intended_and_joins_that_net() {
 
 #[test]
 fn only_horizontal_and_vertical_segments_are_placed() {
-    // A 45 degree diagonal for Angle45, any slope for FreeAngle.
+    // A 45 degree diagonal for either 45 degree mode, any slope for FreeAngle.
     for (mode, end) in [
-        (DrawMode::Angle45, "end=21.59,17.78"),
-        (DrawMode::FreeAngle, "end=31.75,17.78"),
+        (CornerMode::Angle45Start, "end=21.59,17.78"),
+        (CornerMode::Angle45End, "end=21.59,17.78"),
+        (CornerMode::FreeAngle, "end=31.75,17.78"),
     ] {
         let mut app = app_with(two_parts());
-        app.interaction_state.draw_mode = mode;
+        app.interaction_state.corner_rule.mode = mode;
         refused_with(
             &mut app,
             "place_wire",
@@ -1295,14 +1297,14 @@ fn a_bus_takes_no_pin_reference_and_keeps_the_geometry_rules() {
         &["start=12.7,25.4", "end=C1.1", "allow_open=true"],
         "a bus does not connect to pins",
     );
-    app.interaction_state.draw_mode = DrawMode::FreeAngle;
+    app.interaction_state.corner_rule.mode = CornerMode::FreeAngle;
     refused_with(
         &mut app,
         "place_bus",
         &["start=12.7,25.4", "end=25.4,38.1", "allow_open=true"],
         "only horizontal and vertical",
     );
-    app.interaction_state.draw_mode = DrawMode::Ortho90;
+    app.interaction_state.corner_rule.mode = CornerMode::Ortho90;
     refused_with(
         &mut app,
         "place_bus",
