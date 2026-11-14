@@ -77,11 +77,16 @@ fn technical_id(layer: TechnicalLayer) -> MessageId {
     }
 }
 
-/// The colour `layer` is listed with, from the board palette the canvas
-/// draws with. Copper, Board Outline and the keep-out layers take the slots
-/// their geometry is drawn in. Board views use one palette in both themes,
-/// so the chrome `tokens` do not change a swatch.
+/// The colour `layer` is listed with. Board views use one palette in both
+/// themes, so the chrome `tokens` do not change a swatch.
 pub fn layer_colour(layer: PcbLayer, _tokens: &ThemeTokens) -> Color {
+    board_layer_colour(layer)
+}
+
+/// The colour of `layer` in the board palette the canvas draws with.
+/// Copper, Board Outline and the keep-out layers take the slots their
+/// geometry is drawn in.
+pub fn board_layer_colour(layer: PcbLayer) -> Color {
     let canvas = crate::styles::board_canvas_colors();
     let slot_colour = |slot: ColorSlot| {
         let [r, g, b, a] = ResolvedTheme::from_canvas_colors(canvas).color(slot);

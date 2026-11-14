@@ -2,8 +2,12 @@
 //! panel details, Component Preview dialog). Built once when a footprint
 //! is loaded, borrowed on every draw.
 
+use signex_gfx::scene::{DirtyFlags, Scene};
 use signex_library::primitive::Footprint;
 use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
+use signex_renderer::pcb::{PcbRenderer, PcbSnapshot};
+use signex_renderer::schematic::ViewRenderer;
+use signex_renderer::theme::ResolvedTheme;
 
 use super::draw::{LayerInput, PadLabels};
 use crate::library::editor::footprint::layers::{LayerPalette, LayerVisibility};
@@ -13,12 +17,18 @@ use crate::library::editor::footprint::state::{CourtyardRect, EditorPad, Footpri
 const MIN_LABELLED_PAD_PX: f32 = 9.0;
 
 /// The editor's view of a saved footprint: pad models, silk, the courtyard
-/// the editor would draw, and the bbox the preview fits to.
+/// the editor would draw, the pads as the board draws them, and the bbox the
+/// preview fits to.
 #[derive(Debug, Clone)]
 pub struct PreviewFootprint {
     pub name: String,
     key: (uuid::Uuid, i64),
     pads: Vec<EditorPad>,
+    /// The pads lowered as the PCB canvas lowers them, in the board palette.
+    board_pads: Scene,
+    /// The pads the board cannot hold (custom or chamfered shape, slot,
+    /// copper offset), drawn by the editor's pad renderer instead.
+    unheld_pads: Vec<EditorPad>,
     silk_f: Vec<FpGraphic>,
     silk_b: Vec<FpGraphic>,
     fab_f: Vec<FpGraphic>,
@@ -65,12 +75,20 @@ impl PreviewFootprint {
                 grow(p[0], p[1]);
             }
         }
+        let drawn = signex_library::drawn_board_footprint(fp);
+        let unheld_pads = drawn
+            .unheld_pads
+            .iter()
+            .filter_map(|&index| state.pads.get(index).cloned())
+            .collect();
         Self {
             name: fp.name.clone(),
             key: (fp.uuid, fp.updated.timestamp_millis()),
             courtyard_outline,
             courtyard_rect: state.courtyard_mm,
             bbox_mm: bbox,
+            board_pads: board_pad_scene(&drawn.footprint),
+            unheld_pads,
             pads: state.pads,
             silk_f: fp.silk_f.clone(),
             silk_b: fp.silk_b.clone(),
@@ -90,6 +108,17 @@ impl PreviewFootprint {
         &self.pads
     }
 
+    /// The pads as the PCB canvas draws them: copper in the board palette's
+    /// layer colours, drills as openings.
+    pub(crate) fn board_pads(&self) -> &Scene {
+        &self.board_pads
+    }
+
+    /// The pads the board cannot hold, for the editor's pad renderer.
+    pub(crate) fn unheld_pads(&self) -> &[EditorPad] {
+        &self.unheld_pads
+    }
+
     /// Front fab graphics.
     pub(crate) fn fab_f(&self) -> &[FpGraphic] {
         &self.fab_f
@@ -105,13 +134,17 @@ impl PreviewFootprint {
         &self.fab_b
     }
 
-    /// Default layers (front side on), nothing selected.
+    /// Default layers (front side on, plus bottom copper, whose pads the
+    /// board draws too), nothing selected.
     pub(crate) fn layer_input(&self) -> LayerInput<'_> {
         LayerInput {
             pads: &self.pads,
             silk_f: &self.silk_f,
             silk_b: &self.silk_b,
-            visibility: LayerVisibility::default(),
+            visibility: LayerVisibility {
+                b_cu: true,
+                ..LayerVisibility::default()
+            },
             courtyard_outline: self.courtyard_outline.as_deref(),
             courtyard_rect: self.courtyard_rect,
             selected_pad: None,
@@ -129,6 +162,20 @@ impl PreviewFootprint {
     pub fn key(&self) -> (uuid::Uuid, i64) {
         self.key
     }
+}
+
+/// `footprint`'s pads lowered through the PCB canvas's own path, in the board
+/// palette (the same in every theme).
+fn board_pad_scene(footprint: &signex_types::pcb::Footprint) -> Scene {
+    let theme = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors());
+    let mut scene = Scene::default();
+    PcbRenderer::build_scene(
+        &PcbSnapshot::from_footprint(footprint),
+        &theme,
+        DirtyFlags::POLYGONS,
+        &mut scene,
+    );
+    scene
 }
 
 fn graphic_points(g: &FpGraphic, out: &mut Vec<[f64; 2]>) {
