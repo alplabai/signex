@@ -565,6 +565,11 @@
     "category": "navigation"
   },
   {
+    "id": "next_signal_layer",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "number_schematic_sheets",
     "group": "Schematic",
     "category": "design"
@@ -1128,6 +1133,11 @@
     "id": "toggle_selection",
     "group": "General",
     "category": "select"
+  },
+  {
+    "id": "toggle_single_layer_mode",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "toggle_visible_grid",

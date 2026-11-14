@@ -78,11 +78,12 @@ altium	bind	Global	⇧F	command:find_similar_objects
 altium	bind	Global	⇧F12	command:toggle_schematic_list_panel
 altium	bind	Global	⇧F3	command:find_previous
 altium	bind	Global	⇧G	command:cycle_snap_grid_backward
-altium	bind	Pcb	*	command:next_layer
+altium	bind	Pcb	*	command:next_signal_layer
 altium	bind	Pcb	+	command:next_layer
 altium	bind	Pcb	"-"	command:prev_layer
-altium	bind	Pcb	⇧*	command:next_layer
+altium	bind	Pcb	⇧*	command:next_signal_layer
 altium	bind	Pcb	⇧+	command:next_layer
+altium	bind	Pcb	⇧S	command:toggle_single_layer_mode
 altium	bind	Footprint	1	command:footprint_mode_sketch
 altium	bind	Footprint	2	command:footprint_mode_pads
 altium	bind	Footprint	3	command:footprint_mode_view_3d
@@ -314,6 +315,8 @@ altium	hint	-	-	toggle_ratsnest
 altium	hint	-	-	toggle_origin_marker
 altium	hint	-	⇧+	next_layer
 altium	hint	-	"-"	prev_layer
+altium	hint	-	⇧*	next_signal_layer
+altium	hint	-	⇧S	toggle_single_layer_mode
 altium	hint	-	-	toggle_layer_visibility
 altium	hint	-	-	show_all_layers
 altium	hint	-	-	view_rotate
@@ -416,11 +419,12 @@ classic	bind	Global	Y	command:mirror_y
 classic	bind	Global	Z	command:place_wire_to_bus_entry
 classic	bind	Global	`	command:highlight_net_under_cursor
 classic	bind	Global	~	command:clear_net_highlighting
-classic	bind	Pcb	*	command:next_layer
+classic	bind	Pcb	*	command:next_signal_layer
 classic	bind	Pcb	+	command:next_layer
 classic	bind	Pcb	"-"	command:prev_layer
-classic	bind	Pcb	⇧*	command:next_layer
+classic	bind	Pcb	⇧*	command:next_signal_layer
 classic	bind	Pcb	⇧+	command:next_layer
+classic	bind	Pcb	⇧S	command:toggle_single_layer_mode
 classic	bind	Footprint	1	command:footprint_mode_sketch
 classic	bind	Footprint	2	command:footprint_mode_pads
 classic	bind	Footprint	3	command:footprint_mode_view_3d
@@ -652,6 +656,8 @@ classic	hint	-	-	toggle_ratsnest
 classic	hint	-	-	toggle_origin_marker
 classic	hint	-	⇧+	next_layer
 classic	hint	-	"-"	prev_layer
+classic	hint	-	⇧*	next_signal_layer
+classic	hint	-	⇧S	toggle_single_layer_mode
 classic	hint	-	-	toggle_layer_visibility
 classic	hint	-	-	show_all_layers
 classic	hint	-	-	view_rotate
