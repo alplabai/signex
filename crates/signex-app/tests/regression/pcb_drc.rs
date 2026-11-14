@@ -69,7 +69,24 @@ fn board_dump(app: &Signex) -> String {
     format!("{:?}", docs.tabs[docs.active_tab].cached_document)
 }
 
+static DRC_RUN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Held by every test that runs DRC in this binary. A run logs its Messages
+/// lines into the one shared diagnostics ring, so without it a parallel run
+/// lands its lines after another test's mark and is read as that test's.
+pub(crate) fn drc_serial() -> std::sync::MutexGuard<'static, ()> {
+    DRC_RUN_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 fn run_drc(app: &mut Signex) {
+    let _serial = drc_serial();
+    run_drc_held(app);
+}
+
+/// One run, for a caller already holding [`drc_serial`].
+fn run_drc_held(app: &mut Signex) {
     let task = app.update(Message::Pcb(PcbMsg::DrcRequested));
     crate::drive::drive(app, task);
 }
@@ -132,6 +149,7 @@ fn the_check_does_not_edit_the_board() {
 fn the_tools_menu_row_runs_the_check_and_is_greyed_without_a_board() {
     let run_row = |app: &mut Signex| {
         let id = AppCommandId::new("run_drc").expect("id");
+        let _serial = drc_serial();
         let task = app.update(Message::Menu(MenuMessage::Command(id)));
         crate::drive::drive(app, task);
     };
@@ -153,6 +171,7 @@ fn the_tools_menu_row_runs_the_check_and_is_greyed_without_a_board() {
 #[test]
 fn the_panel_button_message_runs_the_check() {
     let (mut app, _tmp, path) = open_board();
+    let _serial = drc_serial();
     let task = app.update(Message::Dock(DockMessage::Panel(PanelMsg::RunDrc)));
     crate::drive::drive(&mut app, task);
     assert!(app.interaction_state.pcb_drc.done_for(&path).is_some());
@@ -247,11 +266,13 @@ fn load_profile_dsl(app: &mut Signex, dsl: Option<&str>) {
     crate::drive::drive(app, task);
 }
 
-/// The Messages lines of one DRC run, in order.
+/// The Messages lines of one DRC run, in order. The lock spans mark, run
+/// and read, so no other test's run falls between them.
 fn drc_lines_of_a_run(app: &mut Signex) -> Vec<String> {
+    let _serial = drc_serial();
     let _ = signex_app::diagnostics::init_logging();
     let since = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
-    run_drc(app);
+    run_drc_held(app);
     signex_app::diagnostics::recent_entries()
         .into_iter()
         .filter(|e| e.id > since && e.message.contains("DRC"))
