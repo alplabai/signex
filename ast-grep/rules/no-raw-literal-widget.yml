@@ -8,8 +8,11 @@ note: |
   function clippy.toml bans, skipping the message catalog (#2056, #2053). Wrap
   it in `text(raw("X"))` (migrating areas move it to `t!`). A literal is never
   user content, so `UserText::new("X")` is refused too: UserText wraps what the
-  user wrote. `row![…]` and `column![…]` hold unparsed token trees that this
-  rule cannot see; scripts/check_raw_labels.sh checks those.
+  user wrote. `row!`, `column!`, `stack!`, `grid!` and `rich_text!` hold unparsed token trees that this
+  rule cannot see; scripts/check_raw_labels.sh checks those. A SCREAMING_CASE
+  const passed as the content is refused the same way. Known limits (no type
+  information): a `let` bound to a literal, and `.push("X")` on a Column or
+  Row, or on a Stack or Grid not built in the same chain (#2193).
   A `"X".into()` that is not a widget (a String, a PathBuf) takes
   `// ast-grep-ignore: no-raw-literal-widget` on the line above.
 files:
@@ -37,12 +40,90 @@ rule:
             - kind: call_expression
             - has:
                 field: function
-                regex: '(^|::)(container|scrollable|mouse_area|button|center|center_x|center_y|right|bottom|float|pin|sensor|opaque)$|(^|::)(Element|Text|Span)::from$|(^|::)(Container|Scrollable|MouseArea)::new$|(^|::)UserText::new$'
+                regex: '(^|::)(container|scrollable|mouse_area|button|center|center_x|center_y|right|bottom|right_center|bottom_center|bottom_right|float|pin|sensor|sticky|opaque)$|(^|::)(Element|Text|Span)::from$|(^|::)(Container|Scrollable|MouseArea|Pin|Float|Sensor|Sticky|Hover)::new$|(^|::)UserText::new$'
             - has:
                 field: arguments
                 has:
                   nthChild: 1
                   kind: string_literal
+        # themer(theme, content) and Themer::new(theme, content).
+        - all:
+            - kind: call_expression
+            - has:
+                field: function
+                regex: '(^|::)(themer|Themer::new)$'
+            - has:
+                field: arguments
+                has:
+                  nthChild: 2
+                  kind: string_literal
+        # A list of children: stack(["X"]), grid(["X"]), Stack::with_children(["X"]).
+        - all:
+            - kind: call_expression
+            - has:
+                field: function
+                regex: '(^|::)(stack|grid|(Stack|Grid)::with_children)$'
+            - has:
+                field: arguments
+                has:
+                  nthChild: 1
+                  kind: array_expression
+                  has:
+                    kind: string_literal
+        # keyed_column([(key, "X")]) and keyed::Column::with_children(…).
+        - all:
+            - kind: call_expression
+            - has:
+                field: function
+                regex: '(^|::)(keyed_column|keyed::Column::with_children)$'
+            - has:
+                field: arguments
+                has:
+                  nthChild: 1
+                  kind: array_expression
+                  has:
+                    kind: tuple_expression
+                    has:
+                      nthChild: 2
+                      kind: string_literal
+        # A push onto a Stack or a Grid built in the same chain:
+        # Stack::new().push("X"), stack([a]).push_under("X").
+        - all:
+            - kind: call_expression
+            - has:
+                field: function
+                kind: field_expression
+                regex: '\.(push|push_under|push_boxed|push_under_boxed)$'
+                has:
+                  field: value
+                  any:
+                    - kind: call_expression
+                      has:
+                        field: function
+                        regex: '(^|::)(stack|grid|Stack::new|Grid::new|Stack::with_children|Grid::with_children)$'
+                    - has:
+                        stopBy: end
+                        kind: call_expression
+                        has:
+                          field: function
+                          regex: '(^|::)(stack|grid|Stack::new|Grid::new|Stack::with_children|Grid::with_children)$'
+            - has:
+                field: arguments
+                has:
+                  nthChild: 1
+                  kind: string_literal
+        # A SCREAMING_CASE const used as a widget: container(LABEL).
+        - all:
+            - kind: call_expression
+            - has:
+                field: function
+                regex: '(^|::)(container|scrollable|mouse_area|button|center|center_x|center_y|right|bottom|right_center|bottom_center|bottom_right|float|pin|sensor|sticky|opaque|hover)$|(^|::)(Element|Text|Span)::from$'
+            - has:
+                field: arguments
+                has:
+                  nthChild: 1
+                  kind: identifier
+                  regex: '^[A-Z][A-Z0-9_]*$'
         # hover(base, top) takes a widget in both arguments.
         - all:
             - kind: call_expression
