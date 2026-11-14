@@ -150,12 +150,12 @@ mod tests {
             .on_press(Probe::BelowLeftPressed)
             .on_right_press(Probe::BelowRightPressed)
             .on_scroll(|_| Probe::BelowScrolled);
-        Stack::new()
+        let stack: Stack<Element<'static, Probe>> = Stack::new()
             .width(Length::Fill)
             .height(Length::Fill)
-            .push(below)
-            .push(MenuBackdrop::new(Probe::Dismissed, Color::TRANSPARENT).boxed())
-            .into()
+            .push(below.boxed())
+            .push(MenuBackdrop::new(Probe::Dismissed, Color::TRANSPARENT).boxed());
+        stack.boxed()
     }
 
     fn after(events: &[Event]) -> Vec<Probe> {
