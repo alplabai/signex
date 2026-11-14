@@ -780,7 +780,9 @@ impl Signex {
             // still fall through exactly as before, which matters for the
             // overlays that deliberately leave the canvas its right-press
             // pan (see `dismiss_layer`).
-            if overlay_id::swallows_scroll(*id) {
+            // A right-click menu's backdrop stops the wheel itself; the guard
+            // would hide the cursor from it (#2349).
+            if overlay_id::swallows_scroll(*id) && !overlay_id::has_menu_backdrop(*id) {
                 for layer in &mut layers[first_new..] {
                     let inner = std::mem::replace(layer, iced::widget::Space::new().boxed());
                     *layer = overlays::scroll_guard(inner);
@@ -804,5 +806,7 @@ mod dock_layout_tests;
 mod editor_bar_wheel_tests;
 #[cfg(test)]
 mod hover_through_tests;
+#[cfg(test)]
+mod menu_dismiss_tests;
 #[cfg(test)]
 mod overlay_paint_tests;
