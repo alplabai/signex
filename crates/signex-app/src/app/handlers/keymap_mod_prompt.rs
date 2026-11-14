@@ -205,8 +205,11 @@ impl Signex {
             }
             Ok(done) => {
                 self.ui_state.set_keymap_profiles(done.set);
-                self.ui_state.active_keymap =
-                    std::sync::Arc::new(self.ui_state.keymap_profiles.compile_active());
+                self.ui_state.active_keymap = std::sync::Arc::new(
+                    self.ui_state
+                        .keymap_profiles
+                        .compile_active_in(&self.ui_state.i18n),
+                );
                 let migrated = self
                     .ui_state
                     .keymap_profiles

@@ -8,6 +8,7 @@ mod backup;
 mod binding;
 mod catalog;
 mod command;
+mod display;
 mod editor;
 mod mod_migration;
 mod physical;
@@ -26,8 +27,13 @@ pub use binding::{
 /// macOS and `Ctrl+S` elsewhere. Text that is not a stroke is returned as is.
 /// For hints that cannot ask the active keymap (fallbacks, prose).
 pub fn shown(spelling: &str) -> String {
+    shown_in(spelling, &signex_i18n::I18n::en_us())
+}
+
+/// [`shown`] with the key words in the language of `i18n`.
+pub fn shown_in(spelling: &str, i18n: &signex_i18n::I18n) -> String {
     ShortcutTrigger::parse(spelling)
-        .map(|trigger| trigger.display_text())
+        .map(|trigger| trigger.display_text_in(Platform::current(), i18n))
         .unwrap_or_else(|_| spelling.to_string())
 }
 

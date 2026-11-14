@@ -124,6 +124,7 @@ fn all_ids() -> Vec<crate::MessageId> {
         .chain(crate::command_ids::ALL)
         .chain(crate::menu_ids::ALL)
         .chain(crate::shortcut_ids::ALL)
+        .chain(crate::key_ids::ALL)
         .copied()
         .chain(crate::area_ids::area_lists())
         .collect()

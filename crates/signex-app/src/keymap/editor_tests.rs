@@ -128,6 +128,9 @@ fn key_names_fold_without_turkic_rules() {
     row.trigger = "Ctrl+Ş".into();
     assert!(row.matches_query_in(&tr, "ctrl+ş"));
     assert!(row.matches_query("ş"));
+    // A translated key name is language text: a Turkish `SİL` is found by `sil`.
+    row.trigger = "Ctrl+SİL".into();
+    assert!(row.matches_query_in(&tr, "sil"));
 }
 
 #[test]

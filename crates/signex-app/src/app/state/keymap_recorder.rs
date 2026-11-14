@@ -12,7 +12,8 @@ pub struct KeymapRecorderState {
     pub command: crate::keymap::AppCommandId,
     pub command_label: String,
     pub context: crate::keymap::ShortcutContext,
-    pub original_trigger: String,
+    /// The binding's trigger before recording, in profile-file spelling.
+    pub original_config: String,
     pub strokes: Vec<crate::keymap::KeyStroke>,
     pub modifiers: crate::keymap::Modifiers,
     pub recording: bool,
@@ -36,9 +37,6 @@ impl KeymapRecorderState {
         // `trigger` is the binding's profile-file spelling, which parses back
         // to the same strokes (display text on macOS would not).
         let parsed = crate::keymap::ShortcutTrigger::parse(&trigger).ok();
-        let original_trigger = parsed
-            .as_ref()
-            .map_or_else(|| trigger.clone(), |parsed| parsed.display_text());
         let strokes = parsed
             .and_then(|trigger| match trigger {
                 crate::keymap::ShortcutTrigger::KeySequence(strokes) => Some(strokes),
@@ -50,16 +48,23 @@ impl KeymapRecorderState {
             command,
             command_label,
             context,
-            original_trigger,
+            original_config: trigger,
             strokes,
             modifiers: crate::keymap::Modifiers::default(),
             recording: true,
         }
     }
 
-    /// The recorded strokes as this OS shows them.
-    pub fn trigger_text(&self) -> String {
-        self.trigger().display_text()
+    /// The trigger before recording as this OS shows it in the language of
+    /// `i18n`; one that does not parse is shown as written.
+    pub fn original_trigger_in(&self, i18n: &signex_i18n::I18n) -> String {
+        crate::keymap::shown_in(&self.original_config, i18n)
+    }
+
+    /// The recorded strokes as this OS shows them in the language of `i18n`.
+    pub fn trigger_text_in(&self, i18n: &signex_i18n::I18n) -> String {
+        self.trigger()
+            .display_text_in(crate::keymap::Platform::current(), i18n)
     }
 
     /// The recorded strokes themselves: what Apply stores, so nothing is

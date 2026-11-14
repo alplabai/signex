@@ -363,7 +363,7 @@ fn enabled(ctx: &MenuContext<'_>, command_id: &str) -> bool {
 /// bind (or the user unbound) shows no hint (#1378).
 fn shortcut_for(ctx: &MenuContext<'_>, command_id: &str, fallback: &str) -> Option<String> {
     let Some(keymap) = ctx.active_keymap.as_ref() else {
-        return (!fallback.is_empty()).then(|| fallback_text(fallback));
+        return (!fallback.is_empty()).then(|| fallback_text(&ctx.i18n, fallback));
     };
     Some(keymap.shortcut_label_for_id(command_id)).filter(|label| !label.is_empty())
 }
@@ -371,9 +371,9 @@ fn shortcut_for(ctx: &MenuContext<'_>, command_id: &str, fallback: &str) -> Opti
 /// A fallback literal as the menu shows it. Only one spelled with the `Mod`
 /// token is a platform chord and goes through the keymap display; every other
 /// literal (`Shift+Ctrl+V`, `Del`, `Home`, ...) is shown as written.
-fn fallback_text(fallback: &str) -> String {
+fn fallback_text(i18n: &signex_i18n::I18n, fallback: &str) -> String {
     if fallback.split('+').any(|part| part == "Mod") {
-        crate::keymap::shown(fallback)
+        crate::keymap::shown_in(fallback, i18n)
     } else {
         fallback.to_string()
     }

@@ -568,7 +568,7 @@ fn keymap_recorder_control<'a>(
     {
         Some(shortcut_chip(
             i18n,
-            &format!("{}...", modifiers_label(recorder.modifiers)),
+            &format!("{}...", modifiers_label(i18n, recorder.modifiers)),
             ChipTone::Warning,
         ))
     } else {
@@ -594,7 +594,7 @@ fn keymap_recorder_control<'a>(
 
     let recorder_warning: Element<'a, PrefMsg> = match recorder_shadow_warning_for(
         i18n,
-        &recorder.trigger_text(),
+        &recorder.trigger_text_in(i18n),
         &recorder.trigger().config_text(),
     ) {
         Some(message) if !recorder.strokes.is_empty() => text(message)
@@ -653,7 +653,7 @@ fn keymap_recorder_control<'a>(
                         text(i18n.message(ids::PREF_KEYMAP_CURRENT, &[]))
                             .size(TS.body)
                             .style(iced::widget::text::secondary),
-                        shortcut_chip(i18n, &recorder.original_trigger, ChipTone::Neutral),
+                        shortcut_chip(i18n, &recorder.original_trigger_in(i18n), ChipTone::Neutral),
                     ]
                     .spacing(SP.m)
                     .align_y(iced::Alignment::Center),
@@ -726,12 +726,15 @@ fn recorded_shortcut_chips<'a>(
     recorder
         .strokes
         .iter()
-        .map(|stroke| shortcut_chip(i18n, &stroke.to_string(), ChipTone::Neutral))
+        .map(|stroke| {
+            let shown = stroke.display_in(crate::keymap::Platform::current(), i18n);
+            shortcut_chip(i18n, &shown, ChipTone::Neutral)
+        })
         .collect()
 }
 
-fn modifiers_label(modifiers: crate::keymap::Modifiers) -> String {
-    modifiers.display_for(crate::keymap::Platform::current())
+fn modifiers_label(i18n: &signex_i18n::I18n, modifiers: crate::keymap::Modifiers) -> String {
+    modifiers.display_in(crate::keymap::Platform::current(), i18n)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

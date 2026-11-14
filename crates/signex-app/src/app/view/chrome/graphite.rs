@@ -195,10 +195,11 @@ impl Signex {
         });
         // The key cap names the real binding, so it never promises a chord
         // the keymap does not have.
-        let hint = self
-            .ui_state
-            .active_keymap
-            .shortcut_label_preferring("open_command_palette", "Ctrl+K");
+        let hint = self.ui_state.active_keymap.shortcut_label_preferring(
+            "open_command_palette",
+            "Ctrl+K",
+            &self.ui_state.i18n,
+        );
         let mut content = row![icon, input].spacing(SP.l).align_y(Alignment::Center);
         if !hint.is_empty() {
             let cap = container(text(raw(hint)).size(TS.caption).font(
