@@ -36,6 +36,16 @@ impl std::fmt::Display for FilterColumn {
     }
 }
 
+/// The label a parameter key gets as a grid column, and so in both range
+/// filter pickers: the key, cut to 13 bytes plus `…` past 14.
+pub(crate) fn parameter_label(key: &str) -> String {
+    if key.len() <= 14 {
+        key.to_string()
+    } else {
+        format!("{}…", crate::text_trunc::prefix_within_bytes(key, 13))
+    }
+}
+
 /// A parameter name as a column caption: its first letter in capitals
 /// ("value" shows as "Value"), cased for the UI language.
 pub(crate) fn parameter_caption(i18n: &signex_i18n::I18n, name: &str) -> String {

@@ -13,11 +13,12 @@
 //! - `parameters`   JSON   | STORED | TEXT  (text parameters; supports
 //!   `parameters.dielectric:X7R`-style equality/contains queries via the
 //!   `QueryParser`)
-//! - **`param_<key>`** f64  INDEXED | STORED | FAST  (one per well-known
-//!   numeric parameter key — see [`NUMERIC_PARAM_KEYS`]; supports `RangeQuery`)
+//! - **`param_num_<key>`** f64  INDEXED | STORED | FAST  (one per numeric
+//!   class-template slot — see [`NUMERIC_PARAM_KEYS`]; supports `RangeQuery`)
 //!
 //! Measurement parameters are indexed in base units (`indexed_number`), so
-//! facet bounds are base-unit numbers.
+//! facet bounds are base-unit numbers. A version file
+//! ([`INDEX_SCHEMA_VERSION`]) marks what the stored values mean.
 //!
 //! Tantivy 0.22 does **not** support range queries on JSON-field subpaths via
 //! the QueryParser, so each numeric parameter key gets its own typed f64
@@ -48,30 +49,42 @@ use crate::lifecycle::LifecycleState;
 use crate::param::ParamValue;
 use crate::search::{Facet, FacetOp, SearchIndex, SearchQuery};
 
-/// Well-known numeric parameter keys promoted to dedicated `f64` Tantivy
-/// fields. Range/Lt/Gt queries on `parameters.<key>` route through these.
+/// Numeric parameter keys promoted to dedicated `f64` Tantivy fields, so
+/// Range/Lt/Gt queries on `parameters.<key>` route through them.
 ///
-/// Adding a new key here is a schema-breaking change — existing indexes built
-/// without the new key will be detected at [`TantivySearchIndex::open`] and
-/// must be rebuilt. Order is irrelevant.
+/// These are the number and measurement slot names of the built-in class
+/// templates (`templates-builtin/*.toml`), so a facet is keyed by the slot
+/// a row's value lives in; a test pins the two lists together. Changing it
+/// changes the schema: [`TantivySearchIndex::open`] refuses an index built
+/// with another list and it must be rebuilt. Order is irrelevant.
 pub const NUMERIC_PARAM_KEYS: &[&str] = &[
-    // Passive components
-    "capacitance",
-    "resistance",
-    "inductance",
-    "tolerance_pct",
-    // Power
-    "voltage",
-    "current",
+    // Resistor / capacitor / inductor
+    "value",
+    "tolerance",
     "power",
-    // Frequency / timing
-    "frequency",
-    "time_ns",
-    // Misc
-    "rating",
-    "temperature_min",
-    "temperature_max",
+    "tcr",
+    "voltage_max",
+    "esr",
+    "current_max",
+    "dcr",
+    "self_resonant_frequency",
+    // Op-amp
+    "channels",
+    "supply_min",
+    "supply_max",
+    "gbw",
+    "slew_rate",
+    "input_offset",
 ];
+
+/// Version of what the index stores. Bump it when stored values change
+/// meaning without the Tantivy schema changing, so [`TantivySearchIndex::open`]
+/// refuses an old index instead of mixing old and new values in one query.
+/// v2: measurements in base units (#1700), facets keyed by template slot.
+pub const INDEX_SCHEMA_VERSION: u32 = 2;
+
+/// File next to the Tantivy segments holding [`INDEX_SCHEMA_VERSION`].
+const INDEX_VERSION_FILE: &str = "signex-index-version";
 
 /// Default writer heap (50 MB) — tantivy's recommended minimum.
 const WRITER_HEAP_BYTES: usize = 50_000_000;
@@ -207,7 +220,8 @@ impl TantivySearchIndex {
     /// - Otherwise the directory is created and a fresh index is initialised
     ///   with the schema described in the module docs.
     /// - If an existing index has a different schema than the current
-    ///   [`NUMERIC_PARAM_KEYS`] would produce, [`TantivyIndexError::SchemaMismatch`]
+    ///   [`NUMERIC_PARAM_KEYS`] would produce, or was written at another
+    ///   [`INDEX_SCHEMA_VERSION`] (or none), [`TantivyIndexError::SchemaMismatch`]
     ///   is returned.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, TantivyIndexError> {
         let path = path.as_ref();
@@ -224,9 +238,17 @@ impl TantivySearchIndex {
                     reason: "existing index schema differs from current".into(),
                 });
             }
+            check_index_version(path)?;
             existing
         } else {
-            Index::open_or_create(dir, schema.clone())?
+            let created = Index::open_or_create(dir, schema.clone())?;
+            // Written after the index: a crash in between leaves an index
+            // with no version, which the next open refuses.
+            signex_types::atomic_io::atomic_write_existing_dir(
+                &path.join(INDEX_VERSION_FILE),
+                INDEX_SCHEMA_VERSION.to_string().as_bytes(),
+            )?;
+            created
         };
 
         let reader = index
@@ -493,7 +515,12 @@ impl TantivySearchIndex {
             .strip_prefix("parameters.")
             .unwrap_or(&facet.field);
 
-        if let Some(numeric_field) = self.fields.numeric_params.get(key) {
+        // A slot can hold text in one class and a number in another
+        // (`value` is text on `generic`), so a text match goes to the JSON
+        // blob, where non-numeric values are indexed.
+        if let Some(numeric_field) = self.fields.numeric_params.get(key)
+            && !is_text_match(facet)
+        {
             return self.numeric_param_query(*numeric_field, key, facet);
         }
 
@@ -760,6 +787,38 @@ where
 /// Extra commit attempts after a transient Windows sharing violation.
 const COMMIT_RETRIES: usize = 5;
 
+/// Refuse an existing index whose stored [`INDEX_SCHEMA_VERSION`] is not
+/// the current one; an index from before the version file has none.
+fn check_index_version(path: &Path) -> Result<(), TantivyIndexError> {
+    let found = match std::fs::read_to_string(path.join(INDEX_VERSION_FILE)) {
+        Ok(text) => text.trim().to_string(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(e.into()),
+    };
+    if index_version_matches(&found) {
+        return Ok(());
+    }
+    let found = if found.is_empty() { "none" } else { &found };
+    Err(TantivyIndexError::SchemaMismatch {
+        path: path.to_path_buf(),
+        reason: format!("index version {found}, expected {INDEX_SCHEMA_VERSION}"),
+    })
+}
+
+/// A `Contains`, or an `Eq` on a value that is not a number.
+fn is_text_match(facet: &Facet) -> bool {
+    match facet.op {
+        FacetOp::Contains => true,
+        FacetOp::Eq => facet.value.parse::<f64>().is_err(),
+        FacetOp::Lt | FacetOp::Gt => false,
+    }
+}
+
+/// Whether a version file's trimmed text names the current version.
+fn index_version_matches(found: &str) -> bool {
+    found.parse::<u32>().ok() == Some(INDEX_SCHEMA_VERSION)
+}
+
 fn writer_closed() -> TantivyIndexError {
     TantivyIndexError::Internal("index writer already closed".into())
 }
@@ -881,6 +940,49 @@ mod tests {
         assert_eq!(indexed_number(&legacy), Some(4700.0));
         assert_eq!(indexed_number(&canonical), Some(4700.0));
         assert_eq!(indexed_number(&ParamValue::Text("4.7k".into())), None);
+    }
+
+    /// #1701: facets are keyed by the slot a row's value lives in.
+    #[test]
+    fn numeric_param_keys_are_the_builtin_numeric_template_slots() {
+        use crate::templates::{ParamKind, TemplateRegistry};
+        use std::collections::BTreeSet;
+        let registry = TemplateRegistry::new_with_builtins();
+        let slots: BTreeSet<&str> = registry
+            .global_templates()
+            .flat_map(|t| t.required_params.iter().chain(&t.optional_params))
+            .filter(|s| matches!(s.kind, ParamKind::Number | ParamKind::Measurement))
+            .map(|s| s.name.as_str())
+            .collect();
+        let keys: BTreeSet<&str> = NUMERIC_PARAM_KEYS.iter().copied().collect();
+        assert_eq!(keys, slots);
+        assert_eq!(
+            keys.len(),
+            NUMERIC_PARAM_KEYS.len(),
+            "a key is listed twice"
+        );
+    }
+
+    #[test]
+    fn index_version_is_checked_exactly() {
+        assert!(index_version_matches(&INDEX_SCHEMA_VERSION.to_string()));
+        assert!(!index_version_matches(""), "an index from before the file");
+        assert!(!index_version_matches("1"));
+        assert!(!index_version_matches("v2"));
+    }
+
+    #[test]
+    fn text_matches_on_a_numeric_slot_go_to_the_text_blob() {
+        let facet = |op, value: &str| Facet {
+            field: "parameters.value".into(),
+            op,
+            value: value.into(),
+        };
+        assert!(is_text_match(&facet(FacetOp::Eq, "10k")));
+        assert!(is_text_match(&facet(FacetOp::Contains, "4")));
+        assert!(!is_text_match(&facet(FacetOp::Eq, "4700")));
+        assert!(!is_text_match(&facet(FacetOp::Lt, "4700")));
+        assert!(!is_text_match(&facet(FacetOp::Gt, "x")));
     }
 
     #[test]

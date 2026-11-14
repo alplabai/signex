@@ -16,7 +16,8 @@ use std::sync::Mutex;
 use chrono::Utc;
 use signex_library::{
     ComponentClass, ComponentRow, DatasheetRef, Facet, FacetOp, LifecycleState, ManufacturerPart,
-    ParamMap, ParamValue, PlmReserved, PrimitiveRef, SearchIndex, SearchQuery, TantivySearchIndex,
+    ParamMap, ParamValue, PlmReserved, PrimitiveRef, SearchIndex, SearchQuery, TantivyIndexError,
+    TantivySearchIndex,
 };
 use uuid::Uuid;
 
@@ -87,10 +88,10 @@ fn fixture_corpus() -> Vec<ComponentRow> {
     // 1 — the unique target the text-search test queries for.
     let mut cap_target_params = ParamMap::new();
     cap_target_params.insert(
-        "capacitance".into(),
+        "value".into(),
         ParamValue::Number(10e-6), // 10 µF
     );
-    cap_target_params.insert("voltage".into(), ParamValue::Number(25.0));
+    cap_target_params.insert("voltage_max".into(), ParamValue::Number(25.0));
     cap_target_params.insert("dielectric".into(), ParamValue::Text("X7R".into()));
     cap_target_params.insert("package".into(), ParamValue::Text("0805".into()));
     out.push(fresh_row(
@@ -118,8 +119,8 @@ fn fixture_corpus() -> Vec<ComponentRow> {
     for (i, (c, v, dielec, pkg)) in cap_specs.iter().enumerate() {
         for rep in 0..4 {
             let mut params = ParamMap::new();
-            params.insert("capacitance".into(), ParamValue::Number(*c));
-            params.insert("voltage".into(), ParamValue::Number(*v));
+            params.insert("value".into(), ParamValue::Number(*c));
+            params.insert("voltage_max".into(), ParamValue::Number(*v));
             params.insert("dielectric".into(), ParamValue::Text((*dielec).into()));
             params.insert("package".into(), ParamValue::Text((*pkg).into()));
             let pn = format!("C_FILLER_{:03}", i * 4 + rep);
@@ -145,7 +146,7 @@ fn fixture_corpus() -> Vec<ComponentRow> {
     for (i, r) in r_decades.iter().enumerate() {
         for (rep, pkg) in ["0402", "0603", "0805", "1206"].iter().enumerate() {
             let mut params = ParamMap::new();
-            params.insert("resistance".into(), ParamValue::Number(*r));
+            params.insert("value".into(), ParamValue::Number(*r));
             params.insert("package".into(), ParamValue::Text((*pkg).into()));
             params.insert("tolerance".into(), ParamValue::Text("1%".into()));
             let pn = format!("R{}_{}_{}", pkg, *r as u64, i);
@@ -243,7 +244,7 @@ fn assert_capacitance_facet(op: FacetOp, value: &str, keep: impl Fn(f64) -> bool
         text: None,
         category: Some("Capacitor".into()),
         facets: vec![Facet {
-            field: "parameters.capacitance".into(),
+            field: "parameters.value".into(),
             op,
             value: value.into(),
         }],
@@ -255,9 +256,7 @@ fn assert_capacitance_facet(op: FacetOp, value: &str, keep: impl Fn(f64) -> bool
     let mut expected: Vec<String> = corpus
         .iter()
         .filter(|c| c.class.as_str() == "Capacitor")
-        .filter(
-            |c| matches!(c.parameters.get("capacitance"), Some(ParamValue::Number(n)) if keep(*n)),
-        )
+        .filter(|c| matches!(c.parameters.get("value"), Some(ParamValue::Number(n)) if keep(*n)))
         .map(|c| c.internal_pn.0.clone())
         .collect();
     expected.sort();
@@ -346,7 +345,7 @@ fn add_or_update_replaces_existing_doc() {
     let idx = TantivySearchIndex::open(dir.path()).expect("open index");
 
     let mut params = ParamMap::new();
-    params.insert("capacitance".into(), ParamValue::Number(1e-6));
+    params.insert("value".into(), ParamValue::Number(1e-6));
     let mut row = fresh_row(
         "C_TEST",
         "TEST-001",
@@ -489,6 +488,99 @@ fn unparseable_query_text_with_no_match_returns_nothing() {
         idx.query(&q).is_empty(),
         "a miss must read as a miss, not as the whole library"
     );
+}
+
+/// #1701: an index written before measurements were stored in base units
+/// carries no version file. Reopening it must fail rather than mix raw and
+/// base-unit values in one facet; the wipe-and-rebuild path then opens.
+#[test]
+fn an_index_from_another_version_is_refused_until_rebuilt() {
+    let _guard = serial_guard();
+    let dir = tempfile::tempdir().unwrap();
+    let version_file = dir.path().join("signex-index-version");
+    {
+        let idx = TantivySearchIndex::open(dir.path()).expect("open index");
+        idx.add_or_update(&fixture_corpus()[0]).expect("add row");
+        idx.commit().expect("commit");
+    }
+    assert!(version_file.is_file(), "a new index records its version");
+    // Reopening at the current version works.
+    drop(TantivySearchIndex::open(dir.path()).expect("reopen"));
+
+    for stale in [None, Some("1")] {
+        match stale {
+            None => std::fs::remove_file(&version_file).unwrap(),
+            Some(text) => std::fs::write(&version_file, text).unwrap(),
+        }
+        match TantivySearchIndex::open(dir.path()) {
+            Err(TantivyIndexError::SchemaMismatch { .. }) => {}
+            Err(e) => panic!("{stale:?}: wrong error {e}"),
+            Ok(_) => panic!("{stale:?}: an index of another version was reopened"),
+        }
+    }
+
+    let idx = TantivySearchIndex::wipe_and_recreate(dir.path()).expect("rebuild");
+    let all = SearchQuery {
+        text: None,
+        category: None,
+        facets: vec![],
+        limit: 10,
+    };
+    assert!(idx.query(&all).is_empty(), "the rebuilt index starts empty");
+    drop(idx);
+    drop(TantivySearchIndex::open(dir.path()).expect("the rebuilt index reopens"));
+}
+
+/// #1701: a facet on a template slot (`value`) compares measurements in
+/// base units, and a text match on the same slot still finds a text value.
+#[test]
+fn a_slot_facet_compares_in_base_units_and_still_matches_text() {
+    let _guard = serial_guard();
+    let dir = tempfile::tempdir().unwrap();
+    let idx = TantivySearchIndex::open(dir.path()).expect("open index");
+
+    let measured = |value: f64, unit: &str| {
+        let mut p = ParamMap::new();
+        p.insert(
+            "value".into(),
+            ParamValue::Measurement {
+                value,
+                unit: unit.into(),
+            },
+        );
+        p
+    };
+    let mut text = ParamMap::new();
+    text.insert("value".into(), ParamValue::Text("10k".into()));
+    for (pn, class, params) in [
+        ("R-4K7-LEGACY", "resistor", measured(4.7, "kΩ")),
+        ("R-100", "resistor", measured(100.0, "ohm")),
+        ("G-10K", "generic", text),
+    ] {
+        let row = fresh_row(pn, pn, "Acme", "", class, params);
+        idx.add_or_update(&row).expect("add row");
+    }
+    idx.commit().expect("commit");
+
+    let pns = |op: FacetOp, value: &str| -> Vec<String> {
+        let q = SearchQuery {
+            text: None,
+            category: None,
+            facets: vec![Facet {
+                field: "parameters.value".into(),
+                op,
+                value: value.into(),
+            }],
+            limit: 10,
+        };
+        idx.query(&q)
+            .iter()
+            .map(|h| h.internal_pn.as_str().to_string())
+            .collect()
+    };
+    assert_eq!(pns(FacetOp::Gt, "1000"), ["R-4K7-LEGACY"]);
+    assert_eq!(pns(FacetOp::Eq, "4700"), ["R-4K7-LEGACY"]);
+    assert_eq!(pns(FacetOp::Eq, "10k"), ["G-10K"]);
 }
 
 // Defensive: keep an unused `BTreeMap` import in scope so cargo doesn't warn
