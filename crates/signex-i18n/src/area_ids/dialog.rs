@@ -11,6 +11,8 @@ define_ids! {
     DIALOG_AUTOSAVE_RECOVERY_LATER = "dialog-autosave-recovery-later";
     DIALOG_BOM_EXPORT = "dialog-bom-export";
     DIALOG_UNSAVED_DISCARD_ALL = "dialog-unsaved-discard-all";
+    DIALOG_QUIT_HELD_PATH_OP = "dialog-quit-held-path-op";
+    DIALOG_QUIT_HELD_REWRITE = "dialog-quit-held-rewrite";
     DIALOG_CREATE_CHILD_SHEET_OPEN_EXISTING = "dialog-create-child-sheet-open-existing";
     DIALOG_CREATE_CHILD_SHEET_BROWSE = "dialog-create-child-sheet-browse";
     DIALOG_CREATE_CHILD_SHEET_LATER = "dialog-create-child-sheet-later";

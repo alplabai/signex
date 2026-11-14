@@ -283,9 +283,23 @@ pub struct SaveAllSettle {
     /// was written, and the others it stands for. The others' dirty markers
     /// go once the written one is clean.
     pub case_variants: Vec<CaseVariants>,
-    /// A write task panicked and ended the writes early (#2269): a row still
-    /// marked in flight will never report, so the settle does not wait.
-    pub interrupted: bool,
+    /// The writes whose task panicked instead of reporting (#2269). Their
+    /// completions never arrive, so the settle fails each one itself.
+    pub stopped: Vec<SaveAllWrite>,
+}
+
+/// What one Save All write saves, so a write that stops without a result
+/// can be failed the way its own completion would fail it.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SaveAllWrite {
+    /// A document file. `generation` is the save stamp of the symbol or
+    /// footprint editor the write snapshotted; `None` for other documents.
+    File {
+        path: std::path::PathBuf,
+        generation: Option<u64>,
+    },
+    /// A Component Preview row.
+    Row(crate::library::state::EditorAddress),
 }
 
 /// A file held under several case-variant spellings: the one written and

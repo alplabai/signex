@@ -386,6 +386,10 @@ pub struct DocumentState {
     /// writing, by batch id; resumed by the last of those writes (#1728).
     pub parked_save_all_settles:
         std::collections::HashMap<u64, crate::app::contracts::SaveAllSettle>,
+    /// Save All batches with a row whose write stopped without a result
+    /// (#2269). Once such a batch has settled, a late row report of it is
+    /// raised on its own: no settle is left to name it.
+    pub stopped_save_all_batches: std::collections::HashSet<u64>,
     /// Opt-in recovery sidecars of dirty schematics (#104); see `crate::autosave`.
     pub autosave: crate::autosave::AutosaveState,
     /// Disk facts behind the project tree's `(missing)` marks (#111).

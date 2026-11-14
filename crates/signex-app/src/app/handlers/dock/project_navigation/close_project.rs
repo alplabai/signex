@@ -869,14 +869,13 @@ impl Signex {
         if self.document_state.pending_path_ops.is_empty() {
             return false;
         }
-        let detail = if self.document_state.pending_path_ops.rewrite_running() {
-            "Annotate or Reset Duplicate Designators is still running, so the app was not \
-             closed. Try again once it finishes."
+        let id = if self.document_state.pending_path_ops.rewrite_running() {
+            signex_i18n::ids::DIALOG_QUIT_HELD_REWRITE
         } else {
-            "A rename or delete is still running, so the app was not closed. \
-             Try again once it finishes."
+            signex_i18n::ids::DIALOG_QUIT_HELD_PATH_OP
         };
-        crate::diagnostics::log_warning(detail);
+        let detail = signex_i18n::t!(self.ui_state.i18n, id).into_string();
+        crate::diagnostics::log_warning(detail.clone());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::quit_held(detail));
         true
     }

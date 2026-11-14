@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::app::contracts::{SaveAllNext, SaveAllPlan, SaveAllSettle};
+use crate::app::contracts::{SaveAllNext, SaveAllPlan, SaveAllSettle, SaveAllWrite};
 use crate::app::state::project_case::CaseProbeOutcome;
 use crate::app::state::scope::CaseFold;
 use crate::app::{FileMsg, Message, Signex, SymbolDocument, TabInfo, TabKind};
@@ -12,7 +12,7 @@ use crate::persist::run_task::outputs;
 
 /// An app with a dirty symbol draft at `dir/Lib.snxsym` and a dirty
 /// schematic at `dir/Sheet.snxsch`.
-fn app_with_two_dirty_documents(dir: &Path) -> (Signex, PathBuf, PathBuf) {
+pub(super) fn app_with_two_dirty_documents(dir: &Path) -> (Signex, PathBuf, PathBuf) {
     let (mut app, _task) = Signex::new();
     let symbol_path = dir.join("Lib.snxsym");
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym1"));
@@ -718,11 +718,15 @@ fn a_colour_during_a_running_save_all_keeps_the_sheet_dirty() {
 }
 
 /// A write whose task panics instead of reporting back.
-async fn write_that_panics() -> Message {
+pub(super) async fn write_that_panics() -> Message {
     panic!("the write blew up")
 }
 
-fn quit_settle(paths: Vec<PathBuf>, rows: Vec<EditorAddress>, batch: u64) -> SaveAllSettle {
+pub(super) fn quit_settle(
+    paths: Vec<PathBuf>,
+    rows: Vec<EditorAddress>,
+    batch: u64,
+) -> SaveAllSettle {
     SaveAllSettle {
         next: SaveAllNext::Quit,
         items: paths.len() + rows.len(),
@@ -731,20 +735,24 @@ fn quit_settle(paths: Vec<PathBuf>, rows: Vec<EditorAddress>, batch: u64) -> Sav
         rows,
         batch,
         case_variants: Vec::new(),
-        interrupted: false,
+        stopped: Vec::new(),
     }
 }
 
-/// #2269: a panicking write ends the writes, not the settle: it still
-/// arrives, marked interrupted.
+/// #2269: a panicking write ends that write, not the settle: it still
+/// arrives, naming the write that stopped.
 #[test]
 fn a_panicking_write_still_ends_with_the_settle() {
+    let write = SaveAllWrite::File {
+        path: PathBuf::from("Sheet.snxsch"),
+        generation: None,
+    };
     let task = super::save_all::writes_then_settle(
-        vec![iced::Task::future(write_that_panics())],
+        vec![(write.clone(), iced::Task::future(write_that_panics()))],
         quit_settle(Vec::new(), Vec::new(), 1),
     );
     match outputs(task).as_slice() {
-        [Message::File(FileMsg::SaveAllSettled(settle))] => assert!(settle.interrupted),
+        [Message::File(FileMsg::SaveAllSettled(settle))] => assert_eq!(settle.stopped, vec![write]),
         other => panic!("expected only the settle, got {other:?}"),
     }
 }
@@ -768,7 +776,10 @@ fn a_quit_save_all_whose_write_panics_declines_the_quit() {
         .insert(7, (batch, row.clone()));
 
     let task = super::save_all::writes_then_settle(
-        vec![iced::Task::future(write_that_panics())],
+        vec![(
+            SaveAllWrite::Row(row.clone()),
+            iced::Task::future(write_that_panics()),
+        )],
         quit_settle(vec![sheet], vec![row], batch),
     );
     let after = feed_then_settle(&mut app, outputs(task));
