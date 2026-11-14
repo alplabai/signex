@@ -1,7 +1,7 @@
 //! #2356: board sketch mode through `Signex::update`. The canvas cursor
 //! follows the pointer, and Properties shows the board, not footprint fields.
 
-use iced::{Point, Size};
+use iced::{Point, Size, Widget as _};
 use signex_types::format::SnxPcb;
 use signex_types::pcb::Point as BoardPoint;
 
