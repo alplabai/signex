@@ -139,7 +139,6 @@ impl Gesture {
                     PcbCanvasMsg::FootprintDropped {
                         from: canvas.screen_to_world(press, bounds),
                         to: canvas.screen_to_world(pos, bounds),
-                        tolerance_mm: hover_reach_mm(canvas.scale()),
                     }
                 } else if past_threshold(press, pos) {
                     PcbCanvasMsg::BoxSelected {

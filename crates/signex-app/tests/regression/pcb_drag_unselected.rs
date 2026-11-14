@@ -284,7 +284,9 @@ fn a_plain_click_on_an_unselected_footprint_only_selects_it() {
 fn a_press_on_empty_space_still_draws_a_box() {
     let mut f = open_board();
     let before = f.snapshot();
-    f.left_drag(f.screen(8.0, 8.0), f.screen(17.0, 17.0));
+    // Right to left from empty space beside U1, a crossing that touches
+    // only U1; the fitted view keeps both corners on the canvas.
+    f.left_drag(f.screen(14.5, 13.6), f.screen(12.0, 12.4));
     assert_eq!(f.snapshot(), before, "a box moves nothing");
     let selected = f.selected();
     assert!(
@@ -330,21 +332,19 @@ fn during_a_drag_the_footprint_is_drawn_only_where_it_is_going() {
     let canvas = &f.app.interaction_state.pcb_canvas;
     let scene = canvas.gpu_scene().expect("a GPU scene");
     let moving = canvas.drag_preview_scene().expect("U1 drawn on the move");
-    // U1's pad spans x 11.7..13.7 at its old place, 14.24..16.24 on the move.
-    let spans = |polygons: &[signex_gfx::primitive::polygon::GpuPolygon], lo: f32, hi: f32| {
-        polygons.iter().any(|p| {
+    // Pads are top-copper polygons. U1's spans x 11.7..13.7 at its old
+    // place and 14.24..16.24 on the move; U2's 24.4..26.4.
+    let spans = |scene: &signex_gfx::scene::Scene, lo: f32, hi: f32| {
+        scene.top_polygons.iter().any(|p| {
             p.vertices
                 .iter()
                 .all(|v| v[0] >= lo - 0.01 && v[0] <= hi + 0.01 && (v[1] - 12.7).abs() <= 0.51)
         })
     };
+    assert!(spans(&scene, 24.4, 26.4), "the GPU scene holds U2's pad");
+    assert!(!spans(&scene, 11.7, 13.7), "but no U1 pad at its old place");
     assert!(
-        !spans(&scene.polygons, 11.7, 13.7),
-        "the GPU scene holds no U1 pad at its old place"
-    );
-    assert!(spans(&scene.polygons, 24.4, 26.4), "but U2's pad");
-    assert!(
-        spans(&moving.polygons, 14.24, 16.24),
+        spans(moving, 14.24, 16.24),
         "U1's pad is drawn at the snapped offset"
     );
     // The selection outline goes with it, not left behind.

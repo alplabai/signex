@@ -141,6 +141,15 @@ impl Signex {
     /// selection carries it; a press on an unselected footprint selects and
     /// carries that one (#2358).
     pub(crate) fn pcb_footprints_dragged(&mut self, from: Point, to: Point, tolerance_mm: f64) {
+        self.follow_pcb_drag(from, to, Some(tolerance_mm));
+    }
+
+    /// Start the drag pressed at `from`, unless it is under way, and follow
+    /// it to `to`. With `pick` (the press's reach) the press picks what it
+    /// carries; without, as for a drop whose drag never arrived, it carries
+    /// the selection only, so a release left over from an ended drag never
+    /// picks anything up.
+    fn follow_pcb_drag(&mut self, from: Point, to: Point, pick: Option<f64>) {
         // A drag is one press: a carry from another press (a release that
         // never arrived) is replaced, never reused for this selection.
         let same_press = self
@@ -150,10 +159,11 @@ impl Signex {
             let Some(path) = self.active_tab_path() else {
                 return;
             };
-            let Some((mut footprints, _)) = self
-                .with_pcb_selection(|state, board| state.grab_for_drag(board, from, tolerance_mm))
-            else {
-                return;
+            let mut footprints = match pick {
+                Some(reach) => self
+                    .with_pcb_selection(|state, board| state.grab_for_drag(board, from, reach))
+                    .unwrap_or_default(),
+                None => self.pcb_selected_footprints(),
             };
             // A locked footprint refuses when the drag starts. The press
             // then carries nothing, so its later moves neither repeat the
@@ -175,8 +185,8 @@ impl Signex {
     }
 
     /// The drag was released at `to`: move as one step.
-    pub(crate) fn pcb_footprints_dropped(&mut self, from: Point, to: Point, tolerance_mm: f64) {
-        self.pcb_footprints_dragged(from, to, tolerance_mm);
+    pub(crate) fn pcb_footprints_dropped(&mut self, from: Point, to: Point) {
+        self.follow_pcb_drag(from, to, None);
         self.drop_pcb_carry(from, to);
     }
 

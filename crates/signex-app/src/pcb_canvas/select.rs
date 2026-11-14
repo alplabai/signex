@@ -272,24 +272,23 @@ impl PcbSelectionState {
     /// The footprints a drag pressed at `at` carries (#2358). A press on a
     /// selected footprint, or on one of its pads, carries the selection;
     /// a press on an unselected one selects that footprint alone and
-    /// carries it. Off every footprint it carries nothing. Whether the
-    /// selection changed comes second.
+    /// carries it. Off every footprint it carries nothing.
     pub fn grab_for_drag(
         &mut self,
         board: &PcbBoard,
         at: Point,
         tolerance_mm: f64,
-    ) -> (BTreeSet<Uuid>, bool) {
+    ) -> BTreeSet<Uuid> {
         let selected = self.selection.footprints();
         let (Ok(p), Ok(tol)) = (
             PointNm::from_mm(at, "press"),
             pcb_geom::mm_to_nm(tolerance_mm, "reach"),
         ) else {
-            return (BTreeSet::new(), false);
+            return BTreeSet::new();
         };
         self.ensure_index(board);
         let Some(index) = &self.index else {
-            return (BTreeSet::new(), false);
+            return BTreeSet::new();
         };
         // A pad outranks the body it sits on, as a click picks.
         let under: Vec<(bool, ItemRef, Uuid)> = index
@@ -302,15 +301,14 @@ impl PcbSelectionState {
             })
             .collect();
         if under.iter().any(|(_, _, id)| selected.contains(id)) {
-            return (selected, false);
+            return selected;
         }
         let Some(&(_, _, id)) = under.iter().min_by_key(|(body, item, _)| (*body, *item)) else {
-            return (BTreeSet::new(), false);
+            return BTreeSet::new();
         };
-        let changed = self
-            .selection
+        self.selection
             .apply_click(Some(ItemRef::Footprint(id)), ClickMode::Replace);
-        (BTreeSet::from([id]), changed)
+        BTreeSet::from([id])
     }
 
     /// The body and pads of each footprint `keep` accepts.

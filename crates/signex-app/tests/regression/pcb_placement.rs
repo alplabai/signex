@@ -372,11 +372,7 @@ fn a_drag_previews_then_drops_the_footprint_on_the_grid() {
     assert_eq!(snapshot(&f.app), before, "a drag in progress edits nothing");
     let ghost = &f.app.interaction_state.pcb_canvas.highlight().ghost;
     assert_eq!(ghost.len(), 3, "the body and both pads are previewed");
-    let dropped = Message::PcbCanvas(PcbCanvasMsg::FootprintDropped {
-        from,
-        to,
-        tolerance_mm: REACH,
-    });
+    let dropped = Message::PcbCanvas(PcbCanvasMsg::FootprintDropped { from, to });
     let edited = one_step(&mut f, dropped);
     // The origin snaps to the 1.27 mm PCB default grid: (12.7, 10.16).
     let at = fp(&edited, U1).position;
@@ -426,7 +422,6 @@ fn a_locked_footprint_refuses_every_edit_with_a_notice() {
             Message::PcbCanvas(PcbCanvasMsg::FootprintDropped {
                 from: Point::new(30.0, 10.0),
                 to: Point::new(35.0, 10.0),
-                tolerance_mm: REACH,
             }),
         ),
     ];

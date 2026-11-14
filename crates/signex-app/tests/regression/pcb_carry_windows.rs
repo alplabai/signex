@@ -329,11 +329,7 @@ fn a_locked_footprint_refuses_the_drag_at_its_start_once() {
     let ghost = &rig.app.interaction_state.pcb_canvas.highlight().ghost;
     assert!(ghost.is_empty(), "the locked part is not previewed");
     send(&mut rig.app, Message::PcbCanvas(dragged(34.0)));
-    let dropped = PcbCanvasMsg::FootprintDropped {
-        from,
-        to,
-        tolerance_mm: 0.05,
-    };
+    let dropped = PcbCanvasMsg::FootprintDropped { from, to };
     send(&mut rig.app, Message::PcbCanvas(dropped));
     assert_eq!(refusals_since(since), 1, "said once, not per move or drop");
     assert_eq!(board_text(&rig.app, &rig.b), before, "nothing moved");

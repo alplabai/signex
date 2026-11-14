@@ -72,12 +72,8 @@ impl Signex {
                 self.pcb_footprints_dragged(from, to, tolerance_mm);
                 Task::none()
             }
-            PcbCanvasMsg::FootprintDropped {
-                from,
-                to,
-                tolerance_mm,
-            } => {
-                self.pcb_footprints_dropped(from, to, tolerance_mm);
+            PcbCanvasMsg::FootprintDropped { from, to } => {
+                self.pcb_footprints_dropped(from, to);
                 Task::none()
             }
             PcbCanvasMsg::FootprintDragCancelled => {

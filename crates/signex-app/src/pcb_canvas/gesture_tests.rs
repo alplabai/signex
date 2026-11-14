@@ -268,12 +268,7 @@ fn a_press_on_a_grabbed_footprint_drags_it_instead_of_a_box() {
     assert_eq!(msg, Some(dragged));
     assert!(rig.canvas.marquee.get().is_none(), "no box is drawn");
     let msg = rig.release(160.0, 140.0);
-    let dropped = PcbCanvasMsg::FootprintDropped {
-        from,
-        to,
-        tolerance_mm,
-    };
-    assert_eq!(msg, Some(dropped));
+    assert_eq!(msg, Some(PcbCanvasMsg::FootprintDropped { from, to }));
 }
 
 #[test]

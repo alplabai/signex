@@ -121,11 +121,7 @@ fn dragged(from: Point, to: Point) -> PcbCanvasMsg {
 }
 
 fn dropped(from: Point, to: Point) -> PcbCanvasMsg {
-    PcbCanvasMsg::FootprintDropped {
-        from,
-        to,
-        tolerance_mm: 0.05,
-    }
+    PcbCanvasMsg::FootprintDropped { from, to }
 }
 
 fn in_window(app: &mut Signex, window: iced::window::Id, msg: PcbCanvasMsg) {

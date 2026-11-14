@@ -38,11 +38,7 @@ pub enum PcbCanvasMsg {
         tolerance_mm: f64,
     },
     /// That drag was released at `to`: the footprints move as one step.
-    FootprintDropped {
-        from: Point,
-        to: Point,
-        tolerance_mm: f64,
-    },
+    FootprintDropped { from: Point, to: Point },
     /// The pointer left the canvas mid-drag: nothing moves.
     FootprintDragCancelled,
 }
