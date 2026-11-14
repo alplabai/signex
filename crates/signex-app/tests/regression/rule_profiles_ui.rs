@@ -738,42 +738,5 @@ fn a_pane_edit_keeps_a_change_made_to_the_file_behind_the_panes_back() {
     assert_eq!(after.severity["dangling_wire"], "off");
 }
 
-#[test]
-fn the_first_launch_after_upgrade_folds_newer_prefs_into_an_older_user_default() {
-    let _serial = serial();
-    let _prefs = PrefsPathGuard::capture();
-    let _lib = ProfilesDirGuard::empty();
-    // v0.15 state: a User Default made once, then prefs.json kept changing.
-    rule_profiles::write_user_default(&library(), rules("dangling_wire", "off")).unwrap();
-    let prefs = signex_app::fonts::prefs_file_path();
-    std::fs::create_dir_all(prefs.parent().unwrap()).unwrap();
-    std::fs::write(
-        &prefs,
-        br#"{"erc_severity": {"dangling_wire": "error", "unused_pin": "info"}}"#,
-    )
-    .unwrap();
-
-    let migrate = || {
-        let (mut app, task) = Signex::boot(Vec::new());
-        settle_task(&mut app, task);
-        app
-    };
-    let _ = migrate();
-    let folded = read_profile("user-default.snxrules");
-    assert_eq!(
-        folded.erc.severity["dangling_wire"], "error",
-        "the newer prefs value wins"
-    );
-    assert_eq!(folded.erc.severity["unused_pin"], "info");
-    let marker: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&prefs).unwrap()).unwrap();
-    assert_eq!(marker["erc_rules_in_profile"], true);
-
-    // Edit the profile, relaunch: the stale prefs keys do not win again.
-    rule_profiles::write_user_default(&library(), rules("dangling_wire", "warning")).unwrap();
-    let _ = migrate();
-    assert_eq!(
-        read_profile("user-default.snxrules").erc.severity["dangling_wire"],
-        "warning"
-    );
-}
+// The first-launch fold test lives in `tests/rule_profiles_first_launch.rs`:
+// it seeds the prefs file by hand, which other tests here write meanwhile.
