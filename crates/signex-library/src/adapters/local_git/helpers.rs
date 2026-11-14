@@ -147,22 +147,51 @@ pub(super) fn stage_and_commit_with(
         // An LFS path's entry records the pointer that was committed.
         entry.id = blob;
     }
-    let updated = committed_entries(repo, workdir, rel_path, content, main_entry, &staged)
-        .and_then(|entries| {
-            retry_on_git_lock(repo.path(), || {
-                super::index_lock::update_index_locked(repo, |index| {
-                    for removed in removed_rel_paths {
-                        if index.get_path(removed, 0).is_some() {
-                            index.remove_path(removed)?;
-                        }
+    let updated = retry_on_git_lock(repo.path(), || {
+        super::index_lock::update_index_locked(repo, |index| {
+            for removed in removed_rel_paths {
+                if index.get_path(removed, 0).is_some() {
+                    index.remove_path(removed)?;
+                }
+            }
+            for (path, blob) in &staged {
+                if Some(*path) == rel_path
+                    && let Some(entry) = &main_entry
+                {
+                    super::index_lock::resolve_conflict(index, path)?;
+                    index.add(entry)?;
+                    continue;
+                }
+                index.add_path(path)?;
+                // `add_path` stores the raw bytes of the working file together
+                // with its stat data; an LFS path's entry records the pointer
+                // that was committed. When the caller supplied the bytes for
+                // `rel_path`, the working file may have moved on since: pairing
+                // the committed blob id with that file's stat would make git trust
+                // the cache and call it clean, hiding the file's real content from
+                // every later checkout or reset. Zeroed stat data forces git to
+                // re-hash the file and report it modified. The extra files are
+                // always committed from the working tree, so they match.
+                let working_differs = content.is_some()
+                    && Some(*path) == rel_path
+                    && super::lfs::working_blob_id(repo, workdir, path).ok() != Some(*blob);
+                if let Some(mut entry) = index.get_path(path, 0)
+                    && (entry.id != *blob || working_differs)
+                {
+                    entry.id = *blob;
+                    if working_differs {
+                        entry.ctime = git2::IndexTime::new(0, 0);
+                        entry.mtime = git2::IndexTime::new(0, 0);
+                        entry.file_size = 0;
+                        entry.ino = 0;
                     }
-                    for entry in &entries {
-                        index.add(entry)?;
-                    }
-                    Ok(())
-                })
-            })
-        });
+                    index.add(&entry)?;
+                }
+            }
+            Ok(())
+        })
+    })
+    .and_then(|edited| edited);
     if let Err(e) = updated {
         tracing::warn!(
             target: "signex::library",
@@ -172,52 +201,6 @@ pub(super) fn stage_and_commit_with(
         );
     }
     Ok(Some(oid))
-}
-
-/// The index entries of the committed `staged` paths: `main_entry` for
-/// `rel_path` when it was staged from the working tree, otherwise the entry
-/// `add_path` makes, carrying the committed blob.
-fn committed_entries(
-    repo: &git2::Repository,
-    workdir: &Path,
-    rel_path: Option<&Path>,
-    content: Option<&[u8]>,
-    mut main_entry: Option<git2::IndexEntry>,
-    staged: &[(&Path, git2::Oid)],
-) -> Result<Vec<git2::IndexEntry>, git2::Error> {
-    let mut entries = Vec::with_capacity(staged.len());
-    for (path, blob) in staged {
-        if Some(*path) == rel_path
-            && let Some(entry) = main_entry.take()
-        {
-            entries.push(entry);
-            continue;
-        }
-        let mut entry = staged_entry(repo, path)?;
-        // `add_path` stores the raw bytes of the working file together
-        // with its stat data; an LFS path's entry records the pointer
-        // that was committed. When the caller supplied the bytes for
-        // `rel_path`, the working file may have moved on since: pairing
-        // the committed blob id with that file's stat would make git trust
-        // the cache and call it clean, hiding the file's real content from
-        // every later checkout or reset. Zeroed stat data forces git to
-        // re-hash the file and report it modified. The extra files are
-        // always committed from the working tree, so they match.
-        let working_differs = content.is_some()
-            && Some(*path) == rel_path
-            && super::lfs::working_blob_id(repo, workdir, path).ok() != Some(*blob);
-        if entry.id != *blob || working_differs {
-            entry.id = *blob;
-            if working_differs {
-                entry.ctime = git2::IndexTime::new(0, 0);
-                entry.mtime = git2::IndexTime::new(0, 0);
-                entry.file_size = 0;
-                entry.ino = 0;
-            }
-        }
-        entries.push(entry);
-    }
-    Ok(entries)
 }
 
 #[cfg(test)]
@@ -245,10 +228,7 @@ fn run_before_commit_hook() {
 /// The index entry `add_path` makes for `rel_path` from the working tree
 /// (its blob, the clean-filtered disk bytes, hashed and stored; its stat
 /// taken), without writing the index.
-pub(super) fn staged_entry(
-    repo: &git2::Repository,
-    rel_path: &Path,
-) -> Result<git2::IndexEntry, git2::Error> {
+fn staged_entry(repo: &git2::Repository, rel_path: &Path) -> Result<git2::IndexEntry, git2::Error> {
     let mut index = repo.index()?;
     index.add_path(rel_path)?;
     let entry = index.get_path(rel_path, 0);
@@ -737,16 +717,14 @@ pub(super) fn commit_initial(
         &parents,
     )
     .map_err(backend("git initial commit"))?;
-    let entries = names
-        .iter()
-        .map(|name| staged_entry(repo, Path::new(name)))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(backend("git add"))?;
-    super::index_lock::update_index_locked(repo, |index| {
-        entries.iter().try_for_each(|entry| index.add(entry))
+    retry_on_git_lock(repo.path(), || {
+        super::index_lock::update_index_locked(repo, |index| {
+            names
+                .iter()
+                .try_for_each(|name| index.add_path(Path::new(name)).map_err(backend("git add")))
+        })
     })
-    .map_err(backend("git index write"))?;
-    Ok(())
+    .map_err(backend("git index write"))?
 }
 
 /// Slugify a human-facing name into a safe filename component.

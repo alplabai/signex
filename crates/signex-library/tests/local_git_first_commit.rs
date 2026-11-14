@@ -237,6 +237,55 @@ fn index_has(dir: &Path, name: &str) -> bool {
     index.get_path(Path::new(name), 0).is_some()
 }
 
+/// #2337: Re-init records an LFS model in the index as the pointer it
+/// committed, not the raw file, so `git status` reports it clean.
+#[test]
+fn recover_init_stages_an_lfs_model_as_its_committed_pointer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    std::fs::write(
+        tmp.path().join(".gitattributes"),
+        "*.step filter=lfs diff=lfs merge=lfs -text\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(tmp.path().join("3dmodels")).unwrap();
+    let model = tmp.path().join("3dmodels/part.step");
+    std::fs::write(&model, "ISO-10303-21;\nENDSEC;\n").unwrap();
+    // Older than the index, so git trusts the stat cache for it.
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    std::fs::File::options()
+        .write(true)
+        .open(&model)
+        .unwrap()
+        .set_modified(old)
+        .unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    let repo = Repository::open(tmp.path()).unwrap();
+    let path = Path::new("3dmodels/part.step");
+    let committed = repo
+        .head()
+        .unwrap()
+        .peel_to_tree()
+        .unwrap()
+        .get_path(path)
+        .unwrap()
+        .id();
+    let pointer = repo.find_blob(committed).unwrap().content().to_vec();
+    assert!(
+        pointer.starts_with(b"version https://git-lfs.github.com/spec/v1\n"),
+        "committed as a raw blob"
+    );
+    let index = repo.index().unwrap();
+    assert_eq!(
+        index.get_path(path, 0).map(|e| e.id),
+        Some(committed),
+        "the index records the committed pointer"
+    );
+    assert_eq!(repo.status_file(path).unwrap(), git2::Status::CURRENT);
+}
+
 /// #1741: a half-made repo (unborn HEAD) whose user staged a project file:
 /// Re-init commits the library, not what was staged, and leaves it staged.
 #[test]
