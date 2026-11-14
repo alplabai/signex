@@ -29,6 +29,8 @@ mod preview_model;
 #[cfg(test)]
 mod chrome_fit_tests;
 #[cfg(test)]
+mod layout_keys_tests;
+#[cfg(test)]
 mod tests;
 
 // `draw_pads_tool_preview` is the one sub-draw still invoked inline by
@@ -332,10 +334,16 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             }
             Event::Keyboard(keyboard::Event::KeyPressed {
                 key,
+                physical_key,
                 modifiers,
                 text,
                 ..
-            }) => self.on_key_pressed(key, modifiers, text.as_ref().and_then(|s| s.chars().next())),
+            }) => self.on_key_pressed(
+                key,
+                *physical_key,
+                modifiers,
+                text.as_ref().and_then(|s| s.chars().next()),
+            ),
             _ => None,
         }
     }

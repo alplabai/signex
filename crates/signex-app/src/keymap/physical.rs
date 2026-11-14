@@ -1,7 +1,11 @@
 //! The US-QWERTY character of a physical key, for layouts whose logical key
-//! is not ASCII (Turkish `ö` on the comma key, Cyrillic letters).
+//! is not ASCII (Turkish `ö` on the comma key, Cyrillic letters), and the
+//! layout-independent shortcut character of a key.
 
-use iced::keyboard::key::{Code, Physical};
+use iced::keyboard::{
+    self,
+    key::{Code, Physical},
+};
 
 pub(super) fn us_qwerty_char(physical: Physical) -> Option<char> {
     let Physical::Code(code) = physical else {
@@ -56,5 +60,19 @@ pub(super) fn us_qwerty_char(physical: Physical) -> Option<char> {
         Code::Equal => Some('='),
         Code::Backquote => Some('`'),
         _ => None,
+    }
+}
+
+/// The character a shortcut matches `key` by, lowercased (#2095). A
+/// Latin-script key keeps its logical character (Dvorak, AZERTY, `é`); a
+/// key of another script (Cyrillic, Greek) is read at its physical letter
+/// or digit position, so `ц` on the W key is `w`. `None` for a named key,
+/// a multi-character key or an unmapped non-Latin key.
+pub fn shortcut_char(key: &keyboard::Key, physical: Physical) -> Option<char> {
+    let latin = key.to_latin(physical)?;
+    let mut lower = latin.to_lowercase();
+    match (lower.next(), lower.next()) {
+        (Some(single), None) => Some(single),
+        _ => Some(latin),
     }
 }

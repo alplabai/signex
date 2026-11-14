@@ -414,9 +414,16 @@ impl Signex {
         if !target.paints_overlay_stack() {
             return Claim::Pass;
         }
-        let keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
+        let keyboard::Event::KeyPressed {
+            key,
+            physical_key,
+            modifiers,
+            ..
+        } = event
+        else {
             return Claim::Swallow;
         };
+        let letter = crate::keymap::shortcut_char(key, *physical_key);
         match (key.as_ref(), *modifiers) {
             (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
                 Claim::Consume(Message::CommandPalette(CommandPaletteMsg::Close))
@@ -428,9 +435,7 @@ impl Signex {
                 Message::CommandPalette(CommandPaletteMsg::MoveSelection(-1)),
             ),
             // Toggle: Ctrl+Shift+P while open closes.
-            (keyboard::Key::Character(c), m)
-                if c.eq_ignore_ascii_case("p") && m.command() && m.shift() =>
-            {
+            (keyboard::Key::Character(_), m) if letter == Some('p') && m.command() && m.shift() => {
                 Claim::Consume(Message::CommandPalette(CommandPaletteMsg::Close))
             }
             _ => Claim::Swallow,
