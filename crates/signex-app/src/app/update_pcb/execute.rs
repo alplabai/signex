@@ -108,6 +108,10 @@ impl Signex {
         let (Some(list), Some(board)) = (state.ready_list().cloned(), state.board.clone()) else {
             return Task::none();
         };
+        // The dialog's Execute is off with nothing ticked; Enter is too.
+        if !state.apply && state.execute_count() == 0 {
+            return Task::none();
+        }
         if let Some(why) = self.update_pcb_execute_block() {
             self.refuse_execute(why);
             return Task::none();

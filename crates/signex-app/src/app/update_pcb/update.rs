@@ -35,10 +35,40 @@ impl Signex {
                 }
                 Task::none()
             }
-            M::RowToggled { key, on } => self.tick_update_pcb(|list| list.set_on(&key, on)),
-            M::GroupToggled { group, on } => {
-                self.tick_update_pcb(|list| list.set_group_on(group, on))
+            M::RowToggled { key, on } => {
+                self.focus_update_pcb_row(key.clone());
+                self.tick_update_pcb(|list| list.set_on(&key, on))
             }
+            M::GroupToggled { group, on } => {
+                self.tick_update_pcb(|list| super::table::set_group_on(list, group, on))
+            }
+            M::GroupFolded { group, folded } => {
+                self.with_update_pcb_table(|table| {
+                    table.folds.insert(group, folded);
+                });
+                Task::none()
+            }
+            M::FilterChipClicked(filter) => {
+                self.with_update_pcb_table(|table| {
+                    table.filter = (table.filter != Some(filter)).then_some(filter);
+                });
+                Task::none()
+            }
+            M::ProblemsOnlyToggled(on) => {
+                self.with_update_pcb_table(|table| table.problems_only = on);
+                Task::none()
+            }
+            M::RowFocused(key) => {
+                self.focus_update_pcb_row(key);
+                Task::none()
+            }
+            M::FocusedRowToggled => self.toggle_focused_update_pcb_row(),
+            M::ChooseFootprintRequested(key) => self.choose_update_pcb_footprint(&key),
+            M::FootprintChosen {
+                sheet,
+                part,
+                footprint,
+            } => self.set_update_pcb_footprint(&sheet, part, footprint),
             M::RefreshRequested => {
                 let previous = self
                     .ui_state
@@ -276,7 +306,7 @@ impl Signex {
 
     /// Tick through `change`; when a footprint row changed, the net rows
     /// are recomputed on the worker for the board the ticks now make.
-    fn tick_update_pcb(
+    pub(super) fn tick_update_pcb(
         &mut self,
         change: impl FnOnce(&mut EcoChangeList) -> bool,
     ) -> Task<Message> {

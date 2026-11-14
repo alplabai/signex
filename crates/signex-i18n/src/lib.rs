@@ -989,7 +989,6 @@ define_ids! {
     UPDATE_PCB_TREE_ROW = "update-pcb-tree-row";
     UPDATE_PCB_TITLE = "update-pcb-title";
     UPDATE_PCB_SUBTITLE = "update-pcb-subtitle";
-    UPDATE_PCB_SUMMARY = "update-pcb-summary";
     UPDATE_PCB_COMPUTING = "update-pcb-computing";
     UPDATE_PCB_OPENING = "update-pcb-opening";
     UPDATE_PCB_NOTHING = "update-pcb-nothing";
@@ -1004,14 +1003,6 @@ define_ids! {
     UPDATE_PCB_BOARD_MISSING = "update-pcb-board-missing";
     UPDATE_PCB_NO_SCHEMATIC = "update-pcb-no-schematic";
     UPDATE_PCB_NOT_IN_PROJECT = "update-pcb-not-in-project";
-    UPDATE_PCB_GROUP_ADD_FOOTPRINTS = "update-pcb-group-add-footprints";
-    UPDATE_PCB_GROUP_REMOVE_FOOTPRINTS = "update-pcb-group-remove-footprints";
-    UPDATE_PCB_GROUP_CHANGE_FOOTPRINTS = "update-pcb-group-change-footprints";
-    UPDATE_PCB_GROUP_DESIGNATORS = "update-pcb-group-designators";
-    UPDATE_PCB_GROUP_VALUES = "update-pcb-group-values";
-    UPDATE_PCB_GROUP_LINKS = "update-pcb-group-links";
-    UPDATE_PCB_GROUP_NETS = "update-pcb-group-nets";
-    UPDATE_PCB_GROUP_PAD_NETS = "update-pcb-group-pad-nets";
     UPDATE_PCB_GROUP_COUNT = "update-pcb-group-count";
     UPDATE_PCB_ROW_ADD = "update-pcb-row-add";
     UPDATE_PCB_ROW_REMOVE = "update-pcb-row-remove";

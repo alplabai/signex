@@ -143,6 +143,9 @@ enum InputConsumer {
     Escape,
     /// Enter creates the project while the New Project dialog is open (#2232).
     NewProject,
+    /// Space ticks the focused row and Enter executes while the Update PCB
+    /// dialog is open (#2371).
+    UpdatePcb,
     /// F1 toggles the keyboard-shortcuts sheet.
     ShortcutsSheet,
     /// Ctrl/Alt+1-8 — the digit is data the keymap profile cannot
@@ -158,11 +161,12 @@ enum InputConsumer {
 /// Order is behaviour. It is ported verbatim from the `if` chain this
 /// module replaced, and it is NOT derived from `PAINT_ORDER` — see the
 /// module docs for the counterexample that rules that out.
-const CLAIM_ORDER: [InputConsumer; 7] = [
+const CLAIM_ORDER: [InputConsumer; 8] = [
     InputConsumer::KeymapRecorder,
     InputConsumer::CommandPalette,
     InputConsumer::Escape,
     InputConsumer::NewProject,
+    InputConsumer::UpdatePcb,
     InputConsumer::ShortcutsSheet,
     InputConsumer::SelectionSlots,
     InputConsumer::Keymap,
@@ -321,6 +325,7 @@ impl Signex {
             InputConsumer::CommandPalette => self.claim_command_palette(target, event),
             InputConsumer::Escape => Self::claim_escape(window, event),
             InputConsumer::NewProject => self.claim_new_project(target, event),
+            InputConsumer::UpdatePcb => self.claim_update_pcb(target, event),
             InputConsumer::ShortcutsSheet => self.claim_shortcuts_sheet(target, event),
             InputConsumer::SelectionSlots => Self::claim_selection_slots(event),
             InputConsumer::Keymap => self.claim_keymap(target, window, event),
@@ -487,6 +492,30 @@ impl Signex {
                 key: keyboard::Key::Named(keyboard::key::Named::Enter),
                 ..
             } => Claim::Consume(Message::from(crate::app::NewProjectMsg::SubmitRequested)),
+            _ => Claim::Pass,
+        }
+    }
+
+    /// Space ticks the focused row and Enter executes while the Update PCB
+    /// dialog is in front. The footprint picker over it keeps both keys.
+    fn claim_update_pcb(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
+        let open = self.ui_state.update_pcb.as_ref().is_some_and(|s| !s.apply);
+        if !open || !target.paints_overlay_stack() || self.library.primitive_picker.is_some() {
+            return Claim::Pass;
+        }
+        let keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
+            return Claim::Pass;
+        };
+        if !modifiers.is_empty() {
+            return Claim::Pass;
+        }
+        match key.as_ref() {
+            keyboard::Key::Named(keyboard::key::Named::Space) => {
+                Claim::Consume(Message::from(crate::app::UpdatePcbMsg::FocusedRowToggled))
+            }
+            keyboard::Key::Named(keyboard::key::Named::Enter) => {
+                Claim::Consume(Message::from(crate::app::UpdatePcbMsg::ExecuteRequested))
+            }
             _ => Claim::Pass,
         }
     }
@@ -743,6 +772,7 @@ mod tests {
             InputConsumer::CommandPalette,
             InputConsumer::Escape,
             InputConsumer::NewProject,
+            InputConsumer::UpdatePcb,
             InputConsumer::ShortcutsSheet,
             InputConsumer::SelectionSlots,
             InputConsumer::Keymap,

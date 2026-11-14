@@ -155,6 +155,13 @@ impl Signex {
             PrimitivePickerTarget::PreviewAlternate(address) => {
                 return self.add_alternate_symbol_from_pick(address, primitive_ref);
             }
+            PrimitivePickerTarget::DesignPart { sheet, part } => {
+                return Task::done(Message::from(crate::app::UpdatePcbMsg::FootprintChosen {
+                    sheet,
+                    part,
+                    footprint: primitive_ref,
+                }));
+            }
         }
         Task::none()
     }

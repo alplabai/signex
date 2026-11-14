@@ -667,7 +667,8 @@ fn validate_runs_on_a_copy() {
     assert!(references(&f).is_empty());
 }
 
-/// The group box ticks or unticks every row of its group.
+/// The group box ticks or unticks every row of its group (#2371: the
+/// Components group holds every footprint row).
 #[test]
 fn the_group_box_unticks_its_whole_group() {
     let mut f = fixture();
@@ -675,7 +676,7 @@ fn the_group_box_unticks_its_whole_group() {
     up(
         &mut f.app,
         UpdatePcbMsg::GroupToggled {
-            group: signex_engine::pcb::eco::EcoGroup::AddFootprints,
+            group: signex_app::app::TableGroup::Components,
             on: false,
         },
     );
@@ -874,3 +875,6 @@ mod review;
 
 #[path = "update_pcb_unresolved.rs"]
 mod unresolved;
+
+#[path = "update_pcb_dialog.rs"]
+mod dialog;
