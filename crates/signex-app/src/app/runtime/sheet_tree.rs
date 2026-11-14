@@ -29,6 +29,15 @@ pub(super) struct RowMarks<'a> {
     pub(super) active: Option<&'a PathBuf>,
 }
 
+impl RowMarks<'_> {
+    /// A listed file is `(missing)` only when the probe found it absent and
+    /// no open or unsaved document holds it: a document created this session
+    /// is not on disk until the user saves it (#2350).
+    pub(super) fn is_missing(&self, facts: &ProjectFsFacts, path: &Path) -> bool {
+        facts.is_missing(path) && !self.open.contains(path) && !self.dirty.contains(path)
+    }
+}
+
 impl Signex {
     /// The walk the Projects tree wants: one job per project, rooted at its
     /// declared root or, without one, its first listed page, carrying what
@@ -124,7 +133,7 @@ pub(super) fn project_sheet_rows(
             info.sym_count = entry.symbols_count;
             info.wire_count = entry.wires_count;
             info.label_count = entry.labels_count;
-            info.missing = facts.is_missing(&abs);
+            info.missing = marks.is_missing(facts, &abs);
             info.children = children;
             Some(info)
         })

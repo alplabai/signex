@@ -358,6 +358,10 @@ mod cross_probe;
 #[path = "regression/update_pcb.rs"]
 mod update_pcb;
 
+// #2350 — a new board in an unsaved project lists as unsaved, not missing.
+#[path = "regression/new_pcb_unsaved.rs"]
+mod new_pcb_unsaved;
+
 // #1836 — hierarchy mistakes the project ERC must report.
 #[path = "regression/hierarchy_checks.rs"]
 mod hierarchy_checks;
