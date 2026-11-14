@@ -90,13 +90,19 @@ impl Signex {
         Self::anchored_layers(close, super::anchored::AnchoredMenu::new(menu, anchor))
     }
 
-    /// The click-outside layer for `close`, then the placed `menu`.
+    /// The click-outside layer for `close`, then the placed `menu`. The
+    /// backdrop guards the wheel itself, so `collect_overlays` leaves these
+    /// layers unwrapped (`overlay_id::has_menu_backdrop`, #2349).
     pub(in crate::app::view) fn anchored_layers<'a>(
         close: Message,
         menu: super::anchored::AnchoredMenu<'a, Message>,
     ) -> Vec<Element<'a, Message>> {
         use iced::Widget as _;
-        vec![Self::dismiss_layer(close), menu.boxed()]
+        let scrim = crate::styles::tokens::scrim(crate::styles::tokens::BACKDROP_ALPHA);
+        vec![
+            super::backdrop::MenuBackdrop::new(close, scrim).boxed(),
+            menu.boxed(),
+        ]
     }
 
     /// A submenu flyout panel; entering or leaving it extends or restarts

@@ -331,6 +331,25 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
     }
 }
 
+/// Whether this overlay's layers are a right-click menu over its
+/// `MenuBackdrop` (`Signex::anchored_layers`), which stops the wheel itself.
+/// `collect_overlays` must not wrap them in `scroll_guard`: the guard claims
+/// the pointer over the whole window-sized layer, which levitated the cursor
+/// off the backdrop, so a click outside the menu never closed it (#2349).
+pub(crate) fn has_menu_backdrop(id: OverlayId) -> bool {
+    matches!(
+        id,
+        OverlayId::FootprintContextMenu
+            | OverlayId::SymbolContextMenu
+            | OverlayId::ContextMenu
+            | OverlayId::TabContextMenu
+            | OverlayId::ProjectTreeContextMenu
+            | OverlayId::ComponentsRowContextMenu
+            | OverlayId::StartRowContextMenu
+            | OverlayId::GridPicker
+    )
+}
+
 /// Whether this overlay, once painted, takes the cursor off the canvas, so
 /// the hover card must not show. Surfaces only: not the paused-placement
 /// banner, the text editor, the dock drop preview or floating panels.
