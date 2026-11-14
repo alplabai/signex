@@ -132,6 +132,7 @@ fn add_new(f: &mut Fixture, name: &str) -> PathBuf {
         .update(Message::Project(ProjectMsg::AddNewSchematicPicked {
             project_id: f.project,
             path: Some(path.clone()),
+            choice: None,
         }));
     complete(&mut f.app, task);
     path

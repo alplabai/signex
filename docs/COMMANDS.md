@@ -231,6 +231,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `move_selection_xy` | Move selection x y | modify | — | — |
 | `move_to_front` | Move to front | modify | — | — |
 | `navigate_up_hierarchy` | Navigate up hierarchy | navigation | — | `Alt+Up` |
+| `new_schematic_sheet` | New schematic sheet in the project | file | — | — |
 | `next_highlighted_net_item` | Next item on highlighted net | select | — | `Tab` |
 | `next_sheet` | Next sheet | navigation | — | `PageDown` |
 | `number_schematic_sheets` | Number schematic sheets | design | — | — |

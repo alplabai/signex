@@ -51,7 +51,7 @@ impl Signex {
 
     /// The project of the document in view, for New PCB with no project
     /// named: the document's owner, else the active project.
-    pub(super) fn project_in_view(&self) -> Option<ProjectId> {
+    pub(crate) fn project_in_view(&self) -> Option<ProjectId> {
         self.update_pcb_source()
             .and_then(|path| self.owning_project(&path).map(|p| p.id))
             .or(self.document_state.active_project)

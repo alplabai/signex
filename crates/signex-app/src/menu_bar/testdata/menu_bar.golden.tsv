@@ -2,6 +2,7 @@
 File	menu	File	-	-	-	-	-
 File/New Project	item	New Project	new_document	Mod+N	NewProject	11111111	always
 File/New	submenu	New	-	-	-	-	-
+File/New/Schematic	item	Schematic	-	-	NewSchematic	01001001	cmd:new_schematic_sheet
 File/New/PCB	item	PCB	-	-	NewPcb	01001001	cmd:new_pcb_document
 File/Open...	item	Open...	open_document	Mod+O	OpenProject	11111111	always
 File/Open Recent	submenu	Open Recent	-	-	-	-	-

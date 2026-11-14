@@ -6,6 +6,7 @@ use iced::{Alignment, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::designator::DesignatorStandard;
 use signex_types::project::{FabTemplate, PcbField, PcbValueError, SHEET_SIZES};
+use signex_types::schematic::{SheetOrientation, SheetSize};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{button, text, text_input};
@@ -354,11 +355,29 @@ pub(crate) fn schematic<'a>(
             ((*size).to_string(), label.into_string())
         })
         .collect();
+    let (size, orientation) = SheetSize::parse(&sheet.paper_size);
     let size_choice = choice(
         ids::DIALOG_NEW_PROJECT_SCH_SIZE,
-        &sheet.paper_size,
+        &size.token(SheetOrientation::Landscape),
         sizes,
         NewProjectMsg::SheetSizePicked,
+        i18n,
+        tokens,
+    );
+    let orientation_choice = choice(
+        ids::SETUP_SHEET_ORIENTATION,
+        &orientation,
+        vec![
+            (
+                SheetOrientation::Landscape,
+                t!(i18n, ids::SETUP_SHEET_LANDSCAPE).into_string(),
+            ),
+            (
+                SheetOrientation::Portrait,
+                t!(i18n, ids::SETUP_SHEET_PORTRAIT).into_string(),
+            ),
+        ],
+        NewProjectMsg::SheetOrientationPicked,
         i18n,
         tokens,
     );
@@ -393,6 +412,7 @@ pub(crate) fn schematic<'a>(
     let col = column![
         heading(ids::DIALOG_NEW_PROJECT_SHEET_HEADING, i18n, tokens),
         size_choice,
+        orientation_choice,
         block_choice,
         designators,
     ]

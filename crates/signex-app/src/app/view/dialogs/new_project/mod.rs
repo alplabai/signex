@@ -18,9 +18,11 @@ use crate::styles::{
 
 pub(crate) mod cards;
 pub(crate) mod customize;
-mod preview;
+mod document_setup;
+pub(crate) mod preview;
 #[cfg(test)]
 mod tests;
+pub(crate) mod user_cards;
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -85,7 +87,7 @@ impl Signex {
             container(
                 column![
                     fields(state, i18n, tokens),
-                    cards::profiles(state, i18n, tokens).map(np),
+                    cards::profiles(state, &self.ui_state.setup_profiles, i18n, tokens).map(np),
                     customize::section(state, i18n, tokens).map(np),
                 ]
                 .spacing(SP.xl + SP.s),
@@ -93,7 +95,11 @@ impl Signex {
             .padding([SP.xl + SP.s, SP.xl + SP.m]),
         )
         .width(Length::Fill);
-        let body = row![left, preview::pane(state, i18n, tokens).map(np)].height(Length::Fill);
+        let body = row![
+            left,
+            preview::pane(state, ids::DIALOG_NEW_PROJECT_PREVIEW_NOTE, i18n, tokens).map(np)
+        ]
+        .height(Length::Fill);
         let hint = text(t!(i18n, ids::DIALOG_NEW_PROJECT_FOOTER_HINT))
             .size(TS.body)
             .color(tokens::muted_text(tokens))

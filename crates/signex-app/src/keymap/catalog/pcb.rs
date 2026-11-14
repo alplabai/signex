@@ -145,8 +145,9 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
-    // #1312: the project's one board, from the project defaults, opened
-    // unsaved (File > New > PCB, Projects > Add New > PCB).
+    // #1312: the project's one board, opened unsaved (File > New > PCB,
+    // Projects > Add New > PCB). #2232: the GUI opens the New PCB setup
+    // dialog first; a headless run names its `profile`.
     CommandMetadata {
         id: "new_pcb_document",
         category: "file",
@@ -155,6 +156,7 @@ pub(super) const PCB: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        operands: super::operands::NEW_PCB,
         ..CommandMetadata::DEFAULT
     },
     // #2234: enter the board sketch of the board in view, or leave it

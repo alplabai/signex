@@ -58,6 +58,7 @@ struct OpenOverlays {
     new_project_open: bool,
     assign_footprints_open: bool,
     update_pcb_open: bool,
+    document_setup_open: bool,
     sheet_numbering_open: bool,
     board_reannotate_open: bool,
     back_annotate_open: bool,
@@ -177,6 +178,7 @@ impl OpenOverlays {
             || self.project_close_confirm_open
             || self.create_child_sheet_confirm_open
             || self.new_project_open
+            || self.document_setup_open
             || self.rename_open
             || self.remove_open
             || self.annotate_reset_confirm_open
@@ -358,6 +360,9 @@ impl OpenOverlays {
             OverlayId::UpdatePcb => self
                 .update_pcb_open
                 .then(|| Message::from(crate::app::UpdatePcbMsg::CloseRequested)),
+            OverlayId::DocumentSetup => self
+                .document_setup_open
+                .then(|| Message::from(crate::app::DocumentSetupMsg::CancelRequested)),
 
             // ── Library modals ──────────────────────────────────────
             OverlayId::LibraryPicker => self
@@ -630,6 +635,7 @@ impl Signex {
             assign_footprints_open: self.ui_state.assign_footprints.is_some(),
             // A headless apply run has no dialog to close.
             update_pcb_open: self.ui_state.update_pcb.as_ref().is_some_and(|s| !s.apply),
+            document_setup_open: self.ui_state.document_setup.is_some(),
             sheet_numbering_open: self.ui_state.sheet_numbering.is_some(),
             board_reannotate_open: self.ui_state.board_reannotate.is_some(),
             back_annotate_open: self.ui_state.back_annotate.is_some(),
@@ -1117,6 +1123,12 @@ mod tests {
     /// `every_ladder_field_claims_escape` and the ranking tests instead.
     #[test]
     fn every_modal_claims_escape() {
+        assert!(matches!(
+            only(|o| o.document_setup_open = true),
+            Some(Message::Project(crate::app::ProjectMsg::DocumentSetup(
+                crate::app::DocumentSetupMsg::CancelRequested
+            )))
+        ));
         assert!(matches!(
             only(|o| o.find_replace_open = true),
             Some(Message::FindReplaceMsg(
@@ -1722,6 +1734,7 @@ mod tests {
             new_project_open,
             assign_footprints_open,
             update_pcb_open,
+            document_setup_open,
             sheet_numbering_open,
             board_reannotate_open,
             back_annotate_open,
@@ -1790,6 +1803,7 @@ mod tests {
                 o.assign_footprints_open = true
             }),
             ("update_pcb_open", |o| o.update_pcb_open = true),
+            ("document_setup_open", |o| o.document_setup_open = true),
             ("sheet_numbering_open", |o| o.sheet_numbering_open = true),
             ("board_reannotate_open", |o| o.board_reannotate_open = true),
             ("back_annotate_open", |o| o.back_annotate_open = true),

@@ -46,6 +46,7 @@ pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, Projec
 pub(crate) mod designator_scan;
 #[cfg(test)]
 mod designator_scan_tests;
+pub(crate) mod document_setup;
 pub mod palette_index;
 #[cfg(test)]
 mod palette_index_tests;
@@ -93,6 +94,7 @@ pub use contracts::{
     UiMsg, VersionControlScope, ViewAngleEntry, ViewRotationMsg, WindowMsg,
 };
 pub(crate) use document::{Document, DocumentKey};
+pub use document_setup::{DocumentSetupMsg, DocumentSetupState, SetupKind, SheetChoice};
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
     LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolDocument, SymbolViewRequest,
@@ -101,7 +103,7 @@ pub use documents::{
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use handlers::window_geometry_events::GeometryReadout;
 pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, tiles};
-pub use new_project::{NewProjectMsg, NewProjectState};
+pub use new_project::{NewProjectMsg, NewProjectState, ProfileUndo};
 pub use sheet_numbering::{NumberingProblem, SheetNumberingMsg, SheetNumberingState};
 pub use signex_history::History;
 pub(crate) use signex_history::SavePoint;
@@ -141,6 +143,8 @@ impl Signex {
         tasks.push(self.sync_back_annotate());
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
+        // A New PCB / New Schematic dialog of a closed project closes (#2232).
+        self.drop_document_setup_of_closed_project();
         self.sync_undo_depth();
         // A Save completed behind the quit prompt must not leave it listing
         // files that are no longer unsaved (#1833).

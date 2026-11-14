@@ -256,6 +256,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("new_document", "NewProject"),
     // #1312: fixture names only, like #2247's.
     ("new_pcb_document", "NewPcb"),
+    ("new_schematic_sheet", "NewSchematic"),
     ("update_pcb_from_schematic", "UpdatePcb"),
     // #2234: Design ▸ Board Sketch.
     ("board_sketch", "BoardSketch"),

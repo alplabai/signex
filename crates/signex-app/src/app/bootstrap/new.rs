@@ -414,6 +414,10 @@ impl Signex {
                 enable_version_control: None,
                 grid_properties: None,
                 new_project: None,
+                document_setup: None,
+                setup_profiles: crate::fonts::read_setup_profiles_from(prefs),
+                removed_profile_names: Default::default(),
+                missing_profiles_warned: Default::default(),
                 update_pcb: None,
                 sheet_numbering: None,
                 sheet_numbering_reads: 0,
@@ -814,6 +818,7 @@ impl Signex {
         }
         let (main_id, open_task) = iced::window::open(main_settings);
         app.ui_state.main_window_id = Some(main_id);
+        app.note_unusable_setup_profiles(crate::fonts::unusable_setup_profiles(prefs));
         let boot_task = iced::Task::batch([
             open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id))),
             mount_task,

@@ -93,6 +93,7 @@ impl Signex {
                 project,
                 tab.and_then(|tab| tab.setup_draft.as_ref()),
                 tab.and_then(|tab| tab.journal_lines_draft.as_deref()),
+                &self.ui_state.setup_profiles,
                 self.ui_state.i18n.as_ref(),
                 tokens,
             ),

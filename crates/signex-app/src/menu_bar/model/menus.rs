@@ -17,11 +17,15 @@ const SEP: MenuEntry = MenuEntry::Separator;
 pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         cmd_item(ctx, cmd("new_document", "Mod+N")),
-        // A board for the open project (#1312); greyed with no project.
+        // A board (#1312) or a sheet (#2232) for the open project, each
+        // through its setup dialog; greyed with no project.
         submenu(
             ctx,
             menu_ids::MENU_FILE_NEW,
-            vec![cmd_item_gated(ctx, cmd("new_pcb_document", ""))],
+            vec![
+                cmd_item_gated(ctx, cmd("new_schematic_sheet", "")),
+                cmd_item_gated(ctx, cmd("new_pcb_document", "")),
+            ],
         ),
         cmd_item(ctx, cmd("open_document", "Mod+O")),
         submenu(ctx, menu_ids::MENU_FILE_OPEN_RECENT, open_recent(ctx)),

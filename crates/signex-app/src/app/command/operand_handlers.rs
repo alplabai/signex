@@ -45,6 +45,14 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("close_active_document", doc::close),
     ("open_document", file::open),
     ("new_document", file::new_project),
+    (
+        "new_pcb_document",
+        crate::app::document_setup::new_pcb_document,
+    ),
+    (
+        "new_schematic_sheet",
+        crate::app::document_setup::new_schematic_sheet,
+    ),
     ("assign_net_class", doc::assign_net_class),
     (
         "update_pcb_from_schematic",
@@ -99,6 +107,13 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
         .iter()
         .find(|(id, _)| *id == command.as_str())
         .map(|(_, handler)| *handler)
+}
+
+/// Commands a headless run hands to their handler even with no operands:
+/// the GUI form opens a setup dialog, the headless form makes the document
+/// from the project's own setup (#2232), as it did before the dialog.
+pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
+    matches!(command.as_str(), "new_pcb_document" | "new_schematic_sheet")
 }
 
 /// Why `command` does nothing without operands on a surface that gives it

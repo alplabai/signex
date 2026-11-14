@@ -85,12 +85,16 @@ comes forward.
 ## New PCB
 
 `new_pcb_document` (File ▸ New ▸ PCB, Projects ▸ Add New ▸ PCB, Create PCB in
-the dialog) gives a project its one board:
+the dialog) gives a project its one board. In the app it first opens the New
+PCB setup dialog (#2232, `PROJECT_SETUP.md`); its Create PCB runs the steps
+below with the values shown, and Cancel or Esc makes nothing. A headless run
+makes the board directly, from `profile=` or else the project's own setup.
 
-- refused when the project already names a board, or when a file of the new
-  board's name (`<project name>.snxpcb`, next to the `.snxprj`) exists (checked
-  on a worker);
-- the board starts from the project defaults (#2232: copper layers,
-  thickness, board setup rules), else from the Standard profile;
+- refused when the project's board is already open (before the dialog
+  opens), or when a file of the new board's name (`<project name>.snxpcb`,
+  next to the `.snxprj`) exists (checked on a worker after Create);
+- the board starts from the dialog's values (copper layers, thickness, board
+  setup rules); headless, from the named profile or the project defaults,
+  else from the Standard profile;
 - it opens as an unsaved tab and the project names it, so both are unsaved:
   nothing is written until the user saves.

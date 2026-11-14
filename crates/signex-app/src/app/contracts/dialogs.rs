@@ -605,6 +605,18 @@ pub enum ProjectMsg {
     /// The New Project setup dialog (#2232); routed to
     /// `dispatch_new_project_message`.
     Setup(crate::app::NewProjectMsg),
+    /// The New PCB or New Schematic setup dialog (#2232); routed to
+    /// `dispatch_document_setup_message`.
+    DocumentSetup(crate::app::DocumentSetupMsg),
+    /// A Save as profile or Remove was merged into `prefs.json` (or not):
+    /// `note` is said in Messages on success (#2232).
+    SetupProfilesWritten {
+        note: String,
+        /// How to take the in-memory change back if the write failed.
+        undo: Box<crate::app::ProfileUndo>,
+        /// The id the profile is stored under (`None` for a removal).
+        result: Result<Option<String>, String>,
+    },
     /// Start screen project rows: pin, unpin, open a pinned project, the
     /// row menu (#2305); routed to `dispatch_start_screen_message`.
     StartScreen(crate::start_screen::StartScreenMsg),
@@ -705,6 +717,9 @@ pub enum ProjectMsg {
     AddNewSchematicPicked {
         project_id: crate::app::state::ProjectId,
         path: Option<std::path::PathBuf>,
+        /// The New Schematic setup dialog's values (#2232); `None`: the
+        /// project's sheet defaults.
+        choice: Option<crate::app::SheetChoice>,
     },
     /// The off-thread copies behind `AddExistingFilePicked` finished: one
     /// entry per pick, `Ok` the path to register, `Err` a message for the
@@ -722,6 +737,9 @@ pub enum ProjectMsg {
         project_id: crate::app::state::ProjectId,
         path: std::path::PathBuf,
         result: Result<crate::app::project_entry_disk::EntryPatch, String>,
+        /// The setup dialog's designator standard, applied only when the
+        /// write succeeded (#2232).
+        designators: Option<signex_types::designator::DesignatorStandard>,
     },
     /// The Create Sheet dialog's path field was edited.
     CreateChildSheetPathChanged(String),

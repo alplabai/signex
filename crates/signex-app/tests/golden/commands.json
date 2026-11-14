@@ -540,6 +540,11 @@
     "category": "file"
   },
   {
+    "id": "new_schematic_sheet",
+    "group": "Schematic",
+    "category": "file"
+  },
+  {
     "id": "next_document_tab",
     "group": "General",
     "category": "window"

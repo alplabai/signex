@@ -256,7 +256,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "run_drc" | "reannotate_board" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
-        "new_pcb_document" => Needs::OpenProject,
+        "new_pcb_document" | "new_schematic_sheet" => Needs::OpenProject,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => Needs::FitTarget,

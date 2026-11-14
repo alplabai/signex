@@ -68,6 +68,7 @@ fn new_pcb_remakes_a_named_board_that_is_gone() {
     f.app.document_state.error_notice = None;
 
     send(&mut f.app, menu_row("new_pcb_document"));
+    crate::document_setup::create_if_asked(&mut f.app);
     assert!(
         f.app.document_state.error_notice.is_none(),
         "New PCB is not refused"
@@ -95,6 +96,7 @@ fn a_failed_disk_check_refuses_new_pcb_with_why() {
             project,
             path: f.board.clone(),
             exists: Err("s4-denied-2271".to_string()),
+            rules: None,
         },
     );
     assert!(f.app.document_state.tabs.iter().all(|t| t.path != f.board));
@@ -150,6 +152,7 @@ fn a_sheet_closed_after_the_read_makes_the_list_stale() {
 fn a_sheet_opened_after_a_disk_read_makes_the_list_stale() {
     let mut f = fixture();
     send(&mut f.app, menu_row("new_pcb_document"));
+    crate::document_setup::create_if_asked(&mut f.app);
     let sheet = f.sheet.clone();
     close_tab(&mut f, &sheet);
     send(&mut f.app, menu_row("update_pcb_from_schematic"));
@@ -190,6 +193,7 @@ fn unticking_a_footprint_row_recomputes_the_net_rows() {
 fn new_pcb_then_save_writes_both_files() {
     let mut f = fixture();
     send(&mut f.app, menu_row("new_pcb_document"));
+    crate::document_setup::create_if_asked(&mut f.app);
     send(&mut f.app, menu_row("save_document"));
     let project = f.app.document_state.projects[0].path.clone();
     let board = std::fs::read_to_string(&f.board).expect("the board is written");
@@ -214,6 +218,7 @@ fn saving_a_new_board_of_another_project_saves_that_project() {
         tab.project_id = Some(first);
     }
     up(&mut f.app, UpdatePcbMsg::NewPcbRequested(Some(other)));
+    crate::document_setup::create_if_asked(&mut f.app);
     let board = dir.join("demo.snxpcb");
     assert!(f.app.document_state.tabs.iter().any(|t| t.path == board));
     f.app.document_state.active_project = Some(first);

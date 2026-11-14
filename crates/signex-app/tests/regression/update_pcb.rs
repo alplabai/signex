@@ -339,6 +339,7 @@ fn show(f: &mut Fixture, path: &Path) {
 /// File ▸ New ▸ PCB, then Design ▸ Update PCB Document from the sheet.
 fn new_board_and_list(f: &mut Fixture) {
     send(&mut f.app, menu_row("new_pcb_document"));
+    crate::document_setup::create_if_asked(&mut f.app);
     let sheet = f.sheet.clone();
     show(f, &sheet);
     send(&mut f.app, menu_row("update_pcb_from_schematic"));
@@ -653,6 +654,7 @@ fn no_board_offers_create_pcb() {
     send(&mut f.app, menu_row("update_pcb_from_schematic"));
     assert!(state(&f).lacks_board());
     up(&mut f.app, UpdatePcbMsg::CreatePcbRequested);
+    crate::document_setup::create_if_asked(&mut f.app);
     assert_eq!(state(&f).board(), Some(f.board.as_path()));
     assert!(add_row(&f, R1).on);
 }
@@ -712,9 +714,11 @@ fn a_new_pcb_takes_the_project_defaults_and_is_not_written() {
             via_drill_mm: 0.15,
         }),
         sheet: None,
+        profile: None,
     };
     let mut f = fixture_with(|_| Vec::new(), None, defaults);
     send(&mut f.app, menu_row("new_pcb_document"));
+    crate::document_setup::create_if_asked(&mut f.app);
     let board = engine(&f).board();
     let copper = board
         .layers
@@ -742,8 +746,10 @@ fn a_new_pcb_takes_the_project_defaults_and_is_not_written() {
 fn a_second_new_pcb_is_refused() {
     let mut f = fixture();
     send(&mut f.app, menu_row("new_pcb_document"));
+    crate::document_setup::create_if_asked(&mut f.app);
     let tabs = f.app.document_state.tabs.len();
     send(&mut f.app, menu_row("new_pcb_document"));
+    crate::document_setup::create_if_asked(&mut f.app);
     assert_eq!(f.app.document_state.tabs.len(), tabs);
     assert!(f.app.document_state.error_notice.is_some(), "it says why");
 }
@@ -763,6 +769,7 @@ fn projects_add_new_pcb_makes_the_board() {
             ProjectTreeAction::AddNewPcb(key),
         )),
     );
+    crate::document_setup::create_if_asked(&mut f.app);
     assert!(engine(&f).board().footprints.is_empty());
 }
 

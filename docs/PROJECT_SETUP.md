@@ -88,9 +88,13 @@ profile copy is added after, as for every new project):
 - `project_defaults.pcb`: copper layers, thickness, clearance, track width,
   via size and via drill (mm).
 - `project_defaults.sheet`: paper size token and title block on or off.
+- `project_defaults.profile`: the id of the profile picked (a built-in token
+  such as `standard`, or a saved profile's `user-...` id). Only the id is
+  stored, never the saved profile itself.
 - `annotation.designator_standard`, the existing Project Options setting.
 
-A PCB added to the project starts from `project_defaults.pcb` (layers,
+A PCB or sheet added to the project starts from these through its setup
+dialog (below): `project_defaults.pcb` (layers,
 thickness and the board setup rules), and a schematic sheet added to it
 starts with the paper size and title block of `project_defaults.sheet`.
 A new board's snap grid is 0.1 mm.
@@ -138,3 +142,87 @@ It answers with the id, path and kind of the project it made. Without
 operands, the palette entry opens the dialog. The command needs the `save`
 capability in `signex-cli` (`--save`), and the folder it creates must stay
 inside the allowed folders.
+
+## Saved profiles
+
+**Save as profile...** sits above the profile cards in the New Project, New
+PCB and New Schematic dialogs and in Project Options' setup section. It asks
+for a name and stores the values shown (board rules, sheet values, designator
+standard) as a profile in the user's settings (`prefs.json`, key
+`setup_profiles`), not in the project. Saving under a name that exists (case
+ignored) replaces that profile's values. A rule value that is not valid
+refuses the save with the reason under the name field. Saved profiles appear
+under **Your profiles**, next to the built-ins, in every project. **Remove**
+under a card asks first (Remove "name"? Remove / Keep, in the card); the
+removal is a settings change and stays when the dialog is cancelled.
+
+Each save or removal is merged into the list the file holds now, by id, read-
+modify-write and atomic, off the UI thread: entries this build cannot read,
+and profiles another running Signex saved, are kept. Edits run in the order
+they were made, whatever the disk speed. A new profile whose id is already in
+the file is stored under the next free number (`user-team-2`) and replaces
+nothing; a `setup_profiles` value that is not a list refuses the edit and is
+left as it is. Messages says "Saved the
+setup profile" only once the file is written; when the write fails it says
+why and the change is taken back in the app.
+At start-up, stored entries that cannot be offered are counted once in
+Messages; they stay in the file.
+
+A project names its default profile by id (`project_defaults.profile`),
+written by New Project and by a profile card pick in Project Options (a rule
+edit does not change it). A saved-profile pick in Project Options stores its
+board rules, sheet values, designator standard and id as one edit. Removing
+the project's own default profile, in Project Options or in the New PCB or
+New Schematic dialog of that project, clears the id in the
+same edit, so it does not dangle. The project's stored values stay its own:
+they win over the named profile, and the id picks the card; no built-in card
+is highlighted while a saved profile is picked. A part the project does not
+store comes from the named profile. A project that names a saved profile the
+user does not have (shared from someone else, or removed) uses its stored
+values (else Standard); Messages says so once per profile per session, by the
+name it had if it was removed this session. A Signex build from before the id
+existed drops `project_defaults.profile` when it re-saves the project (it keeps
+no unknown keys inside `project_defaults`); the stored values stay.
+
+## New PCB and New Schematic
+
+**New PCB** (File > New > PCB, Projects > Add New > PCB, the Update PCB
+dialog's Create PCB, the palette) opens the New PCB dialog, prefilled from
+the project: the profile cards, the PCB rules (rule template, Import rules...,
+copper layers, clearance, track, via, drill, thickness) and the stack-up
+preview. **Create PCB** makes the board with those values in its board setup
+(the design rule check reads its clearance) and opens it unsaved, as before;
+**Cancel** and Esc make nothing. A project holds one board: when its board is
+already open the dialog does not open and the reason is shown.
+
+**New Schematic** (File > New > Schematic, Projects > Add New > Schematic,
+the palette) opens the New Schematic dialog: the saved profiles (the built-in
+cards differ only in board rules, so they are not offered), sheet size,
+orientation, title block and designator standard. **Create schematic...**
+asks where to save the sheet and writes it with those values; cancelling the
+file dialog makes nothing. On a project that stores no sheet defaults (and
+names no saved profile) the dialog starts from the blank sheet Add New always
+made (A4), so pressing Create unchanged writes the same sheet as before. The
+designator standard is the project's: it is applied only when it was picked
+in the dialog, or when a saved profile was picked there and the project
+stored none. A change
+is a project edit (dirty, undoable), made only once the sheet is written: a
+refused or failed write leaves it as it was. There is no title-block template list,
+so the title block is on or off. Grid and units are app preferences, not
+dialog fields. Closing the project closes its open setup dialog, with a note
+in Messages; nothing is made.
+
+Headless and agent runs make the document with no dialog:
+
+```text
+new_pcb_document [profile=<project|hobby|standard|hdi|custom|saved profile>]
+new_schematic_sheet [profile=<...>] [name=<file stem>]
+```
+
+`profile=project` is the project's own setup; a built-in token changes only
+the board rules; a saved profile (id or name) sets its rules, sheet values
+and designator standard. `name` defaults to the first `Sheet<n>` the project
+does not list. Without `profile` the project's own setup is used, as before
+the dialog existed.
+`new_schematic_sheet` writes a file and needs the `save` capability in
+`signex-cli`.
