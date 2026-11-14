@@ -172,9 +172,9 @@ impl Signex {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        // Plain, like the card, so Messages and the card read the same.
+        // Messages stays en-US whatever the UI language.
         let held = Translatable::new(ids::BOARD_SKETCH_HELD).arg("board", name.as_str());
-        crate::diagnostics::log_warning(held.render(&self.ui_state.i18n));
+        crate::diagnostics::log_warning(held.render_en_us());
         let refusal = self
             .interaction_state
             .board_sketch
@@ -296,9 +296,11 @@ impl Signex {
     /// Messages and in the mode's bar. The board and the copy are unchanged.
     fn refuse_board_sketch(&mut self, reason: String) {
         let detail = Translatable::new(ids::BOARD_SKETCH_REFUSED).arg("reason", reason);
-        // The bar and Messages get the same plain text as the card.
+        crate::diagnostics::log_warning(detail.render_en_us());
+        // shortcut: the bar's refusal line (and `$refusal` on the held card)
+        // keeps the language it was rendered in until Translatable args can
+        // nest; store the message instead then (#2059).
         let shown = detail.render(&self.ui_state.i18n);
-        crate::diagnostics::log_warning(shown.clone());
         self.document_state.error_notice = Some(ErrorNotice::new(ids::BOARD_SKETCH_TITLE, detail));
         if let Some(session) = self.interaction_state.board_sketch.as_mut() {
             session.refusal = Some(shown);

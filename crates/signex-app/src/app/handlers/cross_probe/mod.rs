@@ -69,7 +69,8 @@ impl Signex {
     /// An explicit Cross Probe found nothing to show: say why in Messages and
     /// on the notice card, so the command never ends in silence.
     fn refuse_probe(&mut self, id: MessageId) {
-        crate::diagnostics::log_info(t!(self.ui_state.i18n, id).into_string());
+        // Messages stays en-US whatever the UI language.
+        crate::diagnostics::log_info(signex_i18n::I18n::en_us().message_plain(id, &[]));
         self.document_state.error_notice = Some(ErrorNotice::new(ids::CROSS_PROBE_TITLE, id));
     }
 }

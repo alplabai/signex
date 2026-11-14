@@ -58,6 +58,8 @@ notice-project-add-library-unavailable = Adding a library to the project from th
 notice-global-libraries-not-saved = Could not save the global library list ({ $action }): { $error }
 # $path is the library file; $error is the system's reason, in English.
 notice-library-cannot-open = Cannot open library { $path }: { $error }
+# $path is the library file being added; $error is the system's reason, in
+# English.
 notice-library-cannot-add = Cannot add library { $path }: { $error }
 # A library that ships with the app could not be opened. $path is the
 # library file; $error is the system's reason, in English.
@@ -162,12 +164,18 @@ notice-library-rename-failed = Could not rename library { $path }: { $reason }
 notice-save-all-project-kept =
     Could not save { $count } item(s) — project not closed:
     {"  "}{ $listing }
+# Closing a library: $count is how many documents were not saved (a whole
+# number); $listing names each one with its reason, one per line.
 notice-save-all-library-kept =
     Could not save { $count } item(s) — library not closed:
     {"  "}{ $listing }
+# Save All: $count is how many documents were not saved (a whole number);
+# $listing names each one with its reason, one per line.
 notice-save-all-failed =
     Save All: could not save { $count } item(s):
     {"  "}{ $listing }
+# Quitting: $count is how many documents were not saved (a whole number);
+# $listing names each one with its reason, one per line.
 notice-save-all-quit-held =
     Could not save { $count } item(s) — { -brand-name } stayed open so nothing is lost. Save them manually, or choose Discard All to exit anyway:
     {"  "}{ $listing }
@@ -260,4 +268,6 @@ notice-board-sketch-held-why =
 
 # $url is the web address; $error is the system's reason, in English.
 notice-link-not-opened = Could not open { $url } in a browser: { $error }
+# The browser was started but the launch did not finish. $url is the web
+# address; $error is the system's reason, in English.
 notice-link-launch-incomplete = The browser launch for { $url } did not complete: { $error }

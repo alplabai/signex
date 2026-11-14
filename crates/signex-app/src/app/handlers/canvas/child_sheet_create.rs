@@ -15,7 +15,7 @@ use super::child_sheet_path::{
     escapes_through_symlink, reference_from, relative_within, resolve_new_sheet_path,
 };
 use crate::app::contracts::CreateChildSheetConfirmState;
-use crate::app::state::{ProjectId, untranslated, verbatim};
+use crate::app::state::{ProjectId, untranslated};
 use add_io::ChildSheetWriteError;
 use signex_i18n::{Translatable, ids};
 
@@ -379,7 +379,7 @@ impl Signex {
             Err(ChildSheetWriteError::Failed(e)) => {
                 crate::diagnostics::log_error("Create child sheet", &anyhow::anyhow!("{e}"));
                 self.document_state.error_notice =
-                    Some(crate::app::state::ErrorNotice::create(verbatim(e)));
+                    Some(crate::app::state::ErrorNotice::create(untranslated(e)));
                 return Task::none();
             }
         }
