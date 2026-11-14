@@ -11,16 +11,16 @@ mod swap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use iced::Task;
 use signex_engine::pcb::BoardCommand;
 use signex_engine::pcb::component::{self, ComponentRefusal, LocationField};
 use signex_engine::pcb::designators::FootprintTextField;
 use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::PcbBoard;
-use iced::Task;
 use uuid::Uuid;
 
-use crate::app::{Message, Signex};
 use crate::app::state::pcb_edit::CheckedStep;
+use crate::app::{Message, Signex};
 use crate::panels::{ComponentField, PcbComponentFacts, PcbComponentMsg};
 
 /// The Component view's own state: the header's row filter and the text

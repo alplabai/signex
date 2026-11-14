@@ -550,12 +550,12 @@ fn contains_ci(hay: &str, needle: &str) -> bool {
 #[cfg(test)]
 pub(crate) fn header_labels(state: &LibraryState, picker: &PrimitivePickerState) -> Vec<String> {
     list_items(signex_i18n::I18n::en_us_ref(), state, picker, "")
-    .into_iter()
-    .filter_map(|item| match item {
-        ListItem::Header { text } => Some(text),
-        _ => None,
-    })
-    .collect()
+        .into_iter()
+        .filter_map(|item| match item {
+            ListItem::Header { text } => Some(text),
+            _ => None,
+        })
+        .collect()
 }
 
 #[cfg(test)]

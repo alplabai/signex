@@ -458,7 +458,13 @@ pub(super) fn pcb_canvas_menu_entries(
     };
     // Picks a library footprint for the selected components (#2366).
     let change_footprint = if placeable {
-        dd_command(i18n, None, "change_footprint", sc.of("change_footprint"), None)
+        dd_command(
+            i18n,
+            None,
+            "change_footprint",
+            sc.of("change_footprint"),
+            None,
+        )
     } else {
         dd_cmd_disabled(i18n, None, "change_footprint", sc.of("change_footprint"))
     };

@@ -129,8 +129,8 @@ pub use pcb_board_properties::{
     BoardTab, ComponentSide, PcbBoardMsg, PcbBoardPanelView, PcbBoardSummary,
 };
 pub use pcb_component::{
-    ComponentField, FootprintEditability, FootprintLibrary, ParameterFacts, PcbComponentFacts, PcbComponentMsg,
-    PcbFootprintFacts, PcbFootprintTextMsg, Shared,
+    ComponentField, FootprintEditability, FootprintLibrary, ParameterFacts, PcbComponentFacts,
+    PcbComponentMsg, PcbFootprintFacts, PcbFootprintTextMsg, Shared,
 };
 pub use pcb_layers::PcbLayersPanel;
 pub use pcb_nets::PcbNetsSummary;

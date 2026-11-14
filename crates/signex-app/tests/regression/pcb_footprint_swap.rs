@@ -91,7 +91,11 @@ fn footprint_name(app: &Signex, reference: PrimitiveRef) -> String {
         .open_libraries
         .iter()
         .find(|lib| lib.library_id == reference.library_id)
-        .and_then(|lib| lib.cached_footprints.iter().find(|s| s.uuid == reference.uuid))
+        .and_then(|lib| {
+            lib.cached_footprints
+                .iter()
+                .find(|s| s.uuid == reference.uuid)
+        })
         .expect("a stock footprint")
         .name
         .clone()
@@ -221,7 +225,12 @@ fn the_footprint_button_swaps_the_footprint_in_one_step_keeping_place_and_nets()
     let alternate = f.row.alternate_footprints[0].footprint;
     let name = footprint_name(&f.app, alternate);
     press_footprint_button(&mut f);
-    let picker = f.app.library.primitive_picker.as_ref().expect("the picker opened");
+    let picker = f
+        .app
+        .library
+        .primitive_picker
+        .as_ref()
+        .expect("the picker opened");
     let PrimitivePickerTarget::BoardFootprint {
         footprints,
         suggested,
@@ -241,7 +250,10 @@ fn the_footprint_button_swaps_the_footprint_in_one_step_keeping_place_and_nets()
     let before = snapshot(&f.app);
     let since = diagnostics::newest_entry_id().unwrap_or(0);
     pick(&mut f.app, alternate);
-    assert!(f.app.library.primitive_picker.is_none(), "the pick closes it");
+    assert!(
+        f.app.library.primitive_picker.is_none(),
+        "the pick closes it"
+    );
     let after = snapshot(&f.app);
     let swapped = r1(&f.app);
     assert_eq!(swapped.footprint_id, name);
@@ -310,7 +322,12 @@ fn the_board_menu_change_footprint_row_opens_the_picker_and_swaps() {
             project: None,
         })),
     );
-    let picker = f.app.library.primitive_picker.as_ref().expect("the picker opened");
+    let picker = f
+        .app
+        .library
+        .primitive_picker
+        .as_ref()
+        .expect("the picker opened");
     assert!(matches!(
         &picker.target,
         PrimitivePickerTarget::BoardFootprint { footprints, .. } if footprints == &[R1]
@@ -344,7 +361,10 @@ fn a_locked_component_is_refused_with_the_reason() {
         })),
     );
     assert_eq!(snapshot(&f.app), before, "nothing changed");
-    assert!(noticed(since, "Change Footprint: R1 is locked"), "Messages says why");
+    assert!(
+        noticed(since, "Change Footprint: R1 is locked"),
+        "Messages says why"
+    );
 }
 
 #[test]

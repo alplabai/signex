@@ -69,12 +69,15 @@ pub fn swap_commands(
         if let Some(lost) = carry_would_lose(old, &with) {
             return Err(lost.into());
         }
-        swap.unmatched
-            .extend(unmatched_pads(old, &with).into_iter().map(|pad| UnmatchedPad {
-                reference: old.reference.clone(),
-                number: pad.number.clone(),
-                net: pad.net.as_ref().map(|net| net.name.clone()),
-            }));
+        swap.unmatched.extend(
+            unmatched_pads(old, &with)
+                .into_iter()
+                .map(|pad| UnmatchedPad {
+                    reference: old.reference.clone(),
+                    number: pad.number.clone(),
+                    net: pad.net.as_ref().map(|net| net.name.clone()),
+                }),
+        );
         swap.commands.push(BoardCommand::ReplaceFootprint {
             footprint: old.uuid,
             with: Box::new(with),
