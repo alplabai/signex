@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Color, Element, Length, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
-use signex_types::theme::{ThemeId, ThemeTokens};
+use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, text_input, tooltip};
 
 use super::{Action, nav_strip, project_sections};
@@ -19,7 +19,7 @@ use crate::app::Message;
 use crate::panels::signal::coming_soon;
 use crate::pinned_projects::PinnedProjects;
 use crate::styles::{
-    self, ChromeMetrics, Radii, Spacing, TypeScale, ti,
+    self, ChromeMetrics, LINE_HEIGHT, Radii, Spacing, TypeScale, ti,
     tokens::{hover_overlay, resolve},
 };
 
@@ -42,6 +42,11 @@ pub(super) const NAV_W: f32 = TS.body * 19.5;
 /// Narrowest the area beside the full navigation may get (480 px at the
 /// default base); below it the navigation collapses to the icon strip.
 pub(super) const MAIN_MIN_W: f32 = TS.body * 40.0;
+/// Vertical padding of a full navigation row.
+const NAV_ROW_PAD_Y: f32 = 6.0;
+/// Height of a navigation row: one label line and its padding. The icon
+/// strip's rows take the same height.
+pub(super) const NAV_ROW_H: f32 = TS.label * LINE_HEIGHT + 2.0 * NAV_ROW_PAD_Y;
 /// Widest the main column gets.
 const MAIN_MAX_W: f32 = 880.0;
 /// Horizontal padding of the main column.
@@ -161,7 +166,7 @@ fn nav_row<'a>(
 ) -> Element<'a, Message> {
     let mut b = button(text(label).size(TS.label))
         .width(Length::Fill)
-        .padding([6.0, 14.0])
+        .padding([NAV_ROW_PAD_Y, 14.0])
         .style(nav_row_style(tokens, active));
     if let Some(message) = action {
         b = b.on_press(message);
@@ -306,7 +311,7 @@ fn nav_count_row<'a>(
         );
     }
     container(line)
-        .padding([6.0, 14.0])
+        .padding([NAV_ROW_PAD_Y, 14.0])
         .width(Length::Fill)
         .boxed()
 }
@@ -520,7 +525,6 @@ fn sample_card<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Message> {
 /// The Graphite start screen.
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
-    theme: ThemeId,
     i18n: &'a I18n,
     open_shortcut: &str,
     recent: &'a [PathBuf],
@@ -533,7 +537,7 @@ pub fn view<'a>(
     // per size.
     iced::widget::responsive(move |size| {
         view_sized(
-            (tokens, theme),
+            tokens,
             i18n,
             &open_shortcut,
             (recent, pinned),
@@ -545,7 +549,7 @@ pub fn view<'a>(
 }
 
 fn view_sized<'a>(
-    (tokens, theme): (&'a ThemeTokens, ThemeId),
+    tokens: &'a ThemeTokens,
     i18n: &I18n,
     open_shortcut: &str,
     (recent, pinned): (&'a [PathBuf], &'a PinnedProjects),
@@ -582,7 +586,7 @@ fn view_sized<'a>(
             .center_x(Length::Fill),
     );
     let navigation = if nav_collapsed(width) {
-        nav_strip::view(tokens, theme, i18n, open_shortcut)
+        nav_strip::view(tokens, i18n, open_shortcut)
     } else {
         nav(tokens, i18n, open_shortcut, listed, libraries)
     };

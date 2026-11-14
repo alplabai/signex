@@ -717,7 +717,6 @@ impl Signex {
                         .collect();
                     start_screen::view(
                         tokens,
-                        self.ui_state.effective_theme_id(),
                         &self.ui_state.i18n,
                         &open_shortcut,
                         self.ui_state.recent_projects.entries(),

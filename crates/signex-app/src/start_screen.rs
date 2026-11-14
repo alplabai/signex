@@ -169,25 +169,15 @@ fn recent_label(path: &Path) -> String {
 /// components it holds.
 pub type LoadedLibrary = (String, usize);
 
-/// The start screen; `theme` picks the icons of the collapsed navigation.
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
-    theme: signex_types::theme::ThemeId,
     i18n: &'a signex_i18n::I18n,
     open_shortcut: &str,
     recent: &'a [PathBuf],
     pinned: &'a PinnedProjects,
     libraries: &[LoadedLibrary],
 ) -> Element<'a, Message> {
-    graphite::view(
-        tokens,
-        theme,
-        i18n,
-        open_shortcut,
-        recent,
-        pinned,
-        libraries,
-    )
+    graphite::view(tokens, i18n, open_shortcut, recent, pinned, libraries)
 }
 
 pub fn hint_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
@@ -231,7 +221,6 @@ mod tests {
     /// as short as `SMALL_WINDOW`.
     const NARROWEST_FULL_NAV: iced::Size =
         iced::Size::new(graphite::NAV_W + graphite::MAIN_MIN_W, SMALL_WINDOW.height);
-    const DARK: signex_types::theme::ThemeId = signex_types::theme::ThemeId::GraphiteDark;
 
     fn paths(n: usize) -> Vec<PathBuf> {
         (0..n)
@@ -292,7 +281,6 @@ mod tests {
         let texts = lay_out_texts(
             view(
                 &tokens,
-                DARK,
                 &signex_i18n::I18n::en_us(),
                 "Ctrl+O",
                 &recent,
@@ -308,7 +296,6 @@ mod tests {
         let empty = lay_out_texts(
             view(
                 &tokens,
-                DARK,
                 &signex_i18n::I18n::en_us(),
                 "Ctrl+O",
                 &[],
@@ -330,7 +317,7 @@ mod tests {
         let i18n = signex_i18n::I18n::en_us();
         let recent = paths(3);
         let texts = lay_out_texts(
-            view(&tokens, DARK, &i18n, "Ctrl+O", &recent, &NO_PINS, &[]),
+            view(&tokens, &i18n, "Ctrl+O", &recent, &NO_PINS, &[]),
             MOCK_WINDOW,
         );
         assert!(texts.iter().all(|t| t.text != "PINNED PROJECTS"));
@@ -340,7 +327,7 @@ mod tests {
         pinned.pin(&PathBuf::from("gone.snxprj"));
         pinned.set_missing(&PathBuf::from("gone.snxprj"), true);
         let texts = lay_out_texts(
-            view(&tokens, DARK, &i18n, "Ctrl+O", &recent, &pinned, &[]),
+            view(&tokens, &i18n, "Ctrl+O", &recent, &pinned, &[]),
             MOCK_WINDOW,
         );
         let top = |label: &str| find(&texts, label).bounds.y;
@@ -378,7 +365,7 @@ mod tests {
         assert!(remove_label.y < path_line.y + path_line.height + BASE);
         assert!(remove_label.y + remove_label.height > gone_lines[0].bounds.y);
         let remove = crate::layout_probe::messages_on_click(
-            view(&tokens, DARK, &i18n, "Ctrl+O", &recent, &pinned, &[]),
+            view(&tokens, &i18n, "Ctrl+O", &recent, &pinned, &[]),
             MOCK_WINDOW,
             "Remove",
         );
@@ -399,7 +386,6 @@ mod tests {
         let empty = lay_out_texts(
             view(
                 &tokens,
-                DARK,
                 &signex_i18n::I18n::en_us(),
                 "Ctrl+O",
                 &[],
@@ -414,7 +400,6 @@ mod tests {
         let texts = lay_out_texts(
             view(
                 &tokens,
-                DARK,
                 &signex_i18n::I18n::en_us(),
                 "Ctrl+O",
                 &some,
@@ -447,7 +432,6 @@ mod tests {
         let bound = lay_out_texts(
             view(
                 &tokens,
-                DARK,
                 &signex_i18n::I18n::en_us(),
                 "F2",
                 &[],
@@ -459,15 +443,7 @@ mod tests {
         assert!(bound.iter().any(|t| t.text == "F2"));
         for window in [NARROWEST_FULL_NAV, SMALL_WINDOW] {
             let unbound = lay_out_texts(
-                view(
-                    &tokens,
-                    DARK,
-                    &signex_i18n::I18n::en_us(),
-                    "",
-                    &[],
-                    &NO_PINS,
-                    &[],
-                ),
+                view(&tokens, &signex_i18n::I18n::en_us(), "", &[], &NO_PINS, &[]),
                 window,
             );
             if window == NARROWEST_FULL_NAV {
@@ -518,7 +494,6 @@ mod tests {
         let texts = lay_out_texts(
             view(
                 tokens,
-                DARK,
                 &signex_i18n::I18n::en_us(),
                 "Ctrl+O",
                 recent,
@@ -564,7 +539,7 @@ mod tests {
         let tokens = graphite();
         let i18n = signex_i18n::I18n::en_us();
         let texts = lay_out_texts(
-            view(&tokens, DARK, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
             MOCK_WINDOW,
         );
         let title = "What are you building?";
@@ -603,7 +578,7 @@ mod tests {
         let tokens = graphite();
         let i18n = signex_i18n::I18n::en_us();
         let texts = lay_out_texts(
-            view(&tokens, DARK, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
             MOCK_WINDOW,
         );
         let top = |label: &str| find(&texts, label).bounds.y;
@@ -617,7 +592,7 @@ mod tests {
         assert!(top("Keyboard Shortcuts (F1)") > top("Open Sample Project"));
 
         let sample = crate::layout_probe::messages_on_click(
-            view(&tokens, DARK, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
             MOCK_WINDOW,
             "Open Sample Project",
         );
@@ -628,7 +603,7 @@ mod tests {
             "{sample:?}"
         );
         let keys = crate::layout_probe::messages_on_click(
-            view(&tokens, DARK, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
             MOCK_WINDOW,
             "Keyboard Shortcuts (F1)",
         );
@@ -673,7 +648,6 @@ mod tests {
             let texts = lay_out_texts(
                 view(
                     &tokens,
-                    DARK,
                     &signex_i18n::I18n::en_us(),
                     "Ctrl+O",
                     &recent,
@@ -744,12 +718,8 @@ mod tests {
 
         let tokens = graphite();
         let i18n = signex_i18n::I18n::en_us();
-        let lay_out = |window| {
-            lay_out_texts(
-                view(&tokens, DARK, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
-                window,
-            )
-        };
+        let lay_out =
+            |window| lay_out_texts(view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]), window);
         let full = lay_out(NARROWEST_FULL_NAV);
         for label in NAV_TEXTS {
             assert!(
@@ -788,7 +758,7 @@ mod tests {
             .take_while(|y| *y < SMALL_WINDOW.height)
             .flat_map(|y| {
                 crate::layout_probe::messages_on_click_at(
-                    view(&tokens, DARK, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+                    view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
                     SMALL_WINDOW,
                     None,
                     iced::Point::new(nav_strip::STRIP_W / 2.0, y),
@@ -809,6 +779,104 @@ mod tests {
         assert!(
             sent.iter().all(|m| actions.contains(m)),
             "a strip row sends something no full row sends: {sent:?}"
+        );
+    }
+
+    /// Whether a click at (`x`, `y`) in a `window` start screen opens
+    /// Keyboard Shortcuts.
+    fn click_opens_shortcuts(window: iced::Size, x: f32, y: f32) -> bool {
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        let shortcuts = format!("{:?}", Action::KeyboardShortcuts.message());
+        crate::layout_probe::messages_on_click_at(
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            window,
+            None,
+            iced::Point::new(x, y),
+        )
+        .iter()
+        .any(|m| format!("{m:?}") == shortcuts)
+    }
+
+    /// Height of the Keyboard Shortcuts row at `x`, found by clicking
+    /// every quarter pixel from `from` for `reach` pixels.
+    fn shortcuts_row_height(window: iced::Size, x: f32, from: f32, reach: f32) -> f32 {
+        const STEP: f32 = 0.25;
+        let hits = (0..)
+            .map(|i| from + i as f32 * STEP)
+            .take_while(|y| *y < from + reach)
+            .filter(|y| click_opens_shortcuts(window, x, *y))
+            .count();
+        hits as f32 * STEP
+    }
+
+    /// #2346: a strip row is as tall as a full navigation row.
+    #[test]
+    fn a_strip_row_is_as_tall_as_a_full_navigation_row() {
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        let row_h = graphite::NAV_ROW_H;
+        let full_texts = lay_out_texts(
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            NARROWEST_FULL_NAV,
+        );
+        let label = find(&full_texts, "Keyboard Shortcuts (F1)").bounds;
+        let full = shortcuts_row_height(
+            NARROWEST_FULL_NAV,
+            label.center_x(),
+            label.center_y() - row_h,
+            2.0 * row_h,
+        );
+        let x = nav_strip::STRIP_W / 2.0;
+        let step = crate::styles::Spacing::DEFAULT.m;
+        let inside = (0..)
+            .map(|i| i as f32 * step)
+            .take_while(|y| *y < SMALL_WINDOW.height)
+            .find(|y| click_opens_shortcuts(SMALL_WINDOW, x, *y))
+            .expect("no strip row opens Keyboard Shortcuts");
+        let strip = shortcuts_row_height(SMALL_WINDOW, x, inside - row_h, 2.0 * row_h);
+        assert!(
+            (full - row_h).abs() <= 1.0,
+            "the full row is {full} tall, not {row_h}"
+        );
+        assert!(
+            (strip - full).abs() <= 1.0,
+            "a strip row is {strip} tall, a full row {full}"
+        );
+    }
+
+    /// #2346: in a window too short for every strip row the strip scrolls,
+    /// so the last row is reached with the wheel.
+    #[test]
+    fn the_icon_strip_scrolls_in_a_short_window() {
+        let short = iced::Size::new(SMALL_WINDOW.width, SMALL_WINDOW.height / 2.0);
+        assert!(graphite::nav_collapsed(short.width));
+        let x = nav_strip::STRIP_W / 2.0;
+        // The last row's place once the strip is scrolled to its end.
+        let y = short.height - crate::styles::Spacing::DEFAULT.l - graphite::NAV_ROW_H / 2.0;
+        assert!(
+            !click_opens_shortcuts(short, x, y),
+            "the strip fits a {short:?} window; the test needs it taller"
+        );
+        let tokens = graphite();
+        let i18n = signex_i18n::I18n::en_us();
+        let shortcuts = format!("{:?}", Action::KeyboardShortcuts.message());
+        let scrolled = crate::layout_probe::messages_for_events(
+            view(&tokens, &i18n, "Ctrl+O", &[], &NO_PINS, &[]),
+            short,
+            iced::Point::new(x, y),
+            &[
+                iced::mouse::Event::WheelScrolled {
+                    delta: iced::mouse::ScrollDelta::Lines { x: 0.0, y: -100.0 },
+                },
+                iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left),
+                iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left),
+            ]
+            .map(iced::Event::Mouse),
+        );
+        assert!(
+            scrolled.iter().any(|m| format!("{m:?}") == shortcuts),
+            "scrolled to its end, the strip's last row is not under the cursor: {scrolled:?}"
         );
     }
 }
