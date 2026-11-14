@@ -846,8 +846,7 @@ mod tests {
     }
 
     /// #2346: in a window too short for every strip row the strip scrolls,
-    /// so the last row is reached by scrolling. A pixel delta (a touchpad)
-    /// scrolls at once; a wheel line is animated over later frames.
+    /// so the last row is reached by scrolling.
     #[test]
     fn the_icon_strip_scrolls_in_a_short_window() {
         let short = iced::Size::new(SMALL_WINDOW.width, SMALL_WINDOW.height / 2.0);
@@ -867,16 +866,21 @@ mod tests {
             short,
             iced::Point::new(x, y),
             &[
-                iced::mouse::Event::WheelScrolled {
+                iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
                     delta: iced::mouse::ScrollDelta::Pixels {
                         x: 0.0,
                         y: -SMALL_WINDOW.height,
                     },
-                },
-                iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left),
-                iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left),
-            ]
-            .map(iced::Event::Mouse),
+                }),
+                // The scroll moves the content on the next frame.
+                iced::Event::Window(iced::window::Event::RedrawRequested(
+                    std::time::Instant::now() + std::time::Duration::from_secs(2),
+                )),
+                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                    iced::mouse::Button::Left,
+                )),
+            ],
         );
         assert!(
             scrolled.iter().any(|m| format!("{m:?}") == shortcuts),
