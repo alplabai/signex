@@ -77,7 +77,6 @@ pub(super) fn push_symbol_sections<'a>(
 
     col = super::pins::push_focused_pin_section(col, ctx, muted);
     // Fixed label column on Graphite, so no label is clipped.
-    let lbl = LabelInk::graphite(muted);
     if let Some(id) = uuid {
         // General section — editable
         col = col.push(
@@ -87,46 +86,46 @@ pub(super) fn push_symbol_sections<'a>(
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_edit_row("Designator", &reference, lbl, move |s| {
+                    c = c.push(form_edit_row("Designator", &reference, muted, move |s| {
                         PanelMsg::EditSymbolDesignator(id, s)
                     }));
-                    c = c.push(form_edit_row("Value", &value, lbl, move |s| {
+                    c = c.push(form_edit_row("Value", &value, muted, move |s| {
                         PanelMsg::EditSymbolValue(id, s)
                     }));
                     if !description.is_empty() {
-                        c = c.push(form_input_row("Description", &description, lbl, input_bg));
+                        c = c.push(form_input_row("Description", &description, muted, input_bg));
                     }
                     c = super::library_rows::push_footprint_row(
                         c,
                         id,
                         &footprint,
                         &footprint_choices,
-                        lbl,
+                        muted,
                     );
                     if !datasheet.is_empty() {
-                        c = c.push(form_input_row("Datasheet", &datasheet, lbl, input_bg));
+                        c = c.push(form_input_row("Datasheet", &datasheet, muted, input_bg));
                     }
                     for (label, value) in &documents {
-                        c = c.push(form_input_row(label, value, lbl, input_bg));
+                        c = c.push(form_input_row(label, value, muted, input_bg));
                     }
                     c = c.push(super::library_rows::library_id_row(
                         &lib_id,
-                        lbl,
+                        muted,
                         input_bg,
                         &ctx.tokens,
                     ));
-                    c = super::library_rows::push_symbol_choice_row(c, id, &symbol_choices, lbl);
+                    c = super::library_rows::push_symbol_choice_row(c, id, &symbol_choices, muted);
                     c = super::library_rows::push_library_rows(
                         c,
                         id,
                         &library_name,
                         library_status,
-                        lbl,
+                        muted,
                         input_bg,
                         &ctx.tokens,
                     );
                     c = super::library_rows::push_part_actions(c);
-                    super::body_row::push_body_row(c, id, &body, lbl, input_bg)
+                    super::body_row::push_body_row(c, id, &body, muted, input_bg)
                 },
             )
             .boxed(),
@@ -140,8 +139,8 @@ pub(super) fn push_symbol_sections<'a>(
                 &ctx.collapsed_sections,
                 move || {
                     let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_input_row("Position", &position, lbl, input_bg));
-                    c = c.push(form_input_row("Rotation", &rotation, lbl, input_bg));
+                    c = c.push(form_input_row("Position", &position, muted, input_bg));
+                    c = c.push(form_input_row("Rotation", &rotation, muted, input_bg));
                     c
                 },
             )
@@ -160,28 +159,28 @@ pub(super) fn push_symbol_sections<'a>(
                         "Mirror X",
                         has_mirror_x,
                         PanelMsg::ToggleSymbolMirrorX(id),
-                        lbl,
+                        muted,
                         panel_bg,
                     ));
                     c = c.push(form_check_row(
                         "Mirror Y",
                         has_mirror_y,
                         PanelMsg::ToggleSymbolMirrorY(id),
-                        lbl,
+                        muted,
                         panel_bg,
                     ));
                     c = c.push(form_check_row(
                         "Locked",
                         locked,
                         PanelMsg::ToggleSymbolLocked(id),
-                        lbl,
+                        muted,
                         panel_bg,
                     ));
                     c = c.push(form_check_row(
                         "DNP",
                         dnp,
                         PanelMsg::ToggleSymbolDnp(id),
-                        lbl,
+                        muted,
                         panel_bg,
                     ));
                     c
@@ -214,7 +213,7 @@ pub(super) fn push_symbol_sections<'a>(
                         );
                     } else {
                         for (name, value) in &section_params {
-                            c = c.push(form_input_row(name, value, lbl, input_bg));
+                            c = c.push(form_input_row(name, value, muted, input_bg));
                         }
                     }
                     c

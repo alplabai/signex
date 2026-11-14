@@ -112,11 +112,11 @@ pub fn net_params_header<'a>(label_c: Color, border_c: Color) -> Element<'a, Pan
             text(raw("Name".to_string()))
                 .size(TS.body)
                 .color(label_c)
-                .width(Length::FillPortion(2)),
+                .width(PROPERTY_LABEL_COLUMN),
             text(raw("Value".to_string()))
                 .size(TS.body)
                 .color(label_c)
-                .width(Length::FillPortion(3)),
+                .width(Length::Fill),
         ]
         .spacing(SP.s),
     )

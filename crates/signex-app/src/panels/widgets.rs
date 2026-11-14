@@ -191,59 +191,18 @@ pub fn part_tree_row<'a>(
     .boxed()
 }
 
-/// Width of the Properties label column on Graphite: the mock's fixed grid
-/// column, so a label such as "Designator" is never clipped by a narrow dock.
-pub const GRAPHITE_PROPERTY_LABEL_WIDTH: f32 = 92.0;
-
-/// Colour and column width of a property-row label. A bare [`Color`] gets
-/// the fixed Graphite column too, so a wide dock widens the fields, not the
-/// labels (#2347).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LabelInk {
-    pub color: Color,
-    pub width: Length,
-}
-
-impl From<Color> for LabelInk {
-    fn from(color: Color) -> Self {
-        Self::graphite(color)
-    }
-}
-
-impl LabelInk {
-    /// The Graphite label look: the fixed column.
-    pub fn graphite(color: Color) -> Self {
-        Self {
-            color,
-            width: Length::Fixed(GRAPHITE_PROPERTY_LABEL_WIDTH),
-        }
-    }
-}
-
-/// Property-row label: wraps at spaces inside its column, so a narrow panel
-/// grows the row; a single over-long word is clipped, never split mid-word,
-/// and never reaches the value column.
-pub fn property_label<'a, M: 'a>(
-    label: impl Into<String>,
-    ink: impl Into<LabelInk>,
-) -> Element<'a, M> {
-    let ink = ink.into();
-    property_label_sized(label, ink.color, TS.body, ink.width)
-}
-
-fn property_label_sized<'a, M: 'a>(
-    label: impl Into<String>,
-    color: Color,
-    size: f32,
-    width: Length,
-) -> Element<'a, M> {
+/// Property-row label: wraps at spaces inside the fixed label column, so a
+/// narrow panel grows the row and a wide one widens the field; a single
+/// over-long word is clipped, never split mid-word, and never reaches the
+/// value column.
+pub fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
     container(
         text(raw(label.into()))
-            .size(size)
+            .size(TS.body)
             .color(color)
             .wrapping(iced::widget::text::Wrapping::Word),
     )
-    .width(width)
+    .width(PROPERTY_LABEL_COLUMN)
     .clip(true)
     .boxed()
 }
@@ -264,7 +223,7 @@ pub fn form_edit_row_f64<'a>(
         crate::panels::numeric_input("", key, value, draft).size(TS.body),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(6)
+    .spacing(PROPERTY_ROW_GAP)
     .align_y(iced::Alignment::Center)
     .boxed()
 }
@@ -312,7 +271,7 @@ pub fn shape_fill_row<'a>(
         .width(Length::Fill),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(6)
+    .spacing(PROPERTY_ROW_GAP)
     .align_y(iced::Alignment::Center)
     .boxed()
 }
@@ -321,18 +280,13 @@ pub fn shape_fill_row<'a>(
 mod label_tests {
     use super::*;
 
-    #[test]
-    fn graphite_labels_get_the_fixed_92_px_column() {
-        let ink = LabelInk::graphite(Color::BLACK);
-        assert_eq!(ink.width, Length::Fixed(92.0));
-    }
-
-    /// #2347: a plain-colour label keeps the fixed column, so a wide dock
+    /// #2347: every property label takes the fixed column, so a wide dock
     /// gives its extra width to the field, not the label.
     #[test]
-    fn plain_colour_labels_keep_the_fixed_column() {
-        let ink = LabelInk::from(Color::BLACK);
-        assert_eq!(ink.width, LabelInk::graphite(Color::BLACK).width);
-        assert_eq!(ink.width, PROPERTY_LABEL_COLUMN);
+    fn property_labels_take_the_fixed_column() {
+        let label: Element<'_, ()> = property_label("Designator", Color::BLACK);
+        let size = label.as_widget().size();
+        assert_eq!(size.width, Length::Fixed(PROPERTY_LABEL_WIDTH));
+        assert_eq!(size.width, PROPERTY_LABEL_COLUMN);
     }
 }

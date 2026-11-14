@@ -1,5 +1,5 @@
 use super::super::super::*;
-use crate::app::view::canvas_region::{DockExtent, clamp_side_dock_width};
+use crate::app::view::canvas_region::{DockExtent, clamp_side_dock_width, fit_side_docks};
 use crate::dock::{DockMessage, PanelPosition};
 
 impl Signex {
@@ -15,34 +15,49 @@ impl Signex {
         };
     }
 
+    /// The `side` dock's footprint as stored, for the width limits below.
+    fn side_dock_extent(&self, side: PanelPosition) -> DockExtent {
+        let dock = &self.document_state.dock;
+        DockExtent {
+            present: dock.has_panels(side),
+            collapsed: dock.is_collapsed(side),
+            size: match side {
+                PanelPosition::Right => self.ui_state.right_width,
+                _ => self.ui_state.left_width,
+            },
+        }
+    }
+
     /// `width` for the `side` dock, limited by the main window: the canvas
     /// keeps its minimum and the other side dock keeps its width (#2347).
     pub(crate) fn side_dock_width_in_window(&self, side: PanelPosition, width: f32) -> f32 {
-        let (other, other_width) = match side {
-            PanelPosition::Right => (PanelPosition::Left, self.ui_state.left_width),
-            _ => (PanelPosition::Right, self.ui_state.right_width),
+        let other = match side {
+            PanelPosition::Right => PanelPosition::Left,
+            _ => PanelPosition::Right,
         };
-        let dock = &self.document_state.dock;
-        let other = DockExtent {
-            present: dock.has_panels(other),
-            collapsed: dock.is_collapsed(other),
-            size: other_width,
-        };
-        clamp_side_dock_width(width, self.ui_state.window_size.0, other)
+        clamp_side_dock_width(
+            width,
+            self.ui_state.window_size.0,
+            self.side_dock_extent(other),
+        )
     }
 
-    /// Re-limit both side docks after the main window changed size, so a
-    /// smaller window never pushes the canvas under its minimum. A minimised
-    /// window reports a zero size; the widths are kept for the restore.
+    /// Re-limit both side docks to the main window, so neither a smaller
+    /// window nor the other dock opening pushes the canvas under its minimum.
+    /// The wider dock gives way first. A minimised window reports a zero
+    /// size; the widths are kept for the restore.
     pub(crate) fn fit_side_docks_to_window(&mut self) {
         let (w, h) = self.ui_state.window_size;
         if w <= 0.0 || h <= 0.0 {
             return;
         }
-        self.ui_state.left_width =
-            self.side_dock_width_in_window(PanelPosition::Left, self.ui_state.left_width);
-        self.ui_state.right_width =
-            self.side_dock_width_in_window(PanelPosition::Right, self.ui_state.right_width);
+        let (left, right) = fit_side_docks(
+            w,
+            self.side_dock_extent(PanelPosition::Left),
+            self.side_dock_extent(PanelPosition::Right),
+        );
+        self.ui_state.left_width = left;
+        self.ui_state.right_width = right;
     }
 
     /// True while any pointer-driven drag that `handle_layout_drag_moved` or

@@ -2,6 +2,7 @@
 //! may go inside it. Pure geometry, so the placement is tested without a
 //! renderer.
 
+use crate::dock::{MIN_CANVAS_WIDTH, MIN_SIDE_DOCK_WIDTH};
 use iced::Rectangle;
 use signex_types::theme::ThemeTokens;
 
@@ -13,7 +14,7 @@ pub(super) fn chrome_top(tokens: &ThemeTokens) -> f32 {
 }
 const CHROME_SEPARATOR: f32 = 1.0;
 /// Resize handle drawn beside an open dock.
-const HANDLE: f32 = 5.0;
+const HANDLE: f32 = crate::dock::DOCK_HANDLE;
 /// A collapsed dock keeps this strip.
 const COLLAPSED: f32 = 28.0;
 /// Gap between the pointer and a card, so the card never sits under it.
@@ -38,28 +39,57 @@ impl DockExtent {
     }
 }
 
-/// Narrowest a side dock may be dragged, in UI-font ems.
-const MIN_SIDE_DOCK_EMS: f32 = 9.0;
-/// Narrowest the canvas may get from widening a side dock, in UI-font ems.
-const MIN_CANVAS_EMS: f32 = 30.0;
-
-/// Narrowest a side dock may be dragged, in logical px.
-pub(in crate::app) fn min_side_dock_width() -> f32 {
-    crate::styles::TypeScale::DEFAULT.body * MIN_SIDE_DOCK_EMS
-}
-
 /// Width a side dock may take in a `window_width` window beside the `other`
 /// side dock: the other dock keeps its footprint and the canvas keeps
-/// [`MIN_CANVAS_EMS`]. Never below [`min_side_dock_width`].
+/// [`MIN_CANVAS_WIDTH`]. Never below [`MIN_SIDE_DOCK_WIDTH`].
 pub(in crate::app) fn clamp_side_dock_width(
     width: f32,
     window_width: f32,
     other: DockExtent,
 ) -> f32 {
-    let min = min_side_dock_width();
-    let canvas = crate::styles::TypeScale::DEFAULT.body * MIN_CANVAS_EMS;
-    let max = (window_width - other.footprint() - HANDLE - canvas).max(min);
-    width.clamp(min, max)
+    let max =
+        (window_width - other.footprint() - HANDLE - MIN_CANVAS_WIDTH).max(MIN_SIDE_DOCK_WIDTH);
+    width.clamp(MIN_SIDE_DOCK_WIDTH, max)
+}
+
+/// Side dock widths `(left, right)` that leave the canvas its minimum in a
+/// `window_width` window. The wider open dock gives up width first, so the
+/// dock the user did not widen keeps its width; neither drops below
+/// [`MIN_SIDE_DOCK_WIDTH`]. A closed or collapsed dock keeps its stored width.
+pub(in crate::app) fn fit_side_docks(
+    window_width: f32,
+    left: DockExtent,
+    right: DockExtent,
+) -> (f32, f32) {
+    let open = [is_open(left), is_open(right)];
+    let mut sizes = [left, right].map(|dock| {
+        if is_open(dock) {
+            dock.size.max(MIN_SIDE_DOCK_WIDTH)
+        } else {
+            dock.size
+        }
+    });
+    let footprint = |side: usize, dock: DockExtent| DockExtent {
+        size: sizes[side],
+        ..dock
+    };
+    let mut overflow =
+        footprint(0, left).footprint() + footprint(1, right).footprint() + MIN_CANVAS_WIDTH
+            - window_width;
+    let order = if sizes[1] > sizes[0] { [1, 0] } else { [0, 1] };
+    for side in order {
+        if overflow <= 0.0 || !open[side] {
+            continue;
+        }
+        let give = overflow.min((sizes[side] - MIN_SIDE_DOCK_WIDTH).max(0.0));
+        sizes[side] -= give;
+        overflow -= give;
+    }
+    (sizes[0], sizes[1])
+}
+
+fn is_open(dock: DockExtent) -> bool {
+    dock.present && !dock.collapsed
 }
 
 /// The canvas rectangle in window coordinates.
@@ -216,20 +246,63 @@ mod tests {
     /// keeps its minimum beside the other dock.
     #[test]
     fn a_side_dock_grows_until_the_canvas_keeps_its_minimum() {
-        let canvas = crate::styles::TypeScale::DEFAULT.body * MIN_CANVAS_EMS;
-        let max = 2560.0 - (220.0 + HANDLE) - HANDLE - canvas;
+        let max = 2560.0 - (220.0 + HANDLE) - HANDLE - MIN_CANVAS_WIDTH;
         assert!(max > 500.0);
         assert_eq!(clamp_side_dock_width(5000.0, 2560.0, dock(220.0)), max);
         assert_eq!(clamp_side_dock_width(900.0, 2560.0, dock(220.0)), 900.0);
         let lone = clamp_side_dock_width(5000.0, 2560.0, NONE);
-        assert_eq!(lone, 2560.0 - HANDLE - canvas);
+        assert_eq!(lone, 2560.0 - HANDLE - MIN_CANVAS_WIDTH);
     }
 
     #[test]
     fn a_side_dock_never_drops_below_its_minimum() {
-        let min = min_side_dock_width();
+        let min = MIN_SIDE_DOCK_WIDTH;
         assert_eq!(clamp_side_dock_width(10.0, 1400.0, dock(220.0)), min);
         assert_eq!(clamp_side_dock_width(400.0, 300.0, dock(220.0)), min);
+    }
+
+    /// #2347: a smaller window takes width from the wider dock first, so the
+    /// dock the user left alone keeps its width.
+    #[test]
+    fn fitting_shrinks_the_wider_dock_first() {
+        let (left, right) = fit_side_docks(1200.0, dock(240.0), dock(1500.0));
+        assert_eq!(left, 240.0);
+        assert_eq!(right, 1200.0 - (240.0 + HANDLE) - HANDLE - MIN_CANVAS_WIDTH);
+        let (left, right) = fit_side_docks(1200.0, dock(1500.0), dock(220.0));
+        assert_eq!(right, 220.0);
+        assert_eq!(left, 1200.0 - (220.0 + HANDLE) - HANDLE - MIN_CANVAS_WIDTH);
+    }
+
+    #[test]
+    fn fitting_takes_the_rest_from_the_other_dock_down_to_its_minimum() {
+        let (left, right) = fit_side_docks(700.0, dock(400.0), dock(600.0));
+        assert_eq!(right, MIN_SIDE_DOCK_WIDTH);
+        let canvas = 700.0 - (left + HANDLE) - (right + HANDLE);
+        assert!((canvas - MIN_CANVAS_WIDTH).abs() < 0.01, "canvas {canvas}");
+        let (left, right) = fit_side_docks(300.0, dock(400.0), dock(600.0));
+        assert_eq!((left, right), (MIN_SIDE_DOCK_WIDTH, MIN_SIDE_DOCK_WIDTH));
+    }
+
+    #[test]
+    fn fitting_leaves_a_window_with_room_and_a_collapsed_dock_alone() {
+        assert_eq!(
+            fit_side_docks(2560.0, dock(240.0), dock(900.0)),
+            (240.0, 900.0)
+        );
+        let collapsed = DockExtent {
+            collapsed: true,
+            ..dock(1500.0)
+        };
+        let (left, right) = fit_side_docks(1200.0, collapsed, dock(220.0));
+        assert_eq!((left, right), (1500.0, 220.0));
+    }
+
+    /// An open dock stored narrower than the minimum (an older layout) is
+    /// widened to it, so its field never gets 0 px.
+    #[test]
+    fn fitting_widens_a_dock_below_the_minimum() {
+        let (left, _) = fit_side_docks(2560.0, dock(100.0), dock(220.0));
+        assert_eq!(left, MIN_SIDE_DOCK_WIDTH);
     }
 
     /// A Graphite theme reserves the taller 34 px strip and 26 px footer.

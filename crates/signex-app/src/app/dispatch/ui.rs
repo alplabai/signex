@@ -116,7 +116,6 @@ impl Signex {
             }
             UiMsg::WindowResized(w, h) => {
                 self.ui_state.window_size = (w, h);
-                self.fit_side_docks_to_window();
                 self.finish_update()
             }
             UiMsg::DragEnd(released_in) => {
