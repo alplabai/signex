@@ -132,6 +132,14 @@ impl Signex {
                 let cycled = self.cycle_grid_size(false);
                 Task::batch([cycled, self.finish_update()])
             }
+            UiMsg::FastGridPicked(index) => {
+                let picked = self.pick_fast_grid(index);
+                Task::batch([picked, self.finish_update()])
+            }
+            UiMsg::FastGridCycled => {
+                let cycled = self.cycle_fast_grid();
+                Task::batch([cycled, self.finish_update()])
+            }
             UiMsg::GridPickerOpen => {
                 // v0.18.10 — only mount the picker when the active
                 // tab is a Footprint editor; the schematic / PCB

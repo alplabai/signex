@@ -341,6 +341,11 @@ pub enum UiMsg {
     GridCycle,
     /// The reverse of [`UiMsg::GridCycle`]: step to the previous grid preset.
     GridCycleBackward,
+    /// A fast grid was picked (`fast_grid_1` / `fast_grid_2`): the index
+    /// into `canvas::grid::FAST_GRIDS_MM`.
+    FastGridPicked(usize),
+    /// Step to the other fast grid (`cycle_fast_grid`).
+    FastGridCycled,
     /// v0.18.10 — open the Altium-style grid picker popup at the
     /// current `last_mouse_pos`. Footprint editor only (today);
     /// other contexts fall through to no-op.

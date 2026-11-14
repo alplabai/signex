@@ -11,6 +11,10 @@ use crate::render_config::GridStyle;
 /// Range: 0.635 mm (¼ grid) → 5.08 mm (2× grid). Default: 1.27 mm (Altium default, 50 mil).
 pub const GRID_SIZES_MM: &[f32] = &[0.635, 1.27, 2.54, 5.08];
 
+/// The fast grids `fast_grid_1` / `fast_grid_2` snap to and `cycle_fast_grid`
+/// steps between: 50 and 100 mil, both presets of [`GRID_SIZES_MM`].
+pub const FAST_GRIDS_MM: [f32; 2] = [1.27, 2.54];
+
 /// The grid pitch as the exact `f64` millimetre value the user sees.
 ///
 /// The pitch is stored as `f32`, and widening it with `f64::from` turns
@@ -704,5 +708,15 @@ mod pitch_tests {
                 );
             }
         }
+    }
+
+    /// #1672 - each fast grid is a grid preset, so the pickers and
+    /// `next_grid` still find it, and the two differ.
+    #[test]
+    fn fast_grids_are_distinct_grid_presets() {
+        for mm in super::FAST_GRIDS_MM {
+            assert!(super::GRID_SIZES_MM.contains(&mm), "{mm}");
+        }
+        assert_ne!(super::FAST_GRIDS_MM[0], super::FAST_GRIDS_MM[1]);
     }
 }

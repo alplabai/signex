@@ -24,6 +24,33 @@ impl Signex {
         } else {
             sizes[(i + sizes.len() - 1) % sizes.len()]
         };
+        self.set_snap_grid(next)
+    }
+
+    /// Snap to fast grid `index` of `FAST_GRIDS_MM` (`fast_grid_1` / `fast_grid_2`).
+    pub(crate) fn pick_fast_grid(&mut self, index: usize) -> Task<Message> {
+        match crate::canvas::grid::FAST_GRIDS_MM.get(index) {
+            Some(&size) => self.set_snap_grid(size),
+            None => Task::none(),
+        }
+    }
+
+    /// `cycle_fast_grid`: step to the next fast grid, wrapping; from a grid
+    /// that is not a fast grid, land on fast grid 1.
+    pub(crate) fn cycle_fast_grid(&mut self) -> Task<Message> {
+        let fast = crate::canvas::grid::FAST_GRIDS_MM;
+        let current = self.ui_state.grid_size_mm;
+        let next = fast
+            .iter()
+            .position(|s| (s - current).abs() < f32::EPSILON)
+            .map_or(0, |i| (i + 1) % fast.len());
+        self.set_snap_grid(fast[next])
+    }
+
+    /// Set the snap grid; the visible grid follows unless the user set the
+    /// two apart.
+    fn set_snap_grid(&mut self, next: f32) -> Task<Message> {
+        let current = self.ui_state.grid_size_mm;
         let linked = (self.ui_state.visible_grid_mm - current).abs() < f32::EPSILON;
         let mut tasks =
             vec![
