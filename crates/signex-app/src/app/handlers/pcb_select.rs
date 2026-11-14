@@ -60,12 +60,20 @@ impl Signex {
                 }
                 self.close_context_menu_on_press()
             }
-            PcbCanvasMsg::FootprintDragged { from, to } => {
-                self.pcb_footprints_dragged(from, to);
+            PcbCanvasMsg::FootprintDragged {
+                from,
+                to,
+                tolerance_mm,
+            } => {
+                self.pcb_footprints_dragged(from, to, tolerance_mm);
                 Task::none()
             }
-            PcbCanvasMsg::FootprintDropped { from, to } => {
-                self.pcb_footprints_dropped(from, to);
+            PcbCanvasMsg::FootprintDropped {
+                from,
+                to,
+                tolerance_mm,
+            } => {
+                self.pcb_footprints_dropped(from, to, tolerance_mm);
                 Task::none()
             }
             PcbCanvasMsg::FootprintDragCancelled => {

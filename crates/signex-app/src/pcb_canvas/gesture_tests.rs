@@ -258,11 +258,22 @@ fn a_press_on_a_grabbed_footprint_drags_it_instead_of_a_box() {
     grabbing(&mut rig);
     rig.press(100.0, 80.0);
     let (from, to) = (rig.world(100.0, 80.0), rig.world(160.0, 140.0));
+    let tolerance_mm = hover_reach_mm(rig.canvas.scale());
     let msg = rig.move_to(160.0, 140.0);
-    assert_eq!(msg, Some(PcbCanvasMsg::FootprintDragged { from, to }));
+    let dragged = PcbCanvasMsg::FootprintDragged {
+        from,
+        to,
+        tolerance_mm,
+    };
+    assert_eq!(msg, Some(dragged));
     assert!(rig.canvas.marquee.get().is_none(), "no box is drawn");
     let msg = rig.release(160.0, 140.0);
-    assert_eq!(msg, Some(PcbCanvasMsg::FootprintDropped { from, to }));
+    let dropped = PcbCanvasMsg::FootprintDropped {
+        from,
+        to,
+        tolerance_mm,
+    };
+    assert_eq!(msg, Some(dropped));
 }
 
 #[test]

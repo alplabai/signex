@@ -216,8 +216,9 @@ impl PcbSelectionState {
 
     /// What a canvas paints and grabs for this selection: the highlight, the
     /// preview of `carry` once it is anchored, and the shapes a press grabs
-    /// to drag the selected footprints. While a Move waits for its clicks
-    /// nothing is grabbed, so a jiggled click stays a click (#2240).
+    /// to drag: every footprint, selected or not (#2358). While a Move waits
+    /// for its clicks nothing is grabbed, so a jiggled click stays a click
+    /// (#2240).
     pub fn paint(
         &mut self,
         board: &PcbBoard,
@@ -228,8 +229,7 @@ impl PcbSelectionState {
         let grab = if moving {
             Vec::new()
         } else {
-            let selected = self.selection.footprints();
-            self.footprint_shapes(board, &selected)
+            self.shapes_of_footprints(board, |_| true)
         };
         if let Some(carry) = carry.filter(|c| c.anchor.is_some())
             && let Ok(by) = PointNm::from_mm(carry.delta, "carry")
@@ -243,8 +243,8 @@ impl PcbSelectionState {
         (highlight, grab)
     }
 
-    /// The body and pads of each footprint in `footprints`: what a press
-    /// grabs to drag them, and what the drag preview paints.
+    /// The body and pads of each footprint in `footprints`: what the drag
+    /// preview paints.
     pub fn footprint_shapes(
         &mut self,
         board: &PcbBoard,
@@ -253,6 +253,59 @@ impl PcbSelectionState {
         if footprints.is_empty() {
             return Vec::new();
         }
+        self.shapes_of_footprints(board, |id| footprints.contains(&id))
+    }
+
+    /// The footprints a drag pressed at `at` carries (#2358). A press on a
+    /// selected footprint, or on one of its pads, carries the selection;
+    /// a press on an unselected one selects that footprint alone and
+    /// carries it. Off every footprint it carries nothing. Whether the
+    /// selection changed comes second.
+    pub fn grab_for_drag(
+        &mut self,
+        board: &PcbBoard,
+        at: Point,
+        tolerance_mm: f64,
+    ) -> (BTreeSet<Uuid>, bool) {
+        let selected = self.selection.footprints();
+        let (Ok(p), Ok(tol)) = (
+            PointNm::from_mm(at, "press"),
+            pcb_geom::mm_to_nm(tolerance_mm, "reach"),
+        ) else {
+            return (BTreeSet::new(), false);
+        };
+        self.ensure_index(board);
+        let Some(index) = &self.index else {
+            return (BTreeSet::new(), false);
+        };
+        // A pad outranks the body it sits on, as a click picks.
+        let under: Vec<(bool, ItemRef, Uuid)> = index
+            .items_at(p, tol)
+            .into_iter()
+            .filter_map(|i| match i.item {
+                ItemRef::Pad { footprint, .. } => Some((false, i.item, footprint)),
+                ItemRef::Footprint(id) => Some((true, i.item, id)),
+                ItemRef::Track(_) | ItemRef::Via(_) => None,
+            })
+            .collect();
+        if under.iter().any(|(_, _, id)| selected.contains(id)) {
+            return (selected, false);
+        }
+        let Some(&(_, _, id)) = under.iter().min_by_key(|(body, item, _)| (*body, *item)) else {
+            return (BTreeSet::new(), false);
+        };
+        let changed = self
+            .selection
+            .apply_click(Some(ItemRef::Footprint(id)), ClickMode::Replace);
+        (BTreeSet::from([id]), changed)
+    }
+
+    /// The body and pads of each footprint `keep` accepts.
+    fn shapes_of_footprints(
+        &mut self,
+        board: &PcbBoard,
+        keep: impl Fn(Uuid) -> bool,
+    ) -> Vec<pcb_geom::Shape> {
         self.ensure_index(board);
         let Some(index) = &self.index else {
             return Vec::new();
@@ -260,9 +313,7 @@ impl PcbSelectionState {
         index
             .items()
             .filter(|i| match i.item {
-                ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => {
-                    footprints.contains(&id)
-                }
+                ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => keep(id),
                 ItemRef::Track(_) | ItemRef::Via(_) => false,
             })
             .map(|i| i.shape)

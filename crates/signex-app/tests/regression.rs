@@ -158,6 +158,9 @@ mod pcb_canvas_select;
 mod pcb_carry_windows;
 #[path = "regression/pcb_placement.rs"]
 mod pcb_placement;
+// #2358 - press on an unselected footprint and drag: select and move.
+#[path = "regression/pcb_drag_unselected.rs"]
+mod pcb_drag_unselected;
 // #1312 PR 1: board designators in Properties and Re-Annotate Board.
 #[path = "regression/board_designators.rs"]
 mod board_designators;

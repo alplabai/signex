@@ -178,7 +178,7 @@ impl PcbCanvas {
         &self.highlight
     }
 
-    /// What a press grabs to drag the selected footprints.
+    /// What a press grabs to drag a footprint.
     pub fn set_grab(&mut self, grab: Vec<pcb_geom::Shape>) {
         self.grab = grab;
     }

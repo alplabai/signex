@@ -137,16 +137,22 @@ impl Signex {
         }
     }
 
-    /// A drag of the selected footprints reached `to`: preview it.
-    pub(crate) fn pcb_footprints_dragged(&mut self, from: Point, to: Point) {
+    /// A drag pressed at `from` reached `to`: preview it. A press on the
+    /// selection carries it; a press on an unselected footprint selects and
+    /// carries that one (#2358).
+    pub(crate) fn pcb_footprints_dragged(&mut self, from: Point, to: Point, tolerance_mm: f64) {
         // A drag is one press: a carry from another press (a release that
         // never arrived) is replaced, never reused for this selection.
         let same_press = self
             .live_carry(CarryKind::Drag)
             .is_some_and(|carry| carry.anchor == Some(from));
         if !same_press {
-            let mut footprints = self.pcb_selected_footprints();
             let Some(path) = self.active_tab_path() else {
+                return;
+            };
+            let Some((mut footprints, _)) = self
+                .with_pcb_selection(|state, board| state.grab_for_drag(board, from, tolerance_mm))
+            else {
                 return;
             };
             // A locked footprint refuses when the drag starts. The press
@@ -169,8 +175,8 @@ impl Signex {
     }
 
     /// The drag was released at `to`: move as one step.
-    pub(crate) fn pcb_footprints_dropped(&mut self, from: Point, to: Point) {
-        self.pcb_footprints_dragged(from, to);
+    pub(crate) fn pcb_footprints_dropped(&mut self, from: Point, to: Point, tolerance_mm: f64) {
+        self.pcb_footprints_dragged(from, to, tolerance_mm);
         self.drop_pcb_carry(from, to);
     }
 

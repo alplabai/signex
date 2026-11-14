@@ -190,6 +190,7 @@ fn drag_to(x: f64) -> PcbCanvasMsg {
     PcbCanvasMsg::FootprintDragged {
         from: Point::new(10.0, 10.0),
         to: Point::new(x, 10.0),
+        tolerance_mm: 0.05,
     }
 }
 
@@ -321,13 +322,18 @@ fn a_locked_footprint_refuses_the_drag_at_its_start_once() {
     let dragged = |x: f64| PcbCanvasMsg::FootprintDragged {
         from,
         to: Point::new(x, 10.0),
+        tolerance_mm: 0.05,
     };
     send(&mut rig.app, Message::PcbCanvas(dragged(32.0)));
     assert_eq!(refusals_since(since), 1, "refused as the drag starts");
     let ghost = &rig.app.interaction_state.pcb_canvas.highlight().ghost;
     assert!(ghost.is_empty(), "the locked part is not previewed");
     send(&mut rig.app, Message::PcbCanvas(dragged(34.0)));
-    let dropped = PcbCanvasMsg::FootprintDropped { from, to };
+    let dropped = PcbCanvasMsg::FootprintDropped {
+        from,
+        to,
+        tolerance_mm: 0.05,
+    };
     send(&mut rig.app, Message::PcbCanvas(dropped));
     assert_eq!(refusals_since(since), 1, "said once, not per move or drop");
     assert_eq!(board_text(&rig.app, &rig.b), before, "nothing moved");

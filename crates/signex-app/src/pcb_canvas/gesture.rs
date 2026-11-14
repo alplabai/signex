@@ -24,7 +24,7 @@ pub(super) struct Gesture {
     /// The press has passed the drag threshold and owns the canvas marquee,
     /// or (with `carrying`) drags the selected footprints.
     dragging: bool,
-    /// The press landed on a selected footprint: a drag moves it (#2240).
+    /// The press landed on a footprint: a drag moves it (#2240, #2358).
     carrying: bool,
 }
 
@@ -94,6 +94,7 @@ impl Gesture {
                 let msg = PcbCanvasMsg::FootprintDragged {
                     from: canvas.screen_to_world(press, bounds),
                     to: canvas.screen_to_world(pos, bounds),
+                    tolerance_mm: hover_reach_mm(canvas.scale()),
                 };
                 Some(canvas::Action::publish(Message::PcbCanvas(msg)).and_capture())
             }
@@ -138,6 +139,7 @@ impl Gesture {
                     PcbCanvasMsg::FootprintDropped {
                         from: canvas.screen_to_world(press, bounds),
                         to: canvas.screen_to_world(pos, bounds),
+                        tolerance_mm: hover_reach_mm(canvas.scale()),
                     }
                 } else if past_threshold(press, pos) {
                     PcbCanvasMsg::BoxSelected {
