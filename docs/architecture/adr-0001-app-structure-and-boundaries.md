@@ -137,7 +137,7 @@ Arrows into the core are calls. The core returns events and effects to its calle
 
 - **Inside the hexagon:**
   - the domain crates of A2;
-  - `AppCore`, the application core. It is iced-free; it grows in `signex-app/src/app/core/` and is later lifted into its own crate (epic D2). Until then the D5 guard below keeps it apart.
+  - `AppCore`, the application core. It is iced-free; it grows in `signex-app/src/app/core/` and is later lifted into its own crate (epic D2). Until then the ADR-0001 D5 guard below keeps it apart.
 
   `AppCore` names no `iced` type, window id, dialog, canvas, selection or clipboard. It holds no file handle, thread or runtime.
 - **Driving ports:**
@@ -159,7 +159,7 @@ Arrows into the core are calls. The core returns events and effects to its calle
   - Owed and in-flight work is core state (ADR-0003 D1). That includes the writes in flight and their per-path order: the #997 ledger, under which an older write never lands after a newer one.
   - `complete` applies a result only to the same document instance and generation it was issued for (ADR-0003 D4).
   - Every effect gets exactly one `complete`, a failure included, so a lost result frees its slot and reaches the person (ADR-0003 D5).
-  - A boundary command (save, undo, switch, file move) waits on that state. Before it proceeds, the writes in flight that it could overtake have completed, as the `SaveBarrier` wait does today before a synchronous write or a file move (ADR-0003 D2). For a schematic, undo, redo and switch need no other flush: the revision stamp covers them (ADR-0003 D2, D4).
+  - A boundary command (save, undo, switch, file move) first finishes or settles its owed work (`finish_pending`, ADR-0003 D2). Writes wait, as `SaveBarrier` does today before a synchronous write or a file move. Compute is settled inline, as `settle_pending_inline` does for an owed footprint solve. For a schematic, undo, redo, switch and async Save need no other flush: the revision stamp covers them (ADR-0003 D2, D4).
 - **Events are a return value, not a bus.**
   - `CoreOutput { events, effects }` goes back to the one caller, in order. These are application events (what changed: a document, its dirty state, its results), not domain events published to subscribers.
   - The GUI projects the events of its own calls into GUI-only state (A1).
@@ -268,7 +268,7 @@ Cargo blocks the big violations (a domain crate physically cannot import Iced โ€
     - The lint reaches the domain crates only after the epic's S-IO slice, because `signex-types` and `signex-engine` still call `std::fs` today.
     - Clippy reads the nearest `clippy.toml` and does not merge it with the workspace file, so a per-crate file must repeat the workspace bans.
   - **`wasm32-unknown-unknown` build.** The core and the crates below it must build for it, which keeps OS-bound dependencies (git2, tokio's IO and multi-thread runtime) out. That build alone does not catch `std::fs` or `std::thread`: they compile there and fail only at run time. The lint above is what keeps them out.
-  - **Stack frames.** Clippy `large_stack_frames` runs on the core.
+  - **Stack frames (recommendation, open).** Run Clippy `large_stack_frames` on the core, against the stack overflow of #2325. This comes from the research note (ยง7.6), not from an epic decision.
 
 ### D6. Reusable views/widgets use three tiers with promotion-by-need
 
