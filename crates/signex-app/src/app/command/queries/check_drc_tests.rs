@@ -135,7 +135,21 @@ fn warnings(report: &Value) -> Vec<String> {
 }
 
 /// Run DRC on the open board at `path`, to its end: what it reported.
+/// Held by every Run DRC here (the lib binary's only one) and across each
+/// read of the shared diagnostics ring, so a parallel run never logs its
+/// Messages lines between another test's mark and its read.
+fn drc_serial() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 fn run_drc(app: &mut Signex, path: &Path) -> signex_drc::DrcReport {
+    let _serial = drc_serial();
+    run_drc_held(app, path)
+}
+
+/// Run DRC, for a caller already holding [`drc_serial`].
+fn run_drc_held(app: &mut Signex, path: &Path) -> signex_drc::DrcReport {
     let task = app.handle_pcb_drc_requested();
     crate::task_driver::TaskDriver::new()
         .settle(app, task)
@@ -429,6 +443,7 @@ fn a_check_says_its_rule_text_in_the_report_not_in_messages() {
             ..ProjectRules::default()
         },
     );
+    let serial = drc_serial();
     let mark = crate::diagnostics::newest_entry_id();
     let checked = report(&mut app, &path, &[]);
     assert_eq!(logged(mark, "DRC"), Vec::<String>::new());
@@ -446,11 +461,12 @@ fn a_check_says_its_rule_text_in_the_report_not_in_messages() {
     );
     // Run DRC says the same in Messages.
     let mark = crate::diagnostics::newest_entry_id();
-    let _ = run_drc(&mut app, &path);
+    let _ = run_drc_held(&mut app, &path);
     assert!(
         !logged(mark, "the rule text was not applied").is_empty(),
         "Run DRC says it"
     );
+    drop(serial);
 }
 
 #[test]
