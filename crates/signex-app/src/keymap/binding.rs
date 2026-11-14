@@ -1,4 +1,7 @@
-use crate::keymap::{AppCommandId, Platform, physical::us_qwerty_char};
+use crate::keymap::{
+    AppCommandId, Platform,
+    physical::{shortcut_char, us_qwerty_char},
+};
 use iced::keyboard;
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt, str::FromStr};
@@ -215,16 +218,18 @@ impl KeyStroke {
 impl KeyStroke {
     /// The stroke to try when the logical one matches nothing: the key's
     /// US-QWERTY character, for a layout whose logical key is not ASCII
-    /// (Turkish `ö` on the comma key, Cyrillic). Only offered while Ctrl,
-    /// Cmd or Alt is held; a bare or Shift-only key is never remapped.
-    /// `None` when there is nothing to retry with (#1645).
+    /// (Turkish `ö` on the comma key, Cyrillic). With Ctrl, Cmd or Alt held
+    /// any non-ASCII key is retried (#1645). A bare or Shift-only key is
+    /// retried only when it is not Latin script (Cyrillic `ц` is `w`, Greek
+    /// `ς` is `w`), through [`shortcut_char`]; `é` or `ö` stay as typed
+    /// (#2095). `None` when there is nothing to retry with.
     pub fn physical_fallback(
         key: &keyboard::Key,
         physical: keyboard::key::Physical,
         modifiers: keyboard::Modifiers,
     ) -> Option<Self> {
         if !(modifiers.control() || modifiers.logo() || modifiers.alt()) {
-            return None;
+            return Self::non_latin_fallback(key, physical, modifiers);
         }
         // Windows reports AltGr as Ctrl+Alt: that is a typed character
         // (`ą`), not a chord. Applied on every OS for simplicity.
@@ -241,6 +246,29 @@ impl KeyStroke {
         Some(Self {
             modifiers: Modifiers::from_iced(modifiers),
             key: KeyToken::Character(us.to_string()),
+        })
+    }
+
+    /// The bare or Shift-only retry: the key's [`shortcut_char`] when it
+    /// differs from the logical character, which happens only for a
+    /// non-Latin script.
+    fn non_latin_fallback(
+        key: &keyboard::Key,
+        physical: keyboard::key::Physical,
+        modifiers: keyboard::Modifiers,
+    ) -> Option<Self> {
+        let keyboard::Key::Character(value) = key.as_ref() else {
+            return None;
+        };
+        let latin = shortcut_char(key, physical)?;
+        let mut logical = value.chars().flat_map(char::to_lowercase);
+        let unchanged = logical.next() == Some(latin) && logical.next().is_none();
+        if unchanged || !latin.is_ascii_alphanumeric() {
+            return None;
+        }
+        Some(Self {
+            modifiers: Modifiers::from_iced(modifiers),
+            key: KeyToken::Character(latin.to_string()),
         })
     }
 }

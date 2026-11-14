@@ -466,9 +466,12 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 self.on_left_release(state)
             }
-            Event::Keyboard(iced::keyboard::Event::KeyPressed { key, modifiers, .. }) => {
-                self.on_key_pressed(state, key, modifiers)
-            }
+            Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key,
+                physical_key,
+                modifiers,
+                ..
+            }) => self.on_key_pressed(state, key, *physical_key, modifiers),
             _ => None,
         };
         // A queued Fit / centre-origin request needs the real canvas
@@ -877,6 +880,8 @@ fn symbol_draw_options(
     }
 }
 
+#[cfg(test)]
+mod layout_keys_tests;
 #[cfg(test)]
 mod rotate_keys_tests;
 #[cfg(test)]

@@ -100,9 +100,19 @@ Layouts: a key press is matched by the logical key first, exactly as before
 (AZERTY `z` stays `z`; a binding on `Ctrl+ö` still fires). Only when that
 matches nothing, and Ctrl, Cmd or Alt is held, is the physical key's
 US-QWERTY character tried: on a Turkish keyboard `⌘ö` fires `Mod+,`. A bare or
-Shift-only key is never remapped. The macOS label (`⇧⌘S`) is display only and
-is never parsed back; the Preferences recorder and editor carry the profile-file
-spelling or the parsed stroke.
+Shift-only key is remapped only when its character is not Latin script: on a
+Russian or Greek keyboard the W key still fires `W` (Place Wire) when nothing
+binds `ц` or `ς`, while a Latin-script key (`é`, `ö`, Dvorak or AZERTY letters)
+is never remapped (#2095). The symbol and footprint canvases read their own
+letter keys (Ctrl+A, Ctrl+Z, Ctrl+Y, Ctrl+X/C/V, X) the same way.
+
+Known limit: a key whose layout character is ASCII is never remapped, with or
+without Ctrl. The Greek layout puts `;` on the Q key, so on a Greek keyboard
+`Q` and `Ctrl+Q` reach a `;` or `Ctrl+;` binding, not a `Q` or `Ctrl+Q` one.
+
+The macOS label (`⇧⌘S`) is display only and is never parsed back; the
+Preferences recorder and editor carry the profile-file spelling or the parsed
+stroke.
 
 Existing user profiles are not rewritten silently: their `Ctrl+…` and `Cmd+…`
 keep their physical meaning. The one exception is the one-time macOS prompt
