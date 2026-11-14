@@ -99,7 +99,7 @@ Decision: define **one** authoritative `Netlist` type in `signex-types` — the 
 
 The GUI is not the only way into signex. `signex-cli` runs catalog commands for scripts and agents, the agent socket lets an agent work in a running window, and a web or plugin front end may follow. All of them must have the same effect for the same command. Today that parity is bought by booting the whole GUI model without a window (`boot_headless`). A4 replaces this with one core behind ports.
 
-Some rules in this section are still open decisions in epic #2326, and take effect when both maintainers sign off on this amendment: epic decisions D1 (no selection in the core), D5 (effects as data), D7 (settings as values), D10 (wasm32) and D11 (the shared command crate).
+Some rules in this section are still open decisions in epic #2326, and take effect when both maintainers sign off on this amendment: epic decisions D1 (no selection in the core), D2 (the core grows in place and is lifted into a crate last), D3 (no dialog in the core; file dialogs stay with the front end), D5 (effects as data), D7 (settings as values), D10 (wasm32) and D11 (the shared command crate).
 
 ```mermaid
 flowchart LR
@@ -137,7 +137,7 @@ Arrows into the core are calls. The core returns events and effects to its calle
 
 - **Inside the hexagon:**
   - the domain crates of A2;
-  - `AppCore`, the application core. It is iced-free; it grows in `signex-app/src/app/core/` and is later lifted into its own crate (D5).
+  - `AppCore`, the application core. It is iced-free; it grows in `signex-app/src/app/core/` and is later lifted into its own crate (epic D2). Until then the D5 guard below keeps it apart.
 
   `AppCore` names no `iced` type, window id, dialog, canvas, selection or clipboard. It holds no file handle, thread or runtime.
 - **Driving ports:**
@@ -145,21 +145,21 @@ Arrows into the core are calls. The core returns events and effects to its calle
   - `complete(effect id, result) -> CoreOutput`, for finished effects;
   - `query` for read-only answers, with a typed error.
 
-  Every core command names its document and its targets in its arguments. A front end fills in what a person leaves implicit (the active document, the selection, the pre-placement form) before it calls `execute`. A front end that must protect a person's in-progress drag or text edit passes that as plain data in the arguments, never as a callback into the GUI. `execute` routes by command id through a thin table, like `updates/mod.rs`. The handling lives in area modules (documents, placement, hierarchy, files, agent edits), never in the router.
+  Every core command names its document and its targets in its arguments. A front end fills in what a person leaves implicit (the active document, the selection, the pre-placement form) before it calls `execute`. A front end that must protect a person's in-progress drag or text edit passes that as plain data in the arguments, never as a callback into the GUI. `execute` routes by command id through a thin table, like the footprint editor's `crates/signex-app/src/library/editor/footprint/updates/mod.rs`. The handling lives in area modules (documents, placement, hierarchy, files, agent edits), never in the router.
 - **Driven ports:** IO is a set of pluggable driven adapters, the mirror of the driving side.
   - **Who defines what.** The core defines the port types: `Effect`, `EffectResult`, and the storage, version-control, network and clock capabilities they name. A *host* implements them, owns the adapters and runs `perform(Effect) -> EffectResult`.
   - **Where the host lives.** The host is outside the core and depends on it, never the reverse. `perform` takes no `&AppCore`.
   - **Swappable per platform.** A host is composed per platform: native (files, git), browser (browser storage, or a remote server), test (in memory). Swapping a host changes where documents are stored without touching the core or the front end.
   - **How hosts are run.** The GUI runs the host off the UI thread as a `Task`; the CLI runs it inline.
   - **A3.2 tool ports** (`LibraryAdapter`, `DistributorAdapter`, a future `Simulator`) are called by the host, never by the core.
-  - **What is not an effect.** Pure CPU work (netlist building, ERC, DRC) does no IO, so it is not an effect and the host is not involved. A short pure call runs inside `execute`. A long pure job (a full ERC or DRC run) must not block the UI thread. The core hands it to the front end as a compute job, made of an input snapshot and a pure function. The front end runs it off the UI thread and feeds the result back through `complete`, under the same rules as an effect.
+  - **What is not an effect.** Pure CPU work (netlist building, ERC, DRC) does no IO, so it is not an effect and the host is not involved. A short pure call runs inside `execute`. A long pure job (a full ERC or DRC run) must not block the UI thread. Phase 1 of the epic keeps such a job on its existing `Task`. How the core hands such a job out later is an open decision of epic #2326, not a rule here. One candidate is a compute job (an input snapshot and a pure function) that the front end runs off the UI thread and feeds back through `complete`; [the research note](research/hexagonal-ddd.md), §7.3, argues this is compute, not an effect.
   - **What stays with the front end.** Preferences, file dialogs and fonts stay with the front end. The core receives settings as values.
 - **Effect ordering and completion (ADR-0003):**
-  - Effects returned together are independent and may run concurrently. An effect that must follow another (a git commit after its write) is returned only by the `complete` of the one it follows.
-  - Owed and in-flight work is core state.
+  - Effects returned together may run concurrently, except that two writes to one path never run out of order. An effect that must follow another (a git commit after its write) is returned only by the `complete` of the one it follows.
+  - Owed and in-flight work is core state (ADR-0003 D1). That includes the writes in flight and their per-path order: the #997 ledger, under which an older write never lands after a newer one.
   - `complete` applies a result only to the same document instance and generation it was issued for (ADR-0003 D4).
   - Every effect gets exactly one `complete`, a failure included, so a lost result frees its slot and reaches the person (ADR-0003 D5).
-  - Before a save, undo or switch command runs, the core returns its owed work as effects. The front end runs them and feeds their `complete`s, and only then does the boundary command proceed (ADR-0003 D2).
+  - A boundary command (save, undo, switch, file move) waits on that state. Before it proceeds, the writes in flight that it could overtake have completed, as the `SaveBarrier` wait does today before a synchronous write or a file move (ADR-0003 D2). For a schematic, undo, redo and switch need no other flush: the revision stamp covers them (ADR-0003 D2, D4).
 - **Events are a return value, not a bus.**
   - `CoreOutput { events, effects }` goes back to the one caller, in order. These are application events (what changed: a document, its dirty state, its results), not domain events published to subscribers.
   - The GUI projects the events of its own calls into GUI-only state (A1).
@@ -259,7 +259,7 @@ Direct application of A2's authoritative-model rule. `signex-app` wires UI state
 Cargo blocks the big violations (a domain crate physically cannot import Iced — verified: zero `iced` imports in domain crates). Everything *inside* `signex-app` needs explicit discipline.
 
 - Slice internals are `pub(super)` / `pub(crate)`. A slice **never** imports a sibling slice's internals, `views`, or `widgets`.
-- Add a CI arch-guard (same mechanism as the existing KiCad-surface guards) that grep-fails on (a) cross-slice imports between `library/<a>/` and `library/<b>/`, and (b) domain-shaped algorithms surfacing in the app crate. A boundary that is not machine-checked erodes.
+- Add a CI arch-guard (same mechanism as the existing clean-room guard, `.github/workflows/license-guard.yml`) that grep-fails on (a) cross-slice imports between `library/<a>/` and `library/<b>/`, and (b) domain-shaped algorithms surfacing in the app crate. A boundary that is not machine-checked erodes.
 - The crate-level half is machine-checked: `scripts/check_arch_guard.sh` (CI job `arch guard`, #664) fails on a workspace dependency edge missing from `scripts/arch-edges.txt` and on a domain crate depending on the UI/GPU stack. `scripts/check_layer_ratchet.sh` (#664) adds a ratchet on the in-crate side: a count of `SymbolTransform` / union-find copies outside their owning crate and of `library::editor::<slice>::{state,canvas,updates,views}` imports from outside `library/` may not grow (baseline in `scripts/layer-ratchet-baseline.txt`). A full cross-slice import guard between `library/<a>/` and `library/<b>/` is still to do.
 - *Amended (#2326).* The application core (A4) and the shared command crate get the same treatment, using allowlists rather than denylists:
   - **Arch guard.** Both crates' edges go in `scripts/arch-edges.txt`, and both join `DOMAIN` in `scripts/check_arch_guard.sh`. That list, not the edges file, is what fails on a UI/GPU dependency.
