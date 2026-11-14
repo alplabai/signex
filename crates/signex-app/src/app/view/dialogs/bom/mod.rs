@@ -10,6 +10,7 @@
 use super::*;
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
+use signex_i18n::{ids, t};
 use signex_widgets::{raw, text};
 
 use super::widgets::{draggable_header, os_title_bar_slot};
@@ -50,6 +51,7 @@ impl Signex {
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
+        let i18n = self.ui_state.i18n.as_ref();
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
 
@@ -212,7 +214,7 @@ impl Signex {
                 issue_badge,
                 Space::new().width(12),
                 dialog_button(
-                    "Export\u{2026}",
+                    t!(i18n, ids::DIALOG_BOM_EXPORT),
                     super::graphite::call_to_action(tokens),
                     Some(Message::BomPreview(BomPreviewMsg::Export)),
                     tokens,

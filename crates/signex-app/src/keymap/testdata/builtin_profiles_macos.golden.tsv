@@ -96,6 +96,7 @@ altium	hint	-	E W	break_wire
 altium	hint	-	ESC	cancel_current_tool
 altium	hint	-	-	center_on_cursor
 altium	hint	-	HOME	center_view_at_cursor
+altium	hint	-	-	check_drc
 altium	hint	-	-	check_erc
 altium	hint	-	⌘W	close_active_document
 altium	hint	-	-	close_all_documents
@@ -432,6 +433,7 @@ classic	hint	-	-	break_wire
 classic	hint	-	ESC	cancel_current_tool
 classic	hint	-	F4	center_on_cursor
 classic	hint	-	-	center_view_at_cursor
+classic	hint	-	-	check_drc
 classic	hint	-	-	check_erc
 classic	hint	-	-	close_active_document
 classic	hint	-	-	close_all_documents

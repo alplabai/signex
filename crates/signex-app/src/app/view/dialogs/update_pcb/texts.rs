@@ -185,6 +185,16 @@ pub(super) fn note(i18n: &I18n, note: &EcoNote) -> Localized {
             ids::UPDATE_PCB_NOTE_KEPT_UNLINKED,
             "designator" => reference.clone()
         ),
+        EcoNote::ExtraLink {
+            reference,
+            designator,
+            ..
+        } => t!(
+            i18n,
+            ids::UPDATE_PCB_NOTE_EXTRA_LINK,
+            "reference" => reference.clone(),
+            "designator" => designator.clone()
+        ),
         EcoNote::Net(text) => t!(i18n, ids::UPDATE_PCB_NOTE_NET, "text" => text.clone()),
     }
 }

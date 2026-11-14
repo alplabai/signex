@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 
 use signex_erc::project_rules::profile::{BUILTIN_PROFILE_NAME, adopt_profile, builtin_profile};
-use signex_types::project::{ErcRules, RuleProfile};
+use signex_types::project::{ErcRules, ProjectRules, RuleProfile};
 
 use super::{
     FileError, USER_DEFAULT_PROFILE_NAME, file_name_for, read_library, user_profile_ref,
@@ -240,9 +240,18 @@ pub fn save_named_profile(
     save_profile_as(dir, profile, name, version, overwrite)
 }
 
+/// What "Save as profile" writes for a project: its `erc` and `drc` rule
+/// sets (#2307 step 2b); waivers and other project keys stay in the project.
+pub fn profile_of_project_rules(rules: &ProjectRules) -> RuleProfile {
+    RuleProfile {
+        drc: rules.drc.clone(),
+        ..RuleProfile::new(String::new(), String::new(), rules.erc.clone())
+    }
+}
+
 /// Save `profile` under `name`/`version`, keeping everything else it holds
 /// (`drc`, keys from a newer build). Same rules as [`save_named_profile`].
-fn save_profile_as(
+pub fn save_profile_as(
     dir: &Path,
     mut profile: RuleProfile,
     name: &str,

@@ -270,6 +270,12 @@ impl SymbolLink {
         units.dedup();
         Self { sheet, units }
     }
+
+    /// Whether this link names the part made of `units` on `sheet`: the same
+    /// sheet path and at least one shared unit. The one place that rule lives.
+    pub fn names_part(&self, sheet: &InstancePath, units: &[Uuid]) -> bool {
+        self.sheet == *sheet && self.units.iter().any(|u| units.contains(u))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

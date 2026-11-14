@@ -70,9 +70,9 @@ The harness is `crates/signex-app/src/pcb_canvas/frame_bench_tests.rs`, an
 generator above by `#[path]`, so both benches draw the same board.
 
 - **Mount.** The stack `app/view/mod.rs` builds for a board: the `PcbCanvas`
-  canvas (background, grid and, with GPU render off, the board), the
-  `SceneShaderProgram<PcbSurface>` shader when GPU render is on, and the
-  highlight layer. The active bar and the layer strip are left out. `cpu` is
+  canvas (background and grid), the board layer (`BoardContentLayer` with GPU
+  render off, the `SceneShaderProgram<PcbSurface>` shader with it on), and
+  the highlight layer. The active bar and the layer strip are left out. `cpu` is
   the default mount (GPU render off in Preferences), `gpu` the shader mount.
 - **Frame.** `UserInterface::build`, `update` with the frame's mouse events, a
   second build when there were events (the app's `view` runs again after the
@@ -142,6 +142,31 @@ Known risk: the CPU mount is the default (Preferences GPU render off,
 edge of the 60 fps budget. Any further per-item geometry on the CPU path
 (silkscreen, designators, net colours) is likely to push them over unless the
 CPU path gets cheaper or the GPU mount becomes the default.
+
+Rerun on 2026-11-12 on the #2316 branch (trunk 8bd907a07 merged), same
+laptop and settings (#2321): the CPU mount went over the budget at 0°, with
+no AA zoom p95 17.85 ms, and with MSAAx4 pan 21.04 ms and zoom 18.21 ms (at
+37°: pan 17.82 ms, zoom 18.78 ms). The frame's draw phase showed why: every
+pan and zoom frame tessellated the whole board again on one thread (draw p95
+8.5 to 12.0 ms, against 0.01 ms idle).
+
+#2321 moves the CPU board into a layer of its own that a pan only moves and
+that a build tessellates on several threads (`docs/RENDERING_RULES.md`,
+"pcb-cpu-content"). Release bench, CPU path only, 10,000 tracks, AMD Radeon
+880M (Vulkan), 1600 x 1300 at dpr 1, p95 in ms against the 16.7 ms budget.
+"Before" is trunk 070fe7a4a, "after" is this change; both built and run the
+same day on the same machine, one after the other:
+
+| AA | angle | idle | pan | zoom | zoom-pan |
+|---|---|---|---|---|---|
+| none | 0° | 5.15 → 5.28 | **17.25** → 5.78 | **17.71** → 9.07 | 6.39 → 5.63 |
+| none | 37° | 6.29 → 6.37 | 15.82 → 6.66 | **18.42** → 12.08 | 7.09 → 7.33 |
+| MSAA x4 | 0° | 8.60 → 8.48 | **18.93** → 8.66 | **17.93** → 14.27 | 8.48 → 8.37 |
+| MSAA x4 | 37° | 8.74 → 8.03 | **21.01** → 8.63 | **20.17** → 14.27 | 10.62 → 9.69 |
+
+Every row is within budget after the change (9 of 16 were over before). A pan
+now only moves the retained geometry; a zoom still tessellates, on up to 8
+threads. Idle and zoom-pan rows move within run-to-run noise.
 
 ## Realistic boards
 

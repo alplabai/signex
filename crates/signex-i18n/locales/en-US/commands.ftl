@@ -16,6 +16,7 @@ cmd-break-wire = Break wire
 cmd-cancel-current-tool = Cancel current stage / exit placement mode
 cmd-center-on-cursor = Center on cursor
 cmd-center-view-at-cursor = Center/redraw view around cursor
+cmd-check-drc = Check design rules
 cmd-check-erc = Check electrical rules
 cmd-close-active-document = Close active document
 cmd-menu-close-active-document = Close Document

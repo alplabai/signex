@@ -194,3 +194,4 @@ preferences-section-window = Window
 preferences-section-annotation = Schematic — Annotation
 preferences-section-editing = Schematic — Editing
 preferences-section-distributors = Library — Distributor APIs
+preferences-restore-defaults = Restore defaults

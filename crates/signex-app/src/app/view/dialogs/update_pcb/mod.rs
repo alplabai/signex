@@ -174,25 +174,25 @@ impl Signex {
         let can_execute = ready.is_some() && self.update_pcb_execute_block().is_none();
         vec![
             dialog_button(
-                &s(i18n, ids::UPDATE_PCB_CLOSE),
+                t!(i18n, ids::UPDATE_PCB_CLOSE),
                 DialogButtonKind::Cancel,
                 Some(up(UpdatePcbMsg::CloseRequested)),
                 tokens,
             ),
             dialog_button(
-                &s(i18n, ids::UPDATE_PCB_REPORT),
+                t!(i18n, ids::UPDATE_PCB_REPORT),
                 DialogButtonKind::Secondary,
                 ready.map(|_| up(UpdatePcbMsg::ReportRequested)),
                 tokens,
             ),
             dialog_button(
-                &s(i18n, ids::UPDATE_PCB_VALIDATE),
+                t!(i18n, ids::UPDATE_PCB_VALIDATE),
                 DialogButtonKind::Secondary,
                 ready.map(|_| up(UpdatePcbMsg::ValidateRequested)),
                 tokens,
             ),
             dialog_button(
-                &s(i18n, ids::UPDATE_PCB_EXECUTE),
+                t!(i18n, ids::UPDATE_PCB_EXECUTE),
                 super::graphite::call_to_action(tokens),
                 can_execute.then(|| up(UpdatePcbMsg::ExecuteRequested)),
                 tokens,

@@ -303,6 +303,7 @@ fn reprefix_confirm_cancel_changes_nothing() {
         .as_ref()
         .expect("confirm is open");
     assert_eq!(open.change_lines.len(), 1);
+    assert_eq!(open.parts, 1, "the Confirm button counts the one part");
     assert_eq!(refs(&w, ROOT), ["D1"], "nothing applies before Confirm");
 
     let _ = w

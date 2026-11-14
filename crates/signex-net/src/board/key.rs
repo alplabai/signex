@@ -52,7 +52,8 @@ pub struct SymbolPad {
 /// designator is read here.
 ///
 /// A footprint with no link has no key: the sync reports it and leaves it be.
-/// `link_footprints_by_designator` is the one place a designator links one.
+/// Update PCB (`diff_board`) links one by designator, and
+/// `link_footprints_by_designator` does the same once, on request.
 #[derive(Debug, Clone, Default)]
 pub struct SymbolPadKey {
     /// Unit -> its part's anchor, for every unit some footprint links to.

@@ -52,6 +52,8 @@ mod violation_waivers;
 mod violation_waivers_tests;
 pub(crate) use rule_profiles::blocking;
 #[cfg(test)]
+mod rule_profiles_drc_tests;
+#[cfg(test)]
 mod rule_profiles_tests;
 mod rules_edit;
 #[cfg(test)]

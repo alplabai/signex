@@ -85,9 +85,9 @@ pub fn link_footprints_by_designator(
     // A part a linked footprint already holds.
     let held = |part: &DesignPart| {
         board.footprints.iter().any(|f| {
-            f.schematic_link.as_ref().is_some_and(|l| {
-                l.sheet == part.sheet && l.units.iter().any(|u| part.units.contains(u))
-            })
+            f.schematic_link
+                .as_ref()
+                .is_some_and(|l| l.names_part(&part.sheet, &part.units))
         })
     };
 

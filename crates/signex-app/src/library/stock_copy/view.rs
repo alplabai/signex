@@ -3,6 +3,7 @@
 
 use iced::widget::{Space, Widget, column, container, scrollable};
 use iced::{Element, Length};
+use signex_i18n::{ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{raw, text};
@@ -87,7 +88,7 @@ pub fn view<'a>(
     } else {
         let rows = writable.into_iter().map(|(root, name)| {
             secondary_btn(
-                name,
+                signex_i18n::UserText::new(name),
                 LibraryMessage::StockCopy(StockCopyMsg::TargetPicked(root.to_path_buf())),
                 tokens,
             )
@@ -103,9 +104,9 @@ pub fn view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            cancel_btn("Cancel", cancel, tokens),
+            cancel_btn(t!(i18n, ids::DIALOG_BUTTON_CANCEL), cancel, tokens),
             primary_btn(
-                "New Library\u{2026}",
+                t!(i18n, ids::LIBRARY_STOCK_COPY_NEW_LIBRARY),
                 LibraryMessage::StockCopy(StockCopyMsg::NewLibraryRequested),
                 tokens,
             ),

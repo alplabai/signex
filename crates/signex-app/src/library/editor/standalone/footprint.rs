@@ -5,6 +5,7 @@ use std::path::Path;
 
 use iced::widget::{Space, container, row, scrollable};
 use iced::{Border, Element, Length, Theme, Widget};
+use signex_i18n::{ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{button, raw, text};
@@ -216,6 +217,7 @@ fn view_footprint_layers_strip<'a>(
 fn view_footprint_top_strip<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     let text_c = theme_ext::text_primary(tokens);
@@ -332,7 +334,7 @@ fn view_footprint_top_strip<'a>(
     // A copy of a stock footprint can be made again from the editor (#813).
     let copy_again: Element<'a, LibraryMessage> = if editor.file.copied_from.is_some() {
         crate::library::modal_chrome::secondary_btn(
-            "Copy Again",
+            t!(i18n, ids::EDITORS_SYMBOL_COPY_AGAIN),
             LibraryMessage::StockCopy(
                 crate::library::stock_copy::StockCopyMsg::CopyAgainRequested(editor.path.clone()),
             ),

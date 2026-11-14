@@ -2,7 +2,7 @@
 //! https://github.com/alplabai/signex/issues/2199#issuecomment-6771692137): the
 //! request is answered when the edit has run on their completion, never when
 //! it was dispatched. A headless run takes the outcome by its ticket instead.
-//! A `check_erc` waits for its ERC run the same way. See
+//! A check (`check_erc`, `check_drc`) waits for its run the same way. See
 //! `command::edit_reads` and `docs/AGENT_EDITS.md`, "Edits that read the
 //! disk".
 
@@ -52,16 +52,16 @@ impl Signex {
         task
     }
 
-    /// The ERC run of a `check_erc` finished: answer its caller with the
-    /// report. A query writes no edit journal line.
+    /// The run of a check finished: answer its caller with the report. A
+    /// query writes no edit journal line.
     pub(crate) fn handle_check_finished(&mut self, finished: &CheckFinished) -> Task<Message> {
         let request = &finished.request;
         let mark = crate::diagnostics::newest_entry_id();
         let before = self.change_snapshot();
         let (outcome, task) =
             match self.agent_gate_closed(request.ticket, &request.command, &request.args) {
-                Some(reason) => self.turned_away_waiting(request.ticket, &request.sheet, reason),
-                None => (self.erc_check_answer(finished), Task::none()),
+                Some(reason) => self.turned_away_waiting(request.ticket, &request.document, reason),
+                None => (self.check_answer(finished), Task::none()),
             };
         let id = request.command.as_str().to_string();
         self.answer_waiting(request.ticket, &id, mark, &before, outcome);

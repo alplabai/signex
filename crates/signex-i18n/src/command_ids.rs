@@ -17,6 +17,7 @@ define_ids! {
         CMD_CANCEL_CURRENT_TOOL = "cmd-cancel-current-tool";
         CMD_CENTER_ON_CURSOR = "cmd-center-on-cursor";
         CMD_CENTER_VIEW_AT_CURSOR = "cmd-center-view-at-cursor";
+        CMD_CHECK_DRC = "cmd-check-drc";
         CMD_CHECK_ERC = "cmd-check-erc";
         CMD_CLOSE_ACTIVE_DOCUMENT = "cmd-close-active-document";
         CMD_MENU_CLOSE_ACTIVE_DOCUMENT = "cmd-menu-close-active-document";

@@ -22,14 +22,14 @@ const SCALE: f32 = 8.0;
 
 /// A window with the canvas padded off its origin, as in the dock.
 #[derive(Clone, Copy)]
-struct Mount {
-    window: (u32, u32),
-    pad: (f32, f32),
-    dpi: f32,
+pub(crate) struct Mount {
+    pub(crate) window: (u32, u32),
+    pub(crate) pad: (f32, f32),
+    pub(crate) dpi: f32,
 }
 
 /// The big dock-like window.
-const DOCKED: Mount = Mount {
+pub(crate) const DOCKED: Mount = Mount {
     window: (1920, 1080),
     pad: (245.0, 67.0),
     dpi: 1.0,
@@ -43,7 +43,11 @@ enum Path {
     Surface,
 }
 
-fn render_in(gpu: &mut Gpu, mount: Mount, element: Element<'_, crate::app::Message>) -> Frame {
+pub(crate) fn render_in(
+    gpu: &mut Gpu,
+    mount: Mount,
+    element: Element<'_, crate::app::Message>,
+) -> Frame {
     let element = iced::widget::container(element)
         .padding(Padding {
             top: mount.pad.1,
@@ -158,7 +162,7 @@ fn last_frame(
     (last.expect("at least one frame"), rebuilds)
 }
 
-fn differing(a: &Frame, b: &Frame) -> Vec<(u32, u32)> {
+pub(crate) fn differing(a: &Frame, b: &Frame) -> Vec<(u32, u32)> {
     let mut out = Vec::new();
     for y in 0..a.height {
         for x in 0..a.width {
@@ -171,7 +175,7 @@ fn differing(a: &Frame, b: &Frame) -> Vec<(u32, u32)> {
     out
 }
 
-fn max_channel_diff(a: &Frame, b: &Frame) -> u8 {
+pub(crate) fn max_channel_diff(a: &Frame, b: &Frame) -> u8 {
     a.data
         .iter()
         .zip(&b.data)

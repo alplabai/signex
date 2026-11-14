@@ -5,6 +5,7 @@
 use iced::widget::{Space, column, container, scrollable};
 use iced::{Element, Length, Widget};
 use signex_engine::ComponentChangePreview;
+use signex_i18n::{I18n, MessageId, ids, t};
 use signex_types::schematic::PinMatchedBy;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -110,11 +111,11 @@ pub fn preview_lines(preview: &ComponentChangePreview) -> Vec<PreviewLine> {
 }
 
 /// The confirm button's label: it says so when the change loses something.
-pub fn confirm_label(preview: &ComponentChangePreview) -> &'static str {
+pub fn confirm_label(preview: &ComponentChangePreview) -> MessageId {
     if preview.is_clean() {
-        "Change"
+        ids::LIBRARY_CHANGE_PART_CONFIRM
     } else {
-        "Change anyway"
+        ids::LIBRARY_CHANGE_PART_CONFIRM_ANYWAY
     }
 }
 
@@ -163,6 +164,7 @@ fn option_button<'a>(
 pub fn change_preview_view<'a>(
     change: &'a ChangePreview,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
@@ -187,13 +189,17 @@ pub fn change_preview_view<'a>(
     }
     let buttons = vec![
         secondary_btn(
-            "Back",
+            t!(i18n, ids::DIALOG_BUTTON_BACK),
             LibraryMessage::PlacedPart(PlacedPartMsg::ChangePreviewBackedOut),
             tokens,
         ),
-        cancel_btn("Cancel", LibraryMessage::ClosePicker, tokens),
+        cancel_btn(
+            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+            LibraryMessage::ClosePicker,
+            tokens,
+        ),
         primary_btn(
-            confirm_label(&change.preview),
+            t!(i18n, confirm_label(&change.preview)),
             LibraryMessage::PlacedPart(PlacedPartMsg::ChangeConfirmed),
             tokens,
         ),
@@ -211,6 +217,7 @@ pub fn change_preview_view<'a>(
 pub fn datasheet_choice_view<'a>(
     choice: &'a DatasheetChoice,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let mut list = column![
@@ -230,7 +237,11 @@ pub fn datasheet_choice_view<'a>(
             LibraryMessage::PlacedPart(PlacedPartMsg::DatasheetPicked(index)),
         ));
     }
-    let buttons = vec![cancel_btn("Cancel", LibraryMessage::ClosePicker, tokens)];
+    let buttons = vec![cancel_btn(
+        t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+        LibraryMessage::ClosePicker,
+        tokens,
+    )];
     card(
         crate::library::picker::TITLE_OPEN_DATASHEET,
         scrollable(list).width(Length::Fill).boxed(),
@@ -244,6 +255,10 @@ pub fn datasheet_choice_view<'a>(
 mod tests {
     use super::*;
     use signex_types::schematic::{PinMapping, PinPair};
+
+    fn english(id: MessageId) -> String {
+        I18n::en_us_ref().message(id, &[]).to_string()
+    }
 
     fn pair(old: &str, new: &str, by: PinMatchedBy) -> PinPair {
         PinPair {
@@ -277,7 +292,7 @@ mod tests {
                 "Pin 3 \u{2192} 9 (by name)"
             ]
         );
-        assert_eq!(confirm_label(&preview), "Change");
+        assert_eq!(english(confirm_label(&preview)), "Change");
     }
 
     #[test]
@@ -336,7 +351,7 @@ mod tests {
         assert!(warnings[3].ends_with(": 7"));
         assert!(lines[..4].iter().all(|l| l.kind == LineKind::Warning));
         assert!(lines.iter().any(|l| l.text == "Pin 3 has no match"));
-        assert_eq!(confirm_label(&preview), "Change anyway");
+        assert_eq!(english(confirm_label(&preview)), "Change anyway");
         assert!(
             lines
                 .iter()

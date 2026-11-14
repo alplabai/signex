@@ -6,6 +6,7 @@ use crate::keymap::{
     AppCommandId, KeyBindingSource, KeyStroke, Platform, ShortcutBindingAction, ShortcutContext,
     ShortcutTrigger,
 };
+use signex_i18n::I18n;
 use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CompiledKeymap {
@@ -26,7 +27,11 @@ pub struct CompiledKeymap {
 /// The hint is context-free: it does not know which context the menu is
 /// shown in, and an `Unbind` shadows a binding only in its own context
 /// (the same rule `shortcut_label_linear` states independently).
-fn label_index(bindings: &[CompiledBinding], platform: Platform) -> BTreeMap<AppCommandId, String> {
+fn label_index(
+    bindings: &[CompiledBinding],
+    platform: Platform,
+    i18n: &I18n,
+) -> BTreeMap<AppCommandId, String> {
     let mut labels = BTreeMap::new();
     // Reverse scan; `unbinds` holds the unbinds that come after the
     // binding under inspection.
@@ -42,7 +47,7 @@ fn label_index(bindings: &[CompiledBinding], platform: Platform) -> BTreeMap<App
                 if !shadowed && !labels.contains_key(command) {
                     labels.insert(
                         command.clone(),
-                        display_sequence(&binding.sequence, platform),
+                        display_sequence(&binding.sequence, platform, i18n),
                     );
                 }
             }
@@ -52,10 +57,10 @@ fn label_index(bindings: &[CompiledBinding], platform: Platform) -> BTreeMap<App
     labels
 }
 
-fn display_sequence(sequence: &[KeyStroke], platform: Platform) -> String {
+fn display_sequence(sequence: &[KeyStroke], platform: Platform, i18n: &I18n) -> String {
     sequence
         .iter()
-        .map(|stroke| stroke.display_for(platform))
+        .map(|stroke| stroke.display_in(platform, i18n))
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -84,8 +89,26 @@ impl CompiledKeymap {
         Self::compile_for(profile, Platform::current())
     }
 
-    /// Compile with every `Mod` resolved for `platform`.
+    /// [`Self::compile`] with the shortcut labels in the language of `i18n`.
+    pub fn compile_in(profile: &ShortcutProfile, i18n: &I18n) -> Self {
+        Self::build(profile, Platform::current(), i18n)
+    }
+
+    /// Compile with every `Mod` resolved for `platform`, labels in en-US.
     pub fn compile_for(profile: &ShortcutProfile, platform: Platform) -> Self {
+        Self::build(profile, platform, &I18n::en_us())
+    }
+
+    /// The same bindings with the labels rendered in the language of `i18n`:
+    /// a language switch relabels the live keymap, whatever profile built it.
+    pub fn labelled_in(&self, i18n: &I18n) -> Self {
+        Self {
+            labels: label_index(&self.bindings, self.platform, i18n),
+            ..self.clone()
+        }
+    }
+
+    fn build(profile: &ShortcutProfile, platform: Platform, i18n: &I18n) -> Self {
         let source = match profile.kind {
             ShortcutProfileKind::BuiltIn => KeyBindingSource::BuiltIn(profile.id.clone()),
             ShortcutProfileKind::Custom => KeyBindingSource::Custom(profile.id.clone()),
@@ -110,7 +133,7 @@ impl CompiledKeymap {
                 }
             }
         }
-        let labels = label_index(&bindings, platform);
+        let labels = label_index(&bindings, platform, i18n);
         Self {
             platform,
             bindings,
@@ -167,7 +190,13 @@ impl CompiledKeymap {
     /// command to exactly that sequence (and it is not unbound later); else
     /// the usual label. The chrome search field uses this to show `Ctrl+K`
     /// on presets that bind it and fall back to the bound chord otherwise.
-    pub fn shortcut_label_preferring(&self, command_id: &str, preferred: &str) -> String {
+    /// `preferred` is shown in the language of `i18n`, like the labels.
+    pub fn shortcut_label_preferring(
+        &self,
+        command_id: &str,
+        preferred: &str,
+        i18n: &I18n,
+    ) -> String {
         let Ok(command) = AppCommandId::new(command_id) else {
             return String::new();
         };
@@ -191,7 +220,7 @@ impl CompiledKeymap {
                 })
         });
         if bound {
-            display_sequence(&wanted, self.platform)
+            display_sequence(&wanted, self.platform, i18n)
         } else {
             self.shortcut_label(&command).unwrap_or_default()
         }
@@ -233,7 +262,7 @@ impl CompiledKeymap {
                         && later.sequence == binding.sequence
                 });
                 (bound == command && !shadowed)
-                    .then(|| display_sequence(&binding.sequence, self.platform))
+                    .then(|| display_sequence(&binding.sequence, self.platform, &I18n::en_us()))
             })
     }
 
@@ -258,7 +287,7 @@ impl CompiledKeymap {
                 };
                 conflicts.push(BindingConflict {
                     context: binding.context,
-                    trigger: display_sequence(&binding.sequence, self.platform),
+                    trigger: display_sequence(&binding.sequence, self.platform, &I18n::en_us()),
                     sequence: binding.sequence.clone(),
                     first_command,
                     second_command,
@@ -286,7 +315,7 @@ impl CompiledKeymap {
                 let first = binding.sequence.first()?;
                 is_macos_reserved(first, command).then(|| BindingConflict {
                     context: binding.context,
-                    trigger: display_sequence(&binding.sequence, self.platform),
+                    trigger: display_sequence(&binding.sequence, self.platform, &I18n::en_us()),
                     sequence: binding.sequence.clone(),
                     first_command: command.clone(),
                     second_command: command.clone(),

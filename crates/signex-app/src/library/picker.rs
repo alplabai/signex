@@ -19,6 +19,7 @@
 
 use iced::widget::{column, container, row, scrollable};
 use iced::{Border, Element, Length, Theme, Widget};
+use signex_i18n::{ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{button, raw, text, text_input};
@@ -60,8 +61,12 @@ pub fn view<'a>(
     // Change Component and Open Datasheet reuse this modal: their later
     // stages draw their own card.
     match &picker.mode {
-        PickerMode::ChangePreview(change) => return change_preview_view(change, tokens, windowed),
-        PickerMode::Datasheets(choice) => return datasheet_choice_view(choice, tokens, windowed),
+        PickerMode::ChangePreview(change) => {
+            return change_preview_view(change, tokens, i18n, windowed);
+        }
+        PickerMode::Datasheets(choice) => {
+            return datasheet_choice_view(choice, tokens, i18n, windowed);
+        }
         PickerMode::Place | PickerMode::ChangeComponent(_) => {}
     }
     let changing = matches!(picker.mode, PickerMode::ChangeComponent(_));
@@ -171,9 +176,20 @@ pub fn view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            cancel_btn("Cancel", LibraryMessage::ClosePicker, tokens),
+            cancel_btn(
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+                LibraryMessage::ClosePicker,
+                tokens,
+            ),
             primary_btn_if(
-                if changing { "Next" } else { "Place" },
+                t!(
+                    i18n,
+                    if changing {
+                        ids::LIBRARY_PICKER_NEXT
+                    } else {
+                        ids::DIALOG_BUTTON_PLACE
+                    }
+                ),
                 if changing {
                     LibraryMessage::PlacedPart(PlacedPartMsg::ChangePartPicked)
                 } else {

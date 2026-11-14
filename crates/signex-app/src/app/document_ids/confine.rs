@@ -60,7 +60,7 @@ fn readable_file(path: &Path) -> Result<(), String> {
 
 /// The rules of [`Signex::may_read_referenced`] for a file of the project in
 /// folder `dir`, without saying anything: a job off the UI thread reports the
-/// reason itself (`check_erc`, #2199).
+/// reason itself (a check, `check_erc` or `check_drc`, #2199).
 pub(crate) fn confined_read(dir: &Path, path: &Path) -> Result<(), String> {
     inside_folder(dir, path).and_then(|()| readable_file(path))
 }
@@ -75,7 +75,8 @@ impl Signex {
     }
 
     /// [`Self::may_read_referenced`]; a refusal is named in Messages only
-    /// when `said` (`check_erc` says nothing there, #2199).
+    /// when `said` (a check, `check_erc` or `check_drc`, says nothing there,
+    /// #2199).
     pub(crate) fn may_read_referenced_said(
         &self,
         project: &LoadedProject,

@@ -34,8 +34,8 @@ pub struct ReprefixConfirm {
     pub more: usize,
     /// How many parts stay as they are, and why.
     pub skip_lines: Vec<String>,
-    /// The Confirm button's label.
-    pub button_label: String,
+    /// How many parts the Confirm button re-prefixes.
+    pub parts: usize,
 }
 
 impl ReprefixConfirm {
@@ -97,7 +97,7 @@ impl ReprefixConfirm {
                 .into_iter()
                 .map(|(reason, n)| format!("{n} part(s) {}: left unchanged", reason.heading()))
                 .collect(),
-            button_label: format!("Re-prefix {parts} part(s)"),
+            parts,
         }
     }
 }

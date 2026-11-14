@@ -88,15 +88,17 @@ impl Signex {
 
     /// The rule set "Store ERC rules in this project" would write: this
     /// machine's preferences and `User Default` DRC section, with the shipped
-    /// profile named as provenance only when the ERC snapshot is exactly that
-    /// profile.
+    /// profile named as provenance only when that rule set (ERC and DRC) is
+    /// exactly that profile.
     pub(super) fn seeded_project_rules(&self) -> ProjectRules {
         let erc = signex_erc::project_rules::seed_from_overrides(
             &self.ui_state.erc_severity_override,
             &self.ui_state.pin_matrix_overrides,
         );
+        let drc = &self.ui_state.machine_drc_rules;
         let shipped = signex_erc::project_rules::profile::builtin_profile();
-        let profile = (erc.sha256_hex() == shipped.content_sha256()).then(|| {
+        let seeded = signex_types::project::rule_set_sha256(&erc, drc);
+        let profile = (seeded == shipped.content_sha256()).then(|| {
             signex_erc::project_rules::profile::profile_ref(
                 &shipped,
                 signex_erc::project_rules::profile::SOURCE_BUILTIN,
@@ -107,7 +109,7 @@ impl Signex {
         ProjectRules {
             erc,
             profile,
-            drc: self.ui_state.machine_drc_rules.clone(),
+            drc: drc.clone(),
             ..ProjectRules::default()
         }
     }

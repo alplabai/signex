@@ -598,3 +598,58 @@ fn editing_the_machine_rules_keeps_their_drc_section() {
     assert_eq!(after.erc.severity["unused_pin"], "error");
     assert_eq!(after.drc.dsl.as_deref(), Some("rule keep"));
 }
+
+/// Save as profile takes the project's `erc` and `drc` and nothing else
+/// (#2307 step 2b); a confirmed overwrite writes the new `drc` too, and a
+/// project without one writes a profile without one.
+#[test]
+fn save_as_carries_the_project_drc_section_through_an_overwrite() {
+    let tmp = dir();
+    let mut project = signex_types::project::ProjectRules {
+        erc: rules("a", "error"),
+        ..Default::default()
+    };
+    project.drc.dsl = Some("rule a on track then error".into());
+    project
+        .erc_net_waivers
+        .insert("a".into(), ["GND".to_string()].into());
+    let profile = profile_of_project_rules(&project);
+    assert!(profile.unknown.is_empty() && profile.drc == project.drc);
+    saved(save_profile_as(tmp.path(), profile, "Acme", "1.0", false).unwrap());
+    let path = tmp.path().join("acme.snxrules");
+    assert_eq!(read(&path).drc, project.drc);
+    assert!(
+        !String::from_utf8(std::fs::read(&path).unwrap())
+            .unwrap()
+            .contains("GND")
+    );
+
+    project
+        .drc
+        .severity
+        .insert("builtin::unconnected".into(), "error".into());
+    let profile = profile_of_project_rules(&project);
+    assert_eq!(
+        save_profile_as(tmp.path(), profile.clone(), "Acme", "2.0", false).unwrap(),
+        SaveOutcome::Exists
+    );
+    let out = saved(save_profile_as(tmp.path(), profile, "Acme", "2.0", true).unwrap());
+    let on_disk = read(&path);
+    assert_eq!(on_disk.drc, project.drc);
+    assert_eq!(out.reference.sha256, on_disk.content_sha256());
+
+    project.drc = Default::default();
+    saved(
+        save_profile_as(
+            tmp.path(),
+            profile_of_project_rules(&project),
+            "Acme",
+            "3.0",
+            true,
+        )
+        .unwrap(),
+    );
+    let bytes = std::fs::read(&path).unwrap();
+    assert!(!String::from_utf8(bytes).unwrap().contains("drc"));
+    assert_eq!(read(&path).content_sha256(), project.erc.sha256_hex());
+}

@@ -457,7 +457,7 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         let camera = pipeline.camera.bind_group();
         // Composite in the shared `GPU_SCENE_DRAW_ORDER` (drawings at the very
         // back, then fills, then strokes, then pads, then text on top). The order lives in one const so it can be diffed
-        // against the CPU replays: both `pcb_canvas::draw_scene` and the
+        // against the CPU replays: both `pcb_canvas::tessellate` and the
         // schematic replay now draw their base buckets in this order (#645,
         // #653), pinned by the `scene::order` parity tests. GPU parity stays
         // unconfirmed on hardware.
@@ -520,7 +520,7 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         // Overlay pass: strictly after every base bucket above, so overlay
         // content (active-layer zone highlight, selection highlight, DRC
         // markers, ratsnest) always renders on top — matching the CPU
-        // `pcb_canvas::draw_scene` overlay pass, which draws
+        // `pcb_canvas::tessellate` overlay pass, which draws
         // OverlayLines/OverlayCircles/OverlayPolygons last. Order within the
         // pass mirrors the CPU's (lines, then circles, then polygon fills +
         // strokes on top).

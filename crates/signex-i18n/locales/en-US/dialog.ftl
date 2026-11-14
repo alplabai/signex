@@ -130,3 +130,60 @@ dialog-erc-profile-version-placeholder = Version
 dialog-erc-profile-hash-only = Profile "{ $name }": rules already match; only the recorded hash is out of date.
 # Heading above the list of rule changes a profile update applies. $count is a whole number.
 dialog-erc-profile-update-heading = Update from profile "{ $name }" changes { $count } entries:
+
+## Dialog buttons (#2225)
+dialog-annotate-reprefix = Re-prefix to standard
+dialog-annotate-reset-all = Reset All
+dialog-annotate-reset-renumber = Reset & Renumber
+dialog-annotate-accept = Accept Changes
+# Re-prefix confirm button. $count is how many parts change (a whole number);
+# the English keeps "part(s)" for every count.
+dialog-annotate-reprefix-parts =
+    { $count ->
+        [one] Re-prefix { $count } part(s)
+       *[other] Re-prefix { $count } part(s)
+    }
+# Autosave recovery: load the recovered copy as unsaved edits.
+dialog-autosave-recovery-restore = Restore
+dialog-autosave-recovery-later = Decide later
+dialog-bom-export = Export…
+# Closing a project or quitting with unsaved documents.
+dialog-unsaved-discard-all = Discard All
+# Create Sheet: the file already exists; open it instead.
+dialog-create-child-sheet-open-existing = Open it
+dialog-create-child-sheet-browse = Browse...
+dialog-create-child-sheet-later = Later
+dialog-erc-store-rules = Store ERC rules in this project
+dialog-erc-save-as-profile = Save as profile
+dialog-erc-update-from-profile = Update from profile
+dialog-erc-run = Run ERC
+dialog-erc-apply-update = Apply update
+# Replace an existing file or profile.
+dialog-overwrite = Overwrite
+dialog-rename-submit = Rename
+dialog-version-control-enable = Enable
+dialog-version-control-enabling = Enabling…
+dialog-net-color-use = Use Color
+dialog-parameter-manager-add-column = Add column
+# The file changed or vanished on disk since it was opened.
+dialog-disk-conflict-reload = Reload from disk
+dialog-disk-conflict-recreate = Re-create
+dialog-netlist-export-anyway = Export anyway (incomplete)
+dialog-print-preview-export-pdf = Export PDF
+
+## Shared by dialog footer buttons (#2225): one id per common action, so
+## every dialog's Cancel, OK, Save … translates the same way.
+dialog-button-cancel = Cancel
+dialog-button-ok = OK
+dialog-button-apply = Apply
+dialog-button-close = Close
+dialog-button-save = Save
+dialog-button-save-all = Save All
+dialog-button-discard = Discard
+dialog-button-delete = Delete
+dialog-button-create = Create
+dialog-button-back = Back
+dialog-button-copy = Copy
+dialog-button-undo = Undo
+dialog-button-redo = Redo
+dialog-button-place = Place

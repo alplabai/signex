@@ -185,4 +185,10 @@ impl ShortcutProfileSet {
     pub fn compile_active(&self) -> CompiledKeymap {
         CompiledKeymap::compile(self.active_profile())
     }
+
+    /// [`Self::compile_active`] with the labels in the language of `i18n`:
+    /// what the app keeps as its live keymap.
+    pub fn compile_active_in(&self, i18n: &signex_i18n::I18n) -> CompiledKeymap {
+        CompiledKeymap::compile_in(self.active_profile(), i18n)
+    }
 }

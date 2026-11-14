@@ -36,3 +36,4 @@ overlay-symbol-card-designator = Designator
 overlay-symbol-card-value = Value
 overlay-symbol-card-footprint = Footprint
 overlay-symbol-card-library = Library
+overlay-placement-paused-resume = Resume Placement

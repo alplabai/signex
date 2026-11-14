@@ -88,6 +88,9 @@ impl LimitKind {
     }
 }
 
+/// Prefix of a written rule's id (`user::<name>`).
+pub(crate) const USER_RULE_ID_PREFIX: &str = "user::";
+
 /// A compiled rule of the rule language.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UserRule {
@@ -107,7 +110,7 @@ pub struct UserRule {
 
 impl UserRule {
     pub fn id(&self) -> String {
-        format!("user::{}", self.name)
+        format!("{USER_RULE_ID_PREFIX}{}", self.name)
     }
 
     /// Specificity: the net scope first (net, class, pattern, board-wide:

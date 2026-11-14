@@ -120,6 +120,11 @@
     "category": "edit"
   },
   {
+    "id": "check_drc",
+    "group": "General",
+    "category": "validation"
+  },
+  {
     "id": "check_erc",
     "group": "General",
     "category": "validation"

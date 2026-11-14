@@ -1028,6 +1028,7 @@ define_ids! {
     UPDATE_PCB_NOTE_PART_NOT_READ = "update-pcb-note-part-not-read";
     UPDATE_PCB_NOTE_FOOTPRINT_UNRESOLVED = "update-pcb-note-footprint-unresolved";
     UPDATE_PCB_NOTE_KEPT_UNLINKED = "update-pcb-note-kept-unlinked";
+    UPDATE_PCB_NOTE_EXTRA_LINK = "update-pcb-note-extra-link";
     UPDATE_PCB_NOTE_NET = "update-pcb-note-net";
     UPDATE_PCB_VALID = "update-pcb-valid";
     UPDATE_PCB_INVALID = "update-pcb-invalid";
@@ -1136,6 +1137,7 @@ define_ids! {
 include!("command_ids.rs");
 include!("menu_ids.rs");
 include!("shortcut_ids.rs");
+include!("key_ids.rs");
 
 /// Render a message: `t!(i18n, ids::MENU_FILE)` or, with arguments,
 /// `t!(i18n, ID, "count" => 3_i64, "name" => "R1")`.

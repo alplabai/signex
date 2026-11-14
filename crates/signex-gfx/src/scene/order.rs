@@ -9,7 +9,7 @@
 //! Every draw path walks a const from here, so reordering one means editing
 //! this file — and the parity tests below fail until the sides agree:
 //! `scene_shader::ScenePrimitive::draw` walks [`GPU_SCENE_DRAW_ORDER`],
-//! `pcb_canvas::draw_scene` walks [`CPU_PCB_DRAW_ORDER`], and
+//! `pcb_canvas::tessellate::visible_items` walks [`CPU_PCB_DRAW_ORDER`], and
 //! `renderer_scene_canvas::draw_scene_with_world_to_screen` walks
 //! [`CPU_SCHEMATIC_DRAW_ORDER`].
 //!
@@ -137,7 +137,7 @@ pub const CPU_SCHEMATIC_DRAW_ORDER: &[SceneBucket] = &[
     SceneBucket::ErcMarkerPolygons,
 ];
 
-/// Draw order of the PCB CPU canvas renderer (`pcb_canvas::draw_scene`): main
+/// Draw order of the PCB CPU canvas renderer (`pcb_canvas::tessellate`): main
 /// geometry, then a second overlay pass. No arc or text buckets — the PCB scene
 /// never emits them on the CPU path.
 ///

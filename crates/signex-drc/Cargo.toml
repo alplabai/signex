@@ -9,6 +9,8 @@ license.workspace = true
 # UI-free: reads the board model, measures with pcb-geom.
 [dependencies]
 pcb-geom = { path = "../pcb-geom" }
+serde_json.workspace = true
+sha2.workspace = true
 signex-types.workspace = true
 uuid.workspace = true
 

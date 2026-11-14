@@ -30,6 +30,9 @@ impl Signex {
         self.ui_state.i18n = next;
         // The shortcuts-sheet cache holds labels rendered in the old language.
         self.ui_state.refresh_shortcut_sections();
+        // So does the live keymap: menus, palette, hints and key caps read it.
+        self.ui_state.active_keymap =
+            Arc::new(self.ui_state.active_keymap.labelled_in(&self.ui_state.i18n));
         crate::fonts::background_pref_write("language", move || {
             crate::fonts::write_language_pref(&pref)
         })

@@ -5,8 +5,10 @@
 //! and what is not checked yet: `docs/architecture/pcb-drc.md`.
 
 mod check;
+pub mod findings;
 mod keepout;
 mod limits;
+mod profile;
 mod rule_notes;
 mod rules;
 mod severity;
@@ -18,8 +20,10 @@ use pcb_geom::{ItemRef, PointNm, Rejected};
 use signex_types::violation::Severity;
 
 pub use check::run;
+pub use profile::{DrcRuleChange, DrcRuleSection, adopt_profile_drc, diff_drc_against_profile};
 pub use rules::{DEFAULT_CLEARANCE_MM, DrcRules};
 pub use severity::{DrcSeverities, resolve_severities, resolve_severities_with};
+use user_rules::USER_RULE_ID_PREFIX;
 pub use user_rules::{CopperObject, Limit, NetScope, UserRule};
 
 /// What a violation breaks. Declared most severe first: a report sorts by
@@ -106,7 +110,11 @@ impl DrcReport {
 }
 
 #[cfg(test)]
+mod findings_tests;
+#[cfg(test)]
 mod keepout_tests;
+#[cfg(test)]
+mod profile_tests;
 #[cfg(test)]
 mod severity_tests;
 #[cfg(test)]

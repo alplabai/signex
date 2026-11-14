@@ -5732,6 +5732,8 @@ name = "signex-drc"
 version = "26.11.0-rc.1"
 dependencies = [
  "pcb-geom",
+ "serde_json",
+ "sha2",
  "signex-types",
  "uuid",
 ]

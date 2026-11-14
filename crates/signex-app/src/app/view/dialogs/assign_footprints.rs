@@ -77,13 +77,13 @@ impl Signex {
             vec![summary],
             vec![
                 dialog_button(
-                    &s(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
+                    t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_CANCEL),
                     DialogButtonKind::Cancel,
                     cancel,
                     tokens,
                 ),
                 dialog_button(
-                    &s(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY),
+                    t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY),
                     super::graphite::call_to_action(tokens),
                     state
                         .can_apply()

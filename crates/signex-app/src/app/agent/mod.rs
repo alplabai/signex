@@ -69,8 +69,8 @@ pub enum AgentMsg {
     /// The disk reads an agent's edit waited for landed (#2199): run it now
     /// and answer its caller (the socket, or a headless run).
     EditReadsLoaded(Box<crate::app::command::ReadsLoaded>),
-    /// The ERC run a `check_erc` waited for finished (#2199): answer its
-    /// caller (the socket, or a headless run).
+    /// The run a check (`check_erc`, `check_drc`) waited for finished
+    /// (#2199): answer its caller (the socket, or a headless run).
     CheckFinished(Box<crate::app::command::queries::CheckFinished>),
     /// A client connected and passed the peer check (#2253).
     ConnectionOpened { pid: Option<u32> },

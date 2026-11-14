@@ -16,6 +16,7 @@
 
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
+use signex_i18n::{ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{checkbox, raw, text};
@@ -31,6 +32,7 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 pub fn view<'a>(
     state: &'a LibraryCreateOptionsState,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
@@ -132,9 +134,13 @@ pub fn view<'a>(
     let footer = footer_strip(
         Vec::new(),
         vec![
-            cancel_btn("Cancel", LibraryMessage::LibraryCreateOptionsCancel, tokens),
+            cancel_btn(
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+                LibraryMessage::LibraryCreateOptionsCancel,
+                tokens,
+            ),
             primary_btn(
-                "Create Library",
+                t!(i18n, ids::LIBRARY_CREATE_OPTIONS_CREATE),
                 LibraryMessage::LibraryCreateOptionsConfirm,
                 tokens,
             ),

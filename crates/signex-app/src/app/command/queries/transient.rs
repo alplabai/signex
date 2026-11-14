@@ -34,9 +34,9 @@ impl Signex {
         if !query_command_ids().any(|query| query == command.as_str()) {
             return None;
         }
-        // `check_erc` writes nothing to Messages (#2199): its report names
-        // what it did not read.
-        self.read_wanted_document_headers_said(command.as_str() != "check_erc");
+        // A check writes nothing to Messages (#2199): its report names what
+        // it did not read.
+        self.read_wanted_document_headers_said(!super::is_check(command));
         let installed = self.install_for_query(command, args);
         let answered = self.run_query(command, args);
         for path in installed {

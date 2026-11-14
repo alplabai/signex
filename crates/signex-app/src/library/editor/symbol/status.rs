@@ -55,8 +55,8 @@ fn idle_hint(i18n: &I18n) -> String {
     t!(
         i18n,
         ids::EDITORS_SYMBOL_STATUS_HINT_IDLE,
-        "undo" => crate::keymap::shown("Mod+Z"),
-        "redo" => crate::keymap::shown("Mod+Y")
+        "undo" => crate::keymap::shown_in("Mod+Z", i18n),
+        "redo" => crate::keymap::shown_in("Mod+Y", i18n)
     )
     .into_string()
 }

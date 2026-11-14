@@ -39,6 +39,7 @@ use std::path::PathBuf;
 
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
+use signex_i18n::{ids, t};
 use signex_library::RowId;
 use signex_types::schematic::StampField;
 use signex_types::theme::ThemeTokens;
@@ -286,6 +287,7 @@ impl LibraryUpdatesState {
 pub fn view<'a>(
     state: &'a LibraryUpdatesState,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
@@ -322,18 +324,24 @@ pub fn view<'a>(
     .spacing(SP.m);
 
     let selected = state.selected_count();
-    let update_label = format!("Update Selected Components ({})", selected);
-
     let footer = footer_strip(
         vec![secondary_btn(
-            "Skip All",
+            t!(i18n, ids::LIBRARY_UPDATES_SKIP_ALL),
             LibraryMessage::LibraryUpdatesSkipAll,
             tokens,
         )],
         vec![
-            cancel_btn("Cancel", LibraryMessage::LibraryUpdatesCancel, tokens),
+            cancel_btn(
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+                LibraryMessage::LibraryUpdatesCancel,
+                tokens,
+            ),
             primary_btn_if(
-                &update_label,
+                t!(
+                    i18n,
+                    ids::LIBRARY_UPDATES_APPLY,
+                    "count" => selected
+                ),
                 LibraryMessage::LibraryUpdatesApply,
                 selected > 0,
                 tokens,

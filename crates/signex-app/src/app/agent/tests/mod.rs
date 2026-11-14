@@ -2,6 +2,7 @@
 //! sheets open, `b` the active tab with the person at work on it, and the
 //! listener reported as up; a request is run as `Signex::update` runs it.
 
+mod check_drc;
 mod check_erc;
 #[cfg(unix)]
 mod client;

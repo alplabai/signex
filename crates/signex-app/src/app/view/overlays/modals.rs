@@ -426,15 +426,19 @@ impl Signex {
             ModalId::LibraryDocumentOptions => crate::library::document_options::view(
                 lib.document_options.as_ref()?,
                 tokens,
+                &self.ui_state.i18n,
                 windowed,
             )
             .map(Message::Library)
             .boxed(),
-            ModalId::LibraryCreateOptions => {
-                crate::library::create_options::view(lib.create_options.as_ref()?, tokens, windowed)
-                    .map(Message::Library)
-                    .boxed()
-            }
+            ModalId::LibraryCreateOptions => crate::library::create_options::view(
+                lib.create_options.as_ref()?,
+                tokens,
+                &self.ui_state.i18n,
+                windowed,
+            )
+            .map(Message::Library)
+            .boxed(),
             ModalId::LibraryStockCopy => crate::library::stock_copy::view(
                 lib,
                 lib.stock_copy.as_ref()?,
@@ -448,18 +452,23 @@ impl Signex {
                 lib,
                 lib.close_library_confirm.as_ref()?,
                 tokens,
+                &self.ui_state.i18n,
                 windowed,
             )
             .map(Message::Library)
             .boxed(),
-            ModalId::LibraryRecovery => {
-                crate::library::recovery::view(lib.recovery.as_ref()?, tokens, windowed)
-                    .map(Message::Library)
-                    .boxed()
-            }
+            ModalId::LibraryRecovery => crate::library::recovery::view(
+                lib.recovery.as_ref()?,
+                tokens,
+                &self.ui_state.i18n,
+                windowed,
+            )
+            .map(Message::Library)
+            .boxed(),
             ModalId::LibraryUpdates => crate::library::updates_dialog::view(
                 lib.library_updates.as_ref()?,
                 tokens,
+                &self.ui_state.i18n,
                 windowed,
             )
             .map(Message::Library)
@@ -469,16 +478,28 @@ impl Signex {
                 let classes = self.row_classes_for(path);
                 let template = lib.row_template(path, edit.draft.class.as_str());
                 crate::library::edit_row_modal::view(
-                    path, edit, tokens, windowed, classes, template,
+                    path,
+                    edit,
+                    tokens,
+                    &self.ui_state.i18n,
+                    windowed,
+                    classes,
+                    template,
                 )
                 .map(Message::Library)
                 .boxed()
             }
             ModalId::LibraryDeleteConfirm => {
                 let (path, confirm) = self.browser_modal(owner, |b| b.delete_confirm.as_ref())?;
-                crate::library::edit_row_modal::view_delete_confirm(path, confirm, tokens, windowed)
-                    .map(Message::Library)
-                    .boxed()
+                crate::library::edit_row_modal::view_delete_confirm(
+                    path,
+                    confirm,
+                    tokens,
+                    &self.ui_state.i18n,
+                    windowed,
+                )
+                .map(Message::Library)
+                .boxed()
             }
             ModalId::NetColorCustom => {
                 if !self.ui_state.net_color_custom.show {

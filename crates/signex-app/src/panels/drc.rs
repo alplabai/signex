@@ -137,7 +137,7 @@ fn header<'a>(ctx: &'a PanelContext, drc: &DrcPanel, col: Rows<'a>) -> Rows<'a> 
                     .color(primary),
                 Space::new().width(Length::Fill).height(Length::Shrink),
                 crate::styles::dialog_button(
-                    &t!(i18n, ids::DRC_RUN).into_string(),
+                    t!(i18n, ids::DRC_RUN),
                     crate::styles::DialogButtonKind::Secondary,
                     run,
                     &ctx.tokens,

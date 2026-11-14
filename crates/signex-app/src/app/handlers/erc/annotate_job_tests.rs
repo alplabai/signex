@@ -644,7 +644,7 @@ fn confirming_a_reprefix_while_a_run_is_going_keeps_the_confirm_open() {
         change_lines: Vec::new(),
         more: 0,
         skip_lines: Vec::new(),
-        button_label: String::new(),
+        parts: 0,
     });
     let _ = app.handle_reprefix_confirmed();
     let kept = app.ui_state.reprefix_confirm.is_some();

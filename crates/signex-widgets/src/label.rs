@@ -36,6 +36,11 @@ impl<'a> IntoFragment<'a> for Label<'a> {
 }
 
 impl Label<'_> {
+    /// The text, for measuring it (a button sized to its label).
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
     pub(crate) fn into_string(self) -> String {
         self.0.into_owned()
     }
