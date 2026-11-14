@@ -198,7 +198,7 @@ pub(super) fn each_segment(
     scratch: &mut Vec<f32>,
     mut segment: impl FnMut(i64, Point, Point),
 ) {
-    if region.len() < 3 || !(pitch_mm > 0.0) {
+    if region.len() < 3 || pitch_mm.is_nan() || pitch_mm <= 0.0 {
         return;
     }
     let (mut lo, mut hi) = (region[0], region[0]);
