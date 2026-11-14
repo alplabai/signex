@@ -219,6 +219,11 @@ impl Signex {
                 self.handle_altium_import_cancel();
                 Task::none()
             }
+            // On a board the same key steps the Snapping mode (#2353).
+            UiMsg::ToggleSnapHotspots if self.has_active_pcb() => {
+                self.cycle_pcb_snapping();
+                self.finish_update()
+            }
             UiMsg::ToggleSnapHotspots => {
                 self.ui_state.snap_hotspots = !self.ui_state.snap_hotspots;
                 self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;

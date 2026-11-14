@@ -21,6 +21,14 @@ pub struct UiState {
         std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>,
     /// The status bar's view-angle field while it is open (#2316).
     pub pcb_view_angle_entry: Option<crate::app::ViewAngleEntry>,
+    /// What a click or box may pick on a board: the PCB selection filter
+    /// (#2353), one for the editor. Session only.
+    pub pcb_pick_filter: pcb_geom::PickFilter,
+    /// How carried board items snap (#2353), one for the editor. Session only.
+    pub pcb_snap: crate::pcb_canvas::PcbSnapOptions,
+    /// The board Properties panel's tab, search text, filter menu and the
+    /// grid step being typed (#2353).
+    pub pcb_board_panel: crate::panels::PcbBoardPanelView,
     /// The file picker and the opener the returned tasks use (#1931).
     pub io: crate::io_ports::IoPorts,
     pub theme_id: ThemeId,

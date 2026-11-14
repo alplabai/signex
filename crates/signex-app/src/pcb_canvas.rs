@@ -18,6 +18,7 @@ mod highlight;
 pub mod layer_style;
 mod msg;
 mod select;
+mod snap_options;
 mod tessellate;
 
 pub use camera::BoardCamera;
@@ -26,6 +27,7 @@ pub use content::BoardContentLayer;
 pub use highlight::{Highlight, HighlightLayer};
 pub use msg::PcbCanvasMsg;
 pub use select::PcbSelectionState;
+pub use snap_options::{PcbSnapOptions, SnapDistance, SnapScope};
 
 use crate::scene_generation::next_scene_generation;
 use iced::event::Event;

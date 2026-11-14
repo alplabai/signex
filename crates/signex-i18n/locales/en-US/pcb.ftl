@@ -71,20 +71,9 @@ pcb-layers-show = Show layer
 pcb-properties-title = Board
 # Section header over the board's rows.
 pcb-properties-section = Properties
-pcb-properties-size = Size
-# Outline extent; $width and $height are millimetre numbers.
-pcb-properties-size-value = { $width } × { $height } mm
 # Shown as the size when the board has no outline yet.
 pcb-properties-no-outline = No outline
-pcb-properties-layers = Layers
-pcb-properties-layers-value = { $count ->
-    [one] 1 copper layer
-   *[other] { $count } copper layers
-}
 pcb-properties-thickness = Thickness
-# $mm is a millimetre number.
-pcb-properties-thickness-value = { $mm } mm
-pcb-properties-nets = Nets
 # Properties panel while board items are selected; no per-item view exists yet.
 # $board is the board document's name.
 pcb-properties-selection = { $count ->

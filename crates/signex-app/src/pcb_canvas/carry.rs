@@ -6,8 +6,12 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use signex_engine::pcb::placement::{grid_step_mm, snap_delta};
+use signex_engine::pcb::snap::{SnapQuery, object_snap_point};
 use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
+
+use super::PcbSnapOptions;
 
 /// How the carry started, which decides what a click does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,11 +62,34 @@ impl PcbCarry {
     }
 }
 
-/// The offset that takes the carried footprints from `from` towards `to`:
-/// the origin of the footprint nearest `from` lands on the board's grid
-/// (`PcbSetup::grid_size`, else the PCB default).
-pub fn carry_delta(board: &PcbBoard, footprints: &BTreeSet<Uuid>, from: Point, to: Point) -> Point {
+/// The offset that takes the carried footprints from `from` towards `to`.
+/// An object point within the snap distance of `to` takes `from` exactly
+/// onto it (#2353); otherwise, with grid snapping on, the origin of the
+/// footprint nearest `from` lands on the board's grid (`PcbSetup::grid_size`,
+/// else the PCB default). `active` is the active copper layer.
+pub fn carry_delta(
+    board: &PcbBoard,
+    footprints: &BTreeSet<Uuid>,
+    from: Point,
+    to: Point,
+    snap: &PcbSnapOptions,
+    active: CopperLayer,
+) -> Point {
+    if let Some(layers) = snap.layer_mask(active) {
+        let query = SnapQuery {
+            objects: &snap.objects,
+            layers,
+            skip: footprints,
+            radius_mm: snap.distance.factor() * grid_step_mm(board),
+        };
+        if let Some(target) = object_snap_point(board, to, &query) {
+            return Point::new(target.x - from.x, target.y - from.y);
+        }
+    }
     let raw = Point::new(to.x - from.x, to.y - from.y);
+    if !snap.to_grids {
+        return raw;
+    }
     let distance = |p: Point| (p.x - from.x).powi(2) + (p.y - from.y).powi(2);
     let anchor = board
         .footprints
@@ -92,7 +119,14 @@ mod tests {
         }))
         .unwrap();
         let both: BTreeSet<Uuid> = [Uuid::from_u128(1), Uuid::from_u128(2)].into();
-        let delta = carry_delta(&board, &both, Point::new(1.0, 1.0), Point::new(2.0, 1.3));
+        let delta = carry_delta(
+            &board,
+            &both,
+            Point::new(1.0, 1.0),
+            Point::new(2.0, 1.3),
+            &PcbSnapOptions::default(),
+            CopperLayer::Top,
+        );
         // U1 at 1.1 + 1.0 = 2.1 snaps to 2.0; y 1.0 + 0.3 snaps to 1.5.
         assert!(
             (delta.x - 0.9).abs() < 1e-9 && (delta.y - 0.5).abs() < 1e-9,

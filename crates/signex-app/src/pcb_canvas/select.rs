@@ -5,7 +5,10 @@
 use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
-use pcb_geom::{BoardIndex, ClickMode, ItemRef, PointNm, Selection, pick, turned_marquee_select};
+use pcb_geom::{
+    BoardIndex, ClickMode, ItemRef, PickFilter, PointNm, Selection, pick_filtered,
+    turned_marquee_select,
+};
 use signex_renderer::pcb::PcbLayerView;
 use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
@@ -29,6 +32,9 @@ pub struct PcbSelectionState {
     /// The next build only follows a view change, so what it refuses was
     /// already reported.
     quiet_rebuild: bool,
+    /// The kinds a click, a box or the hover may pick (#2353). The index
+    /// keeps every kind, so a selection made another way is not filtered.
+    filter: PickFilter,
 }
 
 /// What [`PcbSelectionState::select_items`] did.
@@ -87,6 +93,18 @@ impl PcbSelectionState {
         self.quiet_rebuild = self.index.take().is_some();
     }
 
+    /// Follow the selection filter: a hovered item of a kind turned off is
+    /// no longer hovered. The selection keeps what it holds.
+    pub fn set_filter(&mut self, filter: &PickFilter) {
+        if self.filter == *filter {
+            return;
+        }
+        self.filter = filter.clone();
+        if self.hover.is_some_and(|h| !filter.allows(h)) {
+            self.hover = None;
+        }
+    }
+
     /// Items the last index build left out, once per build; empty after.
     pub fn take_report(&mut self) -> Vec<String> {
         std::mem::take(&mut self.report)
@@ -142,7 +160,8 @@ impl PcbSelectionState {
         let Some(index) = &self.index else {
             return false;
         };
-        let hits = turned_marquee_select(index, from, to, view_rotation_deg);
+        let mut hits = turned_marquee_select(index, from, to, view_rotation_deg);
+        hits.retain(|item| self.filter.allows(*item));
         self.selection.apply_marquee(&hits, mode)
     }
 
@@ -284,7 +303,7 @@ impl PcbSelectionState {
         let p = PointNm::from_mm(at, "pointer").ok()?;
         let tol = pcb_geom::mm_to_nm(tolerance_mm, "tolerance").ok()?;
         self.ensure_index(board);
-        pick(self.index.as_ref()?, p, tol).map(|i| (i.item, i.shape))
+        pick_filtered(self.index.as_ref()?, p, tol, &self.filter).map(|i| (i.item, i.shape))
     }
 
     fn ensure_index(&mut self, board: &PcbBoard) {
