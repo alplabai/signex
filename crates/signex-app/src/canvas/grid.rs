@@ -16,17 +16,44 @@ pub const GRID_SIZES_MM: &[f32] = &[0.635, 1.27, 2.54, 5.08];
 /// [`GRID_SIZES_MM`]. The user sets their own in Preferences (#1672).
 pub const FAST_GRIDS_MM: [f32; 2] = [1.27, 2.54];
 
-/// A fast grid as its Preferences field shows it (`1.27`, not the widened
-/// `f32` digits).
-pub(crate) fn fast_grid_field_text(mm: f32) -> String {
-    pitch_mm_exact(mm).to_string()
+/// The finest fast grid: 1 nm, the resolution of the saved files. A finer
+/// grid would snap to points no file can hold.
+pub(crate) const FAST_GRID_MIN_MM: f32 = 1e-6;
+
+/// Why a fast-grid field is refused on Save.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum FastGridRefusal {
+    /// Not a finite number above zero, with the Grid Properties Step reason.
+    Invalid(String),
+    /// Finer than [`FAST_GRID_MIN_MM`].
+    BelowMinimum,
 }
 
-/// A fast-grid field's text as the grid it sets, or the reason it is
-/// refused: the same rule as the Grid Properties Step field.
-pub(crate) fn parse_fast_grid_field(text: &str) -> Result<f32, String> {
+/// A fast grid as its Preferences field shows it. `f32` `Display` writes
+/// the shortest digits that read back as the same `f32` (`1.27`, not the
+/// widened `1.2699999…`), so a saved grid never drifts on a later Save.
+pub(crate) fn fast_grid_field_text(mm: f32) -> String {
+    mm.to_string()
+}
+
+/// A fast-grid field's text as the grid it sets, or why it is refused.
+pub(crate) fn parse_fast_grid_field(text: &str) -> Result<f32, FastGridRefusal> {
     crate::numeric_field::validated_grid_step(text)
-        .and_then(crate::numeric_field::positive_grid_step_f32)
+        .map_err(FastGridRefusal::Invalid)
+        .and_then(fast_grid_mm)
+}
+
+/// A fast grid in mm: the Grid Properties Step rule (finite, above zero,
+/// survives the `f32` narrowing) plus the [`FAST_GRID_MIN_MM`] floor. The
+/// floor is checked on the `f32`, so a saved minimum reads back as valid.
+pub(crate) fn fast_grid_mm(step: f64) -> Result<f32, FastGridRefusal> {
+    let mm =
+        crate::numeric_field::positive_grid_step_f32(step).map_err(FastGridRefusal::Invalid)?;
+    if mm < FAST_GRID_MIN_MM {
+        Err(FastGridRefusal::BelowMinimum)
+    } else {
+        Ok(mm)
+    }
 }
 
 /// The grid pitch as the exact `f64` millimetre value the user sees.

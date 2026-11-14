@@ -1,7 +1,7 @@
 //! Fast grid 1 / Fast grid 2 rows of the Schematic Editor section (#1672):
-//! two mm fields, checked on Save.
+//! two mm fields, checked on Save, and the refusal line under them.
 
-use super::widgets::{text_muted, text_primary};
+use super::widgets::{text_muted, text_primary, text_warning};
 use super::{PrefMsg, SP, TS};
 use crate::styles::{self, ti, tokens};
 use iced::widget::{Space, column, container, row};
@@ -22,15 +22,24 @@ const ROWS: [(MessageId, MessageId); 2] = [
     ),
 ];
 
-/// Both fast-grid rows, one above the other.
+/// Both fast-grid rows, one above the other, then why the last Save was
+/// refused over them (`status`; empty renders nothing).
 pub(super) fn fast_grid_rows<'a>(
     drafts: &'a [String; 2],
+    status: &'a str,
     t: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, PrefMsg> {
     let mut rows: iced::widget::Column<'a, PrefMsg> = column![].spacing(SP.l);
     for (index, (draft, messages)) in drafts.iter().zip(ROWS).enumerate() {
         rows = rows.push(fast_grid_row(index, draft, messages, t, i18n));
+    }
+    if !status.is_empty() {
+        rows = rows.push(
+            text(raw(status.to_string()))
+                .size(TS.caption)
+                .style(text_warning),
+        );
     }
     rows.boxed()
 }

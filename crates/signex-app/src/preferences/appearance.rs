@@ -26,6 +26,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         draft_antialiasing,
         draft_symbol_grid_size_mm,
         draft_fast_grids,
+        fast_grid_status,
         draft_symbol_grid_style,
         draft_symbol_pin_selection,
         draft_zoom_step_percent,
@@ -137,6 +138,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     col = col.push(Space::new().height(16).boxed());
     col = col.push(super::fast_grids::fast_grid_rows(
         draft_fast_grids,
+        fast_grid_status,
         v.panel_tokens,
         i18n,
     ));

@@ -7,14 +7,14 @@ use crate::canvas::grid::FAST_GRIDS_MM;
 pub const FAST_GRID_PREF_KEYS: [&str; 2] = ["fast_grid_1_mm", "fast_grid_2_mm"];
 
 /// Read the two fast grids (mm). A missing key, a file without them (saved
-/// before #1672) or a value that is not a finite number above zero reads as
-/// its default in [`FAST_GRIDS_MM`].
+/// before #1672) or a value the Preferences field would refuse reads as its
+/// default in [`FAST_GRIDS_MM`].
 pub fn read_fast_grids_mm_pref_from(json: Option<&serde_json::Value>) -> [f32; 2] {
     let mut grids = FAST_GRIDS_MM;
     for (grid, key) in grids.iter_mut().zip(FAST_GRID_PREF_KEYS) {
         let saved = json
             .and_then(|json| json[key].as_f64())
-            .and_then(|v| crate::numeric_field::positive_grid_step_f32(v).ok());
+            .and_then(|v| crate::canvas::grid::fast_grid_mm(v).ok());
         if let Some(mm) = saved {
             *grid = mm;
         }

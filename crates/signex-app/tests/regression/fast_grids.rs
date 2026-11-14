@@ -76,20 +76,106 @@ fn cycle_fast_grid_steps_between_the_grids_set_in_preferences() {
     assert_eq!(app.ui_state.grid_size_mm, 5.0);
 }
 
+/// A Save with a refused fast grid commits nothing, keeps the dialog open
+/// and dirty with the typed text, and tells the user why under the fields.
+fn assert_save_refused(app: &mut Signex, bad: &str) {
+    assert_eq!(app.ui_state.fast_grids_mm, FAST_GRIDS_MM, "{bad:?}");
+    assert_eq!(app.ui_state.preferences_draft_fast_grids[1], bad);
+    assert!(
+        app.ui_state.preferences_open,
+        "{bad:?}: the dialog stays open"
+    );
+    assert!(
+        app.ui_state.preferences_dirty,
+        "{bad:?}: the dialog stays dirty"
+    );
+    let status = &app.ui_state.preferences_fast_grid_status;
+    assert!(
+        status.contains("not saved") && status.contains("Fast grid 2"),
+        "{bad:?}: the user is told which field was refused; got {status:?}"
+    );
+    let _ = app.update(menu_row("fast_grid_1"));
+    assert_eq!(app.ui_state.grid_size_mm, FAST_GRIDS_MM[0], "{bad:?}");
+    let _ = app.update(menu_row("fast_grid_2"));
+    assert_eq!(app.ui_state.grid_size_mm, FAST_GRIDS_MM[1], "{bad:?}");
+}
+
 #[test]
 fn a_fast_grid_that_is_not_a_finite_number_above_zero_is_refused_on_save() {
     let _serial = crate::preferences_prefs_recovery::serial();
     let _guard = crate::preferences_prefs_recovery::PrefsPathGuard::capture();
     for bad in ["0", "-2.54", "nan", "inf", "1e999", "2.54mm"] {
         let mut app = app_on_grid(5.08);
-        save_fast_grids(&mut app, ["1.27", bad]);
+        // Fast grid 1 is valid: the refusal of grid 2 stops it too.
+        save_fast_grids(&mut app, ["0.635", bad]);
 
-        assert_eq!(app.ui_state.fast_grids_mm, FAST_GRIDS_MM, "{bad:?}");
-        assert_eq!(app.ui_state.preferences_draft_fast_grids[1], "2.54");
-        assert!(!app.ui_state.preferences_has_unsaved_changes(), "{bad:?}");
-        let _ = app.update(menu_row("fast_grid_2"));
-        assert_eq!(app.ui_state.grid_size_mm, FAST_GRIDS_MM[1], "{bad:?}");
+        assert_save_refused(&mut app, bad);
     }
+}
+
+#[test]
+fn a_fast_grid_finer_than_a_nanometre_is_refused_on_save() {
+    let _serial = crate::preferences_prefs_recovery::serial();
+    let _guard = crate::preferences_prefs_recovery::PrefsPathGuard::capture();
+    let mut app = app_on_grid(5.08);
+    save_fast_grids(&mut app, ["0.635", "0.0000001"]);
+
+    assert_save_refused(&mut app, "0.0000001");
+    assert!(
+        app.ui_state
+            .preferences_fast_grid_status
+            .contains("minimum"),
+        "{:?}",
+        app.ui_state.preferences_fast_grid_status
+    );
+}
+
+#[test]
+fn a_fixed_fast_grid_saves_and_clears_the_refusal() {
+    let _serial = crate::preferences_prefs_recovery::serial();
+    let _guard = crate::preferences_prefs_recovery::PrefsPathGuard::capture();
+    let mut app = app_on_grid(5.08);
+    save_fast_grids(&mut app, ["0.635", "0"]);
+    assert!(!app.ui_state.preferences_fast_grid_status.is_empty());
+
+    let _ = app.update(inner(PrefMsg::DraftFastGrid(1, "5.08".to_string())));
+    let task = app.update(inner(PrefMsg::SaveAndClose));
+    crate::drive::drive(&mut app, task);
+
+    assert_eq!(app.ui_state.fast_grids_mm, [0.635, 5.08]);
+    assert!(app.ui_state.preferences_fast_grid_status.is_empty());
+    assert!(!app.ui_state.preferences_open);
+}
+
+#[test]
+fn a_fast_grid_with_many_digits_does_not_drift_on_an_unrelated_save() {
+    // Arrange: a grid whose f32 needs every digit to read back.
+    let _serial = crate::preferences_prefs_recovery::serial();
+    let _guard = crate::preferences_prefs_recovery::PrefsPathGuard::capture();
+    let mut app = app_on_grid(5.08);
+    save_fast_grids(&mut app, ["1.2345678", "2.54"]);
+    let saved = app.ui_state.fast_grids_mm;
+    assert_eq!(app.ui_state.preferences_draft_fast_grids[0], "1.2345678");
+
+    // Act: reopen, change only an unrelated setting, Save.
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    assert!(
+        !app.ui_state.preferences_has_unsaved_changes(),
+        "the reopened field reads back as the saved grid"
+    );
+    let autosave = !app.ui_state.autosave_enabled;
+    let _ = app.update(inner(PrefMsg::DraftAutosaveEnabled(autosave)));
+    let task = app.update(inner(PrefMsg::SaveAndClose));
+    crate::drive::drive(&mut app, task);
+
+    // Assert
+    assert_eq!(app.ui_state.fast_grids_mm, saved, "the grid did not drift");
+    assert_eq!(app.ui_state.preferences_draft_fast_grids[0], "1.2345678");
+    let (rebooted, _t) = Signex::new();
+    assert_eq!(
+        rebooted.ui_state.fast_grids_mm, saved,
+        "nor through prefs.json"
+    );
 }
 
 #[test]

@@ -82,6 +82,7 @@ impl Signex {
                 i18n: &ui.i18n,
                 draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
                 draft_fast_grids: &ui.preferences_draft_fast_grids,
+                fast_grid_status: &ui.preferences_fast_grid_status,
                 draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
                 draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
                 draft_zoom_step_percent: ui.preferences_draft_zoom_step_percent,

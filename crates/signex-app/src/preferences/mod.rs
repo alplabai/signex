@@ -324,6 +324,8 @@ pub struct PrefsView<'a> {
     pub draft_symbol_grid_size_mm: f32,
     /// Text of the Fast grid 1 and Fast grid 2 fields (#1672).
     pub draft_fast_grids: &'a [String; 2],
+    /// Why the last Save was refused over a fast grid; empty renders nothing.
+    pub fast_grid_status: &'a str,
     pub draft_symbol_grid_style: GridStyle,
     pub draft_symbol_pin_selection: PinSelectionMode,
     pub draft_zoom_step_percent: u8,

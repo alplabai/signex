@@ -284,6 +284,10 @@ pub struct UiState {
     pub fast_grids_mm: [f32; 2],
     /// Draft text of the two fast-grid fields, checked on Save.
     pub preferences_draft_fast_grids: [String; 2],
+    /// Why the last Save was refused over a fast-grid field, shown under
+    /// the fields. Cleared on open and on a Save that commits; empty
+    /// renders nothing.
+    pub preferences_fast_grid_status: String,
     /// Symbol-editor grid display style (Dots / Crosses / Lines).
     pub symbol_grid_style: crate::render_config::GridStyle,
     /// Draft mirror of [`Self::symbol_grid_style`]. The only one of the

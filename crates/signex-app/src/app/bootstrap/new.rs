@@ -390,6 +390,7 @@ impl Signex {
                 fast_grids_mm,
                 preferences_draft_fast_grids: fast_grids_mm
                     .map(crate::canvas::grid::fast_grid_field_text),
+                preferences_fast_grid_status: String::new(),
                 symbol_grid_style,
                 preferences_draft_symbol_grid_style: symbol_grid_style,
                 symbol_pin_selection,
