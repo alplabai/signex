@@ -9,7 +9,7 @@ use signex_i18n::{MessageId, UserText, ids, t};
 use signex_widgets::{button, text, text_input, tooltip};
 
 use super::super::form_look;
-use super::super::widgets::{LabelInk, property_label};
+use super::super::widgets::property_label;
 use super::super::{PROPERTY_CONTROL_PORTION, PROPERTY_ROW_PAD_X, PanelContext, PanelMsg};
 use super::{PcbComponentFacts, Shared};
 use crate::styles::{Spacing, TypeScale, ti, tokens::resolve};
@@ -21,7 +21,7 @@ const SP: Spacing = Spacing::DEFAULT;
 /// lower-cased search text.
 pub(super) struct Form<'a> {
     pub ctx: &'a PanelContext,
-    pub ink: LabelInk,
+    pub ink: iced::Color,
     search: String,
 }
 
@@ -29,7 +29,7 @@ impl<'a> Form<'a> {
     pub fn new(ctx: &'a PanelContext, facts: &PcbComponentFacts) -> Self {
         Self {
             ctx,
-            ink: LabelInk::graphite(resolve(&ctx.tokens).ink3),
+            ink: resolve(&ctx.tokens).ink3,
             search: facts.search.trim().to_lowercase(),
         }
     }

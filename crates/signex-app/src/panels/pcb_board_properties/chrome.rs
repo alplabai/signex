@@ -11,7 +11,7 @@ use signex_widgets::{Label, button, checkbox, text, text_input, tooltip};
 
 use super::super::form_look;
 use super::super::properties_parameters::{chip_label, graphite_filter_chip};
-use super::super::{LabelInk, PanelContext, PanelMsg, property_label};
+use super::super::{PanelContext, PanelMsg, property_label};
 use crate::styles::tokens::{hover_overlay, resolve};
 use crate::styles::{HAIRLINE, Spacing, TypeScale, ti};
 
@@ -150,7 +150,7 @@ impl<'a> Form<'a> {
     ) -> Element<'a, PanelMsg> {
         container(
             row![
-                property_label(label.to_string(), LabelInk::graphite(self.muted())),
+                property_label(label.to_string(), self.muted()),
                 container(content).width(Length::Fill),
             ]
             .spacing(SP.m)

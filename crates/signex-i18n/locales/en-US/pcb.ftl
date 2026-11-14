@@ -113,6 +113,9 @@ pcb-layers-show = Show layer
 pcb-properties-title = Board
 # Section header over the board's rows.
 pcb-properties-section = Properties
+pcb-properties-size = Size
+# Outline extent; $width and $height are millimetre numbers.
+pcb-properties-size-value = { $width } × { $height } mm
 # Shown as the size when the board has no outline yet.
 pcb-properties-no-outline = No outline
 pcb-properties-thickness = Thickness

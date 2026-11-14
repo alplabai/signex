@@ -12,7 +12,7 @@ use signex_renderer::pcb::{
     PcbLayerView, PcbSnapshot, board_copper_layers, board_layers, signal_layers,
 };
 use signex_types::pcb::{LayerDef, PcbBoard};
-use signex_types::pcb_layer::PcbLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use crate::app::state::WindowKind;
 use crate::app::{PcbViewMsg, Signex};
@@ -40,10 +40,12 @@ impl Signex {
     }
 
     /// The active copper layer of the board in view; the top layer without
-    /// one. Object snapping on the current layer reads it (#2353).
+    /// one, or while a non-copper layer is active. Object snapping on the
+    /// current layer reads it (#2353).
     pub(crate) fn pcb_active_layer(&self) -> CopperLayer {
         self.active_tab_path()
-            .map_or(CopperLayer::Top, |path| self.pcb_layer_view(&path).active())
+            .and_then(|path| self.pcb_layer_view(&path).active().copper())
+            .unwrap_or(CopperLayer::Top)
     }
 
     /// The snapshot of `board` as the view of `path` shows it, without the
