@@ -144,6 +144,9 @@ pub struct PcbSnapshot {
     pub drc_markers: Vec<DrcMarkerInput>,
     /// The outline, cutouts, mounting holes and keepouts (#2234).
     pub board_features: BoardFeaturesInput,
+    /// Footprint designator and comment texts (#2368). Not in the `Scene`:
+    /// the app draws them on a canvas layer of their own on both mounts.
+    pub texts: Vec<FootprintTextInput>,
 }
 
 impl PcbSnapshot {
@@ -164,11 +167,13 @@ impl PcbSnapshot {
 
 mod board_features;
 mod emit;
+mod footprint_text;
 mod layer_rows;
 mod layer_view;
 mod ratsnest;
 pub use board_features::{BoardFeaturesInput, HoleInput};
 use emit::*;
+pub use footprint_text::FootprintTextInput;
 pub use layer_rows::{
     LayerGroup, LayerRow, board_copper_layers, board_layers, group_layers, layer_rows,
     signal_layers,

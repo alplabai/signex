@@ -16,6 +16,7 @@ use super::emit::{
     is_through_pad, layer_rank_index, pad_from_footprint, sort_zone_stack, trace_from_segment,
     via_from_board_via, zone_from_board_zone,
 };
+use super::footprint_text::footprint_texts;
 use super::layer_rows::{LayerGroup, group_layers};
 use super::{CopperInk, PadInput, PcbSnapshot};
 
@@ -352,6 +353,11 @@ impl PcbSnapshot {
             .iter()
             .flat_map(|footprint| footprint_pads(footprint, view))
             .collect();
+        let texts = board
+            .footprints
+            .iter()
+            .flat_map(|footprint| footprint_texts(footprint, view))
+            .collect();
 
         let layer_ranks = layer_rank_index(board);
         let mut zones = Vec::new();
@@ -396,6 +402,7 @@ impl PcbSnapshot {
                 edge_hidden: view.is_some_and(|v| !v.is_visible(BOARD_OUTLINE)),
                 ..super::BoardFeaturesInput::from_board(board)
             },
+            texts,
         }
     }
 }

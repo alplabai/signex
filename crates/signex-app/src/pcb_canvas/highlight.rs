@@ -58,6 +58,7 @@ impl canvas::Program<Message> for HighlightLayer<'_> {
         // Footprints on the move sit under their selection outline (#2358).
         let mut layers = canvas.drag_preview_geometry(renderer, view, &camera);
         let mut frame = canvas::Frame::new(renderer, bounds.size());
+        canvas.paint_drag_preview_texts(&mut frame, view, &camera);
         for shape in &canvas.highlight.selected {
             paint(&mut frame, shape, &camera, view, accent, 0.45, 1.5);
         }

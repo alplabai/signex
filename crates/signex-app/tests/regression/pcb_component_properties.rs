@@ -344,6 +344,68 @@ fn the_designator_eye_hides_the_designator_as_one_step() {
     assert!(!r2.properties[1].hidden, "the Value text stays");
 }
 
+/// The texts the board canvas draws (#2368).
+fn drawn_texts(app: &Signex) -> Vec<String> {
+    app.interaction_state
+        .pcb_canvas
+        .active_renderer_snapshot()
+        .expect("snapshot")
+        .texts
+        .iter()
+        .map(|t| t.content.clone())
+        .collect()
+}
+
+#[test]
+fn the_canvas_draws_the_designator_until_the_eye_hides_it() {
+    let mut f = open_board();
+    assert!(drawn_texts(&f.app).contains(&"R2".to_string()));
+    select_r2(&mut f.app);
+    send(
+        &mut f.app,
+        panel(PcbComponentMsg::TextShownToggled {
+            board: f.path.clone(),
+            footprints: vec![R2],
+            field: FootprintTextField::Designator,
+            shown: false,
+        }),
+    );
+    let drawn = drawn_texts(&f.app);
+    assert!(!drawn.contains(&"R2".to_string()), "{drawn:?}");
+    assert!(drawn.contains(&"C7".to_string()), "C7's designator stays");
+}
+
+#[test]
+fn a_flip_puts_the_designator_mirrored_on_the_bottom_overlay() {
+    use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
+    let mut f = open_board();
+    select_r2(&mut f.app);
+    send(
+        &mut f.app,
+        panel(PcbComponentMsg::SidePicked {
+            board: f.path.clone(),
+            footprints: vec![R2],
+            side: BoardSide::Bottom,
+        }),
+    );
+    let snapshot = f
+        .app
+        .interaction_state
+        .pcb_canvas
+        .active_renderer_snapshot()
+        .expect("snapshot");
+    let r2 = snapshot
+        .texts
+        .iter()
+        .find(|t| t.content == "R2")
+        .expect("R2 is drawn");
+    assert!(r2.mirrored);
+    assert_eq!(
+        r2.layer,
+        PcbLayer::Technical(TechnicalLayer::SilkscreenBottom)
+    );
+}
+
 #[test]
 fn the_lock_is_one_step_and_blocks_a_drag_and_an_edit() {
     let mut f = open_board();

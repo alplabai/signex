@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+mod board_text;
 mod camera;
 mod carry;
 mod content;
@@ -24,6 +25,7 @@ mod snap_options;
 mod tessellate;
 mod viewport_resize;
 
+pub use board_text::BoardTextLayer;
 pub use camera::BoardCamera;
 pub use carry::{CarryKind, PasteLoad, PcbCarry, board_without, carried_board, carry_delta};
 pub use content::BoardContentLayer;
@@ -143,6 +145,10 @@ pub struct PcbCanvas {
     drag_preview: Option<drag_preview::DragPreview>,
     /// The library part on the cursor, dimmed, set by the app (#2364).
     part_ghost: Option<Arc<Scene>>,
+    /// The footprint texts drawn by [`BoardTextLayer`], kept while the
+    /// camera and the board stay as `text_key` says (#2368).
+    text_cache: canvas::Cache,
+    text_key: std::cell::Cell<Option<board_text::TextKey>>,
     /// Whether this canvas reports clicks and hovers.
     pub selectable: bool,
 }
@@ -182,6 +188,8 @@ impl PcbCanvas {
             carry: std::cell::Cell::new(false),
             drag_preview: None,
             part_ghost: None,
+            text_cache: canvas::Cache::default(),
+            text_key: std::cell::Cell::new(None),
             selectable: true,
         }
     }
