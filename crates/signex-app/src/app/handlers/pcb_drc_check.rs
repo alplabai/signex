@@ -6,9 +6,9 @@
 //! board's own project (else this machine's layer and a loose-board
 //! warning; Run DRC uses the active project, #2332). An open board is read
 //! from memory, in the GUI process, in headless runs and over the agent
-//! channel (#2331). A closed board is read off the UI thread. It changes no DRC state and says nothing in
-//! Messages; what it found comes back as a `signex_types::check` report. See
-//! `docs/CLI.md`, "Checks on demand".
+//! channel (#2331). A closed board is read off the UI thread. It changes no
+//! DRC state and says nothing in Messages; what it found comes back as a
+//! `signex_types::check` report. See `docs/CLI.md`, "Checks on demand".
 
 use std::path::Path;
 
