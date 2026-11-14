@@ -293,6 +293,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
 | `board_sketch` | Enter or leave the board sketch | design | — | — |
+| `change_footprint` | Change the footprint of the selected components | modify | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
