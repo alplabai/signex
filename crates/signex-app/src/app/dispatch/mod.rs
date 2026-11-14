@@ -146,6 +146,7 @@ impl Signex {
                 // that would otherwise clobber the main-window state.
                 if self.ui_state.main_window_id == Some(id) {
                     self.ui_state.window_size = (w, h);
+                    self.fit_side_docks_to_window();
                     return Task::batch([settle, self.main_window_mode_task(id)]);
                 }
                 // An undocked tab window's own size places its overlays.

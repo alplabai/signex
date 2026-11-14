@@ -168,6 +168,9 @@ mod back_annotate;
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
 
+#[path = "regression/dock_side_width.rs"]
+mod dock_side_width;
+
 #[path = "regression/dock_tab_controls.rs"]
 mod dock_tab_controls;
 

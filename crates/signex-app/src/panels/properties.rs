@@ -182,7 +182,10 @@ pub enum PrePlacementKind {
 
 // ─── Properties Panel (matched to Altium Designer) ───────────
 
-pub const PROPERTY_LABEL_PORTION: u16 = 2;
+/// Property-row label column: fixed, so a wide dock gives its extra width to
+/// the fields (#2347).
+pub const PROPERTY_LABEL_COLUMN: Length =
+    Length::Fixed(super::widgets::GRAPHITE_PROPERTY_LABEL_WIDTH);
 pub const PROPERTY_CONTROL_PORTION: u16 = 5;
 pub const PROPERTY_ROW_PAD_X: u16 = 6;
 

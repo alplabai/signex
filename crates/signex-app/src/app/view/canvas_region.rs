@@ -38,6 +38,30 @@ impl DockExtent {
     }
 }
 
+/// Narrowest a side dock may be dragged, in UI-font ems.
+const MIN_SIDE_DOCK_EMS: f32 = 9.0;
+/// Narrowest the canvas may get from widening a side dock, in UI-font ems.
+const MIN_CANVAS_EMS: f32 = 30.0;
+
+/// Narrowest a side dock may be dragged, in logical px.
+pub(in crate::app) fn min_side_dock_width() -> f32 {
+    crate::styles::TypeScale::DEFAULT.body * MIN_SIDE_DOCK_EMS
+}
+
+/// Width a side dock may take in a `window_width` window beside the `other`
+/// side dock: the other dock keeps its footprint and the canvas keeps
+/// [`MIN_CANVAS_EMS`]. Never below [`min_side_dock_width`].
+pub(in crate::app) fn clamp_side_dock_width(
+    width: f32,
+    window_width: f32,
+    other: DockExtent,
+) -> f32 {
+    let min = min_side_dock_width();
+    let canvas = crate::styles::TypeScale::DEFAULT.body * MIN_CANVAS_EMS;
+    let max = (window_width - other.footprint() - HANDLE - canvas).max(min);
+    width.clamp(min, max)
+}
+
 /// The canvas rectangle in window coordinates.
 pub(in crate::app) fn canvas_bounds(
     window: (f32, f32),
@@ -186,6 +210,26 @@ mod tests {
         let b = bounds();
         assert_eq!(b.x, 245.0);
         assert_eq!(b.width, 1400.0 - 245.0 - 225.0);
+    }
+
+    /// #2347: a side dock grows past the old 500 px cap until the canvas
+    /// keeps its minimum beside the other dock.
+    #[test]
+    fn a_side_dock_grows_until_the_canvas_keeps_its_minimum() {
+        let canvas = crate::styles::TypeScale::DEFAULT.body * MIN_CANVAS_EMS;
+        let max = 2560.0 - (220.0 + HANDLE) - HANDLE - canvas;
+        assert!(max > 500.0);
+        assert_eq!(clamp_side_dock_width(5000.0, 2560.0, dock(220.0)), max);
+        assert_eq!(clamp_side_dock_width(900.0, 2560.0, dock(220.0)), 900.0);
+        let lone = clamp_side_dock_width(5000.0, 2560.0, NONE);
+        assert_eq!(lone, 2560.0 - HANDLE - canvas);
+    }
+
+    #[test]
+    fn a_side_dock_never_drops_below_its_minimum() {
+        let min = min_side_dock_width();
+        assert_eq!(clamp_side_dock_width(10.0, 1400.0, dock(220.0)), min);
+        assert_eq!(clamp_side_dock_width(400.0, 300.0, dock(220.0)), min);
     }
 
     /// A Graphite theme reserves the taller 34 px strip and 26 px footer.

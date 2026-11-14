@@ -195,9 +195,9 @@ pub fn part_tree_row<'a>(
 /// column, so a label such as "Designator" is never clipped by a narrow dock.
 pub const GRAPHITE_PROPERTY_LABEL_WIDTH: f32 = 92.0;
 
-/// Colour and column width of a property-row label. A bare [`Color`] keeps
-/// the legacy fill-portion column; [`LabelInk::graphite`] picks the
-/// fixed Graphite column.
+/// Colour and column width of a property-row label. A bare [`Color`] gets
+/// the fixed Graphite column too, so a wide dock widens the fields, not the
+/// labels (#2347).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LabelInk {
     pub color: Color,
@@ -206,10 +206,7 @@ pub struct LabelInk {
 
 impl From<Color> for LabelInk {
     fn from(color: Color) -> Self {
-        Self {
-            color,
-            width: Length::FillPortion(PROPERTY_LABEL_PORTION),
-        }
+        Self::graphite(color)
     }
 }
 
@@ -232,11 +229,6 @@ pub fn property_label<'a, M: 'a>(
 ) -> Element<'a, M> {
     let ink = ink.into();
     property_label_sized(label, ink.color, TS.body, ink.width)
-}
-
-/// Like `property_label`, but with a narrower label column (used by `form_edit_row_f64`).
-fn property_label_small<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
-    property_label_sized(label, color, TS.body, Length::FillPortion(2))
 }
 
 fn property_label_sized<'a, M: 'a>(
@@ -268,7 +260,7 @@ pub fn form_edit_row_f64<'a>(
 ) -> Element<'a, PanelMsg> {
     use iced::widget::row;
     row![
-        property_label_small(label, muted),
+        property_label(label, muted),
         crate::panels::numeric_input("", key, value, draft).size(TS.body),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
@@ -298,7 +290,7 @@ pub fn shape_fill_row<'a>(
         text(t!(i18n, ids::PANELS_SHAPE_FILL))
             .size(TS.body)
             .color(muted)
-            .width(Length::FillPortion(2)),
+            .width(PROPERTY_LABEL_COLUMN),
         row![
             tile(
                 ids::PANELS_SHAPE_FILL_NONE,
@@ -317,7 +309,7 @@ pub fn shape_fill_row<'a>(
             ),
         ]
         .spacing(SP.s)
-        .width(Length::FillPortion(3)),
+        .width(Length::Fill),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)
@@ -333,5 +325,14 @@ mod label_tests {
     fn graphite_labels_get_the_fixed_92_px_column() {
         let ink = LabelInk::graphite(Color::BLACK);
         assert_eq!(ink.width, Length::Fixed(92.0));
+    }
+
+    /// #2347: a plain-colour label keeps the fixed column, so a wide dock
+    /// gives its extra width to the field, not the label.
+    #[test]
+    fn plain_colour_labels_keep_the_fixed_column() {
+        let ink = LabelInk::from(Color::BLACK);
+        assert_eq!(ink.width, LabelInk::graphite(Color::BLACK).width);
+        assert_eq!(ink.width, PROPERTY_LABEL_COLUMN);
     }
 }

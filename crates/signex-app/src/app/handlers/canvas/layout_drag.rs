@@ -1,5 +1,6 @@
 use super::super::super::*;
-use crate::dock::DockMessage;
+use crate::app::view::canvas_region::{DockExtent, clamp_side_dock_width};
+use crate::dock::{DockMessage, PanelPosition};
 
 impl Signex {
     pub(crate) fn handle_layout_drag_started(&mut self, target: DragTarget) {
@@ -12,6 +13,36 @@ impl Signex {
             DragTarget::BottomPanel => self.ui_state.bottom_height,
             DragTarget::ComponentsSplit => self.library.components_panel.list_height,
         };
+    }
+
+    /// `width` for the `side` dock, limited by the main window: the canvas
+    /// keeps its minimum and the other side dock keeps its width (#2347).
+    pub(crate) fn side_dock_width_in_window(&self, side: PanelPosition, width: f32) -> f32 {
+        let (other, other_width) = match side {
+            PanelPosition::Right => (PanelPosition::Left, self.ui_state.left_width),
+            _ => (PanelPosition::Right, self.ui_state.right_width),
+        };
+        let dock = &self.document_state.dock;
+        let other = DockExtent {
+            present: dock.has_panels(other),
+            collapsed: dock.is_collapsed(other),
+            size: other_width,
+        };
+        clamp_side_dock_width(width, self.ui_state.window_size.0, other)
+    }
+
+    /// Re-limit both side docks after the main window changed size, so a
+    /// smaller window never pushes the canvas under its minimum. A minimised
+    /// window reports a zero size; the widths are kept for the restore.
+    pub(crate) fn fit_side_docks_to_window(&mut self) {
+        let (w, h) = self.ui_state.window_size;
+        if w <= 0.0 || h <= 0.0 {
+            return;
+        }
+        self.ui_state.left_width =
+            self.side_dock_width_in_window(PanelPosition::Left, self.ui_state.left_width);
+        self.ui_state.right_width =
+            self.side_dock_width_in_window(PanelPosition::Right, self.ui_state.right_width);
     }
 
     /// True while any pointer-driven drag that `handle_layout_drag_moved` or
@@ -89,11 +120,17 @@ impl Signex {
                 let (current, new_val) = match target {
                     DragTarget::LeftPanel => (
                         self.ui_state.left_width,
-                        (self.interaction_state.drag_start_size + delta).clamp(100.0, 500.0),
+                        self.side_dock_width_in_window(
+                            PanelPosition::Left,
+                            self.interaction_state.drag_start_size + delta,
+                        ),
                     ),
                     DragTarget::RightPanel => (
                         self.ui_state.right_width,
-                        (self.interaction_state.drag_start_size - delta).clamp(100.0, 500.0),
+                        self.side_dock_width_in_window(
+                            PanelPosition::Right,
+                            self.interaction_state.drag_start_size - delta,
+                        ),
                     ),
                     DragTarget::BottomPanel => (
                         self.ui_state.bottom_height,

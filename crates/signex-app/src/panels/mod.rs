@@ -135,7 +135,7 @@ pub use projects_graphite::{ProjectsMsg, ProjectsView};
 pub(crate) use properties::pre_placement_readout;
 pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind, PrePlacementStyle};
 pub(super) use properties::{
-    PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION, PROPERTY_ROW_PAD_X, view_properties,
+    PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN, PROPERTY_ROW_PAD_X, view_properties,
 };
 pub use status::{ErcDiagnosticEntry, ErcSeverityLite, ErcWaiverEntry};
 pub(super) use status::{view_erc, view_messages};
