@@ -351,7 +351,7 @@ rg -c '"id"' ../../../tests/golden/commands.json                                
 
 The guards a command passes are `CommandMetadata::headless_refusal` (`keymap/catalog/mod.rs`), `missing_headless_operand` (`app/command/operands.rs`), `honest_status` (`signex-cli/src/session.rs`) and, on the agent channel, `allow::refusal` (`app/agent/allow.rs`).
 
-**Parity work so far.** Closed issues and PRs that exist only to drive the GUI model headless: #1926 (runtime config root), #1927 (task driver for iced actions), #1929 (text measurer and font catalog), #1931 (file-dialog seams), #1932 (diagnostics and pref writes), #1934 (operand schema), #2170 (refuse GUI-only commands), #2172 (address documents without UI state), #2243 (attach or run headless); #2155 (run operands) in part. `git grep -c gui_only -- crates/signex-app` gives 175 lines in 6 files, 157 of them rows of `keymap/testdata/catalog.golden.tsv`.
+**Parity work so far.** Closed issues and PRs of headless-parity work, some of which A4 reuses (#1934, #2172): #1926 (runtime config root), #1927 (task driver for iced actions), #1929 (text measurer and font catalog), #1931 (file-dialog seams), #1932 (diagnostics and pref writes), #1934 (operand schema), #2170 (refuse GUI-only commands), #2172 (address documents without UI state), #2243 (attach or run headless); #2155 (run operands) in part. `git grep -c gui_only -- crates/signex-app` gives 175 lines in 6 files, 157 of them rows of `keymap/testdata/catalog.golden.tsv`.
 
 **IO on the update path.** Production `std::fs::` call sites under `crates/signex-app/src/app`: test files, comment lines and lines after a `#[cfg(test)]` in their file are excluded.
 
