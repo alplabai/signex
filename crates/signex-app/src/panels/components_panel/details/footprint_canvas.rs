@@ -1,9 +1,9 @@
-//! Footprint preview: the footprint editor's own rendering (backdrop, grid,
-//! origin, front and back silk and fab, courtyard, pads with holes, a size
-//! readout and a scale bar) over a read-only
-//! [`PreviewFootprint`], with its own zoom/pan camera. Fitted to the box on
-//! first show, and again when the box changes size while the user has not
-//! zoomed or panned. Shared by the Components panel and the Component Preview
+//! Footprint preview over a read-only [`PreviewFootprint`]: the footprint
+//! editor's backdrop, silk, fab and courtyard in the board palette, the pads
+//! as the PCB canvas draws them (copper and drills, #2348), pad numbers, a
+//! size readout and a scale bar, with its own zoom/pan camera. Fitted to the
+//! box on first show, and again when the box changes size while the user has
+//! not zoomed or panned. Shared by the Components panel and the Component Preview
 //! dialog. Left-drag pans; Ctrl/Cmd+wheel zooms (a plain wheel scrolls the
 //! panel around it).
 
@@ -13,8 +13,8 @@ use iced::{Color, Point, Rectangle, Renderer, Theme, Vector, mouse};
 use crate::canvas::Camera;
 use crate::library::editor::footprint::canvas::{
     BACKDROP_BG, BACKDROP_GRID, BackdropLook, FootprintCanvasState, PreviewFootprint,
-    draw_back_layers, draw_backdrop, draw_courtyard, draw_fab, draw_origin, draw_pads, draw_silk,
-    graphite_look_for,
+    draw_back_layers, draw_backdrop, draw_courtyard, draw_fab, draw_origin, draw_pad_bodies,
+    draw_pad_numbers, draw_silk, graphite_look_for,
 };
 use crate::library::editor::footprint::layers::LayerPalette;
 use crate::library::editor::footprint::state::SnapOptions;
@@ -29,7 +29,7 @@ pub struct FootprintPreview<'a> {
     model: &'a PreviewFootprint,
     /// Per-wheel-notch zoom factor.
     zoom_step: f32,
-    /// Graphite ground colour and layer palette; `None` until
+    /// Board ground colour and the board palette; `None` until
     /// [`Self::with_theme_tokens`] sets them, which paints the black board.
     graphite: Option<(iced::Color, LayerPalette)>,
 }
@@ -43,11 +43,10 @@ impl<'a> FootprintPreview<'a> {
         }
     }
 
-    /// Paint with the Graphite paper / charcoal canvas look and the preview
-    /// palette (crisp pads, neutral courtyard).
+    /// Paint on the board ground with the board palette, as the PCB canvas
+    /// does in every theme.
     pub fn with_theme_tokens(mut self, tokens: &signex_types::theme::ThemeTokens) -> Self {
-        let look = graphite_look_for(tokens);
-        self.graphite = Some((look.bg, look.palette().for_preview()));
+        self.graphite = Some((graphite_look_for(tokens).bg, LayerPalette::Board));
         self
     }
 
@@ -107,6 +106,20 @@ impl PreviewState {
         self.fitted_for == Some(model.key())
             && (self.user_moved || self.fitted_size == Some(size))
             && self.camera.did_initial_fit
+    }
+}
+
+/// Replay options of the board pad scene at `scale` px per mm. The pads are
+/// fills with no stroke or text, so neither the display scale nor a text
+/// clamp changes them.
+fn board_pad_options(scale: f32) -> crate::renderer_scene_canvas::SceneDrawOptions {
+    let text = signex_gfx::primitive::text::TextSizePolicy::UNCLAMPED;
+    crate::renderer_scene_canvas::SceneDrawOptions {
+        scale_px_per_mm: scale,
+        device_px_per_logical_px: 1.0,
+        text_min_px: text.min_px,
+        text_max_px: text.max_px,
+        frame_origin: Point::ORIGIN,
     }
 }
 
@@ -258,7 +271,17 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
             draw_fab(frame, &camera, self.model.fab_f(), layers.palette);
             draw_silk(frame, &camera, &layers);
             draw_courtyard(frame, &camera, &layers);
-            draw_pads(frame, &camera, &layers);
+            crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
+                frame,
+                self.model.board_pads(),
+                |p| camera.world_to_screen((f64::from(p[0]), f64::from(p[1]))),
+                board_pad_options(camera.scale),
+            );
+            let mut unheld = layers;
+            unheld.pads = self.model.unheld_pads();
+            draw_pad_bodies(frame, &camera, &unheld);
+            // Numbers last so no pad covers a neighbour's number.
+            draw_pad_numbers(frame, &camera, &layers);
             footprint_scale::draw_readouts(frame, area, camera.scale, self.model.bbox_mm());
         });
         vec![geometry]

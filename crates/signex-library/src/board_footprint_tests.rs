@@ -479,3 +479,53 @@ fn a_3d_body_and_a_step_model_convert_without_being_copied() {
     );
     assert!(board.unknown.is_empty() && board.unknown_columns.is_empty());
 }
+
+/// A preview draws what the board holds of every pad (#2348): a pad setting
+/// that leaves the copper alone does not hide it, a feature the board refuses
+/// does not hide the other pads, and a pad the board cannot hold is named.
+#[test]
+fn a_drawn_footprint_keeps_every_pad_the_board_can_hold() {
+    let mut tented = pad("1", PadKind::Smd, PadShape::Rect, &["F.Cu"]);
+    tented.mask_tented_top = true;
+    let custom = PadShape::Custom(Polygon::new(vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]));
+    let mut fp = library(vec![
+        tented.clone(),
+        pad("2", PadKind::Smd, custom, &["F.Cu"]),
+        pad("3", PadKind::Tht, PadShape::Round, &["*.Cu"]),
+    ]);
+    fp.cutouts.push(FpCutout {
+        boundary: Polygon::default(),
+        edge_radius_mm: 0.0,
+        through: true,
+    });
+    assert!(
+        board_footprint(&fp).is_err(),
+        "the board refuses to place it"
+    );
+
+    let drawn = drawn_board_footprint(&fp);
+    let numbers: Vec<&str> = drawn
+        .footprint
+        .pads
+        .iter()
+        .map(|p| p.number.as_str())
+        .collect();
+    assert_eq!(numbers, ["1", "3"]);
+    assert_eq!(drawn.unheld_pads, [1]);
+    assert!(drawn.footprint.graphics.is_empty());
+    let mut held = tented;
+    held.mask_tented_top = false;
+    let placed = convert_one(held).unwrap();
+    let preview = &drawn.footprint.pads[0];
+    assert_eq!(
+        (
+            preview.shape,
+            preview.position,
+            preview.size,
+            preview.rotation
+        ),
+        (placed.shape, placed.position, placed.size, placed.rotation),
+        "the same copper the board places"
+    );
+    assert_eq!(preview.layers, placed.layers);
+}

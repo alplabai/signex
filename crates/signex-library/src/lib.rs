@@ -68,6 +68,7 @@ pub use alternate_symbol_edit::{
     AddAlternateError, DEFAULT_SYMBOL_LABEL, NO_LONGER_OFFERED_LABEL, RESERVED_SYMBOL_LABELS,
     add_alternate_symbol, move_alternate_symbol, relabel_alternate_symbol, remove_alternate_symbol,
 };
+pub use board_footprint::{DrawnBoardFootprint, drawn_board_footprint};
 pub use cascade::{
     CascadeKind, CascadeReport, PrimitiveSave, cascade_after_footprint_save, cascade_after_saves,
     cascade_after_sim_save, cascade_after_symbol_save, patch_bump, retry_cannot_fix,

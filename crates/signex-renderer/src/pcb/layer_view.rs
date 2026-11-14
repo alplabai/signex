@@ -15,7 +15,7 @@ use super::emit::{
     is_through_pad, layer_rank_index, pad_from_footprint, sort_zone_stack, trace_from_segment,
     via_from_board_via, zone_from_board_zone,
 };
-use super::{CopperInk, PcbSnapshot};
+use super::{CopperInk, PadInput, PcbSnapshot};
 
 /// Alpha factor for copper that is not on the active layer, and for a hidden
 /// layer's swatch in the Layers panel.
@@ -338,21 +338,11 @@ impl PcbSnapshot {
                 vias.push((how, input));
             }
         }
-        let mut pads = Vec::new();
-        for footprint in &board.footprints {
-            for pad in &footprint.pads {
-                if view.is_some_and(|v| !v.shows_pad(footprint, pad)) {
-                    continue;
-                }
-                let (how, ink) =
-                    classify(view, pad_layer_names(footprint, pad), is_through_pad(pad));
-                if let Some(mut input) = pad_from_footprint(footprint, pad) {
-                    input.dimmed = how == Emphasis::Dimmed;
-                    input.ink = ink;
-                    pads.push((how, input));
-                }
-            }
-        }
+        let pads: Vec<_> = board
+            .footprints
+            .iter()
+            .flat_map(|footprint| footprint_pads(footprint, view))
+            .collect();
 
         let layer_ranks = layer_rank_index(board);
         let mut zones = Vec::new();
@@ -399,6 +389,35 @@ impl PcbSnapshot {
             },
         }
     }
+}
+
+impl PcbSnapshot {
+    /// The pads of `footprint` alone, drawn as the board draws them with
+    /// every layer shown: a library preview (#2348) lowers the footprint
+    /// through here, so it cannot look different from the board.
+    pub fn from_footprint(footprint: &Footprint) -> Self {
+        Self {
+            pads: strip(footprint_pads(footprint, None)),
+            ..Self::default()
+        }
+    }
+}
+
+/// The pads of `footprint` that `view` shows, each with its emphasis and ink.
+fn footprint_pads(footprint: &Footprint, view: Option<&PcbLayerView>) -> Vec<(Emphasis, PadInput)> {
+    let mut pads = Vec::new();
+    for pad in &footprint.pads {
+        if view.is_some_and(|v| !v.shows_pad(footprint, pad)) {
+            continue;
+        }
+        let (how, ink) = classify(view, pad_layer_names(footprint, pad), is_through_pad(pad));
+        if let Some(mut input) = pad_from_footprint(footprint, pad) {
+            input.dimmed = how == Emphasis::Dimmed;
+            input.ink = ink;
+            pads.push((how, input));
+        }
+    }
+    pads
 }
 
 fn strip<T>(items: Vec<(Emphasis, T)>) -> Vec<T> {

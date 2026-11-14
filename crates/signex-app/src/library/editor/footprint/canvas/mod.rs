@@ -41,10 +41,10 @@ mod tests;
 use draw::draw_pads_tool_preview;
 pub(crate) use draw::{
     BACKDROP_BG, BACKDROP_GRID, BackdropLook, draw_back_layers, draw_backdrop, draw_courtyard,
-    draw_fab, draw_origin, draw_pads, draw_silk, graphite_look_for,
+    draw_fab, draw_origin, draw_pad_bodies, draw_pad_numbers, draw_silk, graphite_look_for,
 };
 #[cfg(test)]
-pub(crate) use draw::{LayerInput, PadLabels};
+pub(crate) use draw::{LayerInput, PadLabels, draw_pads};
 pub use preview_model::PreviewFootprint;
 
 use geometry::{point_in_polygon, point_to_segment_dist, polygon_outline_hit};
