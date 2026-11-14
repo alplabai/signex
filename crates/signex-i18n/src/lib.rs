@@ -87,6 +87,11 @@ define_ids! {
     BOARD_SKETCH_HOLE_PLATED = "board-sketch-hole-plated";
     BOARD_SKETCH_HOLE_NET = "board-sketch-hole-net";
     BOARD_SKETCH_ROLES_HINT = "board-sketch-roles-hint";
+    BOARD_SKETCH_NAME = "board-sketch-name";
+    BOARD_SKETCH_AREA = "board-sketch-area";
+    BOARD_SKETCH_AREA_VALUE = "board-sketch-area-value";
+    BOARD_SKETCH_ENTITIES = "board-sketch-entities";
+    BOARD_SKETCH_CONSTRAINTS = "board-sketch-constraints";
     CROSS_PROBE_TITLE = "cross-probe-title";
     CROSS_PROBE_NOTHING_SELECTED = "cross-probe-nothing-selected";
     CROSS_PROBE_NO_BOARD = "cross-probe-no-board";

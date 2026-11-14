@@ -353,6 +353,16 @@ pub(super) fn view_selection<'a>(
                         );
                     }
                 } // end if !fp_silk_graphic collapsed
+            } else if let Some(board) = fp.board.as_ref() {
+                // A board sketch shows its board, not footprint fields (#2356).
+                col = super::board::view_board_summary(
+                    col,
+                    fp,
+                    board,
+                    palette,
+                    collapsed_sections,
+                    i18n,
+                );
             } else {
                 // Selection Filter — Altium-style flat pill grid for
                 // the 10 footprint kinds (3D Bodies, Keepouts, Tracks,
