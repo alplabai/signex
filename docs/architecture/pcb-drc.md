@@ -309,6 +309,9 @@ The run reads the net classes and rule layers of the board's own project
 (`DocumentState::board_project`: the open project whose `pcb_file` is the
 board), as `check_drc` does, whichever project is active; a board in no open
 project is checked with this machine's layer and no net classes (#2332).
+Such a run first logs `check_drc`'s loose-board warning ("The board is in
+no open project: ...") to Messages, only when its result is applied (not
+for a run a newer one superseded).
 The board is copied and checked in `spawn_blocking`; a result is applied only
 if no newer run began. The Messages panel lists the violations (first 500)
 above the log, and clicking a row selects its items with the #2191

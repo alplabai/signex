@@ -259,7 +259,9 @@ fn drc_lines_of_a_run(app: &mut Signex) -> Vec<String> {
         .collect()
 }
 
-/// What a run of a board in no open project says, as `check_drc` says it.
+/// What a run of a board in no open project says, as `check_drc` says it:
+/// a copy of `pcb_drc_check::LOOSE_BOARD_WARNING` (crate-private, so not
+/// importable here); change both together.
 const LOOSE_BOARD_LINE: &str = "The board is in no open project: it was checked with its own \
      setup rules and this machine's DRC rules, without net classes";
 
