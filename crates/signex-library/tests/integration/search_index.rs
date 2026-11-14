@@ -583,6 +583,55 @@ fn a_slot_facet_compares_in_base_units_and_still_matches_text() {
     assert_eq!(pns(FacetOp::Eq, "10k"), ["G-10K"]);
 }
 
+/// #1701: a numeric `Eq` on a slot finds the number in the f64 column and
+/// a text value spelling the same number, e.g. `generic`'s `Text("100")`.
+#[test]
+fn a_numeric_eq_on_a_slot_also_matches_a_text_value() {
+    let _guard = serial_guard();
+    let dir = tempfile::tempdir().unwrap();
+    let idx = TantivySearchIndex::open(dir.path()).expect("open index");
+
+    let mut measured = ParamMap::new();
+    measured.insert(
+        "value".into(),
+        ParamValue::Measurement {
+            value: 100.0,
+            unit: "ohm".into(),
+        },
+    );
+    let mut text = ParamMap::new();
+    text.insert("value".into(), ParamValue::Text("100".into()));
+    let mut other = ParamMap::new();
+    other.insert("value".into(), ParamValue::Text("220".into()));
+    for (pn, class, params) in [
+        ("R-100", "resistor", measured),
+        ("G-100", "generic", text),
+        ("G-220", "generic", other),
+    ] {
+        let row = fresh_row(pn, pn, "Acme", "", class, params);
+        idx.add_or_update(&row).expect("add row");
+    }
+    idx.commit().expect("commit");
+
+    let q = SearchQuery {
+        text: None,
+        category: None,
+        facets: vec![Facet {
+            field: "parameters.value".into(),
+            op: FacetOp::Eq,
+            value: "100".into(),
+        }],
+        limit: 10,
+    };
+    let mut pns: Vec<String> = idx
+        .query(&q)
+        .iter()
+        .map(|h| h.internal_pn.as_str().to_string())
+        .collect();
+    pns.sort();
+    assert_eq!(pns, ["G-100", "R-100"]);
+}
+
 // Defensive: keep an unused `BTreeMap` import in scope so cargo doesn't warn
 // when the test file evolves; suppression rather than removal because adapter
 // tests often re-introduce these collections.

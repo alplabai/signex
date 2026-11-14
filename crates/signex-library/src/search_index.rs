@@ -517,11 +517,20 @@ impl TantivySearchIndex {
 
         // A slot can hold text in one class and a number in another
         // (`value` is text on `generic`), so a text match goes to the JSON
-        // blob, where non-numeric values are indexed.
+        // blob, where non-numeric values are indexed. A numeric `Eq` checks
+        // both: the f64 column and a text value such as `Text("100")`.
         if let Some(numeric_field) = self.fields.numeric_params.get(key)
             && !is_text_match(facet)
         {
-            return self.numeric_param_query(*numeric_field, key, facet);
+            let numeric = self.numeric_param_query(*numeric_field, facet)?;
+            if !matches!(facet.op, FacetOp::Eq) {
+                return Ok(numeric);
+            }
+            let text = self.json_param_query(key, facet)?;
+            return Ok(Box::new(BooleanQuery::new(vec![
+                (Occur::Should, numeric),
+                (Occur::Should, text),
+            ])));
         }
 
         self.json_param_query(key, facet)
@@ -569,10 +578,11 @@ impl TantivySearchIndex {
         }
     }
 
+    /// The f64-column query for a numeric `Eq`/`Lt`/`Gt`. `facet_to_query`
+    /// sends every `Contains` to the JSON blob, so it never reaches here.
     fn numeric_param_query(
         &self,
         field: Field,
-        key: &str,
         facet: &Facet,
     ) -> Result<Box<dyn Query>, TantivyIndexError> {
         let n = parse_f64(facet)?;
@@ -594,11 +604,9 @@ impl TantivySearchIndex {
                 Bound::Excluded(at()),
                 Bound::Unbounded,
             ))),
-            FacetOp::Contains => Err(TantivyIndexError::InvalidFacetValue {
-                field: format!("parameters.{key}"),
-                value: facet.value.clone(),
-                reason: "Contains is not defined on numeric parameters".into(),
-            }),
+            FacetOp::Contains => {
+                unreachable!("Contains is a text match and goes to the JSON blob")
+            }
         }
     }
 
