@@ -769,6 +769,7 @@ pub mod measure;
 mod merge_queue;
 mod misc;
 mod ordered_write;
+mod pcb_bar;
 #[cfg(test)]
 pub(crate) use ordered_write::pref_slots_taken_on_this_thread;
 mod prefs_file;
@@ -805,6 +806,7 @@ pub use ordered_write::{
 };
 #[cfg(test)]
 pub(crate) use ordered_write::{install_wait_probe, take_wait_probe};
+pub(crate) use pcb_bar::*;
 pub use presets::*;
 pub use recent::*;
 pub use setup_profiles::{

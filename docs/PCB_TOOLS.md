@@ -160,3 +160,36 @@ their origins, as a sheet lines symbols up by their anchors
 its footprint. Two footprints are needed (three to distribute; one for Align
 To Grid, which snaps each origin to the board's grid). A locked footprint
 refuses the whole run and the Messages panel says which.
+
+## Active Bar tool groups {#bar-groups}
+
+Between Align and Board Sketch the PCB Active Bar has one button per tool
+group (#2392), from the table in `crates/signex-app/src/app/pcb_bar_groups.rs`:
+
+| Group | Rows |
+|---|---|
+| Components | Component, Change Footprint |
+| Route | Interactive Routing |
+| Via / Pad | Via, Pad |
+| Copper areas | Polygon Pour, Solid Region, Fill, Keepout |
+| Copper drawing | Track, Arc |
+| Dimensions | Dimension |
+| Text | String |
+
+Every board placement tool is a row of exactly one group, so the bar and
+Place on a board list the same tools; Change Footprint is the Edit and board
+canvas menu row of #2366.
+
+- **Button.** It shows and runs the row its group ran last; until then, the
+  first row that can run. A click runs it as its menu row does.
+- **Dropdown.** A right-click on a group with more than one row opens its
+  rows. A live row runs its command and is greyed by the same gate as its
+  menu row; a tool the board editor cannot run yet is greyed and its tooltip
+  is the reason Place gives ("Place Pad: not available on boards yet").
+- **No live row.** A group whose rows are all greyed is one greyed button
+  with that reason as its tooltip and no dropdown.
+- **Last used.** A tool armed from the group's dropdown, Place, a key or the
+  palette becomes the group's button. Each group's last row is kept in
+  `prefs.json` under `pcb_bar_last_tools` (group key to command id), written
+  off the update thread, so it outlives the session. A stored command that is
+  not a live row of its group reads as never used.

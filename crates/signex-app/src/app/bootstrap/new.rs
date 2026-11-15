@@ -299,6 +299,7 @@ impl Signex {
                 pcb_view_angle_entry: None,
                 pcb_pick_filter: Default::default(),
                 pcb_snap: Default::default(),
+                pcb_bar_last_tools: crate::fonts::read_pcb_bar_last_tools_from(prefs),
                 pcb_board_panel: Default::default(),
                 keymap_pending_sequence: Vec::new(),
                 keymap_pending_target: None,

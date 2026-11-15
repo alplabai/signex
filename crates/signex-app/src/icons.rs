@@ -313,6 +313,16 @@ canonical_icon!(icon_dd_unions, "dropdown/unions.svg");
 canonical_icon!(icon_dd_vcc, "dropdown/vcc.svg");
 canonical_icon!(icon_dd_wire, "dropdown/wire.svg");
 
+// ─── Board tools (PCB Active Bar dropdown rows, #2392) ─────────────
+//
+// Same drawing rules as the dropdown set: 24×24, 2.5 stroke, the accent
+// sentinel on the copper and the neutral grey on drill holes and guides.
+
+canonical_icon!(icon_pcb_dimension, "pcb/dimension.svg");
+canonical_icon!(icon_pcb_keepout, "pcb/keepout.svg");
+canonical_icon!(icon_pcb_pad, "pcb/pad.svg");
+canonical_icon!(icon_pcb_via, "pcb/via.svg");
+
 // ─── Sketch mode (footprint editor sketch active bar) ──────────────
 //
 // Fusion 360-style icon set: the geometry draws in the neutral
@@ -399,6 +409,30 @@ mod tests {
             tinted_handle("justify/tr.svg", BYTES, theme),
             build_tinted_handle(BYTES, theme)
         );
+    }
+
+    /// #2392: the board tool glyphs follow the dropdown set's rules (24×24,
+    /// 2.5 stroke, copper in the accent sentinel, so they tint per theme)
+    /// and are distinct drawings.
+    #[test]
+    fn board_tool_glyphs_follow_the_dropdown_rules() {
+        let glyphs: [&str; 4] = [
+            include_str!("../assets/icons/pcb/dimension.svg"),
+            include_str!("../assets/icons/pcb/keepout.svg"),
+            include_str!("../assets/icons/pcb/pad.svg"),
+            include_str!("../assets/icons/pcb/via.svg"),
+        ];
+        for svg in glyphs {
+            assert!(svg.starts_with("<svg "), "{svg}");
+            assert!(svg.contains(r#"viewBox="0 0 24 24""#), "{svg}");
+            assert!(svg.contains(r#"stroke-width="2.5""#), "{svg}");
+            assert!(svg.contains(ACCENT_SENTINEL), "{svg}");
+            assert!(svg.trim_end().ends_with("</svg>"), "{svg}");
+        }
+        let distinct: std::collections::HashSet<_> = glyphs.iter().collect();
+        assert_eq!(distinct.len(), glyphs.len());
+        let theme = ThemeId::GraphiteDark;
+        assert_ne!(icon_pcb_via(theme), icon_pcb_pad(theme));
     }
 
     /// Two paths with identical bytes (merged by the compiler) still get

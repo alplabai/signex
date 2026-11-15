@@ -99,6 +99,8 @@ pub enum PcbBarMenu {
     Align,
     /// The object kinds a click or a box picks (#2373).
     Filter,
+    /// The rows of a tool group (#2392).
+    Group(crate::app::pcb_bar_groups::PcbBarGroup),
     /// Move and transform the board selection.
     Move,
     /// Turn the board view.
