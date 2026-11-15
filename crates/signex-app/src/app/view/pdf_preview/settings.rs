@@ -3,6 +3,7 @@
 //! `view/pdf_preview.rs` as pure code motion.
 
 use super::super::*;
+use signex_i18n::{MessageId, ids, t};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -38,30 +39,31 @@ impl Signex {
 
     /// Section header strip — accent panel-bg with a 1 px border.
     /// Reused by every Settings-tab section.
-    pub(in crate::app::view) fn pdf_section_title(
-        &self,
-        label: &'static str,
-    ) -> Element<'_, Message> {
+    pub(in crate::app::view) fn pdf_section_title(&self, label: MessageId) -> Element<'_, Message> {
         use iced::widget::container;
-        use signex_widgets::{raw, text};
+        use signex_widgets::text;
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let panel_bg = crate::styles::ti(tokens.panel_bg);
         let border_c = crate::styles::ti(tokens.border);
-        container(text(raw(label)).size(TS.label).color(text_c))
-            .padding([6, 10])
-            .width(Length::Fill)
-            .style(move |_: &iced::Theme| container::Style {
-                background: Some(panel_bg.into()),
-                border: iced::Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: iced::border::Radius::default(),
-                    ..iced::Border::default()
-                },
-                ..container::Style::default()
-            })
-            .boxed()
+        container(
+            text(t!(self.ui_state.i18n, label))
+                .size(TS.label)
+                .color(text_c),
+        )
+        .padding([6, 10])
+        .width(Length::Fill)
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(panel_bg.into()),
+            border: iced::Border {
+                color: border_c,
+                width: 1.0,
+                radius: iced::border::Radius::default(),
+                ..iced::Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
     }
 
     /// Settings → Choose Project Files.
@@ -70,7 +72,8 @@ impl Signex {
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
         use iced::widget::{Space, column, container, row, scrollable};
-        use signex_widgets::{button, checkbox, raw, text};
+        use signex_widgets::{button, checkbox, text};
+        let i18n = self.ui_state.i18n.as_ref();
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -86,7 +89,7 @@ impl Signex {
             column![].spacing(SP.xs).padding([SP.m, SP.l]);
         if sheet_files.is_empty() {
             file_list = file_list.push(
-                text(raw("No sheets to export — open a schematic first."))
+                text(t!(i18n, ids::PDF_NO_SHEETS))
                     .size(TS.body)
                     .color(text_muted)
                     .boxed(),
@@ -127,11 +130,15 @@ impl Signex {
             ..iced::widget::button::Style::default()
         };
         let file_actions = row![
-            button(text(raw("Select All")).size(TS.body).color(text_c))
-                .padding([3.0, SP.m])
-                .on_press(Message::PrintPreview(PrintPreviewMsg::SelectAllFiles))
-                .style(secondary_btn_style),
-            button(text(raw("Clear")).size(TS.body).color(text_c))
+            button(
+                text(t!(i18n, ids::PDF_SELECT_ALL))
+                    .size(TS.body)
+                    .color(text_c)
+            )
+            .padding([3.0, SP.m])
+            .on_press(Message::PrintPreview(PrintPreviewMsg::SelectAllFiles))
+            .style(secondary_btn_style),
+            button(text(t!(i18n, ids::PDF_CLEAR)).size(TS.body).color(text_c))
                 .padding([3.0, SP.m])
                 .on_press(Message::PrintPreview(PrintPreviewMsg::ClearAllFiles))
                 .style(secondary_btn_style),
@@ -139,10 +146,10 @@ impl Signex {
         .spacing(6);
 
         column![
-            self.pdf_section_title("Choose Project Files"),
+            self.pdf_section_title(ids::PDF_SECTION_FILES),
             container(
                 column![
-                    text(raw("Select the files in the project to export from the list. Multiple files can be selected."))
+                    text(t!(i18n, ids::PDF_FILES_HELP))
                         .size(TS.body)
                         .color(text_muted),
                     Space::new().height(6),
@@ -173,12 +180,15 @@ impl Signex {
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
         use iced::widget::{Space, column, container, row};
-        use signex_widgets::{checkbox, raw, text};
+        use signex_widgets::{checkbox, text};
+        let i18n = self.ui_state.i18n.as_ref();
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let opts = &preview.pdf_options;
 
+        // shortcut: the pick list compares the option "Base" as text, so it
+        // stays English until the list holds typed options (#2059).
         let variant_label = opts.variant.clone().unwrap_or_else(|| "Base".to_string());
         let mut variant_options: Vec<String> = vec!["Base".to_string()];
         variant_options.extend(preview.variants.clone());
@@ -195,12 +205,15 @@ impl Signex {
                 })
                 .width(220);
 
-        let labelled_check = |label: &'static str,
+        let labelled_check = |label: MessageId,
                               value: bool,
                               on: fn(bool) -> Message|
          -> iced::widget::Row<Element<'_, Message>> {
             row![
-                text(raw(label)).size(TS.body).color(text_muted).width(150),
+                text(t!(i18n, label))
+                    .size(TS.body)
+                    .color(text_muted)
+                    .width(150),
                 checkbox(value).on_toggle(on),
             ]
             .spacing(SP.m)
@@ -208,33 +221,57 @@ impl Signex {
         };
 
         column![
-            self.pdf_section_title("Structure Settings"),
+            self.pdf_section_title(ids::PDF_SECTION_STRUCTURE),
             container(
                 column![
-                    text(raw("If checked, exported sheets are expanded from logical to physical sheets. Choose a variant and which expanded names appear."))
+                    text(t!(i18n, ids::PDF_STRUCTURE_HELP))
                         .size(TS.body)
                         .color(text_muted),
                     Space::new().height(8),
                     row![
-                        checkbox(opts.use_physical_structure)
-                            .on_toggle(|v| Message::PrintPreview(PrintPreviewMsg::SetUsePhysicalStructure(v))),
-                        text(raw("Use Physical Structure")).size(TS.body).color(text_c),
+                        checkbox(opts.use_physical_structure).on_toggle(|v| Message::PrintPreview(
+                            PrintPreviewMsg::SetUsePhysicalStructure(v)
+                        )),
+                        text(t!(i18n, ids::PDF_USE_PHYSICAL))
+                            .size(TS.body)
+                            .color(text_c),
                     ]
                     .spacing(6)
                     .align_y(iced::Alignment::Center),
                     Space::new().height(6),
                     row![
-                        text(raw("Variant")).size(TS.body).color(text_muted).width(150),
+                        text(t!(i18n, ids::PDF_VARIANT))
+                            .size(TS.body)
+                            .color(text_muted)
+                            .width(150),
                         variant_picker,
                     ]
                     .spacing(SP.m)
                     .align_y(iced::Alignment::Center),
                     Space::new().height(8),
-                    labelled_check("Designators", opts.physical_designators, |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalDesignators(v))),
-                    labelled_check("Net Labels", opts.physical_net_labels, |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalNetLabels(v))),
-                    labelled_check("Ports and Sheet Entries", opts.physical_ports, |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalPorts(v))),
-                    labelled_check("Sheet Number Parameter", opts.physical_sheet_number, |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalSheetNumber(v))),
-                    labelled_check("Document Number Parameter", opts.physical_document_number, |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalDocumentNumber(v))),
+                    labelled_check(
+                        ids::PDF_PHYSICAL_DESIGNATORS,
+                        opts.physical_designators,
+                        |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalDesignators(v))
+                    ),
+                    labelled_check(
+                        ids::PDF_PHYSICAL_NET_LABELS,
+                        opts.physical_net_labels,
+                        |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalNetLabels(v))
+                    ),
+                    labelled_check(ids::PDF_PHYSICAL_PORTS, opts.physical_ports, |v| {
+                        Message::PrintPreview(PrintPreviewMsg::SetPhysicalPorts(v))
+                    }),
+                    labelled_check(
+                        ids::PDF_PHYSICAL_SHEET_NUMBER,
+                        opts.physical_sheet_number,
+                        |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalSheetNumber(v))
+                    ),
+                    labelled_check(
+                        ids::PDF_PHYSICAL_DOCUMENT_NUMBER,
+                        opts.physical_document_number,
+                        |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalDocumentNumber(v))
+                    ),
                 ]
                 .padding([10.0, SP.l])
                 .spacing(SP.xs),
@@ -251,16 +288,17 @@ impl Signex {
     ) -> Element<'_, Message> {
         use crate::app::state::PdfQuality;
         use iced::widget::{Space, column, container, row};
-        use signex_widgets::{checkbox, raw, text};
+        use signex_widgets::{checkbox, text};
+        let i18n = self.ui_state.i18n.as_ref();
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let opts = &preview.pdf_options;
 
-        let lbl_check = move |label: &'static str, value: bool, on: fn(bool) -> Message| {
+        let lbl_check = move |label: MessageId, value: bool, on: fn(bool) -> Message| {
             row![
                 checkbox(value).on_toggle(on),
-                text(raw(label)).size(TS.body).color(text_c),
+                text(t!(i18n, label)).size(TS.body).color(text_c),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center)
@@ -272,15 +310,19 @@ impl Signex {
         .step(0.05_f32)
         .width(180);
         let zoom_col = column![
-            text(raw("Zoom")).size(TS.body).color(text_c),
-            text(raw("Slider controls the zoom level in the PDF reader when jumping to components or nets."))
+            text(t!(i18n, ids::PDF_ZOOM)).size(TS.body).color(text_c),
+            text(t!(i18n, ids::PDF_ZOOM_HELP))
                 .size(TS.caption)
                 .color(text_muted),
             Space::new().height(6),
             row![
-                text(raw("Far")).size(TS.caption).color(text_muted),
+                text(t!(i18n, ids::PDF_ZOOM_FAR))
+                    .size(TS.caption)
+                    .color(text_muted),
                 zoom_slider,
-                text(raw("Close")).size(TS.caption).color(text_muted),
+                text(t!(i18n, ids::PDF_ZOOM_CLOSE))
+                    .size(TS.caption)
+                    .color(text_muted),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center),
@@ -288,79 +330,82 @@ impl Signex {
         .spacing(SP.xs);
 
         let info_col = column![
-            text(raw("Additional Information"))
+            text(t!(i18n, ids::PDF_ADDITIONAL_INFO))
                 .size(TS.body)
                 .color(text_c),
             Space::new().height(4),
-            lbl_check("Generate nets information", opts.generate_nets_info, |v| {
+            lbl_check(ids::PDF_GENERATE_NETS, opts.generate_nets_info, |v| {
                 Message::PrintPreview(PrintPreviewMsg::SetGenerateNetsInfo(v))
             },),
             Space::new().height(4),
-            text(raw(
-                "The following bookmarks can be created in the PDF for nets:"
-            ))
-            .size(TS.caption)
-            .color(text_muted),
+            text(t!(i18n, ids::PDF_NET_BOOKMARKS_HELP))
+                .size(TS.caption)
+                .color(text_muted),
             row![
                 Space::new().width(14),
                 column![
-                    lbl_check("Pins", opts.bookmark_pins, |v| Message::PrintPreview(
-                        PrintPreviewMsg::SetBookmarkPins(v)
-                    )),
-                    lbl_check("Net Labels", opts.bookmark_net_labels, |v| {
-                        Message::PrintPreview(PrintPreviewMsg::SetBookmarkNetLabels(v))
+                    lbl_check(ids::PDF_BOOKMARK_PINS, opts.bookmark_pins, |v| {
+                        Message::PrintPreview(PrintPreviewMsg::SetBookmarkPins(v))
                     }),
-                    lbl_check("Ports", opts.bookmark_ports, |v| Message::PrintPreview(
-                        PrintPreviewMsg::SetBookmarkPorts(v)
-                    )),
+                    lbl_check(
+                        ids::PDF_BOOKMARK_NET_LABELS,
+                        opts.bookmark_net_labels,
+                        |v| { Message::PrintPreview(PrintPreviewMsg::SetBookmarkNetLabels(v)) }
+                    ),
+                    lbl_check(ids::PDF_BOOKMARK_PORTS, opts.bookmark_ports, |v| {
+                        Message::PrintPreview(PrintPreviewMsg::SetBookmarkPorts(v))
+                    }),
                 ]
                 .spacing(SP.xs),
             ],
             Space::new().height(4),
             lbl_check(
-                "Include Component Parameters",
+                ids::PDF_INCLUDE_COMPONENT_PARAMETERS,
                 opts.include_component_parameters,
                 |v| Message::PrintPreview(PrintPreviewMsg::SetIncludeComponentParameters(v)),
             ),
-            lbl_check(
-                "Global Bookmarks for Components and Nets",
-                opts.global_bookmarks,
-                |v| Message::PrintPreview(PrintPreviewMsg::SetGlobalBookmarks(v)),
-            ),
+            lbl_check(ids::PDF_GLOBAL_BOOKMARKS, opts.global_bookmarks, |v| {
+                Message::PrintPreview(PrintPreviewMsg::SetGlobalBookmarks(v))
+            },),
         ]
         .spacing(SP.xs);
 
         let schematics_include_col = column![
-            text(raw("Schematics include")).size(TS.body).color(text_c),
+            text(t!(i18n, ids::PDF_SCHEMATICS_INCLUDE))
+                .size(TS.body)
+                .color(text_c),
             Space::new().height(4),
-            lbl_check("No-ERC Markers", opts.include_no_erc_markers, |v| {
+            lbl_check(ids::PDF_NO_ERC_MARKERS, opts.include_no_erc_markers, |v| {
                 Message::PrintPreview(PrintPreviewMsg::SetIncludeNoErcMarkers(v))
             }),
-            lbl_check("No-Connect Markers", opts.include_no_connect_markers, |v| {
-                Message::PrintPreview(PrintPreviewMsg::SetIncludeNoConnectMarkers(v))
-            }),
-            lbl_check("Parameter Sets", opts.include_parameter_sets, |v| {
+            lbl_check(
+                ids::PDF_NO_CONNECT_MARKERS,
+                opts.include_no_connect_markers,
+                |v| { Message::PrintPreview(PrintPreviewMsg::SetIncludeNoConnectMarkers(v)) }
+            ),
+            lbl_check(ids::PDF_PARAMETER_SETS, opts.include_parameter_sets, |v| {
                 Message::PrintPreview(PrintPreviewMsg::SetIncludeParameterSets(v))
             }),
-            lbl_check("Probes", opts.include_probes, |v| Message::PrintPreview(
-                PrintPreviewMsg::SetIncludeProbes(v)
-            )),
-            lbl_check(
-                "Blankets",
-                opts.include_blankets,
-                |v| Message::PrintPreview(PrintPreviewMsg::SetIncludeBlankets(v))
-            ),
-            lbl_check("Notes", opts.include_notes, |v| Message::PrintPreview(
-                PrintPreviewMsg::SetIncludeNotes(v)
-            )),
+            lbl_check(ids::PDF_PROBES, opts.include_probes, |v| {
+                Message::PrintPreview(PrintPreviewMsg::SetIncludeProbes(v))
+            }),
+            lbl_check(ids::PDF_BLANKETS, opts.include_blankets, |v| {
+                Message::PrintPreview(PrintPreviewMsg::SetIncludeBlankets(v))
+            }),
+            lbl_check(ids::PDF_NOTES, opts.include_notes, |v| {
+                Message::PrintPreview(PrintPreviewMsg::SetIncludeNotes(v))
+            }),
             row![
                 Space::new().width(14),
-                lbl_check("Collapsed notes", opts.include_collapsed_notes, |v| {
-                    Message::PrintPreview(PrintPreviewMsg::SetIncludeCollapsedNotes(v))
-                }),
+                lbl_check(
+                    ids::PDF_COLLAPSED_NOTES,
+                    opts.include_collapsed_notes,
+                    |v| { Message::PrintPreview(PrintPreviewMsg::SetIncludeCollapsedNotes(v)) }
+                ),
             ],
             Space::new().height(8),
-            text(raw("Quality")).size(TS.body).color(text_c),
+            text(t!(i18n, ids::PDF_QUALITY)).size(TS.body).color(text_c),
+            // The quality names come from `PdfQuality`'s Display (#2059).
             iced::widget::pick_list(
                 Some(preview.quality),
                 vec![
@@ -376,55 +421,57 @@ impl Signex {
         ]
         .spacing(SP.xs);
 
-        let radio = move |label: &'static str,
+        let radio = move |label: MessageId,
                           this: signex_output::ColourMode,
                           current: signex_output::ColourMode,
                           on: fn(signex_output::ColourMode) -> Message| {
-            signex_widgets::radio(signex_widgets::raw(label), this, Some(current), on)
+            signex_widgets::radio(t!(i18n, label), this, Some(current), on)
                 .text_size(11)
                 .size(TS.heading)
         };
 
         let sch_color_col = column![
-            text(raw("Schematics Color Mode"))
+            text(t!(i18n, ids::PDF_SCHEMATICS_COLOR_MODE))
                 .size(TS.body)
                 .color(text_c),
             Space::new().height(4),
             radio(
-                "Color",
+                ids::PDF_COLOR_MODE_COLOR,
                 signex_output::ColourMode::Colour,
                 opts.colour_mode,
                 |v| Message::PrintPreview(PrintPreviewMsg::SetColourMode(v))
             ),
             radio(
-                "Greyscale",
+                ids::PDF_COLOR_MODE_GREYSCALE,
                 signex_output::ColourMode::Grayscale,
                 opts.colour_mode,
                 |v| Message::PrintPreview(PrintPreviewMsg::SetColourMode(v))
             ),
             radio(
-                "Monochrome",
+                ids::PDF_COLOR_MODE_MONOCHROME,
                 signex_output::ColourMode::BlackAndWhite,
                 opts.colour_mode,
                 |v| Message::PrintPreview(PrintPreviewMsg::SetColourMode(v))
             ),
             Space::new().height(8),
-            text(raw("PCB Color Mode")).size(TS.body).color(text_c),
+            text(t!(i18n, ids::PDF_PCB_COLOR_MODE))
+                .size(TS.body)
+                .color(text_c),
             Space::new().height(4),
             radio(
-                "Color",
+                ids::PDF_COLOR_MODE_COLOR,
                 signex_output::ColourMode::Colour,
                 opts.pcb_colour_mode,
                 |v| Message::PrintPreview(PrintPreviewMsg::SetPcbColourMode(v))
             ),
             radio(
-                "Greyscale",
+                ids::PDF_COLOR_MODE_GREYSCALE,
                 signex_output::ColourMode::Grayscale,
                 opts.pcb_colour_mode,
                 |v| Message::PrintPreview(PrintPreviewMsg::SetPcbColourMode(v))
             ),
             radio(
-                "Monochrome",
+                ids::PDF_COLOR_MODE_MONOCHROME,
                 signex_output::ColourMode::BlackAndWhite,
                 opts.pcb_colour_mode,
                 |v| Message::PrintPreview(PrintPreviewMsg::SetPcbColourMode(v))
@@ -433,7 +480,7 @@ impl Signex {
         .spacing(SP.xs);
 
         column![
-            self.pdf_section_title("Additional PDF Settings"),
+            self.pdf_section_title(ids::PDF_SECTION_ADDITIONAL),
             container(
                 row![
                     column![zoom_col, Space::new().height(12), info_col]

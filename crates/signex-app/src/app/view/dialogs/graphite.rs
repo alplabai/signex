@@ -18,7 +18,7 @@ pub(super) fn mono() -> iced::Font {
 
 /// Dialog header: title plus optional subtitle.
 pub(super) fn titled_header<'a, M: Clone + 'a>(
-    title: &'static str,
+    title: impl Into<String>,
     subtitle: Option<String>,
     on_close: M,
     theme_tokens: &ThemeTokens,
@@ -61,7 +61,7 @@ fn severity_chip<'a, M: 'a>(
     i18n: &signex_i18n::I18n,
     theme_tokens: &ThemeTokens,
     count: usize,
-    label: &'static str,
+    label: signex_i18n::MessageId,
     tone: Option<PillTone>,
 ) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
@@ -70,6 +70,7 @@ fn severity_chip<'a, M: 'a>(
         None => r.ink3,
     };
     let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.m).align_y(Alignment::Center);
+    // raw: the count is already formatted for the locale by `I18n::count`.
     line = line.push(
         text(raw(i18n.count(count as i64)))
             .size(TS.display)
@@ -77,7 +78,12 @@ fn severity_chip<'a, M: 'a>(
             .font(mono())
             .boxed(),
     );
-    line = line.push(text(raw(label)).size(TS.label).color(r.ink3).boxed());
+    line = line.push(
+        text(signex_i18n::t!(i18n, label))
+            .size(TS.label)
+            .color(r.ink3)
+            .boxed(),
+    );
     container(line)
         .padding([SP.m, SP.l])
         .width(Length::Fill)
@@ -93,28 +99,35 @@ pub(super) fn severity_chips<'a, M: 'a>(
 ) -> Element<'a, M> {
     let [errors, warnings, infos, off] = counts;
     let mut chips: Row<Element<'a, M>> = Row::new().spacing(SP.m);
+    use signex_i18n::ids;
     chips = chips.push(severity_chip(
         i18n,
         theme_tokens,
         errors,
-        "Errors",
+        ids::DIALOG_ERC_CHIP_ERRORS,
         Some(PillTone::Err),
     ));
     chips = chips.push(severity_chip(
         i18n,
         theme_tokens,
         warnings,
-        "Warnings",
+        ids::DIALOG_ERC_CHIP_WARNINGS,
         Some(PillTone::Warn),
     ));
     chips = chips.push(severity_chip(
         i18n,
         theme_tokens,
         infos,
-        "Info",
+        ids::DIALOG_ERC_CHIP_INFO,
         Some(PillTone::Info),
     ));
-    chips = chips.push(severity_chip(i18n, theme_tokens, off, "Off", None));
+    chips = chips.push(severity_chip(
+        i18n,
+        theme_tokens,
+        off,
+        ids::DIALOG_ERC_CHIP_OFF,
+        None,
+    ));
     chips.boxed()
 }
 
@@ -123,6 +136,7 @@ pub(super) fn recovery_icon_tile<'a, M: 'a>(theme_tokens: &ThemeTokens) -> Eleme
     let (fill, ink) = styles::pill_colors(theme_tokens, PillTone::Warn);
     let side = TS.glyph + 2.0 * SP.m;
     container(
+        // raw: a restore glyph, not language.
         text(raw("\u{21BA}"))
             .size(TS.glyph)
             .color(ink)

@@ -63,6 +63,7 @@ pub(super) fn section_heading<'a>(
     theme_tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let words = t!(i18n, label).into_string();
+    // raw: catalog text already rendered, then upper-cased for the locale.
     text(raw(i18n.upper_for_display(&words)))
         .size(TS.section)
         .style(crate::styles::section_label(theme_tokens))

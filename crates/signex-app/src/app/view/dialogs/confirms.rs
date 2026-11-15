@@ -8,7 +8,7 @@
 use super::*;
 use iced::widget::{Space, column, container};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{I18n, MessageId, ids, t};
 use signex_widgets::{button, raw, text};
 
 use super::widgets::modal_title_header;
@@ -44,11 +44,15 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
 
         let header_content: Element<'_, Message> = modal_title_header(
-            if st.unsaved_prompt {
-                "Exclude from Project \u{2014} Unsaved Edits"
-            } else {
-                "Remove from Project"
-            },
+            t!(
+                i18n,
+                if st.unsaved_prompt {
+                    ids::DIALOG_REMOVE_UNSAVED_TITLE
+                } else {
+                    ids::DIALOG_REMOVE_TITLE
+                }
+            )
+            .into_string(),
             Message::Remove(RemoveMsg::Close),
             tokens,
         );
@@ -67,15 +71,11 @@ impl Signex {
         }
 
         let option_card =
-            |title: &'static str, subtitle: &'static str, msg: Message| -> Element<'_, Message> {
-                let title_owned = title.to_string();
-                let subtitle_owned = subtitle.to_string();
+            |title: MessageId, subtitle: MessageId, msg: Message| -> Element<'_, Message> {
                 button(
                     column![
-                        text(raw(format!("\u{2192} {}", title_owned)))
-                            .size(TS.label)
-                            .color(text_c),
-                        text(raw(subtitle_owned)).size(TS.caption).color(text_muted),
+                        text(t!(i18n, title)).size(TS.label).color(text_c),
+                        text(t!(i18n, subtitle)).size(TS.caption).color(text_muted),
                     ]
                     .spacing(SP.s)
                     .padding([SP.xs, 0.0]),
@@ -106,11 +106,11 @@ impl Signex {
             };
 
         let exclude_card = option_card(
-            "Exclude from project",
+            ids::DIALOG_REMOVE_EXCLUDE,
             if st.is_outside_project {
-                "Library is shared or lives outside this project's folder. It will be excluded from the project and is not deleted from disk."
+                ids::DIALOG_REMOVE_EXCLUDE_OUTSIDE
             } else {
-                "File will be excluded from project but left in local folder. Not recommended for projects stored in version control."
+                ids::DIALOG_REMOVE_EXCLUDE_INSIDE
             },
             Message::Remove(RemoveMsg::Confirm(
                 crate::app::RemoveChoice::ExcludeFromProject,
@@ -126,17 +126,13 @@ impl Signex {
         let mut remove_options = column![].spacing(SP.m);
         if !st.is_outside_project && !blockers.blocks_delete(is_library) {
             remove_options = remove_options.push(option_card(
-                "Delete file",
+                ids::DIALOG_REMOVE_DELETE,
                 if st.is_directory_package {
-                    "The library package is deleted whole, with everything inside it, and the \
-                     library is closed."
+                    ids::DIALOG_REMOVE_DELETE_PACKAGE
                 } else if is_library {
-                    "The library file is permanently deleted and the library closed. Its symbol, \
-                     footprint, simulation and datasheet files are deleted too when the folder \
-                     is the library's own; in a folder that also holds another library or a \
-                     project or design file, only the library file goes. Other files are left."
+                    ids::DIALOG_REMOVE_DELETE_LIBRARY
                 } else {
-                    "File will be removed from project and permanently deleted."
+                    ids::DIALOG_REMOVE_DELETE_FILE
                 },
                 Message::Remove(RemoveMsg::Confirm(crate::app::RemoveChoice::DeleteFile)),
             ));
@@ -148,34 +144,28 @@ impl Signex {
 
         let mut prompt = column![dialog_intro(
             DialogIcon::Warn,
-            format!("Remove \"{}\"?", st.display_name),
-            Some(format!(
-                "Please choose how to remove file \"{}\"",
-                st.display_name
-            )),
+            t!(i18n, ids::DIALOG_REMOVE_QUESTION, "name" => st.display_name.as_str()).into_string(),
+            Some(
+                t!(i18n, ids::DIALOG_REMOVE_QUESTION_DETAIL, "name" => st.display_name.as_str())
+                    .into_string(),
+            ),
             tokens,
         )]
         .spacing(SP.s);
         if !blockers.other_parents.is_empty() {
             prompt = prompt.push(
-                text(raw(format!(
-                    "It is also placed by {}, so it cannot be deleted from here.",
-                    blockers.parent_names()
-                )))
-                .size(TS.caption)
-                .color(text_muted)
-                .boxed(),
+                text(t!(i18n, ids::DIALOG_REMOVE_PLACED_BY, "parents" => blockers.parent_names()))
+                    .size(TS.caption)
+                    .color(text_muted)
+                    .boxed(),
             );
         }
         if let Some(why) = blockers.unknown.as_deref().filter(|_| !is_library) {
             prompt = prompt.push(
-                text(raw(format!(
-                    "It cannot be deleted from here: whether another sheet places it is not \
-                     known yet ({why}). You can exclude it from the project."
-                )))
-                .size(TS.caption)
-                .color(text_muted)
-                .boxed(),
+                text(t!(i18n, ids::DIALOG_REMOVE_PLACEMENT_UNKNOWN, "reason" => why))
+                    .size(TS.caption)
+                    .color(text_muted)
+                    .boxed(),
             );
         }
         // Delete is only offered when no other sheet places the file
@@ -185,12 +175,12 @@ impl Signex {
             && blockers.own_parent.is_some()
         {
             prompt = prompt.push(
-                text(raw(format!(
-                    "Deleting it leaves {} sheet symbol(s) pointing at a missing file: {}. \
-                     ERC and netlist export will report them until they are removed.",
-                    blockers.symbols.len(),
-                    PlacingSymbol::describe_all(&blockers.symbols)
-                )))
+                text(t!(
+                    i18n,
+                    ids::DIALOG_REMOVE_DANGLING,
+                    "count" => blockers.symbols.len(),
+                    "symbols" => PlacingSymbol::describe_all(&blockers.symbols)
+                ))
                 .size(TS.caption)
                 .color(text_muted)
                 .boxed(),
@@ -198,11 +188,11 @@ impl Signex {
         }
         if blockers.placed && !blockers.unlisted {
             prompt = prompt.push(
-                text(raw(format!(
-                    "Excluding it does not take it out of the design: a sheet symbol still \
-                         places it ({}).",
-                    PlacingSymbol::describe_all(&blockers.symbols)
-                )))
+                text(t!(
+                    i18n,
+                    ids::DIALOG_REMOVE_STILL_PLACED,
+                    "symbols" => PlacingSymbol::describe_all(&blockers.symbols)
+                ))
                 .size(TS.caption)
                 .color(text_muted)
                 .boxed(),
@@ -210,12 +200,10 @@ impl Signex {
         }
         if blockers.unlisted {
             prompt = prompt.push(
-                text(raw(
-                    "It is not a page of this project, so there is nothing to exclude.",
-                ))
-                .size(TS.caption)
-                .color(text_muted)
-                .boxed(),
+                text(t!(i18n, ids::DIALOG_REMOVE_NOT_A_PAGE))
+                    .size(TS.caption)
+                    .color(text_muted)
+                    .boxed(),
             );
         }
         // Library names can repeat across folders; the full path says which
@@ -230,6 +218,8 @@ impl Signex {
                 .boxed(),
             );
             if let Some(line) = self.library_usage_line(st) {
+                // raw: the usage line is built in English by the Remove
+                // handler, which its own tests read (#2061).
                 prompt = prompt.push(text(raw(line)).size(TS.caption).color(text_muted).boxed());
             }
         }
@@ -295,7 +285,7 @@ impl Signex {
                 header,
                 dialog_body(dialog_intro(
                     DialogIcon::Warn,
-                    "Save the unsaved edits first?",
+                    t!(i18n, ids::DIALOG_EXCLUDE_DIRTY_QUESTION).into_string(),
                     Some(body),
                     tokens,
                 )),
@@ -324,7 +314,7 @@ impl Signex {
         let i18n = self.ui_state.i18n.as_ref();
 
         let header_content: Element<'_, Message> = modal_title_header(
-            "Close Project — Unsaved Edits",
+            t!(i18n, ids::DIALOG_CLOSE_PROJECT_UNSAVED_TITLE).into_string(),
             Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::Cancel)),
             tokens,
         );
@@ -343,11 +333,13 @@ impl Signex {
         let mut body = column![
             dialog_intro(
                 DialogIcon::Warn,
-                "Save changes before closing?",
-                Some(format!(
-                    "'{}' has {}. What would you like to do?",
-                    st.project_name,
-                    unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len())
+                t!(i18n, ids::DIALOG_CLOSE_PROJECT_QUESTION).into_string(),
+                Some(unsaved_line(
+                    i18n,
+                    ids::DIALOG_CLOSE_PROJECT_DETAIL,
+                    st.dirty_paths.len(),
+                    st.dirty_rows.len(),
+                    Some(&st.project_name),
                 )),
                 tokens,
             ),
@@ -365,10 +357,12 @@ impl Signex {
                 .map(|p| crate::app::state::sheet_refs::file_label(p))
                 .collect();
             body = body.push(dialog_hint(
-                format!(
-                    "Kept open, not provably this project's alone: {}",
-                    crate::app::state::sheet_refs::bounded_names(&names)
-                ),
+                t!(
+                    i18n,
+                    ids::DIALOG_CLOSE_PROJECT_KEPT,
+                    "names" => crate::app::state::sheet_refs::bounded_names(&names)
+                )
+                .into_string(),
                 tokens,
             ));
         }
@@ -467,11 +461,18 @@ impl Signex {
         let text_c = crate::styles::ti(tokens.text);
         let i18n = self.ui_state.i18n.as_ref();
 
+        // macOS says "Quit", other systems "Exit".
+        let macos = cfg!(target_os = "macos");
+        let pick = |quit: MessageId, exit: MessageId| if macos { quit } else { exit };
         let header_content: Element<'_, Message> = modal_title_header(
-            format!(
-                "{} Signex — Unsaved Edits",
-                super::super::detached_title::quit_word()
-            ),
+            t!(
+                i18n,
+                pick(
+                    ids::DIALOG_QUIT_UNSAVED_TITLE,
+                    ids::DIALOG_EXIT_UNSAVED_TITLE
+                )
+            )
+            .into_string(),
             Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::Cancel)),
             tokens,
         );
@@ -483,24 +484,26 @@ impl Signex {
         // Basenames only: full paths would overflow the modal.
         let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
 
-        let quitting = if cfg!(target_os = "macos") {
-            "quitting"
-        } else {
-            "exiting"
-        };
         let mut body: iced::widget::Column<Element<'_, Message>> = column![dialog_intro(
             DialogIcon::Warn,
-            format!("Save changes before {quitting}?"),
-            Some(format!(
-                "You have {}. Save before {quitting}?",
-                unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len()),
+            t!(
+                i18n,
+                pick(ids::DIALOG_QUIT_QUESTION, ids::DIALOG_EXIT_QUESTION)
+            )
+            .into_string(),
+            Some(unsaved_line(
+                i18n,
+                pick(ids::DIALOG_QUIT_DETAIL, ids::DIALOG_EXIT_DETAIL),
+                st.dirty_paths.len(),
+                st.dirty_rows.len(),
+                None,
             )),
             tokens,
         )]
         .spacing(SP.m);
         if self.ui_state.quit_confirm_refreshed {
             body = body.push(
-                text(raw("The unsaved list changed; review and confirm again."))
+                text(t!(i18n, ids::DIALOG_QUIT_LIST_CHANGED))
                     .size(TS.body)
                     .color(crate::styles::tokens::danger(tokens))
                     .boxed(),
@@ -548,27 +551,106 @@ impl Signex {
     }
 }
 
-/// "1 unsaved document", "2 unsaved documents"; with library rows in the mix,
-/// "3 unsaved items" (singular "1 unsaved item").
-pub(in crate::app::view) fn unsaved_phrase(documents: usize, rows: usize) -> String {
-    let (total, noun) = if rows == 0 {
-        (documents, "document")
+/// The sentence `id` naming the unsaved count: "1 unsaved document",
+/// "2 unsaved documents"; with library rows in the mix, "3 unsaved items"
+/// (singular "1 unsaved item"). `project` names the project when it says so.
+fn unsaved_line(
+    i18n: &I18n,
+    id: MessageId,
+    documents: usize,
+    rows: usize,
+    project: Option<&str>,
+) -> String {
+    let (count, kind) = if rows == 0 {
+        (documents, "documents")
     } else {
-        (documents + rows, "item")
+        (documents + rows, "items")
     };
-    let plural = if total == 1 { "" } else { "s" };
-    format!("{total} unsaved {noun}{plural}")
+    let project = project.unwrap_or_default();
+    t!(i18n, id, "count" => count, "kind" => kind, "project" => project).into_string()
 }
 
 #[cfg(test)]
 mod copy_tests {
-    use super::unsaved_phrase;
+    use signex_i18n::{I18n, LanguagePref, ids};
+
+    use super::unsaved_line;
+
+    fn plain(text: String) -> String {
+        text.replace(['\u{2068}', '\u{2069}'], "")
+    }
 
     #[test]
     fn the_unsaved_count_is_singular_or_plural_not_a_parenthesised_s() {
-        assert_eq!(unsaved_phrase(1, 0), "1 unsaved document");
-        assert_eq!(unsaved_phrase(2, 0), "2 unsaved documents");
-        assert_eq!(unsaved_phrase(1, 1), "2 unsaved items");
-        assert_eq!(unsaved_phrase(0, 1), "1 unsaved item");
+        let en = I18n::en_us();
+        let line = |documents, rows| {
+            plain(unsaved_line(
+                &en,
+                ids::DIALOG_QUIT_DETAIL,
+                documents,
+                rows,
+                None,
+            ))
+        };
+        assert_eq!(
+            line(1, 0),
+            "You have 1 unsaved document. Save before quitting?"
+        );
+        assert_eq!(
+            line(2, 0),
+            "You have 2 unsaved documents. Save before quitting?"
+        );
+        assert_eq!(
+            line(1, 1),
+            "You have 2 unsaved items. Save before quitting?"
+        );
+        assert_eq!(line(0, 1), "You have 1 unsaved item. Save before quitting?");
+        assert_eq!(
+            plain(unsaved_line(
+                &en,
+                ids::DIALOG_CLOSE_PROJECT_DETAIL,
+                2,
+                0,
+                Some("Demo")
+            )),
+            "'Demo' has 2 unsaved documents. What would you like to do?"
+        );
+    }
+
+    /// The multi-line dialog texts keep the English the views built before
+    /// the catalog, line break included.
+    #[test]
+    fn multi_line_dialog_texts_keep_their_english() {
+        let en = I18n::en_us();
+        let undo = || signex_i18n::Arg::from("Ctrl+Z");
+        assert_eq!(
+            en.message_plain(ids::DIALOG_ANNOTATE_RESET_DETAIL, &[("undo", undo())]),
+            "Every reference designator will be reset to '?', then the sheet will be renumbered from 1.
+This cannot be undone through Ctrl+Z alone — consider saving first."
+        );
+        assert_eq!(
+            en.message_plain(ids::DIALOG_RECOVERY_HINT, &[("undo", undo())]),
+            "Restore loads the copy as unsaved edits; nothing is written to the file until \
+             you save. Restoring replaces the open document and cannot be undone with \
+             Ctrl+Z. Discard deletes the copy. Decide later keeps it for the next time \
+             this file is opened, and pauses autosave for this document for the rest of the \
+             session."
+        );
+    }
+
+    /// #2058: the confirm sentences follow the language in force.
+    #[test]
+    fn the_unsaved_sentence_follows_the_language() {
+        let xa = I18n::new(&LanguagePref::Locale("en-XA".to_owned()));
+        let en = I18n::en_us();
+        let english = unsaved_line(&en, ids::DIALOG_EXIT_DETAIL, 2, 0, None);
+        assert_ne!(
+            unsaved_line(&xa, ids::DIALOG_EXIT_DETAIL, 2, 0, None),
+            english
+        );
+        assert_eq!(
+            plain(english),
+            "You have 2 unsaved documents. Save before exiting?"
+        );
     }
 }
