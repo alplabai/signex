@@ -80,7 +80,7 @@ fn id(name: &str) -> AppCommandId {
 
 /// A headless app and the driver that runs its tasks.
 struct Session {
-    app: Signex,
+    app: Box<Signex>,
     driver: TaskDriver,
 }
 

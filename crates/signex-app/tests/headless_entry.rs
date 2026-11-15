@@ -40,6 +40,28 @@ fn a_headless_boot_runs_commands_by_id_and_leaves_the_real_config_alone() {
     run_probe("run");
 }
 
+/// #2325: the headless boot hands the app back on the heap, so no caller
+/// frame (the CLI on a 1 MB Windows main stack) copies the ~44 KB app.
+#[test]
+fn a_headless_boot_returns_the_app_boxed() {
+    fn returned<T>(_: fn(Vec<PathBuf>, &RuleProfile) -> T) -> usize {
+        std::mem::size_of::<T>()
+    }
+    fn returned_with_depth<T>(_: fn(Vec<PathBuf>, &RuleProfile, &str) -> T) -> usize {
+        std::mem::size_of::<T>()
+    }
+    let sizes = [
+        returned(Signex::boot_headless),
+        returned_with_depth(Signex::boot_headless_with_undo_depth),
+    ];
+    for size in sizes {
+        assert!(
+            size < 1024,
+            "the headless boot returns {size} bytes; box the app"
+        );
+    }
+}
+
 #[test]
 fn a_headless_boot_is_refused_without_a_config_root_override() {
     run_probe("no_override");

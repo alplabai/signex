@@ -56,7 +56,7 @@ fn probe() {
 }
 
 struct Session {
-    app: Signex,
+    app: Box<Signex>,
     driver: TaskDriver,
     _root: tempfile::TempDir,
 }
