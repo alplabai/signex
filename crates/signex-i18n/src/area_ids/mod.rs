@@ -11,6 +11,7 @@ mod library;
 mod notice;
 mod overlay;
 mod panels;
+mod pdf_preview;
 mod preferences;
 
 pub use bom::*;
@@ -22,6 +23,7 @@ pub use library::*;
 pub use notice::*;
 pub use overlay::*;
 pub use panels::*;
+pub use pdf_preview::*;
 pub use preferences::*;
 
 /// Every id of every area list.
@@ -37,6 +39,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         notice::NOTICE,
         overlay::OVERLAY,
         panels::PANELS,
+        pdf_preview::PDF_PREVIEW,
         preferences::PREFERENCES,
     ]
     .concat()
