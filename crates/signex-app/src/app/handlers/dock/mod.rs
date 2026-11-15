@@ -83,8 +83,8 @@ impl Signex {
                 return Task::batch([task, self.finish_update()]);
             }
             if let crate::panels::PanelMsg::PcbComponent(msg) = panel_msg {
-                self.handle_pcb_component(msg);
-                return self.finish_update();
+                let task = self.handle_pcb_component(msg);
+                return Task::batch([task, self.finish_update()]);
             }
             if let crate::panels::PanelMsg::PcbPrimitive(msg) = panel_msg {
                 self.handle_pcb_primitive(msg);

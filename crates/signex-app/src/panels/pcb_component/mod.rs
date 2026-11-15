@@ -66,6 +66,15 @@ pub enum ComponentField {
     Parameter(String),
 }
 
+/// The library a board footprint came from, as the Library row names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FootprintLibrary {
+    /// An open library, by its display name.
+    Open(String),
+    /// A library that is not open, by its id.
+    NotOpen(Uuid),
+}
+
 /// One row of the Parameters tab: a key the selected components all have.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParameterFacts {
@@ -93,8 +102,9 @@ pub struct PcbComponentFacts {
     /// The body's area in mm²; `None` inside when it cannot be measured.
     pub area_mm2: Shared<Option<f64>>,
     pub footprint_name: Shared<String>,
-    /// The library footprint reference (`library:footprint@version`).
-    pub library: Shared<Option<String>>,
+    /// The library the footprint came from; `None` inside when it has no
+    /// library link.
+    pub library: Shared<Option<FootprintLibrary>>,
     /// The schematic sheet path and part link; `None` inside when unlinked.
     pub schematic_path: Shared<Option<String>>,
     /// The keys every selected component has, in the first one's order.
@@ -161,6 +171,12 @@ pub enum PcbComponentMsg {
         footprints: Vec<Uuid>,
         field: FootprintTextField,
         shown: bool,
+    },
+    /// The Footprint Name row's picker button was pressed: the footprint
+    /// picker opens to swap the footprint of these components (#2366).
+    FootprintPickRequested {
+        board: PathBuf,
+        footprints: Vec<Uuid>,
     },
 }
 

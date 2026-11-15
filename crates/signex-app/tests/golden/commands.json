@@ -120,6 +120,11 @@
     "category": "edit"
   },
   {
+    "id": "change_footprint",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
     "id": "check_drc",
     "group": "General",
     "category": "validation"

@@ -311,6 +311,7 @@ altium	hint	-	-	place_component
 altium	hint	-	-	run_drc
 altium	hint	-	-	reannotate_board
 altium	hint	-	-	flip_selection
+altium	hint	-	-	change_footprint
 altium	hint	-	-	toggle_ratsnest
 altium	hint	-	-	toggle_origin_marker
 altium	hint	-	⇧+	next_layer
@@ -652,6 +653,7 @@ classic	hint	-	-	place_component
 classic	hint	-	-	run_drc
 classic	hint	-	-	reannotate_board
 classic	hint	-	-	flip_selection
+classic	hint	-	-	change_footprint
 classic	hint	-	-	toggle_ratsnest
 classic	hint	-	-	toggle_origin_marker
 classic	hint	-	⇧+	next_layer

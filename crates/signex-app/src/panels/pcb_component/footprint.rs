@@ -7,7 +7,7 @@ use signex_i18n::{MessageId, ids, t};
 use signex_widgets::{button, text};
 
 use super::rows::{self, Form};
-use super::{PcbComponentFacts, Shared};
+use super::{FootprintLibrary, PcbComponentFacts, PcbComponentMsg, Shared};
 use crate::panels::{PanelContext, PanelMsg, form_look};
 use crate::styles::{Spacing, TypeScale};
 
@@ -66,14 +66,28 @@ fn footprint<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Vec<Element<'
             Shared::Same(name) => name.clone(),
             Shared::Mixed => String::new(),
         };
-        // The picker needs a library footprint read off the UI thread and a
-        // board-side swap flow; until then the button says so.
+        // Opens the footprint picker; a locked or read-only selection
+        // cannot swap, and the tip says why.
+        let open = facts.is_editable().then(|| {
+            PanelMsg::PcbComponent(PcbComponentMsg::FootprintPickRequested {
+                board: facts.board.clone(),
+                footprints: facts.footprints.clone(),
+            })
+        });
+        let tip = if open.is_some() {
+            ids::PCB_COMPONENT_FOOTPRINT_PICK_TIP
+        } else if facts.read_only {
+            ids::PCB_COMPONENT_READ_ONLY_TIP
+        } else {
+            ids::PCB_COMPONENT_LOCKED_TIP
+        };
         let pick = form.with_tip(
             button(text(t!(form.ctx.i18n, ids::PCB_COMPONENT_FOOTPRINT_PICK)).size(TS.body))
                 .padding([SP.s, SP.m])
                 .style(form_look::ghost_button)
+                .on_press_maybe(open)
                 .boxed(),
-            ids::PCB_COMPONENT_SWAP_NOT_READY,
+            tip,
         );
         let control = Row::new()
             .push(rows::value(name))
@@ -86,7 +100,16 @@ fn footprint<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Vec<Element<'
     }
     let label = form.text(ids::PCB_COMPONENT_LIBRARY);
     if form.shows(&label) {
-        let library = optional_text(form, &facts.library, ids::PCB_COMPONENT_NO_LIBRARY);
+        let library = match &facts.library {
+            Shared::Same(Some(FootprintLibrary::Open(name))) => name.clone(),
+            Shared::Same(Some(FootprintLibrary::NotOpen(id))) => {
+                let id = id.to_string();
+                t!(form.ctx.i18n, ids::PCB_COMPONENT_LIBRARY_NOT_OPEN, "library" => id.as_str())
+                    .into_string()
+            }
+            Shared::Same(None) => form.text(ids::PCB_COMPONENT_NO_LIBRARY),
+            Shared::Mixed => String::new(),
+        };
         rows.push(rows::row(form, label, rows::value(library)));
     }
     // The library footprint's own description is not kept on the board.

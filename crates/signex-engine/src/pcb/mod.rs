@@ -22,6 +22,7 @@ mod engine;
 mod error;
 mod footprint;
 mod footprint_content;
+pub mod footprint_swap;
 mod items;
 mod options;
 pub mod part_place;

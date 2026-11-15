@@ -51,6 +51,7 @@ impl Signex {
                 self.arm_board_tool(tool);
                 Task::none()
             }
+            PcbMsg::FootprintSwap(event) => self.handle_footprint_swap(event),
         }
     }
 

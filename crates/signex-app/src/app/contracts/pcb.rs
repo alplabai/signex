@@ -65,6 +65,31 @@ pub enum PcbMsg {
     /// A board placement tool was picked (its command ran, #2373): it is
     /// armed on the board in view of the window the command ran in.
     PlaceToolPicked(crate::app::pcb_tools::BoardPlaceTool),
+    /// Swapping the footprint of placed components (#2366).
+    FootprintSwap(FootprintSwapMsg),
+}
+
+/// Swapping the library footprint of components placed on a board (#2366).
+/// Each step names the board and footprints it is for, so a selection change
+/// in between cannot send the swap to other components.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FootprintSwapMsg {
+    /// `change_footprint` ran (the board menu, the palette): the footprint
+    /// picker opens for the footprints selected on the board in view.
+    Requested,
+    /// The picker picked `footprint` for them.
+    Picked {
+        board: std::path::PathBuf,
+        footprints: Vec<uuid::Uuid>,
+        footprint: signex_library::PrimitiveRef,
+    },
+    /// The picked footprint was read off the update thread, in its board
+    /// form, or why it could not be.
+    Resolved {
+        board: std::path::PathBuf,
+        footprints: Vec<uuid::Uuid>,
+        result: Result<Box<signex_types::pcb::Footprint>, String>,
+    },
 }
 
 /// A dropdown of the PCB Active Bar (#2352).

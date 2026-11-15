@@ -223,6 +223,7 @@ place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schema
 run_drc	pcb	Run the design rule check on the board	Design Rule Check	PCB	-	-	RequiresDocument(Pcb)	runs_headless	-
 reannotate_board	design	Re-annotate the board's designators by position	Re-Annotate Board...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 flip_selection	modify	Flip selection to the other board side	Flip Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	-
+change_footprint	modify	Change the footprint of the selected components	Change Footprint...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 toggle_ratsnest	view	Show or hide the ratsnest	Toggle Ratsnest	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 toggle_origin_marker	view	Show or hide the board origin marker	Toggle Origin Marker	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 next_layer	view	Make the next layer of the board active	Next Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-

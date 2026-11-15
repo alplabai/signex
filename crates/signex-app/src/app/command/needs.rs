@@ -52,6 +52,8 @@ pub(crate) enum Needs {
     MoveObject,
     /// Flip Selection: a board with an unlocked footprint selected.
     PcbPlacement,
+    /// Change Footprint: a board with unlocked footprints selected (#2366).
+    SwapFootprints,
     /// Cross Probe: something selected on the board or sheet in view (#1312).
     ProbeTarget,
     /// Update PCB: a schematic or a board in view, with a project open
@@ -132,6 +134,7 @@ impl Needs {
             Self::MoveSelection => ctx.has_schematic && ctx.has_selection,
             Self::MoveObject => ctx.has_schematic || ctx.pcb.shown,
             Self::PcbPlacement => ctx.pcb.shown && (ctx.pcb.placeable || ctx.pcb.part_in_hand),
+            Self::SwapFootprints => ctx.pcb.shown && ctx.pcb.placeable,
             Self::ProbeTarget if ctx.pcb.shown => ctx.pcb.any,
             Self::ProbeTarget => ctx.has_schematic && ctx.has_selection,
             Self::PcbSync => {
@@ -193,6 +196,7 @@ impl Needs {
             Self::MoveSelection => "Nothing is selected to move, or a selected footprint is locked",
             Self::MoveObject => "No schematic or PCB is open",
             Self::PcbPlacement => "No unlocked footprint is selected on a PCB",
+            Self::SwapFootprints => "No unlocked footprint is selected on a PCB",
             Self::ProbeTarget => "Nothing is selected on the sheet or board to cross probe",
             Self::PcbSync => "No schematic or PCB of an open project is in view",
             Self::OpenProject => "No project is open",
@@ -255,6 +259,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "move_selection" => Needs::MoveSelection,
         "move_object" => Needs::MoveObject,
         "flip_selection" => Needs::PcbPlacement,
+        "change_footprint" => Needs::SwapFootprints,
         "remove_last_vertex" => Needs::VertexTarget,
         "paste_array"
         | "repeat_last_item"

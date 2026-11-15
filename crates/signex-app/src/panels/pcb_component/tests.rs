@@ -141,3 +141,14 @@ fn placement_edits_stop_while_any_component_is_locked() {
     facts.read_only = true;
     assert!(!facts.is_editable());
 }
+
+#[test]
+fn the_library_row_shows_the_library_name_or_that_it_is_not_open() {
+    let mut facts = one_component("R7", "R_0603");
+    facts.library = Shared::Same(Some(super::FootprintLibrary::Open("Stock".into())));
+    assert!(has(&texts_of(facts.clone(), 0), "Stock"));
+    let id = Uuid::from_u128(9);
+    facts.library = Shared::Same(Some(super::FootprintLibrary::NotOpen(id)));
+    let texts = texts_of(facts, 0);
+    assert!(has(&texts, &format!("{id} (not open)")), "{texts:?}");
+}

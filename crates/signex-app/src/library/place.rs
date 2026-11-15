@@ -88,6 +88,29 @@ pub fn resolve_board_part(
     })
 }
 
+/// The library footprint `address` in its board form, its latest version
+/// read from the open library that holds it (#2366). A footprint the board
+/// cannot hold is refused with why.
+pub fn resolve_library_footprint(
+    address: &PrimitiveRef,
+    open_libraries: &[(Uuid, PathBuf)],
+) -> Result<signex_types::pcb::Footprint, String> {
+    use signex_library::LibraryAdapter as _;
+    use signex_library::adapters::local_git::LocalGitAdapter;
+
+    let (_, path) = open_libraries
+        .iter()
+        .find(|(id, _)| *id == address.library_id)
+        .ok_or_else(|| format!("its library {} is not open", address.library_id))?;
+    let adapter = LocalGitAdapter::open(path)
+        .map_err(|e| format!("could not open {}: {e}", path.display()))?;
+    signex_library::part_footprint::resolve_named_footprint(address, |a, _version| {
+        adapter.get_footprint(a.uuid).ok()
+    })
+    .map(|resolved| resolved.footprint)
+    .map_err(|why| why.to_string())
+}
+
 /// [`resolve_placement`] for the drawing `chosen` and the footprint
 /// `chosen_footprint` name: the row's defaults when `None`, else one of its
 /// alternates (refused when the row no longer offers it).
