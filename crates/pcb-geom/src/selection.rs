@@ -94,14 +94,14 @@ impl Selection {
             .iter()
             .filter_map(|item| match *item {
                 ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => Some(id),
-                ItemRef::Track(_) | ItemRef::Via(_) => None,
+                ItemRef::Track(_) | ItemRef::Via(_) | ItemRef::Zone { .. } => None,
             })
             .collect()
     }
 }
 
 /// The item under `p`: a via over a pad over a track over a footprint
-/// body, then the lowest
+/// body over a drawn area, then the lowest
 /// [`ItemRef`], so the answer does not depend on how the tree was built.
 pub fn pick(index: &BoardIndex, p: PointNm, tolerance: i64) -> Option<&IndexedItem> {
     pick_filtered(index, p, tolerance, &PickFilter::default())
@@ -129,6 +129,8 @@ fn rank(item: ItemRef) -> u8 {
         ItemRef::Track(_) => 2,
         // The body is under its own pads: a click on copper takes the copper.
         ItemRef::Footprint(_) => 3,
+        // A drawn area is under everything on it (#2383).
+        ItemRef::Zone { .. } => 4,
     }
 }
 

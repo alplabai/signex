@@ -720,13 +720,21 @@ impl canvas::Program<Message> for PcbCanvas {
             grid::draw_board_area(frame, &camera, size, region, sheet, &self.canvas_colors);
             if let Some(level) = self.grid_level(camera.scale()) {
                 let paint = grid::grid_paint(&self.canvas_colors, level.fade);
-                grid::draw_grid(frame, &camera, size, region, level, paint);
+                grid::draw_grid(
+                    frame,
+                    &camera,
+                    size,
+                    region,
+                    self.marks.origin,
+                    level,
+                    paint,
+                );
                 marks::draw_grids(frame, &camera, size, region, &self.marks.grids);
             }
             marks::draw_guides(frame, &camera, size, &self.marks.guides);
             if self.origin_marker_visible {
                 let origin = crate::render_config::to_iced(&self.canvas_colors.cursor);
-                grid::draw_origin(frame, &camera, size, origin);
+                grid::draw_origin(frame, &camera, size, self.marks.origin, origin);
             }
         });
 

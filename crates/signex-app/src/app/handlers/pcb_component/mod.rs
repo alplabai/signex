@@ -187,7 +187,14 @@ impl Signex {
                     LocationField::Rotation => ids::PCB_COMPONENT_ROTATION,
                 });
                 self.run_component_edit(board, footprints, &what, |b, ids| {
-                    let value = component::parse_location(*location, text)?;
+                    let typed = component::parse_location(*location, text)?;
+                    // X and Y are typed from the board origin, Y up (#2384).
+                    let origin = b.options.origin;
+                    let value = match location {
+                        LocationField::X => origin.board_x(typed),
+                        LocationField::Y => origin.board_y(typed),
+                        LocationField::Rotation => typed,
+                    };
                     component::location_commands(b, ids, *location, value)
                 });
             }

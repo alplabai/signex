@@ -3,7 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use pcb_geom::{PointNm, RectNm, footprint_extent, nm_to_mm, stage};
+use pcb_geom::{PointNm, RectNm, footprint_extent, nm_to_mm, stage, stage_up};
 use signex_types::part::{FootprintSourceRef, ResolvedFootprint};
 use signex_types::pcb::{Footprint, PcbBoard, Point, SymbolLink};
 use signex_types::schematic::InstancePath;
@@ -443,9 +443,9 @@ fn add_row(part: &EcoPart, duplicates: &HashSet<String>) -> EcoRow {
     }
 }
 
-/// Place every add row's footprint to the right of the board, in part
-/// order. Blocked rows are staged too, so ticking or fixing one never moves
-/// the others.
+/// Place every add row's footprint to the right of the board, or inside an
+/// empty board's area, in part order. Blocked rows are staged too, so
+/// ticking or fixing one never moves the others.
 fn stage_adds(board: &PcbBoard, staging: pcb_geom::Staging, adds: &mut [(usize, EcoRow)]) {
     let mut extents = Vec::new();
     let mut staged = Vec::new();
@@ -464,7 +464,17 @@ fn stage_adds(board: &PcbBoard, staging: pcb_geom::Staging, adds: &mut [(usize, 
             Err(_) => {}
         }
     }
-    let origins = stage(occupied(board), &extents, staging);
+    // Nothing on the board yet: inside its area from the bottom-left (#2384).
+    let origins = match occupied(board) {
+        Some(occupied) => stage(Some(occupied), &extents, staging),
+        None => {
+            let corner = signex_types::pcb_origin::board_area_bottom_left(&board.outline);
+            match PointNm::from_mm(corner, "board area") {
+                Ok(corner) => stage_up(corner, &extents, staging),
+                Err(_) => stage(None, &extents, staging),
+            }
+        }
+    };
     for (i, origin) in staged.into_iter().zip(origins) {
         if let EcoChange::AddFootprint { footprint } = &mut adds[i].1.change {
             footprint.position = Point {

@@ -24,6 +24,11 @@ pub struct UiState {
     /// What a click or box may pick on a board: the PCB selection filter
     /// (#2353), one for the editor. Session only.
     pub pcb_pick_filter: pcb_geom::PickFilter,
+    /// The board filter's saved presets (#2383), the schematic's mechanism
+    /// keyed on board kinds; kept in `prefs.json`.
+    pub pcb_filter_presets: Vec<crate::active_bar::CustomFilterPreset<pcb_geom::PickKind>>,
+    /// The preset the board panel edits.
+    pub pcb_filter_preset_tab: usize,
     /// How carried board items snap (#2353), one for the editor. Session only.
     pub pcb_snap: crate::pcb_canvas::PcbSnapOptions,
     /// The board Properties panel's tab, search text, filter menu and the

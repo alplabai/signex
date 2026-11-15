@@ -7,7 +7,6 @@ use iced::{Background, Border, Color, Element, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
-use crate::active_bar::ActiveBarMsg;
 use crate::styles::{self, Radii, tokens};
 
 const TS: styles::TypeScale = styles::TypeScale::DEFAULT;
@@ -93,17 +92,37 @@ fn chip_style(
 }
 
 /// One toggle chip (a filter category, or a preset shown as an OFF chip).
-pub(super) fn chip(
+/// `msg: None` draws it inert in the OFF paint, with `why` on hover (a
+/// board kind the editor cannot pick yet, #2383).
+pub(super) fn chip<M: Clone + 'static>(
     t: &ThemeTokens,
     label: String,
     on: bool,
-    msg: ActiveBarMsg,
-) -> Element<'static, ActiveBarMsg> {
-    let ink = ChipPaint::of(t, on, false).ink;
-    button(text(raw(label)).size(TS.body).color(ink))
+    msg: Option<M>,
+    why: Option<String>,
+) -> Element<'static, M> {
+    let lit = on && msg.is_some();
+    let paint = ChipPaint::of(t, lit, false);
+    let ink = if msg.is_some() {
+        paint.ink
+    } else {
+        tokens::resolve(t).ink4
+    };
+    let chip = button(text(raw(label)).size(TS.body).color(ink))
         .padding([SP.s, 10.0])
-        .on_press(msg)
-        .style(chip_style(t, on))
+        .on_press_maybe(msg)
+        .style(chip_style(t, lit));
+    let Some(why) = why else {
+        return chip.boxed();
+    };
+    let hint = container(text(raw(why)).size(TS.caption).color(styles::ti(t.text)))
+        .padding([SP.xs, SP.m])
+        .style(signex_widgets::active_bar_dropdown::tooltip_style(
+            tokens::hover_overlay(t),
+            styles::ti(t.border),
+        ));
+    signex_widgets::tooltip(chip.boxed(), hint, iced::widget::tooltip::Position::Bottom)
+        .gap(SP.xs)
         .boxed()
 }
 
@@ -135,12 +154,17 @@ fn segment_style(
 }
 
 /// The All / None segmented control that replaces the legacy "All - On"
-/// toggle: All turns every category on, None turns every one off.
-pub(super) fn all_none(t: &ThemeTokens, scope: FilterScope) -> Element<'static, ActiveBarMsg> {
+/// toggle: `all` turns every category on, `none` turns every one off.
+pub(super) fn all_none<M: Clone + 'static>(
+    t: &ThemeTokens,
+    scope: FilterScope,
+    all: M,
+    none: M,
+) -> Element<'static, M> {
     let r = tokens::resolve(t);
     let sunken = r.sunken;
     let (ink, ink3) = (styles::ti(t.text), r.ink3);
-    let cell = |label: &'static str, active: bool, msg: ActiveBarMsg| {
+    let cell = |label: &'static str, active: bool, msg: M| {
         button(
             text(raw(label))
                 .size(TS.body)
@@ -151,17 +175,9 @@ pub(super) fn all_none(t: &ThemeTokens, scope: FilterScope) -> Element<'static, 
         .style(segment_style(t, active))
         .boxed()
     };
-    let cells: iced::widget::Row<Element<'static, ActiveBarMsg>> = row![
-        cell(
-            "All",
-            scope == FilterScope::All,
-            ActiveBarMsg::AllFiltersPicked
-        ),
-        cell(
-            "None",
-            scope == FilterScope::None,
-            ActiveBarMsg::NoFiltersPicked
-        ),
+    let cells: iced::widget::Row<Element<'static, M>> = row![
+        cell("All", scope == FilterScope::All, all),
+        cell("None", scope == FilterScope::None, none),
     ]
     .spacing(SEGMENT_INSET);
     container(cells)

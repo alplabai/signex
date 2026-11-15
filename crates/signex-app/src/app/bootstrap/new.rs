@@ -298,6 +298,11 @@ impl Signex {
                 pcb_layer_views: Default::default(),
                 pcb_view_angle_entry: None,
                 pcb_pick_filter: Default::default(),
+                pcb_filter_presets: crate::fonts::read_filter_presets_from(
+                    prefs,
+                    crate::fonts::BOARD_FILTER_PRESETS,
+                ),
+                pcb_filter_preset_tab: 0,
                 pcb_snap: Default::default(),
                 pcb_board_panel: Default::default(),
                 keymap_pending_sequence: Vec::new(),

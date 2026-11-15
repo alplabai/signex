@@ -4438,6 +4438,7 @@ version = "26.11.0-rc.1"
 dependencies = [
  "i_overlay",
  "rstar",
+ "serde",
  "signex-types",
  "uuid",
 ]

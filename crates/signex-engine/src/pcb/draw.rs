@@ -150,7 +150,7 @@ pub fn new_copper_area(
         outline,
         holes: Vec::new(),
         priority: 0,
-        fill_type: "solid".into(),
+        fill_type: signex_types::pcb::SOLID_FILL.into(),
         thermal_relief: false,
         thermal_gap: 0.0,
         thermal_width: 0.0,

@@ -10,6 +10,7 @@ license.workspace = true
 [dependencies]
 i_overlay = { version = "9.1", default-features = false }
 rstar = "0.12"
+serde.workspace = true
 signex-types.workspace = true
 uuid.workspace = true
 

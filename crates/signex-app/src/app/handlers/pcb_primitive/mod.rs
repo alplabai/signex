@@ -218,6 +218,22 @@ fn field_name(field: PrimitiveField) -> MessageId {
     }
 }
 
+/// `edit` with a typed X or Y, read from the board origin with Y up, in the
+/// model (#2384).
+fn in_board(board: &PcbBoard, edit: &PrimitiveEdit) -> PrimitiveEdit {
+    use PrimitiveField as F;
+    let origin = board.options.origin;
+    match *edit {
+        PrimitiveEdit::Number(field @ (F::X | F::StartX | F::EndX), v) => {
+            PrimitiveEdit::Number(field, origin.board_x(v))
+        }
+        PrimitiveEdit::Number(field @ (F::Y | F::StartY | F::EndY), v) => {
+            PrimitiveEdit::Number(field, origin.board_y(v))
+        }
+        _ => edit.clone(),
+    }
+}
+
 /// The command for `edit` on `items`, all of one kind. `None` when the
 /// edit changes nothing or does not apply to the kind.
 fn primitive_command(
@@ -225,6 +241,7 @@ fn primitive_command(
     items: &[ItemRef],
     edit: &PrimitiveEdit,
 ) -> Result<Option<BoardCommand>, PrimitiveEditRefusal> {
+    let edit = &in_board(board, edit);
     match items.first() {
         Some(ItemRef::Track(_)) => {
             let ids: Vec<_> = items
@@ -265,7 +282,7 @@ fn primitive_command(
                 None => Ok(None),
             }
         }
-        Some(ItemRef::Footprint(_)) | None => Ok(None),
+        Some(ItemRef::Footprint(_) | ItemRef::Zone { .. }) | None => Ok(None),
     }
 }
 

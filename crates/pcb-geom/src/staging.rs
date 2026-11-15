@@ -1,7 +1,8 @@
 //! Where new footprints wait before they are placed (#1312): packed to the
-//! right of the board outline, in the order given, snapped to a grid, in
-//! integer nm. Deterministic: the same inputs give the same positions, and
-//! no two staged footprints overlap each other or the board.
+//! right of the board outline, or inside the board area from its bottom-left
+//! corner when there is no outline (#2384), in the order given, snapped to a
+//! grid, in integer nm. Deterministic: the same inputs give the same
+//! positions, and no two staged footprints overlap each other or the board.
 
 use signex_types::pcb::{Footprint, Point};
 
@@ -68,12 +69,19 @@ pub fn footprint_extent(footprint: &Footprint) -> Result<RectNm, GeomError> {
 /// the grid, and each footprint's extent, placed at its origin, clears every
 /// other one and the board by at least `gap`.
 pub fn stage(board: Option<RectNm>, extents: &[RectNm], staging: Staging) -> Vec<PointNm> {
+    let gap = staging.gap.max(0);
+    let start = match board {
+        Some(b) => PointNm::new(b.max.x + gap, b.min.y),
+        None => PointNm::ORIGIN,
+    };
+    stage_from(start, extents, staging)
+}
+
+/// Rows from `start` (their top-left), left to right, then down.
+fn stage_from(start: PointNm, extents: &[RectNm], staging: Staging) -> Vec<PointNm> {
     let grid = staging.grid.max(1);
     let gap = staging.gap.max(0);
-    let (left, top) = match board {
-        Some(b) => (b.max.x + gap, b.min.y),
-        None => (0, 0),
-    };
+    let (left, top) = (start.x, start.y);
     let row_end = left.saturating_add(staging.row_width.max(0));
     let mut cursor = PointNm::new(left, top);
     let mut row_height = 0i64;
@@ -95,6 +103,27 @@ pub fn stage(board: Option<RectNm>, extents: &[RectNm], staging: Staging) -> Vec
         cursor = PointNm::new(placed_max.x + gap, cursor.y);
     }
     origins
+}
+
+/// [`stage`] inside a board with no outline (#2384): rows start at `corner`,
+/// the bottom-left of the board area as the screen shows it (model y grows
+/// down), fill to the right and go up the screen. Each origin lies on the
+/// grid and each extent stays at or above the corner.
+pub fn stage_up(corner: PointNm, extents: &[RectNm], staging: Staging) -> Vec<PointNm> {
+    // Stage in the board mirrored about y = 0, where up the screen is down.
+    let mirrored: Vec<RectNm> = extents
+        .iter()
+        .map(|e| {
+            RectNm::new(
+                PointNm::new(e.min.x, -e.max.y),
+                PointNm::new(e.max.x, -e.min.y),
+            )
+        })
+        .collect();
+    stage_from(PointNm::new(corner.x, -corner.y), &mirrored, staging)
+        .into_iter()
+        .map(|p| PointNm::new(p.x, -p.y))
+        .collect()
 }
 
 /// The smallest multiple of `grid` at or above `v`.

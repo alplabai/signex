@@ -11,15 +11,24 @@ pcb-board-parameters-unavailable = Boards hold no parameters yet.
 # Badge on the Health Check tab: how many design and electrical rule findings there are.
 pcb-board-health-badge = { $count }
 
-# The header's summary of the Selection Filter. $first is the first object kind
-# that is on; $more counts the other kinds that are on.
-pcb-board-filter-summary = { $first } (and { $more } more)
-pcb-board-filter-summary-none = No objects
+# The header's Selection Filter button: kinds on out of all, and its tooltip
+# naming the kinds turned off ($off, a comma list).
+pcb-board-filter-count = { $on }/{ $total }
+pcb-board-filter-tip-all = Selection filter: everything is pickable
+pcb-board-filter-tip-off = Selection filter: { $off } off
 
 # Selection Filter: which objects a click or a box picks on the board.
 pcb-board-section-filter = Selection Filter
 pcb-board-filter-all-on = All - On
 pcb-board-filter-unavailable = The board editor cannot pick these objects yet.
+pcb-board-filter-presets = Presets
+pcb-board-filter-preset-add = Add Preset
+pcb-board-filter-preset-add-tip = Save the kinds that are on as a preset.
+pcb-board-filter-preset-full = At most { $limit } presets; delete one to add another.
+pcb-board-filter-preset-apply-tip = Turn on exactly the kinds this preset holds.
+pcb-board-filter-preset-name = Preset name
+pcb-board-filter-preset-update = Save Chips
+pcb-board-filter-preset-update-tip = Store the kinds that are on in this preset.
 pcb-board-kind-components = Components
 pcb-board-kind-bodies = 3D Bodies
 pcb-board-kind-keepouts = Keepouts
@@ -58,18 +67,20 @@ pcb-board-snap-footprint-origins = Footprint Origins
 pcb-board-snap-body-points = 3D Body Snap Points
 pcb-board-snap-texts = Texts
 pcb-board-snap-object-unavailable = Boards hold no 3D bodies yet.
-pcb-board-snap-distance = Snap Distance
+pcb-board-snap-distance = Distance
 # $factor is a multiple of the snap grid, such as 0.5.
 pcb-board-snap-distance-value = { $factor }x Snap Grid
-pcb-board-axis-range = Axis Snap Range
+pcb-board-axis-range = Axis Range
 
 # Board Information: totals read from the board.
 pcb-board-section-info = Board Information
 pcb-board-info-size = Board Size
-pcb-board-info-horizontal = Horizontal
-pcb-board-info-vertical = Vertical
+pcb-board-info-width = Width
+pcb-board-info-height = Height
+pcb-board-info-thickness = Thickness
+pcb-board-info-no-outline = No board outline
 pcb-board-info-area = Area
-pcb-board-info-components-area = Components Area
+pcb-board-info-components-area = Parts Area
 pcb-board-info-density = Density
 pcb-board-info-components = Components
 pcb-board-info-total = Total
@@ -84,39 +95,32 @@ pcb-board-info-hidden = Hidden
 # Shown as the unrouted count before the ratsnest is worked out.
 pcb-board-info-not-counted = Not counted yet
 pcb-board-info-primitives = Primitives & Others
-pcb-board-info-arcs = Arcs
 pcb-board-info-fills = Fills
+pcb-board-info-regions = Regions
+pcb-board-info-keepouts = Keepouts
 pcb-board-info-pads = Pads
 pcb-board-info-strings = Strings
 pcb-board-info-tracks = Tracks
 pcb-board-info-vias = Vias
 pcb-board-info-polygons = Polygons
-pcb-board-info-holes = Pad/Via Holes
+pcb-board-info-holes = Holes
 pcb-board-info-drc = DRC Violations
 pcb-board-info-drc-not-run = Not run
 pcb-board-info-drc-tip = Show the design rule check results
-pcb-board-info-not-held = The board does not hold these objects yet.
 pcb-board-reports = Reports
 pcb-board-reports-unavailable = No board report exists yet.
 # A count in the Board Information rows.
 pcb-board-count = { $count }
 # A length or area from Signex's own formatter, unit included.
 pcb-board-measure = { $value }
-# Shown for a value the board cannot hold yet.
-pcb-board-not-available = Not available
 # Shown in a table cell the board cannot fill yet.
 pcb-board-unset = —
 pcb-board-percent = { $value } %
 
 # Grid Manager: the board's snap grid.
 pcb-board-section-grids = Grid Manager
-pcb-board-grid-priority = Priority
 pcb-board-grid-name = Name
-pcb-board-grid-color = Color
-pcb-board-grid-origin = Origin
-pcb-board-grid-comp = Comp
-pcb-board-grid-non-comp = Non Comp
-pcb-board-grid-global = Global Board Snap Grid
+pcb-board-grid-global = Global Snap Grid
 pcb-board-grid-step = Step
 pcb-board-grid-visible = Visible Grid
 pcb-board-grid-fast = Fast Grids
@@ -126,18 +130,13 @@ pcb-board-grid-invalid = Type a length above zero.
 pcb-board-grid-refused = Grid step not set: { $why }
 # The undo step's name.
 pcb-board-grid-undo = Grid step
-pcb-board-add = Add
-pcb-board-properties = Properties
 pcb-board-delete = Delete
-pcb-board-place = Place
 # A cell of the Global Board Snap Grid row: it applies to everything.
-pcb-board-grid-always = Always
 # A point in board coordinates; $x and $y come from Signex's own formatter.
 pcb-board-point = { $x }, { $y }
 pcb-board-swatch-tip = Click for the next color
 pcb-board-grid-origin-x = Origin X
 pcb-board-grid-origin-y = Origin Y
-pcb-board-select-row-first = Select a row first.
 # The name a new grid gets; $number counts the board's grids.
 pcb-board-grid-new-name = Grid { $number }
 # The undo step of a guide, grid, sheet or naming edit (#2374).
@@ -150,7 +149,7 @@ pcb-board-section-guides = Guide Manager
 pcb-board-guide-enabled = Enabled
 pcb-board-guide-x = X
 pcb-board-guide-y = Y
-pcb-board-guides-empty = No guides
+pcb-board-guides-empty = No guides — add one
 pcb-board-guide-vertical = Vertical
 pcb-board-guide-horizontal = Horizontal
 pcb-board-guide-plus45 = +45°
@@ -163,21 +162,33 @@ pcb-board-section-other = Other
 pcb-board-units = Units
 pcb-board-unit-mm = mm
 pcb-board-unit-mils = mils
-pcb-board-polygon-naming = Polygon Naming Scheme
+pcb-board-polygon-naming = Pour Names
 # How a polygon pour is named: net name, layer number (LXX) or board layer
 # name, and pour number (PXXX).
-pcb-board-naming-net-layer = NET NAME_LXX_PXXX
-pcb-board-naming-layer-net = LXX_NET NAME_PXXX
-pcb-board-naming-board-layer-net = Board Layer_NET NAME_PXXX
-pcb-board-naming-net-board-layer = NET NAME_Board Layer_PXXX
-pcb-board-designator-display = Designator Display
+pcb-board-designator-display = Designators
 pcb-board-designator-physical = Physical
 pcb-board-designator-logical = Logical
 pcb-board-sheet = Sheet Settings
 pcb-board-sheet-width = Width
 pcb-board-sheet-height = Height
-pcb-board-sheet-from-layer = Get Size From Sheet Layer
-pcb-board-sheet-from-layer-tip = The sheet is the box around the board shape while Get Size From Sheet Layer is on.
+pcb-board-sheet-from-layer = Size From Board
+
+# Grid and Guide Manager cards (#2386).
+pcb-board-more = ⋯
+pcb-board-more-tip = More actions
+pcb-board-edit = Edit
+pcb-board-move-up = Move Up
+pcb-board-move-down = Move Down
+pcb-board-grid-parts = Parts
+pcb-board-grid-other = Other
+pcb-board-grid-add = + Add Grid
+pcb-board-grid-fixed-tip = The board's own grid applies to everything no other grid claims.
+pcb-board-guide-add = + Add Guide
+pcb-board-guide-place-on-board = Place on Board
+pcb-board-guide-glyph-vertical = │
+pcb-board-guide-glyph-horizontal = ─
+pcb-board-guide-glyph-plus45 = ╱
+pcb-board-guide-glyph-minus45 = ╲
 
 # Health Check tab.
 pcb-board-health-drc = Design rules

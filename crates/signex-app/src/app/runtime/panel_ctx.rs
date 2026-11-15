@@ -220,6 +220,8 @@ impl Signex {
             unrouted_nets: ratsnest.unrouted_nets(&key),
             hidden_nets: ratsnest.hidden_net_count(&tab.path),
             filter: self.ui_state.pcb_pick_filter.clone(),
+            presets: self.ui_state.pcb_filter_presets.clone(),
+            preset_tab: self.ui_state.pcb_filter_preset_tab,
             snap: self.ui_state.pcb_snap.clone(),
             fast_grids_mm: self.ui_state.fast_grids_mm,
             view: self.ui_state.pcb_board_panel.clone(),
