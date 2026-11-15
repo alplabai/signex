@@ -259,3 +259,56 @@ fn an_undocked_window_with_no_earlier_size_leaves_its_camera() {
     assert_eq!(slot.live_camera(), before);
     assert_eq!(slot.viewport_size(), UNDOCKED_VIEW);
 }
+
+/// Windows reports a minimised window as 0x0. Measured from that, the restore
+/// looked like a canvas twice the window's size and moved the view.
+const MINIMISED: (f32, f32) = (0.0, 0.0);
+
+#[test]
+fn minimising_and_restoring_leaves_a_zoomed_view() {
+    let (mut app, main) = app();
+    fit_all(&mut app);
+    let _ = app.update(Message::Menu(MenuMessage::ZoomIn));
+    let before = camera(&app);
+
+    resize(&mut app, main, MINIMISED);
+    assert_eq!(camera(&app), before, "minimising moved the view");
+    resize(&mut app, main, WINDOW);
+
+    assert_eq!(camera(&app), before, "restoring moved the view");
+    assert_eq!(
+        app.interaction_state.active_canvas().viewport_size(),
+        app.canvas_bounds().size()
+    );
+}
+
+#[test]
+fn minimising_and_restoring_leaves_a_fitted_view() {
+    let (mut app, main) = app();
+    fit_all(&mut app);
+    let fitted = camera(&app);
+
+    resize(&mut app, main, MINIMISED);
+    assert_eq!(camera(&app), fitted, "minimising moved the view");
+    resize(&mut app, main, WINDOW);
+
+    assert_eq!(camera(&app), fitted, "restoring refitted to another size");
+}
+
+#[test]
+fn minimising_and_restoring_an_undocked_window_leaves_its_camera() {
+    let (mut app, window) = undocked_window(true);
+    let before = app.interaction_state.canvases[&window].live_camera();
+
+    resize(&mut app, window, MINIMISED);
+    assert_eq!(
+        app.ui_state.size_of_window(window),
+        UNDOCKED,
+        "the empty size became the base"
+    );
+    resize(&mut app, window, UNDOCKED);
+
+    let slot = &app.interaction_state.canvases[&window];
+    assert_eq!(slot.live_camera(), before);
+    assert_eq!(slot.viewport_size(), UNDOCKED_VIEW);
+}
