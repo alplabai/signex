@@ -324,6 +324,40 @@ rule) and `pcb_canvas::content_pixel_tests` (the layer against trunk's single
 frame at the live camera, within 24/255 per channel and at most 4 edge
 pixels, after reused pans, turned, at fractional display scales).
 
+## pcb-footprint-text — Designator and comment text on the board (#2368)
+
+A footprint's `Reference` and `Value` properties are drawn; other
+properties are parameters and are not. A property's position and rotation
+are footprint-local, placed by `pcb_geom::property_text_placement` with the
+footprint's own transform (mirror on the bottom side, then turn, then move),
+so the text follows a move, a turn and a flip. The angle composes as a pad's
+does: the footprint's turn plus the text's own, minus it on the bottom side.
+
+- **No position:** the designator sits `PCB_FP_TEXT_OFFSET_MM` above the
+  footprint origin, the comment that far below it.
+- **No layer:** the overlay of the footprint's side; an unknown size is
+  `PCB_DEFAULT_TEXT_SIZE_MM`. The text is centred on its anchor.
+- **Shown:** not hidden, not empty, and its layer visible in the board view
+  (`PcbLayerView::is_visible`, so single-layer mode shows the active layer's
+  text only). Colour: `layer_style::board_layer_colour` of its layer.
+- **Size:** true size (cap height in mm through `mm_per_em`), never clamped
+  to a readable minimum; a text under half a pixel is not drawn.
+
+The texts travel in `PcbSnapshot::texts`, not in the `Scene`: the GPU glyph
+atlas can neither mirror nor follow a turned view. `pcb_canvas::BoardTextLayer`
+paints them on a canvas layer between the board content and the highlight
+layer on both mounts, so the CPU and GPU mounts draw the same text. The
+layer is retained until the camera or the scene generation changes. A
+mirrored or turned text is drawn under a frame transform, which iced
+tessellates as outlines; an upright one stays a text primitive. During a
+drag the carried footprints' texts are painted by the highlight layer with
+the rest of the drag preview.
+
+Checks: `pcb::footprint_text::tests` (place, flip, eye, layer and
+single-layer visibility), `pcb_geom::text::tests`,
+`pcb_canvas::board_text::tests`, regression
+`pcb_component_properties::{the_canvas_draws_the_designator_until_the_eye_hides_it, a_flip_puts_the_designator_mirrored_on_the_bottom_overlay}`.
+
 ## What this document is *not*
 
 - **Not** a reverse-engineering of any third-party EDA tool's

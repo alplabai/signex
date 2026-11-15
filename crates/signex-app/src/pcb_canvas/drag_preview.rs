@@ -4,17 +4,19 @@
 //! starts, and the carried footprints are a small scene of their own at the
 //! carry's offset, painted by the highlight layer above both mounts. The
 //! offset moves in grid steps, so only that small scene is rebuilt, and only
-//! when a step is crossed.
+//! when a step is crossed. Their texts move with them, painted by the same
+//! layer (#2368).
 
 use std::collections::BTreeSet;
 
 use iced::widget::canvas;
 use iced::{Rectangle, Renderer};
 use signex_gfx::scene::Scene;
-use signex_renderer::pcb::PcbSnapshot;
+use signex_renderer::pcb::{FootprintTextInput, PcbSnapshot};
 use signex_types::pcb::Point;
 use uuid::Uuid;
 
+use super::board_text::paint_texts;
 use super::content::cull_rect;
 use super::cull::SceneBounds;
 use super::tessellate::{tessellate, visible_items};
@@ -36,6 +38,8 @@ struct MovingScene {
     offset: Point,
     scene: Scene,
     bounds: SceneBounds,
+    /// The carried footprints' designator and comment texts (#2368).
+    texts: Vec<FootprintTextInput>,
 }
 
 impl PcbCanvas {
@@ -74,13 +78,15 @@ impl PcbCanvas {
         if preview.moving.as_ref().is_some_and(|m| m.offset == offset) {
             return;
         }
-        let scene = self.build_scene(&snapshot());
+        let snapshot = snapshot();
+        let scene = self.build_scene(&snapshot);
         let bounds = SceneBounds::from_scene(&scene);
         if let Some(preview) = self.drag_preview.as_mut() {
             preview.moving = Some(MovingScene {
                 offset,
                 scene,
                 bounds,
+                texts: snapshot.texts,
             });
         }
     }
@@ -98,6 +104,26 @@ impl PcbCanvas {
             .as_ref()
             .and_then(|p| p.moving.as_ref())
             .map(|m| &m.scene)
+    }
+
+    /// The carried footprints' texts, if a preview draws them.
+    pub fn drag_preview_texts(&self) -> &[FootprintTextInput] {
+        self.drag_preview
+            .as_ref()
+            .and_then(|p| p.moving.as_ref())
+            .map(|m| m.texts.as_slice())
+            .unwrap_or_default()
+    }
+
+    /// Paint the carried footprints' texts onto `frame` of the highlight
+    /// layer, `viewport` in its pixels.
+    pub(super) fn paint_drag_preview_texts(
+        &self,
+        frame: &mut canvas::Frame,
+        viewport: Rectangle,
+        camera: &BoardCamera,
+    ) {
+        paint_texts(frame, self.drag_preview_texts(), camera, viewport);
     }
 
     /// The carried footprints tessellated for a `viewport` of the highlight

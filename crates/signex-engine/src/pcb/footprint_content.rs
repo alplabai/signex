@@ -202,7 +202,7 @@ pub(super) fn set_property(
 
 /// Whether a property of `key` shows the designator or the value.
 pub(super) fn is_text_key(key: &str) -> bool {
-    key == REFERENCE_KEY || key == VALUE_KEY
+    pcb_geom::is_board_text_key(key)
 }
 
 /// The key of the property that shows `field` on the board.

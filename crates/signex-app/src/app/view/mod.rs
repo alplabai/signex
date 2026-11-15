@@ -666,6 +666,10 @@ impl Signex {
             let highlight = canvas(pcb_canvas.highlight_layer())
                 .width(Length::Fill)
                 .height(Length::Fill);
+            // Footprint texts above the board on both mounts (#2368).
+            let texts = canvas(pcb_canvas.text_layer())
+                .width(Length::Fill)
+                .height(Length::Fill);
             if pcb_canvas.gpu_render {
                 // Stack the GPU shader ABOVE the CPU canvas: the canvas paints
                 // the opaque background + grid and owns pan/zoom/cursor/fit;
@@ -690,7 +694,8 @@ impl Signex {
                 .width(Length::Fill)
                 .height(Length::Fill);
                 let bar = self.pcb_active_bar(is_main);
-                pcb_strip::with_strip(stack![base, content_shader, highlight, bar].boxed(), strip)
+                let layers = stack![base, content_shader, texts, highlight, bar];
+                pcb_strip::with_strip(layers.boxed(), strip)
             } else {
                 // The CPU mount: the board as its own layer where the GPU
                 // mount has its shader, retained across pans (#2321).
@@ -699,7 +704,8 @@ impl Signex {
                     self.ui_state.device_px_per_logical_px(window_id),
                 );
                 let bar = self.pcb_active_bar(is_main);
-                pcb_strip::with_strip(stack![base, content, highlight, bar].boxed(), strip)
+                let layers = stack![base, content, texts, highlight, bar];
+                pcb_strip::with_strip(layers.boxed(), strip)
             }
         } else {
             // "Nothing loaded" gets the actionable start screen; "project
