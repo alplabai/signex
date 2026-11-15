@@ -60,7 +60,7 @@ Evans's own *DDD Reference* (2015, CC BY 4.0; its pattern summaries are CC BY 3.
 ### 2.2 Domain services vs application services
 
 - **Domain service** (Evans): when an important domain process does not belong naturally to any entity or value object, it becomes a standalone service operation, named in the ubiquitous language [7].
-- **Application layer**: Fowler quotes Evans: "This layer is kept thin. It does not contain business rules or knowledge, but only coordinates tasks and delegates work" [10]. Graça puts it more bluntly: "domain logic should stay out of the application layer!" [6]. Vernon's application service "resolve[s] dependencies", loads aggregates and runs the transaction, and does not license changing two aggregates in one request [9].
+- **Application layer**: Fowler cites Evans: the application layer stays thin, holds no business rules or domain knowledge, and only coordinates tasks and hands the work on [10]. Graça puts it more bluntly: "domain logic should stay out of the application layer!" [6]. Vernon's application service "resolve[s] dependencies", loads aggregates and runs the transaction, and does not license changing two aggregates in one request [9].
 - **Layered Architecture** (Evans): keep the domain model apart from the user interface, the application code and the infrastructure. Evans names Hexagonal Architecture as an alternative that can do this job at least as well [7].
 
 ### 2.3 Anemic domain model, transaction script, and data-plus-engine

@@ -268,6 +268,8 @@ ADR-0001 A2 stays. This record names the layer above the engines and makes the e
 | Ports | driving: `execute` / `complete` / `query`; driven: `Effect` / `EffectResult` and the capabilities they name, defined by the core |
 | Adapters | driving: GUI, CLI, agent socket; driven: the host (native and test now, browser later) and the A3.2 tool adapters it calls |
 
+**`signex-types` keeps its name** (Hakan, 2026-11-15). A rename would churn hundreds of imports for no gain. Its contexts grow as modules inside it: the ADR-0001 A3.1 schematic-to-PCB contract is already one (`signex_types::net`, `Netlist`), and a new contract follows the same pattern, a module rather than a new crate, unless a later ADR says otherwise.
+
 **Handlers stay thin.** An `AppCore` handler does three things:
 1. resolves the target document;
 2. builds one engine `Command` or calls a domain service;
