@@ -329,3 +329,24 @@ fn rows_without_a_document_are_greyed() {
         assert!(row_is_live(&app, path), "{path}");
     }
 }
+
+/// #2388: File ▸ Fabrication Outputs is greyed without a board in view and,
+/// on a board, opens its dialog without writing anything.
+#[test]
+fn fabrication_outputs_opens_its_dialog_on_a_board() {
+    let row = "File/Fabrication Outputs…";
+    assert!(!row_is_live(&bare_app(), row), "greyed with no document");
+    assert!(
+        !row_is_live(&one_symbol_selected(), row),
+        "greyed on a sheet"
+    );
+    let mut app = loaded_board_app();
+    assert!(row_is_live(&app, row));
+    let _ = click(&mut app, row);
+    let state = app
+        .ui_state
+        .fab_outputs
+        .as_ref()
+        .expect("the dialog is open");
+    assert!(state.writing.is_none() && state.outcome.is_none());
+}

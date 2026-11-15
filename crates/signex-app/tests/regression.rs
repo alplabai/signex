@@ -180,6 +180,9 @@ mod board_part_place;
 // #1312 PR 1: board designators in Properties and Re-Annotate Board.
 #[path = "regression/board_designators.rs"]
 mod board_designators;
+// #2388: File ▸ Fabrication Outputs and its dialog.
+#[path = "regression/fab_outputs.rs"]
+mod fab_outputs;
 // #2354: the board Component Properties view.
 #[path = "regression/pcb_component_properties.rs"]
 mod pcb_component_properties;

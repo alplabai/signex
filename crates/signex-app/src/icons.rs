@@ -177,6 +177,12 @@ bar_icon!(
     "active_bar/graphite/power_rail.svg"
 );
 bar_icon!(icon_select, "select.svg", "active_bar/graphite/select.svg");
+// Fabrication Outputs (#2388): board layers going out; Graphite glyph only.
+bar_icon!(
+    icon_fab_outputs,
+    "active_bar/graphite/fab_outputs.svg",
+    "active_bar/graphite/fab_outputs.svg"
+);
 // The board view's quarter turn (#2316); Graphite has the only glyph.
 bar_icon!(
     icon_view_rotate,

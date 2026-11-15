@@ -472,6 +472,12 @@ pub struct UiState {
     pub board_reannotate: Option<crate::app::BoardReannotateState>,
     /// The options Re-Annotate Board was last used with, for its next opening.
     pub board_reannotate_options: signex_engine::pcb::designators::ReannotateOptions,
+    /// File ▸ Fabrication Outputs (#2388), while open. Nothing is written
+    /// until Generate.
+    pub fab_outputs: Option<crate::app::FabOutputsState>,
+    /// Generation of the newest Fabrication Outputs write, outside the
+    /// dialog so a reopened dialog never takes an older answer.
+    pub fab_outputs_writes: u64,
     /// Back Annotate (#1312), while open. Execute writes the sheets in
     /// memory as one undo group; nothing is written to disk.
     pub back_annotate: Option<crate::app::BackAnnotateState>,

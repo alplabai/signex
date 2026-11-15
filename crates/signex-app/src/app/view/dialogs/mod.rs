@@ -18,6 +18,7 @@ pub(in crate::app) use bom::{default_column_width as bom_default_column_width, s
 mod confirms;
 mod create_child_sheet;
 mod erc;
+mod fab_outputs;
 mod graphite;
 mod graphite_annotate;
 mod header;

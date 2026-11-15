@@ -370,6 +370,11 @@
     "category": "edit"
   },
   {
+    "id": "fabrication_outputs",
+    "group": "Pcb",
+    "category": "file"
+  },
+  {
     "id": "fast_grid_1",
     "group": "General",
     "category": "view"

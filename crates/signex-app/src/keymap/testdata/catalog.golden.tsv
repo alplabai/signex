@@ -241,6 +241,7 @@ view_board_3d	view	Show the board in 3D, or flat again	3D View	PCB	-	-	RequiresD
 toggle_layers_panel	view	Show or hide the Layers panel	Layers	PCB	-	-	Always	gui_only	-
 new_pcb_document	file	New PCB in the project	PCB	PCB	-	-	Always	mutates_doc	profile:text?
 board_sketch	design	Enter or leave the board sketch	Board Sketch	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+fabrication_outputs	file	Generate the board's fabrication outputs	Fabrication Outputs…	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 place_board_via	place	Place a via on the board	Via	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_track	place	Route a track on the active copper layer	Track	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_fill	place	Place a rectangle of solid copper on the active copper layer	Fill	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-

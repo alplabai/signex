@@ -58,6 +58,8 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         // Export > PDF and File > Print open the same modal; only Print shows Mod+P: docs/MENU_BAR.md#file-export-pdf
         submenu(ctx, menu_ids::MENU_FILE_EXPORT, export(ctx)),
+        // The board's fabrication files (#2388); greyed without a board in view.
+        cmd_item_gated(ctx, cmd("fabrication_outputs", "")),
         cmd_item_gated(ctx, cmd("print", "Mod+P")),
         SEP,
         item(ctx, menu_ids::MENU_FILE_EXIT, MenuMessage::Exit),

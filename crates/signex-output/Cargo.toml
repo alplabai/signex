@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+pcb-geom = { path = "../pcb-geom" }
 signex-bom = { path = "../signex-bom" }
 signex-types = { path = "../signex-types" }
 thiserror = { workspace = true }

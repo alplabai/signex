@@ -264,6 +264,15 @@ Ctrl+F4 (Close Document, Altium profile) is a macOS system default ("Move
 focus to active or next window") and may never reach Signex there; the menu
 row always works.
 
+## File ▸ Fabrication Outputs {#file-fab-outputs}
+
+File ▸ Fabrication Outputs… runs `fabrication_outputs` (#2388), after the
+Export submenu: it opens the Fabrication Outputs dialog on the board in view,
+greyed while no PCB is in view. The same command is the PCB Active Bar's
+Fabrication Outputs button (after Board Sketch) and a palette row; no keymap
+preset binds it. Nothing is written until the dialog's Generate. Files,
+formats and frame: [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md).
+
 ## File: close, save all {#file-close-save-all}
 
 Close Document (the `close_active_document` command, Ctrl+F4 in the Altium
