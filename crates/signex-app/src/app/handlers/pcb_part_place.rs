@@ -41,10 +41,10 @@ impl Signex {
             return Task::none();
         };
         if self.library.library_at(&library_path).is_none() {
-            self.report_place_failure(&format!(
+            self.report_place_failure(crate::app::state::untranslated(format!(
                 "Library {} is no longer open.",
                 library_path.display()
-            ));
+            )));
             return Task::none();
         }
         let arm_epoch = self.interaction_state.placement_epoch;
@@ -94,7 +94,7 @@ impl Signex {
             return Task::none();
         }
         if let Err(detail) = self.arm_board_part(&board, result) {
-            self.report_place_failure(&detail);
+            self.report_place_failure(crate::app::state::untranslated(detail));
         }
         Task::none()
     }

@@ -858,12 +858,9 @@ impl Signex {
     /// project folder (#2280).
     fn hold_quit_while_path_op(&mut self) -> bool {
         if !self.document_state.new_project_writes.is_empty() {
-            let detail = signex_i18n::t!(
-                self.ui_state.i18n,
-                signex_i18n::ids::DIALOG_NEW_PROJECT_QUIT_HELD
-            )
-            .into_string();
-            crate::diagnostics::log_warning(detail.clone());
+            let detail =
+                signex_i18n::Translatable::new(signex_i18n::ids::DIALOG_NEW_PROJECT_QUIT_HELD);
+            crate::diagnostics::log_warning(detail.render_en_us());
             self.document_state.error_notice =
                 Some(crate::app::state::ErrorNotice::quit_held(detail));
             return true;
