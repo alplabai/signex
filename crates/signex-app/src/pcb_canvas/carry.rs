@@ -228,7 +228,8 @@ pub fn snap_point(
     if !snap.to_grids {
         return to;
     }
-    snap_delta(Point::new(0.0, 0.0), to, grid_step_mm(board))
+    // Tool points are not components: the Non-Components grid (#2374).
+    grid_for(board, GridUse::NonComponents).snap_delta(Point::new(0.0, 0.0), to)
 }
 
 /// `board` without `footprints`: what a drag preview leaves in place.
