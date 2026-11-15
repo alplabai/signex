@@ -1,4 +1,4 @@
-//! Output generation for Signex — PDF, BOM, netlist.
+//! Output generation for Signex — PDF, BOM, netlist and fabrication files.
 //!
 //! See `docs/internal/docs/OUTPUT_PLAN.md` for the v0.8 design.
 //!
@@ -13,6 +13,7 @@ use thiserror::Error;
 pub mod bom;
 pub mod erc;
 mod expression;
+pub mod fab;
 mod markup_escape;
 pub mod netlist;
 pub mod pdf;

@@ -101,14 +101,15 @@ fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
 }
 
 /// #2352, #2373: the groups in the PCB editor's order, the Selection
-/// Filter, Move, Align, Board Sketch, View and the live placement tools live, and
+/// Filter, Move, Align, Board Sketch, Fabrication Outputs (#2388), View and the
+/// live placement tools live, and
 /// every other button greyed with a tooltip that says it is not on boards
 /// yet.
 #[test]
 fn the_pcb_bar_has_the_footprint_layout_and_greys_what_boards_cannot_do() {
     let items = pcb_bar_items(ThemeId::GraphiteDark, &I18n::en_us(), None);
     let all = buttons(&items);
-    assert_eq!(all.len(), 17);
+    assert_eq!(all.len(), 18);
     let separators = items
         .iter()
         .filter(|item| matches!(item, ActiveBarItem::Separator))
@@ -121,13 +122,14 @@ fn the_pcb_bar_has_the_footprint_layout_and_greys_what_boards_cannot_do() {
         .count();
     assert_eq!(
         live.len(),
-        5 + live_tools,
-        "filter, move, align, sketch, view and the live tools"
+        6 + live_tools,
+        "filter, move, align, sketch, fabrication outputs, view and the live tools"
     );
     assert!(runs(all[1], "move_object"), "Move follows the filter");
     assert!(runs(all[5], "place_board_via"), "#2373: Via is live");
     assert!(runs(all[15], "board_sketch"));
-    assert!(runs(all[16], "view_rotate"), "View closes the bar");
+    assert!(runs(all[16], "fabrication_outputs"));
+    assert!(runs(all[17], "view_rotate"), "View closes the bar");
     for button in all.iter().filter(|button| !button.enabled) {
         assert!(button.on_press.is_none() && button.on_right_press.is_none());
         assert!(
@@ -178,6 +180,22 @@ fn the_board_sketch_button_enters_sketch_mode() {
     let mut app = board_app();
     click(&mut app, "board_sketch");
     assert!(app.board_sketch_in_view().is_some());
+}
+
+/// #2388: Fabrication Outputs opens its dialog on the board in view and
+/// writes nothing.
+#[test]
+fn the_fabrication_outputs_button_opens_its_dialog() {
+    let mut app = board_app();
+    click(&mut app, "fabrication_outputs");
+    let state = app
+        .ui_state
+        .fab_outputs
+        .as_ref()
+        .expect("the dialog is open");
+    assert!(state.board.ends_with("pcb_active_bar.snxpcb"));
+    assert_eq!(state.options.name, "pcb_active_bar");
+    assert!(state.writing.is_none() && state.outcome.is_none());
 }
 
 /// #2316 / #2352: View turns the board view a quarter turn clockwise.

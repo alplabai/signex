@@ -329,6 +329,7 @@ altium	hint	-	-	view_rotate_reset
 altium	hint	-	-	toggle_layers_panel
 altium	hint	-	-	new_pcb_document
 altium	hint	-	-	board_sketch
+altium	hint	-	-	fabrication_outputs
 altium	hint	-	P V	place_board_via
 altium	hint	-	P T	place_board_track
 altium	hint	-	P F	place_board_fill
@@ -676,6 +677,7 @@ classic	hint	-	-	view_rotate_reset
 classic	hint	-	-	toggle_layers_panel
 classic	hint	-	-	new_pcb_document
 classic	hint	-	-	board_sketch
+classic	hint	-	-	fabrication_outputs
 classic	hint	-	-	place_board_via
 classic	hint	-	-	place_board_track
 classic	hint	-	-	place_board_fill

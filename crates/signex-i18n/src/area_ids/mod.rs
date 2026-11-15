@@ -4,6 +4,7 @@
 
 mod dialog;
 mod editors;
+mod fab_outputs;
 mod file_dialog;
 mod library;
 mod notice;
@@ -18,6 +19,7 @@ mod update_pcb;
 
 pub use dialog::*;
 pub use editors::*;
+pub use fab_outputs::*;
 pub use file_dialog::*;
 pub use library::*;
 pub use notice::*;
@@ -36,6 +38,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
         dialog::DIALOG,
         editors::EDITORS,
+        fab_outputs::FAB_OUTPUTS,
         file_dialog::FILE_DIALOG,
         library::LIBRARY,
         notice::NOTICE,

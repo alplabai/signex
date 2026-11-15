@@ -58,6 +58,8 @@ pub enum PcbMsg {
     Sketch(BoardSketchMsg),
     /// Tools ▸ Re-Annotate Board and its dialog (#1312).
     Reannotate(crate::app::BoardReannotateMsg),
+    /// File ▸ Fabrication Outputs and its dialog (#2388).
+    FabOutputs(crate::app::FabOutputsMsg),
     /// Back Annotate and its dialog (#1312).
     BackAnnotate(crate::app::BackAnnotateMsg),
     /// The PCB Active Bar's dropdowns (#2352).

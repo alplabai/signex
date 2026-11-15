@@ -33,6 +33,7 @@ pub(crate) const EN_US_SOURCES: [&str; 26] = [
     include_str!("../locales/en-US/keys.ftl"),
     include_str!("../locales/en-US/notice.ftl"),
     include_str!("../locales/en-US/file_dialog.ftl"),
+    include_str!("../locales/en-US/fab_outputs.ftl"),
 ];
 
 /// Every locale negotiation may pick, in language-code order.

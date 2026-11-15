@@ -23,6 +23,7 @@ File/Import	submenu	Import	-	-	-	-	-
 File/Import/Altium Project...	item	Altium Project...	-	-	ImportAltium	11111111	always
 File/Export	submenu	Export	-	-	-	-	-
 File/Export/PDF…	item	PDF…	-	-	ExportPdf	01000000	cmd:print
+File/Fabrication Outputs…	item	Fabrication Outputs…	-	-	FabricationOutputs	01100000	cmd:fabrication_outputs
 File/Print...	item	Print...	print	Mod+P	Print	01000000	cmd:print
 File/---	separator	-	-	-	-	-	-
 File/Exit	item	Exit	-	-	Exit	11111111	always

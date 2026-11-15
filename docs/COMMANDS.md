@@ -295,6 +295,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | --- | --- | --- | --- | --- |
 | `board_sketch` | Enter or leave the board sketch | design | — | — |
 | `change_footprint` | Change the footprint of the selected components | modify | — | — |
+| `fabrication_outputs` | Generate the board's fabrication outputs | file | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |

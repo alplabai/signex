@@ -280,6 +280,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("update_pcb_from_schematic", "UpdatePcb"),
     // #2234: Design ▸ Board Sketch.
     ("board_sketch", "BoardSketch"),
+    // #2388: File ▸ Fabrication Outputs.
+    ("fabrication_outputs", "FabricationOutputs"),
     // #2373: Place on a board, fixture names only.
     ("place_board_via", "PlaceBoardVia"),
     ("place_board_track", "PlaceBoardTrack"),

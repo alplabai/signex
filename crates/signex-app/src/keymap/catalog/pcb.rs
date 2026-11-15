@@ -216,6 +216,18 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2388: open the Fabrication Outputs dialog on the board in view.
+    // Nothing is written until the dialog's Generate. No default key.
+    CommandMetadata {
+        id: "fabrication_outputs",
+        category: "file",
+        label: command_ids::CMD_FABRICATION_OUTPUTS,
+        menu_label: Some(command_ids::CMD_MENU_FABRICATION_OUTPUTS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     // #2373: the board placement tools. Each arms its tool on the board in
     // view; every click (or finished shape) is one undo step.
     CommandMetadata {

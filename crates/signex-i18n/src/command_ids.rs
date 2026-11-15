@@ -380,6 +380,8 @@ define_ids! {
         CMD_MENU_NEW_SCHEMATIC_SHEET = "cmd-menu-new-schematic-sheet";
         CMD_BOARD_SKETCH = "cmd-board-sketch";
         CMD_MENU_BOARD_SKETCH = "cmd-menu-board-sketch";
+        CMD_FABRICATION_OUTPUTS = "cmd-fabrication-outputs";
+        CMD_MENU_FABRICATION_OUTPUTS = "cmd-menu-fabrication-outputs";
         CMD_PLACE_BOARD_VIA = "cmd-place-board-via";
         CMD_MENU_PLACE_BOARD_VIA = "cmd-menu-place-board-via";
         CMD_PLACE_BOARD_TRACK = "cmd-place-board-track";

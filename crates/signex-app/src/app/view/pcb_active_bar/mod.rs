@@ -1,7 +1,7 @@
 //! The PCB Active Bar (#2352), laid out like the footprint editor's in the
 //! usual PCB tool order: selection filter, move, align | place component,
 //! pad, via, track, arc, fill, region, polygon pour, text, dimension, keepout
-//! | interactive routing | board sketch | view.
+//! | interactive routing | board sketch, fabrication outputs | view.
 //!
 //! Every live button runs its command through the menu bar's own message, so
 //! a click is the menu row. A tool the board editor cannot run yet is greyed
@@ -240,6 +240,11 @@ pub(in crate::app::view) fn pcb_bar_items(
             "board_sketch",
             svg(ic::icon_board_sketch(tid)),
             t!(i18n, ids::BOARD_SKETCH_TOOLTIP).into_string(),
+        ),
+        command_button(
+            "fabrication_outputs",
+            svg(ic::icon_fab_outputs(tid)),
+            t!(i18n, ids::FAB_OUTPUTS_TOOLTIP).into_string(),
         ),
         ActiveBarItem::Separator,
         menu_button(
