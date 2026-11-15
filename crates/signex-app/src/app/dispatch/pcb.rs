@@ -51,6 +51,10 @@ impl Signex {
                 self.arm_board_tool(tool);
                 Task::none()
             }
+            PcbMsg::RouteModeStepped => {
+                self.step_route_mode();
+                Task::none()
+            }
             PcbMsg::FootprintSwap(event) => self.handle_footprint_swap(event),
         }
     }

@@ -724,6 +724,7 @@ impl Signex {
                 clipboard_text: None,
                 pcb_clipboard: None,
                 corner_rule: Default::default(),
+                route_mode: Default::default(),
                 editing_text: None,
                 context_menu: None,
                 project_tree_context_menu: None,

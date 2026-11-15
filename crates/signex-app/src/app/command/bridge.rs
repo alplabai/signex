@@ -298,6 +298,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "place_board_fill" => board_tool(BoardPlaceTool::Fill),
         "place_board_region" => board_tool(BoardPlaceTool::SolidRegion),
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
+        "place_board_route" => board_tool(BoardPlaceTool::InteractiveRouting),
+        "cycle_route_mode" => Message::Pcb(PcbMsg::RouteModeStepped),
         "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(
             crate::app::FootprintSwapMsg::Requested,
         )),

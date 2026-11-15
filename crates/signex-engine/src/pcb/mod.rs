@@ -30,6 +30,7 @@ pub mod part_place;
 pub mod placement;
 pub mod primitive_edit;
 mod replace;
+pub mod route;
 pub mod snap;
 mod snap_points;
 

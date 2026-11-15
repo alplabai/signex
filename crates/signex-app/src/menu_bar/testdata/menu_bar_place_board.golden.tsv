@@ -3,7 +3,7 @@
 Place/Component	stub	Component	-	-	-	0
 Place/Pad	stub	Pad	-	-	-	0
 Place/Via	item	Via	-	-	PlaceBoardVia	1
-Place/Interactive Routing	stub	Interactive Routing	-	-	-	0
+Place/Interactive Routing	item	Interactive Routing	-	-	PlaceBoardRoute	1
 Place/Track	item	Track	-	-	PlaceBoardTrack	1
 Place/Arc	stub	Arc	-	-	-	0
 Place/Fill	item	Fill	-	-	PlaceBoardFill	1

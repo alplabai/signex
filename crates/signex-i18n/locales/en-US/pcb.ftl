@@ -45,7 +45,6 @@ pcb-bar-arc-unavailable = Place Arc: not available on boards yet
 pcb-bar-polygon-pour-unavailable = Place Polygon Pour: not available on boards yet
 pcb-bar-text-unavailable = Place String: not available on boards yet
 pcb-bar-dimension-unavailable = Place Dimension: not available on boards yet
-pcb-bar-route-unavailable = Interactive Routing: not available on boards yet
 # Rows of the Place menu on a board (#2360). The ones the board editor cannot
 # run yet are greyed, with the tooltip above as the reason.
 pcb-tool-component = Component
@@ -79,6 +78,17 @@ pcb-tool-needs-copper = { $tool }: make a copper layer active to draw on it
 pcb-tool-no-area = { $tool }: the shape has no area, so nothing was added
 # A Keepout click while the active layer is neither copper nor a keep-out layer.
 pcb-tool-keepout-needs-layer = Keepout: make a copper layer or a keep-out layer active to draw on it
+# Interactive Routing (#2389): its Active Bar tooltip and Messages hint, the
+# lines a leg it cannot route writes, and the mode `cycle_route_mode` picks.
+pcb-bar-route-tooltip = Interactive Routing (Space flips the corner, Shift+Space changes the corner mode)
+pcb-tool-hint-route = Interactive Routing: click a pad or track end to start on the active copper layer, then click each point; each leg keeps the rule clearance from other nets. Change the layer to add a via. Click the route's end, Esc or a right-click to finish it as one step
+pcb-route-blocked = Interactive Routing: no way to that point keeps the clearance the rules ask, so nothing was added
+pcb-route-via-blocked = Interactive Routing: a via there would not keep the clearance the rules ask, so nothing was added
+pcb-route-unrepresentable = Interactive Routing: a point or the track width is outside what the board geometry can hold
+# $why says what is wrong with the rules (the setup clearance, a net class).
+pcb-route-no-rules = Interactive Routing: the board's rules are not usable: { $why }
+pcb-route-mode-walkaround = Interactive Routing: walk around other nets' copper
+pcb-route-mode-shove = Interactive Routing: push other nets' tracks aside, walk around the rest
 
 # Layer names in the Layers panel, the layer strip and the status bar, as
 # Altium names them. A mechanical layer the user named shows that name instead.

@@ -106,7 +106,7 @@ impl Signex {
 /// The style of the legs from `anchor` to `to` on `layer`, and the via at
 /// `anchor` when `layer` is not the run's. A run with no net yet takes the
 /// net of the copper under `to`.
-fn next_leg_style(
+pub(super) fn next_leg_style(
     board: &PcbBoard,
     session: &BoardToolSession,
     anchor: Point,

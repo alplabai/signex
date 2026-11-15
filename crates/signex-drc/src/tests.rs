@@ -462,3 +462,25 @@ fn an_oval_pad_is_measured_to_its_tip_exactly_and_off_axis_by_a_32_gon() {
         [ViolationKind::Clearance]
     );
 }
+
+/// #2389: the router asks a pair's clearance as the check measures it: the
+/// stricter net's class, and nothing between items on no shared layer.
+#[test]
+fn the_clearance_between_two_items_is_what_the_check_asks_of_them() {
+    let mut rules = DrcRules::new(RULE);
+    rules.net_clearance.insert(2, 350_000);
+    let item = |net: u32, layers: u32| pcb_geom::CopperItem {
+        item: pcb_geom::ItemRef::Track(id(net.into())),
+        net,
+        layers,
+        shape: pcb_geom::Shape::Disc {
+            center: pcb_geom::PointNm::ORIGIN,
+            radius: 0,
+        },
+        pad_center: None,
+    };
+    assert_eq!(rules.clearance_between(&item(1, 1), &item(3, 1)), RULE);
+    assert_eq!(rules.clearance_between(&item(1, 1), &item(2, 1)), 350_000);
+    assert_eq!(rules.clearance_between(&item(1, 1), &item(2, 2)), 0);
+    assert_eq!(rules.track_width_limits(1, 1), (None, None));
+}

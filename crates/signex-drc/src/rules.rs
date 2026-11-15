@@ -157,6 +157,28 @@ impl DrcRules {
         (most.0, most.1.map(|s| s.rule.id()))
     }
 
+    /// The clearance copper items `a` and `b` of different nets need where
+    /// they share copper layers: what a run asks of the pair, so the
+    /// interactive router (#2389) keeps exactly this gap. 0 when they share
+    /// no layer.
+    pub fn clearance_between(&self, a: &CopperItem, b: &CopperItem) -> i64 {
+        let shared = a.layers & b.layers;
+        if shared == 0 {
+            return 0;
+        }
+        self.required_between(a, b, shared).0
+    }
+
+    /// The narrowest and widest track the written rules allow for `net` on
+    /// `layers`, in nm; `None` where no rule sets one.
+    pub fn track_width_limits(&self, net: u32, layers: u32) -> (Option<i64>, Option<i64>) {
+        let limit = |kind| self.object_limit(kind, net, layers).map(|(nm, _)| nm);
+        (
+            limit(LimitKind::MinTrackWidth),
+            limit(LimitKind::MaxTrackWidth),
+        )
+    }
+
     /// Between two sides asking the same clearance: the more severe one
     /// wins, so a milder rule never downgrades the other side's finding;
     /// at equal severity a written rule is named over the implicit value.

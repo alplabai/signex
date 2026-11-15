@@ -6,6 +6,10 @@
 
 mod facts;
 mod links;
+mod tune;
+
+#[cfg(test)]
+mod tune_tests;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -140,6 +144,10 @@ impl Signex {
             PrimitiveEdit::Designator(text.to_string())
         } else {
             match parse_number(text) {
+                Some(value) if field == PrimitiveField::TuneLength => {
+                    self.tune_track_length(target, value);
+                    return;
+                }
                 Some(value) => PrimitiveEdit::Number(field, value),
                 None => {
                     let line = t!(self.ui_state.i18n, ids::PCB_PRIM_NOT_A_NUMBER, "text" => text);
@@ -215,6 +223,7 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::Rotation => ids::PCB_PRIM_ROTATION,
         F::SizeX => ids::PCB_PRIM_X_SIZE,
         F::SizeY => ids::PCB_PRIM_Y_SIZE,
+        F::TuneLength => ids::PCB_PRIM_TUNE_LENGTH,
     }
 }
 

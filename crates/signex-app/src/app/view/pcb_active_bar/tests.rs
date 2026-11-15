@@ -333,3 +333,21 @@ fn the_selection_filter_toggles_the_kinds_the_board_picks() {
         .unwrap();
     assert!(keepouts.disabled, "a kind the board cannot pick is greyed");
 }
+
+/// #2389: the Interactive Routing button arms the router on the board.
+#[test]
+fn the_routing_button_arms_interactive_routing() {
+    let mut app = board_app();
+    let button = button_for(&bar_of(&app), "place_board_route");
+    assert!(button.enabled);
+    assert!(
+        button.tooltip.starts_with("Interactive Routing ("),
+        "{}",
+        button.tooltip
+    );
+    click(&mut app, "place_board_route");
+    assert_eq!(
+        app.interaction_state.pcb_tool.as_ref().map(|s| s.tool),
+        Some(BoardPlaceTool::InteractiveRouting)
+    );
+}

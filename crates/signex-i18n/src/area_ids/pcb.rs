@@ -11,7 +11,6 @@ define_ids! {
     PCB_BAR_POLYGON_POUR_UNAVAILABLE = "pcb-bar-polygon-pour-unavailable";
     PCB_BAR_TEXT_UNAVAILABLE = "pcb-bar-text-unavailable";
     PCB_BAR_DIMENSION_UNAVAILABLE = "pcb-bar-dimension-unavailable";
-    PCB_BAR_ROUTE_UNAVAILABLE = "pcb-bar-route-unavailable";
     PCB_TOOL_COMPONENT = "pcb-tool-component";
     PCB_TOOL_PAD = "pcb-tool-pad";
     PCB_TOOL_VIA = "pcb-tool-via";
@@ -37,4 +36,12 @@ define_ids! {
     PCB_BAR_KEEPOUT_TOOLTIP = "pcb-bar-keepout-tooltip";
     PCB_TOOL_HINT_KEEPOUT = "pcb-tool-hint-keepout";
     PCB_TOOL_KEEPOUT_NEEDS_LAYER = "pcb-tool-keepout-needs-layer";
+    PCB_BAR_ROUTE_TOOLTIP = "pcb-bar-route-tooltip";
+    PCB_TOOL_HINT_ROUTE = "pcb-tool-hint-route";
+    PCB_ROUTE_BLOCKED = "pcb-route-blocked";
+    PCB_ROUTE_VIA_BLOCKED = "pcb-route-via-blocked";
+    PCB_ROUTE_UNREPRESENTABLE = "pcb-route-unrepresentable";
+    PCB_ROUTE_NO_RULES = "pcb-route-no-rules";
+    PCB_ROUTE_MODE_WALKAROUND = "pcb-route-mode-walkaround";
+    PCB_ROUTE_MODE_SHOVE = "pcb-route-mode-shove";
 }

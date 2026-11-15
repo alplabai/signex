@@ -20,6 +20,7 @@ mod net_length;
 mod pick_filter;
 mod ratsnest;
 mod rect;
+pub mod route;
 mod selection;
 mod shape;
 mod shape_gap;

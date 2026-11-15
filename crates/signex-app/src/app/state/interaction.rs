@@ -88,6 +88,9 @@ pub struct InteractionState {
     /// How a wire or bus run bends at its corner. Kept across segments and
     /// tools until the user flips it or changes the mode (#2372).
     pub corner_rule: signex_types::corner::CornerRule,
+    /// How Interactive Routing treats other nets in its way (#2389): walk
+    /// around them or push their tracks aside. Kept across routes.
+    pub route_mode: signex_engine::pcb::route::RouteMode,
     pub editing_text: Option<TextEditState>,
     pub context_menu: Option<ContextMenuState>,
     /// Projects-panel tree-view right-click menu state. Separate from
