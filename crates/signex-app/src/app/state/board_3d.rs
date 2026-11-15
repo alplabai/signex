@@ -38,10 +38,10 @@ pub struct Board3dSession {
     /// The board shown; the view is drawn while it is the main window's tab.
     pub board_path: PathBuf,
     pub camera: OrbitCamera,
-    /// The view's size in logical pixels, as its last pointer event saw it.
+    /// The view's size in logical pixels, as it last reported it.
     pub viewport: [f32; 2],
     /// The view has not reported its size since it was framed; the first
-    /// size it reports frames it again.
+    /// size a redraw reports frames it again, unless a gesture came first.
     unsized_fit: bool,
     /// The models read for the library footprints the board's parts came
     /// from; a source that could not be read has none and draws as a body.
@@ -100,6 +100,13 @@ impl Board3dSession {
             })),
             generation: crate::scene_generation::next_scene_generation(),
         };
+        if scene.scene.dropped_holes > 0 {
+            crate::diagnostics::log_debug(format!(
+                "[board-3d] {} left {} holes out of the board: each meets a hole cut before it",
+                self.board_path.display(),
+                scene.scene.dropped_holes
+            ));
+        }
         *built = Some((key, scene.clone()));
         scene
     }
@@ -118,14 +125,24 @@ impl Board3dSession {
         self.fit(scene);
     }
 
-    /// The view reported its size. `true` when this is the first size since
-    /// it was framed, so the caller frames it again for the real shape.
+    /// The view reported its size on a redraw. `true` when this is the
+    /// first size since it was framed, so the caller frames it again for
+    /// the real shape.
     pub fn note_viewport(&mut self, viewport: [f32; 2]) -> bool {
         if viewport[0] > 0.0 && viewport[1] > 0.0 {
             self.viewport = viewport;
             return std::mem::take(&mut self.unsized_fit);
         }
         false
+    }
+
+    /// A gesture saw the view at `viewport`. It never frames the view
+    /// again: a refit before the gesture's own step would make it jump.
+    pub fn resize(&mut self, viewport: [f32; 2]) {
+        if viewport[0] > 0.0 && viewport[1] > 0.0 {
+            self.viewport = viewport;
+            self.unsized_fit = false;
+        }
     }
 
     /// The sources of `board`'s footprints not asked for yet; they are

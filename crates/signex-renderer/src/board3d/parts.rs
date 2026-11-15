@@ -16,8 +16,9 @@ pub(super) const DEFAULT_BODY_HEIGHT_MM: f64 = 1.0;
 /// Half the side of the body of a footprint with no pads and no courtyard.
 const EMPTY_BODY_HALF_MM: f64 = 0.5;
 
-/// Append the part of `footprint`; `None` when its face's 3D Body layer is
-/// hidden or its placement cannot be read.
+/// Append the part of `footprint`; `None` when the user hid its face's 3D
+/// Body layer (single-layer mode does not count) or its placement cannot be
+/// read.
 pub(super) fn append_part(
     scene: &mut Scene3d,
     footprint: &Footprint,
@@ -29,7 +30,7 @@ pub(super) fn append_part(
         Side::Top => (Face::Top, TechnicalLayer::Body3dTop),
         Side::Bottom => (Face::Bottom, TechnicalLayer::Body3dBottom),
     };
-    if !input.view.is_visible(PcbLayer::Technical(layer)) {
+    if input.view.is_hidden(PcbLayer::Technical(layer)) {
         return None;
     }
     let stand = Stand {

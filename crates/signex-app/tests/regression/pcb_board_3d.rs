@@ -6,10 +6,11 @@
 use std::sync::Arc;
 
 use iced::widget::shader::Program;
-use iced::{Event, Point as ScreenPoint, Rectangle, mouse};
+use iced::{Event, Point as ScreenPoint, Rectangle, mouse, window};
 use pcb_geom::ItemRef;
 use signex_app::app::{
-    Board3dGesture, Board3dMsg, CommandPaletteMsg, FileMsg, Message, PcbMsg, Signex, TabDocument,
+    Board3dGesture, Board3dMsg, CommandPaletteMsg, ContextMenuMsg, FileMsg, Message, PcbMsg,
+    RenameDialogState, RenameMsg, Signex, TabContextAction, TabDocument,
 };
 use signex_app::board_3d_shader::{Board3dPointer, Board3dProgram};
 use signex_app::canvas::CanvasEvent;
@@ -160,17 +161,34 @@ impl Fixture {
     /// One pointer event through the view's shader program at `at`; what it
     /// publishes goes to the app.
     fn pointer(&mut self, event: mouse::Event, at: ScreenPoint) -> Option<Message> {
+        self.through_program(&Event::Mouse(event), BOUNDS, at)
+    }
+
+    /// One redraw of the view at `bounds`; what it publishes goes to the app.
+    fn redraw(&mut self, bounds: Rectangle) -> Option<Message> {
+        let event = Event::Window(window::Event::RedrawRequested(std::time::Instant::now()));
+        self.through_program(&event, bounds, ScreenPoint::ORIGIN)
+    }
+
+    fn through_program(
+        &mut self,
+        event: &Event,
+        bounds: Rectangle,
+        at: ScreenPoint,
+    ) -> Option<Message> {
+        let session = self.app.interaction_state.board_3d.as_ref()?;
         let program = Board3dProgram {
             scene: Arc::new(BoardScene3d::default()),
             generation: 0,
-            camera: self.camera(),
+            camera: session.camera,
             highlights: Vec::new(),
             highlight: [0.0; 4],
+            viewport: session.viewport,
         };
         let action = program.update(
             &mut self.pointer,
-            &Event::Mouse(event),
-            BOUNDS,
+            event,
+            bounds,
             mouse::Cursor::Available(at),
         );
         let message = action?.into_inner().0?;
@@ -222,13 +240,12 @@ impl Fixture {
     }
 }
 
-/// Size the view the way its first pointer event does, so the frame the
-/// test projects with is the one a click is read with.
+/// Size the view the way its first redraw does, so the frame the test
+/// projects with is the one a click is read with.
 fn sized(f: &mut Fixture) {
-    f.view_3d(Board3dMsg::Pointer {
-        viewport: [BOUNDS.width, BOUNDS.height],
-        gesture: Board3dGesture::Zoomed(0.0),
-    });
+    f.redraw(BOUNDS);
+    let session = f.app.interaction_state.board_3d.as_ref().expect("in 3D");
+    assert_eq!(session.viewport, [BOUNDS.width, BOUNDS.height]);
 }
 
 #[test]
@@ -353,4 +370,92 @@ fn drag_wheel_presets_and_fit_move_the_camera_only() {
     );
     assert!(f.in_3d());
     assert!(!f.can_undo());
+}
+
+/// A tall, narrow view: framing it needs the board further away than the
+/// assumed wide shape does, so a refit shows in the camera.
+const NARROW: Rectangle = Rectangle {
+    x: 0.0,
+    y: 0.0,
+    width: 300.0,
+    height: 600.0,
+};
+
+/// The first redraw reports the view's real size and frames the board for
+/// it; a redraw at the same size reports nothing more.
+#[test]
+fn the_first_redraw_frames_the_view_for_its_real_shape() {
+    let mut f = open_board();
+    f.menu("view_board_3d");
+    let assumed = f.camera();
+    let sent = f.redraw(NARROW);
+    assert!(
+        matches!(
+            sent,
+            Some(Message::Pcb(PcbMsg::Board3d(Board3dMsg::ViewportSized(size))))
+                if size == [NARROW.width, NARROW.height]
+        ),
+        "{sent:?}"
+    );
+    assert!(
+        f.camera().distance > assumed.distance,
+        "framed for the narrow shape"
+    );
+    assert!(f.redraw(NARROW).is_none(), "the size is reported once");
+    assert!(!f.can_undo());
+}
+
+/// A gesture before any redraw does not frame the view again: the wheel
+/// step of zero leaves the camera exactly where it was.
+#[test]
+fn a_first_gesture_does_not_reframe_the_view() {
+    let mut f = open_board();
+    f.menu("view_board_3d");
+    let before = f.camera();
+    f.view_3d(Board3dMsg::Pointer {
+        viewport: [NARROW.width, NARROW.height],
+        gesture: Board3dGesture::Zoomed(0.0),
+    });
+    assert_eq!(f.camera(), before);
+    f.redraw(NARROW);
+    assert_eq!(f.camera(), before, "nor does a redraw after it");
+}
+
+/// A renamed board stays in 3D under its new name.
+#[test]
+fn a_renamed_board_keeps_its_3d_view() {
+    let mut f = open_board();
+    f.menu("view_board_3d");
+    let renamed = f.path.with_file_name("renamed.snxpcb");
+    f.app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
+        target_path: f.path.clone(),
+        tree_path: vec![0],
+        buffer: "renamed.snxpcb".to_string(),
+        error: None,
+        is_project_rename: false,
+    });
+    crate::settle_support::settle(&mut f.app, Message::Rename(RenameMsg::Submit));
+    assert!(renamed.exists(), "the file moved");
+    f.path = renamed;
+    assert!(f.in_3d(), "the view follows the file");
+    let docs = &f.app.document_state;
+    assert_eq!(
+        docs.tabs[docs.active_tab].path, f.path,
+        "and the tab it is shown on"
+    );
+}
+
+/// Closing the board's tab ends its 3D view: the file opens flat again.
+#[test]
+fn a_closed_board_opens_flat_again() {
+    let mut f = open_board();
+    f.menu("view_board_3d");
+    let idx = f.app.document_state.active_tab;
+    f.send(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::Close(idx),
+    )));
+    assert!(f.app.interaction_state.board_3d.is_none());
+    f.send(Message::File(FileMsg::Opened(Some(f.path.clone()))));
+    assert!(!f.in_3d(), "the board opens flat");
 }

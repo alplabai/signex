@@ -2,6 +2,7 @@
 
 use std::ops::Range;
 
+use signex_gfx::ring_fill::{disjoint_holes, retain_holes_inside};
 use signex_gfx::scene3d::Scene3d;
 use signex_types::pcb_layer::CopperLayer;
 
@@ -22,20 +23,23 @@ const PAD_LIFT: f32 = COPPER_LIFT_MM * 1.6;
 
 /// The board from 0 to `thickness`: its outline (or, with none, the box
 /// round the copper) less the cutouts, mounting holes, pad drills and via
-/// drills that lie inside it. Empty when there is nothing to frame.
+/// drills that lie inside it. Empty when there is nothing to frame. A hole
+/// that meets one cut before it (two vias at one point, a drill in a
+/// cutout) is left out, so one such pair cannot cost every hole; the
+/// second value counts them.
 pub(super) fn append_board_slab(
     scene: &mut Scene3d,
     every: &PcbSnapshot,
     thickness: f32,
     colors: &Board3dColors,
-) -> Range<u32> {
+) -> (Range<u32>, usize) {
     let features = &every.board_features;
     let outline: Vec<[f32; 2]> = if features.outline.len() >= 3 {
         features.outline.iter().copied().map(board_xy).collect()
     } else {
         match copper_box(every) {
             Some(rect) => rect,
-            None => return scene.indices.len() as u32..scene.indices.len() as u32,
+            None => return (scene.indices.len() as u32..scene.indices.len() as u32, 0),
         }
     };
     let mut holes: Vec<Vec<[f32; 2]>> = features
@@ -54,9 +58,10 @@ pub(super) fn append_board_slab(
     for (center, drill) in drills {
         holes.push(circle(board_xy(center), drill * 0.5, ROUND_SEGMENTS));
     }
-    // A hole off the board, or across its edge, would spoil the fill.
-    holes.retain(|hole| hole.iter().all(|&p| inside(&outline, p)));
-    scene.append_prism(&outline, &holes, (0.0, thickness), colors.mask, colors.edge)
+    retain_holes_inside(&outline, &mut holes);
+    let (holes, dropped) = disjoint_holes(holes);
+    let range = scene.append_prism(&outline, &holes, (0.0, thickness), colors.mask, colors.edge);
+    (range, dropped)
 }
 
 /// The copper `shown` holds on the two faces: tracks, pads, vias and
@@ -187,19 +192,4 @@ fn copper_box(every: &PcbSnapshot) -> Option<Vec<[f32; 2]>> {
         [hi[0] + m, hi[1] + m],
         [lo[0] - m, hi[1] + m],
     ])
-}
-
-/// Whether `p` is strictly inside the closed `ring` (even-odd).
-fn inside(ring: &[[f32; 2]], p: [f32; 2]) -> bool {
-    let mut odd = false;
-    for (i, a) in ring.iter().enumerate() {
-        let b = ring[(i + 1) % ring.len()];
-        if (a[1] > p[1]) != (b[1] > p[1]) {
-            let x = a[0] + (p[1] - a[1]) / (b[1] - a[1]) * (b[0] - a[0]);
-            if p[0] < x {
-                odd = !odd;
-            }
-        }
-    }
-    odd
 }

@@ -50,6 +50,7 @@ impl Signex {
             generation: built.generation,
             camera: session.camera,
             highlight: board_3d_highlight(),
+            viewport: session.viewport,
         };
         let background = board_3d_background();
         let backdrop = container(iced::widget::Space::new())
