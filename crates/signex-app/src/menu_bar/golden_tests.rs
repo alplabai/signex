@@ -327,6 +327,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("view_rotate_ccw", "RotateViewCounterClockwise"),
     ("view_rotate_180", "RotateView180"),
     ("view_rotate_reset", "ResetViewRotation"),
+    ("view_board_3d", "ViewBoard3d"),
     ("place_wire", "PlaceWire"),
     ("place_bus", "PlaceBus"),
     ("place_net_label", "PlaceLabel"),

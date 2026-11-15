@@ -10,6 +10,7 @@
 pub use wgpu;
 
 pub mod camera;
+pub mod camera3d;
 pub mod color_uniform;
 pub mod context;
 // Dev-only offscreen render passes behind goldens and smoke tests; not part of
@@ -19,6 +20,7 @@ pub mod debug_pass;
 pub mod pipeline;
 pub mod primitive;
 pub mod scene;
+pub mod scene3d;
 pub mod shader;
 pub mod style;
 pub mod view_rotation;

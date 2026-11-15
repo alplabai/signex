@@ -30,6 +30,7 @@ pub mod altium_import;
 pub mod annotate_undo;
 pub mod app;
 pub mod autosave;
+pub mod board_3d_shader;
 pub mod canvas;
 pub mod chrome;
 pub mod config_root;

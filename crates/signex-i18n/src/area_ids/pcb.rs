@@ -42,4 +42,15 @@ define_ids! {
     PCB_TOOL_STRING_NEEDS_OVERLAY = "pcb-tool-string-needs-overlay";
     PCB_LAYER_TAB_HIDE = "pcb-layer-tab-hide";
     PCB_LAYER_TAB_SHOW_ONLY = "pcb-layer-tab-show-only";
+    PCB_3D_TITLE = "pcb-3d-title";
+    PCB_3D_HINT = "pcb-3d-hint";
+    PCB_3D_FLAT = "pcb-3d-flat";
+    PCB_3D_FIT = "pcb-3d-fit";
+    PCB_3D_TOP = "pcb-3d-top";
+    PCB_3D_BOTTOM = "pcb-3d-bottom";
+    PCB_3D_FRONT = "pcb-3d-front";
+    PCB_3D_LEFT = "pcb-3d-left";
+    PCB_3D_RIGHT = "pcb-3d-right";
+    PCB_3D_ISO = "pcb-3d-iso";
+    PCB_3D_MODEL_UNREAD = "pcb-3d-model-unread";
 }

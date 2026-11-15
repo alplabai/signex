@@ -229,3 +229,22 @@ pcb-place-part-refused = { $part } cannot be placed on a board: { $reason }. Not
 # Messages line when the board was closed or switched away from while the
 # part was being read.
 pcb-place-part-board-gone = The board { $board } is no longer active; { $part } was not placed.
+
+## The board 3D view (#2390).
+
+# The 3D view's bar: its name, how to move it, and its buttons.
+pcb-3d-title = 3D View
+pcb-3d-hint = Drag to turn, right-drag to slide, wheel to zoom, click to select
+# Back to the flat board.
+pcb-3d-flat = 2D
+pcb-3d-fit = Fit
+pcb-3d-top = Top
+pcb-3d-bottom = Bottom
+pcb-3d-front = Front
+pcb-3d-left = Left
+pcb-3d-right = Right
+# From above a front corner.
+pcb-3d-iso = Angled
+# Messages line when a part's model could not be read; the part is drawn as
+# a plain body. $source names the library footprint.
+pcb-3d-model-unread = The 3D model of { $source } could not be read: { $why }. It is drawn as a plain body.

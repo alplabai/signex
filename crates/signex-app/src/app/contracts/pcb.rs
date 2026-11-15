@@ -54,6 +54,8 @@ pub enum PcbMsg {
         window: iced::window::Id,
         event: ViewRotationMsg,
     },
+    /// The board 3D view of the main window (#2390).
+    Board3d(Board3dMsg),
     /// Board sketch mode of the main window's board (#2234).
     Sketch(BoardSketchMsg),
     /// Tools ▸ Re-Annotate Board and its dialog (#1312).
@@ -227,4 +229,54 @@ pub enum ViewRotationMsg {
 pub struct ViewAngleEntry {
     pub window: iced::window::Id,
     pub text: String,
+}
+
+/// What the user did in the board 3D view (#2390). View state like pan and
+/// zoom: never a board edit, no undo step, no dirty mark.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Board3dMsg {
+    /// `view_board_3d` ran (View ▸ 3D View, its key, the palette): the
+    /// board in view shows in 3D, or flat again.
+    Toggled,
+    /// The 3D view's 2D button: the board shows flat again.
+    LeaveRequested,
+    /// A viewpoint button was picked: the view looks from there, framed.
+    PresetPicked(signex_gfx::camera3d::ViewPreset),
+    /// The Fit button: the board is framed from where it is seen now.
+    FitRequested,
+    /// The pointer did `gesture` over the view, `viewport` logical pixels.
+    Pointer {
+        viewport: [f32; 2],
+        gesture: Board3dGesture,
+    },
+    /// The models of the library footprints the parts of `board` came from
+    /// were read off the update thread.
+    ModelsRead {
+        board: std::path::PathBuf,
+        read: Arc<Board3dModelsRead>,
+    },
+}
+
+/// A pointer gesture over the board 3D view, in logical pixels.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Board3dGesture {
+    /// A left drag turned the view.
+    Orbited { dx: f32, dy: f32 },
+    /// A right or middle drag, or a Shift left drag, slid the view.
+    Panned { dx: f32, dy: f32 },
+    /// The wheel moved in (positive) or out by this many steps.
+    Zoomed(f32),
+    /// A left click at this point of the view.
+    Clicked([f32; 2]),
+}
+
+/// The models read for a board's parts, and why the others could not be.
+#[derive(Debug, Default, PartialEq)]
+pub struct Board3dModelsRead {
+    pub models: Vec<(
+        signex_types::part::FootprintSourceRef,
+        signex_renderer::board3d::ComponentModel,
+    )>,
+    /// The source that could not be read, as text, and why.
+    pub failures: Vec<(String, String)>,
 }

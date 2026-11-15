@@ -180,6 +180,18 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2390: the board in 3D, or flat again. View state only (no undo
+    // step, no dirty mark); `3` on a board in both built-in profiles.
+    CommandMetadata {
+        id: "view_board_3d",
+        category: "view",
+        label: command_ids::CMD_VIEW_BOARD_3D,
+        menu_label: Some(command_ids::CMD_MENU_VIEW_BOARD_3D),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "toggle_layers_panel",
         category: "view",
