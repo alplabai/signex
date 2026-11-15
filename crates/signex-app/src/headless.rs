@@ -78,7 +78,7 @@ impl Signex {
     pub fn boot_headless(
         paths: Vec<PathBuf>,
         rules: &RuleProfile,
-    ) -> Result<(Self, Task<Message>), HeadlessBootError> {
+    ) -> Result<(Box<Self>, Task<Message>), HeadlessBootError> {
         Self::boot_headless_inner(paths, rules, None)
     }
 
@@ -92,22 +92,31 @@ impl Signex {
         paths: Vec<PathBuf>,
         rules: &RuleProfile,
         undo_depth: &str,
-    ) -> Result<(Self, Task<Message>), HeadlessBootError> {
+    ) -> Result<(Box<Self>, Task<Message>), HeadlessBootError> {
         Self::boot_headless_inner(paths, rules, Some(undo_depth))
+    }
+
+    /// [`Self::new`] moved to the heap in a frame of its own: only `new` and
+    /// this function hold the app by value, never the headless boot or its
+    /// caller (#2325: the copies overflowed the 1 MB Windows main stack).
+    #[inline(never)]
+    fn new_boxed() -> (Box<Self>, Task<Message>) {
+        let (app, boot) = Self::new();
+        (Box::new(app), boot)
     }
 
     fn boot_headless_inner(
         paths: Vec<PathBuf>,
         rules: &RuleProfile,
         undo_depth: Option<&str>,
-    ) -> Result<(Self, Task<Message>), HeadlessBootError> {
+    ) -> Result<(Box<Self>, Task<Message>), HeadlessBootError> {
         if !crate::config_root::is_override_active() {
             return Err(HeadlessBootError::NoConfigRootOverride);
         }
         if let Some(path) = paths.iter().find(|path| !path.is_absolute()) {
             return Err(HeadlessBootError::NotAbsolute(path.clone()));
         }
-        let (mut app, boot) = Self::new();
+        let (mut app, boot) = Self::new_boxed();
         if let Some(text) = undo_depth {
             let read = crate::undo_depth::parse_undo_depth_text(text);
             if let Some(problem) = &read.problem {
