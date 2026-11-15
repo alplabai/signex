@@ -106,12 +106,22 @@ fn location<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Vec<Element<'a
 
 /// An input whose text is `field`'s draft, else `stored` (blank when the
 /// components differ); editable while placement edits run.
+/// The text a field's input shows: the user's unsubmitted draft, else the
+/// stored value, else empty.
+pub(super) fn shown_value(
+    facts: &PcbComponentFacts,
+    field: &ComponentField,
+    stored: Option<String>,
+) -> String {
+    facts.draft(field).cloned().or(stored).unwrap_or_default()
+}
+
 pub(super) fn draft_input<'a>(
     facts: &'a PcbComponentFacts,
     field: ComponentField,
     stored: Option<String>,
 ) -> Element<'a, PanelMsg> {
-    let shown = facts.draft(&field).cloned().or(stored).unwrap_or_default();
+    let shown = shown_value(facts, &field, stored);
     if !facts.is_editable() {
         return rows::input(shown, None);
     }
