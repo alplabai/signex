@@ -135,6 +135,7 @@ signex/
 │   ├── signex-engine/              # command / patch / undo engine
 │   ├── signex-net/                 # authoritative netlist + connectivity
 │   ├── signex-history/             # undo/redo history with a save point (leaf)
+│   ├── signex-commands/            # UI-free command vocabulary: shortcut context/modifiers, operands, targets (ADR-0006)
 │   ├── signex-erc/                 # ERC rule engine (+ signex-erc-dsl)
 │   ├── signex-sketch/              # Newton-LM constraint solver + sketch schema
 │   ├── signex-bake/                # sketch → footprint bake pipeline

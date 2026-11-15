@@ -10,44 +10,41 @@ fn word(i18n: &I18n, id: MessageId) -> String {
     i18n.message_plain(id, &[])
 }
 
-impl Platform {
-    /// The catalog id of what this OS calls the logo key.
-    pub const fn logo_key_id(self) -> MessageId {
-        match self {
-            Self::MacOs => key_ids::KEY_CMD,
-            Self::Windows => key_ids::KEY_WIN,
-            Self::Linux => key_ids::KEY_SUPER,
-        }
+/// The catalog id of what `platform` calls the logo key.
+const fn logo_key_id(platform: Platform) -> MessageId {
+    match platform {
+        Platform::MacOs => key_ids::KEY_CMD,
+        Platform::Windows => key_ids::KEY_WIN,
+        Platform::Linux => key_ids::KEY_SUPER,
     }
 }
 
-impl Modifiers {
-    /// [`Modifiers::display_for`] with the words in the language of `i18n`.
-    pub fn display_in(self, platform: Platform, i18n: &I18n) -> String {
-        let m = self.resolved_for(platform);
-        if platform == Platform::MacOs {
-            return [
-                (m.ctrl, '\u{2303}'),
-                (m.alt, '\u{2325}'),
-                (m.shift, '\u{21e7}'),
-                (m.command, '\u{2318}'),
-            ]
-            .into_iter()
-            .filter_map(|(on, symbol)| on.then_some(symbol))
-            .collect();
-        }
-        [
-            (m.ctrl, key_ids::KEY_CTRL),
-            (m.command, platform.logo_key_id()),
-            (m.alt, key_ids::KEY_ALT),
-            (m.shift, key_ids::KEY_SHIFT),
+/// [`super::ModifiersExt::display_in`]: `modifiers` with the words in the language
+/// of `i18n`.
+pub(super) fn modifiers_in(modifiers: Modifiers, platform: Platform, i18n: &I18n) -> String {
+    let m = modifiers.resolved_for(platform);
+    if platform == Platform::MacOs {
+        return [
+            (m.ctrl, '\u{2303}'),
+            (m.alt, '\u{2325}'),
+            (m.shift, '\u{21e7}'),
+            (m.command, '\u{2318}'),
         ]
         .into_iter()
-        .filter(|(on, _)| *on)
-        .map(|(_, id)| word(i18n, id))
-        .collect::<Vec<_>>()
-        .join("+")
+        .filter_map(|(on, symbol)| on.then_some(symbol))
+        .collect();
     }
+    [
+        (m.ctrl, key_ids::KEY_CTRL),
+        (m.command, logo_key_id(platform)),
+        (m.alt, key_ids::KEY_ALT),
+        (m.shift, key_ids::KEY_SHIFT),
+    ]
+    .into_iter()
+    .filter(|(on, _)| *on)
+    .map(|(_, id)| word(i18n, id))
+    .collect::<Vec<_>>()
+    .join("+")
 }
 
 impl KeyToken {
@@ -80,7 +77,7 @@ impl KeyStroke {
     /// [`KeyStroke::display_for`] with the words in the language of `i18n`.
     pub fn display_in(&self, platform: Platform, i18n: &I18n) -> String {
         let stroke = self.resolved_for(platform);
-        let mut text = stroke.modifiers.display_in(platform, i18n);
+        let mut text = modifiers_in(stroke.modifiers, platform, i18n);
         if platform != Platform::MacOs && !text.is_empty() {
             text.push('+');
         }

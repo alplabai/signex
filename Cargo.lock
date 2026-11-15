@@ -5662,6 +5662,7 @@ dependencies = [
  "sha2",
  "signex-app",
  "signex-bake",
+ "signex-commands",
  "signex-drc",
  "signex-drc-dsl",
  "signex-engine",
@@ -5725,6 +5726,14 @@ dependencies = [
  "signex-types",
  "tempfile",
  "uuid",
+]
+
+[[package]]
+name = "signex-commands"
+version = "26.11.0-rc.1"
+dependencies = [
+ "serde",
+ "signex-types",
 ]
 
 [[package]]

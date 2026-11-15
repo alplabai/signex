@@ -371,7 +371,10 @@ impl Signex {
         match event {
             keyboard::Event::ModifiersChanged(modifiers) => Claim::Consume(Message::Preferences(
                 PreferencesMsg::Inner(crate::preferences::PrefMsg::KeymapRecorderModifiersChanged(
-                    crate::keymap::Modifiers::from_iced(*modifiers).recorded_for(platform),
+                    <crate::keymap::Modifiers as crate::keymap::ModifiersExt>::from_iced(
+                        *modifiers,
+                    )
+                    .recorded_for(platform),
                 )),
             )),
             keyboard::Event::KeyPressed { key, modifiers, .. } => {

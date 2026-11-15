@@ -4,6 +4,7 @@
 //! single-file `preferences` module.
 
 use super::*;
+use crate::keymap::ModifiersExt as _;
 use iced::widget::{Column, Space, Widget, column, container, row};
 use iced::{Background, Border, Element, Length, Theme};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
