@@ -118,3 +118,7 @@ pcb-component-sch-mismatch-count = { $count ->
     [one] 1 component carries a designator the schematic does not. Update PCB sets it to match.
    *[other] { $count } components carry a designator the schematic does not. Update PCB sets them to match.
 }
+# The board footprint changed but the linked schematic part kept its own.
+# $designator is the component.
+pcb-component-swap-sheet-not-open = { $designator }: the board footprint changed, but the schematic was not updated because the part's sheet is not open
+pcb-component-swap-sheet-read-only = { $designator }: the board footprint changed, but the schematic was not updated because the part's sheet is read-only

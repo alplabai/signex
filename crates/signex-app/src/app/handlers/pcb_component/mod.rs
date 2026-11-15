@@ -9,6 +9,7 @@
 mod edits;
 mod facts;
 mod identity;
+mod linked_parts;
 mod swap;
 
 use std::collections::{BTreeMap, BTreeSet};

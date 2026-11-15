@@ -2,19 +2,24 @@
 //! Component view's Footprint Name button or `change_footprint` (the board
 //! menu, the palette). The footprint picker opens with the components' own
 //! library footprints first; the pick is read off the update thread into its
-//! board form, then every selected footprint is replaced as one board undo
-//! step (`signex_engine::pcb::footprint_swap`). Old pads no new pad takes
-//! over are listed in Messages; a refusal says why and changes nothing.
+//! board form, then every selected footprint is replaced
+//! (`signex_engine::pcb::footprint_swap`) and each linked schematic part takes
+//! the same footprint (`linked_parts`), as one undo step. Old pads no new pad
+//! takes over, and parts whose sheet is closed or read-only, are listed in
+//! Messages; a refusal says why and changes nothing.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_engine::pcb::footprint_swap::{self, UnmatchedPad};
 use signex_i18n::{ids, t};
 use signex_library::{PrimitiveKind, PrimitiveRef};
-use signex_types::pcb::{Footprint, PcbBoard};
+use signex_types::pcb::{Footprint, PcbBoard, SymbolLink};
 use uuid::Uuid;
 
+use super::linked_parts::{LinkedPlan, NotUpdated};
+use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{FootprintSwapMsg, Message, Signex};
 use crate::library::messages::LibraryMessage;
 use crate::library::place::resolve_library_footprint;
@@ -134,8 +139,10 @@ impl Signex {
         )
     }
 
-    /// Replace `footprints` on `board` with the footprint read, as one undo
-    /// step, and list the old pads that went with no match.
+    /// Replace `footprints` on `board` with the footprint read, and give
+    /// their linked schematic parts the same footprint, as one undo step.
+    /// The old pads that went with no match, and the parts whose sheet could
+    /// not take the footprint, are listed in Messages.
     fn swap_footprints(
         &mut self,
         board: &Path,
@@ -145,29 +152,86 @@ impl Signex {
         let what = self.catalog(ids::PCB_COMPONENT_FOOTPRINT_SWAP);
         let template = match result {
             Ok(template) => *template,
-            Err(why) => {
-                let line = t!(
-                    self.ui_state.i18n,
-                    ids::PCB_FOOTPRINT_REFUSED,
-                    "what" => what.as_str(),
-                    "why" => why
-                );
-                crate::diagnostics::log_warning(line.into_string());
-                return;
+            Err(why) => return self.refuse_swap(&what, why),
+        };
+        let Some(engine) = self.document_state.board_engine(board) else {
+            let line =
+                t!(self.ui_state.i18n, ids::PCB_FOOTPRINT_BOARD_GONE, "what" => what.as_str());
+            crate::diagnostics::log_warning(line.into_string());
+            return;
+        };
+        let revision = engine.revision();
+        let ids: BTreeSet<Uuid> = footprints.iter().copied().collect();
+        let swap = match footprint_swap::swap_commands(engine.board(), &ids, &template) {
+            Ok(swap) if !swap.commands.is_empty() => swap,
+            Ok(_) => return,
+            Err(refusal) => return self.refuse_swap(&what, refusal.to_string()),
+        };
+        let links: Vec<(String, SymbolLink)> = engine
+            .board()
+            .footprints
+            .iter()
+            .filter(|fp| ids.contains(&fp.uuid))
+            .filter_map(|fp| Some((fp.reference.clone(), fp.schematic_link.clone()?)))
+            .collect();
+        let plan = match &template.library_ref {
+            Some(source) if !links.is_empty() => self.plan_linked_footprints(
+                &links,
+                PrimitiveRef::new(source.library, source.footprint),
+            ),
+            _ => LinkedPlan::default(),
+        };
+        let step = CheckedStep {
+            label: &what,
+            expected_revision: revision,
+        };
+        let ran = if plan.sheets.is_empty() {
+            self.execute_board_commands(board, swap.commands, Some(step))
+                .map_err(|error| self.refuse_swap(&what, error.to_string()))
+                .is_ok()
+        } else {
+            let group = self.mint_undo_group();
+            let changed = self.run_linked_footprints(plan.sheets, group);
+            match self.execute_board_commands_grouped(board, swap.commands, step, group) {
+                Ok(_) => {
+                    self.commit_linked_footprints(changed, group, board.to_path_buf());
+                    true
+                }
+                Err(error) => {
+                    self.roll_back_linked_footprints(&changed, group);
+                    self.refuse_swap(&what, error.to_string());
+                    false
+                }
             }
         };
-        let mut unmatched = Vec::new();
-        let ran = self.run_component_edit(board, footprints, &what, |b, ids| {
-            let swap = footprint_swap::swap_commands(b, ids, &template)?;
-            unmatched = swap.unmatched;
-            Ok(swap.commands)
-        });
         if ran {
-            for pad in &unmatched {
+            for pad in &swap.unmatched {
                 self.report_unmatched_pad(pad);
+            }
+            for (designator, why) in &plan.not_updated {
+                self.report_part_not_updated(designator, *why);
             }
         }
         self.sync_pcb_board_summary();
+    }
+
+    fn refuse_swap(&self, what: &str, why: String) {
+        let line = t!(
+            self.ui_state.i18n,
+            ids::PCB_FOOTPRINT_REFUSED,
+            "what" => what,
+            "why" => why
+        );
+        crate::diagnostics::log_warning(line.into_string());
+    }
+
+    fn report_part_not_updated(&self, designator: &str, why: NotUpdated) {
+        let id = match why {
+            NotUpdated::SheetNotOpen => ids::PCB_COMPONENT_SWAP_SHEET_NOT_OPEN,
+            NotUpdated::SheetReadOnly => ids::PCB_COMPONENT_SWAP_SHEET_READ_ONLY,
+        };
+        let line = t!(self.ui_state.i18n, id, "designator" => designator);
+        crate::diagnostics::log_warning(line.into_string());
     }
 
     fn report_unmatched_pad(&self, pad: &UnmatchedPad) {

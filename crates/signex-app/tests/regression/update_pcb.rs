@@ -229,9 +229,21 @@ fn fixture_editing(
     board: Option<(PcbBoard, bool)>,
     defaults: ProjectDefaults,
 ) -> Fixture {
+    fixture_preparing(|_| {}, edit, board, defaults)
+}
+
+/// [`fixture_editing`] with `prepare` run on the library before it is
+/// mounted (another footprint, an alternate on the row).
+fn fixture_preparing(
+    prepare: impl FnOnce(&Library),
+    edit: impl FnOnce(&Library, &mut SchematicSheet),
+    board: Option<(PcbBoard, bool)>,
+    defaults: ProjectDefaults,
+) -> Fixture {
     let _ = signex_app::diagnostics::init_logging();
     let lib = library();
     bind_two_pad_footprint(&lib);
+    prepare(&lib);
     let tmp = tempfile::tempdir().unwrap();
     let sheet_path = tmp.path().join("demo.snxsch");
     let board_path = tmp.path().join("demo.snxpcb");
@@ -893,3 +905,6 @@ mod unresolved;
 
 #[path = "update_pcb_dialog.rs"]
 mod dialog;
+
+#[path = "update_pcb_swap.rs"]
+mod swap;
