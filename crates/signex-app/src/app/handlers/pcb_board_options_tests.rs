@@ -49,6 +49,8 @@ fn board() -> PcbBoard {
 
 fn app_with_board(dir: &Path) -> (Signex, PathBuf) {
     let mut app = app_workspace(&dir.to_string_lossy(), &[]);
+    // The tour depends on the shared test prefs; open, it takes the Esc.
+    app.ui_state.first_run_tour_open = false;
     app.ui_state.unit = signex_types::coord::Unit::Mm;
     let path = dir.join("board.snxpcb");
     app.open_pcb_tab(path.clone(), "board".into(), board());
