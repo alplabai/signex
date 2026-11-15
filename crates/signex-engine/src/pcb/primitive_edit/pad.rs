@@ -29,7 +29,8 @@ pub enum PadEdit {
 }
 
 /// The command setting `edit` on every pad in `pads` (footprint, pad). A
-/// pad of a locked footprint is refused, as for placement edits.
+/// pad of a locked footprint is refused, as for placement edits, and so is
+/// a pad of a footprint that locks its primitives (#2365).
 pub fn pad_edit_command(
     board: &PcbBoard,
     pads: &[(Uuid, Uuid)],
@@ -52,6 +53,9 @@ pub fn pad_edit_command(
             .ok_or(PrimitiveEditRefusal::Gone)?;
         if fp.locked {
             return Err(PrimitiveEditRefusal::Locked(placement::name(fp)));
+        }
+        if fp.component.lock_primitives {
+            return Err(PrimitiveEditRefusal::PrimitivesLocked(placement::name(fp)));
         }
         let mut new = old.clone();
         apply(board, fp, &mut new, edit)?;

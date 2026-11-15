@@ -529,3 +529,28 @@ fn a_drawn_footprint_keeps_every_pad_the_board_can_hold() {
     );
     assert_eq!(preview.layers, placed.layers);
 }
+
+#[test]
+fn the_type_height_and_description_come_to_the_board() {
+    let mut fp = library(vec![pad("1", PadKind::Smd, PadShape::Rect, &["F.Cu"])]);
+    fp.component_type = ComponentType::Mechanical;
+    fp.height_mm = Some(1.8);
+    fp.description = "Standoff M3".into();
+    let board = board_footprint(&fp).unwrap();
+    assert_eq!(
+        *board.component,
+        pcb::ComponentAttributes {
+            component_type: pcb::ComponentType::Mechanical,
+            height_mm: 1.8,
+            description: "Standoff M3".into(),
+            ..pcb::ComponentAttributes::default()
+        }
+    );
+}
+
+#[test]
+fn a_negative_library_height_is_left_unset() {
+    let mut fp = library(vec![pad("1", PadKind::Smd, PadShape::Rect, &["F.Cu"])]);
+    fp.height_mm = Some(-2.0);
+    assert_eq!(board_footprint(&fp).unwrap().component.height_mm, 0.0);
+}

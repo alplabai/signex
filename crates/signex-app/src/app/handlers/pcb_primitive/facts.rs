@@ -82,7 +82,11 @@ impl Signex {
                         _ => None,
                     })
                     .collect();
-                let locked = if pads.iter().any(|(fp, _)| fp.locked) {
+                // A footprint that locks its primitives (#2365) locks its pads too.
+                let locked = if pads
+                    .iter()
+                    .any(|(fp, _)| fp.locked || fp.component.lock_primitives)
+                {
                     Editability::Locked
                 } else {
                     Editability::Editable

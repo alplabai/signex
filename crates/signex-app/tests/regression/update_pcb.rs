@@ -416,6 +416,7 @@ fn board_footprint(
         properties: Vec::new(),
         schematic_link: link.map(|unit| SymbolLink::new(InstancePath::root(), [unit])),
         library_ref: None,
+        component: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

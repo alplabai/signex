@@ -23,7 +23,7 @@ use signex_types::property::PcbProperty;
 use uuid::Uuid;
 
 use crate::primitive::footprint::{
-    Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape,
+    ComponentType, Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape,
 };
 
 /// The board form of `footprint`: top side, origin at (0, 0), rotation 0,
@@ -111,8 +111,33 @@ fn top_side_footprint(
         ],
         schematic_link: None,
         library_ref: None,
+        component: Box::new(component_attributes(footprint)),
         unknown: Default::default(),
         unknown_columns: Default::default(),
+    }
+}
+
+/// The component settings a library footprint brings to the board (#2365):
+/// its type, height and description. A height the board cannot hold
+/// (negative or not a number) is left unset.
+fn component_attributes(footprint: &Footprint) -> pcb::ComponentAttributes {
+    let component_type = match footprint.component_type {
+        ComponentType::Standard => pcb::ComponentType::Standard,
+        ComponentType::StandardNoBom => pcb::ComponentType::StandardNoBom,
+        ComponentType::Mechanical => pcb::ComponentType::Mechanical,
+        ComponentType::Graphical => pcb::ComponentType::Graphical,
+        ComponentType::NetTie => pcb::ComponentType::NetTie,
+        ComponentType::NetTieInBom => pcb::ComponentType::NetTieInBom,
+        ComponentType::Jumper => pcb::ComponentType::Jumper,
+    };
+    pcb::ComponentAttributes {
+        component_type,
+        height_mm: footprint
+            .height_mm
+            .filter(|h| h.is_finite() && *h >= 0.0)
+            .unwrap_or(0.0),
+        description: footprint.description.clone(),
+        ..pcb::ComponentAttributes::default()
     }
 }
 

@@ -15,6 +15,7 @@ mod board_sketch;
 mod clipboard;
 mod command;
 pub mod component;
+pub mod component_edit;
 pub mod designators;
 pub mod draw;
 pub mod eco;

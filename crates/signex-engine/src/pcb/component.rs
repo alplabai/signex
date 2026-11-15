@@ -50,6 +50,17 @@ pub enum ComponentRefusal {
     },
     #[error("{0} follows the designator or value; edit it in its own field")]
     TextParameter(String),
+    #[error("{0:?} is not a whole number")]
+    NotAWholeNumber(String),
+    #[error("the {0} is out of range")]
+    OutOfRange(&'static str),
+    #[error("a parameter needs a name")]
+    EmptyName,
+    #[error("{} already has a parameter {key}", .footprints.join(", "))]
+    ParameterTaken {
+        footprints: Vec<String>,
+        key: String,
+    },
 }
 
 /// A number typed into a Location field: a finite decimal, with a trailing

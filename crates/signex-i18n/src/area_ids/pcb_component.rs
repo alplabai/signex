@@ -1,5 +1,6 @@
 //! Ids of `locales/en-US/pcb_component.ftl`: the board Component Properties
-//! (#2354).
+//! (#2354) and its stored settings, identity and parameter edits (#2365,
+//! #2367, #2369).
 
 define_ids! {
     PCB_COMPONENT;
@@ -43,8 +44,6 @@ define_ids! {
     PCB_COMPONENT_SCH_PATH = "pcb-component-sch-path";
     PCB_COMPONENT_CHANNEL_OFFSET = "pcb-component-channel-offset";
     PCB_COMPONENT_NOT_LINKED = "pcb-component-not-linked";
-    PCB_COMPONENT_NOT_STORED = "pcb-component-not-stored";
-    PCB_COMPONENT_NEEDS_SCHEMATIC = "pcb-component-needs-schematic";
     PCB_COMPONENT_ONE_AT_A_TIME = "pcb-component-one-at-a-time";
     PCB_COMPONENT_NO_DESCRIPTION = "pcb-component-no-description";
     PCB_COMPONENT_PARAMETERS_NONE = "pcb-component-parameters-none";
@@ -55,4 +54,26 @@ define_ids! {
     PCB_COMPONENT_SWAP_PAD_NET_DROPPED = "pcb-component-swap-pad-net-dropped";
     PCB_COMPONENT_SWAP_PAD_DROPPED = "pcb-component-swap-pad-dropped";
     PCB_COMPONENT_PICKER_OWN_FOOTPRINTS = "pcb-component-picker-own-footprints";
+    PCB_COMPONENT_TYPE_STANDARD = "pcb-component-type-standard";
+    PCB_COMPONENT_TYPE_STANDARD_NO_BOM = "pcb-component-type-standard-no-bom";
+    PCB_COMPONENT_TYPE_MECHANICAL = "pcb-component-type-mechanical";
+    PCB_COMPONENT_TYPE_GRAPHICAL = "pcb-component-type-graphical";
+    PCB_COMPONENT_TYPE_NET_TIE = "pcb-component-type-net-tie";
+    PCB_COMPONENT_TYPE_NET_TIE_IN_BOM = "pcb-component-type-net-tie-in-bom";
+    PCB_COMPONENT_TYPE_JUMPER = "pcb-component-type-jumper";
+    PCB_COMPONENT_HEIGHT_TIP = "pcb-component-height-tip";
+    PCB_COMPONENT_BODY_OPACITY_TIP = "pcb-component-body-opacity-tip";
+    PCB_COMPONENT_LOCK_PRIMITIVES_TIP = "pcb-component-lock-primitives-tip";
+    PCB_COMPONENT_LOCK_STRINGS_TIP = "pcb-component-lock-strings-tip";
+    PCB_COMPONENT_COMMENT_ALL = "pcb-component-comment-all";
+    PCB_COMPONENT_SCH_NOT_READ = "pcb-component-sch-not-read";
+    PCB_COMPONENT_SOURCE_NOT_OPEN = "pcb-component-source-not-open";
+    PCB_COMPONENT_SCH_MISMATCH = "pcb-component-sch-mismatch";
+    PCB_COMPONENT_SCH_MISMATCH_COUNT = "pcb-component-sch-mismatch-count";
+    PCB_COMPONENT_PARAMETER_NAME = "pcb-component-parameter-name";
+    PCB_COMPONENT_PARAMETER_VALUE = "pcb-component-parameter-value";
+    PCB_COMPONENT_PARAMETER_ADD = "pcb-component-parameter-add";
+    PCB_COMPONENT_PARAMETER_ADDED = "pcb-component-parameter-added";
+    PCB_COMPONENT_PARAMETER_REMOVE_TIP = "pcb-component-parameter-remove-tip";
+    PCB_COMPONENT_PARAMETER_REMOVED = "pcb-component-parameter-removed";
 }

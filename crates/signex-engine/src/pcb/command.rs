@@ -1,5 +1,5 @@
 use signex_net::board::BoardNetEdit;
-use signex_types::pcb::{Footprint, PcbBoard, Point, SymbolLink};
+use signex_types::pcb::{ComponentAttributes, Footprint, PcbBoard, Point, SymbolLink};
 use signex_types::pcb_options::BoardOptions;
 use signex_types::pcb_sketch::BoardSketch;
 use signex_types::property::PcbProperty;
@@ -83,7 +83,9 @@ pub enum BoardCommand {
     /// library footprint in its top-side form. The board footprint keeps its
     /// uuid, position, rotation, side (a bottom one flips the template), lock,
     /// schematic link, designator and value, its library link when `with` has
-    /// none, and its property placement and properties `with` lacks; the n-th
+    /// none, its body opacity, locks, swapping and channel offset (`with`
+    /// brings type, height and description), and its property placement and
+    /// properties `with` lacks; the n-th
     /// new pad of a number takes the net and lock of the n-th old pad of it.
     /// Refused for a template not on a readable top-side layer, with a pad
     /// off the number line or a taken uuid, or a different count of a shared
@@ -129,6 +131,29 @@ pub enum BoardCommand {
         index: usize,
         property: PcbProperty,
     },
+    /// Insert `property` at `index` of the footprint's properties: a new
+    /// parameter (#2369). Refused for an empty key, the Reference or Value
+    /// key, an index past the end and a number that is not finite; a key
+    /// already on the footprint is the caller's check, so the inverse of a
+    /// removal always applies. The inverse is a
+    /// [`BoardCommand::RemoveFootprintProperty`].
+    InsertFootprintProperty {
+        footprint: Uuid,
+        index: usize,
+        property: PcbProperty,
+    },
+    /// Remove the footprint's property at `index`: a parameter (#2369).
+    /// Refused for the Reference and Value texts. The inverse is a
+    /// [`BoardCommand::InsertFootprintProperty`] holding what it removed.
+    RemoveFootprintProperty { footprint: Uuid, index: usize },
+    /// Replace the footprint's component settings (#2365): type, height,
+    /// body opacity, locks, swapping, channel offset and description.
+    /// Refused for a negative or non-finite height and an opacity outside
+    /// 0..=1. The inverse is another one holding the settings it replaced.
+    SetFootprintComponent {
+        footprint: Uuid,
+        component: ComponentAttributes,
+    },
     /// Write a net table and pad nets (`signex_net::board`); its inverse is
     /// the edit [`BoardNetEdit::apply`] returns. Refused whole when a change
     /// names a footprint, pad or zone that is gone, or one twice.
@@ -172,7 +197,10 @@ pub enum BoardPatchKind {
     FootprintTextSet,
     FootprintLinkSet,
     FootprintLockSet,
+    /// A property replaced, added or removed.
     FootprintPropertySet,
+    /// The component settings (#2365).
+    FootprintComponentSet,
     /// The net table, and pad and zone nets. The items are the footprints
     /// and zones written; a table-only change names none.
     NetsChanged,
@@ -247,6 +275,19 @@ impl BoardCommand {
                 index,
                 property,
             } => footprint_content::set_property(board, id, index, property),
+            Self::InsertFootprintProperty {
+                footprint: id,
+                index,
+                property,
+            } => footprint_content::insert_property(board, id, index, property),
+            Self::RemoveFootprintProperty {
+                footprint: id,
+                index,
+            } => footprint_content::remove_property(board, id, index),
+            Self::SetFootprintComponent {
+                footprint: id,
+                component,
+            } => footprint::set_component(board, id, component),
             Self::SetNets(edit) => batch::set_nets(board, edit),
             Self::SetGridSize { grid_mm } => set_grid_size(board, grid_mm),
             Self::SetBoardOptions { options: new } => options::set(board, *new),

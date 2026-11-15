@@ -1,9 +1,10 @@
 //! Move, rotate, flip and lock one footprint. Pads, graphics and property texts
 //! are stored in the footprint's local frame, so none of the three rewrites
 //! their positions. The flip itself is `pcb_geom::flip_footprint`. Lock state
-//! is the caller's check, not this module's.
+//! is the caller's check, not this module's. The component settings (#2365)
+//! are set here too.
 
-use signex_types::pcb::{Footprint, PcbBoard, Point};
+use signex_types::pcb::{ComponentAttributes, Footprint, PcbBoard, Point};
 use uuid::Uuid;
 
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
@@ -76,6 +77,29 @@ pub(super) fn set_locked(
             locked: previous,
         },
         patch: patch(BoardPatchKind::FootprintLockSet, id),
+    })
+}
+
+/// Replace the component settings, see [`BoardCommand::SetFootprintComponent`].
+pub(super) fn set_component(
+    board: &mut PcbBoard,
+    id: Uuid,
+    component: ComponentAttributes,
+) -> Result<Applied, BoardCommandError> {
+    if let Some(field) = component.invalid_field() {
+        return Err(BoardCommandError::ComponentFieldInvalid {
+            footprint: id,
+            field,
+        });
+    }
+    let fp = find(board, id)?;
+    let previous = std::mem::replace(&mut *fp.component, component);
+    Ok(Applied {
+        inverse: BoardCommand::SetFootprintComponent {
+            footprint: id,
+            component: previous,
+        },
+        patch: patch(BoardPatchKind::FootprintComponentSet, id),
     })
 }
 

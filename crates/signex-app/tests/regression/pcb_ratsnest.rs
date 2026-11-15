@@ -40,6 +40,7 @@ fn two_pad_board() -> PcbBoard {
         locked: false,
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         pads: vec![pad(1, 0.0), pad(2, 5.0)],
         graphics: vec![],
         properties: vec![],

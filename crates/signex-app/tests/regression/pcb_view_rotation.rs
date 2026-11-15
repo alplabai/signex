@@ -70,6 +70,7 @@ fn board() -> PcbBoard {
         locked: false,
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         pads: vec![pad],
         graphics: Vec::new(),
         properties: Vec::new(),

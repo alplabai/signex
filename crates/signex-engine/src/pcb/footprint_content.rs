@@ -6,7 +6,7 @@
 use std::collections::{HashMap, HashSet};
 
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{Footprint, Pad, PadNet, PcbBoard, SymbolLink};
+use signex_types::pcb::{ComponentAttributes, Footprint, Pad, PadNet, PcbBoard, SymbolLink};
 use signex_types::pcb_layer::BoardSide;
 use signex_types::property::PcbProperty;
 use uuid::Uuid;
@@ -67,6 +67,10 @@ pub(super) fn replace(
     new.position = old.position;
     new.rotation = old.rotation;
     new.locked = old.locked;
+    new.component = Box::new(carried_component(
+        &old.component,
+        std::mem::take(&mut *new.component),
+    ));
     new.schematic_link = old.schematic_link.clone();
     new.reference = old.reference.clone();
     new.value = old.value.clone();
@@ -84,6 +88,21 @@ pub(super) fn replace(
         },
         patch: patch(BoardPatchKind::FootprintReplaced, id),
     })
+}
+
+/// The component settings of a replaced footprint (#2365): the type, height
+/// and description come with the new library footprint; the opacity, locks,
+/// swapping and channel offset are board choices and stay.
+fn carried_component(
+    old: &ComponentAttributes,
+    template: ComponentAttributes,
+) -> ComponentAttributes {
+    ComponentAttributes {
+        component_type: template.component_type,
+        height_mm: template.height_mm,
+        description: template.description,
+        ..old.clone()
+    }
 }
 
 /// Put `footprint` back over the board footprint with its uuid, whole; the
@@ -189,12 +208,88 @@ pub(super) fn set_property(
             key: old.key.clone(),
         });
     }
+    if fp.component.lock_strings && moves_text(old, &property) {
+        return Err(BoardCommandError::StringsLocked(id));
+    }
     let previous = std::mem::replace(&mut fp.properties[index], property);
     Ok(Applied {
         inverse: BoardCommand::SetFootprintProperty {
             footprint: id,
             index,
             property: previous,
+        },
+        patch: patch(BoardPatchKind::FootprintPropertySet, id),
+    })
+}
+
+/// Whether `new` puts the text of `old` somewhere else: another position,
+/// angle, layer or size. Lock Strings refuses exactly these (#2365).
+fn moves_text(old: &PcbProperty, new: &PcbProperty) -> bool {
+    old.position != new.position
+        || old.rotation != new.rotation
+        || old.layer != new.layer
+        || old.font_size != new.font_size
+}
+
+/// Insert a parameter, see [`BoardCommand::InsertFootprintProperty`].
+pub(super) fn insert_property(
+    board: &mut PcbBoard,
+    id: Uuid,
+    index: usize,
+    property: PcbProperty,
+) -> Result<Applied, BoardCommandError> {
+    check_property_finite(&property)?;
+    if property.key.trim().is_empty() {
+        return Err(BoardCommandError::PropertyKeyEmpty);
+    }
+    if is_text_key(&property.key) {
+        return Err(BoardCommandError::PropertyTextOwned {
+            footprint: id,
+            key: property.key,
+        });
+    }
+    let fp = find(board, id)?;
+    if index > fp.properties.len() {
+        return Err(BoardCommandError::PropertyNotFound {
+            footprint: id,
+            index,
+        });
+    }
+    fp.properties.insert(index, property);
+    Ok(Applied {
+        inverse: BoardCommand::RemoveFootprintProperty {
+            footprint: id,
+            index,
+        },
+        patch: patch(BoardPatchKind::FootprintPropertySet, id),
+    })
+}
+
+/// Remove a parameter, see [`BoardCommand::RemoveFootprintProperty`].
+pub(super) fn remove_property(
+    board: &mut PcbBoard,
+    id: Uuid,
+    index: usize,
+) -> Result<Applied, BoardCommandError> {
+    let fp = find(board, id)?;
+    let Some(old) = fp.properties.get(index) else {
+        return Err(BoardCommandError::PropertyNotFound {
+            footprint: id,
+            index,
+        });
+    };
+    if is_text_key(&old.key) {
+        return Err(BoardCommandError::PropertyTextOwned {
+            footprint: id,
+            key: old.key.clone(),
+        });
+    }
+    let removed = fp.properties.remove(index);
+    Ok(Applied {
+        inverse: BoardCommand::InsertFootprintProperty {
+            footprint: id,
+            index,
+            property: removed,
         },
         patch: patch(BoardPatchKind::FootprintPropertySet, id),
     })

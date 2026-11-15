@@ -74,6 +74,7 @@ pub(super) fn footprint(n: u128, pads: Vec<Pad>) -> Footprint {
         locked: false,
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         pads,
         graphics: Vec::new(),
         properties: Vec::new(),

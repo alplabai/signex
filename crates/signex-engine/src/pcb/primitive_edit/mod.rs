@@ -24,6 +24,8 @@ pub enum PrimitiveEditRefusal {
     Empty,
     #[error("{0} is locked")]
     Locked(String),
+    #[error("the pads and graphics of {0} are locked")]
+    PrimitivesLocked(String),
     #[error("pad {0} has no hole")]
     NoHole(String),
     #[error("the value must be a finite number")]

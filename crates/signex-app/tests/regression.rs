@@ -178,6 +178,12 @@ mod pcb_component_properties;
 // #2366: swapping a placed component's footprint from the board.
 #[path = "regression/pcb_footprint_swap.rs"]
 mod pcb_footprint_swap;
+// #2365, #2369: the Component view's stored settings, parameters and Comment.
+#[path = "regression/pcb_component_settings.rs"]
+mod pcb_component_settings;
+// #2367, #2365: component identity from the schematic; Type and the BOM.
+#[path = "regression/pcb_component_schematic.rs"]
+mod pcb_component_schematic;
 // #2355: the track, via and pad Properties panels.
 #[path = "regression/board_primitive_properties.rs"]
 mod board_primitive_properties;

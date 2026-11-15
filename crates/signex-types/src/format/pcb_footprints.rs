@@ -101,6 +101,7 @@ pub(super) fn assemble_footprints(
                 properties: Vec::new(),
                 schematic_link: None,
                 library_ref: None,
+                component: Default::default(),
                 // The placeholder is not in the file: it carries no
                 // foreign keys and must not inherit the orphan pad's.
                 unknown: UnknownFields::default(),

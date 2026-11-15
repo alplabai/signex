@@ -8,7 +8,10 @@ use signex_engine::pcb::designators::FootprintTextField;
 use signex_types::pcb::{Footprint, PcbBoard, SymbolLink};
 
 use crate::app::Signex;
-use crate::panels::{FootprintLibrary, ParameterFacts, PcbComponentFacts, Shared};
+use crate::panels::{
+    ComponentSettingFacts, FootprintLibrary, ParameterFacts, PartIdentity, PcbComponentFacts,
+    Shared,
+};
 
 /// The value every footprint gives, or mixed. Only called on a non-empty
 /// list, where it always has an answer.
@@ -32,6 +35,21 @@ fn hierarchical_path(link: &SymbolLink) -> String {
     let base = sheet.trim_end_matches('/');
     let units: Vec<String> = link.units.iter().map(ToString::to_string).collect();
     format!("{base}/{}", units.join(","))
+}
+
+/// The component settings the footprints share (#2365).
+fn settings(footprints: &[&Footprint]) -> ComponentSettingFacts {
+    ComponentSettingFacts {
+        component_type: shared(footprints, |fp| fp.component.component_type),
+        height_mm: shared(footprints, |fp| fp.component.height_mm),
+        body_opacity: shared(footprints, |fp| fp.component.body_opacity),
+        lock_primitives: shared(footprints, |fp| fp.component.lock_primitives),
+        lock_strings: shared(footprints, |fp| fp.component.lock_strings),
+        pin_swapping: shared(footprints, |fp| fp.component.pin_swapping),
+        part_swapping: shared(footprints, |fp| fp.component.part_swapping),
+        channel_offset: shared(footprints, |fp| fp.component.channel_offset),
+        description: shared(footprints, |fp| fp.component.description.clone()),
+    }
 }
 
 /// The parameters every footprint has, in the first one's order.
@@ -90,7 +108,19 @@ impl Signex {
             .filter(|d| d.is_for(path, &ids))
             .map(|d| d.texts.clone())
             .unwrap_or_default();
+        let identities: Vec<PartIdentity> =
+            fps.iter().map(|fp| self.part_identity(path, fp)).collect();
+        let designator_mismatches = fps
+            .iter()
+            .zip(&identities)
+            .filter(|(fp, identity)| {
+                matches!(identity, PartIdentity::Read { designator, .. } if *designator != fp.reference.trim())
+            })
+            .count();
         Some(PcbComponentFacts {
+            settings: settings(fps),
+            identity: Shared::of(identities).unwrap_or(Shared::Mixed),
+            designator_mismatches,
             board: path.to_path_buf(),
             x: shared(fps, |fp| fp.position.x),
             y: shared(fps, |fp| fp.position.y),
