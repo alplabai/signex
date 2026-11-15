@@ -146,6 +146,7 @@ signex/
 │   ├── signex-drc-dsl/             # DRC rule language: rule text → signex-drc rules
 │   ├── signex-widgets/             # reusable iced widgets
 │   ├── signex-i18n/                # UI message catalogs and locale-aware formatting
+│   ├── signex-i18n-ids/            # message ids + Translatable, no locale deps (rendered by signex-i18n)
 │   └── signex-3d-model-importer/   # STEP / WRL importer
 └── docs/
 ```
@@ -241,6 +242,13 @@ Responsibilities:
 - Fluent catalogs embedded from `crates/signex-i18n/locales/`, with `en-US` as the source language
 - locale negotiation with an `en-US` fallback, and the `en-XA` pseudolocale
 - number formatting through ICU4X
+
+The message ids (`MessageId`, `ids::*`, `command_ids::*`, …), `Translatable`,
+`Arg`, `LocalNumber` and `UserText` live in the UI-free `signex-i18n-ids` crate
+(ADR-0006, "Messages the core reports"); `signex-i18n` re-exports them under
+the same paths and renders them. `Translatable::render` takes any
+`MessageRenderer`; `render_en_us` and `localized` come from the
+`signex_i18n::RenderTranslatable` trait.
 
 The app holds the locale in `UiState::i18n`, saves it as `language` in the
 preferences file and restores it at launch. `Signex::set_language` (reached by
