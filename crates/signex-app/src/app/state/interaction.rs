@@ -51,6 +51,9 @@ pub struct InteractionState {
     /// The board in sketch mode and its working copy (#2234); `None` when
     /// no board is in sketch mode.
     pub board_sketch: Option<super::BoardSketchSession>,
+    /// The board shown in 3D in the main window (#2390); `None` when the
+    /// main window shows boards flat.
+    pub board_3d: Option<super::Board3dSession>,
     /// Text typed into the selected board footprint's Designator or Value
     /// field and not yet applied with Enter (#1312).
     pub pcb_footprint_draft: Option<crate::app::handlers::pcb_footprint_text::PcbFootprintDraft>,

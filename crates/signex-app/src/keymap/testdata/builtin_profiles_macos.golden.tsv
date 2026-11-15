@@ -81,6 +81,7 @@ altium	bind	Global	⇧G	command:cycle_snap_grid_backward
 altium	bind	Pcb	*	command:next_signal_layer
 altium	bind	Pcb	+	command:next_layer
 altium	bind	Pcb	"-"	command:prev_layer
+altium	bind	Pcb	3	command:view_board_3d
 altium	bind	Pcb	P F	command:place_board_fill
 altium	bind	Pcb	P R	command:place_board_region
 altium	bind	Pcb	P T	command:place_board_track
@@ -329,6 +330,7 @@ altium	hint	-	-	view_rotate
 altium	hint	-	-	view_rotate_ccw
 altium	hint	-	-	view_rotate_180
 altium	hint	-	-	view_rotate_reset
+altium	hint	-	3	view_board_3d
 altium	hint	-	-	toggle_layers_panel
 altium	hint	-	-	new_pcb_document
 altium	hint	-	-	board_sketch
@@ -433,6 +435,7 @@ classic	bind	Global	~	command:clear_net_highlighting
 classic	bind	Pcb	*	command:next_signal_layer
 classic	bind	Pcb	+	command:next_layer
 classic	bind	Pcb	"-"	command:prev_layer
+classic	bind	Pcb	3	command:view_board_3d
 classic	bind	Pcb	⇧*	command:next_signal_layer
 classic	bind	Pcb	⇧+	command:next_layer
 classic	bind	Pcb	⇧S	command:toggle_single_layer_mode
@@ -677,6 +680,7 @@ classic	hint	-	-	view_rotate
 classic	hint	-	-	view_rotate_ccw
 classic	hint	-	-	view_rotate_180
 classic	hint	-	-	view_rotate_reset
+classic	hint	-	3	view_board_3d
 classic	hint	-	-	toggle_layers_panel
 classic	hint	-	-	new_pcb_document
 classic	hint	-	-	board_sketch

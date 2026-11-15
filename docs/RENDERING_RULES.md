@@ -358,6 +358,65 @@ single-layer visibility), `pcb_geom::text::tests`,
 `pcb_canvas::board_text::tests`, regression
 `pcb_component_properties::{the_canvas_draws_the_designator_until_the_eye_hides_it, a_flip_puts_the_designator_mirrored_on_the_bottom_overlay}`.
 
+## board-3d — Board 3D view (#2390)
+
+View ▸ 3D View (`view_board_3d`, key `3` on a board) shows the board in view
+in 3D in the main window; the same command, the bar's 2D button or `3` again
+shows it flat. Undocked board windows stay flat. It is view state like pan
+and zoom: no board command, no undo step, no dirty mark.
+
+**Frame.** Millimetres, right-handed, z up out of the top face: a board
+point `(x, y)` (y down, as the flat view draws it) is `(x, -y)`. The bottom
+face is at z = 0, the top face at z = board thickness (the default
+`PCB_DEFAULT_THICKNESS_MM` when the board has none). The Top viewpoint shows
+the board as the flat view does; Bottom mirrors it left to right.
+
+**Lowering** (`signex_renderer::board3d::build_board_scene`, one indexed
+mesh, `signex_gfx::scene3d::Scene3d`):
+
+- **Board.** The outline extruded to the thickness, with every drill hole
+  (pads, vias), cutout and mounting hole that lies inside it cut through;
+  hidden layers do not close a hole. A board with no outline gets the box
+  round its copper, 1 mm wider each side. Faces in the solder mask colour,
+  edge and hole walls a darker shade of it.
+- **Copper** comes from the same `PcbSnapshot` the flat view draws, so a
+  hidden layer is hidden in 3D too: top copper on the top face, bottom
+  copper on the bottom face, vias and through-hole pads on both, inner
+  copper not drawn. Copper sits 0.035 mm (1 oz) off its face, zones lowest,
+  then tracks, then pads and vias, so nothing fights in the depth buffer.
+  Silkscreen waits for the board graphics lowering (#2387).
+- **Parts.** One per footprint whose face's 3D Body layer is shown. The
+  model is the library footprint's (`library_ref`), read off the update
+  thread: its attached model file (`step/<hash>.step`; a `.wrl` or `.vrml`
+  name reads VRML), in the file's units taken as mm, the model's y up the
+  board, turned by the attachment's x, y, z angles and moved by its offset;
+  else its 3D Body (outline, height, offset, colours). A footprint with no
+  library footprint, or one that could not be read (Messages says why), is
+  its body box (`pcb_geom::footprint_body`) extruded to its component height
+  (1 mm when unset). Parts are placed by `pcb_geom::Placement`; a bottom part
+  hangs below the bottom face, x mirrored and z flipped, which turns it over.
+  The component's body opacity scales its alpha.
+
+**Camera** (`signex_gfx::camera3d::OrbitCamera`): perspective, orbiting a
+target. Left drag turns it, right or middle drag or Shift left drag slides
+it, the wheel zooms; Top, Bottom, Front, Left, Right and Angled look from
+there and frame the board; Fit and View ▸ Fit All frame it from where it is
+seen. Entering the view looks from the top, framed.
+
+**Selection** is the flat view's: a click casts a ray and selects the
+footprint of the nearest part it meets before the board (on the board or on
+nothing it clears the selection), and selected footprints are washed in the
+selection colour.
+
+**GPU.** `signex_gfx::pipeline::mesh::MeshPipeline` through iced's shader
+widget (`board_3d_shader`), in its own render pass with its own depth buffer
+over the board canvas background; flat shading from the face's slope, both
+faces lit by a head light. The mesh uploads only when its generation
+changes.
+
+Checks: `signex_gfx::scene3d::tests`, `signex_gfx::camera3d::tests`,
+`signex_renderer::board3d::tests`, regression `pcb_board_3d`.
+
 ## What this document is *not*
 
 - **Not** a reverse-engineering of any third-party EDA tool's

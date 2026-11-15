@@ -43,6 +43,7 @@ impl Signex {
                     app.apply_view_rotation(Some(window), event)
                 })
             }
+            PcbMsg::Board3d(event) => self.handle_board_3d(event),
             PcbMsg::Sketch(event) => self.handle_board_sketch(event),
             PcbMsg::Reannotate(msg) => self.dispatch_board_reannotate_message(msg),
             PcbMsg::BackAnnotate(msg) => self.dispatch_back_annotate_message(msg),

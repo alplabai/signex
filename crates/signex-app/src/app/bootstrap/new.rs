@@ -708,6 +708,7 @@ impl Signex {
                 pcb_drc: Default::default(),
                 cross_select: Default::default(),
                 board_sketch: None,
+                board_3d: None,
                 pcb_footprint_draft: None,
                 pcb_component: Default::default(),
                 pcb_primitive: Default::default(),

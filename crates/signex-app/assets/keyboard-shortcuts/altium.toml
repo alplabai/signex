@@ -165,7 +165,8 @@ context = "global"
 
 # The board view (PCB tabs only): `+` steps to the next layer of the board,
 # `*` to the next signal layer,
-# `-` to the previous layer; Shift+S turns single-layer mode on or off. A
+# `-` to the previous layer; Shift+S turns single-layer mode on or off; `3`
+# shows the board in 3D or flat again. A
 # shifted `+` or `*` is its own stroke on a US layout.
 [[keyboard_shortcuts.sections]]
 context = "pcb"
@@ -176,6 +177,7 @@ context = "pcb"
 "*" = "next_signal_layer"
 "Shift+*" = "next_signal_layer"
 "-" = "prev_layer"
+"3" = "view_board_3d"
 "P F" = "place_board_fill"
 "P R" = "place_board_region"
 "P T" = "place_board_track"

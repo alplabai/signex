@@ -1205,6 +1205,11 @@
     "category": "pcb_sync"
   },
   {
+    "id": "view_board_3d",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "view_rotate",
     "group": "Pcb",
     "category": "view"

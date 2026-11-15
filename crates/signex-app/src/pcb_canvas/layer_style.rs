@@ -158,6 +158,52 @@ fn technical_colour(canvas: &CanvasColors, layer: TechnicalLayer) -> ThemeColor 
     }
 }
 
+/// How much darker the board's edge is than its mask in 3D.
+const BOARD_3D_EDGE_SHADE: f32 = 0.55;
+/// How strongly a selected part is washed in the selection colour in 3D.
+const BOARD_3D_HIGHLIGHT_ALPHA: f32 = 0.45;
+
+/// The colours of the board 3D view (#2390), from this palette: the solder
+/// mask over the faces (opaque), its darker shade on the edge, the copper
+/// and Multi-Layer colours, and the 3D Body layer for a part with no colour
+/// of its own.
+pub fn board_3d_colors() -> signex_renderer::board3d::Board3dColors {
+    let rgba = |c: Color| [c.r, c.g, c.b, c.a];
+    let mask = Color {
+        a: 1.0,
+        ..board_layer_colour(PcbLayer::Technical(TechnicalLayer::SolderMaskTop))
+    };
+    let edge = Color {
+        r: mask.r * BOARD_3D_EDGE_SHADE,
+        g: mask.g * BOARD_3D_EDGE_SHADE,
+        b: mask.b * BOARD_3D_EDGE_SHADE,
+        a: 1.0,
+    };
+    signex_renderer::board3d::Board3dColors {
+        mask: rgba(mask),
+        edge: rgba(edge),
+        top_copper: rgba(board_layer_colour(PcbLayer::Copper(CopperLayer::Top))),
+        bottom_copper: rgba(board_layer_colour(PcbLayer::Copper(CopperLayer::Bottom))),
+        multi_layer: rgba(multi_layer_colour()),
+        body: rgba(board_layer_colour(PcbLayer::Technical(
+            TechnicalLayer::Body3dTop,
+        ))),
+    }
+}
+
+/// The wash over a selected part in the board 3D view: the selection slot.
+pub fn board_3d_highlight() -> [f32; 4] {
+    let [r, g, b, _] = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors())
+        .color(ColorSlot::Selection);
+    [r, g, b, BOARD_3D_HIGHLIGHT_ALPHA]
+}
+
+/// The board 3D view's background: the board canvas's.
+pub fn board_3d_background() -> Color {
+    let c = crate::styles::board_canvas_colors().background;
+    Color::from_rgba8(c.r, c.g, c.b, f32::from(c.a) / 255.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

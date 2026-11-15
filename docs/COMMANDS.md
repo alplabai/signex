@@ -313,6 +313,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `toggle_origin_marker` | Show or hide the board origin marker | view | — | — |
 | `toggle_ratsnest` | Show or hide the ratsnest | view | — | — |
 | `toggle_single_layer_mode` | Draw only the active layer, or every layer again | view | `Shift+S` | `Shift+S` |
+| `view_board_3d` | Show the board in 3D, or flat again | view | `3` | `3` |
 | `view_rotate` | Rotate the board view clockwise | view | — | — |
 | `view_rotate_180` | Rotate the board view 180° | view | — | — |
 | `view_rotate_ccw` | Rotate the board view 90° counter-clockwise | view | — | — |

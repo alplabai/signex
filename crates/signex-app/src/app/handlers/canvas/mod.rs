@@ -268,6 +268,10 @@ impl Signex {
                 self.clear_active_camera_caches();
             }
             CanvasEvent::FitAll => {
+                // The board in 3D frames itself (#2390).
+                if self.fit_board_3d() {
+                    return Task::none();
+                }
                 if self.has_active_schematic() {
                     self.interaction_state.active_canvas_mut().fit_to_content();
                 } else if self.has_active_pcb() {

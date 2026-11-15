@@ -7,6 +7,7 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod agent_edits;
+mod board_3d;
 mod board_project;
 mod board_sketch;
 mod case_fold;
@@ -59,6 +60,7 @@ mod window_sizes;
 mod window_tab;
 
 pub use agent_edits::AgentEdits;
+pub use board_3d::{Board3dSession, BuiltScene};
 pub use board_sketch::BoardSketchSession;
 pub use case_fold::CaseFold;
 pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
