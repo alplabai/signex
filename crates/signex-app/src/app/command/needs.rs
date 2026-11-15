@@ -260,7 +260,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "move_object" => Needs::MoveObject,
         "flip_selection" => Needs::PcbPlacement,
         "change_footprint" => Needs::SwapFootprints,
-        "remove_last_vertex" => Needs::VertexTarget,
+        "remove_last_vertex" | "undo_last_segment" => Needs::VertexTarget,
         "paste_array"
         | "repeat_last_item"
         | "rubber_stamp_copy"
