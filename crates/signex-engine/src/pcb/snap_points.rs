@@ -95,7 +95,8 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
         .graphics
         .iter()
         .filter(|_| every_layer)
-        .filter_map(|g| Some((g.start?, g.end?)).filter(|_| g.center.is_none()))
+        .filter(|g| g.center.is_none())
+        .filter_map(|g| Some((g.start?, g.end?)))
         .chain(tracks.iter().copied())
         .collect();
     if wants(SnapObject::TrackLines) {
