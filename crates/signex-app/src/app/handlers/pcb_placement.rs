@@ -85,6 +85,7 @@ impl Signex {
         });
         let window = self.interaction_state.acting_window;
         let carry = PcbCarry::new(CarryKind::Move, path, window, footprints);
+        self.interaction_state.pcb_tool = None;
         self.interaction_state.pcb_carry = Some(carry);
         // While a Move waits for its clicks, a press never starts a drag.
         self.refresh_pcb_highlight();
@@ -137,17 +138,33 @@ impl Signex {
         }
     }
 
-    /// A drag of the selected footprints reached `to`: preview it.
-    pub(crate) fn pcb_footprints_dragged(&mut self, from: Point, to: Point) {
+    /// A drag pressed at `from` reached `to`: preview it. A press on the
+    /// selection carries it; a press on an unselected footprint selects and
+    /// carries that one (#2358).
+    pub(crate) fn pcb_footprints_dragged(&mut self, from: Point, to: Point, tolerance_mm: f64) {
+        self.follow_pcb_drag(from, to, Some(tolerance_mm));
+    }
+
+    /// Start the drag pressed at `from`, unless it is under way, and follow
+    /// it to `to`. With `pick` (the press's reach) the press picks what it
+    /// carries; without, as for a drop whose drag never arrived, it carries
+    /// the selection only, so a release left over from an ended drag never
+    /// picks anything up.
+    fn follow_pcb_drag(&mut self, from: Point, to: Point, pick: Option<f64>) {
         // A drag is one press: a carry from another press (a release that
         // never arrived) is replaced, never reused for this selection.
         let same_press = self
             .live_carry(CarryKind::Drag)
             .is_some_and(|carry| carry.anchor == Some(from));
         if !same_press {
-            let mut footprints = self.pcb_selected_footprints();
             let Some(path) = self.active_tab_path() else {
                 return;
+            };
+            let mut footprints = match pick {
+                Some(reach) => self
+                    .with_pcb_selection(|state, board| state.grab_for_drag(board, from, reach))
+                    .unwrap_or_default(),
+                None => self.pcb_selected_footprints(),
             };
             // A locked footprint refuses when the drag starts. The press
             // then carries nothing, so its later moves neither repeat the
@@ -170,7 +187,7 @@ impl Signex {
 
     /// The drag was released at `to`: move as one step.
     pub(crate) fn pcb_footprints_dropped(&mut self, from: Point, to: Point) {
-        self.pcb_footprints_dragged(from, to);
+        self.follow_pcb_drag(from, to, None);
         self.drop_pcb_carry(from, to);
     }
 
@@ -278,7 +295,14 @@ impl Signex {
         else {
             return;
         };
-        let delta = carry_delta(board, &carry.footprints, from, to);
+        let delta = carry_delta(
+            board,
+            &carry.footprints,
+            from,
+            to,
+            &self.ui_state.pcb_snap,
+            self.pcb_active_layer(),
+        );
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
             && carry.delta != delta
         {
@@ -301,8 +325,16 @@ impl Signex {
             self.end_pcb_carry();
             return;
         }
+        let active = self.pcb_active_layer();
         let built = self.active_pcb().map(|board| {
-            let delta = carry_delta(board, &carry.footprints, from, to);
+            let delta = carry_delta(
+                board,
+                &carry.footprints,
+                from,
+                to,
+                &self.ui_state.pcb_snap,
+                active,
+            );
             placement::move_commands(board, &carry.footprints, delta)
         });
         self.end_pcb_carry();
@@ -313,7 +345,7 @@ impl Signex {
 
     /// Run a built placement edit on the board in view as one step, or say
     /// why not. Whether the board changed.
-    fn run_placement(
+    pub(crate) fn run_placement(
         &mut self,
         what: &str,
         built: Result<Vec<BoardCommand>, PlacementRefusal>,
@@ -359,6 +391,14 @@ pub(crate) struct PcbTargets {
     pub placeable: bool,
     /// The selection names something to delete and no locked footprint.
     pub deletable: bool,
+    /// The selection names something Copy carries (#2361).
+    pub copyable: bool,
+    /// The clipboard holds board objects to paste (#2361).
+    pub pasteable: bool,
+    /// A library part is on the cursor, for Space and the flip (#2364).
+    pub part_in_hand: bool,
+    /// A track run is being drawn, for Space and Shift+Space (#2373).
+    pub routing: bool,
 }
 
 impl Signex {
@@ -388,23 +428,41 @@ impl Signex {
         let Some(board) = board else {
             return PcbTargets::default();
         };
+        let part_in_hand = self
+            .interaction_state
+            .pcb_carry
+            .as_ref()
+            .is_some_and(|c| c.kind == CarryKind::Place && c.is_for(path.as_deref(), undocked));
+        let routing = self
+            .interaction_state
+            .pcb_tool
+            .as_ref()
+            .is_some_and(|s| s.is_routing() && s.is_for(path.as_deref(), undocked));
         let selection = state
             .filter(|s| s.document().is_some() && s.document() == path.as_deref())
             .map(|s| s.selection());
+        let pasteable = self.interaction_state.pcb_clipboard.is_some();
         let Some(selection) = selection.filter(|s| !s.is_empty()) else {
             return PcbTargets {
                 shown: true,
+                pasteable,
+                part_in_hand,
+                routing,
                 ..PcbTargets::default()
             };
         };
         let footprints = selection.footprints();
         let unlocked = placement::editable_footprints(board, &footprints).is_ok();
+        let copyable = !deletable_items(selection).is_empty();
         PcbTargets {
             shown: true,
             any: true,
             placeable: unlocked,
-            deletable: (footprints.is_empty() || unlocked)
-                && !deletable_items(selection).is_empty(),
+            deletable: (footprints.is_empty() || unlocked) && copyable,
+            copyable,
+            pasteable,
+            part_in_hand,
+            routing,
         }
     }
 }

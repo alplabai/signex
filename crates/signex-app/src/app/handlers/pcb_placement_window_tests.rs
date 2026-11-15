@@ -112,6 +112,18 @@ fn click(x: f64, y: f64) -> PcbCanvasMsg {
     }
 }
 
+fn dragged(from: Point, to: Point) -> PcbCanvasMsg {
+    PcbCanvasMsg::FootprintDragged {
+        from,
+        to,
+        tolerance_mm: 0.05,
+    }
+}
+
+fn dropped(from: Point, to: Point) -> PcbCanvasMsg {
+    PcbCanvasMsg::FootprintDropped { from, to }
+}
+
 fn in_window(app: &mut Signex, window: iced::window::Id, msg: PcbCanvasMsg) {
     let _ = app.update(Message::Pcb(PcbMsg::CanvasInWindow { window, msg }));
 }
@@ -140,11 +152,7 @@ fn escape_in_a_board_window_ends_its_drag_so_the_release_moves_nothing() {
     let mut rig = rig();
     in_window(&mut rig.app, rig.window, click(10.0, 10.0));
     let (from, to) = (Point::new(10.0, 10.0), Point::new(15.0, 10.0));
-    in_window(
-        &mut rig.app,
-        rig.window,
-        PcbCanvasMsg::FootprintDragged { from, to },
-    );
+    in_window(&mut rig.app, rig.window, dragged(from, to));
     assert!(rig.app.interaction_state.pcb_carry.is_some());
     let before = live(&rig.app, &rig.a);
 
@@ -152,11 +160,7 @@ fn escape_in_a_board_window_ends_its_drag_so_the_release_moves_nothing() {
     assert!(rig.app.interaction_state.pcb_carry.is_none());
     assert!(!rig.app.interaction_state.pcb_canvases[&rig.window].is_carrying());
     assert!(window_selection_is_empty(&rig));
-    in_window(
-        &mut rig.app,
-        rig.window,
-        PcbCanvasMsg::FootprintDropped { from, to },
-    );
+    in_window(&mut rig.app, rig.window, dropped(from, to));
     assert_eq!(live(&rig.app, &rig.a), before, "U1 stays where it was");
 }
 
@@ -294,16 +298,13 @@ fn a_new_drag_never_reuses_a_carry_left_by_another_press() {
     let mut rig = rig();
     show_in_main(&mut rig.app, &rig.a.clone());
     in_main(&mut rig.app, click(10.0, 10.0));
-    let stale = PcbCanvasMsg::FootprintDragged {
-        from: Point::new(10.0, 10.0),
-        to: Point::new(12.0, 10.0),
-    };
+    let stale = dragged(Point::new(10.0, 10.0), Point::new(12.0, 10.0));
     in_main(&mut rig.app, stale);
     // The release never arrived; U1 is no longer selected.
     in_main(&mut rig.app, click(20.0, 25.0));
     let before = live(&rig.app, &rig.a);
     let (from, to) = (Point::new(20.0, 25.0), Point::new(25.0, 25.0));
-    in_main(&mut rig.app, PcbCanvasMsg::FootprintDragged { from, to });
-    in_main(&mut rig.app, PcbCanvasMsg::FootprintDropped { from, to });
+    in_main(&mut rig.app, dragged(from, to));
+    in_main(&mut rig.app, dropped(from, to));
     assert_eq!(live(&rig.app, &rig.a), before, "U1 is not carried along");
 }

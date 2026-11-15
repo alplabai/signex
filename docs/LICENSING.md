@@ -1,19 +1,42 @@
 # Licensing
 
-Signex is **Apache-2.0**. The main repository contains no GPL-derived
-code. KiCad migration support — when a user has existing KiCad files —
-ships as a separate **GPL-3.0-or-later** companion tool,
+Signex is source-available under **FSL-1.1-ALv2** (Functional Source
+License 1.1, Apache 2.0 Future License). The main repository contains no
+GPL-derived code. KiCad migration support — when a user has existing KiCad
+files — ships as a separate **GPL-3.0-or-later** companion tool,
 [signex-kicad-import](https://github.com/alplabai/signex-kicad-import),
 distributed independently.
 
-This document explains the two-repo split, the audit trail behind it,
-and what it means for users and contributors.
+This document explains the Signex licence, the two-repo split, the audit
+trail behind it, and what it means for users and contributors.
+
+## The Signex licence (FSL-1.1-ALv2)
+
+- **Allowed:** any use, including companies designing and selling their
+  own products with Signex. Designs you make with Signex are yours.
+- **Not allowed:** a Competing Use. As the licence defines it, that is
+  making Signex available to others in a commercial product or service
+  that substitutes for Signex (or for a product or service Alp Lab offers
+  using it), or that offers the same or substantially similar
+  functionality. Free, non-commercial redistribution is allowed.
+- **Later:** each release becomes Apache-2.0 two years after it ships.
+
+Signex moved from Apache-2.0 to FSL-1.1-ALv2 in November 2026 (issue
+#2344). Releases published before the change stay Apache-2.0. The full
+text is in [`LICENSE`](../LICENSE).
+
+Contributions made before #2344 were licensed under Apache-2.0, and those
+grants remain in effect: that code stays available under Apache-2.0 to
+everyone who received it. The project as a whole is distributed under
+FSL-1.1-ALv2. A copy of the Apache-2.0 text, which code received under it
+must keep, is in [`LICENSE-APACHE`](../LICENSE-APACHE); [`NOTICE`](../NOTICE)
+records the same.
 
 ## TL;DR
 
 | Repository | License | Contains |
 |---|---|---|
-| `alplabai/signex` (this repo) | **Apache-2.0** | Native Signex EDA tooling. The schematic editor and the symbol, footprint and library editors ship today; the PCB editor, 3D viewer, simulation and plugin system are on the [roadmap](ROADMAP.md). Reads/writes `.snxsch`/`.snxpcb`/`.snxsym`/`.snxfpt`/`.snxlib`/`.snxprj` natively. |
+| `alplabai/signex` (this repo) | **FSL-1.1-ALv2** (each release becomes Apache-2.0 after two years) | Native Signex EDA tooling. The schematic editor and the symbol, footprint and library editors ship today; the PCB editor, 3D viewer, simulation and plugin system are on the [roadmap](ROADMAP.md). Reads/writes `.snxsch`/`.snxpcb`/`.snxsym`/`.snxfpt`/`.snxlib`/`.snxprj` natively. |
 | `alplabai/signex-kicad-import` (separate) | **GPL-3.0-or-later** | One-way converter from KiCad files (`.kicad_sch`/`.kicad_pcb`/`.kicad_sym`/`.kicad_pro`) to Signex's native formats. Optional install. |
 
 For users:
@@ -24,13 +47,14 @@ For users:
   `.snxprj` in Signex from then on.
 
 For redistributors and embedders:
-- Signex Community itself has zero GPL transitive dependencies. You can
-  embed, link against, or redistribute it under Apache-2.0 without
-  inheriting any reciprocal-license obligations.
+- Signex Community itself has zero GPL transitive dependencies, so its
+  dependencies add no copyleft obligations. Signex itself, and any copy,
+  modification or derivative of it, stays under FSL-1.1-ALv2 (any purpose
+  other than a Competing Use) until that release converts to Apache-2.0.
 - The companion converter is GPL-3.0-or-later and is **not** linked into
   Signex Community. Users install it separately if they need KiCad
-  migration. Apache consumers of Signex see no GPL aggregation in their
-  build closure.
+  migration. Consumers of Signex see no GPL aggregation in their build
+  closure.
 
 ## Why the split?
 
@@ -126,7 +150,7 @@ asked to refactor, write new code, or design new types.
 
 This matters for the derivation question. Copyright derivation
 attaches at the point of authorship — what the author had in front of
-them when producing the work. An LLM asked to refactor an Apache-2.0
+them when producing the work. An LLM asked to refactor a non-GPL
 codebase, given only that codebase as input, produces output derived
 from that input. Training-data exposure is a separate concern that
 does not by itself create a derivation chain to any specific GPL
@@ -152,15 +176,25 @@ modern code-LLMs at all.
 ## Contributing
 
 Patches to the main `signex` repo must not contain KiCad-derived code.
-The repository is Apache-2.0 clean; KiCad I/O lives in the GPL-3.0
-companion repo.
+The repository is clean-room; KiCad I/O lives in the GPL-3.0 companion
+repo.
+
+Contributions are made under Apache-2.0 (inbound): by submitting a pull
+request, you license your contribution to Alp Lab AB and to every
+recipient of Signex under the Apache License, Version 2.0. Signex is
+distributed (outbound) under FSL-1.1-ALv2. The inbound grant is Apache-2.0
+rather than FSL so that Alp Lab can ship a contribution in every Signex
+edition, including Signex Pro. The Contributor License Agreement, once
+published, replaces this. Signex's non-compete term applies to Signex
+itself; it does not widen what a contribution may bring in. Third-party
+code must still be permissive.
 
 Opening a PR affirms **no license-gated source files** were used —
-nothing under GPL/copyleft or otherwise Apache-incompatible. A
+nothing under GPL/copyleft or otherwise incompatible. A
 contribution that did use one adds a line `License-gated sources: yes`
 and belongs in signex-kicad-import instead.
 
-### What "otherwise Apache-incompatible" means
+### What "otherwise incompatible" means
 
 This document is the canonical statement of that phrase. It was
 undefined until issue #305, and the omission was expensive for someone
@@ -194,7 +228,7 @@ the source you worked from, not the distance between the outputs.
 | GPL / copyleft | GPL-2.0/3.0, AGPL, LGPL | Reciprocal terms relicense Signex. LGPL included — a binding is a link. Copyleft solvers are reached across a process boundary only; see [EXTERNAL_TOOLS.md §4](EXTERNAL_TOOLS.md#4-the-gpl--lgpl-bridge-boundary), the dependency-side counterpart to this section. |
 | **Any Creative Commons licence** | CC BY, CC BY-SA, CC BY-NC | CC is not a software licence — Creative Commons states this itself and recommends against using CC for code. CC BY's attribution terms do not compose with Apache-2.0's `NOTICE` model; BY-SA is copyleft; BY-NC adds a field-of-use bar. CC0 is a public-domain dedication rather than a licence in this sense and is fine. |
 | Non-commercial / no-resale / any field-of-use restriction | CC BY-NC, "you may not resell this tool", "personal use only" | **Signex Pro is sold from this tree.** See below. |
-| Source-available / open-core / "fair source" | BUSL, SSPL, Elastic, Commons Clause, PolyForm | Use restrictions and/or reciprocal terms; not open source. |
+| Source-available / open-core / "fair source" | BUSL, SSPL, Elastic, Commons Clause, PolyForm, another project's FSL | Use restrictions and/or reciprocal terms that bind Alp Lab too and would block the Apache-2.0 conversion. |
 | Text, tables, and figures of paywalled standards | IPC, IEC, JEDEC, ISO | The **document** is copyrighted. The **formulas and physical facts** in it are facts and are not — implementing the maths from your own understanding is fine and welcome. Copying prose, tables, figure geometry, or worked examples is not, including via an LLM. |
 
 MIT, BSD, ISC, Zlib, Unlicense, CC0 and Apache-2.0 are compatible.
@@ -202,12 +236,11 @@ Anything on neither list is a question worth asking before it is a PR
 worth writing.
 
 **Why a field-of-use restriction is fatal to this repo specifically.**
-Signex Community is Apache-2.0 and free. **Signex Pro is a paid
+Signex Community is FSL-1.1-ALv2 and free. **Signex Pro is a paid
 commercial edition built from the same source tree.** A "non-commercial"
 or "no resale" term on any code under `crates/` would be breached the day
-Pro ships, and would void the unencumbered Apache-2.0 surface promised to
-redistributors and embedders in the TL;DR above — the same promise that
-motivated the two-repo split in the first place. Many projects could
+Pro ships, and would void the Apache-2.0 conversion promised to every
+user two years after each release. Many projects could
 accept such a term. This one cannot. That is a fact about our business
 model, not a criticism of the licence or of anyone who chose it.
 
@@ -219,7 +252,7 @@ to finished work.
 ### LLM provenance
 
 LLMs that have been trained on KiCad source CAN contribute to the GPL
-companion repo. They should NOT contribute to the Apache main repo. If
+companion repo. They should NOT contribute to the main repo. If
 your LLM has consulted KiCad source, route the work to
 signex-kicad-import. The same rule generalises: if you or your assistant
 worked from the source of *any* project in an incompatible class above,
@@ -265,6 +298,9 @@ structure is a healthier outcome for both projects than the original
   remaining sub-releases (v0.10.1–v0.10.9) build the SCH Library
   editor, Pin Properties dialog, drawing tools, multi-symbol
   containers, and Component Editor on top of the same foundations.
+- **November 2026** (issue #2344) — Signex relicensed from Apache-2.0
+  to FSL-1.1-ALv2. Releases published before the change stay
+  Apache-2.0; the clean-room invariants above are unchanged.
 
 The v0.7.0–v0.8.0 binaries remain available on GitHub Releases for
 historical use but are flagged with the licensing notice. Please prefer

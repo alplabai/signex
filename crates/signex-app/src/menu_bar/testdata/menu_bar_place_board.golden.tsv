@@ -1,0 +1,16 @@
+# Place on a board (#2360): the `pcb` variant's Place rows.
+# path	kind	label	command_id	shortcut	action	enabled
+Place/Component	stub	Component	-	-	-	0
+Place/Pad	stub	Pad	-	-	-	0
+Place/Via	item	Via	-	-	PlaceBoardVia	1
+Place/Interactive Routing	stub	Interactive Routing	-	-	-	0
+Place/Track	item	Track	-	-	PlaceBoardTrack	1
+Place/Arc	stub	Arc	-	-	-	0
+Place/Fill	item	Fill	-	-	PlaceBoardFill	1
+Place/Solid Region	item	Solid Region	-	-	PlaceBoardRegion	1
+Place/Polygon Pour	stub	Polygon Pour	-	-	-	0
+Place/String	stub	String	-	-	-	0
+Place/Dimension	stub	Dimension	-	-	-	0
+Place/Keepout	item	Keepout	-	-	PlaceBoardKeepout	1
+Place/---	separator	-	-	-	-	-
+Place/Board Sketch	item	Board Sketch	-	-	BoardSketch	1

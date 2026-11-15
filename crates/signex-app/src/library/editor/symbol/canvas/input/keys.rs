@@ -1,7 +1,7 @@
 //! Keyboard handling — the `KeyPressed` branch of `Program::update`,
 //! extracted verbatim. Escape cancels an in-progress multi-click draw;
 //! Delete/Backspace, Home, Ctrl+A, Space (rotate), and undo/redo keep
-//! identical key matching and publish sites.
+//! their publish sites; letters match through `keymap::shortcut_char`.
 
 use super::super::*;
 use iced::widget::canvas;
@@ -12,8 +12,11 @@ impl SymbolCanvas<'_> {
         &self,
         state: &mut CanvasState,
         key: &iced::keyboard::Key,
+        physical: iced::keyboard::key::Physical,
         modifiers: &iced::keyboard::Modifiers,
     ) -> Option<canvas::Action<CanvasAction>> {
+        // Letters match on any layout (#2095): Cyrillic `я` is `z`.
+        let letter = crate::keymap::shortcut_char(key, physical);
         match key {
             iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape) => {
                 // Esc drops the in-flight Polygon stash — no commit,
@@ -88,9 +91,12 @@ impl SymbolCanvas<'_> {
             iced::keyboard::Key::Named(iced::keyboard::key::Named::Home) => {
                 Some(canvas::Action::publish(CanvasAction::Fit))
             }
-            iced::keyboard::Key::Character(c) if c.as_str() == "a" && modifiers.command() => Some(
-                canvas::Action::publish(CanvasAction::Select(SymbolSelection::All)).and_capture(),
-            ),
+            iced::keyboard::Key::Character(_) if letter == Some('a') && modifiers.command() => {
+                Some(
+                    canvas::Action::publish(CanvasAction::Select(SymbolSelection::All))
+                        .and_capture(),
+                )
+            }
             // Space turns the selection counter-clockwise ON SCREEN and
             // Shift+Space clockwise (Altium convention, same as the
             // schematic). The rotate maths is y-up like the world and
@@ -126,15 +132,15 @@ impl SymbolCanvas<'_> {
                 )
             }
             // Undo: Ctrl+Z
-            iced::keyboard::Key::Character(c)
-                if c.as_str() == "z" && modifiers.command() && !modifiers.shift() =>
+            iced::keyboard::Key::Character(_)
+                if letter == Some('z') && modifiers.command() && !modifiers.shift() =>
             {
                 Some(canvas::Action::publish(CanvasAction::Undo).and_capture())
             }
             // Redo: Ctrl+Y  or  Ctrl+Shift+Z
-            iced::keyboard::Key::Character(c)
-                if (c.as_str() == "y" && modifiers.command())
-                    || (c.as_str() == "z" && modifiers.command() && modifiers.shift()) =>
+            iced::keyboard::Key::Character(_)
+                if (letter == Some('y') && modifiers.command())
+                    || (letter == Some('z') && modifiers.command() && modifiers.shift()) =>
             {
                 Some(canvas::Action::publish(CanvasAction::Redo).and_capture())
             }

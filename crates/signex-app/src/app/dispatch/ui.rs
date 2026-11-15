@@ -115,7 +115,9 @@ impl Signex {
                 }
             }
             UiMsg::WindowResized(w, h) => {
+                let before = self.canvas_bounds();
                 self.ui_state.window_size = (w, h);
+                self.follow_main_canvas_resize(before);
                 self.finish_update()
             }
             UiMsg::DragEnd(released_in) => {
@@ -130,6 +132,14 @@ impl Signex {
             }
             UiMsg::GridCycleBackward => {
                 let cycled = self.cycle_grid_size(false);
+                Task::batch([cycled, self.finish_update()])
+            }
+            UiMsg::FastGridPicked(index) => {
+                let picked = self.pick_fast_grid(index);
+                Task::batch([picked, self.finish_update()])
+            }
+            UiMsg::FastGridCycled => {
+                let cycled = self.cycle_fast_grid();
                 Task::batch([cycled, self.finish_update()])
             }
             UiMsg::GridPickerOpen => {
@@ -218,6 +228,11 @@ impl Signex {
             UiMsg::StatusBar(StatusBarRequest::CancelAltiumImport) => {
                 self.handle_altium_import_cancel();
                 Task::none()
+            }
+            // On a board the same key steps the Snapping mode (#2353).
+            UiMsg::ToggleSnapHotspots if self.has_active_pcb() => {
+                self.cycle_pcb_snapping();
+                self.finish_update()
             }
             UiMsg::ToggleSnapHotspots => {
                 self.ui_state.snap_hotspots = !self.ui_state.snap_hotspots;
@@ -384,7 +399,10 @@ impl Signex {
                 // with its reason in the Messages panel; the previous
                 // value is kept and the dialog stays open so the user can
                 // correct it (#972).
-                let step = match draft.as_ref().map(|s| validated_grid_step(&s.step_mm)) {
+                let step = match draft
+                    .as_ref()
+                    .map(|s| crate::numeric_field::validated_grid_step(&s.step_mm))
+                {
                     Some(Ok(step)) => Some(step),
                     Some(Err(reason)) => {
                         crate::diagnostics::log_warning(format!(
@@ -715,15 +733,5 @@ impl Signex {
             Ok(task) => task,
             Err(payload) => resume_unwind(payload),
         }
-    }
-}
-
-/// Parse a Grid Properties step field: it must be a finite number above
-/// zero. The error is the user-facing reason for the refusal.
-fn validated_grid_step(text: &str) -> Result<f64, String> {
-    match signex_types::numeric::parse_finite_f64(text) {
-        Ok(step) if step > 0.0 => Ok(step),
-        Ok(step) => Err(format!("{step} is not above zero")),
-        Err(err) => Err(err.to_string()),
     }
 }

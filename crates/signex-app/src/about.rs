@@ -9,7 +9,7 @@
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// SPDX identifier shown on the About card.
-pub const LICENSE_NAME: &str = "Apache-2.0";
+pub const LICENSE_NAME: &str = "FSL-1.1-ALv2";
 
 /// Repository root, from the crate manifest.
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");

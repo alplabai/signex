@@ -9,15 +9,19 @@
 mod command;
 pub(crate) mod design;
 mod execute;
+mod fix;
 mod new_pcb;
 mod state;
+pub(crate) mod table;
 mod target;
 mod update;
 
 pub(crate) use command::update_pcb_from_schematic;
 pub(crate) use design::DesignSnapshot;
+pub(crate) use new_pcb::new_board_path;
 pub use state::UpdatePcbState;
 pub(crate) use state::{BoardStatus, Phase, file_name};
+pub use table::{RowAction, RowFilter, TableGroup};
 pub(crate) use target::PcbSyncLabel;
 
 #[cfg(test)]
@@ -26,7 +30,7 @@ mod tests;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use signex_engine::pcb::eco::{EcoChangeList, EcoGroup, EcoKey};
+use signex_engine::pcb::eco::{EcoChangeList, EcoKey};
 
 use crate::app::state::ProjectId;
 
@@ -81,9 +85,33 @@ pub enum UpdatePcbMsg {
         key: EcoKey,
         on: bool,
     },
+    /// A group's tri-state box: tick or untick its open rows.
     GroupToggled {
-        group: EcoGroup,
+        group: TableGroup,
         on: bool,
+    },
+    /// A group's heading was clicked: fold or open it.
+    GroupFolded {
+        group: TableGroup,
+        folded: bool,
+    },
+    /// A summary chip was clicked: list only its rows, or every row again
+    /// when it was the chip in force.
+    FilterChipClicked(RowFilter),
+    ProblemsOnlyToggled(bool),
+    /// A row was clicked: Space now ticks it.
+    RowFocused(EcoKey),
+    /// Space: tick or untick the focused row.
+    FocusedRowToggled,
+    /// A problem row's Choose footprint...: the footprint picker opens for
+    /// its part.
+    ChooseFootprintRequested(EcoKey),
+    /// The footprint picker picked `footprint` for the part with anchor unit
+    /// `part` on placement `sheet`.
+    FootprintChosen {
+        sheet: signex_types::schematic::InstancePath,
+        part: uuid::Uuid,
+        footprint: signex_library::PrimitiveRef,
     },
     RefreshRequested,
     ValidateRequested,
@@ -101,8 +129,8 @@ pub enum UpdatePcbMsg {
     /// The no-board banner's Create PCB button.
     CreatePcbRequested,
     CloseRequested,
-    /// `new_pcb_document`: a new board for the project in view (`None`), or
-    /// for the project the Projects tree names.
+    /// `new_pcb_document`: open the New PCB setup dialog for the project in
+    /// view (`None`), or for the project the Projects tree names.
     NewPcbRequested(Option<ProjectId>),
     /// The disk check of the new board's path finished: `Ok(true)` (a file
     /// is there) and `Err` (the check failed) refuse it.
@@ -110,5 +138,8 @@ pub enum UpdatePcbMsg {
         project: ProjectId,
         path: PathBuf,
         exists: Result<bool, String>,
+        /// The rules the setup dialog or the command chose; `None`: the
+        /// project defaults.
+        rules: Option<signex_types::project::PcbDefaults>,
     },
 }

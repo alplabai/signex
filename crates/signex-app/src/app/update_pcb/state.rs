@@ -4,9 +4,10 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use signex_engine::pcb::eco::EcoChangeList;
+use signex_engine::pcb::eco::{EcoChangeList, EcoRow, GroupTicks};
 
 use super::design::DesignSnapshot;
+use super::table::{TableGroup, TableState};
 use crate::app::state::ProjectId;
 
 /// Where the change list is.
@@ -52,6 +53,8 @@ pub struct UpdatePcbState {
     pub(crate) list: Option<EcoChangeList>,
     /// The last Validate: `Ok` or why it refused.
     pub(crate) validation: Option<Result<(), String>>,
+    /// Filters, folds and the focused row of the table.
+    pub(crate) table: TableState,
     /// Libraries whose open failure was already logged: a recompute logs
     /// each once per dialog.
     pub(crate) logged_library_errors: std::collections::HashSet<PathBuf>,
@@ -79,6 +82,7 @@ impl UpdatePcbState {
             logged_library_errors: std::collections::HashSet::new(),
             list: None,
             validation: None,
+            table: TableState::default(),
         }
     }
 
@@ -125,6 +129,32 @@ impl UpdatePcbState {
     /// The last Validate: `Ok` or why it refused.
     pub fn validation(&self) -> Option<&Result<(), String>> {
         self.validation.as_ref()
+    }
+
+    /// The rows the table lists under its filters, in list order.
+    pub fn shown_rows(&self) -> Vec<&EcoRow> {
+        self.list
+            .iter()
+            .flat_map(|list| &list.rows)
+            .filter(|row| self.table.shows(row))
+            .collect()
+    }
+
+    /// The tick state of a table group.
+    pub fn group_ticks(&self, group: TableGroup) -> Option<GroupTicks> {
+        Some(super::table::group_ticks(self.list.as_ref()?, group))
+    }
+
+    /// Whether a table group is folded now.
+    pub fn is_folded(&self, group: TableGroup) -> bool {
+        self.list
+            .as_ref()
+            .is_some_and(|list| self.table.is_folded(list, group))
+    }
+
+    /// How many rows Execute applies now.
+    pub fn execute_count(&self) -> usize {
+        self.list.as_ref().map_or(0, super::table::applied_count)
     }
 
     /// Start a new worker job: results of earlier jobs are dropped.

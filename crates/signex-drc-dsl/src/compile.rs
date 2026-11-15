@@ -205,6 +205,7 @@ impl Checker<'_> {
 
     fn limits(&mut self, limits: &[LimitAst], target: Option<Target>) -> Vec<Limit> {
         let mut out: Vec<Limit> = Vec::new();
+        let mut kept: Vec<(&LimitAst, i64)> = Vec::new();
         for ast in limits {
             let Some(nm) = self.length(ast) else {
                 continue;
@@ -246,8 +247,24 @@ impl Checker<'_> {
                 continue;
             }
             out.push(limit);
+            kept.push((ast, nm));
         }
+        self.contradictions(&kept);
         out
+    }
+
+    /// Says a minimum above a maximum of the same field: no item can meet
+    /// both, so the rule is refused (#2335).
+    fn contradictions(&mut self, kept: &[(&LimitAst, i64)]) {
+        for &(min, min_nm) in kept.iter().filter(|(a, _)| a.bound == Bound::AtLeast) {
+            let above = kept.iter().find(|(max, max_nm)| {
+                max.bound == Bound::AtMost && max.field.text == min.field.text && *max_nm < min_nm
+            });
+            if let Some(&(max, _)) = above {
+                let msg = format!("{} is above {}", written(min), written(max));
+                self.error(&min.field.span, msg);
+            }
+        }
     }
 
     /// Says a limit of 0 (a minimum of 0 checks nothing, a maximum of 0
@@ -306,4 +323,14 @@ impl Checker<'_> {
             }
         }
     }
+}
+
+/// A limit as written: `width >= 0.3mm`.
+fn written(ast: &LimitAst) -> String {
+    let op = match ast.bound {
+        Bound::AtLeast => ">=",
+        Bound::AtMost => "<=",
+    };
+    let unit = ast.unit.as_ref().map_or("", |u| u.text.as_str());
+    format!("{} {op} {}{unit}", ast.field.text, ast.number.text)
 }

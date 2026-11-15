@@ -50,7 +50,7 @@ use crate::svg::{
 use colour::ColourMap;
 use embed::{FontUsage, REFS_PER_FONT, write_fonts};
 use font::{PdfFont, best_alias_for_text, normalize_pdf_text, text_advance_pt};
-use surface::PdfSurface;
+use surface::{PdfSurface, write_stroke_alpha_states};
 
 /// 1 mm in PDF points (1 pt = 1/72 inch).
 const MM_TO_PT: f64 = 72.0 / 25.4;
@@ -378,9 +378,9 @@ impl Exporter for PdfExporter {
             .collect::<Result<Vec<_>, _>>()?;
         let embedded = write_fonts(&mut pdf, &fonts, font_base)?;
 
-        for (idx, content_bytes) in contents.iter().enumerate() {
+        for (idx, content) in contents.iter().enumerate() {
             let content_ref = content_refs[idx];
-            pdf.stream(content_ref, content_bytes);
+            pdf.stream(content_ref, &content.bytes);
 
             // Create the page object referencing the content stream.
             let mut page = pdf.page(page_refs[idx]);
@@ -396,6 +396,7 @@ impl Exporter for PdfExporter {
                 font_dict.pair(Name(f.font.alias().as_bytes()), f.type0);
             }
             font_dict.finish();
+            write_stroke_alpha_states(&mut resources, &content.stroke_alphas);
             resources.finish();
 
             page.finish();

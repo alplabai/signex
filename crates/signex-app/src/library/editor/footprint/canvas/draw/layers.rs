@@ -83,8 +83,8 @@ pub(crate) fn draw_courtyard(
     if !i.visibility.get(FpLayer::EdgeCuts) {
         return;
     }
-    let edge_color = FpLayer::EdgeCuts.color_in(i.palette);
-    // Graphite draws the courtyard dashed; other themes keep it solid.
+    let edge_color = i.palette.courtyard_colour();
+    // The Graphite editor canvas draws the courtyard dashed; the rest solid.
     let dashed = i.palette.dashes_courtyard();
     let stroke = || Stroke {
         line_dash: if dashed {
@@ -119,6 +119,17 @@ pub(crate) fn draw_courtyard(
 
 /// Pads, last of the content layers so they sit on top.
 pub(crate) fn draw_pads(frame: &mut canvas::Frame, cam: &FootprintCanvasState, i: &LayerInput<'_>) {
+    draw_pad_bodies(frame, cam, i);
+    // Numbers last so no pad body covers a neighbour's number.
+    draw_pad_numbers(frame, cam, i);
+}
+
+/// The copper, holes and selection of the visible pads, without numbers.
+pub(crate) fn draw_pad_bodies(
+    frame: &mut canvas::Frame,
+    cam: &FootprintCanvasState,
+    i: &LayerInput<'_>,
+) {
     for (idx, pad) in i.pads.iter().enumerate() {
         if !i.visibility.get(pad.primary_layer()) {
             continue;
@@ -126,7 +137,14 @@ pub(crate) fn draw_pads(frame: &mut canvas::Frame, cam: &FootprintCanvasState, i
         let is_selected = i.selected_pad == Some(idx) || i.selected_pads_extra.contains(&idx);
         draw_pad(frame, cam, pad, is_selected, i.palette);
     }
-    // Numbers last so no pad body covers a neighbour's number.
+}
+
+/// The numbers of the visible pads.
+pub(crate) fn draw_pad_numbers(
+    frame: &mut canvas::Frame,
+    cam: &FootprintCanvasState,
+    i: &LayerInput<'_>,
+) {
     for pad in i.pads {
         if i.visibility.get(pad.primary_layer()) {
             draw_pad_number(frame, cam, pad, i.pad_labels);

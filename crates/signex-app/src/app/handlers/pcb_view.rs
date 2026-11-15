@@ -8,8 +8,10 @@
 use std::path::{Path, PathBuf};
 
 use signex_i18n::{Localized, ids, t};
-use signex_renderer::pcb::{PcbLayerView, PcbSnapshot, board_copper_layers};
-use signex_types::pcb::PcbBoard;
+use signex_renderer::pcb::{
+    PcbLayerView, PcbSnapshot, board_copper_layers, board_layers, signal_layers,
+};
+use signex_types::pcb::{LayerDef, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use crate::app::state::WindowKind;
@@ -35,6 +37,15 @@ impl Signex {
             .get(path)
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// The active copper layer of the board in view; the top layer without
+    /// one, or while a non-copper layer is active. Object snapping on the
+    /// current layer reads it (#2353).
+    pub(crate) fn pcb_active_layer(&self) -> CopperLayer {
+        self.active_tab_path()
+            .and_then(|path| self.pcb_layer_view(&path).active().copper())
+            .unwrap_or(CopperLayer::Top)
     }
 
     /// The snapshot of `board` as the view of `path` shows it, without the
@@ -77,8 +88,8 @@ impl Signex {
         Some((path, self.active_pcb()?))
     }
 
-    /// The status bar pill of `window`: the active copper layer of the board
-    /// that window shows. No pill while every copper layer is hidden.
+    /// The status bar pill of `window`: the active layer of the board that
+    /// window shows. No pill while that layer is hidden.
     pub(crate) fn status_active_layer(
         &self,
         window: iced::window::Id,
@@ -93,26 +104,26 @@ impl Signex {
         let i18n = &self.ui_state.i18n;
         Some((
             t!(i18n, ids::PCB_STATUS_LAYER),
-            layer_style::copper_name(i18n, layer),
+            layer_style::layer_name(i18n, layer),
         ))
     }
 
     fn edit_pcb_view(
         &mut self,
         window: Option<iced::window::Id>,
-        edit: impl FnOnce(&mut PcbLayerView, &[CopperLayer]),
+        edit: impl FnOnce(&mut PcbLayerView, &[LayerDef]),
     ) {
         let Some((path, board)) = self.pcb_view_target(window) else {
             return;
         };
-        let copper = board_copper_layers(&board.layers);
+        let layers = board.layers.clone();
         let view = self
             .ui_state
             .pcb_layer_views
             .entry(path.clone())
             .or_default();
-        edit(view, &copper);
-        view.settle_active(&copper);
+        edit(view, &layers);
+        settle(view, &layers);
         self.redraw_pcb_view_of(&path);
         self.refresh_panel_ctx();
     }
@@ -131,16 +142,42 @@ impl Signex {
     }
 }
 
-/// What `event` changes in `view`; `copper` is the board's copper, top to bottom.
-fn apply_event(view: &mut PcbLayerView, copper: &[CopperLayer], event: PcbViewMsg) {
+/// A hidden active layer moves on: copper to the next shown copper layer,
+/// any other layer to the next shown layer of the board.
+fn settle(view: &mut PcbLayerView, layers: &[LayerDef]) {
+    let candidates = if view.active().is_copper() {
+        copper_layers(layers)
+    } else {
+        board_layers(layers)
+    };
+    view.settle_active(&candidates);
+}
+
+fn copper_layers(layers: &[LayerDef]) -> Vec<PcbLayer> {
+    board_copper_layers(layers)
+        .into_iter()
+        .map(PcbLayer::Copper)
+        .collect()
+}
+
+/// What `event` changes in `view`; `layers` is the board's stackup.
+fn apply_event(view: &mut PcbLayerView, layers: &[LayerDef], event: PcbViewMsg) {
     match event {
         PcbViewMsg::RatsnestVisibilityToggled => view.toggle_ratsnest(),
-        PcbViewMsg::ActiveLayerStepped { forward } => view.step_active(copper, forward),
-        PcbViewMsg::ActiveLayerPicked(layer) => view.set_active(layer),
-        PcbViewMsg::LayerVisibilityToggled(layer) => view.toggle_visibility(layer),
-        PcbViewMsg::ActiveLayerVisibilityToggled => {
-            view.toggle_visibility(PcbLayer::Copper(view.active()));
+        PcbViewMsg::OriginMarkerVisibilityToggled => view.toggle_origin_marker(),
+        PcbViewMsg::ActiveLayerStepped { forward } => {
+            view.step_active(&board_layers(layers), forward);
         }
+        PcbViewMsg::SignalLayerStepped { forward } => {
+            view.step_active(&signal_layers(layers), forward);
+        }
+        PcbViewMsg::ActiveLayerPicked(layer) => view.set_active(layer),
+        PcbViewMsg::SingleLayerModeToggled => view.toggle_single_layer(),
+        PcbViewMsg::LayerGroupVisibilitySet { group, visible } => {
+            view.set_group_visible(layers, group, visible);
+        }
+        PcbViewMsg::LayerVisibilityToggled(layer) => view.toggle_visibility(layer),
+        PcbViewMsg::ActiveLayerVisibilityToggled => view.toggle_visibility(view.active()),
         PcbViewMsg::MultiLayerVisibilityToggled => view.toggle_multi_layer(),
         PcbViewMsg::AllLayersShown => view.show_all(),
     }
@@ -149,3 +186,7 @@ fn apply_event(view: &mut PcbLayerView, copper: &[CopperLayer], event: PcbViewMs
 #[cfg(test)]
 #[path = "pcb_view_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "pcb_layer_tabs_tests.rs"]
+mod layer_tabs_tests;

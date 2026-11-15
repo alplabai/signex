@@ -147,17 +147,20 @@ context = "global"
 "`" = "highlight_net_under_cursor"
 "~" = "clear_net_highlighting"
 
-# The board view (PCB tabs only): `+` and `*` step to the next copper layer,
-# `-` to the previous. A shifted `+` or `*` is its own stroke on a US layout.
+# The board view (PCB tabs only): `+` steps to the next layer of the board,
+# `*` to the next signal layer,
+# `-` to the previous layer; Shift+S turns single-layer mode on or off. A
+# shifted `+` or `*` is its own stroke on a US layout.
 [[keyboard_shortcuts.sections]]
 context = "pcb"
 
 [keyboard_shortcuts.sections.bindings]
 "+" = "next_layer"
 "Shift++" = "next_layer"
-"*" = "next_layer"
-"Shift+*" = "next_layer"
+"*" = "next_signal_layer"
+"Shift+*" = "next_signal_layer"
 "-" = "prev_layer"
+"Shift+S" = "toggle_single_layer_mode"
 
 [[keyboard_shortcuts.sections]]
 context = "footprint"

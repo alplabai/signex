@@ -25,5 +25,6 @@ mod stock_chip_sizes;
 mod stock_footprint_polarity;
 mod stock_library_determinism;
 mod stock_library_rows;
+mod stock_symbol_bodies;
 mod support;
 mod user_guide;

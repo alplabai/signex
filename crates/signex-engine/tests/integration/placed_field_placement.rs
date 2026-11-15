@@ -71,3 +71,32 @@ fn a_part_the_user_placed_fields_of_keeps_them() {
     place_fields_for_new_symbol(&mut sym, &lib);
     assert_eq!(sym.ref_text.expect("ref").position, Point::new(0.0, -2.54));
 }
+
+/// #2370 — the fields sit one text height (one 1.27 mm grid step) from the
+/// part, not the old one and a half: close to the body, still clear of it.
+#[test]
+fn fields_of_a_placed_part_sit_one_text_height_from_it() {
+    let lib = block(7.62, 5.08);
+    let mut sym = Symbol {
+        lib_id: lib.id.clone(),
+        unit: 1,
+        ref_text: Some(field(-2.54)),
+        val_text: Some(field(2.54)),
+        fields_autoplaced: true,
+        ..Default::default()
+    };
+    place_fields_for_new_symbol(&mut sym, &lib);
+    let reference = sym.ref_text.expect("ref");
+    let value = sym.val_text.expect("value");
+    let gap = reference.position.y - 5.08;
+    assert!(
+        gap > 0.0 && gap <= SCHEMATIC_TEXT_MM + 1e-9,
+        "reference sits {gap} mm below the body"
+    );
+    assert!(
+        value.position.y - reference.position.y >= SCHEMATIC_TEXT_MM,
+        "value {:?} overlaps the reference {:?}",
+        value.position,
+        reference.position
+    );
+}

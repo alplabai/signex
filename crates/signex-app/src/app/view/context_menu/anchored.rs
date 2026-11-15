@@ -151,12 +151,20 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for AnchoredMenu<'_, 
         viewport: &Rectangle,
         renderer: &iced::Renderer,
     ) -> mouse::Interaction {
+        // A card's padding and separators claim the pointer too, so a press
+        // there never reaches the click-outside layer below (#2349).
         self.children
             .iter()
             .zip(layout.iter(&tree.children))
             .rev()
             .map(|(child, (child_layout, child_tree))| {
-                child.mouse_interaction(child_tree, child_layout, cursor, viewport, renderer)
+                match child.mouse_interaction(child_tree, child_layout, cursor, viewport, renderer)
+                {
+                    mouse::Interaction::None if cursor.is_over(child_layout.bounds()) => {
+                        mouse::Interaction::Idle
+                    }
+                    interaction => interaction,
+                }
             })
             .find(|interaction| *interaction != mouse::Interaction::None)
             .unwrap_or_default()

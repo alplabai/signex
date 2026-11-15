@@ -168,7 +168,7 @@ fn graphite_power_icon(last: Option<ActiveBarAction>) -> iced::widget::svg::Hand
     }
     let items = bar_items(
         crate::app::Tool::Select,
-        crate::app::DrawMode::Ortho90,
+        signex_types::corner::CornerMode::Ortho90,
         &last_tool,
         &tokens,
         tid,

@@ -230,6 +230,7 @@ pub(super) fn plain_board() -> PcbBoard {
     let footprint = Footprint {
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str(FP_UUID).unwrap(),

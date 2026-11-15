@@ -94,6 +94,7 @@ mod tests {
             rules: signex_drc::DrcRules::new(1),
             violations: Vec::new(),
             skipped: Vec::new(),
+            skipped_keepouts: Vec::new(),
         }
     }
 

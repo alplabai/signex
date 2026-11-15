@@ -143,6 +143,11 @@ enum InputConsumer {
     Escape,
     /// Enter creates the project while the New Project dialog is open (#2232).
     NewProject,
+    /// Space ticks the focused row and Enter executes while the Update PCB
+    /// dialog is open (#2371).
+    UpdatePcb,
+    /// Enter creates the board or sheet while New PCB / New Schematic is open.
+    DocumentSetup,
     /// F1 toggles the keyboard-shortcuts sheet.
     ShortcutsSheet,
     /// Ctrl/Alt+1-8 — the digit is data the keymap profile cannot
@@ -158,11 +163,13 @@ enum InputConsumer {
 /// Order is behaviour. It is ported verbatim from the `if` chain this
 /// module replaced, and it is NOT derived from `PAINT_ORDER` — see the
 /// module docs for the counterexample that rules that out.
-const CLAIM_ORDER: [InputConsumer; 7] = [
+const CLAIM_ORDER: [InputConsumer; 9] = [
     InputConsumer::KeymapRecorder,
     InputConsumer::CommandPalette,
     InputConsumer::Escape,
     InputConsumer::NewProject,
+    InputConsumer::UpdatePcb,
+    InputConsumer::DocumentSetup,
     InputConsumer::ShortcutsSheet,
     InputConsumer::SelectionSlots,
     InputConsumer::Keymap,
@@ -321,6 +328,8 @@ impl Signex {
             InputConsumer::CommandPalette => self.claim_command_palette(target, event),
             InputConsumer::Escape => Self::claim_escape(window, event),
             InputConsumer::NewProject => self.claim_new_project(target, event),
+            InputConsumer::UpdatePcb => self.claim_update_pcb(target, event),
+            InputConsumer::DocumentSetup => self.claim_document_setup(target, event),
             InputConsumer::ShortcutsSheet => self.claim_shortcuts_sheet(target, event),
             InputConsumer::SelectionSlots => Self::claim_selection_slots(event),
             InputConsumer::Keymap => self.claim_keymap(target, window, event),
@@ -414,9 +423,16 @@ impl Signex {
         if !target.paints_overlay_stack() {
             return Claim::Pass;
         }
-        let keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
+        let keyboard::Event::KeyPressed {
+            key,
+            physical_key,
+            modifiers,
+            ..
+        } = event
+        else {
             return Claim::Swallow;
         };
+        let letter = crate::keymap::shortcut_char(key, *physical_key);
         match (key.as_ref(), *modifiers) {
             (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
                 Claim::Consume(Message::CommandPalette(CommandPaletteMsg::Close))
@@ -428,9 +444,7 @@ impl Signex {
                 Message::CommandPalette(CommandPaletteMsg::MoveSelection(-1)),
             ),
             // Toggle: Ctrl+Shift+P while open closes.
-            (keyboard::Key::Character(c), m)
-                if c.eq_ignore_ascii_case("p") && m.command() && m.shift() =>
-            {
+            (keyboard::Key::Character(_), m) if letter == Some('p') && m.command() && m.shift() => {
                 Claim::Consume(Message::CommandPalette(CommandPaletteMsg::Close))
             }
             _ => Claim::Swallow,
@@ -478,11 +492,69 @@ impl Signex {
                 key: keyboard::Key::Named(keyboard::key::Named::Enter),
                 ..
             } if state.dropdown_open => Claim::Swallow,
+            // The Save as profile name field owns Enter: it saves the
+            // profile, never creates the project (#2232).
+            keyboard::Event::KeyPressed {
+                key: keyboard::Key::Named(keyboard::key::Named::Enter),
+                ..
+            } if state.save_profile_name.is_some() => Claim::Consume(Message::from(
+                crate::app::NewProjectMsg::SaveProfileConfirmed,
+            )),
             keyboard::Event::KeyPressed {
                 key: keyboard::Key::Named(keyboard::key::Named::Enter),
                 ..
             } => Claim::Consume(Message::from(crate::app::NewProjectMsg::SubmitRequested)),
             _ => Claim::Pass,
+        }
+    }
+
+    /// Space ticks the focused row and Enter executes while the Update PCB
+    /// dialog is in front. The footprint picker over it keeps both keys.
+    fn claim_update_pcb(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
+        let open = self.ui_state.update_pcb.as_ref().is_some_and(|s| !s.apply);
+        if !open || !target.paints_overlay_stack() || self.library.primitive_picker.is_some() {
+            return Claim::Pass;
+        }
+        let keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
+            return Claim::Pass;
+        };
+        if !modifiers.is_empty() {
+            return Claim::Pass;
+        }
+        match key.as_ref() {
+            keyboard::Key::Named(keyboard::key::Named::Space) => {
+                Claim::Consume(Message::from(crate::app::UpdatePcbMsg::FocusedRowToggled))
+            }
+            keyboard::Key::Named(keyboard::key::Named::Enter) => {
+                Claim::Consume(Message::from(crate::app::UpdatePcbMsg::ExecuteRequested))
+            }
+            _ => Claim::Pass,
+        }
+    }
+
+    /// Enter in the New PCB / New Schematic dialog (main window only): an
+    /// open list keeps it, the profile name field saves, else Create.
+    fn claim_document_setup(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
+        let Some(state) = self.ui_state.document_setup.as_ref() else {
+            return Claim::Pass;
+        };
+        let keyboard::Event::KeyPressed {
+            key: keyboard::Key::Named(keyboard::key::Named::Enter),
+            ..
+        } = event
+        else {
+            return Claim::Pass;
+        };
+        if !target.paints_overlay_stack() {
+            return Claim::Pass;
+        }
+        use crate::app::{DocumentSetupMsg as D, NewProjectMsg as N};
+        if state.draft.dropdown_open {
+            Claim::Swallow
+        } else if state.draft.save_profile_name.is_some() {
+            Claim::Consume(Message::from(D::Setup(N::SaveProfileConfirmed)))
+        } else {
+            Claim::Consume(Message::from(D::SubmitRequested))
         }
     }
 
@@ -738,6 +810,8 @@ mod tests {
             InputConsumer::CommandPalette,
             InputConsumer::Escape,
             InputConsumer::NewProject,
+            InputConsumer::UpdatePcb,
+            InputConsumer::DocumentSetup,
             InputConsumer::ShortcutsSheet,
             InputConsumer::SelectionSlots,
             InputConsumer::Keymap,

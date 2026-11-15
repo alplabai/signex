@@ -341,20 +341,12 @@ pub(super) fn derive_columns(
     sorted.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
     for (key, _) in sorted.into_iter().take(MAX_PARAM_COLUMNS) {
         columns.push(GridColumn {
-            label: shorten_label(&key),
+            label: crate::library::range_filter::parameter_label(&key),
             kind: ColumnKind::Parameter(key),
             width: 90.0,
         });
     }
     columns
-}
-
-fn shorten_label(key: &str) -> String {
-    if key.len() <= 14 {
-        key.to_string()
-    } else {
-        format!("{}…", crate::text_trunc::prefix_within_bytes(key, 13))
-    }
 }
 
 /// Whether `r` matches `needle`, already folded with `i18n.fold_for_search`:

@@ -147,6 +147,7 @@ impl Signex {
         // Reading twice would be harmless today but invites the two to be
         // seeded from different parses of a file edited mid-launch.
         let symbol_grid_size_mm = crate::fonts::read_symbol_grid_size_mm_pref_from(prefs);
+        let fast_grids_mm = crate::fonts::read_fast_grids_mm_pref_from(prefs);
         let component_classes = crate::fonts::read_component_classes_pref_from(prefs);
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref_from(prefs);
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref_from(prefs);
@@ -296,6 +297,9 @@ impl Signex {
                 active_keymap,
                 pcb_layer_views: Default::default(),
                 pcb_view_angle_entry: None,
+                pcb_pick_filter: Default::default(),
+                pcb_snap: Default::default(),
+                pcb_board_panel: Default::default(),
                 keymap_pending_sequence: Vec::new(),
                 keymap_pending_target: None,
                 keymap_chord_wait: None,
@@ -386,6 +390,10 @@ impl Signex {
                 preferences_draft_agent_connections_enabled: agent_connections_enabled,
                 symbol_grid_size_mm,
                 preferences_draft_symbol_grid_size_mm: symbol_grid_size_mm,
+                fast_grids_mm,
+                preferences_draft_fast_grids: fast_grids_mm
+                    .map(crate::canvas::grid::fast_grid_field_text),
+                preferences_fast_grid_status: String::new(),
                 symbol_grid_style,
                 preferences_draft_symbol_grid_style: symbol_grid_style,
                 symbol_pin_selection,
@@ -414,6 +422,10 @@ impl Signex {
                 enable_version_control: None,
                 grid_properties: None,
                 new_project: None,
+                document_setup: None,
+                setup_profiles: crate::fonts::read_setup_profiles_from(prefs),
+                removed_profile_names: Default::default(),
+                missing_profiles_warned: Default::default(),
                 update_pcb: None,
                 sheet_numbering: None,
                 sheet_numbering_reads: 0,
@@ -673,6 +685,7 @@ impl Signex {
                 pending_opens: Default::default(),
                 pending_restores: Default::default(),
                 pending_path_ops: crate::app::path_ops::PendingPathOps::default(),
+                new_project_writes: std::collections::HashSet::new(),
                 dir_case: Default::default(),
                 altium_import_running: None,
                 project_folder_renames: std::collections::HashSet::new(),
@@ -689,11 +702,15 @@ impl Signex {
                 pcb_selection: Default::default(),
                 pcb_selections: std::collections::HashMap::new(),
                 pcb_carry: None,
+                pcb_tool: None,
+                pcb_guide_place: None,
                 pcb_ratsnest: Default::default(),
                 pcb_drc: Default::default(),
                 cross_select: Default::default(),
                 board_sketch: None,
                 pcb_footprint_draft: None,
+                pcb_component: Default::default(),
+                pcb_primitive: Default::default(),
                 dragging: None,
                 drag_start_pos: None,
                 drag_start_size: 0.0,
@@ -705,7 +722,8 @@ impl Signex {
                 shape_anchor: None,
                 clipboard: None,
                 clipboard_text: None,
-                draw_mode: DrawMode::default(),
+                pcb_clipboard: None,
+                corner_rule: Default::default(),
                 editing_text: None,
                 context_menu: None,
                 project_tree_context_menu: None,
@@ -721,6 +739,7 @@ impl Signex {
                 last_tree_click: Default::default(),
                 active_bar_menu: None,
                 active_bar_menu_window: None,
+                pcb_bar_menu: None,
                 acting_window: None,
                 pointer_window: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL
@@ -814,6 +833,7 @@ impl Signex {
         }
         let (main_id, open_task) = iced::window::open(main_settings);
         app.ui_state.main_window_id = Some(main_id);
+        app.note_unusable_setup_profiles(crate::fonts::unusable_setup_profiles(prefs));
         let boot_task = iced::Task::batch([
             open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id))),
             mount_task,

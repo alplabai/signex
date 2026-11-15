@@ -482,27 +482,36 @@ pub enum PrimitivePickerTarget {
     /// The user picks a symbol to add as an alternate of the row open in a
     /// Component Preview tab (#1230).
     PreviewAlternate(EditorAddress),
+    /// Update PCB's Choose footprint (#2371): the footprint of a part of the
+    /// design, by its sheet placement and anchor unit, set on the schematic.
+    DesignPart {
+        sheet: signex_types::schematic::InstancePath,
+        part: Uuid,
+    },
+    /// A board footprint swap (#2366): the footprints of `board` to replace,
+    /// and the footprints their library parts offer, listed first.
+    BoardFootprint {
+        board: std::path::PathBuf,
+        footprints: Vec<Uuid>,
+        suggested: Vec<signex_library::PrimitiveRef>,
+    },
 }
 
 impl PrimitivePickerTarget {
-    /// The row the pick is for.
-    pub fn address(&self) -> &EditorAddress {
+    /// The row the pick is for; `None` for a pick that writes no row.
+    pub fn address(&self) -> Option<&EditorAddress> {
         match self {
             Self::PreviewRow(a)
             | Self::EditRowModal(a)
             | Self::BrowserRow(a)
-            | Self::PreviewAlternate(a) => a,
+            | Self::PreviewAlternate(a) => Some(a),
+            Self::DesignPart { .. } | Self::BoardFootprint { .. } => None,
         }
     }
 
     /// Directory of the library whose row this pick writes.
     pub fn library_path(&self) -> Option<&std::path::Path> {
-        match self {
-            Self::PreviewRow(a)
-            | Self::EditRowModal(a)
-            | Self::BrowserRow(a)
-            | Self::PreviewAlternate(a) => Some(a.library_path.as_path()),
-        }
+        self.address().map(|a| a.library_path.as_path())
     }
 }
 

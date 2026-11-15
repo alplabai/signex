@@ -180,6 +180,10 @@ dialog-new-project-creating = Creating…
 # Create refused because the same project is already being created.
 dialog-new-project-err-create-pending = This project is already being created.
 
+# Messages line and notice when a quit waits for a New Project still being
+# written; the app stays open.
+dialog-new-project-quit-held = A new project is still being created, so the app was not closed. Try again once it finishes.
+
 # Project Options, Project setup section: the stored section is not usable.
 dialog-new-project-setup-unreadable = The project's setup defaults are not readable by this version of Signex; they are kept unchanged and not applied. Editing a value here replaces that section when you save.
 

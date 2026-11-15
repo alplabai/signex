@@ -18,7 +18,7 @@
 //! bake the footprint editor runs (`bake_pads`, `bake_silk`) so the file
 //! carries its pads and silkscreen for consumers that never open the editor.
 //!
-//! Apache-clean: industry-standard footprint dimensions (JEDEC
+//! Clean-room: industry-standard footprint dimensions (JEDEC
 //! SOIC-8 / QFN-16 / chip lands at IPC-7351 Density Level B (manufacturer
 //! tables)) only. No third-party EDA-tool
 //! source / file-format docs / wikis consulted.

@@ -11,7 +11,7 @@ use signex_library::RowId;
 use signex_library::primitive::PrimitiveRef;
 use uuid::Uuid;
 
-use super::messages::{ResolvedPlacement, ResolvedSymbolChoice};
+use super::messages::{BoardPartError, ResolvedBoardPart, ResolvedPlacement, ResolvedSymbolChoice};
 
 /// Read `row_id` of `table` from the `.snxlib` at `library_path` and
 /// resolve its symbol. `lib_id` is `"<library uuid>:<symbol uuid>"`.
@@ -39,6 +39,76 @@ pub fn resolve_placement_with_footprint(
     open_libraries: &[(Uuid, PathBuf)],
 ) -> Result<ResolvedPlacement, String> {
     resolve_placement_of(library_path, table, row_id, None, footprint, open_libraries)
+}
+
+/// [`resolve_placement_with_footprint`] for a board (#2364), with the board
+/// footprint the part lands as: `footprint` when set, else the row's
+/// default. A row with no footprint, or one the board cannot hold, is
+/// refused with why.
+pub fn resolve_board_part(
+    library_path: &Path,
+    table: &str,
+    row_id: RowId,
+    footprint: Option<PrimitiveRef>,
+    open_libraries: &[(Uuid, PathBuf)],
+) -> Result<ResolvedBoardPart, BoardPartError> {
+    use signex_library::LibraryAdapter as _;
+    use signex_library::adapters::local_git::LocalGitAdapter;
+
+    let own = LocalGitAdapter::open(library_path).map_err(|e| {
+        BoardPartError::Read(format!("Could not open {}: {e}", library_path.display()))
+    })?;
+    let row = own.read_row(table, row_id).map_err(|e| {
+        BoardPartError::Read(format!("Could not read row {row_id} of table {table}: {e}"))
+    })?;
+    let lookup = |address: &PrimitiveRef, _version: &str| {
+        if address.library_id == own.library_id() {
+            return own.get_footprint(address.uuid).ok();
+        }
+        let (_, path) = open_libraries
+            .iter()
+            .find(|(id, _)| *id == address.library_id)?;
+        LocalGitAdapter::open(path)
+            .ok()?
+            .get_footprint(address.uuid)
+            .ok()
+    };
+    let board_footprint =
+        signex_library::part_footprint::resolve_part_footprint(&row, footprint.as_ref(), lookup)
+            .map_err(|why| BoardPartError::Refused {
+                part: row.internal_pn.to_string(),
+                reason: why.to_string(),
+            })?;
+    let placement =
+        resolve_placement_with_footprint(library_path, table, row_id, footprint, open_libraries)
+            .map_err(BoardPartError::Read)?;
+    Ok(ResolvedBoardPart {
+        placement,
+        footprint: board_footprint.footprint,
+    })
+}
+
+/// The library footprint `address` in its board form, its latest version
+/// read from the open library that holds it (#2366). A footprint the board
+/// cannot hold is refused with why.
+pub fn resolve_library_footprint(
+    address: &PrimitiveRef,
+    open_libraries: &[(Uuid, PathBuf)],
+) -> Result<signex_types::pcb::Footprint, String> {
+    use signex_library::LibraryAdapter as _;
+    use signex_library::adapters::local_git::LocalGitAdapter;
+
+    let (_, path) = open_libraries
+        .iter()
+        .find(|(id, _)| *id == address.library_id)
+        .ok_or_else(|| format!("its library {} is not open", address.library_id))?;
+    let adapter = LocalGitAdapter::open(path)
+        .map_err(|e| format!("could not open {}: {e}", path.display()))?;
+    signex_library::part_footprint::resolve_named_footprint(address, |a, _version| {
+        adapter.get_footprint(a.uuid).ok()
+    })
+    .map(|resolved| resolved.footprint)
+    .map_err(|why| why.to_string())
 }
 
 /// [`resolve_placement`] for the drawing `chosen` and the footprint

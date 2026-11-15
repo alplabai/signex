@@ -78,11 +78,16 @@ altium	bind	Global	Shift+F	command:find_similar_objects
 altium	bind	Global	Shift+F12	command:toggle_schematic_list_panel
 altium	bind	Global	Shift+F3	command:find_previous
 altium	bind	Global	Shift+G	command:cycle_snap_grid_backward
-altium	bind	Pcb	*	command:next_layer
+altium	bind	Pcb	*	command:next_signal_layer
 altium	bind	Pcb	+	command:next_layer
 altium	bind	Pcb	"-"	command:prev_layer
-altium	bind	Pcb	Shift+*	command:next_layer
+altium	bind	Pcb	P F	command:place_board_fill
+altium	bind	Pcb	P R	command:place_board_region
+altium	bind	Pcb	P T	command:place_board_track
+altium	bind	Pcb	P V	command:place_board_via
+altium	bind	Pcb	Shift+*	command:next_signal_layer
 altium	bind	Pcb	Shift++	command:next_layer
+altium	bind	Pcb	Shift+S	command:toggle_single_layer_mode
 altium	bind	Footprint	1	command:footprint_mode_sketch
 altium	bind	Footprint	2	command:footprint_mode_pads
 altium	bind	Footprint	3	command:footprint_mode_view_3d
@@ -249,6 +254,7 @@ altium	hint	-	-	sync_sheet_pins
 altium	hint	-	-	change_component
 altium	hint	-	-	open_project_options
 altium	hint	-	-	update_pcb_from_schematic
+altium	hint	-	-	new_schematic_sheet
 altium	hint	-	-	back_annotate_schematics
 altium	hint	-	-	tool_select
 altium	hint	-	-	lasso_select
@@ -310,9 +316,13 @@ altium	hint	-	-	place_component
 altium	hint	-	-	run_drc
 altium	hint	-	-	reannotate_board
 altium	hint	-	-	flip_selection
+altium	hint	-	-	change_footprint
 altium	hint	-	-	toggle_ratsnest
+altium	hint	-	-	toggle_origin_marker
 altium	hint	-	Shift++	next_layer
 altium	hint	-	"-"	prev_layer
+altium	hint	-	Shift+*	next_signal_layer
+altium	hint	-	Shift+S	toggle_single_layer_mode
 altium	hint	-	-	toggle_layer_visibility
 altium	hint	-	-	show_all_layers
 altium	hint	-	-	view_rotate
@@ -322,6 +332,11 @@ altium	hint	-	-	view_rotate_reset
 altium	hint	-	-	toggle_layers_panel
 altium	hint	-	-	new_pcb_document
 altium	hint	-	-	board_sketch
+altium	hint	-	P V	place_board_via
+altium	hint	-	P T	place_board_track
+altium	hint	-	P F	place_board_fill
+altium	hint	-	P R	place_board_region
+altium	hint	-	-	place_board_keepout
 altium	hint	-	2	footprint_mode_pads
 altium	hint	-	1	footprint_mode_sketch
 altium	hint	-	3	footprint_mode_view_3d
@@ -415,11 +430,12 @@ classic	bind	Global	Y	command:mirror_y
 classic	bind	Global	Z	command:place_wire_to_bus_entry
 classic	bind	Global	`	command:highlight_net_under_cursor
 classic	bind	Global	~	command:clear_net_highlighting
-classic	bind	Pcb	*	command:next_layer
+classic	bind	Pcb	*	command:next_signal_layer
 classic	bind	Pcb	+	command:next_layer
 classic	bind	Pcb	"-"	command:prev_layer
-classic	bind	Pcb	Shift+*	command:next_layer
+classic	bind	Pcb	Shift+*	command:next_signal_layer
 classic	bind	Pcb	Shift++	command:next_layer
+classic	bind	Pcb	Shift+S	command:toggle_single_layer_mode
 classic	bind	Footprint	1	command:footprint_mode_sketch
 classic	bind	Footprint	2	command:footprint_mode_pads
 classic	bind	Footprint	3	command:footprint_mode_view_3d
@@ -586,6 +602,7 @@ classic	hint	-	-	sync_sheet_pins
 classic	hint	-	-	change_component
 classic	hint	-	-	open_project_options
 classic	hint	-	-	update_pcb_from_schematic
+classic	hint	-	-	new_schematic_sheet
 classic	hint	-	-	back_annotate_schematics
 classic	hint	-	-	tool_select
 classic	hint	-	-	lasso_select
@@ -647,9 +664,13 @@ classic	hint	-	-	place_component
 classic	hint	-	-	run_drc
 classic	hint	-	-	reannotate_board
 classic	hint	-	-	flip_selection
+classic	hint	-	-	change_footprint
 classic	hint	-	-	toggle_ratsnest
+classic	hint	-	-	toggle_origin_marker
 classic	hint	-	Shift++	next_layer
 classic	hint	-	"-"	prev_layer
+classic	hint	-	Shift+*	next_signal_layer
+classic	hint	-	Shift+S	toggle_single_layer_mode
 classic	hint	-	-	toggle_layer_visibility
 classic	hint	-	-	show_all_layers
 classic	hint	-	-	view_rotate
@@ -659,6 +680,11 @@ classic	hint	-	-	view_rotate_reset
 classic	hint	-	-	toggle_layers_panel
 classic	hint	-	-	new_pcb_document
 classic	hint	-	-	board_sketch
+classic	hint	-	-	place_board_via
+classic	hint	-	-	place_board_track
+classic	hint	-	-	place_board_fill
+classic	hint	-	-	place_board_region
+classic	hint	-	-	place_board_keepout
 classic	hint	-	2	footprint_mode_pads
 classic	hint	-	1	footprint_mode_sketch
 classic	hint	-	3	footprint_mode_view_3d

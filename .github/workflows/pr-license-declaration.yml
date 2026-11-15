@@ -1,11 +1,12 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: FSL-1.1-ALv2
 
 name: PR License Declaration
 
-# Clean-room guard. This tree is Apache-2.0; contributions must not copy from
-# license-gated source files — anything under GPL/copyleft or another licence
-# incompatible with Apache-2.0. Opening a PR affirms none were used, so no
-# self-declaration fields are required — a PR that says nothing passes.
+# Clean-room guard. This tree is FSL-1.1-ALv2 and turns Apache-2.0 two years
+# after each release; contributions must not copy from license-gated source
+# files — anything under GPL/copyleft or another licence incompatible with
+# those terms. Opening a PR affirms none were used, so no self-declaration
+# fields are required — a PR that says nothing passes.
 #
 # The only hard block is a PR whose description *explicitly admits* a
 # license-gated source (a `License-gated sources: yes` line); that work belongs
@@ -37,7 +38,7 @@ jobs:
           set -e
           # Hard block: an explicit admission that the contribution draws on a
           # license-gated source file — one under GPL/copyleft or any other
-          # licence incompatible with this Apache-2.0 tree. Such work belongs
+          # licence incompatible with this tree's licence. Such work belongs
           # in the GPL-3.0 companion repo. A PR that makes no such admission is
           # treated as clean and passes.
           if echo "$BODY" | grep -qiE "license-gated sources?:[[:space:]]*yes"; then

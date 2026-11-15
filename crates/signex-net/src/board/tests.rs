@@ -115,6 +115,7 @@ fn footprint(reference: &str, pads: &[&str]) -> Footprint {
         properties: Vec::new(),
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
@@ -148,6 +149,7 @@ fn link_footprints(pcb: &mut PcbBoard, netlist: &Netlist) {
 fn board(footprints: Vec<Footprint>) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::now_v7(),
         version: 0,
         generator: String::new(),

@@ -3,10 +3,11 @@
 
 use super::items::{
     cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, item, item_if, item_if_command,
-    item_named, panel_item, submenu, unavailable,
+    item_named, panel_item, placeholder, submenu, unavailable,
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
+use crate::app::pcb_tools::{BoardPlaceTool, ToolState};
 use crate::app::update_pcb::PcbSyncLabel;
 use crate::menu_bar::{MenuContext, enabled};
 use crate::panels::PanelKind;
@@ -17,11 +18,15 @@ const SEP: MenuEntry = MenuEntry::Separator;
 pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         cmd_item(ctx, cmd("new_document", "Mod+N")),
-        // A board for the open project (#1312); greyed with no project.
+        // A board (#1312) or a sheet (#2232) for the open project, each
+        // through its setup dialog; greyed with no project.
         submenu(
             ctx,
             menu_ids::MENU_FILE_NEW,
-            vec![cmd_item_gated(ctx, cmd("new_pcb_document", ""))],
+            vec![
+                cmd_item_gated(ctx, cmd("new_schematic_sheet", "")),
+                cmd_item_gated(ctx, cmd("new_pcb_document", "")),
+            ],
         ),
         cmd_item(ctx, cmd("open_document", "Mod+O")),
         submenu(ctx, menu_ids::MENU_FILE_OPEN_RECENT, open_recent(ctx)),
@@ -184,8 +189,11 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         SEP,
         // The board view: greyed unless a PCB is open.
         cmd_item_gated(ctx, cmd("toggle_ratsnest", "")),
+        cmd_item_gated(ctx, cmd("toggle_origin_marker", "")),
         cmd_item_gated(ctx, cmd("next_layer", "")),
         cmd_item_gated(ctx, cmd("prev_layer", "")),
+        cmd_item_gated(ctx, cmd("next_signal_layer", "")),
+        cmd_item_gated(ctx, cmd("toggle_single_layer_mode", "")),
         cmd_item_gated(ctx, cmd("toggle_layer_visibility", "")),
         cmd_item_gated(ctx, cmd("show_all_layers", "")),
         // The board view's turn on screen (#2316); greyed without a PCB.
@@ -247,7 +255,33 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
     ]
 }
 
+/// Place follows the document in view: a board's tools on a board (#2360),
+/// a sheet's everywhere else.
 pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
+    if ctx.commands.pcb.shown {
+        board_place(ctx)
+    } else {
+        sheet_place(ctx)
+    }
+}
+
+/// Place on a board: the board placement tools, each running the command its
+/// PCB Active Bar button runs, or greyed with the reason the bar gives while
+/// the board editor cannot run it (one table, #2352, #2373), then Board
+/// Sketch, which draws the outline, cutouts and keepouts.
+fn board_place(ctx: &MenuContext) -> Vec<MenuEntry> {
+    let mut rows: Vec<MenuEntry> = BoardPlaceTool::PLACE_MENU
+        .into_iter()
+        .map(|tool| match tool.state() {
+            ToolState::Live(id) => cmd_item_gated(ctx, cmd(id, "")),
+            ToolState::Unavailable(reason) => placeholder(ctx, tool.name(), reason),
+        })
+        .collect();
+    rows.extend([SEP, cmd_item_gated(ctx, cmd("board_sketch", ""))]);
+    rows
+}
+
+fn sheet_place(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         cmd_item_gated(ctx, cmd("place_wire", "W")),
         cmd_item_gated(ctx, cmd("place_bus", "B")),

@@ -5,7 +5,10 @@
 use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
-use pcb_geom::{BoardIndex, ClickMode, ItemRef, PointNm, Selection, pick, turned_marquee_select};
+use pcb_geom::{
+    BoardIndex, ClickMode, ItemRef, PickFilter, PointNm, Selection, pick_filtered,
+    turned_marquee_select,
+};
 use signex_renderer::pcb::PcbLayerView;
 use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
@@ -29,6 +32,9 @@ pub struct PcbSelectionState {
     /// The next build only follows a view change, so what it refuses was
     /// already reported.
     quiet_rebuild: bool,
+    /// The kinds a click, a box or the hover may pick (#2353). The index
+    /// keeps every kind, so a selection made another way is not filtered.
+    filter: PickFilter,
 }
 
 /// What [`PcbSelectionState::select_items`] did.
@@ -87,6 +93,18 @@ impl PcbSelectionState {
         self.quiet_rebuild = self.index.take().is_some();
     }
 
+    /// Follow the selection filter: a hovered item of a kind turned off is
+    /// no longer hovered. The selection keeps what it holds.
+    pub fn set_filter(&mut self, filter: &PickFilter) {
+        if self.filter == *filter {
+            return;
+        }
+        self.filter = filter.clone();
+        if self.hover.is_some_and(|h| !filter.allows(h)) {
+            self.hover = None;
+        }
+    }
+
     /// Items the last index build left out, once per build; empty after.
     pub fn take_report(&mut self) -> Vec<String> {
         std::mem::take(&mut self.report)
@@ -122,6 +140,12 @@ impl PcbSelectionState {
         self.selection.apply_click(hit, mode)
     }
 
+    /// The item a click at `at` would pick, without selecting it (the
+    /// Properties net pick, #2355).
+    pub fn item_at(&mut self, board: &PcbBoard, at: Point, tolerance_mm: f64) -> Option<ItemRef> {
+        self.pick_at(board, at, tolerance_mm).map(|(item, _)| item)
+    }
+
     /// A box from `from` to `to`, drawn along the screen of a view turned
     /// `view_rotation_deg` (#2316). Whether the selection changed.
     pub fn box_select(
@@ -142,7 +166,8 @@ impl PcbSelectionState {
         let Some(index) = &self.index else {
             return false;
         };
-        let hits = turned_marquee_select(index, from, to, view_rotation_deg);
+        let mut hits = turned_marquee_select(index, from, to, view_rotation_deg);
+        hits.retain(|item| self.filter.allows(*item));
         self.selection.apply_marquee(&hits, mode)
     }
 
@@ -172,9 +197,39 @@ impl PcbSelectionState {
         }
     }
 
+    /// Select All (#2361): every footprint, track and via the view lets be
+    /// picked. A pad comes with its footprint and is selected alone only
+    /// when its footprint's body cannot be picked. Whether the selection
+    /// changed.
+    pub fn select_all(&mut self, board: &PcbBoard) -> bool {
+        self.ensure_index(board);
+        let Some(index) = &self.index else {
+            return false;
+        };
+        let bodies: HashSet<Uuid> = index
+            .items()
+            .filter_map(|i| match i.item {
+                ItemRef::Footprint(id) => Some(id),
+                _ => None,
+            })
+            .collect();
+        let all: Vec<ItemRef> = index
+            .items()
+            .map(|i| i.item)
+            .filter(|item| !matches!(item, ItemRef::Pad { footprint, .. } if bodies.contains(footprint)))
+            .collect();
+        self.selection.apply_marquee(&all, ClickMode::Replace)
+    }
+
     /// The copper to paint for the selection and the hover. A selected
     /// footprint paints its body outline and all its pads.
     pub fn highlight(&mut self, board: &PcbBoard) -> Highlight {
+        self.highlight_except(board, &BTreeSet::new())
+    }
+
+    /// [`Self::highlight`] without the footprints in `moving`: a drag or
+    /// Move draws them, and their outline, where they are going (#2358).
+    fn highlight_except(&mut self, board: &PcbBoard, moving: &BTreeSet<Uuid>) -> Highlight {
         if self.selection.is_empty() && self.hover.is_none() {
             return Highlight::default();
         }
@@ -191,7 +246,11 @@ impl PcbSelectionState {
             })
             .collect();
         let mut highlight = Highlight::default();
-        for indexed in index.items() {
+        let is_moving = |item: ItemRef| match item {
+            ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => moving.contains(&id),
+            ItemRef::Track(_) | ItemRef::Via(_) => false,
+        };
+        for indexed in index.items().filter(|i| !is_moving(i.item)) {
             match indexed.item {
                 ItemRef::Footprint(id) if whole.contains(&id) => {
                     highlight.bodies.push(indexed.shape);
@@ -203,7 +262,7 @@ impl PcbSelectionState {
                 _ => {}
             }
         }
-        if let Some(hovered) = self.hover
+        if let Some(hovered) = self.hover.filter(|h| !is_moving(*h))
             && let Some(found) = index.items().find(|i| i.item == hovered)
         {
             match hovered {
@@ -216,26 +275,33 @@ impl PcbSelectionState {
 
     /// What a canvas paints and grabs for this selection: the highlight, the
     /// preview of `carry` once it is anchored, and the shapes a press grabs
-    /// to drag the selected footprints. While a Move waits for its clicks
-    /// nothing is grabbed, so a jiggled click stays a click (#2240).
+    /// to drag: every footprint, selected or not (#2358). While a Move or a
+    /// paste waits for its clicks, or a part is on the cursor, nothing is
+    /// grabbed, so a jiggled click stays a click (#2240, #2364).
     pub fn paint(
         &mut self,
         board: &PcbBoard,
         carry: Option<&super::PcbCarry>,
     ) -> (Highlight, Vec<pcb_geom::Shape>) {
-        let mut highlight = self.highlight(board);
-        let moving = carry.is_some_and(|c| c.kind == super::CarryKind::Move);
-        let grab = if moving {
+        let anchored = carry.filter(|c| c.anchor.is_some());
+        let none = BTreeSet::new();
+        let carried = anchored.map_or(&none, |c| &c.footprints);
+        let mut highlight = self.highlight_except(board, carried);
+        // A Move, a paste or a Place waits for clicks: nothing is grabbed.
+        let waiting = carry.is_some_and(|c| c.kind != super::CarryKind::Drag);
+        let grab = if waiting {
             Vec::new()
         } else {
-            let selected = self.selection.footprints();
-            self.footprint_shapes(board, &selected)
+            self.shapes_of_footprints(board, |_| true)
         };
         if let Some(carry) = carry.filter(|c| c.anchor.is_some())
             && let Ok(by) = PointNm::from_mm(carry.delta, "carry")
         {
-            highlight.ghost = self
-                .footprint_shapes(board, &carry.footprints)
+            let shapes = match &carry.paste {
+                Some(load) => load.ghost.clone(),
+                None => self.footprint_shapes(board, &carry.footprints),
+            };
+            highlight.ghost = shapes
                 .into_iter()
                 .map(|shape| shape.translated(by))
                 .collect();
@@ -243,8 +309,8 @@ impl PcbSelectionState {
         (highlight, grab)
     }
 
-    /// The body and pads of each footprint in `footprints`: what a press
-    /// grabs to drag them, and what the drag preview paints.
+    /// The body and pads of each footprint in `footprints`: what the drag
+    /// preview paints.
     pub fn footprint_shapes(
         &mut self,
         board: &PcbBoard,
@@ -253,6 +319,57 @@ impl PcbSelectionState {
         if footprints.is_empty() {
             return Vec::new();
         }
+        self.shapes_of_footprints(board, |id| footprints.contains(&id))
+    }
+
+    /// The footprints a drag pressed at `at` carries (#2358). A press on a
+    /// selected footprint, or on one of its pads, carries the selection;
+    /// a press on an unselected one selects that footprint alone and
+    /// carries it. Off every footprint it carries nothing.
+    pub fn grab_for_drag(
+        &mut self,
+        board: &PcbBoard,
+        at: Point,
+        tolerance_mm: f64,
+    ) -> BTreeSet<Uuid> {
+        let selected = self.selection.footprints();
+        let (Ok(p), Ok(tol)) = (
+            PointNm::from_mm(at, "press"),
+            pcb_geom::mm_to_nm(tolerance_mm, "reach"),
+        ) else {
+            return BTreeSet::new();
+        };
+        self.ensure_index(board);
+        let Some(index) = &self.index else {
+            return BTreeSet::new();
+        };
+        // A pad outranks the body it sits on, as a click picks.
+        let under: Vec<(bool, ItemRef, Uuid)> = index
+            .items_at(p, tol)
+            .into_iter()
+            .filter_map(|i| match i.item {
+                ItemRef::Pad { footprint, .. } => Some((false, i.item, footprint)),
+                ItemRef::Footprint(id) => Some((true, i.item, id)),
+                ItemRef::Track(_) | ItemRef::Via(_) => None,
+            })
+            .collect();
+        if under.iter().any(|(_, _, id)| selected.contains(id)) {
+            return selected;
+        }
+        let Some(&(_, _, id)) = under.iter().min_by_key(|(body, item, _)| (*body, *item)) else {
+            return BTreeSet::new();
+        };
+        self.selection
+            .apply_click(Some(ItemRef::Footprint(id)), ClickMode::Replace);
+        BTreeSet::from([id])
+    }
+
+    /// The body and pads of each footprint `keep` accepts.
+    fn shapes_of_footprints(
+        &mut self,
+        board: &PcbBoard,
+        keep: impl Fn(Uuid) -> bool,
+    ) -> Vec<pcb_geom::Shape> {
         self.ensure_index(board);
         let Some(index) = &self.index else {
             return Vec::new();
@@ -260,9 +377,7 @@ impl PcbSelectionState {
         index
             .items()
             .filter(|i| match i.item {
-                ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => {
-                    footprints.contains(&id)
-                }
+                ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => keep(id),
                 ItemRef::Track(_) | ItemRef::Via(_) => false,
             })
             .map(|i| i.shape)
@@ -284,7 +399,7 @@ impl PcbSelectionState {
         let p = PointNm::from_mm(at, "pointer").ok()?;
         let tol = pcb_geom::mm_to_nm(tolerance_mm, "tolerance").ok()?;
         self.ensure_index(board);
-        pick(self.index.as_ref()?, p, tol).map(|i| (i.item, i.shape))
+        pick_filtered(self.index.as_ref()?, p, tol, &self.filter).map(|i| (i.item, i.shape))
     }
 
     fn ensure_index(&mut self, board: &PcbBoard) {
@@ -409,6 +524,7 @@ mod tests {
         };
         PcbBoard {
             sketch: None,
+            options: Default::default(),
             uuid: Uuid::nil(),
             version: 1,
             generator: String::new(),

@@ -129,7 +129,7 @@ pub enum CanvasAction {
     /// Fit the symbol bbox into the viewport (Home key).
     Fit,
     /// The canvas measured its real size while a Fit / centre-origin
-    /// camera request was queued.
+    /// camera request was queued, or at a size other than the last one.
     ViewportMeasured {
         width: f32,
         height: f32,

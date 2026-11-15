@@ -94,6 +94,7 @@ fn footprint(n: u128, reference: &str, pads: Vec<Pad>) -> Footprint {
     Footprint {
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: id(n),

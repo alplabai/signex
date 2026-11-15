@@ -159,10 +159,17 @@ impl Signex {
                 Task::none()
             }
             setup => {
-                self.with_new_project(|s| {
-                    s.apply_setup(setup);
-                });
-                Task::none()
+                let ui = &mut self.ui_state;
+                let Some(state) = ui.new_project.as_mut() else {
+                    return Task::none();
+                };
+                match super::store_profile(state, &mut ui.setup_profiles, &setup) {
+                    super::ProfileStored::NotAStore => {
+                        state.apply_setup(setup, &ui.setup_profiles);
+                        Task::none()
+                    }
+                    stored => self.after_profile_store(stored),
+                }
             }
         }
     }

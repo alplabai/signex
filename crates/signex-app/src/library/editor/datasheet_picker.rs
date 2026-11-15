@@ -21,7 +21,7 @@ use super::super::messages::{DatasheetMsg, EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
 use super::inert::unless_read_only_veiled as veiled;
 use super::kit::{self, SP, TS};
-use crate::panels::{PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION};
+use crate::panels::{PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN};
 
 /// One-line hint under the section title.
 const INTRO: &str = "The first document is the primary; the schematic opens it.";
@@ -140,8 +140,8 @@ fn event(address: &EditorAddress, msg: DatasheetMsg) -> LibraryMessage {
     }
 }
 
-/// A card's form row: a muted label and its control, split by the same
-/// portions as the Properties panel's `form_input_row` so the columns match.
+/// A card's form row: a muted label and its control, laid out like the
+/// Properties panel's `form_input_row` so the columns match.
 fn field_row<'a>(
     label: &'a str,
     field: Element<'a, LibraryMessage>,
@@ -153,7 +153,7 @@ fn field_row<'a>(
                 .size(TS.body)
                 .color(theme_ext::text_secondary(tokens))
         )
-        .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+        .width(PROPERTY_LABEL_COLUMN)
         .clip(true)
         .boxed(),
         container(field)

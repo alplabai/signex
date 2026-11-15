@@ -216,15 +216,40 @@ fn fixture_with(
     board: Option<(PcbBoard, bool)>,
     defaults: ProjectDefaults,
 ) -> Fixture {
+    fixture_editing(
+        |lib, sheet| sheet.symbols.extend(extra(lib)),
+        board,
+        defaults,
+    )
+}
+
+/// [`fixture_with`] that edits the whole sheet (`edit` may add wires).
+fn fixture_editing(
+    edit: impl FnOnce(&Library, &mut SchematicSheet),
+    board: Option<(PcbBoard, bool)>,
+    defaults: ProjectDefaults,
+) -> Fixture {
+    fixture_preparing(|_| {}, edit, board, defaults)
+}
+
+/// [`fixture_editing`] with `prepare` run on the library before it is
+/// mounted (another footprint, an alternate on the row).
+fn fixture_preparing(
+    prepare: impl FnOnce(&Library),
+    edit: impl FnOnce(&Library, &mut SchematicSheet),
+    board: Option<(PcbBoard, bool)>,
+    defaults: ProjectDefaults,
+) -> Fixture {
     let _ = signex_app::diagnostics::init_logging();
     let lib = library();
     bind_two_pad_footprint(&lib);
+    prepare(&lib);
     let tmp = tempfile::tempdir().unwrap();
     let sheet_path = tmp.path().join("demo.snxsch");
     let board_path = tmp.path().join("demo.snxpcb");
-    let text = SnxSchematic::new(sheet(&lib, extra(&lib)))
-        .write_string()
-        .unwrap();
+    let mut drawn = sheet(&lib, Vec::new());
+    edit(&lib, &mut drawn);
+    let text = SnxSchematic::new(drawn).write_string().unwrap();
     std::fs::write(&sheet_path, text).unwrap();
     let names_board = board.is_some();
     if let Some((board, newer)) = board {
@@ -339,6 +364,7 @@ fn show(f: &mut Fixture, path: &Path) {
 /// File ▸ New ▸ PCB, then Design ▸ Update PCB Document from the sheet.
 fn new_board_and_list(f: &mut Fixture) {
     send(&mut f.app, menu_row("new_pcb_document"));
+    crate::document_setup::create_if_asked(&mut f.app);
     let sheet = f.sheet.clone();
     show(f, &sheet);
     send(&mut f.app, menu_row("update_pcb_from_schematic"));
@@ -353,6 +379,7 @@ fn board_of(footprints: Vec<signex_types::pcb::Footprint>) -> PcbBoard {
         thickness: 1.6,
         outline: Vec::new(),
         sketch: None,
+        options: Default::default(),
         layers: Vec::new(),
         setup: None,
         nets: Vec::new(),
@@ -402,6 +429,7 @@ fn board_footprint(
         properties: Vec::new(),
         schematic_link: link.map(|unit| SymbolLink::new(InstancePath::root(), [unit])),
         library_ref: None,
+        component: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
@@ -653,6 +681,7 @@ fn no_board_offers_create_pcb() {
     send(&mut f.app, menu_row("update_pcb_from_schematic"));
     assert!(state(&f).lacks_board());
     up(&mut f.app, UpdatePcbMsg::CreatePcbRequested);
+    crate::document_setup::create_if_asked(&mut f.app);
     assert_eq!(state(&f).board(), Some(f.board.as_path()));
     assert!(add_row(&f, R1).on);
 }
@@ -667,7 +696,8 @@ fn validate_runs_on_a_copy() {
     assert!(references(&f).is_empty());
 }
 
-/// The group box ticks or unticks every row of its group.
+/// The group box ticks or unticks every row of its group (#2371: the
+/// Components group holds every footprint row).
 #[test]
 fn the_group_box_unticks_its_whole_group() {
     let mut f = fixture();
@@ -675,7 +705,7 @@ fn the_group_box_unticks_its_whole_group() {
     up(
         &mut f.app,
         UpdatePcbMsg::GroupToggled {
-            group: signex_engine::pcb::eco::EcoGroup::AddFootprints,
+            group: signex_app::app::TableGroup::Components,
             on: false,
         },
     );
@@ -712,9 +742,11 @@ fn a_new_pcb_takes_the_project_defaults_and_is_not_written() {
             via_drill_mm: 0.15,
         }),
         sheet: None,
+        profile: None,
     };
     let mut f = fixture_with(|_| Vec::new(), None, defaults);
     send(&mut f.app, menu_row("new_pcb_document"));
+    crate::document_setup::create_if_asked(&mut f.app);
     let board = engine(&f).board();
     let copper = board
         .layers
@@ -742,8 +774,10 @@ fn a_new_pcb_takes_the_project_defaults_and_is_not_written() {
 fn a_second_new_pcb_is_refused() {
     let mut f = fixture();
     send(&mut f.app, menu_row("new_pcb_document"));
+    crate::document_setup::create_if_asked(&mut f.app);
     let tabs = f.app.document_state.tabs.len();
     send(&mut f.app, menu_row("new_pcb_document"));
+    crate::document_setup::create_if_asked(&mut f.app);
     assert_eq!(f.app.document_state.tabs.len(), tabs);
     assert!(f.app.document_state.error_notice.is_some(), "it says why");
 }
@@ -763,6 +797,7 @@ fn projects_add_new_pcb_makes_the_board() {
             ProjectTreeAction::AddNewPcb(key),
         )),
     );
+    crate::document_setup::create_if_asked(&mut f.app);
     assert!(engine(&f).board().footprints.is_empty());
 }
 
@@ -874,3 +909,9 @@ mod review;
 
 #[path = "update_pcb_unresolved.rs"]
 mod unresolved;
+
+#[path = "update_pcb_dialog.rs"]
+mod dialog;
+
+#[path = "update_pcb_swap.rs"]
+mod swap;

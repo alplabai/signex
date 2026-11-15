@@ -72,6 +72,7 @@ impl Signex {
         self.interaction_state.active_canvas_mut().selected = cuttable;
         let previous_copy = self.interaction_state.clipboard.clone();
         let previous_text = self.interaction_state.clipboard_text.clone();
+        let previous_board_copy = self.interaction_state.pcb_clipboard.clone();
         // Cut deletes only what the copy now holds: if the copy failed (the
         // reason is in the Messages panel), nothing is deleted.
         if self.handle_selection_copy_requested() != CopyOutcome::Carried {
@@ -80,6 +81,7 @@ impl Signex {
             );
             self.interaction_state.clipboard = previous_copy;
             self.interaction_state.clipboard_text = previous_text;
+            self.interaction_state.pcb_clipboard = previous_board_copy;
             self.interaction_state.active_canvas_mut().selected = selected;
             return Task::none();
         }
@@ -91,6 +93,7 @@ impl Signex {
             );
             self.interaction_state.clipboard = previous_copy;
             self.interaction_state.clipboard_text = previous_text;
+            self.interaction_state.pcb_clipboard = previous_board_copy;
             self.interaction_state.active_canvas_mut().selected = selected;
             return Task::none();
         }
@@ -138,6 +141,7 @@ impl Signex {
         match engine.copy_selection(selected, grid) {
             Ok(Some(copied)) => {
                 self.interaction_state.clipboard = Some(copied);
+                self.interaction_state.pcb_clipboard = None;
                 CopyOutcome::Carried
             }
             Ok(None) => {
@@ -146,6 +150,7 @@ impl Signex {
                 );
                 self.interaction_state.clipboard = None;
                 self.interaction_state.clipboard_text = None;
+                self.interaction_state.pcb_clipboard = None;
                 CopyOutcome::NothingToCarry
             }
             Err(error) => {
@@ -206,6 +211,14 @@ impl Signex {
         std::path::PathBuf,
         signex_types::schematic::Point,
     )> {
+        if self.interaction_state.clipboard.is_none()
+            && self.interaction_state.pcb_clipboard.is_some()
+        {
+            crate::diagnostics::log_warning(
+                "Paste: the clipboard holds board objects, which cannot be pasted on a schematic; nothing was pasted.",
+            );
+            return None;
+        }
         let copied = self.interaction_state.clipboard.clone()?;
         let target = self.document_state.active_path.clone()?;
         let sheet = self.document_state.engines.get(&target)?.document();

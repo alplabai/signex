@@ -42,12 +42,15 @@ pub struct MenuItem {
     pub checked: Option<bool>,
 }
 
-/// A placeholder is a planned feature with no handler yet (greyed, "planned"
-/// tooltip); an unavailable row is greyed informational text; a live row has one and is greyed out
-/// unless enabled in the current context.
+/// A placeholder is a feature with no handler yet (greyed, its `reason` as
+/// the tooltip, else "planned"); an unavailable row is greyed informational
+/// text; a live row has one and is greyed out unless enabled in the current
+/// context.
 #[derive(Debug, Clone)]
 pub enum ItemState {
-    Placeholder,
+    Placeholder {
+        reason: Option<String>,
+    },
     Unavailable,
     Live {
         action: MenuMessage,

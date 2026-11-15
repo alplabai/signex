@@ -42,6 +42,7 @@ fn footprint(n: u128, layer: &str, pads: Vec<Pad>) -> Footprint {
         locked: false,
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         pads,
         graphics: Vec::new(),
         properties: Vec::new(),
@@ -78,6 +79,7 @@ fn via(n: u128, at: (f64, f64), net: u32) -> Via {
 fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, vias: Vec<Via>) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: String::new(),

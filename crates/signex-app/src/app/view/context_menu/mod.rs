@@ -5,6 +5,7 @@
 //! sibling `overlays` module.
 
 mod anchored;
+mod backdrop;
 mod components_row;
 mod dock_tab;
 mod grid_picker;

@@ -12,15 +12,18 @@
 # conflict on the baseline file; the second regenerates it after its merge.
 #
 # A second check (macro_literals below, in awk) fails on a bare string
-# literal that is an element of `row![…]`, `column![…]` or `stack![…]`: `&str`
-# is a widget in this iced fork, so such a literal skips `text(raw(…))`.
+# literal that is an element of `row!`, `column!`, `stack!`, `grid!` or
+# `rich_text!` (any of `[…]`, `(…)`, `{…}`): `&str` is a widget in this iced
+# fork, so such a literal skips `text(raw(…))`. A literal wrapped as `("X")`,
+# `{ "X" }` or in an `if … { "X" } else { … }` branch counts as bare too.
 # ast-grep rules cover the rest (no-raw-literal-widget, no-raw-alias).
 #
 # Known limits: the count is per call site, so a helper that wraps `raw` once
 # and is called many times counts once (crates/chrome-catalog/src/bom_modal.rs
 # does this); an alias or `raw` passed as a value is refused by the ast-grep
-# rule no-raw-alias, except `f(raw)` on a plain function; a byte
-# string `b"…"` as a row!/column! element escapes the macro check.
+# rule no-raw-alias, except `f(raw)` on a plain function. The macro check sees
+# literals only: a `const LABEL: &str` or a `let` bound to a literal and then
+# used as an element, and a literal reached through a `match` arm, pass.
 #
 # The count is textual, not an ast-grep query: iced's `row![…]`/`column![…]`
 # macros hold their arguments as unparsed token trees, which an AST search
@@ -67,115 +70,136 @@ hits() {
 count() { hits | grep -c . || true; }
 
 # POSIX awk (BSD and GNU): prints `file:line` for each bare string literal that
-# is an element of row![…], column![…] or stack![…]. It walks the brackets after
-# the macro name, splits the top-level elements on commas, and flags an element
-# that is nothing but one string literal ("…", r"…" or r#"…"#). Comments (`//`,
-# `/* */`) are dropped only outside string literals; char literals are skipped;
-# an inline `#[cfg(test)] mod name {` ends a file (a `mod name;` declaration
-# does not); nested macros are checked too.
+# is an element of a layout macro. Each line is first masked, one character
+# for one, into `m`: comments (nested `/* */` too) become spaces, a plain
+# string literal ("…", r"…", r#"…"#) becomes \001 then \002s, and any other
+# literal (b"…", br#"…"#, c"…", cr"…", a char) becomes \003s. The macro search
+# and the bracket matching then run on `m`, so a comment or a string never
+# opens a macro or moves a bracket. An inline `#[cfg(test)] mod name { … }` is
+# skipped up to its closing brace (a `mod name;` declaration is not); nested
+# macros are checked too.
 MACRO_AWK='
 function isid(ch) { return ch ~ /[A-Za-z0-9_]/ }
-function rawstart(str, i) {
-  return substr(str, i, 1) == "r" && (i == 1 || !isid(substr(str, i - 1, 1))) \
-    && match(substr(str, i, 40), /^r#*"/)
-}
-# Index of the last character of the string literal starting at i, else 0.
-function litend(str, i,   j, d, h, k, term, rest, idx, len) {
-  if (substr(str, i, 1) == "\"") {
-    j = i + 1
-    while (j <= length(str)) {
-      d = substr(str, j, 1)
-      if (d == "\\") { j += 2; continue }
-      if (d == "\"") return j
-      j++
-    }
-    return 0
+function rep(ch, k,   o) { o = ""; while (k-- > 0) o = o ch; return o }
+# Index of the delimiter that closes the one at o, else 0.
+function closer(o,   i, d, ch) {
+  d = 0
+  for (i = o; i <= n; i++) {
+    ch = substr(m, i, 1)
+    if (ch == "(" || ch == "[" || ch == "{") d++
+    else if (ch == ")" || ch == "]" || ch == "}") { d--; if (!d) return i }
   }
-  if (!rawstart(str, i)) return 0
-  len = RLENGTH; h = len - 2; term = "\""
-  for (k = 0; k < h; k++) term = term "#"
-  rest = substr(str, i + len)
-  idx = index(rest, term)
-  if (!idx) return 0
-  return i + len + idx - 2 + length(term)
+  return 0
 }
-function strip(b,   out, i, n, c, e) {
-  out = ""; i = 1; n = length(b)
-  while (i <= n) {
-    c = substr(b, i, 1)
-    e = (c == "\"" || c == "r") ? litend(b, i) : 0
-    if (e) { out = out substr(b, i, e - i + 1); i = e + 1; continue }
-    if (c == "\047" && match(substr(b, i, 12), /^\047(\\[^\047]*|[^\\\047])\047/)) {
-      out = out substr(b, i, RLENGTH); i += RLENGTH; continue
-    }
-    if (c == "/" && substr(b, i + 1, 1) == "/") {
-      while (i <= n && substr(b, i, 1) != "\n") i++
-      continue
-    }
-    if (c == "/" && substr(b, i + 1, 1) == "*") {
-      e = index(substr(b, i + 2), "*/")
-      e = e ? i + 2 + e : n
-      while (i <= e) { c = substr(b, i, 1); if (c == "\n") out = out c; i++ }
-      continue
-    }
-    out = out c; i++
+# Start of the bare literal that m[a..b] evaluates to, else 0.
+function bare(a, b,   ch, t, e, i, d, r, last) {
+  while (a <= b && substr(m, a, 1) ~ /[ \t\r\n]/) a++
+  while (b >= a && substr(m, b, 1) ~ /[ \t\r\n]/) b--
+  if (a > b) return 0
+  ch = substr(m, a, 1)
+  if (ch == "\001") {
+    t = substr(m, a + 1, b - a); gsub(/[\002\r\n]/, "", t)
+    return t == "" ? a : 0
   }
-  return out
+  if (ch == "(" && closer(a) == b) return bare(a + 1, b - 1)
+  if (ch == "{" && closer(a) == b) {
+    last = a; d = 0
+    for (i = a + 1; i < b; i++) {
+      ch = substr(m, i, 1)
+      if (ch ~ /[[({]/) d++
+      else if (ch ~ /[])}]/) d--
+      else if (ch == ";" && !d) last = i
+    }
+    return bare(last + 1, b - 1)
+  }
+  if (substr(m, a, 2) == "if" && !isid(substr(m, a + 2, 1))) {
+    d = 0
+    for (i = a + 2; i <= b; i++) {
+      ch = substr(m, i, 1)
+      if (ch == "{" && !d) {
+        e = closer(i); if (!e) return 0
+        r = bare(i, e); if (r) return r
+        i = e; continue
+      }
+      if (ch ~ /[[({]/) d++
+      else if (ch ~ /[])}]/) d--
+    }
+  }
+  return 0
 }
-function check(from, to,   body, lead, nl, e, t) {
-  body = strip(substr(s, from, to - from))
-  match(body, /^[ \t\n]*/)
-  lead = substr(body, 1, RLENGTH)
-  e = litend(body, RLENGTH + 1)
-  if (!e || substr(body, e + 1) !~ /^[ \t\n]*$/) return
-  nl = gsub(/\n/, "\n", lead)
-  t = substr(s, 1, from - 1)
-  print FILENAME ":" (gsub(/\n/, "\n", t) + nl + 1)
+function flag(a, b,   r, t) {
+  r = bare(a, b)
+  if (!r) return
+  t = substr(m, 1, r - 1)
+  print FILENAME ":" (gsub(/\n/, "\n", t) + 1)
+}
+function intest(pos,   k) {
+  for (k = 1; k <= nt; k++) if (pos >= ta[k] && pos <= tb[k]) return 1
+  return 0
 }
 {
-  if (stop) next
-  if (pend && $0 ~ /^[ \t]*(pub(\([a-z]+\))?[ \t]+)?mod[ \t]+[A-Za-z0-9_]+[ \t]*\{/) { stop = 1; next }
-  pend = ($0 ~ /^[ \t]*#\[cfg\(test\)\]/)
-  s = s $0 "\n"
+  line = $0; n = length(line); out = ""; i = 1
+  while (i <= n) {
+    c = substr(line, i, 1)
+    if (cdepth) {
+      t = substr(line, i, 2)
+      if (t == "/*") { cdepth++; out = out "  "; i += 2 }
+      else if (t == "*/") { cdepth--; out = out "  "; i += 2 }
+      else { out = out " "; i++ }
+      continue
+    }
+    if (inlit) {
+      if (hashes < 0 && c == "\\") { k = (i < n) ? 2 : 1; out = out rep(fill, k); i += k; continue }
+      if (c == "\"" && (hashes <= 0 || substr(line, i + 1, hashes) == rep("#", hashes))) {
+        k = 1 + (hashes > 0 ? hashes : 0); out = out rep(fill, k); i += k; inlit = 0; continue
+      }
+      out = out fill; i++; continue
+    }
+    if ((c == "\"" || ((c == "b" || c == "c" || c == "r") && (i == 1 || !isid(substr(line, i - 1, 1))))) \
+        && match(substr(line, i, 300), /^([bc]?r#*|[bc])?"/)) {
+      k = RLENGTH; pre = substr(line, i, k - 1)
+      hashes = (pre ~ /r/) ? gsub(/#/, "#", pre) : -1
+      fill = (pre ~ /[bc]/) ? "\003" : "\002"
+      out = out (fill == "\002" ? "\001" : "\003") rep(fill, k - 1); i += k; inlit = 1; continue
+    }
+    if (c == "\047" && match(substr(line, i, 16), /^\047(\\.[^\047]*|[^\\\047])\047/)) {
+      out = out rep("\003", RLENGTH); i += RLENGTH; continue
+    }
+    if (c == "/" && substr(line, i + 1, 1) == "/") { out = out rep(" ", n - i + 1); i = n + 1; continue }
+    if (c == "/" && substr(line, i + 1, 1) == "*") { cdepth = 1; out = out "  "; i += 2; continue }
+    out = out c; i++
+  }
+  m = m out "\n"
 }
 END {
-  n = length(s); p = 1
-  while (p <= n) {
-    if (!match(substr(s, p), /(row|column|stack)!\[/)) break
-    st = p + RSTART - 1; i = st + RLENGTH; p = i
-    if (st > 1 && isid(substr(s, st - 1, 1))) continue
-    depth = 0; from = i
-    while (i <= n) {
-      c = substr(s, i, 1)
-      e = (c == "\"" || c == "r") ? litend(s, i) : 0
-      if (e) {
-        i = e + 1
-        continue
-      } else if (c == "\047") {
-        if (match(substr(s, i, 12), /^\047(\\[^\047]*|[^\\\047])\047/)) i += RLENGTH - 1
-      } else if (c == "/" && substr(s, i + 1, 1) == "/") {
-        while (i <= n && substr(s, i, 1) != "\n") i++
-        continue
-      } else if (c == "/" && substr(s, i + 1, 1) == "*") {
-        e = index(substr(s, i + 2), "*/")
-        i = e ? i + 2 + e + 1 : n + 1
-        continue
-      } else if (c ~ /[[({]/) {
-        depth++
-      } else if (c ~ /[)}]/) {
-        depth--
-      } else if (c == "]") {
-        if (depth == 0) { check(from, i); break }
-        depth--
-      } else if (c == "," && depth == 0) {
-        check(from, i); from = i + 1
-      }
-      i++
+  n = length(m); p = 1; nt = 0
+  while (match(substr(m, p), /#\[cfg\(test\)\]/)) {
+    a = p + RSTART - 1 + RLENGTH; p = a
+    if (match(substr(m, a, 400), /^([ \t\r\n]*#\[[^]]*\])*[ \t\r\n]*(pub(\([a-z ]+\))?[ \t\r\n]+)?mod[ \t\r\n]+[A-Za-z0-9_]+[ \t\r\n]*\{/)) {
+      o = a + RLENGTH - 1; e = closer(o)
+      if (!e) e = n
+      nt++; ta[nt] = o; tb[nt] = e; p = e + 1
     }
+  }
+  p = 1
+  while (match(substr(m, p), /(row|column|stack|grid|rich_text)![ \t\r\n]*[[({]/)) {
+    st = p + RSTART - 1; o = st + RLENGTH - 1; p = o + 1
+    if (st > 1 && isid(substr(m, st - 1, 1))) continue
+    if (intest(st)) continue
+    e = closer(o)
+    if (!e) continue
+    from = o + 1; d = 0
+    for (i = from; i < e; i++) {
+      c = substr(m, i, 1)
+      if (c ~ /[[({]/) d++
+      else if (c ~ /[])}]/) d--
+      else if (c == "," && !d) { flag(from, i - 1); from = i + 1 }
+    }
+    flag(from, e - 1)
   }
 }'
 
-# `file:line` of every bare string literal element in row!/column!/stack!.
+# `file:line` of every bare string literal element in a layout macro.
 macro_literals() {
   list_files | { grep -vE '/(tests|[a-z_]*_tests)\.rs$' || true; } \
     | xargs -n 1 env LC_ALL=C awk "$MACRO_AWK" | tr -d '\r'
@@ -195,7 +219,7 @@ fi
 if [[ "${1:-}" != "--generate" ]]; then
   bare="$(macro_literals)"
   if [[ -n "$bare" ]]; then
-    echo "Raw-label check: a bare string literal is an element of row!/column!/stack!:"
+    echo "Raw-label check: a bare string literal is an element of row!/column!/stack!/grid!/rich_text!:"
     echo "$bare" | sed 's/^/  /'
     echo "  Write text(raw(\"…\")) or text(t!(i18n, ids::…)); a &str is a widget in this iced."
     exit 1

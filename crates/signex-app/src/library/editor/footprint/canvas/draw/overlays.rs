@@ -8,6 +8,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Radians, Vector};
 
 use super::super::{DRAG_THRESHOLD_PX, FootprintCanvas, FootprintCanvasState};
+use super::cursor_ink::CursorInk;
 use super::sketch::{
     draw_dof_direction_arrows, draw_sketch_overlay, draw_sketch_snap_glyph,
     draw_sketch_tool_preview,
@@ -37,17 +38,16 @@ impl FootprintCanvas<'_> {
             let p = cstate.world_to_screen((cx, cy));
             let half = 7.0_f32;
             let arm = 4.5_f32;
-            let dark_blue = Color::from_rgba(0.04, 0.18, 0.36, 1.0);
-            let near_black = Color::from_rgba(0.08, 0.08, 0.08, 1.0);
+            let ink = CursorInk::for_sketch_on(self.bg_color);
             let square_path = Path::rectangle(
                 Point::new(p.x - half, p.y - half),
                 iced::Size::new(half * 2.0, half * 2.0),
             );
             frame.stroke(
                 &square_path,
-                Stroke::default().with_width(1.5).with_color(dark_blue),
+                Stroke::default().with_width(1.5).with_color(ink.frame),
             );
-            let stroke = Stroke::default().with_width(1.0).with_color(near_black);
+            let stroke = Stroke::default().with_width(1.0).with_color(ink.mark);
             frame.stroke(
                 &Path::line(Point::new(p.x - arm, p.y), Point::new(p.x + arm, p.y)),
                 stroke,
@@ -59,7 +59,8 @@ impl FootprintCanvas<'_> {
         }
     }
 
-    /// v0.27 — Select-tool cursor mark: a dark "+" at the raw cursor,
+    /// v0.27 — Select-tool cursor mark: a "+" at the raw cursor, in an
+    /// ink that reads on the ground ([`CursorInk`], #2356),
     /// replaced by a rotated double-headed arrow when hovering a
     /// sketch Line (the resize cue at the exact line angle).
     pub(in crate::library::editor::footprint::canvas) fn draw_select_cursor_mark(
@@ -78,8 +79,8 @@ impl FootprintCanvas<'_> {
             && let Some(p) = cursor_screen
         {
             let arm = 5.0_f32;
-            let near_black = Color::from_rgba(0.10, 0.10, 0.10, 0.90);
-            let stroke = Stroke::default().with_width(1.0).with_color(near_black);
+            let ink = CursorInk::for_sketch_on(self.bg_color);
+            let stroke = Stroke::default().with_width(1.0).with_color(ink.mark);
 
             // Hit-test the cursor against sketch Lines to find the one
             // we'd resize on drag (same tolerance as the hover test).
@@ -147,10 +148,8 @@ impl FootprintCanvas<'_> {
                 let length = 16.0_f32; // shaft + head tip extent
                 let head_len = 7.0_f32;
                 let head_half = 5.0_f32;
-                let shaft_stroke = Stroke::default().with_width(2.2).with_color(near_black);
-                let halo_stroke = Stroke::default()
-                    .with_width(4.5)
-                    .with_color(Color::from_rgba(1.0, 1.0, 1.0, 0.85));
+                let shaft_stroke = Stroke::default().with_width(2.2).with_color(ink.mark);
+                let halo_stroke = Stroke::default().with_width(4.5).with_color(ink.halo);
                 frame.with_save(|inner| {
                     inner.translate(Vector::new(p.x, p.y));
                     inner.rotate(Radians(perp));
@@ -188,8 +187,8 @@ impl FootprintCanvas<'_> {
                     // each filled head.
                     inner.stroke(&right_head, halo_stroke);
                     inner.stroke(&left_head, halo_stroke);
-                    inner.fill(&right_head, near_black);
-                    inner.fill(&left_head, near_black);
+                    inner.fill(&right_head, ink.mark);
+                    inner.fill(&left_head, ink.mark);
                 });
             } else {
                 frame.stroke(

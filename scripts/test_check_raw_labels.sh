@@ -149,6 +149,76 @@ put "$t" crates/signex-app/src/x.rs 'fn v() { column![/* "X" */ a(), // "Y"
 b(r"x").y(), c(r#"]"#)]; }'
 expect comments_and_raw_strings_that_are_not_elements pass "$t"
 
+# --- #2193: every delimiter, grid!/rich_text!, wrapped literals, scanner edges
+
+t="$(new_tree paren_delimiter)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column!("X"); }'
+expect paren_delimiter fail "$t"
+
+t="$(new_tree brace_delimiter)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { row!{a(), "X"}; }'
+expect brace_delimiter fail "$t"
+
+t="$(new_tree space_before_bracket)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { stack! ["X"]; }'
+expect space_before_bracket fail "$t"
+
+t="$(new_tree grid_literal)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { iced::widget::grid!["X"]; }'
+expect grid_literal fail "$t"
+
+t="$(new_tree rich_text_literal)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { rich_text![span(raw("a")), "X"]; }'
+expect rich_text_literal fail "$t"
+
+t="$(new_tree parenthesized_literal)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column![(("X"))]; }'
+expect parenthesized_literal fail "$t"
+
+t="$(new_tree block_literal)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column![{ "X" }]; }'
+expect block_literal fail "$t"
+
+t="$(new_tree block_tail_literal)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column![{ let a = f(); "X" }]; }'
+expect block_tail_literal fail "$t"
+
+t="$(new_tree if_branch_literal)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column![if c { a() } else if d { b() } else { "X" }]; }'
+expect if_branch_literal fail "$t"
+
+t="$(new_tree nested_block_comment)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column![/* a /* b */ c */ "X"]; }'
+expect nested_block_comment fail "$t"
+
+t="$(new_tree byte_raw_string_does_not_desync)"
+put "$t" crates/signex-app/src/x.rs 'fn v() { column![a(br#"x" ]"#), b(cr"]"), c(b"\"]"), "X"]; }'
+expect byte_raw_string_does_not_desync fail "$t"
+
+t="$(new_tree char_literal_quote_does_not_desync)"
+put "$t" crates/signex-app/src/x.rs "fn v() { column![f('\"'), g('\\''), h(')'), \"X\"]; }"
+expect char_literal_quote_does_not_desync fail "$t"
+
+t="$(new_tree scan_resumes_after_inline_test_mod)"
+put "$t" crates/signex-app/src/x.rs 'fn a() {}
+#[cfg(test)]
+mod tests {
+    fn t() { column!["in a test module"]; }
+}
+fn v() { column!["LEAK"]; }'
+expect scan_resumes_after_inline_test_mod fail "$t"
+
+t="$(new_tree macro_in_comment_or_string_is_not_a_macro)"
+put "$t" crates/signex-app/src/x.rs '/// column!["x"]
+//! row!("y")
+/* stack!{"z"} */
+fn v() { let s = "grid![\"w\"]"; let r = r#"rich_text!["v"]"#; }'
+expect macro_in_comment_or_string_is_not_a_macro pass "$t"
+
+t="$(new_tree wrapped_elements_that_are_not_bare_literals)"
+put "$t" crates/signex-app/src/x.rs "fn v() { column![(a, \"X\").0, { f(\"X\") }, if c { a() } else { b(\"X\") }, f(')'), my_row![\"X\"]]; }"
+expect wrapped_elements_that_are_not_bare_literals pass "$t"
+
 # --generate rewrites the baseline so a grown tree passes again.
 t="$(new_tree generate_relocks)"
 put "$t" crates/signex-app/src/x.rs 'fn v() { text(raw("a")); }'

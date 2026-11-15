@@ -58,6 +58,7 @@ fn footprint(uuid: Uuid, reference: &str, x: f64, locked: bool, pads: Vec<Pad>) 
         locked,
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         pads,
         graphics: Vec::new(),
         properties: Vec::new(),
@@ -100,6 +101,7 @@ fn board() -> PcbBoard {
     );
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),
@@ -363,7 +365,11 @@ fn a_drag_previews_then_drops_the_footprint_on_the_grid() {
     let (from, to) = (Point::new(10.0, 10.0), Point::new(13.1, 10.2));
     send(
         &mut f.app,
-        Message::PcbCanvas(PcbCanvasMsg::FootprintDragged { from, to }),
+        Message::PcbCanvas(PcbCanvasMsg::FootprintDragged {
+            from,
+            to,
+            tolerance_mm: REACH,
+        }),
     );
     assert_eq!(snapshot(&f.app), before, "a drag in progress edits nothing");
     let ghost = &f.app.interaction_state.pcb_canvas.highlight().ghost;

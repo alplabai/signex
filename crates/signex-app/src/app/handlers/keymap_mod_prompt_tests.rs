@@ -54,6 +54,37 @@ fn deliver(app: &mut Signex, result: Result<KeymapModMigration, String>) -> Task
     app.update(Message::Ui(UiMsg::KeymapModMigrationWritten(result)))
 }
 
+/// The tests here log the same Messages lines into the one shared ring, so
+/// the ones that log or count them take turns (#2320).
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// The newest Messages line now; count against it with [`lines_since`].
+fn mark() -> Option<u64> {
+    let _ = crate::diagnostics::init_logging();
+    crate::diagnostics::newest_entry_id()
+}
+
+/// How many lines logged after `mark` contain `needle`. Lines older than the
+/// mark, which the ring may drop meanwhile, never move the count. A line
+/// logged after the mark but evicted before the read fails the test, since
+/// the count would silently miss it.
+fn lines_since(mark: Option<u64>, needle: &str) -> usize {
+    let delta = crate::diagnostics::entries_since(mark);
+    assert_eq!(
+        delta.missed, 0,
+        "diagnostics ring overflowed: {} lines logged after the mark were evicted before the count",
+        delta.missed
+    );
+    delta
+        .entries
+        .iter()
+        .filter(|entry| entry.message.contains(needle))
+        .count()
+}
+
 fn app_with_legacy_profile() -> Signex {
     let (mut app, _boot) = Signex::new();
     app.ui_state.set_keymap_profiles(legacy_set());
@@ -152,15 +183,16 @@ fn use_command_backs_the_file_up_then_writes_the_moved_rows() {
 
 #[test]
 fn a_failed_move_leaves_the_keymap_alone_reports_to_messages_and_keeps_the_flag_unset() {
+    let _turn = serial();
     let mut app = app_with_legacy_profile();
     let before = app.ui_state.keymap_profiles.clone();
     let needle = "Shortcuts were not moved to \u{2318}: disk said no";
-    let seen = crate::diagnostics::logged_count(needle);
+    let seen = mark();
 
     let task = deliver(&mut app, Err("disk said no".to_string()));
 
     assert_eq!(app.ui_state.keymap_profiles, before);
-    assert_eq!(crate::diagnostics::logged_count(needle), seen + 1);
+    assert_eq!(lines_since(seen, needle), 1);
     assert_eq!(
         task.units(),
         0,
@@ -170,16 +202,17 @@ fn a_failed_move_leaves_the_keymap_alone_reports_to_messages_and_keeps_the_flag_
 
 #[test]
 fn a_finished_move_is_adopted_reported_and_remembered() {
+    let _turn = serial();
     let mut app = app_with_legacy_profile();
     let source = app.ui_state.keymap_profiles.clone();
     let moved = migrate_active_to_mod(&source).unwrap().set;
     let needle = "the standard commands now use \u{2318}.";
-    let seen = crate::diagnostics::logged_count(needle);
+    let seen = mark();
 
     let task = deliver(&mut app, Ok(written(moved.clone(), source)));
 
     assert_eq!(app.ui_state.keymap_profiles, moved);
-    assert_eq!(crate::diagnostics::logged_count(needle), seen + 1);
+    assert_eq!(lines_since(seen, needle), 1);
     assert!(
         task.units() >= 1,
         "the asked flag is written once it landed"
@@ -190,12 +223,13 @@ fn a_finished_move_is_adopted_reported_and_remembered() {
 /// from an older set and must not replace the live one.
 #[test]
 fn a_stale_result_is_not_adopted_and_the_question_stays_open() {
+    let _turn = serial();
     let mut app = app_with_legacy_profile();
     let source = ShortcutProfileSet::built_ins().unwrap();
     let moved = migrate_active_to_mod(&legacy_set()).unwrap().set;
     let before = app.ui_state.keymap_profiles.clone();
     let needle = "not adopted: shortcuts changed meanwhile; earlier file kept as keyboard_shortcuts.toml.bak";
-    let seen = crate::diagnostics::logged_count(needle);
+    let seen = mark();
 
     let task = deliver(&mut app, Ok(written(moved, source)));
 
@@ -203,7 +237,7 @@ fn a_stale_result_is_not_adopted_and_the_question_stays_open() {
         app.ui_state.keymap_profiles, before,
         "the stale set is dropped"
     );
-    assert_eq!(crate::diagnostics::logged_count(needle), seen + 1);
+    assert_eq!(lines_since(seen, needle), 1);
     assert_eq!(
         task.units(),
         1,
@@ -237,17 +271,18 @@ fn the_resave_puts_the_live_profiles_back_over_the_stale_file() {
 
 #[test]
 fn skipped_chords_are_listed_in_messages() {
+    let _turn = serial();
     let mut app = app_with_legacy_profile();
     let source = app.ui_state.keymap_profiles.clone();
     let moved = migrate_active_to_mod(&source).unwrap().set;
     let mut done = written(moved, source);
     done.skipped = vec!["Ctrl+Skipped".to_string()];
     let needle = "already bound: Ctrl+Skipped.";
-    let seen = crate::diagnostics::logged_count(needle);
+    let seen = mark();
 
     let _ = deliver(&mut app, Ok(done));
 
-    assert_eq!(crate::diagnostics::logged_count(needle), seen + 1);
+    assert_eq!(lines_since(seen, needle), 1);
 }
 
 fn dirty_draft() -> crate::keymap::KeymapEditorModel {
@@ -269,6 +304,7 @@ fn dirty_draft() -> crate::keymap::KeymapEditorModel {
 /// write them back over the migrated file. The draft is moved too, edits kept.
 #[test]
 fn an_open_preferences_draft_is_rebased_onto_the_moved_profile() {
+    let _turn = serial();
     let mut app = app_with_legacy_profile();
     app.ui_state.preferences_open = true;
     app.ui_state.preferences_keymap_editor = dirty_draft();
@@ -299,13 +335,14 @@ fn an_open_preferences_draft_is_rebased_onto_the_moved_profile() {
 /// from the live set, without a "draft moved" message.
 #[test]
 fn a_closed_preferences_draft_is_reseeded_quietly() {
+    let _turn = serial();
     let mut app = app_with_legacy_profile();
     assert!(!app.ui_state.preferences_open);
     app.ui_state.preferences_keymap_editor = dirty_draft();
     let source = app.ui_state.keymap_profiles.clone();
     let moved = migrate_active_to_mod(&source).unwrap().set;
     let needle = "the open Preferences draft was moved";
-    let seen = crate::diagnostics::logged_count(needle);
+    let seen = mark();
 
     let _ = deliver(&mut app, Ok(written(moved.clone(), source)));
 
@@ -313,21 +350,27 @@ fn a_closed_preferences_draft_is_reseeded_quietly() {
         app.ui_state.preferences_keymap_editor,
         crate::keymap::KeymapEditorModel::new(moved)
     );
-    assert_eq!(crate::diagnostics::logged_count(needle), seen);
+    assert_eq!(lines_since(seen, needle), 0);
+    // Positive control: the move itself was reported after the mark.
+    assert_eq!(
+        lines_since(seen, "the standard commands now use \u{2318}."),
+        1
+    );
 }
 
 #[test]
 fn keeping_control_changes_nothing_says_so_and_remembers_at_once() {
+    let _turn = serial();
     let mut app = app_with_legacy_profile();
     let before = app.ui_state.keymap_profiles.clone();
-    let seen = crate::diagnostics::logged_count("kept Control for the standard commands");
+    let seen = mark();
 
     let task = app.handle_keymap_mod_prompt_answered(false);
 
     assert_eq!(app.ui_state.keymap_profiles, before);
     assert_eq!(
-        crate::diagnostics::logged_count("kept Control for the standard commands"),
-        seen + 1
+        lines_since(seen, "kept Control for the standard commands"),
+        1
     );
     assert!(task.units() >= 1, "the asked flag is persisted by a Task");
 }

@@ -1,15 +1,16 @@
-//! The Update PCB from Schematic dialog (#1312): summary, the stale or
-//! blocked banner, the grouped rows with group checkboxes, notes and the
+//! The Update PCB from Schematic dialog (#1312, #2371): header, the summary
+//! chips and the stale or blocked banner, the table (`table.rs`) scrolling
+//! between the fixed column headings and the footer, the notes, and the
 //! Close / Report... / Validate / Execute footer. State and rules:
 //! `app/update_pcb/`.
 
 use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Alignment, Element, Length, Widget as _};
-use signex_engine::pcb::eco::{EcoChangeList, EcoGroup, EcoKey, EcoRow};
+use signex_engine::pcb::eco::EcoChangeList;
 use signex_i18n::UserText;
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{CheckboxLabel as _, Label, checkbox, text};
+use signex_widgets::{Label, text};
 
 use super::sizes;
 use crate::app::update_pcb::{BoardStatus, Phase, UpdatePcbState};
@@ -18,6 +19,8 @@ use crate::styles::{
     DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split, ti, tokens,
 };
 
+mod summary;
+mod table;
 #[cfg(test)]
 mod tests;
 mod texts;
@@ -73,36 +76,40 @@ impl Signex {
             super::header::DIALOG_HEADER_H,
             tokens,
         );
-        let mut body = Column::new()
-            .spacing(SP.m)
-            .push(self.update_pcb_banner(state, i18n, tokens));
-        if let Some(list) = state.list.as_ref() {
-            body = body
-                .push(list_view(list, i18n, tokens))
-                .push(notes_view(list, i18n, tokens));
+        let mut top = Column::new().spacing(SP.m);
+        if let Some(list) = state.ready_list().filter(|l| !l.rows.is_empty()) {
+            top = top.push(summary::bar(list, &state.table, i18n, tokens));
         }
-        if let Some(verdict) = &state.validation {
-            body = body.push(match verdict {
-                Ok(()) => line(t!(i18n, ids::UPDATE_PCB_VALID), tokens::accent(tokens)),
-                Err(why) => line(
-                    t!(i18n, ids::UPDATE_PCB_INVALID, "why" => why.as_str()),
-                    tokens::danger(tokens),
-                ),
-            });
+        top = top.push(self.update_pcb_banner(state, i18n, tokens));
+        let mut card = Column::new()
+            .push(header)
+            .push(container(top).padding([SP.l, SP.xl]).boxed());
+        if let Some(list) = state.list.as_ref().filter(|l| !l.rows.is_empty()) {
+            let scrolled = column![
+                table::body(state, list, i18n, tokens),
+                container(notes_view(list, i18n, tokens)).padding([SP.m, SP.xl]),
+            ];
+            card = card
+                .push(table::headings(i18n, tokens))
+                .push(scrollable(scrolled).height(Length::Fill).boxed());
+        } else {
+            card = card.push(Space::new().height(Length::Fill).boxed());
         }
-        let body = scrollable(container(body).padding([SP.l, SP.xl])).height(Length::Fill);
-        let footer = dialog_footer_split(Vec::new(), self.update_pcb_buttons(state, i18n, tokens));
-        container(column![header, body, footer].width(Length::Fixed(
-            super::widgets::modal_card_width(self.ui_state.window_size, sizes::UPDATE_PCB.0),
-        )))
-        .height(Length::Fixed(sizes::UPDATE_PCB.1))
-        .style(crate::styles::modal_card(tokens))
-        .clip(true)
-        .boxed()
+        let footer = dialog_footer_split(
+            validation_line(state, i18n, tokens).into_iter().collect(),
+            self.update_pcb_buttons(state, i18n, tokens),
+        );
+        let (width, height) =
+            super::widgets::fit_modal_size(self.ui_state.window_size, sizes::UPDATE_PCB);
+        container(card.push(footer).width(Length::Fixed(width)))
+            .height(Length::Fixed(height))
+            .style(crate::styles::modal_card(tokens))
+            .clip(true)
+            .boxed()
     }
 
-    /// The summary, or what stands in the way: no board, opening, reading,
-    /// a failure, a stale list, a parked or read-only board.
+    /// What stands in the way of a list: no board, opening, reading, a
+    /// failure, an empty list, a stale list, a parked or read-only board.
     fn update_pcb_banner<'a>(
         &self,
         state: &UpdatePcbState,
@@ -127,24 +134,11 @@ impl Signex {
                 danger,
             ),
             Phase::Ready => {
-                let Some(list) = state.list.as_ref() else {
-                    return Space::new().boxed();
-                };
-                let summary = if list.rows.is_empty() {
-                    line(t!(i18n, ids::UPDATE_PCB_NOTHING), muted)
-                } else {
-                    line(
-                        t!(
-                            i18n,
-                            ids::UPDATE_PCB_SUMMARY,
-                            "ticked" => list.rows.iter().filter(|r| list.applies(r)).count(),
-                            "total" => list.rows.len()
-                        ),
-                        ti(tokens.text),
-                    )
-                };
+                if state.list.as_ref().is_some_and(|l| l.rows.is_empty()) {
+                    return line(t!(i18n, ids::UPDATE_PCB_NOTHING), muted);
+                }
                 let Some(why) = self.update_pcb_execute_block() else {
-                    return summary;
+                    return Space::new().boxed();
                 };
                 let action = match self.update_pcb_board_status() {
                     Some(BoardStatus::Parked) => Some(link(
@@ -157,9 +151,7 @@ impl Signex {
                     )),
                     Some(BoardStatus::ReadOnly) | None => None,
                 };
-                column![summary, banner(line(UserText::new(why), danger), action)]
-                    .spacing(SP.s)
-                    .boxed()
+                banner(line(UserText::new(why), danger), action)
             }
         }
     }
@@ -171,7 +163,12 @@ impl Signex {
         tokens: &ThemeTokens,
     ) -> Vec<Element<'a, Message>> {
         let ready = state.ready_list();
-        let can_execute = ready.is_some() && self.update_pcb_execute_block().is_none();
+        let count = state.execute_count();
+        let can_execute = ready.is_some() && count > 0 && self.update_pcb_execute_block().is_none();
+        let execute = match ready {
+            Some(_) => t!(i18n, ids::UPDATE_PCB_EXECUTE_COUNT, "count" => count),
+            None => t!(i18n, ids::UPDATE_PCB_EXECUTE),
+        };
         vec![
             dialog_button(
                 t!(i18n, ids::UPDATE_PCB_CLOSE),
@@ -192,13 +189,28 @@ impl Signex {
                 tokens,
             ),
             dialog_button(
-                t!(i18n, ids::UPDATE_PCB_EXECUTE),
+                execute,
                 super::graphite::call_to_action(tokens),
                 can_execute.then(|| up(UpdatePcbMsg::ExecuteRequested)),
                 tokens,
             ),
         ]
     }
+}
+
+/// The last Validate's verdict, left of the footer buttons.
+fn validation_line<'a>(
+    state: &UpdatePcbState,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Option<Element<'a, Message>> {
+    Some(match state.validation.as_ref()? {
+        Ok(()) => line(t!(i18n, ids::UPDATE_PCB_VALID), tokens::accent(tokens)),
+        Err(why) => line(
+            t!(i18n, ids::UPDATE_PCB_INVALID, "why" => why.as_str()),
+            tokens::danger(tokens),
+        ),
+    })
 }
 
 /// A banner line with its action button on the right.
@@ -213,108 +225,6 @@ pub(super) fn banner<'a>(
         bar = bar.push(action);
     }
     bar.boxed()
-}
-
-/// Every group in list order: its checkbox, then its rows.
-fn list_view<'a>(list: &EcoChangeList, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
-    let mut col = Column::new().spacing(SP.s);
-    let mut shown: Option<EcoGroup> = None;
-    for row in &list.rows {
-        if shown != Some(row.group) {
-            shown = Some(row.group);
-            col = col.push(group_header(list, row.group, i18n, tokens));
-        }
-        col = col.push(row_view(list, row, i18n, tokens));
-    }
-    col.boxed()
-}
-
-/// A group's tri-state box: on when every open row is ticked, mixed when
-/// some are; a click ticks them all unless all are ticked already.
-fn group_header<'a>(
-    list: &EcoChangeList,
-    group: EcoGroup,
-    i18n: &I18n,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let ticks = list.group_ticks(group);
-    let target = !ticks.all();
-    let mut boxed = checkbox(ticks.all() || ticks.mixed())
-        .size(TS.title)
-        .labelled(t!(i18n, texts::group_id(group)))
-        .text_size(TS.label);
-    boxed = if ticks.mixed() {
-        boxed.style(crate::panels::form_look::mixed_checkbox_style)
-    } else {
-        boxed.style(crate::panels::form_look::checkbox_style)
-    };
-    if ticks.open > 0 {
-        boxed = boxed.on_toggle(move |_| up(UpdatePcbMsg::GroupToggled { group, on: target }));
-    }
-    row![
-        boxed,
-        Space::new().width(Length::Fill),
-        text(t!(
-            i18n,
-            ids::UPDATE_PCB_GROUP_COUNT,
-            "on" => ticks.on,
-            "open" => ticks.open
-        ))
-        .size(TS.body)
-        .color(tokens::muted_text(tokens))
-    ]
-    .padding([SP.s, 0.0])
-    .align_y(Alignment::Center)
-    .boxed()
-}
-
-/// One row: its box (none to tick when blocked), what it does, and why it
-/// is blocked with the links that fix it.
-fn row_view<'a>(
-    list: &EcoChangeList,
-    row: &EcoRow,
-    i18n: &I18n,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let mut boxed = checkbox(row.on)
-        .size(TS.body)
-        .labelled(texts::change(i18n, &row.change))
-        .text_size(TS.body)
-        .style(crate::panels::form_look::checkbox_style);
-    if row.blocked.is_none() {
-        let key = row.key.clone();
-        boxed = boxed.on_toggle(move |on| {
-            up(UpdatePcbMsg::RowToggled {
-                key: key.clone(),
-                on,
-            })
-        });
-    }
-    let mut col = Column::new().spacing(SP.xs).push(boxed.boxed());
-    if let Some(why) = &row.blocked {
-        let mut fixes = row![line(texts::blocked(i18n, why), tokens::danger(tokens))]
-            .spacing(SP.m)
-            .align_y(Alignment::Center);
-        if texts::needs_annotate(why) {
-            fixes = fixes.push(link(
-                t!(i18n, ids::UPDATE_PCB_FIX_ANNOTATE),
-                up(UpdatePcbMsg::AnnotateRequested),
-            ));
-        }
-        if matches!(row.key, EcoKey::AddFootprint { .. }) {
-            fixes = fixes.push(link(
-                t!(i18n, ids::UPDATE_PCB_FIX_CROSS_PROBE),
-                up(UpdatePcbMsg::CrossProbeRequested(row.key.clone())),
-            ));
-        }
-        col = col.push(fixes.boxed());
-    } else if row.on && !list.applies(row) {
-        col = col.push(line(
-            t!(i18n, ids::UPDATE_PCB_ROW_SKIPPED),
-            tokens::muted_text(tokens),
-        ));
-    }
-    container(col).padding([0.0, SP.xl]).boxed()
 }
 
 fn notes_view<'a>(list: &EcoChangeList, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {

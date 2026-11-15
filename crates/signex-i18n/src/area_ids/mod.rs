@@ -12,8 +12,13 @@ mod library;
 mod notice;
 mod overlay;
 mod panels;
+mod pcb;
+mod pcb_board;
+mod pcb_component;
+mod pcb_primitive;
 mod pdf_preview;
 mod preferences;
+mod update_pcb;
 
 pub use bom::*;
 pub use dialog::*;
@@ -25,8 +30,13 @@ pub use library::*;
 pub use notice::*;
 pub use overlay::*;
 pub use panels::*;
+pub use pcb::*;
+pub use pcb_board::*;
+pub use pcb_component::*;
+pub use pcb_primitive::*;
 pub use pdf_preview::*;
 pub use preferences::*;
+pub use update_pcb::*;
 
 /// Every id of every area list.
 #[cfg(test)]
@@ -42,8 +52,13 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         notice::NOTICE,
         overlay::OVERLAY,
         panels::PANELS,
+        pcb::PCB,
+        pcb_board::PCB_BOARD,
+        pcb_component::PCB_COMPONENT,
+        pcb_primitive::PCB_PRIMITIVE,
         pdf_preview::PDF_PREVIEW,
         preferences::PREFERENCES,
+        update_pcb::UPDATE_PCB,
     ]
     .concat()
 }
