@@ -81,8 +81,40 @@ fn probe() {
         "net_colors" => net_colors(),
         "net_class_assign" => net_class_assign(),
         "agent_pref_ignored" => agent_pref_ignored(),
+        "small_stack" => small_stack(),
         other => panic!("unknown scenario {other}"),
     }
+}
+
+/// #2325: the boot fits a small stack, so an app handed back by value
+/// overflows here. Debug only: release frames are much smaller and would
+/// hide a regression.
+#[cfg(debug_assertions)]
+#[test]
+fn a_debug_headless_boot_settles_on_a_512_kb_stack() {
+    run_probe("small_stack");
+}
+
+/// Boot and settle on a 512 KB thread. On macOS arm64 debug the unboxed boot
+/// needed about 552 KB and the boxed one fits in 400 KB, so the margin is
+/// about 100 KB. Another target's frames may differ: if this fails on one
+/// target only, measure there before raising the limit.
+fn small_stack() {
+    const STACK_BYTES: usize = 512 * 1024;
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    std::thread::Builder::new()
+        .stack_size(STACK_BYTES)
+        .spawn(|| {
+            let (mut app, boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+            TaskDriver::new()
+                .settle(&mut app, boot)
+                .expect("boot settled");
+        })
+        .expect("spawn")
+        .join()
+        .expect("the boot fits the stack");
 }
 
 #[test]

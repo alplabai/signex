@@ -96,9 +96,9 @@ impl Signex {
         Self::boot_headless_inner(paths, rules, Some(undo_depth))
     }
 
-    /// [`Self::new`] moved to the heap in a frame of its own, so no frame of
-    /// the headless boot or its caller holds the ~44 KB app by value (#2325:
-    /// the copies overflowed the 1 MB Windows main stack).
+    /// [`Self::new`] moved to the heap in a frame of its own: only `new` and
+    /// this function hold the app by value, never the headless boot or its
+    /// caller (#2325: the copies overflowed the 1 MB Windows main stack).
     #[inline(never)]
     fn new_boxed() -> (Box<Self>, Task<Message>) {
         let (app, boot) = Self::new();

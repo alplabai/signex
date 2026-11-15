@@ -26,7 +26,7 @@ use crate::roots::folder_and_roots;
 const AUDIT_LINE_CHARS: usize = 400;
 
 pub struct Session {
-    /// Boxed: the app is ~44 KB, too big to move through stack frames (#2325).
+    /// Boxed: the app is too big to move through stack frames (#2325).
     app: Box<Signex>,
     driver: TaskDriver,
     policy: Policy,
