@@ -401,7 +401,9 @@ fn via_diameter_hole_and_net_are_one_undo_step_each() {
     let PcbPrimitiveFacts::Via(via) = facts(&f.app) else {
         panic!("the via panel shows");
     };
-    assert_eq!(via.span.as_deref(), Some("Thru 1:2"));
+    // The layer numbers are Fluent placeables, inside isolation marks.
+    let span = via.span.map(|s| s.replace(['\u{2068}', '\u{2069}'], ""));
+    assert_eq!(span.as_deref(), Some("Thru 1:2"));
     assert_eq!((via.diameter, via.hole), (Some(0.6), Some(0.3)));
     let edited = assert_one_step(&mut f, |f| {
         type_and_enter(f, &t, PrimitiveField::Diameter, "0.8");

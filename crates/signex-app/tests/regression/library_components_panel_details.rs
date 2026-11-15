@@ -397,15 +397,16 @@ fn a_row_dragged_and_released_off_the_canvas_places_nothing() {
     assert!(app.library.components_panel.drag.is_none(), "drag over");
 }
 
-/// #1908: only a schematic tab takes a dropped row; over any other tab the
-/// drop places nothing and waits for nothing.
+/// #1908: only a schematic tab, or since #2364 a board tab, takes a dropped
+/// row; over any other tab the drop places nothing and waits for nothing.
 #[test]
 fn a_row_dropped_on_a_tab_that_is_not_a_schematic_places_nothing() {
     let mut app = app_with_stock();
     let key = key_of(&app, "STOCK-R");
     let canvas = over_canvas(&app);
     let active = app.document_state.active_tab;
-    app.document_state.tabs[active].kind = signex_app::app::TabKind::Pcb;
+    let path = app.document_state.tabs[active].path.clone();
+    app.document_state.tabs[active].kind = signex_app::app::TabKind::SymbolEditor(path);
 
     drag_row(&mut app, &key, (20.0, canvas.1), canvas);
 

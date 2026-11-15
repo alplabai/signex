@@ -194,7 +194,13 @@ fn space_turns_and_y_flips_the_part_on_the_cursor() {
     assert_eq!(fp.layer, "BottomCopper", "Y put it on the bottom");
     // 90° on top, mirrored to the bottom, reads 270°.
     assert_eq!(fp.rotation, 270.0);
-    assert!(fp.pads.iter().all(|p| p.layers == ["BottomCopper"]));
+    // The stock pads carry copper, mask and paste: all of them flip.
+    assert!(
+        fp.pads.iter().all(|p| p.layers.iter().any(|l| l == "BottomCopper")
+            && !p.layers.iter().any(|l| l.starts_with("Top"))),
+        "{:?}",
+        fp.pads.iter().map(|p| &p.layers).collect::<Vec<_>>()
+    );
 }
 
 #[test]

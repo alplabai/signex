@@ -110,7 +110,8 @@ pub(crate) struct CommandContext {
     /// placement commands do (#2240).
     pub pcb: PcbTargets,
     /// Rotate and mirror have something on a sheet besides the selection:
-    /// a part on the cursor, or the Bus Entry tool's next entry.
+    /// a part on the cursor, the Bus Entry tool's next entry, or an open
+    /// wire or bus run, whose corner they bend (#2372).
     pub turn_in_hand: bool,
 }
 
@@ -271,7 +272,8 @@ impl Signex {
             can_remove_part: self.active_symbol_part_is_removable(),
             pcb: self.pcb_targets(window),
             turn_in_hand: self.interaction_state.placement.is_some()
-                || self.interaction_state.current_tool == Tool::BusEntry,
+                || self.interaction_state.current_tool == Tool::BusEntry
+                || self.is_drawing_wire_run(),
         }
     }
 

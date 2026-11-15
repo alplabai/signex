@@ -102,7 +102,14 @@ fn place_rows_need_a_schematic() {
     ] {
         assert!(!row_is_live(&app, path), "{path} is live with no schematic");
     }
-    assert!(!row_is_live(&loaded_board_app(), "Place/Sheet Entry"));
+    // On a board the Place menu lists the board's tools (#2360): Sheet
+    // Entry is not offered there at all.
+    let board = loaded_board_app();
+    let ctx = menu_context(&board);
+    let model = menu_bar_model(&ctx);
+    let place = model.menus.iter().find(|m| m.title == "Place");
+    let sheet_entry = place.and_then(|menu| find_in(menu, &["Sheet Entry"]));
+    assert!(sheet_entry.is_none_or(|item| !item.is_enabled()));
 }
 
 /// The canvas Place flyout's Sheet Entry in an undocked sheet window, while

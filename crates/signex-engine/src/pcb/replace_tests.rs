@@ -14,6 +14,11 @@ fn with_nets() -> PcbBoard {
     }];
     b.vias[0].diameter = 0.6;
     b.vias[0].drill = 0.3;
+    // The shared fixture's tracks have no width; give them one, as the via
+    // gets a size, so an undo restores a width the board can hold.
+    for s in &mut b.segments {
+        s.width = 0.25;
+    }
     b
 }
 

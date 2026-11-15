@@ -103,6 +103,11 @@ fn pill(app: &Signex, window: iced::window::Id) -> Option<String> {
 fn a_tab_click_sets_the_active_layer_and_the_status_readout() {
     let (mut app, path, main) = open();
     assert_eq!(pill(&app, main).as_deref(), Some("Top Layer"));
+    // The opened board's first fit resolves on the canvas's first event and
+    // publishes a cursor move; settle it first so the click reads only the
+    // tab's own message.
+    let bounds = app.canvas_bounds();
+    app.interaction_state.pcb_canvas.resolve_pending_fit(bounds);
     let sent = messages_on_click(app.view(main), WINDOW, "Bottom Layer");
     assert_eq!(sent.len(), 1, "the tab sends one message: {sent:?}");
     for msg in sent {
