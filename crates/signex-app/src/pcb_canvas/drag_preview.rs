@@ -142,3 +142,7 @@ impl PcbCanvas {
         tessellate(renderer, viewport, &items, camera, 1)
     }
 }
+
+#[cfg(test)]
+#[path = "drag_preview_tests.rs"]
+mod tests;

@@ -49,18 +49,24 @@ pub fn property_text_placement(
     let local = property
         .position
         .unwrap_or_else(|| default_position(&property.key));
-    let anchor = placement.to_world(PointNm::from_mm(local, "property.position")?);
+    let local = PointNm::from_mm(local, "property.position")?;
+    Ok(place_text(&placement, local, property.rotation))
+}
+
+/// A text at the footprint-local `local`, turned by its own `rotation`
+/// degrees, placed by `placement`: a property text or a text drawing.
+pub(crate) fn place_text(placement: &Placement, local: PointNm, rotation: f64) -> TextPlacement {
     // The x mirror reverses the text's own turn (`M R(t) M = R(-t)`), as
     // for a pad (`pad_world_rotation_deg`).
     let (own, mirrored) = match placement.side {
-        Side::Top => (property.rotation, false),
-        Side::Bottom => (-property.rotation, true),
+        Side::Top => (rotation, false),
+        Side::Bottom => (-rotation, true),
     };
-    Ok(TextPlacement {
-        anchor,
+    TextPlacement {
+        anchor: placement.to_world(local),
         rotation_deg: placement.rotation_deg + own,
         mirrored,
-    })
+    }
 }
 
 fn default_position(key: &str) -> Point {

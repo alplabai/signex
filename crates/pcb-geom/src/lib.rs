@@ -14,6 +14,7 @@
 mod body;
 mod copper;
 mod flip;
+mod graphic;
 mod index;
 mod mst;
 mod net_length;
@@ -38,6 +39,10 @@ pub use copper::{
     via_layers,
 };
 pub use flip::flip_footprint;
+pub use graphic::{
+    GraphicShape, PlacedGraphic, board_graphic_placement, board_text_placement,
+    footprint_graphic_placement,
+};
 pub use index::{BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected, track_shape, via_shape};
 pub use mst::{Edge, euclidean_mst, spanning_forest};
 pub use net_length::{
