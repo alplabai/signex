@@ -16,17 +16,18 @@ trap 'rm -rf "$TMP"' EXIT
 
 failures=0
 
-# run_case <name> <fail|pass> <core file body | -none- | -empty-> [message]
+# run_case <name> <fail|pass> <core file body | -none- | -empty-> [message] [file]
 #
+# `file` is the path below app/core/ (default sub/x.rs, module depth 2).
 # The exit code alone is not enough: a gate that crashes under `set -e` also
 # exits 1. A fail case must print `message`; a pass case the OK line.
 run_case() {
-  local name="$1" expect="$2" body="$3" want="${4:-}" tree="$TMP/$1" status=0 out
+  local name="$1" expect="$2" body="$3" want="${4:-}" file="${5:-sub/x.rs}" tree="$TMP/$1" status=0 out
   mkdir -p "$tree/crates/signex-app/src/app"
   case "$body" in
     -none-) ;;
     -empty-) mkdir -p "$tree/$CORE_REL" ;;
-    *) mkdir -p "$tree/$CORE_REL/sub"; printf '%s\r\n' "$body" > "$tree/$CORE_REL/sub/x.rs" ;;
+    *) mkdir -p "$(dirname "$tree/$CORE_REL/$file")"; printf '%s\r\n' "$body" > "$tree/$CORE_REL/$file" ;;
   esac
   out="$(CORE_GUARD_ROOT="$tree" bash "$GATE" 2>&1)" || status=$?
   [[ "$expect" == pass ]] && want="Core guard: OK"
@@ -73,6 +74,53 @@ run_case std_thread fail 'std::thread::sleep(d);' "breaks 'std_thread'"
 run_case std_process fail 'use std::process::Command;' "breaks 'std_process'"
 run_case reports_line_number fail 'pub fn ok() {}
 use tokio::sync::mpsc;' "x.rs:2 breaks 'tokio'"
+
+# --- multi-line use groups are judged like the one-line form --------------
+
+run_case multiline_std_group fail 'use std::{
+    fs, // read the file
+};' "x.rs:1 breaks 'std_fs': use std::fs;"
+run_case multiline_crate_group_inside_core pass 'pub(crate) use crate::{
+    app::core::x,
+    app::core::{y, z},
+};'
+run_case multiline_crate_group_escapes fail 'use crate::{
+    app::core::x,
+    app::other,
+};' "breaks 'crate_outside_core': use crate::app::other;"
+run_case nested_crate_group_escapes fail 'use crate::app::{core::x, view::Y};' \
+  "breaks 'crate_outside_core': use crate::app::view::Y;"
+run_case second_statement_on_a_line fail 'use crate::app::core::a; use crate::keymap::K;' \
+  "breaks 'crate_outside_core'"
+
+# --- aliasing the crate root ------------------------------------------------
+
+run_case use_crate_as fail 'use crate as root;' "breaks 'crate_alias'"
+run_case use_crate_self_as fail 'use crate::{self as root};' "breaks 'crate_alias'"
+run_case extern_crate_self_as fail 'extern crate self as root;' "breaks 'crate_alias'"
+
+# --- super:: chains against the module depth --------------------------------
+
+run_case super_inside_core pass 'use super::super::state::CoreState;' '' sub/x.rs
+run_case super_escapes_core fail 'use super::super::super::view::Theme;' \
+  "x.rs:1 breaks 'super_escape'" sub/x.rs
+run_case super_escapes_from_mod_rs fail 'use super::super::x;' \
+  "mod.rs:1 breaks 'super_escape'" sub/mod.rs
+run_case super_inside_core_from_mod_rs pass 'use super::x;' '' sub/mod.rs
+run_case super_from_core_root_mod_rs fail 'pub use super::view;' \
+  "breaks 'super_escape'" mod.rs
+run_case super_in_group_escapes fail 'use super::{
+    super::super::outside,
+};' "breaks 'super_escape'" sub/x.rs
+run_case super_in_inline_test_mod pass '#[cfg(test)]
+mod tests {
+    use super::*;
+    fn f() { let _ = 1; }
+}' '' mod.rs
+run_case super_after_inline_mod_closes fail 'mod tests {
+    use super::*;
+}
+use super::view;' "mod.rs:4 breaks 'super_escape'" mod.rs
 
 # --- and the real tree passes ----------------------------------------------
 
