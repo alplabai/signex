@@ -27,7 +27,7 @@ fn open(app: &mut Signex, modal: ModalId) {
     let ui = &mut app.ui_state;
     match modal {
         ModalId::NewProject => {
-            ui.new_project = Some(crate::app::NewProjectState::new(String::new()))
+            ui.new_project = Some(Box::new(crate::app::NewProjectState::new(String::new())))
         }
         ModalId::FindReplace => ui.find_replace.open = true,
         ModalId::RenameDialog => {

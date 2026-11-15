@@ -439,11 +439,11 @@ pub struct UiState {
     /// keystrokes don't immediately mutate the active editor.
     pub grid_properties: Option<crate::app::GridPropertiesState>,
     /// The New Project setup dialog, while open (#2232). Nothing is on disk
-    /// until its Create.
-    pub new_project: Option<crate::app::NewProjectState>,
+    /// until its Create. Boxed so a closed dialog costs one pointer (#2412).
+    pub new_project: Option<Box<crate::app::NewProjectState>>,
     /// The New PCB or New Schematic setup dialog, while open (#2232).
-    /// Nothing is made until its Create.
-    pub document_setup: Option<crate::app::DocumentSetupState>,
+    /// Nothing is made until its Create. Boxed like `new_project`.
+    pub document_setup: Option<Box<crate::app::DocumentSetupState>>,
     /// The user's saved setup profiles (#2232), loaded from `prefs.json` at
     /// boot and saved on every Save as profile and Remove.
     pub setup_profiles: Vec<signex_types::project::UserProfile>,
@@ -772,5 +772,22 @@ mod tests {
     #[test]
     fn the_bottom_dock_opens_tall_enough_for_several_finding_rows() {
         const { assert!(super::DEFAULT_BOTTOM_PANEL_HEIGHT >= 200.0) };
+    }
+
+    fn field_size<T>(_: fn(&super::UiState) -> &T) -> usize {
+        std::mem::size_of::<T>()
+    }
+
+    /// #2412: a closed setup dialog costs one pointer in every `Signex`.
+    #[test]
+    fn a_closed_setup_dialog_costs_one_pointer() {
+        let pointer = std::mem::size_of::<usize>();
+        let document_setup = field_size(|ui| &ui.document_setup);
+        assert_eq!(
+            document_setup, pointer,
+            "document_setup is {document_setup} B"
+        );
+        let new_project = field_size(|ui| &ui.new_project);
+        assert_eq!(new_project, pointer, "new_project is {new_project} B");
     }
 }

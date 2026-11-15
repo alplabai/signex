@@ -52,7 +52,7 @@ impl Signex {
         }
         let mut state = NewProjectState::new(self.default_project_location());
         state.name = SUGGESTED_NAME.to_string();
-        self.ui_state.new_project = Some(state);
+        self.ui_state.new_project = Some(Box::new(state));
         Task::batch([
             operation::focus(NAME_INPUT_ID.clone()),
             operation::text_input::select_all(NAME_INPUT_ID.clone()),
@@ -185,7 +185,7 @@ impl Signex {
         let start = self
             .ui_state
             .new_project
-            .as_ref()
+            .as_deref()
             .and_then(NewProjectState::location_path);
         let title = signex_i18n::t!(
             self.ui_state.i18n,
