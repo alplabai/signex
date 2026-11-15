@@ -195,3 +195,69 @@ preferences-section-annotation = Schematic — Annotation
 preferences-section-editing = Schematic — Editing
 preferences-section-distributors = Library — Distributor APIs
 preferences-restore-defaults = Restore defaults
+
+## Schematic ▸ Editing (#2058)
+preferences-move-keeps-wires = Keep wires connected when moving
+preferences-move-keeps-wires-help = When on, moving, rotating or mirroring symbols, child sheets or sheet pins (drag, Move, Move By, align, rotate, mirror) drags the wires on their pins along, adding a bend where needed to keep them horizontal or vertical. A net check afterwards keeps this from changing connectivity beyond what a plain move, rotate or mirror would do; a pin that cannot be kept connected moves alone and is reported in the Messages panel. When off, only the selected items move or turn and attached wires stay where they were. Hold Alt through one drag to do the opposite for that drag only; the Drag with connections command (G in the Classic profile) drags the picked object with its wires whatever this says.
+preferences-net-hover = Show net info on hover
+preferences-net-hover-help = When on, resting the pointer on a wire, pin or label for a moment shows a card with the net's name, its net class and the pins on it with the sheet each is on. Turn it off if the card gets in the way while you edit.
+preferences-drag-direction = Select by drag direction
+preferences-drag-direction-help = When on, dragging a selection box from left to right selects only what the box fully contains, and from right to left selects everything the box touches. When off, the Inside / Touching selection mode (Shift+S cycles it) decides for both directions; while on, that mode is not used for box selection.
+preferences-increment-step = Increment step
+preferences-increment-step-help = How far the trailing number of a text moves each time it is repeated: placing the label D0 again and again gives D1, D2, ... with a step of 1, and Paste Array offers the same step. A negative step counts down; a number at the start or middle of a text is left alone.
+preferences-paste-designators = Designators on paste
+preferences-paste-designators-help = What pasted parts are called. Keep leaves the designators of the copy as they were (duplicates stay until Annotate runs). Reset turns them into R?, U?, ... for Annotate to number. Next free number gives each part the next unused number of its prefix in the project. Applies to Paste, Smart Paste, Duplicate, rubber-stamp copy and Paste Array; the units of one part always stay one part.
+preferences-autosave = Autosave recovery copies
+preferences-autosave-help = When on, { -brand-name } keeps a recovery copy of each schematic, symbol and footprint with unsaved changes about once a minute. The copy is a separate file in the { -brand-name } config folder (recovery); your own file is never touched by it. The copy is removed when you save the document, close it without keeping the changes, or quit with Discard All, even if you turn this off first. Off by default.
+
+## Schematic ▸ Annotation
+preferences-annotate-undo = Annotate undo
+# $undo is the Undo shortcut, such as "Ctrl+Z".
+preferences-annotate-undo-help = How many undo steps one annotate run is. One step reverts every sheet the run touched together from whichever sheet { $undo } is pressed on; per sheet undoes each sheet on its own. Applies to the next annotate run.
+
+## Default Component Classes
+preferences-classes-title = Default Component Classes
+preferences-classes-help = Seeds the class registry of newly-created libraries. Per-library edits live inside each .snxlib's manifest (forthcoming Library Properties pane); this list controls only what new libraries inherit.
+preferences-classes-key = Key
+preferences-classes-label = Label
+preferences-classes-remove = Remove
+preferences-classes-empty = No classes defined. Click "+ Add Class" to add one or "Reset to Defaults" to restore the seed list.
+preferences-classes-add = + Add Class
+preferences-classes-reset = Reset to Defaults
+
+## The banner for a preferences file that could not be loaded
+# $path is the file; $error says what is wrong with it, in English.
+preferences-file-broken = Your preferences file at { $path } { $error }.
+preferences-file-defaults = Appearance, ERC severities, component classes and panel layout are showing their defaults, and changes to them are not being saved. The file itself has not been altered — repair it by hand, or start a fresh one and keep the old file beside it.
+preferences-file-start-fresh = Start a fresh preferences file
+
+## Rule Profiles
+preferences-profiles-title = Rule Profiles
+preferences-profiles-help = A profile is a named set of ERC rules. A new project starts with a copy of the default profile. Changes here are saved to the profile's file at once.
+preferences-profiles-reading = Reading the profile library...
+preferences-profiles-automatic = Automatic (User Default if you have one, else { -brand-name } Default)
+# Notes after a profile's name and version.
+preferences-profiles-note-builtin = shipped, read-only
+preferences-profiles-note-user-default = this machine's rules
+# $name and $version are the profile's.
+preferences-profiles-row = { $name }  v{ $version }
+# $name and $version are the profile's; $note is one of the notes above.
+preferences-profiles-row-note = { $name }  v{ $version }  ({ $note })
+preferences-profiles-is-default = Default for new projects
+preferences-profiles-use-as-default = Use as default
+preferences-profiles-new = New
+preferences-profiles-duplicate = Duplicate
+preferences-profiles-rename = Rename
+# $name is the profile's name.
+preferences-profiles-delete-confirm = Delete "{ $name }"? Projects that recorded it keep their rules but can no longer find it for Update from profile.
+preferences-profiles-keep = Keep
+preferences-profiles-name = Name
+# $name is the profile's name.
+preferences-profiles-editing = Editing "{ $name }". Changes are saved to the profile's file immediately.
+# $name is the profile's name.
+preferences-profiles-read-only = "{ $name }" is read-only. Duplicate it to change the rules.
+preferences-profiles-none-selected = No profile is selected.
+# $name is the profile's name.
+preferences-profiles-reset-confirm = Put every rule of "{ $name }" back to the { -brand-name } Default values?
+preferences-profiles-reset = Reset
+preferences-profiles-reset-to-default = Reset to { -brand-name } Default

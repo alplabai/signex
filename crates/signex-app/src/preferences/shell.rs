@@ -52,7 +52,7 @@ pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Elemen
             t,
         ));
     }
-    if let Some(banner) = build_prefs_file_banner(v.prefs_load_error, v.prefs_status) {
+    if let Some(banner) = build_prefs_file_banner(v.prefs_load_error, v.prefs_status, v.i18n) {
         items.push(banner);
     }
     let divider = {

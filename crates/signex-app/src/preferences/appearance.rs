@@ -320,6 +320,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             )
             .step(crate::ui_scale::UI_SCALE_STEP_PERCENT)
             .width(140),
+            // raw: a percentage, not language.
             text(raw(format!("{draft_ui_scale_percent}%")))
                 .size(TS.label)
                 .style(text_primary)

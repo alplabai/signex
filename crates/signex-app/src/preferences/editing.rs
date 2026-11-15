@@ -3,24 +3,13 @@
 use super::*;
 use iced::widget::{Space, column, pick_list, row, slider};
 use iced::{Element, Length, Widget};
+use signex_i18n::{MessageId, ids, t};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{checkbox, raw, text};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
-
-const MOVE_KEEPS_WIRES_HELP: &str = "When on, moving, rotating or mirroring symbols, child sheets or sheet pins (drag, Move, Move By, align, rotate, mirror) drags the wires on their pins along, adding a bend where needed to keep them horizontal or vertical. A net check afterwards keeps this from changing connectivity beyond what a plain move, rotate or mirror would do; a pin that cannot be kept connected moves alone and is reported in the Messages panel. When off, only the selected items move or turn and attached wires stay where they were. Hold Alt through one drag to do the opposite for that drag only; the Drag with connections command (G in the Classic profile) drags the picked object with its wires whatever this says.";
-
-const NET_HOVER_HELP: &str = "When on, resting the pointer on a wire, pin or label for a moment shows a card with the net's name, its net class and the pins on it with the sheet each is on. Turn it off if the card gets in the way while you edit.";
-
-const DRAG_DIRECTION_HELP: &str = "When on, dragging a selection box from left to right selects only what the box fully contains, and from right to left selects everything the box touches. When off, the Inside / Touching selection mode (Shift+S cycles it) decides for both directions; while on, that mode is not used for box selection.";
-
-const INCREMENT_STEP_HELP: &str = "How far the trailing number of a text moves each time it is repeated: placing the label D0 again and again gives D1, D2, ... with a step of 1, and Paste Array offers the same step. A negative step counts down; a number at the start or middle of a text is left alone.";
-
-const PASTE_DESIGNATORS_HELP: &str = "What pasted parts are called. Keep leaves the designators of the copy as they were (duplicates stay until Annotate runs). Reset turns them into R?, U?, ... for Annotate to number. Next free number gives each part the next unused number of its prefix in the project. Applies to Paste, Smart Paste, Duplicate, rubber-stamp copy and Paste Array; the units of one part always stay one part.";
-
-const AUTOSAVE_HELP: &str = "When on, Signex keeps a recovery copy of each schematic, symbol and footprint with unsaved changes about once a minute. The copy is a separate file in the Signex config folder (recovery); your own file is never touched by it. The copy is removed when you save the document, close it without keeping the changes, or quit with Discard All, even if you turn this off first. Off by default.";
 
 /// What the "Allow agent connections" row (#1924) shows: its draft and the
 /// language its labels read in.
@@ -43,17 +32,20 @@ pub(super) fn content_editing<'a>(
         draft_enabled: draft_agent_connections_enabled,
         i18n,
     } = agent_connections;
-    let setting = row![
+    // The label and help text of one setting.
+    let described = |label: MessageId, help: MessageId| {
         column![
-            text(raw("Keep wires connected when moving"))
-                .size(TS.label)
-                .style(text_primary),
-            text(raw(MOVE_KEEPS_WIRES_HELP))
-                .size(TS.caption)
-                .style(text_muted),
+            text(t!(i18n, label)).size(TS.label).style(text_primary),
+            text(t!(i18n, help)).size(TS.caption).style(text_muted),
         ]
         .spacing(3)
-        .width(320),
+        .width(320)
+    };
+    let setting = row![
+        described(
+            ids::PREFERENCES_MOVE_KEEPS_WIRES,
+            ids::PREFERENCES_MOVE_KEEPS_WIRES_HELP
+        ),
         Space::new().width(Length::Fill),
         checkbox(draft_move_keeps_wires)
             .size(TS.heading)
@@ -62,14 +54,7 @@ pub(super) fn content_editing<'a>(
     .align_y(iced::Alignment::Center);
 
     let net_hover = row![
-        column![
-            text(raw("Show net info on hover"))
-                .size(TS.label)
-                .style(text_primary),
-            text(raw(NET_HOVER_HELP)).size(TS.caption).style(text_muted),
-        ]
-        .spacing(3)
-        .width(320),
+        described(ids::PREFERENCES_NET_HOVER, ids::PREFERENCES_NET_HOVER_HELP),
         Space::new().width(Length::Fill),
         checkbox(draft_net_hover_enabled)
             .size(TS.heading)
@@ -78,16 +63,10 @@ pub(super) fn content_editing<'a>(
     .align_y(iced::Alignment::Center);
 
     let drag_direction = row![
-        column![
-            text(raw("Select by drag direction"))
-                .size(TS.label)
-                .style(text_primary),
-            text(raw(DRAG_DIRECTION_HELP))
-                .size(TS.caption)
-                .style(text_muted),
-        ]
-        .spacing(3)
-        .width(320),
+        described(
+            ids::PREFERENCES_DRAG_DIRECTION,
+            ids::PREFERENCES_DRAG_DIRECTION_HELP
+        ),
         Space::new().width(Length::Fill),
         checkbox(draft_drag_direction_select)
             .size(TS.heading)
@@ -96,16 +75,10 @@ pub(super) fn content_editing<'a>(
     .align_y(iced::Alignment::Center);
 
     let increment_step = row![
-        column![
-            text(raw("Increment step"))
-                .size(TS.label)
-                .style(text_primary),
-            text(raw(INCREMENT_STEP_HELP))
-                .size(TS.caption)
-                .style(text_muted),
-        ]
-        .spacing(3)
-        .width(320),
+        described(
+            ids::PREFERENCES_INCREMENT_STEP,
+            ids::PREFERENCES_INCREMENT_STEP_HELP
+        ),
         Space::new().width(Length::Fill),
         slider(
             signex_types::text_increment::STEP_MIN..=signex_types::text_increment::STEP_MAX,
@@ -113,6 +86,7 @@ pub(super) fn content_editing<'a>(
             PrefMsg::DraftIncrementStep,
         )
         .width(140),
+        // raw: a signed number, not language.
         text(raw(format!("{draft_increment_step:+}")))
             .size(TS.label)
             .style(text_primary)
@@ -123,17 +97,12 @@ pub(super) fn content_editing<'a>(
     .align_y(iced::Alignment::Center);
 
     let paste_designators = row![
-        column![
-            text(raw("Designators on paste"))
-                .size(TS.label)
-                .style(text_primary),
-            text(raw(PASTE_DESIGNATORS_HELP))
-                .size(TS.caption)
-                .style(text_muted),
-        ]
-        .spacing(3)
-        .width(320),
+        described(
+            ids::PREFERENCES_PASTE_DESIGNATORS,
+            ids::PREFERENCES_PASTE_DESIGNATORS_HELP
+        ),
         Space::new().width(Length::Fill),
+        // The mode names come from `PasteDesignators`'s Display (#2059).
         pick_list(
             Some(draft_paste_designators),
             crate::paste_prefs::PasteDesignators::ALL,
@@ -145,14 +114,7 @@ pub(super) fn content_editing<'a>(
     .align_y(iced::Alignment::Center);
 
     let autosave = row![
-        column![
-            text(raw("Autosave recovery copies"))
-                .size(TS.label)
-                .style(text_primary),
-            text(raw(AUTOSAVE_HELP)).size(TS.caption).style(text_muted),
-        ]
-        .spacing(3)
-        .width(320),
+        described(ids::PREFERENCES_AUTOSAVE, ids::PREFERENCES_AUTOSAVE_HELP),
         Space::new().width(Length::Fill),
         checkbox(draft_autosave_enabled)
             .size(TS.heading)
@@ -161,22 +123,10 @@ pub(super) fn content_editing<'a>(
     .align_y(iced::Alignment::Center);
 
     let agent_connections = row![
-        column![
-            text(signex_i18n::t!(
-                i18n,
-                signex_i18n::ids::PREFERENCES_AGENT_CONNECTIONS_LABEL
-            ))
-            .size(TS.label)
-            .style(text_primary),
-            text(signex_i18n::t!(
-                i18n,
-                signex_i18n::ids::PREFERENCES_AGENT_CONNECTIONS_HELP
-            ))
-            .size(TS.caption)
-            .style(text_muted),
-        ]
-        .spacing(3)
-        .width(320),
+        described(
+            ids::PREFERENCES_AGENT_CONNECTIONS_LABEL,
+            ids::PREFERENCES_AGENT_CONNECTIONS_HELP
+        ),
         Space::new().width(Length::Fill),
         checkbox(draft_agent_connections_enabled)
             .size(TS.heading)
@@ -185,10 +135,7 @@ pub(super) fn content_editing<'a>(
     .align_y(iced::Alignment::Center);
 
     column![
-        section_title(signex_i18n::t!(
-            i18n,
-            signex_i18n::ids::PREFERENCES_SECTION_EDITING
-        )),
+        section_title(t!(i18n, ids::PREFERENCES_SECTION_EDITING)),
         Space::new().height(10),
         setting,
         Space::new().height(14),
@@ -206,4 +153,23 @@ pub(super) fn content_editing<'a>(
     ]
     .padding([SP.xl, 20.0])
     .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_i18n::{I18n, ids};
+
+    /// The help texts keep the English the view showed before the catalog.
+    #[test]
+    fn the_editing_help_keeps_its_english() {
+        let en = I18n::en_us();
+        assert_eq!(
+            en.message_plain(ids::PREFERENCES_NET_HOVER_HELP, &[]),
+            "When on, resting the pointer on a wire, pin or label for a moment shows a card with the net's name, its net class and the pins on it with the sheet each is on. Turn it off if the card gets in the way while you edit."
+        );
+        assert_eq!(
+            en.message_plain(ids::PREFERENCES_AUTOSAVE_HELP, &[]),
+            "When on, Signex keeps a recovery copy of each schematic, symbol and footprint with unsaved changes about once a minute. The copy is a separate file in the Signex config folder (recovery); your own file is never touched by it. The copy is removed when you save the document, close it without keeping the changes, or quit with Discard All, even if you turn this off first. Off by default."
+        );
+    }
 }
