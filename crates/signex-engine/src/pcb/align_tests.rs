@@ -48,7 +48,10 @@ fn aligned(to: AlignTo, ids: &[u128]) -> Vec<Point> {
 fn footprints_line_up_by_their_origins() {
     let p = Point::new;
     let three = [1, 2, 3];
-    assert_eq!(aligned(AlignTo::Left, &three), [p(1.0, 1.0), p(1.0, 5.0), p(1.0, 2.0)]);
+    assert_eq!(
+        aligned(AlignTo::Left, &three),
+        [p(1.0, 1.0), p(1.0, 5.0), p(1.0, 2.0)]
+    );
     assert_eq!(aligned(AlignTo::Right, &three)[0], p(10.0, 1.0));
     assert_eq!(aligned(AlignTo::Top, &three)[1], p(4.0, 1.0));
     assert_eq!(aligned(AlignTo::Bottom, &three)[2], p(10.0, 5.0));
@@ -64,7 +67,11 @@ fn footprints_line_up_by_their_origins() {
 fn align_needs_two_and_refuses_a_locked_footprint() {
     let engine = BoardEngine::new(board(), 1);
     let one: BTreeSet<Uuid> = [id(1)].into();
-    assert!(align_commands(engine.board(), &one, AlignTo::Left).unwrap().is_empty());
+    assert!(
+        align_commands(engine.board(), &one, AlignTo::Left)
+            .unwrap()
+            .is_empty()
+    );
     let locked: BTreeSet<Uuid> = [id(1), id(4)].into();
     assert!(align_commands(engine.board(), &locked, AlignTo::Left).is_err());
     let mut board = board();

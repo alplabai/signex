@@ -25,7 +25,11 @@ fn a_track_run_starts_on_the_net_under_it_and_adds_its_legs_per_click() {
     let before = live(&app, &path);
     run(&mut app, "place_board_track");
     click(&mut app, 2.1, 0.2);
-    assert_eq!(live(&app, &path), before, "the first click only starts the run");
+    assert_eq!(
+        live(&app, &path),
+        before,
+        "the first click only starts the run"
+    );
     hover(&mut app, 5.2, 4.1);
     assert!(has_ghost(&app), "the next legs follow the pointer");
 
@@ -39,7 +43,10 @@ fn a_track_run_starts_on_the_net_under_it_and_adds_its_legs_per_click() {
         "horizontal first, on the grid"
     );
     let added = &board_of(&app, &path).segments[1];
-    assert_eq!((added.layer.as_str(), added.width, added.net), ("TopCopper", 0.3, 3));
+    assert_eq!(
+        (added.layer.as_str(), added.width, added.net),
+        ("TopCopper", 0.3, 3)
+    );
 
     click(&mut app, 8.0, 4.0);
     assert_eq!(legs(&app, &path).len(), 3, "the run goes on from its end");
@@ -96,15 +103,29 @@ fn esc_ends_the_run_then_the_tool_and_a_click_on_the_end_ends_the_run() {
     run(&mut app, "place_board_track");
     click(&mut app, 2.0, 0.0);
     click(&mut app, 2.0, 0.0);
-    let session = app.interaction_state.pcb_tool.as_ref().expect("still armed");
-    assert!(session.points.is_empty(), "a click on the run's end ends it");
+    let session = app
+        .interaction_state
+        .pcb_tool
+        .as_ref()
+        .expect("still armed");
+    assert!(
+        session.points.is_empty(),
+        "a click on the run's end ends it"
+    );
 
     click(&mut app, 2.0, 0.0);
     escape(&mut app);
-    let session = app.interaction_state.pcb_tool.as_ref().expect("still armed");
+    let session = app
+        .interaction_state
+        .pcb_tool
+        .as_ref()
+        .expect("still armed");
     assert!(session.points.is_empty(), "the first Esc ends the run");
     escape(&mut app);
-    assert!(app.interaction_state.pcb_tool.is_none(), "the second the tool");
+    assert!(
+        app.interaction_state.pcb_tool.is_none(),
+        "the second the tool"
+    );
     assert_eq!(board_of(&app, &path).segments.len(), 1, "nothing was added");
 }
 

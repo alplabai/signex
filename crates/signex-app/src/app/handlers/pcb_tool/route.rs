@@ -89,7 +89,8 @@ impl Signex {
         cursor: Point,
         preview: &mut PcbBoard,
     ) {
-        let (Some(anchor), Some(layer)) = (session.points.last().copied(), self.active_copper_layer())
+        let (Some(anchor), Some(layer)) =
+            (session.points.last().copied(), self.active_copper_layer())
         else {
             return;
         };

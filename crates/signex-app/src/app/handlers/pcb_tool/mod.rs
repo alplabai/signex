@@ -24,11 +24,11 @@ mod area;
 mod route;
 
 #[cfg(test)]
-mod tests;
+mod area_tests;
 #[cfg(test)]
 mod route_tests;
 #[cfg(test)]
-mod area_tests;
+mod tests;
 
 /// A placement tool armed on one board in one window, and the shape it is
 /// drawing.

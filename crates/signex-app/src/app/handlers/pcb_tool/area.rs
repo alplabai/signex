@@ -50,7 +50,9 @@ impl Signex {
         if tool != BoardPlaceTool::Keepout {
             return self.tool_copper_layer(tool).map(PcbLayer::Copper);
         }
-        let active = self.active_tab_path().map(|p| self.pcb_layer_view(&p).active());
+        let active = self
+            .active_tab_path()
+            .map(|p| self.pcb_layer_view(&p).active());
         let layer = active.filter(|layer| keepout_copper(*layer).is_some());
         if layer.is_none() {
             let note = t!(self.ui_state.i18n, ids::PCB_TOOL_KEEPOUT_NEEDS_LAYER);

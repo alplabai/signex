@@ -309,7 +309,11 @@ fn the_selection_filter_toggles_the_kinds_the_board_picks() {
     assert_eq!(app.interaction_state.pcb_bar_menu, Some(PcbBarMenu::Filter));
     assert!(buttons(&bar_of(&app))[0].selected);
     let entries = rows(&app, PcbBarMenu::Filter);
-    assert_eq!(entries.len(), 1 + PickKind::ALL.len(), "All - On and each kind");
+    assert_eq!(
+        entries.len(),
+        1 + PickKind::ALL.len(),
+        "All - On and each kind"
+    );
     assert!(entries.iter().all(|row| row.checked || row.disabled));
     let tracks = entries
         .iter()

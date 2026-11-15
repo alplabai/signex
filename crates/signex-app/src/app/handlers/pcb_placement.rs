@@ -433,9 +433,11 @@ impl Signex {
             .pcb_carry
             .as_ref()
             .is_some_and(|c| c.kind == CarryKind::Place && c.is_for(path.as_deref(), undocked));
-        let routing = self.interaction_state.pcb_tool.as_ref().is_some_and(|s| {
-            s.is_routing() && s.is_for(path.as_deref(), undocked)
-        });
+        let routing = self
+            .interaction_state
+            .pcb_tool
+            .as_ref()
+            .is_some_and(|s| s.is_routing() && s.is_for(path.as_deref(), undocked));
         let selection = state
             .filter(|s| s.document().is_some() && s.document() == path.as_deref())
             .map(|s| s.selection());

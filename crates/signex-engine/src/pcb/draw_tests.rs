@@ -57,7 +57,11 @@ fn a_track_run_bends_by_the_corner_rule_on_the_net_it_starts_on() {
     let board = board();
     let from = Point::new(2.0, 0.0);
     let style = TrackStyle::starting_at(&board, from, CopperLayer::Top);
-    assert_eq!((style.width_mm, style.net), (0.3, 3), "setup width, track net");
+    assert_eq!(
+        (style.width_mm, style.net),
+        (0.3, 3),
+        "setup width, track net"
+    );
     let bottom = TrackStyle::starting_at(&board, from, CopperLayer::Bottom);
     assert_eq!(bottom.net, 0, "no copper under it on the bottom layer");
 
@@ -82,7 +86,10 @@ fn a_track_run_bends_by_the_corner_rule_on_the_net_it_starts_on() {
         mode: CornerMode::FreeAngle,
         is_flipped: false,
     };
-    assert_eq!(track_run(from, Point::new(5.0, 4.0), free, style, &mut ids).len(), 1);
+    assert_eq!(
+        track_run(from, Point::new(5.0, 4.0), free, style, &mut ids).len(),
+        1
+    );
     assert!(track_run(from, from, ortho, style, &mut ids).is_empty());
     assert!(place_route(Vec::new(), None).is_none());
 }
@@ -102,15 +109,24 @@ fn a_layer_change_adds_its_via_and_tracks_as_one_step() {
         net: via.net,
     };
     let mut n = 0x60;
-    let tracks = track_run(at, Point::new(5.0, 3.0), CornerRule::default(), style, || {
-        n += 1;
-        Uuid::from_u128(n)
-    });
+    let tracks = track_run(
+        at,
+        Point::new(5.0, 3.0),
+        CornerRule::default(),
+        style,
+        || {
+            n += 1;
+            Uuid::from_u128(n)
+        },
+    );
     engine
         .execute(place_route(tracks, Some(via)).unwrap())
         .unwrap();
     assert_eq!(engine.board().vias.len(), 1);
-    assert_eq!(engine.board().segments.last().unwrap().layer, "BottomCopper");
+    assert_eq!(
+        engine.board().segments.last().unwrap().layer,
+        "BottomCopper"
+    );
     assert_eq!(engine.board().segments.last().unwrap().net, 3);
     engine.undo().unwrap();
     assert_eq!(serde_json::to_string(engine.board()).unwrap(), before);
@@ -128,7 +144,10 @@ fn a_copper_area_is_solid_copper_on_the_net_under_its_first_point() {
     let id = Uuid::from_u128(0x70);
     let zone = new_copper_area(engine.board(), id, outline, CopperLayer::Top).unwrap();
     assert_eq!((zone.net, zone.net_name.as_str()), (3, "GND"));
-    assert_eq!((zone.layer.as_str(), zone.fill_type.as_str()), ("TopCopper", "solid"));
+    assert_eq!(
+        (zone.layer.as_str(), zone.fill_type.as_str()),
+        ("TopCopper", "solid")
+    );
     engine.execute(place_zone(zone)).unwrap();
     assert_eq!(engine.board().zones.len(), 1);
     engine.undo().unwrap();

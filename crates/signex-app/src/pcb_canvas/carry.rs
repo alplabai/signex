@@ -156,7 +156,12 @@ pub fn carry_delta(
 /// within the snap distance, else the nearest point of the board's grid when
 /// grid snapping is on, else `to` itself. `active` is the active copper
 /// layer.
-pub fn snap_point(board: &PcbBoard, to: Point, snap: &PcbSnapOptions, active: CopperLayer) -> Point {
+pub fn snap_point(
+    board: &PcbBoard,
+    to: Point,
+    snap: &PcbSnapOptions,
+    active: CopperLayer,
+) -> Point {
     if let Some(layers) = snap.layer_mask(active) {
         let none = BTreeSet::new();
         let query = SnapQuery {

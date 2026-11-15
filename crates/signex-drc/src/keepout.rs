@@ -40,7 +40,10 @@ pub(super) fn check(board: &PcbBoard) -> Checked {
     let mut out = Checked::default();
     // Keepouts drawn on the board (#2373) are checked like the sketch's.
     let drawn: Vec<PcbKeepout> = board.zones.iter().filter_map(|z| z.as_keepout()).collect();
-    let sketch = board.sketch.iter().flat_map(|stored| stored.keepouts.iter());
+    let sketch = board
+        .sketch
+        .iter()
+        .flat_map(|stored| stored.keepouts.iter());
     for keepout in sketch.chain(&drawn) {
         match Area::of(keepout) {
             Ok(Some(area)) => area.check(board, &mut out),

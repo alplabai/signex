@@ -62,8 +62,14 @@ pub fn align_commands(
 fn targets(board: &PcbBoard, footprints: &[&Footprint], to: AlignTo) -> Vec<Point> {
     let xs = || footprints.iter().map(|fp| fp.position.x);
     let ys = || footprints.iter().map(|fp| fp.position.y);
-    let (min_x, max_x) = (xs().fold(f64::INFINITY, f64::min), xs().fold(f64::NEG_INFINITY, f64::max));
-    let (min_y, max_y) = (ys().fold(f64::INFINITY, f64::min), ys().fold(f64::NEG_INFINITY, f64::max));
+    let (min_x, max_x) = (
+        xs().fold(f64::INFINITY, f64::min),
+        xs().fold(f64::NEG_INFINITY, f64::max),
+    );
+    let (min_y, max_y) = (
+        ys().fold(f64::INFINITY, f64::min),
+        ys().fold(f64::NEG_INFINITY, f64::max),
+    );
     let grid = grid_step_mm(board);
     let snap = |v: f64| (v / grid).round() * grid;
     let spread = |values: Vec<f64>, lo: f64, hi: f64| distribute(&values, lo, hi);

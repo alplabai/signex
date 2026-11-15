@@ -95,7 +95,11 @@ fn via_places_on_the_grid_on_the_net_under_it_one_step_per_click() {
     click(&mut app, 4.2, 0.3);
     click(&mut app, 7.4, 6.2);
     let vias = &board_of(&app, &path).vias;
-    assert_eq!(vias.len(), 2, "each click places a via, the tool stays armed");
+    assert_eq!(
+        vias.len(),
+        2,
+        "each click places a via, the tool stays armed"
+    );
     assert_eq!(vias[0].position, Point::new(4.0, 0.0), "on the 1 mm grid");
     assert_eq!((vias[0].diameter, vias[0].drill), (0.8, 0.4));
     assert_eq!(vias[0].net, 3, "it joins the track it lands on");
@@ -119,7 +123,10 @@ fn esc_and_a_right_click_end_the_via_tool() {
 
     run(&mut app, "place_board_via");
     right_click(&mut app);
-    assert!(app.interaction_state.pcb_tool.is_none(), "a right-click ends it");
+    assert!(
+        app.interaction_state.pcb_tool.is_none(),
+        "a right-click ends it"
+    );
     assert!(
         app.interaction_state.context_menu.is_none(),
         "the right-click does not open the board menu"

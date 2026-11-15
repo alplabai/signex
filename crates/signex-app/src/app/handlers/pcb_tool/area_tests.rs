@@ -30,7 +30,11 @@ fn fill_is_the_rectangle_between_two_clicks_in_one_step() {
         ]
     );
     assert_eq!((zones[0].layer.as_str(), zones[0].net), ("TopCopper", 3));
-    let session = app.interaction_state.pcb_tool.as_ref().expect("still armed");
+    let session = app
+        .interaction_state
+        .pcb_tool
+        .as_ref()
+        .expect("still armed");
     assert!(session.points.is_empty(), "ready for the next fill");
     undo(&mut app);
     assert_eq!(live(&app, &path), before);
@@ -56,15 +60,26 @@ fn a_solid_region_closes_on_its_first_corner_or_a_right_click() {
         click(&mut app, x, y);
     }
     right_click(&mut app);
-    assert_eq!(board_of(&app, &path).zones.len(), 2, "a right-click closes it");
-    assert!(app.interaction_state.pcb_tool.is_some(), "and keeps the tool");
+    assert_eq!(
+        board_of(&app, &path).zones.len(),
+        2,
+        "a right-click closes it"
+    );
+    assert!(
+        app.interaction_state.pcb_tool.is_some(),
+        "and keeps the tool"
+    );
     assert!(app.interaction_state.context_menu.is_none());
 
     click(&mut app, 20.0, 20.0);
     escape(&mut app);
     escape(&mut app);
     assert!(app.interaction_state.pcb_tool.is_none());
-    assert_eq!(board_of(&app, &path).zones.len(), 2, "Esc drops the open one");
+    assert_eq!(
+        board_of(&app, &path).zones.len(),
+        2,
+        "Esc drops the open one"
+    );
     undo(&mut app);
     undo(&mut app);
     assert_eq!(live(&app, &path), before);
