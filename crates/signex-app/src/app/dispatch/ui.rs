@@ -124,7 +124,9 @@ impl Signex {
                 let dropped = self.finish_components_row_drag(released_in);
                 self.handle_layout_drag_finished();
                 self.interaction_state.pointer_window = None;
-                Task::batch([dropped, self.finish_update()])
+                // A dock drag changed a preferred width the layout saves.
+                let persist = self.persist_dock_layout_soon();
+                Task::batch([dropped, persist, self.finish_update()])
             }
             UiMsg::GridCycle => {
                 let cycled = self.cycle_grid_size(true);
