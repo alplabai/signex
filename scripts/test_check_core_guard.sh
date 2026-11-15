@@ -118,6 +118,11 @@ run_case core_module_self_as_is_fine pass 'use crate::app::core::{self as app_co
 
 run_case path_attribute fail '#[path = "../../view/mod.rs"]
 mod v;' "x.rs:1 breaks 'path_attr'"
+run_case path_in_cfg_attr fail '#[cfg_attr(test, path = "../../view/mod.rs")]
+mod v;' "breaks 'path_attr'"
+run_case path_words_in_other_attributes_are_fine pass '#[doc = "see the path = config"]
+#[error("bad path = {0}")]
+struct E;'
 run_case include_macro fail 'include!("../../view/theme.rs");' "breaks 'include_source'"
 run_case include_str_data_is_fine pass 'const T: &str = include_str!("table.tsv");
 const B: &[u8] = include_bytes!("blob.bin");'

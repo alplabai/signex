@@ -59,7 +59,7 @@ pattern() {
   case "$1" in
     crate_alias) printf '%s\n' '\b(use[[:space:]]+crate|crate::self|extern[[:space:]]+crate[[:space:]]+self)[[:space:]]+as\b' ;;
     std_alias) printf '%s\n' '\b(use|extern[[:space:]]+crate)[[:space:]]+(::)?(std|core|alloc)[[:space:]]+as\b|(^|[^:A-Za-z0-9_])(::)?(std|core|alloc)::self[[:space:]]+as\b' ;;
-    path_attr) printf '%s\n' '#!?\[.*\bpath[[:space:]]*=' ;;
+    path_attr) printf '%s\n' '#!?\[[[:space:]]*(cfg_attr\(.*,[[:space:]]*)?path[[:space:]]*=' ;;
     include_source) printf '%s\n' '\binclude[[:space:]]*!' ;;
     iced) printf '%s\n' '\biced(\b|_)' ;;
     tokio) printf '%s\n' '\btokio\b' ;;
