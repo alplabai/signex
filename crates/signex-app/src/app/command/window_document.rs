@@ -241,8 +241,9 @@ impl Signex {
         .then_some(window)
     }
 
-    /// Drop the Active Bar dropdown and context menu that `window` opened,
-    /// when it closes or reattaches: nothing else would clear them (#1910).
+    /// Drop the Active Bar dropdown, context menu and layer tab menu that
+    /// `window` opened, when it closes or reattaches: nothing else would
+    /// clear them (#1910, #2379).
     pub(crate) fn close_overlays_owned_by(&mut self, window: iced::window::Id) {
         self.retire_window_panel_ctx(window);
         self.close_surfaces_owned_by(window);
@@ -265,6 +266,12 @@ impl Signex {
             self.library.components_panel.row_menu = None;
         }
         let interaction = &mut self.interaction_state;
+        if interaction
+            .pcb_layer_tab_menu
+            .is_some_and(|menu| menu.window == Some(window))
+        {
+            interaction.pcb_layer_tab_menu = None;
+        }
         if interaction.active_bar_menu_window == Some(window) {
             interaction.active_bar_menu = None;
             interaction.active_bar_menu_window = None;

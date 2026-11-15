@@ -6,6 +6,10 @@ pcb-layers-title = Layers
 pcb-layers-empty = Open a board or a footprint to see its layers.
 # Button that shows every hidden layer again.
 pcb-layers-show-all = Show all layers
+# Right-click menu of a layer tab under the board: hide that layer, or show
+# it and hide every other layer.
+pcb-layer-tab-hide = Hide this layer
+pcb-layer-tab-show-only = Show only this layer
 # Group headers of the Layers panel.
 pcb-layers-signal = Signal
 pcb-layers-plane = Plane

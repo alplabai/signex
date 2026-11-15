@@ -147,6 +147,8 @@ pub struct InteractionState {
     pub active_bar_menu_window: Option<iced::window::Id>,
     /// The open dropdown of the main window's PCB Active Bar (#2352).
     pub pcb_bar_menu: Option<crate::app::PcbBarMenu>,
+    /// The open right-click menu of a layer tab under a board canvas (#2379).
+    pub pcb_layer_tab_menu: Option<crate::app::LayerTabMenu>,
     /// The undocked window whose action is running inside `run_in_window`;
     /// `None` for the main window. Stamps what the action opens (a Components
     /// drag) and keeps the app-wide refreshes on the main window.

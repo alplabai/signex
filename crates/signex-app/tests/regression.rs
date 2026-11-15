@@ -166,6 +166,9 @@ mod pcb_placement;
 // #2358 - press on an unselected footprint and drag: select and move.
 #[path = "regression/pcb_drag_unselected.rs"]
 mod pcb_drag_unselected;
+// #2379: tracks and the ratsnest follow a dragged footprint's pads.
+#[path = "regression/pcb_drag_follow.rs"]
+mod pcb_drag_follow;
 // #2364: a component placed from the Components panel onto a board.
 #[path = "regression/board_part_place.rs"]
 mod board_part_place;

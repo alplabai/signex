@@ -40,4 +40,6 @@ define_ids! {
     PCB_TOOL_HINT_POUR = "pcb-tool-hint-pour";
     PCB_TOOL_STRING_TEXT = "pcb-tool-string-text";
     PCB_TOOL_STRING_NEEDS_OVERLAY = "pcb-tool-string-needs-overlay";
+    PCB_LAYER_TAB_HIDE = "pcb-layer-tab-hide";
+    PCB_LAYER_TAB_SHOW_ONLY = "pcb-layer-tab-show-only";
 }

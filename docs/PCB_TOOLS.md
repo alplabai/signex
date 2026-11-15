@@ -204,3 +204,33 @@ their origins, as a sheet lines symbols up by their anchors
 its footprint. Two footprints are needed (three to distribute; one for Align
 To Grid, which snaps each origin to the board's grid). A locked footprint
 refuses the whole run and the Messages panel says which.
+
+## Moving a component with its tracks
+
+A drag or Edit ▸ Move of footprints takes the tracks connected to their pads
+along (#2379). A track end follows when it lies on a moved pad's copper, on a
+copper layer the pad reaches, and the track is on the pad's net: the contact
+the ratsnest counts as connected (`pcb_geom::tracks_on_pads`). Only that end
+moves; the other end stays, so the track stays joined to whatever it meets
+there. The drop runs the footprint moves and the track edits as one batch
+(`signex_engine::pcb::placement::move_commands`), one undo step. During the
+drag the preview draws the carried footprints with those tracks at the
+offset, and the ratsnest is read off the board as the drop would leave it,
+so its lines stay on the carried pads. The tracks that follow are found once,
+when the carry starts, and kept with the preview; each grid step only moves
+them.
+
+Only the drag and Edit ▸ Move take tracks along so far. Align, Distribute and
+Align To Grid, the X and Y fields in Properties, and Turn and Mirror still
+move the footprint alone and leave its tracks where they were. Turn and Mirror
+need the track ends turned about the footprint, not shifted, so they need more
+than the shift a move applies.
+
+## Layer tab menu
+
+A right-click on a layer tab under the board opens Hide this layer, Show only
+this layer and Show all layers (#2379). Show only this layer makes the layer
+active and hides every other layer the Layers panel lists; the board outline
+and the Multi-Layer row keep their state, as in single-layer mode. The rows
+change the view of the board in the window the menu was opened in, never the
+board file.

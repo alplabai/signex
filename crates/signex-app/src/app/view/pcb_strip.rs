@@ -1,10 +1,11 @@
 //! Layer tabs under the PCB canvas (#2357): the board's own layers as tabs
 //! with a colour swatch. A click on a tab makes that layer the active one,
 //! the same message a Layers panel row sends, so the tab, the panel row and
-//! the status bar pill always name one layer.
+//! the status bar pill always name one layer. A right-click opens the tab's
+//! menu: hide the layer, show it alone, or show every layer (#2379).
 
 use iced::widget::button::{Status, Style as ButtonStyle};
-use iced::widget::{Row, Space, container, row};
+use iced::widget::{Row, Space, container, mouse_area, row};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_renderer::pcb::PcbLayerView;
@@ -15,7 +16,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, button, text};
 
 use super::*;
-use crate::app::{PcbMsg, PcbViewMsg};
+use crate::app::{LayerTabMenuMsg, PcbMsg, PcbViewMsg};
 use crate::pcb_canvas::layer_style;
 use crate::styles::{Radii, ti, tokens::resolve};
 
@@ -60,6 +61,21 @@ fn picked(window: Option<iced::window::Id>, layer: PcbLayer) -> Message {
     }
 }
 
+/// What a right-click on the tab of `layer` sends: its menu opens (#2379).
+fn menu_opened(window: Option<iced::window::Id>, layer: PcbLayer) -> Message {
+    Message::Pcb(PcbMsg::LayerTabMenu(LayerTabMenuMsg::Opened {
+        window,
+        layer,
+    }))
+}
+
+/// What a tab sends: a click picks its layer, a right-click opens its menu.
+/// A tab whose layer this build does not know sends neither.
+struct TabMessages {
+    press: Option<Message>,
+    menu: Option<Message>,
+}
+
 /// The strip for the board; `None` when the board declares no layers.
 pub(super) fn layer_strip<'a>(
     strip: StripBoard<'_>,
@@ -91,8 +107,11 @@ pub(super) fn layer_strip<'a>(
         let selected = layer.is_some() && layer == active;
         let hidden = layer.is_some_and(|l| view.is_hidden(l));
         let look = TabLook { selected, hidden };
-        let on_press = layer.map(|l| picked(window, l));
-        tabs = tabs.push(layer_tab(i18n, def, tokens, look, on_press));
+        let messages = TabMessages {
+            press: layer.map(|l| picked(window, l)),
+            menu: layer.map(|l| menu_opened(window, l)),
+        };
+        tabs = tabs.push(layer_tab(i18n, def, tokens, look, messages));
     }
     Some(
         container(tabs)
@@ -124,7 +143,7 @@ fn layer_tab<'a>(
     def: &LayerDef,
     tokens: &ThemeTokens,
     look: TabLook,
-    on_press: Option<Message>,
+    messages: TabMessages,
 ) -> Element<'a, Message> {
     let TabLook { selected, hidden } = look;
     let (label, swatch) = describe(i18n, def, tokens);
@@ -152,7 +171,8 @@ fn layer_tab<'a>(
     .spacing(SP.s)
     .align_y(iced::Alignment::Center);
     let (fill, wash) = (r.accent_soft, crate::styles::tokens::hover_overlay(tokens));
-    button(content)
+    let TabMessages { press, menu } = messages;
+    let tab = button(content)
         .padding([SP.xs, SP.s])
         .style(move |_: &Theme, status| ButtonStyle {
             background: if selected {
@@ -167,8 +187,12 @@ fn layer_tab<'a>(
             },
             ..ButtonStyle::default()
         })
-        .on_press_maybe(on_press)
-        .boxed()
+        .on_press_maybe(press)
+        .boxed();
+    match menu {
+        Some(menu) => mouse_area(tab).on_right_press(menu).boxed(),
+        None => tab,
+    }
 }
 
 /// `view` with `strip` (when there is one) stacked under it.
