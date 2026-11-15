@@ -4,7 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
-use signex_app::app::{ContextMenuMsg, LoadedProject, Message, ProjectTreeAction, Signex, UiMsg};
+use signex_app::app::{
+    ContextMenuMsg, DocumentSetupMsg, LoadedProject, Message, ProjectTreeAction, Signex, UiMsg,
+};
 use signex_app::menu_bar::MenuMessage;
 use signex_types::project::ProjectData;
 use signex_widgets::tree_view::TreeNode;
@@ -67,6 +69,9 @@ fn add_new_pcb(app: &mut Signex) {
             ProjectTreeAction::AddNewPcb(key),
         )),
     );
+    // Since #2232 Add New PCB opens the setup dialog; Create makes the board.
+    assert!(app.ui_state.document_setup.is_some(), "the setup dialog");
+    send(app, Message::from(DocumentSetupMsg::SubmitRequested));
 }
 
 /// The tree row keyed `key`, searched depth first.
