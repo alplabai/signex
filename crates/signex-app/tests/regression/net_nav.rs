@@ -178,6 +178,66 @@ pub(crate) mod flows {
         );
     }
 
+    fn run_command(app: &mut Signex, id: &str) {
+        let _ = app.update(Message::Menu(signex_app::menu_bar::MenuMessage::Command(
+            signex_app::keymap::AppCommandId::new(id).expect("a catalog id"),
+        )));
+    }
+
+    fn cursor_at(app: &mut Signex, x: f32, y: f32) {
+        let _ = app.update(Message::CanvasEvent(
+            signex_app::canvas::CanvasEvent::CursorAt {
+                x,
+                y,
+                zoom_pct: 100.0,
+            },
+        ));
+    }
+
+    /// #1668: `select_expand_connection` is Select > Connection under the
+    /// Classic profile's name: the selected wire grows to its net.
+    #[test]
+    fn select_expand_connection_expands_the_selected_wire_to_its_net() {
+        let tmp = TempDir::new().unwrap();
+        let (mut app, _a, _b) = open_project(tmp.path());
+        let wire = SelectedItem::new(Uuid::from_u128(11), SelectedKind::Wire);
+        app.interaction_state.active_canvas_mut().selected = vec![wire];
+
+        run_command(&mut app, "select_expand_connection");
+
+        assert_eq!(
+            app.interaction_state.active_canvas().selected,
+            vec![wire, item(LABEL_A)]
+        );
+    }
+
+    /// #1668: `select_node_or_connection_item` selects the wire under the
+    /// cursor alone, not its whole net, and leaves the selection be when the
+    /// cursor rests on nothing.
+    #[test]
+    fn select_node_or_connection_item_selects_only_the_item_under_the_cursor() {
+        let tmp = TempDir::new().unwrap();
+        let (mut app, _a, _b) = open_project(tmp.path());
+        let symbol = SelectedItem::new(Uuid::from_u128(99), SelectedKind::Symbol);
+        app.interaction_state.active_canvas_mut().selected = vec![symbol];
+
+        cursor_at(&mut app, 50.0, 50.0);
+        run_command(&mut app, "select_node_or_connection_item");
+        assert_eq!(
+            app.interaction_state.active_canvas().selected,
+            vec![symbol],
+            "nothing under the cursor: the selection stays"
+        );
+
+        // Past the `VCC` label's text, which covers the wire's left part.
+        cursor_at(&mut app, 4.9, 0.0);
+        run_command(&mut app, "select_node_or_connection_item");
+        assert_eq!(
+            app.interaction_state.active_canvas().selected,
+            vec![SelectedItem::new(Uuid::from_u128(11), SelectedKind::Wire)]
+        );
+    }
+
     #[test]
     fn go_to_net_partner_jumps_to_the_other_sheet() {
         let tmp = TempDir::new().unwrap();

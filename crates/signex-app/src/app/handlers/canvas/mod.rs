@@ -44,6 +44,8 @@ pub use sheet_tool::SheetPlaceJobs;
 pub(crate) mod placement_tests;
 #[cfg(test)]
 mod power_ghost_text_tests;
+#[cfg(test)]
+mod redraw_tests;
 mod status_activity;
 mod status_readout;
 mod sync_sheet_pins;
@@ -276,6 +278,14 @@ impl Signex {
                 self.clear_active_camera_caches();
             }
             CanvasEvent::FitSelection => self.fit_selection(),
+            CanvasEvent::RedrawRequested => {
+                self.clear_active_camera_caches();
+                if self.has_active_schematic() {
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
+                }
+            }
             CanvasEvent::CtrlClicked { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot()
                     && let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(

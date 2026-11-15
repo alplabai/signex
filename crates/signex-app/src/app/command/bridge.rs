@@ -77,7 +77,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         // typed. `None` resolves as a main-window Esc (#547).
         "cancel_current_tool" => Message::Input(InputMsg::EscapePressed { window: None }),
         // Recentres without zooming; it used to share the fit arm below (#525).
-        "center_view_at_cursor" => Message::CanvasEvent(CanvasEvent::CenterAtCursor),
+        // `center_on_cursor` is the Classic profile's name for it (#1671).
+        "center_view_at_cursor" | "center_on_cursor" => {
+            Message::CanvasEvent(CanvasEvent::CenterAtCursor)
+        }
+        "refresh_view" => Message::CanvasEvent(CanvasEvent::RedrawRequested),
         // One fit primitive; it frames object extents, as all three labels promise.
         "show_all_design_objects" | "zoom_to_all_objects" | "zoom_to_fit" => {
             Message::CanvasEvent(CanvasEvent::FitAll)
@@ -125,7 +129,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "switch_segment_posture" => Message::Tool(ToolMessage::CornerFlipRequested),
         "cut" => Message::Edit(EditMsg::Cut),
         "delete_selection" => Message::Edit(EditMsg::DeleteSelected),
-        "remove_last_vertex" => Message::Tool(ToolMessage::RemoveLastVertex),
+        // `undo_last_segment` is the Classic profile's Backspace (#1669).
+        "remove_last_vertex" | "undo_last_segment" => Message::Tool(ToolMessage::RemoveLastVertex),
         // Aliases of `draw_line` and `place_sheet_symbol`: one route each.
         "draw_graphic_line" => active_bar(crate::active_bar::ActiveBarAction::DrawLine),
         "draw_hierarchical_sheet" => {
@@ -286,6 +291,13 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "save_document" => Message::File(FileMsg::Save),
         "save_document_as" => Message::Menu(MenuMessage::SaveAs),
         "select_all" => Message::Selection(selection_request::SelectionRequest::SelectAll),
+        // An alias of `select_connection`, the Active Bar's Select > Connection (#1668).
+        "select_expand_connection" => {
+            active_bar(crate::active_bar::ActiveBarAction::SelectConnection)
+        }
+        "select_node_or_connection_item" => {
+            Message::Selection(selection_request::SelectionRequest::ConnectionItemAtCursorRequested)
+        }
         "show_current_command_hotkeys" | "show_current_command_shortcuts" => {
             Message::Menu(MenuMessage::OpenKeyboardShortcuts)
         }
@@ -549,10 +561,14 @@ mod tests {
     ///   warning for a silent no-op. Read the handler body, not just its
     ///   existence.
     /// - **needs an argument** — the target `Message` carries data this
-    ///   entry point cannot supply. `select_expand_connection` wants
-    ///   `SelectionRequest::SelectConnected { seed }`, and a
-    ///   bare id has no cursor. Unblocked by `dispatch(id, args)` (#367),
+    ///   entry point cannot supply. Unblocked by `dispatch(id, args)` (#367),
     ///   not by a match arm.
+    /// - **no model concept** — `reset_local_coordinates` resets a local
+    ///   coordinate origin, and the app has none (no relative origin, no
+    ///   delta readout). `cycle_wiring_mode` cycles how dragged wires bend,
+    ///   but a drag stretches its wires one fixed way; the corner rule only
+    ///   steers drawing (`cycle_wire_bus_graphic_mode`). The copy-attributes
+    ///   half of `copy_attributes_or_add_vertex` does not exist (#1669).
     /// - **not addressable from a bare id** — the operation exists but
     ///   only in a form this entry point cannot name. `DockMessage` does
     ///   have `ClosePanel` and `ToggleCollapse`, but both are addressed
@@ -565,17 +581,14 @@ mod tests {
     /// `docs/audit/command-registry-action-surface-2026-07-25.md` §5.
     #[rustfmt::skip]
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
-        "autoplace_fields", "center_on_cursor",
+        "autoplace_fields",
         "copy_attributes_or_add_vertex",
         "cycle_wiring_mode",
         "import_graphics",
         "place_design_block",
-        "refresh_view",
-        "reset_local_coordinates", "select_expand_connection",
-        "select_node_or_connection_item",
+        "reset_local_coordinates",
         "toggle_floating_panels",
         "toggle_search_panel",
-        "undo_last_segment",
     ];
 
     /// Coverage ratchet: the set of catalog ids with no dispatch arm may
@@ -926,6 +939,23 @@ mod tests {
         assert!(app.interaction_state.wire_points.is_empty());
     }
 
+    /// #1669 - the Classic profile's Backspace, `undo_last_segment`, ends a
+    /// wire draw the same way `remove_last_vertex` does.
+    #[test]
+    fn undo_last_segment_ends_a_wire_draw_like_remove_last_vertex() {
+        let (mut app, _task) = Signex::new();
+        let cmd = AppCommandId::new("undo_last_segment").unwrap();
+        app.interaction_state.wire_drawing = true;
+        app.interaction_state
+            .wire_points
+            .push(signex_types::schematic::Point::new(0.0, 0.0));
+
+        let _ = app.dispatch_command(&cmd, CommandArgs::none(), None);
+
+        assert!(!app.interaction_state.wire_drawing);
+        assert!(app.interaction_state.wire_points.is_empty());
+    }
+
     /// #1350 - Backspace mid-polyline pops the last buffered point and
     /// leaves the selection alone.
     #[test]
@@ -1067,15 +1097,15 @@ mod tests {
     fn an_unmapped_command_reports_that_it_is_not_available_yet() {
         let _guard = serial();
         let _ = crate::diagnostics::init_logging();
-        let command = AppCommandId::new("center_on_cursor").unwrap();
+        let command = AppCommandId::new("autoplace_fields").unwrap();
 
         assert!(core_to_message(&command, &CommandArgs::none()).is_none());
 
         assert!(crate::diagnostics::recent_entries().iter().any(|entry| {
-            entry.message.contains("command 'center_on_cursor'")
+            entry.message.contains("command 'autoplace_fields'")
                 && entry
                     .message
-                    .contains("Center on cursor is not available yet")
+                    .contains("Autoplace fields is not available yet")
         }));
     }
 
