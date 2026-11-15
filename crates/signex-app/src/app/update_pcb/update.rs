@@ -220,8 +220,10 @@ impl Signex {
             return Task::none();
         };
         let Some(root) = project_root_sheet_path(project) else {
-            let why = self.update_pcb_text(ids::UPDATE_PCB_NO_SCHEMATIC);
-            self.fail_update_pcb(why);
+            let logged =
+                signex_i18n::I18n::en_us().message_plain(ids::UPDATE_PCB_NO_SCHEMATIC, &[]);
+            let shown = self.update_pcb_text(ids::UPDATE_PCB_NO_SCHEMATIC);
+            self.fail_update_pcb_as(&logged, shown);
             return Task::none();
         };
         let project_dir = project.dir().to_path_buf();
@@ -355,10 +357,17 @@ impl Signex {
     /// The read failed: Messages and the dialog say why; a headless run
     /// ends here.
     pub(super) fn fail_update_pcb(&mut self, why: String) {
+        let logged = why.clone();
+        self.fail_update_pcb_as(&logged, why);
+    }
+
+    /// [`Self::fail_update_pcb`] when Messages (en-US) and the dialog (UI
+    /// language) word the reason differently.
+    fn fail_update_pcb_as(&mut self, logged: &str, why: String) {
         if self.ui_state.update_pcb.is_none() {
             return;
         }
-        self.log_update_pcb_refused(&why);
+        self.log_update_pcb_refused(logged);
         let Some(state) = self.ui_state.update_pcb.as_mut() else {
             return;
         };
