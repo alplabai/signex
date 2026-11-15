@@ -810,13 +810,15 @@ impl Signex {
     }
 
     /// Close every right-click menu (canvas, document tab, project tree,
-    /// dock tab, Components row, Start screen row) and their submenu state. Each menu's open
-    /// handler calls this first, so exactly one is ever open.
+    /// dock tab, Components row, Start screen row, board layer tab) and
+    /// their submenu state. Each menu's open handler calls this first, so
+    /// exactly one is ever open.
     pub(crate) fn close_all_context_menus(&mut self) {
         let interaction = &mut self.interaction_state;
         interaction.context_menu = None;
         interaction.tab_context_menu = None;
         interaction.start_row_menu = None;
+        interaction.pcb_layer_tab_menu = None;
         interaction.project_tree_context_menu = None;
         interaction.context_submenu = None;
         interaction.pending_submenu = None;

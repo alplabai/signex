@@ -9,10 +9,12 @@ use signex_types::pcb::{LayerDef, PcbBoard, Point, Segment};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 use uuid::Uuid;
 
-use crate::app::{FileMsg, Message, Signex, UiMsg};
+use crate::app::{FileMsg, LayerTabMenuMsg, Message, PcbMsg, Signex, UiMsg};
 use crate::dock::DockMessage;
 use crate::keymap::ShortcutTrigger;
-use crate::layout_probe::{lay_out_texts, messages_on_click};
+use crate::layout_probe::{
+    lay_out_texts, messages_for_events, messages_on_click, messages_on_click_at,
+};
 use crate::panels::{PanelKind, PanelMsg, view_panel};
 
 const TOP: PcbLayer = PcbLayer::Copper(CopperLayer::Top);
@@ -214,4 +216,121 @@ fn the_layers_panel_on_a_board_tab_lists_and_drives_the_board_layers() {
         "the hidden Top track is not drawn"
     );
     assert!(app.document_state.panel_ctx.pcb_layers.is_hidden(TOP));
+}
+
+/// The centre of the last text `label` laid out in `window`'s view: an open
+/// menu paints after the panels, so its row is the last one with the text.
+fn last_text_at(app: &Signex, window: iced::window::Id, label: &str) -> iced::Point {
+    lay_out_texts(app.view(window), WINDOW)
+        .into_iter()
+        .rfind(|t| t.text == label)
+        .unwrap_or_else(|| panic!("no {label:?} in the view"))
+        .bounds
+        .center()
+}
+
+/// Right-click the tab of `label` and run what it sends. The same name may
+/// also show in a panel or the status bar; the tab is the one whose
+/// right-click opens its menu.
+fn right_click_tab(app: &mut Signex, window: iced::window::Id, label: &str) {
+    let press = iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+        iced::mouse::Button::Right,
+    ));
+    let opens = |m: &Message| {
+        matches!(
+            m,
+            Message::Pcb(PcbMsg::LayerTabMenu(LayerTabMenuMsg::Opened {
+                window: None,
+                ..
+            }))
+        )
+    };
+    let (at, sent) = lay_out_texts(app.view(window), WINDOW)
+        .into_iter()
+        .filter(|t| t.text == label)
+        .map(|t| t.bounds.center())
+        .map(|at| {
+            (
+                at,
+                messages_for_events(app.view(window), WINDOW, at, &[press.clone()]),
+            )
+        })
+        .find(|(_, sent)| sent.iter().any(opens))
+        .unwrap_or_else(|| panic!("no tab {label:?} opens a menu on a right-click"));
+    // The pointer subscription keeps this; the menu opens where it is.
+    app.interaction_state.last_mouse_pos = (at.x, at.y);
+    for msg in sent {
+        let _ = app.update(msg);
+    }
+}
+
+/// Click the menu row `label` and run what it sends.
+fn pick_row(app: &mut Signex, window: iced::window::Id, label: &str) {
+    let at = last_text_at(app, window, label);
+    for msg in messages_on_click_at(app.view(window), WINDOW, None, at) {
+        let _ = app.update(msg);
+    }
+}
+
+/// #2379: a right-click on a layer tab opens its menu; each row changes what
+/// the board view shows and closes the menu.
+#[test]
+fn a_tab_right_click_opens_a_menu_whose_rows_change_visibility() {
+    let (mut app, path, main) = open();
+    let bounds = app.canvas_bounds();
+    app.interaction_state.pcb_canvas.resolve_pending_fit(bounds);
+
+    right_click_tab(&mut app, main, "Bottom Layer");
+    let menu = app
+        .interaction_state
+        .pcb_layer_tab_menu
+        .expect("the menu is open");
+    assert_eq!(menu.layer, BOTTOM);
+    pick_row(&mut app, main, "Hide this layer");
+    assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
+    assert!(app.pcb_layer_view(&path).is_hidden(BOTTOM));
+    let traces = |app: &Signex| {
+        app.interaction_state
+            .pcb_canvas
+            .active_renderer_snapshot()
+            .expect("snapshot")
+            .traces
+            .len()
+    };
+    assert_eq!(traces(&app), 1, "the bottom track is no longer drawn");
+
+    right_click_tab(&mut app, main, "Top Overlay");
+    pick_row(&mut app, main, "Show only this layer");
+    let view = app.pcb_layer_view(&path);
+    assert_eq!(view.active(), OVERLAY);
+    assert!(!view.is_hidden(OVERLAY));
+    assert!(view.is_hidden(TOP) && view.is_hidden(BOTTOM));
+    assert_eq!(traces(&app), 0, "no copper is drawn");
+    assert_eq!(pill(&app, main).as_deref(), Some("Top Overlay"));
+
+    right_click_tab(&mut app, main, "Top Layer");
+    pick_row(&mut app, main, "Show all layers");
+    assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
+    assert!(!app.pcb_layer_view(&path).has_hidden());
+    assert_eq!(traces(&app), 2);
+}
+
+#[test]
+fn esc_and_a_click_outside_close_the_tab_menu_and_change_nothing() {
+    let (mut app, path, main) = open();
+    let bounds = app.canvas_bounds();
+    app.interaction_state.pcb_canvas.resolve_pending_fit(bounds);
+    right_click_tab(&mut app, main, "Bottom Layer");
+    let _ = app.update(Message::Input(crate::app::InputMsg::EscapePressed {
+        window: None,
+    }));
+    assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
+
+    right_click_tab(&mut app, main, "Bottom Layer");
+    let _ = app.update(Message::Pcb(PcbMsg::LayerTabMenu(
+        LayerTabMenuMsg::Dismissed,
+    )));
+    assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
+    assert!(!app.pcb_layer_view(&path).has_hidden());
+    assert_eq!(app.pcb_layer_view(&path).active(), TOP);
 }

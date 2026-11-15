@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use signex_i18n::{Localized, ids, t};
 use signex_renderer::pcb::{
-    PcbLayerView, PcbSnapshot, board_copper_layers, board_layers, signal_layers,
+    PcbLayerView, PcbSnapshot, board_copper_layers, board_layers, layer_rows, signal_layers,
 };
 use signex_types::pcb::{LayerDef, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
@@ -180,7 +180,19 @@ fn apply_event(view: &mut PcbLayerView, layers: &[LayerDef], event: PcbViewMsg) 
         PcbViewMsg::ActiveLayerVisibilityToggled => view.toggle_visibility(view.active()),
         PcbViewMsg::MultiLayerVisibilityToggled => view.toggle_multi_layer(),
         PcbViewMsg::AllLayersShown => view.show_all(),
+        PcbViewMsg::LayerHidden(layer) => view.hide(layer),
+        PcbViewMsg::OnlyLayerShown(layer) => view.show_only(&listed_layers(layers), layer),
     }
+}
+
+/// Every layer the Layers panel lists for the board, and the board's own
+/// layers: what Show only this layer hides.
+fn listed_layers(layers: &[LayerDef]) -> Vec<PcbLayer> {
+    layer_rows(layers)
+        .into_iter()
+        .map(|row| row.layer)
+        .chain(board_layers(layers))
+        .collect()
 }
 
 #[cfg(test)]

@@ -162,3 +162,34 @@ fn nothing_selected_and_a_zero_move_do_nothing() {
         Err(PlacementRefusal::NothingSelected)
     );
 }
+
+/// #2379: a track end on a moved pad moves with it, in the same undo step;
+/// its other end stays where it was.
+#[test]
+fn a_move_takes_the_track_ends_on_its_pads_along_in_one_step() {
+    let mut b = board();
+    // U2's pad sits at (21, 10); the track runs from (25, 10) onto it.
+    b.segments = vec![
+        serde_json::from_value(serde_json::json!({
+            "uuid": id(900), "start": {"x": 25.0, "y": 10.0}, "end": {"x": 21.0, "y": 10.0},
+            "width": 0.25, "layer": "TopCopper", "net": 0
+        }))
+        .unwrap(),
+    ];
+    let before = b.clone();
+    let commands = move_commands(&b, &ids(&[2]), Point::new(2.0, 1.0)).unwrap();
+    assert_eq!(commands.len(), 2, "{commands:?}");
+    let mut engine = BoardEngine::new(b, 1);
+    engine.execute_batch(commands).expect("the batch runs");
+    let track = &engine.board().segments[0];
+    assert_eq!(track.start, Point::new(25.0, 10.0));
+    assert_eq!(track.end, Point::new(23.0, 11.0));
+    assert_eq!(fp(engine.board(), 2).position, Point::new(22.0, 11.0));
+    engine.undo().expect("undo runs");
+    assert_eq!(
+        engine.board().segments,
+        before.segments,
+        "one undo puts back both"
+    );
+    assert_eq!(fp(engine.board(), 2).position, fp(&before, 2).position);
+}

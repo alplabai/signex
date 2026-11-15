@@ -67,6 +67,8 @@ pub enum PcbMsg {
     PlaceToolPicked(crate::app::pcb_tools::BoardPlaceTool),
     /// Swapping the footprint of placed components (#2366).
     FootprintSwap(FootprintSwapMsg),
+    /// The right-click menu of a layer tab (#2379).
+    LayerTabMenu(LayerTabMenuMsg),
 }
 
 /// Swapping the library footprint of components placed on a board (#2366).
@@ -168,6 +170,37 @@ pub enum PcbViewMsg {
     MultiLayerVisibilityToggled,
     /// The user asked to show every layer again.
     AllLayersShown,
+    /// The user hid one layer (Hide this layer on its tab, #2379).
+    LayerHidden(PcbLayer),
+    /// The user asked to see one layer alone (Show only this layer on its
+    /// tab, #2379): it becomes the active layer and every other is hidden.
+    OnlyLayerShown(PcbLayer),
+}
+
+/// The right-click menu of a layer tab under the board canvas (#2379).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayerTabMenuMsg {
+    /// A layer tab was right-clicked in `window` (`None`: the main window):
+    /// its menu opens at the pointer.
+    Opened {
+        window: Option<iced::window::Id>,
+        layer: PcbLayer,
+    },
+    /// The user clicked outside the menu or pressed Esc.
+    Dismissed,
+    /// A row was picked: the menu closes and `event` changes the view of the
+    /// board the menu was opened on.
+    Picked(PcbViewMsg),
+}
+
+/// The open layer tab menu: where it is, the layer it is for and the
+/// window whose board it acts on (`None`: the main window).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LayerTabMenu {
+    pub x: f32,
+    pub y: f32,
+    pub layer: PcbLayer,
+    pub window: Option<iced::window::Id>,
 }
 
 /// What the user did about the turn of a board view on screen (#2316). View

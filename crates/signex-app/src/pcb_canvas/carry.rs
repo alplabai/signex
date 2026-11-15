@@ -232,10 +232,16 @@ pub fn snap_point(
     grid_for(board, GridUse::NonComponents).snap_delta(Point::new(0.0, 0.0), to)
 }
 
-/// `board` without `footprints`: what a drag preview leaves in place.
+/// `board` without `footprints` and the tracks with an end on their pads:
+/// what a drag preview leaves in place.
 pub fn board_without(board: &PcbBoard, footprints: &BTreeSet<Uuid>) -> PcbBoard {
+    let following: BTreeSet<usize> = pcb_geom::tracks_on_pads(board, footprints)
+        .iter()
+        .map(|ends| ends.index)
+        .collect();
     let mut rest = PcbBoard {
         footprints: Vec::new(),
+        segments: Vec::new(),
         ..board.clone()
     };
     rest.footprints = board
@@ -244,11 +250,38 @@ pub fn board_without(board: &PcbBoard, footprints: &BTreeSet<Uuid>) -> PcbBoard 
         .filter(|fp| !footprints.contains(&fp.uuid))
         .cloned()
         .collect();
+    rest.segments = board
+        .segments
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !following.contains(index))
+        .map(|(_, segment)| segment.clone())
+        .collect();
     rest
 }
 
-/// Only `footprints` of `board`, moved by `delta`, on its layers: what a
-/// drag preview draws where they are going. No copper of the board's own.
+/// `board` as a move of `footprints` by `delta` leaves it: they and the
+/// track ends on their pads moved (#2379), as the drop's commands
+/// (`placement::move_commands`) move them. The drag preview's ratsnest is
+/// read off it.
+pub fn board_after_move(board: &PcbBoard, footprints: &BTreeSet<Uuid>, delta: Point) -> PcbBoard {
+    let mut moved = board.clone();
+    for fp in moved
+        .footprints
+        .iter_mut()
+        .filter(|fp| footprints.contains(&fp.uuid))
+    {
+        fp.position = Point::new(fp.position.x + delta.x, fp.position.y + delta.y);
+    }
+    for ends in pcb_geom::tracks_on_pads(board, footprints) {
+        moved.segments[ends.index] = ends.follow(&board.segments[ends.index], delta);
+    }
+    moved
+}
+
+/// Only `footprints` of `board`, moved by `delta`, on its layers, with the
+/// tracks that follow their pads (#2379): what a drag preview draws where
+/// they are going. No other copper of the board's own.
 pub fn carried_board(board: &PcbBoard, footprints: &BTreeSet<Uuid>, delta: Point) -> PcbBoard {
     let moved = board
         .footprints
@@ -260,6 +293,10 @@ pub fn carried_board(board: &PcbBoard, footprints: &BTreeSet<Uuid>, delta: Point
             fp
         })
         .collect();
+    let segments = pcb_geom::tracks_on_pads(board, footprints)
+        .iter()
+        .map(|ends| ends.follow(&board.segments[ends.index], delta))
+        .collect();
     PcbBoard {
         uuid: board.uuid,
         version: board.version,
@@ -270,7 +307,7 @@ pub fn carried_board(board: &PcbBoard, footprints: &BTreeSet<Uuid>, delta: Point
         setup: board.setup.clone(),
         nets: board.nets.clone(),
         footprints: moved,
-        segments: Vec::new(),
+        segments,
         vias: Vec::new(),
         zones: Vec::new(),
         graphics: Vec::new(),

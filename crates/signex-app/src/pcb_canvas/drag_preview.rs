@@ -5,7 +5,8 @@
 //! carry's offset, painted by the highlight layer above both mounts. The
 //! offset moves in grid steps, so only that small scene is rebuilt, and only
 //! when a step is crossed. Their texts move with them, painted by the same
-//! layer (#2368).
+//! layer (#2368), and so do the tracks that follow their pads and the
+//! ratsnest, which the small scene carries while the carry lasts (#2379).
 
 use std::collections::BTreeSet;
 

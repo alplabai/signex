@@ -151,6 +151,24 @@ impl PcbLayerView {
         }
     }
 
+    /// Hide `layer`; a hidden one stays hidden.
+    pub fn hide(&mut self, layer: PcbLayer) {
+        self.hidden.insert(layer);
+    }
+
+    /// Show `layer` as the active one and hide every other layer of
+    /// `layers` (#2379). The board outline stays as it is, as single-layer
+    /// mode keeps it, and so does the Multi-Layer row.
+    pub fn show_only(&mut self, layers: &[PcbLayer], layer: PcbLayer) {
+        let others = layers
+            .iter()
+            .copied()
+            .filter(|&l| l != layer && l != BOARD_OUTLINE);
+        self.hidden.extend(others);
+        self.hidden.remove(&layer);
+        self.active = layer;
+    }
+
     pub fn show_all(&mut self) {
         self.hidden.clear();
         self.multi_layer_visible = true;

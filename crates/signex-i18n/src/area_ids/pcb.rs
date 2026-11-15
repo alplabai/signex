@@ -37,4 +37,6 @@ define_ids! {
     PCB_BAR_KEEPOUT_TOOLTIP = "pcb-bar-keepout-tooltip";
     PCB_TOOL_HINT_KEEPOUT = "pcb-tool-hint-keepout";
     PCB_TOOL_KEEPOUT_NEEDS_LAYER = "pcb-tool-keepout-needs-layer";
+    PCB_LAYER_TAB_HIDE = "pcb-layer-tab-hide";
+    PCB_LAYER_TAB_SHOW_ONLY = "pcb-layer-tab-show-only";
 }

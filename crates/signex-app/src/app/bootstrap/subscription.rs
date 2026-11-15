@@ -234,7 +234,7 @@ impl OpenOverlays {
 
             // ── Right-click menus ───────────────────────────────────
             // Esc closes the menu, nothing behind it (#2349). The dock-tab,
-            // Components-row and Start-row menus answer in
+            // Components-row, Start-row and board layer tab menus answer in
             // `dispatch/escape.rs` before this ladder runs.
             OverlayId::ContextMenu => self
                 .canvas_context_menu_open
@@ -273,6 +273,7 @@ impl OpenOverlays {
             | OverlayId::ActiveBarMenu
             | OverlayId::ComponentsRowContextMenu
             | OverlayId::StartRowContextMenu
+            | OverlayId::LayerTabContextMenu
             | OverlayId::PanelList
             | OverlayId::DockDragZone
             | OverlayId::ComponentsRowDragLabel

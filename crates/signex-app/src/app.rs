@@ -85,14 +85,14 @@ pub use contracts::{
     DrcRunResult, EditMsg, EnableVersionControlMsg, EnableVersionControlOutcome,
     EnableVersionControlState, ErcMsg, ExcludeDirtyChoice, ExportMsg, FileMsg, FootprintSwapMsg,
     GitCommitFailure, GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg,
-    KeymapModMigration, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, NetNavMsg,
-    OverlayMsg, ParameterManagerMsg, PasteIntent, PasteRequest, PcbBarMenu, PcbBarMsg, PcbMsg,
-    PcbViewMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState,
-    ProjectMsg, ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
-    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
-    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
-    TextEditState, TextEditTarget, TrackItem, UiMsg, VersionControlScope, ViewAngleEntry,
-    ViewRotationMsg, WindowMsg,
+    KeymapModMigration, LayerTabMenu, LayerTabMenuMsg, LibraryRowRef, Message, MoveSelectionMsg,
+    NetColorMsg, NetNavMsg, OverlayMsg, ParameterManagerMsg, PasteIntent, PasteRequest, PcbBarMenu,
+    PcbBarMsg, PcbMsg, PcbViewMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
+    ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob, ProjectTreeAction,
+    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
+    RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
+    TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem, UiMsg,
+    VersionControlScope, ViewAngleEntry, ViewRotationMsg, WindowMsg,
 };
 pub(crate) use document::{Document, DocumentKey};
 pub use document_setup::{DocumentSetupMsg, DocumentSetupState, SetupKind, SheetChoice};

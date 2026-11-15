@@ -104,7 +104,10 @@ impl Signex {
                 if let Some(dismiss) = self.dock_tab_menu_escape() {
                     return self.update(dismiss);
                 }
-                if let Some(dismiss) = self.components_row_menu_escape() {
+                if let Some(dismiss) = self
+                    .components_row_menu_escape()
+                    .or_else(|| self.layer_tab_menu_escape())
+                {
                     return self.update(dismiss);
                 }
                 if let Some(overlay_msg) = self.escape_overlay_message() {
@@ -132,7 +135,10 @@ impl Signex {
                 if let Some(dismiss) = self.dock_tab_menu_escape() {
                     return self.update(dismiss);
                 }
-                if let Some(dismiss) = self.components_row_menu_escape() {
+                if let Some(dismiss) = self
+                    .components_row_menu_escape()
+                    .or_else(|| self.layer_tab_menu_escape())
+                {
                     return self.update(dismiss);
                 }
                 if self.interaction_state.start_row_menu.is_some() && self.start_screen_shown() {
@@ -188,6 +194,16 @@ impl Signex {
             .then_some(Message::Library(
                 crate::library::LibraryMessage::ComponentsPanelRowMenuDismissed,
             ))
+    }
+
+    /// Esc closes an open board layer tab menu (#2379).
+    fn layer_tab_menu_escape(&self) -> Option<Message> {
+        self.interaction_state
+            .pcb_layer_tab_menu
+            .is_some()
+            .then_some(Message::Pcb(PcbMsg::LayerTabMenu(
+                LayerTabMenuMsg::Dismissed,
+            )))
     }
 
     /// Esc closes an open dock tab right-click menu.

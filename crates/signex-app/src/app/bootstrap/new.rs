@@ -740,6 +740,7 @@ impl Signex {
                 active_bar_menu: None,
                 active_bar_menu_window: None,
                 pcb_bar_menu: None,
+                pcb_layer_tab_menu: None,
                 acting_window: None,
                 pointer_window: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL
