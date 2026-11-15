@@ -287,6 +287,10 @@ frame to a fresh one pixel for pixel and to the plain canvas away from the edge.
 
 ## pcb-cpu-content — The CPU board layer (#2321)
 
+A solid line is stroked with round ends, so a track draws as the capsule the
+GPU line shader, hit-testing and DRC take it to be and a bend of any angle is
+filled (#2391; `pcb_canvas::tessellate::track_cap_tests`).
+
 The CPU PCB mount draws the board in a layer of its own,
 `pcb_canvas::BoardContentLayer`, stacked where the GPU mount has its shader:
 the `PcbCanvas` canvas below it draws only the background and grid, the
