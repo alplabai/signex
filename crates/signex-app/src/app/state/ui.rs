@@ -805,9 +805,10 @@ mod tests {
 
     /// #2412: a new inline dialog draft trips this; box it, or raise the
     /// bound in the same PR with the measured size rounded up to 256 B.
+    /// Windows gets 512 B more: its `PathBuf`/`OsString` are 8 B larger.
     #[test]
     fn ui_state_stays_under_its_size_ceiling() {
-        const CEILING: usize = 7168;
+        const CEILING: usize = if cfg!(windows) { 7680 } else { 7168 };
         let size = std::mem::size_of::<super::UiState>();
         assert!(size <= CEILING, "UiState is {size} B, over {CEILING} B");
     }
