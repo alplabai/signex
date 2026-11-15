@@ -12,7 +12,7 @@ pub type DrcRunResult = Result<
     String,
 >;
 
-use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::pcb_layer::PcbLayer;
 
 /// Board-view events, namespaced under `Message::Pcb` (ADR-0001 D3) and
 /// routed to `dispatch_pcb_message`.
@@ -23,9 +23,11 @@ pub enum PcbMsg {
     /// A design-rule check of the board in view was asked for (the
     /// `run_drc` command or the Messages panel button).
     DrcRequested,
-    /// The check begun as run `generation` finished.
+    /// The check begun as run `generation` finished; `loose` when the board
+    /// was in no open project.
     DrcFinished {
         generation: u64,
+        loose: bool,
         result: Arc<DrcRunResult>,
     },
     /// A violation row (by its position in the report) was clicked.
@@ -58,6 +60,63 @@ pub enum PcbMsg {
     Reannotate(crate::app::BoardReannotateMsg),
     /// Back Annotate and its dialog (#1312).
     BackAnnotate(crate::app::BackAnnotateMsg),
+    /// The PCB Active Bar's dropdowns (#2352).
+    Bar(PcbBarMsg),
+    /// A board placement tool was picked (its command ran, #2373): it is
+    /// armed on the board in view of the window the command ran in.
+    PlaceToolPicked(crate::app::pcb_tools::BoardPlaceTool),
+    /// Swapping the footprint of placed components (#2366).
+    FootprintSwap(FootprintSwapMsg),
+}
+
+/// Swapping the library footprint of components placed on a board (#2366).
+/// Each step names the board and footprints it is for, so a selection change
+/// in between cannot send the swap to other components.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FootprintSwapMsg {
+    /// `change_footprint` ran (the board menu, the palette): the footprint
+    /// picker opens for the footprints selected on the board in view.
+    Requested,
+    /// The picker picked `footprint` for them.
+    Picked {
+        board: std::path::PathBuf,
+        footprints: Vec<uuid::Uuid>,
+        footprint: signex_library::PrimitiveRef,
+    },
+    /// The picked footprint was read off the update thread, in its board
+    /// form, or why it could not be.
+    Resolved {
+        board: std::path::PathBuf,
+        footprints: Vec<uuid::Uuid>,
+        result: Result<Box<signex_types::pcb::Footprint>, String>,
+    },
+}
+
+/// A dropdown of the PCB Active Bar (#2352).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PcbBarMenu {
+    /// Align the board selection (#2373).
+    Align,
+    /// The object kinds a click or a box picks (#2373).
+    Filter,
+    /// Move and transform the board selection.
+    Move,
+    /// Turn the board view.
+    View,
+}
+
+/// What the user did on the PCB Active Bar's dropdowns (#2352). Its buttons
+/// run their commands through the menu bar's own message.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PcbBarMsg {
+    /// A group button was right-clicked: its dropdown opens, or closes when
+    /// it is the open one.
+    MenuToggled(PcbBarMenu),
+    /// The user clicked outside the open dropdown.
+    MenuDismissed,
+    /// A dropdown row was picked: the dropdown closes and the command runs
+    /// as its menu row runs it.
+    CommandPicked(crate::keymap::AppCommandId),
 }
 
 /// What the user did about board sketch mode (#2234). The drawing itself
@@ -81,10 +140,25 @@ pub enum BoardSketchMsg {
 pub enum PcbViewMsg {
     /// The user asked to show or hide the whole ratsnest.
     RatsnestVisibilityToggled,
-    /// The user stepped the active copper layer to the next or previous one.
+    /// The user asked to show or hide the board origin marker (#2351).
+    OriginMarkerVisibilityToggled,
+    /// The user stepped the active layer to the next or previous one of the
+    /// board's layers (`+`, `-`, the status bar pill).
     ActiveLayerStepped { forward: bool },
-    /// The user made one copper layer the active one (a Layers panel row).
-    ActiveLayerPicked(CopperLayer),
+    /// The user stepped the active layer to the next or previous signal
+    /// layer (`*`).
+    SignalLayerStepped { forward: bool },
+    /// The user made one layer the active one (a tab under the canvas or a
+    /// Layers panel row).
+    ActiveLayerPicked(PcbLayer),
+    /// The user turned single-layer mode on or off (Shift+S, the Layers
+    /// panel button).
+    SingleLayerModeToggled,
+    /// The user showed or hid every layer of one Layers panel group.
+    LayerGroupVisibilitySet {
+        group: signex_renderer::pcb::LayerGroup,
+        visible: bool,
+    },
     /// The user asked to show or hide one layer (its eye in the Layers panel).
     LayerVisibilityToggled(PcbLayer),
     /// The user asked to show or hide the active layer.

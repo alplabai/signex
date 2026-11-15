@@ -1,7 +1,9 @@
 # cargo-deny configuration for signex
 #
-# Enforces Apache-clean licensing: the main repo's transitive dependency
-# closure may not contain GPL / AGPL / unlicensed crates.
+# Enforces clean dependency licensing: the main repo's transitive dependency
+# closure may not contain GPL / AGPL / unlicensed crates. Dependencies must
+# be permissive so that Signex (FSL-1.1-ALv2) can still turn Apache-2.0 two
+# years after each release.
 #
 # Run locally: `cargo deny check licenses`
 
@@ -39,7 +41,37 @@ confidence-threshold = 0.93
 
 # Per-crate exceptions. Use sparingly — every entry is an audit trail
 # datum that must be defensible.
-exceptions = []
+#
+# Signex's own workspace crates are FSL-1.1-ALv2 (LICENSE). That licence is
+# allowed for these crates only, never for a dependency: a third-party crate
+# under FSL or any other non-compete licence still fails the allowlist above.
+# The crates are not `publish = false`, so `private.ignore` would not cover
+# them; a new workspace crate needs its own line here.
+exceptions = [
+    { crate = "chrome-catalog", allow = ["FSL-1.1-ALv2"] },
+    { crate = "pcb-geom", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-3d-model-importer", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-app", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-bake", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-bom", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-cli", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-drc", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-drc-dsl", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-engine", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-erc", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-erc-dsl", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-gfx", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-history", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-i18n", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-library", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-library-server", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-net", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-output", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-renderer", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-sketch", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-types", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-widgets", allow = ["FSL-1.1-ALv2"] },
+]
 
 [[licenses.clarify]]
 name = "ring"

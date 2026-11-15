@@ -132,6 +132,11 @@ mod board_sketch;
 #[path = "regression/board_sketch_persist.rs"]
 mod board_sketch_persist;
 
+// #2331 review - a project's open board is its project's: Close Project
+// applies or waits for its sketch, and its window asks for the project.
+#[path = "regression/board_sketch_project.rs"]
+mod board_sketch_project;
+
 // #1245 - the Parameter Manager opens from a catalog command.
 #[path = "regression/parameter_manager_open.rs"]
 mod parameter_manager_open;
@@ -158,15 +163,39 @@ mod pcb_canvas_select;
 mod pcb_carry_windows;
 #[path = "regression/pcb_placement.rs"]
 mod pcb_placement;
+// #2358 - press on an unselected footprint and drag: select and move.
+#[path = "regression/pcb_drag_unselected.rs"]
+mod pcb_drag_unselected;
+// #2364: a component placed from the Components panel onto a board.
+#[path = "regression/board_part_place.rs"]
+mod board_part_place;
 // #1312 PR 1: board designators in Properties and Re-Annotate Board.
 #[path = "regression/board_designators.rs"]
 mod board_designators;
+// #2354: the board Component Properties view.
+#[path = "regression/pcb_component_properties.rs"]
+mod pcb_component_properties;
+// #2366: swapping a placed component's footprint from the board.
+#[path = "regression/pcb_footprint_swap.rs"]
+mod pcb_footprint_swap;
+// #2365, #2369: the Component view's stored settings, parameters and Comment.
+#[path = "regression/pcb_component_settings.rs"]
+mod pcb_component_settings;
+// #2367, #2365: component identity from the schematic; Type and the BOM.
+#[path = "regression/pcb_component_schematic.rs"]
+mod pcb_component_schematic;
+// #2355: the track, via and pad Properties panels.
+#[path = "regression/board_primitive_properties.rs"]
+mod board_primitive_properties;
 // #1312 PR 2: Back Annotate.
 #[path = "regression/back_annotate.rs"]
 mod back_annotate;
 
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
+
+#[path = "regression/dock_side_width.rs"]
+mod dock_side_width;
 
 #[path = "regression/dock_tab_controls.rs"]
 mod dock_tab_controls;
@@ -354,9 +383,17 @@ mod cross_sheet_multiple_names;
 #[path = "regression/cross_probe.rs"]
 mod cross_probe;
 
+// #2232 — New PCB / New Schematic setup dialogs and saved profiles.
+#[path = "regression/document_setup.rs"]
+mod document_setup;
+
 // #1312 — Update PCB from schematic, its entry points and New PCB.
 #[path = "regression/update_pcb.rs"]
 mod update_pcb;
+
+// #2350 — a new board in an unsaved project lists as unsaved, not missing.
+#[path = "regression/new_pcb_unsaved.rs"]
+mod new_pcb_unsaved;
 
 // #1836 — hierarchy mistakes the project ERC must report.
 #[path = "regression/hierarchy_checks.rs"]
@@ -374,6 +411,10 @@ mod command_enablement;
 
 #[path = "regression/dead_schematic_controls.rs"]
 mod dead_schematic_controls;
+
+#[path = "regression/fast_grids.rs"]
+mod fast_grids;
+
 #[path = "regression/file_menu_close.rs"]
 mod file_menu_close;
 

@@ -7,6 +7,7 @@ use crate::dock::DockArea;
 use super::TabInfo;
 
 mod agent_edits;
+mod board_project;
 mod board_sketch;
 mod case_fold;
 pub(crate) mod check_runs;
@@ -20,6 +21,7 @@ mod draft_ownership_tests;
 mod error_notice;
 #[cfg(test)]
 mod error_notice_tests;
+mod fast_grids;
 mod interaction;
 mod keymap_recorder;
 pub(crate) mod library_entry;
@@ -63,7 +65,7 @@ pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use parameter_table::ParameterTableState;
-pub(crate) use pcb_ratsnest::RatsnestKey;
+pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey};
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
@@ -617,6 +619,9 @@ pub struct DocumentState {
     /// opens, restores and second moves of an overlapping path are refused
     /// until the completion message drops the entry.
     pub pending_path_ops: crate::app::path_ops::PendingPathOps,
+    /// New Projects whose folder and files a worker is still writing, by the
+    /// chosen `.snxprj`. A quit is held until they land (#2280).
+    pub new_project_writes: std::collections::HashSet<PathBuf>,
     /// The Altium import still running, if any. A second import is
     /// refused while one runs: two converters writing the same output
     /// folder would interleave.

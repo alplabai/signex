@@ -373,3 +373,10 @@ editors-component-pin-node-pending = Open the Symbol tab first to list the pins.
 editors-component-pin-node-no-pins = The symbol has no pins yet.
 editors-component-parts-empty = No alternates yet.
 editors-component-listings-empty = No distributor listings yet.
+
+## Schematic status bar while the Wire or Bus tool is active (#2372)
+editors-wire-corner-horizontal-first = Corner: 90°, horizontal first
+editors-wire-corner-vertical-first = Corner: 90°, vertical first
+editors-wire-corner-diagonal-first = Corner: 45°, diagonal first
+editors-wire-corner-diagonal-last = Corner: 45°, diagonal last
+editors-wire-corner-any-angle = Corner: any angle

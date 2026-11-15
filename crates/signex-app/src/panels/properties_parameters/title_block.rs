@@ -116,7 +116,7 @@ pub fn view_title_block_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelM
                 c = c.push(
                     container(
                         row![
-                            property_label(label, LabelInk::graphite(muted)),
+                            property_label(label, muted),
                             signex_widgets::text_input(
                                 signex_widgets::raw(project_value.clone().unwrap_or_default()),
                                 value.clone()

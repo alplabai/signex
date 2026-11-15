@@ -82,7 +82,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `cycle_snap_grid_backward` | Cycle backward through snap grids | view | `Shift+G` | — |
 | `cycle_snap_grid_forward` | Open the snap grid picker (footprint editor) | view | `G` | — |
 | `cycle_unit` | Cycle display unit | view | `Ctrl+Q` | `Ctrl+Q` |
-| `cycle_wire_bus_graphic_mode` | Cycle wire/bus/graphic-line mode: free, 90 degrees, 45 degrees | interactive | — | `Shift+Space` |
+| `cycle_wire_bus_graphic_mode` | Cycle the wire/bus corner mode: 90 degrees, 45 degrees start, 45 degrees end, any angle | interactive | — | `Shift+Space` |
 | `cycle_wiring_mode` | Change wiring mode while dragging connected electrical objects | interactive | `Ctrl+Space` | — |
 | `delete_selection` | Delete selection | edit | `Delete` | `Delete` |
 | `document_info` | Document info | file | — | — |
@@ -157,7 +157,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `show_current_command_hotkeys` | Show graphical editing hotkey list for current command | help | `F1` | — |
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |
 | `smart_paste` | Smart Paste | edit | `Mod+Shift+V` | — |
-| `switch_segment_posture` | Switch current segment posture | interactive | — | `/` |
+| `switch_segment_posture` | Flip the wire/bus corner: horizontal or vertical first | interactive | — | `/` |
 | `tile_windows_horizontally` | Tile windows one above the other | window | — | — |
 | `tile_windows_vertically` | Tile windows side by side | window | — | — |
 | `toggle_auto_focus` | Toggle AutoFocus | view | `F9` | `F9` |
@@ -231,6 +231,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `move_selection_xy` | Move selection x y | modify | — | — |
 | `move_to_front` | Move to front | modify | — | — |
 | `navigate_up_hierarchy` | Navigate up hierarchy | navigation | — | `Alt+Up` |
+| `new_schematic_sheet` | New schematic sheet in the project | file | — | — |
 | `next_highlighted_net_item` | Next item on highlighted net | select | — | `Tab` |
 | `next_sheet` | Next sheet | navigation | — | `PageDown` |
 | `number_schematic_sheets` | Number schematic sheets | design | — | — |
@@ -293,16 +294,25 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
 | `board_sketch` | Enter or leave the board sketch | design | — | — |
+| `change_footprint` | Change the footprint of the selected components | modify | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
-| `next_layer` | Make the next copper layer active | view | `+`, `Shift++`, `*`, `Shift+*` | `+`, `Shift++`, `*`, `Shift+*` |
-| `prev_layer` | Make the previous copper layer active | view | `-` | `-` |
+| `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
+| `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
+| `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
+| `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | — | — |
+| `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
+| `place_board_track` | Route a track on the active copper layer | place | `P T` | — |
+| `place_board_via` | Place a via on the board | place | `P V` | — |
+| `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
 | `toggle_layer_visibility` | Show or hide the active layer | view | — | — |
 | `toggle_layers_panel` | Show or hide the Layers panel | view | — | — |
+| `toggle_origin_marker` | Show or hide the board origin marker | view | — | — |
 | `toggle_ratsnest` | Show or hide the ratsnest | view | — | — |
+| `toggle_single_layer_mode` | Draw only the active layer, or every layer again | view | `Shift+S` | `Shift+S` |
 | `view_rotate` | Rotate the board view clockwise | view | — | — |
 | `view_rotate_180` | Rotate the board view 180° | view | — | — |
 | `view_rotate_ccw` | Rotate the board view 90° counter-clockwise | view | — | — |

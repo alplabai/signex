@@ -58,6 +58,7 @@ fn track(n: u128, y: f64, layer: &str, net: u32) -> Segment {
 fn empty_board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),
@@ -198,7 +199,9 @@ fn a_drc_pick_on_a_hidden_layer_selects_nothing_and_delete_deletes_nothing() {
     let path = write_board(tmp.path(), "board.snxpcb", board);
     let mut app = new_app();
     open(&mut app, &path);
+    let serial = crate::pcb_drc::drc_serial();
     send(&mut app, Message::Pcb(PcbMsg::DrcRequested));
+    drop(serial);
     let violations = app
         .interaction_state
         .pcb_drc
@@ -293,6 +296,7 @@ fn linked() -> Linked {
         properties: Vec::new(),
         schematic_link: Some(SymbolLink::new(InstancePath::root(), [R5])),
         library_ref: None,
+        component: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }];

@@ -93,6 +93,40 @@ fn a_first_sync_adds_every_net_and_assigns_every_pad() {
     assert_eq!(net_of(&design.board, "R2", "2"), Some("GND"));
 }
 
+/// #2371: a new board has no nets, so every net row adds one, also for a
+/// net whose only other pin is on a part with no footprint.
+#[test]
+fn a_new_board_lists_only_add_rows_for_nets() {
+    let parts = vec![
+        part("R1", &[0x101], "10k", Ok(r0603())),
+        part(
+            "R2",
+            &[0x102],
+            "*",
+            Err(signex_types::part::FootprintResolveError::NoFootprint),
+        ),
+    ];
+    let nets = netlist(&[
+        ("VCC", &[(0x101, "R1", "1"), (0x102, "R2", "1")]),
+        ("GND", &[(0x101, "R1", "2")]),
+        ("VREF", &[(0x102, "R2", "2")]),
+    ]);
+    let design = Design::new(board(Vec::new()), parts, nets);
+    let list = design.diff();
+    let nets: Vec<&EcoChange> = list
+        .rows
+        .iter()
+        .filter(|r| r.group == EcoGroup::Nets)
+        .map(|r| &r.change)
+        .collect();
+    assert_eq!(nets.len(), 3, "{}", report_text(&list));
+    assert!(
+        nets.iter().all(|c| matches!(c, EcoChange::AddNet { .. })),
+        "{}",
+        report_text(&list)
+    );
+}
+
 #[test]
 fn a_renamed_net_keeps_its_number_and_renames_its_zones() {
     let mut design = synced();

@@ -32,6 +32,7 @@ fn footprint(n: u128, library_ref: Option<FootprintSourceRef>) -> Footprint {
         properties: Vec::new(),
         schematic_link: None,
         library_ref,
+        component: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

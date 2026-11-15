@@ -1,4 +1,4 @@
-//! Which project owns a sheet path, answered from a cached index (#1470).
+//! Which project owns a sheet or board path, answered from a cached index (#1470).
 //!
 //! `DocumentState::document_project` runs from many UI-thread call sites and
 //! used to rebuild everything per call: the child-reference map cloned out of
@@ -8,7 +8,7 @@
 //! ([`ownership_stamp`]) moves.
 //!
 //! The stamp is a hash of exactly what the index is built from — each
-//! project's id, file, case rules and listed sheets, and each open engine's
+//! project's id, file, case rules, listed sheets and board, and each open engine's
 //! path and child-sheet filenames — so the index cannot go stale whichever
 //! code path edited the data (a rename, a sheet added or removed, a project
 //! closed, an engine swapped in without bumping an epoch). Hashing the inputs
@@ -26,7 +26,7 @@ use super::{DocumentState, LoadedProject};
 pub(crate) struct OwnershipIndex {
     stamp: u64,
     /// Per project, in `projects` order: its case rule and the keys of the
-    /// sheets its `.snxprj` lists.
+    /// sheets and board its `.snxprj` lists.
     listed: Vec<(CaseFold, HashSet<String>)>,
     /// `child key → parent path`, once per distinct case rule.
     parents: Vec<(CaseFold, HashMap<String, PathBuf>)>,
@@ -54,11 +54,15 @@ impl OwnershipIndex {
             .map(|p| {
                 let fold = fold_of(p);
                 let dir = p.dir();
+                // The board is the project's too (#2331), joined as
+                // `entries::referenced_files` joins it.
                 let keys = p
                     .data
                     .sheets
                     .iter()
-                    .map(|s| path_key_with(&dir.join(&s.filename), fold))
+                    .map(|s| s.filename.as_str())
+                    .chain(listed_board(p))
+                    .map(|file| path_key_with(&dir.join(file), fold))
                     .collect();
                 (fold, keys)
             })
@@ -207,6 +211,15 @@ impl DocumentState {
     }
 }
 
+/// The board file a project names, when it names one.
+fn listed_board(project: &LoadedProject) -> Option<&str> {
+    project
+        .data
+        .pcb_file
+        .as_deref()
+        .filter(|file| !file.trim().is_empty())
+}
+
 /// Hash of everything an [`OwnershipIndex`] is built from. Engine order is
 /// random (`HashMap`), so per-engine hashes are summed, not chained.
 pub(crate) fn ownership_stamp(
@@ -224,6 +237,7 @@ pub(crate) fn ownership_stamp(
         }
         // Delimit this project's sheet list from the next project's fields.
         p.data.sheets.len().hash(&mut h);
+        listed_board(p).hash(&mut h);
     }
     let engines_hash = engines.iter().fold(0u64, |acc, (path, engine)| {
         let mut e = std::hash::DefaultHasher::new();
@@ -367,6 +381,22 @@ mod tests {
             signex_engine::Engine::new(SchematicSheet::default()).unwrap(),
         );
         assert_eq!(owner(&ds, "/w/a/sub/leaf.snxsch"), None);
+    }
+
+    /// #2331: the board a project names is the project's, open or not.
+    #[test]
+    fn the_board_a_project_names_is_owned_and_follows_its_name() {
+        let (mut ds, id) = state();
+        assert_eq!(owner(&ds, "/w/a/board.snxpcb"), None);
+        ds.projects[0].data.pcb_file = Some("board.snxpcb".to_string());
+        assert_eq!(owner(&ds, "/w/a/board.snxpcb"), Some(id));
+        ds.projects[0].data.pcb_file = Some("new.snxpcb".to_string());
+        assert_eq!(owner(&ds, "/w/a/board.snxpcb"), None);
+        assert_eq!(owner(&ds, "/w/a/new.snxpcb"), Some(id));
+        ds.projects[0].data.pcb_file = Some("  ".to_string());
+        assert_eq!(owner(&ds, "/w/a/  "), None, "a blank name names no board");
+        ds.projects[0].data.pcb_file = None;
+        assert_eq!(owner(&ds, "/w/a/new.snxpcb"), None);
     }
 
     #[test]

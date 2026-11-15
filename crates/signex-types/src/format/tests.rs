@@ -30,6 +30,7 @@ pub(super) fn empty_sheet() -> SchematicSheet {
 pub(super) fn empty_board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -286,6 +287,7 @@ fn show_serialised_pcb_for_inspection() {
     board.footprints.push(Footprint {
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0010-7000-8000-000000000001").unwrap(),
@@ -466,6 +468,7 @@ fn snxpcb_round_trip_with_data() {
     let footprint = Footprint {
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         unknown_columns: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::parse_str("0192a8c0-0010-7000-8000-000000000001").unwrap(),

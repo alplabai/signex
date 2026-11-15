@@ -52,6 +52,7 @@ pub use mod_migration::{
     ModMigration, ModMove, migrate_active_to_mod, offers_mod_migration, standard_ctrl_rows,
     with_standard_set_on_mod,
 };
+pub use physical::shortcut_char;
 pub use platform::Platform;
 pub use profile::{
     BindingConflict, BuiltInProfile, CompiledKeymap, KeyLookup, ProfileLoadError, RestoredProfiles,
@@ -67,6 +68,8 @@ mod binding_tests;
 mod catalog_golden_tests;
 #[cfg(test)]
 mod editor_tests;
+#[cfg(test)]
+mod layout_tests;
 #[cfg(test)]
 mod menu_command_tests;
 #[cfg(test)]

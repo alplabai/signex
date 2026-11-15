@@ -124,7 +124,7 @@ and Signex 365 (§8). The stages, in order:
 
 **Editions** (maintainer decision, 2026-11-08):
 
-- **Community** (Apache-2.0, offline forever): the full editor — schematic,
+- **Community** (FSL-1.1-ALv2, offline forever): the full editor — schematic,
   PCB layout, routing, DRC, the plugin system and the headless CLI. Nothing
   is locked, and there are no upgrade prompts.
 - **Pro** (subscription with included AI credits): hosted Signex AI and the
@@ -470,7 +470,7 @@ of the AI Design gate's.
 the plans after them in this band wait until it ships.
 
 Professional-grade interactive routing, implemented clean-room under
-Apache-2.0 with no reference to other EDA tools' source or format docs.
+FSL-1.1-ALv2 with no reference to other EDA tools' source or format docs.
 Ships as five staged sub-releases. DRC (15 base rules) and net-class
 management land in this band.
 

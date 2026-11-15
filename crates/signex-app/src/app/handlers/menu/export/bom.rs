@@ -114,7 +114,8 @@ impl Signex {
             return;
         };
         preview.options.rule_options.set_enabled(rule, enabled);
-        let opts = preview.options.clone();
+        let mut opts = preview.options.clone();
+        opts.board_left_out = self.active_board_left_out_of_bom();
         let Some(ctx) = super::build_bom_export_context(&self.document_state) else {
             return;
         };
@@ -298,6 +299,7 @@ impl Signex {
         crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
         let opts = BomOptions {
             price_book: crate::library::bom_prices::price_book(&self.library),
+            board_left_out: self.active_board_left_out_of_bom(),
             ..opts.clone()
         };
         Some(signex_output::bom::rollup_with_validation(&ctx, &opts))
@@ -369,6 +371,7 @@ impl Signex {
         // picker's intent.
         opts.format = BomFormat::from_output_path(&save_path);
         opts.price_book = crate::library::bom_prices::price_book(&self.library);
+        opts.board_left_out = self.board_left_out_of_bom(&source);
 
         match BomExporter.export(&ctx, &opts) {
             Ok(output) => {
@@ -398,6 +401,47 @@ impl Signex {
         }
 
         Task::none()
+    }
+
+    /// [`Self::board_left_out_of_bom`] for the document in view.
+    fn active_board_left_out_of_bom(&self) -> Vec<signex_types::pcb::SymbolLink> {
+        self.document_state
+            .active_path
+            .as_deref()
+            .map(|source| self.board_left_out_of_bom(source))
+            .unwrap_or_default()
+    }
+
+    /// The parts whose footprint on the board of `source`'s project is of a
+    /// type the BOM leaves out (#2365). Read from the board while it is
+    /// open; a board that is not open leaves every part in.
+    fn board_left_out_of_bom(
+        &self,
+        source: &std::path::Path,
+    ) -> Vec<signex_types::pcb::SymbolLink> {
+        let docs = &self.document_state;
+        let Some(project) = docs.document_project(source) else {
+            return Vec::new();
+        };
+        let Some(file) = project
+            .data
+            .pcb_file
+            .as_deref()
+            .map(str::trim)
+            .filter(|f| !f.is_empty())
+        else {
+            return Vec::new();
+        };
+        docs.pcb_board(&project.dir().join(file))
+            .map(|board| {
+                board
+                    .footprints
+                    .iter()
+                    .filter(|fp| !fp.component.component_type.in_bom())
+                    .filter_map(|fp| fp.schematic_link.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 }
 

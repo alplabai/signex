@@ -3,7 +3,8 @@
 The bar is plain data: `menu_bar_model(&MenuContext)` in
 `crates/signex-app/src/menu_bar/model/` builds it, and `menu_bar/view.rs`
 renders it as iced_aw menus. Its content is pinned by
-`menu_bar/testdata/menu_bar.golden.tsv`; changing a menu, label, shortcut,
+`menu_bar/testdata/menu_bar.golden.tsv` (Place on a board in
+`menu_bar_place_board.golden.tsv`, [below](#place-board)); changing a menu, label, shortcut,
 order or message is a content change and needs the maintainers' sign-off.
 
 ## How a row runs {#row-routing}
@@ -72,7 +73,8 @@ Force Annotate All Schematics (Shift+Alt+A), Back Annotate Schematics... (see
 [Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
 [Back Annotate](#back-annotate)), Board Sketch (see
 [Design ▸ Board Sketch](#design-board-sketch)), a separator, then
-Parameter Manager.... **File ▸ New** has PCB (`new_pcb_document`). **File ▸
+Parameter Manager.... **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
+(`new_pcb_document`), each opening its setup dialog (#2232). **File ▸
 Export** keeps PDF only.
 Project tree actions with no menu message or command id (add or remove a
 document, Enable Version Control, History, Validate Project) stay in the tree's
@@ -222,10 +224,15 @@ palette, and the Projects tree's project row has an Update PCB Document row
 for the clicked project. No keymap preset binds it. The dialog:
 [UPDATE_PCB.md](UPDATE_PCB.md).
 
-File ▸ New ▸ PCB runs `new_pcb_document`: the project in view gets its board,
-named after the project, from its project defaults. It is greyed with no
-project open. Projects ▸ Add New ▸ PCB does the same for the clicked project.
-The board opens as an unsaved tab; nothing is written until Save.
+File ▸ New ▸ PCB runs `new_pcb_document`: it opens the New PCB setup dialog
+for the project in view, prefilled from the project's setup (#2232); its
+Create PCB makes the project's board, named after the project, with the values
+shown. It is greyed with no project open. Projects ▸ Add New ▸ PCB does the
+same for the clicked project. The board opens as an unsaved tab; nothing is
+written until Save. File ▸ New ▸ Schematic runs `new_schematic_sheet`: the New
+Schematic setup dialog, whose Create asks where to save the sheet; also greyed
+with no project. Both dialogs: `PROJECT_SETUP.md`, "New PCB and New
+Schematic".
 
 ## Design ▸ Board Sketch {#design-board-sketch}
 
@@ -296,6 +303,27 @@ three has a default key).
   tree's Close Project Documents: every tab closes, and an unsaved document is
   parked as a draft exactly as the tab menu's Close All Documents does. Greyed
   when no tab is open.
+
+## Place on a board {#place-board}
+
+Place follows the document in view (#2360). While the window shows a board
+(`CommandContext::pcb.shown`), it lists the board's tools: Component, Pad,
+Via, Interactive Routing, Track, Arc, Fill, Solid Region, Polygon Pour,
+String, Dimension and Keepout, then Board Sketch (`board_sketch`, the same
+command as Design ▸ Board Sketch and the PCB Active Bar's button). Every other
+tab keeps the sheet's Place rows.
+
+The rows come from one table, `app/pcb_tools.rs` (`BoardPlaceTool::state`),
+which the PCB Active Bar builds its buttons from (#2352), so the two surfaces
+run and grey the same set. A live tool (#2373) is a command row that runs the
+same command as its Active Bar button and arms the tool on the board in view;
+see "Board placement tools" in `docs/PCB_TOOLS.md`. A tool the board editor
+cannot run yet is an `ItemState::Placeholder` whose `reason` is its tooltip
+("Place Pad: not available on boards yet").
+
+The golden fixture marks the sheet's Place rows `-` in the `pcb` column: that
+variant's bar does not have them. `menu_bar/testdata/menu_bar_place_board.golden.tsv`
+pins the board's Place rows instead.
 
 ## Tools ▸ Assign Footprints {#tools-assign-footprints}
 
@@ -438,6 +466,24 @@ and vias that end on a moved, rotated, flipped or deleted footprint stay
 where they are. Flip Selection has no default key and
 is greyed outside a board.
 
+## Edit clipboard on a board {#edit-clipboard-board}
+
+On a PCB tab (#2361) Cut, Copy, Paste, Paste Special, Duplicate and Select
+All act on the board, from the Edit menu, their keys and the board's
+right-click menu. Copy and Duplicate are live with footprints, tracks or vias
+selected; Cut also needs no selected footprint to be locked. Paste and Paste
+Special are live once board objects were copied. Select All is live on any
+board and selects every footprint, track and via on a shown layer.
+
+Paste puts the copy on the pointer, on the board grid, and a click places it;
+Esc or a right-click drops it. Paste Special and Duplicate place the copy at
+once, shifted from where it was copied. Each edit is one undo step, and the
+placed copy is selected. A pasted footprint whose designator is taken gets
+one by the paste designator preference, as on a sheet; a pasted pad, track or
+via keeps its net only when the board has a net of that name. One clipboard
+serves sheets and boards: a copy on one replaces the other's, and pasting
+the other kind does nothing and says why in the Messages panel.
+
 ## View: board view {#view-board}
 
 Five View rows act on the board in view and are greyed without one (#2223):
@@ -450,6 +496,11 @@ like them, works without a document (the panel shows its empty state). In an
 undocked PCB window the keys and rows act on that window's board. What a row
 changes is the board view in `UiState::pcb_layer_views`: never the board,
 never its file. See `docs/DECISIONS.md` (2026-11-09).
+
+Toggle Origin Marker (`toggle_origin_marker`, #2351) sits under Toggle
+Ratsnest: it shows or hides the circle-and-X marker at the board origin,
+which is shown by default. It is greyed without a board, has no default key,
+and like the rows above it changes only the board view.
 
 The board canvas menu ends with a View group holding the same Toggle
 Ratsnest row (#2240, #2223); the menu opens only on a board, so the row is
@@ -511,7 +562,9 @@ otherwise the prompt opens. A request stays pending until it is answered, and
 macOS waits (at logout only for a limited time), so every path that keeps the
 app open answers it with `iced::system::cancel_quit()` (a no-op when nothing
 is pending): the prompt's Cancel, a quit held back by a running rename or
-delete, a Save All that left files unsaved, and the prompt closing itself
+delete or by a New Project still being written (#2280), a Save All that left
+files unsaved (also when a write task panicked and ended the writes early: the
+settle still arrives, #2269), and the prompt closing itself
 because everything was saved behind it, and a prompt window that vanishes
 without a close request (treated as Cancel). Each decision is logged to the
 Messages panel ("Quit: the system asked Signex to quit", "Quit: not quitting,

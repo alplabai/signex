@@ -52,7 +52,7 @@ pub(super) fn push_body_row<'a>(
     c: Column<Element<'a, PanelMsg>>,
     id: uuid::Uuid,
     state: &str,
-    muted: impl Into<LabelInk>,
+    muted: Color,
     input_bg: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     let pick = move |choice: BodyChoice| PanelMsg::SymbolBodyStylePicked(id, choice.style());

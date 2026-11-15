@@ -125,7 +125,10 @@ impl Signex {
     ) -> Task<Message> {
         match request {
             selection_request::SelectionRequest::SelectAll => {
-                if let Some(snapshot) = self.active_render_snapshot() {
+                // A board selects its own items (#2361).
+                if !self.select_all_on_pcb()
+                    && let Some(snapshot) = self.active_render_snapshot()
+                {
                     let items = all_selectable_items(snapshot);
                     self.replace_selection(items);
                 }

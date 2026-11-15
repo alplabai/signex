@@ -1,5 +1,6 @@
-//! The keepout check (#2234): what a board-sketch keepout forbids, found
-//! inside it on a layer it covers. Any net counts, net 0 included: a
+//! The keepout check (#2234): what a board-sketch keepout, or a keepout
+//! drawn on the board (#2373, `Zone::as_keepout`), forbids, found inside it
+//! on a layer it covers. Any net counts, net 0 included: a
 //! keepout keeps out copper, not a net.
 //!
 //! - `no_routing` forbids tracks; `no_vias` vias; `no_copper` tracks, vias
@@ -8,31 +9,52 @@
 //!   keepout on its own side's outer copper layer.
 //! - `no_pours` is not checked yet (zones are not tested against keepouts).
 //!
-//! One violation per keepout and item, however many kinds forbid it.
+//! One violation per keepout and item, however many kinds forbid it. A
+//! keepout whose boundary does not convert, and a footprint body a
+//! `no_components` keepout needs that does not, are reported as unchecked
+//! (#2300); a track, via or pad that does not convert is already in the
+//! copper index's `skipped`.
 
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::CopperLayer;
 use signex_types::pcb_sketch::PcbKeepout;
 
 use pcb_geom::{
-    ItemRef, PointNm, RectNm, Shape, Side, footprint_body, layer_bit, layer_mask, pad_layers,
-    pad_shape, track_shape, via_layers, via_shape,
+    GeomError, ItemRef, PointNm, RectNm, Rejected, Shape, Side, footprint_body, layer_bit,
+    layer_mask, pad_layers, pad_shape, track_shape, via_layers, via_shape,
 };
 
-use super::{Violation, ViolationKind};
+use super::{SkippedKeepout, Violation, ViolationKind};
 
-/// Every keepout violation of `board`, unsorted.
-pub(super) fn violations(board: &PcbBoard) -> Vec<Violation> {
-    let Some(stored) = board.sketch.as_ref() else {
-        return Vec::new();
-    };
-    let mut found = Vec::new();
-    for keepout in &stored.keepouts {
-        if let Some(area) = Area::of(keepout) {
-            area.check(board, &mut found);
+/// What the keepout check found and what it could not check.
+#[derive(Default)]
+pub(super) struct Checked {
+    pub(super) violations: Vec<Violation>,
+    /// Footprint bodies that did not convert, once each.
+    pub(super) bodies: Vec<Rejected>,
+    pub(super) keepouts: Vec<SkippedKeepout>,
+}
+
+/// Every keepout violation of `board`, unsorted, and what was not checked.
+pub(super) fn check(board: &PcbBoard) -> Checked {
+    let mut out = Checked::default();
+    // Keepouts drawn on the board (#2373) are checked like the sketch's.
+    let drawn: Vec<PcbKeepout> = board.zones.iter().filter_map(|z| z.as_keepout()).collect();
+    let sketch = board
+        .sketch
+        .iter()
+        .flat_map(|stored| stored.keepouts.iter());
+    for keepout in sketch.chain(&drawn) {
+        match Area::of(keepout) {
+            Ok(Some(area)) => area.check(board, &mut out),
+            Ok(None) => {}
+            Err(error) => out.keepouts.push(SkippedKeepout {
+                keepout: keepout.uuid,
+                error,
+            }),
         }
     }
-    found
+    out
 }
 
 /// A keepout in nm with the copper layers it covers.
@@ -45,30 +67,36 @@ struct Area<'a> {
 }
 
 impl<'a> Area<'a> {
-    /// `None` for a keepout with a corner the geometry cannot hold, or no
-    /// copper layer: it can forbid nothing this check sees.
-    fn of(keepout: &'a PcbKeepout) -> Option<Self> {
-        let polygon = keepout
-            .boundary
-            .iter()
-            .map(|&p| PointNm::from_mm(p, "keepout.boundary"))
-            .collect::<Result<Vec<_>, _>>()
-            .ok()?;
-        let bounds = RectNm::bounding(polygon.iter().copied())?;
+    /// `Ok(None)` for a keepout with no copper layer or no corner: it can
+    /// forbid nothing this check sees. An error for a corner the geometry
+    /// cannot hold: the keepout is not checked, and the run says so.
+    fn of(keepout: &'a PcbKeepout) -> Result<Option<Self>, GeomError> {
         let layers = keepout
             .layers
             .iter()
             .filter_map(|layer| layer.copper())
             .fold(0, |mask, layer| mask | 1 << layer_bit(layer));
-        (layers != 0).then_some(Area {
+        if layers == 0 {
+            return Ok(None);
+        }
+        let polygon = keepout
+            .boundary
+            .iter()
+            .map(|&p| PointNm::from_mm(p, "keepout.boundary"))
+            .collect::<Result<Vec<_>, _>>()?;
+        let Some(bounds) = RectNm::bounding(polygon.iter().copied()) else {
+            return Ok(None);
+        };
+        Ok(Some(Area {
             keepout,
             polygon,
             bounds,
             layers,
-        })
+        }))
     }
 
-    fn check(&self, board: &PcbBoard, found: &mut Vec<Violation>) {
+    fn check(&self, board: &PcbBoard, out: &mut Checked) {
+        let found = &mut out.violations;
         let forbids = self.keepout.forbids;
         let copper = forbids.no_copper;
         if forbids.no_routing || copper {
@@ -116,9 +144,14 @@ impl<'a> Area<'a> {
                     Side::Top => CopperLayer::Top,
                     Side::Bottom => CopperLayer::Bottom,
                 };
-                if let Ok(body) = footprint_body(footprint) {
-                    let item = ItemRef::Footprint(footprint.uuid);
-                    self.meet(item, 0, 1 << layer_bit(side), &body, found);
+                let item = ItemRef::Footprint(footprint.uuid);
+                match footprint_body(footprint) {
+                    Ok(body) => self.meet(item, 0, 1 << layer_bit(side), &body, found),
+                    // Once per footprint, however many keepouts needed it.
+                    Err(error) if !out.bodies.iter().any(|r| r.item == item) => {
+                        out.bodies.push(Rejected { item, error });
+                    }
+                    Err(_) => {}
                 }
             }
         }

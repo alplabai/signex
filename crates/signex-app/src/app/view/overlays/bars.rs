@@ -272,7 +272,7 @@ impl Signex {
         let bar_has_net_colors = !ui.net_colors.is_empty();
         let bar = crate::active_bar::view_bar(
             interaction.current_tool,
-            interaction.draw_mode,
+            interaction.corner_rule.mode,
             &interaction.last_tool,
             &document.panel_ctx.tokens,
             self.ui_state.effective_theme_id(),

@@ -5,6 +5,7 @@
 //! toggles in v0.9.x).
 
 use iced::Color;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
 /// One of the visible layers shown in the Footprint tab toolbar.
 ///
@@ -113,9 +114,6 @@ impl FpLayer {
     }
 }
 
-/// Shade of a preview pad's edge relative to its fill.
-const PAD_EDGE_SHADE: f32 = 0.7;
-
 /// Which colour set the footprint canvas and layer widgets paint with.
 /// Graphite themes get the Graphite values; every other theme keeps the
 /// Altium-flavoured set of [`FpLayer::color`].
@@ -126,9 +124,9 @@ pub enum LayerPalette {
     Graphite,
     /// Graphite colours tuned for the charcoal canvas.
     CanvasDark,
-    /// Read-only previews on the charcoal canvas: opaque pad gold with a
-    /// darker edge, fab ink apart from the copper and a neutral courtyard.
-    PreviewDark,
+    /// Read-only previews: the board palette the PCB canvas draws with, so
+    /// a footprint looks as it does on the board (#2348).
+    Board,
 }
 
 impl LayerPalette {
@@ -137,41 +135,35 @@ impl LayerPalette {
         Color::WHITE
     }
 
-    /// The preview variant of a canvas palette; any other palette as is.
-    pub fn for_preview(self) -> Self {
-        match self {
-            LayerPalette::CanvasDark => LayerPalette::PreviewDark,
-            other => other,
-        }
-    }
-
-    fn is_preview(self) -> bool {
-        self == LayerPalette::PreviewDark
-    }
-
-    /// Whether the courtyard is drawn dashed (the Graphite canvases).
+    /// Whether the courtyard is drawn dashed (the Graphite editor canvas).
     pub fn dashes_courtyard(self) -> bool {
-        !matches!(self, LayerPalette::Legacy | LayerPalette::Graphite)
+        self == LayerPalette::CanvasDark
     }
 
-    /// Alpha of a pad's copper fill: opaque in previews so the gold stays
-    /// crisp on the paper, slightly see-through elsewhere.
-    pub fn pad_fill_alpha(self) -> f32 {
-        if self.is_preview() { 1.0 } else { 0.85 }
-    }
-
-    /// Edge stroke of a pad filled with `fill`: a darker copper in
-    /// previews, the fill colour itself elsewhere.
-    pub fn pad_edge(self, fill: Color) -> Color {
-        if self.is_preview() {
-            Color::from_rgb(
-                fill.r * PAD_EDGE_SHADE,
-                fill.g * PAD_EDGE_SHADE,
-                fill.b * PAD_EDGE_SHADE,
-            )
-        } else {
-            Color { a: 1.0, ..fill }
+    /// Colour of the courtyard outline. The editor draws it in the
+    /// Edge.Cuts colour; the board puts it on Courtyard Top.
+    pub fn courtyard_colour(self) -> Color {
+        match self {
+            LayerPalette::Board => crate::pcb_canvas::layer_style::board_layer_colour(
+                PcbLayer::Technical(TechnicalLayer::CourtyardTop),
+            ),
+            other => FpLayer::EdgeCuts.color_in(other),
         }
+    }
+
+    /// Alpha of a pad's copper fill: opaque as on the board, slightly
+    /// see-through in the editor.
+    pub fn pad_fill_alpha(self) -> f32 {
+        if self == LayerPalette::Board {
+            1.0
+        } else {
+            0.85
+        }
+    }
+
+    /// Edge stroke of a pad filled with `fill`: the fill colour itself.
+    pub fn pad_edge(self, fill: Color) -> Color {
+        Color { a: 1.0, ..fill }
     }
 
     /// The palette a theme paints with: every theme is Graphite.
@@ -204,6 +196,21 @@ impl FpSide {
 }
 
 impl FpLayer {
+    /// The board layer this layer's graphics land on, as `signex-library`
+    /// places a footprint (Edge.Cuts stays the board outline).
+    pub fn board_layer(self) -> PcbLayer {
+        use TechnicalLayer as T;
+        match self {
+            FpLayer::FCu => PcbLayer::Copper(CopperLayer::Top),
+            FpLayer::BCu => PcbLayer::Copper(CopperLayer::Bottom),
+            FpLayer::FSilks => PcbLayer::Technical(T::SilkscreenTop),
+            FpLayer::BSilks => PcbLayer::Technical(T::SilkscreenBottom),
+            FpLayer::FFab => PcbLayer::Technical(T::FabTop),
+            FpLayer::BFab => PcbLayer::Technical(T::FabBottom),
+            FpLayer::EdgeCuts => PcbLayer::Technical(T::EdgeCuts),
+        }
+    }
+
     /// The side of the board this layer belongs to.
     pub fn side(self) -> FpSide {
         match self {
@@ -220,11 +227,9 @@ impl FpLayer {
     pub fn color_in(self, palette: LayerPalette) -> Color {
         match palette {
             LayerPalette::Legacy => self.color(),
-            LayerPalette::PreviewDark => match self {
-                FpLayer::FFab => Color::from_rgb8(0xA3, 0xA5, 0xAB),
-                FpLayer::EdgeCuts => Color::from_rgb8(0x5B, 0x5E, 0x66),
-                _ => self.color_in(LayerPalette::CanvasDark),
-            },
+            LayerPalette::Board => {
+                crate::pcb_canvas::layer_style::board_layer_colour(self.board_layer())
+            }
             LayerPalette::CanvasDark => match self {
                 FpLayer::FFab => Color::from_rgb8(0x4F, 0xA6, 0xB8),
                 FpLayer::BFab => Color::from_rgb8(0x3D, 0x7F, 0x8D),

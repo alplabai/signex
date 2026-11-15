@@ -120,6 +120,11 @@
     "category": "edit"
   },
   {
+    "id": "change_footprint",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
     "id": "check_drc",
     "group": "General",
     "category": "validation"
@@ -540,6 +545,11 @@
     "category": "file"
   },
   {
+    "id": "new_schematic_sheet",
+    "group": "Schematic",
+    "category": "file"
+  },
+  {
     "id": "next_document_tab",
     "group": "General",
     "category": "window"
@@ -563,6 +573,11 @@
     "id": "next_sheet",
     "group": "Schematic",
     "category": "navigation"
+  },
+  {
+    "id": "next_signal_layer",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "number_schematic_sheets",
@@ -662,6 +677,31 @@
   {
     "id": "place_blanket",
     "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_board_fill",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_keepout",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_region",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_track",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_via",
+    "group": "Pcb",
     "category": "place"
   },
   {
@@ -1095,6 +1135,11 @@
     "category": "view"
   },
   {
+    "id": "toggle_origin_marker",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "toggle_properties_panel",
     "group": "General",
     "category": "panels"
@@ -1123,6 +1168,11 @@
     "id": "toggle_selection",
     "group": "General",
     "category": "select"
+  },
+  {
+    "id": "toggle_single_layer_mode",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "toggle_visible_grid",

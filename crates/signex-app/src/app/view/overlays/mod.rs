@@ -354,6 +354,8 @@ impl Signex {
         // underlying content. Left-click anywhere on it triggers the
         // dismiss message.
         //
+        // Right-click menus use `MenuBackdrop` instead (#2349).
+        //
         // We intentionally do *not* wire `on_right_press` — iced's
         // `mouse_area` would `capture_event()` the right-press and
         // prevent the underlying canvas from starting a pan. Instead

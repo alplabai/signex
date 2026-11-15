@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: FSL-1.1-ALv2
 #
 # Controls for scripts/ci_build_needed.sh. A wrong `false` skips the Rust
 # jobs on a PR that needed them, so every fail-closed case is pinned here.

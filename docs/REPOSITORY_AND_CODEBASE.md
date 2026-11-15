@@ -78,14 +78,17 @@ Signex is developed as a single codebase with a shared core.
 
 ### 3.1. Community
 
-Signex Community is the main editor foundation made available as open source.
+Signex Community is the main editor foundation, made available as
+source-available code.
 
-The intended licensing direction for Community is:
+Community is licensed under:
 
-- **Apache License 2.0**
+- **FSL-1.1-ALv2** (Functional Source License 1.1, Apache 2.0 Future
+  License): any use except a Competing Use; each release becomes Apache-2.0
+  two years after it ships. See [LICENSING.md](LICENSING.md).
 
 That means the Community code should be structured so it can stand on its own as
-an open, fully usable editor core without depending on proprietary runtime
+a fully usable editor core without depending on proprietary runtime
 services for normal editing workflows.
 
 ### 3.2. Pro
@@ -409,7 +412,8 @@ That is the standard this repository should hold.
 
 For product and repository planning purposes, the intended licensing model is:
 
-- **Signex Community:** Apache License 2.0
+- **Signex Community:** FSL-1.1-ALv2 (each release becomes Apache-2.0 two
+  years after it ships)
 - **Signex Pro:** commercial / proprietary terms for Pro-only additions
 
 This document records the intended direction so the repository can be organized
@@ -423,8 +427,8 @@ change rather than by silent drift.
 
 ## 12. One-Sentence Summary
 
-This repository is the shared engineering home of Signex: an Apache-clean
+This repository is the shared engineering home of Signex: a clean-room
 EDA editor core with native `.snx*` formats and a clean path to both an
-Apache-2.0 Community edition and a commercial Pro edition from the same
+FSL-1.1-ALv2 Community edition and a commercial Pro edition from the same
 codebase. Optional one-way import from GPL-based EDA tools lives in the separate GPL-3.0
 import companion repository.

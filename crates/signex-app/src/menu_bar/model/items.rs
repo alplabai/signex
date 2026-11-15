@@ -86,6 +86,16 @@ pub(super) fn item_if_command(
     )
 }
 
+/// A greyed row for a feature with no command yet; `reason` is its tooltip.
+pub(super) fn placeholder(ctx: &MenuContext, label: MessageId, reason: MessageId) -> MenuEntry {
+    plain(
+        text(ctx, label),
+        ItemState::Placeholder {
+            reason: Some(text(ctx, reason)),
+        },
+    )
+}
+
 /// A greyed informational row that is not a missing feature (no tooltip).
 pub(super) fn unavailable(ctx: &MenuContext, label: MessageId) -> MenuEntry {
     plain(text(ctx, label), ItemState::Unavailable)

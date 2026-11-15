@@ -247,8 +247,13 @@ impl Signex {
     }
 
     /// An undo or redo moved the board at `path`: the text a draft was typed
-    /// over may have changed under it, so its draft goes.
+    /// over may have changed under it, so its drafts go, the Component
+    /// view's too.
     pub(crate) fn drop_pcb_footprint_draft_of(&mut self, path: &Path) {
+        let component = &mut self.interaction_state.pcb_component.draft;
+        if component.as_ref().is_some_and(|d| d.board == path) {
+            *component = None;
+        }
         if self
             .interaction_state
             .pcb_footprint_draft

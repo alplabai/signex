@@ -53,6 +53,7 @@ mod save_as_project;
 #[cfg(test)]
 mod save_as_project_tests;
 mod save_async;
+pub(crate) use save_async::is_pcb_path;
 #[cfg(test)]
 pub(crate) mod save_async_tests;
 #[cfg(test)]

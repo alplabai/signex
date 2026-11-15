@@ -168,7 +168,13 @@ fn project_dialogs_refuse_without_their_argument() {
     new_project(&mut app, &answers, dir.path());
     let task = app.add_existing_to_project(vec![0]);
     assert_refused(&mut app, task, "Add Existing to Project", "paths");
-    let task = app.add_new_schematic(vec![0]);
+    // Add New ▸ Schematic opens its setup dialog (#2232); Create asks.
+    let open = app.add_new_schematic(vec![0]);
+    TaskDriver::new()
+        .settle(&mut app, open)
+        .expect("the dialog opens");
+    assert!(app.ui_state.document_setup.is_some());
+    let task = app.update(Message::from(crate::app::DocumentSetupMsg::SubmitRequested));
     assert_refused(&mut app, task, "Add New Schematic to Project", "path");
     let task = app.add_project_symbol_library(vec![0]);
     assert_refused(&mut app, task, "New Symbol Library", "path");

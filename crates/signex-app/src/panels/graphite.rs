@@ -10,9 +10,10 @@ use signex_widgets::tree_view::{BadgeTone, TreeIcon, TreeNode, TreeStyle};
 
 use super::{ErcSeverityLite, PanelContext, PanelMsg};
 use crate::styles::tokens::{relative_luminance, resolve};
-use crate::styles::{PillTone, Radii, TypeScale, pill_colors, ti};
+use crate::styles::{PillTone, Radii, Spacing, TypeScale, pill_colors, ti};
 
 const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// Table row height of the Messages and ERC tables.
 pub const TABLE_ROW_HEIGHT: f32 = 28.0;
@@ -250,6 +251,23 @@ pub(crate) fn summary_card<'a>(ctx: &PanelContext) -> Option<Element<'a, PanelMs
             })
             .boxed(),
     )
+}
+
+/// A hint tooltip of a panel control in the shared floating-card look
+/// (opaque paper, border and shadow, as the context menu), so the hint
+/// stays readable over the rows it floats on.
+pub fn hint_tooltip<'a, M: 'a>(
+    content: Element<'a, M>,
+    hint: Localized,
+    tokens: &ThemeTokens,
+    position: iced::widget::tooltip::Position,
+) -> Element<'a, M> {
+    let tip = container(text(hint).size(TS.caption).color(ti(tokens.text)))
+        .padding([SP.xs, SP.s])
+        .style(crate::styles::context_menu(tokens));
+    signex_widgets::tooltip(content, tip, position)
+        .gap(SP.xs)
+        .boxed()
 }
 
 #[cfg(test)]

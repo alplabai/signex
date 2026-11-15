@@ -23,7 +23,7 @@ use signex_types::property::PcbProperty;
 use uuid::Uuid;
 
 use crate::primitive::footprint::{
-    Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape,
+    ComponentType, Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape,
 };
 
 /// The board form of `footprint`: top side, origin at (0, 0), rotation 0,
@@ -55,7 +55,46 @@ pub(crate) fn board_footprint(
     if !footprint.courtyard.points.is_empty() {
         graphics.push(courtyard(&footprint.courtyard.points));
     }
-    Ok(pcb::Footprint {
+    Ok(top_side_footprint(footprint, pads, graphics))
+}
+
+/// The board copper of `footprint`, for a view that places nothing (#2348).
+#[derive(Debug, Clone)]
+pub struct DrawnBoardFootprint {
+    /// The pads the board can hold, converted as `board_footprint` converts
+    /// them; no graphics.
+    pub footprint: pcb::Footprint,
+    /// Indices into the library footprint's pads of the pads the board cannot
+    /// hold (shape, slot, copper offset or layer); the caller draws those
+    /// its own way.
+    pub unheld_pads: Vec<usize>,
+}
+
+/// What the board draws of `footprint`'s copper, for a library preview.
+/// Unlike `board_footprint` nothing refuses the whole footprint, and pad
+/// settings that leave the copper alone (mask, paste, test point) are not
+/// checked: the result is drawn, never placed.
+pub fn drawn_board_footprint(footprint: &Footprint) -> DrawnBoardFootprint {
+    let mut pads = Vec::new();
+    let mut unheld_pads = Vec::new();
+    for (index, pad) in footprint.pads.iter().enumerate() {
+        match copper_pad(pad) {
+            Ok(held) => pads.push(held),
+            Err(_) => unheld_pads.push(index),
+        }
+    }
+    DrawnBoardFootprint {
+        footprint: top_side_footprint(footprint, pads, Vec::new()),
+        unheld_pads,
+    }
+}
+
+fn top_side_footprint(
+    footprint: &Footprint,
+    pads: Vec<pcb::Pad>,
+    graphics: Vec<pcb::FpGraphic>,
+) -> pcb::Footprint {
+    pcb::Footprint {
         uuid: Uuid::now_v7(),
         reference: String::new(),
         value: String::new(),
@@ -72,9 +111,34 @@ pub(crate) fn board_footprint(
         ],
         schematic_link: None,
         library_ref: None,
+        component: Box::new(component_attributes(footprint)),
         unknown: Default::default(),
         unknown_columns: Default::default(),
-    })
+    }
+}
+
+/// The component settings a library footprint brings to the board (#2365):
+/// its type, height and description. A height the board cannot hold
+/// (negative or not a number) is left unset.
+fn component_attributes(footprint: &Footprint) -> pcb::ComponentAttributes {
+    let component_type = match footprint.component_type {
+        ComponentType::Standard => pcb::ComponentType::Standard,
+        ComponentType::StandardNoBom => pcb::ComponentType::StandardNoBom,
+        ComponentType::Mechanical => pcb::ComponentType::Mechanical,
+        ComponentType::Graphical => pcb::ComponentType::Graphical,
+        ComponentType::NetTie => pcb::ComponentType::NetTie,
+        ComponentType::NetTieInBom => pcb::ComponentType::NetTieInBom,
+        ComponentType::Jumper => pcb::ComponentType::Jumper,
+    };
+    pcb::ComponentAttributes {
+        component_type,
+        height_mm: footprint
+            .height_mm
+            .filter(|h| h.is_finite() && *h >= 0.0)
+            .unwrap_or(0.0),
+        description: footprint.description.clone(),
+        ..pcb::ComponentAttributes::default()
+    }
 }
 
 fn unconvertible(what: &'static str, value: impl Into<String>) -> FootprintResolveError {
@@ -114,8 +178,15 @@ fn point(xy: [f64; 2]) -> Point {
 }
 
 fn board_pad(pad: &Pad) -> Result<pcb::Pad, FootprintResolveError> {
-    let (shape, roundrect_ratio) = pad_shape(&pad.shape)?;
+    // The shape is named before the pad settings when both refuse.
+    pad_shape(&pad.shape)?;
     refuse_pad_settings(pad)?;
+    copper_pad(pad)
+}
+
+/// The board pad of `pad`'s copper: shape, place, size, drill and layers.
+fn copper_pad(pad: &Pad) -> Result<pcb::Pad, FootprintResolveError> {
+    let (shape, roundrect_ratio) = pad_shape(&pad.shape)?;
     let offset = (pad.copper_offset_x_mm, pad.copper_offset_y_mm);
     if offset.0.unwrap_or(0.0) != 0.0 || offset.1.unwrap_or(0.0) != 0.0 {
         return Err(unconvertible(

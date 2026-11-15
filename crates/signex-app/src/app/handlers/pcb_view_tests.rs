@@ -19,6 +19,7 @@ fn board() -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),
         version: 1,
@@ -89,14 +90,20 @@ fn press(app: &mut Signex, window: iced::window::Id, keys: &str) {
 fn a_layer_key_in_an_undocked_window_steps_that_windows_board() {
     let (mut app, a, b, main, undocked) = two_windows();
     press(&mut app, undocked, "-");
-    assert_eq!(app.pcb_layer_view(&b).active(), CopperLayer::Bottom);
+    assert_eq!(
+        app.pcb_layer_view(&b).active(),
+        PcbLayer::Copper(CopperLayer::Bottom)
+    );
     assert_eq!(
         app.pcb_layer_view(&a).active(),
-        CopperLayer::Top,
+        PcbLayer::Copper(CopperLayer::Top),
         "A untouched"
     );
     press(&mut app, main, "-");
-    assert_eq!(app.pcb_layer_view(&a).active(), CopperLayer::Bottom);
+    assert_eq!(
+        app.pcb_layer_view(&a).active(),
+        PcbLayer::Copper(CopperLayer::Bottom)
+    );
 }
 
 #[test]
@@ -123,7 +130,10 @@ fn hiding_the_active_layer_moves_the_pill_and_hiding_all_copper_removes_it() {
         )));
     };
     hide(&mut app, CopperLayer::Top);
-    assert_eq!(app.pcb_layer_view(&a).active(), CopperLayer::Bottom);
+    assert_eq!(
+        app.pcb_layer_view(&a).active(),
+        PcbLayer::Copper(CopperLayer::Bottom)
+    );
     let pill = app.status_active_layer(main).map(|(_, n)| n.into_string());
     assert_eq!(pill.as_deref(), Some("Bottom Layer"));
     hide(&mut app, CopperLayer::Bottom);
@@ -133,7 +143,10 @@ fn hiding_the_active_layer_moves_the_pill_and_hiding_all_copper_removes_it() {
     );
     // `+` with every copper layer hidden leaves the active layer alone.
     press(&mut app, main, "+");
-    assert_eq!(app.pcb_layer_view(&a).active(), CopperLayer::Bottom);
+    assert_eq!(
+        app.pcb_layer_view(&a).active(),
+        PcbLayer::Copper(CopperLayer::Bottom)
+    );
 }
 
 /// Round 9 of #2262: the status chip and the layer strip under the canvas

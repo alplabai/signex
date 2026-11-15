@@ -54,8 +54,11 @@ impl canvas::Program<Message> for HighlightLayer<'_> {
         let canvas = self.0;
         let camera = canvas.camera_ref();
         let accent = crate::render_config::to_iced(&canvas.canvas_colors.selection);
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
         let view = Rectangle::with_size(bounds.size());
+        // Footprints on the move sit under their selection outline (#2358).
+        let mut layers = canvas.drag_preview_geometry(renderer, view, &camera);
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        canvas.paint_drag_preview_texts(&mut frame, view, &camera);
         for shape in &canvas.highlight.selected {
             paint(&mut frame, shape, &camera, view, accent, 0.45, 1.5);
         }
@@ -68,6 +71,7 @@ impl canvas::Program<Message> for HighlightLayer<'_> {
         if let Some(shape) = &canvas.highlight.hover_body {
             paint(&mut frame, shape, &camera, view, accent, 0.04, 1.0);
         }
+        canvas.paint_part_ghost(&mut frame);
         for shape in &canvas.highlight.ghost {
             paint(&mut frame, shape, &camera, view, accent, 0.3, 1.0);
         }
@@ -76,7 +80,8 @@ impl canvas::Program<Message> for HighlightLayer<'_> {
             let window = is_window(from, to, camera.rotation().degrees());
             paint_marquee(&mut frame, &camera, at(from), at(to), window, accent);
         }
-        vec![frame.into_geometry()]
+        layers.push(frame.into_geometry());
+        layers
     }
 
     fn mouse_interaction(

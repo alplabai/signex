@@ -364,17 +364,17 @@ fn wire_and_bus_placements_match_their_clicks() {
     let none = |_: &mut Signex| {};
     let two = [OFF_GRID, (30.4, 25.3)];
     assert_method_matches_clicks(Tool::Wire, &two, none, |app, at| {
-        let mode = app.interaction_state.draw_mode;
+        let mode = app.interaction_state.corner_rule;
         let (end, _) = app.place_wire_at(at, grid(24.0, 20.0), mode);
         assert_eq!(end, grid(24.0, 20.0));
     });
     assert_method_matches_clicks(Tool::Bus, &two, none, |app, at| {
-        let mode = app.interaction_state.draw_mode;
+        let mode = app.interaction_state.corner_rule;
         app.place_bus_at(at, grid(24.0, 20.0), mode);
     });
     // A bus half a grid step off the click: both paths snap the entry onto it.
     let with_bus = |app: &mut Signex| {
-        let mode = app.interaction_state.draw_mode;
+        let mode = app.interaction_state.corner_rule;
         app.place_bus_at(grid(0.0, 16.5), grid(30.0, 16.5), mode);
     };
     assert_method_matches_click(Tool::BusEntry, with_bus, |app, at| {

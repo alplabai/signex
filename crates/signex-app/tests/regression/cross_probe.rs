@@ -87,11 +87,13 @@ fn board() -> PcbBoard {
         properties: Vec::new(),
         schematic_link: Some(SymbolLink::new(InstancePath::root(), [R1])),
         library_ref: None,
+        component: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     };
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),
@@ -484,7 +486,9 @@ fn a_refused_probe_logs_english_under_any_language() {
     select_all_on_the_sheet(&mut f);
     f.app.document_state.projects[0].data.pcb_file = None;
     let pref = signex_i18n::LanguagePref::Locale("en-XA".to_owned());
-    send(&mut f.app, Message::Ui(UiMsg::LanguageChanged(pref)));
+    // Not driven: its prefs write would put en-XA in the prefs.json every
+    // test of this binary shares, and later apps would start in it.
+    let _ = f.app.update(Message::Ui(UiMsg::LanguageChanged(pref)));
     let logged = || {
         diagnostics::recent_entries()
             .iter()

@@ -324,6 +324,7 @@ fn findings_that_name_no_item_are_keyed_by_their_message() {
         rules: DrcRules::new(RULE),
         violations: vec![link(1, 1_000_000), link(2, 3_000_000)],
         skipped: Vec::new(),
+        skipped_keepouts: Vec::new(),
     };
     let checked = check_report(&report, &names(), BOARD, Vec::new(), Map::new());
     let keys = checked.keys();
@@ -418,4 +419,54 @@ fn the_same_board_gives_the_same_report_errors_first() {
     assert_eq!(first, checked(&b));
     let severities: Vec<Severity> = first.findings.iter().map(|f| f.severity).collect();
     assert_eq!(severities, [Severity::Error, Severity::Warning]);
+}
+
+/// #2300: a keepout the run could not check is a warning, before the items.
+#[test]
+fn a_keepout_that_could_not_be_checked_is_a_warning() {
+    let mut bad = track(1, (0.0, 0.0), (1.0, 0.0), 1, "TopCopper");
+    bad.start = Point::new(f64::NAN, 0.0);
+    let mut b = board(vec![], vec![bad], vec![]);
+    let corners = [(20.0, 20.0), (f64::NAN, 20.0), (30.0, 30.0)];
+    b.sketch = Some(BoardSketch {
+        keepouts: vec![PcbKeepout {
+            uuid: id(0x900),
+            boundary: corners.iter().map(|&(x, y)| Point::new(x, y)).collect(),
+            layers: vec![PcbLayer::Copper(CopperLayer::Top)],
+            forbids: KeepoutKinds::ALL_COPPER,
+        }],
+        ..BoardSketch::default()
+    });
+    let report = checked(&b);
+    assert_eq!(report.warnings.len(), 2, "{:?}", report.warnings);
+    assert_eq!(
+        report.warnings[0],
+        format!(
+            "DRC: keepout {} could not be checked: keepout.boundary is not a finite length within 1 km of the origin",
+            id(0x900)
+        )
+    );
+    assert!(
+        report.warnings[1].starts_with("DRC: track "),
+        "{:?}",
+        report.warnings
+    );
+}
+
+/// #2334: Run DRC's Messages line is built from the same wording as the
+/// report's message, with round numbers.
+#[test]
+fn the_messages_line_shares_the_finding_wording() {
+    let b = pair(0.0, 0.4);
+    let run = run(&b, &DrcRules::new(RULE));
+    let v = &run.violations[0];
+    assert_eq!(
+        super::findings::messages_line(v, &names()),
+        "DRC: clearance 0.15 mm, needs 0.2 mm, GND / VCC at (0, 0.2) mm"
+    );
+    let report = checked(&b);
+    assert_eq!(
+        report.findings[0].message,
+        "clearance 0.15 mm, needs 0.2 mm, GND / VCC"
+    );
 }

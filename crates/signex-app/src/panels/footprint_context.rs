@@ -664,11 +664,19 @@ pub struct FootprintSketchEntitySummary {
     pub dof_state: Option<signex_sketch::solver::dof::DofColor>,
 }
 
-/// The Board section of the Properties panel in board sketch mode (#2234):
-/// what the selected entity becomes on the board. Keepouts and cutouts use
-/// the Role picker and its sub-forms, as in a footprint.
+/// The Board sections of the Properties panel in board sketch mode (#2234):
+/// the board's name and outline facts in place of the footprint fields
+/// (#2356), and what the selected entity becomes on the board. Keepouts and
+/// cutouts use the Role picker and its sub-forms, as in a footprint.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct BoardSketchProps {
+    /// The board's name, as the canvas chip shows it.
+    pub board_name: String,
+    /// Width and height of the board outline's extent in mm; `None`
+    /// without an outline.
+    pub board_size_mm: Option<(f64, f64)>,
+    /// The area the board outline encloses in mm².
+    pub board_area_mm2: Option<f64>,
     /// The selected entity, if any.
     pub selected: Option<signex_sketch::id::SketchEntityId>,
     /// It is a line, arc or circle: it can be part of the outline.

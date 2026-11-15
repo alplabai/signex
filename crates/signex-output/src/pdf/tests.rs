@@ -675,6 +675,31 @@ fn margins_move_the_content_in_the_exported_pdf() {
     );
 }
 
+/// #2236 — a semi-transparent wire colour strokes through an `/ExtGState`
+/// with its `/CA`, as SVG writes stroke-opacity; an opaque one adds none.
+#[test]
+fn a_semi_transparent_wire_strokes_with_its_alpha() {
+    use signex_types::theme::Color;
+
+    let mut ctx = wire_ctx();
+    ctx.sheets[0].schematic.wires[0].color = Some(Color::new(255, 0, 0, 0x80));
+    let out = PdfExporter
+        .export(&ctx, &PdfOptions::default())
+        .expect("export");
+    let text = String::from_utf8_lossy(&out.bytes);
+    assert!(text.contains("/CA128 gs"), "the wire selects its alpha");
+    assert!(text.contains("/ExtGState"), "the page defines the state");
+    assert!(text.contains("/CA 0.50"), "the state carries the alpha");
+
+    ctx.sheets[0].schematic.wires[0].color = Some(Color::new(255, 0, 0, 255));
+    let out = PdfExporter
+        .export(&ctx, &PdfOptions::default())
+        .expect("export");
+    let text = String::from_utf8_lossy(&out.bytes);
+    assert!(!text.contains("/CA128"), "an opaque wire switches no state");
+    assert!(!text.contains("/ExtGState"), "and the page defines none");
+}
+
 /// `(e, f)` translation of every `a b c d e f Tm` text matrix, in order.
 fn text_matrix_origins(bytes: &[u8]) -> Vec<(f64, f64)> {
     String::from_utf8_lossy(bytes)

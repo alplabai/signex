@@ -30,7 +30,8 @@ Run `cargo test -p iced_aw` locally.
 Only one font file is compiled in: `iced_aw/font.ttf` (`ICED_AW_FONT_BYTES`), with six
 glyphs at U+E800..U+E805: `cancel`, `down-open`, `left-open`, `right-open`, `up-open`, `ok`.
 Signex draws them itself: `iced_aw/tools/build_font.py` builds the file from straight
-strokes, so the font is Signex's own work under Apache-2.0. It replaced the Fontello build
+strokes, so the font is Signex's own work under the Signex licence (FSL-1.1-ALv2;
+released as Apache-2.0 before #2344). It replaced the Fontello build
 upstream ships, whose glyph source (likely Entypo, CC BY 4.0) could not be confirmed (#2031).
 The codepoints, the family name `iced_aw` and the advance widths are unchanged, so the
 widgets need no change. Rebuild with `python vendor/iced_aw/tools/build_font.py`

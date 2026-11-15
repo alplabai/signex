@@ -191,67 +191,18 @@ pub fn part_tree_row<'a>(
     .boxed()
 }
 
-/// Width of the Properties label column on Graphite: the mock's fixed grid
-/// column, so a label such as "Designator" is never clipped by a narrow dock.
-pub const GRAPHITE_PROPERTY_LABEL_WIDTH: f32 = 92.0;
-
-/// Colour and column width of a property-row label. A bare [`Color`] keeps
-/// the legacy fill-portion column; [`LabelInk::graphite`] picks the
-/// fixed Graphite column.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LabelInk {
-    pub color: Color,
-    pub width: Length,
-}
-
-impl From<Color> for LabelInk {
-    fn from(color: Color) -> Self {
-        Self {
-            color,
-            width: Length::FillPortion(PROPERTY_LABEL_PORTION),
-        }
-    }
-}
-
-impl LabelInk {
-    /// The Graphite label look: the fixed column.
-    pub fn graphite(color: Color) -> Self {
-        Self {
-            color,
-            width: Length::Fixed(GRAPHITE_PROPERTY_LABEL_WIDTH),
-        }
-    }
-}
-
-/// Property-row label: wraps at spaces inside its column, so a narrow panel
-/// grows the row; a single over-long word is clipped, never split mid-word,
-/// and never reaches the value column.
-pub fn property_label<'a, M: 'a>(
-    label: impl Into<String>,
-    ink: impl Into<LabelInk>,
-) -> Element<'a, M> {
-    let ink = ink.into();
-    property_label_sized(label, ink.color, TS.body, ink.width)
-}
-
-/// Like `property_label`, but with a narrower label column (used by `form_edit_row_f64`).
-fn property_label_small<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
-    property_label_sized(label, color, TS.body, Length::FillPortion(2))
-}
-
-fn property_label_sized<'a, M: 'a>(
-    label: impl Into<String>,
-    color: Color,
-    size: f32,
-    width: Length,
-) -> Element<'a, M> {
+/// Property-row label: wraps at spaces inside the fixed label column, so a
+/// narrow panel grows the row and a wide one widens the field; a single
+/// over-long word is clipped, never split mid-word, and never reaches the
+/// value column.
+pub fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
     container(
         text(raw(label.into()))
-            .size(size)
+            .size(TS.body)
             .color(color)
             .wrapping(iced::widget::text::Wrapping::Word),
     )
-    .width(width)
+    .width(PROPERTY_LABEL_COLUMN)
     .clip(true)
     .boxed()
 }
@@ -268,11 +219,11 @@ pub fn form_edit_row_f64<'a>(
 ) -> Element<'a, PanelMsg> {
     use iced::widget::row;
     row![
-        property_label_small(label, muted),
+        property_label(label, muted),
         crate::panels::numeric_input("", key, value, draft).size(TS.body),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(6)
+    .spacing(PROPERTY_ROW_GAP)
     .align_y(iced::Alignment::Center)
     .boxed()
 }
@@ -298,7 +249,7 @@ pub fn shape_fill_row<'a>(
         text(t!(i18n, ids::PANELS_SHAPE_FILL))
             .size(TS.body)
             .color(muted)
-            .width(Length::FillPortion(2)),
+            .width(PROPERTY_LABEL_COLUMN),
         row![
             tile(
                 ids::PANELS_SHAPE_FILL_NONE,
@@ -317,10 +268,10 @@ pub fn shape_fill_row<'a>(
             ),
         ]
         .spacing(SP.s)
-        .width(Length::FillPortion(3)),
+        .width(Length::Fill),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(6)
+    .spacing(PROPERTY_ROW_GAP)
     .align_y(iced::Alignment::Center)
     .boxed()
 }
@@ -329,9 +280,17 @@ pub fn shape_fill_row<'a>(
 mod label_tests {
     use super::*;
 
+    /// #2347: every property label takes the fixed column, so a wide dock
+    /// gives its extra width to the field, not the label.
     #[test]
-    fn graphite_labels_get_the_fixed_92_px_column() {
-        let ink = LabelInk::graphite(Color::BLACK);
-        assert_eq!(ink.width, Length::Fixed(92.0));
+    fn property_labels_take_the_fixed_column() {
+        for window_w in [400.0, 1600.0] {
+            let label: Element<'_, ()> = property_label("Designator", Color::BLACK);
+            let size = crate::layout_probe::root_size(label, iced::Size::new(window_w, 100.0));
+            assert_eq!(
+                size.width, PROPERTY_LABEL_WIDTH,
+                "in a {window_w} px window"
+            );
+        }
     }
 }

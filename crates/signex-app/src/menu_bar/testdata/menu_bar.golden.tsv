@@ -1,7 +1,9 @@
 # path	kind	label	command_id	shortcut	action	enabled[default,full,pcb,symbol,sheets,undocked,footprint,dirty]	gate
+# `-` in an enabled column: the row is not in that variant's bar. Place on a board lists the board's rows instead (menu_bar_place_board.golden.tsv).
 File	menu	File	-	-	-	-	-
 File/New Project	item	New Project	new_document	Mod+N	NewProject	11111111	always
 File/New	submenu	New	-	-	-	-	-
+File/New/Schematic	item	Schematic	-	-	NewSchematic	01001001	cmd:new_schematic_sheet
 File/New/PCB	item	PCB	-	-	NewPcb	01001001	cmd:new_pcb_document
 File/Open...	item	Open...	open_document	Mod+O	OpenProject	11111111	always
 File/Open Recent	submenu	Open Recent	-	-	-	-	-
@@ -28,11 +30,11 @@ Edit	menu	Edit	-	-	-	-	-
 Edit/Undo	item	Undo	undo	Mod+Z	Undo	01000000	cmd:undo
 Edit/Redo	item	Redo	redo	Ctrl+Y	Redo	01000000	cmd:redo
 Edit/---	separator	-	-	-	-	-	-
-Edit/Cut	item	Cut	cut	Mod+X	Cut	01000000	cmd:cut
-Edit/Copy	item	Copy	copy	Mod+C	Copy	01000000	cmd:copy
-Edit/Paste	item	Paste	paste	Mod+V	Paste	01000000	cmd:paste
-Edit/Paste Special	item	Paste Special	smart_paste	Shift+Ctrl+V	SmartPaste	01000000	cmd:smart_paste
-Edit/Duplicate	item	Duplicate	duplicate	Mod+D	Duplicate	01000000	cmd:duplicate
+Edit/Cut	item	Cut	cut	Mod+X	Cut	01100000	cmd:cut
+Edit/Copy	item	Copy	copy	Mod+C	Copy	01100000	cmd:copy
+Edit/Paste	item	Paste	paste	Mod+V	Paste	01100000	cmd:paste
+Edit/Paste Special	item	Paste Special	smart_paste	Shift+Ctrl+V	SmartPaste	01100000	cmd:smart_paste
+Edit/Duplicate	item	Duplicate	duplicate	Mod+D	Duplicate	01100000	cmd:duplicate
 Edit/Delete	item	Delete	delete_selection	Del	Delete	01100010	cmd:delete_selection
 Edit/Move	submenu	Move	-	-	-	-	-
 Edit/Move/Move	item	Move	-	-	MoveObject	01100000	cmd:move_object
@@ -49,7 +51,7 @@ Edit/Arrange/Send to Back	item	Send to Back	-	-	SendDrawingsToBack	00000000	cmd:
 Edit/Arrange/Bring Forward	item	Bring Forward	-	-	BringDrawingsForward	00000000	cmd:bring_drawings_forward
 Edit/Arrange/Send Backward	item	Send Backward	-	-	SendDrawingsBackward	00000000	cmd:send_drawings_backward
 Edit/---	separator	-	-	-	-	-	-
-Edit/Select All	item	Select All	select_all	Mod+A	SelectAll	01000000	cmd:select_all
+Edit/Select All	item	Select All	select_all	Mod+A	SelectAll	01100000	cmd:select_all
 Edit/---	separator	-	-	-	-	-	-
 Edit/Find	item	Find	find	Mod+F	Find	11111111	cmd:find
 Edit/Find and Replace	item	Find and Replace	find_and_replace	Ctrl+H	Replace	11111111	cmd:find_and_replace
@@ -63,8 +65,11 @@ View/Cycle Grid Size	item	Cycle Grid Size	-	-	CycleGrid	11111111	cmd:next_grid
 View/AutoFocus (dim unselected)	item	AutoFocus (dim unselected)	toggle_auto_focus	F9	ToggleAutoFocus	11111111	cmd:toggle_auto_focus
 View/---	separator	-	-	-	-	-	-
 View/Toggle Ratsnest	item	Toggle Ratsnest	-	-	ToggleRatsnest	01100000	cmd:toggle_ratsnest
+View/Toggle Origin Marker	item	Toggle Origin Marker	-	-	ToggleOriginMarker	01100000	cmd:toggle_origin_marker
 View/Next Layer	item	Next Layer	-	-	NextLayer	01100000	cmd:next_layer
 View/Previous Layer	item	Previous Layer	-	-	PreviousLayer	01100000	cmd:prev_layer
+View/Next Signal Layer	item	Next Signal Layer	-	-	NextSignalLayer	01100000	cmd:next_signal_layer
+View/Single Layer Mode	item	Single Layer Mode	-	-	ToggleSingleLayerMode	01100000	cmd:toggle_single_layer_mode
 View/Toggle Layer Visibility	item	Toggle Layer Visibility	-	-	ToggleLayerVisibility	01100000	cmd:toggle_layer_visibility
 View/Show All Layers	item	Show All Layers	-	-	ShowAllLayers	01100000	cmd:show_all_layers
 View/Rotate View 90° Clockwise	item	Rotate View 90° Clockwise	-	-	RotateView	01100000	cmd:view_rotate
@@ -87,17 +92,17 @@ Project/Project Options...	item	Project Options...	-	-	OpenProjectOptions	010010
 Project/---	separator	-	-	-	-	-	-
 Project/Close Project	item	Close Project	-	-	CloseProject	01001001	project
 Place	menu	Place	-	-	-	-	-
-Place/Wire	item	Wire	place_wire	W	PlaceWire	01000000	cmd:place_wire
-Place/Bus	item	Bus	place_bus	B	PlaceBus	01000000	cmd:place_bus
-Place/Net Label	item	Net Label	place_net_label	L	PlaceLabel	01000000	cmd:place_net_label
+Place/Wire	item	Wire	place_wire	W	PlaceWire	01-00000	cmd:place_wire
+Place/Bus	item	Bus	place_bus	B	PlaceBus	01-00000	cmd:place_bus
+Place/Net Label	item	Net Label	place_net_label	L	PlaceLabel	01-00000	cmd:place_net_label
 Place/---	separator	-	-	-	-	-	-
-Place/Component...	item	Component...	open_components_panel	P	PlaceComponent	01000000	cmd:open_components_panel
-Place/Power Port	item	Power Port	place_power_symbol	P	PlacePowerPort	01000000	cmd:place_power_symbol
-Place/Junction	item	Junction	place_junction	J	PlaceJunction	01000000	cmd:place_junction
+Place/Component...	item	Component...	open_components_panel	P	PlaceComponent	01-00000	cmd:open_components_panel
+Place/Power Port	item	Power Port	place_power_symbol	P	PlacePowerPort	01-00000	cmd:place_power_symbol
+Place/Junction	item	Junction	place_junction	J	PlaceJunction	01-00000	cmd:place_junction
 Place/---	separator	-	-	-	-	-	-
-Place/Text	item	Text	-	-	PlaceText	01000000	sch
-Place/No Connect	item	No Connect	-	-	PlaceNoConnect	01000000	sch
-Place/Sheet Entry	item	Sheet Entry	-	-	PlaceSheetEntry	01000000	cmd:place_sheet_entry
+Place/Text	item	Text	-	-	PlaceText	01-00000	sch
+Place/No Connect	item	No Connect	-	-	PlaceNoConnect	01-00000	sch
+Place/Sheet Entry	item	Sheet Entry	-	-	PlaceSheetEntry	01-00000	cmd:place_sheet_entry
 Design	menu	Design	-	-	-	-	-
 Design/Update PCB Document	item	Update PCB Document	-	-	UpdatePcb	01000000	cmd:update_pcb_from_schematic
 Design/Update Schematics	item	Update Schematics	-	-	BackAnnotate	01000000	cmd:back_annotate_schematics

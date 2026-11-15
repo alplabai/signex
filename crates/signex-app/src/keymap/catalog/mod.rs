@@ -423,6 +423,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "update_pcb_from_schematic",
     "back_annotate_schematics",
     "new_pcb_document",
+    "new_schematic_sheet",
 ];
 
 /// The editor contexts in which `command` can act, or `None` when it is
@@ -452,7 +453,8 @@ pub fn required_contexts(command: &AppCommandId) -> Option<&'static [ShortcutCon
         "break_wire"
         | "drag_keep_connections"
         | "cycle_wire_bus_graphic_mode"
-        | "cycle_wiring_mode" => return Some(&[ShortcutContext::Schematic]),
+        | "cycle_wiring_mode"
+        | "switch_segment_posture" => return Some(&[ShortcutContext::Schematic]),
         "open_grid_picker" | "cycle_snap_grid_forward" => {
             return Some(&[ShortcutContext::Footprint]);
         }

@@ -73,6 +73,7 @@ fn pad_at(n: u128, x: f64, net: u32) -> Footprint {
         locked: false,
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         pads: vec![pad],
         graphics: Vec::new(),
         properties: Vec::new(),
@@ -91,6 +92,7 @@ fn pad_at(n: u128, x: f64, net: u32) -> Footprint {
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: String::new(),
