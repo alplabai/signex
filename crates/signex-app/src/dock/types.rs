@@ -130,6 +130,9 @@ pub struct DockArea {
     /// Editor docks still owed to a fresh layout; see
     /// `DockArea::seed_for_editor`. Never set for a saved layout.
     pub(super) editor_seeds: EditorSeeds,
+    /// Width the user dragged each side dock to; see `preferred_width`.
+    pub(super) preferred_left_width: f32,
+    pub(super) preferred_right_width: f32,
 }
 
 /// Which editor contexts have not yet got their default dock.

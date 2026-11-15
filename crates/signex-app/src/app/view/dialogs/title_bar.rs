@@ -11,15 +11,15 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{raw, text};
 
 use super::*;
-use crate::styles::{Spacing, TypeScale, ti, tokens};
+use crate::styles::{LINE_HEIGHT, Spacing, TypeScale, ti, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 /// Height of the title bar of a borderless dialog window.
 pub(crate) const DIALOG_TITLE_BAR_H: f32 = super::header::DIALOG_HEADER_H;
-/// Side of the mark in the title bar.
-const MARK_SIZE: f32 = 16.0;
+/// Side of the mark in the title bar: one line of the title text (#2397).
+const MARK_SIZE: f32 = TS.heading * LINE_HEIGHT;
 
 /// The Signex mark, as in the main window's menu bar.
 static MARK: LazyLock<svg::Handle> = LazyLock::new(|| {
@@ -125,6 +125,22 @@ mod tests {
     fn the_title_bar_mark_is_the_signex_mark() {
         let src = include_str!("../../../../assets/icons/chrome/signex_mark.svg");
         assert!(src.contains("aria-label=\"Signex\""));
+    }
+
+    /// #2397: the mark is at least as tall as the laid-out title line, and
+    /// fits the bar.
+    #[test]
+    fn the_mark_is_as_tall_as_the_title_line() {
+        let t = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::BUILTINS[0]);
+        let bar = dialog_title_bar(iced::window::Id::unique(), "Exit Signex".into(), None, &t);
+        let texts = crate::layout_probe::lay_out_texts(bar, iced::Size::new(640.0, 200.0));
+        let title = crate::layout_probe::find(&texts, "Exit Signex").bounds;
+        assert!(
+            MARK_SIZE >= title.height - 0.5,
+            "mark {MARK_SIZE} px, title line {} px",
+            title.height
+        );
+        assert!(MARK_SIZE < DIALOG_TITLE_BAR_H, "the mark fits the bar");
     }
 
     #[test]

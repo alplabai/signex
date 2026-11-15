@@ -91,6 +91,12 @@ impl PcbCarry {
         }
     }
 
+    /// A Move, a paste or a part on the cursor waits for clicks: nothing is
+    /// grabbed and every press is a click (#2240, #2364, #2396).
+    pub fn waits_for_clicks(&self) -> bool {
+        self.kind != CarryKind::Drag
+    }
+
     /// A paste of `load` on the cursor, its origin at `at`.
     pub fn paste(
         path: PathBuf,

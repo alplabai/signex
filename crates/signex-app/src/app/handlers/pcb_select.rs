@@ -190,8 +190,10 @@ impl Signex {
         let ghost = self
             .pcb_part_ghost(carry.as_ref())
             .or_else(|| self.board_tool_ghost());
-        // A tool waits for clicks: a press never starts a drag.
+        // A tool, or a Move, paste or part waiting on the cursor, takes
+        // every press as a click: never a drag or a box (#2396).
         let tool_armed = self.own_board_tool().is_some();
+        let clicks_only = tool_armed || carry.as_ref().is_some_and(PcbCarry::waits_for_clicks);
         let path = self.active_tab_path().unwrap_or_default();
         let view = self.pcb_layer_view(&path);
         let docs = &self.document_state;
@@ -204,6 +206,7 @@ impl Signex {
         let canvas = &mut interaction.pcb_canvas;
         canvas.set_highlight(highlight);
         canvas.set_grab(if tool_armed { Vec::new() } else { grab });
+        canvas.set_clicks_only(clicks_only);
         canvas.set_part_ghost(ghost.as_ref());
         let ratsnest = view
             .ratsnest_visible()
@@ -262,9 +265,15 @@ impl Signex {
             selection.sync(Some(path), revision);
             selection.set_view(&view);
             let (highlight, grab) = selection.paint(board, carry);
+            let tool_armed = interaction
+                .pcb_tool
+                .as_ref()
+                .is_some_and(|tool| tool.is_for(Some(path), Some(id)));
+            let clicks_only = tool_armed || carry.is_some_and(PcbCarry::waits_for_clicks);
             if let Some(canvas) = interaction.pcb_canvases.get_mut(&id) {
                 canvas.set_highlight(highlight);
-                canvas.set_grab(grab);
+                canvas.set_grab(if tool_armed { Vec::new() } else { grab });
+                canvas.set_clicks_only(clicks_only);
                 let own = ghost.as_ref().filter(|(owner, _)| *owner == id);
                 canvas.set_part_ghost(own.map(|(_, snapshot)| snapshot));
                 let ratsnest = view

@@ -26,6 +26,9 @@ pub(super) struct Gesture {
     dragging: bool,
     /// The press landed on a footprint: a drag moves it (#2240, #2358).
     carrying: bool,
+    /// A tool or a carry waited for clicks at the press: its release is a
+    /// click wherever it lands (#2396).
+    clicks_only: bool,
 }
 
 impl Gesture {
@@ -60,24 +63,22 @@ impl Gesture {
                     return discarded.then(|| canvas::Action::publish(message));
                 };
                 self.press = Some(pos);
+                self.clicks_only = canvas.is_clicks_only();
                 let at = canvas.screen_to_world(pos, bounds);
-                self.carrying =
-                    self.modifiers.is_empty() && canvas.grabs(at, hover_reach_mm(canvas.scale()));
+                self.carrying = !self.clicks_only
+                    && self.modifiers.is_empty()
+                    && canvas.grabs(at, hover_reach_mm(canvas.scale()));
                 Some(canvas::Action::publish(message).and_capture())
             }
-            // The pointer or the focus left mid-gesture: its release may
-            // never arrive here.
-            Event::Mouse(mouse::Event::CursorLeft)
-            | Event::Window(iced::window::Event::Unfocused) => {
-                self.press?;
-                let carried = self.carrying && self.dragging;
-                self.drop_press(canvas);
-                if carried {
-                    let msg = Message::PcbCanvas(PcbCanvasMsg::FootprintDragCancelled);
-                    return Some(canvas::Action::publish(msg));
-                }
-                Some(canvas::Action::request_redraw())
+            // The focus left: a modifier released in another window never
+            // reaches this one, so a stale Ctrl or Shift would turn every
+            // later click into a toggle (#2396).
+            Event::Window(iced::window::Event::Unfocused) => {
+                self.modifiers = Modifiers::default();
+                self.pointer_gone(canvas)
             }
+            // The pointer left mid-gesture: its release may never arrive.
+            Event::Mouse(mouse::Event::CursorLeft) => self.pointer_gone(canvas),
             Event::Mouse(mouse::Event::CursorMoved { .. }) if self.carrying => {
                 let press = self.press?;
                 if self.dragging && !canvas.carry.get() {
@@ -100,6 +101,10 @@ impl Gesture {
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 let press = self.press?;
+                if self.clicks_only {
+                    // No box: the canvas keeps publishing the pointer.
+                    return None;
+                }
                 if self.dragging && canvas.marquee.get().is_none() {
                     // Esc cleared the box: the gesture is over.
                     self.drop_press(canvas);
@@ -121,6 +126,7 @@ impl Gesture {
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 let press = self.press?;
                 let carried = self.carrying && self.dragging;
+                let clicks_only = self.clicks_only;
                 let cancelled = if carried {
                     !canvas.carry.get()
                 } else {
@@ -134,24 +140,23 @@ impl Gesture {
                     .position()
                     .map(|p| iced::Point::new(p.x - bounds.x, p.y - bounds.y))
                     .unwrap_or(press);
-                let mode = click_mode(self.modifiers);
                 let msg = if carried {
                     PcbCanvasMsg::FootprintDropped {
                         from: canvas.screen_to_world(press, bounds),
                         to: canvas.screen_to_world(pos, bounds),
                     }
-                } else if past_threshold(press, pos) {
+                } else if !clicks_only && past_threshold(press, pos) {
                     PcbCanvasMsg::BoxSelected {
                         from: canvas.screen_to_world(press, bounds),
                         to: canvas.screen_to_world(pos, bounds),
-                        mode,
+                        mode: box_mode(self.modifiers),
                         view_rotation_deg: f64::from(canvas.view_rotation_deg()),
                     }
                 } else {
                     PcbCanvasMsg::Clicked {
                         at: canvas.screen_to_world(press, bounds),
                         tolerance_mm: hover_reach_mm(canvas.scale()),
-                        mode,
+                        mode: click_mode(self.modifiers),
                     }
                 };
                 Some(canvas::Action::publish(Message::PcbCanvas(msg)).and_capture())
@@ -160,10 +165,24 @@ impl Gesture {
         }
     }
 
+    /// The pointer or the focus left mid-gesture: drop the press, and a
+    /// footprint drag it carries.
+    fn pointer_gone(&mut self, canvas: &PcbCanvas) -> Option<canvas::Action<Message>> {
+        self.press?;
+        let carried = self.carrying && self.dragging;
+        self.drop_press(canvas);
+        if carried {
+            let msg = Message::PcbCanvas(PcbCanvasMsg::FootprintDragCancelled);
+            return Some(canvas::Action::publish(msg));
+        }
+        Some(canvas::Action::request_redraw())
+    }
+
     fn drop_press(&mut self, canvas: &PcbCanvas) {
         self.press = None;
         self.dragging = false;
         self.carrying = false;
+        self.clicks_only = false;
         canvas.marquee.set(None);
         canvas.carry.set(false);
     }
@@ -191,8 +210,18 @@ pub(super) fn hover_reach_mm(scale: f32) -> f64 {
     f64::from(HIT_REACH_PX / scale)
 }
 
-/// Shift adds, Ctrl or Cmd toggles, nothing replaces.
+/// A click: Shift, Ctrl or Cmd toggles the item under it and keeps the
+/// rest; a plain click replaces (#2396).
 fn click_mode(mods: Modifiers) -> ClickMode {
+    if mods.shift() || mods.control() || mods.command() {
+        ClickMode::Toggle
+    } else {
+        ClickMode::Replace
+    }
+}
+
+/// A box: Shift adds, Ctrl or Cmd toggles, a plain box replaces.
+fn box_mode(mods: Modifiers) -> ClickMode {
     if mods.shift() {
         ClickMode::Add
     } else if mods.control() || mods.command() {

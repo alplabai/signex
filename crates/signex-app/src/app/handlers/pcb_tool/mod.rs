@@ -73,6 +73,9 @@ impl Signex {
         }
         self.end_pcb_carry();
         self.interaction_state.pcb_primitive.net_pick = None;
+        // A guide armed by the board panel's Place would take the first
+        // click ahead of the tool (#2396).
+        self.interaction_state.pcb_guide_place = None;
         self.interaction_state.pcb_tool = Some(BoardToolSession {
             tool,
             path,

@@ -123,6 +123,10 @@ impl Signex {
             Some(saved) => saved,
             None => crate::dock::graphite_first_run(),
         };
+        // The shown side-dock widths start at the preferred ones; the first
+        // window size fits them (#2395).
+        let preferred_left_width = dock.preferred_width(crate::dock::PanelPosition::Left);
+        let preferred_right_width = dock.preferred_width(crate::dock::PanelPosition::Right);
         let dock_layout_sync = crate::dock::DockLayoutSync::new(
             std::sync::Arc::new(crate::fonts::PrefsDockLayoutStore::user_prefs()),
             crate::dock::DockLayoutSnapshot::capture(&dock),
@@ -313,8 +317,8 @@ impl Signex {
                 canvas_font_size: 11.0,
                 canvas_font_bold: false,
                 canvas_font_italic: false,
-                left_width: 240.0,
-                right_width: 220.0,
+                left_width: preferred_left_width,
+                right_width: preferred_right_width,
                 bottom_height: if graphite_first_run {
                     crate::dock::GRAPHITE_BOTTOM_HEIGHT
                 } else {
