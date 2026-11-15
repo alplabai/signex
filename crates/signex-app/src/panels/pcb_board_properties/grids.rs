@@ -216,7 +216,7 @@ fn fast_grids<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, Panel
             ids::PCB_BOARD_MEASURE,
             "value" => length_field_text(f64::from(*mm), unit)
         );
-        let press = usable.then(|| PanelMsg::PcbBoard(PcbBoardMsg::FastGridApplied(index)));
+        let press = usable.then_some(PanelMsg::PcbBoard(PcbBoardMsg::FastGridApplied(index)));
         let why = (!usable).then(|| form.t(ids::PCB_BOARD_GRID_NO_SETUP));
         line = line.push(form.action(label, press, why));
     }

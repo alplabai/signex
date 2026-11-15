@@ -2,7 +2,8 @@
 //! text field whose draft waits for Enter, a colour swatch, a dropdown and
 //! a selectable table row.
 
-use iced::widget::{button, container, pick_list};
+use iced::widget::{button as button_style, container, pick_list};
+use signex_widgets::{PickListPlaceholder as _, button};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::Localized;
 use signex_types::measure::length_field_text;
@@ -74,7 +75,7 @@ pub(super) fn swatch<'a>(
     let press = button(chip)
         .padding(0)
         .on_press(msg(on_press))
-        .style(|_: &Theme, _| button::Style::default());
+        .style(|_: &Theme, _| button_style::Style::default());
     form.tip(press.boxed(), tip)
 }
 
@@ -95,7 +96,7 @@ pub(super) fn dropdown<'a, T: Clone + PartialEq + 'a>(
     let selected = current.and_then(|v| choices.iter().find(|c| c.value == v).cloned());
     pick_list(selected, choices, |c: &Choice<T>| c.label.clone())
         .graphite()
-        .placeholder(placeholder.into_string())
+        .placeholder_label(placeholder)
         .on_select(move |c: Choice<T>| msg(picked(c.value)))
         .padding([SP.xs, SP.s])
         .width(Length::Fill)
@@ -114,9 +115,9 @@ pub(super) fn selectable<'a>(
         .padding(0)
         .width(Length::Fill)
         .on_press(msg(on_press))
-        .style(move |_: &Theme, _| button::Style {
+        .style(move |_: &Theme, _| button_style::Style {
             background: selected.then_some(Background::Color(Color { a: 0.12, ..tint })),
-            ..button::Style::default()
+            ..button_style::Style::default()
         })
         .boxed()
 }
