@@ -96,6 +96,7 @@ fn board() -> PcbBoard {
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
+        options: Default::default(),
         unknown: Default::default(),
     }
 }
