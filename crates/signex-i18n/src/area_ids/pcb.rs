@@ -38,4 +38,6 @@ define_ids! {
     PCB_TOOL_KEEPOUT_NEEDS_LAYER = "pcb-tool-keepout-needs-layer";
     PCB_BAR_POUR_TOOLTIP = "pcb-bar-pour-tooltip";
     PCB_TOOL_HINT_POUR = "pcb-tool-hint-pour";
+    PCB_TOOL_STRING_TEXT = "pcb-tool-string-text";
+    PCB_TOOL_STRING_NEEDS_OVERLAY = "pcb-tool-string-needs-overlay";
 }

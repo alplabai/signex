@@ -22,11 +22,14 @@ use crate::pcb_canvas::{carried_board, snap_point};
 
 mod area;
 mod route;
+mod string;
 
 #[cfg(test)]
 mod area_tests;
 #[cfg(test)]
 mod route_tests;
+#[cfg(test)]
+mod string_tests;
 #[cfg(test)]
 mod tests;
 
@@ -186,6 +189,7 @@ impl Signex {
                 self.run_placement("Via", Ok(vec![command]));
             }
             BoardPlaceTool::Track => self.route_clicked(at),
+            BoardPlaceTool::TextString => self.string_clicked(at),
             BoardPlaceTool::Fill
             | BoardPlaceTool::SolidRegion
             | BoardPlaceTool::PolygonPour
@@ -205,12 +209,21 @@ impl Signex {
     /// in view: the board holding only what the next click adds.
     pub(crate) fn board_tool_ghost(&self) -> Option<PcbSnapshot> {
         let session = self.own_board_tool()?;
+        let preview = self.board_tool_preview()?;
+        Some(self.pcb_snapshot_for(&session.path, &preview))
+    }
+
+    /// The board holding only what the next click of the tool armed on the
+    /// board in view adds; `None` without a cursor over the board.
+    fn board_tool_preview(&self) -> Option<PcbBoard> {
+        let session = self.own_board_tool()?;
         let board = self.document_state.pcb_board(&session.path)?;
         let cursor = session.cursor?;
         let mut preview = carried_board(board, &Default::default(), Point::new(0.0, 0.0));
         match session.tool {
             BoardPlaceTool::Via => preview.vias.push(draw::new_via(board, Uuid::nil(), cursor)),
             BoardPlaceTool::Track => self.route_preview(session, board, cursor, &mut preview),
+            BoardPlaceTool::TextString => self.string_preview(cursor, &mut preview),
             BoardPlaceTool::Fill
             | BoardPlaceTool::SolidRegion
             | BoardPlaceTool::PolygonPour
@@ -219,6 +232,6 @@ impl Signex {
             }
             _ => return None,
         }
-        Some(self.pcb_snapshot_for(&session.path, &preview))
+        Some(preview)
     }
 }

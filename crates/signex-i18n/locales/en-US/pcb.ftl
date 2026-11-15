@@ -80,6 +80,10 @@ pcb-tool-needs-copper = { $tool }: make a copper layer active to draw on it
 pcb-tool-no-area = { $tool }: the shape has no area, so nothing was added
 # A Keepout click while the active layer is neither copper nor a keep-out layer.
 pcb-tool-keepout-needs-layer = Keepout: make a copper layer or a keep-out layer active to draw on it
+# The text a string placed with the String tool reads until it is edited.
+pcb-tool-string-text = String
+# A String click while the active layer is not an overlay layer.
+pcb-tool-string-needs-overlay = String: make an overlay layer active to place a string on it
 
 # Layer names in the Layers panel, the layer strip and the status bar, as
 # Altium names them. A mechanical layer the user named shows that name instead.

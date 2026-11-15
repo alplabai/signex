@@ -248,6 +248,14 @@ impl PcbLayer {
         matches!(self, Self::Copper(_))
     }
 
+    /// An overlay (silkscreen) layer, top or bottom.
+    pub fn is_overlay(self) -> bool {
+        matches!(
+            self,
+            Self::Technical(TechnicalLayer::SilkscreenTop | TechnicalLayer::SilkscreenBottom)
+        )
+    }
+
     pub fn copper(self) -> Option<CopperLayer> {
         match self {
             Self::Copper(c) => Some(c),
