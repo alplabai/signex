@@ -43,6 +43,7 @@ fn board() -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::now_v7(),
         version: 1,

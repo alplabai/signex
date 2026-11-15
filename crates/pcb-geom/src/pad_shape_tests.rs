@@ -228,6 +228,7 @@ fn hit_testing_reads_the_rotated_rect_not_its_axis_aligned_box() {
 fn board_of(footprints: Vec<Footprint>) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: String::new(),

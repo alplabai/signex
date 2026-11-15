@@ -79,6 +79,7 @@ fn board() -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::from_u128(1),
         version: 1,
         generator: "signex-test".into(),

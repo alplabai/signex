@@ -8,6 +8,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use signex_types::pcb::{Footprint, PadNet, PcbBoard, Point, Segment, Via};
+use signex_types::pcb_options::GridUse;
 use uuid::Uuid;
 
 use super::command::BoardCommand;
@@ -117,6 +118,16 @@ impl BoardClipboard {
         self.len() == 0
     }
 
+    /// Which grid a paste of the copy snaps to (#2374): the components
+    /// grid when it holds a footprint.
+    pub fn grid_use(&self) -> GridUse {
+        if self.footprints.is_empty() {
+            GridUse::NonComponents
+        } else {
+            GridUse::Components
+        }
+    }
+
     /// The copied items with the origin at (0, 0), on a board that is
     /// otherwise empty and has `like`'s layers and nets: what a preview of
     /// the paste draws.
@@ -137,6 +148,7 @@ impl BoardClipboard {
             graphics: Vec::new(),
             texts: Vec::new(),
             sketch: None,
+            options: Default::default(),
             unknown: Default::default(),
         }
     }

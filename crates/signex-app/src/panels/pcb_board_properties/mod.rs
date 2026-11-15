@@ -3,22 +3,26 @@
 //! Options, Board Information, Grid Manager, Guide Manager and Other); the
 //! Component view when only footprints are selected (`pcb_component`); the
 //! track, via or pad panel when only one such kind is selected
-//! (`pcb_primitive_properties`); a card
-//! naming the board for any other selection. A pure view over data the panel context copies from the board
-//! and the editor settings.
+//! (`pcb_primitive_properties`); a card naming the board for any other
+//! selection. A pure view over data the panel context copies from the board
+//! and the editor settings. Guides, extra grids, the sheet and the naming
+//! options are board options (#2374).
 //!
 //! What the board model cannot store, or the editor cannot act on, yet is
 //! drawn disabled with a tooltip saying why.
 
 mod chrome;
+mod fields;
 mod filter;
 mod grids;
+mod guides;
 mod header;
 mod health;
 mod info;
 mod other;
 mod snap;
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use iced::widget::{Column, container};
@@ -28,6 +32,8 @@ use signex_engine::pcb::snap::SnapObject;
 use signex_i18n::{ids, t};
 use signex_types::coord::Unit;
 use signex_types::pcb::PcbBoard;
+use signex_types::pcb_options::{BoardOptions, DesignatorDisplay, GuideKind, PolygonNaming};
+use uuid::Uuid;
 
 use super::{PanelContext, PanelMsg};
 use crate::pcb_canvas::{PcbSnapOptions, SnapDistance, SnapScope};
@@ -55,6 +61,30 @@ pub struct PcbBoardPanelView {
     pub filter_menu_open: bool,
     /// The snap grid step being typed, until Enter applies it.
     pub grid_draft: Option<String>,
+    /// Other fields being typed, until Enter applies them (#2374).
+    pub drafts: BTreeMap<BoardField, String>,
+    /// The Guide Manager row Delete acts on.
+    pub selected_guide: Option<Uuid>,
+    /// The Grid Manager row Properties and Delete act on.
+    pub selected_grid: Option<Uuid>,
+    /// The selected grid's fields are shown under the table.
+    pub grid_editor_open: bool,
+}
+
+/// A text field of the panel whose draft is kept until Enter (#2374).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum BoardField {
+    AxisRange,
+    GuideX(Uuid),
+    GuideY(Uuid),
+    GridName(Uuid),
+    GridStep(Uuid),
+    GridOriginX(Uuid),
+    GridOriginY(Uuid),
+    SheetX,
+    SheetY,
+    SheetWidth,
+    SheetHeight,
 }
 
 /// Which of the board's components a Board Information count selects.
@@ -86,6 +116,39 @@ pub enum PcbBoardMsg {
     GridStepTyped(String),
     /// Enter in the grid step field: apply the typed step.
     GridStepSubmitted,
+    SnapToGuidesToggled,
+    SnapToAxesToggled,
+    /// Text typed in one of the panel's fields (#2374).
+    FieldTyped(BoardField, String),
+    /// Enter in that field: apply what was typed.
+    FieldSubmitted(BoardField),
+    /// The Guide Manager's Add: a guide of this kind through the origin.
+    GuideAdded(GuideKind),
+    /// The Guide Manager's Place: the next click on the board sets a guide
+    /// of this kind there.
+    GuidePlaceArmed(GuideKind),
+    GuideSelected(Uuid),
+    GuideEnabledToggled(Uuid),
+    /// The guide's swatch was clicked: its next colour.
+    GuideColorStepped(Uuid),
+    /// Delete the selected guide.
+    GuideDeleted,
+    /// The Grid Manager's Add: a new grid at the top priority.
+    GridAdded,
+    GridSelected(Uuid),
+    /// Show or hide the selected grid's fields.
+    GridPropertiesToggled,
+    /// Delete the selected grid.
+    GridDeleted,
+    GridComponentsToggled(Uuid),
+    GridNonComponentsToggled(Uuid),
+    GridColorStepped(Uuid),
+    PolygonNamingPicked(PolygonNaming),
+    DesignatorDisplayPicked(DesignatorDisplay),
+    /// A Fast Grids button: set the board's snap step to that fast grid.
+    FastGridApplied(usize),
+    /// Get Size From Sheet Layer.
+    SheetFromBoardToggled,
 }
 
 /// The board facts and editor settings the panel shows.
@@ -112,10 +175,14 @@ pub struct PcbBoardSummary {
     /// The snap grid step in use, mm; `None` when the board has no setup
     /// to hold one.
     pub grid_mm: Option<f64>,
+    /// The board's guides, extra grids, sheet and naming options (#2374).
+    pub options: BoardOptions,
     /// The board opened read-only (a newer format).
     pub read_only: bool,
     pub filter: PickFilter,
     pub snap: PcbSnapOptions,
+    /// The fast grid preferences (#1672) the Grid Manager offers.
+    pub fast_grids_mm: [f32; 2],
     pub view: PcbBoardPanelView,
     /// Board items selected in the main window.
     pub selected: usize,
@@ -154,6 +221,7 @@ impl PcbBoardSummary {
                 .setup
                 .as_ref()
                 .map(|_| signex_engine::pcb::placement::grid_step_mm(board)),
+            options: board.options.clone(),
             read_only: board.unknown.newer_minor_source.is_some(),
             selected,
             ..Self::default()
@@ -220,8 +288,8 @@ pub fn view<'a>(ctx: &'a PanelContext, board: &'a PcbBoardSummary) -> Element<'a
         snap::section(&form, board),
         info::section(&form, board),
         grids::grid_section(&form, board),
-        grids::guide_section(&form),
-        other::section(&form),
+        guides::section(&form, board),
+        other::section(&form, board),
     ];
     let mut shown = 0;
     for section in sections.into_iter().flatten() {

@@ -32,6 +32,7 @@ use uuid::Uuid;
 use crate::pcb::{PcbBoard, Zone};
 use crate::schematic::SchematicSheet;
 
+mod board_options;
 mod board_sketch;
 mod extras;
 mod finite_toml;
@@ -53,6 +54,8 @@ mod uuid_repair;
 mod version;
 mod wire_color_repair;
 
+#[cfg(test)]
+mod board_options_tests;
 #[cfg(test)]
 mod board_sketch_tests;
 #[cfg(test)]
@@ -858,6 +861,7 @@ impl SnxPcb {
 
         // The board sketch (#2234): absent for a board without one.
         board_sketch::write(&mut out, &self.board)?;
+        board_options::write(&mut out, &self.board)?;
 
         // Footprint extras / pad extras / board extras — wrap in a
         // single `[extras]` tree so toml's serializer produces the
@@ -978,6 +982,7 @@ impl SnxPcb {
             graphics: board_extras.graphics,
             texts: board_extras.texts,
             sketch,
+            options: board_options::read(raw.board_options)?,
             unknown: BoardUnknown {
                 manifest: raw.unknown,
                 stackup: stackup_unknown,
@@ -1043,6 +1048,8 @@ struct PcbRaw {
     extras: Option<PcbExtrasRaw>,
     #[serde(default)]
     board_sketch: Option<board_sketch::BoardSketchRaw>,
+    #[serde(default)]
+    board_options: Option<board_options::BoardOptionsRaw>,
     /// Foreign manifest keys; carried onto the board so they survive
     /// the codec wrapper being discarded.
     #[serde(flatten)]

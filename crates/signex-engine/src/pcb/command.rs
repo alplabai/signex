@@ -1,5 +1,6 @@
 use signex_net::board::BoardNetEdit;
 use signex_types::pcb::{Footprint, PcbBoard, Point, SymbolLink};
+use signex_types::pcb_options::BoardOptions;
 use signex_types::pcb_sketch::BoardSketch;
 use signex_types::property::PcbProperty;
 use uuid::Uuid;
@@ -10,6 +11,7 @@ use super::error::BoardCommandError;
 use super::footprint::{self, FootprintFace};
 use super::footprint_content::{self, FootprintText};
 use super::items::{self, BoardItem, BoardItemId, RemovedItem};
+use super::options;
 use super::replace::{self, FootprintPad};
 
 /// One edit of a board. Targets are absolute so the inverse is exact.
@@ -129,6 +131,12 @@ pub enum BoardCommand {
     /// step and on a board without a setup. The inverse is another one
     /// holding the old step.
     SetGridSize { grid_mm: f64 },
+    /// Replace the board options (#2374): guides, extra snap grids, the
+    /// sheet and the naming options. Refused for a number that is not
+    /// finite, a grid step or sheet side that is not positive, or a guide or
+    /// grid uuid named twice. The inverse is another one holding the old
+    /// options.
+    SetBoardOptions { options: Box<BoardOptions> },
 }
 
 /// What a command changed, for a consumer that redraws or re-derives only
@@ -166,6 +174,8 @@ pub enum BoardPatchKind {
     BoardSketchReplaced,
     /// The setup's snap grid step. Names no items.
     GridChanged,
+    /// The board options. Names no items.
+    OptionsChanged,
 }
 
 /// The result of applying a command: the command that undoes it and the
@@ -226,6 +236,7 @@ impl BoardCommand {
             } => footprint_content::set_property(board, id, index, property),
             Self::SetNets(edit) => batch::set_nets(board, edit),
             Self::SetGridSize { grid_mm } => set_grid_size(board, grid_mm),
+            Self::SetBoardOptions { options: new } => options::set(board, *new),
         }
     }
 }

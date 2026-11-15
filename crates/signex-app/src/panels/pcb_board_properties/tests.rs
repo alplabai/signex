@@ -19,6 +19,7 @@ fn board() -> PcbBoard {
     let p = |x: f64, y: f64| Point { x, y };
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),
         version: 1,
@@ -227,4 +228,39 @@ fn the_header_sums_up_the_selection_filter() {
         texts.iter().any(|t| t == "3D Bodies (and 11 more)"),
         "{texts:?}"
     );
+}
+
+/// #2374: the Guide and Grid Managers list the board's guides and grids,
+/// and the sheet fields are greyed while the sheet follows the board.
+#[test]
+fn the_managers_list_the_boards_guides_and_grids() {
+    use signex_types::pcb_options::{BoardGrid, BoardGuide, GuideKind, MARK_COLORS};
+    let mut ctx = context(0);
+    if let Some(board) = ctx.pcb_board.as_mut() {
+        board.options.guides.push(BoardGuide::new(
+            uuid::Uuid::from_u128(1),
+            GuideKind::Plus45,
+            Point { x: 2.5, y: 0.0 },
+        ));
+        board.options.grids.push(BoardGrid {
+            uuid: uuid::Uuid::from_u128(2),
+            name: "Fine pads".into(),
+            step_mm: 0.1,
+            origin: Point { x: 0.0, y: 0.0 },
+            color: MARK_COLORS[1],
+            components: true,
+            non_components: false,
+        });
+    }
+    let texts = texts(&ctx);
+    for wanted in [
+        "+45°",
+        "Fine pads",
+        "Always",
+        "50",
+        "Get Size From Sheet Layer",
+    ] {
+        assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
+    }
+    assert!(!texts.iter().any(|t| t == "No guides"), "{texts:?}");
 }

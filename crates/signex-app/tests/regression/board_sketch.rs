@@ -36,6 +36,7 @@ fn layer(id: u8, name: &str) -> LayerDef {
 pub(crate) fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::from_u128(0xB0A2D),
         version: 1,
         generator: "signex-test".into(),

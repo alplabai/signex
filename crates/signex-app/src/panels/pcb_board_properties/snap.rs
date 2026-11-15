@@ -1,5 +1,5 @@
-//! Snap Options (#2353): grid snapping, which layers' objects pull the
-//! pointer, which object points do, and how far they reach.
+//! Snap Options (#2353, #2374): grid, guide and axis snapping, which
+//! layers' objects pull the pointer, which object points do, and how far.
 
 use iced::widget::{container, row};
 use iced::{Element, Length, Widget as _};
@@ -7,7 +7,7 @@ use signex_engine::pcb::snap::SnapObject;
 use signex_i18n::{LocalNumber, Localized, MessageId, ids, t};
 
 use super::chrome::{Form, Segment, Shown};
-use super::{PanelMsg, PcbBoardMsg, PcbBoardSummary, SP};
+use super::{BoardField, PanelMsg, PcbBoardMsg, PcbBoardSummary, SP, fields};
 use crate::pcb_canvas::{SnapDistance, SnapScope};
 
 fn msg(m: PcbBoardMsg) -> Option<PanelMsg> {
@@ -35,15 +35,15 @@ pub(super) fn section<'a>(
         ),
         form.chip(
             guides.clone(),
-            false,
-            None,
-            Some(form.t(ids::PCB_BOARD_SNAP_GUIDES_UNAVAILABLE))
+            snap.to_guides,
+            msg(PcbBoardMsg::SnapToGuidesToggled),
+            None
         ),
         form.chip(
             axes.clone(),
-            false,
-            None,
-            Some(form.t(ids::PCB_BOARD_SNAP_AXES_UNAVAILABLE))
+            snap.to_axes,
+            msg(PcbBoardMsg::SnapToAxesToggled),
+            None
         ),
     ]
     .spacing(SP.s);
@@ -87,11 +87,14 @@ pub(super) fn section<'a>(
     ));
 
     let axis = form.t(ids::PCB_BOARD_AXIS_RANGE);
-    let axis_value = form.unavailable(
-        form.t(ids::PCB_BOARD_NOT_AVAILABLE),
-        form.t(ids::PCB_BOARD_SNAP_AXES_UNAVAILABLE),
+    let range = fields::length(
+        form,
+        board,
+        BoardField::AxisRange,
+        axis.clone(),
+        snap.axis_range_mm,
     );
-    rows.push(form.row(&[&axis], form.field(&axis, axis_value)));
+    rows.push(form.row(&[&axis], form.field(&axis, range)));
 
     form.section("pcb_board_snap", ids::PCB_BOARD_SECTION_SNAP, rows)
 }

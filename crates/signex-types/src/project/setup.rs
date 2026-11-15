@@ -162,6 +162,7 @@ impl PcbDefaults {
             .collect();
         PcbBoard {
             sketch: None,
+            options: Default::default(),
             uuid: uuid::Uuid::now_v7(),
             version: 1,
             generator: "signex".into(),

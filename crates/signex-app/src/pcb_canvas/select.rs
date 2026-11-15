@@ -524,6 +524,7 @@ mod tests {
         };
         PcbBoard {
             sketch: None,
+            options: Default::default(),
             uuid: Uuid::nil(),
             version: 1,
             generator: String::new(),

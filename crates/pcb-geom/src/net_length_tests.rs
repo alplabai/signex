@@ -31,6 +31,7 @@ fn via(via_type: ViaType, layers: &[&str]) -> Via {
 fn board(segments: Vec<Segment>) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: String::new(),
