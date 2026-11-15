@@ -13,7 +13,9 @@ use signex_app::diagnostics;
 use signex_app::dock::DockMessage;
 use signex_app::library::state::{LibraryDisplaySettings, OpenLibrary};
 use signex_app::menu_bar::MenuMessage;
-use signex_app::panels::{PanelMsg, PartIdentity, PcbComponentFacts, PcbComponentMsg, PcbFootprintTextMsg, Shared};
+use signex_app::panels::{
+    PanelMsg, PartIdentity, PcbComponentFacts, PcbComponentMsg, PcbFootprintTextMsg, Shared,
+};
 use signex_app::pcb_canvas::PcbCanvasMsg;
 use signex_engine::pcb::component_edit::ComponentSetting;
 use signex_engine::pcb::designators::FootprintTextField;
@@ -22,7 +24,9 @@ use signex_library::{
     ParamMap, PlmReserved, PrimitiveRef,
 };
 use signex_types::format::{SnxPcb, SnxSchematic};
-use signex_types::pcb::{ComponentType, Footprint, Pad, PadShape, PadType, PcbBoard, Point, SymbolLink};
+use signex_types::pcb::{
+    ComponentType, Footprint, Pad, PadShape, PadType, PcbBoard, Point, SymbolLink,
+};
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::{InstancePath, SchematicSheet, Symbol};
 use uuid::Uuid;
@@ -237,13 +241,20 @@ fn fixture(with_sheet: bool) -> Fixture {
     let tmp = tempfile::tempdir().unwrap();
     let sheet = tmp.path().join("demo.snxsch");
     let board_path = tmp.path().join("demo.snxpcb");
-    std::fs::write(&sheet, SnxSchematic::new(self::sheet()).write_string().unwrap()).unwrap();
+    std::fs::write(
+        &sheet,
+        SnxSchematic::new(self::sheet()).write_string().unwrap(),
+    )
+    .unwrap();
     std::fs::write(&board_path, SnxPcb::new(board()).write_string().unwrap()).unwrap();
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     open_library(&mut app);
     if with_sheet {
-        send(&mut app, Message::File(FileMsg::Opened(Some(sheet.clone()))));
+        send(
+            &mut app,
+            Message::File(FileMsg::Opened(Some(sheet.clone()))),
+        );
     }
     send(
         &mut app,

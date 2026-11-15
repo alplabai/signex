@@ -53,7 +53,10 @@ fn every_component_setting_round_trips() {
     let text = SnxPcb::new(board.clone()).write_string().unwrap();
     let back = SnxPcb::parse(&text).unwrap().board;
     assert_eq!(*back.footprints[0].component, every_field_set());
-    assert_eq!(*back.footprints[1].component, ComponentAttributes::default());
+    assert_eq!(
+        *back.footprints[1].component,
+        ComponentAttributes::default()
+    );
     assert_eq!(SnxPcb::new(back).write_string().unwrap(), text, "stable");
 }
 
@@ -67,7 +70,13 @@ fn only_settings_off_their_default_are_written() {
     board.footprints = vec![footprint(1, component)];
     let text = SnxPcb::new(board).write_string().unwrap();
     assert!(text.contains("lock_strings = true"), "{text}");
-    for key in ["type =", "height_mm", "body_opacity", "lock_primitives", "description"] {
+    for key in [
+        "type =",
+        "height_mm",
+        "body_opacity",
+        "lock_primitives",
+        "description",
+    ] {
         assert!(!text.contains(key), "{key} is a default: {text}");
     }
 }

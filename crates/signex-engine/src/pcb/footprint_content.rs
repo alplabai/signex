@@ -93,7 +93,10 @@ pub(super) fn replace(
 /// The component settings of a replaced footprint (#2365): the type, height
 /// and description come with the new library footprint; the opacity, locks,
 /// swapping and channel offset are board choices and stay.
-fn carried_component(old: &ComponentAttributes, template: ComponentAttributes) -> ComponentAttributes {
+fn carried_component(
+    old: &ComponentAttributes,
+    template: ComponentAttributes,
+) -> ComponentAttributes {
     ComponentAttributes {
         component_type: template.component_type,
         height_mm: template.height_mm,

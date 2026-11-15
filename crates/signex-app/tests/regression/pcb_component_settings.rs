@@ -278,8 +278,12 @@ fn every_checkbox_setting_is_one_step() {
         (ComponentSetting::LockPrimitives, |fp| {
             fp.component.lock_primitives
         }),
-        (ComponentSetting::LockStrings, |fp| fp.component.lock_strings),
-        (ComponentSetting::PinSwapping, |fp| fp.component.pin_swapping),
+        (ComponentSetting::LockStrings, |fp| {
+            fp.component.lock_strings
+        }),
+        (ComponentSetting::PinSwapping, |fp| {
+            fp.component.pin_swapping
+        }),
         (ComponentSetting::PartSwapping, |fp| {
             fp.component.part_swapping
         }),
@@ -325,7 +329,11 @@ fn an_opacity_past_one_is_refused_and_says_why() {
     select_r2(&mut f.app);
     let before = snapshot(&f.app);
     let since = diagnostics::newest_entry_id().unwrap_or(0);
-    type_and_enter(&mut f, ComponentField::Setting(TypedSetting::BodyOpacity), "1.5");
+    type_and_enter(
+        &mut f,
+        ComponentField::Setting(TypedSetting::BodyOpacity),
+        "1.5",
+    );
     assert_eq!(snapshot(&f.app), before);
     assert!(noticed(since, "out of range"), "the refusal says why");
 }
@@ -393,13 +401,18 @@ fn adding_then_removing_a_parameter_is_one_step_each() {
             }),
         );
         assert!(
-            facts(&f.app).draft(&ComponentField::NewParameterName).is_none(),
+            facts(&f.app)
+                .draft(&ComponentField::NewParameterName)
+                .is_none(),
             "the typed name goes once added"
         );
     });
     for id in [R2, C7] {
         let added = fp(&edited, id).properties.last().cloned().unwrap();
-        assert_eq!((added.key.as_str(), added.value.as_str()), ("Tolerance", "1%"));
+        assert_eq!(
+            (added.key.as_str(), added.value.as_str()),
+            ("Tolerance", "1%")
+        );
     }
 
     let edited = assert_one_step(&mut f, |f| {

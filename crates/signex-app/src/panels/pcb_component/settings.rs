@@ -65,10 +65,8 @@ pub(super) fn type_row<'a>(
         .padding(SP.s)
         .width(Length::Fill);
     let control = if facts.is_editable() {
-        list.on_select(move |c: TypeChoice| {
-            picked(facts, ComponentSetting::Type(c.component_type))
-        })
-        .boxed()
+        list.on_select(move |c: TypeChoice| picked(facts, ComponentSetting::Type(c.component_type)))
+            .boxed()
     } else {
         list.boxed()
     };

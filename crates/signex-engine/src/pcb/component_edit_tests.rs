@@ -34,7 +34,11 @@ fn undo(board: &mut PcbBoard, inverses: Vec<BoardCommand>) {
 }
 
 fn fp<'a>(board: &'a PcbBoard, which: &str) -> &'a signex_types::pcb::Footprint {
-    board.footprints.iter().find(|f| f.uuid == id(which)).unwrap()
+    board
+        .footprints
+        .iter()
+        .find(|f| f.uuid == id(which))
+        .unwrap()
 }
 
 #[test]
@@ -74,8 +78,14 @@ fn a_setting_is_written_on_every_footprint_and_undone_exactly() {
     let commands = setting_commands(&b, &both, &set).unwrap();
     assert_eq!(commands.len(), 2);
     let inverses = run(&mut b, commands);
-    assert_eq!(fp(&b, FP_A).component.component_type, ComponentType::Mechanical);
-    assert_eq!(fp(&b, FP_B).component.component_type, ComponentType::Mechanical);
+    assert_eq!(
+        fp(&b, FP_A).component.component_type,
+        ComponentType::Mechanical
+    );
+    assert_eq!(
+        fp(&b, FP_B).component.component_type,
+        ComponentType::Mechanical
+    );
     assert!(setting_commands(&b, &both, &set).unwrap().is_empty());
     undo(&mut b, inverses);
     assert_eq!(snapshot(&b), before);
@@ -155,7 +165,10 @@ fn a_parameter_is_added_to_every_footprint_and_undone_exactly() {
     let inverses = run(&mut b, commands);
     for which in [FP_A, FP_B] {
         let added = fp(&b, which).properties.last().unwrap();
-        assert_eq!((added.key.as_str(), added.value.as_str()), ("MPN", "RC0603"));
+        assert_eq!(
+            (added.key.as_str(), added.value.as_str()),
+            ("MPN", "RC0603")
+        );
         assert!(added.hidden, "a new parameter is not drawn");
     }
     assert!(matches!(

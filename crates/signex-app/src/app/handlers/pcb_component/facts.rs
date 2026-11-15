@@ -108,10 +108,8 @@ impl Signex {
             .filter(|d| d.is_for(path, &ids))
             .map(|d| d.texts.clone())
             .unwrap_or_default();
-        let identities: Vec<PartIdentity> = fps
-            .iter()
-            .map(|fp| self.part_identity(path, fp))
-            .collect();
+        let identities: Vec<PartIdentity> =
+            fps.iter().map(|fp| self.part_identity(path, fp)).collect();
         let designator_mismatches = fps
             .iter()
             .zip(&identities)

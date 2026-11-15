@@ -163,7 +163,12 @@ fn the_stored_settings_show_their_values() {
     facts.settings.component_type = Shared::Same(ComponentType::Mechanical);
     facts.settings.description = Shared::Same("Chip resistor".into());
     let texts = texts_of(facts, 0);
-    for wanted in ["Mechanical", "Lock Primitives", "Lock Strings", "Chip resistor"] {
+    for wanted in [
+        "Mechanical",
+        "Lock Primitives",
+        "Lock Strings",
+        "Chip resistor",
+    ] {
         assert!(has(&texts, wanted), "{wanted} in {texts:?}");
     }
 }

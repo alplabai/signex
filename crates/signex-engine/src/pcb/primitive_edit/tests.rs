@@ -84,5 +84,9 @@ fn a_pad_of_a_footprint_that_locks_its_primitives_is_refused() {
         Err(PrimitiveEditRefusal::PrimitivesLocked("U1".into()))
     );
     b.footprints[0].component.lock_primitives = false;
-    assert!(pad_edit_command(&b, &pad, &PadEdit::SizeX(2.0)).unwrap().is_some());
+    assert!(
+        pad_edit_command(&b, &pad, &PadEdit::SizeX(2.0))
+            .unwrap()
+            .is_some()
+    );
 }

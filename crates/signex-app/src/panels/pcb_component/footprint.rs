@@ -131,7 +131,11 @@ fn schematic<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Vec<Element<'
         let path = optional_text(form, &facts.schematic_path, ids::PCB_COMPONENT_NOT_LINKED);
         rows.push(rows::row(form, label, rows::value(path)));
     }
-    let offset = facts.settings.channel_offset.same().map(ToString::to_string);
+    let offset = facts
+        .settings
+        .channel_offset
+        .same()
+        .map(ToString::to_string);
     rows.extend(super::settings::typed_row(
         form,
         facts,

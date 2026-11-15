@@ -79,9 +79,9 @@ mod non_finite_tests;
 #[cfg(test)]
 mod object_lock_tests;
 #[cfg(test)]
-mod pcb_footprints_tests;
-#[cfg(test)]
 mod pcb_component_tests;
+#[cfg(test)]
+mod pcb_footprints_tests;
 #[cfg(test)]
 mod pcb_layer_tests;
 #[cfg(test)]

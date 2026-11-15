@@ -66,7 +66,10 @@ pub enum TypedSetting {
 /// Read typed `text` as a value of `setting`: a height in mm (a trailing
 /// `mm` allowed), an opacity from 0 to 1 or a percentage, a whole channel
 /// offset, or a description as typed.
-pub fn parse_setting(setting: TypedSetting, text: &str) -> Result<ComponentSetting, ComponentRefusal> {
+pub fn parse_setting(
+    setting: TypedSetting,
+    text: &str,
+) -> Result<ComponentSetting, ComponentRefusal> {
     let trimmed = text.trim();
     let not_a_number = || ComponentRefusal::NotANumber(trimmed.to_string());
     match setting {

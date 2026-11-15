@@ -79,7 +79,11 @@ fn is_false(value: &bool) -> bool {
 /// part with no height, an opaque body, no locks and no swapping.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ComponentAttributes {
-    #[serde(default, rename = "type", skip_serializing_if = "ComponentType::is_default")]
+    #[serde(
+        default,
+        rename = "type",
+        skip_serializing_if = "ComponentType::is_default"
+    )]
     pub component_type: ComponentType,
     /// The part's height above the board in mm; 0 is not set.
     #[serde(default, skip_serializing_if = "is_zero")]
