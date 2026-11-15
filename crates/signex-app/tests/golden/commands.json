@@ -195,6 +195,11 @@
     "category": "view"
   },
   {
+    "id": "cycle_route_mode",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "cycle_selection_mode",
     "group": "General",
     "category": "select"
@@ -701,6 +706,11 @@
   },
   {
     "id": "place_board_region",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_route",
     "group": "Pcb",
     "category": "place"
   },

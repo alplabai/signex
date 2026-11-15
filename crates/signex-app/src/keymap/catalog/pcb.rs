@@ -303,4 +303,26 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    // #2389: Interactive Routing. Each route is one undo step when it ends.
+    // No default key.
+    CommandMetadata {
+        id: "place_board_route",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_ROUTE,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_ROUTE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2389: walk around or push and shove. Changes no board. No default key.
+    CommandMetadata {
+        id: "cycle_route_mode",
+        category: "pcb",
+        label: command_ids::CMD_CYCLE_ROUTE_MODE,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
 ];

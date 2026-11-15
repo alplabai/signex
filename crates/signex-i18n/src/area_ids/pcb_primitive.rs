@@ -120,4 +120,6 @@ define_ids! {
     PCB_PRIM_NOT_A_NUMBER = "pcb-prim-not-a-number";
     PCB_PRIM_BOARD_GONE = "pcb-prim-board-gone";
     PCB_PRIM_NO_NET_THERE = "pcb-prim-no-net-there";
+    PCB_PRIM_TUNE_LENGTH = "pcb-prim-tune-length";
+    PCB_PRIM_TUNE_ONE_TRACK = "pcb-prim-tune-one-track";
 }

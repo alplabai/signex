@@ -5801,6 +5801,7 @@ dependencies = [
  "pcb-geom",
  "serde",
  "serde_json",
+ "signex-drc",
  "signex-erc",
  "signex-history",
  "signex-net",

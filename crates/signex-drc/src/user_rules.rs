@@ -223,9 +223,16 @@ pub(crate) fn sets(rules: &[ScopedRule], kind: LimitKind) -> bool {
 
 /// The largest clearance a rule covering `net` sets; 0 with none.
 pub(crate) fn widest_clearance(rules: &[ScopedRule], net: u32) -> i64 {
+    widest_of(rules.iter().filter(|s| s.covers_net(net)))
+}
+
+/// The largest clearance any rule sets, whatever it covers; 0 with none.
+pub(crate) fn widest_written_clearance(rules: &[ScopedRule]) -> i64 {
+    widest_of(rules.iter())
+}
+
+fn widest_of<'a>(rules: impl Iterator<Item = &'a ScopedRule>) -> i64 {
     rules
-        .iter()
-        .filter(|s| s.covers_net(net))
         .flat_map(|s| s.rule.limits.iter())
         .filter_map(|l| match l {
             Limit::MinClearance(nm) => Some(*nm),

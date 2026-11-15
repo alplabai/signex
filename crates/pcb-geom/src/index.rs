@@ -422,7 +422,7 @@ fn sorted(items: impl Iterator<Item = ItemRef>) -> Vec<ItemRef> {
     items
 }
 
-fn envelope_of(rect: &RectNm) -> AABB<[i128; 2]> {
+pub(crate) fn envelope_of(rect: &RectNm) -> AABB<[i128; 2]> {
     AABB::from_corners(
         [i128::from(rect.min.x), i128::from(rect.min.y)],
         [i128::from(rect.max.x), i128::from(rect.max.y)],

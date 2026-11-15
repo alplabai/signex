@@ -130,5 +130,15 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
             value_box(look, mm_or_na(look, f.length_mm)),
         ),
     );
+    // #2389: a length for the track's net; Enter tunes the track to it.
+    s.push(
+        common,
+        ids::PCB_PRIM_TUNE_LENGTH,
+        labelled(
+            look,
+            ids::PCB_PRIM_TUNE_LENGTH,
+            mm_field(common, F::TuneLength, None, look),
+        ),
+    );
     s.finish()
 }

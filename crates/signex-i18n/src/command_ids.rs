@@ -396,6 +396,9 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_POLYGON_POUR = "cmd-menu-place-board-polygon-pour";
         CMD_PLACE_BOARD_KEEPOUT = "cmd-place-board-keepout";
         CMD_MENU_PLACE_BOARD_KEEPOUT = "cmd-menu-place-board-keepout";
+        CMD_PLACE_BOARD_ROUTE = "cmd-place-board-route";
+        CMD_MENU_PLACE_BOARD_ROUTE = "cmd-menu-place-board-route";
+        CMD_CYCLE_ROUTE_MODE = "cmd-cycle-route-mode";
         CMD_CHANGE_FOOTPRINT = "cmd-change-footprint";
         CMD_MENU_CHANGE_FOOTPRINT = "cmd-menu-change-footprint";
         CMD_FOOTPRINT_MODE_PADS = "cmd-footprint-mode-pads";

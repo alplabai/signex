@@ -38,21 +38,7 @@ impl Signex {
             crate::diagnostics::log_info("DRC: a check of this board is already running");
             return Task::none();
         }
-        // The board's own project, as `check_drc` takes it (#2332): a loose
-        // board gets this machine's layer and no net classes, and says so.
-        let project = self.document_state.board_project(&path, None);
-        let loose = project.is_none();
-        let classes = project
-            .map(|p| p.data.net_classes.clone())
-            .unwrap_or_default();
-        let (profile, project_layer) = drc_layers(
-            project.and_then(|p| p.data.rules.as_ref()),
-            &self.ui_state.machine_drc_rules,
-        );
-        let layers = Layers {
-            profile: profile.cloned(),
-            project: project_layer.cloned(),
-        };
+        let (loose, classes, layers) = self.drc_inputs(&path);
         let generation = self.interaction_state.pcb_drc.begin(path, revision);
         self.refresh_panel_ctx();
         Task::perform(
@@ -69,6 +55,41 @@ impl Signex {
                 })
             },
         )
+    }
+
+    /// What a check of the board at `path` reads: whether the board is in
+    /// no open project, its net classes and its rule layers. The board's
+    /// own project, as `check_drc` takes it (#2332): a loose board gets this
+    /// machine's layer and no net classes, and says so.
+    fn drc_inputs(
+        &self,
+        path: &std::path::Path,
+    ) -> (bool, Vec<signex_types::net_class::NetClass>, Layers) {
+        let project = self.document_state.board_project(path, None);
+        let classes = project
+            .map(|p| p.data.net_classes.clone())
+            .unwrap_or_default();
+        let (profile, project_layer) = drc_layers(
+            project.and_then(|p| p.data.rules.as_ref()),
+            &self.ui_state.machine_drc_rules,
+        );
+        let layers = Layers {
+            profile: profile.cloned(),
+            project: project_layer.cloned(),
+        };
+        (project.is_none(), classes, layers)
+    }
+
+    /// The rules a check of `board` (the board at `path`) applies, and its
+    /// project's net classes: what Interactive Routing keeps (#2389).
+    pub(crate) fn board_design_rules(
+        &self,
+        path: &std::path::Path,
+        board: &signex_types::pcb::PcbBoard,
+    ) -> Result<(DrcRules, Vec<signex_types::net_class::NetClass>), String> {
+        let (_, classes, layers) = self.drc_inputs(path);
+        let rules = compile_rules(board, &classes, &layers)?;
+        Ok((rules, classes))
     }
 
     /// Apply a finished run, unless a newer one superseded it. A `loose`
@@ -223,6 +244,24 @@ pub(super) fn run_check(
     classes: &[signex_types::net_class::NetClass],
     layers: &Layers,
 ) -> DrcRunResult {
+    let rules = compile_rules(board, classes, layers)?;
+    let report = signex_drc::run(board, &rules);
+    let names = board
+        .nets
+        .iter()
+        .map(|n| (n.number, n.name.clone()))
+        .collect();
+    Ok((report, names))
+}
+
+/// The rules a check of `board` applies, the rule text compiled: shared
+/// by the check and Interactive Routing (#2389), so a route keeps exactly
+/// the clearances the check asks.
+pub(super) fn compile_rules(
+    board: &signex_types::pcb::PcbBoard,
+    classes: &[signex_types::net_class::NetClass],
+    layers: &Layers,
+) -> Result<DrcRules, String> {
     let (profile, project) = (layers.profile.as_ref(), layers.project.as_ref());
     let written = signex_drc_dsl::compile_layers(profile, project);
     let mut rules = DrcRules::for_board(board, classes)
@@ -235,13 +274,7 @@ pub(super) fn run_check(
     rules.notes.extend(lowered);
     rules.rules_not_applied = written.not_applied;
     rules.texts_not_applied = written.unparsed;
-    let report = signex_drc::run(board, &rules);
-    let names = board
-        .nets
-        .iter()
-        .map(|n| (n.number, n.name.clone()))
-        .collect();
-    Ok((report, names))
+    Ok(rules)
 }
 
 /// The summary line. Its wording changes only when the run has written

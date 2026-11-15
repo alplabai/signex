@@ -69,6 +69,9 @@ pub enum PcbMsg {
     /// A board placement tool was picked (its command ran, #2373): it is
     /// armed on the board in view of the window the command ran in.
     PlaceToolPicked(crate::app::pcb_tools::BoardPlaceTool),
+    /// `cycle_route_mode` ran (#2389): Interactive Routing switches between
+    /// walking around other nets and pushing their tracks aside.
+    RouteModeStepped,
     /// Swapping the footprint of placed components (#2366).
     FootprintSwap(FootprintSwapMsg),
     /// The right-click menu of a layer tab (#2379).

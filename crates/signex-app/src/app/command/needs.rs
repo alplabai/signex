@@ -293,7 +293,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_fill"
         | "place_board_region"
         | "place_board_polygon_pour"
-        | "place_board_keepout" => Needs::Pcb,
+        | "place_board_keepout"
+        // #2389: Interactive Routing and its mode.
+        | "place_board_route"
+        | "cycle_route_mode" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" => Needs::OpenProject,

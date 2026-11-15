@@ -420,3 +420,21 @@ fn a_saved_preset_is_a_chip_of_the_filter_dropdown() {
     let on: Vec<PickKind> = app.ui_state.pcb_pick_filter.on_kinds().collect();
     assert_eq!(on, vec![PickKind::Vias]);
 }
+
+/// #2389: the Interactive Routing button arms the router on the board.
+#[test]
+fn the_routing_button_arms_interactive_routing() {
+    let mut app = board_app();
+    let button = button_for(&bar_of(&app), "place_board_route");
+    assert!(button.enabled);
+    assert!(
+        button.tooltip.starts_with("Interactive Routing ("),
+        "{}",
+        button.tooltip
+    );
+    click(&mut app, "place_board_route");
+    assert_eq!(
+        app.interaction_state.pcb_tool.as_ref().map(|s| s.tool),
+        Some(BoardPlaceTool::InteractiveRouting)
+    );
+}

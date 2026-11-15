@@ -145,3 +145,7 @@ pcb-prim-refused = { $what } was not changed: { $why }
 pcb-prim-not-a-number = "{ $text }" is not a length or angle.
 pcb-prim-board-gone = The board is no longer open, so { $what } was not changed.
 pcb-prim-no-net-there = There is no netted copper there; the net was not changed.
+# Length tuning (#2389): the track field that takes a target length for the
+# track's net, and why it refuses a selection of more than one track.
+pcb-prim-tune-length = Tune Net To
+pcb-prim-tune-one-track = select one track to tune

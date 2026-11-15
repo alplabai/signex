@@ -52,8 +52,96 @@ draws nothing.
   the run goes on on the new layer.
 - A click on the run's end, Esc or a right-click ends the run; the next Esc
   or right-click ends the tool.
-- No walk-around, shove or ratsnest following: that is Interactive Routing,
-  still greyed.
+- Track goes where the clicks are, through anything; Interactive Routing
+  (below) keeps the clearance.
+
+## Interactive Routing
+
+`place_board_route` (no default key; Place, the PCB Active Bar). A route is
+drawn on the active copper layer like a Track run, but each leg keeps the
+clearance the design rules ask from other nets' copper (#2389).
+
+- **Start.** The first click starts the route on the net of the copper under
+  it (a pad or a track end), or no net over bare board, which then takes the
+  net of the copper its next point lands on.
+- **Rules.** The route reads the rules the Design Rule Check of this board
+  reads (`DrcRules`, the same project layers and net classes, compiled once
+  when the route starts): the clearance between each pair of items
+  (`DrcRules::clearance_between`) and the width, the net class's track
+  width, else `PcbSetup::trace_width`, held within the written rules'
+  minimum and maximum width on the layer. The search for copper near a
+  leg looks as far as the widest clearance any rule asks
+  (`DrcRules::widest_clearance`), so a written rule between two object
+  kinds (tracks and pads, say) is found as the check finds it.
+- **Legs.** Each later click routes a leg from the route's end to the point
+  with `signex_engine::pcb::route::route_leg`. The corner rule of #2372
+  draws it when it is clear (Space and Shift+Space bend it); else the leg
+  with the bend flipped; else an A* search on a lattice of the board's grid
+  (coarser for a long leg) finds a way round in the corner mode's directions
+  (90°: axis-aligned; 45°: axis and diagonal, each corner turning 45° at
+  most; any angle: pulled taut) and joins the point with the rule's legs.
+  With no way within the search budget the click adds nothing and the
+  Messages panel says so.
+- **Preview.** The leg on the pointer is routed once per change of what it
+  depends on (the pointer's grid point, a leg, the board revision, the
+  corner rule, the mode, the layer), not per repaint, with a smaller search
+  budget than a click (`PREVIEW_BUDGET`); a leg the preview gives up on
+  still routes on the click.
+- **Push and shove.** `cycle_route_mode` (the palette; no default key)
+  switches between walking around (the default) and pushing. In push mode
+  the rule's legs go straight to the point and other nets' tracks in the
+  way move square to themselves just far enough, carrying the tracks
+  joined at their ends (whose far ends stay), and what they crowd is pushed
+  in turn, a few rounds deep (`pcb_geom::route::shove`). A track that ends
+  on a pad or via, one with same-net copper joined other than at a shared
+  end (a branch ending on its side, an overlap: moving it would break that
+  link), one the leg crosses, a pad or via in the way, or a move that would
+  break a clearance (the leg's via included) or enter a keepout is not
+  pushed: the leg walks around instead.
+- **Vias.** Making another copper layer active mid-route puts a through via
+  (the board's via size, grown to the written rules' minimum diameter and
+  drill for the net) at the route's end with the next leg; a via that would
+  not keep the clearance is refused with the leg.
+- **Keepouts.** A leg stays out of a keepout that forbids tracks, a via out
+  of one that forbids vias or drilling, as the Design Rule Check reads them.
+- **One step.** The legs and the pushed tracks stay off the board, drawn on
+  the cursor, until the route ends: a click on its end, Esc, a right-click,
+  arming another tool (on any board or window), a Move, paste or part on
+  the cursor, or ending this one. It then lands as one undo step
+  (`RouteDraft::commands`: the vias and tracks added, the pushed tracks
+  replaced), checked against the board revision it was routed on. The
+  next Esc or right-click ends the tool.
+- **A board that changed under the route.** An undo, or an edit from
+  another window or panel, moves the board past the revision the route
+  was routed on. The route is then checked again before its next leg and
+  before it lands (`signex_engine::pcb::route::draft_fits`): every track
+  it pushed must still be on the board as it was, and its tracks, vias and
+  pushed tracks must keep the clearance from the board as it is now. A
+  route that still fits goes on against the new revision. One that does
+  not adds no leg and does not land: the Messages panel says why, the
+  route stays drawn (undo or redo back to place it) and the next Esc
+  discards it. When the tool ends with such a route (another tool, a Move,
+  paste or part), the route is discarded with a Messages line; it is never
+  dropped silently.
+- **Not yet.** Differential pairs (the net classes' `diff_pair_gap` and
+  `diff_pair_width`), arcs, blind and buried vias, board-edge clearance,
+  routing several layers in one search, and a route kept when its board's
+  tab closes mid-route.
+
+## Length tuning
+
+The track panel's **Tune Net To** field (#2389). Enter a length with one
+track selected: the track becomes an accordion of square bumps in its
+middle that brings its net's routed length to the target
+(`signex_engine::pcb::route::tune_length`), one undo step. The bumps are
+the fewest no taller than four pitches, a pitch being twice the track width
+plus the board clearance, and never lower than half a pitch (a lower bump
+would lay its copper over itself and add no real length); they go left of
+the track when that side keeps the clearance from other nets, else right.
+The panel's net length readout shows the result after Enter; a live
+length readout while routing is not done yet. A net already as long, a
+shortfall smaller than one lowest bump adds, a track too short for the
+bumps, or no side clear is refused and the Messages panel says why.
 
 ## Fill and Solid Region
 

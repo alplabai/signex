@@ -48,7 +48,6 @@ pcb-bar-pad-unavailable = Place Pad: not available on boards yet
 pcb-bar-arc-unavailable = Place Arc: not available on boards yet
 pcb-bar-text-unavailable = Place String: not available on boards yet
 pcb-bar-dimension-unavailable = Place Dimension: not available on boards yet
-pcb-bar-route-unavailable = Interactive Routing: not available on boards yet
 # Rows of the Place menu on a board (#2360). The ones the board editor cannot
 # run yet are greyed, with the tooltip above as the reason.
 pcb-tool-component = Component
@@ -88,6 +87,23 @@ pcb-tool-keepout-needs-layer = Keepout: make a copper layer or a keep-out layer 
 pcb-tool-string-text = String
 # A String click while the active layer is not an overlay layer.
 pcb-tool-string-needs-overlay = String: make an overlay layer active to place a string on it
+# Interactive Routing (#2389): its Active Bar tooltip and Messages hint, the
+# lines a leg it cannot route writes, and the mode `cycle_route_mode` picks.
+pcb-bar-route-tooltip = Interactive Routing (Space flips the corner, Shift+Space changes the corner mode)
+pcb-tool-hint-route = Interactive Routing: click a pad or track end to start on the active copper layer, then click each point; each leg keeps the rule clearance from other nets. Change the layer to add a via. Click the route's end, Esc or a right-click to finish it as one step
+pcb-route-blocked = Interactive Routing: no way to that point keeps the clearance the rules ask, so nothing was added
+pcb-route-via-blocked = Interactive Routing: a via there would not keep the clearance the rules ask, so nothing was added
+pcb-route-unrepresentable = Interactive Routing: a point or the track width is outside what the board geometry can hold
+# $why says what is wrong with the rules (the setup clearance, a net class).
+pcb-route-no-rules = Interactive Routing: the board's rules are not usable: { $why }
+pcb-route-mode-walkaround = Interactive Routing: walk around other nets' copper
+pcb-route-mode-shove = Interactive Routing: push other nets' tracks aside, walk around the rest
+pcb-route-board-changed = Interactive Routing: a track the route pushed was changed or removed since, so nothing was added
+# The board changed under a route being drawn (an undo, an edit elsewhere)
+# and the route no longer fits it; $why says how.
+pcb-route-stale = Interactive Routing: the board changed and the route no longer fits it ({ $why }), so nothing was added; Esc discards the route
+pcb-route-not-placed = Interactive Routing: the board changed and the route no longer fits it ({ $why }), so nothing was placed; undo or redo back to place it, or press Esc again to discard it
+pcb-route-discarded = Interactive Routing: the route no longer fits the board ({ $why }) and was discarded; the board is unchanged
 
 # Layer names in the Layers panel, the layer strip and the status bar, as
 # Altium names them. A mechanical layer the user named shows that name instead.

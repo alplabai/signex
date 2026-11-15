@@ -22,12 +22,17 @@ use crate::pcb_canvas::{carried_board, snap_point};
 
 mod area;
 mod route;
+mod router;
 mod string;
+
+pub use router::RouterState;
 
 #[cfg(test)]
 mod area_tests;
 #[cfg(test)]
 mod route_tests;
+#[cfg(test)]
+mod router_tests;
 #[cfg(test)]
 mod string_tests;
 #[cfg(test)]
@@ -49,6 +54,8 @@ pub struct BoardToolSession {
     pub cursor: Option<Point>,
     /// The layer, width and net of the track run being drawn.
     pub route: Option<draw::TrackStyle>,
+    /// Interactive Routing's route not yet on the board, and its rules.
+    pub router: Option<RouterState>,
 }
 
 impl BoardToolSession {
@@ -57,9 +64,13 @@ impl BoardToolSession {
         path == Some(self.path.as_path()) && window == self.window
     }
 
-    /// Whether a track run is being drawn: Space and Shift+Space bend it.
+    /// Whether a track run or a route is being drawn: Space and
+    /// Shift+Space bend it.
     pub fn is_routing(&self) -> bool {
-        self.tool == BoardPlaceTool::Track && !self.points.is_empty()
+        matches!(
+            self.tool,
+            BoardPlaceTool::Track | BoardPlaceTool::InteractiveRouting
+        ) && !self.points.is_empty()
     }
 }
 
@@ -75,6 +86,9 @@ impl Signex {
             return;
         }
         self.end_pcb_carry();
+        // A route drawn on any board, this one or another window's, lands
+        // (or is discarded, said in Messages) before the tool is replaced.
+        self.finish_board_route(true);
         self.interaction_state.pcb_primitive.net_pick = None;
         // A guide armed by the board panel's Place would take the first
         // click ahead of the tool (#2396).
@@ -86,6 +100,7 @@ impl Signex {
             points: Vec::new(),
             cursor: None,
             route: None,
+            router: None,
         });
         crate::diagnostics::log_info(t!(self.ui_state.i18n, tool.texts().1).into_string());
         self.refresh_pcb_highlight();
@@ -113,25 +128,42 @@ impl Signex {
     /// End the tool armed on the board this window shows.
     pub(crate) fn end_board_tool(&mut self) {
         if self.own_board_tool().is_some() {
-            self.interaction_state.pcb_tool = None;
+            self.release_board_tool();
             self.refresh_pcb_highlight();
         }
     }
 
-    /// Esc or a right-click: drop the shape being drawn, or end the tool
-    /// when none is. Whether a tool took it.
+    /// End whatever tool is armed, on any board, for a Move, paste or part
+    /// on the cursor: a route being drawn lands first, or is discarded with
+    /// a Messages line when it no longer fits the board.
+    pub(crate) fn release_board_tool(&mut self) {
+        self.finish_board_route(true);
+        self.interaction_state.pcb_tool = None;
+    }
+
+    /// Esc or a right-click: drop the shape being drawn (a route lands on
+    /// the board as one step, or stays drawn once when it no longer fits),
+    /// or end the tool when none is. Whether a tool took it.
     pub(crate) fn step_back_board_tool(&mut self) -> bool {
-        let Some(session) = self.own_board_tool_mut() else {
+        let Some(session) = self.own_board_tool() else {
             return false;
         };
         if session.points.is_empty() {
             self.end_board_tool();
         } else {
-            session.points.clear();
-            session.route = None;
-            self.refresh_pcb_highlight();
+            self.end_route_shape();
         }
         true
+    }
+
+    /// Forget the shape or route being drawn; the tool stays armed.
+    fn drop_board_shape(&mut self) {
+        if let Some(session) = self.own_board_tool_mut() {
+            session.points.clear();
+            session.route = None;
+            session.router = None;
+        }
+        self.refresh_pcb_highlight();
     }
 
     /// The active layer of the board in view, when it is copper: where a
@@ -189,6 +221,7 @@ impl Signex {
                 self.run_placement("Via", Ok(vec![command]));
             }
             BoardPlaceTool::Track => self.route_clicked(at),
+            BoardPlaceTool::InteractiveRouting => self.router_clicked(at),
             BoardPlaceTool::TextString => self.string_clicked(at),
             BoardPlaceTool::Fill
             | BoardPlaceTool::SolidRegion
@@ -223,6 +256,9 @@ impl Signex {
         match session.tool {
             BoardPlaceTool::Via => preview.vias.push(draw::new_via(board, Uuid::nil(), cursor)),
             BoardPlaceTool::Track => self.route_preview(session, board, cursor, &mut preview),
+            BoardPlaceTool::InteractiveRouting => {
+                self.router_preview(session, &mut preview);
+            }
             BoardPlaceTool::TextString => self.string_preview(cursor, &mut preview),
             BoardPlaceTool::Fill
             | BoardPlaceTool::SolidRegion

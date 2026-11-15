@@ -600,3 +600,18 @@ fn all_lists_every_kind_in_declaration_order() {
         assert_eq!(kind as usize, i, "declaration order");
     }
 }
+
+/// #2389: the router's broad phase looks as far as any pair can need,
+/// including a written rule between two object kinds that never applies
+/// to an item and one like it.
+#[test]
+fn the_widest_clearance_covers_classes_and_pair_scoped_rules() {
+    let b = pair(0.4);
+    // HV_A's class asks 0.5 mm.
+    assert_eq!(rules_for(&b, vec![]).widest_clearance(), 500_000);
+    let mut track_pad = clearance("track_pad", NetScope::Board, 2_000_000);
+    track_pad.pair = Some([CopperObject::Track, CopperObject::Pad]);
+    let rules = rules_for(&b, vec![track_pad]);
+    assert_eq!(rules.widest_clearance(), 2_000_000);
+    assert_eq!(rules.reach_of(1), 2_000_000);
+}

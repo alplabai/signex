@@ -35,6 +35,9 @@ pub enum PrimitiveField {
     Rotation,
     SizeX,
     SizeY,
+    /// A target length for a track's net (#2389): Enter tunes the track to
+    /// reach it. Not a value the track holds.
+    TuneLength,
 }
 
 impl PrimitiveField {

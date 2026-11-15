@@ -23,6 +23,7 @@ mod pick_filter;
 mod ratsnest;
 mod rect;
 mod region;
+pub mod route;
 mod selection;
 mod shape;
 mod shape_gap;

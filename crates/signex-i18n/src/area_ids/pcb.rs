@@ -10,7 +10,6 @@ define_ids! {
     PCB_BAR_ARC_UNAVAILABLE = "pcb-bar-arc-unavailable";
     PCB_BAR_TEXT_UNAVAILABLE = "pcb-bar-text-unavailable";
     PCB_BAR_DIMENSION_UNAVAILABLE = "pcb-bar-dimension-unavailable";
-    PCB_BAR_ROUTE_UNAVAILABLE = "pcb-bar-route-unavailable";
     PCB_TOOL_COMPONENT = "pcb-tool-component";
     PCB_TOOL_PAD = "pcb-tool-pad";
     PCB_TOOL_VIA = "pcb-tool-via";
@@ -53,4 +52,16 @@ define_ids! {
     PCB_3D_RIGHT = "pcb-3d-right";
     PCB_3D_ISO = "pcb-3d-iso";
     PCB_3D_MODEL_UNREAD = "pcb-3d-model-unread";
+    PCB_BAR_ROUTE_TOOLTIP = "pcb-bar-route-tooltip";
+    PCB_TOOL_HINT_ROUTE = "pcb-tool-hint-route";
+    PCB_ROUTE_BLOCKED = "pcb-route-blocked";
+    PCB_ROUTE_VIA_BLOCKED = "pcb-route-via-blocked";
+    PCB_ROUTE_UNREPRESENTABLE = "pcb-route-unrepresentable";
+    PCB_ROUTE_NO_RULES = "pcb-route-no-rules";
+    PCB_ROUTE_MODE_WALKAROUND = "pcb-route-mode-walkaround";
+    PCB_ROUTE_MODE_SHOVE = "pcb-route-mode-shove";
+    PCB_ROUTE_BOARD_CHANGED = "pcb-route-board-changed";
+    PCB_ROUTE_STALE = "pcb-route-stale";
+    PCB_ROUTE_NOT_PLACED = "pcb-route-not-placed";
+    PCB_ROUTE_DISCARDED = "pcb-route-discarded";
 }
