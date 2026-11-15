@@ -31,6 +31,9 @@ pub struct UiState {
     pub pcb_filter_preset_tab: usize,
     /// How carried board items snap (#2353), one for the editor. Session only.
     pub pcb_snap: crate::pcb_canvas::PcbSnapOptions,
+    /// The row each PCB Active Bar group last ran (#2392), kept in
+    /// `prefs.json`.
+    pub pcb_bar_last_tools: crate::app::pcb_bar_groups::PcbBarLastTools,
     /// The board Properties panel's tab, search text, filter menu and the
     /// grid step being typed (#2353).
     pub pcb_board_panel: crate::panels::PcbBoardPanelView,

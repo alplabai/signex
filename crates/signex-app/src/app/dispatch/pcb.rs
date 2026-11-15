@@ -51,7 +51,13 @@ impl Signex {
             PcbMsg::Bar(event) => self.handle_pcb_bar(event),
             PcbMsg::PlaceToolPicked(tool) => {
                 self.arm_board_tool(tool);
-                Task::none()
+                // From the bar, Place, a key or the palette alike, the
+                // tool's bar group shows it next (#2392).
+                let group = crate::app::pcb_bar_groups::PcbBarGroup::of_tool(tool);
+                match (group, tool.command()) {
+                    (Some(group), Some(command)) => self.remember_pcb_bar_row(group, command),
+                    _ => Task::none(),
+                }
             }
             PcbMsg::RouteModeStepped => {
                 self.step_route_mode();
@@ -105,9 +111,33 @@ impl Signex {
                 Task::none()
             }
             PcbBarMsg::CommandPicked(command) => {
-                *open = None;
-                self.handle_menu_message(crate::menu_bar::MenuMessage::Command(command))
+                let picked_from = open.take();
+                let remembered = match picked_from {
+                    Some(PcbBarMenu::Group(group)) => {
+                        self.remember_pcb_bar_row(group, command.as_str())
+                    }
+                    _ => Task::none(),
+                };
+                let ran = self.handle_menu_message(crate::menu_bar::MenuMessage::Command(command));
+                Task::batch([remembered, ran])
             }
         }
+    }
+
+    /// Note that `group` ran `command`, a live row of it, and write the
+    /// change to `prefs.json` off the update thread (#2392). Nothing when
+    /// the group already shows that row.
+    pub(crate) fn remember_pcb_bar_row(
+        &mut self,
+        group: crate::app::pcb_bar_groups::PcbBarGroup,
+        command: &str,
+    ) -> Task<Message> {
+        if !self.ui_state.pcb_bar_last_tools.remember(group, command) {
+            return Task::none();
+        }
+        let last = self.ui_state.pcb_bar_last_tools.clone();
+        crate::fonts::background_pref_write("pcb_bar_last_tools", move || {
+            crate::fonts::write_pcb_bar_last_tools(&last)
+        })
     }
 }

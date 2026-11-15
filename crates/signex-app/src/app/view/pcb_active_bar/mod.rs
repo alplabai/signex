@@ -1,33 +1,38 @@
-//! The PCB Active Bar (#2352), laid out like the footprint editor's in the
-//! usual PCB tool order: selection filter, move, align | place component,
-//! pad, via, track, arc, fill, region, polygon pour, text, dimension, keepout
-//! | interactive routing | board sketch, fabrication outputs | view.
+//! The PCB Active Bar (#2352): selection filter, move, align | components |
+//! route | via and pad, copper areas, copper drawing | dimensions, text |
+//! board sketch, fabrication outputs | view.
 //!
 //! Every live button runs its command through the menu bar's own message, so
-//! a click is the menu row. A tool the board editor cannot run yet is greyed
-//! and its tooltip says so, from the table Place on a board greys by
-//! (`app/pcb_tools.rs`). Move and View open a dropdown on right-click; its
-//! rows are greyed by the same gate as their menu rows. The Selection Filter
-//! opens its dropdown of object kinds on a click (`filter.rs`).
+//! a click is the menu row. The tool groups (#2392, `groups.rs`) show the row
+//! their group used last and open their rows on a right-click; a tool the
+//! board editor cannot run yet is greyed with why, from the table Place on a
+//! board greys by (`app/pcb_tools.rs`). Move and View open a dropdown on
+//! right-click; dropdown rows are greyed by the same gate as their menu rows.
+//! The Selection Filter opens its dropdown of object kinds on a click
+//! (`filter.rs`).
 
 use iced::alignment::Horizontal;
 use iced::widget::{Space, column, container, mouse_area, row, stack, svg};
 use iced::{Element, Length, Widget as _};
-use signex_i18n::{I18n, MessageId, ids, t};
+use signex_i18n::{I18n, ids, t};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem, Metrics};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, MenuMetrics};
 
 use crate::active_bar::CustomFilterPreset;
 use crate::app::command::{CommandContext, is_enabled};
-use crate::app::pcb_tools::{BoardPlaceTool, ToolState};
+use crate::app::pcb_bar_groups::{PcbBarGroup, PcbBarLastTools};
+use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::{Message, PcbBarMenu, PcbBarMsg, PcbMsg, Signex};
 use crate::icons as ic;
 use crate::keymap::AppCommandId;
 use crate::menu_bar::MenuMessage;
 
 mod filter;
+mod groups;
 
+#[cfg(test)]
+mod group_tests;
 #[cfg(test)]
 mod tests;
 
@@ -42,7 +47,13 @@ impl Signex {
         let tid = self.ui_state.effective_theme_id();
         let tokens = &self.document_state.panel_ctx.tokens;
         let open = self.interaction_state.pcb_bar_menu;
-        let items = pcb_bar_items(tid, &self.ui_state.i18n, open);
+        let items = pcb_bar_items(
+            tid,
+            &self.ui_state.i18n,
+            open,
+            &self.ui_state.pcb_bar_last_tools,
+            self.main_window_board_tool(),
+        );
         let (offsets, bar_width) =
             signex_widgets::active_bar::slot_offsets(&items, &Metrics::GRAPHITE);
         let anchor = open.and_then(|menu| {
@@ -105,6 +116,17 @@ impl Signex {
             ],
         ]
         .boxed()
+    }
+
+    /// The tool armed on the board the main window shows, whose group button
+    /// the bar draws selected.
+    fn main_window_board_tool(&self) -> Option<BoardPlaceTool> {
+        let path = self.active_tab_path();
+        self.interaction_state
+            .pcb_tool
+            .as_ref()
+            .filter(|session| session.is_for(path.as_deref(), None))
+            .map(|session| session.tool)
     }
 }
 
@@ -184,42 +206,21 @@ fn dropdown_button(
     })
 }
 
-/// A greyed button for a tool the board editor cannot run yet; its tooltip
-/// says so.
-fn unavailable_button(
-    icon: ActiveBarIcon,
-    tooltip: MessageId,
-    i18n: &I18n,
-) -> ActiveBarItem<Message> {
-    ActiveBarItem::Button(ActiveBarButton {
-        icon,
-        tooltip: t!(i18n, tooltip).into_string(),
-        enabled: false,
-        ..ActiveBarButton::default()
-    })
-}
-
-/// The button of a board placement tool: it arms the tool, or is greyed
-/// with why while the board editor cannot run it (#2373).
-fn tool_button(tool: BoardPlaceTool, tid: ThemeId, i18n: &I18n) -> ActiveBarItem<Message> {
-    let icon = tool_icon(tool, tid);
-    match tool.state() {
-        ToolState::Live(command) => {
-            command_button(command, icon, t!(i18n, tool.texts().0).into_string())
-        }
-        ToolState::Unavailable(reason) => unavailable_button(icon, reason, i18n),
-    }
-}
-
 /// The PCB Active Bar's slots in order. `open` is the open dropdown, whose
-/// button is drawn selected.
+/// button is drawn selected; `last` is the row each tool group shows;
+/// `armed` is the tool armed on the board, whose group is drawn selected.
 pub(in crate::app::view) fn pcb_bar_items(
     tid: ThemeId,
     i18n: &I18n,
     open: Option<PcbBarMenu>,
+    last: &PcbBarLastTools,
+    armed: Option<BoardPlaceTool>,
 ) -> Vec<ActiveBarItem<Message>> {
     let svg = ActiveBarIcon::Svg;
-    let tool = |tool: BoardPlaceTool| tool_button(tool, tid, i18n);
+    let group = |group: PcbBarGroup| {
+        let state = groups::GroupState { open, last, armed };
+        groups::group_button(group, &state, tid, i18n)
+    };
     let mut items = vec![
         filter::filter_button(open, tid, i18n),
         menu_button(
@@ -239,10 +240,13 @@ pub(in crate::app::view) fn pcb_bar_items(
         ),
         ActiveBarItem::Separator,
     ];
-    items.extend(BAR_PLACE_TOOLS.into_iter().map(&tool));
+    for (index, slots) in BAR_GROUPS.iter().enumerate() {
+        if index > 0 {
+            items.push(ActiveBarItem::Separator);
+        }
+        items.extend(slots.iter().map(|&slot| group(slot)));
+    }
     items.extend([
-        ActiveBarItem::Separator,
-        tool(BoardPlaceTool::InteractiveRouting),
         ActiveBarItem::Separator,
         command_button(
             "board_sketch",
@@ -267,23 +271,21 @@ pub(in crate::app::view) fn pcb_bar_items(
     items
 }
 
-/// The place group's tools, in the PCB editor's order; Interactive Routing
-/// has a group of its own.
-const BAR_PLACE_TOOLS: [BoardPlaceTool; 11] = [
-    BoardPlaceTool::Component,
-    BoardPlaceTool::Pad,
-    BoardPlaceTool::Via,
-    BoardPlaceTool::Track,
-    BoardPlaceTool::Arc,
-    BoardPlaceTool::Fill,
-    BoardPlaceTool::SolidRegion,
-    BoardPlaceTool::PolygonPour,
-    BoardPlaceTool::TextString,
-    BoardPlaceTool::Dimension,
-    BoardPlaceTool::Keepout,
+/// The tool groups between the Align button and Board Sketch, a separator
+/// between each run: what goes on the board, routing, the copper itself,
+/// then what annotates it.
+const BAR_GROUPS: [&[PcbBarGroup]; 4] = [
+    &[PcbBarGroup::Components],
+    &[PcbBarGroup::Route],
+    &[
+        PcbBarGroup::ViaPad,
+        PcbBarGroup::CopperAreas,
+        PcbBarGroup::CopperDrawing,
+    ],
+    &[PcbBarGroup::Dimensions, PcbBarGroup::Text],
 ];
 
-/// The button icon of `tool`: the footprint editor's where one fits, its
+/// The bar icon of `tool`: the footprint editor's where one fits, its
 /// glyphs for pad and via.
 fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
     use BoardPlaceTool as T;
@@ -342,13 +344,13 @@ fn menu_commands(menu: PcbBarMenu) -> &'static [MenuRow] {
         PcbBarMenu::Move => MOVE_ROWS,
         PcbBarMenu::View => VIEW_ROWS,
         PcbBarMenu::Align => ALIGN_ROWS,
-        PcbBarMenu::Filter => &[],
+        PcbBarMenu::Filter | PcbBarMenu::Group(_) => &[],
     }
 }
 
 /// The rows of `menu`: each runs its command, labelled and greyed as its
 /// menu row is in `ctx`. The Selection Filter's rows toggle the kinds of
-/// `filter` instead.
+/// `filter` instead, and a tool group's rows come from its table.
 pub(in crate::app::view) fn pcb_bar_menu_entries(
     menu: PcbBarMenu,
     i18n: &I18n,
@@ -358,8 +360,10 @@ pub(in crate::app::view) fn pcb_bar_menu_entries(
     filter: &pcb_geom::PickFilter,
     presets: &[CustomFilterPreset<pcb_geom::PickKind>],
 ) -> Vec<DropdownEntry<Message>> {
-    if menu == PcbBarMenu::Filter {
-        return filter::entries(i18n, tokens, filter, presets);
+    match menu {
+        PcbBarMenu::Filter => return filter::entries(i18n, tokens, filter, presets),
+        PcbBarMenu::Group(group) => return groups::entries(group, i18n, tid, ctx),
+        PcbBarMenu::Align | PcbBarMenu::Move | PcbBarMenu::View => {}
     }
     menu_commands(menu)
         .iter()

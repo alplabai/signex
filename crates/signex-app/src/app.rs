@@ -50,6 +50,7 @@ pub(crate) mod document_setup;
 pub mod palette_index;
 #[cfg(test)]
 mod palette_index_tests;
+pub(crate) mod pcb_bar_groups;
 mod pcb_dirty_adapter;
 pub(crate) mod pcb_tools;
 pub(crate) mod project_sheets;

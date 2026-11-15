@@ -1,9 +1,10 @@
 use uuid::Uuid;
 
 use super::*;
+use crate::app::pcb_tools::ToolState;
 
 /// The button that runs `command` on a click.
-fn button_for<'a>(
+pub(super) fn button_for<'a>(
     items: &'a [ActiveBarItem<Message>],
     command: &str,
 ) -> &'a ActiveBarButton<Message> {
@@ -16,14 +17,14 @@ fn button_for<'a>(
         .unwrap_or_else(|| panic!("a button that runs {command}"))
 }
 
-fn runs(button: &ActiveBarButton<Message>, command: &str) -> bool {
+pub(super) fn runs(button: &ActiveBarButton<Message>, command: &str) -> bool {
     matches!(
         &button.on_press,
         Some(Message::Menu(MenuMessage::Command(id))) if id.as_str() == command
     )
 }
 
-fn buttons(items: &[ActiveBarItem<Message>]) -> Vec<&ActiveBarButton<Message>> {
+pub(super) fn buttons(items: &[ActiveBarItem<Message>]) -> Vec<&ActiveBarButton<Message>> {
     items
         .iter()
         .filter_map(|item| match item {
@@ -33,9 +34,11 @@ fn buttons(items: &[ActiveBarItem<Message>]) -> Vec<&ActiveBarButton<Message>> {
         .collect()
 }
 
-/// An app with an empty board open in its tab.
-fn board_app() -> Signex {
+/// An app with an empty board open in its tab. Its groups start on their
+/// first live rows, whatever another test left in the shared prefs file.
+pub(super) fn board_app() -> Signex {
     let (mut app, _task) = Signex::new();
+    app.ui_state.pcb_bar_last_tools = PcbBarLastTools::default();
     let board: signex_types::pcb::PcbBoard =
         serde_json::from_value(serde_json::json!({ "uuid": Uuid::nil() })).expect("a board");
     let path = std::env::temp_dir().join("pcb_active_bar.snxpcb");
@@ -43,11 +46,13 @@ fn board_app() -> Signex {
     app
 }
 
-fn bar_of(app: &Signex) -> Vec<ActiveBarItem<Message>> {
+pub(super) fn bar_of(app: &Signex) -> Vec<ActiveBarItem<Message>> {
     pcb_bar_items(
         app.ui_state.effective_theme_id(),
         &app.ui_state.i18n,
         app.interaction_state.pcb_bar_menu,
+        &app.ui_state.pcb_bar_last_tools,
+        app.main_window_board_tool(),
     )
 }
 
@@ -69,7 +74,7 @@ fn angle(app: &Signex) -> f32 {
 #[test]
 fn the_pcb_bar_buttons_run_board_sketch_and_view_rotate() {
     let tid = ThemeId::GraphiteDark;
-    let items = pcb_bar_items(tid, &I18n::en_us(), None);
+    let items = pcb_bar_items(tid, &I18n::en_us(), None, &PcbBarLastTools::default(), None);
     let sketch = button_for(&items, "board_sketch");
     let rotate = button_for(&items, "view_rotate");
     assert!(runs(sketch, "board_sketch") && sketch.enabled);
@@ -86,7 +91,7 @@ fn the_pcb_bar_buttons_run_board_sketch_and_view_rotate() {
 #[test]
 fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
     let tid = ThemeId::GraphiteDark;
-    let items = pcb_bar_items(tid, &I18n::en_us(), None);
+    let items = pcb_bar_items(tid, &I18n::en_us(), None, &PcbBarLastTools::default(), None);
     let button = button_for(&items, "board_sketch");
     assert!(
         button.tooltip.starts_with("Board Sketch"),
@@ -100,36 +105,45 @@ fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
     assert_ne!(handle, &ic::icon_dd_rect(tid));
 }
 
-/// #2352, #2373: the groups in the PCB editor's order, the Selection
-/// Filter, Move, Align, Board Sketch, Fabrication Outputs (#2388), View and the
-/// live placement tools live, and
-/// every other button greyed with a tooltip that says it is not on boards
-/// yet.
+/// #2352, #2373, #2388, #2389, #2392: Selection Filter, Move, Align | Components |
+/// Route | Via/Pad, Copper Areas, Copper Drawing | Dimensions, Text | Board
+/// Sketch, Fabrication Outputs | View. A group with a live row runs it; a
+/// group with none is greyed with a tooltip that says it is not on boards yet.
 #[test]
-fn the_pcb_bar_has_the_footprint_layout_and_greys_what_boards_cannot_do() {
-    let items = pcb_bar_items(ThemeId::GraphiteDark, &I18n::en_us(), None);
+fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
+    let items = pcb_bar_items(
+        ThemeId::GraphiteDark,
+        &I18n::en_us(),
+        None,
+        &PcbBarLastTools::default(),
+        None,
+    );
     let all = buttons(&items);
-    assert_eq!(all.len(), 18);
+    assert_eq!(all.len(), 13);
     let separators = items
         .iter()
         .filter(|item| matches!(item, ActiveBarItem::Separator))
         .count();
-    assert_eq!(separators, 4);
-    let live: Vec<_> = all.iter().filter(|button| button.enabled).collect();
-    let live_tools = BoardPlaceTool::PLACE_MENU
-        .iter()
-        .filter(|tool| tool.command().is_some())
-        .count();
+    assert_eq!(separators, 6);
+    let live = all.iter().filter(|button| button.enabled).count();
     assert_eq!(
-        live.len(),
-        6 + live_tools,
-        "filter, move, align, sketch, fabrication outputs, view and the live tools"
+        live, 11,
+        "filter, move, align, components, route, via/pad, areas, drawing, sketch, fabrication outputs, view"
     );
     assert!(runs(all[1], "move_object"), "Move follows the filter");
+    assert!(
+        runs(all[3], "change_footprint"),
+        "Component is not live yet"
+    );
     assert!(runs(all[5], "place_board_via"), "#2373: Via is live");
-    assert!(runs(all[15], "board_sketch"));
-    assert!(runs(all[16], "fabrication_outputs"));
-    assert!(runs(all[17], "view_rotate"), "View closes the bar");
+    assert!(
+        runs(all[6], "place_board_polygon_pour"),
+        "#2216: Polygon Pour heads its group"
+    );
+    assert!(runs(all[7], "place_board_track"));
+    assert!(runs(all[10], "board_sketch"));
+    assert!(runs(all[11], "fabrication_outputs"));
+    assert!(runs(all[12], "view_rotate"), "View closes the bar");
     for button in all.iter().filter(|button| !button.enabled) {
         assert!(button.on_press.is_none() && button.on_right_press.is_none());
         assert!(
@@ -139,22 +153,40 @@ fn the_pcb_bar_has_the_footprint_layout_and_greys_what_boards_cannot_do() {
         );
     }
     assert!(all[0].tooltip.starts_with("Selection Filter"));
-    assert!(all[3].tooltip.starts_with("Place Component"));
-    assert!(all[14].tooltip.starts_with("Interactive Routing"));
+    assert!(all[4].tooltip.starts_with("Interactive Routing"));
+    assert!(all[8].tooltip.starts_with("Place Dimension"));
+    assert!(all[9].tooltip.starts_with("Place String"));
 }
 
-/// #2352 / #2360: the bar greys exactly the tools the Place menu greys on a
-/// board, with the same reason, and nothing else.
+/// #2352 / #2360 / #2392: every tool the Place menu greys on a board is
+/// greyed on the bar too, as a button or a dropdown row, with the same
+/// reason, and the bar greys nothing else for that reason.
 #[test]
 fn the_bar_greys_the_place_menus_board_tools() {
+    let app = board_app();
     let i18n = I18n::en_us();
-    let items = pcb_bar_items(ThemeId::GraphiteDark, &i18n, None);
+    let items = pcb_bar_items(
+        ThemeId::GraphiteDark,
+        &i18n,
+        None,
+        &PcbBarLastTools::default(),
+        None,
+    );
     let mut greyed: Vec<String> = buttons(&items)
         .into_iter()
         .filter(|button| !button.enabled)
         .map(|button| button.tooltip.clone())
         .collect();
+    for group in PcbBarGroup::ALL {
+        greyed.extend(
+            rows(&app, PcbBarMenu::Group(group))
+                .into_iter()
+                .filter(|row| row.disabled)
+                .filter_map(|row| row.tooltip),
+        );
+    }
     greyed.sort();
+    greyed.dedup();
     let mut place: Vec<String> = BoardPlaceTool::PLACE_MENU
         .iter()
         .filter_map(|tool| match tool.state() {
@@ -230,7 +262,7 @@ fn a_right_click_opens_and_closes_the_dropdown() {
     assert_eq!(app.interaction_state.pcb_bar_menu, None);
 }
 
-fn rows(app: &Signex, menu: PcbBarMenu) -> Vec<DropdownItem<Message>> {
+pub(super) fn rows(app: &Signex, menu: PcbBarMenu) -> Vec<DropdownItem<Message>> {
     pcb_bar_menu_entries(
         menu,
         &app.ui_state.i18n,
@@ -249,7 +281,7 @@ fn rows(app: &Signex, menu: PcbBarMenu) -> Vec<DropdownItem<Message>> {
 }
 
 /// Picks the row of `menu` that runs `command`, from an open dropdown.
-fn pick(app: &mut Signex, menu: PcbBarMenu, command: &str) {
+pub(super) fn pick(app: &mut Signex, menu: PcbBarMenu, command: &str) {
     let _ = app.update(bar_message(PcbBarMsg::MenuToggled(menu)));
     let row = rows(app, menu)
         .into_iter()
