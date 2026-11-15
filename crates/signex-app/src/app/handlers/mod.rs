@@ -69,6 +69,8 @@ mod pcb_placement_tests;
 mod pcb_placement_window_tests;
 pub(crate) mod pcb_primitive;
 pub mod pcb_select;
+#[cfg(test)]
+mod pcb_select_tests;
 pub(crate) mod pcb_tool;
 pub mod pcb_view;
 pub mod pcb_view_rotation;

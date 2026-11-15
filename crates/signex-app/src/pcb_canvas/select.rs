@@ -288,7 +288,7 @@ impl PcbSelectionState {
         let carried = anchored.map_or(&none, |c| &c.footprints);
         let mut highlight = self.highlight_except(board, carried);
         // A Move, a paste or a Place waits for clicks: nothing is grabbed.
-        let waiting = carry.is_some_and(|c| c.kind != super::CarryKind::Drag);
+        let waiting = carry.is_some_and(super::PcbCarry::waits_for_clicks);
         let grab = if waiting {
             Vec::new()
         } else {

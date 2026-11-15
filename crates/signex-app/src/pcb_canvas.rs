@@ -147,6 +147,9 @@ pub struct PcbCanvas {
     grab: Vec<pcb_geom::Shape>,
     /// A footprint drag is live; Esc clears it and the gesture quits.
     carry: std::cell::Cell<bool>,
+    /// A tool, Move, paste or part on the cursor waits for clicks: every
+    /// press is a click, never a drag or a box (#2396).
+    clicks_only: bool,
     /// The board without the carried footprints, and them at their offset.
     drag_preview: Option<drag_preview::DragPreview>,
     /// The library part on the cursor, dimmed, set by the app (#2364).
@@ -193,6 +196,7 @@ impl PcbCanvas {
             marquee: std::cell::Cell::new(None),
             grab: Vec::new(),
             carry: std::cell::Cell::new(false),
+            clicks_only: false,
             drag_preview: None,
             part_ghost: None,
             text_cache: canvas::Cache::default(),
@@ -212,6 +216,17 @@ impl PcbCanvas {
     /// What a press grabs to drag a footprint.
     pub fn set_grab(&mut self, grab: Vec<pcb_geom::Shape>) {
         self.grab = grab;
+    }
+
+    /// Make every press a click (a tool or a carry waits for clicks), or
+    /// let a press drag a footprint or a box again.
+    pub fn set_clicks_only(&mut self, clicks_only: bool) {
+        self.clicks_only = clicks_only;
+    }
+
+    /// Whether every press is a click.
+    pub fn is_clicks_only(&self) -> bool {
+        self.clicks_only
     }
 
     /// Whether a press at `at` (board mm) lands on a grabbed footprint.
@@ -582,6 +597,13 @@ impl canvas::Program<Message> for PcbCanvas {
             return Some(canvas::Action::publish(Message::CanvasEvent(
                 CanvasEvent::CursorMoved,
             )));
+        }
+
+        // A key released while another window had the focus never reaches
+        // this canvas: forget the held modifiers (#2396).
+        if let Event::Window(iced::window::Event::Unfocused) = event {
+            state.zoom_modifier = false;
+            state.shift_held = false;
         }
 
         if self.selectable
