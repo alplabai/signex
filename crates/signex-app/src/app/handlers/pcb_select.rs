@@ -43,7 +43,8 @@ impl Signex {
                 tolerance_mm,
                 mode,
             } => {
-                if self.board_tool_clicked(at)
+                if self.pcb_guide_place_clicked(at)
+                    || self.board_tool_clicked(at)
                     || self.pcb_place_clicked(at)
                     || self.pcb_paste_clicked(at)
                     || self.pcb_move_clicked(at, tolerance_mm)
@@ -108,6 +109,8 @@ impl Signex {
         self.interaction_state.pcb_canvas.cancel_marquee();
         // Esc also ends a Properties net pick (#2355).
         self.interaction_state.pcb_primitive.net_pick = None;
+        // And a guide armed by the panel's Place (#2374).
+        self.interaction_state.pcb_guide_place = None;
         let carried = self.has_own_pcb_carry();
         if carried {
             self.interaction_state.pcb_carry = None;

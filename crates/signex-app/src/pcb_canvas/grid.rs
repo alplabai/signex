@@ -104,16 +104,21 @@ pub(super) fn board_region(outline: Option<&[[f32; 2]]>) -> &[[f32; 2]] {
     }
 }
 
-/// Fill the frame with the workspace and `region` with the board area.
+/// Fill the frame with the workspace, `sheet` (#2374) with the sheet colour
+/// and `region` with the board area.
 pub(super) fn draw_board_area(
     frame: &mut Frame,
     camera: &BoardCamera,
     size: Size,
     region: &[[f32; 2]],
+    sheet: ([f32; 2], [f32; 2]),
     colors: &CanvasColors,
 ) {
     let workspace = crate::render_config::to_iced(&colors.board_workspace_color());
     frame.fill_rectangle(Point::ORIGIN, size, workspace);
+    let sheet_fill = crate::render_config::to_iced(&colors.board_sheet_color());
+    let sheet_edge = crate::render_config::to_iced(&colors.board_grid_major_color());
+    super::marks::draw_sheet(frame, camera, sheet, sheet_fill, sheet_edge);
     let Some((first, rest)) = region.split_first() else {
         return;
     };

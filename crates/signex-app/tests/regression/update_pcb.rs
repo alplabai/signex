@@ -353,6 +353,7 @@ fn board_of(footprints: Vec<signex_types::pcb::Footprint>) -> PcbBoard {
         thickness: 1.6,
         outline: Vec::new(),
         sketch: None,
+        options: Default::default(),
         layers: Vec::new(),
         setup: None,
         nets: Vec::new(),

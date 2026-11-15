@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_engine::pcb::part_place::PartToPlace;
-use signex_engine::pcb::placement::{grid_step_mm, snap_delta};
+use signex_engine::pcb::placement::grid_for;
 use signex_i18n::{ids, t};
 use signex_library::RowId;
 use signex_library::primitive::PrimitiveRef;
@@ -253,7 +253,7 @@ impl Signex {
 
 /// `at` moved to the nearest point of `board`'s grid.
 fn on_grid(board: &PcbBoard, at: Point) -> Point {
-    snap_delta(Point::new(0.0, 0.0), at, grid_step_mm(board))
+    grid_for(board, signex_types::pcb_options::GridUse::Components).snap(at)
 }
 
 #[cfg(test)]

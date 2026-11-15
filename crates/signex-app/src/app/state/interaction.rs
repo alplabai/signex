@@ -39,6 +39,9 @@ pub struct InteractionState {
     pub pcb_carry: Option<crate::pcb_canvas::PcbCarry>,
     /// The board placement tool armed and the shape it is drawing (#2373).
     pub pcb_tool: Option<crate::app::handlers::pcb_tool::BoardToolSession>,
+    /// A guide armed by the board panel's Place, waiting for the click on
+    /// the main window's board that sets it (#2374): the board and the kind.
+    pub pcb_guide_place: Option<(std::path::PathBuf, signex_types::pcb_options::GuideKind)>,
     /// The active board's ratsnest lines and the nets hidden from them.
     pub pcb_ratsnest: super::pcb_ratsnest::PcbRatsnest,
     /// The board check the Messages panel lists (#2222).

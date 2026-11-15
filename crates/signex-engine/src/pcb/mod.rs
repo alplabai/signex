@@ -23,11 +23,13 @@ mod error;
 mod footprint;
 mod footprint_content;
 mod items;
+mod options;
 pub mod part_place;
 pub mod placement;
 pub mod primitive_edit;
 mod replace;
 pub mod snap;
+mod snap_points;
 
 #[cfg(test)]
 mod board_sketch_tests;

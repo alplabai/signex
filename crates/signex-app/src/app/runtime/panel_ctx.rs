@@ -221,6 +221,7 @@ impl Signex {
             hidden_nets: ratsnest.hidden_net_count(&tab.path),
             filter: self.ui_state.pcb_pick_filter.clone(),
             snap: self.ui_state.pcb_snap.clone(),
+            fast_grids_mm: self.ui_state.fast_grids_mm,
             view: self.ui_state.pcb_board_panel.clone(),
             stats_key: Some(key),
             ..crate::panels::PcbBoardSummary::with_stats(board, tab.title.clone(), selected, stats)

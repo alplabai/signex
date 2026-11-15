@@ -539,6 +539,7 @@ mod tests {
         let path = PathBuf::from("restore-1886.snxpcb");
         let mut board = signex_types::pcb::PcbBoard {
             sketch: None,
+            options: Default::default(),
             unknown: Default::default(),
             uuid: uuid::Uuid::now_v7(),
             version: 1,

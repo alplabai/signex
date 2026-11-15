@@ -34,13 +34,11 @@ pcb-board-kind-texts = Texts
 pcb-board-kind-rooms = Rooms
 pcb-board-kind-other = Other
 
-# Snap Options: what a carried footprint snaps to.
+# Snap Options: what a carried footprint snaps to (#2353, #2374).
 pcb-board-section-snap = Snap Options
 pcb-board-snap-grids = Grids
 pcb-board-snap-guides = Guides
 pcb-board-snap-axes = Axes
-pcb-board-snap-guides-unavailable = Boards hold no guides yet.
-pcb-board-snap-axes-unavailable = Axis snapping is not available yet.
 pcb-board-snapping = Snapping
 pcb-board-snapping-all = All Layers
 pcb-board-snapping-current = Current Layer
@@ -59,7 +57,7 @@ pcb-board-snap-board-shape = Board Shape
 pcb-board-snap-footprint-origins = Footprint Origins
 pcb-board-snap-body-points = 3D Body Snap Points
 pcb-board-snap-texts = Texts
-pcb-board-snap-object-unavailable = The board editor does not snap to these points yet.
+pcb-board-snap-object-unavailable = Boards hold no 3D bodies yet.
 pcb-board-snap-distance = Snap Distance
 # $factor is a multiple of the snap grid, such as 0.5.
 pcb-board-snap-distance-value = { $factor }x Snap Grid
@@ -122,8 +120,6 @@ pcb-board-grid-global = Global Board Snap Grid
 pcb-board-grid-step = Step
 pcb-board-grid-visible = Visible Grid
 pcb-board-grid-fast = Fast Grids
-pcb-board-grid-fast-unavailable = Fast grids are not available yet.
-pcb-board-grid-more-unavailable = Boards hold one grid; more grids, their colours and origins cannot be stored yet.
 pcb-board-grid-no-setup = This board has no setup to hold a grid step.
 pcb-board-grid-invalid = Type a length above zero.
 # $why says why the grid step was not set.
@@ -134,6 +130,20 @@ pcb-board-add = Add
 pcb-board-properties = Properties
 pcb-board-delete = Delete
 pcb-board-place = Place
+# A cell of the Global Board Snap Grid row: it applies to everything.
+pcb-board-grid-always = Always
+# A point in board coordinates; $x and $y come from Signex's own formatter.
+pcb-board-point = { $x }, { $y }
+pcb-board-swatch-tip = Click for the next color
+pcb-board-grid-origin-x = Origin X
+pcb-board-grid-origin-y = Origin Y
+pcb-board-select-row-first = Select a row first.
+# The name a new grid gets; $number counts the board's grids.
+pcb-board-grid-new-name = Grid { $number }
+# The undo step of a guide, grid, sheet or naming edit (#2374).
+pcb-board-options-undo = Board options
+# $why says why a board option was not changed.
+pcb-board-options-refused = Board option not changed: { $why }
 
 # Guide Manager: lines on the board that snapping can follow.
 pcb-board-section-guides = Guide Manager
@@ -141,6 +151,12 @@ pcb-board-guide-enabled = Enabled
 pcb-board-guide-x = X
 pcb-board-guide-y = Y
 pcb-board-guides-empty = No guides
+pcb-board-guide-vertical = Vertical
+pcb-board-guide-horizontal = Horizontal
+pcb-board-guide-plus45 = +45°
+pcb-board-guide-minus45 = -45°
+# Said in Messages after Place is picked.
+pcb-board-guide-place-hint = Place guide: click on the board (Esc to cancel)
 
 # Other board settings.
 pcb-board-section-other = Other
@@ -148,16 +164,20 @@ pcb-board-units = Units
 pcb-board-unit-mm = mm
 pcb-board-unit-mils = mils
 pcb-board-polygon-naming = Polygon Naming Scheme
-pcb-board-polygon-naming-default = NET NAME_LXX_PXXX
-pcb-board-polygon-naming-unavailable = Boards do not name polygons yet.
+# How a polygon pour is named: net name, layer number (LXX) or board layer
+# name, and pour number (PXXX).
+pcb-board-naming-net-layer = NET NAME_LXX_PXXX
+pcb-board-naming-layer-net = LXX_NET NAME_PXXX
+pcb-board-naming-board-layer-net = Board Layer_NET NAME_PXXX
+pcb-board-naming-net-board-layer = NET NAME_Board Layer_PXXX
 pcb-board-designator-display = Designator Display
 pcb-board-designator-physical = Physical
-pcb-board-designator-unavailable = Each part has one designator; logical designators need multi-channel design.
+pcb-board-designator-logical = Logical
 pcb-board-sheet = Sheet Settings
 pcb-board-sheet-width = Width
 pcb-board-sheet-height = Height
 pcb-board-sheet-from-layer = Get Size From Sheet Layer
-pcb-board-sheet-unavailable = Boards hold no sheet yet.
+pcb-board-sheet-from-layer-tip = The sheet is the box around the board shape while Get Size From Sheet Layer is on.
 
 # Health Check tab.
 pcb-board-health-drc = Design rules

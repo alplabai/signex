@@ -30,6 +30,7 @@ fn track(n: u128, y: f64, net: u32) -> Segment {
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),

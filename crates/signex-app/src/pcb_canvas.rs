@@ -18,6 +18,7 @@ mod gesture;
 mod grid;
 mod highlight;
 pub mod layer_style;
+mod marks;
 mod msg;
 mod part_ghost;
 mod select;
@@ -32,6 +33,7 @@ pub use carry::{
 };
 pub use content::BoardContentLayer;
 pub use highlight::{Highlight, HighlightLayer};
+pub use marks::BoardMarks;
 pub use msg::PcbCanvasMsg;
 pub use select::PcbSelectionState;
 pub use snap_options::{PcbSnapOptions, SnapDistance, SnapScope};
@@ -133,6 +135,8 @@ pub struct PcbCanvas {
     /// Whether the board origin marker is drawn: the shown board's view
     /// setting (`PcbLayerView`), on by default (#2351).
     origin_marker_visible: bool,
+    /// Guides, extra grids and the sheet of the shown board (#2374).
+    marks: BoardMarks,
     /// Selection and hover copper to paint, set by the app from
     /// [`PcbSelectionState`] (#2191).
     highlight: Highlight,
@@ -184,6 +188,7 @@ impl PcbCanvas {
             visible_grid_mm: 2.54,
             board_grid_mm: None,
             origin_marker_visible: true,
+            marks: BoardMarks::default(),
             highlight: Highlight::default(),
             marquee: std::cell::Cell::new(None),
             grab: Vec::new(),
@@ -284,6 +289,18 @@ impl PcbCanvas {
             self.board_grid_mm = grid_mm;
             self.bg_cache.clear();
         }
+    }
+
+    /// Draw the shown board's guides, extra grids and sheet (#2374).
+    pub fn set_board_marks(&mut self, marks: BoardMarks) {
+        if self.marks != marks {
+            self.marks = marks;
+            self.bg_cache.clear();
+        }
+    }
+
+    pub fn board_marks(&self) -> &BoardMarks {
+        &self.marks
     }
 
     pub fn clear_bg_cache(&mut self) {
@@ -699,11 +716,14 @@ impl canvas::Program<Message> for PcbCanvas {
                 .as_ref()
                 .map(|s| s.board_features.outline.as_slice());
             let region = grid::board_region(outline);
-            grid::draw_board_area(frame, &camera, size, region, &self.canvas_colors);
+            let sheet = marks::sheet_box(&self.marks, region);
+            grid::draw_board_area(frame, &camera, size, region, sheet, &self.canvas_colors);
             if let Some(level) = self.grid_level(camera.scale()) {
                 let paint = grid::grid_paint(&self.canvas_colors, level.fade);
                 grid::draw_grid(frame, &camera, size, region, level, paint);
+                marks::draw_grids(frame, &camera, size, region, &self.marks.grids);
             }
+            marks::draw_guides(frame, &camera, size, &self.marks.guides);
             if self.origin_marker_visible {
                 let origin = crate::render_config::to_iced(&self.canvas_colors.cursor);
                 grid::draw_origin(frame, &camera, size, origin);

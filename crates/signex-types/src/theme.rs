@@ -339,6 +339,10 @@ pub struct CanvasColors {
     /// `None` uses the canvas background.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub board_workspace: Option<Color>,
+    /// The PCB sheet behind the board area (#2374); `None` uses the
+    /// workspace colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_sheet: Option<Color>,
 }
 
 /// The colour each PCB layer family is listed with. The board edge and
@@ -438,6 +442,13 @@ impl CanvasColors {
     pub fn board_workspace_color(&self) -> Color {
         self.board_workspace.unwrap_or(self.background)
     }
+
+    /// The colour of the PCB sheet behind the board area.
+    #[must_use]
+    pub fn board_sheet_color(&self) -> Color {
+        self.board_sheet
+            .unwrap_or_else(|| self.board_workspace_color())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -532,6 +543,7 @@ const GRAPHITE_LIGHT_CANVAS: CanvasColors = CanvasColors {
     board_grid: None,
     board_grid_major: None,
     board_workspace: None,
+    board_sheet: None,
 };
 
 const GRAPHITE_DARK_TOKENS: ThemeTokens = ThemeTokens {
@@ -607,6 +619,8 @@ const GRAPHITE_DARK_CANVAS: CanvasColors = CanvasColors {
     board_grid_major: s(0x45, 0x49, 0x52),
     // Neutral mid-grey workspace around the board, no grid.
     board_workspace: s(0x5C, 0x5E, 0x63),
+    // A step lighter than the workspace, so the sheet reads as paper.
+    board_sheet: s(0x6E, 0x70, 0x75),
 };
 
 /// Red top and blue bottom copper, as Altium lists them.

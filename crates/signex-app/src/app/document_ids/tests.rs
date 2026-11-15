@@ -318,6 +318,7 @@ fn a_board_and_a_project_with_no_id_are_given_one() {
     app.document_state.projects[0].data.document_id = None;
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         version: 1,
@@ -463,6 +464,7 @@ fn an_unloaded_board_is_read_from_its_file() {
     let mut app = app_with_files(dir.path());
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
         uuid: uid(77),
         version: 1,
@@ -992,6 +994,7 @@ fn a_parked_dirty_sheet_keeps_its_id_against_a_copy_opened_later() {
 fn board_with(id: uuid::Uuid, thickness: f64) -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
         uuid: id,
         version: 1,

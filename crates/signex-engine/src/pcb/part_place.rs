@@ -136,6 +136,7 @@ impl PartToPlace {
             graphics: Vec::new(),
             texts: Vec::new(),
             sketch: None,
+            options: Default::default(),
             unknown: Default::default(),
         }
     }

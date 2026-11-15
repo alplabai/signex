@@ -126,7 +126,7 @@ pub use paper::{
     paper_size_options,
 };
 pub use pcb_board_properties::{
-    BoardTab, ComponentSide, PcbBoardMsg, PcbBoardPanelView, PcbBoardSummary,
+    BoardField, BoardTab, ComponentSide, PcbBoardMsg, PcbBoardPanelView, PcbBoardSummary,
 };
 pub use pcb_component::{
     ComponentField, FootprintEditability, ParameterFacts, PcbComponentFacts, PcbComponentMsg,

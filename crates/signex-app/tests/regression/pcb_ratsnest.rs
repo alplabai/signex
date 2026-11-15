@@ -48,6 +48,7 @@ fn two_pad_board() -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         version: 1,

@@ -83,6 +83,8 @@ pub enum BoardCommandError {
     NonFiniteSketch(String),
     #[error("the grid step must not be negative, not {0} mm")]
     NegativeGridStep(f64),
+    #[error("guide or grid {0} is named more than once")]
+    DuplicateOption(Uuid),
     #[error("the board has no setup to hold a grid step")]
     NoSetup,
     #[error("the board outline belongs to the board sketch; edit the sketch instead")]

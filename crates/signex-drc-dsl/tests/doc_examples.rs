@@ -91,6 +91,7 @@ fn pad_at(n: u128, x: f64, net: u32) -> Footprint {
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: String::new(),

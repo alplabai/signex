@@ -9,10 +9,11 @@ use std::sync::Arc;
 
 use signex_engine::pcb::BoardClipboard;
 use signex_engine::pcb::part_place::PartToPlace;
-use signex_engine::pcb::placement::{grid_step_mm, snap_delta};
-use signex_engine::pcb::snap::{SnapQuery, object_snap_point};
+use signex_engine::pcb::placement::{grid_for, grid_step_mm};
+use signex_engine::pcb::snap::{GuideHit, SnapQuery, axis_snap, guide_snap, object_snap_point};
 use signex_types::pcb::{PcbBoard, Point};
 use signex_types::pcb_layer::CopperLayer;
+use signex_types::pcb_options::{GridUse, GuideKind};
 use uuid::Uuid;
 
 use super::PcbSnapOptions;
@@ -113,9 +114,11 @@ impl PcbCarry {
 
 /// The offset that takes the carried footprints from `from` towards `to`.
 /// An object point within the snap distance of `to` takes `from` exactly
-/// onto it (#2353); otherwise, with grid snapping on, the origin of the
-/// footprint nearest `from` lands on the board's grid (`PcbSetup::grid_size`,
-/// else the PCB default). `active` is the active copper layer.
+/// onto it (#2353). Otherwise, with grid snapping on, the origin of the
+/// footprint nearest `from` lands on the components grid
+/// (`placement::grid_for`); then a guide in reach fixes the axes it runs
+/// across, and axis snapping lines the free axes up with object points
+/// (#2374). `active` is the active copper layer.
 pub fn carry_delta(
     board: &PcbBoard,
     footprints: &BTreeSet<Uuid>,
@@ -124,17 +127,65 @@ pub fn carry_delta(
     snap: &PcbSnapOptions,
     active: CopperLayer,
 ) -> Point {
-    if let Some(layers) = snap.layer_mask(active) {
-        let query = SnapQuery {
-            objects: &snap.objects,
-            layers,
-            skip: footprints,
-            radius_mm: snap.distance.factor() * grid_step_mm(board),
-        };
-        if let Some(target) = object_snap_point(board, to, &query) {
-            return Point::new(target.x - from.x, target.y - from.y);
+    let radius_mm = snap.distance.factor() * grid_step_mm(board);
+    let query = snap.layer_mask(active).map(|layers| SnapQuery {
+        objects: &snap.objects,
+        layers,
+        skip: footprints,
+        radius_mm,
+    });
+    if let Some(query) = &query
+        && let Some(target) = object_snap_point(board, to, query)
+    {
+        return Point::new(target.x - from.x, target.y - from.y);
+    }
+    let mut delta = grid_delta(board, footprints, from, to, snap);
+    let (mut free_x, mut free_y) = (true, true);
+    if snap.to_guides
+        && let Some(hit) = guide_snap(&board.options.guides, to, radius_mm)
+    {
+        let onto = |p: Point| Point::new(p.x - from.x, p.y - from.y);
+        match hit {
+            GuideHit::Line {
+                kind: GuideKind::Vertical,
+                point,
+            } => {
+                delta.x = point.x - from.x;
+                free_x = false;
+            }
+            GuideHit::Line {
+                kind: GuideKind::Horizontal,
+                point,
+            } => {
+                delta.y = point.y - from.y;
+                free_y = false;
+            }
+            GuideHit::Line { point, .. } | GuideHit::Crossing(point) => return onto(point),
         }
     }
+    if snap.to_axes
+        && let Some(query) = &query
+    {
+        let (x, y) = axis_snap(board, to, query, snap.axis_range_mm);
+        if let Some(x) = x.filter(|_| free_x) {
+            delta.x = x - from.x;
+        }
+        if let Some(y) = y.filter(|_| free_y) {
+            delta.y = y - from.y;
+        }
+    }
+    delta
+}
+
+/// The carry's offset on the components grid, or as dragged with grid
+/// snapping off.
+fn grid_delta(
+    board: &PcbBoard,
+    footprints: &BTreeSet<Uuid>,
+    from: Point,
+    to: Point,
+    snap: &PcbSnapOptions,
+) -> Point {
     let raw = Point::new(to.x - from.x, to.y - from.y);
     if !snap.to_grids {
         return raw;
@@ -147,7 +198,7 @@ pub fn carry_delta(
         .map(|fp| fp.position)
         .min_by(|a, b| distance(*a).total_cmp(&distance(*b)));
     match anchor {
-        Some(anchor) => snap_delta(anchor, raw, grid_step_mm(board)),
+        Some(anchor) => grid_for(board, GridUse::Components).snap_delta(anchor, raw),
         None => raw,
     }
 }
@@ -224,6 +275,7 @@ pub fn carried_board(board: &PcbBoard, footprints: &BTreeSet<Uuid>, delta: Point
         graphics: Vec::new(),
         texts: Vec::new(),
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
     }
 }
@@ -257,5 +309,52 @@ mod tests {
             (delta.x - 0.9).abs() < 1e-9 && (delta.y - 0.5).abs() < 1e-9,
             "{delta:?}"
         );
+    }
+
+    /// U1 at (1, 1) on a 0.5 mm board grid, with a vertical guide at x = 5
+    /// and one extra 0.2 mm components grid from (0.1, 0.1).
+    fn guided_board() -> PcbBoard {
+        serde_json::from_value(serde_json::json!({
+            "uuid": Uuid::nil(),
+            "setup": {"grid_size": 0.5},
+            "footprints": [{"uuid": Uuid::from_u128(1), "position": {"x": 1.0, "y": 1.0}}],
+            "options": {
+                "guides": [{"uuid": Uuid::from_u128(7), "kind": "vertical",
+                            "at": {"x": 5.0, "y": 0.0}, "enabled": true,
+                            "color": {"r": 0, "g": 0, "b": 0, "a": 255}}],
+                "grids": [{"uuid": Uuid::from_u128(8), "name": "Fine", "step_mm": 0.2,
+                           "origin": {"x": 0.1, "y": 0.1},
+                           "color": {"r": 0, "g": 0, "b": 0, "a": 255},
+                           "components": true, "non_components": false}]
+            }
+        }))
+        .unwrap()
+    }
+
+    fn carry(snap: &PcbSnapOptions, to: Point) -> Point {
+        carry_delta(
+            &guided_board(),
+            &[Uuid::from_u128(1)].into(),
+            Point::new(1.0, 1.0),
+            to,
+            snap,
+            CopperLayer::Top,
+        )
+    }
+
+    #[test]
+    fn a_guide_fixes_x_and_the_components_grid_rounds_y() {
+        let delta = carry(&PcbSnapOptions::default(), Point::new(5.1, 2.33));
+        // x onto the guide; y: 1.0 + 1.33 on the 0.2 grid from 0.1 is 2.3.
+        assert!(
+            (delta.x - 4.0).abs() < 1e-9 && (delta.y - 1.3).abs() < 1e-9,
+            "{delta:?}"
+        );
+        let off = PcbSnapOptions {
+            to_guides: false,
+            ..PcbSnapOptions::default()
+        };
+        let delta = carry(&off, Point::new(5.1, 2.33));
+        assert!((delta.x - 4.1).abs() < 1e-9, "{delta:?}");
     }
 }

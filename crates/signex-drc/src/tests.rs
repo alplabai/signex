@@ -89,6 +89,7 @@ pub(super) fn board(
 ) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: String::new(),

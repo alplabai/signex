@@ -86,6 +86,7 @@ fn footprint(uuid: Uuid, reference: &str, (x, y): (f64, f64), locked: bool) -> F
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),

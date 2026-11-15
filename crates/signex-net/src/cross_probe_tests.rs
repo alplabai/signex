@@ -69,6 +69,7 @@ fn footprint(uuid: Uuid, link: Option<SymbolLink>, pads: Vec<Pad>) -> Footprint 
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 0,
         generator: String::new(),

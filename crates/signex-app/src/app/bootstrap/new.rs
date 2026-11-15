@@ -699,6 +699,7 @@ impl Signex {
                 pcb_selections: std::collections::HashMap::new(),
                 pcb_carry: None,
                 pcb_tool: None,
+                pcb_guide_place: None,
                 pcb_ratsnest: Default::default(),
                 pcb_drc: Default::default(),
                 cross_select: Default::default(),

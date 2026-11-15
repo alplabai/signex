@@ -30,6 +30,7 @@ pub(super) fn empty_sheet() -> SchematicSheet {
 pub(super) fn empty_board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::nil(),
         version: 1,

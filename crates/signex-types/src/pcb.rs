@@ -496,6 +496,13 @@ pub struct PcbBoard {
     /// writes [`Self::outline`] when the sketch owns it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sketch: Option<crate::pcb_sketch::BoardSketch>,
+    /// Guides, extra grids, the sheet and naming options (#2374). Written
+    /// only through the board engine's `SetBoardOptions` command.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::pcb_options::BoardOptions::is_default"
+    )]
+    pub options: crate::pcb_options::BoardOptions,
     /// Keys in the `.snxpcb` manifest, `[stackup]`, `[nets]` and
     /// `[extras.board]` that this build does not recognise, kept per
     /// section so a save re-emits each where it was found. Empty for
