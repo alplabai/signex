@@ -216,15 +216,28 @@ fn fixture_with(
     board: Option<(PcbBoard, bool)>,
     defaults: ProjectDefaults,
 ) -> Fixture {
+    fixture_editing(
+        |lib, sheet| sheet.symbols.extend(extra(lib)),
+        board,
+        defaults,
+    )
+}
+
+/// [`fixture_with`] that edits the whole sheet (`edit` may add wires).
+fn fixture_editing(
+    edit: impl FnOnce(&Library, &mut SchematicSheet),
+    board: Option<(PcbBoard, bool)>,
+    defaults: ProjectDefaults,
+) -> Fixture {
     let _ = signex_app::diagnostics::init_logging();
     let lib = library();
     bind_two_pad_footprint(&lib);
     let tmp = tempfile::tempdir().unwrap();
     let sheet_path = tmp.path().join("demo.snxsch");
     let board_path = tmp.path().join("demo.snxpcb");
-    let text = SnxSchematic::new(sheet(&lib, extra(&lib)))
-        .write_string()
-        .unwrap();
+    let mut drawn = sheet(&lib, Vec::new());
+    edit(&lib, &mut drawn);
+    let text = SnxSchematic::new(drawn).write_string().unwrap();
     std::fs::write(&sheet_path, text).unwrap();
     let names_board = board.is_some();
     if let Some((board, newer)) = board {
