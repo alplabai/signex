@@ -14,7 +14,7 @@ pub(super) fn push_symbol_choice_row<'a>(
     c: Column<Element<'a, PanelMsg>>,
     id: uuid::Uuid,
     choices: &[SymbolChoiceItem],
-    muted: impl Into<LabelInk>,
+    muted: Color,
 ) -> Column<Element<'a, PanelMsg>> {
     let Some(current) = choices.iter().find(|i| i.selected) else {
         return c;
@@ -73,9 +73,8 @@ pub(super) fn push_footprint_row<'a>(
     id: uuid::Uuid,
     footprint: &str,
     choices: &[FootprintChoiceItem],
-    muted: impl Into<LabelInk>,
+    muted: Color,
 ) -> Column<Element<'a, PanelMsg>> {
-    let ink: LabelInk = muted.into();
     let current = choices.iter().position(|i| i.selected);
     if let Some(current) = current {
         let entry = |index: usize| FootprintEntry {
@@ -92,13 +91,13 @@ pub(super) fn push_footprint_row<'a>(
                 let binding = bindings.get(picked.index).cloned().unwrap_or_default();
                 PanelMsg::SwitchFootprintChoice(id, binding)
             },
-            ink,
+            muted,
         ));
     }
     c.push(form_edit_row(
         footprint_text_label(current.is_some()),
         footprint,
-        ink,
+        muted,
         move |s| PanelMsg::EditSymbolFootprint(id, s),
     ))
 }
@@ -107,7 +106,7 @@ pub(super) fn push_footprint_row<'a>(
 /// when the column is narrow, the whole id in a tooltip.
 pub(super) fn library_id_row<'a>(
     lib_id: &str,
-    label: impl Into<LabelInk>,
+    label: Color,
     input_bg: Color,
     tokens: &ThemeTokens,
 ) -> Element<'a, PanelMsg> {
@@ -186,14 +185,13 @@ pub(super) fn push_library_rows<'a>(
     id: uuid::Uuid,
     library_name: &str,
     status: LibraryStatus<'_>,
-    muted: impl Into<LabelInk>,
+    muted: Color,
     input_bg: Color,
     tokens: &ThemeTokens,
 ) -> Column<Element<'a, PanelMsg>> {
     use signex_i18n::{ids, t};
-    let ink: LabelInk = muted.into();
     if !library_name.is_empty() {
-        c = c.push(form_input_row("Library", library_name, ink, input_bg));
+        c = c.push(form_input_row("Library", library_name, muted, input_bg));
     }
     let LibraryStatus {
         drifted,
@@ -206,7 +204,7 @@ pub(super) fn push_library_rows<'a>(
         c = c.push(
             signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_SYMBOL_MISSING))
                 .size(TS.body)
-                .color(ink.color)
+                .color(muted)
                 .boxed(),
         );
     }

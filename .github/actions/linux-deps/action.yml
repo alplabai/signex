@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: FSL-1.1-ALv2
 #
 # Installs the system libraries the workspace links against on Ubuntu
 # runners, with the downloaded .deb files cached between runs.

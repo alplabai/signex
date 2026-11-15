@@ -8,11 +8,14 @@ use signex_types::format::SnxPcb;
 use signex_types::pcb::{
     Footprint, LayerDef, Pad, PadNet, PadShape, PadType, PcbBoard, Point, Segment,
 };
-use signex_types::pcb_layer::CopperLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use uuid::Uuid;
 
 use crate::drive::drive;
 use crate::menu_support::menu_row;
+
+const TOP: PcbLayer = PcbLayer::Copper(CopperLayer::Top);
+const BOTTOM: PcbLayer = PcbLayer::Copper(CopperLayer::Bottom);
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
@@ -80,6 +83,7 @@ fn board() -> PcbBoard {
         locked: false,
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         pads: vec![pad(1, 0.0), pad(2, 8.0)],
         graphics: Vec::new(),
         properties: Vec::new(),
@@ -88,6 +92,7 @@ fn board() -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),
@@ -199,33 +204,55 @@ fn toggle_ratsnest_hides_and_shows_the_lines() {
     assert_eq!(snapshot(&f).ratsnest_lines.len(), 1);
 }
 
+/// #2351: the origin marker is shown by default; View > Toggle Origin
+/// Marker hides it on the board's canvas and shows it again.
+#[test]
+fn toggle_origin_marker_hides_and_shows_the_marker() {
+    let mut f = open_board();
+    let shown = |f: &Fixture| f.app.interaction_state.pcb_canvas.origin_marker_visible();
+    assert!(view(&f).origin_marker_visible());
+    assert!(shown(&f));
+    run(&mut f, "toggle_origin_marker");
+    assert!(!view(&f).origin_marker_visible());
+    assert!(!shown(&f));
+    run(&mut f, "toggle_origin_marker");
+    assert!(view(&f).origin_marker_visible());
+    assert!(shown(&f));
+}
+
 #[test]
 fn next_and_prev_layer_step_through_the_boards_copper_and_wrap() {
     let mut f = open_board();
-    assert_eq!(view(&f).active(), CopperLayer::Top);
+    assert_eq!(view(&f).active(), TOP);
     run(&mut f, "next_layer");
-    assert!(matches!(view(&f).active(), CopperLayer::Inner(_)));
+    assert!(matches!(
+        view(&f).active(),
+        PcbLayer::Copper(CopperLayer::Inner(_))
+    ));
     run(&mut f, "next_layer");
-    assert_eq!(view(&f).active(), CopperLayer::Bottom);
+    assert_eq!(view(&f).active(), BOTTOM);
     run(&mut f, "next_layer");
-    assert_eq!(view(&f).active(), CopperLayer::Top, "wraps forward");
+    assert_eq!(view(&f).active(), TOP, "wraps forward");
     run(&mut f, "prev_layer");
-    assert_eq!(view(&f).active(), CopperLayer::Bottom, "wraps back");
+    assert_eq!(view(&f).active(), BOTTOM, "wraps back");
 }
 
 #[test]
 fn the_layer_keys_step_the_active_layer_on_a_pcb_tab() {
     let mut f = open_board();
     press(&mut f, "-");
-    assert_eq!(view(&f).active(), CopperLayer::Bottom);
+    assert_eq!(view(&f).active(), BOTTOM);
     press(&mut f, "+");
-    assert_eq!(view(&f).active(), CopperLayer::Top);
+    assert_eq!(view(&f).active(), TOP);
     press(&mut f, "Shift++");
-    assert!(matches!(view(&f).active(), CopperLayer::Inner(_)));
+    assert!(matches!(
+        view(&f).active(),
+        PcbLayer::Copper(CopperLayer::Inner(_))
+    ));
     press(&mut f, "*");
-    assert_eq!(view(&f).active(), CopperLayer::Bottom);
+    assert_eq!(view(&f).active(), BOTTOM);
     press(&mut f, "Shift+*");
-    assert_eq!(view(&f).active(), CopperLayer::Top);
+    assert_eq!(view(&f).active(), TOP);
 }
 
 #[test]
@@ -290,16 +317,19 @@ fn the_view_is_kept_per_board_and_never_written_to_the_file() {
 fn the_layers_panel_follows_the_view() {
     let mut f = open_board();
     let panel = &f.app.document_state.panel_ctx.pcb_layers;
-    assert_eq!(panel.active, Some(CopperLayer::Top));
+    assert_eq!(panel.active, Some(TOP));
     assert!(panel.hidden.is_empty());
     // Hiding the active Top layer moves the active layer to Mid-Layer 1; the
     // next step skips the hidden Top and lands on Bottom.
     run(&mut f, "toggle_layer_visibility");
     let panel = &f.app.document_state.panel_ctx.pcb_layers;
-    assert!(matches!(panel.active, Some(CopperLayer::Inner(_))));
+    assert!(matches!(
+        panel.active,
+        Some(PcbLayer::Copper(CopperLayer::Inner(_)))
+    ));
     run(&mut f, "next_layer");
     let panel = &f.app.document_state.panel_ctx.pcb_layers;
-    assert_eq!(panel.active, Some(CopperLayer::Bottom));
+    assert_eq!(panel.active, Some(BOTTOM));
     assert_eq!(panel.hidden.len(), 1);
 }
 
@@ -308,6 +338,7 @@ fn the_board_view_commands_are_off_without_a_pcb() {
     let (mut app, _boot) = Signex::new();
     for command in [
         "toggle_ratsnest",
+        "toggle_origin_marker",
         "next_layer",
         "prev_layer",
         "show_all_layers",

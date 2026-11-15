@@ -77,40 +77,30 @@ impl Signex {
         use crate::app::RemoveChoice;
         use crate::app::state::ErrorNotice;
         let blockers = self.remove_blockers(state);
-        let (notice, why): (fn(String) -> ErrorNotice, String) = match choice {
+        use signex_i18n::{Translatable, ids};
+        let (notice, why): (fn(Translatable) -> ErrorNotice, Translatable) = match choice {
             RemoveChoice::ExcludeFromProject if blockers.unlisted => (
                 ErrorNotice::exclude_refused,
-                format!(
-                    "\"{}\" is placed by a sheet symbol and is not a page of this project, \
-                     so there is nothing to exclude. Remove or change the sheet symbol instead.",
-                    state.display_name
-                ),
+                Translatable::new(ids::NOTICE_EXCLUDE_NOT_A_PAGE),
             ),
             RemoveChoice::DeleteFile if !blockers.other_parents.is_empty() => (
                 ErrorNotice::delete,
-                format!(
-                    "\"{}\" was not deleted: it is also placed by {}. Remove those sheet \
-                     symbols first.",
-                    state.display_name,
-                    blockers.parent_names()
-                ),
+                Translatable::new(ids::NOTICE_DELETE_PLACED_ELSEWHERE)
+                    .arg("parents", blockers.parent_names()),
             ),
             RemoveChoice::DeleteFile
                 if blockers.unknown.is_some() && !state.target_path.is_dir() =>
             {
                 (
                     ErrorNotice::delete,
-                    format!(
-                        "\"{}\" was not deleted: whether another sheet places it cannot be ruled \
-                     out ({}). Try again once the project has been read, or exclude it instead.",
-                        state.display_name,
-                        blockers.unknown.as_deref().unwrap_or_default()
-                    ),
+                    Translatable::new(ids::NOTICE_DELETE_PLACEMENT_UNKNOWN)
+                        .arg("reason", blockers.unknown.as_deref().unwrap_or_default()),
                 )
             }
             _ => return false,
         };
-        crate::diagnostics::log_warning(&why);
+        let why = why.arg("name", state.display_name.as_str());
+        crate::diagnostics::log_warning(why.render_en_us());
         self.document_state.error_notice = Some(notice(why));
         // Into the Messages panel snapshot now, whichever path asked.
         self.refresh_panel_ctx();
@@ -187,18 +177,15 @@ impl Signex {
             let busy = self
                 .refuse_start_while_path_op(project_file, "deleted")
                 .err()
-                .map(|e| e.to_string())
+                .map(|e| crate::app::state::untranslated(e.to_string()))
                 .or_else(|| {
                     self.document_state
                         .document_saves
                         .is_saving(project_file)
-                        .then(|| {
-                            "The project file is still being saved; try again in a moment."
-                                .to_string()
-                        })
+                        .then(|| signex_i18n::ids::NOTICE_PROJECT_STILL_SAVING.into())
                 });
             if let Some(refusal) = busy {
-                crate::diagnostics::log_warning(&refusal);
+                crate::diagnostics::log_warning(refusal.render_en_us());
                 self.document_state.error_notice =
                     Some(crate::app::state::ErrorNotice::delete(refusal));
                 return iced::Task::none();
@@ -301,12 +288,10 @@ impl Signex {
             }
             DeleteIo::Refused => {
                 self.prune_removed_entry(&request.dialog, true);
-                self.document_state.error_notice =
-                    Some(crate::app::state::ErrorNotice::delete(format!(
-                        "\"{}\" is a shared library or lives outside this project's folder, so \
-                         it was not deleted from disk. It has only been removed from the project.",
-                        request.display_name
-                    )));
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                    signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_DELETE_OUTSIDE_PROJECT)
+                        .arg("name", request.display_name.as_str()),
+                ));
             }
             DeleteIo::Failed(e) | DeleteIo::FailedProjectStale(e) => {
                 if stale_project {
@@ -326,7 +311,9 @@ impl Signex {
                     &anyhow::anyhow!("{}: {e}", target.display()),
                 );
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
-                    format!("Could not delete \"{}\": {e}", request.display_name),
+                    signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_DELETE_FAILED)
+                        .arg("name", request.display_name.as_str())
+                        .arg("error", e.to_string()),
                 ));
             }
             DeleteIo::CheckFailed(e) => {
@@ -335,7 +322,9 @@ impl Signex {
                     &anyhow::anyhow!("{}: {e}", target.display()),
                 );
                 self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
-                    format!("Could not delete \"{}\": {e}", request.display_name),
+                    signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_DELETE_FAILED)
+                        .arg("name", request.display_name.as_str())
+                        .arg("error", e.to_string()),
                 ));
             }
         }
@@ -463,12 +452,11 @@ impl Signex {
             && let Some(dialog) = self.ui_state.remove_dialog.as_ref()
             && let Some(opening) = self.pending_open_under(&dialog.target_path)
         {
-            let detail = format!(
-                "{} is still opening, so {} was not deleted. Delete it again once it has opened.",
-                opening.display(),
-                dialog.display_name
-            );
-            crate::diagnostics::log_warning(&detail);
+            let detail =
+                signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_DELETE_STILL_OPENING)
+                    .arg("path", opening.display().to_string())
+                    .arg("name", dialog.display_name.as_str());
+            crate::diagnostics::log_warning(detail.render_en_us());
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(detail));
             return iced::Task::none();
         }
@@ -482,12 +470,11 @@ impl Signex {
                 .pending_restores
                 .find_under(&dialog.target_path)
         {
-            let detail = format!(
-                "A History restore of {} is still running, so {} was not deleted. Delete it again once the restore has finished.",
-                restoring.display(),
-                dialog.display_name
-            );
-            crate::diagnostics::log_warning(&detail);
+            let detail =
+                signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_DELETE_STILL_RESTORING)
+                    .arg("path", restoring.display().to_string())
+                    .arg("name", dialog.display_name.as_str());
+            crate::diagnostics::log_warning(detail.render_en_us());
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(detail));
             return iced::Task::none();
         }
@@ -527,8 +514,9 @@ impl Signex {
         // owns it: refuse before closing anything.
         if let Err(refusal) = self.refuse_start_while_path_op(&state.target_path, "deleted") {
             crate::diagnostics::log_warning(refusal.to_string());
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                crate::app::state::untranslated(refusal.to_string()),
+            ));
             return iced::Task::none();
         }
 
@@ -539,8 +527,9 @@ impl Signex {
         {
             let refusal = crate::app::dispatch::library::LIBRARY_BACKGROUND_WRITE_REFUSAL;
             crate::diagnostics::log_warning(format!("[delete] refused: {refusal}"));
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                crate::app::state::untranslated(refusal.to_string()),
+            ));
             return iced::Task::none();
         }
 
@@ -551,8 +540,9 @@ impl Signex {
                 self.library_delete_refusal(&state.target_path, self.dialog_fold(&state))
         {
             crate::diagnostics::log_warning(format!("[delete] refused: {refusal}"));
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::delete(refusal));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                crate::app::state::untranslated(refusal),
+            ));
             return iced::Task::none();
         }
 
@@ -562,8 +552,9 @@ impl Signex {
             && let Err(refusal) = self.refuse_while_project_moves(&state.target_path, "delete")
         {
             crate::diagnostics::log_warning(refusal.to_string());
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                crate::app::state::untranslated(refusal.to_string()),
+            ));
             return iced::Task::none();
         }
 

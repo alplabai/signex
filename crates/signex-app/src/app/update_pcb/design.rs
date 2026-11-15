@@ -192,7 +192,36 @@ impl<'a> Resolver<'a> {
 
     /// The board footprint of the part whose first unit is `symbol`: its
     /// library row, the alternate it was built with, the library footprint.
+    /// A part with no row, or whose row gives no footprint, uses the library
+    /// footprint its own footprint names as `<library uuid>:<footprint
+    /// uuid>`, which Choose footprint sets (#2371).
     pub(crate) fn resolve(
+        &self,
+        symbol: &Symbol,
+    ) -> Result<ResolvedFootprint, FootprintResolveError> {
+        let from_row = self.resolve_from_row(symbol);
+        let named = crate::library::drift::split_lib_id(symbol.footprint.trim());
+        match (from_row, named) {
+            (Err(_), Some((library, footprint))) => {
+                self.resolve_named(&PrimitiveRef::new(library, footprint))
+            }
+            (resolved, _) => resolved,
+        }
+    }
+
+    fn resolve_named(
+        &self,
+        address: &PrimitiveRef,
+    ) -> Result<ResolvedFootprint, FootprintResolveError> {
+        signex_library::part_footprint::resolve_named_footprint(address, |address, _version| {
+            self.adapters
+                .get(&address.library_id)?
+                .get_footprint(address.uuid)
+                .ok()
+        })
+    }
+
+    fn resolve_from_row(
         &self,
         symbol: &Symbol,
     ) -> Result<ResolvedFootprint, FootprintResolveError> {

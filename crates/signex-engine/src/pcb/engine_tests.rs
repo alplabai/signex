@@ -265,3 +265,28 @@ fn a_failed_rollback_takes_a_new_revision_and_forgets_the_save_point() {
     assert!(engine.revision() > revision);
     assert!(!engine.is_at_save_point());
 }
+
+#[test]
+fn a_grouped_step_names_its_group_on_the_undo_and_then_the_redo_side() {
+    let group = crate::UndoGroupId::new(7);
+    let mut e = engine();
+    e.execute(move_to(1.0)).unwrap();
+    assert_eq!(e.next_undo_group(), None, "a plain step has no group");
+    e.execute_grouped(vec![move_to(2.0)], "swap", e.revision(), group)
+        .unwrap();
+    assert_eq!(e.next_undo_group(), Some(group));
+    assert!(e.has_undo_group(group));
+    e.undo().unwrap();
+    assert_eq!(e.next_undo_group(), None);
+    assert_eq!(e.next_redo_group(), Some(group));
+    assert!(!e.has_undo_group(group));
+    e.redo().unwrap();
+    assert_eq!(e.next_undo_group(), Some(group));
+    e.undo().unwrap();
+    e.execute(move_to(3.0)).unwrap();
+    assert_eq!(
+        e.next_redo_group(),
+        None,
+        "a new edit cuts the grouped redo"
+    );
+}

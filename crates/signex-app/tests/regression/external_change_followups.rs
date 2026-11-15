@@ -34,6 +34,7 @@ fn sheet_text(paper: &str) -> String {
 fn board(thickness: f64) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         version: 1,
@@ -107,7 +108,7 @@ fn messages_mention(needle: &str) -> bool {
 
 fn card_title(app: &Signex) -> Option<String> {
     let notice = app.document_state.error_notice.as_ref()?;
-    notice.action.is_some().then(|| notice.title.clone())
+    notice.action.is_some().then(|| notice.title.render_en_us())
 }
 
 /// A project rooted at `dir` with auto-commit on, so a commit would be queued.

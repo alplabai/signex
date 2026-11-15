@@ -9,11 +9,11 @@
 
 <h1 align="center">Signex</h1>
 <p align="center">
-  Open-source, AI-first electronics design automation
+  Source-available, AI-first electronics design automation
 </p>
 
 <p align="center">
-  <a href="https://github.com/alplabai/signex/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
+  <a href="https://github.com/alplabai/signex/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue.svg" alt="License"></a>
   <a href="https://github.com/alplabai/signex/releases"><img src="https://img.shields.io/github/v/release/alplabai/signex?include_prereleases&label=version" alt="Latest release"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.97%2B-orange.svg" alt="Rust"></a>
   <a href="docs/USER_GUIDE.md"><img src="https://img.shields.io/badge/docs-user%20guide-blueviolet.svg" alt="User guide"></a>
@@ -33,7 +33,7 @@
 
 ---
 
-Signex is open-source EDA tooling built in Rust with GPU-accelerated
+Signex is source-available EDA tooling built in Rust with GPU-accelerated
 rendering and an Altium Designer-quality UI. Today it is a **schematic
 editor** with symbol, footprint and component-library editors, ERC,
 annotation, and PDF / BOM / netlist export. The PCB editor, 3D viewer,
@@ -53,7 +53,7 @@ formats one-way. Run it once against your project; open the resulting
 
 **Migrating from Altium?** Install the optional
 [signex-altium-import](https://github.com/alplabai/signex-altium-import)
-companion (Apache-2.0, clean-room). Then **File › Import › Altium Project…**
+companion (FSL-1.1-ALv2, clean-room). Then **File › Import › Altium Project…**
 converts a `.PrjPcb`, `.SchDoc`, `.PcbDoc`, `.SchLib` or `.PcbLib` into a sibling
 `<name>-signex/` folder and opens it. The import lists everything it had to
 approximate or skip; review that list before you fabricate an imported
@@ -61,7 +61,7 @@ board.
 
 **Editions:**
 
-- **Signex Community** (Apache-2.0, free, offline forever) — the full editor:
+- **Signex Community** (FSL-1.1-ALv2, free, offline forever) — the full editor:
   schematic today, then PCB layout, routing and DRC (see the
   [roadmap](docs/ROADMAP.md)), plus the plugin system and the headless CLI
 - **Signex Pro** (subscription with included AI credits) — Signex AI (AI
@@ -136,7 +136,7 @@ designs are never used for AI training unless the customer opts in.
   per-sheet stroke/fill colours
 - **TabPill chrome refactor (v0.8)** — 3-sided shared borders, theme-aware
   inactive fill, drag accent from theme
-- **Apache-clean native formats (v0.9)** — `.snxsch` / `.snxpcb` are the
+- **Clean-room native formats (v0.9)** — `.snxsch` / `.snxpcb` are the
   canonical format; import of GPL-based EDA tool formats moved to the optional companion tool
 - **Component library subsystem (v0.10–v0.11)** — Library Browser tab, DBLib
   row model, SCH Library editor, Component Preview, Pick Symbol/Footprint +
@@ -148,7 +148,7 @@ designs are never used for AI training unless the customer opts in.
 - **Multi-unit symbols (v0.14)** — `part_count`, per-unit body geometry and
   graphics, unit buttons, two-click rect / line / circle + three-click arc
 - **Footprint & sketch editor (v0.14)** — `.snxfpt` pad + parametric-sketch
-  editor driven by an Apache-clean Newton-LM constraint solver (19 constraint
+  editor driven by a clean-room Newton-LM constraint solver (19 constraint
   kinds); bake to pads / silk / courtyard; Align / Distribute / Move / Fill /
   Text tooling; CPU 3D-body extrude preview
 - **Authoritative netlist contract (v0.14)** — one connectivity derivation in
@@ -243,7 +243,7 @@ signex/
 │   ├── signex-net/            # Authoritative netlist + connectivity contract
 │   ├── signex-erc/            # ERC rule engine (+ signex-erc-dsl)
 │   ├── signex-drc/            # PCB design rule check (measures with pcb-geom; + signex-drc-dsl)
-│   ├── signex-sketch/         # Apache-clean Newton-LM constraint solver + sketch schema
+│   ├── signex-sketch/         # Clean-room Newton-LM constraint solver + sketch schema
 │   ├── signex-bake/           # Sketch → footprint bake (pad / silk / courtyard / mask / …)
 │   ├── signex-output/         # PDF / netlist / BOM export pipeline (+ signex-bom)
 │   ├── signex-renderer/       # Domain types → render primitives (+ signex-gfx wgpu pipelines)
@@ -422,7 +422,7 @@ In-repo reference docs live under [`docs/`](docs/): the
 
 ## Contributing
 
-Signex is open source and we welcome contributions from everyone — whether
+Signex is source-available and we welcome contributions from everyone — whether
 you're an EDA professional, a Rust developer, or someone who just wants to
 help build a better design tool.
 
@@ -448,10 +448,26 @@ workflow, crate map, code style, and good first issues.
 
 ## License
 
-Signex Community Edition is licensed under the [Apache License 2.0](LICENSE).
-The main repository contains no GPL-derived code; Apache consumers (anyone
-embedding or linking against Signex) get a clean Apache codebase with no GPL
-aggregation in their build closure.
+Signex Community Edition is source-available under the
+[Functional Source License 1.1, Apache 2.0 Future License (FSL-1.1-ALv2)](LICENSE):
+
+- **Allowed:** any use, including companies designing and selling their own
+  products with Signex.
+- **Not allowed:** a Competing Use, which means making Signex available to
+  others in a commercial product or service that substitutes for Signex (or
+  for a product or service Alp Lab offers using it), or that offers the same
+  or substantially similar functionality. Free,
+  non-commercial redistribution is allowed.
+- **Later:** each release becomes Apache-2.0 two years after it ships.
+
+Releases published before the licence change stay Apache-2.0.
+Contributions made before the change (#2344) were licensed under Apache-2.0
+and those grants remain; the project as a whole is distributed under
+FSL-1.1-ALv2. A copy of the Apache-2.0 text is in
+[LICENSE-APACHE](LICENSE-APACHE) (see [NOTICE](NOTICE)).
+
+The main repository contains no GPL-derived code, so there is no GPL
+aggregation in your build closure, before or after the Apache-2.0 conversion.
 
 Migration from GPL-based EDA tools is provided via the optional [import companion repository](https://github.com/alplabai/signex-kicad-import),
 which is **GPL-3.0-or-later** because it implements those tools'
@@ -461,5 +477,5 @@ for the full rationale and the audit trail behind the two-repo split.
 
 Copyright 2026 [Alp Lab AB](https://github.com/alplabai)
 
-Signex™ and Signex AI™ are trademarks of Alp Lab AB. The Apache-2.0 licence
+Signex™ and Signex AI™ are trademarks of Alp Lab AB. The FSL-1.1-ALv2 licence
 does not grant rights to use them; forks must use a different name.

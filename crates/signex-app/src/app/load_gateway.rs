@@ -411,9 +411,11 @@ impl Signex {
         let main = &self.interaction_state.pcb_canvas;
         let mut canvas = crate::pcb_canvas::PcbCanvas::new();
         canvas.gpu_render = main.gpu_render;
-        canvas.set_theme_colors(main.theme_bg, main.theme_grid);
-        canvas.canvas_colors = main.canvas_colors;
+        canvas.set_theme_colors(main.canvas_colors);
         canvas.set_grid(main.grid_visible, main.visible_grid_mm);
+        canvas.set_board_grid(Some(signex_engine::pcb::placement::grid_step_mm(board)));
+        canvas.set_board_marks(crate::pcb_canvas::BoardMarks::of(board));
+        canvas.set_origin_marker_visible(self.pcb_layer_view(path).origin_marker_visible());
         let snapshot = self.undocked_pcb_snapshot(path, board);
         canvas.set_renderer_snapshot(Some(snapshot));
         canvas.fit_to_board();
@@ -448,6 +450,14 @@ impl Signex {
             }
         });
         self.interaction_state.pcb_ratsnest = ratsnest;
+        let board_grid = self
+            .active_pcb()
+            .map(signex_engine::pcb::placement::grid_step_mm);
+        let origin_marker = self.pcb_layer_view(&board_path).origin_marker_visible();
+        let marks = self
+            .active_pcb()
+            .map(crate::pcb_canvas::BoardMarks::of)
+            .unwrap_or_default();
 
         // An undocked window showing the same tab draws the same board
         // (#494). Its camera stays its own.
@@ -464,12 +474,17 @@ impl Signex {
             );
             if shows_active {
                 canvas.set_renderer_snapshot(renderer_snapshot.clone());
+                canvas.set_board_grid(board_grid);
+                canvas.set_board_marks(marks.clone());
+                canvas.set_origin_marker_visible(origin_marker);
                 canvas.clear_content_cache();
             }
         }
-        self.interaction_state
-            .pcb_canvas
-            .set_renderer_snapshot(renderer_snapshot);
+        let main = &mut self.interaction_state.pcb_canvas;
+        main.set_renderer_snapshot(renderer_snapshot);
+        main.set_board_grid(board_grid);
+        main.set_board_marks(marks);
+        main.set_origin_marker_visible(origin_marker);
         self.note_pcb_board_changed();
     }
 

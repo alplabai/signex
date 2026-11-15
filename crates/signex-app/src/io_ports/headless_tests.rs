@@ -168,7 +168,13 @@ fn project_dialogs_refuse_without_their_argument() {
     new_project(&mut app, &answers, dir.path());
     let task = app.add_existing_to_project(vec![0]);
     assert_refused(&mut app, task, "Add Existing to Project", "paths");
-    let task = app.add_new_schematic(vec![0]);
+    // Add New ▸ Schematic opens its setup dialog (#2232); Create asks.
+    let open = app.add_new_schematic(vec![0]);
+    TaskDriver::new()
+        .settle(&mut app, open)
+        .expect("the dialog opens");
+    assert!(app.ui_state.document_setup.is_some());
+    let task = app.update(Message::from(crate::app::DocumentSetupMsg::SubmitRequested));
     assert_refused(&mut app, task, "Add New Schematic to Project", "path");
     let task = app.add_project_symbol_library(vec![0]);
     assert_refused(&mut app, task, "New Symbol Library", "path");
@@ -235,6 +241,24 @@ fn an_answer_is_used_once_and_must_be_absolute() {
     assert_refused(&mut app, task, "Import Altium Project", "path");
 }
 
+/// #2058: the refusal is a log line, and logs stay locale-invariant, so it
+/// names the dialog by its English title whatever the UI language.
+#[test]
+fn a_refusal_names_the_dialog_in_english_under_any_language() {
+    let (mut app, _serial) = headless_app(&HeadlessAnswers::default());
+    let pref = signex_i18n::LanguagePref::Locale("en-XA".to_owned());
+    let _ = app.update(Message::Ui(crate::app::UiMsg::LanguageChanged(pref)));
+    let task = app.update(Message::Menu(MenuMessage::OpenProject));
+    assert_refused(&mut app, task, "Open Project or Schematic", "path");
+    let task = app.update(Message::Menu(MenuMessage::NewProject));
+    assert_refused(
+        &mut app,
+        task,
+        "New Signex Project (a folder named after the project is created)",
+        "path",
+    );
+}
+
 #[test]
 fn a_headless_link_is_refused_and_reported() {
     let (mut app, _serial) = headless_app(&HeadlessAnswers::default());
@@ -243,7 +267,11 @@ fn a_headless_link_is_refused_and_reported() {
     )));
     TaskDriver::new().settle(&mut app, task).expect("settled");
     let notice = app.document_state.error_notice.as_ref().expect("a notice");
-    assert!(notice.detail.contains("headless"), "{}", notice.detail);
+    assert!(
+        notice.detail.render_en_us().contains("headless"),
+        "{}",
+        notice.detail.render_en_us()
+    );
 }
 
 #[test]

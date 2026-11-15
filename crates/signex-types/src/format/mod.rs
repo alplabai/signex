@@ -21,7 +21,7 @@
 //! These types are the canonical Signex schema. Standard I/O — when it
 //! returns via the `signex-standard-import` companion repo (GPL-3.0) —
 //! translates to/from these types at the file-format boundary; no
-//! Standard-shaped types live in this Apache codebase.
+//! Standard-shaped types live in this codebase.
 
 use std::collections::BTreeMap;
 
@@ -32,6 +32,7 @@ use uuid::Uuid;
 use crate::pcb::{PcbBoard, Zone};
 use crate::schematic::SchematicSheet;
 
+mod board_options;
 mod board_sketch;
 mod extras;
 mod finite_toml;
@@ -54,6 +55,8 @@ mod version;
 mod wire_color_repair;
 
 #[cfg(test)]
+mod board_options_tests;
+#[cfg(test)]
 mod board_sketch_tests;
 #[cfg(test)]
 mod body_style_tests;
@@ -75,6 +78,8 @@ mod net_colors_tests;
 mod non_finite_tests;
 #[cfg(test)]
 mod object_lock_tests;
+#[cfg(test)]
+mod pcb_component_tests;
 #[cfg(test)]
 mod pcb_footprints_tests;
 #[cfg(test)]
@@ -858,6 +863,7 @@ impl SnxPcb {
 
         // The board sketch (#2234): absent for a board without one.
         board_sketch::write(&mut out, &self.board)?;
+        board_options::write(&mut out, &self.board)?;
 
         // Footprint extras / pad extras / board extras — wrap in a
         // single `[extras]` tree so toml's serializer produces the
@@ -978,6 +984,7 @@ impl SnxPcb {
             graphics: board_extras.graphics,
             texts: board_extras.texts,
             sketch,
+            options: board_options::read(raw.board_options)?,
             unknown: BoardUnknown {
                 manifest: raw.unknown,
                 stackup: stackup_unknown,
@@ -1043,6 +1050,8 @@ struct PcbRaw {
     extras: Option<PcbExtrasRaw>,
     #[serde(default)]
     board_sketch: Option<board_sketch::BoardSketchRaw>,
+    #[serde(default)]
+    board_options: Option<board_options::BoardOptionsRaw>,
     /// Foreign manifest keys; carried onto the board so they survive
     /// the codec wrapper being discarded.
     #[serde(flatten)]

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: FSL-1.1-ALv2
 
 name: PR Provenance Prompt
 
@@ -160,7 +160,8 @@ jobs:
           - anything with a **"non-commercial"** or **"no resale"** term, or any
             other field-of-use restriction — Signex Pro is sold from this
             source, so such a term is fatal here
-          - **source-available** licences (BUSL, SSPL, Commons Clause)
+          - **source-available** licences of other projects (BUSL, SSPL, FSL,
+            Commons Clause)
           - the **text, tables, and figures** of paywalled standards (IPC, IEC,
             JEDEC) — the formulas in them are facts and fine to implement; the
             document is copyrighted

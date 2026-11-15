@@ -73,7 +73,10 @@ fn a_non_empty_target_folder_is_refused_and_nothing_is_written() {
     assert_eq!(names_in(&folder), ["notes.txt"]);
     assert_eq!(fs::read(folder.join("notes.txt")).unwrap(), b"mine");
     let notice = app.document_state.error_notice.as_ref().expect("refused");
-    assert!(notice.detail.contains("not empty"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("not empty"),
+        "{notice:?}"
+    );
     assert!(app.document_state.projects.is_empty());
 }
 
@@ -90,7 +93,10 @@ fn a_target_folder_that_holds_a_project_is_refused_untouched() {
     assert_eq!(names_in(&folder), ["Other.snxprj"]);
     assert_eq!(fs::read(folder.join("Other.snxprj")).unwrap(), b"precious");
     let notice = app.document_state.error_notice.as_ref().expect("refused");
-    assert!(notice.detail.contains("already"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("already"),
+        "{notice:?}"
+    );
 }
 
 #[test]
@@ -136,7 +142,10 @@ fn a_project_inside_an_existing_project_is_refused() {
 
     assert!(!alpha.join("Beta").exists(), "nothing was created");
     let notice = app.document_state.error_notice.as_ref().expect("refused");
-    assert!(notice.detail.contains("inside the project"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("inside the project"),
+        "{notice:?}"
+    );
 }
 
 #[test]

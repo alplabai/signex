@@ -8,7 +8,7 @@
 //! when the query changes.
 
 use super::*;
-use crate::library::range_filter::{FilterColumn, RangeFilters, retain_in_range};
+use crate::library::range_filter::{FilterColumn, RangeFilters, parameter_label, retain_in_range};
 
 /// One component of an open library, with what the picker draws and
 /// matches on computed once.
@@ -165,7 +165,7 @@ fn picker_filter_columns(entries: &[PickerEntry]) -> Vec<FilterColumn> {
                 signex_library::column_unit(entries.iter().filter_map(|e| e.parameters.get(key)))?;
             Some(FilterColumn {
                 key: key.clone(),
-                label: key.clone(),
+                label: parameter_label(key),
                 unit,
             })
         })

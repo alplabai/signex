@@ -47,7 +47,10 @@ fn ids_from_call(src: &str, call: &str) -> Vec<String> {
             .chars()
             .next_back()
             .is_some_and(|c| c.is_alphanumeric() || c == '_');
-        if starts_identifier {
+        // A call whose id is not a literal (`cmd(id, "")` over a table of
+        // tools) has no literal to read; reading on would take the next
+        // argument's `""` as an id.
+        if starts_identifier || !after.trim_start().starts_with('"') {
             rest = after;
             continue;
         }

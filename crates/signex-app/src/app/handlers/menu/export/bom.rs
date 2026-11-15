@@ -45,7 +45,7 @@ impl Signex {
             ..BomOptions::default()
         };
         let Some((table, validation_report)) = self.rebuild_bom_table(&opts) else {
-            self.refuse_export("Cannot build BOM: no active schematic.");
+            self.refuse_export(signex_i18n::ids::NOTICE_BOM_NO_SHEET);
             return Task::none();
         };
         // Default sort: ascending by the Designator column when it
@@ -114,7 +114,8 @@ impl Signex {
             return;
         };
         preview.options.rule_options.set_enabled(rule, enabled);
-        let opts = preview.options.clone();
+        let mut opts = preview.options.clone();
+        opts.board_left_out = self.active_board_left_out_of_bom();
         let Some(ctx) = super::build_bom_export_context(&self.document_state) else {
             return;
         };
@@ -241,7 +242,12 @@ impl Signex {
         let target = self.save_target(Some(&source));
         let picker = self.ui_state.io.picker.clone();
         let default_name_owned = target.file_name("bom", "-bom", ext);
+        // The filter name is the BOM format's own label (#2060).
         let filter_label_owned = filter_label.to_string();
+        let base = picker.dialog().title_in(
+            &self.ui_state.i18n,
+            signex_i18n::ids::FILE_DIALOG_EXPORT_BOM,
+        );
         let filter_exts_owned: Vec<String> = filter_exts.iter().map(|s| s.to_string()).collect();
 
         // The options and source ride inside `BomFinished`, so a second
@@ -255,7 +261,7 @@ impl Signex {
             async move {
                 let exts_refs: Vec<&str> = filter_exts_owned.iter().map(String::as_str).collect();
                 target
-                    .dialog(picker, "Export Bill of Materials")
+                    .dialog(base)
                     .await
                     .add_filter(filter_label_owned.as_str(), &exts_refs)
                     .set_file_name(default_name_owned.as_str())
@@ -293,6 +299,7 @@ impl Signex {
         crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
         let opts = BomOptions {
             price_book: crate::library::bom_prices::price_book(&self.library),
+            board_left_out: self.active_board_left_out_of_bom(),
             ..opts.clone()
         };
         Some(signex_output::bom::rollup_with_validation(&ctx, &opts))
@@ -333,10 +340,10 @@ impl Signex {
             match super::build_bom_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
-                    self.refuse_export(format!(
-                        "Cannot export BOM: the source document {} is no longer open.",
-                        source.display()
-                    ));
+                    self.refuse_export(
+                        signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_BOM_SOURCE_CLOSED)
+                            .arg("path", source.display().to_string()),
+                    );
                     return Task::none();
                 }
             };
@@ -364,6 +371,7 @@ impl Signex {
         // picker's intent.
         opts.format = BomFormat::from_output_path(&save_path);
         opts.price_book = crate::library::bom_prices::price_book(&self.library);
+        opts.board_left_out = self.board_left_out_of_bom(&source);
 
         match BomExporter.export(&ctx, &opts) {
             Ok(output) => {
@@ -385,11 +393,55 @@ impl Signex {
                 );
             }
             Err(e) => {
-                self.report_export_failure(format!("BOM export failed: {e}"));
+                self.report_export_failure(
+                    signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_BOM_EXPORT_FAILED)
+                        .arg("error", e.to_string()),
+                );
             }
         }
 
         Task::none()
+    }
+
+    /// [`Self::board_left_out_of_bom`] for the document in view.
+    fn active_board_left_out_of_bom(&self) -> Vec<signex_types::pcb::SymbolLink> {
+        self.document_state
+            .active_path
+            .as_deref()
+            .map(|source| self.board_left_out_of_bom(source))
+            .unwrap_or_default()
+    }
+
+    /// The parts whose footprint on the board of `source`'s project is of a
+    /// type the BOM leaves out (#2365). Read from the board while it is
+    /// open; a board that is not open leaves every part in.
+    fn board_left_out_of_bom(
+        &self,
+        source: &std::path::Path,
+    ) -> Vec<signex_types::pcb::SymbolLink> {
+        let docs = &self.document_state;
+        let Some(project) = docs.document_project(source) else {
+            return Vec::new();
+        };
+        let Some(file) = project
+            .data
+            .pcb_file
+            .as_deref()
+            .map(str::trim)
+            .filter(|f| !f.is_empty())
+        else {
+            return Vec::new();
+        };
+        docs.pcb_board(&project.dir().join(file))
+            .map(|board| {
+                board
+                    .footprints
+                    .iter()
+                    .filter(|fp| !fp.component.component_type.in_bom())
+                    .filter_map(|fp| fp.schematic_link.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 }
 
@@ -399,21 +451,27 @@ fn bom_validation_notice(
     report: &signex_output::BomValidationReport,
     saved: &std::path::Path,
 ) -> Option<crate::app::state::ErrorNotice> {
+    use signex_i18n::{Translatable, ids};
+    const SHOWN: usize = 8;
     let summary = report.summary()?;
-    let mut detail = format!("Wrote {} with {summary}.", saved.display());
-    for issue in report.issues.iter().take(8) {
-        detail.push_str(&format!(
-            "
-- {}",
-            issue.message
-        ));
-    }
-    if report.issues.len() > 8 {
-        detail.push_str(&format!(
-            "
-... and {} more",
-            report.issues.len() - 8
-        ));
-    }
-    Some(crate::app::state::ErrorNotice::export_advisory(detail))
+    // The issue lines are the validator's own English (#2061).
+    let issues: String = report
+        .issues
+        .iter()
+        .take(SHOWN)
+        .map(|issue| format!("\n- {}", issue.message))
+        .collect();
+    let more = report.issues.len().saturating_sub(SHOWN);
+    let id = if more > 0 {
+        ids::NOTICE_BOM_ISSUES_MORE
+    } else {
+        ids::NOTICE_BOM_ISSUES
+    };
+    Some(crate::app::state::ErrorNotice::export_advisory(
+        Translatable::new(id)
+            .arg("path", saved.display().to_string())
+            .arg("summary", summary)
+            .arg("issues", issues)
+            .arg("more", more),
+    ))
 }

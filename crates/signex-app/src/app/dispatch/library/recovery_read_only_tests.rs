@@ -55,7 +55,11 @@ fn a_broken_stock_library_raises_the_error_card_not_a_recovery_dialog() {
     ))));
     assert!(app.library.recovery.is_none());
     let notice = app.document_state.error_notice.as_ref().expect("notice");
-    assert!(notice.detail.contains("read-only"), "{}", notice.detail);
+    assert!(
+        notice.detail.render_en_us().contains("read-only"),
+        "{}",
+        notice.detail.render_en_us()
+    );
 }
 
 #[test]
@@ -77,5 +81,9 @@ fn git_reinit_never_writes_to_a_read_only_library() {
     assert_eq!(entries, 0, "re-init wrote into the read-only library");
     assert_eq!(std::fs::read(&lib_file).unwrap(), before);
     let notice = app.document_state.error_notice.as_ref().expect("notice");
-    assert!(notice.detail.contains("read-only"), "{}", notice.detail);
+    assert!(
+        notice.detail.render_en_us().contains("read-only"),
+        "{}",
+        notice.detail.render_en_us()
+    );
 }

@@ -75,29 +75,59 @@ fn plain(
     two_terminal(name, designator, description, ("1", "1"), ("2", "2"), body)
 }
 
-/// Vertical two-terminal part as long as the others (pins at ±3.81 mm) with
-/// 1.27 mm leads, leaving 5.08 mm for the body.
-fn short_lead_two_terminal(
+/// Distance from the origin to either pin end of a vertical two-terminal part.
+const PIN_END_Y: f64 = 3.81;
+
+/// Half width of the rectangle body shared by the resistor, ferrite and fuse.
+const BOX_HALF_W: f64 = 0.762;
+
+/// Half height of that rectangle body: 1.5 grid steps, so the body is
+/// 1.524 x 3.81 mm and each lead is 1.905 mm.
+const BOX_HALF_H: f64 = 1.905;
+
+/// Vertical two-terminal part as long as the others (pins at ±3.81 mm)
+/// whose leads are `lead` long, leaving `2 * (3.81 - lead)` for the body.
+fn leaded_two_terminal(
     name: &str,
     designator: &str,
     description: &str,
+    lead: f64,
     body: Vec<super::SymbolGraphic>,
 ) -> Symbol {
     let pins = vec![
-        name_hidden(with_length(pin("1", "1", Passive, 0.0, 3.81, Down), 1.27)),
-        name_hidden(with_length(pin("2", "2", Passive, 0.0, -3.81, Up), 1.27)),
+        name_hidden(with_length(
+            pin("1", "1", Passive, 0.0, PIN_END_Y, Down),
+            lead,
+        )),
+        name_hidden(with_length(
+            pin("2", "2", Passive, 0.0, -PIN_END_Y, Up),
+            lead,
+        )),
     ];
     symbol(name, designator, description, pins, body)
 }
 
-fn resistor() -> Symbol {
-    // A 5.08 x 1.524 mm rectangle: about 3:1, the usual resistor proportion.
-    short_lead_two_terminal(
-        "R",
-        "R?",
-        "Resistor (IEC rectangle).",
-        vec![rect([-0.762, 2.54], [0.762, -2.54])],
+/// Two-terminal part drawn around the shared rectangle body, with `marks`
+/// drawn inside it.
+fn boxed_two_terminal(
+    name: &str,
+    designator: &str,
+    description: &str,
+    marks: Vec<super::SymbolGraphic>,
+) -> Symbol {
+    let mut body = vec![rect([-BOX_HALF_W, BOX_HALF_H], [BOX_HALF_W, -BOX_HALF_H])];
+    body.extend(marks);
+    leaded_two_terminal(
+        name,
+        designator,
+        description,
+        round4(PIN_END_Y - BOX_HALF_H),
+        body,
     )
+}
+
+fn resistor() -> Symbol {
+    boxed_two_terminal("R", "R?", "Resistor (IEC rectangle).", Vec::new())
 }
 
 /// Two parallel plates 1.016 mm apart with short leads to the pins.
@@ -133,30 +163,24 @@ fn inductor() -> Symbol {
         .iter()
         .map(|&cy| arc([0.0, cy], 0.635, 270.0, 90.0))
         .collect();
-    short_lead_two_terminal("L", "L?", "Inductor (four-hump coil).", body)
+    leaded_two_terminal("L", "L?", "Inductor (four-hump coil).", 1.27, body)
 }
 
 fn ferrite() -> Symbol {
-    plain(
+    boxed_two_terminal(
         "Ferrite",
         "FB?",
         "Ferrite bead: a rectangle struck through by a diagonal.",
-        vec![
-            rect([-1.016, 1.27], [1.016, -1.27]),
-            line([-1.016, -1.27], [1.016, 1.27]),
-        ],
+        vec![line([-BOX_HALF_W, -BOX_HALF_H], [BOX_HALF_W, BOX_HALF_H])],
     )
 }
 
 fn fuse() -> Symbol {
-    plain(
+    boxed_two_terminal(
         "Fuse",
         "F?",
         "Fuse: a rectangle with the element drawn along its axis.",
-        vec![
-            rect([-1.016, 1.27], [1.016, -1.27]),
-            line([0.0, 1.27], [0.0, -1.27]),
-        ],
+        vec![line([0.0, BOX_HALF_H], [0.0, -BOX_HALF_H])],
     )
 }
 

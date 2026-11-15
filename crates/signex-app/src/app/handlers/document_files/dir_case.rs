@@ -219,8 +219,9 @@ impl Signex {
             let message = save_skipped_message(&path);
             crate::diagnostics::log_warning(&message);
             if self.document_state.error_notice.is_none() {
-                self.document_state.error_notice =
-                    Some(crate::app::state::ErrorNotice::save(message));
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
+                    crate::app::state::untranslated(message),
+                ));
             }
             return Task::none();
         }
@@ -262,8 +263,9 @@ impl Signex {
             Ok(task) => task,
             Err(error) => {
                 crate::diagnostics::log_error("Failed to open document path", &error);
-                self.document_state.error_notice =
-                    Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+                    crate::app::state::verbatim(format!("{error:#}")),
+                ));
                 // No SchematicOpened will come: a descent parked on this
                 // claim must still answer (#1756).
                 self.settle_untracked_open(&request)

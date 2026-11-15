@@ -39,7 +39,13 @@ pub(super) fn apply_symbol_camera(editor: &mut SymEditor, msg: SymbolEditorMsg) 
             editor.canvas_cache.clear();
         }
         SymbolEditorMsg::ViewportMeasured { width, height, .. } => {
-            apply_pending_view(editor, width, height);
+            let size = iced::Size::new(width, height);
+            if editor.pending_view.is_some() {
+                apply_pending_view(editor, width, height);
+            } else {
+                follow_resize(editor, size);
+            }
+            editor.viewport = size;
         }
         SymbolEditorMsg::CursorAt { x_mm, y_mm } => {
             editor.cursor_mm = match (x_mm, y_mm) {
@@ -73,8 +79,31 @@ fn apply_pending_view(editor: &mut SymEditor, width: f32, height: f32) {
         }
         SymbolViewRequest::CenterOrigin => {
             editor.camera = crate::canvas::Camera::default();
+            editor.fitted = None;
             editor.camera.offset = iced::Point::new(width * 0.5, height * 0.5);
         }
+    }
+    editor.canvas_cache.clear();
+}
+
+/// The canvas is now `after` instead of the last measured size (#2345): a
+/// view still at its last fit is fitted again, any other keeps the world
+/// point at its centre in the centre, and its zoom.
+fn follow_resize(editor: &mut SymEditor, after: iced::Size) {
+    let camera = &editor.camera;
+    let follow = crate::canvas::resize_follow(
+        editor.viewport,
+        after,
+        editor.fitted,
+        camera.offset,
+        camera.scale,
+    );
+    match follow {
+        crate::canvas::ResizeFollow::Stay => return,
+        crate::canvas::ResizeFollow::Refit(target) => {
+            fit_target(editor, target, iced::Rectangle::with_size(after));
+        }
+        crate::canvas::ResizeFollow::Shift { dx, dy } => editor.camera.pan(dx, dy),
     }
     editor.canvas_cache.clear();
 }
@@ -112,14 +141,29 @@ fn fit_symbol(editor: &mut SymEditor, viewport: iced::Rectangle) {
     let (min_x, min_y, max_x, max_y) = symbol_bbox(editor.primitive());
     let world_w = (max_x - min_x).max(1.0) as f32;
     let world_h = (max_y - min_y).max(1.0) as f32;
+    // Symbol y points up: the box ends at `max_y`, `world_h` below it.
+    let target = iced::Rectangle::new(
+        iced::Point::new(min_x as f32, max_y as f32 - world_h),
+        iced::Size::new(world_w, world_h),
+    );
+    fit_target(editor, target, viewport);
+}
+
+/// Fit the symbol-space box `target` into `viewport` and remember the fit.
+fn fit_target(editor: &mut SymEditor, target: iced::Rectangle, viewport: iced::Rectangle) {
     let avail_w = (viewport.width - FIT_MARGIN * 2.0).max(1.0);
     let avail_h = (viewport.height - FIT_MARGIN * 2.0 - FIT_TOP_CLEARANCE).max(1.0);
     let camera = &mut editor.camera;
-    camera.scale = (avail_w / world_w)
-        .min(avail_h / world_h)
+    camera.scale = (avail_w / target.width)
+        .min(avail_h / target.height)
         .clamp(crate::canvas::Camera::MIN_SCALE, FIT_MAX_SCALE);
-    let centre_x = (min_x as f32 + world_w / 2.0) * camera.scale;
-    let centre_y = (-(max_y as f32) + world_h / 2.0) * camera.scale;
+    let centre_x = (target.x + target.width / 2.0) * camera.scale;
+    let centre_y = (-(target.y + target.height) + target.height / 2.0) * camera.scale;
     camera.offset.x = viewport.width / 2.0 - centre_x;
     camera.offset.y = (viewport.height + FIT_TOP_CLEARANCE) / 2.0 - centre_y;
+    editor.fitted = Some(crate::canvas::FittedView::new(
+        target,
+        camera.offset,
+        camera.scale,
+    ));
 }

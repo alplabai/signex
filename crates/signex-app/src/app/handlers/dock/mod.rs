@@ -78,6 +78,18 @@ impl Signex {
                 self.handle_pcb_footprint_text(msg);
                 return self.finish_update();
             }
+            if let crate::panels::PanelMsg::PcbBoard(msg) = panel_msg {
+                let task = self.handle_pcb_board_panel(msg);
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::PcbComponent(msg) = panel_msg {
+                let task = self.handle_pcb_component(msg);
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::PcbPrimitive(msg) = panel_msg {
+                self.handle_pcb_primitive(msg);
+                return self.finish_update();
+            }
             if self.handle_dock_library_browser_message(panel_msg)
                 || self.handle_dock_multi_edit_message(panel_msg)
                 || self.handle_dock_property_editor_message(panel_msg)

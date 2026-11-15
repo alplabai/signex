@@ -33,7 +33,7 @@ use super::browser::{OVERSCAN_ROWS, visible_range};
 use super::loose_symbols::LooseSymbol;
 use super::messages::{LibraryMessage, PrimitivePickerMsg};
 use super::modal_chrome::{cancel_btn, footer_strip, header, primary_btn, secondary_btn};
-use super::state::{LibraryState, PrimitivePickerState};
+use super::state::{LibraryState, PrimitivePickerState, PrimitivePickerTarget};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -60,11 +60,12 @@ enum ListItem {
 fn list_items(
     i18n: &signex_i18n::I18n,
     state: &LibraryState,
-    kind: PrimitiveKind,
+    picker: &PrimitivePickerState,
     needle: &str,
-    loose: &[LooseSymbol],
 ) -> Vec<ListItem> {
+    let (kind, loose) = (picker.kind, picker.loose.as_slice());
     let mut items = Vec::new();
+    push_suggested(i18n, &mut items, state, picker, needle);
     for lib in &state.open_libraries {
         // Read the per-library cache instead of calling `adapter.list_*`
         // every view tick; it is refreshed on open, post-save and after row
@@ -79,20 +80,12 @@ fn list_items(
         items.push(ListItem::Header {
             text: String::new(),
         });
-        for s in summaries {
-            let hit = needle.is_empty()
-                || contains_ci_in(i18n, &s.name, needle)
-                || s.uuid
-                    .simple()
-                    .encode_lower(&mut uuid::Uuid::encode_buffer())
-                    .contains(needle);
-            if hit {
-                items.push(ListItem::Row(
-                    s.name.clone(),
-                    s.uuid,
-                    PrimitiveRef::new(lib.library_id, s.uuid),
-                ));
-            }
+        for s in summaries.iter().filter(|s| matches(i18n, s, needle)) {
+            items.push(ListItem::Row(
+                s.name.clone(),
+                s.uuid,
+                PrimitiveRef::new(lib.library_id, s.uuid),
+            ));
         }
         let count = items.len() - start - 1;
         if count == 0 {
@@ -105,6 +98,52 @@ fn list_items(
     }
     push_loose(i18n, &mut items, state, loose, needle);
     items
+}
+
+/// Whether the filter `needle` takes the primitive: its name or its uuid.
+fn matches(i18n: &signex_i18n::I18n, s: &PrimitiveSummary, needle: &str) -> bool {
+    needle.is_empty()
+        || contains_ci_in(i18n, &s.name, needle)
+        || s.uuid
+            .simple()
+            .encode_lower(&mut uuid::Uuid::encode_buffer())
+            .contains(needle)
+}
+
+/// A board footprint swap lists first the footprints the components' own
+/// library parts offer (#2366); the full list follows.
+fn push_suggested(
+    i18n: &signex_i18n::I18n,
+    items: &mut Vec<ListItem>,
+    state: &LibraryState,
+    picker: &PrimitivePickerState,
+    needle: &str,
+) {
+    let PrimitivePickerTarget::BoardFootprint { suggested, .. } = &picker.target else {
+        return;
+    };
+    let rows: Vec<ListItem> = suggested
+        .iter()
+        .filter_map(|reference| {
+            let lib = state
+                .open_libraries
+                .iter()
+                .find(|lib| lib.library_id == reference.library_id)?;
+            let s = lib
+                .cached_footprints
+                .iter()
+                .find(|s| s.uuid == reference.uuid)?;
+            matches(i18n, s, needle).then(|| ListItem::Row(s.name.clone(), s.uuid, *reference))
+        })
+        .collect();
+    if rows.is_empty() {
+        return;
+    }
+    let count = rows.len();
+    items.push(ListItem::Header {
+        text: t!(i18n, ids::PCB_COMPONENT_PICKER_OWN_FOOTPRINTS, "count" => count).into_string(),
+    });
+    items.extend(rows);
 }
 
 /// The symbols of files in no library, one group per file (#1841).
@@ -267,7 +306,7 @@ pub fn view<'a>(
 
     let needle = i18n.fold_for_search(picker.filter.trim());
 
-    let items = list_items(i18n, state, picker.kind, &needle, &picker.loose);
+    let items = list_items(i18n, state, picker, &needle);
     let total_visible = items
         .iter()
         .filter(|i| matches!(i, ListItem::Row(..) | ListItem::Loose(..)))
@@ -510,19 +549,13 @@ fn contains_ci(hay: &str, needle: &str) -> bool {
 /// The header labels the list shows for `picker`, for tests.
 #[cfg(test)]
 pub(crate) fn header_labels(state: &LibraryState, picker: &PrimitivePickerState) -> Vec<String> {
-    list_items(
-        signex_i18n::I18n::en_us_ref(),
-        state,
-        picker.kind,
-        "",
-        &picker.loose,
-    )
-    .into_iter()
-    .filter_map(|item| match item {
-        ListItem::Header { text } => Some(text),
-        _ => None,
-    })
-    .collect()
+    list_items(signex_i18n::I18n::en_us_ref(), state, picker, "")
+        .into_iter()
+        .filter_map(|item| match item {
+            ListItem::Header { text } => Some(text),
+            _ => None,
+        })
+        .collect()
 }
 
 #[cfg(test)]

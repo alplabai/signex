@@ -64,7 +64,7 @@ fn add_new_schematic_is_tracked_and_refused_during_a_move() {
     fx.app.document_state.project_folder_renames.insert(id);
     let task = fx
         .app
-        .handle_add_new_schematic_picked(id, Some(new_sheet.clone()));
+        .handle_add_new_schematic_picked(id, Some(new_sheet.clone()), None);
     assert!(iced_runtime::task::into_stream(task).is_none(), "no write");
     assert!(fx.app.document_state.project_writes.is_empty());
     assert!(fx.app.document_state.error_notice.take().is_some());
@@ -72,7 +72,7 @@ fn add_new_schematic_is_tracked_and_refused_during_a_move() {
 
     let task = fx
         .app
-        .handle_add_new_schematic_picked(id, Some(new_sheet.clone()));
+        .handle_add_new_schematic_picked(id, Some(new_sheet.clone()), None);
     assert_eq!(
         fx.app.document_state.project_writes,
         std::slice::from_ref(&new_sheet)
@@ -137,7 +137,11 @@ fn history_restore_is_refused_in_a_moving_project() {
     fx.app.document_state.project_folder_renames.insert(id);
     drop(fx.app.click_restore_on_listed_history("abc123"));
     let notice = fx.app.document_state.error_notice.take().expect("notice");
-    assert!(notice.detail.contains("being renamed"), "{}", notice.detail);
+    assert!(
+        notice.detail.render_en_us().contains("being renamed"),
+        "{}",
+        notice.detail.render_en_us()
+    );
 }
 
 #[test]
@@ -152,13 +156,21 @@ fn annotate_and_reset_refuse_up_front_in_a_moving_project() {
         .app
         .handle_annotate(signex_engine::AnnotateMode::Incremental);
     let notice = fx.app.document_state.error_notice.take().expect("notice");
-    assert!(notice.detail.contains("being renamed"), "{}", notice.detail);
-    assert!(notice.detail.starts_with("Annotate"));
+    assert!(
+        notice.detail.render_en_us().contains("being renamed"),
+        "{}",
+        notice.detail.render_en_us()
+    );
+    assert!(notice.detail.render_en_us().starts_with("Annotate"));
 
     let _ = fx.app.handle_reset_duplicate_designators();
     let notice = fx.app.document_state.error_notice.take().expect("notice");
-    assert!(notice.detail.contains("being renamed"), "{}", notice.detail);
-    assert!(notice.detail.starts_with("Reset Duplicate"));
+    assert!(
+        notice.detail.render_en_us().contains("being renamed"),
+        "{}",
+        notice.detail.render_en_us()
+    );
+    assert!(notice.detail.render_en_us().starts_with("Reset Duplicate"));
     assert_eq!(
         fx.app.document_state.dirty_document_paths(),
         before,
@@ -322,7 +334,11 @@ fn a_write_aimed_at_the_folder_before_the_move_is_refused_after_it() {
         "no write"
     );
     let notice = fx.app.document_state.error_notice.take().expect("notice");
-    assert!(notice.detail.contains("was renamed"), "{}", notice.detail);
+    assert!(
+        notice.detail.render_en_us().contains("was renamed"),
+        "{}",
+        notice.detail.render_en_us()
+    );
     assert!(!fx.folder.exists(), "the old folder was not recreated");
     assert!(fx.app.document_state.project_writes.is_empty());
 
@@ -552,9 +568,9 @@ fn restoring_an_offered_copy_whose_move_is_owed_keeps_it_offered_and_safe() {
     answer(&mut fx);
     let notice = fx.app.document_state.error_notice.take().expect("notice");
     assert!(
-        notice.detail.contains("still being moved"),
+        notice.detail.render_en_us().contains("still being moved"),
         "{}",
-        notice.detail
+        notice.detail.render_en_us()
     );
     let offer = fx
         .app
@@ -677,7 +693,11 @@ fn a_restore_read_that_a_rename_overtook_re_offers_the_copy_at_the_new_path() {
 
     run_task(&mut fx.app, restore);
     let notice = fx.app.document_state.error_notice.take().expect("notice");
-    assert!(notice.detail.contains("renamed while"), "{}", notice.detail);
+    assert!(
+        notice.detail.render_en_us().contains("renamed while"),
+        "{}",
+        notice.detail.render_en_us()
+    );
     let offer = fx
         .app
         .document_state

@@ -7,6 +7,7 @@
 use std::collections::BTreeSet;
 
 use signex_types::pcb::{Footprint, PCB_GRID_MM, PcbBoard, Point};
+use signex_types::pcb_options::{GridSpec, GridUse};
 use uuid::Uuid;
 
 use super::command::BoardCommand;
@@ -45,6 +46,13 @@ pub fn grid_step_mm(board: &PcbBoard) -> f64 {
         .map(|setup| setup.grid_size)
         .filter(|step| step.is_finite() && *step > 0.0)
         .unwrap_or(PCB_GRID_MM)
+}
+
+/// The grid placing or carrying `what` on `board` snaps to (#2374): the
+/// first of the board's extra grids that applies to it, else the board's
+/// own step at the origin.
+pub fn grid_for(board: &PcbBoard, what: GridUse) -> GridSpec {
+    board.options.grid_for(what, grid_step_mm(board))
 }
 
 /// The move that takes `anchor` to the grid point nearest `anchor + raw`.

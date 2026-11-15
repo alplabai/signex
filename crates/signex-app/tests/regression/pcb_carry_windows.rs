@@ -17,7 +17,7 @@ use signex_app::pcb_canvas::{CarryKind, PcbCanvasMsg};
 use signex_app::tab_bar::TabMessage;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{Footprint, LayerDef, Pad, PadShape, PadType, PcbBoard, Point};
-use signex_types::pcb_layer::CopperLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use uuid::Uuid;
 
 use crate::drive::drive;
@@ -54,6 +54,7 @@ fn footprint(id: u128, reference: &str, x: f64, locked: bool) -> Footprint {
         locked,
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         pads: vec![pad(1, 2.0), pad(2, -2.0)],
         graphics: Vec::new(),
         properties: Vec::new(),
@@ -72,6 +73,7 @@ fn board() -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::now_v7(),
         version: 1,
         generator: "signex-test".into(),
@@ -190,6 +192,7 @@ fn drag_to(x: f64) -> PcbCanvasMsg {
     PcbCanvasMsg::FootprintDragged {
         from: Point::new(10.0, 10.0),
         to: Point::new(x, 10.0),
+        tolerance_mm: 0.05,
     }
 }
 
@@ -321,6 +324,7 @@ fn a_locked_footprint_refuses_the_drag_at_its_start_once() {
     let dragged = |x: f64| PcbCanvasMsg::FootprintDragged {
         from,
         to: Point::new(x, 10.0),
+        tolerance_mm: 0.05,
     };
     send(&mut rig.app, Message::PcbCanvas(dragged(32.0)));
     assert_eq!(refusals_since(since), 1, "refused as the drag starts");
@@ -334,7 +338,7 @@ fn a_locked_footprint_refuses_the_drag_at_its_start_once() {
     assert_eq!(carry_kind(&rig.app), None);
 }
 
-fn active_layer(app: &Signex, path: &Path) -> Option<CopperLayer> {
+fn active_layer(app: &Signex, path: &Path) -> Option<PcbLayer> {
     app.ui_state.pcb_layer_views.get(path).map(|v| v.active())
 }
 
@@ -348,17 +352,23 @@ fn the_layer_pill_of_a_board_window_steps_that_windows_board() {
         &mut rig.app,
         Signex::status_bar_message(window, None, pill.clone()),
     );
-    assert_eq!(active_layer(&rig.app, &rig.a), Some(CopperLayer::Bottom));
+    assert_eq!(
+        active_layer(&rig.app, &rig.a),
+        Some(PcbLayer::Copper(CopperLayer::Bottom))
+    );
     assert_eq!(active_layer(&rig.app, &rig.b), b_before, "B untouched");
 
     send(
         &mut rig.app,
         Signex::status_bar_message(rig.main, None, pill),
     );
-    assert_eq!(active_layer(&rig.app, &rig.b), Some(CopperLayer::Bottom));
+    assert_eq!(
+        active_layer(&rig.app, &rig.b),
+        Some(PcbLayer::Copper(CopperLayer::Bottom))
+    );
     assert_eq!(
         active_layer(&rig.app, &rig.a),
-        Some(CopperLayer::Bottom),
+        Some(PcbLayer::Copper(CopperLayer::Bottom)),
         "the main pill leaves A"
     );
 }

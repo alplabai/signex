@@ -145,13 +145,21 @@ impl Signex {
             .to_path_buf();
         let project_path = loaded.path.clone();
 
-        let picker = self.ui_state.io.picker.clone();
+        let i18n = &self.ui_state.i18n;
+        let dialog = self
+            .ui_state
+            .io
+            .picker
+            .dialog()
+            .title_in(i18n, signex_i18n::ids::FILE_DIALOG_NEW_COMPONENT_LIBRARY)
+            .filter_in(
+                i18n,
+                signex_i18n::ids::FILE_FILTER_COMPONENT_LIBRARY,
+                &["snxlib"],
+            );
         Task::perform(
             async move {
-                picker
-                    .dialog()
-                    .set_title("New Component Library")
-                    .add_filter("Signex Component Library", &["snxlib"])
+                dialog
                     .set_directory(&dialog_dir)
                     .set_file_name(&suggested_filename)
                     .save_file()
@@ -328,10 +336,10 @@ impl Signex {
                 };
                 let Some(table) = self.library.table_of_row(&path, summary.row_id) else {
                     self.library.picker = None;
-                    self.report_place_failure(&format!(
-                        "{} is no longer in the library; refresh and pick it again.",
-                        summary.internal_pn.as_str()
-                    ));
+                    self.report_place_failure(
+                        signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_PLACE_PART_GONE)
+                            .arg("part", summary.internal_pn.as_str()),
+                    );
                     return Task::none();
                 };
                 return self.handle_place_library_component(

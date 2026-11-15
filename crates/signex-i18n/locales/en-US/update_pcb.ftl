@@ -11,7 +11,6 @@ update-pcb-tree-row = Update PCB Document
 # The dialog.
 update-pcb-title = Update PCB from Schematic
 update-pcb-subtitle = { $project } to { $board }
-update-pcb-summary = { $ticked } of { $total } changes ticked
 update-pcb-computing = Comparing the schematic with the board...
 update-pcb-opening = Opening { $board }...
 update-pcb-nothing = The board is in line with the schematic. Nothing to change.
@@ -27,19 +26,56 @@ update-pcb-board-missing = The board { $board } could not be opened.
 update-pcb-no-schematic = This project has no schematic to update the board from.
 update-pcb-not-in-project = This document is not part of a project.
 
-# Group headings and their tick count.
-update-pcb-group-add-footprints = Add footprints
-update-pcb-group-remove-footprints = Remove footprints
-update-pcb-group-change-footprints = Change footprints
-update-pcb-group-designators = Designators
-update-pcb-group-values = Values
-update-pcb-group-links = Links
-update-pcb-group-nets = Nets
-update-pcb-group-pad-nets = Pad nets
+# Summary chips: click one to list only its rows.
+update-pcb-chip-add = Add { $count }
+update-pcb-chip-change = Change { $count }
+update-pcb-chip-remove = Remove { $count }
+update-pcb-chip-problems = Problems { $count }
+update-pcb-chip-tooltip = List only these rows. Click again to list every row.
+update-pcb-problems-only = Show problems only
+update-pcb-filtered-empty = No row matches the filter.
+
+# The table: columns, actions, groups and their tick count.
+update-pcb-column-action = Action
+update-pcb-column-object = Object
+update-pcb-column-detail = Detail
+update-pcb-column-status = Status
+update-pcb-action-add = Add
+update-pcb-action-change = Change
+update-pcb-action-remove = Remove
+update-pcb-action-add-icon = +
+update-pcb-action-change-icon = ~
+update-pcb-action-remove-icon = −
+update-pcb-table-components = Components
+update-pcb-table-nets = Nets
+update-pcb-table-pad-nets = Pad nets
+update-pcb-fold-open = ▾
+update-pcb-fold-closed = ▸
 update-pcb-group-count = { $on } of { $open }
 
-# One row each.
-update-pcb-row-add = Add { $designator } ({ $value }) { $footprint }
+# A row's Detail column.
+update-pcb-detail-from-to = { $from } → { $to }
+update-pcb-detail-other-version = { $from } → { $to } (another library version)
+update-pcb-detail-locked = { $from } → { $to } (locked)
+update-pcb-detail-designator = Designator { $from } → { $to }
+update-pcb-detail-value = Value { $from } → { $to }
+update-pcb-detail-link = Link to its part
+update-pcb-detail-net = Net { $net }
+
+# A row's Status column, after Validate; a problem in short, the full text
+# is its tooltip.
+update-pcb-status-ok = ✓
+update-pcb-status-ok-tooltip = Validate: this change applies to the board.
+update-pcb-status-skipped = Skipped
+update-pcb-problem-no-footprint = No footprint
+update-pcb-problem-not-annotated = Not annotated
+update-pcb-problem-duplicate = Duplicate { $designator }
+update-pcb-problem-pads = Pads would lose a net
+update-pcb-problem-unplaceable = Cannot be placed
+update-pcb-problem-not-read = Not read back
+
+# A whole row, as its tooltip.
+update-pcb-row-add = Add { $designator } { $footprint }
 update-pcb-row-remove = Remove { $designator }
 update-pcb-row-change = Change { $designator }: { $from } to { $to }
 update-pcb-row-change-version = Change { $designator }: { $from } to { $to } (another library version)
@@ -62,7 +98,11 @@ update-pcb-blocked-pads = Fewer pads numbered { $pad }; a net or a lock would be
 update-pcb-blocked-unplaceable = Cannot be placed: { $why }
 update-pcb-blocked-not-read = The part could not be read back from its sheet.
 update-pcb-fix-annotate = Annotate...
-update-pcb-fix-cross-probe = Cross Probe
+update-pcb-fix-cross-probe = Cross Probe: show the part on its sheet
+update-pcb-fix-cross-probe-icon = ⌖
+update-pcb-fix-choose-footprint = Choose footprint...
+update-pcb-fix-sheet-closed = Update PCB: the sheet holding the part is not open, so its footprint was not set. Open the sheet and choose again.
+update-pcb-fix-not-set = Update PCB: the part's footprint was not set (the part is locked or the sheet is read-only).
 
 # Notes under the rows.
 update-pcb-notes-heading = Notes
@@ -82,6 +122,10 @@ update-pcb-close = Close
 update-pcb-report = Report...
 update-pcb-validate = Validate
 update-pcb-execute = Execute
+update-pcb-execute-count = { $count ->
+        [one] Execute 1 change
+       *[other] Execute { $count } changes
+    }
 
 # Messages panel lines.
 update-pcb-done = Update PCB: { $count ->

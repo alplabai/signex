@@ -54,11 +54,14 @@ pub struct DrcPanel {
     pub rules_not_applied: usize,
     pub rule_text_unparsed: bool,
     /// Counts for the summary line; track width and via size findings are
-    /// listed as rows but not counted here yet.
+    /// listed as rows but not counted here yet. Keepouts are (#2300).
     pub clearance: usize,
     pub short: usize,
     pub unconnected: usize,
+    pub keepout: usize,
+    /// Items, and keepouts, the run could not check (#2300).
     pub skipped: usize,
+    pub skipped_keepouts: usize,
     pub rows: Vec<DrcRow>,
     /// Violations past [`MAX_ROWS`].
     pub hidden: usize,
@@ -196,7 +199,7 @@ fn status<'a>(ctx: &'a PanelContext, drc: &DrcPanel, mut col: Rows<'a>) -> Rows<
             warn,
         ));
     }
-    col = if drc.rows.is_empty() && drc.skipped == 0 {
+    col = if drc.rows.is_empty() && drc.skipped == 0 && drc.skipped_keepouts == 0 {
         col.push(note(
             t!(i18n, ids::DRC_CLEAN),
             theme_ext::success_color(&ctx.tokens),
@@ -206,11 +209,17 @@ fn status<'a>(ctx: &'a PanelContext, drc: &DrcPanel, mut col: Rows<'a>) -> Rows<
             t!(
                 i18n, ids::DRC_SUMMARY,
                 "clearance" => drc.clearance, "short" => drc.short,
-                "unconnected" => drc.unconnected
+                "unconnected" => drc.unconnected, "keepout" => drc.keepout
             ),
             muted,
         ))
     };
+    if drc.skipped_keepouts > 0 {
+        col = col.push(note(
+            t!(i18n, ids::DRC_KEEPOUTS_SKIPPED, "count" => drc.skipped_keepouts),
+            warn,
+        ));
+    }
     if drc.skipped > 0 {
         col = col.push(note(
             t!(i18n, ids::DRC_SKIPPED, "count" => drc.skipped),
@@ -386,5 +395,58 @@ mod tests {
             "Via drill | GND: 0.100 mm, needs at least 0.150 mm"
         );
         assert!(text(ViolationKind::ViaDiameter, false).starts_with("Via diameter | "));
+    }
+
+    /// #2300: a board whose only violations are keepouts counts them in the
+    /// summary, and a keepout that was not checked is said, never "clean".
+    #[test]
+    fn the_summary_counts_keepouts_and_says_an_unchecked_keepout() {
+        let texts = |panel: DrcPanel| {
+            let mut ctx = context(false);
+            ctx.pcb_drc = Some(panel);
+            let section = section(&ctx).expect("section");
+            crate::layout_probe::lay_out_texts(section, iced::Size::new(1400.0, 300.0))
+                .into_iter()
+                .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+                .collect::<Vec<_>>()
+        };
+        let keepout_only = texts(DrcPanel {
+            ran: true,
+            keepout: 1,
+            rows: vec![DrcRow {
+                index: 0,
+                kind: ViolationKind::Keepout,
+                a: "GND".into(),
+                b: "GND".into(),
+                measured_mm: "0.000".into(),
+                required_mm: "0.000".into(),
+                over_maximum: false,
+                x_mm: "0".into(),
+                y_mm: "0".into(),
+                layer: None,
+            }],
+            ..DrcPanel::default()
+        });
+        let summary = "0 clearance violations, 0 shorts, 0 unconnected links, 1 keepout violation";
+        assert!(
+            keepout_only.iter().any(|t| t == summary),
+            "{keepout_only:?}"
+        );
+
+        let unchecked = texts(DrcPanel {
+            ran: true,
+            skipped_keepouts: 2,
+            ..DrcPanel::default()
+        });
+        assert!(
+            !unchecked.iter().any(|t| t == "No violations."),
+            "{unchecked:?}"
+        );
+        assert!(
+            unchecked
+                .iter()
+                .any(|t| t == "2 keepouts could not be checked; see Messages."),
+            "{unchecked:?}"
+        );
     }
 }

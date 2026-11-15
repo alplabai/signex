@@ -543,7 +543,8 @@ fn worker_failures_reach_the_user_and_leave_the_sheet_alone() {
         app.document_state
             .error_notice
             .as_ref()
-            .map(|n| n.title.as_str()),
+            .map(|n| n.title.render_en_us())
+            .as_deref(),
         Some("Place Failed")
     );
     assert!(doc(&app).symbols.is_empty());

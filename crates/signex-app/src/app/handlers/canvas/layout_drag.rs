@@ -1,5 +1,6 @@
 use super::super::super::*;
-use crate::dock::DockMessage;
+use crate::app::view::canvas_region::{DockExtent, clamp_side_dock_width, fit_side_docks};
+use crate::dock::{DockMessage, PanelPosition};
 
 impl Signex {
     pub(crate) fn handle_layout_drag_started(&mut self, target: DragTarget) {
@@ -12,6 +13,51 @@ impl Signex {
             DragTarget::BottomPanel => self.ui_state.bottom_height,
             DragTarget::ComponentsSplit => self.library.components_panel.list_height,
         };
+    }
+
+    /// The `side` dock's footprint as stored, for the width limits below.
+    fn side_dock_extent(&self, side: PanelPosition) -> DockExtent {
+        let dock = &self.document_state.dock;
+        DockExtent {
+            present: dock.has_panels(side),
+            collapsed: dock.is_collapsed(side),
+            size: match side {
+                PanelPosition::Right => self.ui_state.right_width,
+                _ => self.ui_state.left_width,
+            },
+        }
+    }
+
+    /// `width` for the `side` dock, limited by the main window: the canvas
+    /// keeps its minimum and the other side dock keeps its width (#2347).
+    pub(crate) fn side_dock_width_in_window(&self, side: PanelPosition, width: f32) -> f32 {
+        let other = match side {
+            PanelPosition::Right => PanelPosition::Left,
+            _ => PanelPosition::Right,
+        };
+        clamp_side_dock_width(
+            width,
+            self.ui_state.window_size.0,
+            self.side_dock_extent(other),
+        )
+    }
+
+    /// Re-limit both side docks to the main window, so neither a smaller
+    /// window nor the other dock opening pushes the canvas under its minimum.
+    /// The wider dock gives way first. A minimised window reports a zero
+    /// size; the widths are kept for the restore.
+    pub(crate) fn fit_side_docks_to_window(&mut self) {
+        let (w, h) = self.ui_state.window_size;
+        if w <= 0.0 || h <= 0.0 {
+            return;
+        }
+        let (left, right) = fit_side_docks(
+            w,
+            self.side_dock_extent(PanelPosition::Left),
+            self.side_dock_extent(PanelPosition::Right),
+        );
+        self.ui_state.left_width = left;
+        self.ui_state.right_width = right;
     }
 
     /// True while any pointer-driven drag that `handle_layout_drag_moved` or
@@ -89,11 +135,17 @@ impl Signex {
                 let (current, new_val) = match target {
                     DragTarget::LeftPanel => (
                         self.ui_state.left_width,
-                        (self.interaction_state.drag_start_size + delta).clamp(100.0, 500.0),
+                        self.side_dock_width_in_window(
+                            PanelPosition::Left,
+                            self.interaction_state.drag_start_size + delta,
+                        ),
                     ),
                     DragTarget::RightPanel => (
                         self.ui_state.right_width,
-                        (self.interaction_state.drag_start_size - delta).clamp(100.0, 500.0),
+                        self.side_dock_width_in_window(
+                            PanelPosition::Right,
+                            self.interaction_state.drag_start_size - delta,
+                        ),
                     ),
                     DragTarget::BottomPanel => (
                         self.ui_state.bottom_height,
@@ -115,6 +167,7 @@ impl Signex {
                     new_val.round()
                 };
                 if (current - new_val).abs() >= 1.0 {
+                    let before = self.canvas_bounds();
                     match target {
                         DragTarget::LeftPanel => self.ui_state.left_width = new_val,
                         DragTarget::RightPanel => self.ui_state.right_width = new_val,
@@ -123,6 +176,8 @@ impl Signex {
                             self.library.components_panel.list_height = new_val
                         }
                     }
+                    // A dock splitter resizes the canvas like a window resize.
+                    self.follow_main_canvas_resize(before);
                 }
             }
         }

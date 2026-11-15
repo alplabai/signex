@@ -143,7 +143,7 @@ pub(super) fn notice_detail(app: &Signex) -> String {
     app.document_state
         .error_notice
         .as_ref()
-        .map(|n| n.detail.clone())
+        .map(|n| n.detail.render_en_us())
         .unwrap_or_default()
 }
 

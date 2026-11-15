@@ -411,7 +411,7 @@ impl Engine {
     /// Foreign-format files (any extension other than `.snxsch`) are not
     /// readable here; an optional GPL-3.0 import companion handles
     /// conversion to `.snxsch` and is shipped separately from this
-    /// Apache-2.0 crate.
+    /// FSL-1.1-ALv2 crate.
     pub fn open(path: &Path) -> Result<Self, EngineError> {
         let text = std::fs::read_to_string(path)
             .map_err(|error| EngineError::OpenFailed(anyhow::Error::msg(error.to_string())))?;

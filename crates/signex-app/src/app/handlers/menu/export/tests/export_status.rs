@@ -252,8 +252,10 @@ fn a_refusal_logs_a_warning_and_a_real_failure_logs_an_error_without_a_prefix() 
     use crate::diagnostics::DiagnosticLevel;
     let since = mark();
     let mut app = open_preview(DIR);
-    app.refuse_export("Select something 1766-refusal");
-    app.report_export_failure("BOM export failed: 1766-failure");
+    app.refuse_export(crate::app::state::verbatim("Select something 1766-refusal"));
+    app.report_export_failure(crate::app::state::verbatim(
+        "BOM export failed: 1766-failure",
+    ));
 
     assert_eq!(
         level_since(since, "1766-refusal"),

@@ -305,7 +305,7 @@ fn remove_delete_choice_refuses_shared_library_outside_project() {
         .error_notice
         .as_ref()
         .expect("refusal must be surfaced to the user");
-    assert_eq!(notice.title, "Delete Refused");
+    assert_eq!(notice.title.render_en_us(), "Delete Refused");
     // Still excluded from the project's in-memory list.
     assert!(app.document_state.projects[0].data.libraries.is_empty());
 }
@@ -376,7 +376,7 @@ fn remove_delete_choice_refuses_shared_library_inside_project_folder() {
         .error_notice
         .as_ref()
         .expect("refusal must be surfaced");
-    assert_eq!(notice.title, "Delete Refused");
+    assert_eq!(notice.title.render_en_us(), "Delete Refused");
     assert!(app.document_state.projects[0].data.libraries.is_empty());
 }
 
@@ -654,6 +654,7 @@ fn add_new_schematic_writes_blank_snxsch_marks_project_dirty_no_tab_open() {
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicPicked {
         project_id,
         path: Some(new_sheet.clone()),
+        choice: None,
     }));
     assert!(!new_sheet.exists(), "update itself does no IO");
 
@@ -666,6 +667,7 @@ fn add_new_schematic_writes_blank_snxsch_marks_project_dirty_no_tab_open() {
         project_id,
         path: new_sheet.clone(),
         result: Ok(signex_app::app::project_entry_disk::EntryPatch::NoProjectFile),
+        designators: None,
     }));
 
     assert!(new_sheet.exists(), "new .snxsch must land on disk");
@@ -695,6 +697,7 @@ fn add_new_schematic_cancelled_picker_is_a_clean_noop() {
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicPicked {
         project_id: app.document_state.projects[0].id,
         path: None, // user cancelled the Save-As dialog
+        choice: None,
     }));
 
     assert!(
@@ -1316,14 +1319,15 @@ fn a_corrupt_snxsym_raises_the_error_card_naming_the_file() {
         .as_ref()
         .expect("a corrupt .snxsym must raise the error card, not fail silently");
     assert_eq!(
-        notice.title, "Open Failed",
+        notice.title.render_en_us(),
+        "Open Failed",
         "the shared card must name the operation that failed — it read \"Export Failed\" for \
          every caller until #532"
     );
     assert!(
-        notice.detail.contains("corrupt.snxsym"),
+        notice.detail.render_en_us().contains("corrupt.snxsym"),
         "the card must name the file the user tried to open, got: {}",
-        notice.detail
+        notice.detail.render_en_us()
     );
     assert!(
         !app.document_state.tabs.iter().any(|t| t.path == sym),
@@ -1735,7 +1739,10 @@ fn new_project_write_failure_reaches_the_user_after_the_task_runs() {
         .as_ref()
         .expect("a failed create must be reported");
     assert!(
-        notice.detail.contains("Failed to create new project"),
+        notice
+            .detail
+            .render_en_us()
+            .contains("Failed to create new project"),
         "{notice:?}"
     );
     assert!(
@@ -1805,7 +1812,10 @@ fn new_project_keeps_an_existing_nonempty_project_byte_identical() {
         .error_notice
         .as_ref()
         .expect("a refusal must reach the user");
-    assert!(notice.detail.contains("already exists"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("already exists"),
+        "{notice:?}"
+    );
 }
 
 #[test]

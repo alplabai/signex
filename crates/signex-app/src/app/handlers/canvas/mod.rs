@@ -51,6 +51,12 @@ mod sync_sheet_pins;
 mod tests;
 #[cfg(test)]
 mod undocked_editor_tests;
+mod viewport_resize;
+#[cfg(test)]
+mod viewport_resize_tests;
+mod wire_corner;
+#[cfg(test)]
+mod wire_corner_tests;
 #[cfg(test)]
 mod wire_merge_tests;
 #[cfg(test)]

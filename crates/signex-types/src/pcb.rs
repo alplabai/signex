@@ -7,6 +7,7 @@ use crate::pcb_layer::PcbLayer;
 use crate::property::PcbProperty;
 use crate::schematic::InstancePath;
 
+pub use crate::pcb_component::{ComponentAttributes, ComponentType};
 pub use crate::schematic::Point;
 
 // ---------------------------------------------------------------------------
@@ -309,6 +310,10 @@ pub struct Footprint {
     /// `lib_ref` footprint column. See ADR-0005 section 13.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub library_ref: Option<FootprintSourceRef>,
+    /// Type, height, locks and the other component settings (#2365). Boxed
+    /// so a footprint stays small beside the other board items.
+    #[serde(default, skip_serializing_if = "ComponentAttributes::is_default")]
+    pub component: Box<ComponentAttributes>,
     /// Keys in this footprint's `[extras.footprints.<uuid>]` table that
     /// this build does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
@@ -496,6 +501,13 @@ pub struct PcbBoard {
     /// writes [`Self::outline`] when the sketch owns it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sketch: Option<crate::pcb_sketch::BoardSketch>,
+    /// Guides, extra grids, the sheet and naming options (#2374). Written
+    /// only through the board engine's `SetBoardOptions` command.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::pcb_options::BoardOptions::is_default"
+    )]
+    pub options: crate::pcb_options::BoardOptions,
     /// Keys in the `.snxpcb` manifest, `[stackup]`, `[nets]` and
     /// `[extras.board]` that this build does not recognise, kept per
     /// section so a save re-emits each where it was found. Empty for

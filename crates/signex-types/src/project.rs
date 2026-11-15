@@ -21,6 +21,9 @@ mod setup_profile;
 #[cfg(test)]
 mod setup_tests;
 mod unknown;
+mod user_profile;
+#[cfg(test)]
+mod user_profile_tests;
 pub use annotation::{AnnotationSettings, AnnotationState};
 pub use erc_waiver::ErcWaiver;
 pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
@@ -38,8 +41,13 @@ pub use setup::{
     COPPER_LAYERS, DEFAULT_DESIGNATORS, NEW_BOARD_GRID_MM, PcbDefaults, PcbField, PcbValueError,
     ProjectDefaults, SHEET_SIZES, SheetDefaults, copper_layers,
 };
-pub use setup_profile::{FabTemplate, ProjectSetup, SetupProfile, designator_token};
+pub use setup_profile::{FabTemplate, ProjectSetup, ResolvedSetup, SetupProfile, designator_token};
 pub use unknown::UnknownJson;
+pub use user_profile::{
+    MAX_PROFILE_NAME_CHARS, PROJECT_PROFILE_TOKEN, ProfileNameProblem, ProfileRef,
+    USER_PROFILE_ID_PREFIX, UserProfile, check_profile_name, find_user_profile, new_profile_id,
+    resolve_profile, save_user_profile, user_profiles_from_value,
+};
 
 /// Reads a stored `document_id`; a value that is not one reads as absent, so
 /// a hand-edited key never makes the project unopenable.

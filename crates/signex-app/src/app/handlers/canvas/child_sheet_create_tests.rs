@@ -297,7 +297,9 @@ fn an_unsaved_parent_says_so_and_offers_nothing() {
     assert!(app.ui_state.create_child_sheet_confirm.is_none());
     let card = app.document_state.error_notice.as_ref().expect("a notice");
     assert!(
-        card.detail.contains("Save the parent sheet first"),
+        card.detail
+            .render_en_us()
+            .contains("Save the parent sheet first"),
         "{card:?}"
     );
 }
@@ -414,7 +416,11 @@ fn a_project_being_renamed_refuses_inline_in_the_dialog_not_in_a_notice() {
     assert!(app.plan_child_sheet_from_dialog().is_none());
     let c = confirm(&app);
     assert!(
-        c.error.as_deref().is_some_and(|e| e.contains("renamed")),
+        c.error
+            .as_ref()
+            .map(signex_i18n::Translatable::render_en_us)
+            .as_deref()
+            .is_some_and(|e| e.contains("renamed")),
         "{c:?}"
     );
     assert!(
@@ -449,6 +455,8 @@ fn a_file_another_symbol_uses_is_not_offered_to_open_and_says_who_has_it() {
     assert!(
         offered
             .error
+            .as_ref()
+            .map(signex_i18n::Translatable::render_en_us)
             .as_deref()
             .is_some_and(|e| e.contains("'taken' already points at it")),
         "{offered:?}"
@@ -458,6 +466,8 @@ fn a_file_another_symbol_uses_is_not_offered_to_open_and_says_who_has_it() {
     let c = confirm(&app);
     assert!(
         c.error
+            .as_ref()
+            .map(signex_i18n::Translatable::render_en_us)
             .as_deref()
             .is_some_and(|e| e.contains("already points")),
         "{c:?}"
@@ -805,7 +815,11 @@ fn a_rename_holding_the_child_refuses_the_descent_with_a_notice() {
     assert!(!app.has_tab_for(&child));
     assert!(!app.document_state.pending_opens.contains(&child));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
-    assert!(notice.detail.contains("still running"), "{}", notice.detail);
+    assert!(
+        notice.detail.render_en_us().contains("still running"),
+        "{}",
+        notice.detail.render_en_us()
+    );
 }
 
 #[test]

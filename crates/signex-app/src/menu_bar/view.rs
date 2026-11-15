@@ -133,19 +133,20 @@ fn render_item(
         mc,
         shape,
     );
-    if !matches!(item.state, ItemState::Placeholder) {
+    let ItemState::Placeholder { reason } = &item.state else {
         return Item::new(row);
-    }
-    // A planned feature reads as planned rather than broken (#1251).
-    let hint = container(
-        text(planned.clone())
-            .size(MENU_SHORTCUT_SIZE)
-            .color(mc.text),
-    )
-    .padding([3, 8])
-    .style(signex_widgets::active_bar_dropdown::tooltip_style(
-        mc.hover, mc.border,
-    ));
+    };
+    // A planned feature reads as planned rather than broken (#1251); a row
+    // with a reason says why it is greyed (#2360).
+    let hint_text = match reason {
+        Some(reason) => text(signex_i18n::UserText::new(reason)),
+        None => text(planned.clone()),
+    };
+    let hint = container(hint_text.size(MENU_SHORTCUT_SIZE).color(mc.text))
+        .padding([3, 8])
+        .style(signex_widgets::active_bar_dropdown::tooltip_style(
+            mc.hover, mc.border,
+        ));
     Item::new(iced::advanced::Widget::_boxed(
         signex_widgets::tooltip(row, hint, iced::widget::tooltip::Position::Right).gap(4),
     ))

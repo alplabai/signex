@@ -1,5 +1,6 @@
 //! Per-page PDF content-stream builder + markup/text helpers.
 
+use super::surface::PageContent;
 use super::*;
 
 /// Build a content stream for a single page.
@@ -10,7 +11,7 @@ pub(super) fn build_page_content(
     page_h_pt: f32,
     expr_tables: &ExpressionTables,
     fonts: &mut FontUsage,
-) -> Result<Vec<u8>, PdfError> {
+) -> Result<PageContent, PdfError> {
     let mut surface = PdfSurface::new(fonts);
     let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
 
@@ -75,6 +76,8 @@ pub(super) fn build_page_content(
                 if let Some((r, g, b)) = style.stroke_rgb {
                     let (sr, sg, sb) = colour_map.map_stroke_bw(r, g, b);
                     surface.set_stroke_color(sr, sg, sb);
+                    // A wire colour's alpha, as SVG stroke-opacity (#2236).
+                    surface.set_stroke_alpha(style.stroke_alpha);
                 }
                 if let Some((r, g, b)) = style.fill_rgb {
                     let (fr, fg, fb) = colour_map.map_fill_bw(r, g, b);
@@ -160,6 +163,7 @@ pub(super) fn build_page_content(
 
                     if run.overbar && run_advance > 0.1 {
                         surface.set_stroke_color(sr, sg, sb);
+                        surface.set_stroke_alpha(1.0);
                         surface.set_stroke_width((run_size * 0.08).max(0.25));
                         let v_bar = run_v - run_size * 0.78;
                         let (x1, y1) = place(cursor_u, v_bar);
@@ -179,7 +183,7 @@ pub(super) fn build_page_content(
         }
     }
 
-    Ok(surface.finish())
+    Ok(surface.finish_page())
 }
 
 #[derive(Clone)]

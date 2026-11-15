@@ -328,17 +328,12 @@ fn an_exclude_save_in_an_undecided_folder_names_the_kept_spelling() {
     exclude_then(&mut app, ExcludeDirtyChoice::Save);
 
     let notice = app.document_state.error_notice.take().expect("card");
+    let detail = notice.detail.render_en_us();
     assert!(
-        notice
-            .detail
-            .starts_with("\"Lib.snxsch\" was not excluded: Save each spelling"),
-        "{}",
-        notice.detail
+        detail.starts_with("\"Lib.snxsch\" was not excluded: Save each spelling"),
+        "{detail}"
     );
-    let (_, kept) = notice
-        .detail
-        .split_once("kept unsaved: ")
-        .expect("names it");
+    let (_, kept) = detail.split_once("kept unsaved: ").expect("names it");
     assert_eq!(
         kept,
         lower.display().to_string(),

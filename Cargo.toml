@@ -64,7 +64,7 @@ edition = "2024"
 # When bumping, keep `rust-toolchain.toml`, the CI `dtolnay/rust-toolchain@<ver>`
 # refs, and this line in lockstep.
 rust-version = "1.97"
-license = "Apache-2.0"
+license = "FSL-1.1-ALv2"
 repository = "https://github.com/alplabai/signex"
 
 [workspace.dependencies]

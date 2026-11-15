@@ -18,9 +18,16 @@ allow = [
 ]
 confidence-threshold = 0.95
 
+# Our own crates are FSL-1.1-ALv2 (LICENSE); allowed for them only, never
+# for a dependency.
+exceptions = [
+    { crate = "signex-sketch", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-types", allow = ["FSL-1.1-ALv2"] },
+]
+
 [bans]
 # Specific GPL/LGPL/AGPL crates whose presence in the dep tree would
-# break the Apache-clean invariant for the sketch solver.
+# break the clean-room invariant for the sketch solver.
 deny = []
 
 [advisories]

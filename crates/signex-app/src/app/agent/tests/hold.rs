@@ -94,14 +94,21 @@ fn a_project_held_by_a_live_headless_run_is_refused_with_a_message_and_a_notice(
     let notice = fx.app.document_state.error_notice.take().expect("a notice");
     let pid = std::process::id();
     let want = format!("is being edited by a headless signex-cli run (process {pid})");
-    assert!(notice.detail.contains(&want), "{}", notice.detail);
+    assert!(
+        notice.detail.render_en_us().contains(&want),
+        "{}",
+        notice.detail.render_en_us()
+    );
     // It names the entry to remove if no run is alive.
     let canonical = std::fs::canonicalize(&fx.project).unwrap();
     let entry = fx.dir.join("registry").join(entry_file_name(&canonical));
     assert!(
-        notice.detail.contains(&entry.display().to_string()),
+        notice
+            .detail
+            .render_en_us()
+            .contains(&entry.display().to_string()),
         "{}",
-        notice.detail
+        notice.detail.render_en_us()
     );
     assert!(
         crate::diagnostics::logged_count(&format!("HeldByRun1924.snxprj {want}")) > 0,
@@ -603,10 +610,21 @@ fn an_open_refused_for_a_run_without_an_entry_names_no_process_and_no_file() {
     assert!(!fx.opened());
     let notice = fx.app.document_state.error_notice.take().expect("a notice");
     assert!(
-        notice.detail.contains("another signex-cli run"),
+        notice
+            .detail
+            .render_en_us()
+            .contains("another signex-cli run"),
         "{}",
-        notice.detail
+        notice.detail.render_en_us()
     );
-    assert!(!notice.detail.contains("process 0"), "{}", notice.detail);
-    assert!(!notice.detail.contains("remove"), "{}", notice.detail);
+    assert!(
+        !notice.detail.render_en_us().contains("process 0"),
+        "{}",
+        notice.detail.render_en_us()
+    );
+    assert!(
+        !notice.detail.render_en_us().contains("remove"),
+        "{}",
+        notice.detail.render_en_us()
+    );
 }

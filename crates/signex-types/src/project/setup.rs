@@ -162,6 +162,7 @@ impl PcbDefaults {
             .collect();
         PcbBoard {
             sketch: None,
+            options: Default::default(),
             uuid: uuid::Uuid::now_v7(),
             version: 1,
             generator: "signex".into(),
@@ -242,6 +243,10 @@ pub struct ProjectDefaults {
     pub pcb: Option<PcbDefaults>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sheet: Option<SheetDefaults>,
+    /// The id of the project's default profile: a built-in token or a user
+    /// profile id. Only the id is stored, never the profile; absent = none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
 }
 
 impl ProjectDefaults {

@@ -49,6 +49,30 @@ pub fn resolve_part_footprint(
             found: library.version,
         });
     }
+    ready_for_board(&address, &library, pin_map)
+}
+
+/// Resolve a library footprint a part names itself, with no row behind it
+/// (Update PCB's Choose footprint, #2371): the latest version, pin n on pad n.
+pub fn resolve_named_footprint(
+    address: &PrimitiveRef,
+    lookup: impl Fn(&PrimitiveRef, &str) -> Option<Footprint>,
+) -> Result<ResolvedFootprint, FootprintResolveError> {
+    let library = lookup(address, "").ok_or_else(|| FootprintResolveError::NotFound {
+        library: address.library_id,
+        footprint: address.uuid,
+        version: String::new(),
+    })?;
+    ready_for_board(address, &library, PinPadMap::default())
+}
+
+/// The library footprint `library` at `address` in its board form, stamped
+/// with its source.
+fn ready_for_board(
+    address: &PrimitiveRef,
+    library: &Footprint,
+    pin_map: PinPadMap,
+) -> Result<ResolvedFootprint, FootprintResolveError> {
     let source = FootprintSourceRef {
         library: address.library_id,
         footprint: address.uuid,
@@ -62,7 +86,7 @@ pub fn resolve_part_footprint(
             value: source.to_string(),
         });
     }
-    let mut footprint = board_footprint(&library)?;
+    let mut footprint = board_footprint(library)?;
     footprint.library_ref = Some(source.clone());
     Ok(ResolvedFootprint {
         source,

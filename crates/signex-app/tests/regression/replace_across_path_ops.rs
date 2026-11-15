@@ -252,8 +252,12 @@ fn assert_replace_refused(app: &mut Signex) {
         .error_notice
         .clone()
         .expect("a Replace Refused card");
-    assert_eq!(notice.title, "Replace Refused");
-    assert!(notice.detail.contains("child.snxsch"), "{}", notice.detail);
+    assert_eq!(notice.title.render_en_us(), "Replace Refused");
+    assert!(
+        notice.detail.render_en_us().contains("child.snxsch"),
+        "{}",
+        notice.detail.render_en_us()
+    );
     assert!(!app.ui_state.find_replace.is_busy(), "no replace job waits");
     assert!(outputs(task).is_empty(), "nothing was read");
     assert!(

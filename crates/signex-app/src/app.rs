@@ -27,7 +27,6 @@ pub mod document_read;
 mod documents;
 pub(crate) mod file_extension;
 mod handlers;
-mod helpers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;
 mod library_delete;
@@ -46,10 +45,12 @@ pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, Projec
 pub(crate) mod designator_scan;
 #[cfg(test)]
 mod designator_scan_tests;
+pub(crate) mod document_setup;
 pub mod palette_index;
 #[cfg(test)]
 mod palette_index_tests;
 mod pcb_dirty_adapter;
+pub(crate) mod pcb_tools;
 pub(crate) mod project_sheets;
 mod read_only_refusal;
 pub mod restore_job;
@@ -82,26 +83,29 @@ pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BoardSketchMsg, BomPreviewMsg, CommandPaletteMsg,
     ContextAction, ContextMenuMsg, ContextMenuState, ContextSubmenu, CrossProbeMsg, DragTarget,
     DrcRunResult, EditMsg, EnableVersionControlMsg, EnableVersionControlOutcome,
-    EnableVersionControlState, ErcMsg, ExcludeDirtyChoice, ExportMsg, FileMsg, GitCommitFailure,
-    GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg, KeymapModMigration,
-    LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, NetNavMsg, OverlayMsg,
-    ParameterManagerMsg, PasteIntent, PasteRequest, PcbMsg, PcbViewMsg, PreferencesMsg,
-    PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob,
-    ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg,
-    RenameDialogState, RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest,
-    TabContextAction, TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem,
-    UiMsg, VersionControlScope, ViewAngleEntry, ViewRotationMsg, WindowMsg,
+    EnableVersionControlState, ErcMsg, ExcludeDirtyChoice, ExportMsg, FileMsg, FootprintSwapMsg,
+    GitCommitFailure, GridPickerState, GridPropertiesMsg, GridPropertiesState, InputMsg,
+    KeymapModMigration, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg, NetNavMsg,
+    OverlayMsg, ParameterManagerMsg, PasteIntent, PasteRequest, PcbBarMenu, PcbBarMsg, PcbMsg,
+    PcbViewMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState,
+    ProjectMsg, ProjectRenameJob, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
+    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
+    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
+    TextEditState, TextEditTarget, TrackItem, UiMsg, VersionControlScope, ViewAngleEntry,
+    ViewRotationMsg, WindowMsg,
 };
 pub(crate) use document::{Document, DocumentKey};
+pub use document_setup::{DocumentSetupMsg, DocumentSetupState, SetupKind, SheetChoice};
 pub use documents::{
-    ComponentEditorTab, DrawMode, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
+    ComponentEditorTab, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
     LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolDocument, SymbolViewRequest,
     TabDocument, TabInfo, TabKind, Tool,
 };
+pub(crate) use handlers::document_files::is_pcb_path;
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use handlers::window_geometry_events::GeometryReadout;
 pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, tiles};
-pub use new_project::{NewProjectMsg, NewProjectState};
+pub use new_project::{NewProjectMsg, NewProjectState, ProfileUndo};
 pub use sheet_numbering::{NumberingProblem, SheetNumberingMsg, SheetNumberingState};
 pub use signex_history::History;
 pub(crate) use signex_history::SavePoint;
@@ -115,7 +119,7 @@ pub use state::{
     PreviewState, ProjectId, Signex, UiState,
 };
 pub use symbol_history::SymbolHistorySnapshot;
-pub use update_pcb::{UpdatePcbMsg, UpdatePcbState};
+pub use update_pcb::{RowAction, RowFilter, TableGroup, UpdatePcbMsg, UpdatePcbState};
 
 // Re-exported so modal dialogs outside `state` can reference the type.
 pub use state::AnnotateOrder;
@@ -141,7 +145,13 @@ impl Signex {
         tasks.push(self.sync_back_annotate());
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
+        self.prune_pcb_component_draft();
+        // A New PCB / New Schematic dialog of a closed project closes (#2232).
+        self.drop_document_setup_of_closed_project();
         self.sync_undo_depth();
+        // A resize, a dock collapsed or expanded, or a panel docked into an
+        // empty side all change the room beside the canvas (#2347).
+        self.fit_side_docks_to_window();
         // A Save completed behind the quit prompt must not leave it listing
         // files that are no longer unsaved (#1833).
         tasks.push(self.prune_settled_quit_confirm());

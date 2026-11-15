@@ -96,7 +96,7 @@ fn an_invalid_filename_is_refused_with_a_visible_message() {
             .error_notice
             .as_ref()
             .unwrap_or_else(|| panic!("'{bad}' must raise a visible notice"));
-        assert!(!notice.detail.is_empty());
+        assert!(!notice.detail.render_en_us().is_empty());
         assert_eq!(identity(&app), original(), "'{bad}' must not apply");
     }
     assert!(!app.document_state.is_document_dirty(&path));
@@ -136,7 +136,10 @@ fn a_path_escaping_the_sheets_folder_is_refused() {
             .error_notice
             .as_ref()
             .unwrap_or_else(|| panic!("'{bad}' must raise a visible notice"));
-        assert!(notice.detail.contains("folder"), "{notice:?}");
+        assert!(
+            notice.detail.render_en_us().contains("folder"),
+            "{notice:?}"
+        );
         assert_eq!(identity(&app), original(), "'{bad}' must not apply");
     }
     assert!(!app.document_state.is_document_dirty(&path));
@@ -253,7 +256,10 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
         .error_notice
         .as_ref()
         .expect("a file used by another sheet must raise a notice");
-    assert!(notice.detail.contains("already references"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("already references"),
+        "{notice:?}"
+    );
     assert_eq!(identity(&app), before, "the edit must not apply");
     assert!(!app.document_state.is_document_dirty(&other));
 

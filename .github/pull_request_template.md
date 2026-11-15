@@ -9,7 +9,11 @@ Brief description of what this PR does and why.
 ## License compliance (issue #62)
 
 - [ ] This is original work, or derived only from sources whose licence I read
-      and confirmed Apache-2.0-compatible.
+      and confirmed compatible with Signex's licence (FSL-1.1-ALv2, which
+      becomes Apache-2.0 after two years).
+- [ ] I license this contribution to Alp Lab AB and recipients of Signex
+      under Apache-2.0 (Signex itself is distributed under FSL-1.1-ALv2, see
+      [CONTRIBUTING.md](../CONTRIBUTING.md#contribution-terms)).
 
 **Derived from something? Name the source and its licence:** _(one line, or `n/a`)_
 

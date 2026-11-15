@@ -40,6 +40,28 @@ fn a_headless_boot_runs_commands_by_id_and_leaves_the_real_config_alone() {
     run_probe("run");
 }
 
+/// #2325: the headless boot hands the app back on the heap, so no caller
+/// frame (the CLI on a 1 MB Windows main stack) copies the ~44 KB app.
+#[test]
+fn a_headless_boot_returns_the_app_boxed() {
+    fn returned<T>(_: fn(Vec<PathBuf>, &RuleProfile) -> T) -> usize {
+        std::mem::size_of::<T>()
+    }
+    fn returned_with_depth<T>(_: fn(Vec<PathBuf>, &RuleProfile, &str) -> T) -> usize {
+        std::mem::size_of::<T>()
+    }
+    let sizes = [
+        returned(Signex::boot_headless),
+        returned_with_depth(Signex::boot_headless_with_undo_depth),
+    ];
+    for size in sizes {
+        assert!(
+            size < 1024,
+            "the headless boot returns {size} bytes; box the app"
+        );
+    }
+}
+
 #[test]
 fn a_headless_boot_is_refused_without_a_config_root_override() {
     run_probe("no_override");
@@ -59,8 +81,43 @@ fn probe() {
         "net_colors" => net_colors(),
         "net_class_assign" => net_class_assign(),
         "agent_pref_ignored" => agent_pref_ignored(),
+        "small_stack" => small_stack(),
         other => panic!("unknown scenario {other}"),
     }
+}
+
+/// #2325: the boot fits a small stack, so an app handed back by value
+/// overflows here. Debug only: release frames are much smaller and would
+/// hide a regression.
+#[cfg(debug_assertions)]
+#[test]
+fn a_debug_headless_boot_settles_on_a_512_kb_stack() {
+    run_probe("small_stack");
+}
+
+/// Boot and settle on a 512 KB thread. On macOS arm64 debug the unboxed boot
+/// needed about 552 KB and the boxed one fits in 400 KB, so the margin is
+/// about 100 KB. Another target's frames may differ: if this fails on one
+/// target only, measure there before raising the limit. It catches a boot
+/// that returns the app by value, not one extra copy inside
+/// `boot_headless_inner` (that still fits), so a review checks that
+/// `new_boxed` stays the only place the app is boxed.
+fn small_stack() {
+    const STACK_BYTES: usize = 512 * 1024;
+    let isolated = tempfile::tempdir().expect("override root");
+    set_config_root_override(isolated.path().to_path_buf()).expect("override");
+    install_before_boot(FontSet::BundledOnly).expect("fonts");
+    std::thread::Builder::new()
+        .stack_size(STACK_BYTES)
+        .spawn(|| {
+            let (mut app, boot) = Signex::boot_headless(Vec::new(), &rules()).expect("boot");
+            TaskDriver::new()
+                .settle(&mut app, boot)
+                .expect("boot settled");
+        })
+        .expect("spawn")
+        .join()
+        .expect("the boot fits the stack");
 }
 
 #[test]
@@ -340,9 +397,9 @@ fn run() {
         .take()
         .expect("the open was tried");
     assert!(
-        notice.detail.contains("zq-missing.snxsch"),
+        notice.detail.render_en_us().contains("zq-missing.snxsch"),
         "{}",
-        notice.detail
+        notice.detail.render_en_us()
     );
 
     let (outcome, _task) =

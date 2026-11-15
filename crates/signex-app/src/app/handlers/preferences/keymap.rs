@@ -10,6 +10,7 @@
 //! error there instead of a message silently arriving here.
 
 use iced::Task;
+use signex_i18n::ids;
 
 use super::super::super::*;
 use crate::preferences::PrefMsg;
@@ -233,11 +234,12 @@ impl Signex {
             }
             PrefMsg::KeymapImportProfile => {
                 let picker = self.ui_state.io.picker.clone();
+                let i18n = self.ui_state.i18n.clone();
                 return Task::future(async move {
                     let picked = picker
                         .dialog()
-                        .set_title("Import Signex Keyboard Shortcuts")
-                        .add_filter("Signex Keyboard Shortcuts", &["toml"])
+                        .title_in(&i18n, ids::FILE_DIALOG_IMPORT_SHORTCUTS)
+                        .filter_in(&i18n, ids::FILE_FILTER_SHORTCUTS, &["toml"])
                         .pick_file()
                         .await;
                     let Some(path) = picked else {
@@ -287,11 +289,12 @@ impl Signex {
                         // the last one.
                         self.ui_state.preferences_keymap_status.clear();
                         let picker = self.ui_state.io.picker.clone();
+                        let i18n = self.ui_state.i18n.clone();
                         return Task::future(async move {
                             let picked = picker
                                 .dialog()
-                                .set_title("Export Signex Keyboard Shortcuts")
-                                .add_filter("Signex Keyboard Shortcuts", &["toml"])
+                                .title_in(&i18n, ids::FILE_DIALOG_EXPORT_SHORTCUTS)
+                                .filter_in(&i18n, ids::FILE_FILTER_SHORTCUTS, &["toml"])
                                 .set_file_name(&filename)
                                 .save_file()
                                 .await;

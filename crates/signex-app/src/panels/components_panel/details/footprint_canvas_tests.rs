@@ -184,30 +184,45 @@ fn draw_editor(fp: &Footprint, at: &PreviewState) -> Painted {
     ))
 }
 
+/// The pads are drawn as the PCB canvas draws them (#2348): a top-copper pad
+/// in the colour the Layers panel lists Top Copper with, a through-hole pad
+/// in the Multi-Layer colour with its drill as an opening. A pad the board
+/// cannot hold (the custom outline) is left to the editor's renderer.
 #[test]
-fn preview_paints_the_same_primitives_as_the_editor() {
-    let fp = fixture();
-    let model = preview_of(&fp);
-    let state = show(&model);
-    let preview = draw_preview(&model, &state);
-    let editor = draw_editor(&fp, &state);
-    assert!(preview.paths() > 10, "a real drawing, not an empty frame");
-    // The preview adds only its readouts (size text first, then the scale
-    // bar in a later section). Cut them off at the size text and close the
-    // dump the way the editor's ends; what is left must equal the editor.
-    // So `draw_readouts` must stay the preview's last draw call: anything
-    // drawn after it would be cut off here and never compared.
-    let tail = editor.dump.rsplit("inf } }").next().unwrap();
-    let head = preview
-        .dump
-        .split(", Cached { content: \"4.2 x 4.6 mm\"")
-        .next()
-        .unwrap();
-    assert!(
-        head.len() < preview.dump.len(),
-        "the size readout is painted"
-    );
-    assert_eq!(format!("{head}{tail}"), editor.dump);
+fn preview_pads_are_the_board_lowering_in_the_board_palette() {
+    use crate::pcb_canvas::layer_style::{board_layer_colour, multi_layer_colour};
+    use signex_gfx::style::ColorSlot;
+    use signex_renderer::theme::ResolvedTheme;
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+    let rgba = |c: [f32; 4]| iced::Color {
+        r: c[0],
+        g: c[1],
+        b: c[2],
+        a: c[3],
+    };
+    let model = preview_of(&fixture());
+    let pads = &model.board_pads().top_polygons;
+    assert_eq!(pads.len(), 3, "pad 1, pad 2 and pad 2's drill");
+    let top_copper = board_layer_colour(PcbLayer::Copper(CopperLayer::Top));
+    assert_eq!(rgba(pads[0].fill_color), top_copper);
+    assert_eq!(rgba(pads[1].fill_color), multi_layer_colour());
+    assert_ne!(top_copper, multi_layer_colour());
+
+    let board = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors());
+    let drill = &pads[2];
+    assert_eq!(drill.fill_color, board.color(ColorSlot::BoardOpening));
+    assert!(drill.vertices.len() >= 8);
+    for v in &drill.vertices {
+        let r = ((v[0] - 1.5).powi(2) + v[1].powi(2)).sqrt();
+        assert!((r - 0.3).abs() < 1e-4, "{v:?} on the 0.6 mm drill");
+    }
+
+    let unheld: Vec<&str> = model
+        .unheld_pads()
+        .iter()
+        .map(|p| p.number.as_str())
+        .collect();
+    assert_eq!(unheld, ["3"]);
 }
 
 #[test]
@@ -226,12 +241,13 @@ fn preview_shows_drill_hole_pad_shapes_and_silk_text() {
     assert!(with_all.has_text("REF**"));
     assert!(with_all.has_text("2"));
 
-    // Without the drill the through-hole pad paints one fewer fill + stroke.
+    // Without the drill the through-hole pad paints one fewer fill: the
+    // board draws a drill as an opening with no edge.
     let mut undrilled = fp.clone();
     undrilled.pads[1].drill = None;
     let model = preview_of(&undrilled);
     let without = draw_preview(&model, &show(&model));
-    assert_eq!(with_all.paths(), without.paths() + 2);
+    assert_eq!(with_all.paths(), without.paths() + 1);
 
     // A custom outline is no longer a rectangle.
     let mut rects = fp.clone();
@@ -591,50 +607,51 @@ fn a_drag_in_a_scrolled_pane_pans_one_to_one() {
     }
 }
 
-/// The Graphite previews paint opaque pad gold (#D8B46A) with a darker
-/// edge, fab ink apart from the copper and a neutral courtyard; the editor
-/// canvases keep their palettes.
+/// The previews paint silk, fab and courtyard in the colours the PCB canvas
+/// lists those layers with, the courtyard solid and the pads opaque, as on
+/// the board (#2348); the editor canvases keep their palettes.
 #[test]
-fn graphite_previews_paint_crisp_gold_pads_and_a_neutral_courtyard() {
+fn board_previews_take_the_pcb_layer_colours() {
     use crate::library::editor::footprint::layers::{FpLayer, LayerPalette};
-    let gold = iced::Color::from_rgb8(0xD8, 0xB4, 0x6A);
-    let spread = |c: iced::Color| c.r.max(c.g).max(c.b) - c.r.min(c.g).min(c.b);
-    {
-        let canvas = LayerPalette::CanvasDark;
-        let preview = canvas.for_preview();
-        assert_ne!(preview, canvas, "{canvas:?} has a preview variant");
-        let copper = FpLayer::FCu.color_in(preview);
-        assert_eq!(copper, gold, "{preview:?}");
-        assert_eq!(preview.pad_fill_alpha(), 1.0, "{preview:?} pads are opaque");
-        let edge = preview.pad_edge(copper);
-        assert!(
-            edge.r < copper.r && edge.g < copper.g && edge.b < copper.b,
-            "{preview:?} edge {edge:?} is darker than the fill"
+    use crate::pcb_canvas::layer_style::board_layer_colour;
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer as T};
+    let board = LayerPalette::Board;
+    let cases = [
+        (FpLayer::FCu, PcbLayer::Copper(CopperLayer::Top)),
+        (FpLayer::BCu, PcbLayer::Copper(CopperLayer::Bottom)),
+        (FpLayer::FSilks, PcbLayer::Technical(T::SilkscreenTop)),
+        (FpLayer::BSilks, PcbLayer::Technical(T::SilkscreenBottom)),
+        (FpLayer::FFab, PcbLayer::Technical(T::FabTop)),
+        (FpLayer::BFab, PcbLayer::Technical(T::FabBottom)),
+    ];
+    for (layer, on_board) in cases {
+        assert_eq!(
+            layer.color_in(board),
+            board_layer_colour(on_board),
+            "{layer:?}"
         );
-        let courtyard = FpLayer::EdgeCuts.color_in(preview);
-        assert!(
-            spread(courtyard) < 0.05,
-            "{preview:?} courtyard {courtyard:?} is neutral"
-        );
-        let fab = FpLayer::FFab.color_in(preview);
-        assert!(
-            spread(fab) < 0.05,
-            "{preview:?} fab {fab:?} is not copper-toned"
-        );
-        assert!(preview.dashes_courtyard());
-        // The editor canvas itself is unchanged.
-        assert_eq!(canvas.pad_fill_alpha(), 0.85);
-        assert_eq!(canvas.pad_edge(copper), copper);
-        assert_eq!(preview.for_preview(), preview);
     }
-    assert_eq!(LayerPalette::Legacy.for_preview(), LayerPalette::Legacy);
+    assert_eq!(
+        board.courtyard_colour(),
+        board_layer_colour(PcbLayer::Technical(T::CourtyardTop))
+    );
+    assert!(!board.dashes_courtyard(), "the courtyard is solid");
+    assert_eq!(board.pad_fill_alpha(), 1.0, "pads are opaque");
+    // The editor canvases are unchanged.
+    let canvas = LayerPalette::CanvasDark;
+    assert!(canvas.dashes_courtyard());
+    assert_eq!(canvas.pad_fill_alpha(), 0.85);
+    assert_eq!(
+        canvas.courtyard_colour(),
+        FpLayer::EdgeCuts.color_in(canvas)
+    );
     assert!(!LayerPalette::Legacy.dashes_courtyard());
+    assert!(!LayerPalette::Graphite.dashes_courtyard());
 }
 
-/// `with_theme_tokens` picks the preview palette on Graphite and leaves a
-/// legacy theme on the black board.
+/// `with_theme_tokens` picks the board palette in every theme.
 #[test]
-fn theme_tokens_pick_the_preview_palette() {
+fn theme_tokens_pick_the_board_palette() {
     use crate::library::editor::footprint::layers::LayerPalette;
     use signex_types::theme::{ThemeId, theme_tokens};
     let model = preview_of(&fixture());
@@ -645,14 +662,8 @@ fn theme_tokens_pick_the_preview_palette() {
             .map(|(_, p)| p)
     };
     // The board is dark in Graphite Light too.
-    assert_eq!(
-        palette(ThemeId::GraphiteLight),
-        Some(LayerPalette::PreviewDark)
-    );
-    assert_eq!(
-        palette(ThemeId::GraphiteDark),
-        Some(LayerPalette::PreviewDark)
-    );
+    assert_eq!(palette(ThemeId::GraphiteLight), Some(LayerPalette::Board));
+    assert_eq!(palette(ThemeId::GraphiteDark), Some(LayerPalette::Board));
 }
 
 fn graphic_line(from: [f64; 2], to: [f64; 2]) -> FpGraphic {

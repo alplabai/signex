@@ -10,6 +10,9 @@ use signex_cli::{agent_log, catalog, run};
 const EXIT_ERROR: u8 = 2;
 /// The run finished and a command was refused or failed.
 const EXIT_NOT_OK: u8 = 1;
+/// The run's thread stack: the app's update path runs deep, and the main
+/// thread's stack is 1 MB on Windows (#2325).
+const RUN_STACK_BYTES: usize = 16 << 20;
 
 fn main() -> ExitCode {
     match cli::parse(std::env::args().skip(1)) {
@@ -17,12 +20,20 @@ fn main() -> ExitCode {
         Ok(Invocation::Version) => print_line(&format!("signex-cli {}", env!("CARGO_PKG_VERSION"))),
         Ok(Invocation::Commands) => print_line(&catalog::catalog_json().to_string()),
         Ok(Invocation::Run(options)) => {
-            let stdin = io::stdin();
-            let stdout = io::stdout();
-            match run(options, &mut stdin.lock(), &mut stdout.lock()) {
-                Ok(report) if report.not_ok == 0 => ExitCode::SUCCESS,
-                Ok(_) => ExitCode::from(EXIT_NOT_OK),
-                Err(error) => fail(&error),
+            let spawned = std::thread::Builder::new()
+                .name("signex-cli-run".into())
+                .stack_size(RUN_STACK_BYTES)
+                .spawn(move || run(options, &mut io::stdin().lock(), &mut io::stdout().lock()));
+            let joined = match spawned {
+                Ok(handle) => handle.join(),
+                Err(error) => return fail(&format!("starting the run thread: {error}")),
+            };
+            match joined {
+                Ok(Ok(report)) if report.not_ok == 0 => ExitCode::SUCCESS,
+                Ok(Ok(_)) => ExitCode::from(EXIT_NOT_OK),
+                Ok(Err(error)) => fail(&error),
+                // The panic message is already on stderr (the default hook).
+                Err(_) => fail("the run stopped on an internal error (panic)"),
             }
         }
         Ok(Invocation::AgentLog(project, which)) => {

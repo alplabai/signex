@@ -28,8 +28,8 @@ fn canonical(path: &Path) -> PathBuf {
 
 /// `std::fs::canonicalize` returns `\\?\C:\…` on Windows; strip the
 /// verbatim prefix so the label and the native dialogs show the path the
-/// user knows.
-fn strip_verbatim_prefix(path: PathBuf) -> PathBuf {
+/// user knows. A `\\?\UNC\` path keeps its spelling.
+pub(crate) fn strip_verbatim_prefix(path: PathBuf) -> PathBuf {
     match path.to_str().and_then(|s| s.strip_prefix(r"\\?\")) {
         Some(rest) if !rest.starts_with("UNC") => PathBuf::from(rest),
         _ => path,

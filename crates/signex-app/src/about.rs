@@ -9,7 +9,7 @@
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// SPDX identifier shown on the About card.
-pub const LICENSE_NAME: &str = "Apache-2.0";
+pub const LICENSE_NAME: &str = "FSL-1.1-ALv2";
 
 /// Repository root, from the crate manifest.
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
@@ -53,8 +53,9 @@ pub fn version_info_text() -> String {
 pub fn open_link<M: Send + 'static>(
     opener: crate::io_ports::Opener,
     link: ExternalLink,
-    on_failed: impl FnOnce(String) -> M + Send + 'static,
+    on_failed: impl FnOnce(signex_i18n::Translatable) -> M + Send + 'static,
 ) -> iced::Task<M> {
+    use signex_i18n::{Translatable, ids};
     let url = link.url();
     iced::Task::future(async move {
         let result = tokio::task::spawn_blocking({
@@ -62,13 +63,20 @@ pub fn open_link<M: Send + 'static>(
             move || opener.browse(&url)
         })
         .await;
+        let failed = |id, err: String| {
+            Translatable::new(id)
+                .arg("url", url.clone())
+                .arg("error", err)
+        };
         match result {
             Ok(Ok(())) => None,
-            Ok(Err(err)) => Some(on_failed(format!(
-                "Could not open {url} in a browser: {err}"
+            Ok(Err(err)) => Some(on_failed(failed(
+                ids::NOTICE_LINK_NOT_OPENED,
+                err.to_string(),
             ))),
-            Err(err) => Some(on_failed(format!(
-                "The browser launch for {url} did not complete: {err}"
+            Err(err) => Some(on_failed(failed(
+                ids::NOTICE_LINK_LAUNCH_INCOMPLETE,
+                err.to_string(),
             ))),
         }
     })

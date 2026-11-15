@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-License-Identifier: FSL-1.1-ALv2 -->
 
 # Branching & merge policy
 
@@ -6,7 +6,7 @@ The PR preconditions for `signex`: which branch work targets, which
 checks gate a merge, how branches are merged, and the server-side
 branch-protection settings that enforce it. Mirrors the org policy used
 across Alp Lab repos (see `alp-sdk`'s equivalent doc), adapted to this
-repo's `trunk`/`main` model and Apache-clean license posture.
+repo's `trunk`/`main` model and clean-room license posture.
 
 ## Branch model
 

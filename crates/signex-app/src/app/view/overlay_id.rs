@@ -107,6 +107,8 @@ pub(crate) enum OverlayId {
     ErcDialog,
     /// Update PCB from schematic (#1312).
     UpdatePcb,
+    /// New PCB / New Schematic setup (#2232).
+    DocumentSetup,
 
     // Library modals.
     LibraryPicker,
@@ -140,7 +142,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 65] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 66] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -195,6 +197,8 @@ pub(crate) const PAINT_ORDER: [OverlayId; 65] = [
     OverlayId::ReprefixConfirm,
     OverlayId::ErcDialog,
     OverlayId::UpdatePcb,
+    // Above Update PCB: its Create PCB opens this dialog on top.
+    OverlayId::DocumentSetup,
     OverlayId::LibraryPicker,
     OverlayId::EditRowModal,
     OverlayId::DeleteConfirm,
@@ -317,6 +321,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::ReprefixConfirm
         | OverlayId::ErcDialog
         | OverlayId::UpdatePcb
+        | OverlayId::DocumentSetup
         | OverlayId::LibraryPicker
         | OverlayId::EditRowModal
         | OverlayId::DeleteConfirm
@@ -329,6 +334,25 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::CommandPalette
         | OverlayId::LibraryUpdates => true,
     }
+}
+
+/// Whether this overlay's layers are a right-click menu over its
+/// `MenuBackdrop` (`Signex::anchored_layers`), which stops the wheel itself.
+/// `collect_overlays` must not wrap them in `scroll_guard`: the guard claims
+/// the pointer over the whole window-sized layer, which levitated the cursor
+/// off the backdrop, so a click outside the menu never closed it (#2349).
+pub(crate) fn has_menu_backdrop(id: OverlayId) -> bool {
+    matches!(
+        id,
+        OverlayId::FootprintContextMenu
+            | OverlayId::SymbolContextMenu
+            | OverlayId::ContextMenu
+            | OverlayId::TabContextMenu
+            | OverlayId::ProjectTreeContextMenu
+            | OverlayId::ComponentsRowContextMenu
+            | OverlayId::StartRowContextMenu
+            | OverlayId::GridPicker
+    )
 }
 
 /// Whether this overlay, once painted, takes the cursor off the canvas, so
@@ -517,6 +541,7 @@ impl Signex {
             OverlayId::ReprefixConfirm => layers.extend(self.reprefix_confirm_overlay()),
             OverlayId::ErcDialog => layers.extend(self.erc_dialog_overlay()),
             OverlayId::UpdatePcb => layers.extend(self.update_pcb_overlay()),
+            OverlayId::DocumentSetup => layers.extend(self.document_setup_overlay()),
             OverlayId::LibraryPicker => layers.extend(self.library_picker_overlay()),
             OverlayId::EditRowModal => layers.extend(self.edit_row_modal_overlay()),
             OverlayId::DeleteConfirm => layers.extend(self.delete_confirm_overlay()),

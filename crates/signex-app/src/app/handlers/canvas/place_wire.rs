@@ -2,9 +2,9 @@
 //! click handler keeps the drawing state (first click anchors, each next
 //! click commits from the last anchor); these place what one commit adds.
 
+use signex_types::corner::CornerRule;
 use signex_types::schematic::{Bus, BusEntry, Point, Wire};
 
-use super::super::super::helpers::constrain_segments;
 use super::super::super::*;
 
 /// The commands that place `segments` as wires of `style` (width, colour):
@@ -45,15 +45,15 @@ pub(crate) fn bus_commands(segments: &[(Point, Point)]) -> Vec<signex_engine::Co
 
 impl Signex {
     /// Place wire segments from `start` to `end`, both already snapped, bent
-    /// as `mode` routes them. The point the last segment ends on, which the
+    /// as `rule` bends them. The point the last segment ends on, which the
     /// next segment starts from, and whether the document changed.
     pub(crate) fn place_wire_at(
         &mut self,
         start: Point,
         end: Point,
-        mode: DrawMode,
+        rule: CornerRule,
     ) -> (Point, bool) {
-        let segments = constrain_segments(start, end, mode);
+        let segments = rule.legs(start, end);
         let commands = wire_commands(&segments, self.wire_placement_style());
         let changed = !commands.is_empty() && self.apply_engine_commands(commands, false, false);
         (segments.last().map(|s| s.1).unwrap_or(end), changed)
@@ -75,9 +75,9 @@ impl Signex {
         &mut self,
         start: Point,
         end: Point,
-        mode: DrawMode,
+        rule: CornerRule,
     ) -> (Point, bool) {
-        let segments = constrain_segments(start, end, mode);
+        let segments = rule.legs(start, end);
         let commands = bus_commands(&segments);
         let changed = !commands.is_empty() && self.apply_engine_commands(commands, false, false);
         (segments.last().map(|s| s.1).unwrap_or(end), changed)

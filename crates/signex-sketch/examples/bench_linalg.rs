@@ -1,7 +1,7 @@
 //! Self-contained benchmark for the in-house dense LU solver in
 //! `signex_sketch::solver::linalg`. No external benchmarking crate
 //! is used — timings are taken with `std::time::Instant` so the
-//! Apache-clean Signex codebase stays free of dev-dependencies for
+//! clean-room Signex codebase stays free of dev-dependencies for
 //! micro-benchmarking.
 //!
 //! Run:
@@ -39,7 +39,7 @@
 //! These numbers are not vs-state-of-the-art benchmarks. nalgebra and
 //! faer (the Apache-2.0/MIT pure-Rust LA libraries) ship SIMD-tuned
 //! dense LU that will be 2–5× faster on these sizes. We choose
-//! roll-our-own to keep the Apache-clean Signex codebase
+//! roll-our-own to keep the clean-room Signex codebase
 //! dependency-free; the bench exists to verify the performance is
 //! adequate for the v0.13 use case, not to compete with hand-tuned
 //! BLAS implementations.

@@ -5,7 +5,8 @@ use std::path::PathBuf;
 
 use super::super::super::*;
 use crate::altium_import::{self, ImportOutcome};
-use crate::app::state::ErrorNotice;
+use crate::app::state::{ErrorNotice, untranslated};
+use signex_i18n::{Translatable, ids};
 
 impl Signex {
     pub(crate) fn handle_altium_import_picked(
@@ -18,12 +19,9 @@ impl Signex {
         self.interaction_state.editing_text = None;
         self.interaction_state.context_menu = None;
         if let Some(running) = &self.document_state.altium_import_running {
-            let message = format!(
-                "An Altium import of {} is still running; wait for it to finish \
-                 or cancel it from the status bar.",
-                running.input.display()
-            );
-            crate::diagnostics::log_warning(&message);
+            let message = Translatable::new(ids::NOTICE_IMPORT_RUNNING)
+                .arg("path", running.input.display().to_string());
+            crate::diagnostics::log_warning(message.render_en_us());
             self.document_state.error_notice = Some(ErrorNotice::import(message));
             return iced::Task::none();
         }
@@ -31,7 +29,7 @@ impl Signex {
             Ok(binary) => binary,
             Err(message) => {
                 crate::diagnostics::log_error("Altium import", &anyhow::anyhow!(message.clone()));
-                self.document_state.error_notice = Some(ErrorNotice::import(message));
+                self.document_state.error_notice = Some(ErrorNotice::import(untranslated(message)));
                 return iced::Task::none();
             }
         };
@@ -76,7 +74,7 @@ impl Signex {
             Ok(outcome) => outcome,
             Err(message) => {
                 crate::diagnostics::log_error("Altium import", &anyhow::anyhow!(message.clone()));
-                self.document_state.error_notice = Some(ErrorNotice::import(message));
+                self.document_state.error_notice = Some(ErrorNotice::import(untranslated(message)));
                 return iced::Task::none();
             }
         };
@@ -91,20 +89,21 @@ impl Signex {
             Ok(task) => task,
             Err(error) => {
                 crate::diagnostics::log_error("Open imported Altium design", &error);
-                self.document_state.error_notice = Some(ErrorNotice::import(format!(
-                    "Converted to {}, but it could not be opened: {error:#}",
-                    outcome.open.display()
-                )));
+                self.document_state.error_notice = Some(ErrorNotice::import(
+                    Translatable::new(ids::NOTICE_IMPORT_NOT_OPENED)
+                        .arg("path", outcome.open.display().to_string())
+                        .arg("error", format!("{error:#}")),
+                ));
                 return iced::Task::none();
             }
         };
         // Lossy steps are a review item, not an error: the files exist.
         if !outcome.warnings.is_empty() {
-            self.document_state.error_notice = Some(ErrorNotice::import_advisory(format!(
-                "Review before fabrication (also in the Messages panel and {}):\n{}",
-                altium_import::REPORT_FILE,
-                altium_import::warnings_text(&outcome.warnings)
-            )));
+            self.document_state.error_notice = Some(ErrorNotice::import_advisory(
+                Translatable::new(ids::NOTICE_IMPORT_REVIEW)
+                    .arg("report", altium_import::REPORT_FILE)
+                    .arg("warnings", altium_import::warnings_text(&outcome.warnings)),
+            ));
         }
         self.refresh_panel_ctx();
         task
@@ -142,7 +141,7 @@ mod tests {
         ))));
 
         let card = app.document_state.error_notice.as_ref().expect("card");
-        assert!(card.detail.contains(reason));
+        assert!(card.detail.render_en_us().contains(reason));
         assert_eq!(logged(reason), before + 1);
         assert!(app.document_state.altium_import_running.is_none());
     }
@@ -163,7 +162,7 @@ mod tests {
 
         assert_eq!(logged(warning), before + 1, "every warning is logged");
         let card = app.document_state.error_notice.as_ref().expect("advisory");
-        assert!(card.detail.contains(warning));
+        assert!(card.detail.render_en_us().contains(warning));
         assert!(
             app.document_state.pending_opens.contains(&open),
             "the converted sheet is being opened"

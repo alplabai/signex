@@ -30,6 +30,7 @@ fn track(n: u128, y: f64, net: u32) -> Segment {
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),
@@ -69,7 +70,24 @@ fn board_dump(app: &Signex) -> String {
     format!("{:?}", docs.tabs[docs.active_tab].cached_document)
 }
 
+static DRC_RUN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Held by every test that runs DRC in this binary. A run logs its Messages
+/// lines into the one shared diagnostics ring, so without it a parallel run
+/// lands its lines after another test's mark and is read as that test's.
+pub(crate) fn drc_serial() -> std::sync::MutexGuard<'static, ()> {
+    DRC_RUN_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 fn run_drc(app: &mut Signex) {
+    let _serial = drc_serial();
+    run_drc_held(app);
+}
+
+/// One run, for a caller already holding [`drc_serial`].
+fn run_drc_held(app: &mut Signex) {
     let task = app.update(Message::Pcb(PcbMsg::DrcRequested));
     crate::drive::drive(app, task);
 }
@@ -132,6 +150,7 @@ fn the_check_does_not_edit_the_board() {
 fn the_tools_menu_row_runs_the_check_and_is_greyed_without_a_board() {
     let run_row = |app: &mut Signex| {
         let id = AppCommandId::new("run_drc").expect("id");
+        let _serial = drc_serial();
         let task = app.update(Message::Menu(MenuMessage::Command(id)));
         crate::drive::drive(app, task);
     };
@@ -153,6 +172,7 @@ fn the_tools_menu_row_runs_the_check_and_is_greyed_without_a_board() {
 #[test]
 fn the_panel_button_message_runs_the_check() {
     let (mut app, _tmp, path) = open_board();
+    let _serial = drc_serial();
     let task = app.update(Message::Dock(DockMessage::Panel(PanelMsg::RunDrc)));
     crate::drive::drive(&mut app, task);
     assert!(app.interaction_state.pcb_drc.done_for(&path).is_some());
@@ -247,11 +267,13 @@ fn load_profile_dsl(app: &mut Signex, dsl: Option<&str>) {
     crate::drive::drive(app, task);
 }
 
-/// The Messages lines of one DRC run, in order.
+/// The Messages lines of one DRC run, in order. The lock spans mark, run
+/// and read, so no other test's run falls between them.
 fn drc_lines_of_a_run(app: &mut Signex) -> Vec<String> {
+    let _serial = drc_serial();
     let _ = signex_app::diagnostics::init_logging();
     let since = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
-    run_drc(app);
+    run_drc_held(app);
     signex_app::diagnostics::recent_entries()
         .into_iter()
         .filter(|e| e.id > since && e.message.contains("DRC"))
@@ -259,15 +281,23 @@ fn drc_lines_of_a_run(app: &mut Signex) -> Vec<String> {
         .collect()
 }
 
+/// What a run of a board in no open project says, as `check_drc` says it:
+/// a copy of `pcb_drc_check::LOOSE_BOARD_WARNING` (crate-private, so not
+/// importable here); change both together.
+const LOOSE_BOARD_LINE: &str = "The board is in no open project: it was checked with its own \
+     setup rules and this machine's DRC rules, without net classes";
+
 /// #2307 step 2b: with no rule text (none, or an empty one) a run reports
 /// and says exactly what it did before the rule language.
 #[test]
 fn without_rule_text_the_report_and_its_messages_are_unchanged() {
-    // As trunk writes them, float formatting included.
+    // As trunk writes them; numbers read round since #2334. The board is in
+    // no open project, which the run says first, as `check_drc` does (#2332).
     let pinned = [
-        "DRC: No clearance rule set on this board; checked with 0.19999999999999998 mm. Set it in Board Setup.",
-        "DRC: 1 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance 0.19999999999999998 mm)",
-        "DRC: clearance 0.15 mm, needs 0.19999999999999998 mm, net 1 / net 2 at (0, 0.19999999999999998) mm",
+        LOOSE_BOARD_LINE,
+        "DRC: No clearance rule set on this board; checked with 0.2 mm. Set it in Board Setup.",
+        "DRC: 1 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance 0.2 mm)",
+        "DRC: clearance 0.15 mm, needs 0.2 mm, net 1 / net 2 at (0, 0.2) mm",
     ];
     for dsl in [None, Some(""), Some("  \n")] {
         let (mut app, _tmp, path) = open_board();
@@ -318,7 +348,7 @@ fn rule_text_without_a_clearance_rule_keeps_the_clearance_wording() {
     let lines = drc_lines_of_a_run(&mut app);
     assert!(
         lines.contains(
-            &"DRC: No clearance rule set on this board; checked with 0.19999999999999998 mm. \
+            &"DRC: No clearance rule set on this board; checked with 0.2 mm. \
               Set it in Board Setup."
                 .to_string()
         ),
@@ -327,7 +357,7 @@ fn rule_text_without_a_clearance_rule_keeps_the_clearance_wording() {
     assert!(
         lines.contains(
             &"DRC: 1 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance \
-              0.19999999999999998 mm)"
+              0.2 mm)"
                 .to_string()
         ),
         "{lines:?}"
@@ -374,7 +404,7 @@ fn rule_text_in_the_profile_is_applied_by_the_run() {
     // With written rules the board value holds only where none applies.
     assert!(
         lines.contains(
-            &"DRC: No clearance rule set on this board; 0.19999999999999998 mm applies \
+            &"DRC: No clearance rule set on this board; 0.2 mm applies \
               where no written rule does. Set it in Board Setup."
                 .to_string()
         ),
@@ -383,7 +413,7 @@ fn rule_text_in_the_profile_is_applied_by_the_run() {
     assert!(
         lines.contains(
             &"DRC: 0 clearance, 0 short, 0 unconnected, 0 keepout (minimum clearance \
-              0.19999999999999998 mm where no written rule applies)"
+              0.2 mm where no written rule applies)"
                 .to_string()
         ),
         "{lines:?}"
@@ -460,4 +490,225 @@ fn a_rule_that_does_not_compile_is_reported_and_skipped() {
     );
     let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
     assert_eq!(panel.rules_not_applied, 1);
+}
+
+/// A routing keepout on top copper with the given corners.
+fn routing_keepout(n: u128, corners: &[(f64, f64)]) -> signex_types::pcb_sketch::PcbKeepout {
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+    signex_types::pcb_sketch::PcbKeepout {
+        uuid: Uuid::from_u128(n),
+        boundary: corners.iter().map(|&(x, y)| Point::new(x, y)).collect(),
+        layers: vec![PcbLayer::Copper(CopperLayer::Top)],
+        forbids: signex_types::sketch::attr::KeepoutKinds {
+            no_routing: true,
+            ..Default::default()
+        },
+    }
+}
+
+/// #2300: keepout findings are counted in the panel summary, and a keepout
+/// whose outline does not convert (a corner 5 km out) is said in the panel
+/// and in Messages instead of silently dropped.
+#[test]
+fn keepouts_are_counted_and_an_unchecked_keepout_is_said() {
+    let mut b = board();
+    let crossed = routing_keepout(0x900, &[(4.0, 4.0), (6.0, 4.0), (6.0, 6.0), (4.0, 6.0)]);
+    let far = routing_keepout(0x901, &[(0.0, 0.0), (5_000_000.0, 0.0), (0.0, 1.0)]);
+    b.sketch = Some(signex_types::pcb_sketch::BoardSketch {
+        keepouts: vec![crossed, far],
+        ..Default::default()
+    });
+    let (mut app, _tmp, path) = open(b);
+    let lines = drc_lines_of_a_run(&mut app);
+
+    let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    assert_eq!(
+        done.report.count(ViolationKind::Keepout),
+        1,
+        "{:?}",
+        done.report
+    );
+    assert_eq!(done.report.skipped_keepouts.len(), 1);
+    assert_eq!(
+        done.report.skipped_keepouts[0].keepout,
+        Uuid::from_u128(0x901)
+    );
+    assert!(!done.report.is_clean());
+
+    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    assert_eq!(
+        (panel.clearance, panel.keepout, panel.skipped_keepouts),
+        (1, 1, 1)
+    );
+    let unchecked = format!(
+        "DRC: keepout {} could not be checked: keepout.boundary is not a finite length within 1 km of the origin",
+        Uuid::from_u128(0x901)
+    );
+    assert!(lines.contains(&unchecked), "{lines:?}");
+    assert!(
+        lines.iter().any(
+            |l| l.starts_with("DRC: 1 clearance, 0 short, 0 unconnected, 1 keepout")
+                && l.ends_with("; 1 keepout(s) could not be checked")
+        ),
+        "{lines:?}"
+    );
+}
+
+/// #2300: a board whose only violation is a keepout shows it in the panel
+/// count, so the summary never reads all zeros above a keepout row.
+#[test]
+fn a_keepout_only_board_counts_its_keepout() {
+    let mut b = board();
+    b.segments = vec![track(3, 5.0, 3)];
+    b.sketch = Some(signex_types::pcb_sketch::BoardSketch {
+        keepouts: vec![routing_keepout(
+            0x900,
+            &[(4.0, 4.0), (6.0, 4.0), (6.0, 6.0), (4.0, 6.0)],
+        )],
+        ..Default::default()
+    });
+    let (mut app, _tmp, _path) = open(b);
+    run_drc(&mut app);
+    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    assert_eq!(
+        (
+            panel.clearance,
+            panel.short,
+            panel.unconnected,
+            panel.keepout
+        ),
+        (0, 0, 0, 1)
+    );
+    assert_eq!(panel.rows.len(), 1);
+    assert_eq!(panel.rows[0].kind, ViolationKind::Keepout);
+}
+
+/// An item that does not convert (a track ending 5 km out) is named on its
+/// own Messages line, not only counted in the summary.
+#[test]
+fn an_unchecked_item_is_named_in_messages() {
+    let mut b = board();
+    let mut far = track(4, 8.0, 4);
+    far.end = Point::new(5_000_000.0, 8.0);
+    b.segments.push(far);
+    let (mut app, _tmp, path) = open(b);
+    let lines = drc_lines_of_a_run(&mut app);
+
+    let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    assert_eq!(done.report.skipped.len(), 1, "{:?}", done.report);
+    assert_eq!(
+        done.report.skipped[0].item,
+        ItemRef::Track(Uuid::from_u128(4))
+    );
+    let named = format!("DRC: track {} could not be checked: ", Uuid::from_u128(4));
+    assert!(
+        lines.iter().any(|l| l.starts_with(&named)
+            && l.ends_with("is not a finite length within 1 km of the origin")),
+        "{lines:?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.ends_with("; 1 item(s) could not be checked")),
+        "{lines:?}"
+    );
+}
+
+/// A project at `dir` with the board file `pcb_file` and `dsl` as its
+/// stored DRC rule text, open in `app` and made the active project.
+fn add_project(
+    app: &mut Signex,
+    dir: &std::path::Path,
+    pcb_file: Option<&str>,
+    dsl: &str,
+) -> signex_app::app::ProjectId {
+    use signex_types::project::{DrcRuleSet, ProjectData, ProjectRules};
+    let path = dir.join("demo.snxprj");
+    let data = ProjectData {
+        document_id: None,
+        name: "demo".to_string(),
+        description: None,
+        dir: dir.to_string_lossy().into_owned(),
+        schematic_root: None,
+        pcb_file: pcb_file.map(str::to_string),
+        sheets: Vec::new(),
+        variant_definitions: Vec::new(),
+        active_variant: None,
+        libraries: Vec::new(),
+        enable_git: false,
+        net_classes: Vec::new(),
+        rules: Some(ProjectRules {
+            drc: DrcRuleSet {
+                dsl: Some(dsl.to_string()),
+                ..Default::default()
+            },
+            ..ProjectRules::default()
+        }),
+        annotation: None,
+        parameters: Default::default(),
+        schematic_defaults: Default::default(),
+        project_defaults: Default::default(),
+        agent_journal: Default::default(),
+        unknown: Default::default(),
+    };
+    let id = app.document_state.mint_project_id();
+    app.document_state
+        .projects
+        .push(signex_app::app::LoadedProject {
+            id,
+            path,
+            data,
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        });
+    app.document_state.active_project = Some(id);
+    id
+}
+
+/// Rule text that loosens the clearance to 0.1 mm: the 0.15 mm gap passes.
+const LOOSE_CLEARANCE: &str = "rule tight on clearance require clearance >= 0.1mm then error";
+/// Rule text that adds a 0.3 mm track width check: each 0.25 mm track fails.
+const WIDE_TRACKS: &str = "rule wide on track require width >= 0.3mm then warning";
+
+/// #2332: Run DRC reads the rules of the board's own project, the one whose
+/// `pcb_file` is the board, not those of the active project.
+#[test]
+fn run_drc_uses_the_boards_own_project_not_the_active_one() {
+    let (mut app, tmp, path) = open_board();
+    let own = add_project(&mut app, tmp.path(), Some("board.snxpcb"), LOOSE_CLEARANCE);
+    let other_dir = tmp.path().join("other");
+    std::fs::create_dir(&other_dir).unwrap();
+    let other = add_project(&mut app, &other_dir, None, WIDE_TRACKS);
+    assert_eq!(app.document_state.active_project, Some(other));
+    assert_ne!(own, other);
+
+    let lines = drc_lines_of_a_run(&mut app);
+    let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    // The own project's rule loosens the clearance; the active project's
+    // width rule is not applied.
+    assert!(done.report.violations.is_empty(), "{:?}", done.report);
+    assert_eq!(done.report.rules.user_rules().count(), 1);
+    assert_eq!(done.report.count(ViolationKind::TrackWidth), 0);
+    assert!(!lines.iter().any(|l| l == LOOSE_BOARD_LINE), "{lines:?}");
+}
+
+/// #2332: a loose board is checked with this machine's layer, as
+/// `check_drc` checks it, even while another project is active.
+#[test]
+fn run_drc_on_a_loose_board_ignores_the_active_projects_rules() {
+    let (mut app, tmp, path) = open_board();
+    let other_dir = tmp.path().join("other");
+    std::fs::create_dir(&other_dir).unwrap();
+    let other = add_project(&mut app, &other_dir, None, LOOSE_CLEARANCE);
+    assert_eq!(app.document_state.active_project, Some(other));
+
+    let lines = drc_lines_of_a_run(&mut app);
+    let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
+    // The active project's 0.1 mm rule would pass the 0.15 mm gap.
+    assert_eq!(done.report.violations.len(), 1, "{:?}", done.report);
+    assert_eq!(done.report.violations[0].kind, ViolationKind::Clearance);
+    assert_eq!(done.report.rules.user_rules().count(), 0);
+    assert_eq!(lines.first().map(String::as_str), Some(LOOSE_BOARD_LINE));
 }

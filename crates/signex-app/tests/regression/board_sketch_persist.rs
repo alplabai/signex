@@ -23,7 +23,7 @@ use crate::board_sketch::{
 use crate::menu_support::menu_row;
 
 /// Enter sketch mode and draw a 40 x 30 mm outline the bake takes.
-fn sketch_an_outline(f: &mut Fixture) {
+pub(crate) fn sketch_an_outline(f: &mut Fixture) {
     send(f, menu_row("board_sketch"));
     let drawn = rectangle(f, (0.0, 0.0), (40.0, 30.0));
     assert_eq!(drawn.len(), 4);
@@ -38,7 +38,7 @@ fn sketch_an_outline(f: &mut Fixture) {
 
 /// Enter sketch mode and tag one open line as the outline: the bake
 /// refuses it (no closed profile).
-fn sketch_a_refused_outline(f: &mut Fixture) {
+pub(crate) fn sketch_a_refused_outline(f: &mut Fixture) {
     send(f, menu_row("board_sketch"));
     edit(f, FootprintEditorMsg::SketchSetTool(SketchTool::Line));
     click(f, 0.0, 0.0);
@@ -62,17 +62,22 @@ fn title(f: &Fixture) -> String {
 }
 
 fn held_message(f: &Fixture) -> String {
-    t!(f.app.ui_state.i18n, ids::BOARD_SKETCH_HELD, "board" => "board.snxpcb").into_string()
+    // The card is plain text, without bidi isolation marks.
+    f.app
+        .ui_state
+        .i18n
+        .message_plain(ids::BOARD_SKETCH_HELD, &[("board", "board.snxpcb".into())])
 }
 
-fn notice_says_held(f: &Fixture) -> bool {
+pub(crate) fn notice_says_held(f: &Fixture) -> bool {
     let held = held_message(f);
     f.app
         .document_state
         .error_notice
         .as_ref()
         .is_some_and(|notice| {
-            notice.detail.contains(&held) && notice.detail.contains("closed profile")
+            notice.detail.render_en_us().contains(&held)
+                && notice.detail.render_en_us().contains("closed profile")
         })
 }
 
@@ -92,7 +97,7 @@ fn press(f: &mut Fixture, window: Option<iced::window::Id>, keys: &str) {
 }
 
 /// Undock the board's tab into its own window.
-fn undock(f: &mut Fixture) -> Option<iced::window::Id> {
+pub(crate) fn undock(f: &mut Fixture) -> Option<iced::window::Id> {
     let index = f.app.document_state.active_tab;
     let before: Vec<iced::window::Id> = f.app.ui_state.windows.keys().copied().collect();
     let _ = f.app.update(Message::Window(WindowMsg::UndockTab(index)));

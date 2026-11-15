@@ -157,7 +157,9 @@ impl Signex {
         if let Err(refusal) = self.refuse_start_while_path_op(&path, "opened") {
             let detail = refusal.to_string();
             crate::diagnostics::log_warning(detail.clone());
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(detail));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+                crate::app::state::untranslated(detail),
+            ));
             return (Task::none(), true);
         }
         let title = path

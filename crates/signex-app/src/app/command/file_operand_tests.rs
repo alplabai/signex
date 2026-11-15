@@ -51,7 +51,7 @@ fn notice(app: &Signex) -> Option<(String, String)> {
     app.document_state
         .error_notice
         .as_ref()
-        .map(|n| (n.title.clone(), n.detail.clone()))
+        .map(|n| (n.title.render_en_us(), n.detail.render_en_us()))
 }
 
 /// Run `name path=<path> [extra..]` as an in-process request does, and answer

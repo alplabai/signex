@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+mod board_text;
 mod camera;
 mod carry;
 mod content;
@@ -8,6 +9,7 @@ mod content_pixel_tests;
 #[cfg(test)]
 mod content_tests;
 mod cull;
+mod drag_preview;
 #[cfg(test)]
 mod edge_parity_tests;
 #[cfg(test)]
@@ -16,23 +18,33 @@ mod gesture;
 mod grid;
 mod highlight;
 pub mod layer_style;
+mod marks;
 mod msg;
+mod part_ghost;
 mod select;
+mod snap_options;
 mod tessellate;
+mod viewport_resize;
 
+pub use board_text::BoardTextLayer;
 pub use camera::BoardCamera;
-pub use carry::{CarryKind, PcbCarry, carry_delta};
+pub use carry::{
+    CarryKind, PasteLoad, PcbCarry, board_without, carried_board, carry_delta, snap_point,
+};
 pub use content::BoardContentLayer;
 pub use highlight::{Highlight, HighlightLayer};
+pub use marks::BoardMarks;
 pub use msg::PcbCanvasMsg;
 pub use select::PcbSelectionState;
+pub use snap_options::{PcbSnapOptions, SnapDistance, SnapScope};
 
 use crate::scene_generation::next_scene_generation;
 use iced::event::Event;
 use iced::mouse;
 use iced::widget::canvas;
-use iced::{Color, Rectangle, Renderer, Theme};
+use iced::{Rectangle, Renderer, Theme};
 use signex_gfx::scene::{DirtyFlags, Scene};
+use signex_gfx::style::ColorSlot;
 use signex_renderer::pcb::{PcbRenderer, PcbSnapshot};
 use signex_renderer::schematic::ViewRenderer;
 use signex_renderer::theme::ResolvedTheme;
@@ -96,6 +108,8 @@ pub struct PcbCanvas {
     /// like pan and zoom, never a board edit, never undone, never dirty.
     camera: std::cell::RefCell<BoardCamera>,
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
+    /// The last fit applied and the camera it left (#2345).
+    fitted: std::cell::Cell<Option<crate::canvas::FittedView>>,
     /// Bounds as of the last canvas event — the view centre for menu zoom.
     viewport: std::cell::Cell<Rectangle>,
     pub grid_visible: bool,
@@ -111,28 +125,39 @@ pub struct PcbCanvas {
     pub trackpad_pan: bool,
     /// Preferences "Mouse wheel", synced with `trackpad_pan`.
     pub wheel_mode: crate::canvas::WheelMode,
-    pub theme_bg: Color,
-    pub theme_grid: Color,
     pub canvas_colors: signex_types::theme::CanvasColors,
     pub renderer_snapshot: Option<PcbSnapshot>,
     pub visible_grid_mm: f64,
+    /// The shown board's own grid (`PcbSetup::grid_size`, else the PCB
+    /// default), the pitch placement snaps to; drawn in place of
+    /// [`Self::visible_grid_mm`] so the lines sit on snap points (#2351).
+    board_grid_mm: Option<f64>,
+    /// Whether the board origin marker is drawn: the shown board's view
+    /// setting (`PcbLayerView`), on by default (#2351).
+    origin_marker_visible: bool,
+    /// Guides, extra grids and the sheet of the shown board (#2374).
+    marks: BoardMarks,
     /// Selection and hover copper to paint, set by the app from
     /// [`PcbSelectionState`] (#2191).
     highlight: Highlight,
     /// Box being dragged, in board mm; transient, read by the highlight layer.
     marquee: std::cell::Cell<Option<(signex_types::pcb::Point, signex_types::pcb::Point)>>,
-    /// The body and pads of the selected footprints, set by the app: a
-    /// press on one drags them instead of starting a box (#2240).
+    /// The body and pads of every footprint, set by the app: a press on one
+    /// drags it instead of starting a box (#2240, #2358).
     grab: Vec<pcb_geom::Shape>,
     /// A footprint drag is live; Esc clears it and the gesture quits.
     carry: std::cell::Cell<bool>,
+    /// The board without the carried footprints, and them at their offset.
+    drag_preview: Option<drag_preview::DragPreview>,
+    /// The library part on the cursor, dimmed, set by the app (#2364).
+    part_ghost: Option<Arc<Scene>>,
+    /// The footprint texts drawn by [`BoardTextLayer`], kept while the
+    /// camera and the board stay as `text_key` says (#2368).
+    text_cache: canvas::Cache,
+    text_key: std::cell::Cell<Option<board_text::TextKey>>,
     /// Whether this canvas reports clicks and hovers.
     pub selectable: bool,
 }
-
-/// Narrowest on-screen grid pitch the PCB canvas draws; denser grids step up
-/// by whole multiples of the real pitch (see `adaptive_pitch_mm`).
-const PCB_GRID_MIN_PX: f32 = 8.0;
 
 impl Default for PcbCanvas {
     fn default() -> Self {
@@ -151,21 +176,27 @@ impl PcbCanvas {
             scene_generation: std::cell::Cell::new(next_scene_generation()),
             camera: std::cell::RefCell::new(BoardCamera::default()),
             pending_fit: std::cell::Cell::new(None),
+            fitted: std::cell::Cell::new(None),
             viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             grid_visible: true,
             gpu_render: false,
             zoom_step: Camera::zoom_step_factor(Camera::ZOOM_STEP_PERCENT_DEFAULT),
             trackpad_pan: false,
             wheel_mode: Default::default(),
-            theme_bg: crate::render_config::to_iced(&colors.background),
-            theme_grid: crate::render_config::to_iced(&colors.grid),
             canvas_colors: colors,
             renderer_snapshot: None,
             visible_grid_mm: 2.54,
+            board_grid_mm: None,
+            origin_marker_visible: true,
+            marks: BoardMarks::default(),
             highlight: Highlight::default(),
             marquee: std::cell::Cell::new(None),
             grab: Vec::new(),
             carry: std::cell::Cell::new(false),
+            drag_preview: None,
+            part_ghost: None,
+            text_cache: canvas::Cache::default(),
+            text_key: std::cell::Cell::new(None),
             selectable: true,
         }
     }
@@ -178,7 +209,7 @@ impl PcbCanvas {
         &self.highlight
     }
 
-    /// What a press grabs to drag the selected footprints.
+    /// What a press grabs to drag a footprint.
     pub fn set_grab(&mut self, grab: Vec<pcb_geom::Shape>) {
         self.grab = grab;
     }
@@ -218,24 +249,58 @@ impl PcbCanvas {
         self.renderer_snapshot.as_ref()
     }
 
+    /// The board to draw. A drag preview in progress ends: the app starts
+    /// it again over the new board if the carry is still live.
     pub fn set_renderer_snapshot(&mut self, renderer_snapshot: Option<PcbSnapshot>) {
+        self.drag_preview = None;
+        self.replace_snapshot(renderer_snapshot);
+    }
+
+    fn replace_snapshot(&mut self, renderer_snapshot: Option<PcbSnapshot>) {
         self.renderer_snapshot = renderer_snapshot;
         // The board changed — the cached GPU scene no longer matches.
         *self.content.get_mut() = None;
         *self.scene_cache.get_mut() = None;
         *self.scene_bounds.get_mut() = None;
         *self.scene_generation.get_mut() = next_scene_generation();
+        // The backdrop draws the board area from the outline.
+        self.bg_cache.clear();
     }
 
     /// On-screen grid line spacing in pixels at `scale` px/mm, or `None` when
-    /// the grid is toggled off or too dense to draw. `adaptive_pitch_mm` is
-    /// millimetres, so it is converted to pixels here.
+    /// the grid is toggled off or unusable.
     pub fn grid_step_px(&self, scale: f32) -> Option<f32> {
+        self.grid_level(scale).map(|level| level.step_px)
+    }
+
+    /// The grid level drawn at `scale` px/mm: the board's own grid when a
+    /// board is shown, else the app-wide visible grid.
+    fn grid_level(&self, scale: f32) -> Option<grid::GridLevel> {
         if !self.grid_visible {
             return None;
         }
-        crate::canvas::grid::adaptive_pitch_mm(self.visible_grid_mm as f32, scale, PCB_GRID_MIN_PX)
-            .map(|mm| mm * scale)
+        let pitch_mm = self.board_grid_mm.unwrap_or(self.visible_grid_mm);
+        grid::grid_level(pitch_mm as f32, scale)
+    }
+
+    /// Draw the shown board's grid (`None`: no board, the app-wide grid).
+    pub fn set_board_grid(&mut self, grid_mm: Option<f64>) {
+        if self.board_grid_mm != grid_mm {
+            self.board_grid_mm = grid_mm;
+            self.bg_cache.clear();
+        }
+    }
+
+    /// Draw the shown board's guides, extra grids and sheet (#2374).
+    pub fn set_board_marks(&mut self, marks: BoardMarks) {
+        if self.marks != marks {
+            self.marks = marks;
+            self.bg_cache.clear();
+        }
+    }
+
+    pub fn board_marks(&self) -> &BoardMarks {
+        &self.marks
     }
 
     pub fn clear_bg_cache(&mut self) {
@@ -298,10 +363,23 @@ impl PcbCanvas {
         }
     }
 
-    pub fn set_theme_colors(&mut self, bg: Color, grid: Color) {
-        self.theme_bg = bg;
-        self.theme_grid = grid;
+    /// Adopt the board palette, the backdrop's colours included.
+    pub fn set_theme_colors(&mut self, colors: signex_types::theme::CanvasColors) {
+        self.canvas_colors = colors;
         self.bg_cache.clear();
+    }
+
+    /// Whether the board origin marker is drawn.
+    pub fn origin_marker_visible(&self) -> bool {
+        self.origin_marker_visible
+    }
+
+    /// Show or hide the board origin marker (the board view's setting).
+    pub fn set_origin_marker_visible(&mut self, visible: bool) {
+        if self.origin_marker_visible != visible {
+            self.origin_marker_visible = visible;
+            self.bg_cache.clear();
+        }
     }
 
     /// The camera's zoom as a percentage, `100.0` at the default scale.
@@ -319,12 +397,21 @@ impl PcbCanvas {
         (camera.offset().x, camera.offset().y, camera.scale())
     }
 
+    /// The board scene's colours: the board palette with a clear board-area
+    /// fill, since the backdrop canvas paints the board area with the grid
+    /// on it (#2351) and an opaque fill above would hide the grid.
+    fn content_theme(&self) -> ResolvedTheme {
+        let mut theme = ResolvedTheme::from_canvas_colors(self.canvas_colors);
+        theme.set_slot(ColorSlot::BoardArea, [0.0; 4]);
+        theme
+    }
+
     /// Build the `signex_gfx` scene for a board snapshot. Shared by the CPU
     /// `draw` path and the GPU [`Self::gpu_scene`] path so both tessellate from
     /// identical instance data.
     fn build_scene(&self, snapshot: &PcbSnapshot) -> Scene {
         let mut scene = Scene::default();
-        let theme = ResolvedTheme::from_canvas_colors(self.canvas_colors);
+        let theme = self.content_theme();
         PcbRenderer::build_scene(
             snapshot,
             &theme,
@@ -491,8 +578,7 @@ impl canvas::Program<Message> for PcbCanvas {
     ) -> Option<canvas::Action<Message>> {
         // Remember the bounds so menu zoom (no cursor) can find the view centre.
         self.viewport.set(bounds);
-        if let Some(target) = self.pending_fit.take() {
-            self.camera.borrow_mut().fit_rect(target, bounds);
+        if self.resolve_pending_fit(bounds) {
             return Some(canvas::Action::publish(Message::CanvasEvent(
                 CanvasEvent::CursorMoved,
             )));
@@ -621,23 +707,34 @@ impl canvas::Program<Message> for PcbCanvas {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        // Single read of the sole camera home for the background and grid.
+        // Single read of the sole camera home for the backdrop.
         let camera = self.camera.borrow();
         let bg = self.bg_cache.draw(renderer, bounds.size(), |frame| {
-            frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.theme_bg);
-
-            if let Some(step) = self.grid_step_px(camera.scale()) {
-                let color = Color {
-                    a: 0.18,
-                    ..self.theme_grid
-                };
-                grid::draw_grid(frame, &camera, bounds.size(), step, color);
+            let size = bounds.size();
+            let outline = self
+                .renderer_snapshot
+                .as_ref()
+                .map(|s| s.board_features.outline.as_slice());
+            let region = grid::board_region(outline);
+            let sheet = marks::sheet_box(&self.marks, region);
+            grid::draw_board_area(frame, &camera, size, region, sheet, &self.canvas_colors);
+            if let Some(level) = self.grid_level(camera.scale()) {
+                let paint = grid::grid_paint(&self.canvas_colors, level.fade);
+                grid::draw_grid(frame, &camera, size, region, level, paint);
+                marks::draw_grids(frame, &camera, size, region, &self.marks.grids);
+            }
+            marks::draw_guides(frame, &camera, size, &self.marks.guides);
+            if self.origin_marker_visible {
+                let origin = crate::render_config::to_iced(&self.canvas_colors.cursor);
+                grid::draw_origin(frame, &camera, size, origin);
             }
         });
 
         // The board is a layer of its own stacked above this canvas: the
         // `shader` on the GPU mount, [`BoardContentLayer`] on the CPU mount
-        // (#2321). This canvas draws the background and grid behind it.
+        // (#2321). This canvas draws the workspace, the board area, the grid
+        // and the origin marker behind it, so both mounts share them; the
+        // board scene leaves its board-area fill clear (`content_theme`).
         vec![bg]
     }
 
@@ -678,6 +775,40 @@ mod tests {
         let mut canvas = PcbCanvas::new();
         canvas.set_grid(false, 2.54);
         assert_eq!(canvas.grid_step_px(3.0), None);
+    }
+
+    #[test]
+    fn the_shown_boards_grid_wins_over_the_app_wide_grid() {
+        let mut canvas = PcbCanvas::new();
+        // 0.5 mm board grid at 20 px/mm: 10 px, drawn as is.
+        canvas.set_board_grid(Some(0.5));
+        let step = canvas.grid_step_px(20.0).expect("grid is visible");
+        assert!((step - 10.0).abs() < 1e-4, "got {step}");
+        // No board: back to the app-wide 2.54 mm grid (50.8 px).
+        canvas.set_board_grid(None);
+        let step = canvas.grid_step_px(20.0).expect("grid is visible");
+        assert!((step - 50.8).abs() < 1e-3, "got {step}");
+    }
+
+    #[test]
+    fn the_origin_marker_is_shown_until_hidden() {
+        let mut canvas = PcbCanvas::new();
+        assert!(canvas.origin_marker_visible());
+        canvas.set_origin_marker_visible(false);
+        assert!(!canvas.origin_marker_visible());
+    }
+
+    /// The backdrop paints the board area under the grid; the board scene
+    /// must leave it clear on both mounts, or the grid is hidden.
+    #[test]
+    fn the_board_scene_leaves_the_board_area_clear() {
+        let canvas = PcbCanvas::new();
+        assert_eq!(canvas.content_theme().color(ColorSlot::BoardArea), [0.0; 4]);
+        let full = ResolvedTheme::from_canvas_colors(canvas.canvas_colors);
+        assert_eq!(
+            canvas.content_theme().color(ColorSlot::BoardEdge),
+            full.color(ColorSlot::BoardEdge)
+        );
     }
 
     #[test]

@@ -70,21 +70,23 @@ impl Signex {
                     .as_ref()
                     .map(|p| p.kind)
                     .unwrap_or(PrimitiveKind::Symbol);
+                use signex_i18n::ids;
                 let (label, ext) = match kind {
-                    PrimitiveKind::Symbol => ("Pick Symbol (*.snxsym)", "snxsym"),
-                    PrimitiveKind::Footprint => ("Pick Footprint (*.snxfpt)", "snxfpt"),
-                    PrimitiveKind::Sim => ("Pick Sim Model (*.snxsim)", "snxsim"),
-                    _ => ("Pick Primitive", ""),
+                    PrimitiveKind::Symbol => (ids::FILE_DIALOG_PICK_SYMBOL, "snxsym"),
+                    PrimitiveKind::Footprint => (ids::FILE_DIALOG_PICK_FOOTPRINT, "snxfpt"),
+                    PrimitiveKind::Sim => (ids::FILE_DIALOG_PICK_SIM_MODEL, "snxsim"),
+                    _ => (ids::FILE_DIALOG_PICK_PRIMITIVE, ""),
                 };
-                let picker = self.ui_state.io.picker.clone();
+                let dialog = self
+                    .ui_state
+                    .io
+                    .picker
+                    .dialog()
+                    .title_in(&self.ui_state.i18n, label);
                 Task::perform(
                     async move {
-                        picker
-                            .dialog()
-                            .set_title(label)
-                            .add_filter(ext, &[ext])
-                            .pick_file()
-                            .await
+                        // The filter is named by its extension, not a label.
+                        dialog.add_filter(ext, &[ext]).pick_file().await
                     },
                     |path| {
                         Message::Library(LibraryMessage::PrimitivePicker(
@@ -154,6 +156,24 @@ impl Signex {
             }
             PrimitivePickerTarget::PreviewAlternate(address) => {
                 return self.add_alternate_symbol_from_pick(address, primitive_ref);
+            }
+            PrimitivePickerTarget::DesignPart { sheet, part } => {
+                return Task::done(Message::from(crate::app::UpdatePcbMsg::FootprintChosen {
+                    sheet,
+                    part,
+                    footprint: primitive_ref,
+                }));
+            }
+            PrimitivePickerTarget::BoardFootprint {
+                board, footprints, ..
+            } => {
+                return Task::done(Message::Pcb(crate::app::PcbMsg::FootprintSwap(
+                    crate::app::FootprintSwapMsg::Picked {
+                        board,
+                        footprints,
+                        footprint: primitive_ref,
+                    },
+                )));
             }
         }
         Task::none()

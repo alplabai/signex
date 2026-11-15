@@ -16,6 +16,7 @@ mod drag_layers;
 pub(crate) mod drag_preview;
 mod draw;
 mod erc_marker;
+mod fitted_view;
 mod ghost_split;
 mod gpu_drag;
 pub(crate) mod gpu_mount;
@@ -37,6 +38,7 @@ mod special_strings;
 mod surface;
 #[cfg(test)]
 mod tool_click_tests;
+mod viewport_resize;
 mod wheel;
 pub mod zoom_pill;
 
@@ -50,6 +52,7 @@ use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::{Camera, ScrollIntent};
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
+pub use fitted_view::{FittedView, ResizeFollow, resize_follow};
 pub use graphite::{GraphiteCanvasInk, HALO_FILL_ALPHA};
 pub use wheel::{WheelKeys, WheelMode, wheel_intent};
 mod move_connections;
@@ -203,6 +206,9 @@ pub struct CanvasSlot {
     /// Fit the whole sheet at the next canvas event, so the paper size and the
     /// canvas size are the ones laid out by then, not the ones at load (#1941).
     pending_sheet_fit: std::cell::Cell<bool>,
+    /// The last fit applied and the camera it left; a resize refits while the
+    /// camera is still that one (#2345).
+    fitted: std::cell::Cell<Option<FittedView>>,
     /// Bounds of the canvas as of the last canvas event — lets menu zoom (which has no
     /// cursor and no event bounds) find the view centre.
     viewport: std::cell::Cell<Rectangle>,
@@ -341,6 +347,7 @@ impl CanvasSlot {
             net_highlight: None,
             pending_fit: std::cell::Cell::new(None),
             pending_sheet_fit: std::cell::Cell::new(false),
+            fitted: std::cell::Cell::new(None),
             viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             wire_preview: Vec::new(),
             drawing_mode: false,
@@ -528,7 +535,7 @@ impl CanvasSlot {
         }
         if let Some(target) = self.pending_fit.take() {
             self.pending_sheet_fit.set(false);
-            self.camera_mut().fit_rect(target, viewport);
+            self.apply_fit(target, viewport);
             return true;
         }
         if self.pending_sheet_fit.take() {
@@ -536,10 +543,18 @@ impl CanvasSlot {
                 iced::Point::ORIGIN,
                 iced::Size::new(self.paper_width_mm, self.paper_height_mm),
             );
-            self.camera_mut().fit_rect(paper, viewport);
+            self.apply_fit(paper, viewport);
             return true;
         }
         false
+    }
+
+    /// Fit `target` into `viewport` and remember it, so a resize can refit.
+    fn apply_fit(&self, target: Rectangle, viewport: Rectangle) {
+        let mut camera = self.camera_mut();
+        camera.fit_rect(target, viewport);
+        self.fitted
+            .set(Some(FittedView::new(target, camera.offset, camera.scale)));
     }
 }
 
@@ -592,7 +607,8 @@ pub struct CanvasViewPrefs<'a> {
     /// Preview rubber-banded wires while a selection floats (mirrors the
     /// "Keep wires connected when moving" preference).
     pub move_keeps_wires: bool,
-    pub draw_mode: crate::app::DrawMode,
+    /// How the rubber-band preview of a wire or bus bends.
+    pub corner_rule: signex_types::corner::CornerRule,
     /// Active tool; decides whether the Active Bar shows the draw-mode pill,
     /// which widens the bar the right-click hit-test must centre.
     pub current_tool: crate::app::Tool,
@@ -1026,7 +1042,7 @@ mod tests {
             trackpad_pan: false,
             wheel_mode: WheelMode::Zoom,
             move_keeps_wires: true,
-            draw_mode: crate::app::DrawMode::Ortho90,
+            corner_rule: Default::default(),
             current_tool: crate::app::Tool::Select,
             window_width: 1400.0,
             wire_color_overrides: overrides,

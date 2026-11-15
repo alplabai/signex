@@ -6,6 +6,7 @@
 //! palette, and a future CLI all route a command id through here on
 //! their way to `update`.
 
+use crate::app::pcb_tools::BoardPlaceTool;
 use crate::keymap::AppCommandId;
 
 use super::CommandArgs;
@@ -66,6 +67,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     let text_edit = |target| Message::TextEdit(TextEditMsg::Requested(target));
     let pcb_view = |event| Message::Pcb(PcbMsg::View(event));
     let view_turn = |event| Message::Pcb(PcbMsg::ViewRotation(event));
+    let board_tool = |tool| Message::Pcb(PcbMsg::PlaceToolPicked(tool));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -114,9 +116,13 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::PreviousRequested)
         }
         "next_grid" => Message::Ui(UiMsg::GridCycle),
+        "fast_grid_1" => Message::Ui(UiMsg::FastGridPicked(0)),
+        "fast_grid_2" => Message::Ui(UiMsg::FastGridPicked(1)),
+        "cycle_fast_grid" => Message::Ui(UiMsg::FastGridCycled),
         "cycle_snap_grid_forward" | "open_grid_picker" => Message::Ui(UiMsg::GridPickerOpen),
         "cycle_unit" => Message::Ui(UiMsg::UnitCycled),
         "cycle_wire_bus_graphic_mode" => Message::Tool(ToolMessage::CycleDrawMode),
+        "switch_segment_posture" => Message::Tool(ToolMessage::CornerFlipRequested),
         "cut" => Message::Edit(EditMsg::Cut),
         "delete_selection" => Message::Edit(EditMsg::DeleteSelected),
         "remove_last_vertex" => Message::Tool(ToolMessage::RemoveLastVertex),
@@ -285,9 +291,20 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         "toggle_visible_grid" => Message::Ui(UiMsg::GridToggle),
         "toggle_ratsnest" => pcb_view(PcbViewMsg::RatsnestVisibilityToggled),
+        "toggle_origin_marker" => pcb_view(PcbViewMsg::OriginMarkerVisibilityToggled),
         "board_sketch" => Message::Pcb(PcbMsg::Sketch(crate::app::BoardSketchMsg::ModeToggled)),
+        "place_board_via" => board_tool(BoardPlaceTool::Via),
+        "place_board_track" => board_tool(BoardPlaceTool::Track),
+        "place_board_fill" => board_tool(BoardPlaceTool::Fill),
+        "place_board_region" => board_tool(BoardPlaceTool::SolidRegion),
+        "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
+        "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(
+            crate::app::FootprintSwapMsg::Requested,
+        )),
         "next_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: true }),
         "prev_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: false }),
+        "next_signal_layer" => pcb_view(PcbViewMsg::SignalLayerStepped { forward: true }),
+        "toggle_single_layer_mode" => pcb_view(PcbViewMsg::SingleLayerModeToggled),
         "toggle_layer_visibility" => pcb_view(PcbViewMsg::ActiveLayerVisibilityToggled),
         "show_all_layers" => pcb_view(PcbViewMsg::AllLayersShown),
         // #2316: the board view's turn; `view_rotate` takes `degrees`.
@@ -309,6 +326,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "update_pcb_from_schematic" => Message::UpdatePcb(UpdatePcbMsg::Requested { apply: false }),
         "back_annotate_schematics" => Message::from(crate::app::BackAnnotateMsg::Requested),
         "new_pcb_document" => Message::UpdatePcb(UpdatePcbMsg::NewPcbRequested(None)),
+        // #2232: the setup dialogs; a headless run with `profile` makes the
+        // document through `run_operands` instead.
+        "new_schematic_sheet" => Message::from(crate::app::DocumentSetupMsg::OpenRequested {
+            kind: crate::app::SetupKind::Sheet,
+            project: None,
+        }),
         "undo" => Message::Edit(EditMsg::Undo),
         "unselect_all" => Message::Selection(selection_request::SelectionRequest::ClearAll),
         // Tools > Up Hierarchy: the sheet that references the focused one.
@@ -543,15 +566,14 @@ mod tests {
     #[rustfmt::skip]
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
         "autoplace_fields", "center_on_cursor",
-        "copy_attributes_or_add_vertex", "cycle_fast_grid",
+        "copy_attributes_or_add_vertex",
         "cycle_wiring_mode",
-        "fast_grid_1", "fast_grid_2",
         "import_graphics",
         "place_design_block",
         "refresh_view",
         "reset_local_coordinates", "select_expand_connection",
         "select_node_or_connection_item",
-        "switch_segment_posture", "toggle_floating_panels",
+        "toggle_floating_panels",
         "toggle_search_panel",
         "undo_last_segment",
     ];
@@ -685,6 +707,19 @@ mod tests {
         assert!(matches!(
             resolve("center_view_at_cursor"),
             Message::CanvasEvent(CanvasEvent::CenterAtCursor)
+        ));
+        // #1672: the fast grids.
+        assert!(matches!(
+            resolve("fast_grid_1"),
+            Message::Ui(UiMsg::FastGridPicked(0))
+        ));
+        assert!(matches!(
+            resolve("fast_grid_2"),
+            Message::Ui(UiMsg::FastGridPicked(1))
+        ));
+        assert!(matches!(
+            resolve("cycle_fast_grid"),
+            Message::Ui(UiMsg::FastGridCycled)
         ));
     }
 

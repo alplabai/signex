@@ -145,6 +145,7 @@ fn multi_binding_hints_keep_the_order_they_had_on_trunk() {
                 ("redo", "Ctrl+Y"),
                 ("place_wire", "P W"),
                 ("next_layer", "Shift++"),
+                ("next_signal_layer", "Shift+*"),
                 ("open_command_palette", "Ctrl+Shift+P"),
             ],
         ),
@@ -154,6 +155,7 @@ fn multi_binding_hints_keep_the_order_they_had_on_trunk() {
                 ("redo", "Ctrl+Y"),
                 ("open_command_palette", "Ctrl+Shift+P"),
                 ("next_layer", "Shift++"),
+                ("next_signal_layer", "Shift+*"),
             ],
         ),
     ];
@@ -184,6 +186,7 @@ fn multi_binding_hints_keep_the_order_they_had_on_trunk() {
             .filter(|(_, n)| **n > 1)
             .map(|(a, _)| a.as_str())
             .collect();
-        assert_eq!(multi.len(), 3, "{id}: {multi:?}");
+        // `*` moved to next_signal_layer, so it has two bindings too (#2357).
+        assert_eq!(multi.len(), 4, "{id}: {multi:?}");
     }
 }

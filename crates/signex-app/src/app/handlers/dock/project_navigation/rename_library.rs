@@ -342,15 +342,15 @@ impl Signex {
                 );
             }
             Err(back) => {
-                let detail = format!(
-                    "The library is now at {} but the project still lists {}: {back}. \
-                     Move it back by hand.",
-                    new.display(),
-                    old.display()
-                );
+                let detail = signex_i18n::Translatable::new(
+                    signex_i18n::ids::NOTICE_LIBRARY_RENAME_STRANDED,
+                )
+                .arg("new", new.display().to_string())
+                .arg("old", old.display().to_string())
+                .arg("error", back.to_string());
                 crate::diagnostics::log_error(
                     "Library rename rollback failed",
-                    &anyhow::anyhow!("{detail}"),
+                    &anyhow::anyhow!("{}", detail.render_en_us()),
                 );
                 self.document_state.error_notice = Some(ErrorNotice::rename_failed(detail));
             }
@@ -415,7 +415,9 @@ impl Signex {
     }
 
     fn report_library_rename_failure(&mut self, old_path: &Path, reason: &str) {
-        let detail = format!("Could not rename library {}: {reason}", old_path.display());
+        let detail = signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_LIBRARY_RENAME_FAILED)
+            .arg("path", old_path.display().to_string())
+            .arg("reason", reason);
         // The Messages panel clips a record at 160 characters, so the
         // reason goes first and only the file name follows.
         let name = old_path.file_name().map_or_else(

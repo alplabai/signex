@@ -171,7 +171,7 @@ fn a_locked_stock_library_refuses_the_same_row_save() {
         .error_notice
         .as_ref()
         .expect("the refusal reaches the user");
-    assert_eq!(notice.title, "Library Is Read-Only");
+    assert_eq!(notice.title.render_en_us(), "Library Is Read-Only");
     assert_eq!(before, bytes_of(&w.dir));
 }
 
