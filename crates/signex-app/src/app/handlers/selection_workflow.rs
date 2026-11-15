@@ -308,31 +308,29 @@ impl Signex {
     /// Select the connection item under the cursor alone; the Messages panel
     /// says so when the cursor is off the sheet or over nothing of that kind.
     fn select_connection_item_at_cursor(&mut self) {
-        use signex_types::schematic::SelectedKind;
         const LABEL: &str = "Select node / connection item";
         let Some((x, y)) = self.cursor_world_now() else {
             crate::diagnostics::log_info(format!("{LABEL}: the cursor is not on this sheet"));
             return;
         };
         let Some(snapshot) = self.active_render_snapshot() else {
+            crate::diagnostics::log_info(format!("{LABEL}: no schematic sheet is shown"));
             return;
         };
-        let hit = crate::schematic_runtime::hit_test::hit_test_styled(
+        // Topmost first, so a drawing or a filtered-out item over a wire does
+        // not hide it. A sheet pin is left out: it joins nets across sheets
+        // and `connected_net_items` does not expand it.
+        let hit = crate::schematic_runtime::hit_test::hit_test_all_styled(
             snapshot,
             &self.interaction_state.active_canvas().designators,
             x,
             y,
             self.active_wire_widths(),
         )
-        .filter(|h| {
-            matches!(
-                h.kind,
-                SelectedKind::Wire
-                    | SelectedKind::Bus
-                    | SelectedKind::BusEntry
-                    | SelectedKind::Junction
-                    | SelectedKind::Label
-            ) && passes_filter(h, snapshot, &self.interaction_state.selection_filters)
+        .into_iter()
+        .find(|h| {
+            signex_net::is_connection_kind(h.kind)
+                && passes_filter(h, snapshot, &self.interaction_state.selection_filters)
         });
         match hit {
             Some(item) => {

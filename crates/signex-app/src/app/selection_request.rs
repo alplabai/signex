@@ -26,8 +26,8 @@ pub enum SelectionRequest {
     SelectConnected {
         seed: signex_types::schematic::SelectedItem,
     },
-    /// Select the one wire, bus, bus entry, junction or label under the
-    /// cursor (`select_node_or_connection_item`), without expanding it.
+    /// Select the one wire, bus, junction or label under the cursor
+    /// (`select_node_or_connection_item`), without expanding it.
     ConnectionItemAtCursorRequested,
     /// Start a move-drag on the next click regardless of whether the click
     /// lands on an already-selected item — used for the Active Bar "Drag"
