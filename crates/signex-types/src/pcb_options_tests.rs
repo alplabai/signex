@@ -76,3 +76,19 @@ fn swatches_step_round_the_list() {
     assert_eq!(next_mark_color(MARK_COLORS[5]), MARK_COLORS[0]);
     assert_eq!(next_mark_color(Color::new(1, 2, 3, 4)), MARK_COLORS[0]);
 }
+
+/// #2384: the board's own grid counts from the board origin, so the origin
+/// of a new board lies on every grid step.
+#[test]
+fn the_board_grid_counts_from_the_board_origin() {
+    let options = BoardOptions {
+        origin: BoardOrigin::new(Point::new(0.0, 80.0)),
+        ..BoardOptions::default()
+    };
+    let spec = options.grid_for(GridUse::Components, 1.27);
+    assert_eq!(spec.origin, Point::new(0.0, 80.0));
+    assert!(close(
+        spec.snap(Point::new(0.1, 79.9)),
+        Point::new(0.0, 80.0)
+    ));
+}

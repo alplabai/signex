@@ -43,6 +43,7 @@ impl Signex {
                     app.apply_view_rotation(Some(window), event)
                 })
             }
+            PcbMsg::Board3d(event) => self.handle_board_3d(event),
             PcbMsg::Sketch(event) => self.handle_board_sketch(event),
             PcbMsg::Reannotate(msg) => self.dispatch_board_reannotate_message(msg),
             PcbMsg::BackAnnotate(msg) => self.dispatch_back_annotate_message(msg),
@@ -52,6 +53,36 @@ impl Signex {
                 Task::none()
             }
             PcbMsg::FootprintSwap(event) => self.handle_footprint_swap(event),
+            PcbMsg::LayerTabMenu(event) => {
+                self.handle_layer_tab_menu(event);
+                Task::none()
+            }
+        }
+    }
+
+    /// The right-click menu of a layer tab (#2379): it opens at the pointer,
+    /// one menu at a time, and a picked row changes the view of the board
+    /// of the window it was opened in.
+    fn handle_layer_tab_menu(&mut self, event: LayerTabMenuMsg) {
+        match event {
+            LayerTabMenuMsg::Opened { window, layer } => {
+                self.close_all_context_menus();
+                // The menu takes the cursor: a card the canvas showed goes.
+                self.clear_canvas_hover();
+                let (x, y) = self.interaction_state.last_mouse_pos;
+                self.interaction_state.pcb_layer_tab_menu = Some(LayerTabMenu {
+                    x,
+                    y,
+                    layer,
+                    window,
+                });
+            }
+            LayerTabMenuMsg::Dismissed => self.interaction_state.pcb_layer_tab_menu = None,
+            LayerTabMenuMsg::Picked(view_event) => {
+                if let Some(menu) = self.interaction_state.pcb_layer_tab_menu.take() {
+                    self.apply_pcb_view_event(menu.window, view_event);
+                }
+            }
         }
     }
 

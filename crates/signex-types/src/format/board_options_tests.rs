@@ -6,8 +6,8 @@ use super::tests::empty_board;
 use super::*;
 use crate::pcb::Point;
 use crate::pcb_options::{
-    BoardGrid, BoardGuide, BoardOptions, BoardSheet, DesignatorDisplay, GuideKind, MARK_COLORS,
-    PolygonNaming,
+    BoardGrid, BoardGuide, BoardOptions, BoardOrigin, BoardSheet, DesignatorDisplay, GuideKind,
+    MARK_COLORS, PolygonNaming,
 };
 
 const OLD_BOARD: &str = include_str!("../../tests/corpus/pcb/board-outline-only.snxpcb");
@@ -46,6 +46,7 @@ fn options() -> BoardOptions {
         },
         polygon_naming: PolygonNaming::LayerNetPour,
         designator_display: DesignatorDisplay::Logical,
+        origin: BoardOrigin::new(Point::new(-12.5, 80.0)),
     }
 }
 
@@ -94,4 +95,19 @@ fn a_non_finite_guide_is_refused_on_write() {
         SnxPcb::new(board).write_string(),
         Err(FormatError::NonFiniteField { .. })
     ));
+}
+
+/// #2384: a board keeps the origin it was saved with, and one saved before
+/// the origin existed reloads counting from the model's zero.
+#[test]
+fn the_saved_origin_reloads_unchanged() {
+    let old = SnxPcb::parse(OLD_BOARD).expect("parses").board;
+    assert_eq!(old.options.origin, BoardOrigin::default());
+    let mut board = empty_board();
+    board.options.origin = BoardOrigin::new(Point::new(3.25, 47.5));
+    let text = SnxPcb::new(board.clone()).write_string().expect("writes");
+    assert!(text.contains("[board_options.origin]"), "{text}");
+    let back = SnxPcb::parse(&text).expect("reads back").board;
+    assert_eq!(back.options.origin, board.options.origin);
+    assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);
 }

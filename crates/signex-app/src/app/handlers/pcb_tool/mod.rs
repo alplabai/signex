@@ -86,6 +86,9 @@ impl Signex {
         }
         self.end_pcb_carry();
         self.interaction_state.pcb_primitive.net_pick = None;
+        // A guide armed by the board panel's Place would take the first
+        // click ahead of the tool (#2396).
+        self.interaction_state.pcb_guide_place = None;
         self.interaction_state.pcb_tool = Some(BoardToolSession {
             tool,
             path,
@@ -211,7 +214,10 @@ impl Signex {
             }
             BoardPlaceTool::Track => self.route_clicked(at),
             BoardPlaceTool::TextString => self.string_clicked(at),
-            BoardPlaceTool::Fill | BoardPlaceTool::SolidRegion | BoardPlaceTool::Keepout => {
+            BoardPlaceTool::Fill
+            | BoardPlaceTool::SolidRegion
+            | BoardPlaceTool::PolygonPour
+            | BoardPlaceTool::Keepout => {
                 self.area_clicked(tool, at);
             }
             _ => return false,
@@ -237,7 +243,7 @@ impl Signex {
         let session = self.own_board_tool()?;
         let board = self.document_state.pcb_board(&session.path)?;
         let cursor = session.cursor?;
-        let mut preview = carried_board(board, &Default::default(), Point::new(0.0, 0.0));
+        let mut preview = carried_board(board, &Default::default(), &[], Point::new(0.0, 0.0));
         match session.tool {
             BoardPlaceTool::Via => {
                 let defaults = &self.interaction_state.pcb_tool_defaults;
@@ -245,7 +251,10 @@ impl Signex {
             }
             BoardPlaceTool::Track => self.route_preview(session, board, cursor, &mut preview),
             BoardPlaceTool::TextString => self.string_preview(cursor, &mut preview),
-            BoardPlaceTool::Fill | BoardPlaceTool::SolidRegion | BoardPlaceTool::Keepout => {
+            BoardPlaceTool::Fill
+            | BoardPlaceTool::SolidRegion
+            | BoardPlaceTool::PolygonPour
+            | BoardPlaceTool::Keepout => {
                 self.area_preview(session, board, cursor, &mut preview);
             }
             _ => return None,

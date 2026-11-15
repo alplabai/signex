@@ -14,10 +14,11 @@ use iced::alignment::Horizontal;
 use iced::widget::{Space, column, container, mouse_area, row, stack, svg};
 use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, MessageId, ids, t};
-use signex_types::theme::ThemeId;
+use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem, Metrics};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, MenuMetrics};
 
+use crate::active_bar::CustomFilterPreset;
 use crate::app::command::{CommandContext, is_enabled};
 use crate::app::pcb_tools::{BoardPlaceTool, ToolState};
 use crate::app::{Message, PcbBarMenu, PcbBarMsg, PcbMsg, Signex};
@@ -62,19 +63,26 @@ impl Signex {
         let entries = pcb_bar_menu_entries(
             menu,
             &self.ui_state.i18n,
+            tokens,
             tid,
             &self.command_context(None),
             &self.ui_state.pcb_pick_filter,
+            &self.ui_state.pcb_filter_presets,
         );
-        let panel_width = MenuMetrics::GRAPHITE.fitted_width(
-            &entries,
-            bar_width,
-            &self.document_state.panel_ctx.ui_font_name,
-        );
-        let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, Some(panel_width));
+        // The Selection Filter's chip grid sizes itself, as on the schematic.
+        let panel_width = (menu != PcbBarMenu::Filter).then(|| {
+            MenuMetrics::GRAPHITE.fitted_width(
+                &entries,
+                bar_width,
+                &self.document_state.panel_ctx.ui_font_name,
+            )
+        });
+        let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, panel_width);
         // The panel stays inside the bar's width, so the centred bar does not
         // move while its dropdown is open.
-        let panel_x = trigger_x.min(bar_width - panel_width).max(0.0);
+        let panel_x = trigger_x
+            .min(bar_width - panel_width.unwrap_or(0.0))
+            .max(0.0);
         let bar_and_panel = column![
             bar,
             Space::new().height(crate::active_bar::BAR_DROPDOWN_GAP_PX),
@@ -339,12 +347,14 @@ fn menu_commands(menu: PcbBarMenu) -> &'static [MenuRow] {
 pub(in crate::app::view) fn pcb_bar_menu_entries(
     menu: PcbBarMenu,
     i18n: &I18n,
+    tokens: &ThemeTokens,
     tid: ThemeId,
     ctx: &CommandContext,
     filter: &pcb_geom::PickFilter,
+    presets: &[CustomFilterPreset<pcb_geom::PickKind>],
 ) -> Vec<DropdownEntry<Message>> {
     if menu == PcbBarMenu::Filter {
-        return filter::entries(i18n, filter);
+        return filter::entries(i18n, tokens, filter, presets);
     }
     menu_commands(menu)
         .iter()

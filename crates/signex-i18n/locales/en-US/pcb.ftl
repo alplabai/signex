@@ -6,6 +6,10 @@ pcb-layers-title = Layers
 pcb-layers-empty = Open a board or a footprint to see its layers.
 # Button that shows every hidden layer again.
 pcb-layers-show-all = Show all layers
+# Right-click menu of a layer tab under the board: hide that layer, or show
+# it and hide every other layer.
+pcb-layer-tab-hide = Hide this layer
+pcb-layer-tab-show-only = Show only this layer
 # Group headers of the Layers panel.
 pcb-layers-signal = Signal
 pcb-layers-plane = Plane
@@ -42,7 +46,6 @@ pcb-bar-align-tooltip = Align (click for the align and distribute menu)
 pcb-bar-component-unavailable = Place Component: not available on boards yet
 pcb-bar-pad-unavailable = Place Pad: not available on boards yet
 pcb-bar-arc-unavailable = Place Arc: not available on boards yet
-pcb-bar-polygon-pour-unavailable = Place Polygon Pour: not available on boards yet
 pcb-bar-text-unavailable = Place String: not available on boards yet
 pcb-bar-dimension-unavailable = Place Dimension: not available on boards yet
 pcb-bar-route-unavailable = Interactive Routing: not available on boards yet
@@ -66,12 +69,14 @@ pcb-bar-track-tooltip = Place Track (Space flips the corner, Shift+Space changes
 pcb-bar-fill-tooltip = Place Fill
 pcb-bar-region-tooltip = Place Solid Region (right-click to close)
 pcb-bar-keepout-tooltip = Place Keepout (right-click to close)
+pcb-bar-pour-tooltip = Place Polygon Pour (right-click to close)
 # What the Messages panel says when a board placement tool is armed (#2373).
 pcb-tool-hint-via = Via: click to place a via on the net under it; Esc or a right-click ends the tool
 pcb-tool-hint-track = Track: click to start a run on the active copper layer, then click each corner; change the layer to add a via. Click the run's end, Esc or a right-click to end the run
 pcb-tool-hint-fill = Fill: click two opposite corners of solid copper on the active copper layer; Esc or a right-click ends the tool
 pcb-tool-hint-region = Solid Region: click each corner, then the first corner or a right-click to close it; Esc drops the shape, then ends the tool
 pcb-tool-hint-keepout = Keepout: on a copper or keep-out layer, click each corner, then the first corner or a right-click to close it. It keeps all copper off that copper layer; Esc drops the shape, then ends the tool
+pcb-tool-hint-pour = Polygon Pour: click each corner, then the first corner or a right-click to close it. It fills with the net under the first corner and keeps clear of other nets' copper; Esc drops the shape, then ends the tool
 # A Track, Fill or Solid Region click while the active layer is not copper;
 # $tool is the tool's name.
 pcb-tool-needs-copper = { $tool }: make a copper layer active to draw on it
@@ -224,3 +229,22 @@ pcb-place-part-refused = { $part } cannot be placed on a board: { $reason }. Not
 # Messages line when the board was closed or switched away from while the
 # part was being read.
 pcb-place-part-board-gone = The board { $board } is no longer active; { $part } was not placed.
+
+## The board 3D view (#2390).
+
+# The 3D view's bar: its name, how to move it, and its buttons.
+pcb-3d-title = 3D View
+pcb-3d-hint = Drag to turn, right-drag to slide, wheel to zoom, click to select
+# Back to the flat board.
+pcb-3d-flat = 2D
+pcb-3d-fit = Fit
+pcb-3d-top = Top
+pcb-3d-bottom = Bottom
+pcb-3d-front = Front
+pcb-3d-left = Left
+pcb-3d-right = Right
+# From above a front corner.
+pcb-3d-iso = Angled
+# Messages line when a part's model could not be read; the part is drawn as
+# a plain body. $source names the library footprint.
+pcb-3d-model-unread = The 3D model of { $source } could not be read: { $why }. It is drawn as a plain body.

@@ -372,6 +372,8 @@ define_ids! {
         CMD_MENU_VIEW_ROTATE_180 = "cmd-menu-view-rotate-180";
         CMD_VIEW_ROTATE_RESET = "cmd-view-rotate-reset";
         CMD_MENU_VIEW_ROTATE_RESET = "cmd-menu-view-rotate-reset";
+        CMD_VIEW_BOARD_3D = "cmd-view-board-3d";
+        CMD_MENU_VIEW_BOARD_3D = "cmd-menu-view-board-3d";
         CMD_TOGGLE_LAYERS_PANEL = "cmd-toggle-layers-panel";
         CMD_MENU_TOGGLE_LAYERS_PANEL = "cmd-menu-toggle-layers-panel";
         CMD_NEW_PCB_DOCUMENT = "cmd-new-pcb-document";
@@ -388,6 +390,8 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_FILL = "cmd-menu-place-board-fill";
         CMD_PLACE_BOARD_REGION = "cmd-place-board-region";
         CMD_MENU_PLACE_BOARD_REGION = "cmd-menu-place-board-region";
+        CMD_PLACE_BOARD_POLYGON_POUR = "cmd-place-board-polygon-pour";
+        CMD_MENU_PLACE_BOARD_POLYGON_POUR = "cmd-menu-place-board-polygon-pour";
         CMD_PLACE_BOARD_KEEPOUT = "cmd-place-board-keepout";
         CMD_MENU_PLACE_BOARD_KEEPOUT = "cmd-menu-place-board-keepout";
         CMD_CHANGE_FOOTPRINT = "cmd-change-footprint";

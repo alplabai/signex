@@ -38,7 +38,7 @@ impl Signex {
     }
 
     /// Delete the board selection when the active tab is a PCB: its
-    /// footprints (a selected pad's included), tracks and vias.
+    /// footprints (a selected pad's included), tracks, vias and drawn areas.
     pub(crate) fn delete_pcb_selection(&mut self) -> bool {
         if !self.has_active_pcb() {
             return false;
@@ -468,7 +468,7 @@ impl Signex {
 }
 
 /// What Delete removes for `selection`: its footprints (a selected pad's
-/// included), tracks and vias.
+/// included), tracks, vias and drawn areas.
 pub(crate) fn deletable_items(selection: &pcb_geom::Selection) -> Vec<BoardItemId> {
     let mut items: Vec<BoardItemId> = selection
         .footprints()
@@ -478,6 +478,7 @@ pub(crate) fn deletable_items(selection: &pcb_geom::Selection) -> Vec<BoardItemI
     items.extend(selection.items().filter_map(|item| match item {
         ItemRef::Track(id) => Some(BoardItemId::Segment(id)),
         ItemRef::Via(id) => Some(BoardItemId::Via(id)),
+        ItemRef::Zone { zone, .. } => Some(BoardItemId::Zone(zone)),
         ItemRef::Pad { .. } | ItemRef::Footprint(_) => None,
     }));
     items

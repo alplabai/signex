@@ -8,7 +8,6 @@ define_ids! {
     PCB_BAR_COMPONENT_UNAVAILABLE = "pcb-bar-component-unavailable";
     PCB_BAR_PAD_UNAVAILABLE = "pcb-bar-pad-unavailable";
     PCB_BAR_ARC_UNAVAILABLE = "pcb-bar-arc-unavailable";
-    PCB_BAR_POLYGON_POUR_UNAVAILABLE = "pcb-bar-polygon-pour-unavailable";
     PCB_BAR_TEXT_UNAVAILABLE = "pcb-bar-text-unavailable";
     PCB_BAR_DIMENSION_UNAVAILABLE = "pcb-bar-dimension-unavailable";
     PCB_BAR_ROUTE_UNAVAILABLE = "pcb-bar-route-unavailable";
@@ -37,6 +36,21 @@ define_ids! {
     PCB_BAR_KEEPOUT_TOOLTIP = "pcb-bar-keepout-tooltip";
     PCB_TOOL_HINT_KEEPOUT = "pcb-tool-hint-keepout";
     PCB_TOOL_KEEPOUT_NEEDS_LAYER = "pcb-tool-keepout-needs-layer";
+    PCB_BAR_POUR_TOOLTIP = "pcb-bar-pour-tooltip";
+    PCB_TOOL_HINT_POUR = "pcb-tool-hint-pour";
     PCB_TOOL_STRING_TEXT = "pcb-tool-string-text";
     PCB_TOOL_STRING_NEEDS_OVERLAY = "pcb-tool-string-needs-overlay";
+    PCB_LAYER_TAB_HIDE = "pcb-layer-tab-hide";
+    PCB_LAYER_TAB_SHOW_ONLY = "pcb-layer-tab-show-only";
+    PCB_3D_TITLE = "pcb-3d-title";
+    PCB_3D_HINT = "pcb-3d-hint";
+    PCB_3D_FLAT = "pcb-3d-flat";
+    PCB_3D_FIT = "pcb-3d-fit";
+    PCB_3D_TOP = "pcb-3d-top";
+    PCB_3D_BOTTOM = "pcb-3d-bottom";
+    PCB_3D_FRONT = "pcb-3d-front";
+    PCB_3D_LEFT = "pcb-3d-left";
+    PCB_3D_RIGHT = "pcb-3d-right";
+    PCB_3D_ISO = "pcb-3d-iso";
+    PCB_3D_MODEL_UNREAD = "pcb-3d-model-unread";
 }

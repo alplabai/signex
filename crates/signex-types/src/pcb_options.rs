@@ -1,12 +1,14 @@
 //! Board options (#2374): snap guides, the extra snap grids, the sheet, the
 //! polygon naming scheme and the designator display. Document data, saved
 //! in the `.snxpcb` `[board_options]` section and changed only through the
-//! board engine's `SetBoardOptions` command. See `docs/PCB_BOARD_OPTIONS.md`.
+//! board engine's `SetBoardOptions` command. The board's origin (#2384) is
+//! kept here too. See `docs/PCB_BOARD_OPTIONS.md`.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::pcb::Point;
+pub use crate::pcb_origin::BoardOrigin;
 use crate::theme::Color;
 
 /// The colours a guide or grid swatch steps through, first one the default
@@ -46,6 +48,10 @@ pub struct BoardOptions {
     pub polygon_naming: PolygonNaming,
     #[serde(default)]
     pub designator_display: DesignatorDisplay,
+    /// The point shown as (0, 0), Y up (#2384). A board saved without one
+    /// counts from the model's zero.
+    #[serde(default)]
+    pub origin: BoardOrigin,
 }
 
 impl BoardOptions {
@@ -55,7 +61,7 @@ impl BoardOptions {
 
     /// The grid a carry or placement of `what` snaps to: the first extra
     /// grid that applies to it, else the board's own grid of `board_step`
-    /// at the origin.
+    /// counted from the board origin (#2384).
     pub fn grid_for(&self, what: GridUse, board_step: f64) -> GridSpec {
         self.grids
             .iter()
@@ -66,7 +72,7 @@ impl BoardOptions {
             })
             .unwrap_or(GridSpec {
                 step_mm: board_step,
-                origin: Point::ZERO,
+                origin: self.origin.at,
             })
     }
 }

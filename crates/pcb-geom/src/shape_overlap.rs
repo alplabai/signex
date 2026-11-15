@@ -223,7 +223,7 @@ pub(crate) fn polygons_meet(a: &[PointNm], b: &[PointNm]) -> bool {
 }
 
 /// Whether `p` lies in or on a simple polygon (even-odd crossing count).
-fn point_in_polygon(poly: &[PointNm], p: PointNm) -> bool {
+pub(crate) fn point_in_polygon(poly: &[PointNm], p: PointNm) -> bool {
     let mut inside = false;
     for i in 0..poly.len() {
         let (a, b) = (poly[i], poly[(i + 1) % poly.len()]);

@@ -123,6 +123,10 @@ impl Signex {
             Some(saved) => saved,
             None => crate::dock::graphite_first_run(),
         };
+        // The shown side-dock widths start at the preferred ones; the first
+        // window size fits them (#2395).
+        let preferred_left_width = dock.preferred_width(crate::dock::PanelPosition::Left);
+        let preferred_right_width = dock.preferred_width(crate::dock::PanelPosition::Right);
         let dock_layout_sync = crate::dock::DockLayoutSync::new(
             std::sync::Arc::new(crate::fonts::PrefsDockLayoutStore::user_prefs()),
             crate::dock::DockLayoutSnapshot::capture(&dock),
@@ -298,6 +302,11 @@ impl Signex {
                 pcb_layer_views: Default::default(),
                 pcb_view_angle_entry: None,
                 pcb_pick_filter: Default::default(),
+                pcb_filter_presets: crate::fonts::read_filter_presets_from(
+                    prefs,
+                    crate::fonts::BOARD_FILTER_PRESETS,
+                ),
+                pcb_filter_preset_tab: 0,
                 pcb_snap: Default::default(),
                 pcb_board_panel: Default::default(),
                 keymap_pending_sequence: Vec::new(),
@@ -308,8 +317,8 @@ impl Signex {
                 canvas_font_size: 11.0,
                 canvas_font_bold: false,
                 canvas_font_italic: false,
-                left_width: 240.0,
-                right_width: 220.0,
+                left_width: preferred_left_width,
+                right_width: preferred_right_width,
                 bottom_height: if graphite_first_run {
                     crate::dock::GRAPHITE_BOTTOM_HEIGHT
                 } else {
@@ -709,6 +718,7 @@ impl Signex {
                 pcb_drc: Default::default(),
                 cross_select: Default::default(),
                 board_sketch: None,
+                board_3d: None,
                 pcb_footprint_draft: None,
                 pcb_component: Default::default(),
                 pcb_primitive: Default::default(),
@@ -741,6 +751,7 @@ impl Signex {
                 active_bar_menu: None,
                 active_bar_menu_window: None,
                 pcb_bar_menu: None,
+                pcb_layer_tab_menu: None,
                 acting_window: None,
                 pointer_window: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL

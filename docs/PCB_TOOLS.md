@@ -83,6 +83,50 @@ The design rule check reads it through `Zone::as_keepout` exactly as it reads
 a board-sketch keepout forbidding all copper, so a violation names the
 keepout zone's id.
 
+## Polygon Pour
+
+`place_board_polygon_pour` (`P G`, #2216). Drawn like a Solid Region, on the
+active copper layer, on the net of the copper under its first corner, or no
+net. With a non-copper layer active the tool says so and draws nothing. It is
+stored as a zone with `fill_type = "pour"` and `clearance = 0`, which follows
+the board's clearance (`Zone::pour_clearance_mm`: the zone's own clearance
+when above 0, else `PcbSetup::clearance`, else 0.2 mm).
+
+A pour's outline only bounds its copper. The copper, its fill, is computed by
+`pcb_geom::zone_fills`, in integer nm:
+
+- the outline less the pour's own holes;
+- less every pad, track and via on the pour's layer whose net is not the
+  pour's, grown by the clearance (copper of no net counts as another net,
+  and a pour of no net clears all copper);
+- less every solid copper zone (Fill, Solid Region) of another net on the
+  layer, grown by the clearance;
+- less every keepout zone on the layer and every board-sketch keepout that
+  forbids copper or pours on it, with no clearance;
+- with every part narrower than the zone's `min_thickness` removed, when it
+  is set.
+
+Copper of the pour's own net is filled over: a pad joins the pour solidly, with
+no thermal relief spokes (`thermal_relief`, `thermal_gap` and `thermal_width`
+are kept but not read yet). Not modelled yet: pours of different nets that
+overlap are not cleared from each other and both fill the overlap (zone
+`priority` is not read); islands of fill that join nothing stay; the fill is
+not clipped to the board outline; copper text and footprint copper graphics
+are not cleared.
+
+A round part of a grown obstacle is cut as a polygon whose chords lie on or
+outside the true arc, so the fill never comes closer than the clearance. The
+pieces are separate areas of copper: the ratsnest (`docs/architecture/pcb-ratsnest.md`)
+joins pads through the piece they touch, so pads on two pieces of one pour get
+a ratsnest line.
+
+The fill is not saved: the file keeps the outline and the settings, and the
+fill is recomputed from them. The app recomputes a board's fills with its
+ratsnest, once per board revision (`PcbRatsnest::refresh`), and the canvas
+draws each piece as copper and strokes the outline, on the GPU and the CPU
+paths alike. A pour shown before its fill is computed (a preview on the
+cursor) is drawn as its outline alone.
+
 ## String
 
 Still greyed, with no catalog command or key yet. A string the canvas
@@ -160,3 +204,33 @@ their origins, as a sheet lines symbols up by their anchors
 its footprint. Two footprints are needed (three to distribute; one for Align
 To Grid, which snaps each origin to the board's grid). A locked footprint
 refuses the whole run and the Messages panel says which.
+
+## Moving a component with its tracks
+
+A drag or Edit ▸ Move of footprints takes the tracks connected to their pads
+along (#2379). A track end follows when it lies on a moved pad's copper, on a
+copper layer the pad reaches, and the track is on the pad's net: the contact
+the ratsnest counts as connected (`pcb_geom::tracks_on_pads`). Only that end
+moves; the other end stays, so the track stays joined to whatever it meets
+there. The drop runs the footprint moves and the track edits as one batch
+(`signex_engine::pcb::placement::move_commands`), one undo step. During the
+drag the preview draws the carried footprints with those tracks at the
+offset, and the ratsnest is read off the board as the drop would leave it,
+so its lines stay on the carried pads. The tracks that follow are found once,
+when the carry starts, and kept with the preview; each grid step only moves
+them.
+
+Only the drag and Edit ▸ Move take tracks along so far. Align, Distribute and
+Align To Grid, the X and Y fields in Properties, and Turn and Mirror still
+move the footprint alone and leave its tracks where they were. Turn and Mirror
+need the track ends turned about the footprint, not shifted, so they need more
+than the shift a move applies.
+
+## Layer tab menu
+
+A right-click on a layer tab under the board opens Hide this layer, Show only
+this layer and Show all layers (#2379). Show only this layer makes the layer
+active and hides every other layer the Layers panel lists; the board outline
+and the Multi-Layer row keep their state, as in single-layer mode. The rows
+change the view of the board in the window the menu was opened in, never the
+board file.

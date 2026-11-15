@@ -52,6 +52,8 @@ fn check(options: &BoardOptions) -> Result<(), BoardCommandError> {
             return Err(BoardCommandError::DuplicateOption(grid.uuid));
         }
     }
+    finite(options.origin.at.x, "origin x")?;
+    finite(options.origin.at.y, "origin y")?;
     let sheet = &options.sheet;
     finite(sheet.origin.x, "sheet x")?;
     finite(sheet.origin.y, "sheet y")?;

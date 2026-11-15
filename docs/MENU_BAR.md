@@ -521,6 +521,13 @@ starts at 0°. In an undocked PCB window the rows, the palette, the keys and
 its own status bar act on that window's board and leave the main window's as
 it is. See `docs/DECISIONS.md` (2026-11-12).
 
+3D View (`view_board_3d`, #2390) follows them: it shows the board in view in
+3D in the main window, or flat again. It is greyed without a board and bound
+to `3` on a board in both built-in profiles. In 3D a bar at the foot of the
+view holds 2D, the viewpoints (Top, Bottom, Front, Left, Right, Angled) and
+Fit; View ▸ Fit All frames the 3D view too. See `docs/RENDERING_RULES.md`,
+"board-3d".
+
 ## Native macOS menu {#native-macos-menu}
 
 On macOS the main menu lives in the system menu bar (NSMenu), described as

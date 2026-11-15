@@ -23,6 +23,9 @@ pub const DOCK_LAYOUT_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 pub struct RegionLayout {
     pub panels: Vec<PanelKind>,
     pub collapsed: bool,
+    /// The side dock's preferred width in whole px (#2395); `None` for the
+    /// bottom dock.
+    pub width: Option<u32>,
 }
 
 /// Exactly what `prefs.json` stores about the dock. Transient state
@@ -40,6 +43,10 @@ impl DockLayoutSnapshot {
         let region = |pos: PanelPosition| RegionLayout {
             panels: dock.panel_kinds(pos).to_vec(),
             collapsed: dock.is_collapsed(pos),
+            width: match pos {
+                PanelPosition::Bottom => None,
+                side => Some(dock.preferred_width(side).round() as u32),
+            },
         };
         Self {
             left: region(PanelPosition::Left),
@@ -110,6 +117,7 @@ mod tests {
         let region = |collapsed| RegionLayout {
             panels: vec![PanelKind::Projects],
             collapsed,
+            width: None,
         };
         DockLayoutSnapshot {
             left: region(left_collapsed),

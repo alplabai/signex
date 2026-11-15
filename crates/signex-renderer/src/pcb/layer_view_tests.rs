@@ -433,3 +433,31 @@ fn the_origin_marker_is_shown_by_default_and_toggles() {
     view.set_origin_marker_visible(false);
     assert!(!view.origin_marker_visible());
 }
+
+/// #2379: the layer tab menu's Hide this layer and Show only this layer.
+#[test]
+fn hide_and_show_only_act_on_one_layer() {
+    let board = board();
+    let mut view = PcbLayerView::default();
+    view.hide(BOTTOM);
+    view.hide(BOTTOM);
+    assert!(view.is_hidden(BOTTOM), "hiding twice keeps it hidden");
+
+    let mechanical = PcbLayer::Mechanical(MechanicalLayer::new(3).unwrap());
+    let layers: Vec<PcbLayer> = layer_rows(&board.layers)
+        .into_iter()
+        .map(|row| row.layer)
+        .collect();
+    view.show_only(&layers, BOTTOM);
+    assert_eq!(view.active(), BOTTOM, "the shown layer is the active one");
+    assert!(!view.is_hidden(BOTTOM));
+    assert!(view.is_hidden(TOP) && view.is_hidden(mechanical));
+    assert!(!view.is_hidden(BOARD_OUTLINE), "the outline stays drawn");
+    assert!(
+        view.multi_layer_visible(),
+        "the Multi-Layer row is untouched"
+    );
+
+    view.show_all();
+    assert!(!view.has_hidden());
+}

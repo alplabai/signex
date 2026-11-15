@@ -11,7 +11,8 @@ use crate::app::state::PcbRatsnest;
 use crate::app::{ContextMenuMsg, Message, Signex, TabDocument};
 use crate::canvas::CanvasEvent;
 use crate::pcb_canvas::{
-    PcbCanvas, PcbCanvasMsg, PcbCarry, PcbSelectionState, board_without, carried_board,
+    PcbCanvas, PcbCanvasMsg, PcbCarry, PcbSelectionState, board_after_move, board_without,
+    carried_board,
 };
 
 impl Signex {
@@ -190,8 +191,10 @@ impl Signex {
         let ghost = self
             .pcb_part_ghost(carry.as_ref())
             .or_else(|| self.board_tool_ghost());
-        // A tool waits for clicks: a press never starts a drag.
+        // A tool, or a Move, paste or part waiting on the cursor, takes
+        // every press as a click: never a drag or a box (#2396).
         let tool_armed = self.own_board_tool().is_some();
+        let clicks_only = tool_armed || carry.as_ref().is_some_and(PcbCarry::waits_for_clicks);
         let path = self.active_tab_path().unwrap_or_default();
         let view = self.pcb_layer_view(&path);
         let docs = &self.document_state;
@@ -204,6 +207,7 @@ impl Signex {
         let canvas = &mut interaction.pcb_canvas;
         canvas.set_highlight(highlight);
         canvas.set_grab(if tool_armed { Vec::new() } else { grab });
+        canvas.set_clicks_only(clicks_only);
         canvas.set_part_ghost(ghost.as_ref());
         let ratsnest = view
             .ratsnest_visible()
@@ -262,9 +266,15 @@ impl Signex {
             selection.sync(Some(path), revision);
             selection.set_view(&view);
             let (highlight, grab) = selection.paint(board, carry);
+            let tool_armed = interaction
+                .pcb_tool
+                .as_ref()
+                .is_some_and(|tool| tool.is_for(Some(path), Some(id)));
+            let clicks_only = tool_armed || carry.is_some_and(PcbCarry::waits_for_clicks);
             if let Some(canvas) = interaction.pcb_canvases.get_mut(&id) {
                 canvas.set_highlight(highlight);
-                canvas.set_grab(grab);
+                canvas.set_grab(if tool_armed { Vec::new() } else { grab });
+                canvas.set_clicks_only(clicks_only);
                 let own = ghost.as_ref().filter(|(owner, _)| *owner == id);
                 canvas.set_part_ghost(own.map(|(_, snapshot)| snapshot));
                 let ratsnest = view
@@ -278,8 +288,11 @@ impl Signex {
 
 /// Bring `canvas`'s drag preview in line with `carry` on `board` (#2358):
 /// while the carry is anchored, the board is drawn without the carried
-/// footprints and they are drawn at its offset; otherwise the whole board.
-/// `ratsnest` is the cache and the board path when the view shows it.
+/// footprints and the tracks that follow their pads, and those are drawn at
+/// its offset; otherwise the whole board. `ratsnest` is the cache and the
+/// board path when the view shows it: during the carry the ratsnest is
+/// drawn with the carried footprints, read off the board as the drop would
+/// leave it, so its lines stay on the carried pads (#2379).
 fn sync_drag_preview(
     canvas: &mut PcbCanvas,
     board: &PcbBoard,
@@ -293,17 +306,25 @@ fn sync_drag_preview(
         return;
     };
     if !canvas.previews_drag_of(&carry.footprints) {
-        // Once per carry: the board without what it carries.
-        let rest = board_without(board, &carry.footprints);
-        let base = PcbSnapshot::from_board_with_view(&rest, view);
-        let base = match ratsnest {
-            Some((cache, path)) => cache.apply_uncached(path, &rest, base),
-            None => base,
-        };
-        canvas.begin_drag_preview(carry.footprints.clone(), base);
+        // Once per carry: the tracks that follow the carried pads, and the
+        // board without what it carries, with its pour fills.
+        let following = pcb_geom::tracks_on_pads(board, &carry.footprints);
+        let rest = board_without(board, &carry.footprints, &following);
+        let fills = pcb_geom::zone_fills(&rest);
+        let base = PcbSnapshot::from_board_with_view(&rest, view).with_zone_fills(&fills);
+        canvas.begin_drag_preview(carry.footprints.clone(), following, base);
     }
+    let following = canvas.drag_preview_following().to_vec();
     canvas.move_drag_preview(carry.delta, || {
-        let moved = carried_board(board, &carry.footprints, carry.delta);
-        PcbSnapshot::from_board_with_view(&moved, view)
+        let moved = carried_board(board, &carry.footprints, &following, carry.delta);
+        let snapshot = PcbSnapshot::from_board_with_view(&moved, view);
+        match ratsnest {
+            Some((cache, path)) => {
+                let after = board_after_move(board, &carry.footprints, &following, carry.delta);
+                let fills = pcb_geom::zone_fills(&after);
+                cache.apply_uncached(path, &after, &fills, snapshot)
+            }
+            None => snapshot,
+        }
     });
 }

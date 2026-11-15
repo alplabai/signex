@@ -35,13 +35,14 @@ pub enum CopperObject {
 }
 
 impl CopperObject {
-    /// The kind of `item`; `None` for a footprint, which carries no copper.
+    /// The kind of `item`; `None` for a footprint or a drawn area, which the
+    /// copper rules do not measure.
     pub fn of(item: &ItemRef) -> Option<CopperObject> {
         match item {
             ItemRef::Track(_) => Some(CopperObject::Track),
             ItemRef::Pad { .. } => Some(CopperObject::Pad),
             ItemRef::Via(_) => Some(CopperObject::Via),
-            ItemRef::Footprint(_) => None,
+            ItemRef::Footprint(_) | ItemRef::Zone { .. } => None,
         }
     }
 }

@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::app::Signex;
 use crate::app::state::pcb_edit::CheckedStep;
-use crate::panels::{BoardField, pcb_board_properties};
+use crate::panels::{BoardField, GridCard, pcb_board_properties};
 
 impl Signex {
     /// Run `edit` on a copy of the active board's options and, when it says
@@ -92,25 +92,44 @@ impl Signex {
                 self.say_pcb_options_refused(why);
             }
             BoardField::GuideX(id) => {
-                self.edit_pcb_board_options(|o| edit_guide(o, id, |g| set(&mut g.at.x, mm)));
+                self.edit_pcb_board_options(|o| {
+                    let x = o.origin.board_x(mm);
+                    edit_guide(o, id, |g| set(&mut g.at.x, x))
+                });
             }
             BoardField::GuideY(id) => {
-                self.edit_pcb_board_options(|o| edit_guide(o, id, |g| set(&mut g.at.y, mm)));
+                self.edit_pcb_board_options(|o| {
+                    let y = o.origin.board_y(mm);
+                    edit_guide(o, id, |g| set(&mut g.at.y, y))
+                });
             }
             BoardField::GridStep(id) => {
                 self.edit_pcb_board_options(|o| edit_grid(o, id, |g| set(&mut g.step_mm, mm)));
             }
             BoardField::GridOriginX(id) => {
-                self.edit_pcb_board_options(|o| edit_grid(o, id, |g| set(&mut g.origin.x, mm)));
+                self.edit_pcb_board_options(|o| {
+                    let x = o.origin.board_x(mm);
+                    edit_grid(o, id, |g| set(&mut g.origin.x, x))
+                });
             }
             BoardField::GridOriginY(id) => {
-                self.edit_pcb_board_options(|o| edit_grid(o, id, |g| set(&mut g.origin.y, mm)));
+                self.edit_pcb_board_options(|o| {
+                    let y = o.origin.board_y(mm);
+                    edit_grid(o, id, |g| set(&mut g.origin.y, y))
+                });
             }
             BoardField::SheetX => {
-                self.edit_pcb_board_options(|o| set(&mut o.sheet.origin.x, mm));
+                self.edit_pcb_board_options(|o| {
+                    let x = o.origin.board_x(mm);
+                    set(&mut o.sheet.origin.x, x)
+                });
             }
             BoardField::SheetY => {
-                self.edit_pcb_board_options(|o| set(&mut o.sheet.origin.y, mm));
+                // Typed as the bottom-left corner, Y up (#2384).
+                self.edit_pcb_board_options(|o| {
+                    let y = o.origin.board_y(mm) - o.sheet.height;
+                    set(&mut o.sheet.origin.y, y)
+                });
             }
             BoardField::SheetWidth => {
                 self.edit_pcb_board_options(|o| set(&mut o.sheet.width, mm));
@@ -122,19 +141,19 @@ impl Signex {
         }
     }
 
-    /// Add a guide of `kind` through the board origin and select it.
+    /// Add a guide of `kind` through the board origin: one undo step.
     pub(crate) fn add_pcb_guide(&mut self, kind: GuideKind) {
-        let id = Uuid::now_v7();
-        if self.add_pcb_guide_at(id, kind, Point::ZERO) {
-            self.ui_state.pcb_board_panel.selected_guide = Some(id);
-        }
+        let origin = self
+            .active_pcb()
+            .map_or(Point::ZERO, |b| b.options.origin.at);
+        self.add_pcb_guide_at(kind, origin);
     }
 
-    fn add_pcb_guide_at(&mut self, id: Uuid, kind: GuideKind, at: Point) -> bool {
+    fn add_pcb_guide_at(&mut self, kind: GuideKind, at: Point) {
         self.edit_pcb_board_options(|o| {
-            o.guides.push(BoardGuide::new(id, kind, at));
+            o.guides.push(BoardGuide::new(Uuid::now_v7(), kind, at));
             true
-        })
+        });
     }
 
     /// Place: the next click on the main window's board sets a guide.
@@ -163,10 +182,7 @@ impl Signex {
             return true;
         };
         let at = grid_for(board, GridUse::NonComponents).snap(at);
-        let id = Uuid::now_v7();
-        if self.add_pcb_guide_at(id, kind, at) {
-            self.ui_state.pcb_board_panel.selected_guide = Some(id);
-        }
+        self.add_pcb_guide_at(kind, at);
         true
     }
 
@@ -188,12 +204,11 @@ impl Signex {
         });
     }
 
-    pub(crate) fn delete_pcb_guide(&mut self) {
-        let Some(id) = self.ui_state.pcb_board_panel.selected_guide else {
-            return;
-        };
+    /// A guide card's Delete: one undo step.
+    pub(crate) fn delete_pcb_guide(&mut self, id: Uuid) {
         if self.edit_pcb_board_options(|o| remove_where(&mut o.guides, |g| g.uuid == id)) {
-            self.ui_state.pcb_board_panel.selected_guide = None;
+            let view = &mut self.ui_state.pcb_board_panel;
+            view.guide_menu = None;
         }
     }
 
@@ -220,20 +235,38 @@ impl Signex {
             true
         }) {
             let view = &mut self.ui_state.pcb_board_panel;
-            view.selected_grid = Some(id);
-            view.grid_editor_open = true;
+            view.grid_editing = Some(GridCard::Extra(id));
         }
     }
 
-    pub(crate) fn delete_pcb_grid(&mut self) {
-        let Some(id) = self.ui_state.pcb_board_panel.selected_grid else {
-            return;
-        };
+    /// A grid card's Delete: one undo step.
+    pub(crate) fn delete_pcb_grid(&mut self, id: Uuid) {
         if self.edit_pcb_board_options(|o| remove_where(&mut o.grids, |g| g.uuid == id)) {
             let view = &mut self.ui_state.pcb_board_panel;
-            view.selected_grid = None;
-            view.grid_editor_open = false;
+            view.grid_menu = None;
+            if view.grid_editing == Some(GridCard::Extra(id)) {
+                view.grid_editing = None;
+            }
         }
+    }
+
+    /// Move Up or Move Down: swap the grid with its neighbour in priority,
+    /// one undo step. The first extra grid cannot go above the board's own,
+    /// nor the last below it.
+    pub(crate) fn move_pcb_grid(&mut self, id: Uuid, up: bool) {
+        self.edit_pcb_board_options(|o| {
+            let Some(at) = o.grids.iter().position(|g| g.uuid == id) else {
+                return false;
+            };
+            let to = if up { at.checked_sub(1) } else { Some(at + 1) };
+            match to.filter(|to| *to < o.grids.len()) {
+                Some(to) => {
+                    o.grids.swap(at, to);
+                    true
+                }
+                None => false,
+            }
+        });
     }
 
     /// Flip whether the grid applies to components, or to non-components.

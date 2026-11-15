@@ -160,7 +160,8 @@ impl Signex {
 }
 
 /// `[min_x, min_y, max_x, max_y]` in board mm over `items`: a footprint's
-/// origin and pads, a pad's centre, a track's ends, a via's centre.
+/// origin and pads, a pad's centre, a track's ends, a via's centre, an
+/// area's outline.
 fn board_items_extent(board: &PcbBoard, items: &[ItemRef]) -> Option<[f64; 4]> {
     let mut points: Vec<Point> = Vec::new();
     for item in items {
@@ -192,6 +193,11 @@ fn board_items_extent(board: &PcbBoard, items: &[ItemRef]) -> Option<[f64; 4]> {
                         .filter(|v| v.uuid == id)
                         .map(|v| v.position),
                 );
+            }
+            ItemRef::Zone { zone, .. } => {
+                for z in board.zones.iter().filter(|z| z.uuid == zone) {
+                    points.extend(z.outline.iter().copied());
+                }
             }
         }
     }

@@ -82,3 +82,42 @@ fn snapping_rounds_up_for_negative_values_too() {
     assert_eq!(snap_up(1, 10), 10);
     assert_eq!(snap_up(0, 10), 0);
 }
+
+/// #2384: on a board with no outline, parts stage inside the area from its
+/// bottom-left corner, rows going up the screen (model y down).
+#[test]
+fn without_an_outline_rows_start_at_the_bottom_left_and_go_up() {
+    let corner = PointNm::new(0, 80_000_000);
+    let extents: Vec<RectNm> = (0..30)
+        .map(|i| {
+            rect(
+                -1_000_000,
+                -(i % 3 + 1) * 700_000,
+                2_000_000 + i * 10_000,
+                500_000,
+            )
+        })
+        .collect();
+    let staging = Staging::DEFAULT;
+    let origins = stage_up(corner, &extents, staging);
+    let boxes: Vec<RectNm> = extents
+        .iter()
+        .zip(&origins)
+        .map(|(e, o)| placed(e, *o))
+        .collect();
+    for (i, (b, o)) in boxes.iter().zip(&origins).enumerate() {
+        assert_eq!(o.x % staging.grid, 0, "origin {i} off the grid");
+        assert_eq!(o.y % staging.grid, 0, "origin {i} off the grid");
+        assert!(b.min.x >= corner.x, "footprint {i} left of the corner");
+        assert!(b.max.y <= corner.y, "footprint {i} below the corner");
+        for (j, other) in boxes.iter().enumerate().skip(i + 1) {
+            assert!(
+                gap_between(b, other) >= staging.gap,
+                "{i} and {j} too close"
+            );
+        }
+    }
+    // The first row sits on the bottom edge; later rows are higher.
+    assert!(boxes[0].max.y > corner.y - staging.grid);
+    assert!(boxes.last().unwrap().max.y < boxes[0].min.y);
+}

@@ -9,6 +9,7 @@ pub(crate) mod dialogs;
 /// of the private `overlays` module.
 pub(crate) mod overlay_id;
 
+mod board_3d;
 mod board_sketch;
 pub(in crate::app) mod canvas_region;
 mod chrome;
@@ -632,6 +633,9 @@ impl Signex {
         } else if let Some(sketch) = self.board_sketch_view(window_id) {
             // The board in sketch mode: the sketch over the board (#2234).
             sketch
+        } else if let Some(board_3d) = self.board_3d_view(window_id) {
+            // The board in 3D (#2390).
+            board_3d
         } else if self.pcb_for_window(window_id).is_some() {
             // Each window reads its own PCB canvas, and an undocked
             // window's events carry its id, as for the schematic (#494).

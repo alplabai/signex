@@ -1,10 +1,13 @@
 //! The area tools (#2373), each added as one undo step:
 //! - Fill and Solid Region: solid copper on the active copper layer, on the
 //!   net of the copper under its first point;
+//! - Polygon Pour: an area on the active copper layer, on the net of the
+//!   copper under its first point, whose copper is computed clear of other
+//!   nets (#2216);
 //! - Keepout: an area on the active copper or keep-out layer that keeps all
 //!   copper off that copper layer (the design rule check reads it).
 //!
-//! A Fill is the rectangle between two clicks. A Solid Region or Keepout
+//! A Fill is the rectangle between two clicks. A Solid Region, Polygon Pour or Keepout
 //! takes a corner per click and is closed by a click on its first corner or
 //! a right-click once it has three; Esc drops it.
 
@@ -39,6 +42,7 @@ fn area_zone(
 ) -> Option<Zone> {
     match tool {
         BoardPlaceTool::Keepout => draw::new_keepout(id, outline, active),
+        BoardPlaceTool::PolygonPour => draw::new_pour(board, id, outline, active.copper()?),
         _ => draw::new_copper_area(board, id, outline, active.copper()?),
     }
 }
@@ -97,7 +101,7 @@ impl Signex {
         };
         let polygon = matches!(
             session.tool,
-            BoardPlaceTool::SolidRegion | BoardPlaceTool::Keepout
+            BoardPlaceTool::SolidRegion | BoardPlaceTool::PolygonPour | BoardPlaceTool::Keepout
         );
         if !polygon || session.points.len() < 3 {
             return false;

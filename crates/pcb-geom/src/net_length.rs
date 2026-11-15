@@ -68,8 +68,8 @@ pub fn net_items(board: &PcbBoard, net: u32) -> Vec<ItemRef> {
     tracks.chain(vias).chain(pads).collect()
 }
 
-/// The net of a track, via or pad; `None` for a footprint body, an item
-/// not on the board, or one on no net.
+/// The net of a track, via or pad; `None` for a footprint body, a drawn
+/// area, an item not on the board, or one on no net.
 pub fn item_net(board: &PcbBoard, item: ItemRef) -> Option<u32> {
     let net = match item {
         ItemRef::Track(id) => board.segments.iter().find(|s| s.uuid == id)?.net,
@@ -86,7 +86,7 @@ pub fn item_net(board: &PcbBoard, item: ItemRef) -> Option<u32> {
                 .as_ref()?
                 .number
         }
-        ItemRef::Footprint(_) => return None,
+        ItemRef::Footprint(_) | ItemRef::Zone { .. } => return None,
     };
     (net != 0).then_some(net)
 }
