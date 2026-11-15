@@ -3,6 +3,7 @@
 //! and the refusal must reach the user; a save of our own must move the
 //! editor's base revision on, or the next save would be refused too.
 
+use signex_i18n::RenderTranslatable;
 use std::path::PathBuf;
 
 use signex_library::{

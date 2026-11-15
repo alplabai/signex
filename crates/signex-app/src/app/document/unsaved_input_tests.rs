@@ -2,6 +2,7 @@
 //! (#2132): every gate that prompts, parks or enables Save All sees it, Save
 //! and Save All refuse naming the field and keep the text, Discard drops it.
 
+use signex_i18n::RenderTranslatable;
 use signex_library::{ParamValue, RowId};
 
 use crate::app::{

@@ -5722,6 +5722,7 @@ dependencies = [
  "serde_json",
  "signex-app",
  "signex-engine",
+ "signex-i18n",
  "signex-types",
  "tempfile",
  "uuid",

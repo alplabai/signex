@@ -1,5 +1,6 @@
 use super::*;
 use signex_erc::{RuleKind, Severity, Violation};
+use signex_i18n::RenderTranslatable;
 use signex_types::schematic::Point;
 
 fn violation(rule: RuleKind, severity: Severity, msg: &str, x: f64) -> Violation {

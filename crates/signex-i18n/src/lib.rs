@@ -19,8 +19,8 @@ mod i18n;
 mod locale;
 mod localized;
 mod numbers;
+mod render;
 mod text;
-mod translatable;
 
 pub use format::{DateLength, ListKind};
 pub use i18n::{I18n, LanguageOption};
@@ -28,10 +28,11 @@ pub use i18n::{I18n, LanguageOption};
 pub use icu_locale_core::Locale;
 pub use locale::LanguagePref;
 pub use localized::Localized;
+pub use render::RenderTranslatable;
 pub use signex_i18n_ids::{
-    Arg, LocalNumber, MessageId, UserText, command_ids, ids, key_ids, menu_ids, shortcut_ids,
+    Arg, LocalNumber, MessageId, MessageRenderer, Translatable, UserText, command_ids, ids,
+    key_ids, menu_ids, shortcut_ids,
 };
-pub use translatable::Translatable;
 
 /// Render a message: `t!(i18n, ids::MENU_FILE)` or, with arguments,
 /// `t!(i18n, ID, "count" => 3_i64, "name" => "R1")`.

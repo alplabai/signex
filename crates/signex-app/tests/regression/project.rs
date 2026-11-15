@@ -5,6 +5,7 @@ use signex_app::app::{
     ProjectTreeAction, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg,
     Signex, WindowMsg,
 };
+use signex_i18n::RenderTranslatable;
 use signex_types::project::{ProjectData, SheetEntry};
 
 use std::fs;

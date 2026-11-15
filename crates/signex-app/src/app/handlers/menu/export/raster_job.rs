@@ -272,6 +272,8 @@ impl Signex {
 
 #[cfg(test)]
 mod tests {
+    use signex_i18n::RenderTranslatable;
+
     use super::*;
 
     fn join_error_of(f: impl FnOnce() + Send + 'static) -> tokio::task::JoinError {

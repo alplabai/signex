@@ -7,6 +7,7 @@
 use signex_app::app::{
     LoadedProject, Message, ProjectId, ProjectMsg, RenameDialogState, RenameMsg, Signex,
 };
+use signex_i18n::RenderTranslatable;
 use signex_types::project::{ProjectData, SheetEntry, parse_project, write_project};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

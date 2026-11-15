@@ -1,6 +1,7 @@
 //! #2058: the error notice keeps catalog ids and arguments, and the text is
 //! rendered with the language in force, so an open card follows a switch.
 
+use signex_i18n::RenderTranslatable;
 use std::path::PathBuf;
 
 use signex_i18n::LanguagePref;

@@ -7,6 +7,7 @@ use crate::app::state::project_case::fold_of;
 use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 use crate::app::state::sheet_refs::{SheetRefs, StaleRefs};
 use crate::app::state::volume_case::directory_ignores_case;
+use signex_i18n::RenderTranslatable;
 
 impl Signex {
     /// Commit the pending title-block drafts of the sheets that belong to

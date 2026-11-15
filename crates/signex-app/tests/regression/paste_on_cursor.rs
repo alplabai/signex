@@ -3,6 +3,7 @@
 //! The clipboard carries the library bodies its parts use, so a paste into
 //! another sheet brings them along.
 
+use signex_i18n::RenderTranslatable;
 use std::path::PathBuf;
 
 use crate::paste_support::{paste, send_and_settle, smart_paste};

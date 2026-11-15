@@ -9,6 +9,7 @@ use crate::app::state::scope::CaseFold;
 use crate::app::{
     FileMsg, Message, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg,
 };
+use signex_i18n::RenderTranslatable;
 
 /// A fixture whose project folder rename has started but not finished: the
 /// worker task is returned and dropped unrun, so the move stays in flight.

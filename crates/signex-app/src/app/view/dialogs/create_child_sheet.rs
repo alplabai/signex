@@ -4,6 +4,7 @@
 
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
+use signex_i18n::RenderTranslatable;
 use signex_i18n::{UserText, ids, t};
 use signex_widgets::{raw, text, text_input};
 

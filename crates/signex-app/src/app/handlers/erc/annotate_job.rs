@@ -6,6 +6,7 @@
 //! result that went stale in between, and the guards held meanwhile, are in
 //! `docs/architecture/path-ops.md`, "Annotate and Reset Duplicate Designators".
 
+use signex_i18n::RenderTranslatable;
 use std::path::PathBuf;
 use std::sync::Arc;
 

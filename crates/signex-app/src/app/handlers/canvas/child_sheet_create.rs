@@ -7,6 +7,7 @@
 //! Design: docs/HIERARCHY.md, "Creating the child sheet".
 
 use iced::Task;
+use signex_i18n::RenderTranslatable;
 use uuid::Uuid;
 
 use super::super::super::*;

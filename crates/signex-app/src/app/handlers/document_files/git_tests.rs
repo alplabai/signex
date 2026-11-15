@@ -1,5 +1,6 @@
 //! #833 — commits to one repository run strictly one after another.
 
+use signex_i18n::RenderTranslatable;
 use std::path::PathBuf;
 
 use crate::app::handlers::menu::export::tests::app_workspace;

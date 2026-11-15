@@ -2,6 +2,7 @@
 //! volume rule, not by the host family. Unit tests because `CaseFold` is
 //! crate-private, so an integration test cannot build a folding project.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use super::exclude_dirty::DiscardBlock;

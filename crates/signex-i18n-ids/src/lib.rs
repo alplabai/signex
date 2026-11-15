@@ -5,8 +5,10 @@
 //! rendering it (ADR-0006, "Messages the core reports"). `signex-i18n`
 //! renders them and re-exports everything here under the same paths.
 
+mod translatable;
 mod types;
 
+pub use translatable::{MessageRenderer, Translatable};
 pub use types::{Arg, ArgValue, LocalNumber, MessageId, UserText};
 
 /// Every message id, defined together with a list of them so a new id cannot
