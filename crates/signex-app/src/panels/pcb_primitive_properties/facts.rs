@@ -52,6 +52,10 @@ pub enum PrimitiveField {
     Rotation,
     SizeX,
     SizeY,
+    /// A polygon pour's clearance from other nets.
+    Clearance,
+    /// A polygon pour's minimum copper width.
+    MinThickness,
 }
 
 impl PrimitiveField {
@@ -71,6 +75,36 @@ pub struct NetChoice {
 impl fmt::Display for NetChoice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.label)
+    }
+}
+
+/// A layer in an area's Layer dropdown: copper, or for a keepout also a
+/// keep-out layer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AreaLayerChoice {
+    pub layer: PcbLayer,
+    pub label: String,
+}
+
+impl fmt::Display for AreaLayerChoice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
+/// What kind of area a zone is, as the panel names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZoneKind {
+    Fill,
+    Region,
+    Pour,
+    Keepout,
+}
+
+impl ZoneKind {
+    /// Whether the area is copper (it has a net).
+    pub fn is_copper(self) -> bool {
+        self != Self::Keepout
     }
 }
 
@@ -206,12 +240,31 @@ pub struct PadFacts {
     pub shapes: Vec<ShapeChoice>,
 }
 
+/// Fills, solid regions, polygon pours or keepouts (#2393).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ZoneFacts {
+    pub common: PrimitiveCommon,
+    /// The kind every selected area is; `None` when they differ.
+    pub kind: Option<ZoneKind>,
+    /// Every selected area is copper (has a net).
+    pub is_copper: bool,
+    /// Every selected area is a polygon pour.
+    pub is_pour: bool,
+    pub layer: Option<AreaLayerChoice>,
+    /// The layers the areas can move to.
+    pub layers: Vec<AreaLayerChoice>,
+    /// A pour's clearance as set; 0 follows the board's.
+    pub clearance: Option<f64>,
+    pub min_thickness: Option<f64>,
+}
+
 /// The selection the Properties panel shows as a primitive.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PcbPrimitiveFacts {
     Track(TrackFacts),
     Via(ViaFacts),
     Pad(PadFacts),
+    Zone(ZoneFacts),
 }
 
 impl PcbPrimitiveFacts {
@@ -220,6 +273,7 @@ impl PcbPrimitiveFacts {
             Self::Track(f) => &f.common,
             Self::Via(f) => &f.common,
             Self::Pad(f) => &f.common,
+            Self::Zone(f) => &f.common,
         }
     }
 }

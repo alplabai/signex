@@ -7,10 +7,13 @@ use std::path::Path;
 use signex_types::pcb::PcbBoard;
 
 use super::facts::{track_facts, via_facts};
+use super::zone::zone_facts;
 use crate::app::Signex;
 use crate::app::handlers::pcb_tool::has_form;
 use crate::app::pcb_tools::BoardPlaceTool;
-use crate::panels::pcb_primitive_properties::{Editability, PcbPrimitiveFacts, PrimitiveTarget};
+use crate::panels::pcb_primitive_properties::{
+    Editability, PcbPrimitiveFacts, PrimitiveTarget, ZoneKind,
+};
 
 impl Signex {
     /// The Properties panel's facts of what the tool armed on the board at
@@ -42,8 +45,30 @@ impl Signex {
                 common.placement_paused = paused;
                 PcbPrimitiveFacts::Track(track_facts(board, common, &[&track], i18n))
             }
-            _ => return None,
+            tool => {
+                let kind = area_kind(tool)?;
+                let zone = self.next_board_area(board)?;
+                let net = kind.is_copper().then_some(zone.net);
+                let mut common =
+                    self.primitive_common_on(board, target, Editability::Editable, net);
+                common.placement_paused = paused;
+                let mut facts = zone_facts(board, common, &[&zone], i18n);
+                // The stand-in outline is a rectangle: the tool names the kind.
+                facts.kind = Some(kind);
+                PcbPrimitiveFacts::Zone(facts)
+            }
         };
         Some(facts)
     }
+}
+
+/// The kind of area `tool` draws; `None` for a tool that draws none.
+fn area_kind(tool: BoardPlaceTool) -> Option<ZoneKind> {
+    Some(match tool {
+        BoardPlaceTool::Fill => ZoneKind::Fill,
+        BoardPlaceTool::SolidRegion => ZoneKind::Region,
+        BoardPlaceTool::PolygonPour => ZoneKind::Pour,
+        BoardPlaceTool::Keepout => ZoneKind::Keepout,
+        _ => return None,
+    })
 }

@@ -151,3 +151,21 @@ pcb-prim-not-positive = the value must be above zero
 pcb-prim-placing = Next to place
 pcb-prim-placing-hint = Press Tab to pause placing and change these values for the next placements.
 pcb-prim-placing-paused = Placing is paused. Enter or Tab goes on placing with these values; Esc puts the previous values back.
+
+## Areas (#2393): fills, solid regions, polygon pours and keepouts.
+pcb-prim-fill-title = Fill
+pcb-prim-region-title = Solid Region
+pcb-prim-pour-title = Polygon Pour
+pcb-prim-keepout-title = Keepout
+pcb-prim-area-title = Areas
+pcb-prim-area-count = { $count ->
+    [one] 1 Area
+   *[other] { $count } Areas
+}
+pcb-prim-pour-settings = Pour
+# Clearance 0 follows the board's clearance.
+pcb-prim-clearance = Clearance
+pcb-prim-min-thickness = Minimum Width
+pcb-prim-keepout-kinds = Keeps Out
+pcb-prim-keepout-all-copper = All copper
+pcb-prim-keepout-kinds-unsupported = A board keepout keeps out all copper; other kinds are not stored yet.

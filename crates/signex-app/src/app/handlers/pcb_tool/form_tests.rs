@@ -11,7 +11,7 @@ use crate::panels::{PanelMsg, PcbPrimitiveMsg};
 
 use super::tests::{app_with_board, board_of, click, escape, run, undo};
 
-fn form(app: &Signex) -> PcbPrimitiveFacts {
+pub(super) fn form(app: &Signex) -> PcbPrimitiveFacts {
     app.document_state
         .panel_ctx
         .pcb_board
@@ -20,13 +20,13 @@ fn form(app: &Signex) -> PcbPrimitiveFacts {
         .expect("the placement form")
 }
 
-fn panel(app: &mut Signex, msg: PcbPrimitiveMsg) {
+pub(super) fn panel(app: &mut Signex, msg: PcbPrimitiveMsg) {
     let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::PcbPrimitive(
         msg,
     ))));
 }
 
-fn typed(app: &mut Signex, path: &Path, field: PrimitiveField, text: &str) {
+pub(super) fn typed(app: &mut Signex, path: &Path, field: PrimitiveField, text: &str) {
     panel(
         app,
         PcbPrimitiveMsg::FieldTyped {
@@ -37,7 +37,7 @@ fn typed(app: &mut Signex, path: &Path, field: PrimitiveField, text: &str) {
     );
 }
 
-fn enter(app: &mut Signex, path: &Path, field: PrimitiveField) {
+pub(super) fn enter(app: &mut Signex, path: &Path, field: PrimitiveField) {
     panel(
         app,
         PcbPrimitiveMsg::FieldSubmitted {
@@ -47,7 +47,7 @@ fn enter(app: &mut Signex, path: &Path, field: PrimitiveField) {
     );
 }
 
-fn tab(app: &mut Signex) {
+pub(super) fn tab(app: &mut Signex) {
     run(app, "placement_properties");
 }
 

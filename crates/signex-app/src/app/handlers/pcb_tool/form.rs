@@ -1,7 +1,7 @@
 //! The values a board placement tool places with (#2393), shown in
 //! Properties while the tool is armed. A value nobody set follows the board:
-//! its via size and track width (`PcbSetup`), the net of the copper under
-//! the point, the active layer. Values set in the panel stay the tool's for
+//! its via size, track width and clearance (`PcbSetup`), the net of the
+//! copper under the point, the active layer. Values set in the panel stay the tool's for
 //! the session.
 //!
 //! Tab (`placement_properties`) pauses placing and focuses the panel; Enter
@@ -11,13 +11,17 @@
 use iced::Task;
 use iced::widget::operation;
 use signex_engine::pcb::draw::{self, TrackStyle};
+use signex_engine::pcb::primitive_edit::{
+    PrimitiveEditRefusal, ZoneEdit, apply_zone_edit, zone_layer_allowed,
+};
 use signex_i18n::{MessageId, ids, t};
 use signex_types::format::pcb_layer_token;
-use signex_types::pcb::{PcbBoard, Point, Segment, Via};
+use signex_types::pcb::{PcbBoard, Point, Segment, Via, Zone};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::zone_keepout::KEEPOUT_FILL;
 use uuid::Uuid;
 
-use crate::app::handlers::pcb_primitive::PrimitiveEdit;
+use crate::app::handlers::pcb_primitive::{PrimitiveEdit, zone_edit};
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::{Message, PcbViewMsg, Signex};
 use crate::panels::pcb_primitive_properties::{
@@ -34,9 +38,30 @@ pub struct BoardToolDefaults {
     pub track_width_mm: Option<f64>,
     /// 0 is no net.
     pub track_net: Option<u32>,
+    /// The net of a Fill, Solid Region or Polygon Pour; 0 is no net.
+    pub area_net: Option<u32>,
+    /// A pour's clearance; 0 follows the board's.
+    pub pour_clearance_mm: Option<f64>,
+    pub pour_min_thickness_mm: Option<f64>,
 }
 
 impl BoardToolDefaults {
+    /// `zone`, just made by an area tool, with the values set for the area
+    /// tools. A value an area does not have (a keepout's net) leaves it.
+    pub fn area(&self, board: &PcbBoard, mut zone: Zone) -> Zone {
+        let edits = [
+            self.area_net.map(ZoneEdit::Net),
+            self.pour_clearance_mm.map(ZoneEdit::Clearance),
+            self.pour_min_thickness_mm.map(ZoneEdit::MinThickness),
+        ];
+        for edit in edits.into_iter().flatten() {
+            // Each value was checked by `apply_zone_edit` when it was set,
+            // so none is refused here.
+            let _ = apply_zone_edit(board, &mut zone, edit);
+        }
+        zone
+    }
+
     /// The via the Via tool places at `at` on `board`.
     pub fn via(&self, board: &PcbBoard, id: Uuid, at: Point) -> Via {
         let mut via = draw::new_via(board, id, at);
@@ -71,9 +96,10 @@ pub struct PlacementPause {
     pub active_layer: PcbLayer,
 }
 
-/// Whether Properties shows a form for `tool` while it is armed.
+/// Whether Properties shows a form for `tool` while it is armed: every tool
+/// that can be armed on a board.
 pub(crate) fn has_form(tool: BoardPlaceTool) -> bool {
-    matches!(tool, BoardPlaceTool::Via | BoardPlaceTool::Track)
+    matches!(tool, BoardPlaceTool::Via | BoardPlaceTool::Track) || is_area(tool)
 }
 
 impl Signex {
@@ -198,10 +224,24 @@ impl Signex {
             return;
         };
         let (tool, window) = (session.tool, session.window);
-        if let PrimitiveEdit::Layer(layer) = edit {
-            let layer = PcbLayer::Copper(*layer);
+        let layer = match edit {
+            PrimitiveEdit::Layer(layer) => Some(PcbLayer::Copper(*layer)),
+            PrimitiveEdit::AreaLayer(layer) => Some(*layer),
+            _ => None,
+        };
+        if let Some(layer) = layer {
+            // What the tool draws goes on the active layer.
+            let area = self.active_pcb().and_then(|b| self.next_board_area(b));
+            if area.is_some_and(|zone| !zone_layer_allowed(&zone, layer)) {
+                self.refuse_primitive_edit(what, PrimitiveEditRefusal::LayerNotAllowed.to_string());
+                return;
+            }
             self.apply_pcb_view_event(window, PcbViewMsg::ActiveLayerPicked(layer));
             self.refresh_pcb_highlight();
+            return;
+        }
+        if is_area(tool) {
+            self.edit_area_tool_value(edit, what);
             return;
         }
         let size = match (tool, edit) {
@@ -238,4 +278,44 @@ impl Signex {
         }
         self.refresh_pcb_highlight();
     }
+
+    /// An edit of the area an area tool places next, checked on that area
+    /// the way an edit of a placed area is.
+    fn edit_area_tool_value(&mut self, edit: &PrimitiveEdit, what: MessageId) {
+        let Some(zone_edit) = zone_edit(edit) else {
+            return;
+        };
+        let Some(board) = self.active_pcb() else {
+            return;
+        };
+        let Some(mut zone) = self.next_board_area(board) else {
+            return;
+        };
+        if let Err(refusal) = apply_zone_edit(board, &mut zone, zone_edit) {
+            self.refuse_primitive_edit(what, refusal.to_string());
+            return;
+        }
+        let is_copper = zone.fill_type != KEEPOUT_FILL;
+        let defaults = &mut self.interaction_state.pcb_tool_defaults;
+        match zone_edit {
+            ZoneEdit::Net(net) if is_copper => defaults.area_net = Some(net),
+            ZoneEdit::Clearance(v) if zone.is_pour() => defaults.pour_clearance_mm = Some(v),
+            ZoneEdit::MinThickness(v) if zone.is_pour() => {
+                defaults.pour_min_thickness_mm = Some(v);
+            }
+            _ => return,
+        }
+        self.refresh_pcb_highlight();
+    }
+}
+
+/// Whether `tool` draws an area.
+pub(super) fn is_area(tool: BoardPlaceTool) -> bool {
+    matches!(
+        tool,
+        BoardPlaceTool::Fill
+            | BoardPlaceTool::SolidRegion
+            | BoardPlaceTool::PolygonPour
+            | BoardPlaceTool::Keepout
+    )
 }

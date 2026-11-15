@@ -124,4 +124,16 @@ define_ids! {
     PCB_PRIM_PLACING_HINT = "pcb-prim-placing-hint";
     PCB_PRIM_PLACING_PAUSED = "pcb-prim-placing-paused";
     PCB_PRIM_NOT_POSITIVE = "pcb-prim-not-positive";
+    PCB_PRIM_FILL_TITLE = "pcb-prim-fill-title";
+    PCB_PRIM_REGION_TITLE = "pcb-prim-region-title";
+    PCB_PRIM_POUR_TITLE = "pcb-prim-pour-title";
+    PCB_PRIM_KEEPOUT_TITLE = "pcb-prim-keepout-title";
+    PCB_PRIM_AREA_TITLE = "pcb-prim-area-title";
+    PCB_PRIM_AREA_COUNT = "pcb-prim-area-count";
+    PCB_PRIM_POUR_SETTINGS = "pcb-prim-pour-settings";
+    PCB_PRIM_CLEARANCE = "pcb-prim-clearance";
+    PCB_PRIM_MIN_THICKNESS = "pcb-prim-min-thickness";
+    PCB_PRIM_KEEPOUT_KINDS = "pcb-prim-keepout-kinds";
+    PCB_PRIM_KEEPOUT_ALL_COPPER = "pcb-prim-keepout-all-copper";
+    PCB_PRIM_KEEPOUT_KINDS_UNSUPPORTED = "pcb-prim-keepout-kinds-unsupported";
 }

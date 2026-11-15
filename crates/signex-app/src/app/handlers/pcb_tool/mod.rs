@@ -30,6 +30,8 @@ pub(crate) use form::has_form;
 pub use form::{BoardToolDefaults, PlacementPause};
 
 #[cfg(test)]
+mod area_form_tests;
+#[cfg(test)]
 mod area_tests;
 #[cfg(test)]
 mod form_tests;

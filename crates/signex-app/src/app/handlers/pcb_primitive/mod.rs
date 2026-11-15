@@ -1,4 +1,4 @@
-//! The track, via and pad panels' events (#2355). A typed field keeps a
+//! The track, via, pad and area panels' events (#2355, #2393). A typed field keeps a
 //! draft until Enter; Enter, a dropdown pick or a net picked on the board
 //! is one board undo step through `execute_board_commands`. The commands
 //! come from `signex_engine::pcb::primitive_edit`; a refusal changes
@@ -9,6 +9,9 @@
 mod facts;
 mod links;
 mod placement;
+mod zone;
+
+pub(crate) use zone::zone_edit;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -21,7 +24,7 @@ use signex_engine::pcb::primitive_edit::{
 };
 use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::{PadShape, PcbBoard};
-use signex_types::pcb_layer::CopperLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use crate::app::Signex;
 use crate::app::state::pcb_edit::CheckedStep;
@@ -68,6 +71,8 @@ pub(crate) enum PrimitiveEdit {
     Number(PrimitiveField, f64),
     Designator(String),
     Layer(CopperLayer),
+    /// An area's layer: copper, or a keep-out layer for a keepout.
+    AreaLayer(PcbLayer),
     Net(u32),
     Shape(PadShape),
 }
@@ -107,6 +112,13 @@ impl Signex {
                 self.apply_primitive_edit(
                     target,
                     PrimitiveEdit::Layer(*layer),
+                    ids::PCB_PRIM_LAYER,
+                );
+            }
+            M::AreaLayerPicked { target, layer } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::AreaLayer(*layer),
                     ids::PCB_PRIM_LAYER,
                 );
             }
@@ -226,6 +238,8 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::Rotation => ids::PCB_PRIM_ROTATION,
         F::SizeX => ids::PCB_PRIM_X_SIZE,
         F::SizeY => ids::PCB_PRIM_Y_SIZE,
+        F::Clearance => ids::PCB_PRIM_CLEARANCE,
+        F::MinThickness => ids::PCB_PRIM_MIN_THICKNESS,
     }
 }
 
@@ -293,7 +307,8 @@ fn primitive_command(
                 None => Ok(None),
             }
         }
-        Some(ItemRef::Footprint(_) | ItemRef::Zone { .. }) | None => Ok(None),
+        Some(ItemRef::Zone { .. }) => zone::zone_command(board, items, edit),
+        Some(ItemRef::Footprint(_)) | None => Ok(None),
     }
 }
 

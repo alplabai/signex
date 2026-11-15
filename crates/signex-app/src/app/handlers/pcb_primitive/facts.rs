@@ -94,7 +94,23 @@ impl Signex {
                 let common = self.primitive_common(board, target, locked)?;
                 PcbPrimitiveFacts::Pad(pad_facts(board.options.origin, common, &pads, i18n))
             }
-            ItemRef::Footprint(_) | ItemRef::Zone { .. } => return None,
+            ItemRef::Zone { .. } => {
+                let zones: Vec<&signex_types::pcb::Zone> = target
+                    .items
+                    .iter()
+                    .filter_map(|i| match i {
+                        ItemRef::Zone { zone, .. } => board.zones.iter().find(|z| z.uuid == *zone),
+                        _ => None,
+                    })
+                    .collect();
+                if zones.len() != target.items.len() {
+                    return None;
+                }
+                let net = shared(zones.iter().map(|z| z.net));
+                let common = self.primitive_common_on(board, target, Editability::Editable, net);
+                PcbPrimitiveFacts::Zone(super::zone::zone_facts(board, common, &zones, i18n))
+            }
+            ItemRef::Footprint(_) => return None,
         })
     }
 
