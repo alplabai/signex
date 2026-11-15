@@ -751,3 +751,6 @@ fn a_zone_with_no_area_beside_a_real_zone_meets_it_only_by_touching() {
     assert!(ratsnest(&two_flat(0.0)).is_empty());
     assert_eq!(ratsnest(&two_flat(0.000_001)), apart());
 }
+
+#[path = "ratsnest_fill_tests.rs"]
+mod fill;

@@ -690,6 +690,11 @@
     "category": "place"
   },
   {
+    "id": "place_board_polygon_pour",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "place_board_region",
     "group": "Pcb",
     "category": "place"

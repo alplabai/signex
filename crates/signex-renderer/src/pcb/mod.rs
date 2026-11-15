@@ -80,6 +80,10 @@ pub struct ZonePolygonInput {
     /// Copper off the active layer, drawn faint.
     pub dimmed: bool,
     pub ink: CopperInk,
+    /// A pour's computed copper, drawn instead of filling the outline
+    /// (which is then only stroked); `None` for a zone whose copper is its
+    /// outline. Set by [`PcbSnapshot::with_zone_fills`].
+    pub fill: Option<Vec<ZoneFillPiece>>,
 }
 
 /// Whose colour copper is drawn in: the colour the Layers panel lists that
@@ -171,6 +175,7 @@ mod footprint_text;
 mod layer_rows;
 mod layer_view;
 mod ratsnest;
+mod zone_fill;
 pub use board_features::{BoardFeaturesInput, HoleInput};
 use emit::*;
 pub use footprint_text::FootprintTextInput;
@@ -180,6 +185,7 @@ pub use layer_rows::{
 };
 pub use layer_view::{BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, PcbLayerView};
 pub use ratsnest::ratsnest_inputs;
+pub use zone_fill::ZoneFillPiece;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PcbSliceFamily {
@@ -681,6 +687,7 @@ mod tests {
                 source_order: 2,
                 dimmed: false,
                 ink: CopperInk::Unknown,
+                fill: None,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -693,6 +700,7 @@ mod tests {
                 source_order: 1,
                 dimmed: false,
                 ink: CopperInk::Unknown,
+                fill: None,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -705,6 +713,7 @@ mod tests {
                 source_order: 0,
                 dimmed: false,
                 ink: CopperInk::Unknown,
+                fill: None,
             },
         ];
 

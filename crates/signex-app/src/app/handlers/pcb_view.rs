@@ -57,13 +57,14 @@ impl Signex {
     /// The snapshot an undocked window draws of the board at `path`: its
     /// view, with the ratsnest unless that view hides it.
     pub(crate) fn undocked_pcb_snapshot(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
-        let snapshot = self.pcb_snapshot_for(path, board);
+        let fills = pcb_geom::zone_fills(board);
+        let snapshot = self.pcb_snapshot_for(path, board).with_zone_fills(&fills);
         if !self.pcb_layer_view(path).ratsnest_visible() {
             return snapshot;
         }
         self.interaction_state
             .pcb_ratsnest
-            .apply_uncached(path, board, snapshot)
+            .apply_uncached(path, board, &fills, snapshot)
     }
 
     /// The path of the board an undocked window shows, if it shows one.
