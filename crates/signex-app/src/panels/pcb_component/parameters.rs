@@ -112,15 +112,21 @@ fn add_row<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Element<'a, Pan
         .on_press(added.clone());
     container(
         Row::<Element<'a, PanelMsg>>::new()
-            .push(field(
-                ComponentField::NewParameterName,
-                ids::PCB_COMPONENT_PARAMETER_NAME,
-            ))
-            .push(field(
-                ComponentField::NewParameterValue,
-                ids::PCB_COMPONENT_PARAMETER_VALUE,
-            ))
-            .push(add)
+            .push(
+                field(
+                    ComponentField::NewParameterName,
+                    ids::PCB_COMPONENT_PARAMETER_NAME,
+                )
+                .boxed(),
+            )
+            .push(
+                field(
+                    ComponentField::NewParameterValue,
+                    ids::PCB_COMPONENT_PARAMETER_VALUE,
+                )
+                .boxed(),
+            )
+            .push(add.boxed())
             .spacing(SP.xs)
             .align_y(iced::Alignment::Center),
     )
