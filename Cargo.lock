@@ -5833,9 +5833,14 @@ dependencies = [
  "icu_provider",
  "intl-memoizer",
  "log",
+ "signex-i18n-ids",
  "sys-locale",
  "unic-langid",
 ]
+
+[[package]]
+name = "signex-i18n-ids"
+version = "26.11.0-rc.1"
 
 [[package]]
 name = "signex-library"

@@ -1,7 +1,7 @@
 //! Text kept in state and rendered at view time (epic #2053, decision 4).
 
 use crate::i18n::I18n;
-use crate::types::{Arg, Localized, MessageId, UserText};
+use crate::{Arg, Localized, MessageId, UserText};
 
 /// A message held in state: a catalog id with owned arguments, or text that
 /// is not ours (an OS error line, a path, user content) shown verbatim. The
