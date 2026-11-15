@@ -114,7 +114,8 @@ impl Signex {
         let Some(router) = session.router.as_ref() else {
             return;
         };
-        let (style, via) = next_leg_style(board, session, anchor, at, layer);
+        let defaults = &self.interaction_state.pcb_tool_defaults;
+        let (style, via) = next_leg_style(board, session, defaults, anchor, at, layer);
         let leg = LegRequest {
             from: anchor,
             to: at,
@@ -165,8 +166,16 @@ impl Signex {
                 return;
             }
         };
-        let mut style = TrackStyle::starting_at(board, at, layer);
-        style.width_mm = rule_width(board, &classes, &rules, &style);
+        // The Properties form's width and net come first (#2393); a width
+        // set there replaces the net class's, and the rules still bound it.
+        let defaults = &self.interaction_state.pcb_tool_defaults;
+        let mut style = defaults.track_style(board, at, layer);
+        let classes: &[NetClass] = if defaults.track_width_mm.is_some() {
+            &[]
+        } else {
+            &classes
+        };
+        style.width_mm = rule_width(board, classes, &rules, &style);
         if let Some(session) = self.own_board_tool_mut() {
             session.points = vec![at];
             session.route = Some(style);
@@ -360,7 +369,9 @@ impl Signex {
         let session = self.own_board_tool()?;
         let router = session.router.as_ref()?;
         let board = self.document_state.pcb_board(&session.path)?;
-        let (style, via) = next_leg_style(board, session, key.anchor, key.cursor, key.layer);
+        let defaults = &self.interaction_state.pcb_tool_defaults;
+        let (style, via) =
+            next_leg_style(board, session, defaults, key.anchor, key.cursor, key.layer);
         let leg = LegRequest {
             from: key.anchor,
             to: key.cursor,

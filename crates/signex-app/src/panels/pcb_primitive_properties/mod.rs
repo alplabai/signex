@@ -1,5 +1,6 @@
-//! Properties of the tracks, vias or pads selected on a board (#2355). One
-//! panel per kind (`track`, `via`, `pad`) built from shared rows (`rows`)
+//! Properties of the tracks, vias, pads or areas selected on a board
+//! (#2355, #2393). One panel per kind (`track`, `via`, `pad`, `zone` for
+//! fills, regions, pours and keepouts) built from shared rows (`rows`)
 //! and the shared Net Information section (`net_info`). A pure view over
 //! facts the app copies from the board (`facts`); every edit is a
 //! [`PcbPrimitiveMsg`] the app turns into one board command.
@@ -7,6 +8,10 @@
 //! The header (kind, count, search) is this module's own; the board panel
 //! (#2353) and the component panel (#2354) carry the same shape, and the
 //! three meet in `pcb_board_properties::view`, which picks the panel.
+//!
+//! While a board placement tool is armed the same panel shows the object it
+//! places next (#2393): its target has no items, and its edits set the
+//! tool's values instead of the board.
 
 mod facts;
 mod net_info;
@@ -14,6 +19,7 @@ mod pad;
 mod rows;
 mod track;
 mod via;
+mod zone;
 
 use std::path::PathBuf;
 
@@ -21,12 +27,13 @@ use iced::widget::{column, container, row};
 use iced::{Element, Length, Widget as _};
 use signex_i18n::{ids, t};
 use signex_types::pcb::PadShape;
-use signex_types::pcb_layer::CopperLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_widgets::{text, text_input};
 
 pub use facts::{
-    Editability, LayerChoice, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts, PrimitiveCommon,
-    PrimitiveField, PrimitiveTarget, ShapeChoice, TrackFacts, ViaFacts, shared,
+    AreaLayerChoice, Editability, LayerChoice, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts,
+    PrimitiveCommon, PrimitiveField, PrimitiveTarget, ShapeChoice, TrackFacts, ViaFacts, ZoneFacts,
+    ZoneKind, shared,
 };
 
 use super::{PanelContext, PanelMsg};
@@ -34,6 +41,19 @@ use crate::styles::{Spacing, TypeScale, ti, tokens::resolve};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
+
+/// Widget id of the field Tab focuses while placing (#2393): a via's
+/// Diameter, a track's Width, a pour's Clearance.
+pub static PLACEMENT_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::widget::Id::new("signex.pcb_placement_field"));
+
+/// Whether `field` is the one Tab focuses while placing.
+pub fn is_placement_focus(field: PrimitiveField) -> bool {
+    matches!(
+        field,
+        PrimitiveField::Diameter | PrimitiveField::Width | PrimitiveField::Clearance
+    )
+}
 
 /// An event of a primitive panel.
 #[derive(Debug, Clone, PartialEq)]
@@ -51,6 +71,11 @@ pub enum PcbPrimitiveMsg {
     LayerPicked {
         target: PrimitiveTarget,
         layer: CopperLayer,
+    },
+    /// An area's Layer: copper, or a keep-out layer for a keepout.
+    AreaLayerPicked {
+        target: PrimitiveTarget,
+        layer: PcbLayer,
     },
     NetPicked {
         target: PrimitiveTarget,
@@ -84,6 +109,7 @@ pub fn view<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<
         PcbPrimitiveFacts::Track(f) => track::view(ctx, f),
         PcbPrimitiveFacts::Via(f) => via::view(ctx, f),
         PcbPrimitiveFacts::Pad(f) => pad::view(ctx, f),
+        PcbPrimitiveFacts::Zone(f) => zone::view(ctx, f),
     };
     let common = facts.common();
     let mut notes = column![].spacing(SP.xs);
@@ -96,6 +122,13 @@ pub fn view<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<
     }
     if common.picking_net {
         notes = notes.push(note(ids::PCB_PRIM_PICKING_NET));
+    }
+    if common.target.is_placement() {
+        notes = notes.push(note(if common.placement_paused {
+            ids::PCB_PRIM_PLACING_PAUSED
+        } else {
+            ids::PCB_PRIM_PLACING_HINT
+        }));
     }
     if !common.drafts.is_empty() {
         notes = notes.push(note(ids::PCB_PRIM_ENTER_HINT));
@@ -113,7 +146,7 @@ pub fn view<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<
 fn header<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
     let count = facts.common().target.items.len();
-    let (title, summary) = match facts {
+    let (title, mut summary) = match facts {
         PcbPrimitiveFacts::Track(_) => (
             ids::PCB_PRIM_TRACK_TITLE,
             t!(i18n, ids::PCB_PRIM_TRACK_COUNT, "count" => count),
@@ -126,7 +159,20 @@ fn header<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<'a
             ids::PCB_PRIM_PAD_TITLE,
             t!(i18n, ids::PCB_PRIM_PAD_COUNT, "count" => count),
         ),
+        PcbPrimitiveFacts::Zone(f) => (
+            match f.kind {
+                Some(ZoneKind::Fill) => ids::PCB_PRIM_FILL_TITLE,
+                Some(ZoneKind::Region) => ids::PCB_PRIM_REGION_TITLE,
+                Some(ZoneKind::Pour) => ids::PCB_PRIM_POUR_TITLE,
+                Some(ZoneKind::Keepout) => ids::PCB_PRIM_KEEPOUT_TITLE,
+                None => ids::PCB_PRIM_AREA_TITLE,
+            },
+            t!(i18n, ids::PCB_PRIM_AREA_COUNT, "count" => count),
+        ),
     };
+    if facts.common().target.is_placement() {
+        summary = t!(i18n, ids::PCB_PRIM_PLACING);
+    }
     let ink = ti(ctx.tokens.text);
     let muted = resolve(&ctx.tokens).ink3;
     let semibold = iced::Font {

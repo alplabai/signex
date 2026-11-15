@@ -11,11 +11,28 @@ use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 /// The board and the selected items a panel was built for. Every edit
 /// message carries it, so a selection change in between cannot send the
-/// edit to other items.
+/// edit to other items. No items: the object the placement tool armed on
+/// the board is about to place (#2393).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrimitiveTarget {
     pub board: PathBuf,
     pub items: Vec<ItemRef>,
+}
+
+impl PrimitiveTarget {
+    /// The object the tool armed on `board` places next.
+    pub fn placement(board: PathBuf) -> Self {
+        Self {
+            board,
+            items: Vec::new(),
+        }
+    }
+
+    /// Whether the panel shows the object about to be placed: its edits set
+    /// the tool's values, not the board.
+    pub fn is_placement(&self) -> bool {
+        self.items.is_empty()
+    }
 }
 
 /// A typed field of a primitive panel.
@@ -38,6 +55,10 @@ pub enum PrimitiveField {
     /// A target length for a track's net (#2389): Enter tunes the track to
     /// reach it. Not a value the track holds.
     TuneLength,
+    /// A polygon pour's clearance from other nets.
+    Clearance,
+    /// A polygon pour's minimum copper width.
+    MinThickness,
 }
 
 impl PrimitiveField {
@@ -57,6 +78,36 @@ pub struct NetChoice {
 impl fmt::Display for NetChoice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.label)
+    }
+}
+
+/// A layer in an area's Layer dropdown: copper, or for a keepout also a
+/// keep-out layer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AreaLayerChoice {
+    pub layer: PcbLayer,
+    pub label: String,
+}
+
+impl fmt::Display for AreaLayerChoice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
+/// What kind of area a zone is, as the panel names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZoneKind {
+    Fill,
+    Region,
+    Pour,
+    Keepout,
+}
+
+impl ZoneKind {
+    /// Whether the area is copper (it has a net).
+    pub fn is_copper(self) -> bool {
+        self != Self::Keepout
     }
 }
 
@@ -130,6 +181,8 @@ pub struct PrimitiveCommon {
     pub search: String,
     /// The pick button is waiting for a click on the board.
     pub picking_net: bool,
+    /// Placing is paused for these values to be edited (Tab, #2393).
+    pub placement_paused: bool,
 }
 
 impl PrimitiveCommon {
@@ -190,12 +243,31 @@ pub struct PadFacts {
     pub shapes: Vec<ShapeChoice>,
 }
 
+/// Fills, solid regions, polygon pours or keepouts (#2393).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ZoneFacts {
+    pub common: PrimitiveCommon,
+    /// The kind every selected area is; `None` when they differ.
+    pub kind: Option<ZoneKind>,
+    /// Every selected area is copper (has a net).
+    pub is_copper: bool,
+    /// Every selected area is a polygon pour.
+    pub is_pour: bool,
+    pub layer: Option<AreaLayerChoice>,
+    /// The layers the areas can move to.
+    pub layers: Vec<AreaLayerChoice>,
+    /// A pour's clearance as set; 0 follows the board's.
+    pub clearance: Option<f64>,
+    pub min_thickness: Option<f64>,
+}
+
 /// The selection the Properties panel shows as a primitive.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PcbPrimitiveFacts {
     Track(TrackFacts),
     Via(ViaFacts),
     Pad(PadFacts),
+    Zone(ZoneFacts),
 }
 
 impl PcbPrimitiveFacts {
@@ -204,6 +276,7 @@ impl PcbPrimitiveFacts {
             Self::Track(f) => &f.common,
             Self::Via(f) => &f.common,
             Self::Pad(f) => &f.common,
+            Self::Zone(f) => &f.common,
         }
     }
 }

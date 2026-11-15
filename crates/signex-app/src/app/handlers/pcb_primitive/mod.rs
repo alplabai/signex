@@ -1,15 +1,21 @@
-//! The track, via and pad panels' events (#2355). A typed field keeps a
+//! The track, via, pad and area panels' events (#2355, #2393). A typed field keeps a
 //! draft until Enter; Enter, a dropdown pick or a net picked on the board
 //! is one board undo step through `execute_board_commands`. The commands
 //! come from `signex_engine::pcb::primitive_edit`; a refusal changes
-//! nothing and says why in the Messages panel.
+//! nothing and says why in the Messages panel. An edit of the object a
+//! placement tool is about to place sets the tool's value instead (#2393,
+//! `pcb_tool::form`).
 
 mod facts;
 mod links;
+mod placement;
 mod tune;
+mod zone;
 
 #[cfg(test)]
 mod tune_tests;
+
+pub(crate) use zone::zone_edit;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -22,7 +28,7 @@ use signex_engine::pcb::primitive_edit::{
 };
 use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::{PadShape, PcbBoard};
-use signex_types::pcb_layer::CopperLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use crate::app::Signex;
 use crate::app::state::pcb_edit::CheckedStep;
@@ -69,6 +75,8 @@ pub(crate) enum PrimitiveEdit {
     Number(PrimitiveField, f64),
     Designator(String),
     Layer(CopperLayer),
+    /// An area's layer: copper, or a keep-out layer for a keepout.
+    AreaLayer(PcbLayer),
     Net(u32),
     Shape(PadShape),
 }
@@ -99,11 +107,22 @@ impl Signex {
                 if let Some(text) = typed {
                     self.submit_primitive_text(target, *field, &text);
                 }
+                // Enter in the paused form goes on placing (#2393).
+                if target.is_placement() && self.is_board_tool_paused() {
+                    self.resume_board_tool();
+                }
             }
             M::LayerPicked { target, layer } => {
                 self.apply_primitive_edit(
                     target,
                     PrimitiveEdit::Layer(*layer),
+                    ids::PCB_PRIM_LAYER,
+                );
+            }
+            M::AreaLayerPicked { target, layer } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::AreaLayer(*layer),
                     ids::PCB_PRIM_LAYER,
                 );
             }
@@ -133,7 +152,7 @@ impl Signex {
     }
 
     /// Enter in `field`: read the typed text and apply it.
-    fn submit_primitive_text(
+    pub(crate) fn submit_primitive_text(
         &mut self,
         target: &PrimitiveTarget,
         field: PrimitiveField,
@@ -166,6 +185,10 @@ impl Signex {
         edit: PrimitiveEdit,
         what: MessageId,
     ) {
+        if target.is_placement() {
+            self.edit_board_tool_value(&edit, what);
+            return;
+        }
         let Some(engine) = self.document_state.board_engine(&target.board) else {
             let name = t!(self.ui_state.i18n, what).into_string();
             let line = t!(self.ui_state.i18n, ids::PCB_PRIM_BOARD_GONE, "what" => name);
@@ -196,7 +219,7 @@ impl Signex {
         }
     }
 
-    fn refuse_primitive_edit(&self, what: MessageId, why: String) {
+    pub(crate) fn refuse_primitive_edit(&self, what: MessageId, why: String) {
         let name = t!(self.ui_state.i18n, what).into_string();
         let line = t!(
             self.ui_state.i18n,
@@ -224,6 +247,8 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::SizeX => ids::PCB_PRIM_X_SIZE,
         F::SizeY => ids::PCB_PRIM_Y_SIZE,
         F::TuneLength => ids::PCB_PRIM_TUNE_LENGTH,
+        F::Clearance => ids::PCB_PRIM_CLEARANCE,
+        F::MinThickness => ids::PCB_PRIM_MIN_THICKNESS,
     }
 }
 
@@ -291,7 +316,8 @@ fn primitive_command(
                 None => Ok(None),
             }
         }
-        Some(ItemRef::Footprint(_) | ItemRef::Zone { .. }) | None => Ok(None),
+        Some(ItemRef::Zone { .. }) => zone::zone_command(board, items, edit),
+        Some(ItemRef::Footprint(_)) | None => Ok(None),
     }
 }
 

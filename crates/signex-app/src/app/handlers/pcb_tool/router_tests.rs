@@ -253,3 +253,31 @@ fn a_route_lands_after_an_undo_that_leaves_it_fitting() {
     undo(&mut app);
     assert_eq!(live(&app, &path), before, "one undo removes the route");
 }
+
+/// #2393 — Interactive Routing shows the Track form; a width set there
+/// (Tab, Width, Enter) is the width the route lands with.
+#[test]
+fn interactive_routing_shows_the_track_form_and_routes_with_its_width() {
+    use super::form_tests::{enter, form, tab, typed};
+    use crate::panels::pcb_primitive_properties::{PcbPrimitiveFacts, PrimitiveField};
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), Vec::new(), Vec::new());
+    run(&mut app, "place_board_route");
+    let PcbPrimitiveFacts::Track(track) = form(&app) else {
+        panic!("arming Interactive Routing shows the track form");
+    };
+    assert!(track.common.target.is_placement());
+    assert_eq!(track.width, Some(0.25), "the board's track width");
+
+    tab(&mut app);
+    typed(&mut app, &path, PrimitiveField::Width, "0.4");
+    enter(&mut app, &path, PrimitiveField::Width);
+    assert!(!app.is_board_tool_paused(), "Enter goes on routing");
+    click(&mut app, 0.0, 0.0);
+    click(&mut app, 10.0, 0.0);
+    escape(&mut app);
+    let tracks = &board_of(&app, &path).segments;
+    assert!(!tracks.is_empty(), "the route lands");
+    assert!(tracks.iter().all(|t| t.width == 0.4), "{tracks:?}");
+}

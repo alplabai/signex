@@ -11,7 +11,7 @@ use signex_types::pcb::{PcbBoard, Point, Via};
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
-use super::BoardToolSession;
+use super::{BoardToolDefaults, BoardToolSession};
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
 
@@ -50,7 +50,8 @@ impl Signex {
             return;
         };
         let Some(anchor) = session.points.last().copied() else {
-            let style = TrackStyle::starting_at(board, at, layer);
+            let defaults = &self.interaction_state.pcb_tool_defaults;
+            let style = defaults.track_style(board, at, layer);
             self.set_route(vec![at], Some(style));
             return;
         };
@@ -59,7 +60,8 @@ impl Signex {
             self.set_route(Vec::new(), None);
             return;
         }
-        let (style, via) = next_leg_style(board, session, anchor, at, layer);
+        let defaults = &self.interaction_state.pcb_tool_defaults;
+        let (style, via) = next_leg_style(board, session, defaults, anchor, at, layer);
         let rule = self.interaction_state.corner_rule;
         let tracks = draw::track_run(anchor, at, rule, style, Uuid::now_v7);
         if let Some(command) = draw::place_route(tracks, via) {
@@ -94,7 +96,8 @@ impl Signex {
         else {
             return;
         };
-        let (style, via) = next_leg_style(board, session, anchor, cursor, layer);
+        let defaults = &self.interaction_state.pcb_tool_defaults;
+        let (style, via) = next_leg_style(board, session, defaults, anchor, cursor, layer);
         let rule = self.interaction_state.corner_rule;
         preview
             .segments
@@ -105,23 +108,24 @@ impl Signex {
 
 /// The style of the legs from `anchor` to `to` on `layer`, and the via at
 /// `anchor` when `layer` is not the run's. A run with no net yet takes the
-/// net of the copper under `to`.
+/// net of the copper under `to`, unless the tool's net was set (#2393).
 pub(super) fn next_leg_style(
     board: &PcbBoard,
     session: &BoardToolSession,
+    defaults: &BoardToolDefaults,
     anchor: Point,
     to: Point,
     layer: CopperLayer,
 ) -> (TrackStyle, Option<Via>) {
     let mut style = session
         .route
-        .unwrap_or_else(|| TrackStyle::starting_at(board, anchor, layer));
-    if style.net == 0 {
+        .unwrap_or_else(|| defaults.track_style(board, anchor, layer));
+    if style.net == 0 && defaults.track_net.is_none() {
         style.net = draw::net_under(board, to, 1 << pcb_geom::layer_bit(layer));
     }
     let via = (style.layer != layer).then(|| Via {
         net: style.net,
-        ..draw::new_via(board, Uuid::now_v7(), anchor)
+        ..defaults.via(board, Uuid::now_v7(), anchor)
     });
     style.layer = layer;
     (style, via)
