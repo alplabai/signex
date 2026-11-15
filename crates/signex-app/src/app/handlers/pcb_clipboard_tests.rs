@@ -260,6 +260,8 @@ fn a_board_copy_replaces_the_sheet_copy_and_esc_drops_a_paste() {
 
     run(&mut app, "paste");
     assert!(app.interaction_state.pcb_carry.is_some());
+    // The first-run tour follows the shared test prefs; open, it takes the Esc.
+    app.ui_state.first_run_tour_open = false;
     let _ = app.update(Message::Input(crate::app::InputMsg::EscapePressed {
         window: None,
     }));

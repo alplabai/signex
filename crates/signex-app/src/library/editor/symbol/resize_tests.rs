@@ -7,10 +7,10 @@ use iced::widget::canvas::Program;
 use iced::{Event, Point, Rectangle, mouse, window};
 use std::path::{Path, PathBuf};
 
-use super::super::super::*;
+use super::canvas::CanvasState;
+use crate::app::*;
 use crate::app::{TabInfo, TabKind};
 use crate::library::editor::standalone::symbol::{symbol_action_to_primitive_msg, symbol_canvas};
-use crate::library::editor::symbol::canvas::CanvasState;
 use crate::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg};
 use crate::library::state::LibraryDisplaySettings;
 

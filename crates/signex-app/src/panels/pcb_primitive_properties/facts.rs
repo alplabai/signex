@@ -135,9 +135,12 @@ impl PrimitiveCommon {
     }
 
     /// Whether a row labelled `label` passes the search.
-    pub fn shows(&self, label: &str) -> bool {
+    pub fn shows(&self, i18n: &signex_i18n::I18n, label: &str) -> bool {
         let query = self.search.trim();
-        query.is_empty() || label.to_lowercase().contains(&query.to_lowercase())
+        query.is_empty()
+            || i18n
+                .fold_for_search(label)
+                .contains(&i18n.fold_for_search(query))
     }
 }
 

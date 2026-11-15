@@ -30,7 +30,7 @@ impl<'a> Form<'a> {
         Self {
             ctx,
             ink: resolve(&ctx.tokens).ink3,
-            search: facts.search.trim().to_lowercase(),
+            search: ctx.i18n.fold_for_search(facts.search.trim()),
         }
     }
 
@@ -41,7 +41,7 @@ impl<'a> Form<'a> {
 
     /// Whether a row labelled `label` passes the search.
     pub fn shows(&self, label: &str) -> bool {
-        self.search.is_empty() || label.to_lowercase().contains(&self.search)
+        self.search.is_empty() || self.ctx.i18n.fold_for_search(label).contains(&self.search)
     }
 
     /// `content` with the catalog text `tip` shown on hover.

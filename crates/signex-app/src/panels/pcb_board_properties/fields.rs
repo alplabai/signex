@@ -59,7 +59,7 @@ pub(super) fn swatch<'a>(
 ) -> Element<'a, PanelMsg> {
     let fill = crate::render_config::to_iced(&color);
     let edge = resolve(form.tokens()).line_soft;
-    let chip = container("")
+    let chip = container(iced::widget::Space::new())
         .width(Length::Fixed(TS.body))
         .height(Length::Fixed(TS.body))
         .style(move |_: &Theme| container::Style {

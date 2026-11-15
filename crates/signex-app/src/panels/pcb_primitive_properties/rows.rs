@@ -62,7 +62,7 @@ impl<'a> Section<'a> {
 
     /// Add `row`, labelled `label`, when the search lets it through.
     pub fn push(&mut self, common: &PrimitiveCommon, label: MessageId, row: Element<'a, PanelMsg>) {
-        if common.shows(&self.look.t(label).into_string()) {
+        if common.shows(&self.look.ctx.i18n, &self.look.t(label).into_string()) {
             self.rows.push(row);
         }
     }

@@ -197,16 +197,13 @@ const PREF_WRITE_QUIT_LIMIT: std::time::Duration = std::time::Duration::from_sec
 /// The bound a test watching the wait gets instead. One Save is about two
 /// dozen fsynced rewrites of `prefs.json`, near 10 s on a Windows CI runner,
 /// so the product bound would end the wait before the writes land (#2323).
-#[cfg(test)]
 const WATCHED_PREF_WRITE_QUIT_LIMIT: std::time::Duration = std::time::Duration::from_secs(120);
 
 /// The quit bound: the product one, or a test's when a wait probe watches it.
 fn pref_write_quit_limit(is_watched: bool) -> std::time::Duration {
-    #[cfg(test)]
-    if is_watched {
+    if cfg!(test) && is_watched {
         return WATCHED_PREF_WRITE_QUIT_LIMIT;
     }
-    let _ = is_watched;
     PREF_WRITE_QUIT_LIMIT
 }
 

@@ -256,7 +256,7 @@ fn a_replaced_footprint_keeps_board_choices_and_takes_library_facts() {
     template.pads.clear();
     template.layer = "TopCopper".into();
     *template.component = signex_types::pcb::ComponentAttributes {
-        component_type: ComponentType::Standard,
+        component_type: ComponentType::Mechanical,
         height_mm: 2.0,
         description: "new".into(),
         ..Default::default()
@@ -268,7 +268,7 @@ fn a_replaced_footprint_keeps_board_choices_and_takes_library_facts() {
     .apply(&mut b)
     .unwrap();
     let kept = &fp(&b, FP_A).component;
-    assert_eq!(kept.component_type, ComponentType::Standard);
+    assert_eq!(kept.component_type, ComponentType::Mechanical);
     assert_eq!((kept.height_mm, kept.description.as_str()), (2.0, "new"));
     assert!(kept.lock_primitives);
     assert_eq!((kept.body_opacity, kept.channel_offset), (0.5, 4));
