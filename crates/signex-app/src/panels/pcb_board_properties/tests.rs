@@ -211,22 +211,42 @@ fn the_search_keeps_matching_rows() {
     );
 }
 
-/// #2353: the header sums up the Selection Filter.
+/// #2353, #2383: the header's filter button counts the kinds that are on; a
+/// kind turned off lowers the count and names it on hover. A click opens the
+/// floating dropdown, never a second chip block in the panel.
 #[test]
-fn the_header_sums_up_the_selection_filter() {
+fn the_header_counts_the_kinds_that_are_on() {
     let mut ctx = context(0);
+    let total = PickKind::ALL.len();
     let texts_all = texts(&ctx);
-    assert!(
-        texts_all.iter().any(|t| t == "Components (and 12 more)"),
-        "{texts_all:?}"
-    );
+    let all = format!("{total}/{total}");
+    assert!(texts_all.iter().any(|t| *t == all), "{texts_all:?}");
+    let chips = texts_all.iter().filter(|t| *t == "3D Bodies").count();
     if let Some(board) = ctx.pcb_board.as_mut() {
         board.filter.toggle(PickKind::Components);
     }
     let texts = texts(&ctx);
+    let fewer = format!("{}/{total}", total - 1);
+    assert!(texts.iter().any(|t| *t == fewer), "{texts:?}");
+    let width = DEFAULT_DOCK;
+    let button = laid_out(&ctx, width)
+        .into_iter()
+        .find(|t| t.text == fewer)
+        .expect("the filter button");
+    let sent = crate::layout_probe::messages_on_click_at(
+        super::super::properties::view_properties(&ctx),
+        iced::Size::new(width, WINDOW.height),
+        None,
+        button.bounds.center(),
+    );
     assert!(
-        texts.iter().any(|t| t == "3D Bodies (and 11 more)"),
-        "{texts:?}"
+        sent.iter()
+            .any(|m| matches!(m, PanelMsg::PcbBoard(PcbBoardMsg::FilterMenuToggled))),
+        "{sent:?}"
+    );
+    assert_eq!(
+        chips, 1,
+        "the chips show once, in the Selection Filter section"
     );
 }
 
@@ -253,16 +273,13 @@ fn the_managers_list_the_boards_guides_and_grids() {
         });
     }
     let texts = texts(&ctx);
-    for wanted in [
-        "+45°",
-        "Fine pads",
-        "Always",
-        "50",
-        "Get Size From Sheet Layer",
-    ] {
+    for wanted in ["+45°", "Fine pads", "Global Snap Grid", "Size From Board"] {
         assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
     }
-    assert!(!texts.iter().any(|t| t == "No guides"), "{texts:?}");
+    assert!(
+        !texts.iter().any(|t| t.starts_with("No guides")),
+        "{texts:?}"
+    );
 }
 
 /// The default width of the right dock (`UiState::right_width` at startup).
@@ -388,4 +405,97 @@ fn add_preset_and_run_drc_are_wired() {
     );
     let run = crate::layout_probe::messages_on_click(view(), window, "Run DRC");
     assert!(run.iter().any(|m| matches!(m, PanelMsg::RunDrc)), "{run:?}");
+}
+
+/// A context with one extra grid and one guide, as the managers test has.
+fn managed(ctx: &mut PanelContext) -> uuid::Uuid {
+    use signex_types::pcb_options::{BoardGrid, BoardGuide, GuideKind, MARK_COLORS};
+    let id = uuid::Uuid::from_u128(2);
+    if let Some(board) = ctx.pcb_board.as_mut() {
+        board.options.guides.push(BoardGuide::new(
+            uuid::Uuid::from_u128(1),
+            GuideKind::Vertical,
+            Point { x: 2.5, y: 0.0 },
+        ));
+        board.options.grids.push(BoardGrid {
+            uuid: id,
+            name: "Fine pads".into(),
+            step_mm: 0.1,
+            origin: Point { x: 0.0, y: 0.0 },
+            color: MARK_COLORS[1],
+            components: true,
+            non_components: false,
+        });
+    }
+    id
+}
+
+/// #2386: the board's own grid card offers Edit only; an extra grid's card
+/// offers Edit, Move Up, Move Down and Delete. No table header is drawn.
+#[test]
+fn the_global_grid_card_cannot_be_moved_or_deleted() {
+    let mut ctx = context(0);
+    let id = managed(&mut ctx);
+    let shown = texts(&ctx);
+    for gone in ["Priority", "Comp", "Non Comp", "Properties"] {
+        assert!(!shown.iter().any(|t| t == gone), "{gone} in {shown:?}");
+    }
+    if let Some(board) = ctx.pcb_board.as_mut() {
+        board.view.grid_menu = Some(GridCard::Global);
+    }
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t == "Edit"), "{shown:?}");
+    for gone in ["Move Up", "Move Down", "Delete"] {
+        assert!(!shown.iter().any(|t| t == gone), "{gone} in {shown:?}");
+    }
+    if let Some(board) = ctx.pcb_board.as_mut() {
+        board.view.grid_menu = Some(GridCard::Extra(id));
+    }
+    let shown = texts(&ctx);
+    for wanted in ["Edit", "Move Up", "Move Down", "Delete"] {
+        assert!(shown.iter().any(|t| t == wanted), "{wanted} in {shown:?}");
+    }
+}
+
+/// #2386: the grid and guide cards, the Other rows and the Sheet card keep
+/// every text on one line at the default dock width.
+#[test]
+fn the_manager_cards_do_not_wrap_at_the_default_dock_width() {
+    let mut ctx = context(0);
+    managed(&mut ctx);
+    if let Some(board) = ctx.pcb_board.as_mut() {
+        board.view.guide_add_open = true;
+    }
+    let texts = laid_out(&ctx, DEFAULT_DOCK);
+    let one_line = crate::layout_probe::find(&texts, "Parts").bounds.height;
+    for label in [
+        "Global Snap Grid",
+        "Fine pads",
+        "Parts",
+        "Other",
+        "+ Add Grid",
+        "Vertical",
+        "+ Add Guide",
+        "Place on Board",
+        "Pour Names",
+        "Designators",
+        "Size From Board",
+        "Width",
+    ] {
+        let found = crate::layout_probe::find(&texts, label);
+        assert!(
+            found.bounds.height < one_line * 1.5,
+            "{label} wraps: {found:?}"
+        );
+    }
+}
+
+/// #2386: the pour-name choices read as example names, and the Sheet's
+/// figures are read-only while Size From Board is on.
+#[test]
+fn pour_names_read_as_examples_and_the_sheet_follows_the_board() {
+    let ctx = context(0);
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t.starts_with("GND_")), "{shown:?}");
+    assert!(!shown.iter().any(|t| t.contains("NET NAME")), "{shown:?}");
 }

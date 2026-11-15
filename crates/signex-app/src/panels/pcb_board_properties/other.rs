@@ -1,16 +1,18 @@
 //! Other (#2353, #2374): the units the panel and canvas show lengths in,
-//! the polygon naming scheme, the designator display and the sheet. All
+//! the pour names, the designator display and the sheet card (#2386). All
 //! but the units are board options, each edit one undo step.
 
-use iced::Element;
+use iced::widget::Column;
+use iced::{Element, Widget as _};
 use signex_i18n::{MessageId, ids};
 use signex_types::coord::Unit;
+use signex_types::pcb_layer::CopperLayer;
 use signex_types::pcb_options::{DesignatorDisplay, PolygonNaming};
 
 use super::chrome::{Form, Segment, Shown};
 use super::fields::{self, Choice};
 use super::info::shown_unit;
-use super::{BoardField, PanelMsg, PcbBoardMsg, PcbBoardSummary};
+use super::{BoardField, PanelMsg, PcbBoardMsg, PcbBoardSummary, SP, cards};
 
 fn msg(m: PcbBoardMsg) -> Option<PanelMsg> {
     Some(PanelMsg::PcbBoard(m))
@@ -43,7 +45,7 @@ pub(super) fn section<'a>(
         .into_iter()
         .map(|value| Choice {
             value,
-            label: form.t(naming_label(value)).into_string(),
+            label: example_name(form, value),
         })
         .collect();
     let pick = fields::dropdown(
@@ -72,62 +74,75 @@ pub(super) fn section<'a>(
     ]);
     rows.push(form.row(&[&designators], form.field(&designators, toggle)));
 
-    sheet_rows(form, board, &mut rows);
+    rows.push(sheet_card(form, board));
     form.section("pcb_board_other", ids::PCB_BOARD_SECTION_OTHER, rows)
 }
 
-/// Sheet Settings: X, Y, Width and Height, greyed while Get Size From
-/// Sheet Layer is on (the sheet is then the box around the board shape).
-fn sheet_rows<'a>(form: &Form<'a>, board: &PcbBoardSummary, rows: &mut Vec<Shown<'a>>) {
+/// A pour scheme as the name it gives the first pour of GND on the top
+/// copper layer, which reads better than the pattern.
+fn example_name(form: &Form<'_>, naming: PolygonNaming) -> String {
+    let top = crate::pcb_canvas::layer_style::copper_name(form.i18n, CopperLayer::Top);
+    naming.name(EXAMPLE_NET, 1, &top.into_string(), 1)
+}
+
+/// The net the pour-name examples use.
+const EXAMPLE_NET: &str = "GND";
+
+/// The Sheet card (#2386): Size From Board first; X and Y (the sheet's
+/// bottom-left corner, from the board origin with Y up, #2384), then Width
+/// and Height, as two pairs. With Size From Board on they are read-only and
+/// muted (the sheet is the box around the board shape); off, they edit.
+fn sheet_card<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Shown<'a> {
     let origin = board.options.origin;
     let sheet = &board.options.sheet;
     let caption = form.t(ids::PCB_BOARD_SHEET);
-    rows.push(form.row(&[&caption], form.caption(caption.clone())));
+    let from_board = form.t(ids::PCB_BOARD_SHEET_FROM_LAYER);
+    let toggle = (!board.read_only).then_some(PcbBoardMsg::SheetFromBoardToggled);
     let fixed = sheet.from_board || board.read_only;
-    let values = [
-        // The sheet's bottom-left corner, from the board origin with Y up (#2384).
-        (
+    let cell = |label: MessageId, field: BoardField, mm: f64| {
+        let label = form.t(label);
+        let value = if fixed {
+            cards::muted(form, fields::measure(form, mm))
+        } else {
+            fields::length(form, board, field, label.clone(), mm)
+        };
+        cards::labelled(form, label, value)
+    };
+    let corner = cards::line(vec![
+        cell(
             ids::PCB_BOARD_GUIDE_X,
             BoardField::SheetX,
             origin.user_x(sheet.origin.x),
         ),
-        (
+        cell(
             ids::PCB_BOARD_GUIDE_Y,
             BoardField::SheetY,
             origin.user_y(sheet.origin.y + sheet.height),
         ),
-        (
+    ]);
+    let size = cards::line(vec![
+        cell(
             ids::PCB_BOARD_SHEET_WIDTH,
             BoardField::SheetWidth,
             sheet.width,
         ),
-        (
+        cell(
             ids::PCB_BOARD_SHEET_HEIGHT,
             BoardField::SheetHeight,
             sheet.height,
         ),
-    ];
-    for (label, field, mm) in values {
-        let label = form.t(label);
-        let value = if fixed {
-            let shown = fields::measure(form, mm);
-            form.unavailable(shown, form.t(ids::PCB_BOARD_SHEET_FROM_LAYER_TIP))
-        } else {
-            fields::length(form, board, field, label.clone(), mm)
-        };
-        rows.push(form.row(&[&caption, &label], form.field(&label, value)));
-    }
-    let from_layer = form.t(ids::PCB_BOARD_SHEET_FROM_LAYER);
-    let toggle = (!board.read_only).then_some(PcbBoardMsg::SheetFromBoardToggled);
-    let check = form.check(&from_layer, sheet.from_board, toggle.and_then(msg), None);
-    rows.push(form.row(&[&caption, &from_layer], check));
-}
-
-fn naming_label(naming: PolygonNaming) -> MessageId {
-    match naming {
-        PolygonNaming::NetLayerPour => ids::PCB_BOARD_NAMING_NET_LAYER,
-        PolygonNaming::LayerNetPour => ids::PCB_BOARD_NAMING_LAYER_NET,
-        PolygonNaming::BoardLayerNetPour => ids::PCB_BOARD_NAMING_BOARD_LAYER_NET,
-        PolygonNaming::NetBoardLayerPour => ids::PCB_BOARD_NAMING_NET_BOARD_LAYER,
-    }
+    ]);
+    let body = Column::new()
+        .spacing(SP.s)
+        .push(cards::muted(form, caption.clone()))
+        .push(cards::line(vec![cards::pill(
+            form,
+            from_board.clone(),
+            sheet.from_board,
+            toggle.and_then(msg),
+            None,
+        )]))
+        .push(corner)
+        .push(size);
+    form.row(&[&caption, &from_board], form.card(body.boxed()))
 }

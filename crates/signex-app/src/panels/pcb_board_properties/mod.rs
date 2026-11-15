@@ -11,6 +11,7 @@
 //! What the board model cannot store, or the editor cannot act on, yet is
 //! drawn disabled with a tooltip saying why.
 
+mod cards;
 mod chrome;
 mod fields;
 mod filter;
@@ -60,18 +61,28 @@ pub struct PcbBoardPanelView {
     pub tab: BoardTab,
     /// Text in the search field; rows whose label holds it stay.
     pub search: String,
-    /// The header's Selection Filter menu is open.
-    pub filter_menu_open: bool,
     /// The snap grid step being typed, until Enter applies it.
     pub grid_draft: Option<String>,
     /// Other fields being typed, until Enter applies them (#2374).
     pub drafts: BTreeMap<BoardField, String>,
-    /// The Guide Manager row Delete acts on.
-    pub selected_guide: Option<Uuid>,
-    /// The Grid Manager row Properties and Delete act on.
-    pub selected_grid: Option<Uuid>,
-    /// The selected grid's fields are shown under the table.
-    pub grid_editor_open: bool,
+    /// The grid card whose ⋯ menu is open (#2386).
+    pub grid_menu: Option<GridCard>,
+    /// The grid card whose fields are shown under it.
+    pub grid_editing: Option<GridCard>,
+    /// The guide card whose ⋯ menu is open.
+    pub guide_menu: Option<Uuid>,
+    /// The Add Guide dropdown is open.
+    pub guide_add_open: bool,
+    /// The Add Guide dropdown places the guide with a click on the board
+    /// instead of adding it through the origin.
+    pub guide_place: bool,
+}
+
+/// One card of the Grid Manager: the board's own grid, or an extra grid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GridCard {
+    Global,
+    Extra(Uuid),
 }
 
 /// A text field of the panel whose draft is kept until Enter (#2374).
@@ -103,11 +114,15 @@ pub enum ComponentSide {
 pub enum PcbBoardMsg {
     TabPicked(BoardTab),
     SearchChanged(String),
+    /// The header's filter button: open or close the Active Bar's Selection
+    /// Filter dropdown.
     FilterMenuToggled,
     /// A Selection Filter chip.
     FilterKindToggled(PickKind),
     /// The `All - On` chip: every kind on, or off when all are on.
     FilterAllToggled,
+    /// The filter dropdown's All (`true`) or None (`false`) cell.
+    FilterAllSet(bool),
     /// Save the chips that are on as a new preset (#2383).
     FilterPresetAdded,
     /// A preset was clicked: its kinds become the filter, and it is the one
@@ -139,19 +154,28 @@ pub enum PcbBoardMsg {
     /// The Guide Manager's Place: the next click on the board sets a guide
     /// of this kind there.
     GuidePlaceArmed(GuideKind),
-    GuideSelected(Uuid),
     GuideEnabledToggled(Uuid),
     /// The guide's swatch was clicked: its next colour.
     GuideColorStepped(Uuid),
-    /// Delete the selected guide.
-    GuideDeleted,
+    /// The guide card's ⋯ menu Delete.
+    GuideDeleted(Uuid),
+    /// Open or close a guide card's ⋯ menu.
+    GuideMenuToggled(Uuid),
+    /// Open or close the Add Guide dropdown.
+    GuideAddMenuToggled,
+    /// The Add Guide dropdown's Place on Board row.
+    GuidePlaceModeToggled,
     /// The Grid Manager's Add: a new grid at the top priority.
     GridAdded,
-    GridSelected(Uuid),
-    /// Show or hide the selected grid's fields.
-    GridPropertiesToggled,
-    /// Delete the selected grid.
-    GridDeleted,
+    /// Open or close a grid card's ⋯ menu.
+    GridMenuToggled(GridCard),
+    /// The ⋯ menu's Edit: show or hide the card's fields.
+    GridEditToggled(GridCard),
+    /// The ⋯ menu's Move Up or Move Down: one place in priority
+    /// (`true`: up).
+    GridMoved(Uuid, bool),
+    /// The ⋯ menu's Delete.
+    GridDeleted(Uuid),
     GridComponentsToggled(Uuid),
     GridNonComponentsToggled(Uuid),
     GridColorStepped(Uuid),

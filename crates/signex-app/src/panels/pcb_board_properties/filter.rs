@@ -6,7 +6,7 @@ use iced::widget::{Column, container, row};
 use iced::{Alignment, Element, Length, Widget as _};
 use iced_aw::Wrap;
 use pcb_geom::{PickFilter, PickKind};
-use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
+use signex_i18n::{Localized, MessageId, UserText, ids, t};
 use signex_widgets::{Label, text_input};
 
 use crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT;
@@ -74,21 +74,6 @@ pub(super) fn chips<'a>(form: &Form<'a>, filter: &PickFilter) -> Element<'a, Pan
         wrap = wrap.push(chip);
     }
     iced::widget::container(wrap).padding([SP.xs, SP.l]).boxed()
-}
-
-/// "Components (and 12 more)": the first kind that is on and how many more.
-pub(super) fn summary(i18n: &I18n, filter: &PickFilter) -> Localized {
-    let mut on = filter.on_kinds();
-    let Some(first) = on.next() else {
-        return t!(i18n, ids::PCB_BOARD_FILTER_SUMMARY_NONE);
-    };
-    let first = t!(i18n, kind_label(first)).into_string();
-    t!(
-        i18n,
-        ids::PCB_BOARD_FILTER_SUMMARY,
-        "first" => first,
-        "more" => on.count()
-    )
 }
 
 pub(crate) fn kind_label(kind: PickKind) -> MessageId {

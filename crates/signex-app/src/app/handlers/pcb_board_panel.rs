@@ -23,7 +23,14 @@ impl Signex {
             PcbBoardMsg::TabPicked(BoardTab::Parameters) => {}
             PcbBoardMsg::TabPicked(tab) => view.tab = *tab,
             PcbBoardMsg::SearchChanged(text) => view.search = text.clone(),
-            PcbBoardMsg::FilterMenuToggled => view.filter_menu_open = !view.filter_menu_open,
+            // The header button opens the Active Bar's filter dropdown (#2383).
+            PcbBoardMsg::FilterMenuToggled => {
+                let open = &mut self.interaction_state.pcb_bar_menu;
+                *open = match *open {
+                    Some(crate::app::PcbBarMenu::Filter) => None,
+                    _ => Some(crate::app::PcbBarMenu::Filter),
+                };
+            }
             PcbBoardMsg::GridStepTyped(text) => view.grid_draft = Some(text.clone()),
             PcbBoardMsg::GridStepSubmitted => self.apply_pcb_grid_step(),
             PcbBoardMsg::FilterKindToggled(kind) => {
@@ -34,6 +41,10 @@ impl Signex {
                 let filter = &mut self.ui_state.pcb_pick_filter;
                 let all = filter.is_all_on();
                 filter.set_all(!all);
+                self.refresh_pcb_highlight();
+            }
+            PcbBoardMsg::FilterAllSet(on) => {
+                self.ui_state.pcb_pick_filter.set_all(*on);
                 self.refresh_pcb_highlight();
             }
             PcbBoardMsg::FilterPresetAdded => task = self.add_pcb_filter_preset(),
@@ -64,18 +75,32 @@ impl Signex {
                 view.drafts.insert(*field, text.clone());
             }
             PcbBoardMsg::FieldSubmitted(field) => self.submit_pcb_board_field(*field),
-            PcbBoardMsg::GuideAdded(kind) => self.add_pcb_guide(*kind),
-            PcbBoardMsg::GuidePlaceArmed(kind) => self.arm_pcb_guide_place(*kind),
-            PcbBoardMsg::GuideSelected(id) => view.selected_guide = Some(*id),
+            PcbBoardMsg::GuideAdded(kind) => {
+                view.guide_add_open = false;
+                self.add_pcb_guide(*kind);
+            }
+            PcbBoardMsg::GuidePlaceArmed(kind) => {
+                view.guide_add_open = false;
+                self.arm_pcb_guide_place(*kind);
+            }
             PcbBoardMsg::GuideEnabledToggled(id) => self.toggle_pcb_guide(*id),
             PcbBoardMsg::GuideColorStepped(id) => self.step_pcb_guide_color(*id),
-            PcbBoardMsg::GuideDeleted => self.delete_pcb_guide(),
-            PcbBoardMsg::GridAdded => self.add_pcb_grid(),
-            PcbBoardMsg::GridSelected(id) => view.selected_grid = Some(*id),
-            PcbBoardMsg::GridPropertiesToggled => {
-                view.grid_editor_open = !view.grid_editor_open && view.selected_grid.is_some();
+            PcbBoardMsg::GuideDeleted(id) => self.delete_pcb_guide(*id),
+            PcbBoardMsg::GuideMenuToggled(id) => {
+                view.guide_menu = (view.guide_menu != Some(*id)).then_some(*id);
             }
-            PcbBoardMsg::GridDeleted => self.delete_pcb_grid(),
+            PcbBoardMsg::GuideAddMenuToggled => view.guide_add_open = !view.guide_add_open,
+            PcbBoardMsg::GuidePlaceModeToggled => view.guide_place = !view.guide_place,
+            PcbBoardMsg::GridAdded => self.add_pcb_grid(),
+            PcbBoardMsg::GridMenuToggled(card) => {
+                view.grid_menu = (view.grid_menu != Some(*card)).then_some(*card);
+            }
+            PcbBoardMsg::GridEditToggled(card) => {
+                view.grid_menu = None;
+                view.grid_editing = (view.grid_editing != Some(*card)).then_some(*card);
+            }
+            PcbBoardMsg::GridMoved(id, up) => self.move_pcb_grid(*id, *up),
+            PcbBoardMsg::GridDeleted(id) => self.delete_pcb_grid(*id),
             PcbBoardMsg::GridComponentsToggled(id) => self.toggle_pcb_grid_use(*id, true),
             PcbBoardMsg::GridNonComponentsToggled(id) => self.toggle_pcb_grid_use(*id, false),
             PcbBoardMsg::GridColorStepped(id) => self.step_pcb_grid_color(*id),

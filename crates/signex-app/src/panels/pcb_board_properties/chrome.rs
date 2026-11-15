@@ -381,6 +381,28 @@ impl<'a> Form<'a> {
             .boxed()
     }
 
+    /// A small Graphite card around `body`: a hairline frame inset in the
+    /// section (#2386). Board Information, the Grid and Guide Managers and the
+    /// Sheet use it.
+    pub fn card(&self, body: Element<'a, PanelMsg>) -> Element<'a, PanelMsg> {
+        let edge = resolve(self.tokens()).line_soft;
+        let framed = container(body)
+            .padding([SP.s, SP.m])
+            .width(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                border: Border {
+                    width: HAIRLINE,
+                    color: edge,
+                    radius: crate::styles::RADIUS.into(),
+                },
+                ..container::Style::default()
+            });
+        container(framed)
+            .padding([SP.xs, SP.l])
+            .width(Length::Fill)
+            .boxed()
+    }
+
     /// A table heading cell.
     pub fn heading(&self, id: MessageId) -> Element<'a, PanelMsg> {
         text(self.t(id))

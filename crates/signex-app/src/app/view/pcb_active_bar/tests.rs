@@ -216,6 +216,7 @@ fn rows(app: &Signex, menu: PcbBarMenu) -> Vec<DropdownItem<Message>> {
     pcb_bar_menu_entries(
         menu,
         &app.ui_state.i18n,
+        &app.document_state.panel_ctx.tokens,
         app.ui_state.effective_theme_id(),
         &app.command_context(None),
         &app.ui_state.pcb_pick_filter,
@@ -297,11 +298,40 @@ fn the_view_dropdown_greys_reset_at_zero() {
     assert!(reset.disabled && reset.on_press.is_none());
 }
 
-/// #2373: the Selection Filter button opens a dropdown of the object kinds;
-/// a row toggles its kind in the one filter the Properties panel's chips
-/// edit, and the dropdown stays open for the next.
+/// The board Selection Filter dropdown, laid out: its single chip grid.
+fn filter_grid(app: &Signex) -> iced::Element<'static, Message> {
+    let mut entries = pcb_bar_menu_entries(
+        PcbBarMenu::Filter,
+        &app.ui_state.i18n,
+        &app.document_state.panel_ctx.tokens,
+        app.ui_state.effective_theme_id(),
+        &app.command_context(None),
+        &app.ui_state.pcb_pick_filter,
+        &app.ui_state.pcb_filter_presets,
+    );
+    assert_eq!(entries.len(), 1, "one chip grid, as on the schematic");
+    match entries.remove(0) {
+        DropdownEntry::Custom(grid) => grid,
+        _ => panic!("the filter dropdown is the schematic's chip grid"),
+    }
+}
+
+const WINDOW: iced::Size = iced::Size::new(1200.0, 800.0);
+
+/// The texts of a laid-out dropdown, isolation marks removed.
+fn grid_texts<M>(grid: iced::Element<'_, M>) -> Vec<String> {
+    crate::layout_probe::lay_out_texts(grid, WINDOW)
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect()
+}
+
+/// #2373, #2383: the Selection Filter button opens the schematic's filter
+/// dropdown (one builder, `active_bar::filter_menu_entry`): All / None,
+/// then a chip per board kind. A chip toggles its kind in the one filter
+/// the Properties chips edit, and the dropdown stays open.
 #[test]
-fn the_selection_filter_toggles_the_kinds_the_board_picks() {
+fn the_selection_filter_is_the_schematic_dropdown_with_the_board_kinds() {
     use pcb_geom::PickKind;
 
     let mut app = board_app();
@@ -309,43 +339,47 @@ fn the_selection_filter_toggles_the_kinds_the_board_picks() {
     let filter = buttons(&bar_of(&app))[0].on_press.clone().expect("live");
     let _ = app.update(filter);
     assert_eq!(app.interaction_state.pcb_bar_menu, Some(PcbBarMenu::Filter));
-    assert!(buttons(&bar_of(&app))[0].selected);
-    let entries = rows(&app, PcbBarMenu::Filter);
-    assert_eq!(
-        entries.len(),
-        1 + PickKind::ALL.len(),
-        "All - On and each kind"
+
+    // The schematic's dropdown, built by the same function, opens with the
+    // same All / None control.
+    let tokens = app.document_state.panel_ctx.tokens.clone();
+    let schematic = crate::active_bar::filter_menu_entry(
+        &tokens,
+        crate::active_bar::FilterMenu {
+            chips: Vec::new(),
+            presets: Vec::new(),
+            on: 0,
+            all: (),
+            none: (),
+        },
     );
-    assert!(entries.iter().all(|row| row.checked || row.disabled));
-    let tracks = entries
-        .iter()
-        .find(|row| row.label == "Tracks")
-        .expect("a Tracks row");
-    let _ = app.update(tracks.on_press.clone().expect("a live row"));
+    let DropdownEntry::Custom(schematic) = schematic else {
+        panic!("a chip grid");
+    };
+    let board = grid_texts(filter_grid(&app));
+    assert_eq!(grid_texts(schematic), ["All", "None"]);
+    assert_eq!(&board[..2], ["All", "None"]);
+    assert!(board.iter().any(|t| t == "Tracks") && board.iter().any(|t| t == "Keepouts"));
+
+    let picked = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "Tracks");
+    assert_eq!(picked.len(), 1);
+    let _ = app.update(picked[0].clone());
     assert!(!app.ui_state.pcb_pick_filter.is_on(PickKind::Tracks));
     assert_eq!(app.interaction_state.pcb_bar_menu, Some(PcbBarMenu::Filter));
-    let tracks = rows(&app, PcbBarMenu::Filter)
-        .into_iter()
-        .find(|row| row.label == "Tracks")
-        .unwrap();
-    assert!(!tracks.checked, "the row shows the kind off");
-    // #2383: Keepouts are picked now; Rooms still are not.
-    let keepouts = rows(&app, PcbBarMenu::Filter)
-        .into_iter()
-        .find(|row| row.label == "Keepouts")
-        .unwrap();
-    assert!(!keepouts.disabled && keepouts.checked, "a live kind");
-    let rooms = rows(&app, PcbBarMenu::Filter)
-        .into_iter()
-        .find(|row| row.label == "Rooms")
-        .unwrap();
-    assert!(rooms.disabled, "a kind the board cannot pick is greyed");
+
+    // Rooms cannot be picked yet: its chip sends nothing.
+    let rooms = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "Rooms");
+    assert!(rooms.is_empty(), "{rooms:?}");
+
+    let none = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "None");
+    let _ = app.update(none[0].clone());
+    assert_eq!(app.ui_state.pcb_pick_filter.on_kinds().count(), 0);
 }
 
-/// #2383: a preset saved from the board filter is listed in the Active Bar's
-/// Selection Filter dropdown, and its row applies it.
+/// #2383: a preset saved from the board filter is a preset chip of the
+/// Active Bar's Selection Filter dropdown, and the chip applies it.
 #[test]
-fn a_saved_preset_is_a_row_of_the_filter_dropdown() {
+fn a_saved_preset_is_a_chip_of_the_filter_dropdown() {
     use crate::dock::DockMessage;
     use crate::panels::{PanelMsg, PcbBoardMsg};
     use pcb_geom::PickKind;
@@ -354,18 +388,17 @@ fn a_saved_preset_is_a_row_of_the_filter_dropdown() {
     app.ui_state.pcb_filter_presets.clear();
     let panel = |msg| Message::Dock(DockMessage::Panel(PanelMsg::PcbBoard(msg)));
     // Vias only, saved; the write task is left unrun so prefs.json stays.
-    let _ = app.update(panel(PcbBoardMsg::FilterAllToggled));
+    let _ = app.update(panel(PcbBoardMsg::FilterAllSet(false)));
     let _ = app.update(panel(PcbBoardMsg::FilterKindToggled(PickKind::Vias)));
     let _ = app.update(panel(PcbBoardMsg::FilterPresetAdded));
-    let _ = app.update(panel(PcbBoardMsg::FilterAllToggled));
+    let _ = app.update(panel(PcbBoardMsg::FilterAllSet(true)));
     assert_eq!(app.ui_state.pcb_filter_presets.len(), 1);
 
     let _ = app.update(bar_message(PcbBarMsg::MenuToggled(PcbBarMenu::Filter)));
-    let preset = rows(&app, PcbBarMenu::Filter)
-        .into_iter()
-        .find(|row| row.label == "Filter 1")
-        .expect("a row for the preset");
-    let _ = app.update(preset.on_press.expect("a live row"));
+    let texts = grid_texts(filter_grid(&app));
+    assert_eq!(texts[2], "Filter 1", "presets follow All / None: {texts:?}");
+    let applied = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "Filter 1");
+    let _ = app.update(applied[0].clone());
     let on: Vec<PickKind> = app.ui_state.pcb_pick_filter.on_kinds().collect();
     assert_eq!(on, vec![PickKind::Vias]);
 }

@@ -5,7 +5,7 @@
 
 use iced::widget::text::Wrapping;
 use iced::widget::{Column, Row, container, row};
-use iced::{Alignment, Border, Element, Length, Theme, Widget as _};
+use iced::{Alignment, Element, Length, Widget as _};
 use signex_i18n::{LocalNumber, Localized, MessageId, ids, t};
 use signex_types::coord::Unit;
 use signex_types::measure::{format_length_mm, mm_per};
@@ -13,8 +13,8 @@ use signex_widgets::{Label, text};
 
 use super::chrome::{Form, Shown};
 use super::{ComponentSide, PanelMsg, PcbBoardMsg, PcbBoardSummary, SP};
+use crate::styles::TypeScale;
 use crate::styles::tokens::resolve;
-use crate::styles::{HAIRLINE, RADIUS, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 
@@ -100,22 +100,7 @@ fn card<'a>(
         body = body.push(extra);
         keys.extend(labels);
     }
-    let edge = resolve(form.tokens()).line_soft;
-    let framed = container(body)
-        .padding([SP.s, SP.m])
-        .width(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            border: Border {
-                width: HAIRLINE,
-                color: edge,
-                radius: RADIUS.into(),
-            },
-            ..container::Style::default()
-        });
-    let element = container(framed)
-        .padding([SP.xs, SP.l])
-        .width(Length::Fill)
-        .boxed();
+    let element = form.card(body.boxed());
     let refs: Vec<&Localized> = keys.iter().collect();
     form.row(&refs, element)
 }

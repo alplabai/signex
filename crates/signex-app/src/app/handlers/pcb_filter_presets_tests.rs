@@ -149,3 +149,18 @@ fn a_saved_preset_applies_after_the_chips_change_and_outlives_a_restart() {
     let restarted = app_workspace(&dir.path().to_string_lossy(), &[]);
     assert!(restarted.ui_state.pcb_filter_presets.is_empty());
 }
+
+/// #2383: the board panel header's filter button opens and closes the
+/// Active Bar's Selection Filter dropdown.
+#[test]
+fn the_header_filter_button_opens_the_active_bar_dropdown() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_board(dir.path());
+    run(panel(&mut app, PcbBoardMsg::FilterMenuToggled));
+    assert_eq!(
+        app.interaction_state.pcb_bar_menu,
+        Some(crate::app::PcbBarMenu::Filter)
+    );
+    run(panel(&mut app, PcbBoardMsg::FilterMenuToggled));
+    assert_eq!(app.interaction_state.pcb_bar_menu, None);
+}

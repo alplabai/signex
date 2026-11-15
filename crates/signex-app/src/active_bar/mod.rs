@@ -22,6 +22,7 @@ pub mod presets;
 
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
+pub(crate) use dropdown::{FilterChip, FilterMenu, filter_menu_entry, preset_label};
 pub use dropdown::{dropdown_x_offset, view_dropdown};
 pub(crate) use layout::{
     BAR_DROPDOWN_GAP_PX, bar_height_for, bar_left_in_window, bar_top_margin, bar_width_for,
