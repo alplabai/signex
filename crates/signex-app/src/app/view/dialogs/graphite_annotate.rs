@@ -26,6 +26,7 @@ pub(super) fn checkbox_pip<'a, M: 'a>(theme_tokens: &ThemeTokens, on: bool) -> E
         (r.field, r.line_strong)
     };
     container(
+        // raw: a tick glyph (or a blank), not language.
         text(raw(mark))
             .size(TS.caption)
             .color(tokens::on_accent(theme_tokens)),
@@ -57,6 +58,7 @@ pub(super) fn disabled_checkbox_pip<'a, M: 'a>(
     let side = TS.body + 2.0;
     let mark = if on { "\u{2713}" } else { " " };
     let (fill, edge) = (r.sunken, r.line_soft);
+    // raw: a tick glyph (or a blank), not language.
     container(text(raw(mark)).size(TS.caption).color(r.ink4))
         .width(Length::Fixed(side))
         .height(Length::Fixed(side))
@@ -347,6 +349,8 @@ pub(super) fn sheet_table<'a, M: 'a>(
                 .font(mono())
                 .width(Length::Fill)
                 .boxed(),
+            // raw: the start number and the dash for "no suffix" are not
+            // language.
             text(raw("1"))
                 .size(TS.body)
                 .color(r.ink3)

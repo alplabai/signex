@@ -8,8 +8,8 @@
 use super::*;
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Color, Element, Length, Theme, Widget};
-use signex_i18n::{Localized, ids, t};
-use signex_widgets::{button, raw, text};
+use signex_i18n::{Localized, UserText, ids, t};
+use signex_widgets::{button, text};
 
 use super::widgets::{draggable_header, fit_modal_size, modal_title_header, os_title_bar_slot};
 use crate::styles::{
@@ -84,7 +84,9 @@ impl Signex {
         // ── Header (draggable when in-window; OS-window-drag when
         // detached) ──
         let header_content: Element<'_, Message> = gr::titled_header(
-            "Annotate",
+            self.ui_state
+                .i18n
+                .message_plain(ids::DIALOG_TITLE_ANNOTATE, &[]),
             self.detached_modal_subtitle(crate::app::state::ModalId::AnnotateDialog),
             Message::Annotate(AnnotateMsg::CloseDialog),
             tokens,
@@ -354,12 +356,12 @@ impl Signex {
                     .boxed();
                 // Designators in mono; a changing row is tinted and its proposed
                 // designator takes the accent ink.
-                let cur_text = text(raw(entry.current.clone()))
+                let cur_text = text(UserText::new(entry.current.clone()))
                     .size(TS.body)
                     .color(cur_color)
                     .width(Length::FillPortion(2))
                     .font(gr::mono());
-                let new_text = text(raw(proposed_display))
+                let new_text = text(UserText::new(proposed_display))
                     .size(TS.body)
                     .color(if changing {
                         gr::changed_ink(tokens)
@@ -559,7 +561,7 @@ impl Signex {
         let i18n = self.ui_state.i18n.as_ref();
 
         let header_content: Element<'_, Message> = modal_title_header(
-            "Reset All Annotations",
+            t!(i18n, ids::DIALOG_TITLE_ANNOTATE_RESET).into_string(),
             Message::Annotate(AnnotateMsg::CloseResetConfirm),
             tokens,
         );
@@ -577,12 +579,15 @@ impl Signex {
                 header,
                 dialog_body(crate::styles::dialog_intro(
                     crate::styles::DialogIcon::Warn,
-                    "Reset every designator?",
-                    Some(format!(
-                        "Every reference designator will be reset to '?', then the sheet will be renumbered from 1.
-This cannot be undone through {} alone — consider saving first.",
-                        crate::keymap::shown("Mod+Z")
-                    )),
+                    t!(i18n, ids::DIALOG_ANNOTATE_RESET_QUESTION).into_string(),
+                    Some(
+                        t!(
+                            i18n,
+                            ids::DIALOG_ANNOTATE_RESET_DETAIL,
+                            "undo" => crate::keymap::shown("Mod+Z")
+                        )
+                        .into_string()
+                    ),
                     tokens,
                 )),
                 dialog_footer(vec![
@@ -602,7 +607,10 @@ This cannot be undone through {} alone — consider saving first.",
                     ),
                 ]),
             ]
-            .width(self.dialog_width(super::super::super::state::ModalId::AnnotateResetConfirm, super::sizes::ANNOTATE_RESET_CONFIRM)),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::AnnotateResetConfirm,
+                super::sizes::ANNOTATE_RESET_CONFIRM,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

@@ -89,9 +89,13 @@ impl Signex {
             return None;
         }
         Some(
-            crate::find_replace::view(&ui.find_replace, &self.document_state.panel_ctx.tokens)
-                .map(Message::FindReplaceMsg)
-                .boxed(),
+            crate::find_replace::view(
+                &ui.find_replace,
+                &self.document_state.panel_ctx.tokens,
+                &ui.i18n,
+            )
+            .map(Message::FindReplaceMsg)
+            .boxed(),
         )
     }
 
@@ -100,13 +104,17 @@ impl Signex {
     pub(in crate::app::view) fn find_similar_overlay(&self) -> Option<Element<'_, Message>> {
         let state = self.ui_state.find_similar.as_ref()?;
         Some(
-            crate::find_similar::view(state, &self.document_state.panel_ctx.tokens)
-                .map(|msg| {
-                    Message::Selection(
-                        crate::app::selection_request::SelectionRequest::FindSimilar(msg),
-                    )
-                })
-                .boxed(),
+            crate::find_similar::view(
+                state,
+                &self.document_state.panel_ctx.tokens,
+                &self.ui_state.i18n,
+            )
+            .map(|msg| {
+                Message::Selection(
+                    crate::app::selection_request::SelectionRequest::FindSimilar(msg),
+                )
+            })
+            .boxed(),
         )
     }
 
@@ -114,9 +122,13 @@ impl Signex {
     pub(in crate::app::view) fn paste_array_overlay(&self) -> Option<Element<'_, Message>> {
         let state = self.ui_state.paste_array.as_ref()?;
         Some(
-            crate::paste_array::view(state, &self.document_state.panel_ctx.tokens)
-                .map(|msg| Message::Edit(crate::app::EditMsg::PasteArray(msg)))
-                .boxed(),
+            crate::paste_array::view(
+                state,
+                &self.document_state.panel_ctx.tokens,
+                &self.ui_state.i18n,
+            )
+            .map(|msg| Message::Edit(crate::app::EditMsg::PasteArray(msg)))
+            .boxed(),
         )
     }
 

@@ -181,20 +181,18 @@ impl Signex {
     }
 
     fn browse_new_project_location(&mut self) -> Task<Message> {
-        let picker = self.ui_state.io.picker.clone();
         let start = self
             .ui_state
             .new_project
             .as_deref()
             .and_then(NewProjectState::location_path);
-        let title = signex_i18n::t!(
-            self.ui_state.i18n,
-            signex_i18n::ids::DIALOG_NEW_PROJECT_PICK_LOCATION_TITLE
-        )
-        .into_string();
+        let base = self.ui_state.io.picker.dialog().title_in(
+            &self.ui_state.i18n,
+            signex_i18n::ids::DIALOG_NEW_PROJECT_PICK_LOCATION_TITLE,
+        );
         Task::perform(
             async move {
-                let mut dialog = picker.dialog().set_title(title);
+                let mut dialog = base;
                 if let Some(dir) = start.filter(|d| d.is_dir()) {
                     dialog = dialog.set_directory(dir);
                 }
@@ -321,18 +319,14 @@ pub(crate) fn import_rule_file(
     i18n: &signex_i18n::I18n,
     wrap: impl Fn(NewProjectMsg) -> Message + Send + 'static,
 ) -> Task<Message> {
-    use signex_i18n::{ids, t};
-    let picker = picker.clone();
-    let title = t!(i18n, ids::DIALOG_NEW_PROJECT_PICK_RULES_TITLE).into_string();
-    let filter = t!(i18n, ids::DIALOG_NEW_PROJECT_PICK_RULES_FILTER).into_string();
+    use signex_i18n::ids;
+    let dialog = picker
+        .dialog()
+        .title_in(i18n, ids::DIALOG_NEW_PROJECT_PICK_RULES_TITLE)
+        .filter_in(i18n, ids::DIALOG_NEW_PROJECT_PICK_RULES_FILTER, &["toml"]);
     Task::perform(
         async move {
-            let path = picker
-                .dialog()
-                .set_title(title)
-                .add_filter(filter, &["toml"])
-                .pick_file()
-                .await?;
+            let path = dialog.pick_file().await?;
             let shown = path.display().to_string();
             let read = on_blocking_pool(move || Ok(read_rule_file(&path)))
                 .await

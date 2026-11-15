@@ -1,6 +1,7 @@
 use super::{FindReplaceMsg, FindReplaceState, FindScope};
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Border, Element, Length, Theme, Widget};
+use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text, text_input};
 
@@ -14,8 +15,12 @@ const DIALOG_W: f32 = 440.0;
 const DIALOG_H: f32 = 400.0;
 
 /// The dialog painted as a centred card on a scrim in the main window.
-pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a, FindReplaceMsg> {
-    build(state, tokens, false)
+pub fn view<'a>(
+    state: &'a FindReplaceState,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, FindReplaceMsg> {
+    build(state, tokens, i18n, false)
 }
 
 /// The dialog as the content of its own OS window: no header (the native
@@ -23,13 +28,15 @@ pub fn view<'a>(state: &'a FindReplaceState, tokens: &ThemeTokens) -> Element<'a
 pub fn window_view<'a>(
     state: &'a FindReplaceState,
     tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, FindReplaceMsg> {
-    build(state, tokens, true)
+    build(state, tokens, i18n, true)
 }
 
 fn build<'a>(
     state: &'a FindReplaceState,
     tokens: &ThemeTokens,
+    i18n: &I18n,
     windowed: bool,
 ) -> Element<'a, FindReplaceMsg> {
     let text_primary = crate::styles::ti(tokens.text);
@@ -37,21 +44,28 @@ fn build<'a>(
     let border = crate::styles::ti(tokens.border);
     let hover = crate::styles::ti(tokens.hover);
     let accent = crate::styles::ti(tokens.accent);
-    let title = if state.replace_mode {
-        "Find and Replace"
-    } else {
-        "Find"
-    };
+    let title = t!(
+        i18n,
+        if state.replace_mode {
+            ids::DIALOG_TITLE_FIND_REPLACE
+        } else {
+            ids::FIND_TITLE
+        }
+    );
 
     // The shared dialog header (title, neutral close).
-    let header: Element<'a, FindReplaceMsg> =
-        crate::app::view::dialogs::modal_title_header(raw(title), FindReplaceMsg::Close, tokens);
+    let header: Element<'a, FindReplaceMsg> = crate::app::view::dialogs::modal_title_header(
+        title.into_string(),
+        FindReplaceMsg::Close,
+        tokens,
+    );
 
     let query_row = row![
-        text(raw("Find"))
+        text(t!(i18n, ids::FIND_LABEL))
             .size(TS.body)
             .color(text_secondary)
             .width(80),
+        // raw: placeholders move with #2059.
         text_input(raw("Search text"), &state.query)
             .style(crate::panels::form_look::text_input_style)
             .on_input(FindReplaceMsg::QueryChanged)
@@ -62,23 +76,23 @@ fn build<'a>(
     .align_y(iced::Alignment::Center)
     .spacing(10);
 
-    let scope_button = |label: &'static str, scope: FindScope| {
+    let scope_button = |label: MessageId, scope: FindScope| {
         let chosen = state.scope == scope;
-        button(
-            text(raw(label))
-                .size(TS.body)
-                .color(if chosen { accent } else { text_secondary }),
-        )
+        button(text(t!(i18n, label)).size(TS.body).color(if chosen {
+            accent
+        } else {
+            text_secondary
+        }))
         .on_press(FindReplaceMsg::ScopeChanged(scope))
         .style(crate::styles::menu_item(tokens))
     };
     let scope_row = row![
-        text(raw("Scope"))
+        text(t!(i18n, ids::FIND_SCOPE))
             .size(TS.body)
             .color(text_secondary)
             .width(80),
-        scope_button("Sheet", FindScope::Sheet),
-        scope_button("Project", FindScope::Project),
+        scope_button(ids::FIND_SCOPE_SHEET, FindScope::Sheet),
+        scope_button(ids::FIND_SCOPE_PROJECT, FindScope::Project),
     ]
     .align_y(iced::Alignment::Center)
     .spacing(10);
@@ -87,10 +101,11 @@ fn build<'a>(
     if state.replace_mode {
         form = form.push(Widget::boxed(
             row![
-                text(raw("Replace"))
+                text(t!(i18n, ids::FIND_REPLACE_LABEL))
                     .size(TS.body)
                     .color(text_secondary)
                     .width(80),
+                // raw: placeholders move with #2059.
                 text_input(raw("Replacement text"), &state.replacement)
                     .style(crate::panels::form_look::text_input_style)
                     .on_input(FindReplaceMsg::ReplacementChanged)
@@ -102,20 +117,20 @@ fn build<'a>(
             .spacing(10),
         ));
     }
-    let count = if state.replace_job.is_some() {
-        "Replacing...".to_string()
-    } else if state.scanning {
-        "Searching...".to_string()
-    } else {
-        format!("{} match(es)", state.matches.len())
-    };
+    let count = count_line(
+        i18n,
+        state.replace_job.is_some(),
+        state.scanning,
+        state.matches.len(),
+    );
     form = form.push(
-        container(text(raw(count)).size(TS.caption).color(text_secondary))
+        container(text(count).size(TS.caption).color(text_secondary))
             .padding([SP.xs, 0.0])
             .boxed(),
     );
     if let Some(note) = &state.skipped_note {
         form = form.push(
+            // raw: the skipped-sheets note is worded by the project scan (#2061).
             text(raw(note.clone()))
                 .size(TS.caption)
                 .color(text_secondary)
@@ -125,10 +140,14 @@ fn build<'a>(
 
     let results: Vec<Element<'a, FindReplaceMsg>> = if state.matches.is_empty() {
         vec![
-            container(text(raw("No matches")).size(TS.body).color(text_secondary))
-                .padding([10.0, SP.l])
-                .width(Length::Fill)
-                .boxed(),
+            container(
+                text(t!(i18n, ids::FIND_NO_MATCHES))
+                    .size(TS.body)
+                    .color(text_secondary),
+            )
+            .padding([10.0, SP.l])
+            .width(Length::Fill)
+            .boxed(),
         ]
     } else {
         let result_row = |idx: usize, hit: &'a super::FindMatch| -> Element<'a, FindReplaceMsg> {
@@ -141,10 +160,11 @@ fn build<'a>(
             button(
                 row![
                     column![
+                        // raw: the hit's kind is named by signex-engine (#2060).
                         text(raw(hit.hit.kind.label()))
                             .size(TS.body)
                             .color(text_primary),
-                        text(raw(match &hit.placement_label {
+                        text(UserText::new(match &hit.placement_label {
                             Some(label) => format!("{} · {label}", hit.hit.text),
                             None => hit.hit.text.clone(),
                         }))
@@ -204,7 +224,7 @@ fn build<'a>(
     let replace_current: Element<'a, FindReplaceMsg> =
         if state.replace_mode && state.selected_index.is_some() && !state.is_busy() {
             button(
-                text(raw("Replace Current"))
+                text(t!(i18n, ids::FIND_REPLACE_CURRENT))
                     .size(TS.body)
                     .color(text_primary),
             )
@@ -213,7 +233,7 @@ fn build<'a>(
             .boxed()
         } else {
             container(
-                text(raw("Replace Current"))
+                text(t!(i18n, ids::FIND_REPLACE_CURRENT))
                     .size(TS.body)
                     .color(text_secondary),
             )
@@ -223,19 +243,27 @@ fn build<'a>(
 
     let replace_all: Element<'a, FindReplaceMsg> =
         if state.replace_mode && !state.matches.is_empty() && !state.is_busy() {
-            button(text(raw("Replace All")).size(TS.body).color(text_primary))
-                .on_press(FindReplaceMsg::ReplaceAll)
-                .style(crate::styles::menu_item(tokens))
-                .boxed()
+            button(
+                text(t!(i18n, ids::FIND_REPLACE_ALL))
+                    .size(TS.body)
+                    .color(text_primary),
+            )
+            .on_press(FindReplaceMsg::ReplaceAll)
+            .style(crate::styles::menu_item(tokens))
+            .boxed()
         } else {
-            container(text(raw("Replace All")).size(TS.body).color(text_secondary))
-                .padding([6, 10])
-                .boxed()
+            container(
+                text(t!(i18n, ids::FIND_REPLACE_ALL))
+                    .size(TS.body)
+                    .color(text_secondary),
+            )
+            .padding([6, 10])
+            .boxed()
         };
 
     let footer = row![
         container(
-            text(raw("Targets: labels, notes, designators, values"))
+            text(t!(i18n, ids::FIND_TARGETS))
                 .size(TS.caption)
                 .color(text_secondary)
         ),
@@ -289,4 +317,69 @@ fn build<'a>(
     .height(Length::Fill)
     .style(crate::app::view::dialogs::scrim_style(tokens))
     .boxed()
+}
+
+/// The line under the form: a replace or scan in progress, else the count.
+fn count_line(i18n: &I18n, replacing: bool, scanning: bool, matches: usize) -> Localized {
+    if replacing {
+        t!(i18n, ids::FIND_REPLACING)
+    } else if scanning {
+        t!(i18n, ids::FIND_SEARCHING)
+    } else {
+        t!(i18n, ids::FIND_MATCHES, "count" => matches)
+    }
+}
+
+#[cfg(test)]
+mod i18n_tests {
+    use signex_i18n::{Arg, I18n, LanguagePref, ids};
+
+    use super::count_line;
+
+    fn matches(i18n: &I18n) -> String {
+        i18n.message_plain(ids::FIND_MATCHES, &[("count", Arg::from(3_usize))])
+    }
+
+    fn line(i18n: &I18n, replacing: bool, scanning: bool, matches: usize) -> String {
+        count_line(i18n, replacing, scanning, matches)
+            .into_string()
+            .replace(['\u{2068}', '\u{2069}'], "")
+    }
+
+    /// #2058: the line under the form keeps its English, follows the
+    /// language and picks the replace and scan states over the count.
+    #[test]
+    fn the_count_line_keeps_its_english() {
+        let en = I18n::en_us();
+        assert_eq!(line(&en, false, false, 0), "0 match(es)");
+        assert_eq!(line(&en, false, false, 1), "1 match(es)");
+        assert_eq!(line(&en, false, false, 3), "3 match(es)");
+        assert_eq!(line(&en, false, true, 3), "Searching...");
+        assert_eq!(line(&en, true, true, 3), "Replacing...");
+        let xa = I18n::new(&LanguagePref::Locale("en-XA".to_owned()));
+        assert_ne!(line(&xa, false, false, 3), "3 match(es)");
+        assert_eq!(line(&xa, false, false, 3), matches(&xa));
+    }
+
+    /// #2058: the find, find-similar and paste-array texts keep their
+    /// English and follow the language in force.
+    #[test]
+    fn the_find_texts_follow_the_language() {
+        let en = I18n::en_us();
+        assert_eq!(matches(&en), "3 match(es)");
+        assert_eq!(
+            en.message_plain(ids::PASTE_ARRAY_X_SPACING, &[("unit", Arg::from("mm"))]),
+            "X spacing (mm)"
+        );
+        assert_eq!(
+            en.message_plain(ids::FIND_SIMILAR_SEED, &[("seed", Arg::from("Symbol R1"))]),
+            "Seed: Symbol R1"
+        );
+        let xa = I18n::new(&LanguagePref::Locale("en-XA".to_owned()));
+        assert_ne!(matches(&xa), matches(&en));
+        assert_ne!(
+            xa.message_plain(ids::FIND_SIMILAR_TITLE, &[]),
+            "Find Similar Objects"
+        );
+    }
 }

@@ -38,4 +38,16 @@ define_ids! {
     LIBRARY_UPDATES_APPLY = "library-updates-apply";
     LIBRARY_CHANGE_PART_CONFIRM = "library-change-part-confirm";
     LIBRARY_CHANGE_PART_CONFIRM_ANYWAY = "library-change-part-confirm-anyway";
+    LIBRARY_DIGIKEY_CONNECTING = "library-digikey-connecting";
+    LIBRARY_DIGIKEY_CONNECTED_AS = "library-digikey-connected-as";
+    LIBRARY_DIGIKEY_NOT_CONNECTED = "library-digikey-not-connected";
+    LIBRARY_DIGIKEY_HELP = "library-digikey-help";
+    LIBRARY_MOUSER_API_KEY = "library-mouser-api-key";
+    LIBRARY_MOUSER_NOT_TESTED = "library-mouser-not-tested";
+    LIBRARY_NO_KEY_REQUIRED = "library-no-key-required";
+    LIBRARY_ORDER_OF_PREFERENCE = "library-order-of-preference";
+    LIBRARY_ORDER_ROW = "library-order-row";
+    LIBRARY_DISTRIBUTOR_OTHER = "library-distributor-other";
+    LIBRARY_ORDER_HELP = "library-order-help";
+    LIBRARY_ORDER_SAVE_FAILED = "library-order-save-failed";
 }

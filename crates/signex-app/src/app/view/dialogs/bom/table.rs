@@ -196,6 +196,7 @@ impl Signex {
         const NUM_COL_WIDTH: f32 = 36.0;
         const HEADER_ROW_H: f32 = 24.0;
         const DATA_ROW_H: f32 = 22.0;
+        // raw: an empty cell, no text.
         let num_header: Element<'_, Message> = container(text(raw("")))
             .width(Length::Fixed(NUM_COL_WIDTH))
             .height(HEADER_ROW_H)
@@ -246,6 +247,8 @@ impl Signex {
             // arrow (when this column is the active sort) anchored
             // to the right via Space::Fill. Spreadsheet convention.
             let arrow = sort_arrow(idx).trim();
+            // raw: the column name comes from signex-output (#2060) and the
+            // sort arrow is a glyph.
             let cell_content = row![
                 text(raw(c.header().to_string()))
                     .size(TS.body)
@@ -351,7 +354,7 @@ impl Signex {
             const CELL_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
             let cell =
                 |s: String, width: Length, _truncate_at: f32, mono: bool| -> Element<'_, Message> {
-                    let face = text(raw(s))
+                    let face = text(signex_i18n::UserText::new(s))
                         .size(CELL_TEXT_SIZE)
                         .color(text_c)
                         .wrapping(iced::widget::text::Wrapping::None);
@@ -371,6 +374,7 @@ impl Signex {
                         .boxed()
                 };
             // Leftmost row-number gutter cell — muted text, right-aligned.
+            // raw: a row number, not language.
             let num_cell: Element<'_, Message> = container(
                 text(raw((visible_idx + 1).to_string()))
                     .size(CELL_TEXT_SIZE)
