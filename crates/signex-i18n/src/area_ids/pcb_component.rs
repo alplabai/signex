@@ -53,6 +53,8 @@ define_ids! {
     PCB_COMPONENT_FOOTPRINT_SWAP = "pcb-component-footprint-swap";
     PCB_COMPONENT_SWAP_PAD_NET_DROPPED = "pcb-component-swap-pad-net-dropped";
     PCB_COMPONENT_SWAP_PAD_DROPPED = "pcb-component-swap-pad-dropped";
+    PCB_COMPONENT_SWAP_SHEET_NOT_OPEN = "pcb-component-swap-sheet-not-open";
+    PCB_COMPONENT_SWAP_SHEET_READ_ONLY = "pcb-component-swap-sheet-read-only";
     PCB_COMPONENT_PICKER_OWN_FOOTPRINTS = "pcb-component-picker-own-footprints";
     PCB_COMPONENT_TYPE_STANDARD = "pcb-component-type-standard";
     PCB_COMPONENT_TYPE_STANDARD_NO_BOM = "pcb-component-type-standard-no-bom";

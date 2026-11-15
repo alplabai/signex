@@ -12,6 +12,7 @@ use signex_types::pcb::PcbBoard;
 
 use super::command::{BoardCommand, BoardPatch};
 use super::error::BoardCommandError;
+use crate::UndoGroupId;
 
 /// A board, the history of the edits made to it and its revision.
 #[derive(Debug)]
@@ -26,6 +27,10 @@ pub struct BoardEngine {
     /// Undo labels by timeline position (`History::position`), for steps
     /// made with [`Self::execute_labelled`].
     labels: BTreeMap<usize, String>,
+    /// Undo groups by timeline position, for steps made with
+    /// [`Self::execute_grouped`]: undone and redone with the sheet steps of
+    /// the same group (#2366).
+    groups: BTreeMap<usize, UndoGroupId>,
 }
 
 impl BoardEngine {
@@ -48,6 +53,7 @@ impl BoardEngine {
             history,
             revision,
             labels: BTreeMap::new(),
+            groups: BTreeMap::new(),
         }
     }
 
@@ -92,6 +98,7 @@ impl BoardEngine {
         // A new edit cuts the redo branch, labels and all.
         let applied = self.history.position();
         self.labels.retain(|at, _| *at <= applied);
+        self.groups.retain(|at, _| *at <= applied);
         self.history.record(undo_step(inverses));
         self.revision += 1;
         self.prune_labels();
@@ -120,6 +127,41 @@ impl BoardEngine {
                 .insert(self.history.position(), label.to_string());
         }
         Ok(patches)
+    }
+
+    /// [`Self::execute_labelled`] stamped with `group`, so the app undoes and
+    /// redoes it together with the sheet steps of that group (#2366).
+    pub fn execute_grouped(
+        &mut self,
+        commands: Vec<BoardCommand>,
+        label: &str,
+        expected_revision: u64,
+        group: UndoGroupId,
+    ) -> Result<Vec<BoardPatch>, BoardCommandError> {
+        let made_step = !commands.is_empty();
+        let patches = self.execute_labelled(commands, label, expected_revision)?;
+        if made_step {
+            self.groups.insert(self.history.position(), group);
+        }
+        Ok(patches)
+    }
+
+    /// The group of the step Undo would take back, if it has one.
+    pub fn next_undo_group(&self) -> Option<UndoGroupId> {
+        self.groups.get(&self.history.position()).copied()
+    }
+
+    /// The group of the step Redo would apply, if it has one.
+    pub fn next_redo_group(&self) -> Option<UndoGroupId> {
+        self.groups.get(&(self.history.position() + 1)).copied()
+    }
+
+    /// Whether any step Undo can still reach carries `group`.
+    pub fn has_undo_group(&self, group: UndoGroupId) -> bool {
+        let position = self.history.position();
+        self.groups
+            .iter()
+            .any(|(at, g)| *g == group && *at <= position)
     }
 
     /// Undo the newest step. `None` when there is nothing to undo. On error
@@ -235,6 +277,7 @@ impl BoardEngine {
         let oldest = position.saturating_sub(self.history.undo_len());
         let newest = position + self.history.redo_len();
         self.labels.retain(|at, _| *at > oldest && *at <= newest);
+        self.groups.retain(|at, _| *at > oldest && *at <= newest);
     }
 }
 
