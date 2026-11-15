@@ -471,9 +471,11 @@ fn a_quit_while_create_writes_is_held_until_it_lands() {
     let quit = app.update(Message::Window(crate::app::WindowMsg::QuitRequested));
     crate::task_driver::assert_quit_declined(quit);
     let notice = app.document_state.error_notice.as_ref().expect("notice");
+    // Since #2380 the notice holds catalog ids; read it as the user does.
+    let detail = notice.detail_text(&app.ui_state.i18n);
     assert!(
-        format!("{notice:?}").contains("new project is still being created"),
-        "{notice:?}"
+        detail.contains("new project is still being created"),
+        "{detail}"
     );
 
     TaskDriver::new().settle(&mut app, create).expect("settled");
