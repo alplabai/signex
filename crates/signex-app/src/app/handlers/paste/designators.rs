@@ -56,18 +56,27 @@ impl PasteNumbering {
     pub(crate) fn apply(&mut self, payload: &PlacementPayload) -> PlacementPayload {
         match self.mode {
             PasteDesignators::Keep => payload.clone(),
-            PasteDesignators::KeepIfFree => payload.redesignate_parts(|old| self.keep_if_free(old)),
-            PasteDesignators::Reset => payload.redesignate_parts(|old| {
+            _ => payload.redesignate_parts(|old| self.rename(old)),
+        }
+    }
+
+    /// The designator a pasted part called `old` gets, `None` to keep it:
+    /// the one rule for sheet and board pastes (#2361).
+    pub(crate) fn rename(&mut self, old: &str) -> Option<String> {
+        match self.mode {
+            PasteDesignators::Keep => None,
+            PasteDesignators::KeepIfFree => self.keep_if_free(old),
+            PasteDesignators::Reset => {
                 let prefix = alphabetic_prefix(old);
                 (!prefix.is_empty()).then(|| format!("{prefix}?"))
-            }),
-            PasteDesignators::NextFree => payload.redesignate_parts(|old| {
+            }
+            PasteDesignators::NextFree => {
                 let prefix = alphabetic_prefix(old);
                 if prefix.is_empty() {
                     return None;
                 }
                 take_next(prefix, &mut self.counters)
-            }),
+            }
         }
     }
 }
@@ -110,6 +119,17 @@ impl Signex {
             used.extend(references().map(|r| r.trim().to_owned()));
         }
         PasteNumbering::new(mode, counters).with_used(used)
+    }
+
+    /// The numbering for a paste onto `board`, in the saved preference's
+    /// mode: the board's own designators are the ones in use.
+    pub(crate) fn board_paste_numbering(
+        &self,
+        board: &signex_types::pcb::PcbBoard,
+    ) -> PasteNumbering {
+        let references = || board.footprints.iter().map(|fp| fp.reference.trim());
+        PasteNumbering::new(self.ui_state.paste_designators, seed_counters(references()))
+            .with_used(references().map(str::to_owned).collect())
     }
 }
 

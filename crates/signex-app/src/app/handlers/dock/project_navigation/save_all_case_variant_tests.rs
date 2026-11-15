@@ -20,7 +20,7 @@ fn assert_quit_held_open(app: &Signex, after: iced::Task<crate::app::Message>, n
     // Exactly one cancelled system quit request: no exit, no window close.
     crate::task_driver::assert_quit_declined(after);
     let notice = app.document_state.error_notice.as_ref().expect("notice");
-    assert!(format!("{notice:?}").contains(name), "{notice:?}");
+    assert!(notice.detail.render_en_us().contains(name), "{notice:?}");
 }
 
 #[test]

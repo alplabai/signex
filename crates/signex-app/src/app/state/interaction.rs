@@ -4,7 +4,7 @@
 use crate::canvas::CanvasSlot;
 use crate::pcb_canvas::PcbCanvas;
 
-use super::super::{ContextMenuState, DragTarget, DrawMode, TextEditState, Tool};
+use super::super::{ContextMenuState, DragTarget, TextEditState, Tool};
 
 pub struct InteractionState {
     pub current_tool: Tool,
@@ -37,6 +37,11 @@ pub struct InteractionState {
         std::collections::HashMap<iced::window::Id, crate::pcb_canvas::PcbSelectionState>,
     /// Footprints being dragged or moved, with their preview (#2240).
     pub pcb_carry: Option<crate::pcb_canvas::PcbCarry>,
+    /// The board placement tool armed and the shape it is drawing (#2373).
+    pub pcb_tool: Option<crate::app::handlers::pcb_tool::BoardToolSession>,
+    /// A guide armed by the board panel's Place, waiting for the click on
+    /// the main window's board that sets it (#2374): the board and the kind.
+    pub pcb_guide_place: Option<(std::path::PathBuf, signex_types::pcb_options::GuideKind)>,
     /// The active board's ratsnest lines and the nets hidden from them.
     pub pcb_ratsnest: super::pcb_ratsnest::PcbRatsnest,
     /// The board check the Messages panel lists (#2222).
@@ -49,6 +54,11 @@ pub struct InteractionState {
     /// Text typed into the selected board footprint's Designator or Value
     /// field and not yet applied with Enter (#1312).
     pub pcb_footprint_draft: Option<crate::app::handlers::pcb_footprint_text::PcbFootprintDraft>,
+    /// The board Component view's search and unapplied field text (#2354).
+    pub pcb_component: crate::app::handlers::pcb_component::PcbComponentPanelState,
+    /// The track, via and pad panel's drafts, search, Show More and net
+    /// pick (#2355).
+    pub pcb_primitive: crate::app::handlers::pcb_primitive::PcbPrimitivePanel,
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,
@@ -72,7 +82,12 @@ pub struct InteractionState {
     /// that reads the same text keeps `clipboard` as it is instead of
     /// parsing it back (which would re-anchor it to the current grid).
     pub clipboard_text: Option<String>,
-    pub draw_mode: DrawMode,
+    /// The last Copy or Cut on a board (#2361). One clipboard serves sheets
+    /// and boards: a copy on one clears the other, so at most one is set.
+    pub pcb_clipboard: Option<signex_engine::pcb::BoardClipboard>,
+    /// How a wire or bus run bends at its corner. Kept across segments and
+    /// tools until the user flips it or changes the mode (#2372).
+    pub corner_rule: signex_types::corner::CornerRule,
     pub editing_text: Option<TextEditState>,
     pub context_menu: Option<ContextMenuState>,
     /// Projects-panel tree-view right-click menu state. Separate from
@@ -130,6 +145,8 @@ pub struct InteractionState {
     /// The undocked window `active_bar_menu` was opened in; `None` for the
     /// main window. Only that window paints the dropdown (#1910).
     pub active_bar_menu_window: Option<iced::window::Id>,
+    /// The open dropdown of the main window's PCB Active Bar (#2352).
+    pub pcb_bar_menu: Option<crate::app::PcbBarMenu>,
     /// The undocked window whose action is running inside `run_in_window`;
     /// `None` for the main window. Stamps what the action opens (a Components
     /// drag) and keeps the app-wide refreshes on the main window.

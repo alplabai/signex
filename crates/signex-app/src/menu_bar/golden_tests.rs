@@ -48,12 +48,17 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
             // Turned, so Reset View Rotation is live (#2316).
             pcb_view_turned: true,
             has_document: true,
-            // An unlocked footprint selected, so the board's rows are live.
+            // An unlocked footprint selected and a board copy on the
+            // clipboard, so the board's rows are live.
             pcb: crate::app::command::enablement::PcbTargets {
                 shown: true,
                 any: true,
                 placeable: true,
                 deletable: true,
+                copyable: true,
+                pasteable: true,
+                part_in_hand: false,
+                routing: false,
             },
             ..base
         }),
@@ -116,6 +121,13 @@ fn rows() -> Vec<Vec<&'static str>> {
         .collect()
 }
 
+/// Place on a board lists the board's rows (#2360), so the sheet's Place
+/// rows are not in that variant's bar; `menu_bar_place_board.golden.tsv`
+/// pins the board's.
+fn omits_row(ctx: &MenuContext, path: &str) -> bool {
+    ctx.commands.pcb.shown && path.starts_with("Place/")
+}
+
 #[test]
 fn golden_enablement_matches_live_predicates() {
     let ctxs = variants();
@@ -126,7 +138,15 @@ fn golden_enablement_matches_live_predicates() {
         }
         let got: String = ctxs
             .iter()
-            .map(|c| if eval_gate(gate, c) { '1' } else { '0' })
+            .map(|c| {
+                if omits_row(c, path) {
+                    '-'
+                } else if eval_gate(gate, c) {
+                    '1'
+                } else {
+                    '0'
+                }
+            })
             .collect();
         assert_eq!(got, bits, "enablement of {path} (gate {gate})");
     }
@@ -256,9 +276,16 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("new_document", "NewProject"),
     // #1312: fixture names only, like #2247's.
     ("new_pcb_document", "NewPcb"),
+    ("new_schematic_sheet", "NewSchematic"),
     ("update_pcb_from_schematic", "UpdatePcb"),
     // #2234: Design ▸ Board Sketch.
     ("board_sketch", "BoardSketch"),
+    // #2373: Place on a board, fixture names only.
+    ("place_board_via", "PlaceBoardVia"),
+    ("place_board_track", "PlaceBoardTrack"),
+    ("place_board_fill", "PlaceBoardFill"),
+    ("place_board_region", "PlaceBoardRegion"),
+    ("place_board_keepout", "PlaceBoardKeepout"),
     ("open_document", "OpenProject"),
     ("close_active_document", "CloseDocument"),
     ("save_document", "Save"),
@@ -288,8 +315,11 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("toggle_visible_grid", "ToggleGrid"),
     ("toggle_auto_focus", "ToggleAutoFocus"),
     ("toggle_ratsnest", "ToggleRatsnest"),
+    ("toggle_origin_marker", "ToggleOriginMarker"),
     ("next_layer", "NextLayer"),
     ("prev_layer", "PreviousLayer"),
+    ("next_signal_layer", "NextSignalLayer"),
+    ("toggle_single_layer_mode", "ToggleSingleLayerMode"),
     ("toggle_layer_visibility", "ToggleLayerVisibility"),
     ("show_all_layers", "ShowAllLayers"),
     ("view_rotate", "RotateView"),
@@ -350,7 +380,9 @@ fn flatten(menu: &Menu, parent: Option<&str>, out: &mut Vec<(String, char)>) {
             MenuEntry::Submenu(sub) => flatten(sub, Some(&path), out),
             MenuEntry::Item(item) => {
                 let (kind, action) = match &item.state {
-                    ItemState::Placeholder | ItemState::Unavailable => ("stub", "-".to_string()),
+                    ItemState::Placeholder { .. } | ItemState::Unavailable => {
+                        ("stub", "-".to_string())
+                    }
                     ItemState::Live { action, .. } => ("item", action_name(action)),
                 };
                 let (id, text) = item
@@ -377,19 +409,71 @@ fn flat_rows(ctx: &MenuContext) -> Vec<(String, char)> {
 
 const RECENT_PREFIX: &str = "File/Open Recent/";
 
+/// The path column of a flattened row.
+fn row_path(cols: &str) -> &str {
+    cols.split('\t').next().unwrap_or(cols)
+}
+
+const PLACE_BOARD_GOLDEN: &str = include_str!("testdata/menu_bar_place_board.golden.tsv");
+
+/// #2360: Place on a board lists the board's tools, greyed with the PCB
+/// Active Bar's reason, then Board Sketch, live.
+#[test]
+fn model_reproduces_golden_board_place_menu() {
+    let ctxs = variants();
+    let board = ctxs
+        .iter()
+        .find(|ctx| ctx.commands.pcb.shown)
+        .expect("a board variant");
+    let got: Vec<String> = flat_rows(board)
+        .into_iter()
+        .filter(|(cols, _)| row_path(cols).starts_with("Place/"))
+        .map(|(cols, bit)| format!("{cols}\t{bit}"))
+        .collect();
+    let want: Vec<&str> = PLACE_BOARD_GOLDEN
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect();
+    assert_eq!(got, want);
+}
+
 #[test]
 fn model_reproduces_golden_menu_bar() {
-    let per_variant: Vec<Vec<(String, char)>> = variants().iter().map(flat_rows).collect();
-    let keep = |(cols, _): &(String, char)| !cols.starts_with(RECENT_PREFIX);
-    let first: Vec<&(String, char)> = per_variant[0].iter().filter(|r| keep(r)).collect();
+    let ctxs = variants();
+    // Each variant's rows, less Open Recent and the rows `omits_row` leaves
+    // out of that variant.
+    let mut per_variant: Vec<std::vec::IntoIter<(String, char)>> = ctxs
+        .iter()
+        .map(|ctx| {
+            flat_rows(ctx)
+                .into_iter()
+                .filter(|(cols, _)| {
+                    !cols.starts_with(RECENT_PREFIX) && !omits_row(ctx, row_path(cols))
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+        })
+        .collect();
+    let first: Vec<(String, char)> = flat_rows(&ctxs[0])
+        .into_iter()
+        .filter(|(cols, _)| !cols.starts_with(RECENT_PREFIX))
+        .collect();
+    assert!(
+        !omits_row(&ctxs[0], "Place/"),
+        "the first variant has every row"
+    );
     let mut got = String::new();
-    for (i, (cols, _)) in first.iter().enumerate() {
+    for (cols, _) in &first {
         let bits: String = per_variant
-            .iter()
-            .map(|rows| rows.iter().filter(|r| keep(r)).nth(i).expect("same shape"))
-            .map(|(other, bit)| {
-                assert_eq!(other, cols, "row shape must not depend on context");
-                *bit
+            .iter_mut()
+            .zip(&ctxs)
+            .map(|(rows, ctx)| {
+                if omits_row(ctx, row_path(cols)) {
+                    return '-';
+                }
+                let (other, bit) = rows.next().expect("same shape");
+                assert_eq!(&other, cols, "row shape must not depend on context");
+                bit
             })
             .collect();
         let bits = if bits.chars().all(|c| c == '-') {
@@ -464,7 +548,8 @@ fn model_shortcuts_follow_the_active_keymap() {
     // Edit ▸ Move adds Move, Rotate, Rotate Clockwise, Mirror X and Mirror Y (#2240).
     // View ▸ Next Layer and Previous Layer add two more (#2223).
     // Tools ▸ Cross Select Mode adds Ctrl+Shift+X (#1312).
-    assert_eq!(checked, 38, "the Altium profile labels 38 menu rows");
+    // View ▸ Next Signal Layer and Single Layer Mode add two more (#2357).
+    assert_eq!(checked, 40, "the Altium profile labels 40 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {

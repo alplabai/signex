@@ -58,8 +58,9 @@ impl Signex {
             Ok(task) => task,
             Err(error) => {
                 crate::diagnostics::log_error("Failed to open primitive", &error);
-                self.document_state.error_notice =
-                    Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+                    crate::app::state::verbatim(format!("{error:#}")),
+                ));
                 Task::none()
             }
         }
@@ -195,6 +196,7 @@ impl Signex {
                 if !path.exists() {
                     return crate::app::handlers::document_files::spawn_save_as_for_primitive(
                         self.ui_state.io.picker.clone(),
+                        &self.ui_state.i18n,
                         path,
                     );
                 }

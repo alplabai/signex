@@ -39,6 +39,7 @@ fn fp(rotation: f64, layer: &str, pads: Vec<Pad>) -> Footprint {
         locked: false,
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         pads,
         graphics: Vec::new(),
         properties: Vec::new(),
@@ -228,6 +229,7 @@ fn hit_testing_reads_the_rotated_rect_not_its_axis_aligned_box() {
 fn board_of(footprints: Vec<Footprint>) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: String::new(),

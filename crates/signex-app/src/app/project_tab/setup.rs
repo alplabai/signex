@@ -11,11 +11,14 @@ use signex_i18n::I18n;
 use signex_types::theme::ThemeTokens;
 
 use super::ProjectTabMsg;
-use crate::app::new_project::{NewProjectMsg, NewProjectState, import_rule_file};
+use crate::app::new_project::{
+    NewProjectMsg, NewProjectState, ProfileStored, import_rule_file, store_profile,
+};
 use crate::app::state::{LoadedProject, ProjectId};
 use crate::app::view::dialogs::new_project::{cards, customize};
 use crate::app::{Message, ProjectMsg, Signex};
 use crate::styles::Spacing;
+use signex_types::project::UserProfile;
 
 fn edited(project_id: ProjectId) -> impl Fn(NewProjectMsg) -> Message + Clone + Send + 'static {
     move |msg| {
@@ -33,6 +36,7 @@ pub(super) fn view<'a>(
     project: &LoadedProject,
     draft: Option<&NewProjectState>,
     journal_lines_draft: Option<&'a str>,
+    users: &[UserProfile],
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -41,7 +45,7 @@ pub(super) fn view<'a>(
     let state = match draft {
         Some(draft) => draft,
         None => {
-            stored = NewProjectState::of_project(&project.data);
+            stored = NewProjectState::of_project(&project.data, users);
             &stored
         }
     };
@@ -55,7 +59,7 @@ pub(super) fn view<'a>(
         .color(crate::styles::ti(tokens.text_secondary))
     });
     let body: Element<'a, NewProjectMsg> = column![
-        cards::profiles(state, i18n, tokens),
+        cards::profiles(state, users, i18n, tokens),
         row![
             container(customize::pcb_rules(state, i18n, tokens)).width(Length::FillPortion(1)),
             container(customize::schematic(state, i18n, tokens)).width(Length::FillPortion(1)),
@@ -85,6 +89,7 @@ enum SetupPart {
     Pcb,
     Sheet,
     Designators,
+    Profile,
 }
 
 impl SetupPart {
@@ -96,8 +101,11 @@ impl SetupPart {
             | M::RulesFileRead(_)
             | M::LayersStepped(_)
             | M::RuleEdited(..) => Self::Pcb,
-            M::SheetSizePicked(_) | M::TitleBlockPicked(_) => Self::Sheet,
+            M::SheetSizePicked(_) | M::SheetOrientationPicked(_) | M::TitleBlockPicked(_) => {
+                Self::Sheet
+            }
             M::DesignatorsPicked(_) => Self::Designators,
+            M::UserProfilePicked(_) => Self::Profile,
             _ => return None,
         })
     }
@@ -130,7 +138,7 @@ impl Signex {
         }
         let stored = project.data.project_defaults.clone();
         let stored_designators = project.data.designator_standard();
-        let fresh = NewProjectState::of_project(&project.data);
+        let fresh = NewProjectState::of_project(&project.data, &self.ui_state.setup_profiles);
         let part = SetupPart::of(&msg);
         let typing = match &msg {
             NewProjectMsg::RuleEdited(field, _) => Some(*field),
@@ -142,8 +150,20 @@ impl Signex {
             .entry(project_id)
             .or_default();
         let draft = tab.setup_draft.get_or_insert(fresh);
+        let users = &mut self.ui_state.setup_profiles;
+        let picked = matches!(msg, NewProjectMsg::ProfilePicked(_));
+        match store_profile(draft, users, &msg) {
+            ProfileStored::NotAStore => {}
+            ProfileStored::Removed { profile, at } => {
+                // The project's own default profile is gone: the project no
+                // longer names it, in the same edit.
+                self.clear_removed_default_profile(project_id, &profile.id);
+                return self.after_profile_store(ProfileStored::Removed { profile, at });
+            }
+            stored => return self.after_profile_store(stored),
+        }
         let before = draft.setup.clone();
-        if !draft.apply_setup(msg) || draft.setup == before {
+        if !draft.apply_setup(msg, users) || draft.setup == before {
             return iced::Task::none();
         }
         let Some(part) = part else {
@@ -158,8 +178,20 @@ impl Signex {
             SetupPart::Pcb if !draft.setup.pcb.problems().is_empty() => {
                 return iced::Task::none();
             }
-            SetupPart::Pcb => defaults.pcb = Some(draft.setup.pcb.clone()),
+            SetupPart::Pcb => {
+                defaults.pcb = Some(draft.setup.pcb.clone());
+                // Only a card pick names the project's default profile.
+                if picked {
+                    defaults.profile = Some(draft.setup.profile_id());
+                }
+            }
             SetupPart::Sheet => defaults.sheet = Some(draft.setup.sheet.clone()),
+            // A user profile carries all three parts.
+            SetupPart::Profile => {
+                defaults = draft.setup.defaults();
+                designators = (stored_designators != Some(draft.setup.designators))
+                    .then_some(draft.setup.designators);
+            }
             SetupPart::Designators => {
                 designators = (stored_designators != Some(draft.setup.designators))
                     .then_some(draft.setup.designators);

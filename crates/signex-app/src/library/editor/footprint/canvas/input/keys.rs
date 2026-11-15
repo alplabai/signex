@@ -33,13 +33,16 @@ impl FootprintCanvas<'_> {
     pub(in crate::library::editor::footprint::canvas) fn on_key_pressed(
         &self,
         key: &keyboard::Key,
+        physical: keyboard::key::Physical,
         modifiers: &keyboard::Modifiers,
         typed_char: Option<char>,
     ) -> Option<canvas::Action<LibraryMessage>> {
-        if let Some(a) = self.key_clipboard(key, modifiers) {
+        // Letters match on any layout (#2095): Cyrillic `с` is `c`.
+        let letter = crate::keymap::shortcut_char(key, physical);
+        if let Some(a) = self.key_clipboard(letter, modifiers) {
             return Some(a);
         }
-        if let Some(a) = self.key_rotate_flip(key, modifiers) {
+        if let Some(a) = self.key_rotate_flip(key, letter, modifiers) {
             return Some(a);
         }
         self.key_sketch_input(key, modifiers, typed_char)
@@ -50,18 +53,18 @@ impl FootprintCanvas<'_> {
     /// so iced's global key subscription doesn't fire a duplicate.
     fn key_clipboard(
         &self,
-        key: &keyboard::Key,
+        letter: Option<char>,
         modifiers: &keyboard::Modifiers,
     ) -> Option<canvas::Action<LibraryMessage>> {
         if modifiers.command()
             && !modifiers.shift()
             && !modifiers.alt()
-            && let keyboard::Key::Character(c) = key.as_ref()
+            && let Some(c) = letter
         {
             let cb_msg = match c {
-                "x" | "X" => Some(EditorMsg::Footprint(FootprintEditorMsg::CutPad)),
-                "c" | "C" => Some(EditorMsg::Footprint(FootprintEditorMsg::CopyPad)),
-                "v" | "V" => Some(EditorMsg::Footprint(FootprintEditorMsg::PastePad)),
+                'x' => Some(EditorMsg::Footprint(FootprintEditorMsg::CutPad)),
+                'c' => Some(EditorMsg::Footprint(FootprintEditorMsg::CopyPad)),
+                'v' => Some(EditorMsg::Footprint(FootprintEditorMsg::PastePad)),
                 _ => None,
             };
             if let Some(msg) = cb_msg {
@@ -85,6 +88,7 @@ impl FootprintCanvas<'_> {
     fn key_rotate_flip(
         &self,
         key: &keyboard::Key,
+        letter: Option<char>,
         modifiers: &keyboard::Modifiers,
     ) -> Option<canvas::Action<LibraryMessage>> {
         if !modifiers.command() && !modifiers.alt() {
@@ -101,10 +105,7 @@ impl FootprintCanvas<'_> {
                     .and_capture(),
                 );
             }
-            if let keyboard::Key::Character(c) = key.as_ref()
-                && (c == "x" || c == "X")
-                && self.state.selected_pad.is_some()
-            {
+            if letter == Some('x') && self.state.selected_pad.is_some() {
                 return Some(
                     canvas::Action::publish(LibraryMessage::EditorEvent {
                         library_path: self.address.library_path.clone(),

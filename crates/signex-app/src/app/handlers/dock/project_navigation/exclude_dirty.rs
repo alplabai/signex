@@ -332,10 +332,11 @@ impl Signex {
         {
             // `failed` was written; the error names the spellings that were not.
             crate::diagnostics::log_warning(format!("Exclude from Project: {err}"));
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(format!(
-                "\"{}\" was not excluded: {err}",
-                state.display_name
-            )));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
+                signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_NOT_EXCLUDED)
+                    .arg("name", state.display_name.as_str())
+                    .arg("error", err.to_string()),
+            ));
             return;
         }
         let name = failed
@@ -343,10 +344,12 @@ impl Signex {
             .map(|f| f.to_string_lossy().into_owned())
             .unwrap_or_else(|| state.display_name.clone());
         crate::diagnostics::log_error(&format!("Exclude from Project: could not save {name}"), err);
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(format!(
-            "Could not save \"{name}\", so \"{}\" was not excluded: {err:#}",
-            state.display_name
-        )));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
+            signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_NOT_EXCLUDED_UNSAVED)
+                .arg("file", name)
+                .arg("name", state.display_name.as_str())
+                .arg("error", format!("{err:#}")),
+        ));
     }
 
     /// Drop the engines / editors and dirty markers held for `docs`, so a

@@ -50,6 +50,11 @@ pub struct BomOptions {
     /// Cached library prices the rows are priced from (#1023). Empty: no
     /// row is priced and the price columns stay blank.
     pub price_book: signex_bom::PriceBook,
+    /// The schematic parts whose board footprint is of a type the BOM leaves
+    /// out (Standard (No BOM), Mechanical, Graphical, Net Tie), read from the
+    /// project's board (#2365). Such a part is listed only with the
+    /// not-fitted parts, like one marked out of the BOM on the schematic.
+    pub board_left_out: Vec<signex_types::pcb::SymbolLink>,
 }
 
 impl Default for BomOptions {
@@ -70,6 +75,7 @@ impl Default for BomOptions {
             active_variant: None,
             rule_options: BomRuleOptions::default(),
             price_book: signex_bom::PriceBook::default(),
+            board_left_out: Vec::new(),
         }
     }
 }
@@ -257,16 +263,24 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
     // same unit appearing twice under one designator is two parts, so without
     // entries a child placed N times still yields N parts.
     let mut placed: Vec<(&Symbol, &str)> = Vec::new();
+    // Per entry of `placed`: whether the board's footprint of its part is of
+    // a type the BOM leaves out (#2365).
+    let mut left_out: Vec<bool> = Vec::new();
     for (sheet, path) in bom_sheets(ctx) {
-        placed.extend(
-            sheet
-                .symbols
-                .iter()
-                .filter(|sym| !(sym.reference.starts_with("#PWR") || sym.is_power))
-                .map(|sym| (sym, sym.designator_in(&path).trim())),
-        );
+        for sym in sheet
+            .symbols
+            .iter()
+            .filter(|sym| !(sym.reference.starts_with("#PWR") || sym.is_power))
+        {
+            placed.push((sym, sym.designator_in(&path).trim()));
+            left_out.push(
+                opts.board_left_out
+                    .iter()
+                    .any(|link| link.names_part(&path, &[sym.uuid])),
+            );
+        }
     }
-    let components = placed_components(&placed, opts);
+    let components = placed_components(&placed, &left_out, opts);
 
     BomContext {
         components,
@@ -300,7 +314,11 @@ fn bom_sheets(
 /// The components of a placed-symbol list, one per physical part. A part takes
 /// what ANY of its units sets (see `units`), so an MPN typed on unit 2 or a DNP
 /// flag on unit 2 is not lost to unit 1.
-fn placed_components(placed: &[(&Symbol, &str)], opts: &BomOptions) -> Vec<BomComponent> {
+fn placed_components(
+    placed: &[(&Symbol, &str)],
+    left_out: &[bool],
+    opts: &BomOptions,
+) -> Vec<BomComponent> {
     let mut components = Vec::new();
     let parts = group_into_parts(placed.iter().map(|(sym, designator)| PartKey {
         reference: designator,
@@ -354,7 +372,8 @@ fn placed_components(placed: &[(&Symbol, &str)], opts: &BomOptions) -> Vec<BomCo
             lib_ref,
             description,
             dnp: units.iter().any(|unit| unit.dnp),
-            in_bom: units.iter().any(|unit| unit.in_bom),
+            in_bom: units.iter().any(|unit| unit.in_bom)
+                && !part.iter().any(|&member| left_out[member]),
             on_board: units.iter().any(|unit| unit.on_board),
             variant_fitted,
             base_fitted,
@@ -734,6 +753,40 @@ mod tests {
         assert_eq!(table.rows.len(), 1);
         assert_eq!(table.rows[0].qty, 1);
         assert_eq!(table.rows[0].references, vec!["U1"]);
+    }
+
+    #[test]
+    fn a_part_whose_board_footprint_type_leaves_the_bom_is_left_out() {
+        use signex_types::pcb::SymbolLink;
+        use signex_types::schematic::InstancePath;
+        let r1 = uuid::Uuid::from_u128(0x2365_0001);
+        let r2 = uuid::Uuid::from_u128(0x2365_0002);
+        let ctx = context_with(vec![
+            Symbol {
+                uuid: r1,
+                ..unit_of("R1", "Device:R", 1)
+            },
+            Symbol {
+                uuid: r2,
+                ..unit_of("R2", "Mech:Standoff", 1)
+            },
+        ]);
+        let opts = BomOptions {
+            board_left_out: vec![SymbolLink::new(InstancePath::root(), [r2])],
+            ..BomOptions::default()
+        };
+        let table = rollup(&ctx, &opts);
+        let listed: Vec<&str> = table
+            .rows
+            .iter()
+            .flat_map(|row| row.references.iter().map(String::as_str))
+            .collect();
+        assert_eq!(listed, ["R1"]);
+        let all = BomOptions {
+            include_not_fitted: true,
+            ..opts
+        };
+        assert_eq!(rollup(&ctx, &all).rows.len(), 2);
     }
 
     #[test]

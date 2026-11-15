@@ -53,7 +53,11 @@ impl Session {
                 .document_state
                 .error_notice
                 .take()
-                .map_or_else(|| "nothing was loaded".to_string(), |n| n.detail);
+                // CLI output stays en-US whatever the UI language.
+                .map_or_else(
+                    || "nothing was loaded".to_string(),
+                    |n| n.detail.render_en_us(),
+                );
             return Err(format!("could not open {}: {detail}", project.display()));
         }
         diagnostics::log_info(format!(
@@ -196,7 +200,7 @@ impl Session {
         let (status, reason, mut data) = verdict(
             approved.command.as_str(),
             outcome,
-            notice.map(|n| format!("{}: {}", n.title, n.detail)),
+            notice.map(|n| format!("{}: {}", n.title.render_en_us(), n.detail.render_en_us())),
         );
         if let Some(data) = data.as_mut() {
             scrub_sheets(data, &named_by_call);

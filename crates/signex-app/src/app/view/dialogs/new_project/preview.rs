@@ -144,8 +144,9 @@ fn layer_row<'a>(layer: Layer, copper: u8, i18n: &I18n, ink: Color) -> Element<'
 }
 
 /// The preview column.
-pub(super) fn pane<'a>(
+pub(crate) fn pane<'a>(
     state: &NewProjectState,
+    note: signex_i18n::MessageId,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, NewProjectMsg> {
@@ -210,7 +211,7 @@ pub(super) fn pane<'a>(
             board,
             column![board_line, sheet_line].spacing(SP.s),
             Space::new().height(SP.xl),
-            text(t!(i18n, ids::DIALOG_NEW_PROJECT_PREVIEW_NOTE))
+            text(t!(i18n, note))
                 .size(TS.body)
                 .color(tokens::muted_text(tokens)),
         ]

@@ -29,6 +29,10 @@ mod preview_model;
 #[cfg(test)]
 mod chrome_fit_tests;
 #[cfg(test)]
+mod layout_keys_tests;
+#[cfg(test)]
+mod resize_tests;
+#[cfg(test)]
 mod tests;
 
 // `draw_pads_tool_preview` is the one sub-draw still invoked inline by
@@ -39,10 +43,10 @@ mod tests;
 use draw::draw_pads_tool_preview;
 pub(crate) use draw::{
     BACKDROP_BG, BACKDROP_GRID, BackdropLook, draw_back_layers, draw_backdrop, draw_courtyard,
-    draw_fab, draw_origin, draw_pads, draw_silk, graphite_look_for,
+    draw_fab, draw_origin, draw_pad_bodies, draw_pad_numbers, draw_silk, graphite_look_for,
 };
 #[cfg(test)]
-pub(crate) use draw::{LayerInput, PadLabels};
+pub(crate) use draw::{LayerInput, PadLabels, draw_pads};
 pub use preview_model::PreviewFootprint;
 
 use geometry::{point_in_polygon, point_to_segment_dist, polygon_outline_hit};
@@ -78,6 +82,11 @@ pub struct FootprintCanvasState {
     /// Auto-fit on the first draw — toggled false once we've seen
     /// non-zero bounds at least once.
     pub did_initial_fit: bool,
+    /// The canvas size as of the last event (zero before the first).
+    laid_out: iced::Size,
+    /// The document last fitted, its fit and the camera it left; a resize
+    /// refits while the camera is still that one (#2345).
+    fitted: Option<(EditorAddress, crate::canvas::FittedView)>,
     /// The document this camera last showed and the last
     /// [`super::state::ZoomRequest`] it applied for it. The canvas widget
     /// keeps this state across a tab switch, so a request is only compared
@@ -162,6 +171,8 @@ impl Default for FootprintCanvasState {
             scale: DEFAULT_PX_PER_MM,
             offset: Point::new(0.0, 0.0),
             did_initial_fit: false,
+            laid_out: iced::Size::ZERO,
+            fitted: None,
             applied_zoom: None,
             panning: false,
             last_pan_pos: None,
@@ -291,11 +302,14 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
-        // First-draw camera placement + one-shot Fit-to-Window (see
+        // A resize refit, first-draw camera placement + one-shot Fit-to-Window (see
         // `input::camera`). Both mutate the camera and publish the scale
         // they settled on, consuming the event tick. That is the canvas's
         // first event (normally a redraw or cursor move), and the next one
         // carries the same information, so nothing is lost.
+        if let Some(action) = self.follow_resize(cstate, bounds) {
+            return Some(action);
+        }
         if let Some(action) = self.apply_initial_fit(cstate, bounds) {
             return Some(action);
         }
@@ -332,10 +346,16 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             }
             Event::Keyboard(keyboard::Event::KeyPressed {
                 key,
+                physical_key,
                 modifiers,
                 text,
                 ..
-            }) => self.on_key_pressed(key, modifiers, text.as_ref().and_then(|s| s.chars().next())),
+            }) => self.on_key_pressed(
+                key,
+                *physical_key,
+                modifiers,
+                text.as_ref().and_then(|s| s.chars().next()),
+            ),
             _ => None,
         }
     }

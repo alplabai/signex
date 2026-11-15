@@ -1,0 +1,335 @@
+use uuid::Uuid;
+
+use super::*;
+
+/// The button that runs `command` on a click.
+fn button_for<'a>(
+    items: &'a [ActiveBarItem<Message>],
+    command: &str,
+) -> &'a ActiveBarButton<Message> {
+    items
+        .iter()
+        .find_map(|item| match item {
+            ActiveBarItem::Button(button) if runs(button, command) => Some(button),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("a button that runs {command}"))
+}
+
+fn runs(button: &ActiveBarButton<Message>, command: &str) -> bool {
+    matches!(
+        &button.on_press,
+        Some(Message::Menu(MenuMessage::Command(id))) if id.as_str() == command
+    )
+}
+
+fn buttons(items: &[ActiveBarItem<Message>]) -> Vec<&ActiveBarButton<Message>> {
+    items
+        .iter()
+        .filter_map(|item| match item {
+            ActiveBarItem::Button(button) => Some(button),
+            _ => None,
+        })
+        .collect()
+}
+
+/// An app with an empty board open in its tab.
+fn board_app() -> Signex {
+    let (mut app, _task) = Signex::new();
+    let board: signex_types::pcb::PcbBoard =
+        serde_json::from_value(serde_json::json!({ "uuid": Uuid::nil() })).expect("a board");
+    let path = std::env::temp_dir().join("pcb_active_bar.snxpcb");
+    app.open_pcb_tab(path, "board".into(), board);
+    app
+}
+
+fn bar_of(app: &Signex) -> Vec<ActiveBarItem<Message>> {
+    pcb_bar_items(
+        app.ui_state.effective_theme_id(),
+        &app.ui_state.i18n,
+        app.interaction_state.pcb_bar_menu,
+    )
+}
+
+/// Clicks the button that runs `command` on `app`'s bar.
+fn click(app: &mut Signex, command: &str) {
+    let press = button_for(&bar_of(app), command)
+        .on_press
+        .clone()
+        .expect("a live button");
+    let _ = app.update(press);
+}
+
+fn angle(app: &Signex) -> f32 {
+    app.interaction_state.pcb_canvas.view_rotation_deg()
+}
+
+/// #2234 and #2316: the PCB Active Bar's buttons run `board_sketch` and
+/// `view_rotate`.
+#[test]
+fn the_pcb_bar_buttons_run_board_sketch_and_view_rotate() {
+    let tid = ThemeId::GraphiteDark;
+    let items = pcb_bar_items(tid, &I18n::en_us(), None);
+    let sketch = button_for(&items, "board_sketch");
+    let rotate = button_for(&items, "view_rotate");
+    assert!(runs(sketch, "board_sketch") && sketch.enabled);
+    assert!(runs(rotate, "view_rotate") && rotate.enabled);
+    assert_eq!(rotate.tooltip, "Rotate View 90° Clockwise");
+    let ActiveBarIcon::Svg(handle) = &rotate.icon else {
+        panic!("an SVG icon");
+    };
+    assert_eq!(handle, &ic::icon_view_rotate(tid));
+}
+
+/// Round 9 of #2262: the button says what it is, in its tooltip and its
+/// board glyph, not the generic rectangle.
+#[test]
+fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
+    let tid = ThemeId::GraphiteDark;
+    let items = pcb_bar_items(tid, &I18n::en_us(), None);
+    let button = button_for(&items, "board_sketch");
+    assert!(
+        button.tooltip.starts_with("Board Sketch"),
+        "{}",
+        button.tooltip
+    );
+    let ActiveBarIcon::Svg(handle) = &button.icon else {
+        panic!("an SVG icon");
+    };
+    assert_eq!(handle, &ic::icon_board_sketch(tid));
+    assert_ne!(handle, &ic::icon_dd_rect(tid));
+}
+
+/// #2352, #2373: the groups in the PCB editor's order, the Selection
+/// Filter, Move, Align, Board Sketch, View and the live placement tools live, and
+/// every other button greyed with a tooltip that says it is not on boards
+/// yet.
+#[test]
+fn the_pcb_bar_has_the_footprint_layout_and_greys_what_boards_cannot_do() {
+    let items = pcb_bar_items(ThemeId::GraphiteDark, &I18n::en_us(), None);
+    let all = buttons(&items);
+    assert_eq!(all.len(), 17);
+    let separators = items
+        .iter()
+        .filter(|item| matches!(item, ActiveBarItem::Separator))
+        .count();
+    assert_eq!(separators, 4);
+    let live: Vec<_> = all.iter().filter(|button| button.enabled).collect();
+    let live_tools = BoardPlaceTool::PLACE_MENU
+        .iter()
+        .filter(|tool| tool.command().is_some())
+        .count();
+    assert_eq!(
+        live.len(),
+        5 + live_tools,
+        "filter, move, align, sketch, view and the live tools"
+    );
+    assert!(runs(all[1], "move_object"), "Move follows the filter");
+    assert!(runs(all[5], "place_board_via"), "#2373: Via is live");
+    assert!(runs(all[15], "board_sketch"));
+    assert!(runs(all[16], "view_rotate"), "View closes the bar");
+    for button in all.iter().filter(|button| !button.enabled) {
+        assert!(button.on_press.is_none() && button.on_right_press.is_none());
+        assert!(
+            button.tooltip.ends_with(": not available on boards yet"),
+            "{}",
+            button.tooltip
+        );
+    }
+    assert!(all[0].tooltip.starts_with("Selection Filter"));
+    assert!(all[3].tooltip.starts_with("Place Component"));
+    assert!(all[14].tooltip.starts_with("Interactive Routing"));
+}
+
+/// #2352 / #2360: the bar greys exactly the tools the Place menu greys on a
+/// board, with the same reason, and nothing else.
+#[test]
+fn the_bar_greys_the_place_menus_board_tools() {
+    let i18n = I18n::en_us();
+    let items = pcb_bar_items(ThemeId::GraphiteDark, &i18n, None);
+    let mut greyed: Vec<String> = buttons(&items)
+        .into_iter()
+        .filter(|button| !button.enabled)
+        .map(|button| button.tooltip.clone())
+        .collect();
+    greyed.sort();
+    let mut place: Vec<String> = BoardPlaceTool::PLACE_MENU
+        .iter()
+        .filter_map(|tool| match tool.state() {
+            ToolState::Unavailable(reason) => Some(t!(&i18n, reason).into_string()),
+            ToolState::Live(_) => None,
+        })
+        .collect();
+    place.sort();
+    assert_eq!(greyed, place);
+}
+
+/// #2352: Move arms the board's click-to-click move, as Edit ▸ Move does.
+#[test]
+fn the_move_button_arms_the_board_move() {
+    let mut app = board_app();
+    click(&mut app, "move_object");
+    assert!(app.interaction_state.pcb_carry.is_some(), "Move is armed");
+}
+
+/// #2234 / #2352: Board Sketch enters the board's sketch mode.
+#[test]
+fn the_board_sketch_button_enters_sketch_mode() {
+    let mut app = board_app();
+    click(&mut app, "board_sketch");
+    assert!(app.board_sketch_in_view().is_some());
+}
+
+/// #2316 / #2352: View turns the board view a quarter turn clockwise.
+#[test]
+fn the_view_button_turns_the_board_view() {
+    let mut app = board_app();
+    click(&mut app, "view_rotate");
+    assert_eq!(angle(&app), 90.0);
+}
+
+/// #2352: a right-click opens the button's dropdown and draws the button
+/// selected; another closes it, and so does a click outside.
+#[test]
+fn a_right_click_opens_and_closes_the_dropdown() {
+    let mut app = board_app();
+    let toggle = |app: &Signex, command: &str| {
+        button_for(&bar_of(app), command)
+            .on_right_press
+            .clone()
+            .expect("a dropdown")
+    };
+    let _ = app.update(toggle(&app, "view_rotate"));
+    assert_eq!(app.interaction_state.pcb_bar_menu, Some(PcbBarMenu::View));
+    assert!(button_for(&bar_of(&app), "view_rotate").selected);
+    assert!(!button_for(&bar_of(&app), "move_object").selected);
+    let _ = app.update(toggle(&app, "move_object"));
+    assert_eq!(app.interaction_state.pcb_bar_menu, Some(PcbBarMenu::Move));
+    let _ = app.update(toggle(&app, "move_object"));
+    assert_eq!(app.interaction_state.pcb_bar_menu, None);
+    let _ = app.update(toggle(&app, "move_object"));
+    let _ = app.update(bar_message(PcbBarMsg::MenuDismissed));
+    assert_eq!(app.interaction_state.pcb_bar_menu, None);
+}
+
+fn rows(app: &Signex, menu: PcbBarMenu) -> Vec<DropdownItem<Message>> {
+    pcb_bar_menu_entries(
+        menu,
+        &app.ui_state.i18n,
+        app.ui_state.effective_theme_id(),
+        &app.command_context(None),
+        &app.ui_state.pcb_pick_filter,
+    )
+    .into_iter()
+    .filter_map(|entry| match entry {
+        DropdownEntry::Item(item) => Some(item),
+        _ => None,
+    })
+    .collect()
+}
+
+/// Picks the row of `menu` that runs `command`, from an open dropdown.
+fn pick(app: &mut Signex, menu: PcbBarMenu, command: &str) {
+    let _ = app.update(bar_message(PcbBarMsg::MenuToggled(menu)));
+    let row = rows(app, menu)
+        .into_iter()
+        .find(|row| row.command_id == Some(command))
+        .unwrap_or_else(|| panic!("a {command} row"));
+    let _ = app.update(row.on_press.expect("a live row"));
+    assert_eq!(
+        app.interaction_state.pcb_bar_menu, None,
+        "the pick closes it"
+    );
+}
+
+/// #2352: each View row turns the view as its View menu row does.
+#[test]
+fn the_view_dropdown_rows_turn_the_board_view() {
+    let mut app = board_app();
+    pick(&mut app, PcbBarMenu::View, "view_rotate");
+    assert_eq!(angle(&app), 90.0);
+    pick(&mut app, PcbBarMenu::View, "view_rotate_180");
+    assert_eq!(angle(&app), 270.0);
+    pick(&mut app, PcbBarMenu::View, "view_rotate_ccw");
+    assert_eq!(angle(&app), 180.0);
+    pick(&mut app, PcbBarMenu::View, "view_rotate_reset");
+    assert_eq!(angle(&app), 0.0);
+}
+
+/// #2352: the Move rows are labelled as their menu rows, Move runs from an
+/// empty selection, and the rows that act on a selection are greyed without
+/// one, by the menu bar's gate.
+#[test]
+fn the_move_dropdown_follows_the_menu_rows_and_their_gate() {
+    let mut app = board_app();
+    let move_rows = rows(&app, PcbBarMenu::Move);
+    let labels: Vec<_> = move_rows.iter().map(|row| row.label.as_str()).collect();
+    assert_eq!(
+        labels,
+        [
+            "Move",
+            "Move Selection",
+            "Rotate",
+            "Rotate Clockwise",
+            "Flip Selection"
+        ]
+    );
+    let live: Vec<_> = move_rows
+        .iter()
+        .filter(|row| !row.disabled)
+        .filter_map(|row| row.command_id)
+        .collect();
+    assert_eq!(live, ["move_object"], "nothing is selected");
+    pick(&mut app, PcbBarMenu::Move, "move_object");
+    assert!(app.interaction_state.pcb_carry.is_some(), "Move is armed");
+}
+
+/// #2352: the View rows' Reset is greyed while the view is not turned, as
+/// View ▸ Reset View Rotation is.
+#[test]
+fn the_view_dropdown_greys_reset_at_zero() {
+    let app = board_app();
+    let reset = rows(&app, PcbBarMenu::View)
+        .into_iter()
+        .find(|row| row.command_id == Some("view_rotate_reset"))
+        .expect("a reset row");
+    assert!(reset.disabled && reset.on_press.is_none());
+}
+
+/// #2373: the Selection Filter button opens a dropdown of the object kinds;
+/// a row toggles its kind in the one filter the Properties panel's chips
+/// edit, and the dropdown stays open for the next.
+#[test]
+fn the_selection_filter_toggles_the_kinds_the_board_picks() {
+    use pcb_geom::PickKind;
+
+    let mut app = board_app();
+    let filter = buttons(&bar_of(&app))[0].on_press.clone().expect("live");
+    let _ = app.update(filter);
+    assert_eq!(app.interaction_state.pcb_bar_menu, Some(PcbBarMenu::Filter));
+    assert!(buttons(&bar_of(&app))[0].selected);
+    let entries = rows(&app, PcbBarMenu::Filter);
+    assert_eq!(
+        entries.len(),
+        1 + PickKind::ALL.len(),
+        "All - On and each kind"
+    );
+    assert!(entries.iter().all(|row| row.checked || row.disabled));
+    let tracks = entries
+        .iter()
+        .find(|row| row.label == "Tracks")
+        .expect("a Tracks row");
+    let _ = app.update(tracks.on_press.clone().expect("a live row"));
+    assert!(!app.ui_state.pcb_pick_filter.is_on(PickKind::Tracks));
+    assert_eq!(app.interaction_state.pcb_bar_menu, Some(PcbBarMenu::Filter));
+    let tracks = rows(&app, PcbBarMenu::Filter)
+        .into_iter()
+        .find(|row| row.label == "Tracks")
+        .unwrap();
+    assert!(!tracks.checked, "the row shows the kind off");
+    let keepouts = rows(&app, PcbBarMenu::Filter)
+        .into_iter()
+        .find(|row| row.label == "Keepouts")
+        .unwrap();
+    assert!(keepouts.disabled, "a kind the board cannot pick is greyed");
+}

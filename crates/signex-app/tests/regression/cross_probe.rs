@@ -87,11 +87,13 @@ fn board() -> PcbBoard {
         properties: Vec::new(),
         schematic_link: Some(SymbolLink::new(InstancePath::root(), [R1])),
         library_ref: None,
+        component: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     };
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),
@@ -472,6 +474,38 @@ fn the_board_menu_row_brings_the_sheet_forward() {
     assert_eq!(
         f.app.interaction_state.canvas.selected,
         vec![SelectedItem::new(R1, SelectedKind::Symbol)]
+    );
+}
+
+/// #2058: a refused Cross Probe says why in Messages in English whatever the
+/// UI language; logs stay locale-invariant. The card follows the language.
+#[test]
+fn a_refused_probe_logs_english_under_any_language() {
+    const WHY: &str = "This project has no board to cross probe to.";
+    let mut f = fixture(false);
+    select_all_on_the_sheet(&mut f);
+    f.app.document_state.projects[0].data.pcb_file = None;
+    let pref = signex_i18n::LanguagePref::Locale("en-XA".to_owned());
+    // Not driven: its prefs write would put en-XA in the prefs.json every
+    // test of this binary shares, and later apps would start in it.
+    let _ = f.app.update(Message::Ui(UiMsg::LanguageChanged(pref)));
+    let logged = || {
+        diagnostics::recent_entries()
+            .iter()
+            .filter(|e| e.message == WHY)
+            .count()
+    };
+    let before = logged();
+    send(
+        &mut f.app,
+        Message::Menu(MenuMessage::Command(command("cross_probe"))),
+    );
+    assert_eq!(logged(), before + 1, "the Messages line is English");
+    let notice = f.app.document_state.error_notice.as_ref().expect("a card");
+    assert_ne!(
+        notice.detail_text(&f.app.ui_state.i18n),
+        WHY,
+        "the card is en-XA"
     );
 }
 

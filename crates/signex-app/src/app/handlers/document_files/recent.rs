@@ -47,10 +47,10 @@ impl Signex {
         } else {
             iced::Task::none()
         };
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(format!(
-            "{} no longer exists. It has been removed from File > Open Recent.",
-            path.display()
-        )));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+            signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_RECENT_GONE)
+                .arg("path", path.display().to_string()),
+        ));
         persist
     }
 

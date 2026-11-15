@@ -110,7 +110,8 @@ pub(crate) struct CommandContext {
     /// placement commands do (#2240).
     pub pcb: PcbTargets,
     /// Rotate and mirror have something on a sheet besides the selection:
-    /// a part on the cursor, or the Bus Entry tool's next entry.
+    /// a part on the cursor, the Bus Entry tool's next entry, or an open
+    /// wire or bus run, whose corner they bend (#2372).
     pub turn_in_hand: bool,
 }
 
@@ -160,7 +161,14 @@ pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
 /// (#2240): the menu greys it, but its keystroke still reaches the handler,
 /// which says which footprint is locked instead of doing nothing silently.
 pub(crate) fn explains_refusal_in(command: &AppCommandId, ctx: &CommandContext) -> bool {
-    ctx.pcb.shown && ctx.pcb.any && super::needs::is_placement_command(command)
+    let pastes = matches!(
+        super::needs::needs(command),
+        Some(super::needs::Needs::PasteTarget)
+    );
+    ctx.pcb.shown
+        && ((ctx.pcb.any && super::needs::is_placement_command(command))
+            // A paste with no board objects on the clipboard says why (#2361).
+            || pastes)
 }
 
 /// An Active Bar command whose tool is a planned placeholder (#1249). It is
@@ -264,7 +272,8 @@ impl Signex {
             can_remove_part: self.active_symbol_part_is_removable(),
             pcb: self.pcb_targets(window),
             turn_in_hand: self.interaction_state.placement.is_some()
-                || self.interaction_state.current_tool == Tool::BusEntry,
+                || self.interaction_state.current_tool == Tool::BusEntry
+                || self.is_drawing_wire_run(),
         }
     }
 

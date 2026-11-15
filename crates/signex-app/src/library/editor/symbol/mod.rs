@@ -8,6 +8,8 @@ pub mod active_bar;
 pub mod canvas;
 pub mod context_menu;
 pub mod pins_panel;
+#[cfg(test)]
+mod resize_tests;
 pub mod state;
 pub(crate) mod status;
 pub(crate) mod updates;

@@ -115,7 +115,7 @@ fn a_corrupt_sheet_can_be_deleted_but_blocks_deleting_others_with_its_name() {
         .document_state
         .error_notice
         .as_ref()
-        .map(|n| n.detail.clone())
+        .map(|n| n.detail.render_en_us())
         .expect("a notice");
     assert!(
         detail.contains("corrupt.snxsch"),

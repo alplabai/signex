@@ -16,13 +16,17 @@ pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
     let index = BoardIndex::build(board);
     let mut violations = copper_pairs(&items, &index, rules);
     violations.extend(unconnected(board, &items));
-    violations.extend(super::keepout::violations(board));
+    let keepouts = super::keepout::check(board);
+    violations.extend(keepouts.violations);
     violations.extend(super::limits::violations(board, rules));
     violations.sort_unstable();
+    let mut skipped = index.rejected().to_vec();
+    skipped.extend(keepouts.bodies);
     DrcReport {
         rules: rules.clone(),
         violations,
-        skipped: index.rejected().to_vec(),
+        skipped,
+        skipped_keepouts: keepouts.keepouts,
     }
 }
 

@@ -46,8 +46,14 @@ pub mod paste;
 pub mod pcb_drc;
 mod pcb_drc_check;
 pub(crate) use pcb_drc_check::DRC_CHECK;
-#[cfg(test)]
 pub(crate) use pcb_drc_check::LOOSE_BOARD_WARNING;
+mod pcb_align;
+mod pcb_board_options;
+mod pcb_board_panel;
+mod pcb_clipboard;
+#[cfg(test)]
+mod pcb_clipboard_tests;
+pub(crate) mod pcb_component;
 #[cfg(test)]
 mod pcb_drc_tests;
 mod pcb_edit;
@@ -55,12 +61,15 @@ mod pcb_edit;
 mod pcb_edit_tests;
 pub(crate) mod pcb_footprint_text;
 mod pcb_parking;
+mod pcb_part_place;
 pub(crate) mod pcb_placement;
 #[cfg(test)]
 mod pcb_placement_tests;
 #[cfg(test)]
 mod pcb_placement_window_tests;
+pub(crate) mod pcb_primitive;
 pub mod pcb_select;
+pub(crate) mod pcb_tool;
 pub mod pcb_view;
 pub mod pcb_view_rotation;
 pub mod placed_part;

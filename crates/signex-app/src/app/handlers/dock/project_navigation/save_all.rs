@@ -10,7 +10,7 @@
 use super::*;
 use crate::app::FileMsg;
 use crate::app::contracts::{
-    CaseVariants, PinnedSpelling, SaveAllNext, SaveAllPlan, SaveAllSettle,
+    CaseVariants, PinnedSpelling, SaveAllNext, SaveAllPlan, SaveAllSettle, SaveAllWrite,
 };
 use crate::app::document::DocumentKey;
 use crate::app::handlers::document_files::FoldAnswer;
@@ -21,6 +21,9 @@ use std::collections::HashMap;
 
 /// The reason Save All records for a spelling it kept unsaved.
 const CASE_RULE_UNKNOWN_REASON: &str = "folder case rule unknown, save it separately";
+
+/// The reason Save All gives for a row whose write stopped without a result.
+const WRITE_STOPPED_REASON: &str = "its save stopped unexpectedly; save it again";
 
 impl Signex {
     /// Start the write of one dirty file, matching `path` to the spelling it
@@ -48,6 +51,11 @@ impl Signex {
     /// encoding to identical bytes, and then the first dirty spelling is
     /// written once. The other spellings' dirty markers are cleared when the
     /// Save All settles ([`Self::clear_saved_case_variants`]).
+    ///
+    /// The task returned must be output-only: a future whose one action is
+    /// its completion message. Save All runs it under a panic guard
+    /// ([`writes_then_settle`]) that drops any other runtime action with a
+    /// warning.
     fn begin_held_save(
         &mut self,
         held: &[std::path::PathBuf],
@@ -200,6 +208,15 @@ impl Signex {
             let target = self.write_target(&held).clone();
             match self.begin_held_save(&held, &target) {
                 Ok(task) => {
+                    if let Some(task) = task {
+                        let write = SaveAllWrite::File {
+                            path: target.clone(),
+                            generation: self.primitive_save_generation(&target),
+                        };
+                        #[cfg(test)]
+                        let task = stop_injected(&target, task);
+                        writes.push((write, task));
+                    }
                     // Only a write that began can make the other spellings
                     // clean; a refused one leaves every marker (#1423). Each
                     // other is pinned now: one edited while the write runs
@@ -227,7 +244,6 @@ impl Signex {
                             others,
                         });
                     }
-                    writes.extend(task);
                 }
                 Err(err) => {
                     crate::diagnostics::log_error(
@@ -247,7 +263,7 @@ impl Signex {
         // outcome reaches the settle step through `batch_row_failures`.
         for address in rows {
             match self.begin_save_row_in_batch(address, batch) {
-                Ok(task) => writes.extend(task),
+                Ok(task) => writes.extend(task.map(|t| (SaveAllWrite::Row(address.clone()), t))),
                 Err(err) => {
                     let label = self.library.editor_label(address);
                     crate::diagnostics::log_error(
@@ -258,7 +274,7 @@ impl Signex {
                 }
             }
         }
-        let settled = Message::File(FileMsg::SaveAllSettled(Box::new(SaveAllSettle {
+        let settle = SaveAllSettle {
             next,
             items: begun.len() + rows.len(),
             paths: paths.to_vec(),
@@ -266,13 +282,22 @@ impl Signex {
             rows: rows.to_vec(),
             batch,
             case_variants,
-        })));
-        Task::batch(writes).chain(Task::done(settled))
+            stopped: Vec::new(),
+        };
+        writes_then_settle(writes, settle)
     }
 
-    /// Every write of a Save All completed: continue into the close / quit,
-    /// or stay open and name what did not save.
-    pub(crate) fn handle_save_all_settled(&mut self, settle: SaveAllSettle) -> Task<Message> {
+    /// Every write of a Save All completed: fail the ones that stopped
+    /// without a result, then continue into the close / quit, or stay open
+    /// and name what did not save.
+    pub(crate) fn handle_save_all_settled(&mut self, mut settle: SaveAllSettle) -> Task<Message> {
+        let stopped = self.settle_stopped_writes(&mut settle);
+        Task::batch([stopped, self.continue_save_all(settle)])
+    }
+
+    /// The settle once no write of it is owed: park it while a row of its
+    /// batch still writes, else close / quit or name what did not save.
+    fn continue_save_all(&mut self, settle: SaveAllSettle) -> Task<Message> {
         if self.library.batch_has_rows_in_flight(settle.batch) {
             let waiting = self.library.batch_rows_in_flight_labels(settle.batch);
             crate::diagnostics::log_warning(format!(
@@ -291,6 +316,7 @@ impl Signex {
             rows,
             batch,
             case_variants,
+            stopped: _,
         } = settle;
         self.clear_saved_case_variants(&case_variants);
         // Drop the dirty dots of everything that DID save.
@@ -355,32 +381,105 @@ impl Signex {
             };
         }
         let listing = Self::save_all_failure_listing(&failed);
-        let message = match next {
-            SaveAllNext::CloseProject { .. } => format!(
-                "Could not save {} item(s) — project not closed:\n  {listing}",
-                failed.len()
-            ),
-            SaveAllNext::CloseLibrary { .. } => format!(
-                "Could not save {} item(s) — library not closed:\n  {listing}",
-                failed.len()
-            ),
-            SaveAllNext::Nothing => format!(
-                "Save All: could not save {} item(s):\n  {listing}",
-                failed.len()
-            ),
-            SaveAllNext::Quit => format!(
-                "Could not save {} item(s) — Signex stayed open so nothing is lost. \
-                 Save them manually, or choose Discard All to exit anyway:\n  {listing}",
-                failed.len()
-            ),
+        let id = match next {
+            SaveAllNext::CloseProject { .. } => signex_i18n::ids::NOTICE_SAVE_ALL_PROJECT_KEPT,
+            SaveAllNext::CloseLibrary { .. } => signex_i18n::ids::NOTICE_SAVE_ALL_LIBRARY_KEPT,
+            SaveAllNext::Nothing => signex_i18n::ids::NOTICE_SAVE_ALL_FAILED,
+            SaveAllNext::Quit => signex_i18n::ids::NOTICE_SAVE_ALL_QUIT_HELD,
         };
-        crate::diagnostics::log_warning(&message);
+        let message = signex_i18n::Translatable::new(id)
+            .arg("count", failed.len())
+            .arg("listing", listing);
+        crate::diagnostics::log_warning(message.render_en_us());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(message));
         // The app stays open: a system quit request still waiting is declined.
         if matches!(next, SaveAllNext::Quit) {
             return Self::decline_quit();
         }
         Task::none()
+    }
+
+    /// Fail each write of `settle` whose task panicked (#2269) as its own
+    /// completion would have: the file or row is no longer marked saving, so
+    /// a later save writes it, and the settle names it. Only these writes are
+    /// touched; a row write running as a task of its own still reports.
+    fn settle_stopped_writes(&mut self, settle: &mut SaveAllSettle) -> Task<Message> {
+        let mut tasks = Vec::new();
+        for write in std::mem::take(&mut settle.stopped) {
+            match write {
+                SaveAllWrite::File {
+                    path,
+                    generation: Some(generation),
+                } => tasks.push(
+                    self.handle_primitive_saved(crate::persist::PrimitiveSaveDone {
+                        path,
+                        generation,
+                        save_as: None,
+                        result: Err(WRITE_STOPPED_REASON.to_string()),
+                    }),
+                ),
+                SaveAllWrite::File {
+                    path,
+                    generation: None,
+                } => {
+                    let saves = &mut self.document_state.document_saves;
+                    saves.finish(&path);
+                    saves.record_failure(path.clone(), WRITE_STOPPED_REASON.to_string());
+                    tasks.push(self.drain_released_write(&path));
+                }
+                SaveAllWrite::Row(address) => {
+                    self.stop_row_write(&address, settle.batch);
+                    settle.failed.push((
+                        self.library.editor_label(&address),
+                        WRITE_STOPPED_REASON.to_string(),
+                    ));
+                }
+            }
+        }
+        Task::batch(tasks)
+    }
+
+    /// The stopped write of `path` is released: run what its completion would
+    /// have, the project save asked for meanwhile, or, for a sheet or board,
+    /// the dirty marker re-read from its history and the warning for the
+    /// spellings it superseded.
+    fn drain_released_write(&mut self, path: &std::path::Path) -> Task<Message> {
+        if let Some(DocumentKey::Project(project_id)) =
+            self.document_state.document_key_for_path(path)
+        {
+            return self.start_project_follow_up(project_id, path);
+        }
+        // The file is unchanged, so an Undo back to the save point that the
+        // write was holding dirty may now read clean.
+        self.document_state.sync_history_dirty(path);
+        self.warn_unwritten_spellings(path);
+        Task::none()
+    }
+
+    /// The batch write of the row at `address` stopped without a result:
+    /// release its PDF store (when that was the write), its in-flight mark
+    /// and the editor's saving copy, so the row saves again.
+    fn stop_row_write(&mut self, address: &crate::library::state::EditorAddress, batch: u64) {
+        let store = self
+            .library
+            .batch_rows_in_flight
+            .iter()
+            .find(|(_, (b, a))| *b == batch && a == address)
+            .map(|(generation, _)| *generation);
+        if let Some(generation) = store {
+            self.library.batch_rows_in_flight.remove(&generation);
+            // The store registered its write on the library file.
+            self.document_state
+                .document_saves
+                .finish(&address.library_path);
+        }
+        if let Some(state) = self.library.editors.get_mut(address)
+            && state.saving_row.is_some()
+            && store.is_none_or(|generation| state.saving_generation == generation)
+        {
+            state.abort_save();
+            state.saving_batch = None;
+        }
     }
 
     /// `path` as it is now: the pair `mark_saved` guards for the written one.
@@ -460,6 +559,110 @@ impl Signex {
             .collect::<Vec<_>>()
             .join("\n  ")
     }
+}
+
+/// Run Save All's `writes`, then send `settle`. The runtime runs a task as
+/// one stream, so a panicking write would end it, dropping the settle (a quit
+/// request left unanswered) and every sibling write not yet reported (files
+/// left marked saving forever). Each write is guarded on its own instead: a
+/// panic ends only that write, the others still report, and the settle
+/// arrives naming it in `stopped` (#2269). The writes are futures whose only
+/// actions are their completion messages; any other action is dropped with a
+/// warning.
+pub(super) fn writes_then_settle(
+    writes: Vec<(SaveAllWrite, Task<Message>)>,
+    settle: SaveAllSettle,
+) -> Task<Message> {
+    use iced::futures::{StreamExt as _, stream};
+    let settled = |settle: SaveAllSettle| Message::File(FileMsg::SaveAllSettled(Box::new(settle)));
+    // Assumes no panic between a write's spawn_blocking start and its join.
+    let guarded: Vec<_> = writes
+        .into_iter()
+        .filter_map(|(write, task)| {
+            let stream = iced_runtime::task::into_stream(task)?;
+            Some(
+                std::panic::AssertUnwindSafe(stream)
+                    .catch_unwind()
+                    .map(move |step| step.map_err(|panic| (write.clone(), panic)))
+                    .boxed(),
+            )
+        })
+        .collect();
+    if guarded.is_empty() {
+        return Task::done(settled(settle));
+    }
+    // Each write's item, then `None` once all of them ended.
+    let steps = stream::select_all(guarded)
+        .map(Some)
+        .chain(stream::once(std::future::ready(None)));
+    let messages = steps
+        .scan(Some(settle), move |settle, step| {
+            let message = match step {
+                Some(Ok(iced_runtime::Action::Output(message))) => Some(message),
+                Some(Ok(_)) => {
+                    crate::diagnostics::log_warning(
+                        "Save All: a write asked the runtime for more than its result; ignored",
+                    );
+                    None
+                }
+                Some(Err((write, panic))) => {
+                    crate::diagnostics::log_error(
+                        "Save All: a write stopped unexpectedly",
+                        &anyhow::anyhow!(panic_text(panic.as_ref())),
+                    );
+                    if let Some(settle) = settle.as_mut() {
+                        settle.stopped.push(write);
+                    }
+                    None
+                }
+                None => settle.take().map(settled),
+            };
+            std::future::ready(Some(message))
+        })
+        .filter_map(std::future::ready);
+    Task::stream(messages)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The file whose Save All write a test stops: the write begins as usual,
+    /// then its task panics instead of reporting.
+    pub(super) static STOP_WRITE_OF: std::cell::RefCell<Option<std::path::PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// `task`, or a task that panics in its place when a test asked to stop the
+/// write of `target` (#2269).
+#[cfg(test)]
+fn stop_injected(target: &std::path::Path, task: Task<Message>) -> Task<Message> {
+    let stop = STOP_WRITE_OF.with(|stop| {
+        let mut stop = stop.borrow_mut();
+        let hit = stop.as_deref() == Some(target);
+        if hit {
+            *stop = None;
+        }
+        hit
+    });
+    if !stop {
+        return task;
+    }
+    // The real write began (the file is marked saving) and is dropped unrun,
+    // as a panic would leave it.
+    Task::future(write_that_panics())
+}
+
+#[cfg(test)]
+async fn write_that_panics() -> Message {
+    panic!("the write blew up")
+}
+
+/// The text of a caught panic, when it carries one.
+fn panic_text(panic: &(dyn std::any::Any + Send)) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|s| (*s).to_string())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "a panic with no message".to_string())
 }
 
 /// Whether two path lists hold the same paths, whatever their order.

@@ -57,3 +57,34 @@ fn the_board_menu_properties_row_is_live_with_a_selection() {
     let rows = pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, empty, &sc);
     assert!(row_message(&rows, "Properties...").is_none());
 }
+
+/// #2366: Change Footprint... runs `change_footprint` with an unlocked
+/// footprint selected, and is greyed otherwise.
+#[test]
+fn the_board_menu_change_footprint_row_needs_an_unlocked_footprint() {
+    let sc = shortcuts();
+    let placeable = PcbTargets {
+        shown: true,
+        any: true,
+        placeable: true,
+        ..PcbTargets::default()
+    };
+    let rows = pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, placeable, &sc);
+    assert!(matches!(
+        row_message(&rows, "Change Footprint..."),
+        Some(Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, project: None })))
+            if id.as_str() == "change_footprint"
+    ));
+    let locked = PcbTargets {
+        shown: true,
+        any: true,
+        ..PcbTargets::default()
+    };
+    let rows = pcb_canvas_menu_entries(signex_i18n::I18n::en_us_ref(), TID, locked, &sc);
+    assert!(row_message(&rows, "Change Footprint...").is_none());
+    assert!(
+        rows.iter()
+            .any(|row| matches!(row, DropdownEntry::Item(it) if it.label == "Change Footprint...")),
+        "the row is there, greyed"
+    );
+}

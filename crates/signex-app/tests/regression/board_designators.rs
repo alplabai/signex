@@ -75,6 +75,7 @@ fn footprint(uuid: Uuid, reference: &str, (x, y): (f64, f64), locked: bool) -> F
             [Uuid::from_u128(n + 0x1000)],
         )),
         library_ref: None,
+        component: Default::default(),
         pads: vec![pad(n + 1, -2.0), pad(n + 2, 2.0)],
         graphics: Vec::new(),
         properties: vec![property("Reference", reference), property("Value", "10k")],
@@ -86,6 +87,7 @@ fn footprint(uuid: Uuid, reference: &str, (x, y): (f64, f64), locked: bool) -> F
 fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),

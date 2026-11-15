@@ -1,6 +1,7 @@
 //! The physical-key fallback of the keymap claim (#1645, decision D1): the
 //! logical stroke keeps priority, and the US-QWERTY key of the same
-//! physical position is retried only on a miss with Ctrl, Cmd or Alt held.
+//! physical position is retried only on a miss with Ctrl, Cmd or Alt held,
+//! or, for a non-Latin layout (Cyrillic, Greek), on any miss (#2095).
 
 use super::*;
 use crate::keymap::{
@@ -131,4 +132,49 @@ fn the_fallback_is_tried_after_a_chord_prefix_misses() {
         routed(&app, &press("\u{f6}", Code::Comma, Held::CTRL)),
         stroke("Ctrl+,")
     );
+}
+
+/// #2095: a bare key of a non-Latin layout reaches its US binding on a miss.
+#[test]
+fn a_bare_cyrillic_or_greek_letter_fires_the_us_letter_binding() {
+    let app = app_with(Platform::Windows, &[("W", "place_wire")]);
+    // Russian ЙЦУКЕН: `ц` on the W key. Greek: final sigma on the W key.
+    for logical in ["\u{446}", "\u{3c2}"] {
+        let sent = routed(&app, &press(logical, Code::KeyW, Held::empty()));
+        assert_eq!(sent, stroke("W"), "{logical}");
+        assert_eq!(resolves_to(&app, &sent).as_deref(), Some("place_wire"));
+    }
+    let sent = routed(&app, &press("\u{426}", Code::KeyW, Held::SHIFT));
+    assert_eq!(sent, stroke("Shift+W"));
+}
+
+#[test]
+fn ctrl_z_and_ctrl_c_fire_on_a_russian_layout() {
+    let app = app_with(Platform::Windows, &[("Mod+Z", "undo"), ("Mod+C", "copy")]);
+    let undo = routed(&app, &press("\u{44f}", Code::KeyZ, Held::CTRL));
+    assert_eq!(resolves_to(&app, &undo).as_deref(), Some("undo"));
+    let copy = routed(&app, &press("\u{441}", Code::KeyC, Held::CTRL));
+    assert_eq!(resolves_to(&app, &copy).as_deref(), Some("copy"));
+}
+
+#[test]
+fn a_binding_on_the_cyrillic_letter_itself_keeps_priority() {
+    let app = app_with(
+        Platform::Windows,
+        &[("\u{446}", "find"), ("W", "place_wire")],
+    );
+    let sent = routed(&app, &press("\u{446}", Code::KeyW, Held::empty()));
+    assert_eq!(sent, stroke("\u{446}"));
+    assert_eq!(resolves_to(&app, &sent).as_deref(), Some("find"));
+}
+
+#[test]
+fn dvorak_keeps_its_logical_letter() {
+    // Dvorak types `x` on the physical B key; nothing is remapped.
+    let app = app_with(Platform::Windows, &[("B", "find")]);
+    for held in [Held::empty(), Held::CTRL] {
+        let sent = routed(&app, &press("x", Code::KeyB, held));
+        assert_eq!(sent.key, stroke("X").key);
+        assert_eq!(resolves_to(&app, &sent), None);
+    }
 }

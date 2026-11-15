@@ -25,9 +25,9 @@ fn project_add_library_says_it_is_not_available() {
         .as_ref()
         .expect("the Project add-library request must be surfaced, not dropped");
     assert!(
-        notice.detail.contains("not yet available"),
+        notice.detail.render_en_us().contains("not yet available"),
         "got {:?}",
-        notice.detail
+        notice.detail.render_en_us()
     );
 }
 
@@ -98,9 +98,9 @@ fn non_recoverable_mount_failure_raises_the_error_card() {
         .as_ref()
         .expect("a non-recoverable mount failure must raise the error card");
     assert!(
-        notice.detail.contains("Cannot add library"),
+        notice.detail.render_en_us().contains("Cannot add library"),
         "{:?}",
-        notice.detail
+        notice.detail.render_en_us()
     );
     assert!(app.library.installed_libraries.is_empty());
 }
@@ -185,9 +185,9 @@ fn failed_promote_keeps_the_library_listed_and_shows_the_error() {
         .as_ref()
         .expect("the failed global_libraries.toml write must be reported");
     assert!(
-        notice.detail.contains("promote to global"),
+        notice.detail.render_en_us().contains("promote to global"),
         "{:?}",
-        notice.detail
+        notice.detail.render_en_us()
     );
 }
 
@@ -207,8 +207,8 @@ fn open_library_failure_raises_the_error_card() {
         .as_ref()
         .expect("File > Library > Open Library must not only log a failure");
     assert!(
-        notice.detail.contains("Cannot open library"),
+        notice.detail.render_en_us().contains("Cannot open library"),
         "{:?}",
-        notice.detail
+        notice.detail.render_en_us()
     );
 }

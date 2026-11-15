@@ -80,22 +80,27 @@ pub(crate) fn route_open_error(
 pub(crate) fn open_error_notice(
     state: &LibraryState,
     path: &std::path::Path,
-    action: &str,
+    action: signex_i18n::MessageId,
     err: &LibraryError,
 ) -> crate::app::state::ErrorNotice {
-    if state.is_read_only_target(path) {
-        return read_only_repair_notice(path, &format!("could not be opened ({err})"));
-    }
-    crate::app::state::ErrorNotice::open(format!("Cannot {action} {}: {err}", path.display()))
+    let detail = if state.is_read_only_target(path) {
+        signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_STOCK_LIBRARY_NOT_OPENED)
+    } else {
+        signex_i18n::Translatable::new(action)
+    };
+    crate::app::state::ErrorNotice::open(
+        detail
+            .arg("path", path.display().to_string())
+            .arg("error", err.to_string()),
+    )
 }
 
 /// Error card for a recovery attempt against a read-only (stock) library.
-fn read_only_repair_notice(path: &std::path::Path, what: &str) -> crate::app::state::ErrorNotice {
-    crate::app::state::ErrorNotice::open(format!(
-        "The library at {} ships with Signex and {what}. \
-         It is read-only and cannot be repaired from here; reinstall Signex to restore it.",
-        path.display()
-    ))
+fn read_only_repair_notice(path: &std::path::Path) -> crate::app::state::ErrorNotice {
+    crate::app::state::ErrorNotice::open(
+        signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_STOCK_LIBRARY_NOT_REINITIALISED)
+            .arg("path", path.display().to_string()),
+    )
 }
 
 /// Handle the user's choice from the *Library missing* recovery dialog.
@@ -118,18 +123,17 @@ pub(super) fn handle_recovery_library_missing(
                 let path = path.clone();
                 app.library.missing.start_locating(path);
             }
-            let picker = app.ui_state.io.picker.clone();
-            Task::perform(
-                async move {
-                    picker
-                        .dialog()
-                        .set_title("Locate Library (*.snxlib)")
-                        .add_filter("Signex Library", &["snxlib"])
-                        .pick_file()
-                        .await
-                },
-                |path| Message::Library(LibraryMessage::RecoveryLibraryMissingLocateResult(path)),
-            )
+            let i18n = &app.ui_state.i18n;
+            let dialog = app
+                .ui_state
+                .io
+                .picker
+                .dialog()
+                .title_in(i18n, signex_i18n::ids::FILE_DIALOG_LOCATE_LIBRARY)
+                .filter_in(i18n, signex_i18n::ids::FILE_FILTER_LIBRARY, &["snxlib"]);
+            Task::perform(async move { dialog.pick_file().await }, |path| {
+                Message::Library(LibraryMessage::RecoveryLibraryMissingLocateResult(path))
+            })
         }
         LibraryMissingChoice::RemoveFromProject => {
             let missing = match app.library.recovery.as_ref() {
@@ -323,8 +327,7 @@ pub(super) fn handle_recovery_git_missing(
                 // Defence in depth: the dialog is never opened for a
                 // read-only library, but never write to one regardless.
                 app.library.finish_recovery();
-                app.document_state.error_notice =
-                    Some(read_only_repair_notice(&path, "cannot be re-initialised"));
+                app.document_state.error_notice = Some(read_only_repair_notice(&path));
                 return Task::none();
             }
             // A re-init already running on this library: wait for it.

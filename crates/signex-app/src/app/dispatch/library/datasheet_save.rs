@@ -92,7 +92,15 @@ impl Signex {
             return Task::none();
         };
         let address = address.clone();
-        Task::perform(pick_pdf(self.ui_state.io.picker.clone()), move |file| {
+        let i18n = &self.ui_state.i18n;
+        let dialog = self
+            .ui_state
+            .io
+            .picker
+            .dialog()
+            .title_in(i18n, signex_i18n::ids::FILE_DIALOG_PIN_DATASHEET)
+            .filter_in(i18n, signex_i18n::ids::FILE_FILTER_PDF, &["pdf"]);
+        Task::perform(pick_pdf(dialog), move |file| {
             Message::Library(LibraryMessage::EditorEvent {
                 library_path: address.library_path.clone(),
                 table: address.table.clone(),
@@ -371,7 +379,8 @@ impl Signex {
     }
 
     /// Run the Save All settle parked for `batch` once none of its rows has
-    /// a write in flight (#1728).
+    /// a write in flight (#1728). A report arriving after the batch settled
+    /// finds no parked settle and runs nothing.
     pub(super) fn resume_parked_settle(&mut self, batch: Option<u64>) -> Task<Message> {
         let Some(batch) = batch else {
             return Task::none();
@@ -391,13 +400,8 @@ impl Signex {
 
 /// The file dialog, then the read and the validation of the chosen file.
 /// `None` when the dialog is cancelled.
-async fn pick_pdf(picker: crate::io_ports::Picker) -> Option<Result<PickedFile, String>> {
-    let path = picker
-        .dialog()
-        .set_title("Pin datasheet PDF")
-        .add_filter("PDF", &["pdf"])
-        .pick_file()
-        .await?;
+async fn pick_pdf(dialog: crate::io_ports::FileDialog) -> Option<Result<PickedFile, String>> {
+    let path = dialog.pick_file().await?;
     let filename = path
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())

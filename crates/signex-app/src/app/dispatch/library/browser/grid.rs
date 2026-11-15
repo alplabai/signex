@@ -13,8 +13,12 @@ impl Signex {
         library_path: std::path::PathBuf,
         table: String,
     ) -> Task<Message> {
+        // Compare with the table on screen: before the first click
+        // `active_table` is unset while the first table is shown.
+        let shown = self.library.shown_browser_table(&library_path);
         if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
-            if state.active_table.as_deref() != Some(table.as_str()) {
+            let shown = shown.or_else(|| state.active_table.clone());
+            if shown.as_deref() != Some(table.as_str()) {
                 // The filters name the old table's columns.
                 state.range_filters = Default::default();
             }
@@ -24,8 +28,9 @@ impl Signex {
         Task::none()
     }
 
-    /// A range filter on a parameter column of a Library Browser tab. The
-    /// caches resync in `finish_update`.
+    /// A range filter on a parameter column of a Library Browser tab. Sent
+    /// per keystroke, so it skips `finish_update` and resyncs only the
+    /// view caches, as the picker's filter does.
     pub(in crate::app::dispatch::library) fn handle_browser_range_filter(
         &mut self,
         library_path: std::path::PathBuf,
@@ -33,6 +38,7 @@ impl Signex {
     ) -> Task<Message> {
         if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
             state.range_filters.apply(msg);
+            self.library.sync_view_caches_in(&self.ui_state.i18n);
         }
         Task::none()
     }

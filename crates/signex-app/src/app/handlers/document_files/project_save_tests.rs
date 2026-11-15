@@ -580,9 +580,12 @@ fn a_library_whose_version_control_cannot_be_completed_is_refused_loudly() {
     assert!(project.data.libraries.is_empty());
     let notice = fx.app.document_state.error_notice.clone().expect("card");
     assert!(
-        notice.detail.contains("partly created library"),
+        notice
+            .detail
+            .render_en_us()
+            .contains("partly created library"),
         "{}",
-        notice.detail
+        notice.detail.render_en_us()
     );
     assert!(crate::diagnostics::logged_count(&needle) > before);
 }
@@ -598,4 +601,17 @@ fn a_project_save_names_its_pending_libraries_as_side_writes() {
     assert_eq!(f.app.save_side_writes(&f.prj, true), vec![f.lib.clone()]);
     let sheet = tmp.path().join("Top.snxsch");
     assert!(f.app.save_side_writes(&sheet, false).is_empty());
+}
+
+/// #2331: the board a project names is the project's, but its Save As does
+/// not re-point the project, so it names no side write.
+#[test]
+fn a_project_board_saved_as_a_copy_names_no_side_writes() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let mut f = fixture(tmp.path());
+    f.app.document_state.projects[0].data.pcb_file = Some("board.snxpcb".into());
+    let board = f.app.document_state.projects[0].dir().join("board.snxpcb");
+    assert!(f.app.document_state.document_project(&board).is_some());
+    assert!(f.app.save_side_writes(&board, true).is_empty());
+    assert!(f.app.save_side_writes(&board, false).is_empty());
 }

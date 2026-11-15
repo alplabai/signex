@@ -32,6 +32,7 @@ disallowed-methods = [
     { path = "iced::widget::Tooltip::new", reason = "use signex_widgets::tooltip (#2056)" },
     { path = "iced::widget::value", reason = "use signex_widgets::text, which takes a Localized, a UserText or raw(\"…\") (#2056)" },
     { path = "iced::widget::span", reason = "use signex_widgets::span, which takes a Localized, a UserText or raw(\"…\") (#2056)" },
+    { path = "iced::advanced::text::Span::new", reason = "use signex_widgets::span, which takes a Localized, a UserText or raw(\"…\") (#2193)" },
     { path = "iced::widget::rich_text", reason = "use signex_widgets::rich_text, whose spans come from signex_widgets::span (#2056)" },
     { path = "iced::widget::toggler", reason = "use signex_widgets::toggler and TogglerLabel::labelled (#2056)" },
     { path = "iced::widget::radio", reason = "use signex_widgets::radio, whose label is a Localized, a UserText or raw(\"…\") (#2056)" },
@@ -47,6 +48,10 @@ disallowed-methods = [
     { path = "webbrowser::open", reason = "open links through crate::io_ports::Opener (#1931)" },
     { path = "webbrowser::open_browser", reason = "open links through crate::io_ports::Opener (#1931)" },
     { path = "webbrowser::open_browser_with_options", reason = "open links through crate::io_ports::Opener (#1931)" },
+]
+# `text!` formats straight into an iced Text, past the house widgets (#2193).
+disallowed-macros = [
+    { path = "iced::widget::text", reason = "use signex_widgets::text with t!(…), or raw(format!(…)) for text not in the catalog yet (#2193)" },
 ]
 disallowed-types = [
     { path = "rfd::AsyncFileDialog", reason = "ask through crate::io_ports::Picker (#1931)", allow-invalid = true },

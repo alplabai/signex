@@ -63,7 +63,7 @@ fn notice_detail(app: &Signex) -> String {
     app.document_state
         .error_notice
         .as_ref()
-        .map(|notice| notice.detail.clone())
+        .map(|notice| notice.detail.render_en_us())
         .unwrap_or_default()
 }
 

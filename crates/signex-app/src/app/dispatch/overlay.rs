@@ -92,6 +92,11 @@ impl Signex {
     pub(crate) fn dispatch_project_message(&mut self, msg: ProjectMsg) -> Task<Message> {
         match msg {
             ProjectMsg::Setup(msg) => self.dispatch_new_project_message(msg),
+            ProjectMsg::DocumentSetup(msg) => self.dispatch_document_setup_message(msg),
+            ProjectMsg::SetupProfilesWritten { note, undo, result } => {
+                self.setup_profiles_written(note, *undo, result);
+                Task::none()
+            }
             ProjectMsg::StartScreen(msg) => self.dispatch_start_screen_message(msg),
             ProjectMsg::SheetNumbering(msg) => self.dispatch_sheet_numbering_message(msg),
             ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
@@ -148,8 +153,9 @@ impl Signex {
                 project_id,
                 path,
                 result,
+                designators,
             } => {
-                self.handle_add_new_schematic_written(project_id, path, result);
+                self.handle_add_new_schematic_written(project_id, path, result, designators);
                 Task::none()
             }
             ProjectMsg::CreateChildSheetPathChanged(text) => {
@@ -172,9 +178,11 @@ impl Signex {
                 path,
                 result,
             } => self.handle_child_sheet_created(project_id, &parent, symbol, path, result),
-            ProjectMsg::AddNewSchematicPicked { project_id, path } => {
-                self.handle_add_new_schematic_picked(project_id, path)
-            }
+            ProjectMsg::AddNewSchematicPicked {
+                project_id,
+                path,
+                choice,
+            } => self.handle_add_new_schematic_picked(project_id, path, choice),
             ProjectMsg::GitCommitDone {
                 project_root,
                 rel_path,
@@ -234,6 +242,11 @@ impl Signex {
         self.drop_stale_pcb_carry();
         if self.has_own_pcb_carry() {
             self.end_pcb_carry();
+            return Task::none();
+        }
+        // A board placement tool closes a Solid Region, or ends its shape and
+        // then itself (#2373).
+        if self.close_board_region() || self.step_back_board_tool() {
             return Task::none();
         }
         let canvas = self.interaction_state.active_canvas();

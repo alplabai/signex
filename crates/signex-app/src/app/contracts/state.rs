@@ -190,7 +190,7 @@ pub enum ChildSheetWriteError {
 /// exist, and the user picks where to write it. Held by the parent sheet's
 /// path and the symbol's id, so the answer acts on THAT document whatever tab
 /// is active by then.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateChildSheetConfirmState {
     pub symbol: uuid::Uuid,
     /// The symbol's name, for the dialog text.
@@ -203,7 +203,7 @@ pub struct CreateChildSheetConfirmState {
     /// The editable file path: relative to the parent's folder, or absolute.
     pub path_text: String,
     /// Why Create refused, shown under the field.
-    pub error: Option<String>,
+    pub error: Option<signex_i18n::Translatable>,
     /// The typed path names a file that already exists: offer to open it.
     pub exists: bool,
 }
@@ -283,6 +283,23 @@ pub struct SaveAllSettle {
     /// was written, and the others it stands for. The others' dirty markers
     /// go once the written one is clean.
     pub case_variants: Vec<CaseVariants>,
+    /// The writes whose task panicked instead of reporting (#2269). Their
+    /// completions never arrive, so the settle fails each one itself.
+    pub stopped: Vec<SaveAllWrite>,
+}
+
+/// What one Save All write saves, so a write that stops without a result
+/// can be failed the way its own completion would fail it.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SaveAllWrite {
+    /// A document file. `generation` is the save stamp of the symbol or
+    /// footprint editor the write snapshotted; `None` for other documents.
+    File {
+        path: std::path::PathBuf,
+        generation: Option<u64>,
+    },
+    /// A Component Preview row.
+    Row(crate::library::state::EditorAddress),
 }
 
 /// A file held under several case-variant spellings: the one written and

@@ -35,6 +35,7 @@ fn footprint(pads: Vec<Pad>, graphics: Vec<FpGraphic>, rotation: f64, layer: &st
         locked: false,
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         pads,
         graphics,
         properties: Vec::new(),
@@ -143,6 +144,7 @@ fn a_non_finite_rotation_is_refused() {
 fn board(fp: Footprint) -> PcbBoard {
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: String::new(),

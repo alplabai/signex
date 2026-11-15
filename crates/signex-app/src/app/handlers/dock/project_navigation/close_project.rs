@@ -69,8 +69,9 @@ impl Signex {
         };
         if let Err(refusal) = self.refuse_project_while_delete_pending(project_id, "closed") {
             crate::diagnostics::log_warning(refusal.to_string());
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                crate::app::state::untranslated(refusal.to_string()),
+            ));
             return Task::none();
         }
         // A board of this project in sketch mode takes its sketch before the
@@ -240,8 +241,9 @@ impl Signex {
         let target_id = project_id;
         if let Err(refusal) = self.refuse_project_while_delete_pending(project_id, "closed") {
             crate::diagnostics::log_warning(refusal.to_string());
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                crate::app::state::untranslated(refusal.to_string()),
+            ));
             self.refresh_panel_ctx();
             return Task::none();
         }
@@ -851,19 +853,29 @@ impl Signex {
 
     /// Quitting between a file move and its completion would leave the
     /// project naming the old file with no prompt, so a quit is held (and
-    /// says why) while a rename or delete runs.
+    /// says why) while a rename or delete runs. So is a quit while a New
+    /// Project is still being written: exiting then leaves a half-made
+    /// project folder (#2280).
     fn hold_quit_while_path_op(&mut self) -> bool {
+        if !self.document_state.new_project_writes.is_empty() {
+            let detail =
+                signex_i18n::Translatable::new(signex_i18n::ids::DIALOG_NEW_PROJECT_QUIT_HELD);
+            crate::diagnostics::log_warning(detail.render_en_us());
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::quit_held(detail));
+            return true;
+        }
         if self.document_state.pending_path_ops.is_empty() {
             return false;
         }
-        let detail = if self.document_state.pending_path_ops.rewrite_running() {
-            "Annotate or Reset Duplicate Designators is still running, so the app was not \
-             closed. Try again once it finishes."
-        } else {
-            "A rename or delete is still running, so the app was not closed. \
-             Try again once it finishes."
-        };
-        crate::diagnostics::log_warning(detail);
+        let detail = signex_i18n::Translatable::new(
+            if self.document_state.pending_path_ops.rewrite_running() {
+                signex_i18n::ids::NOTICE_QUIT_HELD_REWRITE
+            } else {
+                signex_i18n::ids::NOTICE_QUIT_HELD_PATH_OP
+            },
+        );
+        crate::diagnostics::log_warning(detail.render_en_us());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::quit_held(detail));
         true
     }

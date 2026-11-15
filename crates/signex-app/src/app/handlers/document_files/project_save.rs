@@ -337,7 +337,11 @@ impl Signex {
 
     /// Run the save asked for while the write of `path` was running, if the
     /// project is still loaded there and still unsaved.
-    fn start_project_follow_up(&mut self, project_id: ProjectId, path: &Path) -> Task<Message> {
+    pub(crate) fn start_project_follow_up(
+        &mut self,
+        project_id: ProjectId,
+        path: &Path,
+    ) -> Task<Message> {
         if self.document_state.document_saves.is_saving(path) {
             return Task::none();
         }

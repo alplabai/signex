@@ -21,6 +21,14 @@ pub struct UiState {
         std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>,
     /// The status bar's view-angle field while it is open (#2316).
     pub pcb_view_angle_entry: Option<crate::app::ViewAngleEntry>,
+    /// What a click or box may pick on a board: the PCB selection filter
+    /// (#2353), one for the editor. Session only.
+    pub pcb_pick_filter: pcb_geom::PickFilter,
+    /// How carried board items snap (#2353), one for the editor. Session only.
+    pub pcb_snap: crate::pcb_canvas::PcbSnapOptions,
+    /// The board Properties panel's tab, search text, filter menu and the
+    /// grid step being typed (#2353).
+    pub pcb_board_panel: crate::panels::PcbBoardPanelView,
     /// The file picker and the opener the returned tasks use (#1931).
     pub io: crate::io_ports::IoPorts,
     pub theme_id: ThemeId,
@@ -279,6 +287,15 @@ pub struct UiState {
     pub symbol_grid_size_mm: f32,
     /// Draft mirror of [`Self::symbol_grid_size_mm`].
     pub preferences_draft_symbol_grid_size_mm: f32,
+    /// Fast grid 1 and Fast grid 2 (mm): the snap grids `fast_grid_1` /
+    /// `fast_grid_2` pick and `cycle_fast_grid` steps between (#1672).
+    pub fast_grids_mm: [f32; 2],
+    /// Draft text of the two fast-grid fields, checked on Save.
+    pub preferences_draft_fast_grids: [String; 2],
+    /// Why the last Save was refused over a fast-grid field, shown under
+    /// the fields. Cleared on open and on a Save that commits; empty
+    /// renders nothing.
+    pub preferences_fast_grid_status: String,
     /// Symbol-editor grid display style (Dots / Crosses / Lines).
     pub symbol_grid_style: crate::render_config::GridStyle,
     /// Draft mirror of [`Self::symbol_grid_style`]. The only one of the
@@ -424,6 +441,18 @@ pub struct UiState {
     /// The New Project setup dialog, while open (#2232). Nothing is on disk
     /// until its Create.
     pub new_project: Option<crate::app::NewProjectState>,
+    /// The New PCB or New Schematic setup dialog, while open (#2232).
+    /// Nothing is made until its Create.
+    pub document_setup: Option<crate::app::DocumentSetupState>,
+    /// The user's saved setup profiles (#2232), loaded from `prefs.json` at
+    /// boot and saved on every Save as profile and Remove.
+    pub setup_profiles: Vec<signex_types::project::UserProfile>,
+    /// Names of the profiles removed this session, by id, so a project that
+    /// still names one can say which.
+    pub removed_profile_names: std::collections::HashMap<String, String>,
+    /// Profile ids a project named and the user did not have, already said
+    /// in Messages this session.
+    pub missing_profiles_warned: std::collections::HashSet<String>,
     /// The Update PCB dialog, while open, or a headless `apply=true` run
     /// (#1312).
     pub update_pcb: Option<crate::app::UpdatePcbState>,
@@ -708,6 +737,7 @@ impl UiState {
             // same constant unless the user actually moved it. A tolerance
             // here would let a real change read as clean.
             || self.preferences_draft_symbol_grid_size_mm != self.symbol_grid_size_mm
+            || self.fast_grid_drafts_differ()
             || self.preferences_draft_symbol_pin_selection != self.symbol_pin_selection
             || self.preferences_draft_zoom_step_percent != self.zoom_step_percent
             || self.preferences_draft_ui_scale_percent

@@ -309,7 +309,7 @@ impl Signex {
     }
 
     /// The save generation of the editor at `path`, if one is open.
-    fn primitive_save_generation(&self, path: &std::path::Path) -> Option<u64> {
+    pub(crate) fn primitive_save_generation(&self, path: &std::path::Path) -> Option<u64> {
         let document = &self.document_state;
         document
             .symbol_editors

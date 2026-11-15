@@ -8,7 +8,7 @@ use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_renderer::pcb::{BOARD_OUTLINE, LayerRow, copper_slot};
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
-use signex_types::theme::{BoardLayerColors, Color as ThemeColor, ThemeTokens};
+use signex_types::theme::{CanvasColors, Color as ThemeColor, ThemeTokens};
 use signex_widgets::Label;
 
 /// The catalog name of `layer`.
@@ -77,11 +77,16 @@ fn technical_id(layer: TechnicalLayer) -> MessageId {
     }
 }
 
-/// The colour `layer` is listed with, from the board palette the canvas
-/// draws with. Copper, Board Outline and the keep-out layers take the slots
-/// their geometry is drawn in. Board views use one palette in both themes,
-/// so the chrome `tokens` do not change a swatch.
+/// The colour `layer` is listed with. Board views use one palette in both
+/// themes, so the chrome `tokens` do not change a swatch.
 pub fn layer_colour(layer: PcbLayer, _tokens: &ThemeTokens) -> Color {
+    board_layer_colour(layer)
+}
+
+/// The colour of `layer` in the board palette the canvas draws with.
+/// Copper, Board Outline and the keep-out layers take the slots their
+/// geometry is drawn in.
+pub fn board_layer_colour(layer: PcbLayer) -> Color {
     let canvas = crate::styles::board_canvas_colors();
     let slot_colour = |slot: ColorSlot| {
         let [r, g, b, a] = ResolvedTheme::from_canvas_colors(canvas).color(slot);
@@ -95,7 +100,7 @@ pub fn layer_colour(layer: PcbLayer, _tokens: &ThemeTokens) -> Color {
     let c = match layer {
         PcbLayer::Copper(copper) => return slot_colour(copper_slot(copper)),
         PcbLayer::Mechanical(n) => cycle(n.index()),
-        PcbLayer::Technical(t) => technical_colour(&colors, t),
+        PcbLayer::Technical(t) => technical_colour(&canvas, t),
     };
     Color::from_rgba8(c.r, c.g, c.b, f32::from(c.a) / 255.0)
 }
@@ -120,15 +125,36 @@ fn drawn_slot(layer: PcbLayer) -> Option<ColorSlot> {
     }
 }
 
-fn technical_colour(colors: &BoardLayerColors, layer: TechnicalLayer) -> ThemeColor {
+fn technical_colour(canvas: &CanvasColors, layer: TechnicalLayer) -> ThemeColor {
     use TechnicalLayer as T;
+    let colors = canvas.board_layer_colors();
+    let t = &colors.technical;
     match layer {
         T::Margin => colors.margin,
         T::SilkscreenTop | T::SilkscreenBottom => colors.silkscreen,
         T::SolderMaskTop | T::SolderMaskBottom => colors.solder_mask,
         T::PasteTop | T::PasteBottom => colors.paste,
-        T::Dimensions | T::Notes | T::DrillDrawing | T::Eco1 | T::Eco2 => colors.drawing,
-        _ => colors.other,
+        T::AdhesiveTop => t.adhesive.top,
+        T::AdhesiveBottom => t.adhesive.bottom,
+        T::FabTop => t.fab.top,
+        T::FabBottom => t.fab.bottom,
+        T::AssemblyTop => t.assembly.top,
+        T::AssemblyBottom => t.assembly.bottom,
+        T::CourtyardTop => t.courtyard.top,
+        T::CourtyardBottom => t.courtyard.bottom,
+        T::Body3dTop => t.body_3d.top,
+        T::Body3dBottom => t.body_3d.bottom,
+        T::FiducialTop => t.fiducial.top,
+        T::FiducialBottom => t.fiducial.bottom,
+        T::DesignatorTop => t.designator.top,
+        T::DesignatorBottom => t.designator.bottom,
+        T::Dimensions => t.dimensions,
+        T::Notes => t.notes,
+        T::DrillDrawing => t.drill_drawing,
+        T::Eco1 => t.eco_1,
+        T::Eco2 => t.eco_2,
+        T::EdgeCuts => canvas.board_edge_color(),
+        T::KeepoutTop | T::KeepoutBottom => canvas.keepout_color(),
     }
 }
 
@@ -374,7 +400,19 @@ mod tests {
         let silk = layer_colour(PcbLayer::Technical(TechnicalLayer::SilkscreenTop), &light);
         assert_eq!(rgba(silk), palette_rgba(colors.silkscreen));
 
+        let t = colors.technical;
         let mut palette: Vec<[u8; 4]> = colors.layer_cycle.map(palette_rgba).to_vec();
+        for pair in [
+            t.adhesive,
+            t.fab,
+            t.assembly,
+            t.courtyard,
+            t.body_3d,
+            t.fiducial,
+            t.designator,
+        ] {
+            palette.extend([pair.top, pair.bottom].map(palette_rgba));
+        }
         palette.extend(
             [
                 colors.top_copper,
@@ -383,8 +421,11 @@ mod tests {
                 colors.silkscreen,
                 colors.solder_mask,
                 colors.paste,
-                colors.drawing,
-                colors.other,
+                t.dimensions,
+                t.notes,
+                t.drill_drawing,
+                t.eco_1,
+                t.eco_2,
                 canvas.board_edge_color(),
                 canvas.keepout_color(),
             ]
@@ -394,6 +435,152 @@ mod tests {
             let swatch = layer_colour(layer, &light);
             assert!(palette.contains(&rgba(swatch)), "{layer:?}: {swatch:?}");
             assert_eq!(swatch, layer_colour(layer, &dark), "{layer:?}");
+        }
+    }
+
+    /// Summed per-channel distance, the measure the theme tests use.
+    fn apart(a: Color, b: Color) -> u32 {
+        let (a, b) = (rgba(a), rgba(b));
+        (0..3).map(|i| u32::from(a[i].abs_diff(b[i]))).sum()
+    }
+
+    fn luminance(c: Color) -> f32 {
+        let lin = |v: f32| {
+            if v <= 0.040_45 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b)
+    }
+
+    fn contrast(a: Color, b: Color) -> f32 {
+        let (la, lb) = (luminance(a), luminance(b));
+        (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+    }
+
+    fn theme_colour(c: ThemeColor) -> Color {
+        Color::from_rgba8(c.r, c.g, c.b, f32::from(c.a) / 255.0)
+    }
+
+    fn hue_degrees(c: Color) -> f32 {
+        let (max, min) = (c.r.max(c.g).max(c.b), c.r.min(c.g).min(c.b));
+        let d = max - min;
+        let h = if max == c.r {
+            ((c.g - c.b) / d).rem_euclid(6.0)
+        } else if max == c.g {
+            (c.b - c.r) / d + 2.0
+        } else {
+            (c.r - c.g) / d + 4.0
+        };
+        h * 60.0
+    }
+
+    fn dark_tokens() -> ThemeTokens {
+        signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark)
+    }
+
+    /// Every technical layer except the outline and keep-outs, which take
+    /// their drawn slots.
+    fn listed_technical() -> impl Iterator<Item = TechnicalLayer> {
+        TechnicalLayer::ALL.into_iter().filter(|t| {
+            !matches!(
+                t,
+                TechnicalLayer::EdgeCuts
+                    | TechnicalLayer::KeepoutTop
+                    | TechnicalLayer::KeepoutBottom
+            )
+        })
+    }
+
+    /// No two technical layers that can show together share a colour: same
+    /// side, or either is board-wide. Copper, outline and keep-out are
+    /// kept apart too.
+    #[test]
+    fn technical_layers_on_one_side_are_told_apart() {
+        let tokens = dark_tokens();
+        let colour = |t: TechnicalLayer| layer_colour(PcbLayer::Technical(t), &tokens);
+        let fixed = [
+            PcbLayer::Copper(CopperLayer::Top),
+            PcbLayer::Copper(CopperLayer::Bottom),
+            BOARD_OUTLINE,
+            PcbLayer::Technical(TechnicalLayer::KeepoutTop),
+        ];
+        for a in listed_technical() {
+            for b in listed_technical().filter(|&b| b != a) {
+                let together = a.side().is_none() || b.side().is_none() || a.side() == b.side();
+                let distance = apart(colour(a), colour(b));
+                assert!(
+                    !together || distance >= 48,
+                    "{a:?} and {b:?} are {distance} apart"
+                );
+            }
+            for f in fixed {
+                let distance = apart(colour(a), layer_colour(f, &tokens));
+                assert!(distance >= 48, "{a:?} and {f:?} are {distance} apart");
+            }
+        }
+    }
+
+    /// One related pair per kind: the top layer is the brighter.
+    #[test]
+    fn a_top_technical_layer_is_brighter_than_its_bottom() {
+        let tokens = dark_tokens();
+        for top in
+            listed_technical().filter(|t| t.side() == Some(signex_types::pcb_layer::BoardSide::Top))
+        {
+            if matches!(
+                top,
+                TechnicalLayer::SilkscreenTop
+                    | TechnicalLayer::SolderMaskTop
+                    | TechnicalLayer::PasteTop
+            ) {
+                continue;
+            }
+            let t = layer_colour(PcbLayer::Technical(top), &tokens);
+            let b = layer_colour(PcbLayer::Technical(top.flipped()), &tokens);
+            assert!(luminance(t) > luminance(b), "{top:?}");
+            assert!(
+                (hue_degrees(t) - hue_degrees(b)).abs() < 10.0,
+                "{top:?} pair is not one hue"
+            );
+        }
+    }
+
+    /// The Board Outline is magenta; the keep-out is its own, paler
+    /// magenta, clearly apart from the outline.
+    #[test]
+    fn the_board_outline_is_magenta_and_the_keep_out_is_told_apart() {
+        let tokens = dark_tokens();
+        let outline = layer_colour(BOARD_OUTLINE, &tokens);
+        let keepout = layer_colour(PcbLayer::Technical(TechnicalLayer::KeepoutTop), &tokens);
+        for (name, c) in [("outline", outline), ("keep-out", keepout)] {
+            let hue = hue_degrees(c);
+            assert!((285.0..=330.0).contains(&hue), "{name} hue {hue}");
+            assert!(c.r > 0.8 && c.b > 0.8 && c.g < c.r && c.g < c.b, "{name}");
+        }
+        assert!(apart(outline, keepout) >= 96, "outline and keep-out");
+        assert!(luminance(keepout) > luminance(outline), "keep-out is paler");
+    }
+
+    /// Every swatch reads on the black board area and on the workspace.
+    #[test]
+    fn every_board_layer_colour_contrasts_with_the_board_and_workspace() {
+        let canvas = crate::styles::board_canvas_colors();
+        let grounds = [
+            ("board area", theme_colour(canvas.board_area_color())),
+            ("workspace", theme_colour(canvas.background)),
+        ];
+        let tokens = dark_tokens();
+        let swatches = PcbLayer::all()
+            .map(|l| (format!("{l:?}"), layer_colour(l, &tokens)))
+            .chain([("Multi-Layer".to_owned(), multi_layer_colour())]);
+        for (layer, swatch) in swatches {
+            for (ground, g) in grounds {
+                let ratio = contrast(swatch, g);
+                assert!(ratio >= 3.0, "{layer} on the {ground}: {ratio:.2}");
+            }
         }
     }
 

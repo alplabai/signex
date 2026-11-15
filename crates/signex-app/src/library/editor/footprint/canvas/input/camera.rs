@@ -37,9 +37,10 @@ impl FootprintCanvas<'_> {
             return None;
         }
         if let Some(bbox) = self.state.content_bbox_mm() {
-            fit_clear_of_chrome(cstate, bbox, bounds);
+            self.fit_clear_of_chrome(cstate, bbox, bounds);
         } else {
             cstate.offset = Point::new(bounds.width / 2.0, bounds.height / 2.0);
+            cstate.fitted = None;
             // Keep DEFAULT_PX_PER_MM scale.
         }
         cstate.did_initial_fit = true;
@@ -68,9 +69,10 @@ impl FootprintCanvas<'_> {
     ) -> Option<canvas::Action<LibraryMessage>> {
         if self.state.fit_pending && bounds.width > 0.0 && bounds.height > 0.0 {
             if let Some(bbox) = self.state.content_bbox_mm() {
-                fit_clear_of_chrome(cstate, bbox, bounds);
+                self.fit_clear_of_chrome(cstate, bbox, bounds);
             } else {
                 cstate.offset = Point::new(bounds.width / 2.0, bounds.height / 2.0);
+                cstate.fitted = None;
             }
             cstate.did_initial_fit = true;
             // Fit replaces any zoom the pill asked for before it.
@@ -86,6 +88,78 @@ impl FootprintCanvas<'_> {
             }));
         }
         None
+    }
+
+    /// The canvas changed size since the last event (#2345). A view still
+    /// at its last fit is fitted again and its scale published, consuming
+    /// the tick like the fits above; any other view keeps the world point
+    /// at its centre in the centre and its zoom, and lets the event through.
+    pub(in crate::library::editor::footprint::canvas) fn follow_resize(
+        &self,
+        cstate: &mut FootprintCanvasState,
+        bounds: Rectangle,
+    ) -> Option<canvas::Action<LibraryMessage>> {
+        let before = std::mem::replace(&mut cstate.laid_out, bounds.size());
+        if !cstate.did_initial_fit {
+            return None;
+        }
+        // The widget state outlives a tab switch: only this document's fit counts.
+        let fitted = cstate
+            .fitted
+            .as_ref()
+            .filter(|(owner, _)| *owner == self.address)
+            .map(|(_, fit)| *fit);
+        let follow = crate::canvas::resize_follow(
+            before,
+            bounds.size(),
+            fitted,
+            cstate.offset,
+            cstate.scale,
+        );
+        match follow {
+            crate::canvas::ResizeFollow::Stay => None,
+            crate::canvas::ResizeFollow::Shift { dx, dy } => {
+                cstate.pan_by(iced::Vector::new(dx, dy));
+                self.cache.clear();
+                None
+            }
+            crate::canvas::ResizeFollow::Refit(target) => {
+                let bbox = (
+                    f64::from(target.x),
+                    f64::from(target.y),
+                    f64::from(target.x + target.width),
+                    f64::from(target.y + target.height),
+                );
+                self.fit_clear_of_chrome(cstate, bbox, bounds);
+                self.cache.clear();
+                Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                    library_path: self.address.library_path.clone(),
+                    table: self.address.table.clone(),
+                    row_id: self.address.row_id,
+                    msg: EditorMsg::Footprint(FootprintEditorMsg::ViewScaleChanged {
+                        px_per_mm: cstate.scale,
+                    }),
+                }))
+            }
+        }
+    }
+
+    /// Fit `bbox` into the part of `bounds` the chrome leaves free and
+    /// remember the fit for this document, so a resize can refit.
+    fn fit_clear_of_chrome(
+        &self,
+        cstate: &mut FootprintCanvasState,
+        bbox: (f64, f64, f64, f64),
+        bounds: Rectangle,
+    ) {
+        place_clear_of_chrome(cstate, bbox, bounds);
+        let (min_x, min_y, max_x, max_y) = bbox;
+        let target = Rectangle::new(
+            Point::new(min_x as f32, min_y as f32),
+            iced::Size::new((max_x - min_x) as f32, (max_y - min_y) as f32),
+        );
+        let fit = crate::canvas::FittedView::new(target, cstate.offset, cstate.scale);
+        cstate.fitted = Some((self.address.clone(), fit));
     }
 
     /// Record this document's current zoom request as applied, without
@@ -303,9 +377,9 @@ pub(in crate::library::editor::footprint::canvas) fn chrome_insets() -> iced::Pa
     }
 }
 
-/// Fit `bbox` into the part of `bounds` the chrome leaves free. A canvas
+/// Place `bbox` in the part of `bounds` the chrome leaves free. A canvas
 /// too small for that gets the plain whole-canvas fit instead.
-fn fit_clear_of_chrome(
+fn place_clear_of_chrome(
     cstate: &mut FootprintCanvasState,
     bbox: (f64, f64, f64, f64),
     bounds: Rectangle,

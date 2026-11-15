@@ -19,7 +19,9 @@ impl Signex {
             "Failed to open document path",
             &anyhow::anyhow!(message.clone()),
         );
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(message));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+            crate::app::state::untranslated(message),
+        ));
     }
 
     pub(crate) fn handle_document_file_opened(
@@ -52,8 +54,9 @@ impl Signex {
     pub(crate) fn report_refused_open(&mut self, error: &anyhow::Error) -> String {
         crate::diagnostics::log_error("Failed to open document path", error);
         let reason = format!("{error:#}");
-        self.document_state.error_notice =
-            Some(crate::app::state::ErrorNotice::open(reason.clone()));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+            crate::app::state::verbatim(reason.clone()),
+        ));
         reason
     }
 
@@ -88,6 +91,7 @@ impl Signex {
                 if !self.document_state.pending_opens.insert(path.clone()) {
                     return Err(format!("{} is already being created", path.display()));
                 }
+                self.document_state.new_project_writes.insert(path.clone());
                 let seed = RuleSeed {
                     dir: crate::rule_profiles::profiles_dir(),
                     selected: self.ui_state.default_rule_profile.clone(),
@@ -117,9 +121,10 @@ impl Signex {
             "Failed to create new project",
             &anyhow::anyhow!(error.to_owned()),
         );
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(format!(
-            "Failed to create new project: {error}"
-        )));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(
+            signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_NEW_PROJECT_FAILED)
+                .arg("error", error),
+        ));
     }
 
     /// Completion of the off-thread New Project writes: on success load the
@@ -132,6 +137,7 @@ impl Signex {
         self.document_state
             .pending_opens
             .remove_untracked(&project_path);
+        self.document_state.new_project_writes.remove(&project_path);
         if self.finish_dialog_create(&project_path, &result) {
             return iced::Task::none();
         }
@@ -239,8 +245,9 @@ impl Signex {
 
     fn report_sample_failure(&mut self, error: &anyhow::Error) {
         crate::diagnostics::log_error("Open sample project", error);
-        self.document_state.error_notice =
-            Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+            crate::app::state::verbatim(format!("{error:#}")),
+        ));
     }
 
     pub(crate) fn handle_active_document_save_requested(&mut self) -> iced::Task<Message> {

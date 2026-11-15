@@ -116,7 +116,7 @@ fn choosing_a_vanished_entry_drops_it_and_says_so() {
         .error_notice
         .as_ref()
         .expect("a visible notice");
-    assert!(notice.detail.contains("gone.snxprj"));
+    assert!(notice.detail.render_en_us().contains("gone.snxprj"));
     assert_eq!(
         app.document_state.projects.len(),
         projects_before,

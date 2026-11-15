@@ -247,15 +247,15 @@ impl Signex {
         }
     }
 
-    /// The schematic sheet the pointer is over, when a Components row drop
-    /// there would place: the pointer is on the canvas of a schematic tab.
-    fn pointer_over_schematic_canvas(&self) -> bool {
-        self.pointer_over_schematic_canvas_of(self.interaction_state.acting_window)
+    /// Whether a Components row dropped here would place: the pointer is on
+    /// the canvas of a schematic or board tab (#2364).
+    fn pointer_over_document_canvas(&self) -> bool {
+        self.pointer_over_document_canvas_of(self.interaction_state.acting_window)
     }
 
-    /// [`Self::pointer_over_schematic_canvas`] for the canvas of `window`
+    /// [`Self::pointer_over_document_canvas`] for the canvas of `window`
     /// (`None`: the main window's), without running inside its swap.
-    fn pointer_over_schematic_canvas_of(&self, window: Option<iced::window::Id>) -> bool {
+    fn pointer_over_document_canvas_of(&self, window: Option<iced::window::Id>) -> bool {
         let (x, y) = self.interaction_state.last_mouse_pos;
         let shown_tab = match window.and_then(|w| self.ui_state.windows.get(&w)) {
             Some(crate::app::state::WindowKind::UndockedTab { path, .. }) => self
@@ -265,7 +265,13 @@ impl Signex {
                 .find(|tab| tab.path == *path),
             _ => self.document_state.tabs.get(self.document_state.active_tab),
         };
-        shown_tab.is_some_and(|tab| matches!(tab.kind, crate::app::TabKind::Schematic))
+        let places = shown_tab.is_some_and(|tab| {
+            matches!(
+                tab.kind,
+                crate::app::TabKind::Schematic | crate::app::TabKind::Pcb
+            )
+        });
+        places
             && self
                 .canvas_bounds_in(window)
                 .contains(iced::Point::new(x, y))
@@ -300,7 +306,7 @@ impl Signex {
             // the window's schematic canvas.
             Some(window)
                 if self.is_document_window(window)
-                    && self.pointer_over_schematic_canvas_of(Some(window)) =>
+                    && self.pointer_over_document_canvas_of(Some(window)) =>
             {
                 self.run_in_window_document(window, |app| app.arm_components_row_drag_here())
             }
@@ -313,7 +319,7 @@ impl Signex {
         let Some(drag) = self.library.components_panel.drag.as_ref() else {
             return Task::none();
         };
-        if !self.pointer_over_schematic_canvas() {
+        if !self.pointer_over_document_canvas() {
             return Task::none();
         }
         let k = drag.key.clone();
@@ -369,12 +375,30 @@ impl Signex {
         let Some(drag) = self.library.components_panel.drag.take() else {
             return Task::none();
         };
-        let over_canvas = self.pointer_over_schematic_canvas();
+        let over_canvas = self.pointer_over_document_canvas();
         if !drag.started || !over_canvas {
             if drag.armed {
                 self.cancel_placement_session();
+                if self.has_pcb_part_in_hand() {
+                    self.end_pcb_carry();
+                }
             }
             return Task::none();
+        }
+        if self.has_active_pcb() {
+            // The footprint on the cursor lands where it shows (#2364).
+            if drag.armed {
+                self.drop_pcb_part();
+                return Task::none();
+            }
+            let k = drag.key;
+            let footprint = self.picked_footprint_for(&k);
+            return self.handle_place_library_component_with(
+                k.library_path,
+                k.table,
+                k.row_id,
+                footprint,
+            );
         }
         // Release point in world mm, through the live camera and the canvas
         // rectangle; the snap happens when the part is placed.
@@ -429,19 +453,13 @@ impl Signex {
         // Open `*.snxlib` directory picker — landing message is
         // `ComponentsPanelAddLibraryAt` so the dispatcher knows
         // which source bucket the result belongs to.
-        let picker = self.ui_state.io.picker.clone();
-        Task::perform(
-            async move {
-                picker
-                    .dialog()
-                    .set_title("Add Library (*.snxlib)")
-                    .pick_folder()
-                    .await
-            },
-            move |path| {
-                Message::Library(LibraryMessage::ComponentsPanelAddLibraryAt { source, path })
-            },
-        )
+        let dialog = self.ui_state.io.picker.dialog().title_in(
+            &self.ui_state.i18n,
+            signex_i18n::ids::FILE_DIALOG_ADD_LIBRARY,
+        );
+        Task::perform(async move { dialog.pick_folder().await }, move |path| {
+            Message::Library(LibraryMessage::ComponentsPanelAddLibraryAt { source, path })
+        })
     }
 
     /// Result of the Add Library file dialog — mount and record it in
@@ -470,8 +488,12 @@ impl Signex {
             // Recoverable failures open their recovery dialog; anything
             // else must still reach the user, so raise the error card.
             if !route_open_error(&mut self.library, &path, &e) {
-                self.document_state.error_notice =
-                    Some(open_error_notice(&self.library, &path, "add library", &e));
+                self.document_state.error_notice = Some(open_error_notice(
+                    &self.library,
+                    &path,
+                    signex_i18n::ids::NOTICE_LIBRARY_CANNOT_ADD,
+                    &e,
+                ));
             }
             return Task::none();
         }
@@ -500,7 +522,7 @@ impl Signex {
     /// so say so instead of silently dropping the request.
     fn reject_project_add_library(&mut self) -> Task<Message> {
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::unavailable(
-            "Adding a library to the project from the Components Panel is not yet available.",
+            signex_i18n::ids::NOTICE_PROJECT_ADD_LIBRARY_UNAVAILABLE,
         ));
         Task::none()
     }
@@ -518,9 +540,11 @@ impl Signex {
             error = %err,
             "global_libraries.toml save failed ({action})"
         );
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(format!(
-            "Could not save the global library list ({action}): {err}"
-        )));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
+            signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_GLOBAL_LIBRARIES_NOT_SAVED)
+                .arg("action", action)
+                .arg("error", err.to_string()),
+        ));
     }
 
     /// Promote an Installed library to Global.

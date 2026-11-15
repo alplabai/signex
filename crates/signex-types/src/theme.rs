@@ -328,6 +328,21 @@ pub struct CanvasColors {
     /// colour); `None` uses the canvas background.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub board_area: Option<Color>,
+    /// The PCB fine grid lines; `None` uses the canvas grid colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_grid: Option<Color>,
+    /// Every fifth PCB grid line, a step brighter than the fine grid;
+    /// `None` uses the fine grid colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_grid_major: Option<Color>,
+    /// The PCB workspace outside the board shape, drawn with no grid;
+    /// `None` uses the canvas background.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_workspace: Option<Color>,
+    /// The PCB sheet behind the board area (#2374); `None` uses the
+    /// workspace colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_sheet: Option<Color>,
 }
 
 /// The colour each PCB layer family is listed with. The board edge and
@@ -343,13 +358,35 @@ pub struct BoardLayerColors {
     pub silkscreen: Color,
     pub solder_mask: Color,
     pub paste: Color,
-    /// Dimensions, Notes, Drill Drawing and the ECO layers.
-    pub drawing: Color,
-    /// Every other technical layer (Fab, Assembly, Courtyard, ...).
-    pub other: Color,
+    /// Fab, Assembly, Courtyard and the other technical layers.
+    pub technical: TechnicalLayerColors,
     /// Through-hole pads and vias (the Altium Multi-Layer).
     #[serde(default = "graphite_multi_layer")]
     pub multi_layer: Color,
+}
+
+/// A top and a bottom layer of one kind: related hues, top the brighter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SidedColors {
+    pub top: Color,
+    pub bottom: Color,
+}
+
+/// One colour per technical layer, so every kind and side is told apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TechnicalLayerColors {
+    pub adhesive: SidedColors,
+    pub fab: SidedColors,
+    pub assembly: SidedColors,
+    pub courtyard: SidedColors,
+    pub body_3d: SidedColors,
+    pub fiducial: SidedColors,
+    pub designator: SidedColors,
+    pub dimensions: Color,
+    pub notes: Color,
+    pub drill_drawing: Color,
+    pub eco_1: Color,
+    pub eco_2: Color,
 }
 
 fn graphite_multi_layer() -> Color {
@@ -385,6 +422,32 @@ impl CanvasColors {
     #[must_use]
     pub fn ratsnest_color(&self) -> Color {
         self.ratsnest.unwrap_or(self.selection)
+    }
+
+    /// The colour of the PCB fine grid lines.
+    #[must_use]
+    pub fn board_grid_color(&self) -> Color {
+        self.board_grid.unwrap_or(self.grid)
+    }
+
+    /// The colour of the brighter PCB major grid lines.
+    #[must_use]
+    pub fn board_grid_major_color(&self) -> Color {
+        self.board_grid_major
+            .unwrap_or_else(|| self.board_grid_color())
+    }
+
+    /// The colour of the PCB workspace outside the board shape.
+    #[must_use]
+    pub fn board_workspace_color(&self) -> Color {
+        self.board_workspace.unwrap_or(self.background)
+    }
+
+    /// The colour of the PCB sheet behind the board area.
+    #[must_use]
+    pub fn board_sheet_color(&self) -> Color {
+        self.board_sheet
+            .unwrap_or_else(|| self.board_workspace_color())
     }
 }
 
@@ -477,6 +540,10 @@ const GRAPHITE_LIGHT_CANVAS: CanvasColors = CanvasColors {
     keepout: None,
     board_layers: None,
     board_area: None,
+    board_grid: None,
+    board_grid_major: None,
+    board_workspace: None,
+    board_sheet: None,
 };
 
 const GRAPHITE_DARK_TOKENS: ThemeTokens = ThemeTokens {
@@ -541,11 +608,19 @@ const GRAPHITE_DARK_CANVAS: CanvasColors = CanvasColors {
     bus: c(0xA3, 0xA5, 0xAB),
     grid: c(0x26, 0x28, 0x2D),
     cursor: c(0xEC, 0xEA, 0xE5),
-    board_edge: s(0xE8, 0xC5, 0x47),
-    keepout: s(0xFF, 0x40, 0xFF),
+    // Magenta outline; the keep-out is a paler, pinker magenta (#2362).
+    board_edge: s(0xE0, 0x00, 0xE0),
+    keepout: s(0xFF, 0x80, 0xE0),
     board_layers: Some(GRAPHITE_BOARD_LAYERS),
     // Altium default Board Area (black), to be checked by Caner.
     board_area: s(0x00, 0x00, 0x00),
+    // Drawn on the board area only: quiet, but readable at full opacity.
+    board_grid: s(0x2C, 0x2F, 0x36),
+    board_grid_major: s(0x45, 0x49, 0x52),
+    // Neutral mid-grey workspace around the board, no grid.
+    board_workspace: s(0x5C, 0x5E, 0x63),
+    // A step lighter than the workspace, so the sheet reads as paper.
+    board_sheet: s(0x6E, 0x70, 0x75),
 };
 
 /// Red top and blue bottom copper, as Altium lists them.
@@ -564,10 +639,31 @@ const GRAPHITE_BOARD_LAYERS: BoardLayerColors = BoardLayerColors {
     silkscreen: c(0xE8, 0xE8, 0xE8),
     solder_mask: c(0x40, 0x9C, 0x58),
     paste: c(0xA8, 0xA8, 0xB8),
-    drawing: c(0x88, 0x88, 0xA0),
-    other: c(0x70, 0x90, 0xB0),
+    technical: GRAPHITE_TECHNICAL_LAYERS,
     // Altium default Multi-Layer (silver), to be checked by Caner.
     multi_layer: c(0xC0, 0xC0, 0xC0),
+};
+
+const fn sided(top: Color, bottom: Color) -> SidedColors {
+    SidedColors { top, bottom }
+}
+
+/// Each kind its own hue, apart from copper, overlay, solder, paste, the
+/// outline and keep-out; every colour is at least 3:1 against the board
+/// area and the workspace.
+const GRAPHITE_TECHNICAL_LAYERS: TechnicalLayerColors = TechnicalLayerColors {
+    adhesive: sided(c(0xF2, 0xA6, 0x49), c(0xC7, 0x84, 0x32)),
+    fab: sided(c(0x6D, 0xD1, 0xF2), c(0x50, 0xA9, 0xC7)),
+    assembly: sided(c(0xA5, 0xF2, 0x6D), c(0x81, 0xC7, 0x50)),
+    courtyard: sided(c(0x6D, 0xF2, 0xC6), c(0x50, 0xC7, 0x9F)),
+    body_3d: sided(c(0x83, 0x6D, 0xF2), c(0x63, 0x50, 0xC7)),
+    fiducial: sided(c(0xF2, 0x91, 0x91), c(0xCC, 0x76, 0x76)),
+    designator: sided(c(0xF7, 0xF1, 0xAD), c(0xC7, 0xC1, 0x81)),
+    dimensions: c(0x9D, 0xB3, 0xF2),
+    notes: c(0xDA, 0xA1, 0xE6),
+    drill_drawing: c(0x77, 0xD9, 0x87),
+    eco_1: c(0xB6, 0xF2, 0xF2),
+    eco_2: c(0x86, 0xBF, 0xBF),
 };
 
 // ---------------------------------------------------------------------------

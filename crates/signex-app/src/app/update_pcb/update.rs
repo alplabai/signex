@@ -21,10 +21,10 @@ impl Signex {
         match msg {
             M::Requested { apply } => self
                 .open_update_pcb_from_view(apply)
-                .unwrap_or_else(|why| self.refuse_update_pcb(&why)),
+                .unwrap_or_else(|why| self.refuse_update_pcb(why)),
             M::RequestedForProject(project) => self
                 .open_update_pcb(project, false)
-                .unwrap_or_else(|why| self.refuse_update_pcb(&why)),
+                .unwrap_or_else(|why| self.refuse_update_pcb(why)),
             M::Computed { job, result } => self.update_pcb_computed(job, result),
             M::NetsRefreshed { job, list } => {
                 if let Some(state) = self.ui_state.update_pcb.as_mut()
@@ -35,10 +35,40 @@ impl Signex {
                 }
                 Task::none()
             }
-            M::RowToggled { key, on } => self.tick_update_pcb(|list| list.set_on(&key, on)),
-            M::GroupToggled { group, on } => {
-                self.tick_update_pcb(|list| list.set_group_on(group, on))
+            M::RowToggled { key, on } => {
+                self.focus_update_pcb_row(key.clone());
+                self.tick_update_pcb(|list| list.set_on(&key, on))
             }
+            M::GroupToggled { group, on } => {
+                self.tick_update_pcb(|list| super::table::set_group_on(list, group, on))
+            }
+            M::GroupFolded { group, folded } => {
+                self.with_update_pcb_table(|table| {
+                    table.folds.insert(group, folded);
+                });
+                Task::none()
+            }
+            M::FilterChipClicked(filter) => {
+                self.with_update_pcb_table(|table| {
+                    table.filter = (table.filter != Some(filter)).then_some(filter);
+                });
+                Task::none()
+            }
+            M::ProblemsOnlyToggled(on) => {
+                self.with_update_pcb_table(|table| table.problems_only = on);
+                Task::none()
+            }
+            M::RowFocused(key) => {
+                self.focus_update_pcb_row(key);
+                Task::none()
+            }
+            M::FocusedRowToggled => self.toggle_focused_update_pcb_row(),
+            M::ChooseFootprintRequested(key) => self.choose_update_pcb_footprint(&key),
+            M::FootprintChosen {
+                sheet,
+                part,
+                footprint,
+            } => self.set_update_pcb_footprint(&sheet, part, footprint),
             M::RefreshRequested => {
                 let previous = self
                     .ui_state
@@ -66,19 +96,22 @@ impl Signex {
             M::ReopenRequested => self.reopen_update_pcb_board(),
             M::CreatePcbRequested => {
                 let project = self.ui_state.update_pcb.as_ref().map(|s| s.project);
-                self.request_new_pcb(project)
+                self.open_document_setup(crate::app::SetupKind::Pcb, project)
             }
             M::CloseRequested => {
                 self.ui_state.update_pcb = None;
                 Task::none()
             }
-            M::NewPcbRequested(project) => self.request_new_pcb(project),
+            M::NewPcbRequested(project) => {
+                self.open_document_setup(crate::app::SetupKind::Pcb, project)
+            }
             M::NewPcbPathChecked {
                 project,
                 path,
                 exists,
+                rules,
             } => {
-                self.new_pcb_path_checked(project, path, exists);
+                self.new_pcb_path_checked(project, path, exists, rules);
                 Task::none()
             }
         }
@@ -88,11 +121,11 @@ impl Signex {
     pub(crate) fn open_update_pcb_from_view(
         &mut self,
         apply: bool,
-    ) -> Result<Task<Message>, String> {
+    ) -> Result<Task<Message>, MessageId> {
         let project = self
             .update_pcb_source()
             .and_then(|path| self.owning_project(&path).map(|p| p.id))
-            .ok_or_else(|| self.update_pcb_text(ids::UPDATE_PCB_NOT_IN_PROJECT))?;
+            .ok_or(ids::UPDATE_PCB_NOT_IN_PROJECT)?;
         self.open_update_pcb(project, apply)
     }
 
@@ -102,15 +135,15 @@ impl Signex {
         &mut self,
         project: ProjectId,
         apply: bool,
-    ) -> Result<Task<Message>, String> {
+    ) -> Result<Task<Message>, MessageId> {
         let loaded = self
             .document_state
             .project_by_id(project)
-            .ok_or_else(|| self.update_pcb_text(ids::UPDATE_PCB_NOT_IN_PROJECT))?;
+            .ok_or(ids::UPDATE_PCB_NOT_IN_PROJECT)?;
         let name = file_name(&loaded.path);
         let board = Self::project_board(loaded);
         if apply && board.is_none() {
-            return Err(self.update_pcb_text(ids::UPDATE_PCB_NO_BOARD));
+            return Err(ids::UPDATE_PCB_NO_BOARD);
         }
         self.ui_state.update_pcb = Some(UpdatePcbState::new(project, name, board.clone(), apply));
         match board {
@@ -276,7 +309,7 @@ impl Signex {
 
     /// Tick through `change`; when a footprint row changed, the net rows
     /// are recomputed on the worker for the board the ticks now make.
-    fn tick_update_pcb(
+    pub(super) fn tick_update_pcb(
         &mut self,
         change: impl FnOnce(&mut EcoChangeList) -> bool,
     ) -> Task<Message> {
@@ -343,10 +376,9 @@ impl Signex {
     }
 
     /// Update PCB cannot start: say why in Messages and on the notice card.
-    fn refuse_update_pcb(&mut self, why: &str) -> Task<Message> {
-        self.log_update_pcb_refused(why);
-        let title = self.update_pcb_text(ids::UPDATE_PCB_TITLE);
-        self.document_state.error_notice = Some(ErrorNotice::new(title, why.to_string()));
+    fn refuse_update_pcb(&mut self, why: MessageId) -> Task<Message> {
+        self.log_update_pcb_refused(&self.update_pcb_text(why));
+        self.document_state.error_notice = Some(ErrorNotice::new(ids::UPDATE_PCB_TITLE, why));
         Task::none()
     }
 

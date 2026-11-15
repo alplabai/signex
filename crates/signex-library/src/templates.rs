@@ -200,6 +200,11 @@ impl TemplateRegistry {
         r
     }
 
+    /// Every global template (the built-ins unless replaced), in no order.
+    pub fn global_templates(&self) -> impl Iterator<Item = &ParameterTemplate> {
+        self.global.values()
+    }
+
     /// Add (or replace) a global override for `class`.
     pub fn insert_global(&mut self, t: ParameterTemplate) {
         self.global.insert(t.class.clone(), t);

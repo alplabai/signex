@@ -6,6 +6,7 @@
 use super::*;
 use crate::app::project_entry_disk::EntryPatch;
 use crate::app::state::ProjectId;
+use signex_i18n::ids;
 
 impl Signex {
     /// `Add Existing to Project…` — open a multi-select file picker
@@ -16,37 +17,48 @@ impl Signex {
         let Some(project_id) = self.project_id_for_tree_path(&tree_path) else {
             return iced::Task::none();
         };
-        let picker = self.ui_state.io.picker.clone();
-        iced::Task::perform(
-            async move {
-                picker
-                    .dialog()
-                    .set_title("Add Existing to Project")
-                    .add_filter(
-                        "All Supported",
-                        &["snxsch", "snxpcb", "snxlib", "snxsym", "snxfpt"],
-                    )
-                    .add_filter("Signex Schematic", &["snxsch"])
-                    .add_filter("Signex PCB", &["snxpcb"])
-                    .add_filter("Signex Library", &["snxlib"])
-                    .add_filter("Signex Symbol", &["snxsym"])
-                    .add_filter("Signex Footprint", &["snxfpt"])
-                    .pick_files()
-                    .await
-            },
-            move |paths| Message::Project(ProjectMsg::AddExistingFilePicked { project_id, paths }),
-        )
+        let i18n = &self.ui_state.i18n;
+        let dialog = self
+            .ui_state
+            .io
+            .picker
+            .dialog()
+            .title_in(i18n, ids::FILE_DIALOG_ADD_EXISTING)
+            .filter_in(
+                i18n,
+                ids::FILE_FILTER_ALL_SUPPORTED,
+                &["snxsch", "snxpcb", "snxlib", "snxsym", "snxfpt"],
+            )
+            .filter_in(i18n, ids::FILE_FILTER_SCHEMATIC, &["snxsch"])
+            .filter_in(i18n, ids::FILE_FILTER_PCB, &["snxpcb"])
+            .filter_in(i18n, ids::FILE_FILTER_LIBRARY, &["snxlib"])
+            .filter_in(i18n, ids::FILE_FILTER_SYMBOL, &["snxsym"])
+            .filter_in(i18n, ids::FILE_FILTER_FOOTPRINT, &["snxfpt"]);
+        iced::Task::perform(async move { dialog.pick_files().await }, move |paths| {
+            Message::Project(ProjectMsg::AddExistingFilePicked { project_id, paths })
+        })
     }
 
-    /// `Add New ▸ Schematic` — Save-As dialog scoped to the project
-    /// directory; result returns through [`ProjectMsg::AddNewSchematicPicked`].
-    /// The handler writes a blank `.snxsch` and lists it in the saved
-    /// `.snxprj` in one worker job (#1821); the project is dirtied only when
-    /// the saved project could not take the entry.
+    /// `Add New ▸ Schematic` — the New Schematic setup dialog (#2232) for
+    /// the project; its Create opens the file dialog
+    /// ([`Self::pick_new_schematic_path`]).
     pub(crate) fn add_new_schematic(&mut self, tree_path: Vec<usize>) -> iced::Task<Message> {
         let Some(project_id) = self.project_id_for_tree_path(&tree_path) else {
             return iced::Task::none();
         };
+        self.open_document_setup(crate::app::SetupKind::Sheet, Some(project_id))
+    }
+
+    /// Save-As dialog scoped to the project directory; the result returns
+    /// through [`ProjectMsg::AddNewSchematicPicked`] with `choice`. The
+    /// handler writes a blank `.snxsch` and lists it in the saved `.snxprj`
+    /// in one worker job (#1821); the project is dirtied only when the saved
+    /// project could not take the entry.
+    pub(crate) fn pick_new_schematic_path(
+        &mut self,
+        project_id: ProjectId,
+        choice: crate::app::SheetChoice,
+    ) -> iced::Task<Message> {
         let project_dir = match self
             .document_state
             .project_by_id(project_id)
@@ -57,18 +69,25 @@ impl Signex {
         };
         let default_name = unique_name_in(&project_dir, "Sheet", "snxsch");
         let picker = self.ui_state.io.picker.clone();
+        let i18n = self.ui_state.i18n.clone();
         iced::Task::perform(
             async move {
                 picker
                     .dialog()
-                    .set_title("Add New Schematic to Project")
+                    .title_in(&i18n, ids::FILE_DIALOG_ADD_NEW_SCHEMATIC)
                     .set_directory(&project_dir)
                     .set_file_name(&default_name)
-                    .add_filter("Signex Schematic", &["snxsch"])
+                    .filter_in(&i18n, ids::FILE_FILTER_SCHEMATIC, &["snxsch"])
                     .save_file()
                     .await
             },
-            move |path| Message::Project(ProjectMsg::AddNewSchematicPicked { project_id, path }),
+            move |path| {
+                Message::Project(ProjectMsg::AddNewSchematicPicked {
+                    project_id,
+                    path,
+                    choice: Some(choice.clone()),
+                })
+            },
         )
     }
 
@@ -93,14 +112,15 @@ impl Signex {
         };
         let default_name = unique_name_in(&project_dir, "SymbolLibrary", "snxsym");
         let picker = self.ui_state.io.picker.clone();
+        let i18n = self.ui_state.i18n.clone();
         iced::Task::perform(
             async move {
                 picker
                     .dialog()
-                    .set_title("New Symbol Library")
+                    .title_in(&i18n, ids::FILE_DIALOG_NEW_SYMBOL_LIBRARY)
                     .set_directory(&project_dir)
                     .set_file_name(&default_name)
-                    .add_filter("Signex Symbol Library", &["snxsym"])
+                    .filter_in(&i18n, ids::FILE_FILTER_SYMBOL_LIBRARY, &["snxsym"])
                     .save_file()
                     .await
             },
@@ -135,14 +155,15 @@ impl Signex {
         };
         let default_name = unique_name_in(&project_dir, "FootprintLibrary", "snxfpt");
         let picker = self.ui_state.io.picker.clone();
+        let i18n = self.ui_state.i18n.clone();
         iced::Task::perform(
             async move {
                 picker
                     .dialog()
-                    .set_title("New PCB Library")
+                    .title_in(&i18n, ids::FILE_DIALOG_NEW_PCB_LIBRARY)
                     .set_directory(&project_dir)
                     .set_file_name(&default_name)
-                    .add_filter("Signex Footprint Library", &["snxfpt"])
+                    .filter_in(&i18n, ids::FILE_FILTER_FOOTPRINT_LIBRARY, &["snxfpt"])
                     .save_file()
                     .await
             },
@@ -162,6 +183,7 @@ impl Signex {
         &mut self,
         project_id: ProjectId,
         path: Option<std::path::PathBuf>,
+        choice: Option<crate::app::SheetChoice>,
     ) -> iced::Task<Message> {
         let Some(path) = path else {
             return iced::Task::none();
@@ -238,11 +260,16 @@ impl Signex {
         self.begin_project_write(&path);
         // The blank sheet and its project entry are committed together off
         // the update thread; the project is looked up again by id when the
-        // job lands.
-        let sheet_defaults = self
-            .document_state
-            .project_by_id(project_id)
-            .and_then(|p| p.data.project_defaults.sheet.clone());
+        // job lands. The setup dialog's sheet values win over the project's;
+        // its designator standard is applied when the write lands (#2232).
+        let designators = choice.as_ref().and_then(|c| c.designators);
+        let sheet_defaults = match choice {
+            Some(choice) => Some(choice.sheet),
+            None => self
+                .document_state
+                .project_by_id(project_id)
+                .and_then(|p| p.data.project_defaults.sheet.clone()),
+        };
         iced::Task::perform(
             {
                 let path = path.clone();
@@ -264,9 +291,38 @@ impl Signex {
                     project_id,
                     path,
                     result,
+                    designators,
                 })
             },
         )
+    }
+
+    /// Set the project's designator standard to `standard` when it differs,
+    /// as a Project Options edit would (dirty, undoable).
+    fn apply_sheet_designators(
+        &mut self,
+        project_id: ProjectId,
+        standard: signex_types::designator::DesignatorStandard,
+    ) {
+        let Some(project) = self.document_state.project_by_id(project_id) else {
+            return;
+        };
+        let current = project
+            .data
+            .designator_standard()
+            .unwrap_or(signex_types::project::DEFAULT_DESIGNATORS);
+        if current == standard {
+            return;
+        }
+        let defaults = project.data.project_defaults.clone();
+        self.apply_project_general(
+            project_id,
+            signex_engine::ProjectGeneralCommand::SetProjectDefaults {
+                defaults,
+                designators: Some(standard),
+                typing: None,
+            },
+        );
     }
 
     fn refuse_add_while_project_saving(&self) {
@@ -280,11 +336,15 @@ impl Signex {
     /// dialog was opened for, or report the failure. A sheet the saved
     /// project already lists (`Patched`) leaves the project's dirty state as
     /// it was, so other unsaved project edits are neither written nor lost.
+    /// The setup dialog's designator standard (`designators`) is applied only
+    /// once the sheet is written, so a refused or failed write changes
+    /// nothing (#2232).
     pub(crate) fn handle_add_new_schematic_written(
         &mut self,
         project_id: ProjectId,
         path: std::path::PathBuf,
         result: Result<EntryPatch, String>,
+        designators: Option<signex_types::designator::DesignatorStandard>,
     ) {
         self.end_project_write(&path);
         self.document_state.pending_path_ops.finish_add_sheet(&path);
@@ -295,6 +355,19 @@ impl Signex {
                 return;
             }
         };
+        self.register_written_schematic(project_id, &path, patch);
+        if let Some(standard) = designators {
+            self.apply_sheet_designators(project_id, standard);
+        }
+    }
+
+    fn register_written_schematic(
+        &mut self,
+        project_id: ProjectId,
+        path: &std::path::Path,
+        patch: EntryPatch,
+    ) {
+        let path = path.to_path_buf();
         let Some((_, project_path)) =
             self.project_dir_and_path(project_id, "Add New", std::slice::from_ref(&path))
         else {

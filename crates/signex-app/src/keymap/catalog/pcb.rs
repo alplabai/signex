@@ -40,11 +40,34 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    // #2366: pick a library footprint for the selected footprints; the swap
+    // is one board undo step. No default key.
+    CommandMetadata {
+        id: "change_footprint",
+        category: "modify",
+        label: command_ids::CMD_CHANGE_FOOTPRINT,
+        menu_label: Some(command_ids::CMD_MENU_CHANGE_FOOTPRINT),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "toggle_ratsnest",
         category: "view",
         label: command_ids::CMD_TOGGLE_RATSNEST,
         menu_label: Some(command_ids::CMD_MENU_TOGGLE_RATSNEST),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2351: the board origin marker, shown by default. No default key.
+    CommandMetadata {
+        id: "toggle_origin_marker",
+        category: "view",
+        label: command_ids::CMD_TOGGLE_ORIGIN_MARKER,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_ORIGIN_MARKER),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
@@ -65,6 +88,28 @@ pub(super) const PCB: &[CommandMetadata] = &[
         category: "view",
         label: command_ids::CMD_PREV_LAYER,
         menu_label: Some(command_ids::CMD_MENU_PREV_LAYER),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2357: `*` steps through the signal layers only, `+` through every
+    // layer the board lists.
+    CommandMetadata {
+        id: "next_signal_layer",
+        category: "view",
+        label: command_ids::CMD_NEXT_SIGNAL_LAYER,
+        menu_label: Some(command_ids::CMD_MENU_NEXT_SIGNAL_LAYER),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "toggle_single_layer_mode",
+        category: "view",
+        label: command_ids::CMD_TOGGLE_SINGLE_LAYER_MODE,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_SINGLE_LAYER_MODE),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
@@ -145,8 +190,9 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
-    // #1312: the project's one board, from the project defaults, opened
-    // unsaved (File > New > PCB, Projects > Add New > PCB).
+    // #1312: the project's one board, opened unsaved (File > New > PCB,
+    // Projects > Add New > PCB). #2232: the GUI opens the New PCB setup
+    // dialog first; a headless run names its `profile`.
     CommandMetadata {
         id: "new_pcb_document",
         category: "file",
@@ -155,6 +201,7 @@ pub(super) const PCB: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        operands: super::operands::NEW_PCB,
         ..CommandMetadata::DEFAULT
     },
     // #2234: enter the board sketch of the board in view, or leave it
@@ -167,6 +214,58 @@ pub(super) const PCB: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2373: the board placement tools. Each arms its tool on the board in
+    // view; every click (or finished shape) is one undo step.
+    CommandMetadata {
+        id: "place_board_via",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_VIA,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_VIA),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_track",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_TRACK,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_TRACK),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_fill",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_FILL,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_FILL),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_region",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_REGION,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_REGION),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_keepout",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_KEEPOUT,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_KEEPOUT),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
 ];

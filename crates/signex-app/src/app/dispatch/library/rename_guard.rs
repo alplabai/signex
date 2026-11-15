@@ -15,7 +15,10 @@ use crate::library::stock_copy::StockCopyMsg;
 impl Signex {
     /// Why `msg` cannot run now, or `None` when it can. The cause leads: the
     /// Messages panel clips a record near 160 characters.
-    pub(super) fn library_write_refusal(&self, msg: &LibraryMessage) -> Option<String> {
+    pub(super) fn library_write_refusal(
+        &self,
+        msg: &LibraryMessage,
+    ) -> Option<signex_i18n::Translatable> {
         let ops = &self.document_state.pending_path_ops;
         if !ops.library_rename_running() || !writes_through_adapter(msg) {
             return None;
@@ -27,11 +30,7 @@ impl Signex {
         {
             return None;
         }
-        Some(
-            "A library rename or delete is still running, so this library change was not applied. \
-             Try again once it finishes."
-                .to_string(),
-        )
+        Some(signex_i18n::ids::NOTICE_LIBRARY_WRITE_WHILE_RENAMING.into())
     }
 
     /// Why a symbol or footprint editor edit cannot apply now, or `None`.
@@ -347,7 +346,11 @@ mod tests {
             column: String::new(),
         };
         let refusal = app.library_write_refusal(&write).expect("refused");
-        assert!(refusal.starts_with("A library rename or delete is still running"));
+        assert!(
+            refusal
+                .render_en_us()
+                .starts_with("A library rename or delete is still running")
+        );
         assert!(
             app.library_write_refusal(&LibraryMessage::BrowserSearchChanged {
                 library_path: "/w/a.snxlib".into(),
@@ -366,10 +369,11 @@ mod tests {
         let since = crate::diagnostics::newest_entry_id();
         let _task = app.update(crate::app::Message::Library(LibraryMessage::NewComponent));
         let notice = app.document_state.error_notice.clone().expect("a card");
-        assert_eq!(notice.title, "Library Change Not Applied");
+        assert_eq!(notice.title.render_en_us(), "Library Change Not Applied");
         assert!(
             notice
                 .detail
+                .render_en_us()
                 .starts_with("A library rename or delete is still running")
         );
         assert!(

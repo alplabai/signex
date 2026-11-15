@@ -11,7 +11,7 @@ use std::path::Path;
 
 use iced::Task;
 use signex_engine::pcb::BoardCommand;
-use signex_i18n::{ids, t};
+use signex_i18n::{Translatable, ids, t};
 
 use crate::app::state::{BoardSketchSession, ErrorNotice};
 use crate::app::{BoardSketchMsg, FootprintDocument, Message, PcbMsg, Signex};
@@ -168,24 +168,26 @@ impl Signex {
     /// A save, close, quit or undock waits for the sketch: say so in
     /// Messages and on the notice card, with the bake's reason.
     fn hold_for_board_sketch(&mut self, board: &Path) {
-        let i18n = &self.ui_state.i18n;
         let name = board
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let held = t!(i18n, ids::BOARD_SKETCH_HELD, "board" => name.as_str()).into_string();
-        let title = t!(i18n, ids::BOARD_SKETCH_TITLE).into_string();
-        crate::diagnostics::log_warning(held.clone());
+        // Messages stays en-US whatever the UI language.
+        let held = Translatable::new(ids::BOARD_SKETCH_HELD).arg("board", name.as_str());
+        crate::diagnostics::log_warning(held.render_en_us());
         let refusal = self
             .interaction_state
             .board_sketch
             .as_ref()
             .and_then(|session| session.refusal.clone());
+        // The refusal line was rendered when the board refused the sketch.
         let detail = match refusal {
-            Some(refusal) => format!("{held}\n{refusal}"),
-            None => held,
+            Some(refusal) => Translatable::new(ids::NOTICE_BOARD_SKETCH_HELD_WHY)
+                .arg("board", name)
+                .arg("refusal", refusal),
+            None => Translatable::new(ids::BOARD_SKETCH_HELD).arg("board", name),
         };
-        self.document_state.error_notice = Some(ErrorNotice::new(title, detail));
+        self.document_state.error_notice = Some(ErrorNotice::new(ids::BOARD_SKETCH_TITLE, detail));
     }
 
     /// Whether the board at `path` is shown in its own window.
@@ -278,14 +280,16 @@ impl Signex {
         }
         // The stored copy carries the bake's ownership record; keep editing
         // from it so a later delete of the outline still clears the board's.
-        let stored = self
-            .document_state
-            .pcb_board(&path)
-            .and_then(|board| board.sketch.as_ref())
+        let Some(board) = self.document_state.pcb_board(&path) else {
+            return true;
+        };
+        let stored = board
+            .sketch
+            .as_ref()
             .map(|stored| stored.sketch.clone())
             .unwrap_or_default();
         if let Some(session) = self.interaction_state.board_sketch.as_mut() {
-            session.mark_committed(stored);
+            session.mark_committed(stored, board);
         }
         true
     }
@@ -293,13 +297,15 @@ impl Signex {
     /// The board did not take the sketch: say why on the notice card, in
     /// Messages and in the mode's bar. The board and the copy are unchanged.
     fn refuse_board_sketch(&mut self, reason: String) {
-        let i18n = &self.ui_state.i18n;
-        let title = t!(i18n, ids::BOARD_SKETCH_TITLE).into_string();
-        let detail = t!(i18n, ids::BOARD_SKETCH_REFUSED, "reason" => reason.as_str()).into_string();
-        crate::diagnostics::log_warning(detail.clone());
-        self.document_state.error_notice = Some(ErrorNotice::new(title, detail.clone()));
+        let detail = Translatable::new(ids::BOARD_SKETCH_REFUSED).arg("reason", reason);
+        crate::diagnostics::log_warning(detail.render_en_us());
+        // shortcut: the bar's refusal line (and `$refusal` on the held card)
+        // keeps the language it was rendered in until Translatable args can
+        // nest; store the message instead then (#2059).
+        let shown = detail.render(&self.ui_state.i18n);
+        self.document_state.error_notice = Some(ErrorNotice::new(ids::BOARD_SKETCH_TITLE, detail));
         if let Some(session) = self.interaction_state.board_sketch.as_mut() {
-            session.refusal = Some(detail);
+            session.refusal = Some(shown);
         }
     }
 
@@ -380,3 +386,7 @@ impl Signex {
         Some(moved)
     }
 }
+
+#[cfg(test)]
+#[path = "board_sketch_tests.rs"]
+mod tests;

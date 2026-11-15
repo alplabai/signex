@@ -55,6 +55,7 @@ jobs:
       pull-requests: read
     outputs:
       build: ${{ steps.decide.outputs.build }}
+      library_server: ${{ steps.decide.outputs.library_server }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -89,6 +90,19 @@ jobs:
           )
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "Rust jobs needed: $build"
+          # The postgres job (#2156) runs on a PR only when its inputs change:
+          # the library server, the crates it builds on, the toolchain and
+          # this file. Pushes and manual runs (no base) always run it.
+          library_server=true
+          if [ -n "$BASE_SHA" ]; then
+            if git diff --no-renames --name-only "$BASE_SHA"...HEAD | grep -qE '^(crates/signex-library-server/|crates/signex-library/|crates/signex-sketch/|crates/signex-types/|Cargo\.toml$|Cargo\.lock$|rust-toolchain\.toml$|\.github/workflows/ci\.yml$)'; then
+              library_server=true
+            else
+              library_server=false
+            fi
+          fi
+          echo "library_server=$library_server" >> "$GITHUB_OUTPUT"
+          echo "Postgres job needed: $library_server"
 
   check:
     name: check · ${{ matrix.os }}
@@ -274,7 +288,7 @@ jobs:
   library-server-pg:
     name: test · library-server postgres
     needs: changes
-    if: needs.changes.outputs.build == 'true' && github.event_name != 'merge_group'
+    if: needs.changes.outputs.build == 'true' && needs.changes.outputs.library_server == 'true' && github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     services:
       postgres:

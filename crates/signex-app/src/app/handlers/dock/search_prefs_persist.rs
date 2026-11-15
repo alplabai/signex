@@ -162,6 +162,10 @@ impl Signex {
 fn wait_for_pref_writes_then(next: Task<Message>) -> Task<Message> {
     #[cfg(test)]
     let probe = crate::fonts::take_wait_probe();
+    #[cfg(test)]
+    let limit = pref_write_quit_limit(probe.is_some());
+    #[cfg(not(test))]
+    let limit = pref_write_quit_limit(false);
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
@@ -169,12 +173,12 @@ fn wait_for_pref_writes_then(next: Task<Message>) -> Task<Message> {
                 if let Some(probe) = &probe {
                     probe.store(true, std::sync::atomic::Ordering::SeqCst);
                 }
-                if !crate::fonts::wait_for_pref_writes(PREF_WRITE_QUIT_LIMIT) {
+                if !crate::fonts::wait_for_pref_writes(limit) {
                     crate::diagnostics::log_error(
                         "Preferences were not fully saved before exit",
                         &anyhow::anyhow!(
                             "a preference write was still running after {} s",
-                            PREF_WRITE_QUIT_LIMIT.as_secs()
+                            limit.as_secs()
                         ),
                     );
                 }
@@ -189,6 +193,19 @@ fn wait_for_pref_writes_then(next: Task<Message>) -> Task<Message> {
 
 /// How long quit waits for preference writes before giving up.
 const PREF_WRITE_QUIT_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The bound a test watching the wait gets instead. One Save is about two
+/// dozen fsynced rewrites of `prefs.json`, near 10 s on a Windows CI runner,
+/// so the product bound would end the wait before the writes land (#2323).
+const WATCHED_PREF_WRITE_QUIT_LIMIT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// The quit bound: the product one, or a test's when a wait probe watches it.
+fn pref_write_quit_limit(is_watched: bool) -> std::time::Duration {
+    if cfg!(test) && is_watched {
+        return WATCHED_PREF_WRITE_QUIT_LIMIT;
+    }
+    PREF_WRITE_QUIT_LIMIT
+}
 
 fn search_prefs_timer(armed: Option<u64>) -> Task<Message> {
     let Some(generation) = armed else {
@@ -213,4 +230,18 @@ fn write_search_prefs_task(write: SearchPrefsWrite) -> Task<Message> {
         },
         |result| Message::SearchPrefs(SearchPrefsMsg::Saved(result)),
     )
+}
+
+#[cfg(test)]
+mod quit_limit_tests {
+    use super::*;
+
+    /// #2323: a watched quit test waits past a slow runner's Save, while the
+    /// product keeps its short bound.
+    #[test]
+    fn only_a_watched_quit_wait_gets_the_long_bound() {
+        assert_eq!(pref_write_quit_limit(false), PREF_WRITE_QUIT_LIMIT);
+        assert_eq!(pref_write_quit_limit(true), WATCHED_PREF_WRITE_QUIT_LIMIT);
+        assert!(pref_write_quit_limit(true) > pref_write_quit_limit(false) * 10);
+    }
 }

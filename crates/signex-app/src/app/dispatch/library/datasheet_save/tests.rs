@@ -688,7 +688,7 @@ fn save_all_stores_the_staged_pdf_off_the_update_and_then_quits() {
     run_save_all(&mut app, second);
     let notice = app.document_state.error_notice.take().expect("a card");
     assert!(
-        format!("{notice:?}").contains("still being saved"),
+        notice.detail.render_en_us().contains("still being saved"),
         "{notice:?}"
     );
     assert!(
@@ -723,7 +723,10 @@ fn save_all_with_a_failing_store_reports_it_and_does_not_quit() {
         "the PDF is still staged"
     );
     let notice = app.document_state.error_notice.as_ref().expect("a card");
-    assert!(format!("{notice:?}").contains("stayed open"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("stayed open"),
+        "{notice:?}"
+    );
     assert!(
         app.library.batch_row_failures.is_empty(),
         "taken by the settle"
@@ -774,7 +777,10 @@ fn close_library_with_a_failing_store_keeps_the_library_and_the_draft() {
     let state = editor(&app, &address);
     assert!(state.dirty && state.staged_datasheets.contains_key(&hash));
     let notice = app.document_state.error_notice.as_ref().expect("a card");
-    assert!(format!("{notice:?}").contains("not closed"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("not closed"),
+        "{notice:?}"
+    );
 }
 
 #[test]
@@ -846,10 +852,13 @@ fn a_batch_across_two_libraries_commits_one_and_lists_the_other() {
     assert!(!editor(&app, &good).dirty, "the working library saved");
     assert!(head_has(&good_file, &good_hash));
     assert!(editor(&app, &bad).dirty);
-    let notice = format!(
-        "{:?}",
-        app.document_state.error_notice.as_ref().expect("a card")
-    );
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("a card")
+        .detail
+        .render_en_us();
     assert!(
         notice.contains("stayed open") && notice.contains("1 item"),
         "{notice}"
@@ -1108,7 +1117,10 @@ fn a_late_row_write_failure_is_listed_by_its_save_all() {
     settle(&mut app, row_write);
 
     let notice = app.document_state.error_notice.as_ref().expect("a card");
-    assert!(format!("{notice:?}").contains("stayed open"), "{notice:?}");
+    assert!(
+        notice.detail.render_en_us().contains("stayed open"),
+        "{notice:?}"
+    );
     assert!(app.library.batch_row_failures.is_empty(), "no leaked entry");
     assert!(app.document_state.parked_save_all_settles.is_empty());
     assert!(app.library.batch_rows_in_flight.is_empty());

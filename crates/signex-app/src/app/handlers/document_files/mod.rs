@@ -53,6 +53,7 @@ mod save_as_project;
 #[cfg(test)]
 mod save_as_project_tests;
 mod save_async;
+pub(crate) use save_async::is_pcb_path;
 #[cfg(test)]
 pub(crate) mod save_async_tests;
 #[cfg(test)]
@@ -74,9 +75,10 @@ mod symbol_restore_tests;
 /// `handle_save_primitive_as` applies the extension and overwrite check.
 pub(crate) fn spawn_save_as_for_primitive(
     picker: crate::io_ports::Picker,
+    i18n: &signex_i18n::I18n,
     suggested: PathBuf,
 ) -> iced::Task<Message> {
-    spawn_primitive_save_dialog(picker, suggested)
+    spawn_primitive_save_dialog(picker, i18n, suggested)
 }
 
 fn primitive_save_as_message(from_path: PathBuf, to_path: PathBuf) -> Message {
@@ -107,13 +109,22 @@ pub(crate) fn with_primitive_extension(to_path: PathBuf, ext: &str) -> PathBuf {
 
 fn spawn_primitive_save_dialog(
     picker: crate::io_ports::Picker,
+    i18n: &signex_i18n::I18n,
     suggested: PathBuf,
 ) -> iced::Task<Message> {
+    use signex_i18n::ids;
     let filter_ext = primitive_extension(&suggested);
     let (filter_label, title) = match filter_ext {
-        "snxfpt" => ("Signex Footprint", "Save Footprint As"),
-        _ => ("Signex Symbol", "Save Symbol As"),
+        "snxfpt" => (
+            ids::FILE_FILTER_FOOTPRINT,
+            ids::FILE_DIALOG_SAVE_FOOTPRINT_AS,
+        ),
+        _ => (ids::FILE_FILTER_SYMBOL, ids::FILE_DIALOG_SAVE_SYMBOL_AS),
     };
+    let dialog = picker
+        .dialog()
+        .title_in(i18n, title)
+        .filter_in(i18n, filter_label, &[filter_ext]);
     let default_dir = suggested
         .parent()
         .map(|p| p.to_path_buf())
@@ -126,10 +137,7 @@ fn spawn_primitive_save_dialog(
 
     iced::Task::perform(
         async move {
-            picker
-                .dialog()
-                .set_title(title)
-                .add_filter(filter_label, &[filter_ext])
+            dialog
                 .set_directory(&default_dir)
                 .set_file_name(&default_name)
                 .save_file()

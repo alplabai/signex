@@ -63,6 +63,8 @@ mod save_all_case_variant_tests;
 #[cfg(test)]
 mod save_all_gate_tests;
 #[cfg(test)]
+mod save_all_stopped_tests;
+#[cfg(test)]
 mod save_all_tests;
 mod sheet_references;
 #[cfg(test)]

@@ -28,9 +28,15 @@ pub enum PcbCanvasMsg {
         mode: ClickMode,
         view_rotation_deg: f64,
     },
-    /// A press on a selected footprint is being dragged from `from` to
-    /// `to` (#2240). The board is untouched until the drop.
-    FootprintDragged { from: Point, to: Point },
+    /// A press on a footprint is being dragged from `from` to `to` (#2240).
+    /// An unselected one is selected by the drag (#2358); `tolerance_mm` is
+    /// the reach the press grabbed it with. The board is untouched until
+    /// the drop.
+    FootprintDragged {
+        from: Point,
+        to: Point,
+        tolerance_mm: f64,
+    },
     /// That drag was released at `to`: the footprints move as one step.
     FootprintDropped { from: Point, to: Point },
     /// The pointer left the canvas mid-drag: nothing moves.

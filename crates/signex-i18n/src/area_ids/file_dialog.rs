@@ -1,0 +1,53 @@
+//! Ids of `locales/en-US/file_dialog.ftl`: native file dialogs (#2058).
+
+define_ids! {
+    FILE_DIALOG;
+    FILE_DIALOG_OPEN_PROJECT = "file-dialog-open-project";
+    FILE_DIALOG_IMPORT_ALTIUM = "file-dialog-import-altium";
+    FILE_DIALOG_NEW_PROJECT = "file-dialog-new-project";
+    FILE_DIALOG_SAVE_SCHEMATIC_AS = "file-dialog-save-schematic-as";
+    FILE_DIALOG_EXPORT_PDF = "file-dialog-export-pdf";
+    FILE_DIALOG_EXPORT_BOM = "file-dialog-export-bom";
+    FILE_DIALOG_EXPORT_ERC_REPORT = "file-dialog-export-erc-report";
+    FILE_DIALOG_EXPORT_NETLIST = "file-dialog-export-netlist";
+    FILE_DIALOG_IMPORT_SHORTCUTS = "file-dialog-import-shortcuts";
+    FILE_DIALOG_EXPORT_SHORTCUTS = "file-dialog-export-shortcuts";
+    FILE_DIALOG_OPEN_LIBRARY = "file-dialog-open-library";
+    FILE_DIALOG_CREATE_SHEET = "file-dialog-create-sheet";
+    FILE_DIALOG_PICK_SYMBOL = "file-dialog-pick-symbol";
+    FILE_DIALOG_PICK_FOOTPRINT = "file-dialog-pick-footprint";
+    FILE_DIALOG_PICK_SIM_MODEL = "file-dialog-pick-sim-model";
+    FILE_DIALOG_PICK_PRIMITIVE = "file-dialog-pick-primitive";
+    FILE_DIALOG_ADD_EXISTING = "file-dialog-add-existing";
+    FILE_DIALOG_ADD_NEW_SCHEMATIC = "file-dialog-add-new-schematic";
+    FILE_DIALOG_NEW_SYMBOL_LIBRARY = "file-dialog-new-symbol-library";
+    FILE_DIALOG_NEW_PCB_LIBRARY = "file-dialog-new-pcb-library";
+    FILE_DIALOG_SAVE_FOOTPRINT_AS = "file-dialog-save-footprint-as";
+    FILE_DIALOG_SAVE_SYMBOL_AS = "file-dialog-save-symbol-as";
+    FILE_DIALOG_NEW_LIBRARY = "file-dialog-new-library";
+    FILE_DIALOG_LOCATE_LIBRARY = "file-dialog-locate-library";
+    FILE_DIALOG_PIN_DATASHEET = "file-dialog-pin-datasheet";
+    FILE_DIALOG_ADD_LIBRARY = "file-dialog-add-library";
+    FILE_DIALOG_NEW_COMPONENT_LIBRARY = "file-dialog-new-component-library";
+    FILE_FILTER_PROJECT = "file-filter-project";
+    FILE_FILTER_SCHEMATIC = "file-filter-schematic";
+    FILE_FILTER_PCB = "file-filter-pcb";
+    FILE_FILTER_LIBRARY = "file-filter-library";
+    FILE_FILTER_SYMBOL = "file-filter-symbol";
+    FILE_FILTER_FOOTPRINT = "file-filter-footprint";
+    FILE_FILTER_SYMBOL_LIBRARY = "file-filter-symbol-library";
+    FILE_FILTER_FOOTPRINT_LIBRARY = "file-filter-footprint-library";
+    FILE_FILTER_COMPONENT_LIBRARY = "file-filter-component-library";
+    FILE_FILTER_SHORTCUTS = "file-filter-shortcuts";
+    FILE_FILTER_ALL_SUPPORTED = "file-filter-all-supported";
+    FILE_FILTER_ALL_FILES = "file-filter-all-files";
+    FILE_FILTER_ALTIUM_DESIGN = "file-filter-altium-design";
+    FILE_FILTER_ALTIUM_LIBRARY = "file-filter-altium-library";
+    FILE_FILTER_TEXT = "file-filter-text";
+    FILE_FILTER_PDF = "file-filter-pdf";
+    FILE_FILTER_HTML_EXT = "file-filter-html-ext";
+    FILE_FILTER_PDF_EXT = "file-filter-pdf-ext";
+    FILE_FILTER_JSON_EXT = "file-filter-json-ext";
+    FILE_FILTER_CSV_EXT = "file-filter-csv-ext";
+    FILE_FILTER_TEXT_EXT = "file-filter-text-ext";
+}

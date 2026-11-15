@@ -14,8 +14,12 @@ impl Signex {
                 Task::none()
             }
             PcbMsg::DrcRequested => self.handle_pcb_drc_requested(),
-            PcbMsg::DrcFinished { generation, result } => {
-                self.handle_pcb_drc_finished(generation, &result);
+            PcbMsg::DrcFinished {
+                generation,
+                loose,
+                result,
+            } => {
+                self.handle_pcb_drc_finished(generation, loose, &result);
                 Task::none()
             }
             PcbMsg::DrcViolationPicked(index) => {
@@ -42,6 +46,32 @@ impl Signex {
             PcbMsg::Sketch(event) => self.handle_board_sketch(event),
             PcbMsg::Reannotate(msg) => self.dispatch_board_reannotate_message(msg),
             PcbMsg::BackAnnotate(msg) => self.dispatch_back_annotate_message(msg),
+            PcbMsg::Bar(event) => self.handle_pcb_bar(event),
+            PcbMsg::PlaceToolPicked(tool) => {
+                self.arm_board_tool(tool);
+                Task::none()
+            }
+            PcbMsg::FootprintSwap(event) => self.handle_footprint_swap(event),
+        }
+    }
+
+    /// The PCB Active Bar's dropdowns (#2352): one is open at a time, and a
+    /// picked row runs its command as its menu row does.
+    fn handle_pcb_bar(&mut self, event: PcbBarMsg) -> Task<Message> {
+        let open = &mut self.interaction_state.pcb_bar_menu;
+        match event {
+            PcbBarMsg::MenuToggled(menu) => {
+                *open = (*open != Some(menu)).then_some(menu);
+                Task::none()
+            }
+            PcbBarMsg::MenuDismissed => {
+                *open = None;
+                Task::none()
+            }
+            PcbBarMsg::CommandPicked(command) => {
+                *open = None;
+                self.handle_menu_message(crate::menu_bar::MenuMessage::Command(command))
+            }
         }
     }
 }

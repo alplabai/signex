@@ -76,15 +76,19 @@ impl Signex {
         // A newer pick supersedes any read still in flight, even one that
         // fails the checks below.
         self.interaction_state.placement_epoch += 1;
+        // On a board the part goes on as its footprint (#2364).
+        if self.has_active_pcb() {
+            return self.start_board_part_placement(library_path, table, row_id, footprint);
+        }
         let Some(target_sheet) = self.document_state.active_path.clone() else {
-            self.report_place_failure("Open a schematic sheet before placing a library part.");
+            self.report_place_failure(signex_i18n::ids::NOTICE_PLACE_NO_SHEET.into());
             return Task::none();
         };
         if self.library.library_at(&library_path).is_none() {
-            self.report_place_failure(&format!(
-                "Library {} is no longer open.",
-                library_path.display()
-            ));
+            self.report_place_failure(
+                signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_PLACE_LIBRARY_CLOSED)
+                    .arg("path", library_path.display().to_string()),
+            );
             return Task::none();
         }
         let arm_epoch = self.interaction_state.placement_epoch;
@@ -142,7 +146,7 @@ impl Signex {
             .take()
             .filter(|(epoch, _)| *epoch == arm_epoch);
         if let Err(detail) = self.arm_resolved(&target_sheet, arm_epoch, &library_path, result) {
-            self.report_place_failure(&detail);
+            self.report_place_failure(crate::app::state::untranslated(detail));
             return Task::none();
         }
         // Closed sheets' numbers arrive off-thread; the ghost refreshes then.
@@ -273,10 +277,15 @@ impl Signex {
         )
     }
 
-    pub(crate) fn report_place_failure(&mut self, detail: &str) {
-        crate::diagnostics::log_warning(format!("Place from library failed: {detail}"));
-        self.document_state.error_notice =
-            Some(crate::app::state::ErrorNotice::new("Place Failed", detail));
+    pub(crate) fn report_place_failure(&mut self, detail: signex_i18n::Translatable) {
+        crate::diagnostics::log_warning(format!(
+            "Place from library failed: {}",
+            detail.render_en_us()
+        ));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::new(
+            signex_i18n::ids::NOTICE_PLACE_FAILED,
+            detail,
+        ));
     }
 }
 

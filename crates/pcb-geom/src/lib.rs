@@ -16,6 +16,8 @@ mod copper;
 mod flip;
 mod index;
 mod mst;
+mod net_length;
+mod pick_filter;
 mod ratsnest;
 mod rect;
 mod selection;
@@ -23,6 +25,8 @@ mod shape;
 mod shape_gap;
 mod shape_overlap;
 mod staging;
+mod stats;
+mod text;
 mod transform;
 mod turned_marquee;
 mod union_find;
@@ -30,17 +34,24 @@ mod units;
 
 pub use body::footprint_body;
 pub use copper::{
-    CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, pad_layers, via_layers,
+    CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, pad_layers,
+    via_layers,
 };
 pub use flip::flip_footprint;
 pub use index::{BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected, track_shape, via_shape};
 pub use mst::{Edge, euclidean_mst, spanning_forest};
+pub use net_length::{
+    item_net, net_items, net_routed_length_mm, track_length_mm, tracks_length_mm, via_span,
+};
+pub use pick_filter::{PickFilter, PickKind};
 pub use ratsnest::{RatLine, ratsnest};
 pub use rect::RectNm;
-pub use selection::{ClickMode, Selection, marquee_mode, marquee_select, pick};
+pub use selection::{ClickMode, Selection, marquee_mode, marquee_select, pick, pick_filtered};
 pub use shape::Shape;
 pub use shape_gap::Separation;
 pub use staging::{Staging, footprint_extent, stage};
+pub use stats::BoardStats;
+pub use text::{TextPlacement, is_board_text_key, property_text_placement};
 pub use transform::{Placement, Side, pad_shape, pad_world_center, pad_world_rotation_deg};
 pub use turned_marquee::{turned_marquee_corners, turned_marquee_mode, turned_marquee_select};
 pub use union_find::UnionFind;

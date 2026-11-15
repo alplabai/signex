@@ -189,11 +189,12 @@ impl Signex {
     }
 
     fn refuse_erc_report_before_run(&mut self) {
-        self.refuse_export(format!(
-            "Cannot export the ERC report: ERC has not been run. \
-                 Run ERC ({}) first, then export.",
-            crate::menu_bar::erc_menu_path(&self.ui_state.i18n)
-        ));
+        // shortcut: the menu path is rendered now, so it keeps the language
+        // the notice opened in; pass its ids once Translatable nests (#2059).
+        self.refuse_export(
+            signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_ERC_REPORT_NOT_RUN)
+                .arg("menu", crate::menu_bar::erc_menu_path(&self.ui_state.i18n)),
+        );
     }
 
     /// Menu entry: refuse if ERC never ran, otherwise ask where to save.
@@ -206,17 +207,23 @@ impl Signex {
         }
         let target = self.save_target(None);
         let picker = self.ui_state.io.picker.clone();
+        let i18n = self.ui_state.i18n.clone();
         let file_name = target.file_name("erc-report", "-erc-report", "html");
         Task::perform(
             async move {
+                use signex_i18n::ids;
                 target
-                    .dialog(picker, "Export ERC Report")
+                    .dialog(
+                        picker
+                            .dialog()
+                            .title_in(&i18n, ids::FILE_DIALOG_EXPORT_ERC_REPORT),
+                    )
                     .await
-                    .add_filter("HTML (.html)", &["html", "htm"])
-                    .add_filter("PDF (.pdf)", &["pdf"])
-                    .add_filter("JSON (.json)", &["json"])
-                    .add_filter("CSV (.csv)", &["csv"])
-                    .add_filter("Text (.txt)", &["txt"])
+                    .filter_in(&i18n, ids::FILE_FILTER_HTML_EXT, &["html", "htm"])
+                    .filter_in(&i18n, ids::FILE_FILTER_PDF_EXT, &["pdf"])
+                    .filter_in(&i18n, ids::FILE_FILTER_JSON_EXT, &["json"])
+                    .filter_in(&i18n, ids::FILE_FILTER_CSV_EXT, &["csv"])
+                    .filter_in(&i18n, ids::FILE_FILTER_TEXT_EXT, &["txt"])
                     .set_file_name(file_name)
                     .save_file()
                     .await

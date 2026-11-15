@@ -250,8 +250,10 @@ impl Signex {
     }
 
     pub(super) fn refuse_run(&mut self, label: &str, why: &str) {
-        let detail = format!("{label} was not run: {why}");
-        crate::diagnostics::log_warning(detail.clone());
+        let detail = signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_RUN_REFUSED)
+            .arg("label", label)
+            .arg("reason", why);
+        crate::diagnostics::log_warning(detail.render_en_us());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
     }
 
@@ -518,13 +520,11 @@ impl Signex {
             return;
         }
         let names: Vec<String> = failed.iter().map(|p| p.display().to_string()).collect();
-        let detail = format!(
-            "{label} could not write {} unopened sheet(s) and left them as they were on disk: \
-             {}. The open sheets were still renumbered, so run it again once the cause is fixed.",
-            failed.len(),
-            names.join(", ")
-        );
-        crate::diagnostics::log_warning(detail.clone());
+        let detail = signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_RUN_WRITE_FAILED)
+            .arg("label", label)
+            .arg("count", failed.len())
+            .arg("sheets", names.join(", "));
+        crate::diagnostics::log_warning(detail.render_en_us());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
     }
 

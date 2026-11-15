@@ -228,3 +228,33 @@ fn a_browser_tab_takes_the_filter_and_a_table_switch_drops_it() {
     }));
     assert!(app.library.library_browsers[&root].range_filters.is_empty());
 }
+
+/// #1701: before the first table click the tab shows its first table with
+/// no table selected. Clicking that same table must keep the filters.
+#[test]
+fn clicking_the_table_already_shown_keeps_the_filters() {
+    let (mut app, root) = app_with_resistors();
+    app.library
+        .library_browsers
+        .get_mut(&root)
+        .unwrap()
+        .active_table = None;
+    let _ = app.update(Message::Library(LibraryMessage::BrowserRangeFilter {
+        library_path: root.clone(),
+        msg: RangeFilterMsg::ColumnPicked {
+            key: "value".into(),
+            unit: Unit::Ohm,
+        },
+    }));
+
+    let _ = app.update(Message::Library(LibraryMessage::BrowserSelectTable {
+        library_path: root.clone(),
+        table: "Resistors".into(),
+    }));
+    let browser = &app.library.library_browsers[&root];
+    assert_eq!(browser.active_table.as_deref(), Some("Resistors"));
+    assert!(
+        browser.range_filters.get("value").is_some(),
+        "selecting the table on screen dropped its filters"
+    );
+}

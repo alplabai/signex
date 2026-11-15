@@ -183,9 +183,12 @@ impl Signex {
             ));
             // Only a dialog still open for this file shows it; another dialog
             // (reopened for a sheet meanwhile) must not.
-            let shown = format!("Rename failed: {reason}");
+            let shown = signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_RENAME_FAILED_WHY)
+                .arg("reason", reason.to_string());
             if self.dialog_targets(&job.from) {
-                self.set_rename_error(&shown);
+                // shortcut: the Rename dialog keeps its error as text, so a
+                // language switch leaves it as it was; store the id with #2059.
+                self.set_rename_error(&shown.render(&self.ui_state.i18n));
             } else {
                 self.document_state.error_notice =
                     Some(crate::app::state::ErrorNotice::rename_failed(shown));
@@ -324,13 +327,14 @@ impl Signex {
         &mut self,
         path: &Path,
         what: &str,
-        notice: fn(String) -> crate::app::state::ErrorNotice,
+        notice: fn(signex_i18n::Translatable) -> crate::app::state::ErrorNotice,
     ) -> bool {
         let Err(e) = self.refuse_while_project_moves(path, what) else {
             return false;
         };
         crate::diagnostics::log_warning(e.to_string());
-        self.document_state.error_notice = Some(notice(e.to_string()));
+        self.document_state.error_notice =
+            Some(notice(crate::app::state::untranslated(e.to_string())));
         true
     }
 

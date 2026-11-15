@@ -74,6 +74,14 @@ pub(in crate::app::view) fn wrap_modal_scrim<'a>(
     iced::widget::stack![backdrop, positioned].boxed()
 }
 
+/// `card` claiming the pointer over its own bounds, so a press on its padding
+/// stops at it instead of reaching the click-outside layer below.
+fn claim_pointer<'a>(card: Element<'a, Message>) -> Element<'a, Message> {
+    iced::widget::mouse_area(card)
+        .interaction(iced::mouse::Interaction::Idle)
+        .boxed()
+}
+
 /// Wrap a header element in a mouse_area so pressing on it begins a modal
 /// drag. Uses the last known mouse position as the drag anchor.
 pub(in crate::app::view) fn draggable_header<'a>(
@@ -91,13 +99,23 @@ pub(in crate::app::view) fn draggable_header<'a>(
 }
 
 impl Signex {
-    /// The click-outside layer for `on_dismiss`, then `card` as drawn (it
-    /// positions itself).
+    /// The click-outside layer for `on_dismiss` under `card` as drawn (it
+    /// positions itself), as ONE overlay layer. `collect_overlays` wraps each
+    /// layer in `scroll_guard`, which claims the pointer over the whole
+    /// window-sized card layer; a backdrop in a layer of its own below it
+    /// never saw a click (#2349).
     pub(in crate::app::view) fn dismiss_over<'a>(
         on_dismiss: Message,
         card: Element<'a, Message>,
     ) -> Vec<Element<'a, Message>> {
-        vec![Self::dismiss_layer(on_dismiss), card]
+        vec![
+            iced::widget::Stack::new()
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .push(Self::dismiss_layer(on_dismiss))
+                .push(card)
+                .boxed(),
+        ]
     }
 
     /// [`Self::dismiss_over`] with `card` placed at the absolute `at`.
@@ -106,7 +124,10 @@ impl Signex {
         card: Element<'a, Message>,
         at: (f32, f32),
     ) -> Vec<Element<'a, Message>> {
-        Self::dismiss_over(on_dismiss, signex_widgets::Translate::new(card, at).boxed())
+        Self::dismiss_over(
+            on_dismiss,
+            signex_widgets::Translate::new(claim_pointer(card), at).boxed(),
+        )
     }
 
     /// [`Self::dismiss_over`] with `card` centred in the window.
@@ -114,7 +135,7 @@ impl Signex {
         on_dismiss: Message,
         card: Element<'a, Message>,
     ) -> Vec<Element<'a, Message>> {
-        let centred = container(card)
+        let centred = container(claim_pointer(card))
             .width(Length::Fill)
             .height(Length::Fill)
             .center_x(Length::Fill)
@@ -243,15 +264,40 @@ pub(super) fn section_header(title: &str, muted: Color) -> Element<'_, Message> 
 mod tests {
     use super::*;
 
+    /// Backdrop and card share one layer, so the scroll guard that
+    /// `collect_overlays` puts around each layer cannot hide the backdrop
+    /// from a click (#2349).
     #[test]
-    fn dismiss_helpers_stack_the_backdrop_under_one_card() {
+    fn dismiss_helpers_stack_the_backdrop_under_one_card_in_one_layer() {
         let card = || Space::new().boxed();
         let msg = Message::noop;
-        assert_eq!(Signex::dismiss_over(msg(), card()).len(), 2);
+        assert_eq!(Signex::dismiss_over(msg(), card()).len(), 1);
         assert_eq!(
             Signex::dismiss_and_place(msg(), card(), (3.0, 4.0)).len(),
-            2
+            1
         );
-        assert_eq!(Signex::dismiss_and_centre(msg(), card()).len(), 2);
+        assert_eq!(Signex::dismiss_and_centre(msg(), card()).len(), 1);
+    }
+
+    /// A click outside the placed card dismisses; a click on the card's
+    /// padding does not, even inside the scroll guard every overlay gets.
+    #[test]
+    fn a_click_outside_a_placed_card_dismisses_and_one_on_it_does_not() {
+        use crate::layout_probe::messages_on_click_at;
+        let window = iced::Size::new(400.0, 300.0);
+        let click = |at: iced::Point| {
+            let card = container(Space::new().width(100).height(60))
+                .padding(10)
+                .boxed();
+            let layer = Signex::dismiss_and_place(Message::noop(), card, (50.0, 40.0))
+                .pop()
+                .expect("one layer");
+            let guarded = super::super::super::overlays::scroll_guard(layer);
+            messages_on_click_at(guarded, window, None, at)
+        };
+        let outside = click(iced::Point::new(300.0, 250.0));
+        assert_eq!(outside.len(), 1, "{outside:?}");
+        let on_padding = click(iced::Point::new(55.0, 45.0));
+        assert!(on_padding.is_empty(), "{on_padding:?}");
     }
 }
