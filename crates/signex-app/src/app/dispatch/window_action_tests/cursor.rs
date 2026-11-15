@@ -36,12 +36,28 @@ fn select_node_from_a_window_selects_the_item_under_its_cursor() {
 #[test]
 fn refresh_view_from_a_window_clears_that_windows_canvas_caches() {
     let mut f = fixture();
-    let window_before = f.app.interaction_state.canvases[&f.window].content_cache_clears;
+    // The main window shows its sheet too, so a redraw run there would count.
+    let main_sheet = f.app.document_state.engines[&f.main_path]
+        .document()
+        .clone();
+    f.app.interaction_state.canvas.set_render_cache(Some(
+        crate::schematic_runtime::SchematicRenderCache::from_sheet(&main_sheet),
+    ));
+    let clears = |f: &Fixture| f.app.interaction_state.canvases[&f.window].content_cache_clears;
+    // The control: a window canvas event that redraws nothing (no hover yet,
+    // so centring returns at once) still passes through the window's swap.
+    let start = clears(&f);
+    run_in_window(&mut f, "center_on_cursor");
+    let control = clears(&f);
     let main_before = f.app.interaction_state.canvas.content_cache_clears;
 
     run_in_window(&mut f, "refresh_view");
 
-    assert!(f.app.interaction_state.canvases[&f.window].content_cache_clears > window_before);
+    let after = clears(&f);
+    assert!(
+        after - control > control - start,
+        "the window's content cache: {start} -> {control} -> {after}"
+    );
     assert_eq!(
         f.app.interaction_state.canvas.content_cache_clears, main_before,
         "the main window's canvas was not asked to redraw"

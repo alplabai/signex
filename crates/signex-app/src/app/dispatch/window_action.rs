@@ -130,8 +130,7 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
 /// Whether the message a command resolved to edits the sheet an undocked
 /// window shows, so it runs in the window's swap. An explicit allow-list of
 /// variants (never a whole enum): sheet edits, selection, tools, in-place text
-/// edits, Active Bar actions, the view zoom, redraw and centring, and opening
-/// Find (the dialog then
+/// edits, Active Bar actions, the view zoom and opening Find (the dialog then
 /// searches that window's sheet). Everything else (sheet stepping, project
 /// opens, net jumps, Find next / previous, Annotate, ERC, export, app-wide
 /// toggles, and any message added later) runs on the main window, where it
@@ -140,7 +139,6 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
     use crate::active_bar::ActiveBarMsg;
     use crate::app::selection_request::SelectionRequest as Sel;
     use crate::app::{EditMsg, InputMsg, OverlayMsg, TextEditMsg, ToolMessage};
-    use crate::canvas::CanvasEvent;
     use crate::library::{LibraryMessage, PlacedPartMsg};
     use crate::menu_bar::MenuMessage;
     match message {
@@ -194,8 +192,6 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
         Message::Input(InputMsg::EscapePressed { .. }) => true,
         Message::TextEdit(TextEditMsg::Requested(_)) => true,
         Message::Menu(menu) => matches!(menu, MenuMessage::ZoomIn | MenuMessage::ZoomOut),
-        // Redraw and centring act on the canvas and cursor of the shown sheet.
-        Message::CanvasEvent(CanvasEvent::RedrawRequested | CanvasEvent::CenterAtCursor) => true,
         _ => false,
     }
 }
