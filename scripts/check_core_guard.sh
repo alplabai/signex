@@ -9,6 +9,12 @@
 #   crate_alias         aliases the crate root (`use crate as x`,
 #                       `use crate::{self as x}`, `extern crate self as x`),
 #                       which would hide a path from the rule above;
+#   std_alias           aliases the `std`, `core` or `alloc` root (`use std as s`,
+#                       `use std::{self as s}`, `extern crate std as s`), which
+#                       would hide `std::fs` and the rest from the rules below;
+#   path_attr           uses `#[path = ...]`, which mounts a file from anywhere;
+#   include_source      uses `include!`, which pastes outside source in
+#                       (`include_str!` / `include_bytes!` of data are fine);
 #   super_escape        climbs out of app/core/ with a `super::` chain, judged
 #                       against the file's module depth (`a/b.rs` is 2 deep,
 #                       `a/mod.rs` 1) plus the inline `mod x {` blocks around it;
@@ -18,11 +24,13 @@
 #   std_fs / std_thread / std_process
 #                       names `std::fs`, `std::thread` or `std::process`.
 #
-# Each `use` statement is joined over its lines and flattened to one path per
-# record first (scripts/check_core_guard.awk), so a multi-line group is judged
-# like the one-line form. A missing or empty core directory passes. Lines
-# whose first non-blank text is `//` are skipped. Block comments and string
-# literals are still scanned: a hit there fails, the safe side.
+# Each `use` statement, also one after `#[attr]` or `{` on its line, is joined
+# over its lines and flattened to one path per record first
+# (scripts/check_core_guard.awk), so a multi-line group is judged like the
+# one-line form. `//` comments are cut off before matching (outside "..."
+# strings); a failure reports the original source line. A missing or empty
+# core directory passes. Block comments and string literals are still
+# scanned: a hit there fails, the safe side.
 #
 # This is a source scan, unlike the crate-graph check in
 # scripts/check_arch_guard.sh, which reads `cargo metadata`.
@@ -44,11 +52,15 @@ fi
 
 cd "$ROOT"
 
-RULES=(crate_outside_core crate_alias super_escape iced tokio blocking std_fs std_thread std_process)
+RULES=(crate_outside_core crate_alias std_alias path_attr include_source super_escape
+  iced tokio blocking std_fs std_thread std_process)
 
 pattern() {
   case "$1" in
     crate_alias) printf '%s\n' '\b(use[[:space:]]+crate|crate::self|extern[[:space:]]+crate[[:space:]]+self)[[:space:]]+as\b' ;;
+    std_alias) printf '%s\n' '\b(use|extern[[:space:]]+crate)[[:space:]]+(::)?(std|core|alloc)[[:space:]]+as\b|(^|[^:A-Za-z0-9_])(::)?(std|core|alloc)::self[[:space:]]+as\b' ;;
+    path_attr) printf '%s\n' '#!?\[.*\bpath[[:space:]]*=' ;;
+    include_source) printf '%s\n' '\binclude[[:space:]]*!' ;;
     iced) printf '%s\n' '\biced(\b|_)' ;;
     tokio) printf '%s\n' '\btokio\b' ;;
     blocking) printf '%s\n' '\b(spawn_blocking|run_blocking)\b' ;;
@@ -82,11 +94,25 @@ hits() {
   esac
 }
 
+# report <rule> <path:line:matched text>: the original line, plus what was
+# matched when that differs (a flattened `use` path, a line without its comment).
+report() {
+  local path="${2%%:*}" rest="${2#*:}" line text orig
+  line="${rest%%:*}"
+  text="${rest#*:}"
+  orig="$(sed -n "${line}p" "$path" | tr -d '\r')"
+  orig="${orig#"${orig%%[![:space:]]*}"}"
+  echo "Core guard: $path:$line breaks '$1': $orig"
+  text="${text#"${text%%[![:space:]]*}"}"
+  [[ "$text" != "$orig" ]] && echo "    matched: $text"
+  return 0
+}
+
 fail=0
 for rule in "${RULES[@]}"; do
   while IFS= read -r hit; do
     [[ -z "$hit" ]] && continue
-    echo "Core guard: ${hit%%:*}:$(cut -d: -f2 <<<"$hit") breaks '$rule': $(cut -d: -f3- <<<"$hit")"
+    report "$rule" "$hit"
     fail=1
   done < <(hits "$rule")
 done

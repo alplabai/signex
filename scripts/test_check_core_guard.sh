@@ -79,7 +79,14 @@ use tokio::sync::mpsc;' "x.rs:2 breaks 'tokio'"
 
 run_case multiline_std_group fail 'use std::{
     fs, // read the file
-};' "x.rs:1 breaks 'std_fs': use std::fs;"
+};' "x.rs:1 breaks 'std_fs': use std::{
+    matched: use std::fs;"
+run_case use_after_attribute_is_joined fail '#[cfg(unix)] use std::{
+    fs };' "x.rs:1 breaks 'std_fs'"
+run_case use_after_brace_is_joined fail 'fn f() { use std::{
+    fs}; }' "x.rs:1 breaks 'std_fs'"
+run_case use_after_statement_is_joined fail 'use a::b; use std::{
+    fs };' "x.rs:1 breaks 'std_fs'"
 run_case multiline_crate_group_inside_core pass 'pub(crate) use crate::{
     app::core::x,
     app::core::{y, z},
@@ -87,9 +94,9 @@ run_case multiline_crate_group_inside_core pass 'pub(crate) use crate::{
 run_case multiline_crate_group_escapes fail 'use crate::{
     app::core::x,
     app::other,
-};' "breaks 'crate_outside_core': use crate::app::other;"
+};' "matched: use crate::app::other;"
 run_case nested_crate_group_escapes fail 'use crate::app::{core::x, view::Y};' \
-  "breaks 'crate_outside_core': use crate::app::view::Y;"
+  "matched: use crate::app::view::Y;"
 run_case second_statement_on_a_line fail 'use crate::app::core::a; use crate::keymap::K;' \
   "breaks 'crate_outside_core'"
 
@@ -98,6 +105,30 @@ run_case second_statement_on_a_line fail 'use crate::app::core::a; use crate::ke
 run_case use_crate_as fail 'use crate as root;' "breaks 'crate_alias'"
 run_case use_crate_self_as fail 'use crate::{self as root};' "breaks 'crate_alias'"
 run_case extern_crate_self_as fail 'extern crate self as root;' "breaks 'crate_alias'"
+
+# --- aliasing std / core / alloc --------------------------------------------
+
+run_case use_std_as fail 'use std as s; fn f(p: &str) { s::fs::read(p); }' "breaks 'std_alias'"
+run_case extern_crate_std_as fail 'extern crate std as s;' "breaks 'std_alias'"
+run_case use_std_self_as fail 'use ::std::{self as s};' "breaks 'std_alias'"
+run_case use_core_as fail 'use core as c;' "breaks 'std_alias'"
+run_case core_module_self_as_is_fine pass 'use crate::app::core::{self as app_core};'
+
+# --- outside source pulled in without crate:: -------------------------------
+
+run_case path_attribute fail '#[path = "../../view/mod.rs"]
+mod v;' "x.rs:1 breaks 'path_attr'"
+run_case include_macro fail 'include!("../../view/theme.rs");' "breaks 'include_source'"
+run_case include_str_data_is_fine pass 'const T: &str = include_str!("table.tsv");
+const B: &[u8] = include_bytes!("blob.bin");'
+
+# --- trailing comments are not code -----------------------------------------
+
+run_case trailing_comment_is_skipped pass 'let a = 1; // like crate::app::view or std::fs'
+run_case slashes_in_a_string_are_not_a_comment fail 'let u = "a//b"; let s = std::fs::read(u);' \
+  "breaks 'std_fs'"
+run_case trailing_comment_reports_original_line fail 'let s = std::fs::read(p); // why' \
+  "breaks 'std_fs': let s = std::fs::read(p); // why"
 
 # --- super:: chains against the module depth --------------------------------
 
