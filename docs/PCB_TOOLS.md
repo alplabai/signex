@@ -85,13 +85,19 @@ keepout zone's id.
 
 ## String
 
-`place_board_string` (default profile: `P S` on a board). Each click
-places a string (`PcbBoard::texts`) on the active layer, whatever kind it
-is, at the PCB default text size (`PCB_DEFAULT_TEXT_SIZE_MM`) and unturned,
-reading the catalog's new-string text (`pcb-tool-string-text`, "String").
-The string carries no net. It is saved with the board; the board renderer
-draws board text once #2387 lands, so until then neither the string nor its
-preview on the cursor shows on the canvas.
+Still greyed, with no catalog command or key yet. A string the canvas
+cannot draw or pick would still be saved with the board and could not be
+selected or deleted, so the row goes live only once board text is drawn
+(#2387) and picked (a Text kind in `pcb_geom::ItemRef`).
+
+The tool behind the row is in. Each click places a string
+(`PcbBoard::texts`) on the active layer at the PCB default text size
+(`PCB_DEFAULT_TEXT_SIZE_MM`) and unturned, reading the catalog's new-string
+text (`pcb-tool-string-text`, "String"); the string carries no net. Only the
+two overlay layers take a string (`PcbLayer::is_overlay`): on any other
+layer a click places nothing and the Messages panel says to make an overlay
+layer active, and nothing follows the pointer. Copper text would be copper
+that the copper list, the design rule check and the ratsnest never read.
 
 ## Arc
 

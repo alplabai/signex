@@ -11,7 +11,6 @@ fn arc(start: (f64, f64), mid: (f64, f64), end: (f64, f64)) -> TrackArc {
         width: 0.25,
         layer: "TopCopper".into(),
         net: 3,
-        unknown_columns: UnknownColumns::default(),
     }
 }
 

@@ -194,21 +194,25 @@ pub fn place_zone(zone: Zone) -> BoardCommand {
 }
 
 /// A board string (#2373) reading `text` at `at` on `layer`, at the PCB
-/// default size and unturned. Drawing it is the board renderer's (#2387).
+/// default size and unturned. `None` off the overlay (silkscreen) layers:
+/// copper text would be copper the copper list, DRC and ratsnest never read.
 pub fn new_text(
     id: Uuid,
     at: Point,
     layer: PcbLayer,
     text: String,
-) -> signex_types::pcb::BoardText {
-    signex_types::pcb::BoardText {
+) -> Option<signex_types::pcb::BoardText> {
+    if !layer.is_overlay() {
+        return None;
+    }
+    Some(signex_types::pcb::BoardText {
         uuid: id,
         text,
         position: at,
         layer: pcb_layer_token(layer),
         font_size: signex_types::pcb::PCB_DEFAULT_TEXT_SIZE_MM,
         rotation: 0.0,
-    }
+    })
 }
 
 /// Add a board string: one undo step.

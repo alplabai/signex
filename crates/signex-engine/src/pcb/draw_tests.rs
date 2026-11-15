@@ -187,7 +187,7 @@ fn a_board_string_lands_on_its_layer_at_the_default_size_in_one_step() {
     let before = serde_json::to_string(engine.board()).unwrap();
     let overlay = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
     let id = Uuid::from_u128(0x90);
-    let text = new_text(id, Point::new(2.0, 3.0), overlay, "J1".into());
+    let text = new_text(id, Point::new(2.0, 3.0), overlay, "J1".into()).unwrap();
     assert_eq!(
         (text.layer.as_str(), text.text.as_str()),
         ("TopSilkscreen", "J1")
@@ -198,4 +198,23 @@ fn a_board_string_lands_on_its_layer_at_the_default_size_in_one_step() {
     assert_eq!(engine.board().texts, [text]);
     engine.undo().unwrap();
     assert_eq!(serde_json::to_string(engine.board()).unwrap(), before);
+}
+
+#[test]
+fn a_board_string_lands_on_an_overlay_layer_only() {
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
+
+    let at = Point::new(2.0, 3.0);
+    let id = Uuid::from_u128(0x91);
+    let bottom = PcbLayer::Technical(TechnicalLayer::SilkscreenBottom);
+    let text = new_text(id, at, bottom, "J1".into()).unwrap();
+    assert_eq!(text.layer, "BottomSilkscreen");
+    for layer in [
+        PcbLayer::Copper(CopperLayer::Top),
+        PcbLayer::Copper(CopperLayer::Bottom),
+        PcbLayer::Technical(TechnicalLayer::EdgeCuts),
+        PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
+    ] {
+        assert!(new_text(id, at, layer, "J1".into()).is_none(), "{layer:?}");
+    }
 }

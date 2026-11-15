@@ -8,7 +8,7 @@ use std::f64::consts::TAU;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::format::{UnknownColumns, parse_pcb_layer};
+use crate::format::parse_pcb_layer;
 use crate::pcb_layer::PcbLayer;
 use crate::schematic::{Point, circumcircle};
 
@@ -31,10 +31,6 @@ pub struct TrackArc {
     pub layer: String,
     #[serde(default)]
     pub net: u32,
-    /// TSV columns this build does not recognise, kept per row so a save
-    /// re-emits them (see [`UnknownColumns`]).
-    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
-    pub unknown_columns: UnknownColumns,
 }
 
 /// The circle an arc lies on and how far it turns along it.

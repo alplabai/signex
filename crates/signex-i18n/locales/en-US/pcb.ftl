@@ -43,6 +43,7 @@ pcb-bar-component-unavailable = Place Component: not available on boards yet
 pcb-bar-pad-unavailable = Place Pad: not available on boards yet
 pcb-bar-arc-unavailable = Place Arc: not available on boards yet
 pcb-bar-polygon-pour-unavailable = Place Polygon Pour: not available on boards yet
+pcb-bar-text-unavailable = Place String: not available on boards yet
 pcb-bar-dimension-unavailable = Place Dimension: not available on boards yet
 pcb-bar-route-unavailable = Interactive Routing: not available on boards yet
 # Rows of the Place menu on a board (#2360). The ones the board editor cannot
@@ -64,16 +65,12 @@ pcb-bar-via-tooltip = Place Via
 pcb-bar-track-tooltip = Place Track (Space flips the corner, Shift+Space changes the corner mode)
 pcb-bar-fill-tooltip = Place Fill
 pcb-bar-region-tooltip = Place Solid Region (right-click to close)
-pcb-bar-string-tooltip = Place String
 pcb-bar-keepout-tooltip = Place Keepout (right-click to close)
 # What the Messages panel says when a board placement tool is armed (#2373).
 pcb-tool-hint-via = Via: click to place a via on the net under it; Esc or a right-click ends the tool
 pcb-tool-hint-track = Track: click to start a run on the active copper layer, then click each corner; change the layer to add a via. Click the run's end, Esc or a right-click to end the run
 pcb-tool-hint-fill = Fill: click two opposite corners of solid copper on the active copper layer; Esc or a right-click ends the tool
 pcb-tool-hint-region = Solid Region: click each corner, then the first corner or a right-click to close it; Esc drops the shape, then ends the tool
-pcb-tool-hint-string = String: click to place a string on the active layer; Esc or a right-click ends the tool
-# The text a string placed with the String tool reads until it is edited.
-pcb-tool-string-text = String
 pcb-tool-hint-keepout = Keepout: on a copper or keep-out layer, click each corner, then the first corner or a right-click to close it. It keeps all copper off that copper layer; Esc drops the shape, then ends the tool
 # A Track, Fill or Solid Region click while the active layer is not copper;
 # $tool is the tool's name.
@@ -82,6 +79,10 @@ pcb-tool-needs-copper = { $tool }: make a copper layer active to draw on it
 pcb-tool-no-area = { $tool }: the shape has no area, so nothing was added
 # A Keepout click while the active layer is neither copper nor a keep-out layer.
 pcb-tool-keepout-needs-layer = Keepout: make a copper layer or a keep-out layer active to draw on it
+# The text a string placed with the String tool reads until it is edited.
+pcb-tool-string-text = String
+# A String click while the active layer is not an overlay layer.
+pcb-tool-string-needs-overlay = String: make an overlay layer active to place a string on it
 
 # Layer names in the Layers panel, the layer strip and the status bar, as
 # Altium names them. A mechanical layer the user named shows that name instead.

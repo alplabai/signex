@@ -302,7 +302,6 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | — | — |
 | `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
-| `place_board_string` | Place a string of text on the active layer | place | `P S` | — |
 | `place_board_track` | Route a track on the active copper layer | place | `P T` | — |
 | `place_board_via` | Place a via on the board | place | `P V` | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |

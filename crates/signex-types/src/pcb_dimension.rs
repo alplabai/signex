@@ -87,12 +87,12 @@ impl LinearDimension {
         (self.end.x - self.start.x).hypot(self.end.y - self.start.y)
     }
 
-    /// What the dimension draws; `None` when its points are the same or a
-    /// number in it is not finite.
+    /// What the dimension draws; `None` when its points are the same, a
+    /// number in it is not finite or its text height is not above zero.
     pub fn drawing(&self) -> Option<DimensionDrawing> {
         let length = self.value_mm();
         let numbers = [length, self.offset, self.text_height];
-        if numbers.iter().any(|v| !v.is_finite()) || length == 0.0 {
+        if numbers.iter().any(|v| !v.is_finite()) || length == 0.0 || self.text_height <= 0.0 {
             return None;
         }
         let along = Point::new(

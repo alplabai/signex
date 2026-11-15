@@ -79,6 +79,11 @@ fn a_dimension_of_one_point_or_a_number_that_is_not_finite_draws_nothing() {
     );
     let far = dimension(p(0.0, 0.0), p(f64::INFINITY, 0.0), 1.0);
     assert!(far.drawing().is_none());
+    for height in [0.0, -1.0] {
+        let mut flat = dimension(p(0.0, 0.0), p(1.0, 0.0), 1.0);
+        flat.text_height = height;
+        assert!(flat.drawing().is_none(), "text height {height}");
+    }
 }
 
 #[test]

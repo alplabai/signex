@@ -292,8 +292,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_track"
         | "place_board_fill"
         | "place_board_region"
-        | "place_board_keepout"
-        | "place_board_string" => Needs::Pcb,
+        | "place_board_keepout" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" => Needs::OpenProject,
