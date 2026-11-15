@@ -7,6 +7,8 @@ mod document_target;
 mod pcb_targets;
 mod platform;
 mod shortcut;
+#[cfg(test)]
+mod spelling_tests;
 
 pub use document_target::DocumentTarget;
 pub use pcb_targets::PcbTargets;
