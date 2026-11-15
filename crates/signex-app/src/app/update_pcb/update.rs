@@ -164,8 +164,7 @@ impl Signex {
         match self.open_path_reported(board.to_path_buf()) {
             Ok(task) => task,
             Err(_) => {
-                let why = self.board_missing(board);
-                self.fail_update_pcb(why);
+                self.fail_update_pcb_board_missing(board);
                 Task::none()
             }
         }
@@ -176,9 +175,17 @@ impl Signex {
             || self.ui_state.pending_sheet_opens.contains_key(board)
     }
 
-    fn board_missing(&self, board: &Path) -> String {
-        t!(self.ui_state.i18n, ids::UPDATE_PCB_BOARD_MISSING, "board" => file_name(board))
-            .into_string()
+    /// The board did not open: Messages says so in en-US, the dialog in the
+    /// UI language.
+    fn fail_update_pcb_board_missing(&mut self, board: &Path) {
+        let logged = signex_i18n::I18n::en_us().message_plain(
+            ids::UPDATE_PCB_BOARD_MISSING,
+            &[("board", file_name(board).into())],
+        );
+        let shown =
+            t!(self.ui_state.i18n, ids::UPDATE_PCB_BOARD_MISSING, "board" => file_name(board))
+                .into_string();
+        self.fail_update_pcb_as(&logged, shown);
     }
 
     /// The pass after every update: a board the dialog waits for has opened
@@ -194,8 +201,7 @@ impl Signex {
             return self.start_update_pcb_read(None);
         }
         if !self.is_board_opening(&board) {
-            let why = self.board_missing(&board);
-            self.fail_update_pcb(why);
+            self.fail_update_pcb_board_missing(&board);
         }
         Task::none()
     }
