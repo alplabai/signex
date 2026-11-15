@@ -417,8 +417,8 @@ pub struct UiState {
     /// "Close Project — Unsaved Edits" confirmation modal. `Some`
     /// while the user is being asked to save / discard / cancel a
     /// close request that touches a dirty document. Cleared on any
-    /// of the three button choices.
-    pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
+    /// of the three button choices. Boxed like `new_project`.
+    pub project_close_confirm: Option<Box<crate::app::ProjectCloseConfirmState>>,
     /// "Create the missing sheet?" confirm; `Some` while it is up.
     pub create_child_sheet_confirm: Option<crate::app::contracts::CreateChildSheetConfirmState>,
     /// A Create Sheet request from the Projects tree waiting for its parent
@@ -454,8 +454,8 @@ pub struct UiState {
     /// in Messages this session.
     pub missing_profiles_warned: std::collections::HashSet<String>,
     /// The Update PCB dialog, while open, or a headless `apply=true` run
-    /// (#1312).
-    pub update_pcb: Option<crate::app::UpdatePcbState>,
+    /// (#1312). Boxed like `new_project`.
+    pub update_pcb: Option<Box<crate::app::UpdatePcbState>>,
     /// The Number Schematic Sheets dialog, while open (#2247). Apply writes
     /// to memory only; the sheets are saved by the user.
     pub sheet_numbering: Option<crate::app::SheetNumberingState>,
@@ -468,8 +468,9 @@ pub struct UiState {
     /// The options Re-Annotate Board was last used with, for its next opening.
     pub board_reannotate_options: signex_engine::pcb::designators::ReannotateOptions,
     /// Back Annotate (#1312), while open. Execute writes the sheets in
-    /// memory as one undo group; nothing is written to disk.
-    pub back_annotate: Option<crate::app::BackAnnotateState>,
+    /// memory as one undo group; nothing is written to disk. Boxed like
+    /// `new_project`.
+    pub back_annotate: Option<Box<crate::app::BackAnnotateState>>,
     /// The Find Similar Objects dialog, while open (#1257).
     pub find_similar: Option<crate::find_similar::FindSimilarState>,
     /// Token of the newest Find Similar project search. Lives outside the
@@ -532,7 +533,8 @@ pub struct UiState {
     pub erc_run_rule_set: Option<signex_output::ErcReportRuleSet>,
     /// An "Update from profile" waiting for the user's confirmation, with the
     /// diff it would apply (#1085). Nothing is changed until confirmed.
-    pub pending_profile_update: Option<crate::app::state::PendingProfileUpdate>,
+    /// Boxed like `new_project`.
+    pub pending_profile_update: Option<Box<crate::app::state::PendingProfileUpdate>>,
     /// The machine's rule set, as the `User Default` profile holds it (#1608):
     /// per-rule severity overrides, used by a project that stores no rules of
     /// its own. If empty, each rule's default is used. Loaded from the profile
@@ -778,16 +780,35 @@ mod tests {
         std::mem::size_of::<T>()
     }
 
-    /// #2412: a closed setup dialog costs one pointer in every `Signex`.
+    /// #2412: a closed large dialog costs one pointer in every `Signex`.
     #[test]
-    fn a_closed_setup_dialog_costs_one_pointer() {
+    fn a_closed_large_dialog_costs_one_pointer() {
         let pointer = std::mem::size_of::<usize>();
-        let document_setup = field_size(|ui| &ui.document_setup);
-        assert_eq!(
-            document_setup, pointer,
-            "document_setup is {document_setup} B"
-        );
-        let new_project = field_size(|ui| &ui.new_project);
-        assert_eq!(new_project, pointer, "new_project is {new_project} B");
+        let sizes = [
+            ("document_setup", field_size(|ui| &ui.document_setup)),
+            ("new_project", field_size(|ui| &ui.new_project)),
+            (
+                "project_close_confirm",
+                field_size(|ui| &ui.project_close_confirm),
+            ),
+            ("update_pcb", field_size(|ui| &ui.update_pcb)),
+            ("back_annotate", field_size(|ui| &ui.back_annotate)),
+            (
+                "pending_profile_update",
+                field_size(|ui| &ui.pending_profile_update),
+            ),
+        ];
+        for (name, size) in sizes {
+            assert_eq!(size, pointer, "{name} is {size} B");
+        }
+    }
+
+    /// #2412: a new inline dialog draft trips this; box it, or raise the
+    /// bound in the same PR with the measured size rounded up to 256 B.
+    #[test]
+    fn ui_state_stays_under_its_size_ceiling() {
+        const CEILING: usize = 7168;
+        let size = std::mem::size_of::<super::UiState>();
+        assert!(size <= CEILING, "UiState is {size} B, over {CEILING} B");
     }
 }

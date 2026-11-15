@@ -145,7 +145,12 @@ impl Signex {
         if apply && board.is_none() {
             return Err(ids::UPDATE_PCB_NO_BOARD);
         }
-        self.ui_state.update_pcb = Some(UpdatePcbState::new(project, name, board.clone(), apply));
+        self.ui_state.update_pcb = Some(Box::new(UpdatePcbState::new(
+            project,
+            name,
+            board.clone(),
+            apply,
+        )));
         match board {
             Some(board) => Ok(self.begin_update_pcb_board(&board)),
             None => Ok(Task::none()),

@@ -182,14 +182,15 @@ impl Signex {
                 ));
                 self.refresh_panel_ctx();
             }
-            self.ui_state.project_close_confirm = Some(crate::app::ProjectCloseConfirmState {
-                project_id,
-                project_name,
-                dirty_paths: scan.mine,
-                dirty_rows: scan.mine_rows,
-                kept_paths: scan.kept,
-                sheet_refs,
-            });
+            self.ui_state.project_close_confirm =
+                Some(Box::new(crate::app::ProjectCloseConfirmState {
+                    project_id,
+                    project_name,
+                    dirty_paths: scan.mine,
+                    dirty_rows: scan.mine_rows,
+                    kept_paths: scan.kept,
+                    sheet_refs,
+                }));
             return Task::none();
         }
 

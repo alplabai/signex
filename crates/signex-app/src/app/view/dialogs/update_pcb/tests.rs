@@ -28,7 +28,7 @@ fn the_dialog_builds_in_every_phase() {
         );
         state.phase = phase;
         state.list = Some(Default::default());
-        app.ui_state.update_pcb = Some(state);
+        app.ui_state.update_pcb = Some(Box::new(state));
         let _ = app.view_update_pcb_dialog();
     }
     app.ui_state.update_pcb = None;
@@ -89,7 +89,7 @@ fn the_table_builds_with_problems_under_every_filter() {
         state.list = Some(list.clone());
         state.table.filter = filter;
         state.validation = Some(Ok(()));
-        app.ui_state.update_pcb = Some(state);
+        app.ui_state.update_pcb = Some(Box::new(state));
         let _ = app.view_update_pcb_dialog();
     }
 }

@@ -17,12 +17,12 @@ pub(crate) static NAME_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("signex.new_project.name"));
 
 /// Name a fresh dialog offers.
-const SUGGESTED_NAME: &str = "Untitled";
+pub(super) const SUGGESTED_NAME: &str = "Untitled";
 
 impl Signex {
     /// Where a new project goes by default: beside the open project's folder,
     /// else `Signex` in the user's documents folder.
-    fn default_project_location(&self) -> String {
+    pub(super) fn default_project_location(&self) -> String {
         let beside_open = self
             .document_state
             .active_project
