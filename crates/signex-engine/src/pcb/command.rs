@@ -12,7 +12,7 @@ use super::footprint::{self, FootprintFace};
 use super::footprint_content::{self, FootprintText};
 use super::items::{self, BoardItem, BoardItemId, RemovedItem};
 use super::options;
-use super::replace::{self, FootprintPad};
+use super::replace::{self, FootprintPad, Values};
 
 /// One edit of a board. Targets are absolute so the inverse is exact.
 #[derive(Debug, Clone, PartialEq)]
@@ -62,16 +62,23 @@ pub enum BoardCommand {
     /// footprint, an id named twice or gone, a number that is not finite, a
     /// width or size that is not positive, a via hole not inside its via, a
     /// track moved to a layer that is not copper, or a net not in the table.
-    /// The inverse is another one holding the items it replaced.
+    /// The inverse is a [`BoardCommand::RestoreReplacedItems`].
     ReplaceItems { items: Vec<BoardItem> },
+    /// Put back items a replace took off, at their list index; the inverse
+    /// of [`BoardCommand::ReplaceItems`] and of itself. Only the ids are
+    /// checked: the values were on the board before, odd ones included.
+    RestoreReplacedItems { items: Vec<BoardItem> },
     /// Put each pad over the pad with its uuid on its footprint, at the same
     /// index: a pad's edited fields (#2355). Refused whole for a footprint or
     /// pad that is gone, a pad named twice, a number that is not finite, a
     /// size that is not positive, a hole larger than the pad, or a net not
     /// in the table under its name. The caller enforces `Footprint::locked`
-    /// and `Pad::net_locked`. The inverse is another one holding the pads it
-    /// replaced.
+    /// and `Pad::net_locked`. The inverse is a
+    /// [`BoardCommand::RestoreReplacedPads`].
     ReplacePads { pads: Vec<FootprintPad> },
+    /// Put back pads a replace took off; the inverse of
+    /// [`BoardCommand::ReplacePads`] and of itself. Only the ids are checked.
+    RestoreReplacedPads { pads: Vec<FootprintPad> },
     /// Swap the footprint's pads, graphics and name for those of `with`, a
     /// library footprint in its top-side form. The board footprint keeps its
     /// uuid, position, rotation, side (a bottom one flips the template), lock,
@@ -205,8 +212,14 @@ impl BoardCommand {
             Self::DeleteItems { items: ids } => items::delete(board, &ids),
             Self::RestoreItems { items: removed } => items::restore(board, removed),
             Self::AddItems { items: added } => items::add(board, added),
-            Self::ReplaceItems { items: new } => replace::replace(board, new),
-            Self::ReplacePads { pads } => replace::replace_pads(board, pads),
+            Self::ReplaceItems { items: new } => replace::replace(board, new, Values::Checked),
+            Self::RestoreReplacedItems { items: old } => {
+                replace::replace(board, old, Values::Restored)
+            }
+            Self::ReplacePads { pads } => replace::replace_pads(board, pads, Values::Checked),
+            Self::RestoreReplacedPads { pads } => {
+                replace::replace_pads(board, pads, Values::Restored)
+            }
             Self::ReplaceFootprint {
                 footprint: id,
                 with,

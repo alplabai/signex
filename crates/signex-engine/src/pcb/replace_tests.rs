@@ -179,6 +179,57 @@ fn a_replace_is_one_engine_step() {
 }
 
 #[test]
+fn an_odd_value_on_the_board_undoes_and_redoes_back() {
+    // The test board's tracks have no width and its via no size: an edit
+    // away from them must undo to them, and redo again.
+    let mut b = board();
+    b.nets = with_nets().nets;
+    assert_eq!(segment(&b, SEG_1).width, 0.0);
+    assert_eq!(via(&b).diameter, 0.0);
+    let mut engine = BoardEngine::new(b, 1);
+    let before = snapshot(engine.board());
+    let mut s = segment(engine.board(), SEG_1);
+    s.width = 0.3;
+    let mut v = via(engine.board());
+    v.diameter = 0.6;
+    v.drill = 0.3;
+    engine
+        .execute(replace(vec![BoardItem::Segment(s), BoardItem::Via(v)]))
+        .unwrap();
+    let after = snapshot(engine.board());
+    assert_eq!(segment(engine.board(), SEG_1).width, 0.3);
+    engine.undo().unwrap().expect("a step to undo");
+    assert_eq!(snapshot(engine.board()), before);
+    assert_eq!(segment(engine.board(), SEG_1).width, 0.0);
+    engine.redo().unwrap().expect("a step to redo");
+    assert_eq!(snapshot(engine.board()), after);
+    engine.undo().unwrap().expect("undo again");
+    assert_eq!(snapshot(engine.board()), before);
+}
+
+#[test]
+fn an_odd_pad_size_undoes_back() {
+    let mut b = with_nets();
+    b.footprints[0].pads[0].size = Point { x: 0.0, y: 0.0 };
+    let mut engine = BoardEngine::new(b, 1);
+    let before = snapshot(engine.board());
+    let mut pad = engine.board().footprints[0].pads[0].clone();
+    pad.size = Point { x: 0.5, y: 0.5 };
+    engine
+        .execute(BoardCommand::ReplacePads {
+            pads: vec![FootprintPad {
+                footprint: id(FP_A),
+                pad,
+            }],
+        })
+        .unwrap();
+    engine.undo().unwrap().expect("a step to undo");
+    assert_eq!(snapshot(engine.board()), before);
+    engine.redo().unwrap().expect("a step to redo");
+    assert_eq!(engine.board().footprints[0].pads[0].size.x, 0.5);
+}
+
+#[test]
 fn replacing_a_pad_undoes_exactly_and_refuses_a_stray_net() {
     let mut b = with_nets();
     let before = snapshot(&b);

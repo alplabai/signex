@@ -11,13 +11,26 @@ use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
 use super::error::BoardCommandError;
 use super::items::{self, BoardItem, BoardItemId};
 
+/// Whether a replace checks the new values or puts back values the board
+/// already held.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Values {
+    /// A new edit: every value is checked.
+    Checked,
+    /// An undo or redo: the values were on the board before (a board read
+    /// with a 0-width track undoes to one), so only the ids are checked.
+    Restored,
+}
+
 /// Put each item over the board item with its id. Refused whole, before any
-/// write, for a footprint (it has its own commands), an id named twice or not
-/// on the board, a number that is not finite, or a changed value the board
-/// cannot hold (see [`check_segment`] and [`check_via`]).
+/// write, for a footprint (it has its own commands) or an id named twice or
+/// not on the board, and, for [`Values::Checked`], a number that is not
+/// finite or a changed value the board cannot hold (see [`check_segment`]
+/// and [`check_via`]). The inverse restores what was replaced.
 pub(super) fn replace(
     board: &mut PcbBoard,
     items: Vec<BoardItem>,
+    values: Values,
 ) -> Result<Applied, BoardCommandError> {
     let ids: Vec<BoardItemId> = items.iter().map(BoardItem::id).collect();
     let mut seen = HashSet::with_capacity(ids.len());
@@ -31,11 +44,13 @@ pub(super) fn replace(
             return Err(BoardCommandError::DuplicateItem(id));
         }
         let index = items::position(board, id).ok_or(BoardCommandError::ItemNotFound(id))?;
-        items::check_finite(item)?;
-        match item {
-            BoardItem::Segment(new) => check_segment(board, &board.segments[index], new)?,
-            BoardItem::Via(new) => check_via(board, &board.vias[index], new)?,
-            _ => {}
+        if values == Values::Checked {
+            items::check_finite(item)?;
+            match item {
+                BoardItem::Segment(new) => check_segment(board, &board.segments[index], new)?,
+                BoardItem::Via(new) => check_via(board, &board.vias[index], new)?,
+                _ => {}
+            }
         }
         slots.push(index);
     }
@@ -45,7 +60,7 @@ pub(super) fn replace(
         .map(|(item, index)| items::swap_at(board, index, item))
         .collect();
     Ok(Applied {
-        inverse: BoardCommand::ReplaceItems { items: previous },
+        inverse: BoardCommand::RestoreReplacedItems { items: previous },
         patch: BoardPatch {
             kind: BoardPatchKind::ItemsReplaced,
             items: ids,
@@ -109,12 +124,13 @@ pub struct FootprintPad {
 
 /// Put each pad over the pad with its uuid on its footprint, at the same
 /// index. Refused whole, before any write, for a footprint or pad that is
-/// gone, a pad named twice, a position or turn that is not finite, or a
-/// changed size, hole or net the board cannot hold (see [`check_pad`]).
-/// Locks are the caller's, as for placement edits.
+/// gone or a pad named twice, and, for [`Values::Checked`], a position or
+/// turn that is not finite or a changed size, hole or net the board cannot
+/// hold (see [`check_pad`]). Locks are the caller's, as for placement edits.
 pub(super) fn replace_pads(
     board: &mut PcbBoard,
     pads: Vec<FootprintPad>,
+    values: Values,
 ) -> Result<Applied, BoardCommandError> {
     let mut seen = HashSet::with_capacity(pads.len());
     let mut slots = Vec::with_capacity(pads.len());
@@ -140,8 +156,10 @@ pub(super) fn replace_pads(
                 pad: new.pad.uuid,
             });
         }
-        items::check_pads_finite(std::slice::from_ref(&new.pad))?;
-        check_pad(board, &fp.pads[pad_index], &new.pad)?;
+        if values == Values::Checked {
+            items::check_pads_finite(std::slice::from_ref(&new.pad))?;
+            check_pad(board, &fp.pads[pad_index], &new.pad)?;
+        }
         slots.push((fp_index, pad_index));
     }
     let footprints: BTreeSet<Uuid> = pads.iter().map(|p| p.footprint).collect();
@@ -154,7 +172,7 @@ pub(super) fn replace_pads(
         })
         .collect();
     Ok(Applied {
-        inverse: BoardCommand::ReplacePads { pads: previous },
+        inverse: BoardCommand::RestoreReplacedPads { pads: previous },
         patch: BoardPatch {
             kind: BoardPatchKind::PadsReplaced,
             items: footprints.into_iter().map(BoardItemId::Footprint).collect(),
