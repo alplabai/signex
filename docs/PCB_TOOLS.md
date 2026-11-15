@@ -28,13 +28,13 @@ are both built from it (see `MENU_BAR.md`, "Place on a board").
 
 ## Via
 
-`place_board_via` (Altium profile: `P V` on a board). Each click places a
+`place_board_via` (default profile: `P V` on a board). Each click places a
 through via (top to bottom copper) with the board's via size
 (`PcbSetup::via_diameter` and `via_drill`, else 0.6 mm and 0.3 mm).
 
 ## Track
 
-`place_board_track` (Altium profile: `P T` on a board). A run is drawn on
+`place_board_track` (default profile: `P T` on a board). A run is drawn on
 the active copper layer; with a non-copper layer active the tool says so and
 draws nothing.
 
