@@ -244,6 +244,9 @@ pub enum Board3dMsg {
     PresetPicked(signex_gfx::camera3d::ViewPreset),
     /// The Fit button: the board is framed from where it is seen now.
     FitRequested,
+    /// A redraw found the view at a size it had not reported, in logical
+    /// pixels; the first one frames the view for its real shape.
+    ViewportSized([f32; 2]),
     /// The pointer did `gesture` over the view, `viewport` logical pixels.
     Pointer {
         viewport: [f32; 2],

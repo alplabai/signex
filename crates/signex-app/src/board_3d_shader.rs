@@ -16,7 +16,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use iced::widget::shader::{self, Viewport};
-use iced::{Event, Point, Rectangle, keyboard, mouse};
+use iced::{Event, Point, Rectangle, keyboard, mouse, window};
 use signex_gfx::camera3d::OrbitCamera;
 use signex_gfx::pipeline::mesh::{MeshPipeline, PixelRect};
 use signex_renderer::board3d::BoardScene3d;
@@ -40,7 +40,14 @@ pub struct Board3dProgram {
     pub highlights: Vec<Range<u32>>,
     /// The selection wash.
     pub highlight: [f32; 4],
+    /// The view's size as the app last heard it; a redraw that finds
+    /// another reports it.
+    pub viewport: [f32; 2],
 }
+
+/// How far, in logical pixels, the view's size may differ from the size
+/// the app holds before a redraw reports it.
+const RESIZE_SLOP_PX: f32 = 0.5;
 
 /// A press in progress over the view.
 #[derive(Debug, Clone, Copy)]
@@ -51,12 +58,14 @@ struct Drag {
     moved: bool,
 }
 
-/// The pointer state of the view's widget: the press in progress and
-/// whether Shift is held (mouse events carry no modifiers).
+/// The pointer state of the view's widget: the press in progress, whether
+/// Shift is held (mouse events carry no modifiers) and the size last
+/// reported, so a size the app ignores is not reported on every redraw.
 #[derive(Debug, Default)]
 pub struct Board3dPointer {
     drag: Option<Drag>,
     shift: bool,
+    reported: Option<[f32; 2]>,
 }
 
 impl Board3dProgram {
@@ -66,6 +75,29 @@ impl Board3dProgram {
             gesture,
         })))
         .and_capture()
+    }
+
+    /// On a redraw, the view's size when the app holds another and it was
+    /// not reported already. Not captured: the redraw goes on.
+    fn report_size(
+        &self,
+        state: &mut Board3dPointer,
+        bounds: Rectangle,
+    ) -> Option<shader::Action<Message>> {
+        let size = [bounds.width, bounds.height];
+        if size[0] <= 0.0 || size[1] <= 0.0 {
+            return None;
+        }
+        let apart = |a: [f32; 2]| {
+            (a[0] - size[0]).abs() > RESIZE_SLOP_PX || (a[1] - size[1]).abs() > RESIZE_SLOP_PX
+        };
+        if !apart(self.viewport) || state.reported.is_some_and(|r| !apart(r)) {
+            return None;
+        }
+        state.reported = Some(size);
+        Some(shader::Action::publish(Message::Pcb(PcbMsg::Board3d(
+            Board3dMsg::ViewportSized(size),
+        ))))
     }
 }
 
@@ -81,6 +113,7 @@ impl shader::Program<Message> for Board3dProgram {
         cursor: mouse::Cursor,
     ) -> Option<shader::Action<Message>> {
         match event {
+            Event::Window(window::Event::RedrawRequested(_)) => self.report_size(state, bounds),
             Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
                 state.shift = modifiers.shift();
                 None

@@ -19,6 +19,7 @@ pub mod context;
 pub mod debug_pass;
 pub mod pipeline;
 pub mod primitive;
+pub mod ring_fill;
 pub mod scene;
 pub mod scene3d;
 pub mod shader;

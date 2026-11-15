@@ -122,6 +122,9 @@ pub struct BoardScene3d {
     /// The board's thickness, mm: the top face is at this height, the
     /// bottom face at 0.
     pub thickness_mm: f32,
+    /// Holes left out of the slab because they meet a hole cut before
+    /// them (`signex_gfx::ring_fill::disjoint_holes`).
+    pub dropped_holes: usize,
 }
 
 /// Height of the copper above its face, mm (1 oz copper). Keeps the copper
@@ -178,15 +181,17 @@ pub fn build_board_scene(input: &Board3dInput<'_>) -> BoardScene3d {
     } else {
         PCB_DEFAULT_THICKNESS_MM as f32
     };
-    // Holes go through whatever layers are hidden; copper shows as the view
-    // shows it.
+    // Holes go through whatever layers are hidden; copper shows as the
+    // layers' eyes show it. Single-layer mode is a flat-view editing aid and
+    // does not reach 3D: see `docs/RENDERING_RULES.md`, "board-3d".
     let every = PcbSnapshot::from_board(board);
-    let shown = PcbSnapshot::from_board_with_view(board, input.view);
+    let shown = PcbSnapshot::from_board_with_view(board, &all_layers_of(input.view));
     let mut out = BoardScene3d {
         thickness_mm: thickness,
         ..BoardScene3d::default()
     };
-    out.board = copper::append_board_slab(&mut out.scene, &every, thickness, &input.colors);
+    (out.board, out.dropped_holes) =
+        copper::append_board_slab(&mut out.scene, &every, thickness, &input.colors);
     copper::append_copper(&mut out.scene, &shown, thickness, &input.colors);
     for footprint in &board.footprints {
         if let Some(part) = parts::append_part(&mut out.scene, footprint, input, thickness) {
@@ -194,6 +199,15 @@ pub fn build_board_scene(input: &Board3dInput<'_>) -> BoardScene3d {
         }
     }
     out
+}
+
+/// `view` with single-layer mode off: the hidden layers stay hidden.
+fn all_layers_of(view: &PcbLayerView) -> PcbLayerView {
+    let mut view = view.clone();
+    if view.single_layer() {
+        view.toggle_single_layer();
+    }
+    view
 }
 
 #[cfg(test)]

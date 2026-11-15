@@ -163,41 +163,27 @@ impl Scene3d {
 }
 
 /// Triangles filling `outline` minus `holes`: the points and the index
-/// triples into them. The same ear clip the flat view fills with; when the
-/// holes do not leave the area they should, the outline fills whole, and a
-/// contour the clip refuses fills as a fan.
+/// triples into them. The flat view's fill
+/// ([`crate::ring_fill::triangulate_with_holes`]); when it refuses the
+/// holes, the outline fills whole, and a contour the clip refuses fills as
+/// a fan.
 fn triangulate(outline: &[[f32; 2]], holes: &[Vec<[f32; 2]>]) -> (Vec<[f32; 2]>, Vec<[u32; 3]>) {
-    use signex_sketch::geom::{Point2, ear_clip, ear_clip_with_holes, signed_area};
+    use signex_sketch::geom::{Point2, ear_clip};
     if outline.len() < 3 {
         return (Vec::new(), Vec::new());
     }
-    let to_2d = |p: &[f32; 2]| Point2::new(f64::from(p[0]), f64::from(p[1]));
-    let outer: Vec<Point2> = outline.iter().map(to_2d).collect();
-    let rings: Vec<Vec<Point2>> = holes
-        .iter()
-        .filter(|hole| hole.len() >= 3)
-        .map(|hole| hole.iter().map(to_2d).collect())
-        .collect();
-    let index = |t: [usize; 3]| [t[0] as u32, t[1] as u32, t[2] as u32];
-    if !rings.is_empty() {
-        let (merged, triangles) = ear_clip_with_holes(&outer, &rings);
-        let expected =
-            signed_area(&outer).abs() - rings.iter().map(|h| signed_area(h).abs()).sum::<f64>();
-        let filled: f64 = triangles
-            .iter()
-            .map(|&[a, b, c]| signed_area(&[merged[a], merged[b], merged[c]]).abs())
-            .sum();
-        if !triangles.is_empty()
-            && filled.is_finite()
-            && expected.is_finite()
-            && (filled - expected).abs() <= expected.abs() * 1e-6 + 1e-9
-        {
-            let points = merged.iter().map(|p| [p.x as f32, p.y as f32]).collect();
-            return (points, triangles.into_iter().map(index).collect());
-        }
+    if holes.iter().any(|hole| hole.len() >= 3)
+        && let Some(filled) = crate::ring_fill::triangulate_with_holes(outline, holes)
+    {
+        return filled;
     }
+    let outer: Vec<Point2> = outline
+        .iter()
+        .map(|p| Point2::new(f64::from(p[0]), f64::from(p[1])))
+        .collect();
     let triangles = ear_clip(&outer);
     if !triangles.is_empty() {
+        let index = |t: [usize; 3]| [t[0] as u32, t[1] as u32, t[2] as u32];
         return (outline.to_vec(), triangles.into_iter().map(index).collect());
     }
     let fan = (1..outline.len() as u32 - 1)

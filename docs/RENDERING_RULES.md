@@ -421,7 +421,15 @@ mesh, `signex_gfx::scene3d::Scene3d`):
   (pads, vias), cutout and mounting hole that lies inside it cut through;
   hidden layers do not close a hole. A board with no outline gets the box
   round its copper, 1 mm wider each side. Faces in the solder mask colour,
-  edge and hole walls a darker shade of it.
+  edge and hole walls a darker shade of it. A hole that meets one cut
+  before it (two vias at one point, a pad drill on a mounting hole, a
+  drill inside a cutout) is left out (`signex_gfx::ring_fill::disjoint_holes`,
+  counted in `BoardScene3d::dropped_holes` and logged), so one such pair
+  cannot make the fill refuse every hole. The fill with holes is the flat
+  view's (`signex_gfx::ring_fill::triangulate_with_holes`).
+- **Single-layer mode does not reach 3D.** It is an editing aid of the flat
+  view; in 3D the copper of every shown layer and the parts of both faces
+  stay. Only a layer's eye hides it (`PcbLayerView::is_hidden`).
 - **Copper** comes from the same `PcbSnapshot` the flat view draws, so a
   hidden layer is hidden in 3D too: top copper on the top face, bottom
   copper on the bottom face, vias and through-hole pads on both, inner
@@ -444,7 +452,10 @@ mesh, `signex_gfx::scene3d::Scene3d`):
 target. Left drag turns it, right or middle drag or Shift left drag slides
 it, the wheel zooms; Top, Bottom, Front, Left, Right and Angled look from
 there and frame the board; Fit and View ▸ Fit All frame it from where it is
-seen. Entering the view looks from the top, framed.
+seen. Entering the view looks from the top, framed for an assumed shape;
+the view's first redraw reports its real size and frames it again. A
+gesture never frames it again, so the first drag or wheel step cannot jump.
+The view follows a renamed board and ends when the board's tab closes.
 
 **Selection** is the flat view's: a click casts a ray and selects the
 footprint of the nearest part it meets before the board (on the board or on
@@ -457,7 +468,7 @@ over the board canvas background; flat shading from the face's slope, both
 faces lit by a head light. The mesh uploads only when its generation
 changes.
 
-Checks: `signex_gfx::scene3d::tests`, `signex_gfx::camera3d::tests`,
+Checks: `signex_gfx::scene3d::tests`, `signex_gfx::ring_fill::tests`, `signex_gfx::camera3d::tests`,
 `signex_renderer::board3d::tests`, regression `pcb_board_3d`.
 
 ## What this document is *not*

@@ -285,3 +285,53 @@ fn a_board_without_an_outline_gets_a_slab_round_its_copper() {
     let (lo, hi) = scene.scene.bounds_of(scene.board.clone()).expect("a slab");
     assert!(lo[0] < 9.0 && hi[0] > 40.0, "{lo:?} {hi:?}");
 }
+
+/// Single-layer mode is a flat-view aid: in 3D the parts of both faces and
+/// the copper of every shown layer stay, and a click still picks a part.
+#[test]
+fn single_layer_mode_does_not_reach_the_3d_view() {
+    let mut single = PcbLayerView::default();
+    single.toggle_single_layer();
+    let flat_aid = build(&board(), &single, &HashMap::new());
+    let plain = scene_of(&board());
+    assert!(flat_aid.part(U1).is_some(), "U1 keeps its part");
+    assert!(flat_aid.part(U2).is_some(), "so does the bottom part");
+    assert_eq!(flat_aid.pick([10.0, -10.0, 50.0], DOWN), Some(U1));
+    assert_eq!(
+        flat_aid.scene.triangle_count(),
+        plain.scene.triangle_count(),
+        "the same copper as with the mode off"
+    );
+}
+
+fn via_at(id: u128, x: f64, y: f64) -> Via {
+    Via {
+        uuid: Uuid::from_u128(id),
+        position: Point::new(x, y),
+        diameter: 0.6,
+        drill: 0.3,
+        layers: vec!["TopCopper".into(), "BottomCopper".into()],
+        net: 1,
+        via_type: ViaType::Through,
+        unknown_columns: Default::default(),
+    }
+}
+
+/// Two vias stacked at one point: the second drill is left out, and every
+/// other hole is still cut through the board.
+#[test]
+fn coincident_vias_keep_every_other_hole() {
+    let mut board = board();
+    board.vias.push(via_at(5, 40.0, 20.0));
+    board.vias.push(via_at(6, 20.0, 25.0));
+    let scene = scene_of(&board);
+    assert_eq!(scene.dropped_holes, 1);
+    for (x, y) in [(40.0, -20.0), (20.0, -25.0)] {
+        let through = scene.scene.ray_hit(scene.board.clone(), [x, y, 10.0], DOWN);
+        assert_eq!(through, None, "the drill at ({x}, {y}) is open");
+    }
+    let beside = scene
+        .scene
+        .ray_hit(scene.board.clone(), [21.0, -25.0, 10.0], DOWN);
+    assert!(beside.is_some());
+}

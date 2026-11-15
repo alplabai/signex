@@ -3,18 +3,21 @@
 //! off the update thread. View state only: no board command, no undo step,
 //! no dirty mark. See `docs/RENDERING_RULES.md`, "Board 3D view".
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::Task;
 use pcb_geom::ItemRef;
 use signex_i18n::{ids, t};
+use signex_library::adapters::local_git::LocalGitAdapter;
 use signex_renderer::board3d::{AttachedModel, BodyExtrusion, ComponentModel, read_model_file};
 use signex_types::part::FootprintSourceRef;
 use uuid::Uuid;
 
 use crate::app::state::{Board3dSession, BuiltScene};
 use crate::app::{Board3dGesture, Board3dModelsRead, Board3dMsg, Message, PcbMsg, Signex};
+use crate::library::place::open_library;
 use crate::pcb_canvas::layer_style::board_3d_colors;
 
 impl Signex {
@@ -39,6 +42,7 @@ impl Signex {
             Board3dMsg::FitRequested => {
                 self.fit_board_3d();
             }
+            Board3dMsg::ViewportSized(viewport) => self.size_board_3d(viewport),
             Board3dMsg::Pointer { viewport, gesture } => self.board_3d_pointer(viewport, gesture),
             Board3dMsg::ModelsRead { board, read } => self.take_board_3d_models(&board, &read),
         }
@@ -62,6 +66,32 @@ impl Signex {
             .board_3d
             .as_mut()
             .filter(|session| session.board_path == shown)
+    }
+
+    /// The board's file moved from `from` to `to` (a rename): its 3D view
+    /// follows it, as its sketch mode does.
+    pub(crate) fn rekey_board_3d(&mut self, from: &Path, to: &Path) {
+        if let Some(session) = self
+            .interaction_state
+            .board_3d
+            .as_mut()
+            .filter(|session| session.board_path == from)
+        {
+            session.board_path = to.to_path_buf();
+        }
+    }
+
+    /// The board at `path` closed: its 3D view ends with the tab, so the
+    /// file opens flat again.
+    pub(crate) fn end_board_3d_of(&mut self, path: &Path) {
+        if self
+            .interaction_state
+            .board_3d
+            .as_ref()
+            .is_some_and(|session| session.board_path == path)
+        {
+            self.interaction_state.board_3d = None;
+        }
     }
 
     /// The scene of the board in the 3D view, built when the board, its
@@ -157,6 +187,19 @@ impl Signex {
         }
     }
 
+    /// The view reported its size; the first report frames it again for its
+    /// real shape.
+    fn size_board_3d(&mut self, viewport: [f32; 2]) {
+        let Some(built) = self.board_3d_scene() else {
+            return;
+        };
+        if let Some(session) = self.board_3d_in_view_mut()
+            && session.note_viewport(viewport)
+        {
+            session.fit(&built.scene);
+        }
+    }
+
     fn board_3d_pointer(&mut self, viewport: [f32; 2], gesture: Board3dGesture) {
         let Some(built) = self.board_3d_scene() else {
             return;
@@ -164,9 +207,7 @@ impl Signex {
         let Some(session) = self.board_3d_in_view_mut() else {
             return;
         };
-        if session.note_viewport(viewport) {
-            session.fit(&built.scene);
-        }
+        session.resize(viewport);
         let [width, height] = session.viewport;
         match gesture {
             Board3dGesture::Orbited { dx, dy } => session.camera.orbit(dx, dy),
@@ -197,14 +238,23 @@ impl Signex {
     }
 }
 
-/// Read the model of each of `sources` from the open libraries. Blocking IO.
+/// Read the model of each of `sources` from the open libraries, each
+/// library opened once. Blocking IO.
 fn read_models(
     sources: &[FootprintSourceRef],
     open_libraries: &[(Uuid, PathBuf)],
 ) -> Board3dModelsRead {
+    let mut libraries: HashMap<Uuid, Result<(LocalGitAdapter, PathBuf), String>> = HashMap::new();
     let mut read = Board3dModelsRead::default();
     for source in sources {
-        match read_model(source, open_libraries) {
+        let library = libraries
+            .entry(source.library)
+            .or_insert_with(|| open_library(source.library, open_libraries));
+        let model = match &*library {
+            Ok((adapter, root)) => read_model(source, adapter, root),
+            Err(why) => Err(why.clone()),
+        };
+        match model {
             Ok(model) => read.models.push((source.clone(), model)),
             Err(why) => read.failures.push((source.to_string(), why)),
         }
@@ -212,21 +262,16 @@ fn read_models(
     read
 }
 
-/// The model of the library footprint `source`: its attached model file,
-/// placed by the attachment's offset and turn; else its 3D Body.
+/// The model of the library footprint `source` from its open library
+/// `adapter` at `root`: its attached model file, placed by the attachment's
+/// offset and turn; else its 3D Body.
 fn read_model(
     source: &FootprintSourceRef,
-    open_libraries: &[(Uuid, PathBuf)],
+    adapter: &LocalGitAdapter,
+    root: &Path,
 ) -> Result<ComponentModel, String> {
     use signex_library::LibraryAdapter as _;
-    use signex_library::adapters::local_git::LocalGitAdapter;
 
-    let (_, root) = open_libraries
-        .iter()
-        .find(|(id, _)| *id == source.library)
-        .ok_or_else(|| format!("its library {} is not open", source.library))?;
-    let adapter = LocalGitAdapter::open(root)
-        .map_err(|e| format!("could not open {}: {e}", root.display()))?;
     let footprint = adapter
         .get_footprint(source.footprint)
         .map_err(|e| e.to_string())?;

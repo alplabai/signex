@@ -88,6 +88,28 @@ pub fn resolve_board_part(
     })
 }
 
+/// The open library `library`, read from its folder in `open_libraries`,
+/// with that folder. Blocking IO; refused with why when it is not open or
+/// cannot be read.
+pub fn open_library(
+    library: Uuid,
+    open_libraries: &[(Uuid, PathBuf)],
+) -> Result<
+    (
+        signex_library::adapters::local_git::LocalGitAdapter,
+        PathBuf,
+    ),
+    String,
+> {
+    let (_, path) = open_libraries
+        .iter()
+        .find(|(id, _)| *id == library)
+        .ok_or_else(|| format!("its library {library} is not open"))?;
+    let adapter = signex_library::adapters::local_git::LocalGitAdapter::open(path)
+        .map_err(|e| format!("could not open {}: {e}", path.display()))?;
+    Ok((adapter, path.clone()))
+}
+
 /// The library footprint `address` in its board form, its latest version
 /// read from the open library that holds it (#2366). A footprint the board
 /// cannot hold is refused with why.
@@ -96,14 +118,8 @@ pub fn resolve_library_footprint(
     open_libraries: &[(Uuid, PathBuf)],
 ) -> Result<signex_types::pcb::Footprint, String> {
     use signex_library::LibraryAdapter as _;
-    use signex_library::adapters::local_git::LocalGitAdapter;
 
-    let (_, path) = open_libraries
-        .iter()
-        .find(|(id, _)| *id == address.library_id)
-        .ok_or_else(|| format!("its library {} is not open", address.library_id))?;
-    let adapter = LocalGitAdapter::open(path)
-        .map_err(|e| format!("could not open {}: {e}", path.display()))?;
+    let (adapter, _) = open_library(address.library_id, open_libraries)?;
     signex_library::part_footprint::resolve_named_footprint(address, |a, _version| {
         adapter.get_footprint(a.uuid).ok()
     })
