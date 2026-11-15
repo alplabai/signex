@@ -1,8 +1,8 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: FSL-1.1-ALv2
 
 name: License Guard
 
-# Enforces the issue-62 Apache-clean invariants on every push and PR
+# Enforces the issue-62 clean-room invariants on every push and PR
 # to main / trunk. Targets the actual derivation surface (imports, deps,
 # removed API surface) rather than every substring containing "kicad" —
 # the latter catches doc comments, migration messages, and stable
@@ -20,7 +20,7 @@ name: License Guard
 # Every step above `Port-smell heuristic` is shaped around the issue-62
 # KiCad incident and BLOCKS. The port-smell step (issue #305) is the
 # one check here that never blocks: it is a heuristic for a threat the
-# rest of this file cannot see — an Apache-incompatible source port of
+# rest of this file cannot see — a licence-incompatible source port of
 # some project we have never heard of. It is deliberately weak. The
 # actual control for that threat is written policy, in CONTRIBUTING.md
 # §"License compliance for contributions".
@@ -217,16 +217,16 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           set -e
-          # The Apache-clean Signex repo doesn't read or write KiCad
+          # The clean-room Signex repo doesn't read or write KiCad
           # files; the GPL-3.0 companion does. Any literal containing
           # `.kicad_sch` / `.kicad_pcb` / `.kicad_sym` (test fixture
           # filenames, error messages, file dialogs) signals a probable
           # GPL-companion code drift. Use `.snxsch` / `.snxpcb` / `.snxsym`
-          # in the Apache crates.
+          # in the Signex crates.
           if git grep -nE '\.kicad_(sch|pcb|sym)\b' -- 'crates/**/*.rs' 'crates/**/*.toml'; then
             echo ""
             echo "::error::Published KiCad file-format extension substring detected in crates/."
-            echo "::error::This Apache crate doesn't interop with KiCad files. Use the Signex"
+            echo "::error::This Signex crate doesn't interop with KiCad files. Use the Signex"
             echo "::error::extensions (.snxsch / .snxpcb / .snxsym) for fixtures and messages."
             exit 1
           fi
@@ -306,7 +306,7 @@ jobs:
           # WHY THIS JOB EXISTS
           #
           # PR #304 was a Rust port of a CC-BY-4.0 project carrying a
-          # "you may not resell this tool" rider — Apache-incompatible,
+          # "you may not resell this tool" rider — licence-incompatible,
           # and incompatible with Signex Pro being sold from this tree.
           # It passed every blocking job in this file and `cargo deny`
           # green, because a port is not a Cargo dependency and contains

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: FSL-1.1-ALv2
 #
 # Prints `true` when the Rust jobs in ci.yml must run, else `false`. Inputs:
 #   CI_EVENT  the GitHub event name. Unset or empty means pull_request; any

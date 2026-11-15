@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: FSL-1.1-ALv2
 #
 # cargo-nextest settings. CI runs `cargo nextest run --workspace --profile ci`
 # instead of `cargo test --workspace`: cargo test runs the test binaries one

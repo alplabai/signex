@@ -375,6 +375,6 @@ single-layer visibility), `pcb_geom::text::tests`,
 
 ## License
 
-Licensed under the same Apache-2.0 terms as the rest of `signex`
+Licensed under the same FSL-1.1-ALv2 terms as the rest of `signex`
 (see `LICENSE`). This document is original Signex prose and may
 be reproduced under those terms.

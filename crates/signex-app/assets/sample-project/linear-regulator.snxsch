@@ -555,7 +555,7 @@ x = 40.0
 y = 72.0
 
 [extras.sheet.title_block]
-comment1 = "Original sample design shipped with Signex (Apache-2.0)."
+comment1 = "Original sample design shipped with Signex (FSL-1.1-ALv2)."
 comment2 = "Generic 5 V to 3.3 V LDO application circuit; values are illustrative."
 company = "Alp Lab"
 date = "2026-01-01"

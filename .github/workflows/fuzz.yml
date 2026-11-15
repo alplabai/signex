@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: FSL-1.1-ALv2
 #
 # Fuzz build smoke (#113). Non-required. Its own workflow so the `paths`
 # filter does not gate the other CI jobs. cargo-fuzz needs nightly, so this is
