@@ -695,6 +695,11 @@
     "category": "place"
   },
   {
+    "id": "place_board_string",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "place_board_track",
     "group": "Pcb",
     "category": "place"

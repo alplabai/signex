@@ -193,6 +193,31 @@ pub fn place_zone(zone: Zone) -> BoardCommand {
     }
 }
 
+/// A board string (#2373) reading `text` at `at` on `layer`, at the PCB
+/// default size and unturned. Drawing it is the board renderer's (#2387).
+pub fn new_text(
+    id: Uuid,
+    at: Point,
+    layer: PcbLayer,
+    text: String,
+) -> signex_types::pcb::BoardText {
+    signex_types::pcb::BoardText {
+        uuid: id,
+        text,
+        position: at,
+        layer: pcb_layer_token(layer),
+        font_size: signex_types::pcb::PCB_DEFAULT_TEXT_SIZE_MM,
+        rotation: 0.0,
+    }
+}
+
+/// Add a board string: one undo step.
+pub fn place_text(text: signex_types::pcb::BoardText) -> BoardCommand {
+    BoardCommand::AddItems {
+        items: vec![BoardItem::Text(text)],
+    }
+}
+
 /// Whether the polygon encloses any area, in integer nm (exact): false for
 /// fewer than three points, points on one line, or a point the geometry
 /// cannot hold.

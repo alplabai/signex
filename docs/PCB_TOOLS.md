@@ -83,6 +83,56 @@ The design rule check reads it through `Zone::as_keepout` exactly as it reads
 a board-sketch keepout forbidding all copper, so a violation names the
 keepout zone's id.
 
+## String
+
+`place_board_string` (default profile: `P S` on a board). Each click
+places a string (`PcbBoard::texts`) on the active layer, whatever kind it
+is, at the PCB default text size (`PCB_DEFAULT_TEXT_SIZE_MM`) and unturned,
+reading the catalog's new-string text (`pcb-tool-string-text`, "String").
+The string carries no net. It is saved with the board; the board renderer
+draws board text once #2387 lands, so until then neither the string nor its
+preview on the cursor shows on the canvas.
+
+## Arc
+
+Still greyed. The model is in: `signex_types::pcb_arc::TrackArc`, a copper
+track along the circle through its start, a point on it (`mid`, which picks
+the way it bends) and its end, with width, layer and net like a track.
+`TrackArc::sweep` gives the circle and the signed turn (counter-clockwise
+positive), `length_mm` the centre-line length and `points` the polyline
+whose chords each stay within a given error of the arc (at most 360
+chords), which is how drawing, hit-testing, the design rule check and the
+ratsnest are to read it. Three points on one line are a straight track.
+
+Still to come before the tool is live: the board list
+(`PcbBoard::arcs`) and its `.snxpcb` rows, a `BoardItem` kind so it is
+added and undone as one step, the renderer, the pick index, the copper list
+the ratsnest and the design rule check share (`pcb_geom::collect_copper`),
+and the three-click tool (start, end, then a point on the arc).
+
+## Dimension
+
+Still greyed. The model is in: `signex_types::pcb_dimension::LinearDimension`
+measures the straight distance between two points, its dimension line
+standing `offset` mm off them (positive: a quarter turn counter-clockwise
+from start to end), on the Dimensions layer at the PCB default line width
+and text height with two decimals. `LinearDimension::drawing` gives what it
+draws: the two extension lines (running half a text height past the
+dimension line), the dimension line, an arrow at each end (one text height
+long) and the value's centre, a text height off the line, turned to read
+along it and never upside down (text running straight down reads bottom to
+top).
+
+Still to come before the tool is live: the board list and its `.snxpcb`
+section, a `BoardItem` kind, the renderer, and the tool (two clicks for the
+points, a third for the offset).
+
+## Pad
+
+Still greyed. A pad placed on its own needs a board-level pad list next to
+the footprints' pads, read by the copper list, the net table, the design rule
+check, the ratsnest and the pick index; none of that exists yet.
+
 ## Selection Filter
 
 The PCB Active Bar's first button. A click (or right-click) opens a

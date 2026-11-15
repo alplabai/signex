@@ -80,6 +80,7 @@ altium	bind	Pcb	+	command:next_layer
 altium	bind	Pcb	"-"	command:prev_layer
 altium	bind	Pcb	P F	command:place_board_fill
 altium	bind	Pcb	P R	command:place_board_region
+altium	bind	Pcb	P S	command:place_board_string
 altium	bind	Pcb	P T	command:place_board_track
 altium	bind	Pcb	P V	command:place_board_via
 altium	bind	Pcb	Shift+*	command:next_signal_layer
@@ -334,6 +335,7 @@ altium	hint	-	P T	place_board_track
 altium	hint	-	P F	place_board_fill
 altium	hint	-	P R	place_board_region
 altium	hint	-	-	place_board_keepout
+altium	hint	-	P S	place_board_string
 altium	hint	-	2	footprint_mode_pads
 altium	hint	-	1	footprint_mode_sketch
 altium	hint	-	3	footprint_mode_view_3d
@@ -681,6 +683,7 @@ classic	hint	-	-	place_board_track
 classic	hint	-	-	place_board_fill
 classic	hint	-	-	place_board_region
 classic	hint	-	-	place_board_keepout
+classic	hint	-	-	place_board_string
 classic	hint	-	2	footprint_mode_pads
 classic	hint	-	1	footprint_mode_sketch
 classic	hint	-	3	footprint_mode_view_3d

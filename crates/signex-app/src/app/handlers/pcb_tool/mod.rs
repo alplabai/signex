@@ -22,11 +22,14 @@ use crate::pcb_canvas::{carried_board, snap_point};
 
 mod area;
 mod route;
+mod string;
 
 #[cfg(test)]
 mod area_tests;
 #[cfg(test)]
 mod route_tests;
+#[cfg(test)]
+mod string_tests;
 #[cfg(test)]
 mod tests;
 
@@ -183,6 +186,7 @@ impl Signex {
                 self.run_placement("Via", Ok(vec![command]));
             }
             BoardPlaceTool::Track => self.route_clicked(at),
+            BoardPlaceTool::TextString => self.string_clicked(at),
             BoardPlaceTool::Fill | BoardPlaceTool::SolidRegion | BoardPlaceTool::Keepout => {
                 self.area_clicked(tool, at);
             }
@@ -205,6 +209,7 @@ impl Signex {
         match session.tool {
             BoardPlaceTool::Via => preview.vias.push(draw::new_via(board, Uuid::nil(), cursor)),
             BoardPlaceTool::Track => self.route_preview(session, board, cursor, &mut preview),
+            BoardPlaceTool::TextString => self.string_preview(cursor, &mut preview),
             BoardPlaceTool::Fill | BoardPlaceTool::SolidRegion | BoardPlaceTool::Keepout => {
                 self.area_preview(session, board, cursor, &mut preview);
             }
