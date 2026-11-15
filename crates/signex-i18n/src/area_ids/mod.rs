@@ -7,6 +7,7 @@ mod dialog;
 mod dialog_text;
 mod editors;
 mod file_dialog;
+mod find;
 mod library;
 mod notice;
 mod overlay;
@@ -19,6 +20,7 @@ pub use dialog::*;
 pub use dialog_text::*;
 pub use editors::*;
 pub use file_dialog::*;
+pub use find::*;
 pub use library::*;
 pub use notice::*;
 pub use overlay::*;
@@ -35,6 +37,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         dialog_text::DIALOG_TEXT,
         editors::EDITORS,
         file_dialog::FILE_DIALOG,
+        find::FIND,
         library::LIBRARY,
         notice::NOTICE,
         overlay::OVERLAY,
