@@ -249,7 +249,7 @@ Two writes to one path never run out of order, whichever caller runs them (the #
 Caner's decision of 2026-11-15 (`docs/DECISIONS.md`):
 - **What it holds.** A small UI-free crate, `signex-i18n-ids`, holds `MessageId`, the id constants (`ids::*`, `command_ids::*`) and `Translatable` (an id plus its arguments). It has no Fluent, ICU or locale dependency.
 - **The guard.** It joins `DOMAIN` in `scripts/check_arch_guard.sh`.
-- **`signex-i18n` does not move.** It keeps the Fluent bundles, ICU formatting and locale negotiation, and stays in `UI_STACK`. It re-exports the ids, so existing call sites keep working. The 2026-11-07 row that no domain crate may depend on `signex-i18n` stays true.
+- **`signex-i18n` does not move.** It keeps the Fluent bundles, ICU formatting and locale negotiation, and stays in `UI_STACK`. It re-exports the ids at their old paths, so existing call sites keep working. The one change for callers: `render_en_us()` and `localized()` become methods of the `signex_i18n::RenderTranslatable` trait, so a file calling them imports the trait. The 2026-11-07 row that no domain crate may depend on `signex-i18n` stays true.
 - **Who renders.** The core and `signex-commands` carry `Translatable` values (notices, refusal reasons, typed errors such as `QueryError`) and never render them. Front ends render them in `view()`, which keeps the `(MessageId, args)` label rule.
 
 Splitting this crate is the first step of slice 1, because the catalog that slice 1 moves imports `signex_i18n::{I18n, MessageId, command_ids, t}` today.
