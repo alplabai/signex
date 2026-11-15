@@ -114,6 +114,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("direction", OperandKind::Text),
     ("apply", OperandKind::Bool),
     ("baseline", OperandKind::Text),
+    ("layer", OperandKind::Text),
+    ("style", OperandKind::Text),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -271,6 +273,34 @@ pub const NEW_SCHEMATIC: &[Operand] = &[
 /// Turn the board view by `degrees` (90 when left out), clockwise positive
 /// (#2316).
 pub const TURN: &[Operand] = &[optional("degrees", OperandKind::Turn)];
+
+/// One layer of the named board by its name in the board file, e.g.
+/// `BottomCopper` (#2394).
+pub const LAYER: &[Operand] = &[
+    required("layer", OperandKind::Text),
+    required("document", OperandKind::Document),
+];
+
+/// A kind of layer of the named board: `signal`, `plane`, `overlay`,
+/// `mask`, `paste`, `mechanical` or `all` (#2394).
+pub const LAYER_GROUP: &[Operand] = &[
+    required("group", OperandKind::Text),
+    required("document", OperandKind::Document),
+];
+
+/// A layer set on the named board: a built-in one (`all`, `signal`,
+/// `plane`, `non_signal`, `mechanical`) or a saved one by its name (#2394).
+pub const LAYER_SET: &[Operand] = &[
+    required("name", OperandKind::Text),
+    required("document", OperandKind::Document),
+];
+
+/// A saved layer set by its name (#2394): a per-user setting, no board.
+pub const LAYER_SET_NAME: &[Operand] = &[required("name", OperandKind::Text)];
+
+/// How the layer tabs name their layers: `short`, `medium` or `long`
+/// (#2394).
+pub const LAYER_TAB_NAMES: &[Operand] = &[required("style", OperandKind::Text)];
 
 /// Colour the net under a point of the named document's sheet.
 pub const COLOR_NET: &[Operand] = &[

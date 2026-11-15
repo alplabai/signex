@@ -128,9 +128,56 @@ than the shift a move applies.
 
 ## Layer tab menu
 
-A right-click on a layer tab under the board opens Hide this layer, Show only
-this layer and Show all layers (#2379). Show only this layer makes the layer
-active and hides every other layer the Layers panel lists; the board outline
-and the Multi-Layer row keep their state, as in single-layer mode. The rows
-change the view of the board in the window the menu was opened in, never the
-board file.
+A right-click on a layer tab under the board opens its menu (#2379, #2394):
+
+- Hide <layer>, Highlight <layer> (every other layer is drawn dimmed;
+  picking it again ends the highlight), Show only this layer and Show all
+  layers. Show only this layer makes the layer active and hides every other
+  layer the Layers panel lists; the board outline and the Multi-Layer row
+  keep their state, as in single-layer mode.
+- Hide layers ▸ and Show layers ▸, one row per kind: signal, plane, overlay,
+  mask (solder mask and adhesive), paste, mechanical (board outline,
+  documentation and mechanical layers) and all.
+- Layer stack..., Drill symbols... and Layer drawing order... are greyed with
+  the reason as their hover text: none of those editors exists yet (the layer
+  stack editor is #2401).
+- Short, Medium and Long tab names and Show layer numbers. Short names are
+  `TL`, `BL`, `M1` (Mid-Layer 1), `TO`, `BS` and so on; Medium names are
+  `Top`, `Bottom`, `Mid 1`, and a technical layer keeps its long name. A
+  number goes in front: a copper layer's place in the stack (1 is the top),
+  a mechanical layer's index; technical layers have none.
+- Flip board view: the board seen from below. The view is mirrored left to
+  right (the turn of the view, #2316, still applies on top), board text
+  reads mirrored, a box selection keeps its left-to-right and right-to-left
+  meaning on screen, and within one emphasis the copper nearer the bottom is
+  drawn over the copper nearer the top. The active or highlighted layer still
+  draws last.
+
+The rows change the view of the board in the window the menu was opened in,
+never the board file. The tab names are per user (`prefs.json`,
+`pcb_layer_strip`); the flip is the board view's, for the session.
+
+## Layer sets
+
+The button at the left end of the layer tabs names the set the tabs list and
+opens the set menu (#2394): All Layers, Signal Layers, Plane Layers,
+Non-signal Layers (every layer but copper), Mechanical Layers, then the sets
+the user saved, then Save current as set... and Manage sets.... Picking a set
+shows its layers and hides every other listed layer (the board outline keeps
+its state), and the tabs list only the set's layers. An active layer the set
+hides moves into the set. All Layers and Show all layers list and show every
+layer again.
+
+Save current as set... turns the card into a name field; Enter or Save saves
+the layers the view shows under that name (a set of the same name is
+replaced) and shows it. Manage sets... lists the saved sets with Delete; it is
+greyed while there are none. Saved sets are per user, in `prefs.json` under
+`pcb_layer_strip`, and are offered on every board; a layer a board does not
+have is left out when the set is shown there.
+
+Every row is also a catalog command with typed operands: `show_layer_set`,
+`save_layer_set`, `hide_layer`, `highlight_layer`, `hide_layer_group` and
+`show_layer_group` name their board with `document` and are on the agent
+channel; `delete_layer_set` and `set_layer_tab_names` change per-user
+settings and name no board; `toggle_layer_numbers` and `flip_board_view` are
+View menu rows. See `docs/COMMANDS.md`.

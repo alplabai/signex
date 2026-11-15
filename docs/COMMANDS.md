@@ -295,7 +295,12 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | --- | --- | --- | --- | --- |
 | `board_sketch` | Enter or leave the board sketch | design | — | — |
 | `change_footprint` | Change the footprint of the selected components | modify | — | — |
+| `delete_layer_set` | Delete a saved layer set | view | — | — |
+| `flip_board_view` | View the board from below, or from above again | view | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | — | — |
+| `hide_layer` | Hide one layer of the board view | view | — | — |
+| `hide_layer_group` | Hide every layer of one kind | view | — | — |
+| `highlight_layer` | Highlight one layer and dim the others | view | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
@@ -307,7 +312,12 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
+| `save_layer_set` | Save the shown layers as a layer set | view | — | — |
+| `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
+| `show_layer_group` | Show every layer of one kind | view | — | — |
+| `show_layer_set` | Show a layer set on the board view | view | — | — |
+| `toggle_layer_numbers` | Show or hide the numbers on the layer tabs | view | — | — |
 | `toggle_layer_visibility` | Show or hide the active layer | view | — | — |
 | `toggle_layers_panel` | Show or hide the Layers panel | view | — | — |
 | `toggle_origin_marker` | Show or hide the board origin marker | view | — | — |

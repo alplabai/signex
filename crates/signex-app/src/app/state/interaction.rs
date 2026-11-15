@@ -149,6 +149,8 @@ pub struct InteractionState {
     pub pcb_bar_menu: Option<crate::app::PcbBarMenu>,
     /// The open right-click menu of a layer tab under a board canvas (#2379).
     pub pcb_layer_tab_menu: Option<crate::app::LayerTabMenu>,
+    /// The open menu of the layer set button under a board canvas (#2394).
+    pub pcb_layer_set_menu: Option<crate::app::LayerSetMenu>,
     /// The undocked window whose action is running inside `run_in_window`;
     /// `None` for the main window. Stamps what the action opens (a Components
     /// drag) and keeps the app-wide refreshes on the main window.

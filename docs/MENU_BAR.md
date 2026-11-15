@@ -521,6 +521,15 @@ starts at 0°. In an undocked PCB window the rows, the palette, the keys and
 its own status bar act on that window's board and leave the main window's as
 it is. See `docs/DECISIONS.md` (2026-11-12).
 
+Two View rows come from the layer tab menu (#2394): Show Layer Numbers
+(`toggle_layer_numbers`) under Show All Layers, a per-user setting of the
+layer tabs, and Flip Board View (`flip_board_view`) under Reset View
+Rotation, which shows the board from below. Both are greyed without a board
+and have no default key; the flip is board view state like the turn. The
+other rows of that menu take a layer, a kind or a set name and are run from
+the menu, the layer set button or a command with operands
+(`docs/PCB_TOOLS.md`, "Layer sets").
+
 ## Native macOS menu {#native-macos-menu}
 
 On macOS the main menu lives in the system menu bar (NSMenu), described as

@@ -296,6 +296,7 @@ impl Signex {
                 keymap_profiles,
                 active_keymap,
                 pcb_layer_views: Default::default(),
+                layer_strip: crate::fonts::read_layer_strip_pref_from(prefs),
                 pcb_view_angle_entry: None,
                 pcb_pick_filter: Default::default(),
                 pcb_snap: Default::default(),
@@ -741,6 +742,7 @@ impl Signex {
                 active_bar_menu_window: None,
                 pcb_bar_menu: None,
                 pcb_layer_tab_menu: None,
+                pcb_layer_set_menu: None,
                 acting_window: None,
                 pointer_window: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL

@@ -322,6 +322,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("toggle_single_layer_mode", "ToggleSingleLayerMode"),
     ("toggle_layer_visibility", "ToggleLayerVisibility"),
     ("show_all_layers", "ShowAllLayers"),
+    // #2394: fixture names only.
+    ("toggle_layer_numbers", "ToggleLayerNumbers"),
+    ("flip_board_view", "FlipBoardView"),
     ("view_rotate", "RotateView"),
     ("view_rotate_ccw", "RotateViewCounterClockwise"),
     ("view_rotate_180", "RotateView180"),

@@ -77,7 +77,8 @@ impl canvas::Program<Message> for HighlightLayer<'_> {
         }
         if let Some((from, to)) = canvas.marquee.get() {
             let at = |p: signex_types::pcb::Point| Point::new(p.x as f32, p.y as f32);
-            let window = is_window(from, to, camera.rotation().degrees());
+            let (judged_from, judged_to, deg) = camera.box_frame(from, to);
+            let window = is_window(judged_from, judged_to, deg);
             paint_marquee(&mut frame, &camera, at(from), at(to), window, accent);
         }
         layers.push(frame.into_geometry());

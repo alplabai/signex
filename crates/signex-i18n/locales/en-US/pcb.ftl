@@ -7,9 +7,109 @@ pcb-layers-empty = Open a board or a footprint to see its layers.
 # Button that shows every hidden layer again.
 pcb-layers-show-all = Show all layers
 # Right-click menu of a layer tab under the board: hide that layer, or show
-# it and hide every other layer.
-pcb-layer-tab-hide = Hide this layer
+# it and hide every other layer. $layer is the layer's name.
+pcb-layer-tab-hide = Hide { $layer }
 pcb-layer-tab-show-only = Show only this layer
+# Highlight one layer: every other layer is drawn dimmed. $layer is its name.
+pcb-layer-tab-highlight = Highlight { $layer }
+# Flyouts of the layer tab menu: one row per kind of layer.
+pcb-layer-tab-hide-layers = Hide layers
+pcb-layer-tab-show-layers = Show layers
+# A row of those flyouts. $kind is the kind's token.
+pcb-layer-kind = { $kind ->
+    [signal] Signal layers
+    [plane] Plane layers
+    [overlay] Overlay layers
+    [mask] Mask layers
+    [paste] Paste layers
+    [mechanical] Mechanical layers
+   *[all] All layers
+}
+# Rows that open board editors; greyed with the reason while the editor is
+# not built.
+pcb-layer-tab-layer-stack = Layer stack...
+pcb-layer-tab-layer-stack-unavailable = The layer stack editor is not built yet. The Layers panel lists the board's layers.
+pcb-layer-tab-drill-symbols = Drill symbols...
+pcb-layer-tab-drill-symbols-unavailable = Drill symbols cannot be set yet.
+pcb-layer-tab-drawing-order = Layer drawing order...
+pcb-layer-tab-drawing-order-unavailable = The layer drawing order cannot be changed yet.
+# How the layer tabs name their layers, and their numbers.
+pcb-layer-tab-names-short = Short tab names
+pcb-layer-tab-names-medium = Medium tab names
+pcb-layer-tab-names-long = Long tab names
+pcb-layer-tab-show-numbers = Show layer numbers
+# View the board from below: mirrored, bottom layers on top.
+pcb-layer-tab-flip = Flip board view
+# A layer tab with its number in front. $number is the layer's number,
+# $name its name.
+pcb-layer-tab-numbered = { $number } { $name }
+# Short layer tab names. $layer is the layer's name in the board file.
+pcb-layer-short = { $layer ->
+    [TopCopper] TL
+    [BottomCopper] BL
+    [EdgeCuts] OL
+    [Margin] MG
+    [TopSilkscreen] TO
+    [BottomSilkscreen] BO
+    [TopSolderMask] TS
+    [BottomSolderMask] BS
+    [TopPaste] TP
+    [BottomPaste] BP
+    [TopAdhesive] TA
+    [BottomAdhesive] BA
+    [TopFab] TF
+    [BottomFab] BF
+    [TopAssembly] TAS
+    [BottomAssembly] BAS
+    [TopCourtyard] TC
+    [BottomCourtyard] BC
+    [Top3DBody] T3D
+    [Bottom3DBody] B3D
+    [TopKeepout] TK
+    [BottomKeepout] BK
+    [TopFiducial] TFD
+    [BottomFiducial] BFD
+    [TopDesignator] TD
+    [BottomDesignator] BD
+    [Dimensions] DIM
+    [Notes] NT
+    [DrillDrawing] DD
+    [Eco1] E1
+    [Eco2] E2
+   *[other] { $layer }
+}
+pcb-layer-short-inner = M{ $index }
+pcb-layer-short-mechanical = Mech{ $index }
+# Medium layer tab names of copper and mechanical layers; every other layer
+# keeps its long name.
+pcb-layer-medium-top = Top
+pcb-layer-medium-bottom = Bottom
+pcb-layer-medium-inner = Mid { $index }
+pcb-layer-medium-mechanical = Mech { $index }
+# The layer set button at the left end of the layer tabs, and its menu.
+pcb-layer-set-tooltip = Layer set: show a set of layers
+# The button's label. $set is the set's token.
+pcb-layer-set-short = { $set ->
+    [signal] Signal
+    [plane] Plane
+    [non_signal] Non-signal
+    [mechanical] Mechanical
+   *[all] All
+}
+# A built-in set's row in the menu. $set is the set's token.
+pcb-layer-set = { $set ->
+    [signal] Signal Layers
+    [plane] Plane Layers
+    [non_signal] Non-signal Layers
+    [mechanical] Mechanical Layers
+   *[all] All Layers
+}
+pcb-layer-set-save = Save current as set...
+pcb-layer-set-manage = Manage sets...
+pcb-layer-set-none-saved = No saved sets yet.
+pcb-layer-set-name-placeholder = Set name
+pcb-layer-set-save-button = Save
+pcb-layer-set-delete = Delete
 # Group headers of the Layers panel.
 pcb-layers-signal = Signal
 pcb-layers-plane = Plane

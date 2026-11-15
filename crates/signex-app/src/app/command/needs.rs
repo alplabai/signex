@@ -311,7 +311,18 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "show_all_layers"
         | "view_rotate"
         | "view_rotate_ccw"
-        | "view_rotate_180" => Needs::Pcb,
+        | "view_rotate_180"
+        // #2394: the layer strip under the board.
+        | "show_layer_set"
+        | "save_layer_set"
+        | "delete_layer_set"
+        | "hide_layer"
+        | "highlight_layer"
+        | "hide_layer_group"
+        | "show_layer_group"
+        | "set_layer_tab_names"
+        | "toggle_layer_numbers"
+        | "flip_board_view" => Needs::Pcb,
         // At 0° Reset has nothing to do, so it is greyed.
         "view_rotate_reset" => Needs::TurnedPcbView,
         "open_library_browser" => Needs::Library,

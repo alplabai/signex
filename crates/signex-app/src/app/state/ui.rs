@@ -19,6 +19,9 @@ pub struct UiState {
     /// only: never written to the `.snxpcb`.
     pub pcb_layer_views:
         std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>,
+    /// The board layer strip's tab names and saved layer sets (#2394), per
+    /// user in `prefs.json`.
+    pub layer_strip: crate::layer_strip_prefs::LayerStripPrefs,
     /// The status bar's view-angle field while it is open (#2316).
     pub pcb_view_angle_entry: Option<crate::app::ViewAngleEntry>,
     /// What a click or box may pick on a board: the PCB selection filter

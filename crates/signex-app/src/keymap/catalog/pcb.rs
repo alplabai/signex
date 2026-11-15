@@ -268,4 +268,117 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    // #2394: the layer strip under the board. View state and per-user
+    // settings only: no undo step, no dirty mark. The rows with operands run
+    // from an agent or the CLI on the board `document` names (the per-user
+    // ones name none); a person uses the tab menu or the layer set button,
+    // so without operands they say so and do nothing.
+    CommandMetadata {
+        id: "show_layer_set",
+        category: "view",
+        label: command_ids::CMD_SHOW_LAYER_SET,
+        menu_label: Some(command_ids::CMD_MENU_SHOW_LAYER_SET),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "save_layer_set",
+        category: "view",
+        label: command_ids::CMD_SAVE_LAYER_SET,
+        menu_label: Some(command_ids::CMD_MENU_SAVE_LAYER_SET),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "delete_layer_set",
+        category: "view",
+        label: command_ids::CMD_DELETE_LAYER_SET,
+        menu_label: Some(command_ids::CMD_MENU_DELETE_LAYER_SET),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER_SET_NAME,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "hide_layer",
+        category: "view",
+        label: command_ids::CMD_HIDE_LAYER,
+        menu_label: Some(command_ids::CMD_MENU_HIDE_LAYER),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "highlight_layer",
+        category: "view",
+        label: command_ids::CMD_HIGHLIGHT_LAYER,
+        menu_label: Some(command_ids::CMD_MENU_HIGHLIGHT_LAYER),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "hide_layer_group",
+        category: "view",
+        label: command_ids::CMD_HIDE_LAYER_GROUP,
+        menu_label: Some(command_ids::CMD_MENU_HIDE_LAYER_GROUP),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER_GROUP,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "show_layer_group",
+        category: "view",
+        label: command_ids::CMD_SHOW_LAYER_GROUP,
+        menu_label: Some(command_ids::CMD_MENU_SHOW_LAYER_GROUP),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER_GROUP,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_layer_tab_names",
+        category: "view",
+        label: command_ids::CMD_SET_LAYER_TAB_NAMES,
+        menu_label: Some(command_ids::CMD_MENU_SET_LAYER_TAB_NAMES),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER_TAB_NAMES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "toggle_layer_numbers",
+        category: "view",
+        label: command_ids::CMD_TOGGLE_LAYER_NUMBERS,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_LAYER_NUMBERS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "flip_board_view",
+        category: "view",
+        label: command_ids::CMD_FLIP_BOARD_VIEW,
+        menu_label: Some(command_ids::CMD_MENU_FLIP_BOARD_VIEW),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
 ];

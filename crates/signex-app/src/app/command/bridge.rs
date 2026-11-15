@@ -307,6 +307,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "toggle_single_layer_mode" => pcb_view(PcbViewMsg::SingleLayerModeToggled),
         "toggle_layer_visibility" => pcb_view(PcbViewMsg::ActiveLayerVisibilityToggled),
         "show_all_layers" => pcb_view(PcbViewMsg::AllLayersShown),
+        // #2394: the board seen from below, and the layer tabs' numbers.
+        "flip_board_view" => pcb_view(PcbViewMsg::BoardFlipToggled),
+        "toggle_layer_numbers" => Message::Pcb(PcbMsg::LayerStrip(
+            crate::app::LayerStripMsg::LayerNumbersToggled,
+        )),
         // #2316: the board view's turn; `view_rotate` takes `degrees`.
         "view_rotate" => view_turn(ViewRotationMsg::TurnedBy(
             super::operand_handlers::view_turn_degrees(args),

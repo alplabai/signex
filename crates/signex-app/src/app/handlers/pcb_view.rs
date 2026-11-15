@@ -9,7 +9,8 @@ use std::path::{Path, PathBuf};
 
 use signex_i18n::{Localized, ids, t};
 use signex_renderer::pcb::{
-    PcbLayerView, PcbSnapshot, board_copper_layers, board_layers, layer_rows, signal_layers,
+    BuiltinLayerSet, LayerSetId, PcbLayerView, PcbSnapshot, ShownLayerSet, board_copper_layers,
+    board_layers, builtin_set_layers, kind_layers, listed_layers, signal_layers,
 };
 use signex_types::pcb::{LayerDef, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
@@ -36,6 +37,17 @@ impl Signex {
             .pcb_layer_views
             .get(path)
             .cloned()
+            .unwrap_or_default()
+    }
+
+    /// The view of the board a menu opened in `window` acts on (`None`: the
+    /// main window's active board); the default view without a board.
+    pub(crate) fn pcb_layer_view_of_window(
+        &self,
+        window: Option<iced::window::Id>,
+    ) -> PcbLayerView {
+        self.pcb_view_target(window)
+            .map(|(path, _)| self.pcb_layer_view(&path))
             .unwrap_or_default()
     }
 
@@ -108,7 +120,9 @@ impl Signex {
         ))
     }
 
-    fn edit_pcb_view(
+    /// Edit the view of the board of `window` with its stackup, settle its
+    /// active layer and redraw it.
+    pub(crate) fn edit_pcb_view(
         &mut self,
         window: Option<iced::window::Id>,
         edit: impl FnOnce(&mut PcbLayerView, &[LayerDef]),
@@ -117,15 +131,45 @@ impl Signex {
             return;
         };
         let layers = board.layers.clone();
+        self.edit_pcb_view_with(path, &layers, edit);
+    }
+
+    /// [`Self::edit_pcb_view`] on the open board at `path`, wherever it is
+    /// shown (a command that names its document, #2394). Whether the board
+    /// is open.
+    pub(crate) fn edit_pcb_view_at(
+        &mut self,
+        path: &Path,
+        edit: impl FnOnce(&mut PcbLayerView, &[LayerDef]),
+    ) -> bool {
+        let Some(board) = self.document_state.pcb_board(path) else {
+            return false;
+        };
+        let layers = board.layers.clone();
+        self.edit_pcb_view_with(path.to_path_buf(), &layers, edit);
+        true
+    }
+
+    fn edit_pcb_view_with(
+        &mut self,
+        path: PathBuf,
+        layers: &[LayerDef],
+        edit: impl FnOnce(&mut PcbLayerView, &[LayerDef]),
+    ) {
         let view = self
             .ui_state
             .pcb_layer_views
             .entry(path.clone())
             .or_default();
-        edit(view, &layers);
-        settle(view, &layers);
+        edit(view, layers);
+        settle(view, layers);
         self.redraw_pcb_view_of(&path);
         self.refresh_panel_ctx();
+    }
+
+    /// Apply a board-view event to the open board at `path` (#2394).
+    pub(crate) fn apply_pcb_view_event_at(&mut self, path: &Path, event: PcbViewMsg) -> bool {
+        self.edit_pcb_view_at(path, |view, layers| apply_event(view, layers, event))
     }
 
     /// Redraw every canvas showing the board at `path` after its view changed.
@@ -143,7 +187,9 @@ impl Signex {
 }
 
 /// A hidden active layer moves on: copper to the next shown copper layer,
-/// any other layer to the next shown layer of the board.
+/// any other layer to the next shown layer of the board. While a layer set
+/// is shown it moves into the set (#2394): to any shown layer of the board
+/// when the set has no layer of its kind.
 fn settle(view: &mut PcbLayerView, layers: &[LayerDef]) {
     let candidates = if view.active().is_copper() {
         copper_layers(layers)
@@ -151,6 +197,9 @@ fn settle(view: &mut PcbLayerView, layers: &[LayerDef]) {
         board_layers(layers)
     };
     view.settle_active(&candidates);
+    if view.layer_set().is_some() {
+        view.settle_active(&board_layers(layers));
+    }
 }
 
 fn copper_layers(layers: &[LayerDef]) -> Vec<PcbLayer> {
@@ -182,17 +231,20 @@ fn apply_event(view: &mut PcbLayerView, layers: &[LayerDef], event: PcbViewMsg) 
         PcbViewMsg::AllLayersShown => view.show_all(),
         PcbViewMsg::LayerHidden(layer) => view.hide(layer),
         PcbViewMsg::OnlyLayerShown(layer) => view.show_only(&listed_layers(layers), layer),
+        PcbViewMsg::LayerHighlightToggled(layer) => view.toggle_highlight(layer),
+        PcbViewMsg::LayerKindVisibilitySet { kind, visible } => {
+            view.set_layers_visible(&kind_layers(layers, kind), visible);
+        }
+        PcbViewMsg::BuiltinLayerSetShown(BuiltinLayerSet::All) => view.show_all(),
+        PcbViewMsg::BuiltinLayerSetShown(set) => {
+            let shown = ShownLayerSet {
+                id: LayerSetId::Builtin(set),
+                layers: builtin_set_layers(layers, set),
+            };
+            view.show_set(&listed_layers(layers), shown);
+        }
+        PcbViewMsg::BoardFlipToggled => view.toggle_flipped(),
     }
-}
-
-/// Every layer the Layers panel lists for the board, and the board's own
-/// layers: what Show only this layer hides.
-fn listed_layers(layers: &[LayerDef]) -> Vec<PcbLayer> {
-    layer_rows(layers)
-        .into_iter()
-        .map(|row| row.layer)
-        .chain(board_layers(layers))
-        .collect()
 }
 
 #[cfg(test)]
@@ -202,3 +254,7 @@ mod tests;
 #[cfg(test)]
 #[path = "pcb_layer_tabs_tests.rs"]
 mod layer_tabs_tests;
+
+#[cfg(test)]
+#[path = "pcb_layer_sets_tests.rs"]
+mod layer_sets_tests;

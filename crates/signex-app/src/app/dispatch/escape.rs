@@ -196,9 +196,16 @@ impl Signex {
             ))
     }
 
-    /// Esc closes an open board layer tab menu (#2379).
+    /// Esc closes an open board layer tab menu (#2379) or layer set menu
+    /// (#2394).
     fn layer_tab_menu_escape(&self) -> Option<Message> {
-        self.interaction_state
+        let interaction = &self.interaction_state;
+        if interaction.pcb_layer_set_menu.is_some() {
+            return Some(Message::Pcb(PcbMsg::LayerSetMenu(
+                crate::app::LayerSetMenuMsg::Dismissed,
+            )));
+        }
+        interaction
             .pcb_layer_tab_menu
             .is_some()
             .then_some(Message::Pcb(PcbMsg::LayerTabMenu(

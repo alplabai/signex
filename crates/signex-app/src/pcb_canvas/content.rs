@@ -26,6 +26,8 @@ pub(super) struct BuiltAt {
     pub(super) offset: (f32, f32),
     pub(super) scale: f32,
     pub(super) degrees: f32,
+    /// The board seen from below (#2394).
+    pub(super) mirrored: bool,
     pub(super) device_px_per_logical_px: f32,
     pub(super) viewport: Size,
     pub(super) scene_generation: u64,
@@ -37,6 +39,7 @@ impl BuiltAt {
             offset: (camera.offset().x, camera.offset().y),
             scale: camera.scale(),
             degrees: camera.rotation().degrees(),
+            mirrored: camera.rotation().is_mirrored(),
             device_px_per_logical_px: dpr,
             viewport,
             scene_generation: canvas.scene_generation.get(),
@@ -47,6 +50,7 @@ impl BuiltAt {
     fn same_view(&self, live: &Self) -> bool {
         (self.scale - live.scale).abs() < 0.0001
             && self.degrees == live.degrees
+            && self.mirrored == live.mirrored
             && self.device_px_per_logical_px == live.device_px_per_logical_px
             && self.viewport == live.viewport
             && self.scene_generation == live.scene_generation

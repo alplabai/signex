@@ -461,3 +461,59 @@ fn hide_and_show_only_act_on_one_layer() {
     view.show_all();
     assert!(!view.has_hidden());
 }
+
+/// #2394: a highlighted layer is drawn on top and every other layer dimmed,
+/// whatever the active layer; highlighting it again ends it.
+#[test]
+fn a_highlighted_layer_dims_every_other_layer() {
+    let board = board();
+    let mut view = PcbLayerView::default();
+    view.toggle_highlight(BOTTOM);
+    assert_eq!(view.highlighted(), Some(BOTTOM));
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &view);
+    let nets: Vec<(u32, bool)> = snapshot.traces.iter().map(|t| (t.net, t.dimmed)).collect();
+    assert_eq!(nets, vec![(1, true), (3, true), (2, false)]);
+    view.toggle_highlight(BOTTOM);
+    assert_eq!(view.highlighted(), None);
+}
+
+/// #2394: seen from below, the bottom copper is drawn over the top copper.
+#[test]
+fn a_flipped_view_draws_the_bottom_copper_last() {
+    let board = board();
+    let mut view = PcbLayerView::default();
+    // A non-copper active layer: no copper is dimmed or raised.
+    view.set_active(PcbLayer::Technical(TechnicalLayer::SilkscreenTop));
+    let order = |view: &PcbLayerView| -> Vec<u32> {
+        PcbSnapshot::from_board_with_view(&board, view)
+            .traces
+            .iter()
+            .map(|t| t.net)
+            .collect()
+    };
+    assert_eq!(order(&view), vec![1, 2, 3], "source order from above");
+    view.toggle_flipped();
+    assert!(view.flipped());
+    assert_eq!(order(&view), vec![3, 1, 2], "bottom copper last from below");
+}
+
+/// #2394: a layer set shows its layers alone and the strip lists only them;
+/// Show all layers lists every layer again.
+#[test]
+fn a_layer_set_shows_its_layers_and_lists_them() {
+    let board = board();
+    let mut view = PcbLayerView::default();
+    let listed = crate::pcb::listed_layers(&board.layers);
+    let set = crate::pcb::ShownLayerSet {
+        id: crate::pcb::LayerSetId::Builtin(crate::pcb::BuiltinLayerSet::Signal),
+        layers: vec![TOP, BOTTOM],
+    };
+    view.show_set(&listed, set);
+    assert!(!view.is_hidden(TOP) && !view.is_hidden(BOTTOM));
+    let mechanical = PcbLayer::Mechanical(MechanicalLayer::new(3).unwrap());
+    assert!(view.is_hidden(mechanical));
+    assert!(!view.is_hidden(BOARD_OUTLINE), "the outline stays drawn");
+    assert!(view.lists_in_strip(TOP) && !view.lists_in_strip(mechanical));
+    view.show_all();
+    assert!(view.layer_set().is_none() && view.lists_in_strip(mechanical));
+}

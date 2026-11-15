@@ -7,9 +7,12 @@ use signex_gfx::style::ColorSlot;
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_renderer::pcb::{BOARD_OUTLINE, LayerRow, copper_slot};
 use signex_renderer::theme::ResolvedTheme;
+use signex_types::format::pcb_layer_token;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 use signex_types::theme::{CanvasColors, Color as ThemeColor, ThemeTokens};
 use signex_widgets::Label;
+
+use crate::layer_strip_prefs::LayerNameStyle;
 
 /// The catalog name of `layer`.
 pub fn layer_name(i18n: &I18n, layer: PcbLayer) -> Localized {
@@ -30,6 +33,37 @@ pub fn copper_name(i18n: &I18n, layer: CopperLayer) -> Localized {
         CopperLayer::Inner(n) => {
             t!(i18n, ids::PCB_LAYER_INNER_COPPER, "index" => u32::from(n.index()))
         }
+    }
+}
+
+/// The name of `layer` in `style` (#2394): the short and medium names come
+/// from the catalog; a technical layer has no medium name and keeps its
+/// long one.
+pub fn styled_layer_name(i18n: &I18n, layer: PcbLayer, style: LayerNameStyle) -> Localized {
+    match (style, layer) {
+        (LayerNameStyle::Long, _) => layer_name(i18n, layer),
+        (LayerNameStyle::Short, PcbLayer::Copper(CopperLayer::Inner(n))) => {
+            t!(i18n, ids::PCB_LAYER_SHORT_INNER, "index" => u32::from(n.index()))
+        }
+        (LayerNameStyle::Short, PcbLayer::Mechanical(m)) => {
+            t!(i18n, ids::PCB_LAYER_SHORT_MECHANICAL, "index" => u32::from(m.index()))
+        }
+        (LayerNameStyle::Short, _) => {
+            t!(i18n, ids::PCB_LAYER_SHORT, "layer" => pcb_layer_token(layer))
+        }
+        (LayerNameStyle::Medium, PcbLayer::Copper(CopperLayer::Top)) => {
+            t!(i18n, ids::PCB_LAYER_MEDIUM_TOP)
+        }
+        (LayerNameStyle::Medium, PcbLayer::Copper(CopperLayer::Bottom)) => {
+            t!(i18n, ids::PCB_LAYER_MEDIUM_BOTTOM)
+        }
+        (LayerNameStyle::Medium, PcbLayer::Copper(CopperLayer::Inner(n))) => {
+            t!(i18n, ids::PCB_LAYER_MEDIUM_INNER, "index" => u32::from(n.index()))
+        }
+        (LayerNameStyle::Medium, PcbLayer::Mechanical(m)) => {
+            t!(i18n, ids::PCB_LAYER_MEDIUM_MECHANICAL, "index" => u32::from(m.index()))
+        }
+        (LayerNameStyle::Medium, PcbLayer::Technical(_)) => layer_name(i18n, layer),
     }
 }
 

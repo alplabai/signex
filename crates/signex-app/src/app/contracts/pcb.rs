@@ -68,7 +68,13 @@ pub enum PcbMsg {
     /// Swapping the footprint of placed components (#2366).
     FootprintSwap(FootprintSwapMsg),
     /// The right-click menu of a layer tab (#2379).
-    LayerTabMenu(LayerTabMenuMsg),
+    LayerTabMenu(super::LayerTabMenuMsg),
+    /// The menu of the layer set button (#2394).
+    LayerSetMenu(super::LayerSetMenuMsg),
+    /// The layer strip's per-user settings changed (#2394).
+    LayerStrip(super::LayerStripMsg),
+    /// A saved layer set was saved, shown or deleted (#2394).
+    LayerSet(super::LayerSetMsg),
 }
 
 /// Swapping the library footprint of components placed on a board (#2366).
@@ -175,32 +181,20 @@ pub enum PcbViewMsg {
     /// The user asked to see one layer alone (Show only this layer on its
     /// tab, #2379): it becomes the active layer and every other is hidden.
     OnlyLayerShown(PcbLayer),
-}
-
-/// The right-click menu of a layer tab under the board canvas (#2379).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LayerTabMenuMsg {
-    /// A layer tab was right-clicked in `window` (`None`: the main window):
-    /// its menu opens at the pointer.
-    Opened {
-        window: Option<iced::window::Id>,
-        layer: PcbLayer,
+    /// The user highlighted one layer, or ended its highlight (#2394):
+    /// every other layer is drawn dimmed.
+    LayerHighlightToggled(PcbLayer),
+    /// The user showed or hid every layer of one kind (Hide layers ▸ and
+    /// Show layers ▸ on a tab, #2394).
+    LayerKindVisibilitySet {
+        kind: signex_renderer::pcb::LayerKind,
+        visible: bool,
     },
-    /// The user clicked outside the menu or pressed Esc.
-    Dismissed,
-    /// A row was picked: the menu closes and `event` changes the view of the
-    /// board the menu was opened on.
-    Picked(PcbViewMsg),
-}
-
-/// The open layer tab menu: where it is, the layer it is for and the
-/// window whose board it acts on (`None`: the main window).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LayerTabMenu {
-    pub x: f32,
-    pub y: f32,
-    pub layer: PcbLayer,
-    pub window: Option<iced::window::Id>,
+    /// The user picked a built-in layer set (the layer set button, #2394).
+    BuiltinLayerSetShown(signex_renderer::pcb::BuiltinLayerSet),
+    /// The user flipped the board view: seen from below or above again
+    /// (#2394).
+    BoardFlipToggled,
 }
 
 /// What the user did about the turn of a board view on screen (#2316). View
