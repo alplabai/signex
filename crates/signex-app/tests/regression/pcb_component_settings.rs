@@ -273,9 +273,12 @@ fn the_type_is_picked_as_one_step_and_shown() {
     assert!(fp(&edited, C7).component.is_default(), "only R2");
 }
 
+/// A checkbox setting and how to read it back off a footprint.
+type CheckboxCase = (fn(bool) -> ComponentSetting, fn(&Footprint) -> bool);
+
 #[test]
 fn every_checkbox_setting_is_one_step() {
-    let cases: [(fn(bool) -> ComponentSetting, fn(&Footprint) -> bool); 4] = [
+    let cases: [CheckboxCase; 4] = [
         (ComponentSetting::LockPrimitives, |fp| {
             fp.component.lock_primitives
         }),
