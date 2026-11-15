@@ -64,7 +64,7 @@ fn add_new_schematic_is_tracked_and_refused_during_a_move() {
     fx.app.document_state.project_folder_renames.insert(id);
     let task = fx
         .app
-        .handle_add_new_schematic_picked(id, Some(new_sheet.clone()));
+        .handle_add_new_schematic_picked(id, Some(new_sheet.clone()), None);
     assert!(iced_runtime::task::into_stream(task).is_none(), "no write");
     assert!(fx.app.document_state.project_writes.is_empty());
     assert!(fx.app.document_state.error_notice.take().is_some());
@@ -72,7 +72,7 @@ fn add_new_schematic_is_tracked_and_refused_during_a_move() {
 
     let task = fx
         .app
-        .handle_add_new_schematic_picked(id, Some(new_sheet.clone()));
+        .handle_add_new_schematic_picked(id, Some(new_sheet.clone()), None);
     assert_eq!(
         fx.app.document_state.project_writes,
         std::slice::from_ref(&new_sheet)

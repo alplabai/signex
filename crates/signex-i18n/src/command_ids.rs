@@ -376,6 +376,8 @@ define_ids! {
         CMD_MENU_TOGGLE_LAYERS_PANEL = "cmd-menu-toggle-layers-panel";
         CMD_NEW_PCB_DOCUMENT = "cmd-new-pcb-document";
         CMD_MENU_NEW_PCB_DOCUMENT = "cmd-menu-new-pcb-document";
+        CMD_NEW_SCHEMATIC_SHEET = "cmd-new-schematic-sheet";
+        CMD_MENU_NEW_SCHEMATIC_SHEET = "cmd-menu-new-schematic-sheet";
         CMD_BOARD_SKETCH = "cmd-board-sketch";
         CMD_MENU_BOARD_SKETCH = "cmd-menu-board-sketch";
         CMD_PLACE_BOARD_VIA = "cmd-place-board-via";

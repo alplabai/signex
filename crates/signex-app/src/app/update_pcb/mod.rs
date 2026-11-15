@@ -18,6 +18,7 @@ mod update;
 
 pub(crate) use command::update_pcb_from_schematic;
 pub(crate) use design::DesignSnapshot;
+pub(crate) use new_pcb::new_board_path;
 pub use state::UpdatePcbState;
 pub(crate) use state::{BoardStatus, Phase, file_name};
 pub use table::{RowAction, RowFilter, TableGroup};
@@ -128,8 +129,8 @@ pub enum UpdatePcbMsg {
     /// The no-board banner's Create PCB button.
     CreatePcbRequested,
     CloseRequested,
-    /// `new_pcb_document`: a new board for the project in view (`None`), or
-    /// for the project the Projects tree names.
+    /// `new_pcb_document`: open the New PCB setup dialog for the project in
+    /// view (`None`), or for the project the Projects tree names.
     NewPcbRequested(Option<ProjectId>),
     /// The disk check of the new board's path finished: `Ok(true)` (a file
     /// is there) and `Err` (the check failed) refuse it.
@@ -137,5 +138,8 @@ pub enum UpdatePcbMsg {
         project: ProjectId,
         path: PathBuf,
         exists: Result<bool, String>,
+        /// The rules the setup dialog or the command chose; `None`: the
+        /// project defaults.
+        rules: Option<signex_types::project::PcbDefaults>,
     },
 }

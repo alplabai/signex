@@ -287,6 +287,8 @@ pub(super) struct Probe {
     pub back_annotate: bool,
     /// Place on a board arms a board placement tool (#2373).
     pub pcb_tool: bool,
+    /// File ▸ New ▸ PCB / Schematic opens its setup dialog (#2232).
+    pub document_setup: bool,
 }
 
 pub(super) fn probe(app: &Signex) -> Probe {
@@ -364,6 +366,7 @@ pub(super) fn probe(app: &Signex) -> Probe {
         board_reannotate: app.ui_state.board_reannotate.is_some(),
         back_annotate: app.ui_state.back_annotate.is_some(),
         pcb_tool: app.interaction_state.pcb_tool.is_some(),
+        document_setup: app.ui_state.document_setup.is_some(),
     }
 }
 

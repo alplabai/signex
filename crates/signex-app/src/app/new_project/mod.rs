@@ -3,13 +3,16 @@
 //! `docs/PROJECT_SETUP.md`.
 
 mod command;
+mod profiles;
 mod state;
 mod target;
 mod update;
 
 pub(crate) use command::new_project_with_profile;
+pub use profiles::ProfileUndo;
+pub(crate) use profiles::{ProfileStored, store_profile};
 pub use state::NewProjectState;
-pub(crate) use state::{Blocker, NameProblem, RULE_FIELDS, check_name};
+pub(crate) use state::{Blocker, NameProblem, RULE_FIELDS, SaveProfileProblem, check_name};
 pub(crate) use target::{TargetProblem, TargetStatus};
 pub(crate) use update::{NAME_INPUT_ID, import_rule_file};
 
@@ -18,6 +21,7 @@ mod tests;
 
 use signex_types::designator::DesignatorStandard;
 use signex_types::project::{FabTemplate, PcbField, RuleTemplate, SetupProfile};
+use signex_types::schematic::SheetOrientation;
 
 impl From<NewProjectMsg> for crate::app::Message {
     fn from(msg: NewProjectMsg) -> Self {
@@ -57,7 +61,22 @@ pub enum NewProjectMsg {
     LayersStepped(i8),
     RuleEdited(PcbField, String),
     SheetSizePicked(String),
+    SheetOrientationPicked(SheetOrientation),
     TitleBlockPicked(bool),
+    /// A saved user profile's card was picked, by id.
+    UserProfilePicked(String),
+    /// "Save as profile..." opened its name field.
+    SaveProfileOpened,
+    SaveProfileNameEdited(String),
+    /// The name field's Save: store the current values as a user profile.
+    SaveProfileConfirmed,
+    SaveProfileCancelled,
+    /// Remove on a user profile's card, by id: asks to confirm.
+    UserProfileRemoveRequested(String),
+    /// The confirm's Remove: the asked profile leaves the user's settings.
+    UserProfileRemoveConfirmed,
+    /// The confirm's Keep.
+    UserProfileRemoveCancelled,
     DesignatorsPicked(DesignatorStandard),
     /// The disk check of generation `generation` finished.
     TargetChecked {

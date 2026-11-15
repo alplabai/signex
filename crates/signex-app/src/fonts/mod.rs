@@ -766,6 +766,7 @@ mod erc;
 mod fast_grids;
 mod language;
 pub mod measure;
+mod merge_queue;
 mod misc;
 mod ordered_write;
 #[cfg(test)]
@@ -774,6 +775,7 @@ mod prefs_file;
 mod presets;
 mod recent;
 pub mod resolve;
+mod setup_profiles;
 
 #[cfg(test)]
 pub(crate) use prefs_file::PrefsIoHold;
@@ -798,11 +800,17 @@ pub use erc::*;
 pub use fast_grids::*;
 pub use language::*;
 pub use misc::*;
-pub use ordered_write::{OrderedPrefWrite, background_pref_write, wait_for_pref_writes};
+pub use ordered_write::{
+    OrderedPrefWrite, background_pref_merge, background_pref_write, wait_for_pref_writes,
+};
 #[cfg(test)]
 pub(crate) use ordered_write::{install_wait_probe, take_wait_probe};
 pub use presets::*;
 pub use recent::*;
+pub use setup_profiles::{
+    SETUP_PROFILES_KEY, SetupProfileEdit, apply_setup_profile_edit, read_setup_profiles_from,
+    unusable_setup_profiles,
+};
 
 #[cfg(test)]
 mod tests {

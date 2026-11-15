@@ -92,6 +92,8 @@ const SAVES: &[&str] = &[
     "save_document_as",
     "new_document",
     "new_project_with_profile",
+    // Writes the blank sheet and lists it in the saved project (#2232).
+    "new_schematic_sheet",
 ];
 
 /// The one capability `command` needs, from its catalog flags.
@@ -165,6 +167,7 @@ mod tests {
         let pinned = BTreeSet::from([
             (Capability::Save, "new_document"),
             (Capability::Save, "new_project_with_profile"),
+            (Capability::Save, "new_schematic_sheet"),
             (Capability::Save, "save_document"),
             (Capability::Save, "save_document_as"),
             (Capability::Export, "print"),
