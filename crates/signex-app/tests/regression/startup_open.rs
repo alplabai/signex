@@ -83,8 +83,13 @@ fn unsupported_file_argument_raises_the_open_failed_notice() {
         .error_notice
         .as_ref()
         .expect("an unsupported file must surface an error notice");
-    assert_eq!(notice.title, "Open Failed");
-    assert!(notice.detail.contains("unsupported file type"));
+    assert_eq!(notice.title.render_en_us(), "Open Failed");
+    assert!(
+        notice
+            .detail
+            .render_en_us()
+            .contains("unsupported file type")
+    );
     assert!(app.document_state.projects.is_empty());
 }
 
@@ -113,7 +118,7 @@ fn an_upper_case_sheet_extension_opens_as_a_schematic() {
 
     let notice = app.document_state.error_notice.as_ref();
     assert!(
-        notice.is_none_or(|n| !n.detail.contains("unsupported file type")),
+        notice.is_none_or(|n| !n.detail.render_en_us().contains("unsupported file type")),
         "{:?}",
         notice.map(|n| &n.detail)
     );
@@ -129,6 +134,6 @@ fn failed_async_schematic_read_raises_the_open_failed_notice() {
         disk: None,
     }));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
-    assert_eq!(notice.title, "Open Failed");
-    assert!(notice.detail.contains("not found"));
+    assert_eq!(notice.title.render_en_us(), "Open Failed");
+    assert!(notice.detail.render_en_us().contains("not found"));
 }

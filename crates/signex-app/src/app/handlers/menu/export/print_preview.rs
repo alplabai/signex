@@ -246,18 +246,14 @@ impl Signex {
                     let page = match parsed {
                         Some(p) if p > 0 => p,
                         _ => {
-                            self.refuse_export(
-                                "Specific page must be a positive page number (1, 2, 3, ...).",
-                            );
+                            self.refuse_export(signex_i18n::ids::NOTICE_EXPORT_PAGE_INVALID);
                             return Some(Task::none());
                         }
                     };
                     options.page_range = PageRange::Specific(vec![page]);
                 }
                 if preview.selected_files.is_empty() {
-                    self.refuse_export(
-                        "Select at least one file in the Settings tab before exporting.",
-                    );
+                    self.refuse_export(signex_i18n::ids::NOTICE_EXPORT_NO_FILES);
                     return Some(Task::none());
                 }
                 // Quality is the only Settings field not stored
@@ -290,13 +286,15 @@ impl Signex {
 
         let target = self.save_target(Some(&request.source));
         let picker = self.ui_state.io.picker.clone();
+        let i18n = self.ui_state.i18n.clone();
         let file_name = target.file_name("schematic", "", "pdf");
         Some(Task::perform(
             async move {
+                use signex_i18n::ids;
                 target
-                    .dialog(picker, "Export PDF")
+                    .dialog(picker.dialog().title_in(&i18n, ids::FILE_DIALOG_EXPORT_PDF))
                     .await
-                    .add_filter("PDF", &["pdf"])
+                    .filter_in(&i18n, ids::FILE_FILTER_PDF, &["pdf"])
                     .set_file_name(file_name)
                     .save_file()
                     .await

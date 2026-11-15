@@ -70,7 +70,12 @@ fn a_delete_is_refused_while_a_project_folder_move_is_in_flight() {
     ))));
 
     let notice = fx.app.document_state.error_notice.clone().expect("notice");
-    assert!(notice.detail.contains("project folder is being renamed"));
+    assert!(
+        notice
+            .detail
+            .render_en_us()
+            .contains("project folder is being renamed")
+    );
     assert!(fx.app.document_state.pending_path_ops.is_empty());
     assert!(fx.sheet.exists(), "nothing was deleted");
     assert_eq!(fx.app.document_state.projects[0].data.sheets.len(), 1);
@@ -176,7 +181,11 @@ fn close_project_is_held_while_a_delete_under_it_is_pending() {
 
     assert_eq!(fx.app.document_state.projects.len(), 1, "still open");
     let notice = fx.app.document_state.error_notice.clone().expect("notice");
-    assert!(notice.detail.contains("delete"), "{}", notice.detail);
+    assert!(
+        notice.detail.render_en_us().contains("delete"),
+        "{}",
+        notice.detail.render_en_us()
+    );
 }
 
 /// A stock copy or "Commit now" writes into a library on a worker; deleting
@@ -205,9 +214,12 @@ fn a_library_delete_waits_for_a_library_copy_in_flight() {
 
     let notice = fx.app.document_state.error_notice.clone().expect("notice");
     assert!(
-        notice.detail.contains("commit or copy is still running"),
+        notice
+            .detail
+            .render_en_us()
+            .contains("commit or copy is still running"),
         "got: {}",
-        notice.detail
+        notice.detail.render_en_us()
     );
     assert!(fx.app.document_state.pending_path_ops.is_empty());
     assert!(library.exists(), "nothing was deleted");

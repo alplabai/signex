@@ -172,15 +172,17 @@ impl Signex {
             .as_deref()
             .and_then(std::path::Path::parent)
             .map(std::path::Path::to_path_buf);
-        let title = self.update_pcb_text(ids::UPDATE_PCB_TITLE);
-        let picker = self.ui_state.io.picker.clone();
+        let i18n = &self.ui_state.i18n;
+        let base = self
+            .ui_state
+            .io
+            .picker
+            .dialog()
+            .title_in(i18n, ids::UPDATE_PCB_TITLE)
+            .filter_in(i18n, ids::FILE_FILTER_TEXT, &["txt"]);
         Task::perform(
             async move {
-                let mut dialog = picker
-                    .dialog()
-                    .set_title(title)
-                    .set_file_name(REPORT_FILE)
-                    .add_filter("Text", &["txt"]);
+                let mut dialog = base.set_file_name(REPORT_FILE);
                 if let Some(dir) = dir {
                     dialog = dialog.set_directory(dir);
                 }

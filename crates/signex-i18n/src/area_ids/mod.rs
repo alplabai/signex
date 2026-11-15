@@ -4,7 +4,9 @@
 
 mod dialog;
 mod editors;
+mod file_dialog;
 mod library;
+mod notice;
 mod overlay;
 mod panels;
 mod pcb;
@@ -16,7 +18,9 @@ mod update_pcb;
 
 pub use dialog::*;
 pub use editors::*;
+pub use file_dialog::*;
 pub use library::*;
+pub use notice::*;
 pub use overlay::*;
 pub use panels::*;
 pub use pcb::*;
@@ -32,7 +36,9 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
         dialog::DIALOG,
         editors::EDITORS,
+        file_dialog::FILE_DIALOG,
         library::LIBRARY,
+        notice::NOTICE,
         overlay::OVERLAY,
         panels::PANELS,
         pcb::PCB,

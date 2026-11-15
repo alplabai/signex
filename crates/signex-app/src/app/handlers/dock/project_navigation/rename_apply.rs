@@ -85,8 +85,10 @@ impl Signex {
         if self.dialog_targets(&request.from) {
             self.set_rename_error(&shown);
         } else {
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::rename_failed(shown));
+            // The Rename dialog shows the same text (#2059).
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename_failed(
+                crate::app::state::untranslated(shown),
+            ));
         }
     }
 

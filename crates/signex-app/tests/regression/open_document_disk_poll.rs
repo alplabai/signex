@@ -44,7 +44,7 @@ fn poll(app: &mut Signex) {
 
 fn card_title(app: &Signex) -> Option<String> {
     let notice = app.document_state.error_notice.as_ref()?;
-    notice.action.is_some().then(|| notice.title.clone())
+    notice.action.is_some().then(|| notice.title.render_en_us())
 }
 
 #[test]

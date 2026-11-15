@@ -358,7 +358,7 @@ fn reset_and_renumber_refuses_the_run_when_a_sheet_would_be_skipped() {
         .document_state
         .error_notice
         .as_ref()
-        .map(|n| n.detail.clone())
+        .map(|n| n.detail.render_en_us())
         .unwrap_or_default();
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(
@@ -441,7 +441,7 @@ fn reset_and_renumber_refuses_the_run_when_a_sheet_cannot_be_read() {
         .document_state
         .error_notice
         .as_ref()
-        .map(|n| n.detail.clone())
+        .map(|n| n.detail.render_en_us())
         .unwrap_or_default();
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(

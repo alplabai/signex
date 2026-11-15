@@ -198,8 +198,9 @@ impl Signex {
                     "Failed to open primitive",
                     &anyhow::anyhow!(message.clone()),
                 );
-                self.document_state.error_notice =
-                    Some(crate::app::state::ErrorNotice::open(message));
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+                    crate::app::state::untranslated(message),
+                ));
             }
         }
     }

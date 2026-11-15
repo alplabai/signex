@@ -49,7 +49,7 @@ impl Signex {
             if *modal == super::state::ModalId::ErrorNotice
                 && let Some(notice) = self.document_state.error_notice.as_ref()
             {
-                return notice.title.clone();
+                return notice.title_text(&self.ui_state.i18n);
             }
             return self.detached_modal_title(*modal);
         }

@@ -46,7 +46,8 @@ fn has_text(texts: &[LaidOutText], label: &str) -> bool {
 #[test]
 fn an_error_card_paints_with_no_editor_tab_active() {
     let (mut app, window) = start_screen_app();
-    app.document_state.error_notice = Some(ErrorNotice::save(ERROR_DETAIL));
+    app.document_state.error_notice =
+        Some(ErrorNotice::save(crate::app::state::verbatim(ERROR_DETAIL)));
 
     let texts = main_window_texts(&app, window);
 

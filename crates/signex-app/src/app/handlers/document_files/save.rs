@@ -112,7 +112,11 @@ impl Signex {
     /// writes the file.
     fn save_primitive_document(&mut self, path: PathBuf) -> iced::Task<Message> {
         if !path.exists() {
-            return super::spawn_save_as_for_primitive(self.ui_state.io.picker.clone(), path);
+            return super::spawn_save_as_for_primitive(
+                self.ui_state.io.picker.clone(),
+                &self.ui_state.i18n,
+                path,
+            );
         }
         // The write runs off the UI thread; the completion logs it, clears
         // the dirty marker and queues the git commit.
@@ -230,9 +234,10 @@ impl Signex {
         // The first failure of a save sequence is the one that explains it;
         // a follow-up write (e.g. the project file) must not replace it.
         if self.document_state.error_notice.is_none() {
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(format!(
-                "{context}: {error:#}"
-            )));
+            // `context` is the caller's English log label (#2061).
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
+                crate::app::state::untranslated(format!("{context}: {error:#}")),
+            ));
         }
     }
 

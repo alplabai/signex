@@ -148,18 +148,18 @@ impl Signex {
             .chain(std::iter::once(&inputs.root))
             .map(PathBuf::as_path)
             .collect();
-        let refusal = match sheets.iter().find(|p| self.path_is_in_moving_project(p)) {
-            Some(path) => format!(
-                "{} is in a project whose folder is being renamed. Try again once it finishes.",
-                path.display()
-            ),
+        use signex_i18n::{Translatable, ids};
+        let detail = match sheets.iter().find(|p| self.path_is_in_moving_project(p)) {
+            Some(path) => Translatable::new(ids::NOTICE_REPLACE_PROJECT_MOVING)
+                .arg("path", path.display().to_string()),
             None => match self.refuse_project_wide_while_path_op(sheets, "read") {
                 Ok(()) => return false,
-                Err(e) => e.to_string(),
+                Err(e) => {
+                    Translatable::new(ids::NOTICE_REPLACE_REFUSED_WHY).arg("reason", e.to_string())
+                }
             },
         };
-        let detail = format!("Replace was not run: {refusal}");
-        crate::diagnostics::log_warning(&detail);
+        crate::diagnostics::log_warning(detail.render_en_us());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::replace(detail));
         true
     }

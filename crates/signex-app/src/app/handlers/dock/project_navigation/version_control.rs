@@ -289,10 +289,11 @@ impl Signex {
             // reopened — without this the user sees a normal close with
             // auto-commit still off.
             self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::version_control(format!(
-                    "The repository at {} was created, but auto-commit is not enabled: {reason}",
-                    project_dir.display()
-                )));
+                Some(crate::app::state::ErrorNotice::version_control(
+                    signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_VCS_AUTO_COMMIT_OFF)
+                        .arg("path", project_dir.display().to_string())
+                        .arg("reason", reason.to_string()),
+                ));
         } else if matches!(scope, crate::app::VersionControlScope::Project) {
             // Flip `enable_git = true` on the matching project + mark it
             // dirty so the .snxprj save captures the flag. Match by
@@ -320,13 +321,12 @@ impl Signex {
                         project_dir.display()
                     ));
                     self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::version_control(format!(
-                            "The repository at {} was created, but its project was closed \
-                             before auto-commit could be enabled. Delete the project's \
-                             .git folder, reopen the project, then enable version \
-                             control again.",
-                            project_dir.display()
-                        )));
+                        Some(crate::app::state::ErrorNotice::version_control(
+                            signex_i18n::Translatable::new(
+                                signex_i18n::ids::NOTICE_VCS_PROJECT_CLOSED,
+                            )
+                            .arg("path", project_dir.display().to_string()),
+                        ));
                     project_closed = true;
                 }
             }

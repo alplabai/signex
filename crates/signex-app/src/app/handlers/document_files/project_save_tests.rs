@@ -580,9 +580,12 @@ fn a_library_whose_version_control_cannot_be_completed_is_refused_loudly() {
     assert!(project.data.libraries.is_empty());
     let notice = fx.app.document_state.error_notice.clone().expect("card");
     assert!(
-        notice.detail.contains("partly created library"),
+        notice
+            .detail
+            .render_en_us()
+            .contains("partly created library"),
         "{}",
-        notice.detail
+        notice.detail.render_en_us()
     );
     assert!(crate::diagnostics::logged_count(&needle) > before);
 }

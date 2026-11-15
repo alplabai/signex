@@ -240,11 +240,10 @@ fn a_tree_symbol_opens_on_completion_and_a_corrupt_one_raises_the_card() {
     assert_eq!(tabs_for(&app, &bad), 0, "no half-opened tab");
     assert!(!app.document_state.symbol_editors.contains_key(&bad));
     let card = app.document_state.error_notice.as_ref().expect("card");
+    let detail = card.detail.render_en_us();
     assert!(
-        card.detail
-            .starts_with(&format!("could not parse {}", bad.display())),
-        "{}",
-        card.detail
+        detail.starts_with(&format!("could not parse {}", bad.display())),
+        "{detail}"
     );
     assert!(logged(&app, "Failed to open primitive"));
 }

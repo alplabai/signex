@@ -222,12 +222,10 @@ impl Signex {
         if skipped.is_empty() {
             return false;
         }
-        let detail = format!(
-            "{label} was not run: it would skip {}, and renumbering around a sheet can repeat \
-             its designators. Nothing was changed; try again once the sheet is free.",
-            skipped.join(", ")
-        );
-        crate::diagnostics::log_warning(detail.clone());
+        let detail = signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_RUN_WOULD_SKIP)
+            .arg("label", label)
+            .arg("sheets", skipped.join(", "));
+        crate::diagnostics::log_warning(detail.render_en_us());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
         true
     }
@@ -245,7 +243,9 @@ impl Signex {
         let summary = skipped_summary(skipped);
         crate::diagnostics::log_warning(format!("{pass}: {summary}"));
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::sheet_edit(
-            format!("{pass} skipped read-only sheets. {summary}"),
+            signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_RUN_SKIPPED_READ_ONLY)
+                .arg("label", pass)
+                .arg("summary", summary),
         ));
     }
 
@@ -263,11 +263,10 @@ impl Signex {
         else {
             return false;
         };
-        let detail = format!(
-            "{what} was not run: {} is in a project whose folder is being renamed. Try again once the rename has finished.",
-            path.display()
-        );
-        crate::diagnostics::log_warning(detail.clone());
+        let detail = signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_RUN_PROJECT_MOVING)
+            .arg("label", what)
+            .arg("path", path.display().to_string());
+        crate::diagnostics::log_warning(detail.render_en_us());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
         true
     }
@@ -284,8 +283,10 @@ impl Signex {
         let Err(refusal) = self.refuse_project_wide_while_path_op(sheets, "rewritten") else {
             return false;
         };
-        let detail = format!("{what} was not run: {refusal}");
-        crate::diagnostics::log_warning(detail.clone());
+        let detail = signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_RUN_REFUSED)
+            .arg("label", what)
+            .arg("reason", refusal.to_string());
+        crate::diagnostics::log_warning(detail.render_en_us());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
         true
     }

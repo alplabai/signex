@@ -62,7 +62,11 @@ fn title(f: &Fixture) -> String {
 }
 
 fn held_message(f: &Fixture) -> String {
-    t!(f.app.ui_state.i18n, ids::BOARD_SKETCH_HELD, "board" => "board.snxpcb").into_string()
+    // The card is plain text, without bidi isolation marks.
+    f.app
+        .ui_state
+        .i18n
+        .message_plain(ids::BOARD_SKETCH_HELD, &[("board", "board.snxpcb".into())])
 }
 
 pub(crate) fn notice_says_held(f: &Fixture) -> bool {
@@ -72,7 +76,8 @@ pub(crate) fn notice_says_held(f: &Fixture) -> bool {
         .error_notice
         .as_ref()
         .is_some_and(|notice| {
-            notice.detail.contains(&held) && notice.detail.contains("closed profile")
+            notice.detail.render_en_us().contains(&held)
+                && notice.detail.render_en_us().contains("closed profile")
         })
 }
 

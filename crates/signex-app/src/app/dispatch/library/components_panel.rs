@@ -453,19 +453,13 @@ impl Signex {
         // Open `*.snxlib` directory picker — landing message is
         // `ComponentsPanelAddLibraryAt` so the dispatcher knows
         // which source bucket the result belongs to.
-        let picker = self.ui_state.io.picker.clone();
-        Task::perform(
-            async move {
-                picker
-                    .dialog()
-                    .set_title("Add Library (*.snxlib)")
-                    .pick_folder()
-                    .await
-            },
-            move |path| {
-                Message::Library(LibraryMessage::ComponentsPanelAddLibraryAt { source, path })
-            },
-        )
+        let dialog = self.ui_state.io.picker.dialog().title_in(
+            &self.ui_state.i18n,
+            signex_i18n::ids::FILE_DIALOG_ADD_LIBRARY,
+        );
+        Task::perform(async move { dialog.pick_folder().await }, move |path| {
+            Message::Library(LibraryMessage::ComponentsPanelAddLibraryAt { source, path })
+        })
     }
 
     /// Result of the Add Library file dialog — mount and record it in
@@ -494,8 +488,12 @@ impl Signex {
             // Recoverable failures open their recovery dialog; anything
             // else must still reach the user, so raise the error card.
             if !route_open_error(&mut self.library, &path, &e) {
-                self.document_state.error_notice =
-                    Some(open_error_notice(&self.library, &path, "add library", &e));
+                self.document_state.error_notice = Some(open_error_notice(
+                    &self.library,
+                    &path,
+                    signex_i18n::ids::NOTICE_LIBRARY_CANNOT_ADD,
+                    &e,
+                ));
             }
             return Task::none();
         }
@@ -524,7 +522,7 @@ impl Signex {
     /// so say so instead of silently dropping the request.
     fn reject_project_add_library(&mut self) -> Task<Message> {
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::unavailable(
-            "Adding a library to the project from the Components Panel is not yet available.",
+            signex_i18n::ids::NOTICE_PROJECT_ADD_LIBRARY_UNAVAILABLE,
         ));
         Task::none()
     }
@@ -542,9 +540,11 @@ impl Signex {
             error = %err,
             "global_libraries.toml save failed ({action})"
         );
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(format!(
-            "Could not save the global library list ({action}): {err}"
-        )));
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
+            signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_GLOBAL_LIBRARIES_NOT_SAVED)
+                .arg("action", action)
+                .arg("error", err.to_string()),
+        ));
     }
 
     /// Promote an Installed library to Global.

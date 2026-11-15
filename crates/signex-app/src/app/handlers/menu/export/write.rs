@@ -9,6 +9,7 @@ use iced::Task;
 use super::super::super::super::*;
 use crate::app::contracts::ExportWriteOutcome;
 use crate::app::state::ErrorNotice;
+use signex_i18n::Translatable;
 
 /// Write `bytes` to `path` crash-safely off the UI thread. `what` names the
 /// deliverable in the failure text ("PDF", "netlist", "BOM").
@@ -188,17 +189,17 @@ impl Signex {
     /// An export failed for real (building or writing the file): the notice
     /// card plus an error line in the Messages panel, so the failure outlives
     /// the card.
-    pub(crate) fn report_export_failure(&mut self, detail: impl Into<String>) {
+    pub(crate) fn report_export_failure(&mut self, detail: impl Into<Translatable>) {
         let detail = detail.into();
-        log::error!("{detail}");
+        log::error!("{}", detail.render_en_us());
         self.document_state.error_notice = Some(ErrorNotice::export(detail));
     }
 
     /// An export was refused up front (a precondition or an input of the
     /// user's): the notice card plus a warning line in the Messages panel.
-    pub(crate) fn refuse_export(&mut self, reason: impl Into<String>) {
+    pub(crate) fn refuse_export(&mut self, reason: impl Into<Translatable>) {
         let reason = reason.into();
-        crate::diagnostics::log_warning(&reason);
+        crate::diagnostics::log_warning(reason.render_en_us());
         self.document_state.error_notice = Some(ErrorNotice::export(reason));
     }
 
@@ -218,7 +219,7 @@ impl Signex {
                     } else {
                         crate::diagnostics::log_warning(format!(
                             "Export advisory dropped, a notice is already showing: {}",
-                            notice.detail
+                            notice.detail.render_en_us()
                         ));
                     }
                 }
@@ -227,7 +228,7 @@ impl Signex {
                 }
             }
             Err(e) => {
-                self.report_export_failure(e);
+                self.report_export_failure(crate::app::state::untranslated(e));
             }
         }
         Task::none()

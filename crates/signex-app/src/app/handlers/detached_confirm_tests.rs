@@ -219,7 +219,9 @@ fn a_notice_raised_over_a_detached_dialog_gets_its_own_window() {
         is_project_rename: false,
     });
     let _ = app.sync_detached_modals();
-    app.document_state.error_notice = Some(crate::app::state::ErrorNotice::create("it failed"));
+    app.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(
+        crate::app::state::verbatim("it failed"),
+    ));
     let _ = app.sync_detached_modals();
     assert!(app.detached_window_of(ModalId::RenameDialog).is_some());
     assert!(

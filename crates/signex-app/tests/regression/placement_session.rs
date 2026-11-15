@@ -283,7 +283,11 @@ fn session_refused_on_newer_minor_sheet() {
         "no session on a read-only sheet"
     );
     let notice = app.document_state.error_notice.as_ref().expect("says why");
-    assert!(notice.detail.contains("read-only"), "{}", notice.detail);
+    assert!(
+        notice.detail.render_en_us().contains("read-only"),
+        "{}",
+        notice.detail.render_en_us()
+    );
     assert!(doc(&app).symbols.is_empty());
 }
 

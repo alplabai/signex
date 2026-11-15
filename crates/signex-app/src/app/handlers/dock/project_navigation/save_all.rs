@@ -381,26 +381,16 @@ impl Signex {
             };
         }
         let listing = Self::save_all_failure_listing(&failed);
-        let message = match next {
-            SaveAllNext::CloseProject { .. } => format!(
-                "Could not save {} item(s) — project not closed:\n  {listing}",
-                failed.len()
-            ),
-            SaveAllNext::CloseLibrary { .. } => format!(
-                "Could not save {} item(s) — library not closed:\n  {listing}",
-                failed.len()
-            ),
-            SaveAllNext::Nothing => format!(
-                "Save All: could not save {} item(s):\n  {listing}",
-                failed.len()
-            ),
-            SaveAllNext::Quit => format!(
-                "Could not save {} item(s) — Signex stayed open so nothing is lost. \
-                 Save them manually, or choose Discard All to exit anyway:\n  {listing}",
-                failed.len()
-            ),
+        let id = match next {
+            SaveAllNext::CloseProject { .. } => signex_i18n::ids::NOTICE_SAVE_ALL_PROJECT_KEPT,
+            SaveAllNext::CloseLibrary { .. } => signex_i18n::ids::NOTICE_SAVE_ALL_LIBRARY_KEPT,
+            SaveAllNext::Nothing => signex_i18n::ids::NOTICE_SAVE_ALL_FAILED,
+            SaveAllNext::Quit => signex_i18n::ids::NOTICE_SAVE_ALL_QUIT_HELD,
         };
-        crate::diagnostics::log_warning(&message);
+        let message = signex_i18n::Translatable::new(id)
+            .arg("count", failed.len())
+            .arg("listing", listing);
+        crate::diagnostics::log_warning(message.render_en_us());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(message));
         // The app stays open: a system quit request still waiting is declined.
         if matches!(next, SaveAllNext::Quit) {

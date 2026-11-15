@@ -218,8 +218,9 @@ impl Signex {
         if !plan.read_only_parents.is_empty() {
             let detail = super::sheet_references::read_only_parents_detail(&plan.read_only_parents);
             crate::diagnostics::log_warning(format!(
-                "Rename of {} refused. {detail}",
-                state.target_path.display()
+                "Rename of {} refused. {}",
+                state.target_path.display(),
+                detail.render_en_us()
             ));
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename(detail));
             self.ui_state.rename_dialog = None;

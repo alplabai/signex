@@ -266,5 +266,5 @@ fn refresh_pricing_on_a_read_only_library_is_refused_and_starts_no_walk() {
         "no walk may start on a read-only mount"
     );
     let notice = app.document_state.error_notice.as_ref().expect("explained");
-    assert_eq!(notice.title, "Library Is Read-Only");
+    assert_eq!(notice.title.render_en_us(), "Library Is Read-Only");
 }

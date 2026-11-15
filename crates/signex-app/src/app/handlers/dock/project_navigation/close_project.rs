@@ -69,8 +69,9 @@ impl Signex {
         };
         if let Err(refusal) = self.refuse_project_while_delete_pending(project_id, "closed") {
             crate::diagnostics::log_warning(refusal.to_string());
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                crate::app::state::untranslated(refusal.to_string()),
+            ));
             return Task::none();
         }
         // A board of this project in sketch mode takes its sketch before the
@@ -240,8 +241,9 @@ impl Signex {
         let target_id = project_id;
         if let Err(refusal) = self.refuse_project_while_delete_pending(project_id, "closed") {
             crate::diagnostics::log_warning(refusal.to_string());
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::delete(refusal.to_string()));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                crate::app::state::untranslated(refusal.to_string()),
+            ));
             self.refresh_panel_ctx();
             return Task::none();
         }
@@ -869,13 +871,14 @@ impl Signex {
         if self.document_state.pending_path_ops.is_empty() {
             return false;
         }
-        let id = if self.document_state.pending_path_ops.rewrite_running() {
-            signex_i18n::ids::DIALOG_QUIT_HELD_REWRITE
-        } else {
-            signex_i18n::ids::DIALOG_QUIT_HELD_PATH_OP
-        };
-        let detail = signex_i18n::t!(self.ui_state.i18n, id).into_string();
-        crate::diagnostics::log_warning(detail.clone());
+        let detail = signex_i18n::Translatable::new(
+            if self.document_state.pending_path_ops.rewrite_running() {
+                signex_i18n::ids::NOTICE_QUIT_HELD_REWRITE
+            } else {
+                signex_i18n::ids::NOTICE_QUIT_HELD_PATH_OP
+            },
+        );
+        crate::diagnostics::log_warning(detail.render_en_us());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::quit_held(detail));
         true
     }

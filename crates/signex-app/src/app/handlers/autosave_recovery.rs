@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use iced::Task;
+use signex_i18n::{Translatable, ids};
 
 use crate::app::state::ErrorNotice;
 use crate::app::{Message, Signex};
@@ -185,10 +186,9 @@ impl Signex {
                     if self.is_open_document(&offer.path) {
                         let name = file_label(&offer.path);
                         self.document_state.autosave.offer(offer);
-                        self.report_recovery_failure(format!(
-                            "Restore needs the document open: reopen {name} to restore. The \
-                             copy is kept and autosave stays paused for it."
-                        ));
+                        self.report_recovery_failure(
+                            Translatable::new(ids::NOTICE_RECOVERY_NEEDS_OPEN).arg("name", name),
+                        );
                     } else {
                         self.report_restore_target_closed(&offer.path);
                     }
@@ -198,10 +198,9 @@ impl Signex {
                 if self.document_state.autosave.move_owed(&offer.path) {
                     let name = file_label(&offer.path);
                     self.document_state.autosave.offer(offer);
-                    self.report_recovery_failure(format!(
-                        "The recovery copy of {name} is still being moved to the file's new \
-                         name. It was kept; choose Restore again in a moment."
-                    ));
+                    self.report_recovery_failure(
+                        Translatable::new(ids::NOTICE_RECOVERY_STILL_MOVING).arg("name", name),
+                    );
                     // Start the move now rather than on the next tick, which
                     // never comes while autosave is off.
                     return self.autosave_flush_moves();
@@ -232,10 +231,9 @@ impl Signex {
             if result.is_err() {
                 let name = file_label(&current);
                 self.document_state.autosave.offer(offer);
-                self.report_recovery_failure(format!(
-                    "{name} was renamed while its recovery copy was being read. The copy was \
-                     kept and is offered again."
-                ));
+                self.report_recovery_failure(
+                    Translatable::new(ids::NOTICE_RECOVERY_RENAMED_WHILE_READING).arg("name", name),
+                );
                 return Task::none();
             }
         }
@@ -248,26 +246,24 @@ impl Signex {
                 // unprotected: autosave resumes and replaces it. The reason
                 // already says so.
                 self.document_state.autosave.allow_writes(&path);
-                self.report_recovery_failure(reason);
+                self.report_recovery_failure(crate::app::state::untranslated(reason));
                 return Task::none();
             }
             Err(LoadError::Missing(reason)) => {
                 // Nothing left to protect or offer: autosave resumes.
                 self.document_state.autosave.allow_writes(&path);
-                self.report_recovery_failure(format!(
-                    "{reason}\nThe recovery copy is gone, so there is nothing to restore. \
-                     Autosave resumes for this document."
-                ));
+                self.report_recovery_failure(
+                    Translatable::new(ids::NOTICE_RECOVERY_COPY_GONE).arg("reason", reason),
+                );
                 return Task::none();
             }
             Err(LoadError::Unreadable(reason)) => {
                 // The copy may be intact (a lock, permissions): do not let
                 // autosave replace it. Offer it again and stay paused.
                 self.document_state.autosave.offer(offer);
-                self.report_recovery_failure(format!(
-                    "{reason}\nThe copy was kept and is offered again. Autosave stays paused \
-                     for this document until you answer."
-                ));
+                self.report_recovery_failure(
+                    Translatable::new(ids::NOTICE_RECOVERY_COPY_UNREADABLE).arg("reason", reason),
+                );
                 return Task::none();
             }
         };
@@ -297,23 +293,19 @@ impl Signex {
             // this document (the one sidecar is that copy) and the prompt
             // comes back, so Discard (which resumes autosave) is one click away.
             self.document_state.autosave.offer(offer);
-            self.report_recovery_failure(format!(
-                "{} was edited while the prompt was open, so its recovery copy was not loaded \
-                 over those edits. The copy was kept and is offered again. Autosave stays \
-                 paused for this document until you answer, so neither version is overwritten.",
-                file_label(&path)
-            ));
+            self.report_recovery_failure(
+                Translatable::new(ids::NOTICE_RECOVERY_EDITED_DURING_PROMPT)
+                    .arg("name", file_label(&path)),
+            );
             return Task::none();
         }
         let needs_tab = !matches!(restored, RestoredDocument::Project(_));
         if needs_tab && !self.activate_tab_for_path(&path) {
             self.document_state.autosave.offer(offer);
-            self.report_recovery_failure(format!(
-                "The tab of {} could not be activated, so its recovery copy was not restored. \
-                 The copy was kept and is offered again. Autosave stays paused for this \
-                 document until you answer.",
-                file_label(&path)
-            ));
+            self.report_recovery_failure(
+                Translatable::new(ids::NOTICE_RECOVERY_TAB_NOT_ACTIVATED)
+                    .arg("name", file_label(&path)),
+            );
             return Task::none();
         }
         self.keep_live_document_id(&path, &mut restored);
@@ -399,17 +391,16 @@ impl Signex {
     }
 
     fn report_restore_target_closed(&mut self, path: &Path) {
-        self.report_recovery_failure(format!(
-            "{} was closed, so its recovery copy was not restored. The copy was kept and is \
-             offered again the next time the file is opened.",
-            file_label(path)
-        ));
+        self.report_recovery_failure(
+            Translatable::new(ids::NOTICE_RECOVERY_TARGET_CLOSED).arg("name", file_label(path)),
+        );
     }
 
     /// A Restore that did not happen: the dialog tells the user, and the
-    /// Messages panel keeps the record after the dialog is dismissed.
-    fn report_recovery_failure(&mut self, text: String) {
-        crate::diagnostics::log_warning(format!("Recovery: {}", text.replace('\n', " ")));
+    /// Messages panel keeps the record (in en-US) after the dialog is dismissed.
+    fn report_recovery_failure(&mut self, text: Translatable) {
+        let line = text.render_en_us().replace('\n', " ");
+        crate::diagnostics::log_warning(format!("Recovery: {line}"));
         self.document_state.error_notice = Some(ErrorNotice::recovery(text));
     }
 }

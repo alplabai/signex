@@ -346,7 +346,12 @@ fn ctrl_s_on_a_newer_minor_board_writes_nothing() {
     assert!(!path.exists());
     assert!(no_commit_requested(&app));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
-    assert!(notice.detail.contains("read-only (newer format)"));
+    assert!(
+        notice
+            .detail
+            .render_en_us()
+            .contains("read-only (newer format)")
+    );
 }
 
 /// The board the first tab holds, as `begin_pcb_save` encodes it.

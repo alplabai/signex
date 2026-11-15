@@ -48,7 +48,10 @@ fn saving_a_newer_minor_schematic_is_refused_and_stays_dirty() {
     // The card carries the full cause; the Messages panel line is trimmed
     // to 160 bytes, so only its leading context is matched.
     let notice = app.document_state.error_notice.as_ref().expect("card");
-    assert!(notice.detail.contains("newer Signex") && notice.detail.contains("snxsch/1.7"));
+    assert!(
+        notice.detail.render_en_us().contains("newer Signex")
+            && notice.detail.render_en_us().contains("snxsch/1.7")
+    );
     assert!(
         signex_app::diagnostics::recent_entries()
             .iter()
