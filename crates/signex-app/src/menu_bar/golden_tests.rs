@@ -285,6 +285,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_board_track", "PlaceBoardTrack"),
     ("place_board_fill", "PlaceBoardFill"),
     ("place_board_region", "PlaceBoardRegion"),
+    ("place_board_polygon_pour", "PlaceBoardPolygonPour"),
     ("place_board_keepout", "PlaceBoardKeepout"),
     ("open_document", "OpenProject"),
     ("close_active_document", "CloseDocument"),

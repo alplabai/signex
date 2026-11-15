@@ -8,7 +8,7 @@ Place/Track	item	Track	-	-	PlaceBoardTrack	1
 Place/Arc	stub	Arc	-	-	-	0
 Place/Fill	item	Fill	-	-	PlaceBoardFill	1
 Place/Solid Region	item	Solid Region	-	-	PlaceBoardRegion	1
-Place/Polygon Pour	stub	Polygon Pour	-	-	-	0
+Place/Polygon Pour	item	Polygon Pour	-	-	PlaceBoardPolygonPour	1
 Place/String	stub	String	-	-	-	0
 Place/Dimension	stub	Dimension	-	-	-	0
 Place/Keepout	item	Keepout	-	-	PlaceBoardKeepout	1

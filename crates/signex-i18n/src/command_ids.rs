@@ -388,6 +388,8 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_FILL = "cmd-menu-place-board-fill";
         CMD_PLACE_BOARD_REGION = "cmd-place-board-region";
         CMD_MENU_PLACE_BOARD_REGION = "cmd-menu-place-board-region";
+        CMD_PLACE_BOARD_POLYGON_POUR = "cmd-place-board-polygon-pour";
+        CMD_MENU_PLACE_BOARD_POLYGON_POUR = "cmd-menu-place-board-polygon-pour";
         CMD_PLACE_BOARD_KEEPOUT = "cmd-place-board-keepout";
         CMD_MENU_PLACE_BOARD_KEEPOUT = "cmd-menu-place-board-keepout";
         CMD_CHANGE_FOOTPRINT = "cmd-change-footprint";

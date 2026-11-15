@@ -178,3 +178,25 @@ fn a_keepout_is_drawn_on_copper_or_a_keep_out_layer_only() {
     let overlay = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
     assert!(new_keepout(id, outline, overlay).is_none());
 }
+
+#[test]
+fn a_pour_is_a_pour_zone_on_the_net_under_its_first_point_in_one_step() {
+    use signex_types::pcb_layer::CopperLayer;
+
+    let mut engine = BoardEngine::new(board(), 1);
+    let before = serde_json::to_string(engine.board()).unwrap();
+    let outline = rectangle(Point::new(1.0, 0.0), Point::new(4.0, 3.0));
+    let id = Uuid::from_u128(0x90);
+    let zone = new_pour(engine.board(), id, outline, CopperLayer::Top).unwrap();
+    assert!(zone.is_pour());
+    assert_eq!((zone.net, zone.layer.as_str()), (3, "TopCopper"));
+    assert_eq!(zone.clearance, 0.0, "follows the board's clearance");
+    assert_eq!(zone.pour_clearance_mm(engine.board()), 0.2);
+    engine.execute(place_zone(zone)).unwrap();
+    assert_eq!(engine.board().zones.len(), 1);
+    engine.undo().unwrap();
+    assert_eq!(serde_json::to_string(engine.board()).unwrap(), before);
+
+    let flat = rectangle(Point::new(1.0, 1.0), Point::new(4.0, 1.0));
+    assert!(new_pour(engine.board(), id, flat, CopperLayer::Top).is_none());
+}

@@ -1,6 +1,6 @@
 [package]
 name = "pcb-geom"
-description = "Integer-nanometre board geometry: R-tree index, hit-test, union-find and spanning tree"
+description = "Integer-nanometre board geometry: R-tree index, hit-test, union-find, spanning tree, polygon booleans and pour fills"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,7 @@ license.workspace = true
 
 # UI-free: reads the f64-mm board model, computes in integer nm.
 [dependencies]
+i_overlay = { version = "9.1", default-features = false }
 rstar = "0.12"
 signex-types.workspace = true
 uuid.workspace = true

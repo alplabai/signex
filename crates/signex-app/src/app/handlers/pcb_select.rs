@@ -295,9 +295,10 @@ fn sync_drag_preview(
     if !canvas.previews_drag_of(&carry.footprints) {
         // Once per carry: the board without what it carries.
         let rest = board_without(board, &carry.footprints);
-        let base = PcbSnapshot::from_board_with_view(&rest, view);
+        let fills = pcb_geom::zone_fills(&rest);
+        let base = PcbSnapshot::from_board_with_view(&rest, view).with_zone_fills(&fills);
         let base = match ratsnest {
-            Some((cache, path)) => cache.apply_uncached(path, &rest, base),
+            Some((cache, path)) => cache.apply_uncached(path, &rest, &fills, base),
             None => base,
         };
         canvas.begin_drag_preview(carry.footprints.clone(), base);
