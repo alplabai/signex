@@ -21,6 +21,7 @@ fn arm_string(app: &mut Signex, path: &Path) {
         points: Vec::new(),
         cursor: None,
         route: None,
+        paused: None,
     });
 }
 

@@ -145,3 +145,9 @@ pcb-prim-refused = { $what } was not changed: { $why }
 pcb-prim-not-a-number = "{ $text }" is not a length or angle.
 pcb-prim-board-gone = The board is no longer open, so { $what } was not changed.
 pcb-prim-no-net-there = There is no netted copper there; the net was not changed.
+pcb-prim-not-positive = the value must be above zero
+
+## While a placement tool is armed (#2393): the object about to be placed.
+pcb-prim-placing = Next to place
+pcb-prim-placing-hint = Press Tab to pause placing and change these values for the next placements.
+pcb-prim-placing-paused = Placing is paused. Enter or Tab goes on placing with these values; Esc puts the previous values back.

@@ -39,6 +39,9 @@ pub struct InteractionState {
     pub pcb_carry: Option<crate::pcb_canvas::PcbCarry>,
     /// The board placement tool armed and the shape it is drawing (#2373).
     pub pcb_tool: Option<crate::app::handlers::pcb_tool::BoardToolSession>,
+    /// The values the board placement tools place with, set in Properties
+    /// while one is armed (#2393); kept for the session.
+    pub pcb_tool_defaults: crate::app::handlers::pcb_tool::BoardToolDefaults,
     /// A guide armed by the board panel's Place, waiting for the click on
     /// the main window's board that sets it (#2374): the board and the kind.
     pub pcb_guide_place: Option<(std::path::PathBuf, signex_types::pcb_options::GuideKind)>,

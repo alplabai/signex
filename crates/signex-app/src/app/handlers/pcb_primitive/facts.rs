@@ -105,13 +105,25 @@ impl Signex {
         target: PrimitiveTarget,
         editability: Editability,
     ) -> Option<PrimitiveCommon> {
-        let i18n = &*self.ui_state.i18n;
         let nets: Option<Vec<u32>> = target
             .items
             .iter()
             .map(|i| item_on_board(board, *i).then(|| pcb_geom::item_net(board, *i).unwrap_or(0)))
             .collect();
         let shared_net = shared(nets?.into_iter());
+        Some(self.primitive_common_on(board, target, editability, shared_net))
+    }
+
+    /// The facts every kind shares, for items on `shared_net` (`None`: they
+    /// differ).
+    pub(super) fn primitive_common_on(
+        &self,
+        board: &PcbBoard,
+        target: PrimitiveTarget,
+        editability: Editability,
+        shared_net: Option<u32>,
+    ) -> PrimitiveCommon {
+        let i18n = &*self.ui_state.i18n;
         let name_of = |n: u32| {
             board
                 .nets
@@ -177,13 +189,14 @@ impl Signex {
         } else {
             editability
         };
-        Some(PrimitiveCommon {
+        PrimitiveCommon {
             drafts: if panel.draft_target.as_ref() == Some(&target) {
                 panel.drafts.clone()
             } else {
                 Default::default()
             },
             picking_net: panel.net_pick.as_ref() == Some(&target),
+            placement_paused: false,
             show_more: panel.show_more,
             search: panel.search.clone(),
             target,
@@ -191,7 +204,7 @@ impl Signex {
             net_info,
             nets,
             net,
-        })
+        }
     }
 
     /// The active project's net classes, the table the schematic uses.
@@ -215,7 +228,7 @@ fn item_on_board(board: &PcbBoard, item: ItemRef) -> bool {
     }
 }
 
-fn track_facts(
+pub(super) fn track_facts(
     board: &PcbBoard,
     common: PrimitiveCommon,
     tracks: &[&Segment],
@@ -253,7 +266,12 @@ fn track_facts(
     }
 }
 
-fn via_facts(board: &PcbBoard, common: PrimitiveCommon, vias: &[&Via], i18n: &I18n) -> ViaFacts {
+pub(super) fn via_facts(
+    board: &PcbBoard,
+    common: PrimitiveCommon,
+    vias: &[&Via],
+    i18n: &I18n,
+) -> ViaFacts {
     let stack = signex_renderer::pcb::board_copper_layers(&board.layers);
     let span = shared(
         vias.iter()

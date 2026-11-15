@@ -2,10 +2,13 @@
 //! draft until Enter; Enter, a dropdown pick or a net picked on the board
 //! is one board undo step through `execute_board_commands`. The commands
 //! come from `signex_engine::pcb::primitive_edit`; a refusal changes
-//! nothing and says why in the Messages panel.
+//! nothing and says why in the Messages panel. An edit of the object a
+//! placement tool is about to place sets the tool's value instead (#2393,
+//! `pcb_tool::form`).
 
 mod facts;
 mod links;
+mod placement;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -95,6 +98,10 @@ impl Signex {
                 if let Some(text) = typed {
                     self.submit_primitive_text(target, *field, &text);
                 }
+                // Enter in the paused form goes on placing (#2393).
+                if target.is_placement() && self.is_board_tool_paused() {
+                    self.resume_board_tool();
+                }
             }
             M::LayerPicked { target, layer } => {
                 self.apply_primitive_edit(
@@ -129,7 +136,7 @@ impl Signex {
     }
 
     /// Enter in `field`: read the typed text and apply it.
-    fn submit_primitive_text(
+    pub(crate) fn submit_primitive_text(
         &mut self,
         target: &PrimitiveTarget,
         field: PrimitiveField,
@@ -158,6 +165,10 @@ impl Signex {
         edit: PrimitiveEdit,
         what: MessageId,
     ) {
+        if target.is_placement() {
+            self.edit_board_tool_value(&edit, what);
+            return;
+        }
         let Some(engine) = self.document_state.board_engine(&target.board) else {
             let name = t!(self.ui_state.i18n, what).into_string();
             let line = t!(self.ui_state.i18n, ids::PCB_PRIM_BOARD_GONE, "what" => name);
@@ -188,7 +199,7 @@ impl Signex {
         }
     }
 
-    fn refuse_primitive_edit(&self, what: MessageId, why: String) {
+    pub(crate) fn refuse_primitive_edit(&self, what: MessageId, why: String) {
         let name = t!(self.ui_state.i18n, what).into_string();
         let line = t!(
             self.ui_state.i18n,

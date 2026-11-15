@@ -120,4 +120,8 @@ define_ids! {
     PCB_PRIM_NOT_A_NUMBER = "pcb-prim-not-a-number";
     PCB_PRIM_BOARD_GONE = "pcb-prim-board-gone";
     PCB_PRIM_NO_NET_THERE = "pcb-prim-no-net-there";
+    PCB_PRIM_PLACING = "pcb-prim-placing";
+    PCB_PRIM_PLACING_HINT = "pcb-prim-placing-hint";
+    PCB_PRIM_PLACING_PAUSED = "pcb-prim-placing-paused";
+    PCB_PRIM_NOT_POSITIVE = "pcb-prim-not-positive";
 }

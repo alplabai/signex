@@ -11,11 +11,28 @@ use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 /// The board and the selected items a panel was built for. Every edit
 /// message carries it, so a selection change in between cannot send the
-/// edit to other items.
+/// edit to other items. No items: the object the placement tool armed on
+/// the board is about to place (#2393).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrimitiveTarget {
     pub board: PathBuf,
     pub items: Vec<ItemRef>,
+}
+
+impl PrimitiveTarget {
+    /// The object the tool armed on `board` places next.
+    pub fn placement(board: PathBuf) -> Self {
+        Self {
+            board,
+            items: Vec::new(),
+        }
+    }
+
+    /// Whether the panel shows the object about to be placed: its edits set
+    /// the tool's values, not the board.
+    pub fn is_placement(&self) -> bool {
+        self.items.is_empty()
+    }
 }
 
 /// A typed field of a primitive panel.
@@ -127,6 +144,8 @@ pub struct PrimitiveCommon {
     pub search: String,
     /// The pick button is waiting for a click on the board.
     pub picking_net: bool,
+    /// Placing is paused for these values to be edited (Tab, #2393).
+    pub placement_paused: bool,
 }
 
 impl PrimitiveCommon {

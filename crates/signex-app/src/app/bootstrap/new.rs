@@ -703,6 +703,7 @@ impl Signex {
                 pcb_selections: std::collections::HashMap::new(),
                 pcb_carry: None,
                 pcb_tool: None,
+                pcb_tool_defaults: Default::default(),
                 pcb_guide_place: None,
                 pcb_ratsnest: Default::default(),
                 pcb_drc: Default::default(),

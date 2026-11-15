@@ -226,8 +226,12 @@ impl Signex {
             stats_key: Some(key),
             ..crate::panels::PcbBoardSummary::with_stats(board, tab.title.clone(), selected, stats)
         };
-        let component = self.pcb_component_facts(&tab.path, board);
-        let primitive = self.pcb_primitive_facts(&tab.path, board);
+        // An armed placement tool shows what it places next (#2393).
+        let placing = self.pcb_placement_facts(&tab.path, board);
+        let component = self
+            .pcb_component_facts(&tab.path, board)
+            .filter(|_| placing.is_none());
+        let primitive = placing.or_else(|| self.pcb_primitive_facts(&tab.path, board));
         Some(
             summary
                 .with_footprint(footprint)

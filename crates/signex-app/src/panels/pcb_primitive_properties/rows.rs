@@ -185,6 +185,9 @@ pub(super) fn field<'a>(
         .padding(SP.s)
         .style(form_look::text_input_style)
         .width(Length::Fill);
+    if common.target.is_placement() && super::is_placement_focus(field) {
+        input = input.id(super::PLACEMENT_INPUT_ID.clone());
+    }
     if common.is_editable() {
         let target = common.target.clone();
         let submitted = PcbPrimitiveMsg::FieldSubmitted {

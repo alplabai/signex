@@ -5,11 +5,12 @@
 //! `run_placement`, built by `signex_engine::pcb::draw`. What the next click
 //! adds follows the pointer, drawn by the board renderer in its layer's
 //! colour and dimmed. Esc or a right-click ends the shape being drawn, and
-//! then the tool; a tab switch leaves it behind.
+//! then the tool; a tab switch leaves it behind. Properties shows what the
+//! next click places, and Tab pauses placing to edit it (`form`, #2393).
 
 use std::path::PathBuf;
 
-use signex_engine::pcb::draw;
+use signex_engine::pcb::{BoardCommand, BoardItem, draw};
 use signex_i18n::{ids, t};
 use signex_renderer::pcb::PcbSnapshot;
 use signex_types::pcb::{PcbBoard, Point};
@@ -21,11 +22,17 @@ use crate::app::pcb_tools::BoardPlaceTool;
 use crate::pcb_canvas::{carried_board, snap_point};
 
 mod area;
+mod form;
 mod route;
 mod string;
 
+pub(crate) use form::has_form;
+pub use form::{BoardToolDefaults, PlacementPause};
+
 #[cfg(test)]
 mod area_tests;
+#[cfg(test)]
+mod form_tests;
 #[cfg(test)]
 mod route_tests;
 #[cfg(test)]
@@ -49,6 +56,9 @@ pub struct BoardToolSession {
     pub cursor: Option<Point>,
     /// The layer, width and net of the track run being drawn.
     pub route: Option<draw::TrackStyle>,
+    /// Tab paused placing for the values to be edited in Properties (#2393);
+    /// what Esc puts back.
+    pub paused: Option<PlacementPause>,
 }
 
 impl BoardToolSession {
@@ -83,6 +93,7 @@ impl Signex {
             points: Vec::new(),
             cursor: None,
             route: None,
+            paused: None,
         });
         crate::diagnostics::log_info(t!(self.ui_state.i18n, tool.texts().1).into_string());
         self.refresh_pcb_highlight();
@@ -115,9 +126,13 @@ impl Signex {
         }
     }
 
-    /// Esc or a right-click: drop the shape being drawn, or end the tool
-    /// when none is. Whether a tool took it.
+    /// Esc or a right-click: undo the edits of a pause and go on placing,
+    /// else drop the shape being drawn, or end the tool when none is.
+    /// Whether a tool took it.
     pub(crate) fn step_back_board_tool(&mut self) -> bool {
+        if self.revert_board_tool_pause() {
+            return true;
+        }
         let Some(session) = self.own_board_tool_mut() else {
             return false;
         };
@@ -176,13 +191,22 @@ impl Signex {
         let Some(tool) = self.own_board_tool().map(|s| s.tool) else {
             return false;
         };
+        if self.is_board_tool_paused() {
+            // A paused tool places nothing; the net pick of its form still
+            // takes the click.
+            return self.interaction_state.pcb_primitive.net_pick.is_none();
+        }
         let Some(board) = self.active_pcb() else {
             return false;
         };
         let at = self.board_tool_point(board, at);
         match tool {
             BoardPlaceTool::Via => {
-                let command = draw::place_via(board, Uuid::now_v7(), at);
+                let defaults = &self.interaction_state.pcb_tool_defaults;
+                let via = defaults.via(board, Uuid::now_v7(), at);
+                let command = BoardCommand::AddItems {
+                    items: vec![BoardItem::Via(via)],
+                };
                 self.run_placement("Via", Ok(vec![command]));
             }
             BoardPlaceTool::Track => self.route_clicked(at),
@@ -215,7 +239,10 @@ impl Signex {
         let cursor = session.cursor?;
         let mut preview = carried_board(board, &Default::default(), Point::new(0.0, 0.0));
         match session.tool {
-            BoardPlaceTool::Via => preview.vias.push(draw::new_via(board, Uuid::nil(), cursor)),
+            BoardPlaceTool::Via => {
+                let defaults = &self.interaction_state.pcb_tool_defaults;
+                preview.vias.push(defaults.via(board, Uuid::nil(), cursor));
+            }
             BoardPlaceTool::Track => self.route_preview(session, board, cursor, &mut preview),
             BoardPlaceTool::TextString => self.string_preview(cursor, &mut preview),
             BoardPlaceTool::Fill | BoardPlaceTool::SolidRegion | BoardPlaceTool::Keepout => {

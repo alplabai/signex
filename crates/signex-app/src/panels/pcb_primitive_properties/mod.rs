@@ -7,6 +7,10 @@
 //! The header (kind, count, search) is this module's own; the board panel
 //! (#2353) and the component panel (#2354) carry the same shape, and the
 //! three meet in `pcb_board_properties::view`, which picks the panel.
+//!
+//! While a board placement tool is armed the same panel shows the object it
+//! places next (#2393): its target has no items, and its edits set the
+//! tool's values instead of the board.
 
 mod facts;
 mod net_info;
@@ -34,6 +38,16 @@ use crate::styles::{Spacing, TypeScale, ti, tokens::resolve};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
+
+/// Widget id of the field Tab focuses while placing (#2393): a via's
+/// Diameter, a track's Width.
+pub static PLACEMENT_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::widget::Id::new("signex.pcb_placement_field"));
+
+/// Whether `field` is the one Tab focuses while placing.
+pub fn is_placement_focus(field: PrimitiveField) -> bool {
+    matches!(field, PrimitiveField::Diameter | PrimitiveField::Width)
+}
 
 /// An event of a primitive panel.
 #[derive(Debug, Clone, PartialEq)]
@@ -97,6 +111,13 @@ pub fn view<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<
     if common.picking_net {
         notes = notes.push(note(ids::PCB_PRIM_PICKING_NET));
     }
+    if common.target.is_placement() {
+        notes = notes.push(note(if common.placement_paused {
+            ids::PCB_PRIM_PLACING_PAUSED
+        } else {
+            ids::PCB_PRIM_PLACING_HINT
+        }));
+    }
     if !common.drafts.is_empty() {
         notes = notes.push(note(ids::PCB_PRIM_ENTER_HINT));
     }
@@ -113,7 +134,7 @@ pub fn view<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<
 fn header<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
     let count = facts.common().target.items.len();
-    let (title, summary) = match facts {
+    let (title, mut summary) = match facts {
         PcbPrimitiveFacts::Track(_) => (
             ids::PCB_PRIM_TRACK_TITLE,
             t!(i18n, ids::PCB_PRIM_TRACK_COUNT, "count" => count),
@@ -127,6 +148,9 @@ fn header<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<'a
             t!(i18n, ids::PCB_PRIM_PAD_COUNT, "count" => count),
         ),
     };
+    if facts.common().target.is_placement() {
+        summary = t!(i18n, ids::PCB_PRIM_PLACING);
+    }
     let ink = ti(ctx.tokens.text);
     let muted = resolve(&ctx.tokens).ink3;
     let semibold = iced::Font {
