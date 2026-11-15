@@ -565,7 +565,9 @@ mod tests {
     ///   not by a match arm.
     /// - **no model concept** — `reset_local_coordinates` resets a local
     ///   coordinate origin, and the app has none (no relative origin, no
-    ///   delta readout). `cycle_wiring_mode` cycles how dragged wires bend,
+    ///   delta readout). The document's `PageOrigin`
+    ///   (`PanelMsg::SetPageOrigin`) is a different thing, a saved sheet
+    ///   setting, so this id must not be wired to it. `cycle_wiring_mode` cycles how dragged wires bend,
     ///   but a drag stretches its wires one fixed way; the corner rule only
     ///   steers drawing (`cycle_wire_bus_graphic_mode`). The copy-attributes
     ///   half of `copy_attributes_or_add_vertex` does not exist (#1669).
