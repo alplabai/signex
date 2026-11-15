@@ -23,7 +23,9 @@ partial last line, a line of a newer version) goes to standard error. See
 `<project>` is a `.snxprj` (or a loose `.snxsch`). The exit code is `0` when
 every command was ok, `1` when a command was refused or failed, `2` for a
 usage error, a project that cannot be opened or a run that cannot be placed
-(`--attach` or `--headless` below, an unsafe token file).
+(`--attach` or `--headless` below, an unsafe token file), and `2` for an
+internal error (the run's thread could not start, or the run panicked; the
+panic message is on standard error).
 
 A run works in one of two places (#1924): in a running Signex that has the
 project open, or headless, as described above. See "Working through a running
