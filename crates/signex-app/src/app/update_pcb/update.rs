@@ -369,15 +369,17 @@ impl Signex {
         }
     }
 
+    /// Messages stays en-US whatever the UI language.
     pub(super) fn log_update_pcb_refused(&self, why: &str) {
         crate::diagnostics::log_warning(
-            t!(self.ui_state.i18n, ids::UPDATE_PCB_REFUSED, "why" => why).into_string(),
+            signex_i18n::I18n::en_us()
+                .message_plain(ids::UPDATE_PCB_REFUSED, &[("why", why.into())]),
         );
     }
 
     /// Update PCB cannot start: say why in Messages and on the notice card.
     fn refuse_update_pcb(&mut self, why: MessageId) -> Task<Message> {
-        self.log_update_pcb_refused(&self.update_pcb_text(why));
+        self.log_update_pcb_refused(&signex_i18n::I18n::en_us().message_plain(why, &[]));
         self.document_state.error_notice = Some(ErrorNotice::new(ids::UPDATE_PCB_TITLE, why));
         Task::none()
     }

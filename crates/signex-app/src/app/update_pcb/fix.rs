@@ -134,6 +134,6 @@ impl Signex {
 
     fn log_update_pcb_fix(&self, id: signex_i18n::MessageId) {
         // The log stays English under any UI language.
-        crate::diagnostics::log_warning(signex_i18n::I18n::en_us_ref().message_plain(id, &[]));
+        crate::diagnostics::log_warning(signex_i18n::I18n::en_us().message_plain(id, &[]));
     }
 }
