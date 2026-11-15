@@ -1,6 +1,6 @@
 # Hexagonal architecture, DDD and the signex AppCore design: a sourced reference
 
-Prepared 2026-11-13 for epic #2326 and the ADR-0001 amendment (the new A4; amended A1, A2, A3.2, D1, D5, D8 and three Part C bullets). It began as a review of a first draft of that amendment. The ADR adopts most of its recommendations; §8 lists the ones still open (the handler ratchet of row 10 and the shared-kernel naming of row 11).
+Prepared 2026-11-13 for epic #2326: [ADR-0006](../adr-0006-application-core.md) (the application core) and the matching ADR-0001 amendment notes (A1, A2, A3.2, D1, D5, D8 and three Part C bullets). It began as a review of a first draft of that amendment. The ADRs adopt most of its recommendations; §8 lists the one still open (the handler ratchet of row 10).
 
 **Method and clean-room note.** Only articles, public book summaries, official documentation and blog posts were read. No source code of any project was read, and no GPL project material. Licences are given for every code-bearing project cited; where GitHub's licence detection and the project's own text differ, both are given. Numbered references are at the end. Text marked *(analysis)* is a judgement with no source.
 
@@ -41,14 +41,14 @@ Prepared 2026-11-13 for epic #2326 and the ADR-0001 amendment (the new A4; amend
 
 ## 2. Domain-Driven Design: Evans and Vernon
 
-Evans's own *DDD Reference* (2015, CC BY 4.0; its pattern summaries are CC BY 3.0) is the primary text used here [7].
+Evans's own *DDD Reference* (2015, CC BY 4.0; its pattern summaries are CC BY 3.0) is the primary text used here [7]. It is paraphrased, not quoted.
 
 ### 2.1 Aggregates and consistency boundaries
 
 - **Evans** [7]:
   - Cluster entities and value objects into aggregates, each with one root. Outside objects hold references only to the root.
-  - The root, or "some designated framework mechanism", enforces the invariants.
-  - "Use the same aggregate boundaries to govern transactions and distribution. Within an aggregate boundary, apply consistency rules synchronously. Across boundaries, handle updates asynchronously."
+  - The root, or a framework mechanism set aside for the purpose, enforces the invariants.
+  - The aggregate boundary is also the transaction and distribution boundary: rules inside one aggregate are kept consistent at once, while changes that span aggregates are applied asynchronously.
 - **Vernon** (*Effective Aggregate Design*, 2011) [8][9]:
   - "Rule: Model True Invariants In Consistency Boundaries". An invariant "is a business rule that must always be consistent", in the transactional sense.
   - "Rule: Design Small Aggregates".
@@ -59,9 +59,9 @@ Evans's own *DDD Reference* (2015, CC BY 4.0; its pattern summaries are CC BY 3.
 
 ### 2.2 Domain services vs application services
 
-- **Domain service** (Evans): when a significant domain process "is not a natural responsibility of an entity or value object", it becomes a standalone service operation, named in the ubiquitous language [7].
+- **Domain service** (Evans): when an important domain process does not belong naturally to any entity or value object, it becomes a standalone service operation, named in the ubiquitous language [7].
 - **Application layer**: Fowler quotes Evans: "This layer is kept thin. It does not contain business rules or knowledge, but only coordinates tasks and delegates work" [10]. Graça puts it more bluntly: "domain logic should stay out of the application layer!" [6]. Vernon's application service "resolve[s] dependencies", loads aggregates and runs the transaction, and does not license changing two aggregates in one request [9].
-- **Layered Architecture** (Evans): isolate the domain model "from the user interface, application, and infrastructure code". Evans names Hexagonal Architecture as a pattern that "may serve as well or better" [7].
+- **Layered Architecture** (Evans): keep the domain model apart from the user interface, the application code and the infrastructure. Evans names Hexagonal Architecture as an alternative that can do this job at least as well [7].
 
 ### 2.3 Anemic domain model, transaction script, and data-plus-engine
 
@@ -71,7 +71,7 @@ Evans's own *DDD Reference* (2015, CC BY 4.0; its pattern summaries are CC BY 3.
 
 ### 2.4 Domain events
 
-- **Evans** [7]: model domain activity "as a series of discrete events". Domain events are "distinct from system events that reflect activity within the software itself".
+- **Evans** [7]: model what happens in the domain as a sequence of discrete events. Domain events are not the same thing as system events, which record what the software itself is doing.
 - **Vernon** (2011): "An aggregate command method publishes a domain event that is in time delivered to one or more asynchronous subscribers", through an in-process singleton `DomainEventPublisher` [9].
 - **Immediate vs deferred dispatch.**
   - Dahan's static `DomainEvents.Raise` dispatches immediately. Microsoft's .NET architecture guide notes that this "makes testing and debugging more difficult" [13].
@@ -83,7 +83,7 @@ Evans's own *DDD Reference* (2015, CC BY 4.0; its pattern summaries are CC BY 3.
 
 ### 2.5 Bounded contexts and shared kernel
 
-- **Shared Kernel** (Evans) is a relationship *between bounded contexts or teams*: "Designate with an explicit boundary some subset of the domain model that the teams agree to share. Keep this kernel small". Changes to it need "consultation with the other team" [7].
+- **Shared Kernel** (Evans) is a relationship *between bounded contexts or teams*: the teams mark out, with an explicit boundary, a part of the domain model they agree to share, and keep that part small. A change to it is made only after the other team has been consulted [7].
 - Graça likewise asks for a shared kernel "as minimal as possible" [6].
 
 ---
@@ -204,8 +204,8 @@ Cannon's definition [19] and Crux's `resolve` [18] both keep the core synchronou
 ### 7.4 Errors across ports
 
 - The anyhow README says to use anyhow "if you don't care what error type your functions return... common in application code", and thiserror "if you are a library that wants to design your own dedicated error type(s)" (anyhow: Apache-2.0 or MIT) [27].
-- *(analysis)* The core and `signex-commands` are libraries, so they need typed errors (thiserror), and those errors must serialise for the wire (epic D11) with i18n keys (epic D6). Only binaries such as the CLI `main` should use anyhow.
-- The epic's `query -> Result<Value, QueryError>` keeps a typed error at the port. `QueryError` must itself follow the rule above: serialisable, with i18n keys.
+- *(analysis)* The core and `signex-commands` are libraries, so they need typed errors (thiserror), and those errors must serialise for the wire (epic D11) and carry a `Translatable` from the UI-free `signex-i18n-ids` crate (epic D6, ADR-0006), never rendered text. Only binaries such as the CLI `main` should use anyhow.
+- The epic's `query -> Result<Value, QueryError>` keeps a typed error at the port. `QueryError` must itself follow the rule above: serialisable, with a `Translatable`.
 
 ### 7.5 Crate boundaries as enforcement
 
@@ -243,7 +243,6 @@ ADR D8 already prescribes the right shape: the worker sends over a channel, and 
 | quinn-proto | GitHub reports Apache-2.0; README lists MIT too | A sans-IO state machine | README [25] |
 | rustls | Apache-2.0 OR ISC OR MIT | Caller-driven IO | docs.rs [26] |
 | iced | MIT | `Task` as a runtime-performed action | docs.rs [17] |
-| helix | MPL-2.0 | not used; no architecture doc read | — |
 
 ### 7.9 What Rust makes cheap and what it makes expensive
 
@@ -267,14 +266,14 @@ ADR D8 already prescribes the right shape: the worker sends over a channel, and 
 
 Verdict scale: **C** = consistent with the literature, **P** = partly consistent, **I** = inconsistent.
 
-This section keeps only the recommendations that are still relevant to ADR-0001 A4 and D5. The row numbers are kept so that §10 can refer to them. The rest of an earlier check, written against a draft of the amendment, was resolved by the ADR text and is not repeated here.
+This section keeps only the recommendations that are still relevant to ADR-0006 (the application core, first drafted as ADR-0001 A4) and ADR-0001 D5. The row numbers are kept so that §10 can refer to them. The rest of an earlier check, written against a draft of the amendment, was resolved by the ADR text and is not repeated here.
 
-| # | Element | Verdict | Why | Recommendation | Status in ADR-0001 | Counter-argument: when the recommendation is wrong for signex |
+| # | Element | Verdict | Why | Recommendation | Status in the ADRs | Counter-argument: when the recommendation is wrong for signex |
 |---|---|---|---|---|---|---|
-| 2 | Documents as aggregates, mutated only through the engine command path | **P** | It fits Evans's root and transaction rule [7]. Two gaps: (a) only schematics go through `signex-engine` today, while symbol, footprint and Component rows use app-local history; (b) ECO, Update PCB, back-annotation and hierarchy renames change several documents at once, which breaks Vernon's one-aggregate-per-transaction rule [9]. | Record that cross-document commands are one undo group, justified by Vernon's user-aggregate affinity (one person per desktop session) [9], and that the aggregate rule covers schematics only until #661's `History<S>` slice lands. | Adopted: the A4 DDD table states both. | Attach mode puts a second actor on the same documents, which weakens affinity. The person-busy targets passed as data in the arguments are what keep the exception honest. |
-| 8 | The wasm32 constraint (epic D10) | **P** (the build alone is weaker than it sounds) | No hexagonal source requires it. It is enforcement, like rust-analyzer's "never does IO" invariant [21]. On `wasm32-unknown-unknown`, `std::fs` compiles and "always return[s] errors" at run time, and `std::thread::spawn` compiles and "will panic" [30]. The build catches native dependencies (libgit2, mio and the like), not `std::fs`. | Add `disallowed-methods` and `disallowed-types` for `std::fs::*`, `std::thread::spawn`, `std::process`, `std::net` and `tokio::*` on the core and domain crates [31]. Keep the wasm32 check, described as "no native-only dependencies". | Lint adopted in ADR-0001 D5: a source guard while the core lives in `signex-app`, the clippy lint after the lift. No wasm32 gate now: epic D10 was decided 2026-11-15 as "not now, native first". | YAGNI: no web front end is scheduled. The lint alone gives the IO-free guarantee now. The wasm32 job can wait until slice S-IO actually begins. |
-| 10 | Risk that command handlers moved into `AppCore` become a transaction script | **P** (a real risk) | Fowler's definition of Transaction Script is literally "each procedure handles a single request from the presentation" [11]. Per-command handlers *are* procedures, and that is fine for an application layer as long as they hold no rules [6][10]. The risk is that defaults, designator assignment, connectivity or placement maths drift into handlers. | Add a review rule and a ratchet. A core handler only (a) resolves operands, (b) calls engine or domain functions, (c) groups the undo, and (d) assembles events and effects. A loop over document items, or any geometry arithmetic, in a handler is a smell that moves into an engine. Extend `check_layer_ratchet.sh` to count such patterns under `app/core/`. | Review rule adopted ("Handlers stay thin" in A4). The ratchet is not adopted; it stays open. | A ratchet on heuristics produces false positives. Review discipline may be enough for two maintainers. |
-| 11 | `signex-types` as the "shared kernel" | **P** | Evans's shared kernel is a small subset of the model shared *between bounded contexts or teams*, changed only after consultation [7]. `signex-types` is the whole model's data, shared inside one team. | Either call it "the common domain types", or keep "shared kernel" only for the schematic-to-PCB contract of A3.1 (`Netlist`), which is a genuine context seam. | Not addressed: the A4 table keeps "Shared kernel: `signex-types` (unchanged)". Open. | — |
+| 2 | Documents as aggregates, mutated only through the engine command path | **P** | It fits Evans's root and transaction rule [7]. Two gaps: (a) only schematics go through `signex-engine` today, while symbol, footprint and Component rows use app-local history; (b) ECO, Update PCB, back-annotation and hierarchy renames change several documents at once, which breaks Vernon's one-aggregate-per-transaction rule [9]. | Record that cross-document commands are one undo group, justified by Vernon's user-aggregate affinity (one person per desktop session) [9], and that the aggregate rule covers schematics only until #661's `History<S>` slice lands. | Adopted: the ADR-0006 DDD table states both. | Attach mode puts a second actor on the same documents, which weakens affinity. The person-busy targets passed as data in the arguments are what keep the exception honest. |
+| 8 | The wasm32 constraint (epic D10) | **P** (the build alone is weaker than it sounds) | No hexagonal source requires it. It is enforcement, like rust-analyzer's "never does IO" invariant [21]. On `wasm32-unknown-unknown`, `std::fs` compiles and "always return[s] errors" at run time, and `std::thread::spawn` compiles and "will panic" [30]. The build catches native dependencies (libgit2, mio and the like), not `std::fs`. | Add `disallowed-methods` and `disallowed-types` for `std::fs::*`, `std::thread::spawn`, `std::process`, `std::net` and `tokio::*` on the core and domain crates [31]. Keep the wasm32 check, described as "no native-only dependencies". | Lint adopted in ADR-0006, "Enforcement": a source guard while the core lives in `signex-app`, the clippy lint after the lift. No wasm32 gate now: epic D10 was decided 2026-11-15 as "not now, native first". | YAGNI: no web front end is scheduled. The lint alone gives the IO-free guarantee now. The wasm32 job can wait until slice S-IO actually begins. |
+| 10 | Risk that command handlers moved into `AppCore` become a transaction script | **P** (a real risk) | Fowler's definition of Transaction Script is literally "each procedure handles a single request from the presentation" [11]. Per-command handlers *are* procedures, and that is fine for an application layer as long as they hold no rules [6][10]. The risk is that defaults, designator assignment, connectivity or placement maths drift into handlers. | Add a review rule and a ratchet. A core handler only (a) resolves operands, (b) calls engine or domain functions, (c) groups the undo, and (d) assembles events and effects. A loop over document items, or any geometry arithmetic, in a handler is a smell that moves into an engine. Extend `check_layer_ratchet.sh` to count such patterns under `app/core/`. | Review rule adopted ("Handlers stay thin" in ADR-0006). The ratchet is not adopted; it stays open. | A ratchet on heuristics produces false positives. Review discipline may be enough for two maintainers. |
+| 11 | `signex-types` as the "shared kernel" | **P** | Evans's shared kernel is a small subset of the model shared *between bounded contexts or teams*, changed only after consultation [7]. `signex-types` is the whole model's data, shared inside one team. | Either call it "the common domain types", or keep "shared kernel" only for the schematic-to-PCB contract of A3.1 (`Netlist`), which is a genuine context seam. | Adopted in ADR-0006: its DDD table names `signex-types` "the common domain types" and keeps "shared kernel" for the A3.1 `Netlist` contract. The crate keeps its name. | — |
 
 ---
 
@@ -291,7 +290,7 @@ This section keeps only the recommendations that are still relevant to ADR-0001 
 ## 10. Risks of adopting this design
 
 1. **Persistence invariants turn into state machines.** Dirty marks, save ordering, the quit barrier and pending restores move across `complete` boundaries. A dropped transition silently loses work. The epic already flags slices 2, 3 and 5 as the high-risk ones.
-2. **Churn against open work.** The epic counts 2,755 `ui_state.` and 5,386 `document_state.` references. Long-lived strangler phases breed dual paths.
+2. **Churn against open work.** The references a slice must move keep growing; ADR-0006, "The cost of waiting", gives the counts and the commits they were measured at. Long-lived strangler phases breed dual paths.
 3. **The closed effect enum vs plugins.** S-P plugins cannot add IO kinds without a core change. Decide before S-P whether plugins get a generic `PluginEffect` variant.
 4. **Event granularity.** If `DocumentChanged { patch }` is too coarse, the projector over-invalidates and drags get slow. If it is too fine, events flood. Add a benchmark before slice 2 lands.
 5. **The transaction-script drift** described in item 10 of §8.
@@ -316,7 +315,7 @@ This keeps every structural benefit Cockburn's intent asks for [1] and drops the
 
 ## 12. Measurements (2026-11-15)
 
-Measured on origin/trunk content, macOS arm64, Rust 1.97.0, cold release build. ADR-0001 A4 cites these in short form.
+macOS arm64, Rust 1.97.0. Each block names the trunk commit it was measured at: `1bf5750dd` (2026-11-14) for the dependency tree, build, boot and IO counts; `f3d4efc75` (2026-11-15) for the parity counts. ADR-0006 cites these in short form.
 
 **Dependency tree.** Distinct crate versions on the normal-dependency edge:
 
@@ -339,19 +338,21 @@ awk '{t+=$2} END{print t}' unit-durations.txt                     # 2475
 
 **Boot time.** `time signex-cli run <project>.snxprj` with no commands, on a one-sheet project: first run 2.26 s, then 1.29, 1.29, 1.29, 1.29, 1.28 s (median of the warm runs 1.29 s). `signex-cli --help` takes 0.026 s, and so does `run` on a missing project. How the 1.29 s splits inside the boot (model construction, keymap load, font catalog, icon decode) is not measured. The run log shows `dropped an iced action a headless run does not perform kind="window"` three times.
 
-**Parity per command.** Ids with an operand handler, and how many of them also have a GUI arm in the bridge:
+**Parity per command** (at `f3d4efc75`; at `1bf5750dd` the same commands gave 34, 20, 240 and 175). Ids with an operand handler, how many of them also have a GUI arm in the bridge, the golden command count and the `gui_only` lines:
 
 ```sh
-cd crates/signex-app/src/app/command
-rg -o '^\s*\("([a-z_]+)",' -r '$1' operand_handlers.rs | sort -u > /tmp/oh.txt; wc -l < /tmp/oh.txt   # 34
-rg -o '"([a-z_]+)"' -r '$1' bridge.rs | sort -u > /tmp/br.txt
-comm -12 /tmp/oh.txt /tmp/br.txt | wc -l                                                            # 20
-rg -c '"id"' ../../../tests/golden/commands.json                                                   # 240
+T=f3d4efc75; d=crates/signex-app/src/app/command
+git show "${T}:$d/operand_handlers.rs" | rg -o '^\s*\("([a-z_]+)",' -r '$1' | sort -u > /tmp/oh.txt; wc -l < /tmp/oh.txt   # 34
+git show "${T}:$d/bridge.rs" | rg -o '"([a-z_]+)"' -r '$1' | sort -u > /tmp/br.txt
+comm -12 /tmp/oh.txt /tmp/br.txt | wc -l                                                                                  # 20
+git show "${T}:crates/signex-app/tests/golden/commands.json" | rg -c '"id"'                                               # 250
+git grep -c gui_only "${T}" -- crates/signex-app | awk -F: '{s+=$3} END{print s}'                                         # 184, in 6 files
+git show "${T}:crates/signex-app/src/keymap/testdata/catalog.golden.tsv" | rg -c gui_only                                  # 166
 ```
 
 The guards a command passes are `CommandMetadata::headless_refusal` (`keymap/catalog/mod.rs`), `missing_headless_operand` (`app/command/operands.rs`), `honest_status` (`signex-cli/src/session.rs`) and, on the agent channel, `allow::refusal` (`app/agent/allow.rs`).
 
-**Parity work so far.** Closed issues and PRs of headless-parity work, some of which A4 reuses (#1934, #2172): #1926 (runtime config root), #1927 (task driver for iced actions), #1929 (text measurer and font catalog), #1931 (file-dialog seams), #1932 (diagnostics and pref writes), #1934 (operand schema), #2170 (refuse GUI-only commands), #2172 (address documents without UI state), #2243 (attach or run headless); #2155 (run operands) in part. `git grep -c gui_only -- crates/signex-app` gives 175 lines in 6 files, 157 of them rows of `keymap/testdata/catalog.golden.tsv`.
+**Parity work so far.** Closed issues and PRs of headless-parity work, some of which ADR-0006 reuses (#1934, #2172): #1926 (runtime config root), #1927 (task driver for iced actions), #1929 (text measurer and font catalog), #1931 (file-dialog seams), #1932 (diagnostics and pref writes), #1934 (operand schema), #2170 (refuse GUI-only commands), #2172 (address documents without UI state), #2243 (attach or run headless); #2155 (run operands) in part.
 
 **IO on the update path.** Production `std::fs::` call sites under `crates/signex-app/src/app`: test files, comment lines and lines after a `#[cfg(test)]` in their file are excluded.
 

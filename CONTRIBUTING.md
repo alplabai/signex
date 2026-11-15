@@ -408,8 +408,9 @@ them, so the rest is on the author.
   state changes, and IO is returned as a `Task`, never run inline (the
   bounded `SaveBarrier` wait in ADR-0003 D2 is the sanctioned exception). No
   process-global app state. Message routers are exhaustive, with no `_` arm.
-  Once epic #2326 decides D5 (effects as data) and both maintainers sign off
-  on ADR-0001 A4, IO inside the application core is an `Effect` that the host
+  Inside the application core
+  ([ADR-0006](docs/architecture/adr-0006-application-core.md), in force once
+  it merges with both maintainers' approval), IO is an `Effect` that the host
   behind the calling front end runs; the GUI runs it as a `Task`.
 - **Messages:** contributors do not add `Message` variants. If a change needs
   a new message, open an issue that describes the event and the maintainers
