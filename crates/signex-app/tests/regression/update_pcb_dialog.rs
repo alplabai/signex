@@ -13,10 +13,15 @@ use super::*;
 
 const R4: Uuid = Uuid::from_u128(0x1312_4004);
 
-fn port(net: &str, x: f64, n: u128) -> Symbol {
-    let at = Point::new(x, 0.0);
+/// How far above its pin a port sits, mm.
+const PORT_RISE: f64 = 5.0;
+
+/// A power port above the pin at `(x, 0)`, wired down to it: a pin touching
+/// a port directly is not a connection (ADR-0002 D5.1).
+fn wired_port(sheet: &mut SchematicSheet, net: &str, x: f64, n: u128) {
+    let at = Point::new(x, -PORT_RISE);
     let lib_id = format!("power:{net}");
-    Symbol {
+    sheet.symbols.push(Symbol {
         uuid: Uuid::from_u128(0x2371_0000 + n),
         lib_id: lib_id.clone(),
         reference: format!("#PWR0{n}"),
@@ -26,23 +31,31 @@ fn port(net: &str, x: f64, n: u128) -> Symbol {
         is_power: true,
         val_text: Some(power_port_value_field(&lib_id, at)),
         ..Default::default()
-    }
+    });
+    sheet.wires.push(Wire {
+        uuid: Uuid::from_u128(0x2371_0100 + n),
+        start: Point::new(x, 0.0),
+        end: at,
+        stroke_width: 0.0,
+        color: None,
+        locked: false,
+        unknown_columns: Default::default(),
+    });
 }
 
-/// R1.1 and R3.1 on VCC, R2.2 and R4.2 on GND; R3 and R4 have no footprint.
-fn powered(lib: &Library) -> Vec<Symbol> {
-    vec![
-        part(lib, R3, "R3", 40.0, false),
-        part(lib, R4, "R4", 60.0, false),
-        port("VCC", 0.0, 1),
-        port("GND", 30.0, 2),
-        port("VCC", 40.0, 3),
-        port("GND", 70.0, 4),
-    ]
+/// R1.1 and R3.1 on VCC, R2.2 and R4.2 on GND; R3 and R4 have no footprint,
+/// so each power net reaches one pad on the board.
+fn powered(lib: &Library, sheet: &mut SchematicSheet) {
+    sheet.symbols.push(part(lib, R3, "R3", 40.0, false));
+    sheet.symbols.push(part(lib, R4, "R4", 60.0, false));
+    wired_port(sheet, "VCC", 0.0, 1);
+    wired_port(sheet, "GND", 30.0, 2);
+    wired_port(sheet, "VCC", 40.0, 3);
+    wired_port(sheet, "GND", 70.0, 4);
 }
 
 fn powered_list() -> Fixture {
-    let mut f = fixture_with(powered, None, ProjectDefaults::default());
+    let mut f = fixture_editing(powered, None, ProjectDefaults::default());
     new_board_and_list(&mut f);
     f
 }
