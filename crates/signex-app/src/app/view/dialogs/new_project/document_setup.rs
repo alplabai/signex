@@ -118,13 +118,13 @@ impl Signex {
             vec![hint],
             vec![
                 dialog_button(
-                    &s(i18n, ids::DIALOG_NEW_PROJECT_CANCEL),
+                    t!(i18n, ids::DIALOG_NEW_PROJECT_CANCEL),
                     DialogButtonKind::Cancel,
                     cancel,
                     tokens,
                 ),
                 dialog_button(
-                    &s(i18n, create),
+                    t!(i18n, create),
                     super::super::graphite::call_to_action(tokens),
                     state
                         .can_create()
