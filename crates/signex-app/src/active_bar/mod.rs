@@ -18,6 +18,7 @@ mod glyph_tests;
 mod glyphs;
 mod layout;
 mod planned;
+pub mod presets;
 
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
@@ -186,40 +187,7 @@ pub enum ActiveBarMsg {
     ScopedToWindow(iced::window::Id, Box<ActiveBarMsg>),
 }
 
-/// Maximum number of user-defined custom filter presets exposed in the
-/// Active Bar's filter dropdown and managed in the Properties panel.
-pub const CUSTOM_FILTER_PRESET_LIMIT: usize = 4;
-
-/// A user-defined named selection-filter preset. Persisted to
-/// `~/.config/signex/prefs.json` under `custom_filter_presets` and
-/// surfaced as a shortcut button in the Active Bar's filter dropdown.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct CustomFilterPreset {
-    pub name: String,
-    /// Stored as `Vec` (not `HashSet`) so the on-disk representation
-    /// has a stable order and a sensible JSON shape.
-    pub filters: Vec<SelectionFilter>,
-}
-
-impl CustomFilterPreset {
-    /// Snapshot the active filter set into a new preset with a default name.
-    pub fn capture(name: String, filters: &std::collections::HashSet<SelectionFilter>) -> Self {
-        // Keep the canonical order of `SelectionFilter::ALL` so two
-        // captures of the same set are byte-identical on disk.
-        let filters: Vec<SelectionFilter> = SelectionFilter::ALL
-            .iter()
-            .copied()
-            .filter(|f| filters.contains(f))
-            .collect();
-        Self { name, filters }
-    }
-
-    /// Realize the preset's `Vec` into a `HashSet` for assignment back
-    /// into `InteractionState::selection_filters`.
-    pub fn as_set(&self) -> std::collections::HashSet<SelectionFilter> {
-        self.filters.iter().copied().collect()
-    }
-}
+pub use presets::{CUSTOM_FILTER_PRESET_LIMIT, CustomFilterPreset, PresetKind};
 
 /// A footprint-editor selection-filter preset. Parallel to
 /// `CustomFilterPreset` but keyed on `SelectionFilterKind` (footprint

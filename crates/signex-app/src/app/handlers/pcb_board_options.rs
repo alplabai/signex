@@ -92,25 +92,44 @@ impl Signex {
                 self.say_pcb_options_refused(why);
             }
             BoardField::GuideX(id) => {
-                self.edit_pcb_board_options(|o| edit_guide(o, id, |g| set(&mut g.at.x, mm)));
+                self.edit_pcb_board_options(|o| {
+                    let x = o.origin.board_x(mm);
+                    edit_guide(o, id, |g| set(&mut g.at.x, x))
+                });
             }
             BoardField::GuideY(id) => {
-                self.edit_pcb_board_options(|o| edit_guide(o, id, |g| set(&mut g.at.y, mm)));
+                self.edit_pcb_board_options(|o| {
+                    let y = o.origin.board_y(mm);
+                    edit_guide(o, id, |g| set(&mut g.at.y, y))
+                });
             }
             BoardField::GridStep(id) => {
                 self.edit_pcb_board_options(|o| edit_grid(o, id, |g| set(&mut g.step_mm, mm)));
             }
             BoardField::GridOriginX(id) => {
-                self.edit_pcb_board_options(|o| edit_grid(o, id, |g| set(&mut g.origin.x, mm)));
+                self.edit_pcb_board_options(|o| {
+                    let x = o.origin.board_x(mm);
+                    edit_grid(o, id, |g| set(&mut g.origin.x, x))
+                });
             }
             BoardField::GridOriginY(id) => {
-                self.edit_pcb_board_options(|o| edit_grid(o, id, |g| set(&mut g.origin.y, mm)));
+                self.edit_pcb_board_options(|o| {
+                    let y = o.origin.board_y(mm);
+                    edit_grid(o, id, |g| set(&mut g.origin.y, y))
+                });
             }
             BoardField::SheetX => {
-                self.edit_pcb_board_options(|o| set(&mut o.sheet.origin.x, mm));
+                self.edit_pcb_board_options(|o| {
+                    let x = o.origin.board_x(mm);
+                    set(&mut o.sheet.origin.x, x)
+                });
             }
             BoardField::SheetY => {
-                self.edit_pcb_board_options(|o| set(&mut o.sheet.origin.y, mm));
+                // Typed as the bottom-left corner, Y up (#2384).
+                self.edit_pcb_board_options(|o| {
+                    let y = o.origin.board_y(mm) - o.sheet.height;
+                    set(&mut o.sheet.origin.y, y)
+                });
             }
             BoardField::SheetWidth => {
                 self.edit_pcb_board_options(|o| set(&mut o.sheet.width, mm));
@@ -125,7 +144,10 @@ impl Signex {
     /// Add a guide of `kind` through the board origin and select it.
     pub(crate) fn add_pcb_guide(&mut self, kind: GuideKind) {
         let id = Uuid::now_v7();
-        if self.add_pcb_guide_at(id, kind, Point::ZERO) {
+        let origin = self
+            .active_pcb()
+            .map_or(Point::ZERO, |b| b.options.origin.at);
+        if self.add_pcb_guide_at(id, kind, origin) {
             self.ui_state.pcb_board_panel.selected_guide = Some(id);
         }
     }

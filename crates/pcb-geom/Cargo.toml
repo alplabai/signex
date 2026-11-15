@@ -9,6 +9,7 @@ license.workspace = true
 # UI-free: reads the f64-mm board model, computes in integer nm.
 [dependencies]
 rstar = "0.12"
+serde.workspace = true
 signex-types.workspace = true
 uuid.workspace = true
 

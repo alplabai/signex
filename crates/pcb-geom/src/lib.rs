@@ -49,7 +49,7 @@ pub use rect::RectNm;
 pub use selection::{ClickMode, Selection, marquee_mode, marquee_select, pick, pick_filtered};
 pub use shape::Shape;
 pub use shape_gap::Separation;
-pub use staging::{Staging, footprint_extent, stage};
+pub use staging::{Staging, footprint_extent, stage, stage_up};
 pub use stats::BoardStats;
 pub use text::{TextPlacement, is_board_text_key, property_text_placement};
 pub use transform::{Placement, Side, pad_shape, pad_world_center, pad_world_rotation_deg};

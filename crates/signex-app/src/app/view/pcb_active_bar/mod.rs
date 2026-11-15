@@ -18,6 +18,7 @@ use signex_types::theme::ThemeId;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem, Metrics};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, MenuMetrics};
 
+use crate::active_bar::CustomFilterPreset;
 use crate::app::command::{CommandContext, is_enabled};
 use crate::app::pcb_tools::{BoardPlaceTool, ToolState};
 use crate::app::{Message, PcbBarMenu, PcbBarMsg, PcbMsg, Signex};
@@ -65,6 +66,7 @@ impl Signex {
             tid,
             &self.command_context(None),
             &self.ui_state.pcb_pick_filter,
+            &self.ui_state.pcb_filter_presets,
         );
         let panel_width = MenuMetrics::GRAPHITE.fitted_width(
             &entries,
@@ -342,9 +344,10 @@ pub(in crate::app::view) fn pcb_bar_menu_entries(
     tid: ThemeId,
     ctx: &CommandContext,
     filter: &pcb_geom::PickFilter,
+    presets: &[CustomFilterPreset<pcb_geom::PickKind>],
 ) -> Vec<DropdownEntry<Message>> {
     if menu == PcbBarMenu::Filter {
-        return filter::entries(i18n, filter);
+        return filter::entries(i18n, filter, presets);
     }
     menu_commands(menu)
         .iter()

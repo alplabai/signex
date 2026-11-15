@@ -36,6 +36,13 @@ impl Signex {
                 filter.set_all(!all);
                 self.refresh_pcb_highlight();
             }
+            PcbBoardMsg::FilterPresetAdded => task = self.add_pcb_filter_preset(),
+            PcbBoardMsg::FilterPresetApplied(idx) => self.apply_pcb_filter_preset(*idx),
+            PcbBoardMsg::FilterPresetRenamed(idx, name) => {
+                task = self.rename_pcb_filter_preset(*idx, name.clone());
+            }
+            PcbBoardMsg::FilterPresetUpdated(idx) => task = self.update_pcb_filter_preset(*idx),
+            PcbBoardMsg::FilterPresetRemoved(idx) => task = self.remove_pcb_filter_preset(*idx),
             PcbBoardMsg::SnapToGridsToggled => {
                 let snap = &mut self.ui_state.pcb_snap;
                 snap.to_grids = !snap.to_grids;

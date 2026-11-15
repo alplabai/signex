@@ -59,7 +59,10 @@ mod pcb_drc_tests;
 mod pcb_edit;
 #[cfg(test)]
 mod pcb_edit_tests;
+mod pcb_filter_presets;
 pub(crate) mod pcb_footprint_text;
+#[cfg(test)]
+mod pcb_origin_tests;
 mod pcb_parking;
 mod pcb_part_place;
 pub(crate) mod pcb_placement;

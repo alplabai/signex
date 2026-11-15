@@ -70,5 +70,11 @@ fn bad_options_are_refused_and_change_nothing() {
     let mut sheet = BoardOptions::default();
     sheet.sheet.height = -1.0;
     assert!(engine.execute(set(sheet)).is_err());
+    let mut origin = BoardOptions::default();
+    origin.origin.at.y = f64::NAN;
+    assert_eq!(
+        engine.execute(set(origin)),
+        Err(BoardCommandError::NonFinite { field: "origin y" })
+    );
     assert!(engine.board().options.is_default());
 }

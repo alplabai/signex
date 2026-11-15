@@ -108,6 +108,15 @@ pub enum PcbBoardMsg {
     FilterKindToggled(PickKind),
     /// The `All - On` chip: every kind on, or off when all are on.
     FilterAllToggled,
+    /// Save the chips that are on as a new preset (#2383).
+    FilterPresetAdded,
+    /// A preset was clicked: its kinds become the filter, and it is the one
+    /// the panel edits.
+    FilterPresetApplied(usize),
+    FilterPresetRenamed(usize, String),
+    /// Save the chips that are on into this preset.
+    FilterPresetUpdated(usize),
+    FilterPresetRemoved(usize),
     SnapToGridsToggled,
     SnapScopePicked(SnapScope),
     SnapObjectToggled(SnapObject),
@@ -183,6 +192,9 @@ pub struct PcbBoardSummary {
     /// The board opened read-only (a newer format).
     pub read_only: bool,
     pub filter: PickFilter,
+    /// The filter's saved presets and the one the panel edits (#2383).
+    pub presets: Vec<crate::active_bar::CustomFilterPreset<PickKind>>,
+    pub preset_tab: usize,
     pub snap: PcbSnapOptions,
     /// The fast grid preferences (#1672) the Grid Manager offers.
     pub fast_grids_mm: [f32; 2],

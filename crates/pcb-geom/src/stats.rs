@@ -5,6 +5,7 @@
 use signex_types::pcb::PcbBoard;
 
 use crate::body::footprint_body;
+use crate::pick_filter::PickKind;
 use crate::shape::Shape;
 use crate::transform::Side;
 use crate::units::{NM_PER_MM, PointNm};
@@ -24,8 +25,13 @@ pub struct BoardStats {
     /// Track segments.
     pub tracks: usize,
     pub vias: usize,
-    /// Copper zones.
+    /// Zones that are not a fill, a solid region or a keepout (#2386).
     pub polygons: usize,
+    /// Fills, solid regions and keepouts drawn on the board (#2373), as
+    /// [`PickKind::of_zone`](crate::PickKind::of_zone) names them.
+    pub fills: usize,
+    pub regions: usize,
+    pub keepouts: usize,
     /// Board texts.
     pub strings: usize,
     /// Pads with a drill.
@@ -41,11 +47,18 @@ impl BoardStats {
             area_mm2: outline_area_mm2(board),
             tracks: board.segments.len(),
             vias: board.vias.len(),
-            polygons: board.zones.len(),
             strings: board.texts.len(),
             via_holes: board.vias.iter().filter(|v| v.drill > 0.0).count(),
             ..BoardStats::default()
         };
+        for zone in &board.zones {
+            match PickKind::of_zone(zone) {
+                Some(PickKind::Fills) => stats.fills += 1,
+                Some(PickKind::Regions) => stats.regions += 1,
+                Some(PickKind::Keepouts) => stats.keepouts += 1,
+                _ => stats.polygons += 1,
+            }
+        }
         for footprint in &board.footprints {
             match Side::of_layer(&footprint.layer) {
                 Side::Top => stats.components_top += 1,

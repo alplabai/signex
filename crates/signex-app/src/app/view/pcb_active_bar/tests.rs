@@ -219,6 +219,7 @@ fn rows(app: &Signex, menu: PcbBarMenu) -> Vec<DropdownItem<Message>> {
         app.ui_state.effective_theme_id(),
         &app.command_context(None),
         &app.ui_state.pcb_pick_filter,
+        &app.ui_state.pcb_filter_presets,
     )
     .into_iter()
     .filter_map(|entry| match entry {
@@ -304,6 +305,7 @@ fn the_selection_filter_toggles_the_kinds_the_board_picks() {
     use pcb_geom::PickKind;
 
     let mut app = board_app();
+    app.ui_state.pcb_filter_presets.clear();
     let filter = buttons(&bar_of(&app))[0].on_press.clone().expect("live");
     let _ = app.update(filter);
     assert_eq!(app.interaction_state.pcb_bar_menu, Some(PcbBarMenu::Filter));
@@ -327,9 +329,43 @@ fn the_selection_filter_toggles_the_kinds_the_board_picks() {
         .find(|row| row.label == "Tracks")
         .unwrap();
     assert!(!tracks.checked, "the row shows the kind off");
+    // #2383: Keepouts are picked now; Rooms still are not.
     let keepouts = rows(&app, PcbBarMenu::Filter)
         .into_iter()
         .find(|row| row.label == "Keepouts")
         .unwrap();
-    assert!(keepouts.disabled, "a kind the board cannot pick is greyed");
+    assert!(!keepouts.disabled && keepouts.checked, "a live kind");
+    let rooms = rows(&app, PcbBarMenu::Filter)
+        .into_iter()
+        .find(|row| row.label == "Rooms")
+        .unwrap();
+    assert!(rooms.disabled, "a kind the board cannot pick is greyed");
+}
+
+/// #2383: a preset saved from the board filter is listed in the Active Bar's
+/// Selection Filter dropdown, and its row applies it.
+#[test]
+fn a_saved_preset_is_a_row_of_the_filter_dropdown() {
+    use crate::dock::DockMessage;
+    use crate::panels::{PanelMsg, PcbBoardMsg};
+    use pcb_geom::PickKind;
+
+    let mut app = board_app();
+    app.ui_state.pcb_filter_presets.clear();
+    let panel = |msg| Message::Dock(DockMessage::Panel(PanelMsg::PcbBoard(msg)));
+    // Vias only, saved; the write task is left unrun so prefs.json stays.
+    let _ = app.update(panel(PcbBoardMsg::FilterAllToggled));
+    let _ = app.update(panel(PcbBoardMsg::FilterKindToggled(PickKind::Vias)));
+    let _ = app.update(panel(PcbBoardMsg::FilterPresetAdded));
+    let _ = app.update(panel(PcbBoardMsg::FilterAllToggled));
+    assert_eq!(app.ui_state.pcb_filter_presets.len(), 1);
+
+    let _ = app.update(bar_message(PcbBarMsg::MenuToggled(PcbBarMenu::Filter)));
+    let preset = rows(&app, PcbBarMenu::Filter)
+        .into_iter()
+        .find(|row| row.label == "Filter 1")
+        .expect("a row for the preset");
+    let _ = app.update(preset.on_press.expect("a live row"));
+    let on: Vec<PickKind> = app.ui_state.pcb_pick_filter.on_kinds().collect();
+    assert_eq!(on, vec![PickKind::Vias]);
 }

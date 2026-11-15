@@ -79,11 +79,13 @@ fn guide_row<'a>(
         PcbBoardMsg::GuideColorStepped(id),
         form.t(ids::PCB_BOARD_SWATCH_TIP),
     );
+    // From the board origin, Y up (#2384).
+    let origin = board.options.origin;
     let cells = vec![
         enabled.boxed(),
         form.value(form.t(kind_label(guide.kind))),
-        coord(BoardField::GuideX(id), x, guide.at.x),
-        coord(BoardField::GuideY(id), y, guide.at.y),
+        coord(BoardField::GuideX(id), x, origin.user_x(guide.at.x)),
+        coord(BoardField::GuideY(id), y, origin.user_y(guide.at.y)),
         swatch,
     ];
     let line = form.table_row(cells, false);

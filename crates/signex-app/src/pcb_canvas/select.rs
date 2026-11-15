@@ -197,8 +197,8 @@ impl PcbSelectionState {
         }
     }
 
-    /// Select All (#2361): every footprint, track and via the view lets be
-    /// picked. A pad comes with its footprint and is selected alone only
+    /// Select All (#2361): every footprint, track, via and drawn area the view
+    /// lets be picked. A pad comes with its footprint and is selected alone only
     /// when its footprint's body cannot be picked. Whether the selection
     /// changed.
     pub fn select_all(&mut self, board: &PcbBoard) -> bool {
@@ -248,7 +248,7 @@ impl PcbSelectionState {
         let mut highlight = Highlight::default();
         let is_moving = |item: ItemRef| match item {
             ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => moving.contains(&id),
-            ItemRef::Track(_) | ItemRef::Via(_) => false,
+            ItemRef::Track(_) | ItemRef::Via(_) | ItemRef::Zone { .. } => false,
         };
         for indexed in index.items().filter(|i| !is_moving(i.item)) {
             match indexed.item {
@@ -350,7 +350,7 @@ impl PcbSelectionState {
             .filter_map(|i| match i.item {
                 ItemRef::Pad { footprint, .. } => Some((false, i.item, footprint)),
                 ItemRef::Footprint(id) => Some((true, i.item, id)),
-                ItemRef::Track(_) | ItemRef::Via(_) => None,
+                ItemRef::Track(_) | ItemRef::Via(_) | ItemRef::Zone { .. } => None,
             })
             .collect();
         if under.iter().any(|(_, _, id)| selected.contains(id)) {
@@ -378,7 +378,7 @@ impl PcbSelectionState {
             .items()
             .filter(|i| match i.item {
                 ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => keep(id),
-                ItemRef::Track(_) | ItemRef::Via(_) => false,
+                ItemRef::Track(_) | ItemRef::Via(_) | ItemRef::Zone { .. } => false,
             })
             .map(|i| i.shape)
             .collect()
@@ -431,18 +431,12 @@ impl PcbSelectionState {
             return index;
         }
         let hidden = hidden_items(board, &self.view);
-        BoardIndex::from_items(
-            index
-                .items()
-                .filter(|indexed| !hidden.contains(&indexed.item))
-                .cloned()
-                .collect(),
-        )
+        index.without(|item| hidden.contains(&item))
     }
 }
 
-/// The pads, tracks, vias and footprint bodies of `board` that sit only on
-/// hidden layers. A footprint body follows the side the footprint is on.
+/// The pads, tracks, vias, footprint bodies and drawn areas of `board` that
+/// sit only on hidden layers. A footprint body follows the side the footprint is on.
 fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
     let mut hidden = HashSet::new();
     for footprint in &board.footprints {
@@ -466,6 +460,15 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
     for via in &board.vias {
         if !view.shows_via(&via.layers) {
             hidden.insert(ItemRef::Via(via.uuid));
+        }
+    }
+    for zone in &board.zones {
+        let kind = pcb_geom::PickKind::of_zone(zone);
+        if let Some(kind) = kind.filter(|_| !view.shows_any(std::slice::from_ref(&zone.layer))) {
+            hidden.insert(ItemRef::Zone {
+                zone: zone.uuid,
+                kind,
+            });
         }
     }
     hidden
@@ -502,6 +505,7 @@ fn describe(item: ItemRef) -> String {
         ItemRef::Track(id) => format!("track {id}"),
         ItemRef::Via(id) => format!("via {id}"),
         ItemRef::Footprint(id) => format!("footprint {id}"),
+        ItemRef::Zone { zone, .. } => format!("area {zone}"),
     }
 }
 

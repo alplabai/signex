@@ -20,6 +20,9 @@ fn msg(m: PcbBoardMsg) -> Option<PanelMsg> {
 
 /// The Global Board Snap Grid's priority: below every extra grid.
 const GLOBAL_PRIORITY: usize = 50;
+/// The share of the table each column takes: Priority, Name, Color, Origin,
+/// Comp, Non Comp. Name gets the room its text needs (#2386).
+const COLUMNS: [u16; 6] = [2, 6, 2, 4, 2, 3];
 
 pub(super) fn grid_section<'a>(
     form: &Form<'a>,
@@ -35,14 +38,15 @@ pub(super) fn grid_section<'a>(
         ids::PCB_BOARD_GRID_COMP,
         ids::PCB_BOARD_GRID_NON_COMP,
     ];
-    let header = form.table_row(headings.iter().map(|id| form.heading(*id)).collect(), true);
+    let cells = headings.iter().map(|id| form.heading(*id)).collect();
+    let header = form.table_row_in(cells, &COLUMNS, true);
     rows.push(form.row(&[&title], header));
     let editable = !board.read_only;
     for (index, grid) in board.options.grids.iter().enumerate() {
         rows.push(grid_row(form, board, index, grid, editable));
     }
     let name = form.t(ids::PCB_BOARD_GRID_GLOBAL);
-    let global = form.table_row(
+    let global = form.table_row_in(
         vec![
             form.value(t!(form.i18n, ids::PCB_BOARD_COUNT, "count" => GLOBAL_PRIORITY)),
             form.value(name.clone()),
@@ -51,6 +55,7 @@ pub(super) fn grid_section<'a>(
             form.value(form.t(ids::PCB_BOARD_GRID_ALWAYS)),
             form.value(form.t(ids::PCB_BOARD_GRID_ALWAYS)),
         ],
+        &COLUMNS,
         false,
     );
     rows.push(form.row(&[&name], global));
@@ -120,14 +125,18 @@ fn grid_row<'a>(
         form.value(t!(form.i18n, ids::PCB_BOARD_COUNT, "count" => index + 1)),
         form.value(signex_i18n::UserText::new(grid.name.clone())),
         swatch,
-        form.value(origin_text(form, grid.origin.x, grid.origin.y)),
+        form.value(origin_text(
+            form,
+            board.options.origin.user_x(grid.origin.x),
+            board.options.origin.user_y(grid.origin.y),
+        )),
         check(grid.components, PcbBoardMsg::GridComponentsToggled(id)),
         check(
             grid.non_components,
             PcbBoardMsg::GridNonComponentsToggled(id),
         ),
     ];
-    let line = form.table_row(cells, false);
+    let line = form.table_row_in(cells, &COLUMNS, false);
     let picked = board.view.selected_grid == Some(id);
     let line = fields::selectable(form, line, picked, PcbBoardMsg::GridSelected(id));
     form.row(&[&form.t(ids::PCB_BOARD_SECTION_GRIDS)], line)
@@ -159,12 +168,12 @@ fn editor_rows<'a>(
         (
             ids::PCB_BOARD_GRID_ORIGIN_X,
             BoardField::GridOriginX(id),
-            grid.origin.x,
+            board.options.origin.user_x(grid.origin.x),
         ),
         (
             ids::PCB_BOARD_GRID_ORIGIN_Y,
             BoardField::GridOriginY(id),
-            grid.origin.y,
+            board.options.origin.user_y(grid.origin.y),
         ),
     ];
     for (label, field, mm) in lengths {

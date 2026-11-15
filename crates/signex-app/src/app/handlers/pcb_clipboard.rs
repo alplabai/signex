@@ -212,7 +212,8 @@ impl Signex {
     }
 
     /// What Copy carries of the board selection: footprints (a selected
-    /// pad's included), tracks and vias.
+    /// pad's included), tracks and vias; the board copy leaves drawn areas
+    /// out.
     fn pcb_copy_items(&mut self) -> Vec<BoardItemId> {
         self.with_pcb_selection(|state, _| deletable_items(state.selection()))
             .unwrap_or_default()

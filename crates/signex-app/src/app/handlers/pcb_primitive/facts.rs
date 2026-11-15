@@ -92,9 +92,9 @@ impl Signex {
                     Editability::Editable
                 };
                 let common = self.primitive_common(board, target, locked)?;
-                PcbPrimitiveFacts::Pad(pad_facts(common, &pads, i18n))
+                PcbPrimitiveFacts::Pad(pad_facts(board.options.origin, common, &pads, i18n))
             }
-            ItemRef::Footprint(_) => return None,
+            ItemRef::Footprint(_) | ItemRef::Zone { .. } => return None,
         })
     }
 
@@ -211,7 +211,7 @@ fn item_on_board(board: &PcbBoard, item: ItemRef) -> bool {
             .footprints
             .iter()
             .any(|f| f.uuid == footprint && f.pads.iter().any(|p| p.uuid == pad)),
-        ItemRef::Footprint(_) => false,
+        ItemRef::Footprint(_) | ItemRef::Zone { .. } => false,
     }
 }
 
@@ -221,6 +221,8 @@ fn track_facts(
     tracks: &[&Segment],
     i18n: &I18n,
 ) -> TrackFacts {
+    // Coordinates are shown from the board origin, Y up (#2384).
+    let origin = board.options.origin;
     let layers: Vec<LayerChoice> = signex_renderer::pcb::board_copper_layers(&board.layers)
         .into_iter()
         .map(|layer| LayerChoice {
@@ -236,17 +238,20 @@ fn track_facts(
             label: layer_style::copper_name(i18n, layer).into_string(),
         });
     TrackFacts {
-        location: track_location(tracks.iter().copied()).map(|p| (p.x, p.y)),
+        location: track_location(tracks.iter().copied()).map(|p| {
+            let shown = origin.to_user(p);
+            (shown.x, shown.y)
+        }),
         layer,
         layers,
         width: shared(tracks.iter().map(|s| s.width)),
         start: (
-            shared(tracks.iter().map(|s| s.start.x)),
-            shared(tracks.iter().map(|s| s.start.y)),
+            shared(tracks.iter().map(|s| origin.user_x(s.start.x))),
+            shared(tracks.iter().map(|s| origin.user_y(s.start.y))),
         ),
         end: (
-            shared(tracks.iter().map(|s| s.end.x)),
-            shared(tracks.iter().map(|s| s.end.y)),
+            shared(tracks.iter().map(|s| origin.user_x(s.end.x))),
+            shared(tracks.iter().map(|s| origin.user_y(s.end.y))),
         ),
         length_mm: pcb_geom::tracks_length_mm(tracks.iter().copied()),
         common,
@@ -254,6 +259,7 @@ fn track_facts(
 }
 
 fn via_facts(board: &PcbBoard, common: PrimitiveCommon, vias: &[&Via], i18n: &I18n) -> ViaFacts {
+    let origin = board.options.origin;
     let stack = signex_renderer::pcb::board_copper_layers(&board.layers);
     let span = shared(
         vias.iter()
@@ -269,8 +275,8 @@ fn via_facts(board: &PcbBoard, common: PrimitiveCommon, vias: &[&Via], i18n: &I1
         Some(t!(i18n, id, "from" => from, "to" => to).into_string())
     });
     ViaFacts {
-        x: shared(vias.iter().map(|v| v.position.x)),
-        y: shared(vias.iter().map(|v| v.position.y)),
+        x: shared(vias.iter().map(|v| origin.user_x(v.position.x))),
+        y: shared(vias.iter().map(|v| origin.user_y(v.position.y))),
         diameter: shared(vias.iter().map(|v| v.diameter)),
         hole: shared(vias.iter().map(|v| v.drill)),
         span,
@@ -279,6 +285,7 @@ fn via_facts(board: &PcbBoard, common: PrimitiveCommon, vias: &[&Via], i18n: &I1
 }
 
 fn pad_facts(
+    origin: signex_types::pcb_options::BoardOrigin,
     common: PrimitiveCommon,
     pads: &[(&signex_types::pcb::Footprint, &Pad)],
     i18n: &I18n,
@@ -309,8 +316,8 @@ fn pad_facts(
     PadFacts {
         designator: shared(pads.iter().map(|(_, p)| p.number.clone())),
         layer,
-        x: shared(centres.iter().map(|c| c.map(|p| p.x))).flatten(),
-        y: shared(centres.iter().map(|c| c.map(|p| p.y))).flatten(),
+        x: shared(centres.iter().map(|c| c.map(|p| origin.user_x(p.x)))).flatten(),
+        y: shared(centres.iter().map(|c| c.map(|p| origin.user_y(p.y)))).flatten(),
         rotation: shared(pads.iter().map(|(fp, pad)| {
             pcb_geom::pad_world_rotation_deg(fp, pad)
                 .ok()

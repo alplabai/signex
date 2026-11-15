@@ -122,8 +122,9 @@ impl Signex {
             identity: Shared::of(identities).unwrap_or(Shared::Mixed),
             designator_mismatches,
             board: path.to_path_buf(),
-            x: shared(fps, |fp| fp.position.x),
-            y: shared(fps, |fp| fp.position.y),
+            // Shown from the board origin, Y up (#2384).
+            x: shared(fps, |fp| board.options.origin.user_x(fp.position.x)),
+            y: shared(fps, |fp| board.options.origin.user_y(fp.position.y)),
             rotation: shared(fps, |fp| fp.rotation),
             locked: shared(fps, |fp| fp.locked),
             side: shared(fps, component::side_of),

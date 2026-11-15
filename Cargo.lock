@@ -4395,6 +4395,7 @@ name = "pcb-geom"
 version = "26.11.0-rc.1"
 dependencies = [
  "rstar",
+ "serde",
  "signex-types",
  "uuid",
 ]

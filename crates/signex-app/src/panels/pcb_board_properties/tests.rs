@@ -80,9 +80,9 @@ fn an_unselected_board_shows_its_own_properties() {
         "Board",
         "mixed-tht-smd",
         "Board Size",
-        "Horizontal",
+        "Width",
         "50.000 mm",
-        "Vertical",
+        "Height",
         "40.000 mm",
         "Area",
         "2000.00 mm²",
@@ -197,10 +197,10 @@ fn the_search_keeps_matching_rows() {
         board.view.search = "pad".into();
     }
     let shown = texts(&ctx);
-    for wanted in ["Pad Centers", "Pads", "Pad/Via Holes"] {
+    for wanted in ["Pad Centers", "Pads", "Holes"] {
         assert!(shown.iter().any(|t| t == wanted), "{wanted} in {shown:?}");
     }
-    assert!(!shown.iter().any(|t| t == "Horizontal"), "{shown:?}");
+    assert!(!shown.iter().any(|t| t == "Width"), "{shown:?}");
     if let Some(board) = ctx.pcb_board.as_mut() {
         board.view.search = "zzzz".into();
     }
@@ -263,4 +263,129 @@ fn the_managers_list_the_boards_guides_and_grids() {
         assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
     }
     assert!(!texts.iter().any(|t| t == "No guides"), "{texts:?}");
+}
+
+/// The default width of the right dock (`UiState::right_width` at startup).
+const DEFAULT_DOCK: f32 = 220.0;
+
+fn laid_out(ctx: &PanelContext, width: f32) -> Vec<crate::layout_probe::LaidOutText> {
+    let window = iced::Size::new(width, WINDOW.height);
+    lay_out_texts(super::super::properties::view_properties(ctx), window)
+        .into_iter()
+        .map(|mut t| {
+            t.text = t.text.replace(['\u{2068}', '\u{2069}'], "");
+            t
+        })
+        .collect()
+}
+
+/// #2386: the Components card lays Total, Top and Bottom out on one row.
+#[test]
+fn the_components_card_puts_its_three_figures_on_one_row() {
+    let texts = laid_out(&context(0), DEFAULT_DOCK);
+    // The Selection Filter has a Components chip too: start at Board Size.
+    let size = texts
+        .iter()
+        .position(|t| t.text == "Board Size")
+        .expect("card");
+    let card = size
+        + texts[size..]
+            .iter()
+            .position(|t| t.text == "Components")
+            .expect("the Components card");
+    let after = &texts[card..];
+    let y = |label: &str| crate::layout_probe::find(after, label).bounds.y;
+    assert_eq!(y("Total"), y("Top"), "{after:?}");
+    assert_eq!(y("Top"), y("Bottom"), "{after:?}");
+    let x = |label: &str| crate::layout_probe::find(after, label).bounds.x;
+    assert!(x("Total") < x("Top") && x("Top") < x("Bottom"));
+}
+
+/// #2386: no label of the board panel wraps at the default dock width.
+#[test]
+fn no_board_panel_label_wraps_at_the_default_dock_width() {
+    let texts = laid_out(&context(0), DEFAULT_DOCK);
+    let one_line = crate::layout_probe::find(&texts, "Width").bounds.height;
+    for label in [
+        "Width",
+        "Height",
+        "Thickness",
+        "Parts Area",
+        "Unrouted",
+        "Holes",
+        "Keepouts",
+        "DRC Violations",
+        "Snapping",
+        "Distance",
+        "Axis Range",
+        "Global Snap Grid",
+        "Fast Grids",
+        "Pour Names",
+        "Designators",
+    ] {
+        let found = crate::layout_probe::find(&texts, label);
+        assert!(
+            found.bounds.height < one_line * 1.5,
+            "{label} wraps: {found:?}"
+        );
+    }
+}
+
+/// #2386: a board with no outline shows one muted "No board outline" line
+/// in place of its width, height and area.
+#[test]
+fn an_outline_less_board_says_so_on_one_line() {
+    let mut ctx = context(0);
+    let mut no_outline = board();
+    no_outline.outline.clear();
+    ctx.pcb_board = Some(PcbBoardSummary::of(&no_outline, "b".into(), 0));
+    let texts = laid_out(&ctx, DEFAULT_DOCK);
+    let line = crate::layout_probe::find(&texts, "No board outline");
+    let thickness = crate::layout_probe::find(&texts, "Thickness");
+    assert!(
+        line.bounds.height < thickness.bounds.height * 2.0,
+        "{line:?}"
+    );
+    let from = texts
+        .iter()
+        .position(|t| t.text == "Board Size")
+        .expect("card");
+    let rest = &texts[from..];
+    let to = rest
+        .iter()
+        .position(|t| t.text == "Components")
+        .expect("next card");
+    let card = &rest[..to];
+    for gone in ["Width", "Height", "Area"] {
+        assert!(!card.iter().any(|t| t.text == gone), "{gone} in {card:?}");
+    }
+}
+
+/// #2386: the Primitives card leaves out kinds the board cannot hold and
+/// counts the drawn areas.
+#[test]
+fn the_primitives_card_counts_what_the_board_holds() {
+    let texts = texts(&context(0));
+    for wanted in ["Fills", "Regions", "Keepouts", "Polygons", "Holes"] {
+        assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
+    }
+    assert!(!texts.iter().any(|t| t == "Not available"), "{texts:?}");
+}
+
+/// #2383, #2386: Add Preset and the Board Information Run DRC send their
+/// messages from the laid-out panel.
+#[test]
+fn add_preset_and_run_drc_are_wired() {
+    let ctx = context(0);
+    let window = iced::Size::new(DEFAULT_DOCK, WINDOW.height);
+    let view = || super::super::properties::view_properties(&ctx);
+    let added = crate::layout_probe::messages_on_click(view(), window, "Add Preset");
+    assert!(
+        added
+            .iter()
+            .any(|m| matches!(m, PanelMsg::PcbBoard(PcbBoardMsg::FilterPresetAdded))),
+        "{added:?}"
+    );
+    let run = crate::layout_probe::messages_on_click(view(), window, "Run DRC");
+    assert!(run.iter().any(|m| matches!(m, PanelMsg::RunDrc)), "{run:?}");
 }

@@ -20,6 +20,14 @@ pcb-board-filter-summary-none = No objects
 pcb-board-section-filter = Selection Filter
 pcb-board-filter-all-on = All - On
 pcb-board-filter-unavailable = The board editor cannot pick these objects yet.
+pcb-board-filter-presets = Presets
+pcb-board-filter-preset-add = Add Preset
+pcb-board-filter-preset-add-tip = Save the kinds that are on as a preset.
+pcb-board-filter-preset-full = At most { $limit } presets; delete one to add another.
+pcb-board-filter-preset-apply-tip = Turn on exactly the kinds this preset holds.
+pcb-board-filter-preset-name = Preset name
+pcb-board-filter-preset-update = Save Chips
+pcb-board-filter-preset-update-tip = Store the kinds that are on in this preset.
 pcb-board-kind-components = Components
 pcb-board-kind-bodies = 3D Bodies
 pcb-board-kind-keepouts = Keepouts
@@ -58,18 +66,20 @@ pcb-board-snap-footprint-origins = Footprint Origins
 pcb-board-snap-body-points = 3D Body Snap Points
 pcb-board-snap-texts = Texts
 pcb-board-snap-object-unavailable = Boards hold no 3D bodies yet.
-pcb-board-snap-distance = Snap Distance
+pcb-board-snap-distance = Distance
 # $factor is a multiple of the snap grid, such as 0.5.
 pcb-board-snap-distance-value = { $factor }x Snap Grid
-pcb-board-axis-range = Axis Snap Range
+pcb-board-axis-range = Axis Range
 
 # Board Information: totals read from the board.
 pcb-board-section-info = Board Information
 pcb-board-info-size = Board Size
-pcb-board-info-horizontal = Horizontal
-pcb-board-info-vertical = Vertical
+pcb-board-info-width = Width
+pcb-board-info-height = Height
+pcb-board-info-thickness = Thickness
+pcb-board-info-no-outline = No board outline
 pcb-board-info-area = Area
-pcb-board-info-components-area = Components Area
+pcb-board-info-components-area = Parts Area
 pcb-board-info-density = Density
 pcb-board-info-components = Components
 pcb-board-info-total = Total
@@ -84,26 +94,24 @@ pcb-board-info-hidden = Hidden
 # Shown as the unrouted count before the ratsnest is worked out.
 pcb-board-info-not-counted = Not counted yet
 pcb-board-info-primitives = Primitives & Others
-pcb-board-info-arcs = Arcs
 pcb-board-info-fills = Fills
+pcb-board-info-regions = Regions
+pcb-board-info-keepouts = Keepouts
 pcb-board-info-pads = Pads
 pcb-board-info-strings = Strings
 pcb-board-info-tracks = Tracks
 pcb-board-info-vias = Vias
 pcb-board-info-polygons = Polygons
-pcb-board-info-holes = Pad/Via Holes
+pcb-board-info-holes = Holes
 pcb-board-info-drc = DRC Violations
 pcb-board-info-drc-not-run = Not run
 pcb-board-info-drc-tip = Show the design rule check results
-pcb-board-info-not-held = The board does not hold these objects yet.
 pcb-board-reports = Reports
 pcb-board-reports-unavailable = No board report exists yet.
 # A count in the Board Information rows.
 pcb-board-count = { $count }
 # A length or area from Signex's own formatter, unit included.
 pcb-board-measure = { $value }
-# Shown for a value the board cannot hold yet.
-pcb-board-not-available = Not available
 # Shown in a table cell the board cannot fill yet.
 pcb-board-unset = —
 pcb-board-percent = { $value } %
@@ -116,7 +124,7 @@ pcb-board-grid-color = Color
 pcb-board-grid-origin = Origin
 pcb-board-grid-comp = Comp
 pcb-board-grid-non-comp = Non Comp
-pcb-board-grid-global = Global Board Snap Grid
+pcb-board-grid-global = Global Snap Grid
 pcb-board-grid-step = Step
 pcb-board-grid-visible = Visible Grid
 pcb-board-grid-fast = Fast Grids
@@ -163,14 +171,14 @@ pcb-board-section-other = Other
 pcb-board-units = Units
 pcb-board-unit-mm = mm
 pcb-board-unit-mils = mils
-pcb-board-polygon-naming = Polygon Naming Scheme
+pcb-board-polygon-naming = Pour Names
 # How a polygon pour is named: net name, layer number (LXX) or board layer
 # name, and pour number (PXXX).
 pcb-board-naming-net-layer = NET NAME_LXX_PXXX
 pcb-board-naming-layer-net = LXX_NET NAME_PXXX
 pcb-board-naming-board-layer-net = Board Layer_NET NAME_PXXX
 pcb-board-naming-net-board-layer = NET NAME_Board Layer_PXXX
-pcb-board-designator-display = Designator Display
+pcb-board-designator-display = Designators
 pcb-board-designator-physical = Physical
 pcb-board-designator-logical = Logical
 pcb-board-sheet = Sheet Settings

@@ -79,13 +79,23 @@ pub(super) fn section<'a>(
 /// Sheet Settings: X, Y, Width and Height, greyed while Get Size From
 /// Sheet Layer is on (the sheet is then the box around the board shape).
 fn sheet_rows<'a>(form: &Form<'a>, board: &PcbBoardSummary, rows: &mut Vec<Shown<'a>>) {
+    let origin = board.options.origin;
     let sheet = &board.options.sheet;
     let caption = form.t(ids::PCB_BOARD_SHEET);
     rows.push(form.row(&[&caption], form.caption(caption.clone())));
     let fixed = sheet.from_board || board.read_only;
     let values = [
-        (ids::PCB_BOARD_GUIDE_X, BoardField::SheetX, sheet.origin.x),
-        (ids::PCB_BOARD_GUIDE_Y, BoardField::SheetY, sheet.origin.y),
+        // The sheet's bottom-left corner, from the board origin with Y up (#2384).
+        (
+            ids::PCB_BOARD_GUIDE_X,
+            BoardField::SheetX,
+            origin.user_x(sheet.origin.x),
+        ),
+        (
+            ids::PCB_BOARD_GUIDE_Y,
+            BoardField::SheetY,
+            origin.user_y(sheet.origin.y + sheet.height),
+        ),
         (
             ids::PCB_BOARD_SHEET_WIDTH,
             BoardField::SheetWidth,

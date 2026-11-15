@@ -373,6 +373,9 @@ fn default_via_type() -> ViaType {
 // Zone
 // ---------------------------------------------------------------------------
 
+/// The `fill_type` of solid copper drawn as a Fill or a Solid Region (#2373).
+pub const SOLID_FILL: &str = "solid";
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Zone {
     pub uuid: Uuid,

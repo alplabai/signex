@@ -309,3 +309,13 @@ fn a_new_board_has_a_real_grid() {
     assert_eq!(grid, NEW_BOARD_GRID_MM);
     assert!(grid > 0.0);
 }
+
+/// #2384: a new board's origin is the bottom-left corner of its board area,
+/// whatever rules it starts from.
+#[test]
+fn a_new_board_counts_from_the_bottom_left_of_its_area() {
+    let board = SetupProfile::Standard.pcb(2).new_board();
+    let corner = crate::pcb_origin::board_area_bottom_left(&board.outline);
+    assert_eq!(board.options.origin.at, corner);
+    assert_eq!(corner, crate::pcb::Point::new(0.0, 80.0));
+}
