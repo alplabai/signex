@@ -43,14 +43,14 @@ impl Signex {
     /// The subtitle a dialog's header carries beside its title: the same
     /// line in the in-window header and in a borderless window's title bar.
     pub(crate) fn detached_modal_subtitle(&self, modal: ModalId) -> Option<String> {
+        let i18n = &self.ui_state.i18n;
         match modal {
-            ModalId::AnnotateDialog => Some("Schematic Annotation Configuration".to_owned()),
-            ModalId::ErcDialog => Some(
-                self.document_state
-                    .active_document_project()
-                    .map_or_else(|| "Machine rules".to_string(), |p| p.data.name.clone()),
-            ),
-            ModalId::BomPreview => Some("BOM preview".to_owned()),
+            ModalId::AnnotateDialog => Some(i18n.message_plain(ids::DIALOG_SUBTITLE_ANNOTATE, &[])),
+            ModalId::ErcDialog => Some(self.document_state.active_document_project().map_or_else(
+                || i18n.message_plain(ids::DIALOG_SUBTITLE_ERC_MACHINE, &[]),
+                |p| p.data.name.clone(),
+            )),
+            ModalId::BomPreview => Some(i18n.message_plain(ids::DIALOG_SUBTITLE_BOM, &[])),
             _ => None,
         }
     }
@@ -59,14 +59,6 @@ impl Signex {
 /// Native title-bar text of a detached modal window. Matches the header
 /// the same dialog shows when it is painted inside the main window, so the
 /// OS window switcher names it the way the user knows it.
-/// "Quit" on macOS (the app menu's word), "Exit" elsewhere.
-pub(crate) fn quit_word() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "Quit"
-    } else {
-        "Exit"
-    }
-}
 
 pub(crate) fn detached_modal_title(modal: ModalId) -> MessageId {
     match modal {

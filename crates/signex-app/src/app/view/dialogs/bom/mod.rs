@@ -56,7 +56,7 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
 
         let header_content: Element<'_, Message> = super::graphite::titled_header(
-            "Bill of Materials",
+            t!(i18n, ids::DIALOG_TITLE_BOM).into_string(),
             self.detached_modal_subtitle(crate::app::state::ModalId::BomPreview),
             Message::BomPreview(BomPreviewMsg::Close),
             tokens,
@@ -74,25 +74,41 @@ impl Signex {
         let body = self.bom_table();
         let sidebar = self.bom_sidebar();
 
+        // A named variant is the user's; the base view is ours.
         let active_variant_label = preview
             .options
             .active_variant
             .clone()
-            .unwrap_or_else(|| "Base".to_string());
+            .unwrap_or_else(|| t!(i18n, ids::BOM_VARIANT_BASE).into_string());
         let row_count = preview.table.rows.len();
         let total_count = preview.table.rows.len();
-        let mut status_label = format!("{} of {} lines visible", row_count, total_count);
-        if let Some(prices) = price_status(&preview.table, &preview.options.columns) {
-            status_label.push_str(" · ");
-            status_label.push_str(&prices);
-        }
-        let variant_label = format!("Current variant: {}", active_variant_label);
+        let status_label = match price_status(&preview.table, &preview.options.columns) {
+            // The price note is built in English by `price_status` (#2061).
+            Some(prices) => t!(
+                i18n,
+                ids::BOM_STATUS_VISIBLE_PRICES,
+                "visible" => row_count,
+                "total" => total_count,
+                "prices" => prices
+            ),
+            None => t!(
+                i18n,
+                ids::BOM_STATUS_VISIBLE,
+                "visible" => row_count,
+                "total" => total_count
+            ),
+        };
+        let variant_label = t!(
+            i18n,
+            ids::BOM_CURRENT_VARIANT,
+            "variant" => active_variant_label.as_str()
+        );
 
         // Variant dropdown for the top toolbar — placeholder in the
         // header strip area, sits to the left. (i) info badge sits
         // on the right.
         let variant_dropdown: Element<'_, Message> = if preview.variants.is_empty() {
-            text(raw(format!("Variant: {}", active_variant_label)))
+            text(t!(i18n, ids::BOM_VARIANT_IS, "variant" => active_variant_label.as_str()))
                 .size(TS.body)
                 .color(text_muted)
                 .boxed()
@@ -100,10 +116,11 @@ impl Signex {
             container(
                 row![
                     Space::new().width(Length::Fill),
-                    text(raw(active_variant_label.clone()))
+                    text(signex_i18n::UserText::new(active_variant_label.clone()))
                         .size(TS.body)
                         .color(text_c),
                     Space::new().width(Length::Fill),
+                    // raw: a disclosure glyph, not language.
                     text(raw("\u{25BE}")).size(TS.caption).color(text_c),
                 ]
                 .align_y(iced::Alignment::Center),
@@ -125,6 +142,7 @@ impl Signex {
             })
             .boxed()
         };
+        // raw: the info badge's "i" is a symbol, not a word.
         let info_badge: Element<'_, Message> =
             container(text(raw("i")).size(TS.body).color(iced::Color::WHITE))
                 .width(20)
@@ -193,23 +211,25 @@ impl Signex {
                     } else {
                         signex_output::BomIssueSeverity::Warning
                     };
+                    // raw: the issue count comes from signex-bom (#2060).
                     text(raw(label))
                         .size(TS.caption)
                         .color(rules::severity_color(severity, text_muted, tokens))
                         .boxed()
                 }
-                None => text(raw("No BOM issues"))
+                None => text(t!(i18n, ids::BOM_NO_ISSUES))
                     .size(TS.caption)
                     .color(text_muted)
                     .boxed(),
             };
         let footer = container(
             row![
-                text(raw(status_label)).size(TS.caption).color(text_muted),
+                text(status_label).size(TS.caption).color(text_muted),
                 Space::new().width(12),
+                // raw: a separator glyph, not language.
                 text(raw("|")).size(TS.caption).color(text_muted),
                 Space::new().width(12),
-                text(raw(variant_label)).size(TS.caption).color(text_muted),
+                text(variant_label).size(TS.caption).color(text_muted),
                 Space::new().width(Length::Fill),
                 issue_badge,
                 Space::new().width(12),

@@ -453,7 +453,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 i18n,
             },
         ),
-        PrefNav::RuleProfiles => content_profiles(profiles, default_profile, panel_tokens),
+        PrefNav::RuleProfiles => content_profiles(profiles, default_profile, panel_tokens, i18n),
         // Library → Distributor APIs — the library subsystem owns
         // the actual form
         // (`crate::library::settings::distributor_apis::view`); we

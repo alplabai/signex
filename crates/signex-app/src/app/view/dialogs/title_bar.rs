@@ -38,6 +38,8 @@ pub(crate) fn dialog_title_bar<'a>(
     let r = tokens::resolve(theme_tokens);
     let mut line: Row<Element<'a, Message>> = Row::new().spacing(SP.m).align_y(Alignment::Center);
     line = line.push(svg(MARK.clone()).width(MARK_SIZE).height(MARK_SIZE).boxed());
+    // raw: the title and subtitle come from `detached_modal_title` /
+    // `detached_modal_subtitle`, already rendered from the catalog.
     line = line.push(
         text(raw(title))
             .size(TS.heading)

@@ -38,7 +38,7 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
         let header_content: Element<'_, Message> = modal_title_header(
-            "Re-prefix to Standard",
+            t!(i18n, ids::DIALOG_TITLE_REPREFIX).into_string(),
             Message::Annotate(AnnotateMsg::ReprefixCancelled),
             tokens,
         );
@@ -52,6 +52,8 @@ impl Signex {
             os_title_bar_slot()
         };
 
+        // raw: the change and skip lines are built in English by the
+        // re-prefix handler and kept in its state (#2061).
         let mut lines: Vec<Element<'_, Message>> = confirm
             .change_lines
             .iter()
@@ -59,7 +61,7 @@ impl Signex {
             .collect();
         if confirm.more > 0 {
             lines.push(
-                text(raw(format!("+{} more", confirm.more)))
+                text(t!(i18n, ids::DIALOG_REPREFIX_MORE, "count" => confirm.more))
                     .size(TS.body)
                     .color(text_muted)
                     .boxed(),
@@ -67,13 +69,15 @@ impl Signex {
         }
         let mut skips = column![].spacing(SP.xs);
         for line in &confirm.skip_lines {
+            // raw: see the change lines above.
             skips = skips.push(text(raw(line.clone())).size(TS.body).color(text_muted));
         }
 
         let body = column![
             crate::styles::dialog_intro(
                 crate::styles::DialogIcon::Warn,
-                "Change designator prefixes?",
+                t!(i18n, ids::DIALOG_REPREFIX_QUESTION).into_string(),
+                // The headline is built in English by the re-prefix handler (#2061).
                 Some(confirm.headline.clone()),
                 tokens,
             ),

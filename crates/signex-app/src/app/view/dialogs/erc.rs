@@ -48,7 +48,9 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
         let header_content: Element<'_, Message> = super::graphite::titled_header(
-            "Electrical Rules Check",
+            self.ui_state
+                .i18n
+                .message_plain(signex_i18n::ids::DIALOG_TITLE_ERC, &[]),
             self.detached_modal_subtitle(crate::app::state::ModalId::ErcDialog),
             Message::Erc(ErcMsg::CloseDialog),
             tokens,
@@ -104,6 +106,8 @@ impl Signex {
         if stored.is_none()
             && let Some(notice) = self.machine_rules_notice()
         {
+            // raw: the machine-rules notice is built in English by the rule
+            // profile loader, which also logs it (#2061).
             scope = scope.push(
                 text(raw(notice))
                     .size(TS.caption)
@@ -164,6 +168,7 @@ impl Signex {
         // The shared rule editor: rules table on the left, pin-connection
         // matrix on the right. Preferences ▸ Rule Profiles draws the same one.
         let body = rule_editor(RuleEditor {
+            i18n: &self.ui_state.i18n,
             tokens,
             severity: severity_map,
             pin_matrix: pin_map,
@@ -254,6 +259,7 @@ impl Signex {
         };
         let mut list = column![text(heading).size(TS.body).color(text_c)].spacing(SP.xs);
         for line in lines {
+            // raw: one rule change per line, built by the profile diff (#2061).
             list = list.push(text(raw(line)).size(TS.caption).color(text_muted).boxed());
         }
         let buttons = row![
@@ -371,6 +377,8 @@ impl Signex {
                 .boxed(),
             );
             if let Some(error) = &dialog.error {
+                // raw: the save-as-profile error is set in English by its
+                // handler (#2061).
                 panel = panel.push(
                     text(raw(error.clone()))
                         .size(TS.caption)

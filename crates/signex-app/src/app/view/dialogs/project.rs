@@ -49,13 +49,19 @@ impl Signex {
         let i18n = self.ui_state.i18n.as_ref();
         let error_c = crate::styles::tokens::danger(tokens);
 
-        let title = if st.is_project_rename {
-            "Rename Project"
-        } else {
-            "Rename File"
-        };
-        let header_content: Element<'_, Message> =
-            modal_title_header(title, Message::Rename(RenameMsg::Close), tokens);
+        let title = t!(
+            i18n,
+            if st.is_project_rename {
+                ids::DIALOG_RENAME_PROJECT_TITLE
+            } else {
+                ids::DIALOG_RENAME_FILE_TITLE
+            }
+        );
+        let header_content: Element<'_, Message> = modal_title_header(
+            title.into_string(),
+            Message::Rename(RenameMsg::Close),
+            tokens,
+        );
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::RenameDialog,
@@ -74,19 +80,24 @@ impl Signex {
                 .unwrap_or("")
                 .to_string()
         };
+        // Placeholders move with #2059; these are example names anyway.
         let placeholder = if st.is_project_rename {
             "new-project-name"
         } else {
             "new-name.snxsch"
         };
-        let prompt = if st.is_project_rename {
-            format!("Rename project \"{}\"", current_label)
-        } else {
-            format!("Rename \"{}\"", current_label)
-        };
+        let prompt = t!(
+            i18n,
+            if st.is_project_rename {
+                ids::DIALOG_RENAME_PROJECT_PROMPT
+            } else {
+                ids::DIALOG_RENAME_FILE_PROMPT
+            },
+            "name" => current_label.as_str()
+        );
 
         let mut body: iced::widget::Column<Element<'_, Message>> = column![
-            dialog_intro(DialogIcon::File, prompt, None, tokens),
+            dialog_intro(DialogIcon::File, prompt.into_string(), None, tokens),
             text_input(raw(placeholder), &st.buffer)
                 .style(crate::panels::form_look::text_input_style)
                 .on_input(|s| Message::Rename(RenameMsg::BufferChanged(s)))
@@ -98,6 +109,7 @@ impl Signex {
         .spacing(SP.m);
 
         if let Some(ref err) = st.error {
+            // raw: the Rename error is kept as text by its handler (#2059).
             body = body.push(text(raw(err.clone())).size(TS.body).color(error_c).boxed());
         }
 
@@ -152,7 +164,7 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
         let header_content: Element<'_, Message> = modal_title_header(
-            "Enable Version Control",
+            t!(i18n, ids::DIALOG_TITLE_ENABLE_VERSION_CONTROL).into_string(),
             Message::EnableVersionControl(EnableVersionControlMsg::Close),
             tokens,
         );
@@ -162,9 +174,9 @@ impl Signex {
         );
 
         let scope = st.scope;
-        let summary_label = match scope {
-            crate::app::VersionControlScope::Project => "Project",
-            crate::app::VersionControlScope::Library => "Library",
+        let summary_id = match scope {
+            crate::app::VersionControlScope::Project => ids::DIALOG_VERSION_CONTROL_PROJECT,
+            crate::app::VersionControlScope::Library => ids::DIALOG_VERSION_CONTROL_LIBRARY,
         };
 
         // Per-row track toggles. Surfaced as a column (no scrollable
@@ -191,10 +203,11 @@ impl Signex {
                 let row_widget = row![
                     cb,
                     Space::new().width(8),
-                    text(raw(item.relative.clone()))
+                    text(signex_i18n::UserText::new(item.relative.clone()))
                         .size(TS.body)
                         .color(items_text_c),
                     Space::new().width(Length::Fill),
+                    // raw: the item's kind is worded by the folder scan (#2061).
                     text(raw(item.label.clone()))
                         .size(TS.caption)
                         .color(items_text_muted),
@@ -227,7 +240,7 @@ impl Signex {
         // The shell's intro opens the body: what gets a repository, then why.
         let mut body_col: iced::widget::Column<Element<'_, Message>> = column![dialog_intro(
             DialogIcon::File,
-            format!("{summary_label}: {}", st.project_name),
+            t!(i18n, summary_id, "name" => st.project_name.as_str()).into_string(),
             Some(st.intro_text.clone()),
             tokens,
         )]
@@ -247,6 +260,7 @@ impl Signex {
             );
         }
         if let Some(err) = st.error.as_ref() {
+            // raw: the setup error is worded by the version-control job (#2061).
             body_col = body_col.push(
                 text(raw(err.clone()))
                     .size(TS.body)
@@ -320,7 +334,7 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
 
         let header_content: Element<'_, Message> = modal_title_header(
-            "Cartesian Grid Editor [mm]",
+            t!(i18n, ids::DIALOG_GRID_TITLE).into_string(),
             Message::GridProperties(GridPropertiesMsg::Close),
             tokens,
         );
@@ -335,6 +349,7 @@ impl Signex {
             on_input: fn(String) -> Message,
         ) -> Element<'a, Message> {
             use signex_widgets::{raw, text_input};
+            // raw: an example number as placeholder (#2059).
             text_input(raw(placeholder), value)
                 .style(crate::panels::form_look::text_input_style)
                 .size(TS.label)
@@ -376,7 +391,7 @@ impl Signex {
                 .boxed()
             };
         let mk_mult_row = |current: u32| -> Element<'_, Message> {
-            // The multiplier labels are numbers, not words.
+            // raw: the multiplier labels are numbers, not words.
             let seg = move |label: &'static str, target: u32, active: bool| {
                 let msg = Message::GridProperties(GridPropertiesMsg::SetMultiplier(target));
                 grid_segment(raw(label), active, msg, text_c, border_c, tokens)
@@ -429,7 +444,7 @@ impl Signex {
         .spacing(10);
         let body = with_graphite_intro(
             DialogIcon::Settings,
-            "Grid step and display",
+            t!(i18n, ids::DIALOG_GRID_INTRO).into_string(),
             body,
             10.0,
             tokens,
@@ -489,7 +504,7 @@ impl Signex {
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
         let header_content: Element<'_, Message> = modal_title_header(
-            "Selection Filter — Customize",
+            t!(i18n, ids::DIALOG_SELECTION_FILTER_TITLE).into_string(),
             Message::SelectionFilter(SelectionFilterMsg::CloseCustom),
             tokens,
         );
@@ -545,8 +560,13 @@ impl Signex {
             mk_row(ids::DIALOG_SELECTION_FILTER_TEXTS, K::Texts, st.texts),
         ]
         .spacing(SP.s);
-        let body =
-            with_graphite_intro(DialogIcon::Settings, "Selectable kinds", body, SP.s, tokens);
+        let body = with_graphite_intro(
+            DialogIcon::Settings,
+            t!(i18n, ids::DIALOG_SELECTION_FILTER_INTRO).into_string(),
+            body,
+            SP.s,
+            tokens,
+        );
 
         let dialog = container(
             column![
@@ -581,7 +601,7 @@ impl Signex {
 /// `body` under the shell's title-only intro.
 fn with_graphite_intro<'a>(
     icon: DialogIcon,
-    title: &'static str,
+    title: String,
     body: iced::widget::Column<Element<'a, Message>>,
     gap: f32,
     tokens: &signex_types::theme::ThemeTokens,

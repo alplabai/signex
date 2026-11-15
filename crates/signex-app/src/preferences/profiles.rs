@@ -68,6 +68,7 @@ pub(super) fn content_profiles<'a>(
     manager: &'a ProfileManager,
     default_profile: Option<&'a str>,
     tokens: &'a signex_types::theme::ThemeTokens,
+    i18n: &'a signex_i18n::I18n,
 ) -> Element<'a, PrefMsg> {
     let header = column![
         text(raw("Rule Profiles"))
@@ -164,6 +165,7 @@ pub(super) fn content_profiles<'a>(
                 )
             };
             let editor = rule_editor(RuleEditor {
+                i18n,
                 tokens,
                 severity: &resolved.severity,
                 pin_matrix: &resolved.pin_matrix,

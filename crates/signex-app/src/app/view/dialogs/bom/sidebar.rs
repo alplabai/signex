@@ -7,7 +7,8 @@
 use super::super::*;
 use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
-use signex_widgets::{button, raw, text};
+use signex_i18n::{UserText, ids, t};
+use signex_widgets::{Label, button, raw, text};
 
 use super::super::widgets::section_header;
 
@@ -37,8 +38,9 @@ impl Signex {
         let accent_c = crate::styles::ti(tokens.accent);
         let hover_c = crate::styles::tokens::hover_overlay(tokens);
         let field_c = crate::styles::tokens::resolve(tokens).field;
-        let row_pill = |label: String, on: bool, msg: Message| -> Element<'_, Message> {
-            button(text(raw(label)).size(TS.body).color(text_c))
+        let i18n = self.ui_state.i18n.as_ref();
+        let row_pill = |label: Label<'static>, on: bool, msg: Message| -> Element<'_, Message> {
+            button(text(label).size(TS.body).color(text_c))
                 .padding([SP.s, 10.0])
                 .on_press(msg)
                 .style(move |_: &Theme, status: button::Status| {
@@ -67,22 +69,24 @@ impl Signex {
         };
 
         let grouping_row: Element<'_, Message> = row![
-            text(raw("Grouping:")).size(TS.body).color(text_muted),
+            text(t!(i18n, ids::BOM_GROUPING))
+                .size(TS.body)
+                .color(text_muted),
             Space::new().width(8),
             row_pill(
-                "Grouped".to_string(),
+                t!(i18n, ids::BOM_GROUPING_GROUPED).into(),
                 preview.options.grouping == BomGrouping::Grouped,
                 Message::BomPreview(BomPreviewMsg::SetGrouping(BomGrouping::Grouped)),
             ),
             Space::new().width(4),
             row_pill(
-                "Ungrouped".to_string(),
+                t!(i18n, ids::BOM_GROUPING_UNGROUPED).into(),
                 preview.options.grouping == BomGrouping::Ungrouped,
                 Message::BomPreview(BomPreviewMsg::SetGrouping(BomGrouping::Ungrouped)),
             ),
             Space::new().width(4),
             row_pill(
-                "Flat".to_string(),
+                t!(i18n, ids::BOM_GROUPING_FLAT).into(),
                 preview.options.grouping == BomGrouping::Flat,
                 Message::BomPreview(BomPreviewMsg::SetGrouping(BomGrouping::Flat)),
             ),
@@ -91,22 +95,24 @@ impl Signex {
         .boxed();
 
         let format_row: Element<'_, Message> = row![
-            text(raw("Format:")).size(TS.body).color(text_muted),
+            text(t!(i18n, ids::BOM_FORMAT))
+                .size(TS.body)
+                .color(text_muted),
             Space::new().width(8),
             row_pill(
-                "CSV".to_string(),
+                t!(i18n, ids::BOM_FORMAT_CSV).into(),
                 preview.options.format == BomFormat::Csv,
                 Message::BomPreview(BomPreviewMsg::SetFormat(BomFormat::Csv)),
             ),
             Space::new().width(4),
             row_pill(
-                "XLSX".to_string(),
+                t!(i18n, ids::BOM_FORMAT_XLSX).into(),
                 preview.options.format == BomFormat::Xlsx,
                 Message::BomPreview(BomPreviewMsg::SetFormat(BomFormat::Xlsx)),
             ),
             Space::new().width(4),
             row_pill(
-                "HTML".to_string(),
+                t!(i18n, ids::BOM_FORMAT_HTML).into(),
                 preview.options.format == BomFormat::Html,
                 Message::BomPreview(BomPreviewMsg::SetFormat(BomFormat::Html)),
             ),
@@ -116,13 +122,13 @@ impl Signex {
 
         let toggle_row: Element<'_, Message> = row![
             row_pill(
-                "Include DNP".to_string(),
+                t!(i18n, ids::BOM_INCLUDE_DNP).into(),
                 preview.options.include_dnp,
                 Message::BomPreview(BomPreviewMsg::SetIncludeDnp(!preview.options.include_dnp)),
             ),
             Space::new().width(4),
             row_pill(
-                "Include Not Fitted".to_string(),
+                t!(i18n, ids::BOM_INCLUDE_NOT_FITTED).into(),
                 preview.options.include_not_fitted,
                 Message::BomPreview(BomPreviewMsg::SetIncludeNotFitted(
                     !preview.options.include_not_fitted
@@ -137,16 +143,19 @@ impl Signex {
         let variant_row: Element<'_, Message> = if preview.variants.is_empty() {
             Space::new().boxed()
         } else {
+            // "Base" is compared as text below; a variant can be named so.
             let active_label = preview
                 .options
                 .active_variant
                 .clone()
                 .unwrap_or_else(|| "Base".to_string());
             let mut r = row![
-                text(raw("Variant:")).size(TS.body).color(text_muted),
+                text(t!(i18n, ids::BOM_VARIANT))
+                    .size(TS.body)
+                    .color(text_muted),
                 Space::new().width(8),
                 row_pill(
-                    "Base".to_string(),
+                    t!(i18n, ids::BOM_VARIANT_BASE).into(),
                     preview.options.active_variant.is_none(),
                     Message::BomPreview(BomPreviewMsg::SetVariant(None)),
                 ),
@@ -156,7 +165,7 @@ impl Signex {
                 let is_active = active_label.as_str() == variant.as_str();
                 r = r.push(Space::new().width(4).boxed());
                 r = r.push(row_pill(
-                    variant.clone(),
+                    UserText::new(variant.clone()).into(),
                     is_active,
                     Message::BomPreview(BomPreviewMsg::SetVariant(Some(variant.clone()))),
                 ));
@@ -173,59 +182,60 @@ impl Signex {
                 custom_keys.insert(k.clone());
             }
         }
-        let column_options: Vec<(BomColumn, &'static str)> = vec![
-            (BomColumn::Name, "Name"),
-            (BomColumn::Description, "Description"),
-            (BomColumn::Designator, "Designator"),
-            (BomColumn::Value, "Value"),
-            (BomColumn::Footprint, "Footprint"),
-            (BomColumn::LibRef, "LibRef"),
-            (BomColumn::Qty, "Qty"),
+        let column_options: Vec<(BomColumn, signex_i18n::MessageId)> = vec![
+            (BomColumn::Name, ids::BOM_COLUMN_NAME),
+            (BomColumn::Description, ids::BOM_COLUMN_DESCRIPTION),
+            (BomColumn::Designator, ids::BOM_COLUMN_DESIGNATOR),
+            (BomColumn::Value, ids::BOM_COLUMN_VALUE),
+            (BomColumn::Footprint, ids::BOM_COLUMN_FOOTPRINT),
+            (BomColumn::LibRef, ids::BOM_COLUMN_LIB_REF),
+            (BomColumn::Qty, ids::BOM_COLUMN_QTY),
             // Cached library prices (#1023).
-            (BomColumn::UnitPrice, "Unit Price"),
-            (BomColumn::BuyQty, "Buy Qty"),
-            (BomColumn::ExtendedPrice, "Ext. Price"),
-            (BomColumn::Currency, "Currency"),
-            (BomColumn::Stock, "Stock"),
-            (BomColumn::Distributor, "Distributor"),
-            (BomColumn::PriceAge, "Price Age"),
+            (BomColumn::UnitPrice, ids::BOM_COLUMN_UNIT_PRICE),
+            (BomColumn::BuyQty, ids::BOM_COLUMN_BUY_QTY),
+            (BomColumn::ExtendedPrice, ids::BOM_COLUMN_EXT_PRICE),
+            (BomColumn::Currency, ids::BOM_COLUMN_CURRENCY),
+            (BomColumn::Stock, ids::BOM_COLUMN_STOCK),
+            (BomColumn::Distributor, ids::BOM_COLUMN_DISTRIBUTOR),
+            (BomColumn::PriceAge, ids::BOM_COLUMN_PRICE_AGE),
         ];
         // Properties sidebar — General / Columns tabs, collapsible
         // sections inside.
         use crate::app::state::BomSidebarTab;
         let sidebar_tab = preview.sidebar_tab;
-        let tab_pill = |label: &'static str, target: BomSidebarTab| -> Element<'_, Message> {
-            let on = sidebar_tab == target;
-            button(text(raw(label.to_string())).size(TS.body).color(text_c))
-                .padding([SP.s, SP.l])
-                .on_press(Message::BomPreview(BomPreviewMsg::SetSidebarTab(target)))
-                .style(move |_: &iced::Theme, status: button::Status| {
-                    let bg = match (on, status) {
-                        (true, _) => iced::Color {
-                            a: 0.15,
-                            ..accent_c
-                        },
-                        (false, button::Status::Hovered) => hover_c,
-                        _ => iced::Color::TRANSPARENT,
-                    };
-                    let border_color = if on { accent_c } else { border_c };
-                    button::Style {
-                        background: Some(iced::Background::Color(bg)),
-                        border: iced::Border {
-                            width: 1.0,
-                            radius: 3.0.into(),
-                            color: border_color,
-                            ..iced::Border::default()
-                        },
-                        text_color: text_c,
-                        ..button::Style::default()
-                    }
-                })
-                .boxed()
-        };
+        let tab_pill =
+            |label: signex_i18n::MessageId, target: BomSidebarTab| -> Element<'_, Message> {
+                let on = sidebar_tab == target;
+                button(text(t!(i18n, label)).size(TS.body).color(text_c))
+                    .padding([SP.s, SP.l])
+                    .on_press(Message::BomPreview(BomPreviewMsg::SetSidebarTab(target)))
+                    .style(move |_: &iced::Theme, status: button::Status| {
+                        let bg = match (on, status) {
+                            (true, _) => iced::Color {
+                                a: 0.15,
+                                ..accent_c
+                            },
+                            (false, button::Status::Hovered) => hover_c,
+                            _ => iced::Color::TRANSPARENT,
+                        };
+                        let border_color = if on { accent_c } else { border_c };
+                        button::Style {
+                            background: Some(iced::Background::Color(bg)),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 3.0.into(),
+                                color: border_color,
+                                ..iced::Border::default()
+                            },
+                            text_color: text_c,
+                            ..button::Style::default()
+                        }
+                    })
+                    .boxed()
+            };
 
         let general_pane: Element<'_, Message> = column![
-            section_header("BOM Items", text_muted),
+            section_header(t!(i18n, ids::BOM_SECTION_ITEMS), text_muted),
             container(
                 column![
                     grouping_row,
@@ -238,7 +248,7 @@ impl Signex {
             )
             .padding([SP.m, SP.l]),
             Space::new().height(8),
-            section_header("Export Options", text_muted),
+            section_header(t!(i18n, ids::BOM_SECTION_EXPORT), text_muted),
             container(column![format_row].spacing(0),).padding([SP.m, SP.l]),
         ]
         .spacing(0)
@@ -251,70 +261,76 @@ impl Signex {
         // `Message::BomPreview(BomPreviewMsg::ToggleColumn)` — the existing handler
         // already does add/remove on the Vec.
         let mut col_list: Column<Element<'_, Message>> = Column::new().spacing(0);
-        col_list = col_list.push(section_header("Columns", text_muted));
+        col_list = col_list.push(section_header(
+            t!(i18n, ids::BOM_SECTION_COLUMNS),
+            text_muted,
+        ));
         let mut list_items: Column<Element<'_, Message>> = Column::new().spacing(0);
-        let render_col_row = |col: BomColumn, label: String, on: bool| -> Element<'_, Message> {
-            let pip_bg = if on {
-                Color::from_rgb(0.00, 0.47, 0.84)
-            } else {
-                field_c
-            };
-            let inner = if on {
-                text(raw("\u{2713}")).size(TS.caption).color(Color::WHITE)
-            } else {
-                text(raw(" ")).size(TS.caption)
-            };
-            let pip = container(inner)
-                .width(14)
-                .height(14)
-                .align_x(iced::alignment::Horizontal::Center)
-                .align_y(iced::alignment::Vertical::Center)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(pip_bg)),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: border_c,
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                });
-            button(
-                row![
-                    pip,
-                    Space::new().width(8),
-                    text(raw(label)).size(TS.body).color(text_c),
-                    Space::new().width(Length::Fill),
-                ]
-                .align_y(iced::Alignment::Center),
-            )
-            .on_press(Message::BomPreview(BomPreviewMsg::ToggleColumn(col)))
-            .padding([3.0, SP.l])
-            .width(Length::Fill)
-            .style(move |_: &Theme, status: button::Status| {
-                let bg = match status {
-                    button::Status::Hovered | button::Status::Pressed => {
-                        Some(Background::Color(hover_c))
-                    }
-                    _ => None,
+        let render_col_row =
+            |col: BomColumn, label: Label<'static>, on: bool| -> Element<'_, Message> {
+                let pip_bg = if on {
+                    Color::from_rgb(0.00, 0.47, 0.84)
+                } else {
+                    field_c
                 };
-                button::Style {
-                    background: bg,
-                    border: Border::default(),
-                    text_color: text_c,
-                    ..button::Style::default()
-                }
-            })
-            .boxed()
-        };
+                // raw: a tick glyph (or a blank of the same size), not language.
+                let inner = if on {
+                    text(raw("\u{2713}")).size(TS.caption).color(Color::WHITE)
+                } else {
+                    text(raw(" ")).size(TS.caption)
+                };
+                let pip = container(inner)
+                    .width(14)
+                    .height(14)
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .align_y(iced::alignment::Vertical::Center)
+                    .style(move |_: &Theme| container::Style {
+                        background: Some(Background::Color(pip_bg)),
+                        border: Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: border_c,
+                            ..Border::default()
+                        },
+                        ..container::Style::default()
+                    });
+                button(
+                    row![
+                        pip,
+                        Space::new().width(8),
+                        text(label).size(TS.body).color(text_c),
+                        Space::new().width(Length::Fill),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .on_press(Message::BomPreview(BomPreviewMsg::ToggleColumn(col)))
+                .padding([3.0, SP.l])
+                .width(Length::Fill)
+                .style(move |_: &Theme, status: button::Status| {
+                    let bg = match status {
+                        button::Status::Hovered | button::Status::Pressed => {
+                            Some(Background::Color(hover_c))
+                        }
+                        _ => None,
+                    };
+                    button::Style {
+                        background: bg,
+                        border: Border::default(),
+                        text_color: text_c,
+                        ..button::Style::default()
+                    }
+                })
+                .boxed()
+            };
         for (col, label) in &column_options {
             let on = preview.options.columns.iter().any(|c| c == col);
-            list_items = list_items.push(render_col_row(col.clone(), label.to_string(), on));
+            list_items = list_items.push(render_col_row(col.clone(), t!(i18n, *label).into(), on));
         }
         for key in &custom_keys {
             let col = BomColumn::Custom(key.clone());
             let on = preview.options.columns.iter().any(|c| c == &col);
-            list_items = list_items.push(render_col_row(col, key.clone(), on));
+            list_items =
+                list_items.push(render_col_row(col, UserText::new(key.clone()).into(), on));
         }
         col_list = col_list.push(container(list_items).padding([SP.s, 0.0]).boxed());
         let columns_pane: Element<'_, Message> = col_list.boxed();
@@ -325,16 +341,20 @@ impl Signex {
             BomSidebarTab::Rules => self.bom_rules_pane(),
         };
         let sidebar = column![
-            container(text(raw("Properties")).size(TS.title).color(text_c))
-                .padding([10.0, SP.l])
-                .width(Length::Fill),
+            container(
+                text(t!(i18n, ids::BOM_PROPERTIES))
+                    .size(TS.title)
+                    .color(text_c)
+            )
+            .padding([10.0, SP.l])
+            .width(Length::Fill),
             container(
                 row![
-                    tab_pill("General", BomSidebarTab::General),
+                    tab_pill(ids::BOM_TAB_GENERAL, BomSidebarTab::General),
                     Space::new().width(4),
-                    tab_pill("Columns", BomSidebarTab::Columns),
+                    tab_pill(ids::BOM_TAB_COLUMNS, BomSidebarTab::Columns),
                     Space::new().width(4),
-                    tab_pill("Rules", BomSidebarTab::Rules),
+                    tab_pill(ids::BOM_TAB_RULES, BomSidebarTab::Rules),
                 ]
                 .align_y(iced::Alignment::Center),
             )
