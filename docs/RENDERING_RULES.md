@@ -287,6 +287,10 @@ frame to a fresh one pixel for pixel and to the plain canvas away from the edge.
 
 ## pcb-cpu-content — The CPU board layer (#2321)
 
+A solid line is stroked with round ends, so a track draws as the capsule the
+GPU line shader, hit-testing and DRC take it to be and a bend of any angle is
+filled (#2391; `pcb_canvas::tessellate::track_cap_tests`).
+
 The CPU PCB mount draws the board in a layer of its own,
 `pcb_canvas::BoardContentLayer`, stacked where the GPU mount has its shader:
 the `PcbCanvas` canvas below it draws only the background and grid, the
@@ -357,6 +361,45 @@ Checks: `pcb::footprint_text::tests` (place, flip, eye, layer and
 single-layer visibility), `pcb_geom::text::tests`,
 `pcb_canvas::board_text::tests`, regression
 `pcb_component_properties::{the_canvas_draws_the_designator_until_the_eye_hides_it, a_flip_puts_the_designator_mirrored_on_the_bottom_overlay}`.
+
+## pcb-graphics — Footprint and board drawings on the board (#2387)
+
+A footprint's drawings (`Footprint.graphics`: silkscreen, fab, assembly,
+courtyard, 3D body outline) are footprint-local and are placed by
+`pcb_geom::footprint_graphic_placement` with the footprint's own transform,
+as its pads are. The board's own drawings (`PcbBoard.graphics`) and texts
+(`PcbBoard.texts`) are in board coordinates already
+(`board_graphic_placement`, `board_text_placement`).
+
+- **Kinds:** `line`, `rect` (four corners, so it turns with the footprint),
+  `poly` (a closed outline), `circle`, `arc`, `text`. Another kind, or one
+  missing the points it needs, is not drawn; nor is a value `pcb-geom`
+  refuses.
+- **Arc:** about its centre from its start to its end; with a middle point
+  it runs the way that passes it, without one the way of increasing angle.
+  The bottom-side mirror reverses it. Drawn as chords of at most 6 degrees.
+- **Fill:** `fill = "solid"` draws a circle as a disc and a rectangle or
+  polygon as an area; otherwise the outline. A drawing saved with no width
+  takes `PCB_DEFAULT_GRAPHIC_WIDTH_MM`.
+- **Layer:** drawn only on a layer this build knows and the view shows
+  (`PcbLayerView::is_visible`, so single-layer mode draws the active layer's
+  drawings only). Colour: `ResolvedTheme::board_layer_color`, which the
+  Layers panel swatches read too. A drawing on a copper layer off the active
+  copper layer is dimmed as copper is; other layers are not dimmed.
+- **Text:** a footprint's `text` drawing and a board text join
+  `PcbSnapshot::texts` and draw as the designator does (see
+  "pcb-footprint-text"). A board text on a bottom-side layer is mirrored: it
+  is read from below.
+
+The strokes and areas travel in `PcbSnapshot::graphics` and are emitted
+into the overlay buckets after the board features and before the ratsnest,
+so both mounts draw them from the one scene. A drag preview builds the
+carried footprints' snapshot through the same path, so their drawings move
+with them. The library preview (`PcbSnapshot::from_footprint`) takes the pads
+only and draws the drawings itself in the same palette (#2348).
+
+Checks: `pcb_geom::graphic::tests`, `pcb::graphics::tests` (placement, flip,
+eye, single-layer mode, dimming, board text), `pcb_canvas::drag_preview::tests`.
 
 ## What this document is *not*
 
