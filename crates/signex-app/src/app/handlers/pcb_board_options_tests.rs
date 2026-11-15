@@ -167,7 +167,8 @@ fn place_sets_a_guide_where_the_board_is_clicked() {
         &mut app,
         PcbBoardMsg::GuidePlaceArmed(GuideKind::Horizontal),
     );
-    click(&mut app, 3.1, 7.4);
+    // 3.6 / 1.27 = 2.83, so x rounds to 3 steps (3.81); 3.1 rounds to 2.
+    click(&mut app, 3.6, 7.4);
     let guides = options(&app, &path).guides;
     assert_eq!(guides.len(), 1);
     assert_eq!(guides[0].kind, GuideKind::Horizontal);

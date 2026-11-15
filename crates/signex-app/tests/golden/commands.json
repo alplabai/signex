@@ -675,6 +675,31 @@
     "category": "place"
   },
   {
+    "id": "place_board_fill",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_keepout",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_region",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_track",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_via",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "place_bus",
     "group": "Schematic",
     "category": "place"
