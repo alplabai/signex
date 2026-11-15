@@ -9,7 +9,8 @@ use signex_types::pcb::{LayerDef, PcbBoard, Point, Segment};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 use uuid::Uuid;
 
-use crate::app::{FileMsg, LayerTabMenuMsg, Message, PcbMsg, Signex, UiMsg};
+use crate::app::state::WindowKind;
+use crate::app::{FileMsg, LayerTabMenuMsg, Message, PcbMsg, Signex, UiMsg, WindowMsg};
 use crate::dock::DockMessage;
 use crate::keymap::ShortcutTrigger;
 use crate::layout_probe::{
@@ -231,18 +232,19 @@ fn last_text_at(app: &Signex, window: iced::window::Id, label: &str) -> iced::Po
 
 /// Right-click the tab of `label` and run what it sends. The same name may
 /// also show in a panel or the status bar; the tab is the one whose
-/// right-click opens its menu.
+/// right-click opens its menu, owned by `window` (`None` for the main one).
 fn right_click_tab(app: &mut Signex, window: iced::window::Id, label: &str) {
     let press = iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
         iced::mouse::Button::Right,
     ));
+    let owner = app.overlay_owner(window);
     let opens = |m: &Message| {
         matches!(
             m,
             Message::Pcb(PcbMsg::LayerTabMenu(LayerTabMenuMsg::Opened {
-                window: None,
+                window: opened_in,
                 ..
-            }))
+            })) if *opened_in == owner
         )
     };
     let (at, sent) = lay_out_texts(app.view(window), WINDOW)
@@ -333,4 +335,97 @@ fn esc_and_a_click_outside_close_the_tab_menu_and_change_nothing() {
     assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
     assert!(!app.pcb_layer_view(&path).has_hidden());
     assert_eq!(app.pcb_layer_view(&path).active(), TOP);
+}
+
+/// The main window shows `/w/tabs.snxpcb`; an undocked window shows a
+/// second board with the same layers, with its own fitted canvas.
+fn undocked() -> (Signex, PathBuf, PathBuf, iced::window::Id) {
+    let (mut app, main_path, _main) = open();
+    let path = PathBuf::from("/w/undocked.snxpcb");
+    let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        disk: None,
+        path: path.clone(),
+        title: "undocked".to_string(),
+        result: Ok(Box::new(board())),
+    }));
+    let index = app
+        .document_state
+        .tabs
+        .iter()
+        .position(|tab| tab.path == main_path)
+        .expect("the main board's tab");
+    app.document_state.active_tab = index;
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        WindowKind::UndockedTab {
+            path: path.clone(),
+            title: "undocked".to_string(),
+        },
+    );
+    app.interaction_state
+        .canvases
+        .insert(window, crate::canvas::CanvasSlot::new());
+    let canvas = app.new_pcb_canvas_for(&path).expect("a PCB canvas");
+    let bounds = app.canvas_bounds();
+    canvas.resolve_pending_fit(bounds);
+    app.interaction_state.pcb_canvases.insert(window, canvas);
+    app.interaction_state.pcb_canvas.resolve_pending_fit(bounds);
+    (app, main_path, path, window)
+}
+
+/// #2379 review: a pick in an undocked window's tab menu changes that
+/// window's board view, not the main window's.
+#[test]
+fn a_pick_in_an_undocked_windows_tab_menu_changes_that_windows_board() {
+    let (mut app, main_path, path, window) = undocked();
+    right_click_tab(&mut app, window, "Bottom Layer");
+    let menu = app
+        .interaction_state
+        .pcb_layer_tab_menu
+        .expect("the menu is open");
+    assert_eq!(menu.window, Some(window));
+    assert_eq!(menu.layer, BOTTOM);
+    pick_row(&mut app, window, "Hide this layer");
+    assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
+    assert!(app.pcb_layer_view(&path).is_hidden(BOTTOM));
+    assert!(
+        !app.pcb_layer_view(&main_path).has_hidden(),
+        "the main window's board is untouched"
+    );
+}
+
+/// #2379 review, as #1910 for the other menus: closing or reattaching the
+/// undocked window drops the tab menu it opened, so no menu nobody can see
+/// is left to take the next Esc.
+#[test]
+fn closing_or_reattaching_an_undocked_window_drops_its_tab_menu() {
+    let closers: [fn(iced::window::Id) -> WindowMsg; 2] =
+        [WindowMsg::SecondaryWindowClosed, WindowMsg::ReattachTab];
+    for closed in closers {
+        let (mut app, _main_path, _path, window) = undocked();
+        let _ = app.update(Message::Pcb(PcbMsg::LayerTabMenu(
+            LayerTabMenuMsg::Opened {
+                window: Some(window),
+                layer: BOTTOM,
+            },
+        )));
+        assert!(app.interaction_state.pcb_layer_tab_menu.is_some());
+        let _ = app.update(Message::Window(closed(window)));
+        assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
+    }
+}
+
+/// A tab menu the main window opened stays when an undocked window closes.
+#[test]
+fn closing_an_undocked_window_keeps_the_main_windows_tab_menu() {
+    let (mut app, _main_path, _path, window) = undocked();
+    let _ = app.update(Message::Pcb(PcbMsg::LayerTabMenu(
+        LayerTabMenuMsg::Opened {
+            window: None,
+            layer: BOTTOM,
+        },
+    )));
+    let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(window)));
+    assert!(app.interaction_state.pcb_layer_tab_menu.is_some());
 }

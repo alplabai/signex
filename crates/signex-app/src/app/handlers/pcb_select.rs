@@ -297,17 +297,20 @@ fn sync_drag_preview(
         return;
     };
     if !canvas.previews_drag_of(&carry.footprints) {
-        // Once per carry: the board without what it carries.
-        let rest = board_without(board, &carry.footprints);
+        // Once per carry: the tracks that follow the carried pads, and the
+        // board without what it carries.
+        let following = pcb_geom::tracks_on_pads(board, &carry.footprints);
+        let rest = board_without(board, &carry.footprints, &following);
         let base = PcbSnapshot::from_board_with_view(&rest, view);
-        canvas.begin_drag_preview(carry.footprints.clone(), base);
+        canvas.begin_drag_preview(carry.footprints.clone(), following, base);
     }
+    let following = canvas.drag_preview_following().to_vec();
     canvas.move_drag_preview(carry.delta, || {
-        let moved = carried_board(board, &carry.footprints, carry.delta);
+        let moved = carried_board(board, &carry.footprints, &following, carry.delta);
         let snapshot = PcbSnapshot::from_board_with_view(&moved, view);
         match ratsnest {
             Some((cache, path)) => {
-                let after = board_after_move(board, &carry.footprints, carry.delta);
+                let after = board_after_move(board, &carry.footprints, &following, carry.delta);
                 cache.apply_uncached(path, &after, snapshot)
             }
             None => snapshot,

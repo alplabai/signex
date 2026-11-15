@@ -201,7 +201,7 @@ impl Signex {
         let session = self.own_board_tool()?;
         let board = self.document_state.pcb_board(&session.path)?;
         let cursor = session.cursor?;
-        let mut preview = carried_board(board, &Default::default(), Point::new(0.0, 0.0));
+        let mut preview = carried_board(board, &Default::default(), &[], Point::new(0.0, 0.0));
         match session.tool {
             BoardPlaceTool::Via => preview.vias.push(draw::new_via(board, Uuid::nil(), cursor)),
             BoardPlaceTool::Track => self.route_preview(session, board, cursor, &mut preview),

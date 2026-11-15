@@ -7,11 +7,12 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use pcb_geom::TrackEnds;
 use signex_engine::pcb::BoardClipboard;
 use signex_engine::pcb::part_place::PartToPlace;
 use signex_engine::pcb::placement::{grid_for, grid_step_mm};
 use signex_engine::pcb::snap::{GuideHit, SnapQuery, axis_snap, guide_snap, object_snap_point};
-use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb::{PcbBoard, Point, Segment};
 use signex_types::pcb_layer::CopperLayer;
 use signex_types::pcb_options::{GridUse, GuideKind};
 use uuid::Uuid;
@@ -232,13 +233,14 @@ pub fn snap_point(
     grid_for(board, GridUse::NonComponents).snap_delta(Point::new(0.0, 0.0), to)
 }
 
-/// `board` without `footprints` and the tracks with an end on their pads:
-/// what a drag preview leaves in place.
-pub fn board_without(board: &PcbBoard, footprints: &BTreeSet<Uuid>) -> PcbBoard {
-    let following: BTreeSet<usize> = pcb_geom::tracks_on_pads(board, footprints)
-        .iter()
-        .map(|ends| ends.index)
-        .collect();
+/// `board` without `footprints` and the `following` tracks, the ones with
+/// an end on their pads: what a drag preview leaves in place.
+pub fn board_without(
+    board: &PcbBoard,
+    footprints: &BTreeSet<Uuid>,
+    following: &[TrackEnds],
+) -> PcbBoard {
+    let following: BTreeSet<Uuid> = following.iter().map(|ends| ends.track).collect();
     let mut rest = PcbBoard {
         footprints: Vec::new(),
         segments: Vec::new(),
@@ -253,18 +255,33 @@ pub fn board_without(board: &PcbBoard, footprints: &BTreeSet<Uuid>) -> PcbBoard 
     rest.segments = board
         .segments
         .iter()
-        .enumerate()
-        .filter(|(index, _)| !following.contains(index))
-        .map(|(_, segment)| segment.clone())
+        .filter(|segment| !following.contains(&segment.uuid))
+        .cloned()
         .collect();
     rest
 }
 
+/// The track of `ends` on `board` with its ends on the moved pads shifted
+/// by `delta`; `None` when `board` no longer holds that track where `ends`
+/// found it (`following` is read once per carry; the board may change).
+fn followed(board: &PcbBoard, ends: &TrackEnds, delta: Point) -> Option<Segment> {
+    let segment = board
+        .segments
+        .get(ends.index)
+        .filter(|segment| segment.uuid == ends.track)?;
+    Some(ends.follow(segment, delta))
+}
+
 /// `board` as a move of `footprints` by `delta` leaves it: they and the
-/// track ends on their pads moved (#2379), as the drop's commands
-/// (`placement::move_commands`) move them. The drag preview's ratsnest is
-/// read off it.
-pub fn board_after_move(board: &PcbBoard, footprints: &BTreeSet<Uuid>, delta: Point) -> PcbBoard {
+/// `following` track ends on their pads moved (#2379), as the drop's
+/// commands (`placement::move_commands`) move them. The drag preview's
+/// ratsnest is read off it.
+pub fn board_after_move(
+    board: &PcbBoard,
+    footprints: &BTreeSet<Uuid>,
+    following: &[TrackEnds],
+    delta: Point,
+) -> PcbBoard {
     let mut moved = board.clone();
     for fp in moved
         .footprints
@@ -273,16 +290,23 @@ pub fn board_after_move(board: &PcbBoard, footprints: &BTreeSet<Uuid>, delta: Po
     {
         fp.position = Point::new(fp.position.x + delta.x, fp.position.y + delta.y);
     }
-    for ends in pcb_geom::tracks_on_pads(board, footprints) {
-        moved.segments[ends.index] = ends.follow(&board.segments[ends.index], delta);
+    for ends in following {
+        if let Some(segment) = followed(board, ends, delta) {
+            moved.segments[ends.index] = segment;
+        }
     }
     moved
 }
 
 /// Only `footprints` of `board`, moved by `delta`, on its layers, with the
-/// tracks that follow their pads (#2379): what a drag preview draws where
-/// they are going. No other copper of the board's own.
-pub fn carried_board(board: &PcbBoard, footprints: &BTreeSet<Uuid>, delta: Point) -> PcbBoard {
+/// `following` tracks on their pads (#2379): what a drag preview draws
+/// where they are going. No other copper of the board's own.
+pub fn carried_board(
+    board: &PcbBoard,
+    footprints: &BTreeSet<Uuid>,
+    following: &[TrackEnds],
+    delta: Point,
+) -> PcbBoard {
     let moved = board
         .footprints
         .iter()
@@ -293,9 +317,9 @@ pub fn carried_board(board: &PcbBoard, footprints: &BTreeSet<Uuid>, delta: Point
             fp
         })
         .collect();
-    let segments = pcb_geom::tracks_on_pads(board, footprints)
+    let segments = following
         .iter()
-        .map(|ends| ends.follow(&board.segments[ends.index], delta))
+        .filter_map(|ends| followed(board, ends, delta))
         .collect();
     PcbBoard {
         uuid: board.uuid,
