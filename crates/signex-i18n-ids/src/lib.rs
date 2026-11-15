@@ -2,7 +2,7 @@
 //!
 //! UI-free: no Fluent, ICU or locale dependency, so a domain crate or the
 //! application core can report a [`MessageId`] with its arguments without
-//! rendering it (ADR-0006, "Messages the core reports"). `signex-i18n`
+//! rendering it (epic #2326, decision of 2026-11-15). `signex-i18n`
 //! renders them and re-exports everything here under the same paths.
 
 mod translatable;

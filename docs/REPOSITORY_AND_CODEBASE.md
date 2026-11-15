@@ -245,7 +245,7 @@ Responsibilities:
 
 The message ids (`MessageId`, `ids::*`, `command_ids::*`, …), `Translatable`,
 `Arg`, `LocalNumber` and `UserText` live in the UI-free `signex-i18n-ids` crate
-(ADR-0006, "Messages the core reports"); `signex-i18n` re-exports them under
+(epic #2326, decision of 2026-11-15); `signex-i18n` re-exports them under
 the same paths and renders them. `Translatable::render` takes any
 `MessageRenderer`; `render_en_us` and `localized` come from the
 `signex_i18n::RenderTranslatable` trait.
