@@ -180,6 +180,9 @@ impl Signex {
     /// Hand the canvas the copper to paint for the current selection, the
     /// preview of a drag or Move, and what a press grabs to drag (#2240).
     pub(crate) fn refresh_pcb_highlight(&mut self) {
+        // The leg on the pointer is routed here, once per change, not per
+        // repaint (#2389).
+        self.update_router_preview();
         let carry = self
             .interaction_state
             .pcb_carry

@@ -137,14 +137,25 @@ pub struct RouteWorld<'a> {
     tree: RTree<Slot>,
     keepouts: Vec<KeepoutArea>,
     rule: &'a ClearanceRule<'a>,
-    /// The most clearance any item asks for: how far the broad phase looks.
+    /// How far the broad phase looks: the widest clearance the rules can
+    /// ask of any pair.
     reach: i64,
 }
 
 impl<'a> RouteWorld<'a> {
-    /// The netted copper of `board` (`collect_copper`) and its keepouts,
-    /// the board sketch's and those drawn as zones.
+    /// [`Self::with_reach`] looking as far as the widest clearance any item
+    /// asks of an item like itself. Rules scoped to a pair of object kinds
+    /// need [`Self::with_reach`].
     pub fn new(board: &PcbBoard, rule: &'a ClearanceRule<'a>) -> Self {
+        Self::with_reach(board, rule, 0)
+    }
+
+    /// The netted copper of `board` (`collect_copper`) and its keepouts,
+    /// the board sketch's and those drawn as zones. The broad phase looks
+    /// `reach` nm round new copper, or further when an item asks more of an
+    /// item like itself; `reach` is the widest clearance the rules can ask
+    /// of any pair, as the design rule check reads it.
+    pub fn with_reach(board: &PcbBoard, rule: &'a ClearanceRule<'a>, reach: i64) -> Self {
         let items = collect_copper(board);
         let slots = items
             .iter()
@@ -154,7 +165,10 @@ impl<'a> RouteWorld<'a> {
                 envelope: envelope_of(&item.shape.aabb()),
             })
             .collect();
-        let reach = items.iter().map(|item| rule(item, item)).max().unwrap_or(0);
+        let reach = items
+            .iter()
+            .map(|item| rule(item, item))
+            .fold(reach, i64::max);
         let drawn: Vec<PcbKeepout> = board.zones.iter().filter_map(|z| z.as_keepout()).collect();
         let sketch = board.sketch.iter().flat_map(|s| s.keepouts.iter());
         let keepouts = sketch.chain(&drawn).filter_map(KeepoutArea::of).collect();
@@ -265,6 +279,55 @@ impl<'a> RouteWorld<'a> {
                     && !matches!(o.item, ItemRef::Track(_))
                     && o.shape.contains(end, 0)
             })
+    }
+
+    /// Whether copper of item `index`'s net on its layers touches it other
+    /// than the items in `moving` (which move with it) and copper holding
+    /// one of the `kept` points (which stay where they are): a connection a
+    /// push would break, a T-junction or an overlap.
+    pub(super) fn is_joined_elsewhere(
+        &self,
+        index: usize,
+        kept: &[PointNm],
+        moving: &[usize],
+    ) -> bool {
+        let item = &self.items[index];
+        self.tree
+            .locate_in_envelope_intersecting(&envelope_of(&item.shape.aabb()))
+            .map(|slot| slot.index)
+            .any(|other| {
+                let o = &self.items[other];
+                other != index
+                    && !moving.contains(&other)
+                    && o.net == item.net
+                    && o.layers & item.layers != 0
+                    && o.shape.overlaps(&item.shape)
+                    && !kept.iter().any(|&p| o.shape.contains(p, 0))
+            })
+    }
+
+    /// Whether the track or via `id` comes closer than the rule to another
+    /// net's copper, or sits in a keepout that forbids it. False for an
+    /// item this world does not hold.
+    pub fn is_crowded(&self, id: ItemRef) -> bool {
+        let Some(index) = self.items.iter().position(|c| c.item == id) else {
+            return false;
+        };
+        let item = &self.items[index];
+        let kind = match item.item {
+            ItemRef::Via(_) => NewKind::Via,
+            _ => NewKind::Track,
+        };
+        let new = NewCopper {
+            kind,
+            net: item.net,
+            layers: item.layers,
+            shape: item.shape,
+        };
+        self.in_keepout(&new)
+            || !self
+                .conflicts(item, &HashMap::new(), Some(index))
+                .is_empty()
     }
 }
 

@@ -14,7 +14,10 @@ use super::super::items::{BoardItem, BoardItemId};
 /// The accordion's shape and the rule it keeps.
 pub struct Meander<'a> {
     pub clearance: &'a ClearanceRule<'a>,
-    /// How far apart the accordion's legs run.
+    /// The widest clearance the rules can ask of any pair, in nm.
+    pub reach: i64,
+    /// How far apart the accordion's legs run; a bump is never lower than
+    /// half of it, so it never folds onto its own copper.
     pub pitch_mm: f64,
     /// The tallest a bump may be.
     pub amplitude_mm: f64,
@@ -31,6 +34,8 @@ pub enum TuneRefusal {
     LongEnough { current_mm: f64 },
     #[error("the track is too short for the meanders this needs")]
     TooShort,
+    #[error("the net is short by less than one meander adds ({least_mm:.3} mm)")]
+    TooLittle { least_mm: f64 },
     #[error("the meanders would not keep the clearance the rules ask")]
     Blocked,
     #[error("a length here is not one the board geometry can hold")]
@@ -70,14 +75,23 @@ pub fn tune_length(
     let a = PointNm::from_mm(segment.start, "track start").map_err(|_| Unrepresentable)?;
     let b = PointNm::from_mm(segment.end, "track end").map_err(|_| Unrepresentable)?;
     let length = (a.distance_sq(b) as f64).sqrt().floor() as i64;
+    // A bump lower than half a pitch lays its copper over itself: it adds
+    // centre-line length but no real length.
+    let lowest = (pitch + 1) / 2;
+    if extra < 2 * lowest {
+        return Err(TuneRefusal::TooLittle {
+            least_mm: pcb_geom::nm_to_mm(2 * lowest),
+        });
+    }
     let bumps = (extra + 2 * amplitude - 1) / (2 * amplitude);
+    let bumps = bumps.min(extra / (2 * lowest)).max(1);
     let bumps = usize::try_from(bumps).map_err(|_| Unrepresentable)?;
     if bumps > accordion_room(length, pitch) {
         return Err(TuneRefusal::TooShort);
     }
     let twice = 2 * bumps as i64;
     let height = (extra + twice - 1) / twice;
-    let world = RouteWorld::new(board, meander.clearance);
+    let world = RouteWorld::with_reach(board, meander.clearance, meander.reach);
     let radius = (nm(segment.width)? / 2).abs();
     let layers = layer_mask(std::iter::once(segment.layer.as_str()));
     let is_clear = |corners: &[PointNm]| {

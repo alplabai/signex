@@ -78,3 +78,32 @@ fn a_track_held_by_a_pad_or_crossed_by_the_leg_does_not_move() {
     let world = RouteWorld::new(&crossed, &rule);
     assert_eq!(shove(&world, &[leg()]), None, "the leg crosses it");
 }
+
+#[test]
+fn a_track_with_a_branch_off_its_side_does_not_move() {
+    // Net 2: a run over the leg, risers joined at both ends, and a branch
+    // whose end sits on the run's side (a T-junction), clear of the leg.
+    let run = |branch: bool| {
+        let mut tracks = vec![
+            track_at(1, (2.0, 0.1), (14.0, 0.1), 2),
+            track_at(2, (2.0, 0.1), (2.0, 5.0), 2),
+            track_at(3, (14.0, 5.0), (14.0, 0.1), 2),
+        ];
+        if branch {
+            tracks.push(track_at(4, (13.0, 0.1), (13.0, 5.0), 2));
+        }
+        board(Vec::new(), tracks)
+    };
+    let free = run(false);
+    let world = RouteWorld::new(&free, &rule);
+    let pushed = shove(&world, &[leg()]).expect("without the branch the run moves");
+    assert_eq!(pushed.len(), 3, "the run and its two risers: {pushed:?}");
+
+    let branched = run(true);
+    let world = RouteWorld::new(&branched, &rule);
+    assert_eq!(
+        shove(&world, &[leg()]),
+        None,
+        "moving the run would leave the branch behind"
+    );
+}

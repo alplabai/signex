@@ -89,6 +89,12 @@ pcb-route-unrepresentable = Interactive Routing: a point or the track width is o
 pcb-route-no-rules = Interactive Routing: the board's rules are not usable: { $why }
 pcb-route-mode-walkaround = Interactive Routing: walk around other nets' copper
 pcb-route-mode-shove = Interactive Routing: push other nets' tracks aside, walk around the rest
+pcb-route-board-changed = Interactive Routing: a track the route pushed was changed or removed since, so nothing was added
+# The board changed under a route being drawn (an undo, an edit elsewhere)
+# and the route no longer fits it; $why says how.
+pcb-route-stale = Interactive Routing: the board changed and the route no longer fits it ({ $why }), so nothing was added; Esc discards the route
+pcb-route-not-placed = Interactive Routing: the board changed and the route no longer fits it ({ $why }), so nothing was placed; undo or redo back to place it, or press Esc again to discard it
+pcb-route-discarded = Interactive Routing: the route no longer fits the board ({ $why }) and was discarded; the board is unchanged
 
 # Layer names in the Layers panel, the layer strip and the status bar, as
 # Altium names them. A mechanical layer the user named shows that name instead.

@@ -14,8 +14,8 @@ use super::*;
 use crate::pcb::BoardEngine;
 use crate::pcb::draw::new_via;
 
-const A: (u32, &str) = (1, "A");
-const B: (u32, &str) = (2, "B");
+pub(super) const A: (u32, &str) = (1, "A");
+pub(super) const B: (u32, &str) = (2, "B");
 
 /// A footprint holding one round 1 mm top pad at (`x`, `y`).
 pub(super) fn pad(n: u128, x: f64, y: f64, net: (u32, &str)) -> serde_json::Value {
@@ -55,7 +55,7 @@ pub(super) fn board(
     .unwrap()
 }
 
-fn style(layer: CopperLayer) -> TrackStyle {
+pub(super) fn style(layer: CopperLayer) -> TrackStyle {
     TrackStyle {
         layer,
         width_mm: 0.25,
@@ -63,7 +63,7 @@ fn style(layer: CopperLayer) -> TrackStyle {
     }
 }
 
-fn request(from: (f64, f64), to: (f64, f64)) -> LegRequest {
+pub(super) fn request(from: (f64, f64), to: (f64, f64)) -> LegRequest {
     LegRequest {
         from: Point::new(from.0, from.1),
         to: Point::new(to.0, to.1),
@@ -74,7 +74,7 @@ fn request(from: (f64, f64), to: (f64, f64)) -> LegRequest {
 
 /// Land `draft` on `board` and run the design rule check on the result;
 /// one undo must give `board` back.
-fn land_and_check(board: &PcbBoard, draft: &RouteDraft, rules: &DrcRules) -> PcbBoard {
+pub(super) fn land_and_check(board: &PcbBoard, draft: &RouteDraft, rules: &DrcRules) -> PcbBoard {
     let before = serde_json::to_string(board).unwrap();
     let mut engine = BoardEngine::new(board.clone(), 1);
     engine
@@ -106,9 +106,11 @@ fn a_leg_goes_around_an_other_net_pad_and_passes_the_rule_check() {
     let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
     let route = RouteRules {
         clearance: &clearance,
+        reach: rules.widest_clearance(),
         corner: CornerRule::default(),
         mode: RouteMode::Walkaround,
         grid_mm: 0.5,
+        budget: SEARCH_BUDGET,
     };
     let draft = RouteDraft::default();
     let leg = route_leg(
@@ -165,9 +167,11 @@ fn shove_pushes_an_other_net_track_aside_and_keeps_it_legal() {
     let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
     let mut route = RouteRules {
         clearance: &clearance,
+        reach: rules.widest_clearance(),
         corner: CornerRule::default(),
         mode: RouteMode::Walkaround,
         grid_mm: 0.5,
+        budget: SEARCH_BUDGET,
     };
     let leg = |route: &RouteRules| {
         route_leg(
@@ -213,9 +217,11 @@ fn a_via_that_does_not_keep_the_clearance_is_refused() {
     let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
     let route = RouteRules {
         clearance: &clearance,
+        reach: rules.widest_clearance(),
         corner: CornerRule::default(),
         mode: RouteMode::Walkaround,
         grid_mm: 0.5,
+        budget: SEARCH_BUDGET,
     };
     let via = Via {
         net: 1,

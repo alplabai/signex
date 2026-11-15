@@ -1,19 +1,23 @@
 //! #2389 — Interactive Routing through the app: a route between two pads
 //! goes around an other-net pad at the rule clearance, push mode moves an
 //! other-net track and keeps it legal, nothing lands until the route ends,
-//! and one undo removes the whole route.
+//! and one undo removes the whole route. A board that changed under the
+//! route (an undo) is checked again: the route lands when it still fits,
+//! and is kept, then discarded, when it does not.
 
 use std::path::{Path, PathBuf};
 
 use serde_json::json;
-use signex_types::pcb::{PcbBoard, Point};
+use signex_engine::pcb::draw::place_via;
+use signex_engine::pcb::route::{RouteDraft, RouteMode};
+use signex_engine::pcb::{BoardCommand, BoardItem};
+use signex_types::pcb::{PcbBoard, Point, Segment};
 use uuid::Uuid;
 
 use super::tests::{board_of, click, escape, has_ghost, hover, live, run, undo};
 use crate::app::Signex;
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::pcb_tools::BoardPlaceTool;
-use signex_engine::pcb::route::RouteMode;
 
 /// A footprint holding one round 1 mm top pad at (`x`, `y`) on `net`.
 fn pad(n: u128, x: f64, y: f64, net: u32) -> serde_json::Value {
@@ -157,4 +161,95 @@ fn interactive_routing_is_a_live_tool_and_space_bends_its_route() {
     let rule = app.interaction_state.corner_rule;
     run(&mut app, "rotate_counterclockwise");
     assert_eq!(app.interaction_state.corner_rule, rule.flipped());
+}
+
+/// The route drawn with the tool, if any.
+fn drawn_draft(app: &Signex) -> Option<RouteDraft> {
+    let session = app.interaction_state.pcb_tool.as_ref()?;
+    session.router.as_ref().map(|router| router.draft.clone())
+}
+
+#[test]
+fn a_route_whose_pushed_run_was_undone_does_not_land_and_is_discarded_on_the_next_esc() {
+    let dir = tempfile::tempdir().unwrap();
+    let net_b = vec![pad(3, 2.0, 5.0, 2), pad(4, 8.0, 5.0, 2)];
+    let (mut app, path) = app_with(dir.path(), net_b, Vec::new());
+    let before_run = live(&app, &path);
+    // Net B's run lands as its own undo step.
+    let run_b: Vec<BoardItem> = [
+        track(11, (2.0, 0.3), (8.0, 0.3), 2),
+        track(12, (2.0, 0.3), (2.0, 5.0), 2),
+        track(13, (8.0, 5.0), (8.0, 0.3), 2),
+    ]
+    .into_iter()
+    .map(|value| BoardItem::Segment(serde_json::from_value::<Segment>(value).unwrap()))
+    .collect();
+    let add = BoardCommand::AddItems { items: run_b };
+    app.execute_board_commands(&path, vec![add], None)
+        .expect("the run lands");
+    let with_run = live(&app, &path);
+
+    run(&mut app, "cycle_route_mode");
+    run(&mut app, "place_board_route");
+    click(&mut app, 0.0, 0.0);
+    click(&mut app, 10.0, 0.0);
+    let pushed = drawn_draft(&app).expect("a route is drawn");
+    assert!(!pushed.shoved.is_empty(), "the leg pushed the run");
+    assert_eq!(live(&app, &path), with_run, "nothing lands mid-route");
+
+    // Undo takes the run away under the route.
+    undo(&mut app);
+    assert_eq!(live(&app, &path), before_run);
+    escape(&mut app);
+    assert_eq!(
+        live(&app, &path),
+        before_run,
+        "a route built on the undone run does not land"
+    );
+    assert_eq!(
+        drawn_draft(&app),
+        Some(pushed),
+        "the route is kept, not lost behind a log line"
+    );
+
+    escape(&mut app);
+    assert_eq!(live(&app, &path), before_run);
+    let session = app
+        .interaction_state
+        .pcb_tool
+        .as_ref()
+        .expect("still armed");
+    assert!(
+        session.router.is_none() && session.points.is_empty(),
+        "the second Esc discards it"
+    );
+}
+
+#[test]
+fn a_route_lands_after_an_undo_that_leaves_it_fitting() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), vec![pad(3, 5.0, 0.0, 2)], Vec::new());
+    let before = live(&app, &path);
+    let far_via = place_via(
+        board_of(&app, &path),
+        Uuid::from_u128(77),
+        Point::new(30.0, 30.0),
+    );
+    app.execute_board_commands(&path, vec![far_via], None)
+        .expect("the via lands");
+
+    run(&mut app, "place_board_route");
+    click(&mut app, 0.0, 0.0);
+    click(&mut app, 10.0, 0.0);
+    // Undo takes the far via away; the route still fits.
+    undo(&mut app);
+    assert_eq!(live(&app, &path), before);
+    escape(&mut app);
+
+    let board = board_of(&app, &path);
+    assert!(board.vias.is_empty(), "the undone via stays undone");
+    assert!(board.segments.len() >= 3, "the route landed around the pad");
+    assert_legal(&app, &path);
+    undo(&mut app);
+    assert_eq!(live(&app, &path), before, "one undo removes the route");
 }

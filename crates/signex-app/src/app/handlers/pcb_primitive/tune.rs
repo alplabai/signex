@@ -56,6 +56,7 @@ impl Signex {
         let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
         let meander = Meander {
             clearance: &clearance,
+            reach: rules.widest_clearance(),
             pitch_mm,
             amplitude_mm: AMPLITUDE_PITCHES * pitch_mm,
         };

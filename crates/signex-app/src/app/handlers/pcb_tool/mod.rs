@@ -83,7 +83,9 @@ impl Signex {
             return;
         }
         self.end_pcb_carry();
-        self.finish_board_route();
+        // A route drawn on any board, this one or another window's, lands
+        // (or is discarded, said in Messages) before the tool is replaced.
+        self.finish_board_route(true);
         self.interaction_state.pcb_primitive.net_pick = None;
         self.interaction_state.pcb_tool = Some(BoardToolSession {
             tool,
@@ -120,15 +122,22 @@ impl Signex {
     /// End the tool armed on the board this window shows.
     pub(crate) fn end_board_tool(&mut self) {
         if self.own_board_tool().is_some() {
-            self.finish_board_route();
-            self.interaction_state.pcb_tool = None;
+            self.release_board_tool();
             self.refresh_pcb_highlight();
         }
     }
 
+    /// End whatever tool is armed, on any board, for a Move, paste or part
+    /// on the cursor: a route being drawn lands first, or is discarded with
+    /// a Messages line when it no longer fits the board.
+    pub(crate) fn release_board_tool(&mut self) {
+        self.finish_board_route(true);
+        self.interaction_state.pcb_tool = None;
+    }
+
     /// Esc or a right-click: drop the shape being drawn (a route lands on
-    /// the board as one step), or end the tool when none is. Whether a
-    /// tool took it.
+    /// the board as one step, or stays drawn once when it no longer fits),
+    /// or end the tool when none is. Whether a tool took it.
     pub(crate) fn step_back_board_tool(&mut self) -> bool {
         let Some(session) = self.own_board_tool() else {
             return false;
@@ -136,8 +145,7 @@ impl Signex {
         if session.points.is_empty() {
             self.end_board_tool();
         } else {
-            self.finish_board_route();
-            self.drop_board_shape();
+            self.end_route_shape();
         }
         true
     }
@@ -231,7 +239,7 @@ impl Signex {
             BoardPlaceTool::Via => preview.vias.push(draw::new_via(board, Uuid::nil(), cursor)),
             BoardPlaceTool::Track => self.route_preview(session, board, cursor, &mut preview),
             BoardPlaceTool::InteractiveRouting => {
-                self.router_preview(session, board, cursor, &mut preview);
+                self.router_preview(session, &mut preview);
             }
             BoardPlaceTool::Fill | BoardPlaceTool::SolidRegion | BoardPlaceTool::Keepout => {
                 self.area_preview(session, board, cursor, &mut preview);

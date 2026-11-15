@@ -179,6 +179,27 @@ impl DrcRules {
         )
     }
 
+    /// The smallest via copper diameter and drill the written rules allow
+    /// for `net` on `layers`, in nm; `None` where no rule sets one.
+    pub fn via_size_limits(&self, net: u32, layers: u32) -> (Option<i64>, Option<i64>) {
+        let limit = |kind| self.object_limit(kind, net, layers).map(|(nm, _)| nm);
+        (
+            limit(LimitKind::MinViaDiameter),
+            limit(LimitKind::MinViaDrill),
+        )
+    }
+
+    /// The most clearance any pair of copper items can need here: the
+    /// board value, every net class's and every written rule's, whatever
+    /// nets, layers or object kinds the rule names. How far a search from
+    /// one item must look so that no pair is missed, whichever side's rule
+    /// asks it (the interactive router's broad phase, #2389).
+    pub fn widest_clearance(&self) -> i64 {
+        let classes = self.net_clearance.values().copied().max().unwrap_or(0);
+        let written = user_rules::widest_written_clearance(&self.user);
+        self.clearance.max(classes).max(written).min(MAX_ABS_NM)
+    }
+
     /// Between two sides asking the same clearance: the more severe one
     /// wins, so a milder rule never downgrades the other side's finding;
     /// at equal severity a written rule is named over the implicit value.

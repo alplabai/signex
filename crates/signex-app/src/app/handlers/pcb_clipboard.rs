@@ -114,7 +114,7 @@ impl Signex {
         let window = self.interaction_state.acting_window;
         let load = PasteLoad { copy, ghost };
         // A paste on the cursor replaces a placement tool (#2373).
-        self.interaction_state.pcb_tool = None;
+        self.release_board_tool();
         self.interaction_state.pcb_carry = Some(PcbCarry::paste(path, window, load, at));
         crate::diagnostics::log_info("Paste: click where the copy should go (Esc to cancel)");
         self.refresh_pcb_highlight();

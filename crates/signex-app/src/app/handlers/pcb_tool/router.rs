@@ -4,21 +4,25 @@
 //! written rules' limits. Each later click routes a leg to the point with
 //! `signex_engine::pcb::route`: around other nets' copper at the rule
 //! clearance, or pushing their tracks aside (`cycle_route_mode`), bent by
-//! the corner rule of #2372; a layer change adds a via. The legs stay off
-//! the board until the route ends (a click on its end, Esc, a right-click,
-//! another tool), then land as one undo step.
+//! the corner rule of #2372; a layer change adds a via no smaller than the
+//! rules allow. The legs stay off the board until the route ends (a click
+//! on its end, Esc, a right-click, another tool), then land as one undo
+//! step, checked against the board revision they were routed on. How a
+//! board that changed under the route is handled: `docs/PCB_TOOLS.md`,
+//! "Interactive Routing".
 
 use pcb_geom::CopperItem;
 use signex_drc::DrcRules;
 use signex_engine::pcb::draw::TrackStyle;
 use signex_engine::pcb::placement::grid_step_mm;
 use signex_engine::pcb::route::{
-    LegRequest, RouteDraft, RouteMode, RouteRefusal, RouteRules, RoutedLeg, route_leg,
+    LegRequest, PREVIEW_BUDGET, RouteDraft, RouteMode, RouteRefusal, RouteRules, RoutedLeg,
+    SEARCH_BUDGET, draft_fits, route_leg,
 };
 use signex_i18n::{MessageId, ids, t};
 use signex_types::corner::CornerRule;
 use signex_types::net_class::{NetClass, first_matching_class};
-use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb::{PcbBoard, Point, Via};
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
@@ -26,13 +30,52 @@ use super::BoardToolSession;
 use super::route::next_leg_style;
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
+use crate::app::state::pcb_edit::CheckedStep;
 
-/// The route being drawn: its legs not yet on the board, and the rules
-/// they keep, read once when the route starts.
+/// The route being drawn: its legs not yet on the board, the rules they
+/// keep (read once when the route starts) and the board revision they were
+/// last checked against.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RouterState {
     pub draft: RouteDraft,
     pub rules: DrcRules,
+    pub revision: u64,
+    /// Landing the draft was refused once: the next Esc discards it.
+    pub refused: bool,
+    /// The leg the next click adds, routed for the pointer.
+    pub preview: Option<RouterPreview>,
+}
+
+/// The leg on the pointer and what it was routed from: routed again only
+/// when one of those changes, not on every repaint.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RouterPreview {
+    pub key: PreviewKey,
+    pub leg: Option<RoutedLeg>,
+}
+
+/// What the leg on the pointer depends on.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PreviewKey {
+    pub anchor: Point,
+    pub cursor: Point,
+    /// Points placed so far: a new leg changes the draft.
+    pub placed: usize,
+    pub revision: u64,
+    pub corner: CornerRule,
+    pub mode: RouteMode,
+    pub layer: CopperLayer,
+}
+
+/// How ending a route went.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RouteEnd {
+    /// It landed, or there was nothing to land.
+    Landed,
+    /// It no longer fits the board and is kept for another try.
+    Kept,
+    /// It no longer fits the board and was dropped, said in Messages.
+    Discarded,
 }
 
 impl Signex {
@@ -54,8 +97,15 @@ impl Signex {
         };
         if at == anchor {
             // A second click on the route's end finishes it.
-            self.finish_board_route();
-            self.drop_board_shape();
+            self.end_route_shape();
+            return;
+        }
+        if let Err(why) = self.recheck_route() {
+            if let Some(router) = self.own_router_mut() {
+                router.refused = true;
+            }
+            let line = t!(self.ui_state.i18n, ids::PCB_ROUTE_STALE, "why" => why);
+            crate::diagnostics::log_warning(line.into_string());
             return;
         }
         let Some((board, session)) = self.active_pcb().zip(self.own_board_tool()) else {
@@ -69,23 +119,22 @@ impl Signex {
             from: anchor,
             to: at,
             style,
-            via,
+            via: via.map(|via| rule_via(via, &router.rules)),
         };
         let interaction = &self.interaction_state;
-        let routed = route_on(
-            board,
-            router,
-            leg,
-            (interaction.corner_rule, interaction.route_mode),
-            Uuid::now_v7,
+        let modes = (
+            interaction.corner_rule,
+            interaction.route_mode,
+            SEARCH_BUDGET,
         );
-        match routed {
+        match route_on(board, router, leg, modes, Uuid::now_v7) {
             Ok(leg) => {
                 if let Some(session) = self.own_board_tool_mut() {
                     session.points.push(at);
                     session.route = Some(style);
                     if let Some(router) = session.router.as_mut() {
                         router.draft.add(leg);
+                        router.refused = false;
                     }
                 }
             }
@@ -99,6 +148,13 @@ impl Signex {
     /// The first click: read the board's rules and start the route at `at`.
     fn start_route(&mut self, at: Point, layer: CopperLayer) {
         let Some((path, board)) = self.active_tab_path().zip(self.active_pcb()) else {
+            return;
+        };
+        let Some(revision) = self
+            .document_state
+            .board_engine(&path)
+            .map(|engine| engine.revision())
+        else {
             return;
         };
         let (rules, classes) = match self.board_design_rules(&path, board) {
@@ -117,22 +173,130 @@ impl Signex {
             session.router = Some(RouterState {
                 draft: RouteDraft::default(),
                 rules,
+                revision,
+                refused: false,
+                preview: None,
             });
         }
     }
 
-    /// Land the route being drawn on the board as one undo step. Nothing
-    /// when no route is drawn or it has no leg yet.
-    pub(super) fn finish_board_route(&mut self) {
-        let draft = self
-            .own_board_tool_mut()
-            .and_then(|session| session.router.as_mut())
-            .map(|router| std::mem::take(&mut router.draft));
-        let Some(draft) = draft.filter(|d| !d.is_empty()) else {
-            return;
+    /// End the route on the board in view (its end clicked, Esc or a
+    /// right-click): the tool stays armed for a new route, unless the route
+    /// no longer fits and is kept for another try.
+    pub(super) fn end_route_shape(&mut self) {
+        if self.finish_board_route(false) != RouteEnd::Kept {
+            self.drop_board_shape();
+        }
+    }
+
+    /// Land the route being drawn, on whichever board it is drawn, as one
+    /// undo step. Nothing when no route is drawn or it has no leg yet. When
+    /// the board changed under it and it no longer fits, nothing lands: the
+    /// route is kept for one more try, or dropped when `last_chance` (the
+    /// tool is ending) or a try was refused already; Messages says which.
+    pub(super) fn finish_board_route(&mut self, last_chance: bool) -> RouteEnd {
+        let Some(router) = self.drawn_router() else {
+            return RouteEnd::Landed;
         };
-        let what = t!(self.ui_state.i18n, ids::PCB_TOOL_ROUTE).into_string();
-        self.run_placement(&what, Ok(draft.commands()));
+        if router.draft.is_empty() {
+            return RouteEnd::Landed;
+        }
+        let refused_before = router.refused;
+        let why = match self.land_route() {
+            Ok(()) => {
+                if let Some(router) = self.drawn_router_mut() {
+                    router.draft = RouteDraft::default();
+                }
+                return RouteEnd::Landed;
+            }
+            Err(why) => why,
+        };
+        let i18n = &self.ui_state.i18n;
+        if last_chance || refused_before {
+            let line = t!(i18n, ids::PCB_ROUTE_DISCARDED, "why" => why);
+            crate::diagnostics::log_warning(line.into_string());
+            if let Some(router) = self.drawn_router_mut() {
+                router.draft = RouteDraft::default();
+            }
+            return RouteEnd::Discarded;
+        }
+        let line = t!(i18n, ids::PCB_ROUTE_NOT_PLACED, "why" => why);
+        crate::diagnostics::log_warning(line.into_string());
+        if let Some(router) = self.drawn_router_mut() {
+            router.refused = true;
+        }
+        RouteEnd::Kept
+    }
+
+    /// Run the draft on its board as one step checked against the revision
+    /// it fits; why not, when it does not.
+    fn land_route(&mut self) -> Result<(), String> {
+        self.recheck_route()?;
+        let Some(session) = self.interaction_state.pcb_tool.as_ref() else {
+            return Ok(());
+        };
+        let Some(router) = session.router.as_ref() else {
+            return Ok(());
+        };
+        let path = session.path.clone();
+        let commands = router.draft.commands();
+        let expected_revision = router.revision;
+        let label = t!(self.ui_state.i18n, ids::PCB_TOOL_ROUTE).into_string();
+        let step = CheckedStep {
+            label: &label,
+            expected_revision,
+        };
+        self.execute_board_commands(&path, commands, Some(step))
+            .map_err(|error| error.to_string())?;
+        self.refresh_pcb_highlight();
+        Ok(())
+    }
+
+    /// Check the draft against its board when the board moved past the
+    /// revision it was last checked on (an undo, an edit from another
+    /// window or panel); a draft that still fits is then held against the
+    /// new revision. Why it does not fit, when it does not.
+    fn recheck_route(&mut self) -> Result<(), String> {
+        let Some(session) = self.interaction_state.pcb_tool.as_ref() else {
+            return Ok(());
+        };
+        let Some(router) = session.router.as_ref() else {
+            return Ok(());
+        };
+        let Some(engine) = self.document_state.board_engine(&session.path) else {
+            let gone = crate::app::BoardEditError::NotLoaded(session.path.clone());
+            return Err(gone.to_string());
+        };
+        let live = engine.revision();
+        if live == router.revision {
+            return Ok(());
+        }
+        let rules = &router.rules;
+        let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
+        draft_fits(
+            engine.board(),
+            &router.draft,
+            &clearance,
+            rules.widest_clearance(),
+        )
+        .map_err(|refusal| refusal.to_string())?;
+        if let Some(router) = self.drawn_router_mut() {
+            router.revision = live;
+        }
+        Ok(())
+    }
+
+    /// The route drawn with the tool armed, on whichever board.
+    fn drawn_router(&self) -> Option<&RouterState> {
+        self.interaction_state.pcb_tool.as_ref()?.router.as_ref()
+    }
+
+    fn drawn_router_mut(&mut self) -> Option<&mut RouterState> {
+        self.interaction_state.pcb_tool.as_mut()?.router.as_mut()
+    }
+
+    fn own_router_mut(&mut self) -> Option<&mut RouterState> {
+        self.own_board_tool_mut()?.router.as_mut()
     }
 
     /// `cycle_route_mode`: walk around other nets, or push their tracks.
@@ -151,37 +315,76 @@ impl Signex {
         }
     }
 
-    /// The route so far and the leg the next click adds, drawn into
-    /// `preview`.
-    pub(super) fn router_preview(
-        &self,
-        session: &BoardToolSession,
-        board: &PcbBoard,
-        cursor: Point,
-        preview: &mut PcbBoard,
-    ) {
+    /// Route the leg on the pointer again when what it depends on changed
+    /// (the pointer's grid point, a leg, the board, the corner rule, the
+    /// mode or the layer), with the preview's smaller search budget.
+    pub(crate) fn update_router_preview(&mut self) {
+        let Some(key) = self.router_preview_key() else {
+            return;
+        };
+        let held = self
+            .own_board_tool()
+            .and_then(|session| session.router.as_ref())
+            .and_then(|router| router.preview.as_ref())
+            .is_some_and(|preview| preview.key == key);
+        if held {
+            return;
+        }
+        let leg = self.preview_leg(key);
+        if let Some(router) = self.own_router_mut() {
+            router.preview = Some(RouterPreview { key, leg });
+        }
+    }
+
+    fn router_preview_key(&self) -> Option<PreviewKey> {
+        let session = self.own_board_tool().filter(|s| s.router.is_some())?;
+        let anchor = *session.points.last()?;
+        let cursor = session.cursor?;
+        let revision = self.document_state.board_engine(&session.path)?.revision();
+        let interaction = &self.interaction_state;
+        Some(PreviewKey {
+            anchor,
+            cursor,
+            placed: session.points.len(),
+            revision,
+            corner: interaction.corner_rule,
+            mode: interaction.route_mode,
+            layer: self.active_copper_layer()?,
+        })
+    }
+
+    fn preview_leg(&self, key: PreviewKey) -> Option<RoutedLeg> {
+        if key.cursor == key.anchor {
+            return None;
+        }
+        let session = self.own_board_tool()?;
+        let router = session.router.as_ref()?;
+        let board = self.document_state.pcb_board(&session.path)?;
+        let (style, via) = next_leg_style(board, session, key.anchor, key.cursor, key.layer);
+        let leg = LegRequest {
+            from: key.anchor,
+            to: key.cursor,
+            style,
+            via: via.map(|via| rule_via(via, &router.rules)),
+        };
+        let modes = (key.corner, key.mode, PREVIEW_BUDGET);
+        route_on(board, router, leg, modes, Uuid::nil).ok()
+    }
+
+    /// The route so far and the leg the next click adds (routed by
+    /// [`Self::update_router_preview`]), drawn into `preview`.
+    pub(super) fn router_preview(&self, session: &BoardToolSession, preview: &mut PcbBoard) {
         let Some(router) = session.router.as_ref() else {
             return;
         };
         draw_into(&router.draft, preview);
-        let (Some(anchor), Some(layer)) =
-            (session.points.last().copied(), self.active_copper_layer())
-        else {
-            return;
-        };
-        if cursor == anchor {
-            return;
-        }
-        let (style, via) = next_leg_style(board, session, anchor, cursor, layer);
-        let leg = LegRequest {
-            from: anchor,
-            to: cursor,
-            style,
-            via,
-        };
-        let interaction = &self.interaction_state;
-        let modes = (interaction.corner_rule, interaction.route_mode);
-        if let Ok(leg) = route_on(board, router, leg, modes, Uuid::nil) {
+        let key = self.router_preview_key();
+        let next = router
+            .preview
+            .as_ref()
+            .filter(|held| Some(held.key) == key)
+            .and_then(|held| held.leg.clone());
+        if let Some(leg) = next {
             let mut next = RouteDraft::default();
             next.add(leg);
             draw_into(&next, preview);
@@ -189,21 +392,24 @@ impl Signex {
     }
 }
 
-/// Route `leg` with the route's rules, in the corner rule and mode given.
+/// Route `leg` with the route's rules, in the corner rule and mode given,
+/// expanding at most `budget` lattice points.
 fn route_on(
     board: &PcbBoard,
     router: &RouterState,
     leg: LegRequest,
-    (corner, mode): (CornerRule, RouteMode),
+    (corner, mode, budget): (CornerRule, RouteMode, usize),
     ids: impl FnMut() -> Uuid,
 ) -> Result<RoutedLeg, RouteRefusal> {
     let rules = &router.rules;
     let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
     let route = RouteRules {
         clearance: &clearance,
+        reach: rules.widest_clearance(),
         corner,
         mode,
         grid_mm: grid_step_mm(board),
+        budget,
     };
     route_leg(board, &router.draft, leg, &route, ids)
 }
@@ -238,11 +444,26 @@ fn rule_width(board: &PcbBoard, classes: &[NetClass], rules: &DrcRules, style: &
     width
 }
 
+/// `via` grown to the smallest copper diameter and drill the written rules
+/// allow for its net, its copper never narrower than its drill.
+fn rule_via(mut via: Via, rules: &DrcRules) -> Via {
+    let (diameter, drill) = rules.via_size_limits(via.net, pcb_geom::via_layers(&via));
+    if let Some(min) = diameter {
+        via.diameter = via.diameter.max(pcb_geom::nm_to_mm(min));
+    }
+    if let Some(min) = drill {
+        via.drill = via.drill.max(pcb_geom::nm_to_mm(min));
+    }
+    via.diameter = via.diameter.max(via.drill);
+    via
+}
+
 /// The Messages line for a leg that was not routed.
 fn refusal_line(refusal: RouteRefusal) -> MessageId {
     match refusal {
         RouteRefusal::Blocked => ids::PCB_ROUTE_BLOCKED,
         RouteRefusal::ViaBlocked => ids::PCB_ROUTE_VIA_BLOCKED,
         RouteRefusal::Unrepresentable => ids::PCB_ROUTE_UNREPRESENTABLE,
+        RouteRefusal::BoardChanged => ids::PCB_ROUTE_BOARD_CHANGED,
     }
 }

@@ -95,3 +95,31 @@ fn a_start_inside_another_nets_clearance_finds_no_way() {
     );
     assert_eq!(path, None);
 }
+
+#[test]
+fn a_way_round_in_a_45_degree_mode_turns_45_degrees_at_most() {
+    let board = board(vec![pad_at(1, 5.0, 0.0, 1.0, 2)], Vec::new());
+    let world = RouteWorld::new(&board, &rule);
+    for mode in [CornerMode::Angle45Start, CornerMode::Angle45End] {
+        let walk = walk(mode);
+        let path = walkaround(&world, at(0.0, 0.0), at(10.0, 0.0), &walk)
+            .unwrap_or_else(|| panic!("{mode:?}: a way round"));
+        assert!(path.len() > 2, "{mode:?}: not straight through the pad");
+        let directions: Vec<(i64, i64)> = path
+            .windows(2)
+            .map(|leg| {
+                (
+                    (leg[1].x - leg[0].x).signum(),
+                    (leg[1].y - leg[0].y).signum(),
+                )
+            })
+            .collect();
+        for turn in directions.windows(2) {
+            let (a, b) = (turn[0], turn[1]);
+            assert!(
+                a.0 * b.0 + a.1 * b.1 > 0,
+                "{mode:?}: a corner sharper than 45° in {path:?}"
+            );
+        }
+    }
+}

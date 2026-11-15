@@ -3,10 +3,12 @@
 //! the rules ask. A moved track's ends carry the tracks joined there with
 //! them (their far ends stay put), so the net stays connected. What a
 //! moved track then crowds is pushed in turn, a few rounds deep. Nothing
-//! moves when a track ends on a pad or via, when the leg crosses a track,
-//! when something else than a track is in the way, or when the moved
-//! copper would break a clearance or enter a keepout: the caller then
-//! walks around instead.
+//! moves when a track ends on a pad or via, when same-net copper joins it
+//! other than at a shared end (a T-junction, an overlap), when the leg
+//! crosses a track, when something else than a track is in the way, or
+//! when the moved copper would break a clearance or enter a keepout: the
+//! caller then walks around instead. A via among the legs never pushes
+//! (a track it crowds stays), but every moved track keeps clear of it.
 
 use std::collections::HashMap;
 
@@ -87,10 +89,15 @@ fn push_one(
     if world.is_anchored(index, a) || world.is_anchored(index, b) {
         return None;
     }
+    let joined_ends = [world.joined_at(index, a), world.joined_at(index, b)];
+    if keeps_unmoved_link(world, index, &joined_ends) {
+        return None;
+    }
     let offset = push_offset(world, item, pushers)?;
     let mut touched = vec![index];
-    for (end, new_end) in [(a, a.plus(offset)), (b, b.plus(offset))] {
-        for joined in world.joined_at(index, end) {
+    let ends = [(a, a.plus(offset)), (b, b.plus(offset))];
+    for ((end, new_end), joined_here) in ends.into_iter().zip(joined_ends) {
+        for joined in joined_here {
             let Shape::Capsule {
                 a: ja,
                 b: jb,
@@ -127,6 +134,31 @@ fn push_one(
         },
     );
     Some(touched)
+}
+
+/// Whether track `index`, or a track joined at one of its ends, is held by
+/// same-net copper that would not follow the push: a branch ending on the
+/// track's side (a T-junction), or copper overlapping it rather than
+/// sharing an end. Moving it would leave that copper disconnected.
+fn keeps_unmoved_link(world: &RouteWorld, index: usize, joined_ends: &[Vec<usize>; 2]) -> bool {
+    let all: Vec<usize> = joined_ends.iter().flatten().copied().collect();
+    if world.is_joined_elsewhere(index, &[], &all) {
+        return true;
+    }
+    // A joined track turns about its far end: what holds that end stays
+    // linked, anything else on it would be left behind.
+    let Shape::Capsule { a: ta, b: tb, .. } = world.items[index].shape else {
+        return true;
+    };
+    let mut moving = all.clone();
+    moving.push(index);
+    all.iter().any(|&joined| {
+        let Shape::Capsule { a, b, .. } = world.items[joined].shape else {
+            return true;
+        };
+        let far: Vec<PointNm> = [a, b].into_iter().filter(|&p| p != ta && p != tb).collect();
+        world.is_joined_elsewhere(joined, &far, &moving)
+    })
 }
 
 /// How far, square to the track, it must move to clear every pusher it is

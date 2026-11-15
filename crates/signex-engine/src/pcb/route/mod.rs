@@ -2,7 +2,8 @@
 //! to the point on the active copper layer, walking around other nets'
 //! copper at the rule clearance or pushing their tracks aside
 //! ([`RouteMode`]). Legs gather in a [`RouteDraft`] that reaches the board
-//! as ONE undo step when the route ends ([`RouteDraft::commands`]). The
+//! as ONE undo step when the route ends ([`RouteDraft::commands`]), after
+//! [`draft_fits`] checked it against the board as it is then. The
 //! geometry is `pcb_geom::route`; this module turns it into board items.
 
 mod tune;
@@ -10,7 +11,7 @@ mod tune;
 use pcb_geom::route::{
     ClearanceRule, NewCopper, NewKind, Pushed, RouteWorld, Walk, rule_legs, shove, walkaround,
 };
-use pcb_geom::{PointNm, layer_bit, mm_to_nm, via_layers, via_shape};
+use pcb_geom::{ItemRef, PointNm, layer_bit, mm_to_nm, via_layers, via_shape};
 use signex_types::corner::CornerRule;
 use signex_types::format::pcb_layer_token;
 use signex_types::pcb::{PcbBoard, Point, Segment, Via};
@@ -23,8 +24,12 @@ use super::items::BoardItem;
 
 pub use tune::{Meander, TuneRefusal, tune_length};
 
-/// Lattice points one leg's search may expand.
-const SEARCH_BUDGET: usize = 12_000;
+/// Lattice points one clicked leg's search may expand.
+pub const SEARCH_BUDGET: usize = 12_000;
+
+/// Lattice points the search for the leg on the pointer may expand: the
+/// preview runs while the pointer moves, so it gives up sooner.
+pub const PREVIEW_BUDGET: usize = 1_500;
 
 /// Most lattice steps across a leg: a longer leg searches a coarser
 /// multiple of the grid.
@@ -57,10 +62,16 @@ pub struct RouteRules<'a> {
     /// The clearance between two copper items, as the design rule check
     /// asks it.
     pub clearance: &'a ClearanceRule<'a>,
+    /// The widest clearance the rules can ask of any pair, in nm: how far
+    /// round new copper the check looks.
+    pub reach: i64,
     pub corner: CornerRule,
     pub mode: RouteMode,
     /// The board's snap grid: the search's lattice step.
     pub grid_mm: f64,
+    /// Lattice points the search may expand ([`SEARCH_BUDGET`],
+    /// [`PREVIEW_BUDGET`]).
+    pub budget: usize,
 }
 
 /// Why a leg was not routed.
@@ -72,15 +83,19 @@ pub enum RouteRefusal {
     ViaBlocked,
     #[error("a point or the width is not a length the board geometry can hold")]
     Unrepresentable,
+    #[error("a track the route pushed was changed or removed since")]
+    BoardChanged,
 }
 
 /// One routed leg: its tracks, the via that took it to another layer, and
-/// the other nets' tracks it pushed (as they will be).
+/// the other nets' tracks it pushed (as they will be, and as they were).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RoutedLeg {
     pub tracks: Vec<Segment>,
     pub via: Option<Via>,
     pub shoved: Vec<Segment>,
+    /// The pushed tracks as the board held them before the route.
+    pub shoved_from: Vec<Segment>,
 }
 
 /// The legs of a route not yet on the board.
@@ -90,6 +105,10 @@ pub struct RouteDraft {
     pub vias: Vec<Via>,
     /// Board tracks the route pushed, at their new place; one per track.
     pub shoved: Vec<Segment>,
+    /// Those tracks as the board held them before the route first pushed
+    /// them: a board that no longer holds one as it was has been edited
+    /// under the route ([`draft_fits`]).
+    pub shoved_from: Vec<Segment>,
 }
 
 impl RouteDraft {
@@ -97,7 +116,8 @@ impl RouteDraft {
         self.tracks.is_empty() && self.vias.is_empty() && self.shoved.is_empty()
     }
 
-    /// Add a leg; a track pushed again keeps only its latest place.
+    /// Add a leg; a track pushed again keeps only its latest place, and
+    /// the place it had before the first push.
     pub fn add(&mut self, leg: RoutedLeg) {
         self.vias.extend(leg.via);
         self.tracks.extend(leg.tracks);
@@ -105,6 +125,11 @@ impl RouteDraft {
             match self.shoved.iter_mut().find(|held| held.uuid == moved.uuid) {
                 Some(held) => *held = moved,
                 None => self.shoved.push(moved),
+            }
+        }
+        for was in leg.shoved_from {
+            if !self.shoved_from.iter().any(|held| held.uuid == was.uuid) {
+                self.shoved_from.push(was);
             }
         }
     }
@@ -176,32 +201,36 @@ pub fn route_leg(
         via,
     } = leg;
     let working = draft.applied_to(board);
-    let world = RouteWorld::new(&working, rules.clearance);
+    let world = RouteWorld::with_reach(&working, rules.clearance, rules.reach);
     let (a, b) = (nm(from)?, nm(to)?);
     let width =
         mm_to_nm(style.width_mm, "track width").map_err(|_| RouteRefusal::Unrepresentable)?;
-    if let Some(via) = &via {
-        let shape = via_shape(via).map_err(|_| RouteRefusal::Unrepresentable)?;
-        let new = NewCopper {
-            kind: NewKind::Via,
-            net: style.net,
-            layers: via_layers(via),
-            shape,
-        };
-        if !world.is_clear(&new) {
-            return Err(RouteRefusal::ViaBlocked);
+    let new_via = match &via {
+        Some(via) => {
+            let shape = via_shape(via).map_err(|_| RouteRefusal::Unrepresentable)?;
+            let new = NewCopper {
+                kind: NewKind::Via,
+                net: style.net,
+                layers: via_layers(via),
+                shape,
+            };
+            if !world.is_clear(&new) {
+                return Err(RouteRefusal::ViaBlocked);
+            }
+            Some(new)
         }
-    }
+        None => None,
+    };
     let walk = Walk {
         net: style.net,
         layers: 1 << layer_bit(style.layer),
         radius: width.abs() / 2,
         rule: rules.corner,
         step: lattice_step(rules.grid_mm, a, b),
-        budget: SEARCH_BUDGET,
+        budget: rules.budget,
     };
     let pushing = match rules.mode {
-        RouteMode::Shove => pushed_way(&world, &walk, a, b),
+        RouteMode::Shove => pushed_way(&world, &walk, new_via, a, b),
         RouteMode::Walkaround => None,
     };
     let (path, pushed) = match pushing {
@@ -230,15 +259,60 @@ pub fn route_leg(
             unknown_columns: Default::default(),
         })
         .collect();
-    let shoved = pushed
+    let shoved: Vec<Segment> = pushed
         .into_iter()
         .filter_map(|p| moved_track(&working, p))
+        .collect();
+    let shoved_from = shoved
+        .iter()
+        .filter_map(|moved| board.segments.iter().find(|s| s.uuid == moved.uuid))
+        .cloned()
         .collect();
     Ok(RoutedLeg {
         tracks,
         via,
         shoved,
+        shoved_from,
     })
+}
+
+/// Whether `draft` still lands legally on `board`, which may have changed
+/// since the draft was routed (an undo, an edit from another window or
+/// panel): every track it pushed is on the board as it was before the
+/// push, and its tracks, vias and pushed tracks keep the clearance from
+/// other nets' copper and stay out of keepouts that forbid them.
+pub fn draft_fits(
+    board: &PcbBoard,
+    draft: &RouteDraft,
+    clearance: &ClearanceRule,
+    reach: i64,
+) -> Result<(), RouteRefusal> {
+    let on_board = |uuid| board.segments.iter().find(|s| s.uuid == uuid);
+    let unchanged = draft
+        .shoved_from
+        .iter()
+        .all(|was| on_board(was.uuid) == Some(was));
+    let present = draft
+        .shoved
+        .iter()
+        .all(|moved| on_board(moved.uuid).is_some());
+    if !unchanged || !present {
+        return Err(RouteRefusal::BoardChanged);
+    }
+    let working = draft.applied_to(board);
+    let world = RouteWorld::with_reach(&working, clearance, reach);
+    let crowded = draft
+        .tracks
+        .iter()
+        .chain(&draft.shoved)
+        .map(|s| ItemRef::Track(s.uuid))
+        .chain(draft.vias.iter().map(|v| ItemRef::Via(v.uuid)))
+        .any(|id| world.is_crowded(id));
+    if crowded {
+        Err(RouteRefusal::Blocked)
+    } else {
+        Ok(())
+    }
 }
 
 fn nm(p: Point) -> Result<PointNm, RouteRefusal> {
@@ -246,10 +320,12 @@ fn nm(p: Point) -> Result<PointNm, RouteRefusal> {
 }
 
 /// The rule's legs straight to `b` (then the flipped rule's), with the
-/// tracks pushed out of their way, when pushing clears it.
+/// tracks pushed out of their way, when pushing clears it. A pushed track
+/// keeps clear of `via` too.
 fn pushed_way(
     world: &RouteWorld,
     walk: &Walk,
+    via: Option<NewCopper>,
     a: PointNm,
     b: PointNm,
 ) -> Option<(Vec<PointNm>, Vec<Pushed>)> {
@@ -261,6 +337,7 @@ fn pushed_way(
             let legs: Vec<NewCopper> = path
                 .windows(2)
                 .map(|leg| NewCopper::track(leg[0], leg[1], walk.radius, walk.net, walk.layers))
+                .chain(via)
                 .collect();
             shove(world, &legs).map(|pushed| (path, pushed))
         })
@@ -296,6 +373,8 @@ fn lattice_step(grid_mm: f64, a: PointNm, b: PointNm) -> i64 {
     grid * (span / grid / MAX_STEPS + 1)
 }
 
+#[cfg(test)]
+mod fit_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

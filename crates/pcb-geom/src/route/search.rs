@@ -3,8 +3,9 @@
 //! tried first, as they are, then with the bend flipped; when both are
 //! blocked, an A* search on a lattice anchored at the start finds a way
 //! round, in the rule's directions (axis-aligned for 90°, axis and 45°
-//! otherwise), and joins the target with the rule's legs from the first
-//! lattice point that reaches it clear. Any-angle routes are pulled taut.
+//! otherwise, turning 45° at most in the 45° modes), and joins the target
+//! with the rule's legs from the first lattice point that reaches it clear.
+//! Any-angle routes are pulled taut.
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
@@ -109,6 +110,10 @@ const MOVES: [(i64, i64); 8] = [
     (1, -1),
 ];
 
+/// How often the search tries to join the target from a point farther
+/// than the nearest tried: one expansion in this many.
+const JOIN_EVERY: usize = 16;
+
 /// The direction a lattice point was reached in; `START` for the anchor.
 const START: u8 = 8;
 
@@ -141,11 +146,17 @@ fn lattice_search(
             long - short + (short as f64 * std::f64::consts::SQRT_2) as i64
         }
     };
+    // In a 45° mode a corner turns 45° at most (#2372).
+    let max_45 = matches!(
+        walk.rule.mode,
+        CornerMode::Angle45Start | CornerMode::Angle45End
+    );
     let start: State = (0, 0, START);
     let mut best: HashMap<State, i64> = HashMap::from([(start, 0)]);
     let mut parent: HashMap<State, State> = HashMap::new();
     let mut open = BinaryHeap::from([Reverse((estimate(from), 0_i64, start))]);
     let mut expanded = 0_usize;
+    let mut nearest = i64::MAX;
     while let Some(Reverse((_, cost, state))) = open.pop() {
         if best.get(&state).is_some_and(|&held| cost > held) {
             continue;
@@ -155,8 +166,15 @@ fn lattice_search(
             return None;
         }
         let here = point((state.0, state.1));
+        // Joining the target costs a few clearance checks: try it from a
+        // point no farther than any tried yet, and now and then otherwise.
+        let left = estimate(here);
+        let try_join = left <= nearest || expanded % JOIN_EVERY == 0;
+        nearest = nearest.min(left);
         if state != start
+            && try_join
             && let Some(tail) = direct(world, walk, here, to)
+            && (!max_45 || joins_45_at_most(MOVES[usize::from(state.2)], here, &tail))
         {
             let mut path: Vec<PointNm> = trace(&parent, state).into_iter().map(point).collect();
             path.extend(tail.into_iter().skip(1));
@@ -166,6 +184,12 @@ fn lattice_search(
             let next: State = (state.0 + dx, state.1 + dy, index as u8);
             let there = point((next.0, next.1));
             if !window.contains_point(there) {
+                continue;
+            }
+            if max_45
+                && state.2 != START
+                && !turns_45_at_most(MOVES[usize::from(state.2)], (dx, dy))
+            {
                 continue;
             }
             let length = if dx != 0 && dy != 0 { diagonal } else { step };
@@ -187,6 +211,22 @@ fn lattice_search(
         }
     }
     None
+}
+
+/// Whether a run going `along` (a lattice move) may turn into `next`: by
+/// 45° at most, which for the lattice's eight directions is a positive dot
+/// product.
+fn turns_45_at_most(along: (i64, i64), next: (i64, i64)) -> bool {
+    along.0 * next.0 + along.1 * next.1 > 0
+}
+
+/// Whether the path `tail` (starting at `here`) leaves `here` turning 45°
+/// at most from a run going `along`.
+fn joins_45_at_most(along: (i64, i64), here: PointNm, tail: &[PointNm]) -> bool {
+    tail.get(1).is_none_or(|&next| {
+        let d = next.minus(here);
+        turns_45_at_most(along, (d.x.signum(), d.y.signum()))
+    })
 }
 
 /// The lattice points from the anchor to `state`.

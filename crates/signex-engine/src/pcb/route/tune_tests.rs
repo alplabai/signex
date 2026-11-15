@@ -31,6 +31,7 @@ fn tune(
     let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
     let meander = Meander {
         clearance: &clearance,
+        reach: rules.widest_clearance(),
         pitch_mm: 1.0,
         amplitude_mm: 3.0,
     };
@@ -79,4 +80,19 @@ fn tuning_refuses_a_net_long_enough_or_a_track_too_short() {
         "{long_enough:?}"
     );
     assert_eq!(tune(&board, &rules, 200.0), Err(TuneRefusal::TooShort));
+}
+
+#[test]
+fn tuning_refuses_a_shortfall_smaller_than_one_meander() {
+    // A 1 mm pitch: a bump is at least 0.5 mm tall and adds 1 mm.
+    let board = tuning_board();
+    let rules = DrcRules::for_board(&board, &[]).unwrap();
+    let refused = tune(&board, &rules, 20.05);
+    assert!(
+        matches!(
+            refused,
+            Err(TuneRefusal::TooLittle { least_mm }) if (least_mm - 1.0).abs() < 1.0e-9
+        ),
+        "{refused:?}"
+    );
 }

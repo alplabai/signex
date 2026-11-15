@@ -44,4 +44,8 @@ define_ids! {
     PCB_ROUTE_NO_RULES = "pcb-route-no-rules";
     PCB_ROUTE_MODE_WALKAROUND = "pcb-route-mode-walkaround";
     PCB_ROUTE_MODE_SHOVE = "pcb-route-mode-shove";
+    PCB_ROUTE_BOARD_CHANGED = "pcb-route-board-changed";
+    PCB_ROUTE_STALE = "pcb-route-stale";
+    PCB_ROUTE_NOT_PLACED = "pcb-route-not-placed";
+    PCB_ROUTE_DISCARDED = "pcb-route-discarded";
 }
