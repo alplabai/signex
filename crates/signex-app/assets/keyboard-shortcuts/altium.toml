@@ -176,6 +176,10 @@ context = "pcb"
 "*" = "next_signal_layer"
 "Shift+*" = "next_signal_layer"
 "-" = "prev_layer"
+"P F" = "place_board_fill"
+"P R" = "place_board_region"
+"P T" = "place_board_track"
+"P V" = "place_board_via"
 "Shift+S" = "toggle_single_layer_mode"
 
 [[keyboard_shortcuts.sections]]

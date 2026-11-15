@@ -1,13 +1,13 @@
-//! The board placement tools the PCB editor cannot run yet (#2352, #2360).
-//! One table, so the PCB Active Bar and the Place menu on a board grey the
-//! same set and give the same reason.
+//! The board placement tools (#2352, #2360, #2373). One table, so the PCB
+//! Active Bar and the Place menu on a board run the same command for a live
+//! tool, and grey the same set with the same reason for a tool the board
+//! editor cannot run yet.
 
 use signex_i18n::{MessageId, ids};
 
-/// A board tool with no command yet: greyed on the PCB Active Bar and in
-/// Place on a board.
+/// A board placement tool, in the Place menu's order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum UnavailableBoardTool {
+pub enum BoardPlaceTool {
     Component,
     Pad,
     Via,
@@ -22,7 +22,17 @@ pub(crate) enum UnavailableBoardTool {
     Keepout,
 }
 
-impl UnavailableBoardTool {
+/// Whether a tool runs on a board yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToolState {
+    /// The catalog command that arms it.
+    Live(&'static str),
+    /// Greyed on the PCB Active Bar and in Place on a board, with why: the
+    /// button's tooltip and the row's hint.
+    Unavailable(MessageId),
+}
+
+impl BoardPlaceTool {
     /// Place on a board, top to bottom.
     pub(crate) const PLACE_MENU: [Self; 12] = [
         Self::Component,
@@ -38,6 +48,33 @@ impl UnavailableBoardTool {
         Self::Dimension,
         Self::Keepout,
     ];
+
+    pub(crate) fn state(self) -> ToolState {
+        use ToolState::{Live, Unavailable};
+        match self {
+            Self::Via => Live("place_board_via"),
+            Self::Track => Live("place_board_track"),
+            Self::Fill => Live("place_board_fill"),
+            Self::SolidRegion => Live("place_board_region"),
+            Self::Keepout => Live("place_board_keepout"),
+            Self::Component => Unavailable(ids::PCB_BAR_COMPONENT_UNAVAILABLE),
+            Self::Pad => Unavailable(ids::PCB_BAR_PAD_UNAVAILABLE),
+            Self::InteractiveRouting => Unavailable(ids::PCB_BAR_ROUTE_UNAVAILABLE),
+            Self::Arc => Unavailable(ids::PCB_BAR_ARC_UNAVAILABLE),
+            Self::PolygonPour => Unavailable(ids::PCB_BAR_POLYGON_POUR_UNAVAILABLE),
+            Self::TextString => Unavailable(ids::PCB_BAR_TEXT_UNAVAILABLE),
+            Self::Dimension => Unavailable(ids::PCB_BAR_DIMENSION_UNAVAILABLE),
+        }
+    }
+
+    /// The catalog command that arms the tool; `None` while the board
+    /// editor cannot run it.
+    pub(crate) fn command(self) -> Option<&'static str> {
+        match self.state() {
+            ToolState::Live(command) => Some(command),
+            ToolState::Unavailable(_) => None,
+        }
+    }
 
     /// The tool's name, as its Place row reads.
     pub(crate) fn name(self) -> MessageId {
@@ -57,22 +94,16 @@ impl UnavailableBoardTool {
         }
     }
 
-    /// Why the tool is greyed: the Active Bar button's tooltip and the
-    /// Place row's hint.
-    pub(crate) fn reason(self) -> MessageId {
+    /// The live tool's Active Bar tooltip and the hint the Messages panel
+    /// shows when it is armed.
+    pub(crate) fn texts(self) -> (MessageId, MessageId) {
         match self {
-            Self::Component => ids::PCB_BAR_COMPONENT_UNAVAILABLE,
-            Self::Pad => ids::PCB_BAR_PAD_UNAVAILABLE,
-            Self::Via => ids::PCB_BAR_VIA_UNAVAILABLE,
-            Self::InteractiveRouting => ids::PCB_BAR_ROUTE_UNAVAILABLE,
-            Self::Track => ids::PCB_BAR_TRACK_UNAVAILABLE,
-            Self::Arc => ids::PCB_BAR_ARC_UNAVAILABLE,
-            Self::Fill => ids::PCB_BAR_FILL_UNAVAILABLE,
-            Self::SolidRegion => ids::PCB_BAR_REGION_UNAVAILABLE,
-            Self::PolygonPour => ids::PCB_BAR_POLYGON_POUR_UNAVAILABLE,
-            Self::TextString => ids::PCB_BAR_TEXT_UNAVAILABLE,
-            Self::Dimension => ids::PCB_BAR_DIMENSION_UNAVAILABLE,
-            Self::Keepout => ids::PCB_BAR_KEEPOUT_UNAVAILABLE,
+            Self::Via => (ids::PCB_BAR_VIA_TOOLTIP, ids::PCB_TOOL_HINT_VIA),
+            Self::Track => (ids::PCB_BAR_TRACK_TOOLTIP, ids::PCB_TOOL_HINT_TRACK),
+            Self::Fill => (ids::PCB_BAR_FILL_TOOLTIP, ids::PCB_TOOL_HINT_FILL),
+            Self::SolidRegion => (ids::PCB_BAR_REGION_TOOLTIP, ids::PCB_TOOL_HINT_REGION),
+            Self::Keepout => (ids::PCB_BAR_KEEPOUT_TOOLTIP, ids::PCB_TOOL_HINT_KEEPOUT),
+            other => (other.name(), other.name()),
         }
     }
 }

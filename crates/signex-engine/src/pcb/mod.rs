@@ -9,12 +9,14 @@
 //! deltas: `x + d - d` is not `x` in `f64`, and the inverse must restore the
 //! board bit for bit.
 
+pub mod align;
 mod batch;
 mod board_sketch;
 mod clipboard;
 mod command;
 pub mod component;
 pub mod designators;
+pub mod draw;
 pub mod eco;
 mod engine;
 mod error;

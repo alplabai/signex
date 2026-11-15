@@ -85,6 +85,7 @@ impl Signex {
         });
         let window = self.interaction_state.acting_window;
         let carry = PcbCarry::new(CarryKind::Move, path, window, footprints);
+        self.interaction_state.pcb_tool = None;
         self.interaction_state.pcb_carry = Some(carry);
         // While a Move waits for its clicks, a press never starts a drag.
         self.refresh_pcb_highlight();
@@ -396,6 +397,8 @@ pub(crate) struct PcbTargets {
     pub pasteable: bool,
     /// A library part is on the cursor, for Space and the flip (#2364).
     pub part_in_hand: bool,
+    /// A track run is being drawn, for Space and Shift+Space (#2373).
+    pub routing: bool,
 }
 
 impl Signex {
@@ -430,6 +433,9 @@ impl Signex {
             .pcb_carry
             .as_ref()
             .is_some_and(|c| c.kind == CarryKind::Place && c.is_for(path.as_deref(), undocked));
+        let routing = self.interaction_state.pcb_tool.as_ref().is_some_and(|s| {
+            s.is_routing() && s.is_for(path.as_deref(), undocked)
+        });
         let selection = state
             .filter(|s| s.document().is_some() && s.document() == path.as_deref())
             .map(|s| s.selection());
@@ -439,6 +445,7 @@ impl Signex {
                 shown: true,
                 pasteable,
                 part_in_hand,
+                routing,
                 ..PcbTargets::default()
             };
         };
@@ -453,6 +460,7 @@ impl Signex {
             copyable,
             pasteable,
             part_in_hand,
+            routing,
         }
     }
 }

@@ -100,8 +100,10 @@ fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
     assert_ne!(handle, &ic::icon_dd_rect(tid));
 }
 
-/// #2352: the groups in the PCB editor's order, three live buttons, and every
-/// other button greyed with a tooltip that says it is not on boards yet.
+/// #2352, #2373: the groups in the PCB editor's order, the Selection
+/// Filter, Move, Align, Board Sketch, View and the live placement tools live, and
+/// every other button greyed with a tooltip that says it is not on boards
+/// yet.
 #[test]
 fn the_pcb_bar_has_the_footprint_layout_and_greys_what_boards_cannot_do() {
     let items = pcb_bar_items(ThemeId::GraphiteDark, &I18n::en_us(), None);
@@ -113,8 +115,17 @@ fn the_pcb_bar_has_the_footprint_layout_and_greys_what_boards_cannot_do() {
         .count();
     assert_eq!(separators, 4);
     let live: Vec<_> = all.iter().filter(|button| button.enabled).collect();
-    assert_eq!(live.len(), 3);
+    let live_tools = BoardPlaceTool::PLACE_MENU
+        .iter()
+        .filter(|tool| tool.command().is_some())
+        .count();
+    assert_eq!(
+        live.len(),
+        5 + live_tools,
+        "filter, move, align, sketch, view and the live tools"
+    );
     assert!(runs(all[1], "move_object"), "Move follows the filter");
+    assert!(runs(all[5], "place_board_via"), "#2373: Via is live");
     assert!(runs(all[15], "board_sketch"));
     assert!(runs(all[16], "view_rotate"), "View closes the bar");
     for button in all.iter().filter(|button| !button.enabled) {
@@ -131,8 +142,7 @@ fn the_pcb_bar_has_the_footprint_layout_and_greys_what_boards_cannot_do() {
 }
 
 /// #2352 / #2360: the bar greys exactly the tools the Place menu greys on a
-/// board, with the same reason, plus the filter and align it has no command
-/// for.
+/// board, with the same reason, and nothing else.
 #[test]
 fn the_bar_greys_the_place_menus_board_tools() {
     let i18n = I18n::en_us();
@@ -143,13 +153,12 @@ fn the_bar_greys_the_place_menus_board_tools() {
         .map(|button| button.tooltip.clone())
         .collect();
     greyed.sort();
-    let mut place: Vec<String> = UnavailableBoardTool::PLACE_MENU
+    let mut place: Vec<String> = BoardPlaceTool::PLACE_MENU
         .iter()
-        .map(|tool| t!(&i18n, tool.reason()).into_string())
-        .chain([
-            t!(&i18n, ids::PCB_BAR_FILTER_UNAVAILABLE).into_string(),
-            t!(&i18n, ids::PCB_BAR_ALIGN_UNAVAILABLE).into_string(),
-        ])
+        .filter_map(|tool| match tool.state() {
+            ToolState::Unavailable(reason) => Some(t!(&i18n, reason).into_string()),
+            ToolState::Live(_) => None,
+        })
         .collect();
     place.sort();
     assert_eq!(greyed, place);
@@ -209,6 +218,7 @@ fn rows(app: &Signex, menu: PcbBarMenu) -> Vec<DropdownItem<Message>> {
         &app.ui_state.i18n,
         app.ui_state.effective_theme_id(),
         &app.command_context(None),
+        &app.ui_state.pcb_pick_filter,
     )
     .into_iter()
     .filter_map(|entry| match entry {
@@ -284,4 +294,38 @@ fn the_view_dropdown_greys_reset_at_zero() {
         .find(|row| row.command_id == Some("view_rotate_reset"))
         .expect("a reset row");
     assert!(reset.disabled && reset.on_press.is_none());
+}
+
+/// #2373: the Selection Filter button opens a dropdown of the object kinds;
+/// a row toggles its kind in the one filter the Properties panel's chips
+/// edit, and the dropdown stays open for the next.
+#[test]
+fn the_selection_filter_toggles_the_kinds_the_board_picks() {
+    use pcb_geom::PickKind;
+
+    let mut app = board_app();
+    let filter = buttons(&bar_of(&app))[0].on_press.clone().expect("live");
+    let _ = app.update(filter);
+    assert_eq!(app.interaction_state.pcb_bar_menu, Some(PcbBarMenu::Filter));
+    assert!(buttons(&bar_of(&app))[0].selected);
+    let entries = rows(&app, PcbBarMenu::Filter);
+    assert_eq!(entries.len(), 1 + PickKind::ALL.len(), "All - On and each kind");
+    assert!(entries.iter().all(|row| row.checked || row.disabled));
+    let tracks = entries
+        .iter()
+        .find(|row| row.label == "Tracks")
+        .expect("a Tracks row");
+    let _ = app.update(tracks.on_press.clone().expect("a live row"));
+    assert!(!app.ui_state.pcb_pick_filter.is_on(PickKind::Tracks));
+    assert_eq!(app.interaction_state.pcb_bar_menu, Some(PcbBarMenu::Filter));
+    let tracks = rows(&app, PcbBarMenu::Filter)
+        .into_iter()
+        .find(|row| row.label == "Tracks")
+        .unwrap();
+    assert!(!tracks.checked, "the row shows the kind off");
+    let keepouts = rows(&app, PcbBarMenu::Filter)
+        .into_iter()
+        .find(|row| row.label == "Keepouts")
+        .unwrap();
+    assert!(keepouts.disabled, "a kind the board cannot pick is greyed");
 }

@@ -137,6 +137,7 @@ impl Signex {
             .into_string(),
         );
         let window = self.interaction_state.acting_window;
+        self.interaction_state.pcb_tool = None;
         self.interaction_state.pcb_carry = Some(PcbCarry::place(board.to_path_buf(), window, part));
         self.refresh_pcb_highlight();
         Ok(())

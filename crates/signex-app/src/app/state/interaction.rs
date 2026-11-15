@@ -37,6 +37,8 @@ pub struct InteractionState {
         std::collections::HashMap<iced::window::Id, crate::pcb_canvas::PcbSelectionState>,
     /// Footprints being dragged or moved, with their preview (#2240).
     pub pcb_carry: Option<crate::pcb_canvas::PcbCarry>,
+    /// The board placement tool armed and the shape it is drawing (#2373).
+    pub pcb_tool: Option<crate::app::handlers::pcb_tool::BoardToolSession>,
     /// The active board's ratsnest lines and the nets hidden from them.
     pub pcb_ratsnest: super::pcb_ratsnest::PcbRatsnest,
     /// The board check the Messages panel lists (#2222).

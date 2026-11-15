@@ -34,7 +34,8 @@ mod units;
 
 pub use body::footprint_body;
 pub use copper::{
-    CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, pad_layers, via_layers,
+    CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, pad_layers,
+    via_layers,
 };
 pub use flip::flip_footprint;
 pub use index::{BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected, track_shape, via_shape};

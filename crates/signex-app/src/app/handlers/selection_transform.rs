@@ -23,7 +23,9 @@ impl Signex {
         // (#2240, #2364). The board's y axis points down the screen, so a
         // model turn of +90° is clockwise.
         let quarter_turns = if clockwise { 1 } else { -1 };
-        if self.rotate_pcb_part(clockwise)
+        // Mid track run the keys bend it as they bend a wire (#2373).
+        if self.bend_board_route(clockwise)
+            || self.rotate_pcb_part(clockwise)
             || self.transform_pcb_selection(PlacementTransform::Rotate { quarter_turns })
         {
             return;

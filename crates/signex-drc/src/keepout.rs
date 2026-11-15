@@ -1,5 +1,6 @@
-//! The keepout check (#2234): what a board-sketch keepout forbids, found
-//! inside it on a layer it covers. Any net counts, net 0 included: a
+//! The keepout check (#2234): what a board-sketch keepout, or a keepout
+//! drawn on the board (#2373, `Zone::as_keepout`), forbids, found inside it
+//! on a layer it covers. Any net counts, net 0 included: a
 //! keepout keeps out copper, not a net.
 //!
 //! - `no_routing` forbids tracks; `no_vias` vias; `no_copper` tracks, vias
@@ -37,10 +38,10 @@ pub(super) struct Checked {
 /// Every keepout violation of `board`, unsorted, and what was not checked.
 pub(super) fn check(board: &PcbBoard) -> Checked {
     let mut out = Checked::default();
-    let Some(stored) = board.sketch.as_ref() else {
-        return out;
-    };
-    for keepout in &stored.keepouts {
+    // Keepouts drawn on the board (#2373) are checked like the sketch's.
+    let drawn: Vec<PcbKeepout> = board.zones.iter().filter_map(|z| z.as_keepout()).collect();
+    let sketch = board.sketch.iter().flat_map(|stored| stored.keepouts.iter());
+    for keepout in sketch.chain(&drawn) {
         match Area::of(keepout) {
             Ok(Some(area)) => area.check(board, &mut out),
             Ok(None) => {}

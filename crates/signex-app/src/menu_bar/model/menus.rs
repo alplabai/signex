@@ -7,7 +7,7 @@ use super::items::{
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
-use crate::app::pcb_tools::UnavailableBoardTool;
+use crate::app::pcb_tools::{BoardPlaceTool, ToolState};
 use crate::app::update_pcb::PcbSyncLabel;
 use crate::menu_bar::{MenuContext, enabled};
 use crate::panels::PanelKind;
@@ -261,13 +261,17 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
     }
 }
 
-/// Place on a board: the tools the board editor cannot run yet, greyed with
-/// the reason the PCB Active Bar gives (one table, #2352), then Board Sketch,
-/// which draws the outline, cutouts and keepouts.
+/// Place on a board: the board placement tools, each running the command its
+/// PCB Active Bar button runs, or greyed with the reason the bar gives while
+/// the board editor cannot run it (one table, #2352, #2373), then Board
+/// Sketch, which draws the outline, cutouts and keepouts.
 fn board_place(ctx: &MenuContext) -> Vec<MenuEntry> {
-    let mut rows: Vec<MenuEntry> = UnavailableBoardTool::PLACE_MENU
+    let mut rows: Vec<MenuEntry> = BoardPlaceTool::PLACE_MENU
         .into_iter()
-        .map(|tool| placeholder(ctx, tool.name(), tool.reason()))
+        .map(|tool| match tool.state() {
+            ToolState::Live(id) => cmd_item_gated(ctx, cmd(id, "")),
+            ToolState::Unavailable(reason) => placeholder(ctx, tool.name(), reason),
+        })
         .collect();
     rows.extend([SEP, cmd_item_gated(ctx, cmd("board_sketch", ""))]);
     rows

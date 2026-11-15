@@ -30,6 +30,7 @@ impl Signex {
                 self.pcb_move_followed(at);
                 self.pcb_paste_followed(at);
                 self.pcb_place_followed(at);
+                self.board_tool_followed(at);
                 // The status readout follows the pointer as before.
                 self.update(Message::CanvasEvent(CanvasEvent::CursorAt {
                     x: at.x as f32,
@@ -42,7 +43,8 @@ impl Signex {
                 tolerance_mm,
                 mode,
             } => {
-                if self.pcb_place_clicked(at)
+                if self.board_tool_clicked(at)
+                    || self.pcb_place_clicked(at)
                     || self.pcb_paste_clicked(at)
                     || self.pcb_move_clicked(at, tolerance_mm)
                     || self.pcb_net_pick_clicked(at, tolerance_mm)
@@ -99,6 +101,10 @@ impl Signex {
     /// Esc on a board: drop the selection, the hover, a box in progress and
     /// a drag or Move in progress.
     pub(crate) fn clear_pcb_selection(&mut self) {
+        // A placement tool steps back first: its shape, then the tool.
+        if self.step_back_board_tool() {
+            return;
+        }
         self.interaction_state.pcb_canvas.cancel_marquee();
         // Esc also ends a Properties net pick (#2355).
         self.interaction_state.pcb_primitive.net_pick = None;
@@ -178,7 +184,11 @@ impl Signex {
             .filter(|_| self.has_own_pcb_carry());
         let painted = self.with_pcb_selection(|sel, board| sel.paint(board, carry.as_ref()));
         let (highlight, grab) = painted.unwrap_or_default();
-        let ghost = self.pcb_part_ghost(carry.as_ref());
+        let ghost = self
+            .pcb_part_ghost(carry.as_ref())
+            .or_else(|| self.board_tool_ghost());
+        // A tool waits for clicks: a press never starts a drag.
+        let tool_armed = self.own_board_tool().is_some();
         let path = self.active_tab_path().unwrap_or_default();
         let view = self.pcb_layer_view(&path);
         let docs = &self.document_state;
@@ -190,7 +200,7 @@ impl Signex {
         let interaction = &mut self.interaction_state;
         let canvas = &mut interaction.pcb_canvas;
         canvas.set_highlight(highlight);
-        canvas.set_grab(grab);
+        canvas.set_grab(if tool_armed { Vec::new() } else { grab });
         canvas.set_part_ghost(ghost.as_ref());
         let ratsnest = view
             .ratsnest_visible()
