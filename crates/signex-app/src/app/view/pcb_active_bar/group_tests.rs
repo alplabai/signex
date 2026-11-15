@@ -88,6 +88,24 @@ fn each_group_opens_its_dropdown_and_a_row_arms_its_tool() {
     }
 }
 
+/// #2392: while one of its tools is armed a group's button is drawn
+/// selected, as on the schematic bar; ending the tool clears it.
+#[test]
+fn a_group_is_drawn_selected_while_its_tool_is_armed() {
+    let mut app = board_app();
+    assert!(!group_button_of(&app, PcbBarGroup::CopperAreas).selected);
+    let _ = pick_from_group(&mut app, PcbBarGroup::CopperAreas, "place_board_fill");
+    assert_eq!(app.interaction_state.pcb_bar_menu, None);
+    assert!(group_button_of(&app, PcbBarGroup::CopperAreas).selected);
+    assert!(!group_button_of(&app, PcbBarGroup::ViaPad).selected);
+    let _ = pick_from_group(&mut app, PcbBarGroup::ViaPad, "place_board_via");
+    assert!(group_button_of(&app, PcbBarGroup::ViaPad).selected);
+    assert!(!group_button_of(&app, PcbBarGroup::CopperAreas).selected);
+    app.end_board_tool();
+    assert_eq!(armed(&app), None);
+    assert!(!group_button_of(&app, PcbBarGroup::ViaPad).selected);
+}
+
 /// #2392: the Components group lists Component and Change Footprint; the
 /// swap is greyed by its menu gate while nothing is selected.
 #[test]
@@ -108,11 +126,6 @@ fn a_tool_not_built_yet_is_a_greyed_row_with_its_reason() {
     let app = board_app();
     let cases = [
         (PcbBarGroup::ViaPad, "Pad", "Place Pad"),
-        (
-            PcbBarGroup::CopperAreas,
-            "Polygon Pour",
-            "Place Polygon Pour",
-        ),
         (PcbBarGroup::CopperDrawing, "Arc", "Place Arc"),
         (PcbBarGroup::Components, "Component", "Place Component"),
     ];

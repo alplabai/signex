@@ -301,6 +301,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
 | `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | — | — |
+| `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | — |
 | `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
 | `place_board_track` | Route a track on the active copper layer | place | `P T` | — |
 | `place_board_via` | Place a via on the board | place | `P V` | — |
@@ -313,6 +314,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `toggle_origin_marker` | Show or hide the board origin marker | view | — | — |
 | `toggle_ratsnest` | Show or hide the ratsnest | view | — | — |
 | `toggle_single_layer_mode` | Draw only the active layer, or every layer again | view | `Shift+S` | `Shift+S` |
+| `view_board_3d` | Show the board in 3D, or flat again | view | `3` | `3` |
 | `view_rotate` | Rotate the board view clockwise | view | — | — |
 | `view_rotate_180` | Rotate the board view 180° | view | — | — |
 | `view_rotate_ccw` | Rotate the board view 90° counter-clockwise | view | — | — |

@@ -5,6 +5,7 @@ pub mod autosave_primitives;
 pub mod autosave_project;
 pub mod autosave_recovery;
 pub mod autosave_row;
+mod board_3d;
 mod board_sketch;
 pub mod canvas;
 pub mod clipboard_workflows;
@@ -59,7 +60,10 @@ mod pcb_drc_tests;
 mod pcb_edit;
 #[cfg(test)]
 mod pcb_edit_tests;
+mod pcb_filter_presets;
 pub(crate) mod pcb_footprint_text;
+#[cfg(test)]
+mod pcb_origin_tests;
 mod pcb_parking;
 mod pcb_part_place;
 pub(crate) mod pcb_placement;
@@ -69,6 +73,8 @@ mod pcb_placement_tests;
 mod pcb_placement_window_tests;
 pub(crate) mod pcb_primitive;
 pub mod pcb_select;
+#[cfg(test)]
+mod pcb_select_tests;
 pub(crate) mod pcb_tool;
 pub mod pcb_view;
 pub mod pcb_view_rotation;

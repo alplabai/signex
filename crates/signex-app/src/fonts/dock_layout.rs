@@ -25,10 +25,14 @@ impl crate::dock::DockLayoutStore for PrefsDockLayoutStore {
     fn write(&self, layout: &crate::dock::DockLayoutSnapshot) -> Result<(), String> {
         fn region_to_json(region: &crate::dock::RegionLayout) -> serde_json::Value {
             let kinds: Vec<&str> = region.panels.iter().map(|k| panel_kind_key(*k)).collect();
-            serde_json::json!({
+            let mut json = serde_json::json!({
                 "panels": kinds,
                 "collapsed": region.collapsed,
-            })
+            });
+            if let Some(width) = region.width {
+                json["width"] = serde_json::json!(width);
+            }
+            json
         }
 
         try_update_prefs_json(&self.path, "dock", |prefs| {
@@ -77,6 +81,11 @@ pub fn read_dock_layout_from(json: Option<&serde_json::Value>) -> Option<crate::
             && c
         {
             dock.update(crate::dock::DockMessage::ToggleCollapse(pos));
+        }
+        // A layout saved before #2395 has no width; the dock keeps the
+        // fresh-layout width.
+        if let Some(width) = region.get("width").and_then(|v| v.as_f64()) {
+            dock.set_preferred_width(pos, width as f32);
         }
     }
     Some(dock)
@@ -159,10 +168,11 @@ mod tests {
     use crate::dock::{DockLayoutSnapshot, DockLayoutStore, PanelPosition, RegionLayout};
     use crate::panels::PanelKind;
 
-    fn region(panels: &[PanelKind], collapsed: bool) -> RegionLayout {
+    fn region(panels: &[PanelKind], collapsed: bool, width: Option<u32>) -> RegionLayout {
         RegionLayout {
             panels: panels.to_vec(),
             collapsed,
+            width,
         }
     }
 
@@ -171,9 +181,13 @@ mod tests {
     fn saved(dir: &tempfile::TempDir) -> String {
         let path = dir.path().join("prefs.json");
         let layout = DockLayoutSnapshot {
-            left: region(&[PanelKind::Projects], false),
-            right: region(&[PanelKind::Properties, PanelKind::SignexAi], false),
-            bottom: region(&[PanelKind::Messages], true),
+            left: region(&[PanelKind::Projects], false, Some(310)),
+            right: region(
+                &[PanelKind::Properties, PanelKind::SignexAi],
+                false,
+                Some(420),
+            ),
+            bottom: region(&[PanelKind::Messages], true, None),
         };
         PrefsDockLayoutStore::at(path.clone())
             .write(&layout)
@@ -220,5 +234,42 @@ mod tests {
         );
         assert!(dock.is_collapsed(PanelPosition::Bottom));
         assert!(!dock.is_collapsed(PanelPosition::Left));
+    }
+
+    /// #2395: the side docks' preferred widths are saved and load back.
+    #[test]
+    fn the_side_dock_widths_round_trip() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let json: serde_json::Value =
+            serde_json::from_str(&saved(&dir)).expect("prefs.json parses");
+        assert_eq!(json["dock"]["left"]["width"], serde_json::json!(310));
+        assert_eq!(json["dock"]["right"]["width"], serde_json::json!(420));
+        assert!(json["dock"]["bottom"].get("width").is_none());
+
+        let dock = read_dock_layout_from(Some(&json)).expect("a saved layout loads");
+        assert_eq!(dock.preferred_width(PanelPosition::Left), 310.0);
+        assert_eq!(dock.preferred_width(PanelPosition::Right), 420.0);
+    }
+
+    /// A layout saved before the widths were stored still loads, with the
+    /// fresh-layout widths.
+    #[test]
+    fn a_layout_without_widths_loads_with_the_default_widths() {
+        let json = serde_json::json!({
+            "dock": {
+                "left": { "panels": ["projects"], "collapsed": false },
+                "right": { "panels": ["properties"], "collapsed": false },
+            }
+        });
+        let dock = read_dock_layout_from(Some(&json)).expect("an older layout loads");
+        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::Projects]);
+        assert_eq!(
+            dock.preferred_width(PanelPosition::Left),
+            crate::dock::DEFAULT_LEFT_DOCK_WIDTH
+        );
+        assert_eq!(
+            dock.preferred_width(PanelPosition::Right),
+            crate::dock::DEFAULT_RIGHT_DOCK_WIDTH
+        );
     }
 }

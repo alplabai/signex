@@ -325,10 +325,13 @@ moved after it.
 ## Zones
 
 `Unconnected` is the ratsnest, so it joins copper through zones the way the
-ratsnest does (#2215): a pad island joined only through a same-net pour is not
-reported open. The pour itself is not checked: a zone's clearance to other
-nets (#2216) and its fill are not modelled, so a zone is never a `Clearance`
-or `Short` party.
+ratsnest does (#2215): a pad island joined only through a same-net zone is not
+reported open. A polygon pour joins through its computed fill (#2216), so a
+pad in a pour's hole or inside its clearance from another net is reported
+open. The zones themselves are not checked: a zone is never a `Clearance` or
+`Short` party. A pour's fill keeps its clearance from pads, tracks, vias and
+solid zones by construction, but not from another pour; a solid zone's
+clearance to other nets is not checked yet.
 
 ## Keepouts
 

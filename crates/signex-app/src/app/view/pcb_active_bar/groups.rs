@@ -1,6 +1,7 @@
 //! The tool group buttons of the PCB Active Bar (#2392), from the group
 //! table in `app/pcb_bar_groups.rs`. A button shows and runs the row its
-//! group used last; a right-click opens the group's rows, greyed by the menu
+//! group used last, drawn selected while one of its tools is armed or its
+//! dropdown is open; a right-click opens the group's rows, greyed by the menu
 //! bar's gate, or with why for a tool the board editor cannot run yet. A
 //! group whose rows are all greyed is one greyed button that says why.
 
@@ -18,16 +19,36 @@ use crate::app::{Message, PcbBarMenu, PcbBarMsg};
 use crate::icons as ic;
 use crate::keymap::AppCommandId;
 
-/// The button of `group`: it runs the row `last` holds for it, or is
+/// What the group buttons are drawn from.
+pub(super) struct GroupState<'a> {
+    /// The open dropdown.
+    pub open: Option<PcbBarMenu>,
+    /// The row each group shows.
+    pub last: &'a PcbBarLastTools,
+    /// The tool armed on the board in view.
+    pub armed: Option<BoardPlaceTool>,
+}
+
+impl GroupState<'_> {
+    /// Whether `group`'s button is drawn selected: its dropdown is open or
+    /// one of its tools is armed, as on the schematic bar.
+    fn is_selected(&self, group: PcbBarGroup) -> bool {
+        let armed = self
+            .armed
+            .is_some_and(|tool| group.rows().contains(&PcbBarRow::Tool(tool)));
+        armed || self.open == Some(PcbBarMenu::Group(group))
+    }
+}
+
+/// The button of `group`: it runs the row `state.last` holds for it, or is
 /// greyed with why when no row of the group can run yet.
 pub(super) fn group_button(
     group: PcbBarGroup,
-    last: &PcbBarLastTools,
-    open: Option<PcbBarMenu>,
+    state: &GroupState<'_>,
     tid: ThemeId,
     i18n: &I18n,
 ) -> ActiveBarItem<Message> {
-    let row = last.current(group);
+    let row = state.last.current(group);
     let icon = button_icon(row, tid);
     let tooltip = row_tooltip(row, i18n);
     let Some(on_press) = row.command().and_then(run) else {
@@ -44,7 +65,7 @@ pub(super) fn group_button(
         icon,
         tooltip,
         enabled: true,
-        selected: open == Some(menu),
+        selected: state.is_selected(group),
         on_press: Some(on_press),
         on_right_press: has_menu.then(|| bar_message(PcbBarMsg::MenuToggled(menu))),
         dropdown_indicator: has_menu.then(|| ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),

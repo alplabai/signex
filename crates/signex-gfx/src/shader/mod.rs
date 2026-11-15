@@ -9,3 +9,4 @@ pub const CIRCLE_WGSL: &str = include_str!("circle.wgsl");
 pub const ARC_WGSL: &str = include_str!("arc.wgsl");
 pub const POLYGON_WGSL: &str = include_str!("polygon.wgsl");
 pub const GRID_WGSL: &str = include_str!("grid.wgsl");
+pub const MESH_WGSL: &str = include_str!("mesh.wgsl");

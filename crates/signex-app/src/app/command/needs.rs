@@ -292,6 +292,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_track"
         | "place_board_fill"
         | "place_board_region"
+        | "place_board_polygon_pour"
         | "place_board_keepout" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
@@ -303,6 +304,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "toggle_ratsnest"
         | "toggle_origin_marker"
         | "board_sketch"
+        | "view_board_3d"
         | "next_layer"
         | "prev_layer"
         | "next_signal_layer"

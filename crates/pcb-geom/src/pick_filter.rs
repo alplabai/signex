@@ -3,10 +3,16 @@
 
 use std::collections::BTreeSet;
 
+use signex_types::pcb::{Point, SOLID_FILL, Zone};
+use signex_types::zone_keepout::KEEPOUT_FILL;
+
 use crate::index::ItemRef;
 
-/// One kind of board object the selection filter names.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// One kind of board object the selection filter names. Its serde name is
+/// what a saved filter preset stores (#2383).
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum PickKind {
     Components,
     Bodies3d,
@@ -48,6 +54,20 @@ impl PickKind {
             ItemRef::Pad { .. } => PickKind::Pads,
             ItemRef::Track(_) => PickKind::Tracks,
             ItemRef::Via(_) => PickKind::Vias,
+            ItemRef::Zone { kind, .. } => kind,
+        }
+    }
+
+    /// The kind a drawn area is (#2383): a keepout, a Fill (solid copper on
+    /// an upright rectangle, as the Fill tool draws it) or a Solid Region.
+    /// `None` for any other zone, such as a polygon pour, which the board
+    /// editor does not pick yet.
+    pub fn of_zone(zone: &Zone) -> Option<Self> {
+        match zone.fill_type.as_str() {
+            KEEPOUT_FILL => Some(PickKind::Keepouts),
+            SOLID_FILL if is_upright_rectangle(&zone.outline) => Some(PickKind::Fills),
+            SOLID_FILL => Some(PickKind::Regions),
+            _ => None,
         }
     }
 
@@ -56,7 +76,13 @@ impl PickKind {
     pub fn is_pickable(self) -> bool {
         matches!(
             self,
-            PickKind::Components | PickKind::Tracks | PickKind::Pads | PickKind::Vias
+            PickKind::Components
+                | PickKind::Tracks
+                | PickKind::Pads
+                | PickKind::Vias
+                | PickKind::Keepouts
+                | PickKind::Regions
+                | PickKind::Fills
         )
     }
 }
@@ -97,10 +123,37 @@ impl PickFilter {
         };
     }
 
+    /// Turn on exactly `kinds` and every other kind off (a filter preset,
+    /// #2383).
+    pub fn set_on_kinds(&mut self, kinds: impl IntoIterator<Item = PickKind>) {
+        let on: BTreeSet<PickKind> = kinds.into_iter().collect();
+        self.off = PickKind::ALL
+            .into_iter()
+            .filter(|kind| !on.contains(kind))
+            .collect();
+    }
+
     /// The kinds that are on, in [`PickKind::ALL`] order.
     pub fn on_kinds(&self) -> impl Iterator<Item = PickKind> + '_ {
         PickKind::ALL.into_iter().filter(|kind| self.is_on(*kind))
     }
+}
+
+/// Four corners on two x and two y values: the rectangle the Fill tool draws.
+fn is_upright_rectangle(outline: &[Point]) -> bool {
+    let [a, b, c, d] = outline else {
+        return false;
+    };
+    let xs = [a.x, b.x, c.x, d.x];
+    let ys = [a.y, b.y, c.y, d.y];
+    let two = |v: [f64; 4]| {
+        let lo = v.iter().copied().fold(f64::INFINITY, f64::min);
+        let hi = v.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        lo < hi && v.iter().all(|x| *x == lo || *x == hi)
+    };
+    // Neighbouring corners share an x or a y; opposite corners share neither.
+    let shares = |p: &Point, q: &Point| p.x == q.x || p.y == q.y;
+    two(xs) && two(ys) && shares(a, b) && shares(b, c) && shares(c, d) && shares(d, a)
 }
 
 #[cfg(test)]
@@ -132,5 +185,64 @@ mod tests {
         assert!(!filter.allows(ItemRef::Track(Uuid::nil())));
         filter.set_all(true);
         assert!(filter.is_all_on());
+    }
+
+    fn zone(fill: &str, outline: &[(f64, f64)]) -> Zone {
+        Zone {
+            uuid: Uuid::nil(),
+            net: 0,
+            net_name: String::new(),
+            layer: "TopCopper".into(),
+            outline: outline.iter().map(|&(x, y)| Point::new(x, y)).collect(),
+            holes: Vec::new(),
+            priority: 0,
+            fill_type: fill.into(),
+            thermal_relief: false,
+            thermal_gap: 0.0,
+            thermal_width: 0.0,
+            clearance: 0.0,
+            min_thickness: 0.0,
+            unknown: Default::default(),
+        }
+    }
+
+    /// #2383: a keepout, a Fill and a Solid Region are told apart; a pour is
+    /// not picked yet.
+    #[test]
+    fn drawn_areas_have_their_kind() {
+        let rect = [(0.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0)];
+        let tri = [(0.0, 0.0), (4.0, 0.0), (2.0, 3.0)];
+        let bow = [(0.0, 0.0), (4.0, 2.0), (4.0, 0.0), (0.0, 2.0)];
+        assert_eq!(
+            PickKind::of_zone(&zone("keepout", &tri)),
+            Some(PickKind::Keepouts)
+        );
+        assert_eq!(
+            PickKind::of_zone(&zone("solid", &rect)),
+            Some(PickKind::Fills)
+        );
+        assert_eq!(
+            PickKind::of_zone(&zone("solid", &tri)),
+            Some(PickKind::Regions)
+        );
+        assert_eq!(
+            PickKind::of_zone(&zone("solid", &bow)),
+            Some(PickKind::Regions)
+        );
+        assert_eq!(PickKind::of_zone(&zone("pour", &rect)), None);
+        for kind in [PickKind::Keepouts, PickKind::Fills, PickKind::Regions] {
+            assert!(kind.is_pickable(), "{kind:?}");
+        }
+        assert!(!PickKind::Polygons.is_pickable());
+    }
+
+    #[test]
+    fn a_preset_turns_on_exactly_its_kinds() {
+        let mut filter = PickFilter::default();
+        filter.set_on_kinds([PickKind::Vias, PickKind::Keepouts]);
+        assert_eq!(
+            filter.on_kinds().collect::<Vec<_>>(),
+            vec![PickKind::Keepouts, PickKind::Vias]
+        );
     }
 }

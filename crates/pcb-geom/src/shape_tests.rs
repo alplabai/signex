@@ -163,3 +163,64 @@ fn a_ratio_half_round_rect_outline_repeats_no_vertex() {
         assert_ne!(*a, ring[(i + 1) % ring.len()], "vertex {i} repeats");
     }
 }
+
+#[test]
+fn inflating_grows_every_side_and_rounds_a_rectangle() {
+    let rect = Shape::Rect {
+        center: p(0, 0),
+        half_w: MM,
+        half_h: MM / 2,
+        rotation_deg: 0.0,
+    };
+    assert_eq!(
+        rect.inflated(MM / 4),
+        Shape::RoundRect {
+            center: p(0, 0),
+            half_w: MM + MM / 4,
+            half_h: MM / 2 + MM / 4,
+            radius: MM / 4,
+            rotation_deg: 0.0,
+        }
+    );
+    assert_eq!(rect.inflated(-5), rect);
+    assert_eq!(
+        track().inflated(MM),
+        Shape::Capsule {
+            a: p(0, 0),
+            b: p(10 * MM, 0),
+            radius: MM / 2 + MM,
+        }
+    );
+}
+
+#[test]
+fn a_covering_ring_never_cuts_into_the_shape() {
+    // Every edge of the ring keeps out of the shape: its midpoint, where a
+    // chord comes closest to the arc, is not inside.
+    let shapes = [
+        Shape::Disc {
+            center: p(MM, -MM),
+            radius: MM,
+        },
+        track(),
+        Shape::RoundRect {
+            center: p(0, 0),
+            half_w: 2 * MM,
+            half_h: MM,
+            radius: MM / 2,
+            rotation_deg: 30.0,
+        },
+    ];
+    for shape in shapes {
+        let ring = shape.covering_ring(8);
+        for i in 0..ring.len() {
+            let (a, b) = (ring[i], ring[(i + 1) % ring.len()]);
+            let mid = p((a.x + b.x) / 2, (a.y + b.y) / 2);
+            assert!(!shape.contains(mid, 0), "{shape:?}: {mid:?} cuts in");
+            assert!(
+                shape.contains(mid, MM / 20),
+                "{shape:?}: {mid:?} too far out"
+            );
+        }
+    }
+}

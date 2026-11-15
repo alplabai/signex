@@ -10,6 +10,7 @@ mod components_row;
 mod dock_tab;
 mod grid_picker;
 mod items;
+mod layer_tab;
 mod menus;
 mod placement;
 mod project_tree;

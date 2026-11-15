@@ -354,3 +354,57 @@ fn a_repeated_item_identity_is_rejected() {
         }]
     );
 }
+
+fn area(uuid: Uuid, fill: &str, outline: &[(f64, f64)]) -> Zone {
+    Zone {
+        uuid,
+        net: 0,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: outline.iter().map(|&(x, y)| Point::new(x, y)).collect(),
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: fill.into(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        unknown: Default::default(),
+    }
+}
+
+/// #2383: a keepout is picked on its edge and inside it, a box selects it
+/// whole only when it holds every edge, and a pour stays out of the index.
+#[test]
+fn drawn_areas_are_picked_on_their_edges_and_inside() {
+    let mut b = board(Vec::new(), Vec::new(), Vec::new());
+    let triangle = [(0.0, 0.0), (10.0, 0.0), (0.0, 10.0)];
+    b.zones = vec![
+        area(id(7), "keepout", &triangle),
+        area(id(8), "pour", &[(20.0, 0.0), (30.0, 0.0), (30.0, 10.0)]),
+    ];
+    let index = BoardIndex::build_selectable(&b);
+    let keepout = ItemRef::Zone {
+        zone: id(7),
+        kind: PickKind::Keepouts,
+    };
+    assert_eq!(
+        index.hit_point(PointNm::new(2 * MM, 2 * MM), 0),
+        vec![keepout]
+    );
+    assert_eq!(index.hit_point(PointNm::new(5 * MM, 0), 0), vec![keepout]);
+    assert!(index.hit_point(PointNm::new(8 * MM, 8 * MM), 0).is_empty());
+    assert!(index.hit_point(PointNm::new(25 * MM, 2 * MM), 0).is_empty());
+    let whole = RectNm::new(PointNm::new(-MM, -MM), PointNm::new(11 * MM, 11 * MM));
+    let half = RectNm::new(PointNm::new(-MM, -MM), PointNm::new(5 * MM, 11 * MM));
+    let within = RectNm::new(PointNm::new(MM, MM), PointNm::new(2 * MM, 2 * MM));
+    assert_eq!(index.hit_rect(&whole, RectSelect::Inside), vec![keepout]);
+    assert!(index.hit_rect(&half, RectSelect::Inside).is_empty());
+    assert_eq!(index.hit_rect(&half, RectSelect::Touching), vec![keepout]);
+    assert_eq!(index.hit_rect(&within, RectSelect::Touching), vec![keepout]);
+    assert!(
+        BoardIndex::build(&b).is_empty(),
+        "connectivity holds no areas"
+    );
+}

@@ -1,5 +1,6 @@
 //! The two irregular dropdowns that ride the widget's `Custom` escape
-//! hatch: the NetColor swatches and the Selection Filter chip grid.
+//! hatch: the NetColor swatches and the Selection Filter chip grid, the
+//! latter shared by the schematic and board Active Bars (#2383).
 //! Graphite themes paint both through `super::graphite`.
 
 use iced::widget::{Space, column, container, row};
@@ -128,20 +129,29 @@ pub(super) fn net_color_entries(
     ]
 }
 
-/// Selection Filter menu: an irregular chip-wrap layout (All toggle +
-/// user presets, then two rows of six category chips) that can't be
-/// expressed as a vertical `Item` list, so it rides the widget's
-/// `Custom` escape hatch as a single owned `Element<'static>`.
-pub(super) fn filter_entry(
-    tokens: &ThemeTokens,
-    filters: &std::collections::HashSet<SelectionFilter>,
-    custom_presets: &[CustomFilterPreset],
-) -> DropdownEntry<ActiveBarMsg> {
-    graphite_filter_entry(tokens, filters, custom_presets)
+/// One category chip of a Selection Filter dropdown. `msg: None` draws it
+/// inert with `why` on hover.
+pub(crate) struct FilterChip<M> {
+    pub label: String,
+    pub on: bool,
+    pub msg: Option<M>,
+    pub why: Option<String>,
+}
+
+/// What a Selection Filter dropdown shows and sends, for any editor: the
+/// schematic's categories or the board's kinds (#2383).
+pub(crate) struct FilterMenu<M> {
+    pub chips: Vec<FilterChip<M>>,
+    /// The saved presets, by label, each with the message that applies it.
+    pub presets: Vec<(String, M)>,
+    /// How many categories are on, out of `chips.len()`.
+    pub on: usize,
+    pub all: M,
+    pub none: M,
 }
 
 /// The preset's button label: its name, or "Filter N" when unnamed.
-fn preset_label(idx: usize, preset: &CustomFilterPreset) -> String {
+pub(crate) fn preset_label<K>(idx: usize, preset: &CustomFilterPreset<K>) -> String {
     if preset.name.trim().is_empty() {
         format!("Filter {}", idx + 1)
     } else {
@@ -149,35 +159,30 @@ fn preset_label(idx: usize, preset: &CustomFilterPreset) -> String {
     }
 }
 
-/// Graphite Selection Filter: an All / None segmented control and the
-/// presets on top, then the categories as toggle chips, six per row.
-fn graphite_filter_entry(
+/// Selection Filter menu: an irregular chip-wrap layout (All / None and the
+/// presets on top, then the categories as toggle chips, six per row) that
+/// can't be expressed as a vertical `Item` list, so it rides the widget's
+/// `Custom` escape hatch as a single owned `Element<'static>`. The one
+/// builder of every editor's Selection Filter dropdown.
+pub(crate) fn filter_menu_entry<M: Clone + 'static>(
     tokens: &ThemeTokens,
-    filters: &std::collections::HashSet<SelectionFilter>,
-    custom_presets: &[CustomFilterPreset],
-) -> DropdownEntry<ActiveBarMsg> {
-    let scope = graphite::FilterScope::of(filters.len(), SelectionFilter::ALL.len());
-    let mut top_row = iced::widget::Row::<Element<'static, ActiveBarMsg>>::new()
+    menu: FilterMenu<M>,
+) -> DropdownEntry<M> {
+    let scope = graphite::FilterScope::of(menu.on, menu.chips.len());
+    let mut top_row = iced::widget::Row::<Element<'static, M>>::new()
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
-        .push(graphite::all_none(tokens, scope));
-    for (idx, preset) in custom_presets.iter().enumerate() {
-        top_row = top_row.push(graphite::chip(
-            tokens,
-            preset_label(idx, preset),
-            false,
-            ActiveBarMsg::ApplyCustomFilter(idx),
-        ));
+        .push(graphite::all_none(tokens, scope, menu.all, menu.none));
+    for (label, msg) in menu.presets {
+        top_row = top_row.push(graphite::chip(tokens, label, false, Some(msg), None));
     }
-    let mut chips = iced::widget::Column::<Element<'static, ActiveBarMsg>>::new().spacing(SP.s);
-    for categories in SelectionFilter::ALL.chunks(6) {
-        let mut line = iced::widget::Row::<Element<'static, ActiveBarMsg>>::new().spacing(SP.s);
-        for &filter in categories {
+    let mut chips = iced::widget::Column::<Element<'static, M>>::new().spacing(SP.s);
+    let mut kinds = menu.chips.into_iter().peekable();
+    while kinds.peek().is_some() {
+        let mut line = iced::widget::Row::<Element<'static, M>>::new().spacing(SP.s);
+        for chip in kinds.by_ref().take(6) {
             line = line.push(graphite::chip(
-                tokens,
-                filter.label().to_string(),
-                filters.contains(&filter),
-                ActiveBarMsg::ToggleFilter(filter),
+                tokens, chip.label, chip.on, chip.msg, chip.why,
             ));
         }
         chips = chips.push(line.boxed());
@@ -189,5 +194,42 @@ fn graphite_filter_entry(
         ]
         .spacing(SP.xs)
         .boxed(),
+    )
+}
+
+/// The schematic's Selection Filter menu.
+pub(super) fn filter_entry(
+    tokens: &ThemeTokens,
+    filters: &std::collections::HashSet<SelectionFilter>,
+    custom_presets: &[CustomFilterPreset],
+) -> DropdownEntry<ActiveBarMsg> {
+    let chips = SelectionFilter::ALL
+        .iter()
+        .map(|&filter| FilterChip {
+            label: filter.label().to_string(),
+            on: filters.contains(&filter),
+            msg: Some(ActiveBarMsg::ToggleFilter(filter)),
+            why: None,
+        })
+        .collect();
+    let presets = custom_presets
+        .iter()
+        .enumerate()
+        .map(|(idx, preset)| {
+            (
+                preset_label(idx, preset),
+                ActiveBarMsg::ApplyCustomFilter(idx),
+            )
+        })
+        .collect();
+    filter_menu_entry(
+        tokens,
+        FilterMenu {
+            chips,
+            presets,
+            on: filters.len(),
+            all: ActiveBarMsg::AllFiltersPicked,
+            none: ActiveBarMsg::NoFiltersPicked,
+        },
     )
 }

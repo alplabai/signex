@@ -197,8 +197,19 @@ mod tests {
         let areas = PcbBarGroup::CopperAreas;
         assert_eq!(
             last.current(areas),
-            PcbBarRow::Tool(BoardPlaceTool::SolidRegion),
-            "Polygon Pour is not live yet"
+            PcbBarRow::Tool(BoardPlaceTool::PolygonPour),
+            "#2216: the first row is live"
+        );
+        let mut drawing = PcbBarLastTools::default();
+        assert!(matches!(
+            BoardPlaceTool::Arc.state(),
+            ToolState::Unavailable(_)
+        ));
+        assert!(!drawing.remember(PcbBarGroup::CopperDrawing, "place_board_arc"));
+        assert_eq!(
+            drawing.current(PcbBarGroup::CopperDrawing),
+            PcbBarRow::Tool(BoardPlaceTool::Track),
+            "a greyed row is never shown while a live one exists"
         );
         assert!(last.remember(areas, "place_board_fill"));
         assert!(!last.remember(areas, "place_board_fill"), "unchanged");

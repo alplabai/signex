@@ -11,6 +11,7 @@ use signex_types::pcb::{
 };
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::zone_keepout::{KEEPOUT_FILL, keepout_copper};
+use signex_types::zone_pour::POUR_FILL;
 use uuid::Uuid;
 
 use super::command::BoardCommand;
@@ -149,13 +150,30 @@ pub fn new_copper_area(
         outline,
         holes: Vec::new(),
         priority: 0,
-        fill_type: "solid".into(),
+        fill_type: signex_types::pcb::SOLID_FILL.into(),
         thermal_relief: false,
         thermal_gap: 0.0,
         thermal_width: 0.0,
         clearance: 0.0,
         min_thickness: 0.0,
         unknown: Default::default(),
+    })
+}
+
+/// A polygon pour over `outline` on `layer` (#2216): a zone with the pour
+/// fill, on the net of the copper under its first point, or no net. Its
+/// clearance is left at 0, which follows the board's clearance
+/// (`Zone::pour_clearance_mm`). `None` for an outline with no area or a
+/// point the geometry cannot hold.
+pub fn new_pour(
+    board: &PcbBoard,
+    id: Uuid,
+    outline: Vec<Point>,
+    layer: CopperLayer,
+) -> Option<Zone> {
+    new_copper_area(board, id, outline, layer).map(|zone| Zone {
+        fill_type: POUR_FILL.into(),
+        ..zone
     })
 }
 

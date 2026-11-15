@@ -93,7 +93,7 @@ pub(super) fn zone_from_board_zone(
     Some(ZonePolygonInput {
         vertices,
         holes,
-        rule_area: is_rule_area_zone(zone),
+        rule_area: zone.is_rule_area(),
         net: zone.net,
         priority: zone.priority,
         layer_rank,
@@ -101,6 +101,7 @@ pub(super) fn zone_from_board_zone(
         source_order,
         dimmed: false,
         ink: CopperInk::Unknown,
+        fill: zone.is_pour().then(Vec::new),
     })
 }
 
@@ -132,13 +133,6 @@ pub(super) fn zone_layer_top_composite_key(zone: &ZonePolygonInput) -> (u32, u8,
 
 pub(super) fn zone_connected_bucket(net: u32) -> u8 {
     if net == 0 { 0 } else { 1 }
-}
-
-pub(super) fn is_rule_area_zone(zone: &Zone) -> bool {
-    let fill = zone.fill_type.to_ascii_lowercase();
-    let layer = zone.layer.to_ascii_lowercase();
-
-    fill.contains("rule") || fill.contains("keepout") || layer.contains("rule")
 }
 
 pub(super) fn point_to_xy(point: Point) -> [f32; 2] {
@@ -351,13 +345,33 @@ pub(super) fn emit_static_polygons(
     }
 
     for zone in &snapshot.zones {
-        let fill = with_alpha_mul(copper_color(theme, zone.ink, ColorSlot::Ghost), 0.38);
-        let stroke = copper_color(theme, zone.ink, ColorSlot::Bus);
+        let fill = dim_if(
+            with_alpha_mul(copper_color(theme, zone.ink, ColorSlot::Ghost), 0.38),
+            zone.dimmed,
+        );
+        let stroke = Some(dim_if(
+            copper_color(theme, zone.ink, ColorSlot::Bus),
+            zone.dimmed,
+        ));
+        // A pour: its fill pieces as copper, then its outline stroked only.
+        for piece in zone.fill.iter().flatten() {
+            scene.polygons.push(GpuPolygon {
+                vertices: piece.vertices.clone(),
+                holes: piece.holes.clone(),
+                fill_color: fill,
+                stroke_color: None,
+                stroke_width: 0.0,
+            });
+        }
+        let (fill_color, holes) = match zone.fill {
+            Some(_) => (with_alpha_mul(fill, 0.0), Vec::new()),
+            None => (fill, zone.holes.clone()),
+        };
         scene.polygons.push(GpuPolygon {
             vertices: zone.vertices.clone(),
-            holes: zone.holes.clone(),
-            fill_color: dim_if(fill, zone.dimmed),
-            stroke_color: Some(dim_if(stroke, zone.dimmed)),
+            holes,
+            fill_color,
+            stroke_color: stroke,
             stroke_width: 0.06,
         });
     }
@@ -505,6 +519,8 @@ pub(super) fn emit_overlays(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene
     // The board's openings and keepouts first, so the ratsnest and DRC
     // markers stay readable on top (#2234).
     super::board_features::emit(&snapshot.board_features, theme, scene);
+    // Footprint and board drawings over the copper, under the ratsnest.
+    super::graphics::emit(&snapshot.graphics, theme, scene);
 
     let ratsnest_color = with_alpha_mul(theme.color(ColorSlot::Ratsnest), 0.72);
 

@@ -127,7 +127,7 @@ pub(super) fn emit(features: &BoardFeaturesInput, theme: &ResolvedTheme, scene: 
     }
 }
 
-fn line(p0: [f32; 2], p1: [f32; 2], color: [f32; 4], width: f32) -> LineSegment {
+pub(super) fn line(p0: [f32; 2], p1: [f32; 2], color: [f32; 4], width: f32) -> LineSegment {
     LineSegment {
         p0,
         p1,
@@ -139,7 +139,7 @@ fn line(p0: [f32; 2], p1: [f32; 2], color: [f32; 4], width: f32) -> LineSegment 
 }
 
 /// The closed loop through `points` as line segments.
-fn push_loop(scene: &mut Scene, points: &[[f32; 2]], color: [f32; 4], width: f32) {
+pub(super) fn push_loop(scene: &mut Scene, points: &[[f32; 2]], color: [f32; 4], width: f32) {
     for (i, &p0) in points.iter().enumerate() {
         let p1 = points[(i + 1) % points.len()];
         scene.overlay_lines.push(line(p0, p1, color, width));

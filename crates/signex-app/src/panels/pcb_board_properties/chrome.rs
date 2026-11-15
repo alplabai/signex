@@ -2,6 +2,7 @@
 //! Graphite look of the schematic Document Options. Sizes come from the type
 //! and spacing scales.
 
+use iced::widget::text::Wrapping;
 use iced::widget::tooltip::Position;
 use iced::widget::{Column, Row, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
@@ -11,7 +12,7 @@ use signex_widgets::{Label, button, checkbox, text, text_input, tooltip};
 
 use super::super::form_look;
 use super::super::properties_parameters::{chip_label, graphite_filter_chip};
-use super::super::{PanelContext, PanelMsg, property_label};
+use super::super::{PROPERTY_LABEL_COLUMN, PanelContext, PanelMsg};
 use crate::styles::tokens::{hover_overlay, resolve};
 use crate::styles::{HAIRLINE, Spacing, TypeScale, ti};
 
@@ -142,15 +143,20 @@ impl<'a> Form<'a> {
         tooltip(content, hint, Position::Bottom).gap(SP.xs).boxed()
     }
 
-    /// Label | content: the Graphite property row.
+    /// Label | content: the Graphite property row. The label sits on one
+    /// line in this panel's own column (#2386).
     pub fn field(
         &self,
         label: &Localized,
         content: Element<'a, PanelMsg>,
     ) -> Element<'a, PanelMsg> {
+        let label = text(label.clone())
+            .size(TS.body)
+            .color(self.muted())
+            .wrapping(Wrapping::None);
         container(
             row![
-                property_label(label.to_string(), self.muted()),
+                container(label).width(PROPERTY_LABEL_COLUMN).clip(true),
                 container(content).width(Length::Fill),
             ]
             .spacing(SP.m)
@@ -167,6 +173,7 @@ impl<'a> Form<'a> {
             .size(TS.body)
             .font(mono())
             .color(self.ink())
+            .wrapping(Wrapping::None)
             .boxed()
     }
 
@@ -216,14 +223,27 @@ impl<'a> Form<'a> {
             Some(why) => self.tip(box_.boxed(), why),
             None => box_.boxed(),
         };
-        self.field(label, control)
+        // The label follows the box and takes the row, so a long one stays on
+        // one line (#2386).
+        let label = text(label.clone())
+            .size(TS.body)
+            .color(self.muted())
+            .wrapping(Wrapping::None);
+        container(
+            row![control, label]
+                .spacing(SP.m)
+                .align_y(Alignment::Center),
+        )
+        .padding([SP.xs, SP.l])
+        .width(Length::Fill)
+        .boxed()
     }
 
     /// A Selection Filter or snap chip; `msg: None` draws it inert with
     /// `why` on hover.
     pub fn chip(
         &self,
-        label: Localized,
+        label: impl Into<Label<'a>>,
         on: bool,
         msg: Option<PanelMsg>,
         why: Option<Localized>,
@@ -320,12 +340,30 @@ impl<'a> Form<'a> {
         cells: Vec<Element<'a, PanelMsg>>,
         header: bool,
     ) -> Element<'a, PanelMsg> {
+        let even = vec![1; cells.len()];
+        self.table_row_in(cells, &even, header)
+    }
+
+    /// [`Self::table_row`] with each cell taking its `portions` share of the
+    /// width; a cell clips what does not fit, so nothing wraps (#2386).
+    pub fn table_row_in(
+        &self,
+        cells: Vec<Element<'a, PanelMsg>>,
+        portions: &[u16],
+        header: bool,
+    ) -> Element<'a, PanelMsg> {
         let mut line: Row<Element<'a, PanelMsg>> = Row::new()
             .spacing(SP.s)
             .align_y(Alignment::Center)
             .width(Length::Fill);
-        for cell in cells {
-            line = line.push(container(cell).width(Length::FillPortion(1)).boxed());
+        for (cell, portion) in cells
+            .into_iter()
+            .zip(portions.iter().copied().chain(std::iter::repeat(1)))
+        {
+            let cell = container(cell)
+                .width(Length::FillPortion(portion))
+                .clip(true);
+            line = line.push(cell.boxed());
         }
         let edge = resolve(self.tokens()).line_soft;
         container(line)
@@ -343,11 +381,34 @@ impl<'a> Form<'a> {
             .boxed()
     }
 
+    /// A small Graphite card around `body`: a hairline frame inset in the
+    /// section (#2386). Board Information, the Grid and Guide Managers and the
+    /// Sheet use it.
+    pub fn card(&self, body: Element<'a, PanelMsg>) -> Element<'a, PanelMsg> {
+        let edge = resolve(self.tokens()).line_soft;
+        let framed = container(body)
+            .padding([SP.s, SP.m])
+            .width(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                border: Border {
+                    width: HAIRLINE,
+                    color: edge,
+                    radius: crate::styles::RADIUS.into(),
+                },
+                ..container::Style::default()
+            });
+        container(framed)
+            .padding([SP.xs, SP.l])
+            .width(Length::Fill)
+            .boxed()
+    }
+
     /// A table heading cell.
     pub fn heading(&self, id: MessageId) -> Element<'a, PanelMsg> {
         text(self.t(id))
             .size(TS.caption)
             .color(resolve(self.tokens()).ink4)
+            .wrapping(Wrapping::None)
             .boxed()
     }
 }

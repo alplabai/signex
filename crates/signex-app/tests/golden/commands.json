@@ -690,6 +690,11 @@
     "category": "place"
   },
   {
+    "id": "place_board_polygon_pour",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "place_board_region",
     "group": "Pcb",
     "category": "place"
@@ -1203,6 +1208,11 @@
     "id": "update_pcb_from_schematic",
     "group": "Schematic",
     "category": "pcb_sync"
+  },
+  {
+    "id": "view_board_3d",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "view_rotate",

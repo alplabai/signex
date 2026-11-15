@@ -17,6 +17,7 @@ use super::emit::{
     via_from_board_via, zone_from_board_zone,
 };
 use super::footprint_text::footprint_texts;
+use super::graphics::{Drawings, board_drawings, footprint_drawings};
 use super::layer_rows::{LayerGroup, group_layers};
 use super::{CopperInk, PadInput, PcbSnapshot};
 
@@ -149,6 +150,24 @@ impl PcbLayerView {
         if !self.hidden.remove(&layer) {
             self.hidden.insert(layer);
         }
+    }
+
+    /// Hide `layer`; a hidden one stays hidden.
+    pub fn hide(&mut self, layer: PcbLayer) {
+        self.hidden.insert(layer);
+    }
+
+    /// Show `layer` as the active one and hide every other layer of
+    /// `layers` (#2379). The board outline stays as it is, as single-layer
+    /// mode keeps it, and so does the Multi-Layer row.
+    pub fn show_only(&mut self, layers: &[PcbLayer], layer: PcbLayer) {
+        let others = layers
+            .iter()
+            .copied()
+            .filter(|&l| l != layer && l != BOARD_OUTLINE);
+        self.hidden.extend(others);
+        self.hidden.remove(&layer);
+        self.active = layer;
     }
 
     pub fn show_all(&mut self) {
@@ -353,11 +372,18 @@ impl PcbSnapshot {
             .iter()
             .flat_map(|footprint| footprint_pads(footprint, view))
             .collect();
-        let texts = board
-            .footprints
-            .iter()
-            .flat_map(|footprint| footprint_texts(footprint, view))
-            .collect();
+        let mut drawings = Drawings {
+            texts: board
+                .footprints
+                .iter()
+                .flat_map(|footprint| footprint_texts(footprint, view))
+                .collect(),
+            ..Drawings::default()
+        };
+        board_drawings(board, view, &mut drawings);
+        for footprint in &board.footprints {
+            footprint_drawings(footprint, view, &mut drawings);
+        }
 
         let layer_ranks = layer_rank_index(board);
         let mut zones = Vec::new();
@@ -402,7 +428,8 @@ impl PcbSnapshot {
                 edge_hidden: view.is_some_and(|v| !v.is_visible(BOARD_OUTLINE)),
                 ..super::BoardFeaturesInput::from_board(board)
             },
-            texts,
+            texts: drawings.texts,
+            graphics: drawings.graphics,
         }
     }
 }
@@ -410,7 +437,9 @@ impl PcbSnapshot {
 impl PcbSnapshot {
     /// The pads of `footprint` alone, drawn as the board draws them with
     /// every layer shown: a library preview (#2348) lowers the footprint
-    /// through here, so it cannot look different from the board.
+    /// through here, so it cannot look different from the board. Its
+    /// drawings are left out: the preview draws them itself, in the same
+    /// board palette colours (`ResolvedTheme::board_layer_color`).
     pub fn from_footprint(footprint: &Footprint) -> Self {
         Self {
             pads: strip(footprint_pads(footprint, None)),

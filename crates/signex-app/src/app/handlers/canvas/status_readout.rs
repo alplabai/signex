@@ -161,7 +161,8 @@ impl Signex {
     }
 
     /// The cursor's position in mm over the canvas `window_id` is showing.
-    /// On a schematic sheet Y is shown from the sheet's page origin (#2034).
+    /// On a schematic sheet Y is shown from the sheet's page origin (#2034);
+    /// on a board, from the board origin with Y up (#2384).
     /// A library editor that has not seen the cursor reads the origin, as the
     /// app does before the first hover.
     pub(crate) fn status_cursor(&self, window_id: iced::window::Id) -> (f64, f64) {
@@ -170,7 +171,14 @@ impl Signex {
             Surface::SymbolEditor(editor) => editor.cursor_mm.unwrap_or_default(),
             Surface::FootprintEditor(editor) => editor.state.cursor_mm.unwrap_or_default(),
             Surface::NoCamera => (0.0, 0.0),
-            Surface::Pcb => (x, y),
+            // On a board, from its origin with Y up (#2384).
+            Surface::Pcb => self.pcb_for_window(window_id).map_or((x, y), |board| {
+                let shown = board
+                    .options
+                    .origin
+                    .to_user(signex_types::pcb::Point::new(x, y));
+                (shown.x, shown.y)
+            }),
             Surface::Schematic => {
                 let sheet = self
                     .interaction_state

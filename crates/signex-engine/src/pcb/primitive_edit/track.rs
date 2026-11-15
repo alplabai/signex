@@ -24,9 +24,10 @@ pub enum TrackEdit {
     Net(u32),
 }
 
-/// Where a selection of tracks is: the lower-left corner of the box around
-/// their ends. Moving the location moves every track by the same step, so
-/// the shape of a selected route is kept. `None` for no tracks.
+/// Where a selection of tracks is: the lower-left corner, as the screen shows
+/// it (model y grows down), of the box around their ends (#2384). Moving the
+/// location moves every track by the same step, so the shape of a selected
+/// route is kept. `None` for no tracks.
 pub fn track_location<'a>(tracks: impl IntoIterator<Item = &'a Segment>) -> Option<Point> {
     tracks
         .into_iter()
@@ -34,7 +35,7 @@ pub fn track_location<'a>(tracks: impl IntoIterator<Item = &'a Segment>) -> Opti
         .fold(None, |corner: Option<Point>, p| {
             Some(match corner {
                 None => p,
-                Some(c) => Point::new(c.x.min(p.x), c.y.min(p.y)),
+                Some(c) => Point::new(c.x.min(p.x), c.y.max(p.y)),
             })
         })
 }

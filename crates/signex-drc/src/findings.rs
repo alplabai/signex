@@ -186,7 +186,10 @@ fn rule_source(rules: &DrcRules, v: &Violation) -> Option<&'static str> {
 fn item_id(item: &ItemRef) -> String {
     match item {
         ItemRef::Pad { footprint, pad } => format!("{footprint}/{pad}"),
-        ItemRef::Track(id) | ItemRef::Via(id) | ItemRef::Footprint(id) => id.to_string(),
+        ItemRef::Track(id)
+        | ItemRef::Via(id)
+        | ItemRef::Footprint(id)
+        | ItemRef::Zone { zone: id, .. } => id.to_string(),
     }
 }
 
@@ -196,6 +199,7 @@ fn item_label(item: &ItemRef) -> String {
         ItemRef::Track(_) => "track",
         ItemRef::Via(_) => "via",
         ItemRef::Footprint(_) => "footprint",
+        ItemRef::Zone { .. } => "area",
     };
     format!("{kind} {}", item_id(item))
 }

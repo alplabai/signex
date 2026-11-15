@@ -172,7 +172,8 @@ fn run_drc_rules_and_items(report: &signex_drc::DrcReport) -> Vec<(String, Vec<S
                     pcb_geom::ItemRef::Pad { footprint, pad } => format!("{footprint}/{pad}"),
                     pcb_geom::ItemRef::Track(id)
                     | pcb_geom::ItemRef::Via(id)
-                    | pcb_geom::ItemRef::Footprint(id) => id.to_string(),
+                    | pcb_geom::ItemRef::Footprint(id)
+                    | pcb_geom::ItemRef::Zone { zone: id, .. } => id.to_string(),
                 })
                 .collect();
             (rule, items)

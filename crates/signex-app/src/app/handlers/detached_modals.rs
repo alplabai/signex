@@ -325,6 +325,7 @@ impl Signex {
         interaction.context_menu = None;
         interaction.tab_context_menu = None;
         interaction.start_row_menu = None;
+        interaction.pcb_layer_tab_menu = None;
         interaction.project_tree_context_menu = None;
         interaction.active_bar_menu = None;
         interaction.grid_picker = None;

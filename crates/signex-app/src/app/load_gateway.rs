@@ -442,7 +442,9 @@ impl Signex {
         let ratsnest_visible = self.pcb_layer_view(&board_path).ratsnest_visible();
         let renderer_snapshot = self.active_pcb().map(|board| {
             ratsnest.refresh(ratsnest_key, board);
-            let snapshot = self.pcb_snapshot_for(&board_path, board);
+            let snapshot = self
+                .pcb_snapshot_for(&board_path, board)
+                .with_zone_fills(ratsnest.zone_fills());
             if ratsnest_visible {
                 ratsnest.apply(&board_path, snapshot)
             } else {

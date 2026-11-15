@@ -15,10 +15,11 @@ use iced::alignment::Horizontal;
 use iced::widget::{Space, column, container, mouse_area, row, stack, svg};
 use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, ids, t};
-use signex_types::theme::ThemeId;
+use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem, Metrics};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, MenuMetrics};
 
+use crate::active_bar::CustomFilterPreset;
 use crate::app::command::{CommandContext, is_enabled};
 use crate::app::pcb_bar_groups::{PcbBarGroup, PcbBarLastTools};
 use crate::app::pcb_tools::BoardPlaceTool;
@@ -51,6 +52,7 @@ impl Signex {
             &self.ui_state.i18n,
             open,
             &self.ui_state.pcb_bar_last_tools,
+            self.main_window_board_tool(),
         );
         let (offsets, bar_width) =
             signex_widgets::active_bar::slot_offsets(&items, &Metrics::GRAPHITE);
@@ -72,19 +74,26 @@ impl Signex {
         let entries = pcb_bar_menu_entries(
             menu,
             &self.ui_state.i18n,
+            tokens,
             tid,
             &self.command_context(None),
             &self.ui_state.pcb_pick_filter,
+            &self.ui_state.pcb_filter_presets,
         );
-        let panel_width = MenuMetrics::GRAPHITE.fitted_width(
-            &entries,
-            bar_width,
-            &self.document_state.panel_ctx.ui_font_name,
-        );
-        let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, Some(panel_width));
+        // The Selection Filter's chip grid sizes itself, as on the schematic.
+        let panel_width = (menu != PcbBarMenu::Filter).then(|| {
+            MenuMetrics::GRAPHITE.fitted_width(
+                &entries,
+                bar_width,
+                &self.document_state.panel_ctx.ui_font_name,
+            )
+        });
+        let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, panel_width);
         // The panel stays inside the bar's width, so the centred bar does not
         // move while its dropdown is open.
-        let panel_x = trigger_x.min(bar_width - panel_width).max(0.0);
+        let panel_x = trigger_x
+            .min(bar_width - panel_width.unwrap_or(0.0))
+            .max(0.0);
         let bar_and_panel = column![
             bar,
             Space::new().height(crate::active_bar::BAR_DROPDOWN_GAP_PX),
@@ -107,6 +116,17 @@ impl Signex {
             ],
         ]
         .boxed()
+    }
+
+    /// The tool armed on the board the main window shows, whose group button
+    /// the bar draws selected.
+    fn main_window_board_tool(&self) -> Option<BoardPlaceTool> {
+        let path = self.active_tab_path();
+        self.interaction_state
+            .pcb_tool
+            .as_ref()
+            .filter(|session| session.is_for(path.as_deref(), None))
+            .map(|session| session.tool)
     }
 }
 
@@ -187,15 +207,20 @@ fn dropdown_button(
 }
 
 /// The PCB Active Bar's slots in order. `open` is the open dropdown, whose
-/// button is drawn selected; `last` is the row each tool group shows.
+/// button is drawn selected; `last` is the row each tool group shows;
+/// `armed` is the tool armed on the board, whose group is drawn selected.
 pub(in crate::app::view) fn pcb_bar_items(
     tid: ThemeId,
     i18n: &I18n,
     open: Option<PcbBarMenu>,
     last: &PcbBarLastTools,
+    armed: Option<BoardPlaceTool>,
 ) -> Vec<ActiveBarItem<Message>> {
     let svg = ActiveBarIcon::Svg;
-    let group = |group: PcbBarGroup| groups::group_button(group, last, open, tid, i18n);
+    let group = |group: PcbBarGroup| {
+        let state = groups::GroupState { open, last, armed };
+        groups::group_button(group, &state, tid, i18n)
+    };
     let mut items = vec![
         filter::filter_button(open, tid, i18n),
         menu_button(
@@ -324,12 +349,14 @@ fn menu_commands(menu: PcbBarMenu) -> &'static [MenuRow] {
 pub(in crate::app::view) fn pcb_bar_menu_entries(
     menu: PcbBarMenu,
     i18n: &I18n,
+    tokens: &ThemeTokens,
     tid: ThemeId,
     ctx: &CommandContext,
     filter: &pcb_geom::PickFilter,
+    presets: &[CustomFilterPreset<pcb_geom::PickKind>],
 ) -> Vec<DropdownEntry<Message>> {
     match menu {
-        PcbBarMenu::Filter => return filter::entries(i18n, filter),
+        PcbBarMenu::Filter => return filter::entries(i18n, tokens, filter, presets),
         PcbBarMenu::Group(group) => return groups::entries(group, i18n, tid, ctx),
         PcbBarMenu::Align | PcbBarMenu::Move | PcbBarMenu::View => {}
     }

@@ -90,3 +90,16 @@ fn a_pad_of_a_footprint_that_locks_its_primitives_is_refused() {
             .is_some()
     );
 }
+
+/// #2384: the location is the corner at the bottom left of the screen, the
+/// greatest model y, so it reads as the lower-left once Y is shown upward.
+#[test]
+fn the_location_is_the_lower_left_corner_as_shown() {
+    let mut b = board();
+    b.segments[0].end = Point::new(1.0, 4.0);
+    let corner = track_location(b.segments.iter().take(1)).unwrap();
+    assert_eq!(corner, Point::new(0.0, 4.0));
+    let command = track_edit_command(&b, &[id(SEG_1)], TrackEdit::LocationY(10.0)).unwrap();
+    run(&mut b, command);
+    assert_eq!((b.segments[0].start.y, b.segments[0].end.y), (6.0, 10.0));
+}

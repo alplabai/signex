@@ -51,6 +51,9 @@ pub struct InteractionState {
     /// The board in sketch mode and its working copy (#2234); `None` when
     /// no board is in sketch mode.
     pub board_sketch: Option<super::BoardSketchSession>,
+    /// The board shown in 3D in the main window (#2390); `None` when the
+    /// main window shows boards flat.
+    pub board_3d: Option<super::Board3dSession>,
     /// Text typed into the selected board footprint's Designator or Value
     /// field and not yet applied with Enter (#1312).
     pub pcb_footprint_draft: Option<crate::app::handlers::pcb_footprint_text::PcbFootprintDraft>,
@@ -147,6 +150,8 @@ pub struct InteractionState {
     pub active_bar_menu_window: Option<iced::window::Id>,
     /// The open dropdown of the main window's PCB Active Bar (#2352).
     pub pcb_bar_menu: Option<crate::app::PcbBarMenu>,
+    /// The open right-click menu of a layer tab under a board canvas (#2379).
+    pub pcb_layer_tab_menu: Option<crate::app::LayerTabMenu>,
     /// The undocked window whose action is running inside `run_in_window`;
     /// `None` for the main window. Stamps what the action opens (a Components
     /// drag) and keeps the app-wide refreshes on the main window.

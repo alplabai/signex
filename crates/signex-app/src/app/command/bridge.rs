@@ -293,10 +293,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "toggle_ratsnest" => pcb_view(PcbViewMsg::RatsnestVisibilityToggled),
         "toggle_origin_marker" => pcb_view(PcbViewMsg::OriginMarkerVisibilityToggled),
         "board_sketch" => Message::Pcb(PcbMsg::Sketch(crate::app::BoardSketchMsg::ModeToggled)),
+        "view_board_3d" => Message::Pcb(PcbMsg::Board3d(crate::app::Board3dMsg::Toggled)),
         "place_board_via" => board_tool(BoardPlaceTool::Via),
         "place_board_track" => board_tool(BoardPlaceTool::Track),
         "place_board_fill" => board_tool(BoardPlaceTool::Fill),
         "place_board_region" => board_tool(BoardPlaceTool::SolidRegion),
+        "place_board_polygon_pour" => board_tool(BoardPlaceTool::PolygonPour),
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
         "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(
             crate::app::FootprintSwapMsg::Requested,

@@ -67,6 +67,8 @@ pub(crate) enum OverlayId {
     ComponentsRowContextMenu,
     /// Right-click menu of a Start screen project row (#2305).
     StartRowContextMenu,
+    /// Right-click menu of a board layer tab (#2379).
+    LayerTabContextMenu,
     GridPicker,
     PanelList,
     DockDragZone,
@@ -142,7 +144,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 66] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 67] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -164,6 +166,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 66] = [
     OverlayId::ProjectTreeContextMenu,
     OverlayId::ComponentsRowContextMenu,
     OverlayId::StartRowContextMenu,
+    OverlayId::LayerTabContextMenu,
     OverlayId::GridPicker,
     OverlayId::PanelList,
     OverlayId::DockDragZone,
@@ -290,6 +293,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::ProjectTreeContextMenu
         | OverlayId::ComponentsRowContextMenu
         | OverlayId::StartRowContextMenu
+        | OverlayId::LayerTabContextMenu
         | OverlayId::GridPicker
         | OverlayId::PanelList
         | OverlayId::DockDragZone
@@ -351,6 +355,7 @@ pub(crate) fn has_menu_backdrop(id: OverlayId) -> bool {
             | OverlayId::ProjectTreeContextMenu
             | OverlayId::ComponentsRowContextMenu
             | OverlayId::StartRowContextMenu
+            | OverlayId::LayerTabContextMenu
             | OverlayId::GridPicker
     )
 }
@@ -503,6 +508,7 @@ impl Signex {
             OverlayId::StartRowContextMenu => {
                 layers.extend(self.start_row_context_menu_overlay(window_id))
             }
+            OverlayId::LayerTabContextMenu => layers.extend(self.layer_tab_menu_overlay(window_id)),
             OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),

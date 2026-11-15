@@ -114,6 +114,11 @@ mod pcb_view;
 #[path = "regression/pcb_view_rotation.rs"]
 mod pcb_view_rotation;
 
+// #2390 - the board 3D view: the View row, the palette, the bar, pointer
+// gestures and a click that selects in the flat view.
+#[path = "regression/pcb_board_3d.rs"]
+mod pcb_board_3d;
+
 // #2240 / #2223 - the board menu's View group: Toggle Ratsnest.
 #[path = "regression/pcb_board_menu_view.rs"]
 mod pcb_board_menu_view;
@@ -166,6 +171,9 @@ mod pcb_placement;
 // #2358 - press on an unselected footprint and drag: select and move.
 #[path = "regression/pcb_drag_unselected.rs"]
 mod pcb_drag_unselected;
+// #2379: tracks and the ratsnest follow a dragged footprint's pads.
+#[path = "regression/pcb_drag_follow.rs"]
+mod pcb_drag_follow;
 // #2364: a component placed from the Components panel onto a board.
 #[path = "regression/board_part_place.rs"]
 mod board_part_place;

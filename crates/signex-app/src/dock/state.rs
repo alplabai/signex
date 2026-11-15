@@ -63,6 +63,8 @@ impl DockArea {
             drop_preview: None,
             tab_menu: None,
             editor_seeds: EditorSeeds::default(),
+            preferred_left_width: super::DEFAULT_LEFT_DOCK_WIDTH,
+            preferred_right_width: super::DEFAULT_RIGHT_DOCK_WIDTH,
         }
     }
 
