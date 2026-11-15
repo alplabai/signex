@@ -98,7 +98,10 @@ fn a_debug_headless_boot_settles_on_a_512_kb_stack() {
 /// Boot and settle on a 512 KB thread. On macOS arm64 debug the unboxed boot
 /// needed about 552 KB and the boxed one fits in 400 KB, so the margin is
 /// about 100 KB. Another target's frames may differ: if this fails on one
-/// target only, measure there before raising the limit.
+/// target only, measure there before raising the limit. It catches a boot
+/// that returns the app by value, not one extra copy inside
+/// `boot_headless_inner` (that still fits), so a review checks that
+/// `new_boxed` stays the only place the app is boxed.
 fn small_stack() {
     const STACK_BYTES: usize = 512 * 1024;
     let isolated = tempfile::tempdir().expect("override root");
