@@ -64,4 +64,9 @@ define_ids! {
     EDITORS_COMPONENT_PIN_NODE_NO_PINS = "editors-component-pin-node-no-pins";
     EDITORS_COMPONENT_PARTS_EMPTY = "editors-component-parts-empty";
     EDITORS_COMPONENT_LISTINGS_EMPTY = "editors-component-listings-empty";
+    EDITORS_WIRE_CORNER_HORIZONTAL_FIRST = "editors-wire-corner-horizontal-first";
+    EDITORS_WIRE_CORNER_VERTICAL_FIRST = "editors-wire-corner-vertical-first";
+    EDITORS_WIRE_CORNER_DIAGONAL_FIRST = "editors-wire-corner-diagonal-first";
+    EDITORS_WIRE_CORNER_DIAGONAL_LAST = "editors-wire-corner-diagonal-last";
+    EDITORS_WIRE_CORNER_ANY_ANGLE = "editors-wire-corner-any-angle";
 }

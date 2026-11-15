@@ -318,6 +318,7 @@ fn a_board_and_a_project_with_no_id_are_given_one() {
     app.document_state.projects[0].data.document_id = None;
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
         version: 1,
@@ -463,6 +464,7 @@ fn an_unloaded_board_is_read_from_its_file() {
     let mut app = app_with_files(dir.path());
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
         uuid: uid(77),
         version: 1,
@@ -992,6 +994,7 @@ fn a_parked_dirty_sheet_keeps_its_id_against_a_copy_opened_later() {
 fn board_with(id: uuid::Uuid, thickness: f64) -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
+        options: Default::default(),
         unknown: Default::default(),
         uuid: id,
         version: 1,
@@ -1081,6 +1084,44 @@ fn a_parked_board_is_listed_loaded_and_dirty_and_read_with_its_unsaved_edits() {
         &[&format!("document={}", uid(900)), "kind=via"],
     );
     assert_eq!(found["count"], 1, "the parked board is searched: {found}");
+}
+
+/// #2331: a project's board, open in a tab or parked, is listed once with
+/// that project, as it is while closed.
+#[test]
+fn an_open_or_parked_board_names_its_project() {
+    let dir = temp_dir();
+    let mut app = app_with_project(dir.path());
+    let board = dir.path().join("Board.snxpcb");
+    let prj = dir.path().join("P.snxprj").display().to_string();
+    let boards = |app: &mut Signex| -> Vec<serde_json::Value> {
+        let listed = headless(app, "list_documents", &[]);
+        listed["documents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|d| d["kind"] == "pcb")
+            .cloned()
+            .collect()
+    };
+    let closed = boards(&mut app);
+    assert_eq!(closed.len(), 1, "{closed:?}");
+    assert_eq!(closed[0]["project"]["path"], prj, "{closed:?}");
+
+    app.open_pcb_tab(board.clone(), "Board".into(), board_with(uid(910), 1.6));
+    let open = boards(&mut app);
+    assert_eq!(open.len(), 1, "listed once: {open:?}");
+    assert_eq!(open[0]["loaded"], true, "{open:?}");
+    assert_eq!(open[0]["project"]["path"], prj, "{open:?}");
+
+    let dir = temp_dir();
+    let mut app = app_with_project(dir.path());
+    let board = dir.path().join("Board.snxpcb");
+    let prj = dir.path().join("P.snxprj").display().to_string();
+    parked_board(&mut app, &board, uid(911));
+    let parked = boards(&mut app);
+    assert_eq!(parked.len(), 1, "listed once: {parked:?}");
+    assert_eq!(parked[0]["project"]["path"], prj, "{parked:?}");
 }
 
 #[test]

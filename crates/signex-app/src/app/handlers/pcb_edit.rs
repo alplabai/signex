@@ -29,9 +29,42 @@ impl Signex {
         Ok(patches)
     }
 
+    /// [`Self::execute_board_commands`] as a step of undo group `group`.
+    pub(crate) fn execute_board_commands_grouped(
+        &mut self,
+        path: &Path,
+        commands: Vec<BoardCommand>,
+        step: CheckedStep<'_>,
+        group: signex_engine::UndoGroupId,
+    ) -> Result<Vec<BoardPatch>, BoardEditError> {
+        let patches = self
+            .document_state
+            .execute_board_grouped(path, commands, step, group)?;
+        if !patches.is_empty() {
+            self.after_board_change(path);
+        }
+        Ok(patches)
+    }
+
     /// One undo (`undo`) or redo of the board at `path`. Whether it moved; a
-    /// refusal is logged and reads as not moved.
+    /// refusal is logged and reads as not moved. A step of an undo group
+    /// moves with the sheet steps of that group (#2366).
     pub(crate) fn step_board_history(&mut self, path: &Path, undo: bool) -> bool {
+        let group = self.document_state.board_engine(path).and_then(|engine| {
+            if undo {
+                engine.next_undo_group()
+            } else {
+                engine.next_redo_group()
+            }
+        });
+        if let Some(group) = group.filter(|g| self.document_state.undo_groups.contains_key(g)) {
+            return self.step_board_undo_group(group, undo);
+        }
+        self.step_board_once(path, undo)
+    }
+
+    /// One undo or redo of the board at `path` alone.
+    pub(crate) fn step_board_once(&mut self, path: &Path, undo: bool) -> bool {
         let result = if undo {
             self.document_state.undo_board(path)
         } else {
@@ -40,6 +73,7 @@ impl Signex {
         match result {
             Ok(true) => {
                 self.drop_pcb_footprint_draft_of(path);
+                self.interaction_state.pcb_primitive.drop_drafts_of(path);
                 self.after_board_change(path);
                 true
             }
@@ -79,6 +113,9 @@ impl Signex {
             return;
         };
         let snapshot = self.undocked_pcb_snapshot(path, board);
+        let board_grid = Some(signex_engine::pcb::placement::grid_step_mm(board));
+        let origin_marker = self.pcb_layer_view(path).origin_marker_visible();
+        let marks = crate::pcb_canvas::BoardMarks::of(board);
         for (id, canvas) in &mut self.interaction_state.pcb_canvases {
             let shows = matches!(
                 self.ui_state.windows.get(id),
@@ -87,6 +124,9 @@ impl Signex {
             );
             if shows {
                 canvas.set_renderer_snapshot(Some(snapshot.clone()));
+                canvas.set_board_grid(board_grid);
+                canvas.set_board_marks(marks.clone());
+                canvas.set_origin_marker_visible(origin_marker);
                 canvas.clear_content_cache();
             }
         }

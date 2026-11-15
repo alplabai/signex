@@ -122,12 +122,9 @@ fn view_footprint_layers_strip<'a>(
     let layers = editor.state.layer_visibility;
 
     let mut row_widget = row![
-        text(signex_i18n::t!(
-            i18n,
-            signex_i18n::ids::PANELS_KIND_FOOTPRINT_LAYERS
-        ))
-        .size(TS.caption)
-        .color(muted)
+        text(signex_i18n::t!(i18n, signex_i18n::ids::PANELS_KIND_LAYERS))
+            .size(TS.caption)
+            .color(muted)
     ]
     .spacing(SP.s)
     .align_y(iced::Alignment::Center);

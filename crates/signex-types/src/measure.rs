@@ -4,7 +4,7 @@ use crate::coord::Unit;
 use crate::schematic::Point;
 
 /// Millimetres per display unit.
-fn mm_per(unit: Unit) -> f64 {
+pub fn mm_per(unit: Unit) -> f64 {
     match unit {
         Unit::Mm => 1.0,
         Unit::Mil => 0.0254,

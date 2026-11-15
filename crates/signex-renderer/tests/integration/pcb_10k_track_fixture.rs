@@ -141,6 +141,7 @@ pub fn board_10k_tracks() -> PcbBoard {
 
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::from_u128(UUID_BOARD),
         version: 1,
         generator: "signex-renderer pcb_10k_track_fixture".to_string(),
@@ -247,6 +248,7 @@ fn two_pad_part(
         properties: Vec::new(),
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

@@ -24,7 +24,7 @@ mod planned;
 pub use dropdown::{dropdown_x_offset, view_dropdown};
 pub(crate) use layout::{
     BAR_DROPDOWN_GAP_PX, bar_height_for, bar_left_in_window, bar_top_margin, bar_width_for,
-    bar_zone_height_for, menu_at, symbol_editor_bar_drop,
+    bar_zone_height_for, menu_at, shows_draw_mode_pill, symbol_editor_bar_drop,
 };
 pub use planned::{PLANNED_TOOLS, PLANNED_TOOLTIP, is_planned, planned_name, refusal_line};
 
@@ -439,7 +439,7 @@ fn draw_mode_pill_action(current_tool: crate::app::Tool) -> ActiveBarAction {
 /// Render the Active Bar (the floating toolbar strip).
 pub fn view_bar<'a>(
     current_tool: crate::app::Tool,
-    draw_mode: crate::app::DrawMode,
+    corner_mode: signex_types::corner::CornerMode,
     last_tool: &std::collections::HashMap<String, ActiveBarAction>,
     tokens: &'a ThemeTokens,
     tid: ThemeId,
@@ -448,7 +448,7 @@ pub fn view_bar<'a>(
 ) -> Element<'a, ActiveBarMsg> {
     let items = bar_items(
         current_tool,
-        draw_mode,
+        corner_mode,
         last_tool,
         tokens,
         tid,
@@ -462,7 +462,7 @@ pub fn view_bar<'a>(
 /// `layout::SCHEMATIC_BAR_SLOTS` (pinned by `bar_items_follow_the_slot_table`).
 fn bar_items(
     current_tool: crate::app::Tool,
-    draw_mode: crate::app::DrawMode,
+    corner_mode: signex_types::corner::CornerMode,
     last_tool: &std::collections::HashMap<String, ActiveBarAction>,
     tokens: &ThemeTokens,
     tid: ThemeId,
@@ -633,10 +633,12 @@ fn bar_items(
     // styling doesn't apply.
     if layout::shows_draw_mode_pill(current_tool) {
         items.push(ActiveBarItem::Separator);
-        let mode_label = match draw_mode {
-            crate::app::DrawMode::Ortho90 => "90\u{00B0}",
-            crate::app::DrawMode::Angle45 => "45\u{00B0}",
-            crate::app::DrawMode::FreeAngle => "Any",
+        // The pill names the angle; the status bar says which leg leads.
+        let mode_label = match corner_mode {
+            signex_types::corner::CornerMode::Ortho90 => "90\u{00B0}",
+            signex_types::corner::CornerMode::Angle45Start
+            | signex_types::corner::CornerMode::Angle45End => "45\u{00B0}",
+            signex_types::corner::CornerMode::FreeAngle => "Any",
         };
         let pill_text = styles::ti(tokens.text);
         let pill_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
@@ -719,7 +721,7 @@ pub(crate) fn drawn_trigger_centres_with(
     let m = Metrics::GRAPHITE;
     let items = bar_items(
         tool,
-        crate::app::DrawMode::Ortho90,
+        signex_types::corner::CornerMode::Ortho90,
         &std::collections::HashMap::new(),
         tokens,
         tid,

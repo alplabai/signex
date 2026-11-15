@@ -199,6 +199,7 @@ fn run_flow(tag: &str, work: &Path) -> Outputs {
         Message::Project(ProjectMsg::AddNewSchematicPicked {
             project_id,
             path: Some(extra.clone()),
+            choice: None,
         }),
     );
     send(&mut app, Message::Menu(MenuMessage::SaveAll));

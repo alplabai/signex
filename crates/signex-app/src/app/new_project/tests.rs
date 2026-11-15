@@ -453,6 +453,56 @@ fn cancel_and_esc_wait_while_create_writes() {
     assert!(tmp.path().join("Busy").join("Busy.snxprj").is_file());
 }
 
+/// #2280: a quit while Create writes is declined with a reason, so the
+/// project folder is never left half written; once Create lands, quit runs.
+#[test]
+fn a_quit_while_create_writes_is_held_until_it_lands() {
+    let _ = crate::diagnostics::init_logging();
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, _t) = Signex::new();
+    settle(&mut app, Message::Menu(MenuMessage::NewProject));
+    dialog(
+        &mut app,
+        NewProjectMsg::LocationEdited(tmp.path().display().to_string()),
+    );
+    dialog(&mut app, NewProjectMsg::NameEdited("Held".into()));
+    let create = app.update(Message::from(NewProjectMsg::SubmitRequested));
+
+    let quit = app.update(Message::Window(crate::app::WindowMsg::QuitRequested));
+    crate::task_driver::assert_quit_declined(quit);
+    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    // Since #2380 the notice holds catalog ids; read it as the user does.
+    let detail = notice.detail_text(&app.ui_state.i18n);
+    assert!(
+        detail.contains("new project is still being created"),
+        "{detail}"
+    );
+
+    TaskDriver::new().settle(&mut app, create).expect("settled");
+    assert!(tmp.path().join("Held").join("Held.snxprj").is_file());
+    assert!(app.document_state.new_project_writes.is_empty());
+    assert!(app.prepare_quit(), "quit is no longer held");
+}
+
+/// #2280: a failed Create releases the quit too.
+#[test]
+fn a_failed_create_does_not_hold_quit() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, _t) = Signex::new();
+    let chosen = tmp.path().join("Gone.snxprj");
+    // The worker is never run: its completion is fed below as a failure.
+    let _worker = app
+        .start_new_project(chosen.clone(), Default::default())
+        .expect("started");
+    assert!(app.document_state.new_project_writes.contains(&chosen));
+    let _ = app.update(Message::File(crate::app::FileMsg::NewProjectWritten {
+        path: chosen,
+        result: Err("disk full".into()),
+    }));
+    assert!(app.document_state.new_project_writes.is_empty());
+    assert!(app.prepare_quit(), "quit is not held by a failed Create");
+}
+
 #[test]
 fn a_create_that_cannot_start_says_why_and_does_not_hang() {
     let tmp = tempfile::tempdir().unwrap();

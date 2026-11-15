@@ -47,8 +47,9 @@ mod numeric_draft;
 mod palette;
 mod paper;
 pub mod pcb_board_properties;
-pub mod pcb_footprint_properties;
+pub mod pcb_component;
 pub mod pcb_nets;
+pub mod pcb_primitive_properties;
 mod projects;
 mod projects_graphite;
 mod properties;
@@ -124,10 +125,17 @@ pub use paper::{
     PageFormatMode, PageOrigin, SchematicSheetColor, SheetColor, paper_dimensions,
     paper_size_options,
 };
-pub use pcb_board_properties::PcbBoardSummary;
-pub use pcb_footprint_properties::{FootprintEditability, PcbFootprintFacts, PcbFootprintTextMsg};
+pub use pcb_board_properties::{
+    BoardField, BoardTab, ComponentSide, PcbBoardMsg, PcbBoardPanelView, PcbBoardSummary,
+};
+pub use pcb_component::{
+    ComponentField, ComponentSettingFacts, FootprintEditability, FootprintLibrary, ParameterFacts,
+    PartIdentity, PcbComponentFacts, PcbComponentMsg, PcbFootprintFacts, PcbFootprintTextMsg,
+    Shared,
+};
 pub use pcb_layers::PcbLayersPanel;
 pub use pcb_nets::PcbNetsSummary;
+pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(super) use projects::{view_navigator, view_projects};
 pub use projects_graphite::{ProjectsMsg, ProjectsView};
@@ -135,7 +143,8 @@ pub use projects_graphite::{ProjectsMsg, ProjectsView};
 pub(crate) use properties::pre_placement_readout;
 pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind, PrePlacementStyle};
 pub(super) use properties::{
-    PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION, PROPERTY_ROW_PAD_X, view_properties,
+    PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN, PROPERTY_LABEL_WIDTH, PROPERTY_ROW_GAP,
+    PROPERTY_ROW_PAD_X, view_properties,
 };
 pub use status::{ErcDiagnosticEntry, ErcSeverityLite, ErcWaiverEntry};
 pub(super) use status::{view_erc, view_messages};
@@ -145,7 +154,7 @@ pub use symbol_context::{
     SymbolPinSummary,
 };
 pub(super) use widgets::{
-    LabelInk, collapsible_section_header, form_edit_row_f64, is_section_collapsed, part_tree_row,
+    collapsible_section_header, form_edit_row_f64, is_section_collapsed, part_tree_row,
     prop_kv_row, property_label, section_title, separator, shape_fill_row, shape_icon_handle,
     view_stub,
 };
@@ -163,7 +172,8 @@ pub enum PanelKind {
     SignexAi,
     Drc,
     LayerStack,
-    /// Show or hide each board layer and pick the active copper layer (#2223).
+    /// The layers of the active tab (#2223, #2359): a board's layers with
+    /// their eyes and the active layer, or a footprint's layers by side.
     Layers,
     NetClasses,
     Variants,
@@ -190,9 +200,6 @@ pub enum PanelKind {
     /// new tab (same `Open ▸ Footprint` flow). Visible whenever a
     /// Footprint editor tab is focused.
     FootprintLibrary,
-    /// Footprint editor layers grouped by board side, with eye toggles.
-    /// Visible whenever a Footprint editor tab is focused.
-    FootprintLayers,
     /// Symbol editor pin table (number, name, type, part, visibility).
     /// Visible whenever a Symbol editor tab is focused.
     SymbolPins,
@@ -234,7 +241,6 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Wiki,
     PanelKind::SchLibrary,
     PanelKind::FootprintLibrary,
-    PanelKind::FootprintLayers,
     PanelKind::SymbolPins,
     PanelKind::PcbNets,
     PanelKind::History,
@@ -263,10 +269,7 @@ impl PanelKind {
 
     /// Whether this panel requires a PCB document to be open.
     pub fn needs_pcb(self) -> bool {
-        matches!(
-            self,
-            PanelKind::LayerStack | PanelKind::Layers | PanelKind::NetClasses
-        )
+        matches!(self, PanelKind::LayerStack | PanelKind::NetClasses)
     }
 
     /// The catalog message of [`Self::label`] (dock tabs and titles).
@@ -297,7 +300,6 @@ impl PanelKind {
             PanelKind::Library => ids::PANELS_KIND_LIBRARY,
             PanelKind::SchLibrary => ids::PANELS_KIND_SCH_LIBRARY,
             PanelKind::FootprintLibrary => ids::PANELS_KIND_FOOTPRINT_LIBRARY,
-            PanelKind::FootprintLayers => ids::PANELS_KIND_FOOTPRINT_LAYERS,
             PanelKind::SymbolPins => ids::PANELS_KIND_SYMBOL_PINS,
             PanelKind::PcbNets => ids::PANELS_KIND_PCB_NETS,
             PanelKind::History => ids::PANELS_KIND_HISTORY,
@@ -331,7 +333,6 @@ impl PanelKind {
             PanelKind::Library => "Library",
             PanelKind::SchLibrary => "SCH Library",
             PanelKind::FootprintLibrary => "Footprint Library",
-            PanelKind::FootprintLayers => "Layers",
             PanelKind::SymbolPins => "Pins",
             PanelKind::PcbNets => "PCB",
             PanelKind::History => "History",
@@ -365,6 +366,11 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         }
         PanelKind::Drc => view_stub("DRC", "Run DRC to check PCB design rules", ctx),
         PanelKind::LayerStack => view_stub("Layer Stack", "PCB mode only", ctx),
+        // One Layers panel follows the active tab (#2359): a footprint's
+        // layers on a footprint tab, else the board's (or its empty state).
+        PanelKind::Layers if ctx.footprint_editor.is_some() => {
+            crate::library::editor::footprint::layers_panel::view(ctx)
+        }
         PanelKind::Layers => pcb_layers::view(ctx),
         PanelKind::NetClasses => view_stub("Net Classes", "Define net classes and rules", ctx),
         PanelKind::Variants => view_stub("Variants", "Design variant management", ctx),
@@ -383,7 +389,6 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         ),
         PanelKind::SchLibrary => view_sch_library(ctx),
         PanelKind::FootprintLibrary => view_footprint_library(ctx),
-        PanelKind::FootprintLayers => crate::library::editor::footprint::layers_panel::view(ctx),
         PanelKind::SymbolPins => crate::library::editor::symbol::pins_panel::view(ctx),
         PanelKind::PcbNets => pcb_nets::view(ctx),
         PanelKind::History => return history::view_history(ctx),

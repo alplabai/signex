@@ -10,12 +10,13 @@ pub(crate) mod dialogs;
 pub(crate) mod overlay_id;
 
 mod board_sketch;
-mod canvas_region;
+pub(in crate::app) mod canvas_region;
 mod chrome;
 mod context_menu;
 mod modals;
 mod overlays;
 mod parameter_manager;
+mod pcb_active_bar;
 mod pcb_strip;
 mod pdf_preview;
 mod print_preview;
@@ -645,16 +646,28 @@ impl Signex {
                 base.map(move |msg| overlay_id::scope_pcb_canvas_message(window_id, msg))
                     .boxed()
             };
-            // The board's layers as a strip under the canvas.
+            // The board's layers as tabs under the canvas; a tab click acts
+            // on this window's board (#2357).
             let strip = self.pcb_for_window(window_id).and_then(|board| {
+                let undocked = self.undocked_pcb_path(window_id);
+                let path = undocked.clone().or_else(|| self.active_tab_path())?;
+                let view = self.pcb_layer_view(&path);
                 pcb_strip::layer_strip(
-                    board,
+                    pcb_strip::StripBoard {
+                        board,
+                        view: &view,
+                        window: undocked.map(|_| window_id),
+                    },
                     &self.ui_state.i18n,
                     &self.document_state.panel_ctx.tokens,
                 )
             });
             // Selection, hover and marquee paint above the board and take no input.
             let highlight = canvas(pcb_canvas.highlight_layer())
+                .width(Length::Fill)
+                .height(Length::Fill);
+            // Footprint texts above the board on both mounts (#2368).
+            let texts = canvas(pcb_canvas.text_layer())
                 .width(Length::Fill)
                 .height(Length::Fill);
             if pcb_canvas.gpu_render {
@@ -681,7 +694,8 @@ impl Signex {
                 .width(Length::Fill)
                 .height(Length::Fill);
                 let bar = self.pcb_active_bar(is_main);
-                pcb_strip::with_strip(stack![base, content_shader, highlight, bar].boxed(), strip)
+                let layers = stack![base, content_shader, texts, highlight, bar];
+                pcb_strip::with_strip(layers.boxed(), strip)
             } else {
                 // The CPU mount: the board as its own layer where the GPU
                 // mount has its shader, retained across pans (#2321).
@@ -690,7 +704,8 @@ impl Signex {
                     self.ui_state.device_px_per_logical_px(window_id),
                 );
                 let bar = self.pcb_active_bar(is_main);
-                pcb_strip::with_strip(stack![base, content, highlight, bar].boxed(), strip)
+                let layers = stack![base, content, texts, highlight, bar];
+                pcb_strip::with_strip(layers.boxed(), strip)
             }
         } else {
             // "Nothing loaded" gets the actionable start screen; "project
@@ -780,7 +795,9 @@ impl Signex {
             // still fall through exactly as before, which matters for the
             // overlays that deliberately leave the canvas its right-press
             // pan (see `dismiss_layer`).
-            if overlay_id::swallows_scroll(*id) {
+            // A right-click menu's backdrop stops the wheel itself; the guard
+            // would hide the cursor from it (#2349).
+            if overlay_id::swallows_scroll(*id) && !overlay_id::has_menu_backdrop(*id) {
                 for layer in &mut layers[first_new..] {
                     let inner = std::mem::replace(layer, iced::widget::Space::new().boxed());
                     *layer = overlays::scroll_guard(inner);
@@ -805,4 +822,8 @@ mod editor_bar_wheel_tests;
 #[cfg(test)]
 mod hover_through_tests;
 #[cfg(test)]
+mod menu_dismiss_tests;
+#[cfg(test)]
 mod overlay_paint_tests;
+#[cfg(test)]
+mod start_nav_tests;

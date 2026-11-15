@@ -19,6 +19,7 @@ impl Signex {
         let wheel_mode = ui.wheel_mode;
         let (increment_step, paste_designators) = (ui.increment_step, ui.paste_designators);
         let antialiasing = ui.antialiasing;
+        let fast_grids = ui.fast_grids_mm;
         let agent_connections = ui.agent_connections_enabled;
         let (grid_style, annotate_undo, keeps_wires, placement, autosave, gpu, theme) = (
             ui.grid_style,
@@ -89,6 +90,9 @@ impl Signex {
             write("theme", move || crate::fonts::write_theme_pref(theme)),
             write("symbol_grid_size_mm", move || {
                 crate::fonts::write_symbol_grid_size_mm_pref(sym_size)
+            }),
+            write("fast_grids_mm", move || {
+                crate::fonts::write_fast_grids_mm_pref(fast_grids)
             }),
             write("symbol_grid_style", move || {
                 crate::fonts::write_symbol_grid_style_pref(sym_style)

@@ -317,7 +317,7 @@ impl Signex {
     /// own, so it must be saved again. A same-document rapid Ctrl+S loser is
     /// not listed: its winner's completion has cleaned it by now. Runs from
     /// both completions, so the warning fires in either completion order.
-    fn warn_unwritten_spellings(&mut self, path: &std::path::Path) {
+    pub(crate) fn warn_unwritten_spellings(&mut self, path: &std::path::Path) {
         for path in self.document_state.document_saves.take_superseded(path) {
             if self.document_state.is_document_dirty(&path) {
                 crate::diagnostics::log_warning(format!(
@@ -502,7 +502,7 @@ impl Signex {
 /// Routed by extension, not by an open tab, so a PCB whose tab closed
 /// mid-write still logs and commits. Any letter case, as open accepts it, so
 /// a board opened as `Board.SNXPCB` completes as a board (#1832).
-pub(super) fn is_pcb_path(path: &std::path::Path) -> bool {
+pub(crate) fn is_pcb_path(path: &std::path::Path) -> bool {
     use crate::app::file_extension::has_extension;
     has_extension(path, "snxpcb") || has_extension(path, "standard_pcb")
 }

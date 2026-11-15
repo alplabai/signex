@@ -109,7 +109,6 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         Library => "library",
         SchLibrary => "sch_library",
         FootprintLibrary => "footprint_library",
-        FootprintLayers => "footprint_layers",
         SymbolPins => "symbol_pins",
         PcbNets => "pcb_nets",
         History => "history",
@@ -144,7 +143,8 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "library" => Library,
         "sch_library" => SchLibrary,
         "footprint_library" => FootprintLibrary,
-        "footprint_layers" => FootprintLayers,
+        // The footprint editor's own Layers panel, merged into Layers (#2359).
+        "footprint_layers" => Layers,
         "symbol_pins" => SymbolPins,
         "pcb_nets" => PcbNets,
         "history" => History,

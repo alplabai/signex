@@ -17,7 +17,17 @@ pub(crate) enum Needs {
     Document,
     Undo,
     Redo,
-    Selection,
+    /// Copy and Duplicate: a board selection Copy carries, or a selection on
+    /// a sheet (#2361).
+    CopyTarget,
+    /// Cut: a board selection with no locked footprint, or a selection on a
+    /// sheet.
+    CutTarget,
+    /// Paste and Paste Special: board objects on the clipboard on a board,
+    /// a sheet otherwise.
+    PasteTarget,
+    /// Select All: a sheet or a board.
+    SelectAllTarget,
     DrawingSelection,
     SelectedObject,
     Schematic,
@@ -42,6 +52,8 @@ pub(crate) enum Needs {
     MoveObject,
     /// Flip Selection: a board with an unlocked footprint selected.
     PcbPlacement,
+    /// Change Footprint: a board with unlocked footprints selected (#2366).
+    SwapFootprints,
     /// Cross Probe: something selected on the board or sheet in view (#1312).
     ProbeTarget,
     /// Update PCB: a schematic or a board in view, with a project open
@@ -69,7 +81,13 @@ impl Needs {
             Self::Document => ctx.has_document,
             Self::Undo => ctx.can_undo,
             Self::Redo => ctx.can_redo,
-            Self::Selection => ctx.has_selection,
+            Self::CopyTarget if ctx.pcb.shown => ctx.pcb.copyable,
+            Self::CopyTarget => ctx.has_selection,
+            Self::CutTarget if ctx.pcb.shown => ctx.pcb.deletable,
+            Self::CutTarget => ctx.has_selection,
+            Self::PasteTarget if ctx.pcb.shown => ctx.pcb.pasteable,
+            Self::PasteTarget => ctx.has_schematic,
+            Self::SelectAllTarget => ctx.has_schematic || ctx.pcb.shown,
             // Arrange acts on drawings only; a selection of circuit elements
             // leaves it nothing to do (#1583).
             Self::DrawingSelection => ctx.has_schematic && ctx.has_drawing_selection,
@@ -107,13 +125,16 @@ impl Needs {
             Self::Pcb => ctx.has_pcb,
             Self::TurnedPcbView => ctx.has_pcb && ctx.pcb_view_turned,
             // On a sheet, rotate also turns a part on the cursor with
-            // nothing selected.
-            Self::Turn if ctx.pcb.shown => ctx.pcb.placeable,
+            // nothing selected; on a board too (#2364).
+            Self::Turn if ctx.pcb.shown => {
+                ctx.pcb.placeable || ctx.pcb.part_in_hand || ctx.pcb.routing
+            }
             Self::Turn => ctx.has_schematic && (ctx.has_selection || ctx.turn_in_hand),
             Self::MoveSelection if ctx.pcb.shown => ctx.pcb.placeable,
             Self::MoveSelection => ctx.has_schematic && ctx.has_selection,
             Self::MoveObject => ctx.has_schematic || ctx.pcb.shown,
-            Self::PcbPlacement => ctx.pcb.shown && ctx.pcb.placeable,
+            Self::PcbPlacement => ctx.pcb.shown && (ctx.pcb.placeable || ctx.pcb.part_in_hand),
+            Self::SwapFootprints => ctx.pcb.shown && ctx.pcb.placeable,
             Self::ProbeTarget if ctx.pcb.shown => ctx.pcb.any,
             Self::ProbeTarget => ctx.has_schematic && ctx.has_selection,
             Self::PcbSync => {
@@ -148,7 +169,12 @@ impl Needs {
             Self::Document => "No document is open",
             Self::Undo => "Nothing to undo",
             Self::Redo => "Nothing to redo",
-            Self::Selection => "Nothing is selected",
+            Self::CopyTarget => "Nothing is selected to copy",
+            Self::CutTarget => "Nothing is selected to cut, or a selected footprint is locked",
+            Self::PasteTarget => {
+                "Nothing to paste here: no schematic is open, or the clipboard holds no board objects"
+            }
+            Self::SelectAllTarget => "No schematic or PCB is open",
             Self::DrawingSelection => "No drawing is selected",
             Self::SelectedObject => "No object is selected",
             Self::Schematic => "No schematic is open",
@@ -170,6 +196,7 @@ impl Needs {
             Self::MoveSelection => "Nothing is selected to move, or a selected footprint is locked",
             Self::MoveObject => "No schematic or PCB is open",
             Self::PcbPlacement => "No unlocked footprint is selected on a PCB",
+            Self::SwapFootprints => "No unlocked footprint is selected on a PCB",
             Self::ProbeTarget => "Nothing is selected on the sheet or board to cross probe",
             Self::PcbSync => "No schematic or PCB of an open project is in view",
             Self::OpenProject => "No project is open",
@@ -184,7 +211,13 @@ impl Needs {
 pub(crate) fn is_placement_command(command: &AppCommandId) -> bool {
     matches!(
         needs(command),
-        Some(Needs::Turn | Needs::MoveSelection | Needs::PcbPlacement | Needs::DeleteTarget)
+        Some(
+            Needs::Turn
+                | Needs::MoveSelection
+                | Needs::PcbPlacement
+                | Needs::DeleteTarget
+                | Needs::CutTarget
+        )
     )
 }
 
@@ -201,7 +234,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "close_active_document" | "close_all_documents" => Needs::Document,
         "undo" => Needs::Undo,
         "redo" => Needs::Redo,
-        "cut" | "copy" | "duplicate" => Needs::Selection,
+        "copy" | "duplicate" => Needs::CopyTarget,
+        "cut" => Needs::CutTarget,
+        "paste" | "smart_paste" | "paste_special" => Needs::PasteTarget,
+        "select_all" => Needs::SelectAllTarget,
         "bring_drawings_to_front"
         | "send_drawings_to_back"
         | "bring_drawings_forward"
@@ -223,14 +259,11 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "move_selection" => Needs::MoveSelection,
         "move_object" => Needs::MoveObject,
         "flip_selection" => Needs::PcbPlacement,
+        "change_footprint" => Needs::SwapFootprints,
         "remove_last_vertex" => Needs::VertexTarget,
-        "paste"
-        | "smart_paste"
-        | "paste_special"
-        | "paste_array"
+        "paste_array"
         | "repeat_last_item"
         | "rubber_stamp_copy"
-        | "select_all"
         | "place_wire"
         | "draw_wire"
         | "place_bus"
@@ -254,17 +287,26 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "assign_footprints" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
         "run_drc" | "reannotate_board" => Needs::Pcb,
+        // #2373: the board placement tools.
+        "place_board_via"
+        | "place_board_track"
+        | "place_board_fill"
+        | "place_board_region"
+        | "place_board_keepout" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
-        "new_pcb_document" => Needs::OpenProject,
+        "new_pcb_document" | "new_schematic_sheet" => Needs::OpenProject,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => Needs::FitTarget,
         "cycle_snap_grid_forward" | "open_grid_picker" => Needs::FootprintEditor,
         "toggle_ratsnest"
+        | "toggle_origin_marker"
         | "board_sketch"
         | "next_layer"
         | "prev_layer"
+        | "next_signal_layer"
+        | "toggle_single_layer_mode"
         | "toggle_layer_visibility"
         | "show_all_layers"
         | "view_rotate"

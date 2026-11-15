@@ -35,10 +35,40 @@ impl Signex {
                 }
                 Task::none()
             }
-            M::RowToggled { key, on } => self.tick_update_pcb(|list| list.set_on(&key, on)),
-            M::GroupToggled { group, on } => {
-                self.tick_update_pcb(|list| list.set_group_on(group, on))
+            M::RowToggled { key, on } => {
+                self.focus_update_pcb_row(key.clone());
+                self.tick_update_pcb(|list| list.set_on(&key, on))
             }
+            M::GroupToggled { group, on } => {
+                self.tick_update_pcb(|list| super::table::set_group_on(list, group, on))
+            }
+            M::GroupFolded { group, folded } => {
+                self.with_update_pcb_table(|table| {
+                    table.folds.insert(group, folded);
+                });
+                Task::none()
+            }
+            M::FilterChipClicked(filter) => {
+                self.with_update_pcb_table(|table| {
+                    table.filter = (table.filter != Some(filter)).then_some(filter);
+                });
+                Task::none()
+            }
+            M::ProblemsOnlyToggled(on) => {
+                self.with_update_pcb_table(|table| table.problems_only = on);
+                Task::none()
+            }
+            M::RowFocused(key) => {
+                self.focus_update_pcb_row(key);
+                Task::none()
+            }
+            M::FocusedRowToggled => self.toggle_focused_update_pcb_row(),
+            M::ChooseFootprintRequested(key) => self.choose_update_pcb_footprint(&key),
+            M::FootprintChosen {
+                sheet,
+                part,
+                footprint,
+            } => self.set_update_pcb_footprint(&sheet, part, footprint),
             M::RefreshRequested => {
                 let previous = self
                     .ui_state
@@ -66,19 +96,22 @@ impl Signex {
             M::ReopenRequested => self.reopen_update_pcb_board(),
             M::CreatePcbRequested => {
                 let project = self.ui_state.update_pcb.as_ref().map(|s| s.project);
-                self.request_new_pcb(project)
+                self.open_document_setup(crate::app::SetupKind::Pcb, project)
             }
             M::CloseRequested => {
                 self.ui_state.update_pcb = None;
                 Task::none()
             }
-            M::NewPcbRequested(project) => self.request_new_pcb(project),
+            M::NewPcbRequested(project) => {
+                self.open_document_setup(crate::app::SetupKind::Pcb, project)
+            }
             M::NewPcbPathChecked {
                 project,
                 path,
                 exists,
+                rules,
             } => {
-                self.new_pcb_path_checked(project, path, exists);
+                self.new_pcb_path_checked(project, path, exists, rules);
                 Task::none()
             }
         }
@@ -276,7 +309,7 @@ impl Signex {
 
     /// Tick through `change`; when a footprint row changed, the net rows
     /// are recomputed on the worker for the board the ticks now make.
-    fn tick_update_pcb(
+    pub(super) fn tick_update_pcb(
         &mut self,
         change: impl FnOnce(&mut EcoChangeList) -> bool,
     ) -> Task<Message> {

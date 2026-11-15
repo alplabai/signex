@@ -421,14 +421,14 @@ fn drawing_num_row<'a>(
         text(label)
             .size(TS.body)
             .color(muted)
-            .width(Length::FillPortion(2)),
+            .width(PROPERTY_LABEL_COLUMN),
         text_input(raw(""), display)
             .size(TS.body)
             .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
-            .width(Length::FillPortion(3)),
+            .width(Length::Fill),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(6)
+    .spacing(PROPERTY_ROW_GAP)
     .align_y(iced::Alignment::Center)
     .boxed()
 }
@@ -492,7 +492,7 @@ fn drawing_stroke_color_row<'a>(
         ))
         .size(TS.body)
         .color(muted)
-        .width(Length::FillPortion(2)),
+        .width(PROPERTY_LABEL_COLUMN),
         row![
             tile(
                 Some(ids::PANELS_DRAWING_COLOR_AUTO),
@@ -532,10 +532,10 @@ fn drawing_stroke_color_row<'a>(
             ),
         ]
         .spacing(SP.s)
-        .width(Length::FillPortion(3)),
+        .width(Length::Fill),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(6)
+    .spacing(PROPERTY_ROW_GAP)
     .align_y(iced::Alignment::Center)
     .boxed()
 }
@@ -562,7 +562,7 @@ fn drawing_placement_row<'a>(
         text(t!(i18n, ids::PANELS_DRAWING_PLACEMENT))
             .size(TS.body)
             .color(muted)
-            .width(Length::FillPortion(2)),
+            .width(PROPERTY_LABEL_COLUMN),
         row![
             tile(
                 ids::PANELS_DRAWING_PLACEMENT_BEHIND,
@@ -571,10 +571,10 @@ fn drawing_placement_row<'a>(
             tile(ids::PANELS_DRAWING_PLACEMENT_ABOVE, DrawingPlacement::Above),
         ]
         .spacing(SP.s)
-        .width(Length::FillPortion(3)),
+        .width(Length::Fill),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(6)
+    .spacing(PROPERTY_ROW_GAP)
     .align_y(iced::Alignment::Center)
     .boxed()
 }
@@ -599,7 +599,7 @@ fn drawing_fill_row<'a>(
         text(t!(i18n, ids::PANELS_SHAPE_FILL))
             .size(TS.body)
             .color(muted)
-            .width(Length::FillPortion(2)),
+            .width(PROPERTY_LABEL_COLUMN),
         row![
             tile(
                 ids::PANELS_SHAPE_FILL_NONE,
@@ -618,10 +618,10 @@ fn drawing_fill_row<'a>(
             ),
         ]
         .spacing(SP.s)
-        .width(Length::FillPortion(3)),
+        .width(Length::Fill),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(6)
+    .spacing(PROPERTY_ROW_GAP)
     .align_y(iced::Alignment::Center)
     .boxed()
 }

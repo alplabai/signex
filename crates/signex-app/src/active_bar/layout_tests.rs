@@ -4,7 +4,8 @@
 
 use super::layout::{BarSlot, SCHEMATIC_BAR_SLOTS, bar_slots, slot_rects};
 use super::*;
-use crate::app::{DrawMode, Tool};
+use crate::app::Tool;
+use signex_types::corner::CornerMode;
 use signex_widgets::active_bar::{ActiveBarItem, Metrics, slot_offsets};
 
 use signex_types::theme::ThemeTokens;
@@ -21,7 +22,7 @@ fn themes() -> [(ThemeTokens, ThemeId); 2] {
 fn drawn_items(tool: Tool, tokens: &ThemeTokens, tid: ThemeId) -> Vec<ActiveBarItem<ActiveBarMsg>> {
     bar_items(
         tool,
-        DrawMode::Ortho90,
+        CornerMode::Ortho90,
         &std::collections::HashMap::new(),
         tokens,
         tid,

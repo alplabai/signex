@@ -1,5 +1,6 @@
 //! What the board view shows of a board's layers (#2223): which layers are
-//! hidden, which copper layer is active, and whether the ratsnest is drawn.
+//! hidden, which layer is active, single-layer mode, and whether the
+//! ratsnest is drawn.
 //!
 //! Session state only. It decides what is drawn and what a pointer can hit,
 //! and is never written to the `.snxpcb`. Names and colours of the layers are
@@ -15,7 +16,9 @@ use super::emit::{
     is_through_pad, layer_rank_index, pad_from_footprint, sort_zone_stack, trace_from_segment,
     via_from_board_via, zone_from_board_zone,
 };
-use super::{CopperInk, PcbSnapshot};
+use super::footprint_text::footprint_texts;
+use super::layer_rows::{LayerGroup, group_layers};
+use super::{CopperInk, PadInput, PcbSnapshot};
 
 /// Alpha factor for copper that is not on the active layer, and for a hidden
 /// layer's swatch in the Layers panel.
@@ -37,20 +40,30 @@ pub enum Emphasis {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PcbLayerView {
+    /// The layers the user hid (their eye in the Layers panel).
     hidden: HashSet<PcbLayer>,
-    active: CopperLayer,
+    /// Any layer of the board: a copper layer, an overlay, a mask, the
+    /// board outline or a mechanical layer.
+    active: PcbLayer,
     ratsnest_visible: bool,
     /// The Multi-Layer row: vias and through-hole pads.
     multi_layer_visible: bool,
+    /// The board origin marker (#2351).
+    origin_marker_visible: bool,
+    /// Single-layer mode: only the active layer is drawn and hit, with the
+    /// board outline and the vias and through-hole pads that reach it.
+    single_layer: bool,
 }
 
 impl Default for PcbLayerView {
     fn default() -> Self {
         Self {
             hidden: HashSet::new(),
-            active: CopperLayer::Top,
+            active: PcbLayer::Copper(CopperLayer::Top),
             ratsnest_visible: true,
             multi_layer_visible: true,
+            origin_marker_visible: true,
+            single_layer: false,
         }
     }
 }
@@ -96,25 +109,39 @@ fn classify(view: Option<&PcbLayerView>, names: &[String], through: bool) -> (Em
 }
 
 impl PcbLayerView {
-    /// The active copper layer. It is hidden only while every copper layer
-    /// of the board is (see [`Self::settle_active`]).
-    pub fn active(&self) -> CopperLayer {
+    /// The active layer. It is hidden only while every layer it could move
+    /// to is (see [`Self::settle_active`]).
+    pub fn active(&self) -> PcbLayer {
         self.active
     }
 
     /// The active layer as drawn: `None` when it is hidden, and then no
     /// copper is dimmed.
-    pub fn shown_active(&self) -> Option<CopperLayer> {
-        self.is_visible(PcbLayer::Copper(self.active))
-            .then_some(self.active)
+    pub fn shown_active(&self) -> Option<PcbLayer> {
+        (!self.is_hidden(self.active)).then_some(self.active)
     }
 
-    pub fn set_active(&mut self, layer: CopperLayer) {
-        self.active = layer;
+    /// The active layer when it is a shown copper layer: the copper the
+    /// rest of the copper is dimmed against.
+    pub fn active_copper(&self) -> Option<CopperLayer> {
+        self.shown_active().and_then(PcbLayer::copper)
     }
 
+    pub fn set_active(&mut self, layer: impl Into<PcbLayer>) {
+        self.active = layer.into();
+    }
+
+    /// Whether the user hid `layer` (its eye), whatever single-layer mode
+    /// draws.
+    pub fn is_hidden(&self, layer: PcbLayer) -> bool {
+        self.hidden.contains(&layer)
+    }
+
+    /// Whether `layer` is drawn and hit: not hidden, and in single-layer
+    /// mode the active layer or the board outline.
     pub fn is_visible(&self, layer: PcbLayer) -> bool {
-        !self.hidden.contains(&layer)
+        !self.is_hidden(layer)
+            && (!self.single_layer || layer == self.active || layer == BOARD_OUTLINE)
     }
 
     /// Hide `layer`, or show it again.
@@ -133,6 +160,30 @@ impl PcbLayerView {
         !self.hidden.is_empty() || !self.multi_layer_visible
     }
 
+    /// Show or hide every layer of one Layers panel group of a board; the
+    /// Drill group carries the Multi-Layer row too.
+    pub fn set_group_visible(&mut self, layers: &[LayerDef], group: LayerGroup, visible: bool) {
+        for layer in group_layers(layers, group) {
+            if visible {
+                self.hidden.remove(&layer);
+            } else {
+                self.hidden.insert(layer);
+            }
+        }
+        if group == LayerGroup::Drill {
+            self.multi_layer_visible = visible;
+        }
+    }
+
+    /// Whether only the active layer is drawn.
+    pub fn single_layer(&self) -> bool {
+        self.single_layer
+    }
+
+    pub fn toggle_single_layer(&mut self) {
+        self.single_layer = !self.single_layer;
+    }
+
     /// Whether vias and through-hole pads (the Multi-Layer row) are shown.
     pub fn multi_layer_visible(&self) -> bool {
         self.multi_layer_visible
@@ -143,9 +194,20 @@ impl PcbLayerView {
     }
 
     /// Whether a via on `names` is drawn and hit: the Multi-Layer row is
-    /// shown and so is one of its layers.
+    /// shown and so is one of its layers; in single-layer mode, it reaches
+    /// the active copper layer.
     pub fn shows_via(&self, names: &[String]) -> bool {
-        self.multi_layer_visible && self.shows_any(names)
+        self.multi_layer_visible && self.shows_through(names)
+    }
+
+    fn shows_through(&self, names: &[String]) -> bool {
+        if !self.single_layer {
+            return self.shows_any(names);
+        }
+        match (self.active_copper(), copper_span(names)) {
+            (Some(active), Some((top, bottom))) => (top..=bottom).contains(&active),
+            _ => false,
+        }
     }
 
     pub fn ratsnest_visible(&self) -> bool {
@@ -154,6 +216,18 @@ impl PcbLayerView {
 
     pub fn toggle_ratsnest(&mut self) {
         self.ratsnest_visible = !self.ratsnest_visible;
+    }
+
+    pub fn origin_marker_visible(&self) -> bool {
+        self.origin_marker_visible
+    }
+
+    pub fn set_origin_marker_visible(&mut self, visible: bool) {
+        self.origin_marker_visible = visible;
+    }
+
+    pub fn toggle_origin_marker(&mut self) {
+        self.origin_marker_visible = !self.origin_marker_visible;
     }
 
     /// Whether an item on `names` is drawn and hit. A name this build does
@@ -170,7 +244,8 @@ impl PcbLayerView {
     /// Paste goes with Top Copper. A pad on no copper layer follows its names.
     /// A through-hole pad also needs the Multi-Layer row shown.
     pub fn shows_pad(&self, footprint: &Footprint, pad: &Pad) -> bool {
-        if is_through_pad(pad) && !self.multi_layer_visible {
+        let through = is_through_pad(pad);
+        if through && !self.multi_layer_visible {
             return false;
         }
         let names = pad_layer_names(footprint, pad);
@@ -178,19 +253,23 @@ impl PcbLayerView {
         if copper.peek().is_none() {
             return self.shows_any(names);
         }
+        if through && self.single_layer {
+            return self.shows_through(names);
+        }
         copper.any(|layer| self.is_visible(PcbLayer::Copper(layer)))
     }
 
     /// Where an item on `names` stands against the active copper layer. An
-    /// item on no copper layer, or drawn while the active layer is hidden, is
-    /// [`Emphasis::Normal`]. An item spanning the active layer (a through via
-    /// listed as Top and Bottom while an inner layer is active) is on it.
+    /// item on no copper layer, or drawn while the active layer is hidden or
+    /// not copper, is [`Emphasis::Normal`]. An item spanning the active
+    /// layer (a through via listed as Top and Bottom while an inner layer is
+    /// active) is on it.
     pub fn emphasis(&self, names: &[String]) -> Emphasis {
         self.span_emphasis(copper_span(names))
     }
 
     fn span_emphasis(&self, span: Option<CopperSpan>) -> Emphasis {
-        let (Some(active), Some((top, bottom))) = (self.shown_active(), span) else {
+        let (Some(active), Some((top, bottom))) = (self.active_copper(), span) else {
             return Emphasis::Normal;
         };
         if (top..=bottom).contains(&active) {
@@ -200,106 +279,37 @@ impl PcbLayerView {
         }
     }
 
-    /// Step the active layer through the shown layers of `copper` (top to
-    /// bottom), wrapping. Hidden layers are skipped; with none shown the
-    /// active layer stays. An active layer the board lacks starts from the
+    /// Step the active layer through the shown layers of `layers`, in their
+    /// order, wrapping. Hidden layers are skipped; with none shown the
+    /// active layer stays. An active layer not in `layers` starts from the
     /// first or last.
-    pub fn step_active(&mut self, copper: &[CopperLayer], forward: bool) {
-        if let Some(next) = self.next_shown(copper, forward) {
+    pub fn step_active(&mut self, layers: &[PcbLayer], forward: bool) {
+        if let Some(next) = self.next_shown(layers, forward) {
             self.active = next;
         }
     }
 
     /// After a layer was hidden: a hidden active layer moves to the next
-    /// shown copper layer, so the pill and the dimming never name a layer
-    /// that is not drawn. With every copper layer hidden it stays.
-    pub fn settle_active(&mut self, copper: &[CopperLayer]) {
+    /// shown one of `layers`, so the pill and the dimming never name a layer
+    /// that is not drawn. With every one of them hidden it stays.
+    pub fn settle_active(&mut self, layers: &[PcbLayer]) {
         if self.shown_active().is_none() {
-            self.step_active(copper, true);
+            self.step_active(layers, true);
         }
     }
 
-    fn next_shown(&self, copper: &[CopperLayer], forward: bool) -> Option<CopperLayer> {
-        let n = copper.len();
-        let start = copper.iter().position(|&c| c == self.active);
+    fn next_shown(&self, layers: &[PcbLayer], forward: bool) -> Option<PcbLayer> {
+        let n = layers.len();
+        let start = layers.iter().position(|&l| l == self.active);
         (1..=n)
             .map(|step| match (start, forward) {
-                (Some(i), true) => copper[(i + step) % n],
-                (Some(i), false) => copper[(i + n - step) % n],
-                (None, true) => copper[step - 1],
-                (None, false) => copper[n - step],
+                (Some(i), true) => layers[(i + step) % n],
+                (Some(i), false) => layers[(i + n - step) % n],
+                (None, true) => layers[step - 1],
+                (None, false) => layers[n - step],
             })
-            .find(|&c| self.is_visible(PcbLayer::Copper(c)))
+            .find(|&l| !self.is_hidden(l))
     }
-}
-
-/// The copper layers a board defines, top to bottom; Top and Bottom when
-/// it lists none.
-pub fn board_copper_layers(layers: &[LayerDef]) -> Vec<CopperLayer> {
-    let mut copper: Vec<CopperLayer> = layers
-        .iter()
-        .filter_map(|def| parse_pcb_layer(&def.name)?.copper())
-        .collect();
-    copper.sort();
-    copper.dedup();
-    if copper.is_empty() {
-        copper = vec![CopperLayer::Top, CopperLayer::Bottom];
-    }
-    copper
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LayerGroup {
-    Copper,
-    Technical,
-    Mechanical,
-}
-
-/// One row of the Layers panel. Its name is the app's to give (a catalog
-/// message), except for a mechanical layer the user named.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LayerRow {
-    pub layer: PcbLayer,
-    pub group: LayerGroup,
-    /// The board's own name for a mechanical layer; `None` for every other row.
-    pub user_name: Option<String>,
-}
-
-/// The rows to list for a board: its copper layers, every technical layer,
-/// and the mechanical layers its stackup lists, by index.
-pub fn layer_rows(layers: &[LayerDef]) -> Vec<LayerRow> {
-    let row = |layer: PcbLayer, group| LayerRow {
-        layer,
-        group,
-        user_name: None,
-    };
-    let mut rows: Vec<LayerRow> = board_copper_layers(layers)
-        .into_iter()
-        .map(|c| row(PcbLayer::Copper(c), LayerGroup::Copper))
-        .collect();
-    rows.extend(
-        TechnicalLayer::ALL
-            .into_iter()
-            .map(|t| row(PcbLayer::Technical(t), LayerGroup::Technical)),
-    );
-    let mut mechanical: Vec<(u8, LayerRow)> = layers
-        .iter()
-        .filter_map(|def| match parse_pcb_layer(&def.name)? {
-            PcbLayer::Mechanical(m) => Some((
-                m.index(),
-                LayerRow {
-                    layer: PcbLayer::Mechanical(m),
-                    group: LayerGroup::Mechanical,
-                    user_name: (!def.display_name.is_empty()).then(|| def.display_name.clone()),
-                },
-            )),
-            _ => None,
-        })
-        .collect();
-    mechanical.sort_by_key(|(index, _)| *index);
-    mechanical.dedup_by_key(|(index, _)| *index);
-    rows.extend(mechanical.into_iter().map(|(_, row)| row));
-    rows
 }
 
 fn active_last<T>(mut items: Vec<(Emphasis, T)>) -> Vec<(Emphasis, T)> {
@@ -338,21 +348,16 @@ impl PcbSnapshot {
                 vias.push((how, input));
             }
         }
-        let mut pads = Vec::new();
-        for footprint in &board.footprints {
-            for pad in &footprint.pads {
-                if view.is_some_and(|v| !v.shows_pad(footprint, pad)) {
-                    continue;
-                }
-                let (how, ink) =
-                    classify(view, pad_layer_names(footprint, pad), is_through_pad(pad));
-                if let Some(mut input) = pad_from_footprint(footprint, pad) {
-                    input.dimmed = how == Emphasis::Dimmed;
-                    input.ink = ink;
-                    pads.push((how, input));
-                }
-            }
-        }
+        let pads: Vec<_> = board
+            .footprints
+            .iter()
+            .flat_map(|footprint| footprint_pads(footprint, view))
+            .collect();
+        let texts = board
+            .footprints
+            .iter()
+            .flat_map(|footprint| footprint_texts(footprint, view))
+            .collect();
 
         let layer_ranks = layer_rank_index(board);
         let mut zones = Vec::new();
@@ -397,8 +402,38 @@ impl PcbSnapshot {
                 edge_hidden: view.is_some_and(|v| !v.is_visible(BOARD_OUTLINE)),
                 ..super::BoardFeaturesInput::from_board(board)
             },
+            texts,
         }
     }
+}
+
+impl PcbSnapshot {
+    /// The pads of `footprint` alone, drawn as the board draws them with
+    /// every layer shown: a library preview (#2348) lowers the footprint
+    /// through here, so it cannot look different from the board.
+    pub fn from_footprint(footprint: &Footprint) -> Self {
+        Self {
+            pads: strip(footprint_pads(footprint, None)),
+            ..Self::default()
+        }
+    }
+}
+
+/// The pads of `footprint` that `view` shows, each with its emphasis and ink.
+fn footprint_pads(footprint: &Footprint, view: Option<&PcbLayerView>) -> Vec<(Emphasis, PadInput)> {
+    let mut pads = Vec::new();
+    for pad in &footprint.pads {
+        if view.is_some_and(|v| !v.shows_pad(footprint, pad)) {
+            continue;
+        }
+        let (how, ink) = classify(view, pad_layer_names(footprint, pad), is_through_pad(pad));
+        if let Some(mut input) = pad_from_footprint(footprint, pad) {
+            input.dimmed = how == Emphasis::Dimmed;
+            input.ink = ink;
+            pads.push((how, input));
+        }
+    }
+    pads
 }
 
 fn strip<T>(items: Vec<(Emphasis, T)>) -> Vec<T> {

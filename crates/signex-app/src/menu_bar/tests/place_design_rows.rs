@@ -102,7 +102,14 @@ fn place_rows_need_a_schematic() {
     ] {
         assert!(!row_is_live(&app, path), "{path} is live with no schematic");
     }
-    assert!(!row_is_live(&loaded_board_app(), "Place/Sheet Entry"));
+    // On a board the Place menu lists the board's tools (#2360): Sheet
+    // Entry is not offered there at all.
+    let board = loaded_board_app();
+    let ctx = menu_context(&board);
+    let model = menu_bar_model(&ctx);
+    let place = model.menus.iter().find(|m| m.title == "Place");
+    let sheet_entry = place.and_then(|menu| find_in(menu, &["Sheet Entry"]));
+    assert!(sheet_entry.is_none_or(|item| !item.is_enabled()));
 }
 
 /// The canvas Place flyout's Sheet Entry in an undocked sheet window, while
@@ -438,4 +445,91 @@ fn tools_back_annotate_is_live_on_a_project_sheet() {
     ));
     let label = update_schematics_row(&app).label;
     assert_eq!(label, "Update Schematics", "{label}");
+}
+
+/// The Place menu's rows on the main window's bar, top to bottom.
+fn place_rows(app: &Signex) -> Vec<MenuItem> {
+    let model = menu_bar_model(&menu_context(app));
+    let place = model
+        .menus
+        .iter()
+        .find(|menu| menu.title == "Place")
+        .expect("a Place menu");
+    place
+        .entries
+        .iter()
+        .filter_map(|entry| match entry {
+            MenuEntry::Item(item) => Some(item.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// #2360, #2373: on a board, Place lists the board's tools. A live tool runs
+/// its command, the ones the board editor cannot run yet are greyed with the
+/// PCB Active Bar's reason, and Board Sketch runs its command.
+#[test]
+fn place_on_a_board_lists_the_boards_tools() {
+    let mut app = loaded_board_app();
+    let rows = place_rows(&app);
+    let labels: Vec<&str> = rows.iter().map(|row| row.label.as_str()).collect();
+    assert_eq!(
+        labels,
+        [
+            "Component",
+            "Pad",
+            "Via",
+            "Interactive Routing",
+            "Track",
+            "Arc",
+            "Fill",
+            "Solid Region",
+            "Polygon Pour",
+            "String",
+            "Dimension",
+            "Keepout",
+            "Board Sketch",
+        ]
+    );
+    let tools = crate::app::pcb_tools::BoardPlaceTool::PLACE_MENU;
+    for (row, tool) in rows[..12].iter().zip(tools) {
+        if let Some(command) = tool.command() {
+            // #2373: a live tool runs the command its Active Bar button runs.
+            assert!(row.is_enabled(), "{} is live", row.label);
+            assert!(matches!(
+                row.dispatches(),
+                Some(crate::menu_bar::MenuMessage::Command(id)) if id.as_str() == command
+            ));
+            continue;
+        }
+        let ItemState::Placeholder {
+            reason: Some(reason),
+        } = &row.state
+        else {
+            panic!("{} is not greyed with a reason", row.label);
+        };
+        assert!(!row.is_enabled());
+        assert!(
+            reason.ends_with(": not available on boards yet"),
+            "{reason}"
+        );
+    }
+    let live: Vec<&MenuItem> = rows.iter().filter(|row| row.is_enabled()).collect();
+    let live_tools = tools.iter().filter(|tool| tool.command().is_some()).count();
+    assert_eq!(live.len(), 1 + live_tools);
+    assert!(matches!(
+        live[live_tools].dispatches(),
+        Some(crate::menu_bar::MenuMessage::Command(id)) if id.as_str() == "board_sketch"
+    ));
+    let _ = click(&mut app, "Place/Board Sketch");
+    assert!(app.board_sketch_in_view().is_some(), "sketch mode is on");
+}
+
+/// #2360: a sheet keeps its Place menu.
+#[test]
+fn place_on_a_sheet_keeps_the_sheets_rows() {
+    let app = one_symbol_selected();
+    let labels: Vec<String> = place_rows(&app).into_iter().map(|row| row.label).collect();
+    assert_eq!(labels.first().map(String::as_str), Some("Wire"));
+    assert!(!labels.iter().any(|label| label == "Board Sketch"));
 }

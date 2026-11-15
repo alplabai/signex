@@ -96,7 +96,7 @@ impl Signex {
             || self
                 .document_state
                 .dock
-                .locate(crate::panels::PanelKind::FootprintLayers)
+                .locate(crate::panels::PanelKind::Layers)
                 .is_none()
     }
 

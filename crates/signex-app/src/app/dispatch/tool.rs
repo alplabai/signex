@@ -294,7 +294,13 @@ impl Signex {
                 Task::batch([resume_task, self.finish_update()])
             }
             ToolMessage::CycleDrawMode => {
-                self.interaction_state.draw_mode = self.interaction_state.draw_mode.next();
+                let rule = self.interaction_state.corner_rule.with_next_mode();
+                self.set_corner_rule(rule);
+                self.finish_update()
+            }
+            ToolMessage::CornerFlipRequested => {
+                let rule = self.interaction_state.corner_rule.flipped();
+                self.set_corner_rule(rule);
                 self.finish_update()
             }
             ToolMessage::RemoveLastVertex => {

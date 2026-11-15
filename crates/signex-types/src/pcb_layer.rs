@@ -225,6 +225,12 @@ pub enum PcbLayer {
     Mechanical(MechanicalLayer),
 }
 
+impl From<CopperLayer> for PcbLayer {
+    fn from(layer: CopperLayer) -> Self {
+        Self::Copper(layer)
+    }
+}
+
 impl PcbLayer {
     /// Total layers the type can name.
     pub const COUNT: usize =

@@ -44,6 +44,8 @@ pub struct UndoGroupSheets {
     /// Parked sheets an undo took back to disk state and dropped. Their
     /// history is gone, so the group can no longer be redone as a whole.
     pub dropped: Vec<std::path::PathBuf>,
+    /// Boards whose step carries the group, moved with its sheets (#2366).
+    pub boards: Vec<std::path::PathBuf>,
 }
 
 /// Which run stamped an undo group.
@@ -61,6 +63,8 @@ pub enum UndoGroupKind {
     BackAnnotate,
     /// An agent's `apply_edits` call that edited several sheets (#2178).
     AgentEdit,
+    /// A board footprint swap and the linked parts' footprints (#2366).
+    FootprintSwap,
 }
 
 impl UndoGroupSheets {
@@ -73,6 +77,7 @@ impl UndoGroupSheets {
             UndoGroupKind::SheetNumbers => "sheet numbering",
             UndoGroupKind::BackAnnotate => "back annotate",
             UndoGroupKind::AgentEdit => "agent edit",
+            UndoGroupKind::FootprintSwap => "footprint change",
         }
     }
 
@@ -94,6 +99,7 @@ impl UndoGroupSheets {
             UndoGroupKind::SheetNumbers => "Sheet numbering",
             UndoGroupKind::BackAnnotate => "Back annotate",
             UndoGroupKind::AgentEdit => "Agent edit",
+            UndoGroupKind::FootprintSwap => "Change Footprint",
         }
     }
 
@@ -105,6 +111,7 @@ impl UndoGroupSheets {
             UndoGroupKind::SheetNumbers => "new sheet numbers".to_string(),
             UndoGroupKind::BackAnnotate => "back-annotated designators and values".to_string(),
             UndoGroupKind::AgentEdit => "agent edits".to_string(),
+            UndoGroupKind::FootprintSwap => "changed footprints".to_string(),
             _ => format!("{} designators", self.participle()),
         }
     }
@@ -118,6 +125,7 @@ impl UndoGroupSheets {
             UndoGroupKind::SheetNumbers => "sheet numbers",
             UndoGroupKind::BackAnnotate => "designators and values",
             UndoGroupKind::AgentEdit => "contents",
+            UndoGroupKind::FootprintSwap => "footprints",
             _ => "designators",
         }
     }
@@ -132,6 +140,7 @@ impl UndoGroupSheets {
             UndoGroupKind::SheetNumbers => "renumbered",
             UndoGroupKind::BackAnnotate => "back-annotated",
             UndoGroupKind::AgentEdit => "edited",
+            UndoGroupKind::FootprintSwap => "changed",
         }
     }
 }
@@ -201,6 +210,9 @@ impl Signex {
             .get(&group)
             .cloned()
             .unwrap_or_default();
+        if !recorded.boards.is_empty() {
+            return self.step_board_undo_group(group, direction == StepDirection::Undo);
+        }
         let (noun, title, done) = (recorded.noun(), recorded.title(), recorded.participle());
         let (kept, holds, wide) = (recorded.kept(), recorded.holds(), recorded.wide());
         if direction == StepDirection::Redo && !recorded.dropped.is_empty() {
@@ -361,5 +373,113 @@ impl Signex {
         // sheet itself was not touched.
         self.refresh_panel_ctx();
         changed
+    }
+
+    /// Undo (`undo`) or redo a group that holds board steps as well as sheet
+    /// steps (#2366), from the board or from a sheet: every live member moves
+    /// in one step. Refused, with nothing moved, when a member has a later
+    /// step above the group's; a closed member is skipped and named.
+    pub(crate) fn step_board_undo_group(
+        &mut self,
+        group: signex_engine::UndoGroupId,
+        undo: bool,
+    ) -> bool {
+        let Some(recorded) = self.document_state.undo_groups.get(&group).cloned() else {
+            return false;
+        };
+        let direction = if undo {
+            StepDirection::Undo
+        } else {
+            StepDirection::Redo
+        };
+        let owed = |path: &std::path::PathBuf| undo || recorded.undone.contains(path);
+        let (mut sheets, mut boards, mut blocked, mut skipped) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for path in &recorded.live {
+            match self.document_state.engines.get(path) {
+                Some(engine) if direction.top(engine) == Some(group) => sheets.push(path.clone()),
+                Some(engine) if (undo && engine.has_undo_group(group)) || (!undo && owed(path)) => {
+                    blocked.push(path.clone());
+                }
+                _ if owed(path) => skipped.push(path.clone()),
+                _ => {}
+            }
+        }
+        for path in &recorded.boards {
+            let Some(engine) = self.document_state.board_engine(path) else {
+                if owed(path) {
+                    skipped.push(path.clone());
+                }
+                continue;
+            };
+            let top = if undo {
+                engine.next_undo_group()
+            } else {
+                engine.next_redo_group()
+            };
+            if top == Some(group) {
+                boards.push(path.clone());
+            } else if (undo && engine.has_undo_group(group)) || (!undo && owed(path)) {
+                blocked.push(path.clone());
+            } else if owed(path) {
+                skipped.push(path.clone());
+            }
+        }
+        let (title, verb) = (recorded.title(), if undo { "undo" } else { "redo" });
+        if !blocked.is_empty() {
+            crate::diagnostics::log_warning(format!(
+                "Cannot {verb} the {}: {} has a later step. Undo the newer edit there first.",
+                recorded.noun(),
+                file_names(&blocked),
+            ));
+            return false;
+        }
+        if sheets.is_empty() && boards.is_empty() {
+            return false;
+        }
+        if !skipped.is_empty() {
+            crate::diagnostics::log_warning(format!(
+                "{title}: the {verb} did not reach {}, which is closed or no longer holds the step.",
+                file_names(&skipped),
+            ));
+        }
+        let active = self.document_state.active_path.clone();
+        let mut active_invalidation = None;
+        let mut moved = Vec::new();
+        for path in &sheets {
+            let Some(engine) = self.document_state.engines.get_mut(path) else {
+                continue;
+            };
+            match if undo { engine.undo() } else { engine.redo() } {
+                Ok(Some(pair)) => {
+                    moved.push(path.clone());
+                    if active.as_ref() == Some(path) {
+                        active_invalidation =
+                            Some(Self::render_invalidation_for_patch(pair.document));
+                    } else {
+                        self.document_state.sync_history_dirty(path);
+                    }
+                }
+                Ok(None) => {}
+                Err(error) => crate::diagnostics::log_error(
+                    "Engine group step failed",
+                    &anyhow::Error::new(error),
+                ),
+            }
+        }
+        for path in &boards {
+            if self.step_board_once(path, undo) {
+                moved.push(path.clone());
+            }
+        }
+        if undo && let Some(record) = self.document_state.undo_groups.get_mut(&group) {
+            record.undone = moved;
+        }
+        self.document_state.note_sheet_edit();
+        if let Some(invalidation) = active_invalidation {
+            self.finish_schematic_mutation(invalidation, true, true);
+        }
+        self.refresh_panel_ctx();
+        true
     }
 }

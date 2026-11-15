@@ -58,6 +58,7 @@ struct OpenOverlays {
     new_project_open: bool,
     assign_footprints_open: bool,
     update_pcb_open: bool,
+    document_setup_open: bool,
     sheet_numbering_open: bool,
     board_reannotate_open: bool,
     back_annotate_open: bool,
@@ -94,6 +95,12 @@ struct OpenOverlays {
     /// The `.snxlib` whose Library Browser has the Edit Component
     /// Details modal open, if any. Per-library, like `delete_confirm`.
     edit_row_modal: Option<std::path::PathBuf>,
+    /// The canvas, document-tab and Projects-tree right-click menus and the
+    /// grid picker: Esc closes the popup and leaves the tool alone (#2349).
+    canvas_context_menu_open: bool,
+    tab_context_menu_open: bool,
+    project_tree_context_menu_open: bool,
+    grid_picker_open: bool,
 }
 
 // `KeyContext` used to live here — the slice of modal state the
@@ -177,6 +184,7 @@ impl OpenOverlays {
             || self.project_close_confirm_open
             || self.create_child_sheet_confirm_open
             || self.new_project_open
+            || self.document_setup_open
             || self.rename_open
             || self.remove_open
             || self.annotate_reset_confirm_open
@@ -224,9 +232,26 @@ impl OpenOverlays {
                 .net_color_custom_open
                 .then(|| Message::NetColor(NetColorMsg::CustomShow(false))),
 
+            // ── Right-click menus ───────────────────────────────────
+            // Esc closes the menu, nothing behind it (#2349). The dock-tab,
+            // Components-row and Start-row menus answer in
+            // `dispatch/escape.rs` before this ladder runs.
+            OverlayId::ContextMenu => self
+                .canvas_context_menu_open
+                .then(|| Message::ContextMenu(ContextMenuMsg::Close)),
+            OverlayId::TabContextMenu => self
+                .tab_context_menu_open
+                .then(|| Message::ContextMenu(ContextMenuMsg::CloseTab)),
+            OverlayId::ProjectTreeContextMenu => self
+                .project_tree_context_menu_open
+                .then(|| Message::ContextMenu(ContextMenuMsg::CloseProjectTree)),
+            OverlayId::GridPicker => self
+                .grid_picker_open
+                .then_some(Message::Ui(UiMsg::GridPickerClose)),
+
             // ── Editor chrome, menus, pickers, panels: no rung ───────
-            // None of these is a modal; Esc over a context menu resets
-            // the tool, as it always has.
+            // None of these is a modal. The symbol editor's menu closes from
+            // its own Esc (`escape_editor_or_tool_reset`).
             //
             // `FootprintAlign` looks like an omission and is not. #370
             // gives the footprint Align… dialog an Esc of its own,
@@ -246,12 +271,8 @@ impl OpenOverlays {
             | OverlayId::SymbolContextMenu
             | OverlayId::TextEdit
             | OverlayId::ActiveBarMenu
-            | OverlayId::ContextMenu
-            | OverlayId::TabContextMenu
-            | OverlayId::ProjectTreeContextMenu
             | OverlayId::ComponentsRowContextMenu
             | OverlayId::StartRowContextMenu
-            | OverlayId::GridPicker
             | OverlayId::PanelList
             | OverlayId::DockDragZone
             | OverlayId::ComponentsRowDragLabel
@@ -358,6 +379,9 @@ impl OpenOverlays {
             OverlayId::UpdatePcb => self
                 .update_pcb_open
                 .then(|| Message::from(crate::app::UpdatePcbMsg::CloseRequested)),
+            OverlayId::DocumentSetup => self
+                .document_setup_open
+                .then(|| Message::from(crate::app::DocumentSetupMsg::CancelRequested)),
 
             // ── Library modals ──────────────────────────────────────
             OverlayId::LibraryPicker => self
@@ -630,6 +654,7 @@ impl Signex {
             assign_footprints_open: self.ui_state.assign_footprints.is_some(),
             // A headless apply run has no dialog to close.
             update_pcb_open: self.ui_state.update_pcb.as_ref().is_some_and(|s| !s.apply),
+            document_setup_open: self.ui_state.document_setup.is_some(),
             sheet_numbering_open: self.ui_state.sheet_numbering.is_some(),
             board_reannotate_open: self.ui_state.board_reannotate.is_some(),
             back_annotate_open: self.ui_state.back_annotate.is_some(),
@@ -696,6 +721,13 @@ impl Signex {
                 .iter()
                 .find(|(_, browser)| browser.edit_modal.is_some())
                 .map(|(path, _)| path.clone()),
+            canvas_context_menu_open: self.interaction_state.context_menu.is_some(),
+            tab_context_menu_open: self.interaction_state.tab_context_menu.is_some(),
+            project_tree_context_menu_open: self
+                .interaction_state
+                .project_tree_context_menu
+                .is_some(),
+            grid_picker_open: self.interaction_state.grid_picker.is_some(),
         }
     }
 
@@ -1117,6 +1149,12 @@ mod tests {
     /// `every_ladder_field_claims_escape` and the ranking tests instead.
     #[test]
     fn every_modal_claims_escape() {
+        assert!(matches!(
+            only(|o| o.document_setup_open = true),
+            Some(Message::Project(crate::app::ProjectMsg::DocumentSetup(
+                crate::app::DocumentSetupMsg::CancelRequested
+            )))
+        ));
         assert!(matches!(
             only(|o| o.find_replace_open = true),
             Some(Message::FindReplaceMsg(
@@ -1722,6 +1760,7 @@ mod tests {
             new_project_open,
             assign_footprints_open,
             update_pcb_open,
+            document_setup_open,
             sheet_numbering_open,
             board_reannotate_open,
             back_annotate_open,
@@ -1740,6 +1779,10 @@ mod tests {
             net_color_custom_open,
             delete_confirm,
             edit_row_modal,
+            canvas_context_menu_open,
+            tab_context_menu_open,
+            project_tree_context_menu_open,
+            grid_picker_open,
         ];
 
         type EscapeSetter = fn(&mut OpenOverlays);
@@ -1790,6 +1833,7 @@ mod tests {
                 o.assign_footprints_open = true
             }),
             ("update_pcb_open", |o| o.update_pcb_open = true),
+            ("document_setup_open", |o| o.document_setup_open = true),
             ("sheet_numbering_open", |o| o.sheet_numbering_open = true),
             ("board_reannotate_open", |o| o.board_reannotate_open = true),
             ("back_annotate_open", |o| o.back_annotate_open = true),
@@ -1836,6 +1880,14 @@ mod tests {
             ("edit_row_modal", |o| {
                 o.edit_row_modal = Some(std::path::PathBuf::from("fixture.snxlib"))
             }),
+            ("canvas_context_menu_open", |o| {
+                o.canvas_context_menu_open = true
+            }),
+            ("tab_context_menu_open", |o| o.tab_context_menu_open = true),
+            ("project_tree_context_menu_open", |o| {
+                o.project_tree_context_menu_open = true
+            }),
+            ("grid_picker_open", |o| o.grid_picker_open = true),
         ];
 
         // Where a notice lives, not a modal of its own: no rung.

@@ -319,6 +319,31 @@ fn the_picker_applies_the_same_filter() {
     assert_eq!(columns, [("value", &Unit::Ohm)]);
 }
 
+/// #1701: the picker labels a filter column as the browser does, not by
+/// its raw key.
+#[test]
+fn the_picker_and_the_browser_label_a_column_alike() {
+    let key = "self_resonant_frequency";
+    let mut rows = resistors();
+    for r in &mut rows {
+        r.parameters.insert(key.into(), measured(100.0, "MHz"));
+    }
+    let (state, root) = fixture("Inductors", rows);
+
+    let label_in = |columns: &[super::FilterColumn]| {
+        columns
+            .iter()
+            .find(|c| c.key == key)
+            .map(|c| c.label.clone())
+            .expect("a filter column")
+    };
+    let cache = state.library_browsers[&root].view_cache.as_ref().unwrap();
+    let browser = label_in(cache.filter_columns_for_test());
+    let picker = label_in(state.picker.as_ref().unwrap().rows.filter_columns());
+    assert_eq!(picker, browser);
+    assert_eq!(picker, "self_resonant…");
+}
+
 #[test]
 fn clearing_the_filter_restores_every_row() {
     let (mut state, root) = fixture("Resistors", resistors());

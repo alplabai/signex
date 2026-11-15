@@ -200,9 +200,39 @@ impl Signex {
             0
         };
         let footprint = self.pcb_footprint_facts(&tab.path, board);
+        // The totals are counted once per board revision (#2353).
+        let revision = self
+            .document_state
+            .pcb_revisions
+            .get(&tab.path)
+            .copied()
+            .unwrap_or(0);
+        let key = (tab.path.clone(), revision);
+        let stats = self
+            .document_state
+            .panel_ctx
+            .pcb_board
+            .as_ref()
+            .filter(|s| s.stats_key.as_ref() == Some(&key))
+            .map_or_else(|| pcb_geom::BoardStats::of(board), |s| s.stats.clone());
+        let ratsnest = &self.interaction_state.pcb_ratsnest;
+        let summary = crate::panels::PcbBoardSummary {
+            unrouted_nets: ratsnest.unrouted_nets(&key),
+            hidden_nets: ratsnest.hidden_net_count(&tab.path),
+            filter: self.ui_state.pcb_pick_filter.clone(),
+            snap: self.ui_state.pcb_snap.clone(),
+            fast_grids_mm: self.ui_state.fast_grids_mm,
+            view: self.ui_state.pcb_board_panel.clone(),
+            stats_key: Some(key),
+            ..crate::panels::PcbBoardSummary::with_stats(board, tab.title.clone(), selected, stats)
+        };
+        let component = self.pcb_component_facts(&tab.path, board);
+        let primitive = self.pcb_primitive_facts(&tab.path, board);
         Some(
-            crate::panels::PcbBoardSummary::of(board, tab.title.clone(), selected)
-                .with_footprint(footprint),
+            summary
+                .with_footprint(footprint)
+                .with_component(component)
+                .with_primitive(primitive),
         )
     }
 
@@ -228,6 +258,14 @@ impl Signex {
             in_view.as_deref() == Some(d.board.as_path()) && shown != Some(d.footprint)
         }) {
             self.interaction_state.pcb_footprint_draft = None;
+        }
+        self.drop_moved_pcb_component_draft(summary.as_ref().and_then(|s| s.component.as_ref()));
+        if let Some(board) = in_view.as_deref() {
+            let shown = summary.as_ref().and_then(|s| s.primitive.as_ref());
+            let target = shown.map(|p| &p.common().target);
+            self.interaction_state
+                .pcb_primitive
+                .keep_only(board, target);
         }
         self.document_state.panel_ctx.pcb_board = summary;
     }
@@ -415,6 +453,11 @@ impl Signex {
             .tabs
             .get(self.document_state.active_tab)
             .map(|tab| tab.path.clone());
+        let marks = super::sheet_tree::RowMarks {
+            open: &open_paths,
+            dirty: &dirty_paths,
+            active: active_path.as_ref(),
+        };
         let projects_panel: Vec<crate::panels::ProjectPanelInfo> = self
             .document_state
             .projects
@@ -442,27 +485,15 @@ impl Signex {
                     .map(lookup)
                     .unwrap_or((false, false, false));
 
-                // F24 — file existence check. Used to mark orphan
-                // references (file registered on the project but
-                // missing on disk) so the tree shows them as
-                // `<name> (missing)` upfront.
+                // F24 — a file the project lists that is neither on disk nor
+                // held by an open or unsaved document shows as `(missing)`.
                 // Read from the cache, never the disk (#111): the off-thread
                 // probe keeps it current.
                 let fs_facts = &self.document_state.project_fs.facts;
-                let exists =
-                    |filename: &str| -> bool { !fs_facts.is_missing(&project_dir.join(filename)) };
-                let project_file_missing = p
-                    .data
-                    .schematic_root
-                    .as_deref()
-                    .map(|f| !exists(f))
-                    .unwrap_or(false);
-                let pcb_file_missing = p
-                    .data
-                    .pcb_file
-                    .as_deref()
-                    .map(|f| !exists(f))
-                    .unwrap_or(false);
+                let missing =
+                    |filename: &str| marks.is_missing(fs_facts, &project_dir.join(filename));
+                let project_file_missing = p.data.schematic_root.as_deref().is_some_and(missing);
+                let pcb_file_missing = p.data.pcb_file.as_deref().is_some_and(missing);
                 // Flatten `Project::libraries` into the panel struct
                 // alongside the sheet list. Each entry resolves to an
                 // absolute path so the right-click menu can dispatch
@@ -546,15 +577,7 @@ impl Signex {
                     pcb_file_dirty,
                     pcb_file_active,
                     pcb_file_missing,
-                    sheets: super::sheet_tree::project_sheet_rows(
-                        p,
-                        fs_facts,
-                        &super::sheet_tree::RowMarks {
-                            open: &open_paths,
-                            dirty: &dirty_paths,
-                            active: active_path_ref,
-                        },
-                    ),
+                    sheets: super::sheet_tree::project_sheet_rows(p, fs_facts, &marks),
                     libraries,
                     is_active: Some(p.id) == active_id,
                     is_dirty: dirty_paths.contains(&p.path),

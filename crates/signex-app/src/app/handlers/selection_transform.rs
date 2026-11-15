@@ -19,10 +19,27 @@ impl Signex {
     /// With the Bus Entry tool armed the turn applies to the entry about to
     /// be placed instead, and a part on the cursor turns before either.
     pub(crate) fn handle_selection_rotate_requested(&mut self, clockwise: bool) {
-        // On a board the selected footprints turn (#2240). The board's y
-        // axis points down the screen, so a model turn of +90° is clockwise.
+        // On a board a part on the cursor turns, else the selected footprints
+        // (#2240, #2364). The board's y axis points down the screen, so a
+        // model turn of +90° is clockwise.
         let quarter_turns = if clockwise { 1 } else { -1 };
-        if self.transform_pcb_selection(PlacementTransform::Rotate { quarter_turns }) {
+        // Mid track run the keys bend it as they bend a wire (#2373).
+        if self.bend_board_route(clockwise)
+            || self.rotate_pcb_part(clockwise)
+            || self.transform_pcb_selection(PlacementTransform::Rotate { quarter_turns })
+        {
+            return;
+        }
+        // Mid wire or bus run, the rotate keys bend the run instead (#2372):
+        // counter-clockwise (Space) flips the corner, clockwise
+        // (Shift+Space) steps the corner mode.
+        if self.is_drawing_wire_run() {
+            let rule = self.interaction_state.corner_rule;
+            self.set_corner_rule(if clockwise {
+                rule.with_next_mode()
+            } else {
+                rule.flipped()
+            });
             return;
         }
         // A part on the cursor turns instead of the selection.
@@ -60,7 +77,9 @@ impl Signex {
 
     /// Mirror top to bottom. On a board that is a flip and a half turn.
     pub(crate) fn handle_selection_mirror_x_requested(&mut self) {
-        if self.transform_pcb_selection(PlacementTransform::FlipTopBottom) {
+        if self.mirror_pcb_part_top_bottom()
+            || self.transform_pcb_selection(PlacementTransform::FlipTopBottom)
+        {
             return;
         }
         if self.mirror_placement(MirrorAxis::Vertical) {
@@ -75,7 +94,7 @@ impl Signex {
 
     /// Mirror left to right. On a board that is the flip to the other side.
     pub(crate) fn handle_selection_mirror_y_requested(&mut self) {
-        if self.transform_pcb_selection(PlacementTransform::FlipLeftRight) {
+        if self.flip_pcb_part() || self.transform_pcb_selection(PlacementTransform::FlipLeftRight) {
             return;
         }
         if self.mirror_placement(MirrorAxis::Horizontal) {

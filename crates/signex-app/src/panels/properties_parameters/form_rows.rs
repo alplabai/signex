@@ -66,7 +66,7 @@ pub fn section_hdr<'a, M: 'a>(title: &str, text_c: Color, border_c: Color) -> El
 pub fn form_input_row<'a, M: 'a>(
     label: &str,
     value: &str,
-    label_c: impl Into<LabelInk>,
+    label_c: Color,
     input_bg: Color,
 ) -> Element<'a, M> {
     container(
@@ -141,7 +141,7 @@ pub fn form_mm_edit_row<'a>(
     value: f32,
     draft: Option<&str>,
     edge: PaperEdge,
-    label_c: impl Into<LabelInk>,
+    label_c: Color,
     _input_bg: Color,
     _input_border: Color,
 ) -> Element<'a, PanelMsg> {
@@ -171,7 +171,7 @@ pub fn form_pick_row<'a, T>(
     options: Vec<T>,
     selected: T,
     on_change: impl Fn(T) -> PanelMsg + 'a,
-    label_c: impl Into<LabelInk>,
+    label_c: Color,
 ) -> Element<'a, PanelMsg>
 where
     T: Clone + Eq + std::fmt::Display + 'static,
@@ -198,13 +198,12 @@ pub fn form_check_row<'a>(
     label: &str,
     checked: bool,
     msg: PanelMsg,
-    label_c: impl Into<LabelInk>,
+    label_c: Color,
     _surface: Color,
 ) -> Element<'a, PanelMsg> {
-    let ink: LabelInk = label_c.into();
     container(
         row![
-            property_label(label.to_string(), ink),
+            property_label(label.to_string(), label_c),
             container(
                 signex_widgets::checkbox(checked)
                     .on_toggle(move |_| msg.clone())
@@ -235,7 +234,7 @@ pub fn form_grid_row(
     unit: Unit,
     has_checkbox: bool,
     on_size: impl Fn(f32) -> PanelMsg + 'static,
-    label_c: impl Into<LabelInk>,
+    label_c: Color,
     active: bool,
     on_toggle: PanelMsg,
 ) -> Element<'static, PanelMsg> {
@@ -307,9 +306,8 @@ pub fn form_check_row_shortcut<'a>(
     value: bool,
     on_toggle: PanelMsg,
     shortcut: &'a str,
-    label_c: impl Into<LabelInk>,
+    label_c: Color,
 ) -> Element<'a, PanelMsg> {
-    let label_c: LabelInk = label_c.into();
     let shortcut_owned = shortcut.to_string();
     container(
         row![
@@ -323,7 +321,7 @@ pub fn form_check_row_shortcut<'a>(
                 Space::new().width(Length::Fill),
                 text(raw(shortcut_owned))
                     .size(TS.caption)
-                    .color(label_c.color)
+                    .color(label_c)
                     .wrapping(iced::widget::text::Wrapping::None),
             ]
             .spacing(SP.s)
@@ -344,7 +342,7 @@ pub fn form_font_link_row<'a>(
     current_size_px: f32,
     _bold: bool,
     _italic: bool,
-    label_c: impl Into<LabelInk>,
+    label_c: Color,
 ) -> Element<'a, PanelMsg> {
     let summary = format!("{current_family}, {:.0}px", current_size_px);
 
@@ -484,7 +482,7 @@ pub fn canvas_font_popup<'a>(
 pub fn form_edit_row<'a>(
     label: &str,
     value: &str,
-    label_c: impl Into<LabelInk>,
+    label_c: Color,
     on_input: impl Fn(String) -> PanelMsg + 'a,
 ) -> Element<'a, PanelMsg> {
     container(

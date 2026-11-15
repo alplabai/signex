@@ -1,0 +1,207 @@
+//! The optional `[board_options]` section of a `.snxpcb` (#2374): guides,
+//! extra snap grids, the sheet, the polygon naming scheme and the
+//! designator display.
+//!
+//! Written only when the options differ from the default, so a board
+//! without any re-saves byte-identical and a file from before the section
+//! loads unchanged. Lengths are integer nm like every other on-disk
+//! geometry; colours are `#rrggbbaa`. See `docs/PCB_BOARD_OPTIONS.md`.
+
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use super::FormatError;
+use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
+use crate::pcb::{PcbBoard, Point};
+use crate::pcb_options::{
+    BoardGrid, BoardGuide, BoardOptions, BoardSheet, DesignatorDisplay, GuideKind, PolygonNaming,
+};
+use crate::theme::Color;
+
+const GUIDES: &str = "board_options.guides";
+const GRIDS: &str = "board_options.grids";
+const SHEET: &str = "board_options.sheet";
+
+/// `[board_options]` as stored.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub(in crate::format) struct BoardOptionsRaw {
+    #[serde(default)]
+    polygon_naming: PolygonNaming,
+    #[serde(default)]
+    designator_display: DesignatorDisplay,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sheet: Option<SheetRaw>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    guides: Vec<GuideRaw>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    grids: Vec<GridRaw>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SheetRaw {
+    from_board: bool,
+    x: i64,
+    y: i64,
+    width: i64,
+    height: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GuideRaw {
+    uuid: Uuid,
+    kind: GuideKind,
+    x: i64,
+    y: i64,
+    enabled: bool,
+    color: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GridRaw {
+    uuid: Uuid,
+    name: String,
+    step: i64,
+    origin_x: i64,
+    origin_y: i64,
+    color: String,
+    components: bool,
+    non_components: bool,
+}
+
+/// The board options of the file; the default when it has no section.
+pub(in crate::format) fn read(raw: Option<BoardOptionsRaw>) -> Result<BoardOptions, FormatError> {
+    let Some(raw) = raw else {
+        return Ok(BoardOptions::default());
+    };
+    let point = |x: i64, y: i64| Point::new(nm_to_mm(x), nm_to_mm(y));
+    let sheet = raw
+        .sheet
+        .map(|s| BoardSheet {
+            from_board: s.from_board,
+            origin: point(s.x, s.y),
+            width: nm_to_mm(s.width),
+            height: nm_to_mm(s.height),
+        })
+        .unwrap_or_default();
+    let guides = raw
+        .guides
+        .into_iter()
+        .enumerate()
+        .map(|(row, g)| {
+            Ok(BoardGuide {
+                uuid: g.uuid,
+                kind: g.kind,
+                at: point(g.x, g.y),
+                enabled: g.enabled,
+                color: color(&g.color, GUIDES, row)?,
+            })
+        })
+        .collect::<Result<_, FormatError>>()?;
+    let grids = raw
+        .grids
+        .into_iter()
+        .enumerate()
+        .map(|(row, g)| {
+            Ok(BoardGrid {
+                uuid: g.uuid,
+                name: g.name,
+                step_mm: nm_to_mm(g.step),
+                origin: point(g.origin_x, g.origin_y),
+                color: color(&g.color, GRIDS, row)?,
+                components: g.components,
+                non_components: g.non_components,
+            })
+        })
+        .collect::<Result<_, FormatError>>()?;
+    Ok(BoardOptions {
+        guides,
+        grids,
+        sheet,
+        polygon_naming: raw.polygon_naming,
+        designator_display: raw.designator_display,
+    })
+}
+
+fn color(cell: &str, block: &str, row: usize) -> Result<Color, FormatError> {
+    Color::parse_hex(cell).ok_or_else(|| FormatError::TsvFieldParse {
+        block: block.to_string(),
+        row,
+        field: "color".to_string(),
+        message: format!("{cell:?} is not #rrggbb or #rrggbbaa"),
+    })
+}
+
+/// Append `[board_options]` to `out`; nothing for default options.
+pub(in crate::format) fn write(out: &mut String, board: &PcbBoard) -> Result<(), FormatError> {
+    let options = &board.options;
+    if options.is_default() {
+        return Ok(());
+    }
+    let refuse = |block: &str, row: usize, e: NonFiniteField| FormatError::NonFiniteField {
+        block: block.to_string(),
+        row,
+        field: e.0.to_string(),
+    };
+    let sheet = &options.sheet;
+    let sheet = (*sheet != BoardSheet::default())
+        .then(|| {
+            Ok::<_, NonFiniteField>(SheetRaw {
+                from_board: sheet.from_board,
+                x: mm_to_nm(sheet.origin.x, "x")?,
+                y: mm_to_nm(sheet.origin.y, "y")?,
+                width: mm_to_nm(sheet.width, "width")?,
+                height: mm_to_nm(sheet.height, "height")?,
+            })
+        })
+        .transpose()
+        .map_err(|e| refuse(SHEET, 0, e))?;
+    let guides = options
+        .guides
+        .iter()
+        .enumerate()
+        .map(|(row, g)| {
+            Ok(GuideRaw {
+                uuid: g.uuid,
+                kind: g.kind,
+                x: mm_to_nm(g.at.x, "x").map_err(|e| refuse(GUIDES, row, e))?,
+                y: mm_to_nm(g.at.y, "y").map_err(|e| refuse(GUIDES, row, e))?,
+                enabled: g.enabled,
+                color: g.color.to_hex(),
+            })
+        })
+        .collect::<Result<_, FormatError>>()?;
+    let grids = options
+        .grids
+        .iter()
+        .enumerate()
+        .map(|(row, g)| {
+            let nm = |mm: f64, field| mm_to_nm(mm, field).map_err(|e| refuse(GRIDS, row, e));
+            Ok(GridRaw {
+                uuid: g.uuid,
+                name: g.name.clone(),
+                step: nm(g.step_mm, "step")?,
+                origin_x: nm(g.origin.x, "origin_x")?,
+                origin_y: nm(g.origin.y, "origin_y")?,
+                color: g.color.to_hex(),
+                components: g.components,
+                non_components: g.non_components,
+            })
+        })
+        .collect::<Result<_, FormatError>>()?;
+    #[derive(Serialize)]
+    struct Wrapper {
+        board_options: BoardOptionsRaw,
+    }
+    let wrapper = Wrapper {
+        board_options: BoardOptionsRaw {
+            polygon_naming: options.polygon_naming,
+            designator_display: options.designator_display,
+            sheet,
+            guides,
+            grids,
+        },
+    };
+    out.push('\n');
+    out.push_str(&toml::to_string_pretty(&wrapper)?);
+    Ok(())
+}

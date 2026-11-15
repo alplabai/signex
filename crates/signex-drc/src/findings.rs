@@ -13,7 +13,7 @@ use signex_types::check::{CheckReport, Finding};
 use signex_types::format::pcb_layer_token;
 use signex_types::pcb_layer::PcbLayer;
 
-use crate::{DrcReport, DrcRules, Violation, ViolationKind};
+use crate::{DrcReport, DrcRules, SkippedKeepout, Violation, ViolationKind};
 
 /// The id a report names its check by.
 pub const DRC_CHECK: &str = "drc";
@@ -24,7 +24,7 @@ const KEY_HEX_DIGITS: usize = 32;
 /// `report`, a run over the board file `board`, as a check report.
 /// `net_names` names the board's nets by number. The warnings are
 /// `warnings`, then what the rule text and the setup said, then one per item
-/// the run could not check. `rule_set` gets the clearance the run used.
+/// the run could not check (keepouts, then items). `rule_set` gets the clearance the run used.
 /// DRC has no waivers, so `waived` and `lapsed` are empty; a finding of a
 /// rule switched off is not listed.
 pub fn check_report(
@@ -42,6 +42,7 @@ pub fn check_report(
     let warnings = warnings
         .into_iter()
         .chain(rule_warnings(&report.rules))
+        .chain(report.skipped_keepouts.iter().map(skipped_keepout_warning))
         .chain(report.skipped.iter().map(skipped_warning))
         .collect();
     let mut rule_set = rule_set;
@@ -76,16 +77,18 @@ fn rule_of(v: &Violation) -> &str {
     v.rule.as_deref().unwrap_or(v.kind.rule_id())
 }
 
-/// A net by its name, as Run DRC's Messages lines name it when it has none.
-fn net_name(net_names: &BTreeMap<u32, String>, net: u32) -> String {
+/// A net by its name, `net <n>` when it has none: one wording for Run
+/// DRC's Messages lines and the check report (#2334).
+pub fn net_name(net_names: &BTreeMap<u32, String>, net: u32) -> String {
     net_names
         .get(&net)
         .cloned()
         .unwrap_or_else(|| format!("net {net}"))
 }
 
-/// What broke, in the words of Run DRC's Messages lines.
-fn describe(v: &Violation) -> String {
+/// What broke: one wording for Run DRC's Messages lines and the check
+/// report (#2334).
+pub fn describe(v: &Violation) -> String {
     match v.kind {
         ViolationKind::Clearance => format!(
             "clearance {} mm, needs {} mm",
@@ -103,6 +106,23 @@ fn describe(v: &Violation) -> String {
     }
 }
 
+/// Run DRC's Messages line for `v`: what broke, the written rule, the nets
+/// and where, as `DRC: <describe> (<rule>), <a> / <b> at (x, y) mm`.
+pub fn messages_line(v: &Violation, net_names: &BTreeMap<u32, String>) -> String {
+    let rule = v
+        .rule
+        .as_ref()
+        .map_or_else(String::new, |id| format!(" ({id})"));
+    format!(
+        "DRC: {}{rule}, {} / {} at ({}, {}) mm",
+        describe(v),
+        net_name(net_names, v.nets.0),
+        net_name(net_names, v.nets.1),
+        mm(v.at.x),
+        mm(v.at.y)
+    )
+}
+
 fn size_text(what: &str, v: &Violation) -> String {
     let bound = if v.measured_nm < v.required_nm {
         "at least"
@@ -118,7 +138,7 @@ fn size_text(what: &str, v: &Violation) -> String {
 
 /// `nm` in mm, divided so a round value reads round (`0.2`, not the
 /// `0.19999999999999998` a multiplication by 1e-6 gives).
-fn mm(nm: i64) -> f64 {
+pub fn mm(nm: i64) -> f64 {
     nm as f64 / NM_PER_MM as f64
 }
 
@@ -235,22 +255,40 @@ fn rule_warnings(rules: &DrcRules) -> Vec<String> {
             rules.rules_not_applied
         ));
     }
-    if rules.from_default {
-        let value = mm(rules.clearance);
-        out.push(if rules.sets_written_clearance() {
-            format!(
-                "DRC: No clearance rule set on this board; {value} mm applies where no written rule does. Set it in Board Setup."
-            )
-        } else {
-            format!(
-                "DRC: No clearance rule set on this board; checked with {value} mm. Set it in Board Setup."
-            )
-        });
-    }
+    out.extend(default_clearance_note(rules));
     out
 }
 
-fn skipped_warning(rejected: &Rejected) -> String {
+/// The note that the clearance came from the default, `None` when the
+/// board sets one; shared with Run DRC's Messages (#2334).
+pub fn default_clearance_note(rules: &DrcRules) -> Option<String> {
+    if !rules.from_default {
+        return None;
+    }
+    let value = mm(rules.clearance);
+    Some(if rules.sets_written_clearance() {
+        format!(
+            "DRC: No clearance rule set on this board; {value} mm applies where no written rule does. Set it in Board Setup."
+        )
+    } else {
+        format!(
+            "DRC: No clearance rule set on this board; checked with {value} mm. Set it in Board Setup."
+        )
+    })
+}
+
+/// A keepout whose boundary did not convert (#2300); shared with Run DRC's
+/// Messages.
+pub fn skipped_keepout_warning(skipped: &SkippedKeepout) -> String {
+    format!(
+        "DRC: keepout {} could not be checked: {}",
+        skipped.keepout, skipped.error
+    )
+}
+
+/// An item (a track, via, pad or footprint body) that did not convert;
+/// shared with Run DRC's Messages.
+pub fn skipped_warning(rejected: &Rejected) -> String {
     format!(
         "DRC: {} could not be checked: {}",
         item_label(&rejected.item),

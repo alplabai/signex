@@ -79,7 +79,10 @@ impl BoardSketchSession {
 
     /// The board took the copy and stored it as `stored`, which also records
     /// what the bake owns (`baked_kinds`): it is the new starting point.
-    pub fn mark_committed(&mut self, stored: SketchData) {
+    /// `board` is the board after the commit: the backdrop and the outline
+    /// facts in Properties follow its new outline.
+    pub fn mark_committed(&mut self, stored: SketchData, board: &PcbBoard) {
+        self.editor.state.board_backdrop = Some(Arc::new(BoardBackdrop::from_board(board)));
         self.editor.primitive_mut().sketch = Some(stored.clone());
         self.editor.mark_saved();
         self.editor.canvas_cache.clear();

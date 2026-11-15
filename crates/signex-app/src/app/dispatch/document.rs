@@ -69,17 +69,26 @@ impl Signex {
             }
             EditMsg::FlipSelection => {
                 let flip = signex_engine::pcb::placement::PlacementTransform::FlipLeftRight;
-                if !self.transform_pcb_selection(flip) {
+                if !self.flip_pcb_part() && !self.transform_pcb_selection(flip) {
                     crate::diagnostics::log_info("Flip Selection works on a PCB");
                 }
                 self.finish_update()
             }
-            EditMsg::Cut => self.handle_selection_cut_requested(),
+            // A board runs its own clipboard (#2361).
+            EditMsg::Cut => match self.cut_pcb_selection() {
+                Some(write) => Task::batch([write, self.finish_update()]),
+                None => self.handle_selection_cut_requested(),
+            },
             EditMsg::Copy => {
-                let write = self.copy_and_write_clipboard_task();
+                let write = match self.copy_pcb_selection() {
+                    Some(write) => write,
+                    None => self.copy_and_write_clipboard_task(),
+                };
                 Task::batch([write, self.finish_update()])
             }
+            EditMsg::Paste if self.paste_on_pcb() => self.finish_update(),
             EditMsg::Paste => self.request_paste(PasteIntent::Paste),
+            EditMsg::SmartPaste if self.paste_special_on_pcb() => self.finish_update(),
             EditMsg::SmartPaste => self.request_paste(PasteIntent::SmartPaste),
             EditMsg::PasteArrayRequested => self.request_paste(PasteIntent::Array),
             EditMsg::PasteTextRead { request, text } => self.handle_paste_text_read(request, text),
@@ -88,7 +97,10 @@ impl Signex {
             }
             EditMsg::PasteArray(msg) => self.handle_paste_array_message(msg),
             EditMsg::RubberStampCopy => self.handle_rubber_stamp_requested(),
-            EditMsg::Duplicate => self.handle_selection_duplicate_requested(),
+            EditMsg::Duplicate => match self.duplicate_pcb_selection() {
+                Some(write) => Task::batch([write, self.finish_update()]),
+                None => self.handle_selection_duplicate_requested(),
+            },
             EditMsg::RepeatLastItem => self.handle_repeat_last_item_requested(),
             EditMsg::ArrangeDrawings(arrange) => {
                 self.handle_drawings_arrange_requested(arrange);

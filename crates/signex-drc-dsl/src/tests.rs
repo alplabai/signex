@@ -323,3 +323,50 @@ fn layer_messages_name_the_layer_and_say_what_was_dropped() {
         ]
     );
 }
+
+/// #2335: a minimum above the maximum of the same field can never be met,
+/// so the rule is refused, not applied with two findings per track.
+#[test]
+fn a_minimum_above_its_maximum_is_refused() {
+    let got = compile("rule w on track require width >= 0.3mm and width <= 0.2mm then error");
+    assert!(got.rules.is_empty(), "{got:?}");
+    assert_eq!(got.not_applied, 1);
+    assert_eq!(messages(&got), ["width >= 0.3mm is above width <= 0.2mm"]);
+    let d = &got.diagnostics[0];
+    assert_eq!((d.level, d.rule.as_deref()), (Level::Error, Some("w")));
+    // The order written does not matter, nor the units.
+    let swapped = compile("rule w on track require width <= 8mil and width >= 0.3 mm then error");
+    assert_eq!(
+        messages(&swapped),
+        ["width >= 0.3mm is above width <= 8mil"]
+    );
+    // Equal bounds, or a minimum under the maximum, are met by some track.
+    for ok in [
+        "rule w on track require width >= 0.2mm and width <= 0.2mm then error",
+        "rule w on track require width >= 0.1mm and width <= 0.2mm then error",
+    ] {
+        let got = compile(ok);
+        assert_eq!(got.rules.len(), 1, "{ok}: {got:?}");
+        assert!(got.diagnostics.is_empty(), "{ok}: {got:?}");
+    }
+}
+
+/// The refused rule is counted as not applied and named in Messages, the
+/// other rules of the text still apply.
+#[test]
+fn a_minimum_above_its_maximum_is_reported_as_not_applied() {
+    let project = layer(
+        "rule w on track require width >= 0.3mm and width <= 0.2mm then error\n\
+         rule v on via require drill >= 0.2mm then error",
+    );
+    let got = compile_layers(None, Some(&project));
+    let names: Vec<_> = got.rules.iter().map(|r| r.name.as_str()).collect();
+    assert_eq!(names, ["v"]);
+    assert_eq!(got.not_applied, 1);
+    assert_eq!(
+        got.messages,
+        [
+            "DRC DSL (project): line 1, column 25: rule 'w': width >= 0.3mm is above width <= 0.2mm; the rule is skipped"
+        ]
+    );
+}

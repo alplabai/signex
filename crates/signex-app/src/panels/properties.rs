@@ -182,9 +182,16 @@ pub enum PrePlacementKind {
 
 // ─── Properties Panel (matched to Altium Designer) ───────────
 
-pub const PROPERTY_LABEL_PORTION: u16 = 2;
+/// Width of the property-row label column: the fixed grid column, so a label
+/// such as "Designator" is never clipped by a narrow dock.
+pub const PROPERTY_LABEL_WIDTH: f32 = 92.0;
+/// Property-row label column: fixed, so a wide dock gives its extra width to
+/// the fields (#2347).
+pub const PROPERTY_LABEL_COLUMN: Length = Length::Fixed(PROPERTY_LABEL_WIDTH);
 pub const PROPERTY_CONTROL_PORTION: u16 = 5;
 pub const PROPERTY_ROW_PAD_X: u16 = 6;
+/// Gap between a property row's label and its field.
+pub const PROPERTY_ROW_GAP: f32 = 6.0;
 
 pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let palette = PanelPalette::from_tokens(&ctx.tokens);

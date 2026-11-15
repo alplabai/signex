@@ -185,7 +185,6 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
         &ctx.collapsed_sections,
         move || {
             let muted = hint_ink;
-            let label = LabelInk::graphite(muted);
             let mut c = Column::new().spacing(SP.s).width(Length::Fill);
             if !panel.available {
                 return c.push(
@@ -283,7 +282,7 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
             );
 
             let field = |label_text: &str, hint: MessageId, f: NetClassField, value: &str| {
-                commit_row(label_text, t!(i18n, hint), value, label, f)
+                commit_row(label_text, t!(i18n, hint), value, muted, f)
             };
             c = c.push(field(
                 "Name",
@@ -308,7 +307,7 @@ pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a,
                 ClassLine::options(),
                 ClassLine(panel.classes[selected].style.line),
                 |l: ClassLine| PanelMsg::NetClass(NetClassMsg::SetLine(l.0)),
-                label,
+                muted,
             ));
             c = c.push(field(
                 "Nets",
@@ -425,7 +424,7 @@ fn commit_row<'a>(
     label: &str,
     hint: Localized,
     value: &str,
-    label_c: LabelInk,
+    label_c: Color,
     field: NetClassField,
 ) -> Element<'a, PanelMsg> {
     container(

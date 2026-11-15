@@ -1,20 +1,36 @@
-//! The words of the Update PCB dialog: a group's heading, a row, why a row
-//! is blocked and a note, each from the catalog.
+//! The words of the Update PCB dialog: a group's heading, a row's action,
+//! object, detail and whole sentence, why a row is blocked (short and in
+//! full) and a note, each from the catalog.
 
-use signex_engine::pcb::eco::{ChangeReason, EcoBlock, EcoChange, EcoGroup, EcoNote};
+use signex_engine::pcb::eco::{ChangeReason, EcoBlock, EcoChange, EcoNote};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::pcb::PadNet;
 
-pub(super) fn group_id(group: EcoGroup) -> MessageId {
+use crate::app::update_pcb::{RowAction, TableGroup};
+
+/// The value a part shows when it has none of its own.
+const PLACEHOLDER_VALUE: &str = "*";
+
+pub(super) fn group_id(group: TableGroup) -> MessageId {
     match group {
-        EcoGroup::AddFootprints => ids::UPDATE_PCB_GROUP_ADD_FOOTPRINTS,
-        EcoGroup::RemoveFootprints => ids::UPDATE_PCB_GROUP_REMOVE_FOOTPRINTS,
-        EcoGroup::ChangeFootprints => ids::UPDATE_PCB_GROUP_CHANGE_FOOTPRINTS,
-        EcoGroup::Designators => ids::UPDATE_PCB_GROUP_DESIGNATORS,
-        EcoGroup::Values => ids::UPDATE_PCB_GROUP_VALUES,
-        EcoGroup::Links => ids::UPDATE_PCB_GROUP_LINKS,
-        EcoGroup::Nets => ids::UPDATE_PCB_GROUP_NETS,
-        EcoGroup::PadNets => ids::UPDATE_PCB_GROUP_PAD_NETS,
+        TableGroup::Components => ids::UPDATE_PCB_TABLE_COMPONENTS,
+        TableGroup::Nets => ids::UPDATE_PCB_TABLE_NETS,
+        TableGroup::PadNets => ids::UPDATE_PCB_TABLE_PAD_NETS,
+    }
+}
+
+/// The icon and word of an action.
+pub(super) fn action(action: RowAction) -> (MessageId, MessageId) {
+    match action {
+        RowAction::Add => (ids::UPDATE_PCB_ACTION_ADD_ICON, ids::UPDATE_PCB_ACTION_ADD),
+        RowAction::Change => (
+            ids::UPDATE_PCB_ACTION_CHANGE_ICON,
+            ids::UPDATE_PCB_ACTION_CHANGE,
+        ),
+        RowAction::Remove => (
+            ids::UPDATE_PCB_ACTION_REMOVE_ICON,
+            ids::UPDATE_PCB_ACTION_REMOVE,
+        ),
     }
 }
 
@@ -25,14 +41,96 @@ fn net_name(i18n: &I18n, net: &Option<PadNet>) -> String {
     }
 }
 
-/// What one row does.
+/// What a row is about: a designator, a net, or a pad as `R1.2`.
+pub(super) fn object(change: &EcoChange) -> String {
+    match change {
+        EcoChange::AddFootprint { footprint } => footprint.reference.clone(),
+        EcoChange::RemoveFootprint { reference, .. }
+        | EcoChange::ChangeFootprint { reference, .. }
+        | EcoChange::SetValue { reference, .. }
+        | EcoChange::Link { reference, .. } => reference.clone(),
+        EcoChange::SetDesignator { from, .. } => from.clone(),
+        EcoChange::AddNet { name, .. } | EcoChange::RemoveNet { name, .. } => name.clone(),
+        EcoChange::RenameNet { from, .. } => from.clone(),
+        EcoChange::PadNet {
+            reference,
+            pad_number,
+            ..
+        } => format!("{reference}.{pad_number}"),
+    }
+}
+
+/// The row's Detail column: the footprint (with the value unless it is the
+/// placeholder), or what changes from what to what.
+pub(super) fn detail(i18n: &I18n, change: &EcoChange) -> String {
+    let from_to = |id: MessageId, from: &str, to: &str| {
+        t!(i18n, id, "from" => from.to_string(), "to" => to.to_string()).into_string()
+    };
+    match change {
+        EcoChange::AddFootprint { footprint } => {
+            let value = footprint.value.trim();
+            if value.is_empty() || value == PLACEHOLDER_VALUE {
+                footprint.footprint_id.clone()
+            } else {
+                format!("{value} · {}", footprint.footprint_id)
+            }
+        }
+        EcoChange::RemoveFootprint { .. }
+        | EcoChange::AddNet { .. }
+        | EcoChange::RemoveNet { .. } => String::new(),
+        EcoChange::ChangeFootprint {
+            from, reason, with, ..
+        } => from_to(
+            match reason {
+                ChangeReason::Footprint => ids::UPDATE_PCB_DETAIL_FROM_TO,
+                ChangeReason::OtherVersion => ids::UPDATE_PCB_DETAIL_OTHER_VERSION,
+            },
+            from,
+            &with.footprint_id,
+        ),
+        EcoChange::SetDesignator { from, to, .. } => {
+            from_to(ids::UPDATE_PCB_DETAIL_DESIGNATOR, from, to)
+        }
+        EcoChange::SetValue { from, to, .. } => from_to(ids::UPDATE_PCB_DETAIL_VALUE, from, to),
+        EcoChange::Link { .. } => t!(i18n, ids::UPDATE_PCB_DETAIL_LINK).into_string(),
+        EcoChange::RenameNet { from, to, .. } => from_to(ids::UPDATE_PCB_DETAIL_FROM_TO, from, to),
+        EcoChange::PadNet {
+            from, to, locked, ..
+        } => {
+            let (from, to) = (net_name(i18n, from), net_name(i18n, to));
+            let id = if *locked {
+                ids::UPDATE_PCB_DETAIL_LOCKED
+            } else {
+                ids::UPDATE_PCB_DETAIL_FROM_TO
+            };
+            from_to(id, &from, &to)
+        }
+    }
+}
+
+/// Why a row cannot be ticked, in a few words for its Status column.
+pub(super) fn problem(i18n: &I18n, why: &EcoBlock) -> Localized {
+    match why {
+        EcoBlock::MissingFootprint(_) => t!(i18n, ids::UPDATE_PCB_PROBLEM_NO_FOOTPRINT),
+        EcoBlock::NeedsAnnotation => t!(i18n, ids::UPDATE_PCB_PROBLEM_NOT_ANNOTATED),
+        EcoBlock::DuplicateDesignator(designator) => t!(
+            i18n,
+            ids::UPDATE_PCB_PROBLEM_DUPLICATE,
+            "designator" => designator.clone()
+        ),
+        EcoBlock::PadsCannotCarry { .. } => t!(i18n, ids::UPDATE_PCB_PROBLEM_PADS),
+        EcoBlock::Unplaceable(_) => t!(i18n, ids::UPDATE_PCB_PROBLEM_UNPLACEABLE),
+        EcoBlock::PartNotRead => t!(i18n, ids::UPDATE_PCB_PROBLEM_NOT_READ),
+    }
+}
+
+/// What one row does, as a sentence (the row's tooltip).
 pub(super) fn change(i18n: &I18n, change: &EcoChange) -> Localized {
     match change {
         EcoChange::AddFootprint { footprint } => t!(
             i18n,
             ids::UPDATE_PCB_ROW_ADD,
             "designator" => footprint.reference.clone(),
-            "value" => footprint.value.clone(),
             "footprint" => footprint.footprint_id.clone()
         ),
         EcoChange::RemoveFootprint { reference, .. } => {

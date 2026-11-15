@@ -167,6 +167,7 @@ impl Signex {
             Ok(Some(copied)) => {
                 self.interaction_state.clipboard = Some(copied);
                 self.interaction_state.clipboard_text = Some(text.to_owned());
+                self.interaction_state.pcb_clipboard = None;
             }
             Ok(None) => {}
             Err(error) => crate::diagnostics::log_warning(format!(

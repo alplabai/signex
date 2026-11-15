@@ -22,7 +22,7 @@ cycle_unit	view	Cycle display unit	-	General	-	-	Always	gui_only	-
 cycle_snap_grid_backward	view	Cycle backward through snap grids	-	General	-	-	Always	gui_only	-
 cycle_selection_mode	select	Cycle selection mode	-	General	-	-	Always	gui_only	-
 cycle_snap_grid_forward	view	Open the snap grid picker (footprint editor)	-	General	-	-	Always	gui_only	-
-cycle_wire_bus_graphic_mode	interactive	Cycle wire/bus/graphic-line mode: free, 90 degrees, 45 degrees	-	General	-	-	Always	gui_only	-
+cycle_wire_bus_graphic_mode	interactive	Cycle the wire/bus corner mode: 90 degrees, 45 degrees start, 45 degrees end, any angle	-	General	-	-	Always	gui_only	-
 cycle_wiring_mode	interactive	Change wiring mode while dragging connected electrical objects	-	General	-	-	Always	gui_only	-
 delete_selection	edit	Delete selection	Delete	General	-	-	RequiresSelection	mutates_doc,undoable	-
 document_info	file	Document info	-	General	-	-	Always	-	document:document
@@ -95,7 +95,7 @@ show_all_design_objects	view	Show all design objects	-	General	-	-	Always	gui_on
 show_current_command_hotkeys	help	Show graphical editing hotkey list for current command	Keyboard Shortcuts	General	-	-	Always	gui_only	-
 show_current_command_shortcuts	help	Show valid shortcuts for the current interactive command	-	General	-	-	Always	gui_only	-
 smart_paste	edit	Smart Paste	Paste Special	General	-	-	Always	mutates_doc,undoable	-
-switch_segment_posture	interactive	Switch current segment posture	-	General	-	-	Always	gui_only	-
+switch_segment_posture	interactive	Flip the wire/bus corner: horizontal or vertical first	-	General	-	-	Always	gui_only	-
 tile_windows_horizontally	window	Tile windows one above the other	Tile Horizontally	General	-	-	Always	gui_only	-
 tile_windows_vertically	window	Tile windows side by side	Tile Vertically	General	-	-	Always	gui_only	-
 toggle_cross_select_mode	select	Toggle Cross Select Mode	Cross Select Mode	General	-	-	Always	gui_only	-
@@ -162,6 +162,7 @@ sync_sheet_pins	design	Sync the selected sheet symbol's pins with its child shee
 change_component	edit	Change the selected part's component	Change Component…	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 open_project_options	file	Open Project Options for the active project	Project Options...	Schematic	-	-	Always	gui_only	-
 update_pcb_from_schematic	pcb_sync	Update PCB from schematic	-	Schematic	-	-	Always	mutates_doc,undoable	apply:bool
+new_schematic_sheet	file	New schematic sheet in the project	Schematic	Schematic	-	-	Always	mutates_doc	profile:text?,name:text?
 back_annotate_schematics	pcb_sync	Back-annotate the board's designators and values to the schematic	Back Annotate Schematics...	Schematic	-	-	Always	gui_only	-
 tool_select	select	Tool select	-	Schematic	-	-	Always	gui_only	-
 lasso_select	select	Lasso select	Lasso Select	Schematic	-	-	Always	gui_only	-
@@ -223,9 +224,13 @@ place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schema
 run_drc	pcb	Run the design rule check on the board	Design Rule Check	PCB	-	-	RequiresDocument(Pcb)	runs_headless	-
 reannotate_board	design	Re-annotate the board's designators by position	Re-Annotate Board...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 flip_selection	modify	Flip selection to the other board side	Flip Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	-
+change_footprint	modify	Change the footprint of the selected components	Change Footprint...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 toggle_ratsnest	view	Show or hide the ratsnest	Toggle Ratsnest	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
-next_layer	view	Make the next copper layer active	Next Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
-prev_layer	view	Make the previous copper layer active	Previous Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+toggle_origin_marker	view	Show or hide the board origin marker	Toggle Origin Marker	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+next_layer	view	Make the next layer of the board active	Next Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+prev_layer	view	Make the previous layer of the board active	Previous Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+next_signal_layer	view	Make the next signal layer active	Next Signal Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+toggle_single_layer_mode	view	Draw only the active layer, or every layer again	Single Layer Mode	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 toggle_layer_visibility	view	Show or hide the active layer	Toggle Layer Visibility	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 show_all_layers	view	Show every layer	Show All Layers	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 view_rotate	view	Rotate the board view clockwise	Rotate View 90° Clockwise	PCB	-	-	RequiresDocument(Pcb)	-	degrees:turn/deg?
@@ -233,8 +238,13 @@ view_rotate_ccw	view	Rotate the board view 90° counter-clockwise	Rotate View 90
 view_rotate_180	view	Rotate the board view 180°	Rotate View 180°	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 view_rotate_reset	view	Reset the board view rotation to 0°	Reset View Rotation	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 toggle_layers_panel	view	Show or hide the Layers panel	Layers	PCB	-	-	Always	gui_only	-
-new_pcb_document	file	New PCB in the project	PCB	PCB	-	-	Always	mutates_doc	-
+new_pcb_document	file	New PCB in the project	PCB	PCB	-	-	Always	mutates_doc	profile:text?
 board_sketch	design	Enter or leave the board sketch	Board Sketch	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+place_board_via	place	Place a via on the board	Via	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_track	place	Route a track on the active copper layer	Track	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_fill	place	Place a rectangle of solid copper on the active copper layer	Fill	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_region	place	Place a polygon of solid copper on the active copper layer	Solid Region	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_keepout	place	Draw a keepout that keeps copper off a layer	Keepout	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-

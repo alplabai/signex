@@ -152,7 +152,6 @@ pub fn view_properties_general<'a>(
     let i18n: &'a I18n = &ctx.i18n;
     // Graphite muted ink for labels and hints, on the shared label column.
     let muted = crate::styles::tokens::resolve(&ctx.tokens).ink3;
-    let label = LabelInk::graphite(muted);
     let hairline = crate::styles::tokens::resolve(&ctx.tokens).line_soft;
     // Derive button/input colors from tokens (Copy values captured in closures)
     let palette = PanelPalette::from_tokens(&ctx.tokens);
@@ -222,7 +221,7 @@ pub fn view_properties_general<'a>(
                         unit,
                         false,
                         PanelMsg::SetVisibleGridSize,
-                        label,
+                        muted,
                         grid_visible,
                         PanelMsg::ToggleGrid,
                     ));
@@ -232,7 +231,7 @@ pub fn view_properties_general<'a>(
                         unit,
                         true,
                         PanelMsg::SetGridSize,
-                        label,
+                        muted,
                         snap_enabled,
                         PanelMsg::ToggleSnap,
                     ));
@@ -241,7 +240,7 @@ pub fn view_properties_general<'a>(
                         snap_hotspots,
                         PanelMsg::ToggleSnapHotspots,
                         "Shift+E",
-                        label,
+                        muted,
                     ));
                     c = c.push(form_font_link_row(
                         "Canvas Font",
@@ -249,7 +248,7 @@ pub fn view_properties_general<'a>(
                         canvas_font_size,
                         canvas_font_bold,
                         canvas_font_italic,
-                        label,
+                        muted,
                     ));
                     if canvas_font_popup_open {
                         c = c.push(
@@ -276,7 +275,7 @@ pub fn view_properties_general<'a>(
                         crate::panels::SchematicSheetColor::options(),
                         sheet_color,
                         PanelMsg::SetSheetColor,
-                        label,
+                        muted,
                     ));
                     c
                 },
@@ -352,7 +351,7 @@ pub fn view_properties_general<'a>(
                                     .0
                                     .token(SheetOrientation::Landscape),
                                 PanelMsg::SetPaperSize,
-                                label,
+                                muted,
                             ));
                             if matches!(format_mode, PageFormatMode::Template) {
                                 c = c.push(
@@ -378,7 +377,7 @@ pub fn view_properties_general<'a>(
                                     })
                                     .as_deref(),
                                 PaperEdge::Width,
-                                label,
+                                muted,
                                 input_bg,
                                 input_bdr,
                             ));
@@ -392,7 +391,7 @@ pub fn view_properties_general<'a>(
                                     })
                                     .as_deref(),
                                 PaperEdge::Height,
-                                label,
+                                muted,
                                 input_bg,
                                 input_bdr,
                             ));
@@ -404,7 +403,7 @@ pub fn view_properties_general<'a>(
                             vec![SheetOrientation::Landscape, SheetOrientation::Portrait],
                             orientation,
                             PanelMsg::SetSheetOrientation,
-                            label,
+                            muted,
                         ));
                     }
                     let (w, h) = paper_dimensions(&paper_size);
@@ -421,7 +420,7 @@ pub fn view_properties_general<'a>(
                         PanelMsg::EditSheetFrame(SheetFrameEdit::ShowBorder(
                             !sheet_frame.show_border,
                         )),
-                        label,
+                        muted,
                         panel_bg,
                     ));
                     c = c.push(form_check_row(
@@ -430,7 +429,7 @@ pub fn view_properties_general<'a>(
                         PanelMsg::EditSheetFrame(SheetFrameEdit::ShowTitleBlock(
                             !sheet_frame.show_title_block,
                         )),
-                        label,
+                        muted,
                         panel_bg,
                     ));
                     let zone_counts: Vec<u8> = (0..=signex_types::schematic::MAX_ZONES).collect();
@@ -439,14 +438,14 @@ pub fn view_properties_general<'a>(
                         zone_counts.clone(),
                         sheet_frame.vertical_zones,
                         |n| PanelMsg::EditSheetFrame(SheetFrameEdit::VerticalZones(n)),
-                        label,
+                        muted,
                     ));
                     c = c.push(form_pick_row(
                         "Horizontal",
                         zone_counts,
                         sheet_frame.horizontal_zones,
                         |n| PanelMsg::EditSheetFrame(SheetFrameEdit::HorizontalZones(n)),
-                        label,
+                        muted,
                     ));
                     let origin_opts: Vec<PageOrigin> =
                         vec![PageOrigin::UpperLeft, PageOrigin::LowerLeft];
@@ -455,7 +454,7 @@ pub fn view_properties_general<'a>(
                         origin_opts,
                         origin,
                         PanelMsg::SetPageOrigin,
-                        label,
+                        muted,
                     ));
                     c = c.push(form_label(t!(i18n, ids::PANELS_PROPERTIES_TEXT)));
                     c = c.push(crate::panels::element_properties::font_family_row(
@@ -584,7 +583,11 @@ pub fn props_tab_btn(
 
 /// Graphite filter chip: accent-soft fill when on, hairline outline when
 /// off, radius 7.
-fn graphite_filter_chip(theme: &Theme, on: bool, hovered: bool) -> iced::widget::button::Style {
+pub(crate) fn graphite_filter_chip(
+    theme: &Theme,
+    on: bool,
+    hovered: bool,
+) -> iced::widget::button::Style {
     let l = form_look::FormLook::of(theme);
     let fill = if on {
         Some(Background::Color(l.accent_soft))
@@ -607,7 +610,7 @@ fn graphite_filter_chip(theme: &Theme, on: bool, hovered: bool) -> iced::widget:
 }
 
 /// Label of a filter tab or chip: the Graphite ink pair resolved from the theme.
-fn chip_label<'a>(label: Label<'a>, on: bool) -> iced::widget::Text<'a> {
+pub(crate) fn chip_label<'a>(label: Label<'a>, on: bool) -> iced::widget::Text<'a> {
     text(label)
         .size(TS.body)
         .style(move |theme: &Theme| iced::widget::text::Style {

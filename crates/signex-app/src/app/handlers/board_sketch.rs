@@ -280,14 +280,16 @@ impl Signex {
         }
         // The stored copy carries the bake's ownership record; keep editing
         // from it so a later delete of the outline still clears the board's.
-        let stored = self
-            .document_state
-            .pcb_board(&path)
-            .and_then(|board| board.sketch.as_ref())
+        let Some(board) = self.document_state.pcb_board(&path) else {
+            return true;
+        };
+        let stored = board
+            .sketch
+            .as_ref()
             .map(|stored| stored.sketch.clone())
             .unwrap_or_default();
         if let Some(session) = self.interaction_state.board_sketch.as_mut() {
-            session.mark_committed(stored);
+            session.mark_committed(stored, board);
         }
         true
     }
@@ -384,3 +386,7 @@ impl Signex {
         Some(moved)
     }
 }
+
+#[cfg(test)]
+#[path = "board_sketch_tests.rs"]
+mod tests;

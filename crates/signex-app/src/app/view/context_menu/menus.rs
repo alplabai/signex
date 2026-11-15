@@ -30,6 +30,8 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "copy",
     "paste",
     "smart_paste",
+    "duplicate",
+    "select_all",
     "rotate_counterclockwise",
     "rotate_clockwise",
     "move_selection",
@@ -48,6 +50,7 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "open_project_options",
     "cross_probe",
     "board_sketch",
+    "change_footprint",
 ];
 
 /// Keyboard-shortcut hints for the canvas menu, keyed by command id and
@@ -448,7 +451,32 @@ pub(super) fn pcb_canvas_menu_entries(
         }
     };
     let placeable = board.placeable;
+    let duplicate = if board.copyable {
+        dd_command(i18n, None, "duplicate", sc.of("duplicate"), None)
+    } else {
+        dd_cmd_disabled(i18n, None, "duplicate", sc.of("duplicate"))
+    };
+    // Picks a library footprint for the selected components (#2366).
+    let change_footprint = if placeable {
+        dd_command(
+            i18n,
+            None,
+            "change_footprint",
+            sc.of("change_footprint"),
+            None,
+        )
+    } else {
+        dd_cmd_disabled(i18n, None, "change_footprint", sc.of("change_footprint"))
+    };
     vec![
+        // The clipboard group (#2361), as on a sheet.
+        row(ic::icon_dd_cut(tid), "cut", board.deletable),
+        row(ic::icon_dd_copy(tid), "copy", board.copyable),
+        row(ic::icon_dd_paste(tid), "paste", board.pasteable),
+        row(ic::icon_dd_smart_paste(tid), "smart_paste", board.pasteable),
+        duplicate,
+        row(ic::icon_dd_select_all(tid), "select_all", true),
+        DropdownEntry::Separator,
         row(ic::icon_dd_move_sel(tid), "move_selection", placeable),
         DropdownEntry::Separator,
         row(
@@ -458,6 +486,7 @@ pub(super) fn pcb_canvas_menu_entries(
         ),
         row(ic::icon_dd_rotate_cw(tid), "rotate_clockwise", placeable),
         row(ic::icon_dd_flip_x(tid), "flip_selection", placeable),
+        change_footprint,
         DropdownEntry::Separator,
         row(ic::icon_dd_delete(tid), "delete_selection", board.deletable),
         DropdownEntry::Separator,

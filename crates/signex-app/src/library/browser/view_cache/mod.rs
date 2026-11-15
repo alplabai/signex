@@ -187,6 +187,11 @@ impl BrowserViewCache {
         &self.range_excluded
     }
 
+    #[cfg(test)]
+    pub(crate) fn filter_columns_for_test(&self) -> &[FilterColumn] {
+        &self.filter_columns
+    }
+
     pub(super) fn matches_in(
         &self,
         i18n: &I18n,
@@ -249,6 +254,14 @@ impl LibraryState {
             .visible
             .iter()
             .position(|&i| rows.get(i).is_some_and(|r| r.row_id == selected.as_uuid()))
+    }
+
+    /// The table the browser tab on `path` shows: [`active_table`] owned,
+    /// so a handler can compare it while mutating the tab.
+    pub(crate) fn shown_browser_table(&self, path: &std::path::Path) -> Option<String> {
+        let lib = self.library_at(path)?;
+        let browser = self.library_browsers.get(path)?;
+        Some(active_table(lib, browser).to_string())
     }
 
     /// Bring every browser tab's cache up to date; a tab rebuilds only when

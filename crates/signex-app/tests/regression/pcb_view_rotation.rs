@@ -70,6 +70,7 @@ fn board() -> PcbBoard {
         locked: false,
         schematic_link: None,
         library_ref: None,
+        component: Default::default(),
         pads: vec![pad],
         graphics: Vec::new(),
         properties: Vec::new(),
@@ -97,6 +98,7 @@ fn board() -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
         generator: "signex-test".into(),

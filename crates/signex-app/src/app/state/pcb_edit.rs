@@ -80,6 +80,24 @@ impl DocumentState {
         Ok(patches)
     }
 
+    /// [`Self::execute_board`] with the step stamped with `group`, undone
+    /// and redone with the sheet steps of that group (#2366).
+    pub(crate) fn execute_board_grouped(
+        &mut self,
+        path: &Path,
+        commands: Vec<BoardCommand>,
+        step: CheckedStep<'_>,
+        group: signex_engine::UndoGroupId,
+    ) -> Result<Vec<BoardPatch>, BoardEditError> {
+        let engine = self.editable_board(path)?;
+        let patches =
+            engine.execute_grouped(commands, step.label, step.expected_revision, group)?;
+        if !patches.is_empty() {
+            self.board_history_moved(path);
+        }
+        Ok(patches)
+    }
+
     /// Undo the newest step of the board at `path`. `Ok(false)` when there is
     /// nothing to undo.
     pub(crate) fn undo_board(&mut self, path: &Path) -> Result<bool, BoardEditError> {

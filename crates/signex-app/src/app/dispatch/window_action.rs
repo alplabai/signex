@@ -45,6 +45,9 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::EditSymbolDesignator(..)
                 // A board window's footprint fields edit that window's board (#1312).
                 | P::PcbFootprintText(..)
+                // And its Component view's edits (#2354).
+                | P::PcbComponent(..)
+                | P::PcbPrimitive(..)
                 | P::EditSymbolValue(..)
                 | P::EditSymbolFootprint(..)
                 | P::SwitchSymbolChoice(..)
@@ -173,6 +176,7 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
                 | ToolMessage::PrePlacementTab
                 | ToolMessage::ResumePlacement
                 | ToolMessage::CycleDrawMode
+                | ToolMessage::CornerFlipRequested
                 | ToolMessage::CancelDrawing
                 | ToolMessage::RemoveLastVertex
         ),
@@ -325,5 +329,5 @@ impl Signex {
 }
 
 #[cfg(test)]
-#[path = "window_action_tests.rs"]
+#[path = "window_action_tests/mod.rs"]
 mod tests;

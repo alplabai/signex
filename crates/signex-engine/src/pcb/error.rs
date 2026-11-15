@@ -58,10 +58,46 @@ pub enum BoardCommandError {
     FaceMismatch(Uuid),
     #[error("footprint {0} no longer has the properties the text was taken from")]
     TextMismatch(Uuid),
+    #[error("footprint {footprint} has no property at index {index}")]
+    PropertyNotFound { footprint: Uuid, index: usize },
+    #[error("property {index} of footprint {footprint} would change its key")]
+    PropertyKeyChanged { footprint: Uuid, index: usize },
+    #[error(
+        "the {key} text of footprint {footprint} shows its designator or value; \
+         set those with a text edit"
+    )]
+    PropertyTextOwned { footprint: Uuid, key: String },
+    #[error("footprint {footprint} already has a parameter {key}")]
+    PropertyKeyTaken { footprint: Uuid, key: String },
+    #[error("a parameter needs a name")]
+    PropertyKeyEmpty,
+    #[error("the texts of footprint {0} are locked")]
+    StringsLocked(Uuid),
+    #[error("the component {field} of footprint {footprint} is out of range")]
+    ComponentFieldInvalid {
+        footprint: Uuid,
+        field: &'static str,
+    },
+    #[error("{0:?} cannot be replaced in place; footprints have their own edits")]
+    NotReplaceable(BoardItemId),
+    #[error("{field} must be greater than zero")]
+    NotPositive { field: &'static str },
+    #[error("{0} is not a copper layer")]
+    NotCopperLayer(String),
+    #[error("net {0} is not in the board's net table")]
+    UnknownNet(u32),
+    #[error("the hole ({hole} mm) must fit inside the copper around it ({diameter} mm)")]
+    HoleTooLarge { hole: f64, diameter: f64 },
     #[error("{field} must be a finite number")]
     NonFinite { field: &'static str },
     #[error("the board sketch holds a number that is not finite at {0}")]
     NonFiniteSketch(String),
+    #[error("the grid step must not be negative, not {0} mm")]
+    NegativeGridStep(f64),
+    #[error("guide or grid {0} is named more than once")]
+    DuplicateOption(Uuid),
+    #[error("the board has no setup to hold a grid step")]
+    NoSetup,
     #[error("the board outline belongs to the board sketch; edit the sketch instead")]
     OutlineOwnedBySketch,
     #[error(

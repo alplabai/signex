@@ -1,11 +1,12 @@
 //! Rewrite what a footprint is, keeping where it is: swap in a new library
 //! footprint, set its designator and value, set its schematic link. These are
-//! the forward-annotation edits of Update PCB from schematic (#1312).
+//! the forward-annotation edits of Update PCB from schematic (#1312). One
+//! property's value or visibility is the Properties panel's edit (#2354).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{Footprint, Pad, PadNet, PcbBoard, SymbolLink};
+use signex_types::pcb::{ComponentAttributes, Footprint, Pad, PadNet, PcbBoard, SymbolLink};
 use signex_types::pcb_layer::BoardSide;
 use signex_types::property::PcbProperty;
 use uuid::Uuid;
@@ -66,6 +67,10 @@ pub(super) fn replace(
     new.position = old.position;
     new.rotation = old.rotation;
     new.locked = old.locked;
+    new.component = Box::new(carried_component(
+        &old.component,
+        std::mem::take(&mut *new.component),
+    ));
     new.schematic_link = old.schematic_link.clone();
     new.reference = old.reference.clone();
     new.value = old.value.clone();
@@ -83,6 +88,21 @@ pub(super) fn replace(
         },
         patch: patch(BoardPatchKind::FootprintReplaced, id),
     })
+}
+
+/// The component settings of a replaced footprint (#2365): the type, height
+/// and description come with the new library footprint; the opacity, locks,
+/// swapping and channel offset are board choices and stay.
+fn carried_component(
+    old: &ComponentAttributes,
+    template: ComponentAttributes,
+) -> ComponentAttributes {
+    ComponentAttributes {
+        component_type: template.component_type,
+        height_mm: template.height_mm,
+        description: template.description,
+        ..old.clone()
+    }
 }
 
 /// Put `footprint` back over the board footprint with its uuid, whole; the
@@ -160,6 +180,156 @@ pub(super) fn set_link(
     })
 }
 
+/// Replace property `index` of footprint `id` with `property`, see
+/// [`BoardCommand::SetFootprintProperty`]. Every check runs before the write.
+pub(super) fn set_property(
+    board: &mut PcbBoard,
+    id: Uuid,
+    index: usize,
+    property: PcbProperty,
+) -> Result<Applied, BoardCommandError> {
+    check_property_finite(&property)?;
+    let fp = find(board, id)?;
+    let Some(old) = fp.properties.get(index) else {
+        return Err(BoardCommandError::PropertyNotFound {
+            footprint: id,
+            index,
+        });
+    };
+    if old.key != property.key {
+        return Err(BoardCommandError::PropertyKeyChanged {
+            footprint: id,
+            index,
+        });
+    }
+    if is_text_key(&old.key) && old.value != property.value {
+        return Err(BoardCommandError::PropertyTextOwned {
+            footprint: id,
+            key: old.key.clone(),
+        });
+    }
+    if fp.component.lock_strings && moves_text(old, &property) {
+        return Err(BoardCommandError::StringsLocked(id));
+    }
+    let previous = std::mem::replace(&mut fp.properties[index], property);
+    Ok(Applied {
+        inverse: BoardCommand::SetFootprintProperty {
+            footprint: id,
+            index,
+            property: previous,
+        },
+        patch: patch(BoardPatchKind::FootprintPropertySet, id),
+    })
+}
+
+/// Whether `new` puts the text of `old` somewhere else: another position,
+/// angle, layer or size. Lock Strings refuses exactly these (#2365).
+fn moves_text(old: &PcbProperty, new: &PcbProperty) -> bool {
+    old.position != new.position
+        || old.rotation != new.rotation
+        || old.layer != new.layer
+        || old.font_size != new.font_size
+}
+
+/// Insert a parameter, see [`BoardCommand::InsertFootprintProperty`].
+pub(super) fn insert_property(
+    board: &mut PcbBoard,
+    id: Uuid,
+    index: usize,
+    property: PcbProperty,
+) -> Result<Applied, BoardCommandError> {
+    check_property_finite(&property)?;
+    if property.key.trim().is_empty() {
+        return Err(BoardCommandError::PropertyKeyEmpty);
+    }
+    if is_text_key(&property.key) {
+        return Err(BoardCommandError::PropertyTextOwned {
+            footprint: id,
+            key: property.key,
+        });
+    }
+    let fp = find(board, id)?;
+    if index > fp.properties.len() {
+        return Err(BoardCommandError::PropertyNotFound {
+            footprint: id,
+            index,
+        });
+    }
+    fp.properties.insert(index, property);
+    Ok(Applied {
+        inverse: BoardCommand::RemoveFootprintProperty {
+            footprint: id,
+            index,
+        },
+        patch: patch(BoardPatchKind::FootprintPropertySet, id),
+    })
+}
+
+/// Remove a parameter, see [`BoardCommand::RemoveFootprintProperty`].
+pub(super) fn remove_property(
+    board: &mut PcbBoard,
+    id: Uuid,
+    index: usize,
+) -> Result<Applied, BoardCommandError> {
+    let fp = find(board, id)?;
+    let Some(old) = fp.properties.get(index) else {
+        return Err(BoardCommandError::PropertyNotFound {
+            footprint: id,
+            index,
+        });
+    };
+    if is_text_key(&old.key) {
+        return Err(BoardCommandError::PropertyTextOwned {
+            footprint: id,
+            key: old.key.clone(),
+        });
+    }
+    let removed = fp.properties.remove(index);
+    Ok(Applied {
+        inverse: BoardCommand::InsertFootprintProperty {
+            footprint: id,
+            index,
+            property: removed,
+        },
+        patch: patch(BoardPatchKind::FootprintPropertySet, id),
+    })
+}
+
+/// Whether a property of `key` shows the designator or the value.
+pub(super) fn is_text_key(key: &str) -> bool {
+    pcb_geom::is_board_text_key(key)
+}
+
+/// The key of the property that shows `field` on the board.
+pub(super) fn text_key(field: super::designators::FootprintTextField) -> &'static str {
+    match field {
+        super::designators::FootprintTextField::Designator => REFERENCE_KEY,
+        super::designators::FootprintTextField::Value => VALUE_KEY,
+    }
+}
+
+fn check_property_finite(property: &PcbProperty) -> Result<(), BoardCommandError> {
+    let position_ok = property
+        .position
+        .is_none_or(|p| p.x.is_finite() && p.y.is_finite());
+    if !position_ok {
+        return Err(BoardCommandError::NonFinite {
+            field: "property.position",
+        });
+    }
+    if !property.rotation.is_finite() {
+        return Err(BoardCommandError::NonFinite {
+            field: "property.rotation",
+        });
+    }
+    if property.font_size.is_some_and(|size| !size.is_finite()) {
+        return Err(BoardCommandError::NonFinite {
+            field: "property.font_size",
+        });
+    }
+    Ok(())
+}
+
 /// Give the n-th pad of `new` with a number the net and lock of the n-th pad
 /// of `old` with that number, so a lock on any of several `EP` pads stays on
 /// its pad. A number `old` lacks gets no net. Refused, before anything is
@@ -196,6 +366,17 @@ fn carry_pad_nets(old: &Footprint, new: &mut Footprint) -> Result<(), BoardComma
         pad.net_locked = locked;
     }
     Ok(())
+}
+
+/// The pads of `old` whose number `new` lacks: a replace of `old` by `new`
+/// drops them, with their nets and locks. Shared by the ECO notes and the
+/// board's footprint swap report.
+pub(crate) fn unmatched_pads<'a>(old: &'a Footprint, new: &Footprint) -> Vec<&'a Pad> {
+    let numbers: HashSet<&str> = new.pads.iter().map(|p| p.number.as_str()).collect();
+    old.pads
+        .iter()
+        .filter(|pad| !numbers.contains(pad.number.as_str()))
+        .collect()
 }
 
 /// The refusal a replace of `old` by `new` would meet, if any: `new` has
@@ -261,7 +442,8 @@ fn merge_properties(old: &[PcbProperty], template: Vec<PcbProperty>) -> Vec<PcbP
     merged
 }
 
-fn sync_text_properties(fp: &mut Footprint) {
+/// Write the designator and value into the Reference and Value property texts.
+pub(super) fn sync_text_properties(fp: &mut Footprint) {
     for property in &mut fp.properties {
         if property.key == REFERENCE_KEY {
             property.value.clone_from(&fp.reference);

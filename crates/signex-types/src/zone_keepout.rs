@@ -1,0 +1,43 @@
+//! A keepout drawn on the board (#2373): a zone whose `fill_type` is
+//! [`KEEPOUT_FILL`]. It keeps out copper of any net on the copper layer it
+//! stands for, as a board-sketch keepout forbidding all copper does, so the
+//! design rule check reads both the same way.
+
+use crate::format::parse_pcb_layer;
+use crate::pcb::Zone;
+use crate::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
+use crate::pcb_sketch::PcbKeepout;
+use crate::sketch::attr::KeepoutKinds;
+
+/// The `fill_type` of a keepout zone.
+pub const KEEPOUT_FILL: &str = "keepout";
+
+/// The copper layer a keepout drawn on `layer` keeps clear: the layer
+/// itself for copper, the side's outer copper for a keep-out layer, none for
+/// any other layer.
+pub fn keepout_copper(layer: PcbLayer) -> Option<CopperLayer> {
+    match layer {
+        PcbLayer::Copper(copper) => Some(copper),
+        PcbLayer::Technical(TechnicalLayer::KeepoutTop) => Some(CopperLayer::Top),
+        PcbLayer::Technical(TechnicalLayer::KeepoutBottom) => Some(CopperLayer::Bottom),
+        PcbLayer::Technical(_) | PcbLayer::Mechanical(_) => None,
+    }
+}
+
+impl Zone {
+    /// The keepout this zone is, when it is one on a layer that keeps
+    /// copper clear: its outline, the copper layer and all copper
+    /// forbidden.
+    pub fn as_keepout(&self) -> Option<PcbKeepout> {
+        if self.fill_type != KEEPOUT_FILL {
+            return None;
+        }
+        let copper = keepout_copper(parse_pcb_layer(&self.layer)?)?;
+        Some(PcbKeepout {
+            uuid: self.uuid,
+            boundary: self.outline.clone(),
+            layers: vec![PcbLayer::Copper(copper)],
+            forbids: KeepoutKinds::ALL_COPPER,
+        })
+    }
+}

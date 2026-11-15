@@ -257,6 +257,7 @@ fn a_disk_only_sheet_add_then_undo_to_the_file_reads_clean() {
         Ok(crate::app::project_entry_disk::EntryPatch::Patched(
             std::sync::Arc::new(Vec::new()),
         )),
+        None,
     );
     let on_disk = encoded(&app);
     app.document_state.projects[0].data = before;
@@ -267,6 +268,7 @@ fn a_disk_only_sheet_add_then_undo_to_the_file_reads_clean() {
         Ok(crate::app::project_entry_disk::EntryPatch::Patched(
             std::sync::Arc::new(on_disk),
         )),
+        None,
     );
     assert!(dirty(&app), "the description is unsaved");
     assert!(step(&mut app, true));

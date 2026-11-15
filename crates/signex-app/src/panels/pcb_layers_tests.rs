@@ -4,7 +4,7 @@ use crate::layout_probe::{
     draw_pixels, find, lay_out_texts, messages_on_click, messages_on_click_at,
 };
 use iced::Size;
-use signex_types::pcb_layer::MechanicalLayer;
+use signex_types::pcb_layer::{CopperLayer, MechanicalLayer, TechnicalLayer};
 
 const WINDOW: Size = Size::new(300.0, 1800.0);
 
@@ -42,13 +42,15 @@ fn view_panel_for_test(ctx: &PanelContext) -> Element<'_, PanelMsg> {
 }
 
 #[test]
-fn rows_show_the_names_of_copper_technical_and_mechanical_layers() {
+fn rows_show_the_names_of_the_layers_in_their_groups() {
     let ctx = context(&PcbLayerView::default());
     let texts = lay_out_texts(view_panel_for_test(&ctx), WINDOW);
     for label in [
         "Layers",
-        "COPPER",
-        "TECHNICAL",
+        "SIGNAL",
+        "OVERLAY",
+        "MASK",
+        "DRILL",
         "MECHANICAL",
         "Top Layer",
         "Bottom Layer",
@@ -68,7 +70,7 @@ fn a_name_click_picks_the_copper_layer_and_an_eye_click_toggles_it() {
         matches!(
             picked.as_slice(),
             [PanelMsg::PcbLayers(PcbViewMsg::ActiveLayerPicked(
-                CopperLayer::Bottom
+                PcbLayer::Copper(CopperLayer::Bottom)
             ))]
         ),
         "{picked:?}"
@@ -120,12 +122,80 @@ fn the_board_outline_eye_toggles_the_board_edge() {
     );
 }
 
-/// A technical layer has no active state: its name is not a button.
+/// #2357/#2359: any layer can be the active one, so a technical row's name
+/// picks its layer, as its tab under the canvas does.
 #[test]
-fn a_technical_layer_name_is_not_clickable() {
+fn a_technical_layer_name_picks_it_as_the_active_layer() {
     let ctx = context(&PcbLayerView::default());
     let clicked = messages_on_click(view_panel_for_test(&ctx), WINDOW, "Top Overlay");
-    assert!(clicked.is_empty(), "{clicked:?}");
+    assert!(
+        matches!(
+            clicked.as_slice(),
+            [PanelMsg::PcbLayers(PcbViewMsg::ActiveLayerPicked(
+                PcbLayer::Technical(TechnicalLayer::SilkscreenTop)
+            ))]
+        ),
+        "{clicked:?}"
+    );
+}
+
+/// #2359: a group's button hides every layer of the group while all are
+/// shown, and shows them all again once one is hidden.
+#[test]
+fn a_group_button_hides_or_shows_the_whole_group() {
+    let ctx = context(&PcbLayerView::default());
+    let texts = lay_out_texts(view_panel_for_test(&ctx), WINDOW);
+    let signal = find(&texts, "SIGNAL").bounds;
+    let hide = texts
+        .iter()
+        .filter(|t| t.text == "Hide all" && t.bounds.y > signal.y)
+        .min_by(|a, b| a.bounds.y.total_cmp(&b.bounds.y))
+        .expect("the Signal group's button");
+    let sent = messages_on_click_at(
+        view_panel_for_test(&ctx),
+        WINDOW,
+        None,
+        iced::Point::new(hide.bounds.center_x(), hide.bounds.center_y()),
+    );
+    assert!(
+        matches!(
+            sent.as_slice(),
+            [PanelMsg::PcbLayers(PcbViewMsg::LayerGroupVisibilitySet {
+                group: LayerGroup::Signal,
+                visible: false,
+            })]
+        ),
+        "{sent:?}"
+    );
+
+    let mut view = PcbLayerView::default();
+    view.toggle_visibility(PcbLayer::Copper(CopperLayer::Bottom));
+    let ctx = context(&view);
+    assert!(!ctx.pcb_layers.group_all_shown(LayerGroup::Signal));
+    assert!(ctx.pcb_layers.group_all_shown(LayerGroup::Overlay));
+}
+
+/// #2357/#2359: the Single layer button sends the same toggle as Shift+S
+/// and is drawn pressed while the mode is on.
+#[test]
+fn the_single_layer_button_toggles_the_mode() {
+    let ctx = context(&PcbLayerView::default());
+    let sent = messages_on_click(view_panel_for_test(&ctx), WINDOW, "Single layer");
+    assert!(
+        matches!(
+            sent.as_slice(),
+            [PanelMsg::PcbLayers(PcbViewMsg::SingleLayerModeToggled)]
+        ),
+        "{sent:?}"
+    );
+    let mut on = PcbLayerView::default();
+    on.toggle_single_layer();
+    assert!(context(&on).pcb_layers.single_layer);
+    assert_ne!(
+        pixels(&PcbLayerView::default()),
+        pixels(&on),
+        "the button is filled while on"
+    );
 }
 
 /// Graphite look: the active row, a hidden layer's eye and swatch each draw
@@ -149,10 +219,10 @@ fn the_empty_panel_says_a_board_is_needed() {
     let ctx = app.document_state.panel_ctx.clone();
     let texts = lay_out_texts(view_panel_for_test(&ctx), WINDOW);
     find(&texts, "Layers");
-    find(&texts, "Open a PCB to see its layers.");
+    find(&texts, "Open a board or a footprint to see its layers.");
 }
 
-/// The Multi-Layer row lists under the copper rows; its eye shows or hides
+/// The Multi-Layer row lists with the drill layers; its eye shows or hides
 /// vias and through-hole pads, and a click on its name picks no layer.
 #[test]
 fn the_multi_layer_row_toggles_vias_and_through_hole_pads() {
@@ -160,7 +230,7 @@ fn the_multi_layer_row_toggles_vias_and_through_hole_pads() {
     let texts = lay_out_texts(view_panel_for_test(&ctx), WINDOW);
     let label = find(&texts, "Multi-Layer").bounds;
     assert!(label.y > find(&texts, "Bottom Layer").bounds.y);
-    assert!(label.y < find(&texts, "TECHNICAL").bounds.y);
+    assert!(label.y > find(&texts, "Drill Drawing").bounds.y);
     let eye_x = label.x - SP.s - 12.0 - SP.s - SP.xs - (7.0 + SP.s);
     let toggled = messages_on_click_at(
         view_panel_for_test(&ctx),

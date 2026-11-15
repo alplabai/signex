@@ -216,6 +216,15 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         result: Result<Box<ResolvedPlacement>, String>,
     },
+    /// Completion of the off-thread read of a row placed on a board (#2364).
+    /// `board` and `window` are where the gesture started; `arm_epoch` lets
+    /// the handler ignore a read the user cancelled.
+    BoardPartResolved {
+        board: PathBuf,
+        window: Option<iced::window::Id>,
+        arm_epoch: u64,
+        result: Result<Box<ResolvedBoardPart>, BoardPartError>,
+    },
     /// The off-thread designator scan of a project finished; `generation`
     /// is the request it answers, an older one is dropped.
     DesignatorsScanned {
@@ -676,4 +685,22 @@ pub struct ResolvedPlacement {
 pub struct ResolvedSymbolChoice {
     pub lib_id: String,
     pub lib_symbol: signex_types::schematic::LibSymbol,
+}
+
+/// A library row read for placing on a board (#2364): the part as the
+/// schematic would place it, for its designator and value, and its board
+/// footprint in top-side form.
+#[derive(Debug, Clone)]
+pub struct ResolvedBoardPart {
+    pub placement: ResolvedPlacement,
+    pub footprint: signex_types::pcb::Footprint,
+}
+
+/// Why a row was not read for placing on a board.
+#[derive(Debug, Clone)]
+pub enum BoardPartError {
+    /// The library, the row or its symbol could not be read.
+    Read(String),
+    /// The part binds no footprint, or one the board cannot hold.
+    Refused { part: String, reason: String },
 }
