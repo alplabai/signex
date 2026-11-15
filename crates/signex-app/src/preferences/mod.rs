@@ -569,7 +569,7 @@ fn build_prefs_file_banner<'a>(
         );
     }
     if !status.is_empty() {
-        // raw: the recovery result is worded by its handler (#2061).
+        // raw: the recovery result is set by its handler (#2061: handler-worded state text).
         lines = lines.push(text(raw(status)).size(TS.caption).style(text_muted));
     }
 

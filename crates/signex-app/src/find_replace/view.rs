@@ -1,7 +1,7 @@
 use super::{FindReplaceMsg, FindReplaceState, FindScope};
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Border, Element, Length, Theme, Widget};
-use signex_i18n::{I18n, MessageId, UserText, ids, t};
+use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text, text_input};
 
@@ -117,13 +117,12 @@ fn build<'a>(
             .spacing(10),
         ));
     }
-    let count = if state.replace_job.is_some() {
-        t!(i18n, ids::FIND_REPLACING)
-    } else if state.scanning {
-        t!(i18n, ids::FIND_SEARCHING)
-    } else {
-        t!(i18n, ids::FIND_MATCHES, "count" => state.matches.len())
-    };
+    let count = count_line(
+        i18n,
+        state.replace_job.is_some(),
+        state.scanning,
+        state.matches.len(),
+    );
     form = form.push(
         container(text(count).size(TS.caption).color(text_secondary))
             .padding([SP.xs, 0.0])
@@ -320,12 +319,46 @@ fn build<'a>(
     .boxed()
 }
 
+/// The line under the form: a replace or scan in progress, else the count.
+fn count_line(i18n: &I18n, replacing: bool, scanning: bool, matches: usize) -> Localized {
+    if replacing {
+        t!(i18n, ids::FIND_REPLACING)
+    } else if scanning {
+        t!(i18n, ids::FIND_SEARCHING)
+    } else {
+        t!(i18n, ids::FIND_MATCHES, "count" => matches)
+    }
+}
+
 #[cfg(test)]
 mod i18n_tests {
     use signex_i18n::{Arg, I18n, LanguagePref, ids};
 
+    use super::count_line;
+
     fn matches(i18n: &I18n) -> String {
         i18n.message_plain(ids::FIND_MATCHES, &[("count", Arg::from(3_usize))])
+    }
+
+    fn line(i18n: &I18n, replacing: bool, scanning: bool, matches: usize) -> String {
+        count_line(i18n, replacing, scanning, matches)
+            .into_string()
+            .replace(['\u{2068}', '\u{2069}'], "")
+    }
+
+    /// #2058: the line under the form keeps its English, follows the
+    /// language and picks the replace and scan states over the count.
+    #[test]
+    fn the_count_line_keeps_its_english() {
+        let en = I18n::en_us();
+        assert_eq!(line(&en, false, false, 0), "0 match(es)");
+        assert_eq!(line(&en, false, false, 1), "1 match(es)");
+        assert_eq!(line(&en, false, false, 3), "3 match(es)");
+        assert_eq!(line(&en, false, true, 3), "Searching...");
+        assert_eq!(line(&en, true, true, 3), "Replacing...");
+        let xa = I18n::new(&LanguagePref::Locale("en-XA".to_owned()));
+        assert_ne!(line(&xa, false, false, 3), "3 match(es)");
+        assert_eq!(line(&xa, false, false, 3), matches(&xa));
     }
 
     /// #2058: the find, find-similar and paste-array texts keep their

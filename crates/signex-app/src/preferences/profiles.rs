@@ -137,7 +137,7 @@ pub(super) fn content_profiles<'a>(
     }
     body = body.push(h_sep()).push(actions_row(manager, i18n));
     if let Some((is_error, message)) = &manager.status {
-        // raw: the action result is worded by its handler (#2061).
+        // raw: the action result is set by its handler (#2061: handler-worded state text).
         let styled = text(raw(message.clone())).size(TS.caption);
         body = body.push(
             container(if *is_error {

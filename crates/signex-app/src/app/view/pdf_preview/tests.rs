@@ -3,6 +3,7 @@
 use signex_i18n::{Arg, I18n, LanguagePref, ids};
 
 use crate::app::{Message, Signex, UiMsg};
+use crate::layout_probe::lay_out_texts;
 
 fn caption(i18n: &I18n) -> String {
     let arg = |v: &str| Arg::from(v);
@@ -33,11 +34,23 @@ fn the_pdf_text_follows_the_language() {
         let pref = LanguagePref::Locale(tag.to_owned());
         let _ = app.update(Message::Ui(UiMsg::LanguageChanged(pref)));
     };
-    let shown = |app: &Signex| app.ui_state.i18n.message_plain(ids::PDF_SECTION_FILES, &[]);
+    // The text the section title widget lays out.
+    let shown = |app: &Signex| {
+        let window = iced::Size::new(400.0, 100.0);
+        lay_out_texts(app.pdf_section_title(ids::PDF_SECTION_FILES), window)
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect::<Vec<_>>()
+            .join("|")
+    };
     switch(&mut app, "en-US");
     assert_eq!(shown(&app), "Choose Project Files");
     switch(&mut app, "en-XA");
     assert_ne!(shown(&app), "Choose Project Files");
+    assert_eq!(
+        shown(&app),
+        app.ui_state.i18n.message_plain(ids::PDF_SECTION_FILES, &[])
+    );
     assert_ne!(caption(&app.ui_state.i18n), caption(&I18n::en_us()));
     switch(&mut app, "en-US");
     assert_eq!(shown(&app), "Choose Project Files");

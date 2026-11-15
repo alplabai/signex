@@ -52,8 +52,8 @@ impl Signex {
             os_title_bar_slot()
         };
 
-        // raw: the change and skip lines are built in English by the
-        // re-prefix handler and kept in its state (#2061).
+        // raw: the change and skip lines are built by the re-prefix handler
+        // and kept in its state (#2061: handler-worded state text).
         let mut lines: Vec<Element<'_, Message>> = confirm
             .change_lines
             .iter()
@@ -69,7 +69,7 @@ impl Signex {
         }
         let mut skips = column![].spacing(SP.xs);
         for line in &confirm.skip_lines {
-            // raw: see the change lines above.
+            // raw: built by the re-prefix handler (#2061: handler-worded state text).
             skips = skips.push(text(raw(line.clone())).size(TS.body).color(text_muted));
         }
 
@@ -77,7 +77,7 @@ impl Signex {
             crate::styles::dialog_intro(
                 crate::styles::DialogIcon::Warn,
                 t!(i18n, ids::DIALOG_REPREFIX_QUESTION).into_string(),
-                // The headline is built in English by the re-prefix handler (#2061).
+                // Built by the re-prefix handler (#2061: handler-worded state text).
                 Some(confirm.headline.clone()),
                 tokens,
             ),

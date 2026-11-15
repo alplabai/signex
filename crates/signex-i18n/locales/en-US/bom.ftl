@@ -44,12 +44,25 @@ bom-column-distributor = Distributor
 bom-column-price-age = Price Age
 bom-no-issues = No BOM issues
 bom-no-issues-found = No issues found.
-# Issue list headings; $count is how many issues (a whole number).
+# Issue list heading; $count is how many errors (a whole number).
 bom-issues-errors = Errors ({ $count })
+# Issue list heading; $count is how many warnings (a whole number).
 bom-issues-warnings = Warnings ({ $count })
+# Issue list heading; $count is how many notes (a whole number).
 bom-issues-notes = Notes ({ $count })
 # Footer: $visible and $total are line counts (whole numbers). The English
 # says "lines" for every count.
 bom-status-visible = { $visible } of { $total } lines visible
-# As above, followed by the price note $prices, in English.
+# As above, followed by the price note $prices (one of the bom-price-*
+# messages below).
 bom-status-visible-prices = { $visible } of { $total } lines visible · { $prices }
+# Price note when no line has a cached price.
+bom-price-none = no cached prices
+# Price note: $sums is the total per currency, such as "2.00 EUR + 1.50 USD".
+bom-price-total = Total { $sums }
+# As above, when some lines have no cached price; $count is how many lines
+# (a whole number, at least 1).
+bom-price-total-unpriced = Total { $sums } · { $count ->
+    [one] { $count } line without a cached price
+   *[other] { $count } lines without a cached price
+}

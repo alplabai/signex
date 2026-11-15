@@ -10,7 +10,7 @@
 
 use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Theme, Widget};
-use signex_i18n::{UserText, ids, t};
+use signex_i18n::{ids, t};
 use signex_library::DistributorSource;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text, text_input};
@@ -42,20 +42,21 @@ pub fn view<'a>(
     };
 
     // ── DigiKey ──────────────────────────────────────────────
-    // A status set by the OAuth flow is its own English (#2061).
     let digikey_status: signex_widgets::Label<'static> = match (
         settings.digikey_in_flight,
-        settings.digikey_status.as_deref(),
+        settings.digikey_status.clone(),
         settings.digikey_account_email.as_deref(),
     ) {
-        (true, Some(s), _) => UserText::new(s).into(),
+        // raw: the OAuth status is set by its handler (#2061: handler-worded state text).
+        (true, Some(s), _) => raw(s),
         // In-flight with no status set yet — never let "Not connected"
         // render while the Cancel button is also visible.
         (true, None, _) => t!(i18n, ids::LIBRARY_DIGIKEY_CONNECTING).into(),
         (false, _, Some(label)) => {
             t!(i18n, ids::LIBRARY_DIGIKEY_CONNECTED_AS, "account" => label).into()
         }
-        (false, Some(s), _) => UserText::new(s).into(),
+        // raw: the OAuth status is set by its handler (#2061: handler-worded state text).
+        (false, Some(s), _) => raw(s),
         _ => t!(i18n, ids::LIBRARY_DIGIKEY_NOT_CONNECTED).into(),
     };
     let mut digikey_actions =
@@ -92,9 +93,9 @@ pub fn view<'a>(
     // with the bullet string and permanently overwrote the real key.
     // `secure(true)` is the iced-supplied mask — the buffer stays
     // cleartext, only the rendered glyphs are bullets.
-    // A status set by the key test is its own English (#2061).
     let mouser_test_status: signex_widgets::Label<'static> = match settings.mouser_status.clone() {
-        Some(status) => UserText::new(status).into(),
+        // raw: the key-test status is set by its handler (#2061: handler-worded state text).
+        Some(status) => raw(status),
         None => t!(i18n, ids::LIBRARY_MOUSER_NOT_TESTED).into(),
     };
     let mouser_section = column![

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use iced::Task;
 use signex_engine::pcb::eco::EcoKey;
-use signex_i18n::{ids, t};
+use signex_i18n::ids;
 use signex_library::{PrimitiveKind, PrimitiveRef};
 use signex_types::schematic::InstancePath;
 use uuid::Uuid;
@@ -133,6 +133,7 @@ impl Signex {
     }
 
     fn log_update_pcb_fix(&self, id: signex_i18n::MessageId) {
-        crate::diagnostics::log_warning(t!(self.ui_state.i18n, id).into_string());
+        // The log stays English under any UI language.
+        crate::diagnostics::log_warning(signex_i18n::I18n::en_us_ref().message_plain(id, &[]));
     }
 }

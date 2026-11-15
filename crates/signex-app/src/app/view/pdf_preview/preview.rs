@@ -249,9 +249,9 @@ impl Signex {
         // pan delta moves it inside a clipped container — no
         // scrollbars, just drag-to-pan + wheel-zoom.
         let viewport: Element<'_, Message> = if preview.pages.is_empty() {
-            // The range note is worded by the preview handler (#2061).
             let note = match preview.range_note.clone() {
-                Some(note) => text(signex_i18n::UserText::new(note)),
+                // raw: the range note is set by the preview handler (#2061: handler-worded state text).
+                Some(note) => text(raw(note)),
                 None => text(t!(i18n, ids::PDF_NO_FILES_SELECTED)),
             };
             container(note.size(TS.label).color(text_muted))

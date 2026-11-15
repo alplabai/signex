@@ -184,7 +184,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     // A non-empty status (parse / save error, profile action) wins;
     // otherwise fall back to the conflict summary.
     let status_line = if !status.is_empty() {
-        // raw: worded by the handler that set it (#2061).
+        // raw: set by its handler (#2061: handler-worded state text).
         text(raw(status.to_string()))
     } else if conflict_count == 1 {
         text(i18n.message(ids::PREF_KEYMAP_CONFLICT_ONE, &[]))

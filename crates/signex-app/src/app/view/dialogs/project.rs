@@ -98,6 +98,7 @@ impl Signex {
 
         let mut body: iced::widget::Column<Element<'_, Message>> = column![
             dialog_intro(DialogIcon::File, prompt.into_string(), None, tokens),
+            // raw: an example name as placeholder (#2059).
             text_input(raw(placeholder), &st.buffer)
                 .style(crate::panels::form_look::text_input_style)
                 .on_input(|s| Message::Rename(RenameMsg::BufferChanged(s)))
@@ -109,7 +110,7 @@ impl Signex {
         .spacing(SP.m);
 
         if let Some(ref err) = st.error {
-            // raw: the Rename error is kept as text by its handler (#2059).
+            // raw: the Rename error is set by its handler (#2061: handler-worded state text).
             body = body.push(text(raw(err.clone())).size(TS.body).color(error_c).boxed());
         }
 
@@ -207,7 +208,7 @@ impl Signex {
                         .size(TS.body)
                         .color(items_text_c),
                     Space::new().width(Length::Fill),
-                    // raw: the item's kind is worded by the folder scan (#2061).
+                    // raw: the item's kind is set by the folder scan (#2061: handler-worded state text).
                     text(raw(item.label.clone()))
                         .size(TS.caption)
                         .color(items_text_muted),

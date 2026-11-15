@@ -46,4 +46,7 @@ define_ids! {
     BOM_ISSUES_NOTES = "bom-issues-notes";
     BOM_STATUS_VISIBLE = "bom-status-visible";
     BOM_STATUS_VISIBLE_PRICES = "bom-status-visible-prices";
+    BOM_PRICE_NONE = "bom-price-none";
+    BOM_PRICE_TOTAL = "bom-price-total";
+    BOM_PRICE_TOTAL_UNPRICED = "bom-price-total-unpriced";
 }
