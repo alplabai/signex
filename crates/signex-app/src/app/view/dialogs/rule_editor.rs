@@ -91,9 +91,11 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
                     i18n,
                     *rule,
                     current,
-                    border_c,
-                    text_muted,
-                    crate::styles::tokens::resolve(tokens).field,
+                    (
+                        border_c,
+                        text_muted,
+                        crate::styles::tokens::resolve(tokens).field,
+                    ),
                     editable,
                     on_severity,
                 ),
@@ -160,9 +162,8 @@ fn severity_segmented<M: Clone + 'static>(
     i18n: &I18n,
     rule: RuleKind,
     current: Severity,
-    border: Color,
-    text_muted: Color,
-    unselected: Color,
+    // The border, the unselected text and the unselected fill.
+    (border, text_muted, unselected): (Color, Color, Color),
     editable: bool,
     on_severity: fn(RuleKind, Severity) -> M,
 ) -> Element<'static, M> {

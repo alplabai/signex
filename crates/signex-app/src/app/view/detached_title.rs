@@ -59,7 +59,6 @@ impl Signex {
 /// Native title-bar text of a detached modal window. Matches the header
 /// the same dialog shows when it is painted inside the main window, so the
 /// OS window switcher names it the way the user knows it.
-
 pub(crate) fn detached_modal_title(modal: ModalId) -> MessageId {
     match modal {
         ModalId::AnnotateDialog => ids::DIALOG_TITLE_ANNOTATE,
