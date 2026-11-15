@@ -118,20 +118,25 @@ impl Signex {
         )
     }
 
-    /// A write finished: the outcome shows in the dialog and in Messages.
-    /// An answer for a closed or newer dialog only reaches Messages.
+    /// A write finished: the outcome shows in the dialog and in Messages,
+    /// with every note and stale file, as a warning when there is any. An
+    /// answer for a closed or newer dialog only reaches Messages.
     fn fab_outputs_written(
         &mut self,
         generation: u64,
         result: Result<super::FabWritten, FabProblem>,
     ) {
-        let line = match &result {
-            Ok(written) => super::written_text(written, &self.ui_state.i18n),
-            Err(problem) => super::problem_text(problem, &self.ui_state.i18n),
+        let (line, is_warning) = match &result {
+            Ok(written) => super::written_message(written, &self.ui_state.i18n),
+            Err(problem) => (
+                super::problem_text(problem, &self.ui_state.i18n).into_string(),
+                true,
+            ),
         };
-        match &result {
-            Ok(_) => crate::diagnostics::log_info(line.into_string()),
-            Err(_) => crate::diagnostics::log_warning(line.into_string()),
+        if is_warning {
+            crate::diagnostics::log_warning(line);
+        } else {
+            crate::diagnostics::log_info(line);
         }
         if let Some(state) = self.ui_state.fab_outputs.as_mut()
             && state.writing == Some(generation)

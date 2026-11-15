@@ -9,9 +9,9 @@ use signex_app::app::{
 use signex_app::diagnostics;
 use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
-use signex_output::fab::FabError;
+use signex_output::fab::{FabError, FabNote};
 use signex_types::format::SnxPcb;
-use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point};
+use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point, Zone};
 use uuid::Uuid;
 
 fn pad(n: u128, x: f64) -> Pad {
@@ -87,10 +87,14 @@ struct Fixture {
 }
 
 fn open_board(with_outline: bool) -> Fixture {
+    open(board(with_outline))
+}
+
+fn open(board: PcbBoard) -> Fixture {
     let _ = diagnostics::init_logging();
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("board.snxpcb");
-    let text = SnxPcb::new(board(with_outline)).write_string().unwrap();
+    let text = SnxPcb::new(board).write_string().unwrap();
     std::fs::write(&path, text).unwrap();
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
@@ -234,4 +238,51 @@ fn with_no_board_in_view_the_command_does_not_open_the_dialog() {
     app.ui_state.first_run_tour_open = false;
     menu_row(&mut app);
     assert!(app.ui_state.fab_outputs.is_none());
+}
+
+#[test]
+fn a_board_with_an_unfilled_copper_zone_warns_in_messages_after_generate() {
+    let mut with_zone = board(true);
+    with_zone.zones.push(Zone {
+        uuid: Uuid::from_u128(0x80),
+        net: 0,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: vec![
+            Point::new(1.0, 1.0),
+            Point::new(9.0, 1.0),
+            Point::new(9.0, 9.0),
+        ],
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: String::new(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        unknown: Default::default(),
+    });
+    let mut f = open(with_zone);
+    menu_row(&mut f.app);
+    let out = f.tmp.path().join("zoned-out");
+    send(
+        &mut f.app,
+        fab(FabOutputsMsg::FolderPicked(Some(out.clone()))),
+    );
+    let before = diagnostics::newest_entry_id();
+    send(&mut f.app, fab(FabOutputsMsg::GenerateRequested));
+    let state = f.app.ui_state.fab_outputs.as_ref().expect("the dialog");
+    assert_eq!(
+        state.notes(),
+        [FabNote::ZonesNotFilled { count: 1 }].as_slice()
+    );
+    let folder = out.display().to_string();
+    let logged = diagnostics::entries_since(before).entries;
+    let line = logged
+        .iter()
+        .find(|e| e.message.contains(&folder))
+        .unwrap_or_else(|| panic!("a Messages line for {folder}: {logged:?}"));
+    assert_eq!(line.level, diagnostics::DiagnosticLevel::Warning);
+    assert!(line.message.contains("copper zone"), "{}", line.message);
 }

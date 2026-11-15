@@ -31,4 +31,6 @@ define_ids! {
     FAB_OUTPUTS_NOTE_TEXTS = "fab-outputs-note-texts";
     FAB_OUTPUTS_NOTE_V_SCORES = "fab-outputs-note-v-scores";
     FAB_OUTPUTS_NOTE_SKIPPED = "fab-outputs-note-skipped";
+    FAB_OUTPUTS_NOTE_UNNAMED_PARTS = "fab-outputs-note-unnamed-parts";
+    FAB_OUTPUTS_STALE = "fab-outputs-stale";
 }

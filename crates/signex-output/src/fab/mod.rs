@@ -29,6 +29,7 @@ mod tests;
 use pcb_geom::PointNm;
 use signex_types::pcb::{PCB_DEFAULT_THICKNESS_MM, PcbBoard, Point};
 use signex_types::pcb_layer::PcbLayer;
+use signex_types::zone_keepout::KEEPOUT_FILL;
 use thiserror::Error;
 
 pub use notes::FabNote;
@@ -184,7 +185,11 @@ pub fn generate(
         files.push(FabFile {
             name: format!("{name}-centroid.csv"),
             kind: FabFileKind::Centroid,
-            contents: centroid::write_centroid(board, &mut centroid_skipped),
+            contents: centroid::write_centroid(
+                board,
+                &mut tally.unnamed_parts,
+                &mut centroid_skipped,
+            ),
         });
         skipped = skipped.max(centroid_skipped);
     }
@@ -214,9 +219,11 @@ pub fn generate(
         contents: job,
     });
     tally.skipped = skipped;
+    // A keepout (#2373) is a zone on a copper layer with no copper to fill.
     let copper_zones = board
         .zones
         .iter()
+        .filter(|z| z.fill_type != KEEPOUT_FILL)
         .filter(|z| z.pcb_layer().is_some_and(PcbLayer::is_copper))
         .count();
     let zones_not_filled = if options.gerber && extras.zone_fills.is_empty() {
@@ -262,28 +269,24 @@ fn drill_files(
     skipped: &mut usize,
     files: &mut Vec<FabFile>,
 ) {
-    let holes = drill::collect_holes(board, skipped);
+    let holes = drill::collect_holes(board, stack, skipped);
     let layers = stack.count();
-    for (plated, suffix, function) in [
-        (true, "pth", format!("Plated,1,{layers},PTH")),
-        (false, "npth", format!("NonPlated,1,{layers},NPTH")),
-    ] {
-        if let Some(contents) = drill::write_drill(&holes, plated, layers) {
-            files.push(FabFile {
-                name: format!("{name}-{suffix}.drl"),
-                kind: FabFileKind::Drill {
-                    function,
-                    polarity: "Positive",
-                },
-                contents,
-            });
-        }
+    let drill_files = drill::drill_files(&holes, layers);
+    for drill_file in &drill_files {
+        files.push(FabFile {
+            name: format!("{name}-{}.drl", drill_file.suffix(layers)),
+            kind: FabFileKind::Drill {
+                function: drill_file.function(layers),
+                polarity: "Positive",
+            },
+            contents: drill::write_drill(&holes, *drill_file, layers),
+        });
     }
     if !holes.is_empty() {
         files.push(FabFile {
             name: format!("{name}-drill-table.csv"),
             kind: FabFileKind::DrillTable,
-            contents: drill::write_table(&holes),
+            contents: drill::write_table(&holes, &drill_files, layers),
         });
     }
 }

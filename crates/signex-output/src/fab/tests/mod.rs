@@ -8,7 +8,7 @@ pub(crate) mod fixture;
 use std::path::PathBuf;
 
 use pcb_geom::{PointNm, pad_world_center};
-use signex_types::pcb::{PadShape, PadType, Point, Zone};
+use signex_types::pcb::{PadShape, PadType, Point, Via, ViaType, Zone};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use uuid::Uuid;
 
@@ -338,4 +338,115 @@ fn only_the_selected_outputs_are_written() {
             .all(|k| !matches!(k, FabFileKind::Gerber { .. } | FabFileKind::TestNetlist))
     );
     assert!(matches!(kinds.last(), Some(FabFileKind::Job)));
+}
+
+fn via_on(id: u128, at: Point, via_type: ViaType, layers: &[&str]) -> Via {
+    Via {
+        uuid: Uuid::from_u128(id),
+        position: at,
+        diameter: 0.45,
+        drill: 0.2,
+        layers: layers.iter().map(|l| l.to_string()).collect(),
+        net: 1,
+        via_type,
+        unknown_columns: Default::default(),
+    }
+}
+
+#[test]
+fn a_blind_or_buried_via_is_drilled_only_through_its_span() {
+    let mut board = fixture_board();
+    board.vias.push(via_on(
+        41,
+        p(3.0, 3.0),
+        ViaType::Blind,
+        &["TopCopper", "Inner1Copper"],
+    ));
+    board.vias.push(via_on(
+        42,
+        p(4.0, 4.0),
+        ViaType::Micro,
+        &["Inner1Copper", "Inner2Copper"],
+    ));
+    let set = generated(&board);
+    let blind = file(&set, "fab-blind-l1-l2.drl").expect("the blind span's file");
+    assert!(blind.contains("; #@! TF.FileFunction,Plated,1,2,Blind\n"));
+    assert!(blind.contains("T1C0.200\n"), "{blind}");
+    assert!(blind.contains("T1\nX3.000Y-3.000\n"), "{blind}");
+    let buried = file(&set, "fab-buried-l2-l3.drl").expect("the buried span's file");
+    assert!(buried.contains("; #@! TF.FileFunction,Plated,2,3,Buried\n"));
+    assert!(buried.contains("X4.000Y-4.000\n"), "{buried}");
+    let pth = file(&set, "fab-pth.drl").expect("plated through file");
+    assert!(pth.contains("; #@! TF.FileFunction,Plated,1,4,PTH\n"));
+    assert!(!pth.contains("X3.000Y-3.000"), "{pth}");
+    assert!(!pth.contains("X4.000Y-4.000"), "{pth}");
+    let table = file(&set, "fab-drill-table.csv").expect("drill table");
+    assert!(table.contains("Blind L1-L2,T1,0.200,1,0\n"), "{table}");
+    assert!(table.contains("Buried L2-L3,T1,0.200,1,0\n"), "{table}");
+    let job = file(&set, "fab-job.gbrjob").expect("job file");
+    assert!(job.contains("\"Plated,1,2,Blind\""), "{job}");
+    assert!(job.contains("\"Plated,2,3,Buried\""), "{job}");
+    let bottom = file(&set, "fab-copper-l4-bottom.gbr").expect("bottom copper");
+    assert!(!bottom.contains("X3000000Y-3000000D03*"), "{bottom}");
+    assert!(set.notes.is_empty(), "{:?}", set.notes);
+}
+
+#[test]
+fn a_blind_via_naming_one_layer_is_not_drilled_through_the_board() {
+    let mut board = fixture_board();
+    board
+        .vias
+        .push(via_on(43, p(3.0, 3.0), ViaType::Blind, &["TopCopper"]));
+    let set = generated(&board);
+    let pth = file(&set, "fab-pth.drl").expect("plated through file");
+    assert!(!pth.contains("X3.000Y-3.000"), "{pth}");
+    assert_eq!(set.notes, vec![FabNote::ItemsSkipped { count: 1 }]);
+}
+
+#[test]
+fn a_keepout_is_not_counted_as_an_unfilled_zone() {
+    let mut board = fixture_board();
+    let keepout = Zone {
+        fill_type: "keepout".into(),
+        ..zone("TopCopper")
+    };
+    board.zones.push(keepout);
+    assert!(generated(&board).notes.is_empty());
+    board.zones.push(zone("BottomCopper"));
+    assert_eq!(
+        generated(&board).notes,
+        vec![FabNote::ZonesNotFilled { count: 1 }]
+    );
+}
+
+#[test]
+fn a_part_without_a_designator_is_noted_not_dropped_silently() {
+    let mut board = fixture_board();
+    board
+        .footprints
+        .push(footprint(56, "", p(1.0, 1.0), 0.0, "TopCopper", Vec::new()));
+    let set = generated(&board);
+    assert_eq!(
+        set.notes,
+        vec![FabNote::PartsWithoutDesignator { count: 1 }]
+    );
+    let centroid = file(&set, "fab-centroid.csv").expect("centroid");
+    assert_eq!(centroid.lines().count(), 3, "{centroid}");
+}
+
+#[test]
+fn mask_and_paste_openings_carry_no_copper_pad_function() {
+    let set = generated(&fixture_board());
+    for name in ["fab-soldermask-top.gbr", "fab-paste-top.gbr"] {
+        let image = file(&set, name).expect("an opening image");
+        assert!(
+            image.contains("%TA.AperFunction,Other,PadOpening*%"),
+            "{image}"
+        );
+        for copper_only in ["SMDPad", "ComponentPad", "ConnectorPad", "OtherPad"] {
+            assert!(!image.contains(copper_only), "{name}: {image}");
+        }
+    }
+    let top = file(&set, "fab-copper-l1-top.gbr").expect("top copper");
+    assert!(top.contains("%TA.AperFunction,SMDPad,CuDef*%"), "{top}");
 }

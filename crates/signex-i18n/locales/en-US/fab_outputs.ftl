@@ -49,3 +49,13 @@ fab-outputs-note-skipped = { $count ->
     [one] One item with a size or position out of range was left out.
    *[other] { $count } items with a size or position out of range were left out.
 }
+fab-outputs-note-unnamed-parts = { $count ->
+    [one] One part has no designator and has no pick-and-place row.
+   *[other] { $count } parts have no designator and have no pick-and-place row.
+}
+# Files of the same name stem already in the output folder that this
+# Generate did not write; they are left in place.
+fab-outputs-stale = { $count ->
+    [one] One older file in the folder is not part of this set: { $files }. Remove it before sending the folder.
+   *[other] { $count } older files in the folder are not part of this set: { $files }. Remove them before sending the folder.
+}

@@ -329,7 +329,7 @@ fn pad_marks(
             layer,
             Mark::Flash {
                 shape,
-                function,
+                function: Function::PadOpening,
                 at,
                 attributes: Attributes::default(),
             },

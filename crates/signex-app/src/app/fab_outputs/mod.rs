@@ -185,6 +185,40 @@ pub(crate) fn note_text(note: FabNote, i18n: &I18n) -> Localized {
         FabNote::VScoresNotWritten { .. } => {
             t!(i18n, ids::FAB_OUTPUTS_NOTE_V_SCORES, "count" => count)
         }
+        FabNote::PartsWithoutDesignator { .. } => {
+            t!(i18n, ids::FAB_OUTPUTS_NOTE_UNNAMED_PARTS, "count" => count)
+        }
         FabNote::ItemsSkipped { .. } => t!(i18n, ids::FAB_OUTPUTS_NOTE_SKIPPED, "count" => count),
     }
+}
+
+/// The older files of the same stem left in the folder; `None` when there
+/// are none.
+pub(crate) fn stale_text(written: &FabWritten, i18n: &I18n) -> Option<Localized> {
+    if written.stale.is_empty() {
+        return None;
+    }
+    let files = written.stale.join(", ");
+    Some(t!(
+        i18n,
+        ids::FAB_OUTPUTS_STALE,
+        "count" => written.stale.len(),
+        "files" => files.as_str()
+    ))
+}
+
+/// The Messages line of a finished Generate: what was written, then every
+/// note and the stale files. It is a warning when the set is incomplete
+/// or the folder holds older files, so it is not read as a clean set.
+pub(crate) fn written_message(written: &FabWritten, i18n: &I18n) -> (String, bool) {
+    let mut parts = vec![written_text(written, i18n).into_string()];
+    parts.extend(
+        written
+            .notes
+            .iter()
+            .map(|n| note_text(*n, i18n).into_string()),
+    );
+    parts.extend(stale_text(written, i18n).map(Localized::into_string));
+    let is_warning = parts.len() > 1;
+    (parts.join(" "), is_warning)
 }

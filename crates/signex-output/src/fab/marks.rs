@@ -47,12 +47,15 @@ pub(crate) enum Function {
     SmdPad,
     ComponentPad,
     ConnectorPad,
-    /// The copper or opening of a non-plated hole's pad.
+    /// The copper of a non-plated hole's pad.
     NonPlatedPad,
     ViaPad,
     Conductor,
     NonConductor,
     Profile,
+    /// A pad's opening on a solder mask or paste image. The X2 pad
+    /// functions are for copper images only.
+    PadOpening,
     /// A drawing on a legend, mask or paste image.
     Graphic,
 }
@@ -68,6 +71,7 @@ impl Function {
             Function::Conductor => "Conductor",
             Function::NonConductor => "NonConductor",
             Function::Profile => "Profile",
+            Function::PadOpening => "Other,PadOpening",
             Function::Graphic => "Other,Graphic",
         }
     }

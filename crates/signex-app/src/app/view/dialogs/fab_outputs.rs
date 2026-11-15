@@ -9,7 +9,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{CheckboxLabel as _, checkbox, text, text_input};
 
 use super::sizes;
-use crate::app::fab_outputs::{FabOutput, FabOutputsMsg, FabOutputsState, note_text};
+use crate::app::fab_outputs::{FabOutput, FabOutputsMsg, FabOutputsState, note_text, stale_text};
 use crate::app::{Message, Signex};
 use crate::styles::{
     DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split, ti, tokens,
@@ -162,8 +162,9 @@ fn fields<'a>(
     .boxed()
 }
 
-/// While writing, a line that says so; after, what was written and what
-/// the files leave out, or why nothing was written.
+/// While writing, a line that says so; after, what was written, what the
+/// files leave out and the older files beside them, or why nothing was
+/// written.
 fn outcome<'a>(
     state: &'a FabOutputsState,
     i18n: &I18n,
@@ -195,8 +196,16 @@ fn outcome<'a>(
         }
         None => {}
     }
+    // What the set leaves out, and older files beside it, in the warning
+    // colour: the set is not complete as it stands.
+    let warning = ti(tokens.warning);
     for note in state.notes() {
-        col = col.push(text(note_text(*note, i18n)).size(TS.body).color(muted));
+        col = col.push(text(note_text(*note, i18n)).size(TS.body).color(warning));
+    }
+    if let Some(Ok(written)) = &state.outcome
+        && let Some(line) = stale_text(written, i18n)
+    {
+        col = col.push(text(line).size(TS.body).color(warning));
     }
     col.boxed()
 }

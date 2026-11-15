@@ -9,7 +9,16 @@ is written until Generate. Generate copies the board as it is in memory
 `signex_output::fab::generate`, and writes each file with the crash-safe
 atomic write. A file of the same name in the folder is replaced. The dialog
 stays open with what was written, or why nothing was, and the same line goes
-to Messages.
+to Messages. When the set leaves something out (see "Not drawn yet") the
+Messages line carries every note and is a warning, not an info line, so a
+set without its zone copper is never logged as a clean one.
+
+Generate never deletes. Files in the folder that start with `<name>-`, end
+in `.gbr`, `.drl`, `.csv`, `.ipc` or `.gbrjob`, and were not written by this
+run (an inner layer removed since, a kind unticked, a span no longer
+drilled) are listed in the dialog and in the Messages warning as older
+files to remove before the folder goes to a board house. The job file
+lists only the files of this run.
 
 The writers live in `crates/signex-output/src/fab/` (no UI); the dialog in
 `crates/signex-app/src/app/fab_outputs/`.
@@ -23,7 +32,8 @@ The writers live in `crates/signex-output/src/fab/` (no UI); the dialog in
 | `<name>-soldermask-<top\|bottom>.gbr` | mask openings (negative polarity) |
 | `<name>-paste-<top\|bottom>.gbr` | paste apertures |
 | `<name>-profile.gbr` | board outline and through cutouts |
-| `<name>-pth.drl`, `<name>-npth.drl` | plated and non-plated holes and slots |
+| `<name>-pth.drl`, `<name>-npth.drl` | plated and non-plated holes and slots through the whole stack |
+| `<name>-blind-l<i>-l<j>.drl`, `<name>-buried-l<i>-l<j>.drl` | plated holes of a blind or buried via span, one file per span |
 | `<name>-drill-table.csv` | per file and tool: diameter, hole and slot counts |
 | `<name>-centroid.csv` | pick and place |
 | `<name>-netlist.ipc` | IPC-D-356 bare-board test netlist |
@@ -54,7 +64,9 @@ coordinate is the board's integer nanometre value itself, with no rounding.
 Header attributes: `.GenerationSoftware`, `.FileFunction` (`Copper,L1,Top`,
 `Soldermask,Bot`, `Profile,NP`, ...) and `.FilePolarity`. Each aperture
 carries `.AperFunction`; on copper each pad, track, via and zone fill carries
-`.N` (net), and each pad `.P` and `.C` (designator and pad number).
+`.N` (net), and each pad `.P` and `.C` (designator and pad number). The X2
+pad functions (`SMDPad,CuDef`, `ComponentPad`, ...) are for copper images;
+a pad's flash on a mask or paste image is `Other,PadOpening`.
 
 - Pads are flashed: a circle, an axis-aligned rectangle or stadium as a
   standard aperture, a turned rectangle or stadium and every round-rect as a
@@ -77,8 +89,9 @@ carries `.AperFunction`; on copper each pad, track, via and zone fill carries
 
 - **Zone fills (#2216).** A zone's outline is never written in place of its
   fill: it would short every net it crosses. Fills enter through
-  `FabExtras::zone_fills`; until zone filling lands the dialog notes how many
-  zones were left out.
+  `FabExtras::zone_fills`; until zone filling lands the dialog and Messages
+  note how many zones were left out. A keepout (a zone with `fill_type`
+  `keepout`, #2373) has no copper and is not counted.
 - **Text (#2387).** Board and footprint text needs the stroke font board text
   drawing brings; stroked glyphs enter through `FabExtras::strokes`. Until
   then the dialog notes how many texts were not drawn.
@@ -87,8 +100,13 @@ carries `.AperFunction`; on copper each pad, track, via and zone fill carries
 ## Drill
 
 Excellon, metric, absolute, explicit decimal point with three decimals
-(micrometres), `FMAT,2`. Plated and non-plated holes are separate files with
-X2 comments (`; #@! TF.FileFunction,Plated,1,2,PTH`). Tools are the distinct
+(micrometres), `FMAT,2`. One file per drilled span and plating, each with
+X2 comments (`; #@! TF.FileFunction,Plated,1,2,PTH`): plated holes through
+the whole stack, then one file per blind or buried via span top first
+(`Plated,1,2,Blind` from an outer layer, `Plated,2,3,Buried` between inner
+layers), then the non-plated holes. A blind or micro via is drilled only
+between the outermost stack layers it names; one that names fewer than two
+stack layers is not drilled and is counted as a skipped item. Tools are the distinct
 diameters, smallest first. Holes come from pads (plated unless the pad is
 non-plated), vias (plated) and the board sketch's mounting holes (as set).
 
@@ -101,7 +119,8 @@ to the non-plated file.
 
 CSV with a header: `Designator,Value,Footprint,X (mm),Y (mm),Rotation,Side`.
 One row per footprint with a designator whose component type is listed in
-the BOM, sorted by designator. X and Y are the footprint origin in the
+the BOM, sorted by designator. A part the BOM lists with no designator has
+no row; the dialog and Messages note how many. X and Y are the footprint origin in the
 frame above, in mm to three decimals; the rotation is counter-clockwise in
 that frame, the turn its pads are flashed with, so a bottom-side part's row
 and its Gerber flash agree.

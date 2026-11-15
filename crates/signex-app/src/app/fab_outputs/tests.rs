@@ -67,3 +67,52 @@ fn a_refused_board_creates_no_folder() {
     assert_eq!(result, Err(FabProblem::Refused(FabError::NoOutline)));
     assert!(!folder.exists());
 }
+
+#[test]
+fn older_files_of_the_same_stem_are_reported_and_left_in_place() {
+    let tmp = tempfile::tempdir().unwrap();
+    let folder = tmp.path().to_path_buf();
+    let board = board(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)]);
+    let first = write_fab_outputs(&board, &FabOptions::all("b"), &folder).expect("written");
+    assert!(first.stale.is_empty(), "{:?}", first.stale);
+    std::fs::write(folder.join("b-copper-l3-inner2.gbr"), "old").unwrap();
+    std::fs::write(folder.join("b-readme.txt"), "not a fabrication file").unwrap();
+    std::fs::write(folder.join("other-pth.drl"), "another stem").unwrap();
+    let options = FabOptions {
+        centroid: false,
+        ..FabOptions::all("b")
+    };
+    let second = write_fab_outputs(&board, &options, &folder).expect("written");
+    assert_eq!(second.stale, ["b-centroid.csv", "b-copper-l3-inner2.gbr"]);
+    assert!(
+        folder.join("b-copper-l3-inner2.gbr").is_file(),
+        "never deleted"
+    );
+}
+
+#[test]
+fn a_set_with_notes_or_stale_files_is_a_warning_in_messages() {
+    let i18n = signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale("en-US".into()));
+    let clean = super::FabWritten {
+        files: vec!["b-job.gbrjob".into()],
+        folder: PathBuf::from("out"),
+        notes: Vec::new(),
+        stale: Vec::new(),
+    };
+    let (line, is_warning) = super::written_message(&clean, &i18n);
+    assert!(!is_warning, "{line}");
+    let zones = super::FabWritten {
+        notes: vec![signex_output::fab::FabNote::ZonesNotFilled { count: 2 }],
+        ..clean.clone()
+    };
+    let (line, is_warning) = super::written_message(&zones, &i18n);
+    assert!(is_warning);
+    assert!(line.contains(&super::note_text(zones.notes[0], &i18n).into_string()));
+    let stale = super::FabWritten {
+        stale: vec!["b-npth.drl".into()],
+        ..clean
+    };
+    let (line, is_warning) = super::written_message(&stale, &i18n);
+    assert!(is_warning);
+    assert!(line.contains("b-npth.drl"), "{line}");
+}

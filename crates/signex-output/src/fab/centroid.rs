@@ -9,13 +9,18 @@ use super::frame::{deg3, fab_angle_udeg, fab_point, mm3};
 const HEADER: &str = "Designator,Value,Footprint,X (mm),Y (mm),Rotation,Side\n";
 
 /// Every footprint the BOM lists (`ComponentType::in_bom`) with a
-/// designator, sorted by designator then uuid. X and Y are the
+/// designator, sorted by designator then uuid. One the BOM lists with no
+/// designator has no row and is counted in `unnamed`. X and Y are the
 /// footprint's origin in the fabrication frame; the rotation is
 /// counter-clockwise in that frame, the turn its pads are flashed with.
-pub(crate) fn write_centroid(board: &PcbBoard, skipped: &mut usize) -> String {
+pub(crate) fn write_centroid(board: &PcbBoard, unnamed: &mut usize, skipped: &mut usize) -> String {
     let mut rows: Vec<(&str, uuid::Uuid, String)> = Vec::new();
     for footprint in &board.footprints {
-        if footprint.reference.is_empty() || !footprint.component.component_type.in_bom() {
+        if !footprint.component.component_type.in_bom() {
+            continue;
+        }
+        if footprint.reference.is_empty() {
+            *unnamed += 1;
             continue;
         }
         let Ok(placement) = Placement::of_footprint(footprint) else {

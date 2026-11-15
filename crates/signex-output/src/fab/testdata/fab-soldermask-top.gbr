@@ -3,9 +3,9 @@
 %TF.FilePolarity,Negative*%
 %FSLAX46Y46*%
 %MOMM*%
-%TA.AperFunction,SMDPad,CuDef*%
+%TA.AperFunction,Other,PadOpening*%
 %ADD10R,1X1.2*%
-%TA.AperFunction,ComponentPad*%
+%TA.AperFunction,Other,PadOpening*%
 %ADD11C,1.6*%
 %TD*%
 G75*

@@ -12,6 +12,9 @@ pub enum FabNote {
     /// Texts on a fabrication layer, left for the stroke font of board text
     /// drawing (#2387).
     TextsNotDrawn { count: usize },
+    /// Placed parts the BOM lists that have no designator, so the
+    /// pick-and-place file has no row for them.
+    PartsWithoutDesignator { count: usize },
     /// V-score lines, which no file written here carries.
     VScoresNotWritten { count: usize },
     /// Items with a coordinate or size the geometry cannot hold (not
@@ -23,6 +26,7 @@ pub enum FabNote {
 #[derive(Debug, Default)]
 pub(crate) struct Tally {
     pub texts: usize,
+    pub unnamed_parts: usize,
     pub skipped: usize,
 }
 
@@ -34,6 +38,9 @@ impl Tally {
                 count: zones_not_filled,
             },
             FabNote::TextsNotDrawn { count: self.texts },
+            FabNote::PartsWithoutDesignator {
+                count: self.unnamed_parts,
+            },
             FabNote::VScoresNotWritten { count: v_scores },
             FabNote::ItemsSkipped {
                 count: self.skipped,
@@ -50,6 +57,7 @@ impl FabNote {
         match self {
             FabNote::ZonesNotFilled { count }
             | FabNote::TextsNotDrawn { count }
+            | FabNote::PartsWithoutDesignator { count }
             | FabNote::VScoresNotWritten { count }
             | FabNote::ItemsSkipped { count } => count,
         }
