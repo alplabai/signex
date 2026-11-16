@@ -168,6 +168,15 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "rules_enable",
         "it writes the project's rule set, which no sheet's undo step covers",
     ),
+    // #2389: length tuning lands on the named board's own undo stack.
+    (
+        "tune_net_length",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "tune_diff_pair",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
 ];
 
 /// Why `command` may not be one of the edits, or `None` when it may: it must
@@ -357,6 +366,8 @@ mod tests {
             ("apply_edits", "its own edits"),
             ("assign_net_class", "net classes"),
             ("update_pcb_from_schematic", "edits the project's board"),
+            ("tune_net_length", "edits a board"),
+            ("tune_diff_pair", "edits a board"),
             ("toggle_properties_panel", "not runnable headless"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));

@@ -39,8 +39,10 @@ Two commands, both with capability `edit` in `signex-cli`:
   refused too: it writes the project's net classes, which no sheet's undo step
   covers (a decision for a follow-up, see Known limits).
   `update_pcb_from_schematic` is refused as well: it edits the project's
-  board, which no sheet's undo step covers; it runs as its own command. A
-  test pins the set.
+  board, which no sheet's undo step covers; it runs as its own command. The
+  length tuning commands `tune_net_length` and `tune_diff_pair` (#2389) are
+  refused for the same reason: each is one step on the named board. A test
+  pins the set.
 - An edit acts on the call's `document`, or on the sheet its own `document`
   names (an id or a path). Where a command takes a `document` operand
   (`color_net`, the placements), the call's is filled in when the edit names

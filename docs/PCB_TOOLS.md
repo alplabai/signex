@@ -148,7 +148,8 @@ the active copper layer as one route (#2389).
   Interactive Routing's). A pair takes its class's differential-pair width
   and gap where they are set; the gap between neighbours is never under the
   clearance the rules ask between any two of the nets, which is also a
-  bus's gap.
+  bus's gap. The pitch carries 4 nm more, so corners rounded to whole nm
+  never bring two members under that clearance.
 - **Legs.** Each later click routes the centre line to the point around
   other nets' copper (`route_bus_leg`): the search sees the whole bus as one
   wide track, half a pitch wider on each side so a right-angle bend's outer

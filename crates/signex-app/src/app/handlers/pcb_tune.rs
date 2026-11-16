@@ -24,10 +24,6 @@ use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{Message, Signex, TuneMsg};
 
-/// How tall a bump may grow, in accordion pitches; the track panel's
-/// Tune Net To uses the same.
-const AMPLITUDE_PITCHES: f64 = 4.0;
-
 /// What a tuning landed: the nets lengthened and the length they reach.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Tuned {
@@ -161,21 +157,20 @@ fn tune_commands(
     ask: TuneAsk<'_>,
 ) -> Result<(Vec<BoardCommand>, Tuned), TuneRefusal> {
     let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
-    let pitch = |nets: &[u32]| {
+    // The accordion of the widest track of `nets`.
+    let meander = |nets: &[u32]| {
         let width = board
             .segments
             .iter()
             .filter(|s| nets.contains(&s.net))
             .map(|s| s.width.abs())
             .fold(0.0, f64::max);
-        // Legs a track width and a clearance apart, on either side.
-        2.0 * (width + nm_to_mm(rules.clearance))
-    };
-    let meander = |pitch_mm: f64| Meander {
-        clearance: &clearance,
-        reach: rules.widest_clearance(),
-        pitch_mm,
-        amplitude_mm: AMPLITUDE_PITCHES * pitch_mm,
+        Meander::for_tracks(
+            &clearance,
+            rules.widest_clearance(),
+            width,
+            nm_to_mm(rules.clearance),
+        )
     };
     match ask {
         TuneAsk::Nets(nets, target) => {
@@ -186,7 +181,7 @@ fn tune_commands(
                     .filter_map(|&net| net_routed_length_mm(board, net))
                     .fold(0.0, f64::max),
             };
-            let commands = tune_nets(board, nets, target, &meander(pitch(nets)), Uuid::now_v7)?;
+            let commands = tune_nets(board, nets, target, &meander(nets), Uuid::now_v7)?;
             let tuned = Tuned {
                 nets: nets.to_vec(),
                 length_mm: target,
@@ -196,7 +191,7 @@ fn tune_commands(
         TuneAsk::Pair(net) => {
             // The caller said already when the net is in no pair.
             let pair = diff_pair_of(board, classes, net).ok_or(TuneRefusal::NoNet)?;
-            let meander = meander(pitch(&pair.nets()));
+            let meander = meander(&pair.nets());
             let (commands, done) = tune_pair(board, pair, &meander, Uuid::now_v7)?;
             let tuned = Tuned {
                 nets: vec![done.net],

@@ -23,6 +23,30 @@ pub struct Meander<'a> {
     pub amplitude_mm: f64,
 }
 
+/// How tall a bump may grow, in accordion pitches.
+const AMPLITUDE_PITCHES: f64 = 4.0;
+
+impl<'a> Meander<'a> {
+    /// The accordion every tuning surface uses (#2389) on tracks
+    /// `width_mm` wide: legs a track width and the rules' plain clearance
+    /// (`clearance_mm`) apart on either side, bumps up to four pitches
+    /// tall.
+    pub fn for_tracks(
+        clearance: &'a ClearanceRule<'a>,
+        reach: i64,
+        width_mm: f64,
+        clearance_mm: f64,
+    ) -> Self {
+        let pitch_mm = 2.0 * (width_mm.abs() + clearance_mm);
+        Self {
+            clearance,
+            reach,
+            pitch_mm,
+            amplitude_mm: AMPLITUDE_PITCHES * pitch_mm,
+        }
+    }
+}
+
 /// Why a track was not tuned.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum TuneRefusal {

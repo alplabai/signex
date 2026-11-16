@@ -83,8 +83,14 @@ fn a_pair_follows_its_centre_line_each_member_on_its_own_side() {
     let of = |net: u32| -> Vec<_> { tracks.iter().filter(|t| t.net == net).collect() };
     let (a, b) = (of(1), of(2));
     assert_eq!(a[0].start, Point::new(1.0, 0.5), "A starts at its stub");
-    assert!((a[1].start.y - 0.25).abs() < 1e-9, "A on the left: {a:?}");
-    assert!((b[1].start.y + 0.25).abs() < 1e-9, "B on the right: {b:?}");
+    // Half a pitch off the centre line, plus half the few nm of rounding
+    // room the pitch carries.
+    assert!((a[1].start.y - 0.25).abs() < 1e-5, "A on the left: {a:?}");
+    assert!((b[1].start.y + 0.25).abs() < 1e-5, "B on the right: {b:?}");
+    assert!(
+        a[1].start.y >= 0.25 && b[1].start.y <= -0.25,
+        "never closer"
+    );
     assert!((a[1].end.x - 10.0).abs() < 1e-9);
     assert!(
         tracks
@@ -92,6 +98,24 @@ fn a_pair_follows_its_centre_line_each_member_on_its_own_side() {
             .all(|t| t.width == 0.25 && t.layer == "TopCopper")
     );
     let rules = DrcRules::for_board(&board, &[]).unwrap();
+    land(&board, tracks, &rules);
+}
+
+/// A gap set exactly at the rule clearance stays legal on a 45° leg, where
+/// the members' corners are rounded to whole nm.
+#[test]
+fn a_gap_at_the_clearance_stays_legal_on_a_diagonal_leg() {
+    let board = stubs(Vec::new());
+    let rules = DrcRules::for_board(&board, &[]).unwrap();
+    // 0.25 mm tracks 0.2 mm apart: the board's clearance exactly.
+    let tight = BusStyle {
+        pitch_mm: 0.45,
+        ..STYLE
+    };
+    let start = bus_start(&members()).unwrap();
+    let centre = [start, Point::new(5.0, 4.0), Point::new(9.0, 4.0)];
+    let tracks = bus_tracks(&members(), &centre, &tight, Uuid::now_v7).expect("tracks");
+    assert_eq!(tracks.len(), 6, "a join and two legs each");
     land(&board, tracks, &rules);
 }
 

@@ -159,8 +159,14 @@ pub fn bus_tracks(
     Ok(tracks)
 }
 
-/// The width and pitch in nm; refused when one is not a length the
-/// geometry can hold or the pitch leaves no room for the width.
+/// What rounding the members' corners to whole nm can take off the gap
+/// between two neighbours, added to the pitch: a gap set exactly at the
+/// rule clearance stays legal on a diagonal leg.
+const ROUNDING_NM: i64 = 4;
+
+/// The width and pitch in nm, the pitch with [`ROUNDING_NM`] added;
+/// refused when one is not a length the geometry can hold or the pitch
+/// leaves no room for the width.
 fn widths(style: &BusStyle) -> Result<(i64, i64), RouteRefusal> {
     let width = mm_to_nm(style.width_mm, "track width")
         .map_err(|_| RouteRefusal::Unrepresentable)?
@@ -171,5 +177,5 @@ fn widths(style: &BusStyle) -> Result<(i64, i64), RouteRefusal> {
     if pitch <= width {
         return Err(RouteRefusal::Unrepresentable);
     }
-    Ok((width, pitch))
+    Ok((width, pitch + ROUNDING_NM))
 }
