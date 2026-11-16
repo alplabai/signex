@@ -294,6 +294,8 @@ fn the_pour_clearance_falls_back_to_the_board_then_the_default() {
 /// A net-2 track along y = `y` across the whole pour.
 fn track_across(n: u128, y: f64) -> Segment {
     Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(n),
         start: Point::new(-20.0, y),
         end: Point::new(20.0, y),
