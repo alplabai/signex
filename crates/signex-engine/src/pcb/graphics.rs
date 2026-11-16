@@ -1,6 +1,6 @@
 //! Add board drawings at the end of `PcbBoard::graphics` and take them back:
-//! the edit behind a DXF import onto a layer (#2410). A board drawing has no
-//! uuid, so the inverse names the drawings it removes by value and refuses
+//! the edit behind a DXF import onto a layer (#2410). The inverse names the
+//! drawings it removes by value (their uuids included, #2424) and refuses
 //! unless the list still ends with exactly them.
 
 use signex_types::format::mm_as_stored_nm;

@@ -18,6 +18,7 @@ const CHORD_DEG: f64 = 6.0;
 pub fn board_graphics(drawing: &DxfDrawing, origin: BoardOrigin, layer: &str) -> Vec<BoardGraphic> {
     let at = |p: Point| Point::new(origin.board_x(p.x), origin.board_y(p.y));
     let base = || BoardGraphic {
+        uuid: uuid::Uuid::now_v7(),
         graphic_type: String::new(),
         layer: layer.to_string(),
         width: PCB_DEFAULT_GRAPHIC_WIDTH_MM,
@@ -26,6 +27,8 @@ pub fn board_graphics(drawing: &DxfDrawing, origin: BoardOrigin, layer: &str) ->
         center: None,
         radius: 0.0,
         points: Vec::new(),
+        text: String::new(),
+        font_size: 0.0,
     };
     let line = |a: Point, b: Point| BoardGraphic {
         graphic_type: "line".into(),
