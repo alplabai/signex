@@ -216,6 +216,7 @@ pub(crate) mod flows {
     const NODE_MISS: &str = "Select node / connection item: no wire, bus, junction or label";
 
     /// One sheet: a wire from (0, 0) to (20, 0) inside a rectangle drawing,
+    /// joined at (20, 0) by a second wire of the same net down to (20, 10),
     /// and a text note at (40, 40).
     fn open_framed_wire() -> Signex {
         use signex_types::schematic::{SchDrawing, TextNote};
@@ -231,6 +232,13 @@ pub(crate) mod flows {
             uuid: Uuid::from_u128(FRAMED_WIRE),
             start: Point::new(0.0, 0.0),
             end: Point::new(20.0, 0.0),
+            ..Default::default()
+        });
+        // Same net, so expanding the connection would select it too.
+        sheet.wires.push(Wire {
+            uuid: Uuid::from_u128(24),
+            start: Point::new(20.0, 0.0),
+            end: Point::new(20.0, 10.0),
             ..Default::default()
         });
         sheet.drawings.push(SchDrawing::Rect {

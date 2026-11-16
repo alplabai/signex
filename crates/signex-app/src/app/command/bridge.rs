@@ -570,8 +570,8 @@ mod tests {
     ///   delta readout). The document's `PageOrigin`
     ///   (`PanelMsg::SetPageOrigin`) is a different thing, a saved sheet
     ///   setting, so this id must not be wired to it. `cycle_wiring_mode`
-    ///   cycles how dragged wires bend, but a drag stretches its wires one fixed way; the corner rule only
-    ///   steers drawing (`cycle_wire_bus_graphic_mode`). The copy-attributes
+    ///   cycles how dragged wires bend, but a drag stretches its wires one
+    ///   fixed way; the corner rule only steers drawing (`cycle_wire_bus_graphic_mode`). The copy-attributes
     ///   half of `copy_attributes_or_add_vertex` does not exist (#1669).
     /// - **not addressable from a bare id** — the operation exists but
     ///   only in a form this entry point cannot name. `DockMessage` does
