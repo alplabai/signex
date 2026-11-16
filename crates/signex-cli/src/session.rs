@@ -2,6 +2,7 @@
 //! per command. Everything reaches the app through `signex_app::headless`
 //! and the app's own task driver.
 
+use signex_i18n::RenderTranslatable;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -26,7 +27,8 @@ use crate::roots::folder_and_roots;
 const AUDIT_LINE_CHARS: usize = 400;
 
 pub struct Session {
-    app: Signex,
+    /// Boxed: the app is too big to move through stack frames (#2325).
+    app: Box<Signex>,
     driver: TaskDriver,
     policy: Policy,
     run_id: String,
@@ -385,5 +387,13 @@ mod tests {
         for status in [Status::Refused, Status::Failed] {
             assert_eq!(honest(status, true, true), (status, Some("why".into())));
         }
+    }
+
+    /// #2325: a session holds the app on the heap. Held by value, each frame
+    /// of the run copied ~44 KB and the 1 MB Windows main stack overflowed.
+    #[test]
+    fn a_session_holds_the_app_on_the_heap() {
+        let size = std::mem::size_of::<Session>();
+        assert!(size < 1024, "Session is {size} bytes; box the app");
     }
 }

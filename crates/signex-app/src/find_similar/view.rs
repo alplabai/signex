@@ -1,6 +1,7 @@
 use super::{FindSimilarMsg, FindSimilarState, SimilarScope};
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Element, Length, Widget};
+use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
@@ -29,20 +30,28 @@ fn shown(value: &str) -> String {
 }
 
 /// The dialog as a centred card on a scrim in the main window.
-pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a, FindSimilarMsg> {
+pub fn view<'a>(
+    state: &'a FindSimilarState,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, FindSimilarMsg> {
     let text_primary = crate::styles::ti(tokens.text);
     let text_secondary = crate::styles::ti(tokens.text_secondary);
     let accent = crate::styles::ti(tokens.accent);
 
     let header = container(
         row![
-            text(raw("Find Similar Objects"))
+            text(t!(i18n, ids::FIND_SIMILAR_TITLE))
                 .size(TS.heading)
                 .color(text_primary),
             Space::new().width(Length::Fill),
-            button(text(raw("Close")).size(TS.body).color(text_secondary))
-                .on_press(FindSimilarMsg::Closed)
-                .style(crate::styles::menu_item(tokens)),
+            button(
+                text(t!(i18n, ids::DIALOG_BUTTON_CLOSE))
+                    .size(TS.body)
+                    .color(text_secondary)
+            )
+            .on_press(FindSimilarMsg::Closed)
+            .style(crate::styles::menu_item(tokens)),
         ]
         .align_y(iced::Alignment::Center)
         .spacing(SP.m),
@@ -50,9 +59,9 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
     .padding([10, 14])
     .style(crate::styles::toolbar_strip(tokens));
 
-    let choice = |label: &'static str, on: bool, msg: FindSimilarMsg| {
+    let choice = |label: MessageId, on: bool, msg: FindSimilarMsg| {
         button(
-            text(raw(label))
+            text(t!(i18n, label))
                 .size(TS.body)
                 .color(if on { accent } else { text_secondary }),
         )
@@ -62,15 +71,15 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
 
     let mut table = column![
         row![
-            text(raw("Property"))
+            text(t!(i18n, ids::FIND_SIMILAR_COL_PROPERTY))
                 .size(TS.caption)
                 .color(text_secondary)
                 .width(130),
-            text(raw("Seed value"))
+            text(t!(i18n, ids::FIND_SIMILAR_COL_SEED))
                 .size(TS.caption)
                 .color(text_secondary)
                 .width(Length::Fill),
-            text(raw("Match"))
+            text(t!(i18n, ids::FIND_SIMILAR_COL_MATCH))
                 .size(TS.caption)
                 .color(text_secondary)
                 .width(110),
@@ -80,19 +89,34 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
     .spacing(SP.s);
     for v in &state.values {
         let same = state.same.contains(&v.property);
+        // An empty value is ours to word; any other is the user's.
+        let value = if v.value.is_empty() {
+            text(t!(i18n, ids::FIND_SIMILAR_EMPTY))
+        } else {
+            text(UserText::new(shown(&v.value)))
+        };
         table = table.push(
             row![
+                // raw: the property's name comes from signex-engine (#2060).
                 text(raw(v.property.label()))
                     .size(TS.body)
                     .color(text_primary)
                     .width(130),
-                text(raw(shown(&v.value)))
+                value
                     .size(TS.body)
                     .color(text_secondary)
                     .width(Length::Fill),
                 row![
-                    choice("Same", same, FindSimilarMsg::PropertySet(v.property, true)),
-                    choice("Any", !same, FindSimilarMsg::PropertySet(v.property, false)),
+                    choice(
+                        ids::FIND_SIMILAR_SAME,
+                        same,
+                        FindSimilarMsg::PropertySet(v.property, true)
+                    ),
+                    choice(
+                        ids::FIND_SIMILAR_ANY,
+                        !same,
+                        FindSimilarMsg::PropertySet(v.property, false)
+                    ),
                 ]
                 .width(110),
             ]
@@ -103,17 +127,17 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
     }
 
     let scope_row = row![
-        text(raw("Scope"))
+        text(t!(i18n, ids::FIND_SCOPE))
             .size(TS.body)
             .color(text_secondary)
             .width(130),
         choice(
-            "Current sheet",
+            ids::FIND_SIMILAR_SCOPE_SHEET,
             state.scope == SimilarScope::Sheet,
             FindSimilarMsg::ScopeChosen(SimilarScope::Sheet)
         ),
         choice(
-            "Whole project",
+            ids::FIND_SIMILAR_SCOPE_PROJECT,
             state.scope == SimilarScope::Project,
             FindSimilarMsg::ScopeChosen(SimilarScope::Project)
         ),
@@ -123,29 +147,35 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
 
     let ok: Element<'a, FindSimilarMsg> = if state.running {
         container(
-            text(raw("Searching..."))
+            text(t!(i18n, ids::FIND_SEARCHING))
                 .size(TS.body)
                 .color(text_secondary),
         )
         .padding([6, 10])
         .boxed()
     } else {
-        button(text(raw("OK")).size(TS.body).color(text_primary))
-            .on_press(FindSimilarMsg::ApplyPressed)
-            .style(crate::styles::menu_item(tokens))
-            .boxed()
+        button(
+            text(t!(i18n, ids::DIALOG_BUTTON_OK))
+                .size(TS.body)
+                .color(text_primary),
+        )
+        .on_press(FindSimilarMsg::ApplyPressed)
+        .style(crate::styles::menu_item(tokens))
+        .boxed()
     };
     let footer = row![
-        text(raw(
-            "Selects every match. Matches on other sheets are only counted."
-        ))
-        .size(TS.caption)
-        .color(text_secondary),
+        text(t!(i18n, ids::FIND_SIMILAR_FOOTER))
+            .size(TS.caption)
+            .color(text_secondary),
         Space::new().width(Length::Fill),
         ok,
-        button(text(raw("Cancel")).size(TS.body).color(text_secondary))
-            .on_press(FindSimilarMsg::Closed)
-            .style(crate::styles::menu_item(tokens)),
+        button(
+            text(t!(i18n, ids::DIALOG_BUTTON_CANCEL))
+                .size(TS.body)
+                .color(text_secondary)
+        )
+        .on_press(FindSimilarMsg::Closed)
+        .style(crate::styles::menu_item(tokens)),
     ]
     .align_y(iced::Alignment::Center)
     .spacing(SP.m);
@@ -160,9 +190,14 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
         column![
             header,
             container(
-                text(raw(format!("Seed: {}", state.seed_label)))
-                    .size(TS.label)
-                    .color(text_primary)
+                // The seed is named by the selection handler, in English (#2061).
+                text(t!(
+                    i18n,
+                    ids::FIND_SIMILAR_SEED,
+                    "seed" => state.seed_label.as_str()
+                ))
+                .size(TS.label)
+                .color(text_primary)
             )
             .padding([SP.l, 14.0]),
             container(scrollable(table).height(Length::Fill)).padding([0.0, 14.0]),
@@ -205,6 +240,11 @@ mod tests {
         let long = "x".repeat(VALUE_SHOWN_CHARS + 5);
         assert_eq!(shown(&long).chars().count(), VALUE_SHOWN_CHARS + 1);
         assert!(shown(&long).ends_with('…'));
+        // The view shows an empty value with the catalog's same English.
+        assert_eq!(
+            I18n::en_us().message_plain(ids::FIND_SIMILAR_EMPTY, &[]),
+            shown("")
+        );
     }
 
     #[test]

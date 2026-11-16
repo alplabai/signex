@@ -12,10 +12,6 @@
 
 use super::ActiveBarAction;
 
-/// Tooltip shown on every planned row, in the bar, the menus and the
-/// context menus.
-pub const PLANNED_TOOLTIP: &str = "Planned — not available yet";
-
 /// Every tool that is still a placeholder, with the name the Messages line
 /// uses when it refuses the click.
 pub const PLANNED_TOOLS: &[(ActiveBarAction, &str)] = &[
@@ -210,13 +206,18 @@ mod tests {
     #[test]
     fn a_bar_button_whose_action_is_planned_says_so() {
         use super::super::{ActiveBarMsg, button_tooltip};
+        use signex_i18n::ids;
+        let i18n = signex_i18n::I18n::en_us();
         let harness = ActiveBarMsg::Action(ActiveBarAction::PlaceSignalHarness);
         assert_eq!(
-            button_tooltip(&harness, "Harness"),
-            format!("Harness — {PLANNED_TOOLTIP}")
+            button_tooltip(&harness, ids::CHROME_ACTIVE_BAR_HARNESS, &i18n),
+            "Harness — Planned — not available yet"
         );
         let wire = ActiveBarMsg::Action(ActiveBarAction::DrawWire);
-        assert_eq!(button_tooltip(&wire, "Wiring"), "Wiring");
+        assert_eq!(
+            button_tooltip(&wire, ids::CHROME_ACTIVE_BAR_WIRING, &i18n),
+            "Wiring"
+        );
     }
 
     #[test]

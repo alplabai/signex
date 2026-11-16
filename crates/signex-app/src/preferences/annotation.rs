@@ -2,50 +2,51 @@
 
 use super::*;
 use crate::annotate_undo::AnnotateUndo;
+use crate::choice::{Choice, chosen};
 use iced::widget::{Space, Widget, column, pick_list, row};
 use iced::{Element, Length};
+use signex_i18n::{I18n, ids, t};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::{raw, text};
+use signex_widgets::text;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-fn annotate_undo_help() -> String {
-    format!(
-        "How many undo steps one annotate run is. One step reverts every sheet the run touched together from whichever sheet {} is pressed on; per sheet undoes each sheet on its own. Applies to the next annotate run.",
-        crate::keymap::shown("Mod+Z")
+fn annotate_undo_help(i18n: &I18n) -> signex_i18n::Localized {
+    t!(
+        i18n,
+        ids::PREFERENCES_ANNOTATE_UNDO_HELP,
+        "undo" => crate::keymap::shown("Mod+Z")
     )
 }
 
-pub(super) fn content_annotation<'a>(
-    draft: AnnotateUndo,
-    i18n: &signex_i18n::I18n,
-) -> Element<'a, PrefMsg> {
+pub(super) fn content_annotation<'a>(draft: AnnotateUndo, i18n: &I18n) -> Element<'a, PrefMsg> {
+    let scopes = Choice::named(AnnotateUndo::ALL, AnnotateUndo::label, i18n);
     let setting = row![
         column![
-            text(raw("Annotate undo"))
+            text(t!(i18n, ids::PREFERENCES_ANNOTATE_UNDO))
                 .size(TS.label)
                 .style(text_primary),
-            text(raw(annotate_undo_help()))
+            text(annotate_undo_help(i18n))
                 .size(TS.caption)
                 .style(text_muted),
         ]
         .spacing(3)
         .width(320),
         Space::new().width(Length::Fill),
-        pick_list(Some(draft), AnnotateUndo::ALL, |v: &AnnotateUndo| v
-            .to_string())
+        pick_list(
+            chosen(&scopes, &draft),
+            scopes,
+            |v: &Choice<AnnotateUndo>| v.label.clone()
+        )
         .graphite()
-        .on_select(PrefMsg::DraftAnnotateUndo),
+        .on_select(|v: Choice<AnnotateUndo>| PrefMsg::DraftAnnotateUndo(v.value)),
     ]
     .align_y(iced::Alignment::Center);
 
     column![
-        section_title(signex_i18n::t!(
-            i18n,
-            signex_i18n::ids::PREFERENCES_SECTION_ANNOTATION
-        )),
+        section_title(t!(i18n, ids::PREFERENCES_SECTION_ANNOTATION)),
         Space::new().height(10),
         setting,
     ]
@@ -59,7 +60,7 @@ mod tests {
 
     #[test]
     fn the_help_text_has_no_stray_line_continuation_backslash() {
-        let help = annotate_undo_help();
+        let help = annotate_undo_help(&signex_i18n::I18n::en_us()).into_string();
         assert!(!help.contains('\\'), "{help}");
     }
 }

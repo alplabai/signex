@@ -606,4 +606,25 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         operands: operands::SYMBOL_PARAMETER,
         ..CommandMetadata::DEFAULT
     },
+    // Sheet selection, scoped like `select_connection` (#1668).
+    CommandMetadata {
+        id: "select_expand_connection",
+        category: "select",
+        label: command_ids::CMD_SELECT_EXPAND_CONNECTION,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "select_node_or_connection_item",
+        category: "select",
+        label: command_ids::CMD_SELECT_NODE_OR_CONNECTION_ITEM,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
 ];

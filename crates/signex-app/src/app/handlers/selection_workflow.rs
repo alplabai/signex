@@ -247,6 +247,9 @@ impl Signex {
                     self.update_selection_info();
                 }
             }
+            selection_request::SelectionRequest::ConnectionItemAtCursorRequested => {
+                self.select_connection_item_at_cursor();
+            }
             selection_request::SelectionRequest::FindSimilar(msg) => {
                 return self.handle_find_similar_message(msg);
             }
@@ -304,6 +307,44 @@ impl Signex {
         }
         self.sync_lasso_polygon_to_canvas();
         self.open_selected_child_sheet().unwrap_or_else(Task::none)
+    }
+
+    /// Select the connection item under the cursor alone; the Messages panel
+    /// says so when the cursor is off the sheet or over nothing of that kind.
+    fn select_connection_item_at_cursor(&mut self) {
+        const LABEL: &str = "Select node / connection item";
+        let Some((x, y)) = self.cursor_world_now() else {
+            crate::diagnostics::log_info(format!("{LABEL}: the cursor is not on this sheet"));
+            return;
+        };
+        let Some(snapshot) = self.active_render_snapshot() else {
+            crate::diagnostics::log_info(format!("{LABEL}: no schematic sheet is shown"));
+            return;
+        };
+        // Topmost first, so a drawing or a filtered-out item over a wire does
+        // not hide it. A sheet pin is left out: it joins nets across sheets
+        // and `connected_net_items` does not expand it.
+        let hit = crate::schematic_runtime::hit_test::hit_test_all_styled(
+            snapshot,
+            &self.interaction_state.active_canvas().designators,
+            x,
+            y,
+            self.active_wire_widths(),
+        )
+        .into_iter()
+        .find(|h| {
+            signex_net::is_connection_kind(h.kind)
+                && passes_filter(h, snapshot, &self.interaction_state.selection_filters)
+        });
+        match hit {
+            Some(item) => {
+                self.interaction_state.clicked_pin = None;
+                self.replace_selection(vec![item]);
+            }
+            None => crate::diagnostics::log_info(format!(
+                "{LABEL}: no wire, bus, junction or label under the cursor"
+            )),
+        }
     }
 
     /// Cycle the rubber-band selection mode (Shift+S).

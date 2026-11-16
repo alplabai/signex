@@ -4,8 +4,9 @@
 
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
+use signex_i18n::RenderTranslatable;
 use signex_i18n::{UserText, ids, t};
-use signex_widgets::{raw, text, text_input};
+use signex_widgets::{text, text_input};
 
 use super::widgets::modal_title_header;
 use super::*;
@@ -70,13 +71,16 @@ impl Signex {
                 "folder" => full_folder.clone()
             ),
         };
-        let field = text_input(raw("sheet.snxsch"), &confirm.path_text)
-            .style(crate::panels::form_look::text_input_style)
-            .on_input(|t| msg(ProjectMsg::CreateChildSheetPathChanged(t)))
-            .on_submit(create.clone())
-            .padding([6, 8])
-            .size(TS.label)
-            .width(Length::Fill);
+        let field = text_input(
+            t!(i18n, ids::PLACEHOLDER_CHILD_SHEET_PATH),
+            &confirm.path_text,
+        )
+        .style(crate::panels::form_look::text_input_style)
+        .on_input(|t| msg(ProjectMsg::CreateChildSheetPathChanged(t)))
+        .on_submit(create.clone())
+        .padding([6, 8])
+        .size(TS.label)
+        .width(Length::Fill);
         let note: Element<'_, Message> = match &confirm.error {
             Some(error) => text(error.localized(i18n))
                 .size(TS.body)

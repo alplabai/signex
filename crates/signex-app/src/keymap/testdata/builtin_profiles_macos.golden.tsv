@@ -200,8 +200,6 @@ altium	hint	-	⌘R	rubber_stamp_copy
 altium	hint	-	⌘S	save_document
 altium	hint	-	⇧⌘S	save_document_as
 altium	hint	-	⌘A	select_all
-altium	hint	-	-	select_expand_connection
-altium	hint	-	-	select_node_or_connection_item
 altium	hint	-	-	show_all_design_objects
 altium	hint	-	F1	show_current_command_hotkeys
 altium	hint	-	⇧F1	show_current_command_shortcuts
@@ -284,6 +282,8 @@ altium	hint	-	-	set_object_position
 altium	hint	-	-	set_object_rotation
 altium	hint	-	-	set_sheet_symbol_size
 altium	hint	-	-	set_symbol_parameter
+altium	hint	-	-	select_expand_connection
+altium	hint	-	-	select_node_or_connection_item
 altium	hint	-	-	tool_select
 altium	hint	-	-	lasso_select
 altium	hint	-	-	select_connection
@@ -625,8 +625,6 @@ classic	hint	-	-	rubber_stamp_copy
 classic	hint	-	⌘S	save_document
 classic	hint	-	⇧⌘S	save_document_as
 classic	hint	-	⌘A	select_all
-classic	hint	-	⌘4	select_expand_connection
-classic	hint	-	⌥3	select_node_or_connection_item
 classic	hint	-	-	show_all_design_objects
 classic	hint	-	-	show_current_command_hotkeys
 classic	hint	-	-	show_current_command_shortcuts
@@ -709,6 +707,8 @@ classic	hint	-	-	set_object_position
 classic	hint	-	-	set_object_rotation
 classic	hint	-	-	set_sheet_symbol_size
 classic	hint	-	-	set_symbol_parameter
+classic	hint	-	⌘4	select_expand_connection
+classic	hint	-	⌥3	select_node_or_connection_item
 classic	hint	-	-	tool_select
 classic	hint	-	-	lasso_select
 classic	hint	-	-	select_connection

@@ -1,6 +1,7 @@
 //! Multi-unit parts through the real Annotate and Reset Duplicate Designators
 //! handlers (#691): units of one part are one part, wherever they sit.
 
+use signex_i18n::RenderTranslatable;
 use std::path::PathBuf;
 
 use signex_types::format::SnxSchematic;

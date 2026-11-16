@@ -461,7 +461,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 i18n,
             },
         ),
-        PrefNav::RuleProfiles => content_profiles(profiles, default_profile, panel_tokens),
+        PrefNav::RuleProfiles => content_profiles(profiles, default_profile, panel_tokens, i18n),
         // Library → Distributor APIs — the library subsystem owns
         // the actual form
         // (`crate::library::settings::distributor_apis::view`); we
@@ -486,7 +486,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             keymap_recorder,
             panel_tokens,
         ),
-        PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
+        PrefNav::ComponentClasses => content_component_classes(draft_component_classes, i18n),
     };
 
     container(
@@ -521,7 +521,9 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
 fn build_prefs_file_banner<'a>(
     load_error: Option<&'a str>,
     status: &'a str,
+    i18n: &signex_i18n::I18n,
 ) -> Option<Element<'a, PrefMsg>> {
+    use signex_i18n::{ids, t};
     if load_error.is_none() && status.is_empty() {
         return None;
     }
@@ -542,10 +544,16 @@ fn build_prefs_file_banner<'a>(
         // probe and the recovery use, so the path the user is told to
         // repair is the path the app actually reads and writes.
         let path = crate::fonts::prefs_file_path().display().to_string();
+        // $error is the loader's English reason (#2061).
         lines = lines.push(
-            text(raw(format!("Your preferences file at {path} {error}.")))
-                .size(TS.body)
-                .style(text_warning),
+            text(t!(
+                i18n,
+                ids::PREFERENCES_FILE_BROKEN,
+                "path" => path,
+                "error" => error
+            ))
+            .size(TS.body)
+            .style(text_warning),
         );
         // Scoped to what `prefs.json` actually backs. The banner spans
         // the whole dialog, and two of the panes it covers persist
@@ -555,17 +563,13 @@ fn build_prefs_file_banner<'a>(
         // Distributors pane it invites a user to re-enter API keys that
         // did save.
         lines = lines.push(
-            text(raw(
-                "Appearance, ERC severities, component classes and panel layout are showing \
-             their defaults, and changes to them are not being saved. The file itself \
-             has not been altered — repair it by hand, or start a fresh one and keep \
-             the old file beside it.",
-            ))
-            .size(TS.caption)
-            .style(text_muted),
+            text(t!(i18n, ids::PREFERENCES_FILE_DEFAULTS))
+                .size(TS.caption)
+                .style(text_muted),
         );
     }
     if !status.is_empty() {
+        // raw: the recovery result is set by its handler (#2061: handler-worded state text).
         lines = lines.push(text(raw(status)).size(TS.caption).style(text_muted));
     }
 
@@ -574,7 +578,7 @@ fn build_prefs_file_banner<'a>(
     // banner is a result line and there is nothing left to reset.
     if load_error.is_some() {
         strip = strip.push(
-            button(text(raw("Start a fresh preferences file")).size(TS.body))
+            button(text(t!(i18n, ids::PREFERENCES_FILE_START_FRESH)).size(TS.body))
                 .padding([7, 14])
                 .on_press(PrefMsg::ResetPrefsFile)
                 // NOT `secondary_button_style` — that fills with

@@ -353,13 +353,13 @@ impl Signex {
             ));
             return Task::none();
         }
-        self.ui_state.pending_profile_update = Some(PendingProfileUpdate {
+        self.ui_state.pending_profile_update = Some(Box::new(PendingProfileUpdate {
             project,
             profile,
             source,
             changes,
             drc_changes,
-        });
+        }));
         self.refresh_panel_ctx();
         Task::none()
     }

@@ -497,6 +497,8 @@ impl Signex {
 
 #[cfg(test)]
 mod tests {
+    use signex_i18n::RenderTranslatable;
+
     use super::{ReferenceRewrite, rename_incomplete_detail};
     use crate::app::Signex;
     use crate::app::state::library_entry::with_new_leaf;

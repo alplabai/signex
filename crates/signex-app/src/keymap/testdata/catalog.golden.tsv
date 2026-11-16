@@ -89,8 +89,6 @@ rubber_stamp_copy	edit	Rubber-stamp copy / repeated paste	-	General	-	-	Requires
 save_document	file	Save document	Save	General	-	-	Always	-	document:document
 save_document_as	file	Save as	Save As...	General	-	-	Always	-	document:document,path:path,overwrite:bool?
 select_all	select	Select all	Select All	General	-	-	Always	runs_headless	-
-select_expand_connection	select	Select / expand connection	-	General	-	-	Always	gui_only	-
-select_node_or_connection_item	select	Select node / connection item under cursor	-	General	-	-	Always	gui_only	-
 show_all_design_objects	view	Show all design objects	-	General	-	-	Always	gui_only	-
 show_current_command_hotkeys	help	Show graphical editing hotkey list for current command	Keyboard Shortcuts	General	-	-	Always	gui_only	-
 show_current_command_shortcuts	help	Show valid shortcuts for the current interactive command	-	General	-	-	Always	gui_only	-
@@ -173,6 +171,8 @@ set_object_position	edit	Set the position of a placed object	-	Schematic	-	-	Req
 set_object_rotation	edit	Set the rotation of a placed part or label	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,rotation:angle/deg,document:document?
 set_sheet_symbol_size	edit	Set the size of a sheet symbol	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,size:point/mm,document:document?
 set_symbol_parameter	edit	Set a parameter of a placed part	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,name:text,value:text?,document:document?
+select_expand_connection	select	Select / expand connection	-	Schematic	-	-	Always	gui_only	-
+select_node_or_connection_item	select	Select node / connection item under cursor	-	Schematic	-	-	Always	gui_only	-
 tool_select	select	Tool select	-	Schematic	-	-	Always	gui_only	-
 lasso_select	select	Lasso select	Lasso Select	Schematic	-	-	Always	gui_only	-
 select_connection	select	Select connection	Connection	Schematic	-	-	Always	gui_only	-

@@ -18,7 +18,9 @@ impl Signex {
         use iced::widget::{
             Space, Widget as _, column, container, image, mouse_area, row, scrollable,
         };
+        use signex_i18n::{MessageId, ids, t};
         use signex_widgets::{button, checkbox, raw, text, text_input};
+        let i18n = self.ui_state.i18n.as_ref();
         let tokens = &self.document_state.panel_ctx.tokens;
         let panel_bg = crate::styles::ti(tokens.panel_bg);
         let text_c = crate::styles::ti(tokens.text);
@@ -27,12 +29,12 @@ impl Signex {
         let accent_c = crate::styles::ti(tokens.accent);
         let hover_c = crate::styles::ti(tokens.hover);
 
-        let mode_button = |label: &'static str, selected: bool, msg: Message| {
+        let mode_button = |label: MessageId, selected: bool, msg: Message| {
             let selected_bg = accent_c;
             let selected_text = iced::Color::WHITE;
             let default_bg = panel_bg;
             let default_text = text_c;
-            button(text(raw(label)).size(TS.body).color(if selected {
+            button(text(t!(i18n, label)).size(TS.body).color(if selected {
                 selected_text
             } else {
                 default_text
@@ -63,9 +65,11 @@ impl Signex {
         };
 
         let colour_controls = row![
-            text(raw("Colour")).size(TS.body).color(text_muted),
+            text(t!(i18n, ids::PDF_COLOUR))
+                .size(TS.body)
+                .color(text_muted),
             mode_button(
-                "Color",
+                ids::PDF_COLOUR_COLOR,
                 matches!(
                     preview.pdf_options.colour_mode,
                     signex_output::ColourMode::Colour
@@ -75,7 +79,7 @@ impl Signex {
                 )),
             ),
             mode_button(
-                "Gray",
+                ids::PDF_COLOUR_GRAY,
                 matches!(
                     preview.pdf_options.colour_mode,
                     signex_output::ColourMode::Grayscale
@@ -85,7 +89,7 @@ impl Signex {
                 )),
             ),
             mode_button(
-                "B/W",
+                ids::PDF_COLOUR_BW,
                 matches!(
                     preview.pdf_options.colour_mode,
                     signex_output::ColourMode::BlackAndWhite
@@ -99,9 +103,11 @@ impl Signex {
         .align_y(iced::Alignment::Center);
 
         let range_controls = row![
-            text(raw("Pages")).size(TS.body).color(text_muted),
+            text(t!(i18n, ids::PDF_PAGES))
+                .size(TS.body)
+                .color(text_muted),
             mode_button(
-                "All",
+                ids::PDF_PAGES_ALL,
                 matches!(
                     preview.pdf_options.page_range,
                     signex_output::PageRange::All
@@ -109,7 +115,7 @@ impl Signex {
                 Message::PrintPreview(PrintPreviewMsg::SetPageRangeAll),
             ),
             mode_button(
-                "Current",
+                ids::PDF_PAGES_CURRENT,
                 matches!(
                     preview.pdf_options.page_range,
                     signex_output::PageRange::Current
@@ -117,7 +123,7 @@ impl Signex {
                 Message::PrintPreview(PrintPreviewMsg::SetPageRangeCurrent),
             ),
             mode_button(
-                "Specific",
+                ids::PDF_PAGES_SPECIFIC,
                 matches!(
                     preview.pdf_options.page_range,
                     signex_output::PageRange::Specific(_)
@@ -133,12 +139,17 @@ impl Signex {
             signex_output::PageRange::Specific(_)
         ) {
             row![
-                text(raw("Page")).size(TS.body).color(text_muted),
-                text_input(raw("1"), &preview.specific_page_input)
-                    .on_input(|v| Message::PrintPreview(PrintPreviewMsg::SetSpecificPageInput(v)))
-                    .padding([SP.s, SP.m])
-                    .size(TS.label)
-                    .width(80),
+                text(t!(i18n, ids::PDF_PAGE))
+                    .size(TS.body)
+                    .color(text_muted),
+                text_input(
+                    t!(i18n, ids::PLACEHOLDER_PDF_PAGE),
+                    &preview.specific_page_input
+                )
+                .on_input(|v| Message::PrintPreview(PrintPreviewMsg::SetSpecificPageInput(v)))
+                .padding([SP.s, SP.m])
+                .size(TS.label)
+                .width(80),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center)
@@ -148,11 +159,15 @@ impl Signex {
         };
 
         let toggles_row = row![
-            text(raw("Output")).size(TS.body).color(text_muted),
+            text(t!(i18n, ids::PDF_OUTPUT))
+                .size(TS.body)
+                .color(text_muted),
             row![
                 checkbox(preview.pdf_options.include_title_block)
                     .on_toggle(|v| Message::PrintPreview(PrintPreviewMsg::SetIncludeTitleBlock(v))),
-                text(raw("Title Block")).size(TS.body).color(text_c),
+                text(t!(i18n, ids::PDF_TITLE_BLOCK))
+                    .size(TS.body)
+                    .color(text_c),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
@@ -205,7 +220,7 @@ impl Signex {
             let card = container(
                 column![
                     thumb,
-                    text(raw(format!("Page {}", page.page_number)))
+                    text(t!(i18n, ids::PDF_PAGE_N, "page" => page.page_number.to_string()))
                         .size(TS.caption)
                         .color(text_c)
                 ]
@@ -236,26 +251,25 @@ impl Signex {
         // pan delta moves it inside a clipped container — no
         // scrollbars, just drag-to-pan + wheel-zoom.
         let viewport: Element<'_, Message> = if preview.pages.is_empty() {
-            container(
-                text(raw(preview.range_note.clone().unwrap_or_else(|| {
-                    "No files selected — toggle files in Settings → Files.".to_string()
-                })))
-                .size(TS.label)
-                .color(text_muted),
-            )
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .style(move |_: &iced::Theme| container::Style {
-                background: Some(iced::Color::WHITE.into()),
-                border: iced::Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: iced::border::Radius::from(2.0),
-                    ..iced::Border::default()
-                },
-                ..container::Style::default()
-            })
-            .boxed()
+            let note = match preview.range_note.clone() {
+                // raw: the range note is set by the preview handler (#2061: handler-worded state text).
+                Some(note) => text(raw(note)),
+                None => text(t!(i18n, ids::PDF_NO_FILES_SELECTED)),
+            };
+            container(note.size(TS.label).color(text_muted))
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(move |_: &iced::Theme| container::Style {
+                    background: Some(iced::Color::WHITE.into()),
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(2.0),
+                        ..iced::Border::default()
+                    },
+                    ..container::Style::default()
+                })
+                .boxed()
         } else {
             let selected_page = &preview.pages[preview.selected];
             let zoom = preview.zoom;
@@ -329,17 +343,20 @@ impl Signex {
 
         let zoom = preview.zoom;
         let page_caption = if preview.pages.is_empty() {
+            // raw: a dash for "no page", not language.
             text(raw("—".to_string())).size(TS.body).color(text_muted)
         } else {
             let selected_page = &preview.pages[preview.selected];
-            text(raw(format!(
-                "Page {} of {} — {}×{} px · {:.0}%",
-                selected_page.page_number,
-                selected_page.sheet_count,
-                selected_page.width_px,
-                selected_page.height_px,
-                zoom * 100.0,
-            )))
+            // Numbers go in as text so pixel sizes keep their digits ungrouped.
+            text(t!(
+                i18n,
+                ids::PDF_PAGE_CAPTION,
+                "page" => selected_page.page_number.to_string(),
+                "pages" => selected_page.sheet_count.to_string(),
+                "width" => selected_page.width_px.to_string(),
+                "height" => selected_page.height_px.to_string(),
+                "zoom" => format!("{:.0}", zoom * 100.0)
+            ))
             .size(TS.body)
             .color(text_muted)
         };

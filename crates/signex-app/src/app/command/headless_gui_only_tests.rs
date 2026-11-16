@@ -169,7 +169,7 @@ fn probe() {
 /// A headless app with one clean sheet open, and the driver that settles its
 /// tasks.
 struct Session {
-    app: Signex,
+    app: Box<Signex>,
     driver: TaskDriver,
     path: PathBuf,
 }

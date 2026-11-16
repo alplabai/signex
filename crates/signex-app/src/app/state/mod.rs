@@ -847,16 +847,15 @@ impl PdfQuality {
             PdfQuality::High600 => 600.0,
         }
     }
-}
 
-impl std::fmt::Display for PdfQuality {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            PdfQuality::Draft72 => "Draft (72 dpi)",
-            PdfQuality::Medium300 => "Medium (300 dpi)",
-            PdfQuality::High600 => "High (600 dpi)",
-        };
-        f.write_str(s)
+    /// The name the quality pick list shows, rendered at view time.
+    pub fn label(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
+        match self {
+            PdfQuality::Draft72 => ids::PDF_QUALITY_DRAFT,
+            PdfQuality::Medium300 => ids::PDF_QUALITY_MEDIUM,
+            PdfQuality::High600 => ids::PDF_QUALITY_HIGH,
+        }
     }
 }
 

@@ -16,6 +16,8 @@ path = "src/main.rs"
 
 [dependencies]
 signex-app = { path = "../signex-app" }
+# Renders the app's notices in en-US for the result lines.
+signex-i18n.workspace = true
 signex-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true

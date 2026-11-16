@@ -13,6 +13,7 @@ mod project;
 #[path = "autosave/row.rs"]
 mod row;
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use futures::StreamExt;

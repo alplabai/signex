@@ -13,6 +13,7 @@ use signex_app::app::{
 use signex_app::dock::DockMessage;
 use signex_app::library::messages::{EditorMsg, LibraryMessage};
 use signex_app::panels::PanelMsg;
+use signex_i18n::RenderTranslatable;
 use signex_types::theme::{ThemeId, theme_tokens};
 use tempfile::TempDir;
 

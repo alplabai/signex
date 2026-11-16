@@ -149,7 +149,7 @@ pub fn form_mm_edit_row<'a>(
     container(
         row![
             property_label(label.to_string(), label_c),
-            signex_widgets::text_input(signex_widgets::raw(""), text_value)
+            signex_widgets::text_input(signex_i18n::UserText::new(String::new()), text_value)
                 .on_input(move |s| PanelMsg::CustomPaperEdgeTyping(edge, s))
                 .on_submit(PanelMsg::CommitCustomPaperEdge(edge))
                 .size(TS.body)
@@ -488,12 +488,15 @@ pub fn form_edit_row<'a>(
     container(
         row![
             property_label(label.to_string(), label_c),
-            signex_widgets::text_input(signex_widgets::raw(""), value.to_string())
-                .on_input(on_input)
-                .size(TS.body)
-                .padding(SP.s)
-                .style(form_look::text_input_style)
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+            signex_widgets::text_input(
+                signex_i18n::UserText::new(String::new()),
+                value.to_string()
+            )
+            .on_input(on_input)
+            .size(TS.body)
+            .padding(SP.s)
+            .style(form_look::text_input_style)
+            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(SP.m)
         .align_y(iced::Alignment::Center),

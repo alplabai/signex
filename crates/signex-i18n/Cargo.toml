@@ -22,6 +22,7 @@ icu_locale_core = "~2.2"
 icu_provider = "~2.2"
 intl-memoizer = "0.5"
 log = "0.4"
+signex-i18n-ids = { workspace = true }
 sys-locale = "0.3"
 unic-langid = "0.9"
 
@@ -31,6 +32,7 @@ test-support = []
 
 [dev-dependencies]
 fluent-syntax = "0.12"
+signex-i18n-ids = { workspace = true, features = ["test-support"] }
 
 [lints]
 workspace = true

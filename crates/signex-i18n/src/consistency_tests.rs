@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use fluent_syntax::ast::{Entry, Expression, InlineExpression, Pattern, PatternElement, Resource};
 use fluent_syntax::parser;
+use signex_i18n_ids::all_ids;
 
 use crate::catalog::{AVAILABLE, EN_US, EN_US_SOURCES};
 use crate::ids;
@@ -117,19 +118,6 @@ fn language_name_ids() -> BTreeSet<String> {
         .collect()
 }
 
-/// Every defined id, across the id modules.
-fn all_ids() -> Vec<crate::MessageId> {
-    ids::ALL
-        .iter()
-        .chain(crate::command_ids::ALL)
-        .chain(crate::menu_ids::ALL)
-        .chain(crate::shortcut_ids::ALL)
-        .chain(crate::key_ids::ALL)
-        .copied()
-        .chain(crate::area_ids::area_lists())
-        .collect()
-}
-
 #[test]
 fn every_defined_id_exists_in_en_us() {
     let en_us = messages_of(EN_US);
@@ -205,11 +193,11 @@ fn every_id_renders_from_the_embedded_en_us_catalog() {
 #[test]
 fn a_message_with_a_variable_is_not_a_lookup_problem() {
     let i18n = I18n::en_us_from_sources_for_test(&["with-var = Zoom { $percent }\n"]);
-    let id = crate::MessageId::new("with-var");
+    let id = crate::MessageId::unlisted_for_test("with-var");
     let _ = i18n.message(id, &[]);
     assert_eq!(i18n.emitted_for_test(), 1, "the format problem is logged");
     assert_eq!(i18n.lookup_problems_for_test(), 0);
-    let _ = i18n.message(crate::MessageId::new("absent"), &[]);
+    let _ = i18n.message(crate::MessageId::unlisted_for_test("absent"), &[]);
     assert_eq!(i18n.lookup_problems_for_test(), 1);
 }
 

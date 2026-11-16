@@ -927,26 +927,6 @@ pub(super) const GENERAL: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
-        id: "select_expand_connection",
-        category: "select",
-        label: command_ids::CMD_SELECT_EXPAND_CONNECTION,
-        menu_label: None,
-        group: CommandGroup::General,
-        enable: Enablement::Always,
-        flags: CommandFlags::GUI_ONLY,
-        ..CommandMetadata::DEFAULT
-    },
-    CommandMetadata {
-        id: "select_node_or_connection_item",
-        category: "select",
-        label: command_ids::CMD_SELECT_NODE_OR_CONNECTION_ITEM,
-        menu_label: None,
-        group: CommandGroup::General,
-        enable: Enablement::Always,
-        flags: CommandFlags::GUI_ONLY,
-        ..CommandMetadata::DEFAULT
-    },
-    CommandMetadata {
         id: "show_all_design_objects",
         category: "view",
         label: command_ids::CMD_SHOW_ALL_DESIGN_OBJECTS,

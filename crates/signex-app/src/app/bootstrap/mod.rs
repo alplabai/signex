@@ -18,6 +18,18 @@ pub(in crate::app) fn bundled_window_icon() -> Option<iced::window::Icon> {
     }
 }
 
+/// The main window's title: the version, and how many documents have
+/// unsaved changes. Plain text, since the OS draws it.
+pub(in crate::app) fn main_window_title(i18n: &signex_i18n::I18n, dirty_count: usize) -> String {
+    i18n.message_plain(
+        signex_i18n::ids::CHROME_WINDOW_TITLE,
+        &[
+            ("version", env!("CARGO_PKG_VERSION").into()),
+            ("count", dirty_count.into()),
+        ],
+    )
+}
+
 // `selection_slot_from_key` moved to `app/dispatch/input.rs` with its
 // only consumer when the keyboard branches left the subscription (#557).
 
@@ -53,13 +65,7 @@ impl Signex {
             }
             return self.detached_modal_title(*modal);
         }
-        let version = env!("CARGO_PKG_VERSION");
-        let dirty_count = self.unsaved_file_count();
-        if dirty_count == 0 {
-            format!("Signex {version}")
-        } else {
-            format!("• Signex {version} — {dirty_count} unsaved")
-        }
+        main_window_title(&self.ui_state.i18n, self.unsaved_file_count())
     }
 
     /// The interface scale every window lays out at, on top of the OS

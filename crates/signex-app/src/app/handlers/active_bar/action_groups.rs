@@ -109,21 +109,12 @@ impl Signex {
             // selected, expand it to its connected net geometry. Otherwise
             // fall through to the Select tool.
             ActiveBarAction::SelectConnection => {
-                use signex_types::schematic::SelectedKind;
                 let seed = self
                     .interaction_state
                     .active_canvas()
                     .selected
                     .iter()
-                    .find(|i| {
-                        matches!(
-                            i.kind,
-                            SelectedKind::Wire
-                                | SelectedKind::Bus
-                                | SelectedKind::Junction
-                                | SelectedKind::Label
-                        )
-                    })
+                    .find(|i| signex_net::is_connection_kind(i.kind))
                     .copied();
                 match seed {
                     Some(seed) => self.update(Message::Selection(

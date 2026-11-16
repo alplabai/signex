@@ -156,8 +156,6 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `save_document` | Save document | file | `Mod+S` | `Mod+S` |
 | `save_document_as` | Save as | file | `Mod+Shift+S` | `Mod+Shift+S` |
 | `select_all` | Select all | select | `Mod+A` | `Mod+A` |
-| `select_expand_connection` | Select / expand connection | select | — | `Mod+4` |
-| `select_node_or_connection_item` | Select node / connection item under cursor | select | — | `Alt+3` |
 | `send_drawings_backward` | Send drawings backward | edit | — | — |
 | `send_drawings_to_back` | Send drawings to back | edit | — | — |
 | `show_all_design_objects` | Show all design objects | view | — | — |
@@ -293,6 +291,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rotate_selection_cw` | Rotate selection clockwise | modify | — | — |
 | `run_erc` | Run electrical rules check | validation | `F8` | `F8` |
 | `select_connection` | Select connection | select | — | — |
+| `select_expand_connection` | Select / expand connection | select | — | `Mod+4` |
+| `select_node_or_connection_item` | Select node / connection item under cursor | select | — | `Alt+3` |
 | `send_to_back` | Send to back | modify | — | — |
 | `send_to_back_of` | Send to back of | modify | — | — |
 | `set_object_position` | Set the position of a placed object | edit | — | — |

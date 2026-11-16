@@ -23,7 +23,7 @@ impl Signex {
         value: &str,
         on_input: impl Fn(String) -> PrintPreviewMsg + 'static,
     ) -> Element<'static, Message> {
-        signex_widgets::text_input(signex_widgets::raw(""), value.to_owned())
+        signex_widgets::text_input(signex_i18n::UserText::new(String::new()), value.to_owned())
             .on_input(move |v| Message::PrintPreview(on_input(v)))
             .padding([SP.s, SP.m])
             .size(FIELD_TEXT + 1.0)
@@ -37,7 +37,9 @@ impl Signex {
         preview: &crate::app::state::PreviewState,
     ) -> Element<'static, Message> {
         use iced::widget::{pick_list, row};
+        use signex_i18n::{ids, t};
         use signex_widgets::{raw, text};
+        let i18n = self.ui_state.i18n.as_ref();
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let options = &preview.pdf_options;
@@ -60,6 +62,7 @@ impl Signex {
         // orientation is derived from them and shown, not picked.
         let orientation_control: Element<'static, Message> =
             if matches!(current_size, PageSize::Custom { .. }) {
+                // raw: the orientation's name comes from signex-types (#2060).
                 text(raw(orientation.to_string()))
                     .size(FIELD_TEXT)
                     .color(text_muted)
@@ -79,7 +82,10 @@ impl Signex {
             };
 
         let mut controls = row![
-            text(raw("Page")).size(FIELD_TEXT).color(text_muted).boxed(),
+            text(t!(i18n, ids::PDF_PAGE))
+                .size(FIELD_TEXT)
+                .color(text_muted)
+                .boxed(),
             size_picker.boxed(),
             orientation_control,
         ]
@@ -87,14 +93,25 @@ impl Signex {
         .align_y(iced::Alignment::Center);
 
         if matches!(current_size, PageSize::Custom { .. }) {
-            controls = controls.push(text(raw("W")).size(FIELD_TEXT).color(text_muted).boxed());
+            controls = controls.push(
+                text(t!(i18n, ids::PDF_WIDTH_SHORT))
+                    .size(FIELD_TEXT)
+                    .color(text_muted)
+                    .boxed(),
+            );
             controls = controls.push(
                 self.pdf_numeric_field(&inputs.custom_width, PrintPreviewMsg::SetCustomWidth),
             );
-            controls = controls.push(text(raw("H")).size(FIELD_TEXT).color(text_muted).boxed());
+            controls = controls.push(
+                text(t!(i18n, ids::PDF_HEIGHT_SHORT))
+                    .size(FIELD_TEXT)
+                    .color(text_muted)
+                    .boxed(),
+            );
             controls = controls.push(
                 self.pdf_numeric_field(&inputs.custom_height, PrintPreviewMsg::SetCustomHeight),
             );
+            // raw: a unit symbol, the same in every language.
             controls = controls.push(text(raw("mm")).size(FIELD_TEXT).color(text_muted).boxed());
         }
 
@@ -106,7 +123,7 @@ impl Signex {
         .graphite()
         .on_select(|m| Message::PrintPreview(PrintPreviewMsg::SetScaleMode(m)));
         controls = controls.push(
-            text(raw("Scale"))
+            text(t!(i18n, ids::PDF_SCALE))
                 .size(FIELD_TEXT)
                 .color(text_muted)
                 .boxed(),
@@ -115,6 +132,7 @@ impl Signex {
         if matches!(options.scale, PdfScale::Percent(_)) {
             controls = controls
                 .push(self.pdf_numeric_field(&inputs.percent, PrintPreviewMsg::SetScalePercent));
+            // raw: the percent sign, a symbol.
             controls = controls.push(text(raw("%")).size(FIELD_TEXT).color(text_muted).boxed());
         }
         controls.boxed()
@@ -135,6 +153,7 @@ impl Signex {
                 } else {
                     tokens.error
                 };
+                // raw: the page-setup notice is worded by its validator (#2061).
                 signex_widgets::text(signex_widgets::raw(message.to_string()))
                     .size(FIELD_TEXT)
                     .color(crate::styles::ti(colour))
@@ -150,13 +169,16 @@ impl Signex {
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
         use iced::widget::{Space, column, container, row};
+        use signex_i18n::{ids, t};
         use signex_widgets::{raw, text};
+        let i18n = self.ui_state.i18n.as_ref();
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
         let mut margins = row![].spacing(SP.m).align_y(iced::Alignment::Center);
         for edge in MarginEdge::ALL {
             margins = margins.push(
+                // raw: the edge's name comes from signex-output (#2060).
                 text(raw(edge.to_string()))
                     .size(FIELD_TEXT)
                     .color(text_muted)
@@ -168,13 +190,14 @@ impl Signex {
                 }),
             );
         }
+        // raw: a unit symbol, the same in every language.
         margins = margins.push(text(raw("mm")).size(FIELD_TEXT).color(text_muted).boxed());
 
         column![
-            self.pdf_section_title("Page Setup"),
+            self.pdf_section_title(ids::PDF_SECTION_PAGE_SETUP),
             container(
                 column![
-                    text(raw("Margins are measured from the page edge."))
+                    text(t!(i18n, ids::PDF_MARGINS_HELP))
                         .size(FIELD_TEXT)
                         .color(text_muted)
                         .boxed(),

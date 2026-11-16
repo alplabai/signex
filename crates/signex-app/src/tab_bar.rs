@@ -5,7 +5,7 @@ use iced::widget::{Row, container, mouse_area, scrollable};
 use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::TabPill;
-use signex_widgets::{raw, text, tooltip};
+use signex_widgets::{Label, text, tooltip};
 
 use crate::app::{Document, DocumentKey, TabInfo};
 use crate::styles::{self, Spacing, TypeScale};
@@ -64,16 +64,21 @@ pub fn reveal_active_tab<M: Send + 'static>(active: usize, count: usize) -> iced
 /// The hover text of a tab, or `None` when tooltips are off. They are off
 /// while the tab's context menu is open, since the tooltip hangs below the
 /// tab and would cover the menu's first row (#1770).
-fn tab_tooltip(path: &std::path::Path, read_only: bool, enabled: bool) -> Option<String> {
+fn tab_tooltip(
+    path: &std::path::Path,
+    read_only: bool,
+    enabled: bool,
+    i18n: &signex_i18n::I18n,
+) -> Option<Label<'static>> {
     if !enabled {
         return None;
     }
-    let mut tip = path.display().to_string();
-    if read_only {
-        tip.push('\n');
-        tip.push_str(READ_ONLY_TOOLTIP);
-    }
-    Some(tip)
+    let path = path.display().to_string();
+    Some(if read_only {
+        signex_i18n::t!(i18n, signex_i18n::ids::CHROME_TAB_READ_ONLY_TOOLTIP, "path" => path).into()
+    } else {
+        signex_i18n::UserText::new(path).into()
+    })
 }
 
 /// Per-tab state the strip marks: unsaved edits, a read-only sheet, and
@@ -180,10 +185,10 @@ pub fn view<'a>(
                 .boxed();
         // The pill shows an ellipsized title; hovering names the full path.
         let tab_el: Element<'_, TabMessage> =
-            match tab_tooltip(&tab.path, is_read_only, tooltips_enabled) {
+            match tab_tooltip(&tab.path, is_read_only, tooltips_enabled, i18n) {
                 Some(tip) => tooltip(
                     tab_el,
-                    container(text(raw(tip)).size(TAB_FONT_SIZE)).padding([SP.xs, 6.0]),
+                    container(text(tip).size(TAB_FONT_SIZE)).padding([SP.xs, 6.0]),
                     tooltip::Position::Bottom,
                 )
                 .style(styles::context_menu(tokens))
@@ -223,9 +228,6 @@ pub fn placeholder<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
         })
         .boxed()
 }
-
-/// Tooltip line saying why a sheet is read-only.
-const READ_ONLY_TOOLTIP: &str = "Read-only: written by a newer Signex. Edit it in that version.";
 
 /// Tab label font size; the dirty dot is sized from it.
 const TAB_FONT_SIZE: f32 = TS.body;
@@ -289,8 +291,8 @@ fn ellipsize_title(title: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        READ_ONLY_TOOLTIP, ellipsize_title, read_only_tab_paths, reveal_active_tab, reveal_offset,
-        tab_is_dirty, tab_tooltip,
+        ellipsize_title, read_only_tab_paths, reveal_active_tab, reveal_offset, tab_is_dirty,
+        tab_tooltip,
     };
     use crate::app::{TabInfo, TabKind};
     use std::collections::HashSet;
@@ -372,19 +374,26 @@ mod tests {
     #[test]
     fn a_tab_has_no_tooltip_while_its_context_menu_is_open() {
         let path = std::path::Path::new("a/b.snxsch");
-        assert_eq!(tab_tooltip(path, false, false), None);
-        assert_eq!(tab_tooltip(path, true, false), None);
+        let i18n = signex_i18n::I18n::en_us();
+        assert!(tab_tooltip(path, false, false, &i18n).is_none());
+        assert!(tab_tooltip(path, true, false, &i18n).is_none());
     }
 
     #[test]
     fn a_tab_tooltip_names_the_path_and_the_read_only_reason() {
         let path = std::path::Path::new("a/b.snxsch");
+        let i18n = signex_i18n::I18n::en_us();
+        let tip = |read_only| {
+            tab_tooltip(path, read_only, true, &i18n)
+                .expect("a tooltip")
+                .as_str()
+                .replace(['\u{2068}', '\u{2069}'], "")
+        };
+        assert_eq!(tip(false), "a/b.snxsch");
         assert_eq!(
-            tab_tooltip(path, false, true).as_deref(),
-            Some("a/b.snxsch")
+            tip(true),
+            "a/b.snxsch\nRead-only: written by a newer Signex. Edit it in that version."
         );
-        let tip = tab_tooltip(path, true, true).expect("a tooltip");
-        assert!(tip.ends_with(READ_ONLY_TOOLTIP));
     }
 
     #[test]

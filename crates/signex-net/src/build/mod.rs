@@ -23,7 +23,7 @@ use signex_types::schematic::{InstancePath, Label, LabelType, Point, SchematicSh
 use uuid::Uuid;
 
 mod connected_items;
-pub use connected_items::connected_net_items;
+pub use connected_items::{connected_net_items, is_connection_kind};
 mod extent;
 pub use extent::{NetExtent, net_extent_at};
 mod gate;

@@ -1,6 +1,7 @@
 //! #859 — opening a schematic, PCB or primitive reads the file on a worker;
 //! the tab is installed only by a completion that is still current.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use super::restore_commit_tests::{collect_messages, run_task};

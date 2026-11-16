@@ -2,6 +2,7 @@
 //! Messages panel receives.
 
 use iced::Task;
+use signex_i18n::RenderTranslatable;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;

@@ -448,7 +448,7 @@ fn place_menu_greys_only_the_planned_tools() {
             assert_eq!(it.disabled, planned, "{}", it.label);
             assert_eq!(
                 it.tooltip.as_deref(),
-                planned.then_some(crate::active_bar::PLANNED_TOOLTIP),
+                planned.then_some("Planned — not available yet"),
                 "{}",
                 it.label
             );

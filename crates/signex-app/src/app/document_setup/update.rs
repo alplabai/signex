@@ -106,7 +106,7 @@ impl Signex {
         };
         let mut draft = NewProjectState::of_setup(resolved.setup);
         draft.customize_open = true;
-        self.ui_state.document_setup = Some(DocumentSetupState {
+        self.ui_state.document_setup = Some(Box::new(DocumentSetupState {
             kind,
             project,
             project_name,
@@ -114,7 +114,7 @@ impl Signex {
             project_had_designators,
             designators_picked: false,
             profile_picked: false,
-        });
+        }));
         Task::none()
     }
 

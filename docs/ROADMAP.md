@@ -525,6 +525,22 @@ the area migrations come after the infrastructure.
 **Not in this plan:** right-to-left layout (a later phase of #2053), translated user guide
 and sample projects, user content.
 
+### Application Core (architecture, no tier)
+
+One iced-free application core shared by every front end: the GUI and
+`signex-cli` run the same command through the same core, and the CLI stops
+building and booting the GUI. Epic #2326; the design is
+[ADR-0006](architecture/adr-0006-application-core.md). The slices ship one
+PR at a time across releases, each a valid stopping point; this plan carries
+no release of its own.
+
+| Plan | Scope |
+|------|-------|
+| **Application Core** | The #2325 CLI stack fix; the `signex-i18n-ids` split and the `signex-commands` crate; the core contract (`CoreEvent`, `Effect`, the test adapter); the event seam and projector; the `load_gateway` split; the state partition; persistence and git IO as effects run by a host; command handlers in the core; queries; lifting the core into `signex-workspace` so `signex-cli` drops `signex-app` (ADR-0006, "Slices") |
+
+**Not in this plan:** a web front end and the wasm32 gate (epic D10: not
+now), the plugin host (Plugin System).
+
 ### 3D Viewer (P3)
 
 The in-canvas realistic 3D view mode — Tier 1 of the two-tier 3D stack.

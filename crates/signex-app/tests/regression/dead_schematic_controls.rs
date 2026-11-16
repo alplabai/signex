@@ -369,6 +369,34 @@ fn center_view_at_cursor_recentres_without_changing_zoom_and_cancels_a_queued_fi
     );
 }
 
+/// #1671: `center_on_cursor` (Classic F4) is Center View At Cursor under
+/// another profile's name: it recentres on the cursor and keeps the zoom.
+#[test]
+fn center_on_cursor_recentres_like_center_view_at_cursor() {
+    let (mut app, path) = app_with(vec![symbol(uuid::Uuid::now_v7(), "R1", 0.0)]);
+    let sheet = app.document_state.engines[&path].document().clone();
+    app.interaction_state
+        .active_canvas_mut()
+        .set_render_cache(Some(
+            signex_app::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
+    app.interaction_state.active_canvas().set_viewport(VIEWPORT);
+    cursor_at(&mut app, 50.0, 30.0);
+    let (_, _, s0) = app.interaction_state.active_canvas().live_camera();
+
+    let _ = app.update(Message::Menu(MenuMessage::Command(
+        signex_app::keymap::AppCommandId::new("center_on_cursor").expect("a catalog id"),
+    )));
+
+    let camera = app.interaction_state.active_canvas().live_camera();
+    assert!((camera.2 - s0).abs() < 1e-6, "zoom must not change");
+    let centre = view_centre(camera);
+    assert!(
+        (centre.0 - 50.0).abs() < 1e-3 && (centre.1 - 30.0).abs() < 1e-3,
+        "cursor point must land at the view centre, got {centre:?}"
+    );
+}
+
 /// #525 review: the cursor point belongs to the document it was reported
 /// over. Before any hover, or once another tab is active, there is no point
 /// to centre on and the view stays put.

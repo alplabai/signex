@@ -4,6 +4,7 @@
 //!
 //! Driven through the real messages against a real temp `.snxlib`.
 
+use signex_i18n::RenderTranslatable;
 use std::path::PathBuf;
 
 use signex_app::app::{ContextMenuMsg, EditMsg, Message, Signex, Tool};

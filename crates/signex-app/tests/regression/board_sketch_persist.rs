@@ -12,6 +12,7 @@ use signex_app::library::editor::footprint::SketchTool;
 use signex_app::library::messages::FootprintEditorMsg;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::panels::{BoardSketchAttrMsg, PanelMsg};
+use signex_i18n::RenderTranslatable;
 use signex_i18n::{ids, t};
 use signex_types::format::SnxPcb;
 use signex_types::pcb::PcbBoard;

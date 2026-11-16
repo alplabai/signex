@@ -3,6 +3,7 @@
 //! sweep. All disk work runs in `spawn_blocking`; the pure decisions are in
 //! `crate::autosave::recovery`.
 
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 

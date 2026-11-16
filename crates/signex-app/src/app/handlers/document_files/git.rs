@@ -1,6 +1,7 @@
 //! Project git-commit handlers. Split from `handlers/document_files.rs`.
 
 use anyhow::Result;
+use signex_i18n::RenderTranslatable;
 
 use super::super::super::*;
 

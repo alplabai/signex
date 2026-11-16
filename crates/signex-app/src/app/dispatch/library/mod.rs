@@ -15,6 +15,7 @@
 //! a single state assignment) stay inline.
 
 use iced::Task;
+use signex_i18n::RenderTranslatable;
 
 use super::super::*;
 use crate::library::commands;

@@ -51,4 +51,15 @@ define_ids! {
     PANELS_DIRECTIVE_NET_CLASS = "panels-directive-net-class";
     PANELS_DIRECTIVE_ERC_EXCLUSIONS = "panels-directive-erc-exclusions";
     PANELS_DIRECTIVE_ALL_RULES = "panels-directive-all-rules";
+    PANELS_STATUS_BAR_X = "panels-status-bar-x";
+    PANELS_STATUS_BAR_Y = "panels-status-bar-y";
+    PANELS_STATUS_BAR_ZOOM = "panels-status-bar-zoom";
+    PANELS_STATUS_BAR_SAVING = "panels-status-bar-saving";
+    PANELS_STATUS_BAR_SELECTION_ONE_KIND = "panels-status-bar-selection-one-kind";
+    PANELS_STATUS_BAR_SELECTION_KINDS = "panels-status-bar-selection-kinds";
+    PANELS_STATUS_BAR_SELECTED_COMPONENTS = "panels-status-bar-selected-components";
+    PANELS_STATUS_BAR_SELECTED_WIRES = "panels-status-bar-selected-wires";
+    PANELS_STATUS_BAR_SELECTED_LABELS = "panels-status-bar-selected-labels";
+    PANELS_STATUS_BAR_SELECTED_SHAPES = "panels-status-bar-selected-shapes";
+    PANELS_STATUS_BAR_SELECTED_OTHER = "panels-status-bar-selected-other";
 }

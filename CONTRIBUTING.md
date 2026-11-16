@@ -323,6 +323,7 @@ Each crate maps to an `area:` label (auto-applied to PRs by path — see
 | `signex-widgets` / `chrome-catalog` | Custom Iced widgets + chrome catalog. | `widgets` |
 | `signex-cli` | Headless command runner (`signex-cli`): JSON Lines in, one result line out; the security rules for agent input. See [docs/CLI.md](docs/CLI.md). | `app` |
 | `signex-i18n` | UI message catalogs and locale-aware formatting. No area label of its own yet; use `app`. | `app` |
+| `signex-i18n-ids` | Message ids and `Translatable`, with no locale dependency; `signex-i18n` re-exports and renders them. | `app` |
 | `signex-app` | Main binary — Iced app, panels, dock, menus, canvas, Active Bar, and the footprint/symbol/library editors. | `app`, `footprint-editor`, `symbol-editor`, `schematic`, `pcb` |
 
 **Rule:** `signex-types` has zero rendering dependencies. If you need to draw
@@ -408,6 +409,10 @@ them, so the rest is on the author.
   state changes, and IO is returned as a `Task`, never run inline (the
   bounded `SaveBarrier` wait in ADR-0003 D2 is the sanctioned exception). No
   process-global app state. Message routers are exhaustive, with no `_` arm.
+  Inside the application core
+  ([ADR-0006](docs/architecture/adr-0006-application-core.md), accepted
+  2026-11-16), IO is an `Effect` that the host
+  behind the calling front end runs; the GUI runs it as a `Task`.
 - **Messages:** contributors do not add `Message` variants. If a change needs
   a new message, open an issue that describes the event and the maintainers
   add it. The message tree is shared by every surface, so its shape is decided

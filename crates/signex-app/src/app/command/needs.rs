@@ -34,6 +34,8 @@ pub(crate) enum Needs {
     ParentSheet,
     DeleteTarget,
     VertexTarget,
+    /// A wire, bus or polyline draw is in progress.
+    DrawInProgress,
     Sheets,
     ActiveSheet,
     Canvas,
@@ -126,6 +128,7 @@ impl Needs {
             Self::DeleteTarget if ctx.pcb.shown => ctx.pcb.deletable,
             Self::DeleteTarget => editable_selection(ctx) || ctx.has_footprint_editor,
             Self::VertexTarget => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
+            Self::DrawInProgress => ctx.drawing,
             // These assemble the project's sheets, not only the active tab's.
             Self::Sheets => ctx.has_schematic || ctx.has_sheets,
             // Annotate acts from the active document's path; with none open it
@@ -202,6 +205,7 @@ impl Needs {
             Self::ParentSheet => "The active sheet has no parent sheet",
             Self::DeleteTarget => "Nothing is selected to delete, or the selection is locked",
             Self::VertexTarget => "Nothing is selected and no wire is being drawn",
+            Self::DrawInProgress => "No wire, bus or polyline is being drawn",
             Self::Sheets => "No schematic or project is open",
             Self::ActiveSheet => "No sheet is open",
             Self::Canvas => "No schematic or PCB is open",
@@ -294,6 +298,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "flip_selection" => Needs::PcbPlacement,
         "change_footprint" => Needs::SwapFootprints,
         "remove_last_vertex" => Needs::VertexTarget,
+        "undo_last_segment" => Needs::DrawInProgress,
         "paste_array"
         | "repeat_last_item"
         | "rubber_stamp_copy"
@@ -393,7 +398,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
-        "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => Needs::FitTarget,
+        // Redraw, like a fit, acts on a main or undocked sheet or board canvas.
+        "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" | "refresh_view" => {
+            Needs::FitTarget
+        }
         "cycle_snap_grid_forward" | "open_grid_picker" => Needs::FootprintEditor,
         "toggle_ratsnest"
         | "toggle_origin_marker"

@@ -40,6 +40,7 @@
 //! "Update from library", so nothing changes silently.
 
 use iced::Task;
+use signex_i18n::RenderTranslatable;
 use std::path::{Path, PathBuf};
 
 use signex_engine::PlacementPayload;

@@ -17,7 +17,7 @@ fn app_with_state(apply: bool, job: u64) -> Signex {
     );
     state.job = job;
     state.phase = Phase::Computing;
-    app.ui_state.update_pcb = Some(state);
+    app.ui_state.update_pcb = Some(Box::new(state));
     app
 }
 

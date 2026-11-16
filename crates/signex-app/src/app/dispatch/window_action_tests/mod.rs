@@ -799,6 +799,9 @@ fn an_in_place_edit_opened_from_a_window_commits_on_the_windows_sheet() {
 #[path = "context.rs"]
 mod context;
 
+#[path = "cursor.rs"]
+mod cursor;
+
 #[path = "descent.rs"]
 mod descent;
 

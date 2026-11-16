@@ -5766,6 +5766,7 @@ dependencies = [
  "serde_json",
  "signex-app",
  "signex-engine",
+ "signex-i18n",
  "signex-types",
  "tempfile",
  "uuid",
@@ -5878,9 +5879,14 @@ dependencies = [
  "icu_provider",
  "intl-memoizer",
  "log",
+ "signex-i18n-ids",
  "sys-locale",
  "unic-langid",
 ]
+
+[[package]]
+name = "signex-i18n-ids"
+version = "26.11.0-rc.1"
 
 [[package]]
 name = "signex-library"

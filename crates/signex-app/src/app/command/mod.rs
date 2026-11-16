@@ -414,17 +414,17 @@ mod tests {
         assert_eq!(task.units(), 0);
     }
 
-    /// `center_on_cursor` is a real catalog entry
+    /// `reset_local_coordinates` is a real catalog entry
     /// (`keymap/catalog`) with no arm in `core_to_message`
     /// yet — it must resolve to a no-op too, not panic.
     #[test]
     fn catalog_id_with_no_bridge_arm_is_a_no_op_and_does_not_panic() {
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("center_on_cursor").unwrap();
+        let command = AppCommandId::new("reset_local_coordinates").unwrap();
         assert!(
             crate::keymap::metadata_for(&command).is_some(),
-            "test fixture drifted: center_on_cursor is no longer a catalog id"
+            "test fixture drifted: reset_local_coordinates is no longer a catalog id"
         );
 
         let (outcome, task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
@@ -521,10 +521,10 @@ mod tests {
             disabled + 1
         );
 
-        let unmapped = count("command 'center_on_cursor'");
-        click(&mut app, "center_on_cursor");
+        let unmapped = count("command 'reset_local_coordinates'");
+        click(&mut app, "reset_local_coordinates");
         assert!(
-            count("command 'center_on_cursor'") > unmapped,
+            count("command 'reset_local_coordinates'") > unmapped,
             "no bridge arm"
         );
 

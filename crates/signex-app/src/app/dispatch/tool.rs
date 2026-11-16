@@ -311,28 +311,19 @@ impl Signex {
                 self.set_corner_rule(rule);
                 self.finish_update()
             }
+            // Outside a draw it is a delete.
             ToolMessage::RemoveLastVertex => {
-                // Segments commit per click, so the only uncommitted vertex
-                // is the wire's start point: popping it ends the draw but
-                // keeps the Wire tool armed. Outside a draw it is a delete.
-                if self.interaction_state.wire_drawing {
-                    self.interaction_state.wire_drawing = false;
-                    self.interaction_state.wire_points.clear();
-                    let canvas = self.interaction_state.active_canvas_mut();
-                    canvas.wire_preview.clear();
-                    canvas.drawing_mode = false;
-                    return self.finish_update();
-                }
-                // A polyline buffers every click until Enter / double-click,
-                // so Backspace drops the last buffered point.
-                if self.interaction_state.polyline_points.pop().is_some() {
-                    let points = self.interaction_state.polyline_points.clone();
-                    let canvas = self.interaction_state.active_canvas_mut();
-                    canvas.polyline_points = points;
-                    canvas.clear_overlay_cache();
+                if self.pop_pending_vertex() {
                     return self.finish_update();
                 }
                 self.update(Message::Edit(EditMsg::DeleteSelected))
+            }
+            // Outside a draw it does nothing (`undo_last_segment`).
+            ToolMessage::LastSegmentUndoRequested => {
+                if self.pop_pending_vertex() {
+                    return self.finish_update();
+                }
+                Task::none()
             }
             ToolMessage::CancelDrawing => {
                 if self.interaction_state.wire_drawing {
@@ -430,6 +421,30 @@ impl Signex {
                 self.finish_update()
             }
         }
+    }
+
+    /// Drop the pending vertex of a draw in progress; `false` when there is
+    /// no draw. Segments commit per click, so the only uncommitted wire vertex
+    /// is its start point: popping it ends the draw but keeps the tool armed.
+    /// A polyline buffers every click until Enter / double-click, so it drops
+    /// the last buffered point.
+    fn pop_pending_vertex(&mut self) -> bool {
+        if self.interaction_state.wire_drawing {
+            self.interaction_state.wire_drawing = false;
+            self.interaction_state.wire_points.clear();
+            let canvas = self.interaction_state.active_canvas_mut();
+            canvas.wire_preview.clear();
+            canvas.drawing_mode = false;
+            return true;
+        }
+        if self.interaction_state.polyline_points.pop().is_some() {
+            let points = self.interaction_state.polyline_points.clone();
+            let canvas = self.interaction_state.active_canvas_mut();
+            canvas.polyline_points = points;
+            canvas.clear_overlay_cache();
+            return true;
+        }
+        false
     }
 }
 
