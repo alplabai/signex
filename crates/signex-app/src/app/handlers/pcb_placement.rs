@@ -380,26 +380,7 @@ impl Signex {
     }
 }
 
-/// What the placement commands could act on in a window, for enablement.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub(crate) struct PcbTargets {
-    /// The window shows a board.
-    pub shown: bool,
-    /// Something on it is selected.
-    pub any: bool,
-    /// The selection names footprints and none is locked.
-    pub placeable: bool,
-    /// The selection names something to delete and no locked footprint.
-    pub deletable: bool,
-    /// The selection names something Copy carries (#2361).
-    pub copyable: bool,
-    /// The clipboard holds board objects to paste (#2361).
-    pub pasteable: bool,
-    /// A library part is on the cursor, for Space and the flip (#2364).
-    pub part_in_hand: bool,
-    /// A track run is being drawn, for Space and Shift+Space (#2373).
-    pub routing: bool,
-}
+pub(crate) use signex_commands::PcbTargets;
 
 impl Signex {
     /// [`PcbTargets`] for a command from `window` (`None`: the main one).
