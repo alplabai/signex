@@ -6,7 +6,10 @@ use signex_types::pcb::{PcbBoard, Segment, Via, ViaType};
 use signex_types::pcb_layer::CopperLayer;
 
 use crate::copper::layer_mask;
-use crate::index::ItemRef;
+use crate::index::{ItemRef, track_shape, via_shape};
+use crate::pick_filter::PickKind;
+use crate::shape::Shape;
+use crate::transform::pad_shape;
 use crate::units::{PointNm, nm_to_mm};
 
 /// The centre-line length of a track in nm; `None` for an end the geometry
@@ -68,8 +71,49 @@ pub fn net_items(board: &PcbBoard, net: u32) -> Vec<ItemRef> {
     tracks.chain(vias).chain(pads).collect()
 }
 
-/// The net of a track, via or pad; `None` for a footprint body, a drawn
-/// area, an item not on the board, or one on no net.
+/// Every track, via and pad of `net`, then its selectable drawn areas: what
+/// Select Net puts in the selection (#2403). Empty for net 0.
+pub fn net_members(board: &PcbBoard, net: u32) -> Vec<ItemRef> {
+    let mut items = net_items(board, net);
+    if net == 0 {
+        return items;
+    }
+    items.extend(board.zones.iter().filter(|z| z.net == net).filter_map(|z| {
+        Some(ItemRef::Zone {
+            zone: z.uuid,
+            kind: PickKind::of_zone(z)?,
+        })
+    }));
+    items
+}
+
+/// The copper of the tracks, vias and pads of `net`: what Highlight Net
+/// draws bright (#2403). Items the geometry cannot hold are left out.
+pub fn net_copper(board: &PcbBoard, net: u32) -> Vec<Shape> {
+    if net == 0 {
+        return Vec::new();
+    }
+    let tracks = board
+        .segments
+        .iter()
+        .filter(|s| s.net == net)
+        .filter_map(|s| track_shape(s).ok());
+    let vias = board
+        .vias
+        .iter()
+        .filter(|v| v.net == net)
+        .filter_map(|v| via_shape(v).ok());
+    let pads = board.footprints.iter().flat_map(|fp| {
+        fp.pads
+            .iter()
+            .filter(|p| p.net.as_ref().is_some_and(|n| n.number == net))
+            .filter_map(move |p| pad_shape(fp, p).ok())
+    });
+    tracks.chain(vias).chain(pads).collect()
+}
+
+/// The net of a track, via, pad or drawn area; `None` for a footprint body,
+/// an item not on the board, or one on no net.
 pub fn item_net(board: &PcbBoard, item: ItemRef) -> Option<u32> {
     let net = match item {
         ItemRef::Track(id) => board.segments.iter().find(|s| s.uuid == id)?.net,
@@ -86,7 +130,8 @@ pub fn item_net(board: &PcbBoard, item: ItemRef) -> Option<u32> {
                 .as_ref()?
                 .number
         }
-        ItemRef::Footprint(_) | ItemRef::Zone { .. } => return None,
+        ItemRef::Zone { zone, .. } => board.zones.iter().find(|z| z.uuid == zone)?.net,
+        ItemRef::Footprint(_) => return None,
     };
     (net != 0).then_some(net)
 }

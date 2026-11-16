@@ -49,11 +49,14 @@ pub use graphic::{
     GraphicShape, PlacedGraphic, board_graphic_placement, board_text_placement,
     footprint_graphic_placement,
 };
-pub use index::{BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected, track_shape, via_shape};
+pub use index::{
+    BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected, item_by_uuid, track_shape, via_shape,
+};
 pub use measure::{Span, edge_gap};
 pub use mst::{Edge, euclidean_mst, spanning_forest};
 pub use net_length::{
-    item_net, net_items, net_routed_length_mm, track_length_mm, tracks_length_mm, via_span,
+    item_net, net_copper, net_items, net_members, net_routed_length_mm, track_length_mm,
+    tracks_length_mm, via_span,
 };
 pub use net_report::{NetReport, net_named, net_reports};
 pub use pick_filter::{PickFilter, PickKind};

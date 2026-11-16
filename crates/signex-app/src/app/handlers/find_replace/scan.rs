@@ -40,6 +40,19 @@ impl Signex {
         }
     }
 
+    /// Board results left from a tab no longer in view (#2403): search the
+    /// document in view again instead of acting on them, and say so. `None`
+    /// when the results are current.
+    pub(super) fn refresh_stale_board_find(&mut self) -> Option<Task<Message>> {
+        if !self.board_find_is_stale() {
+            return None;
+        }
+        crate::diagnostics::log_info(
+            "Find: the results were for a board no longer in view; searched the document in view",
+        );
+        Some(self.refresh_find_matches())
+    }
+
     /// Sheet-scope refresh, for callers that need the list current right now.
     pub(super) fn refresh_find_matches_now(&mut self) {
         if !self.refresh_board_find() {

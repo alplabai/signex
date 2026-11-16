@@ -261,10 +261,11 @@ as on a sheet (#2403). The numbers and matches come from the domain crates
   shape, net) and OK selects every object of the board that matches the ones
   set to Same.
 - **Select Net** and **Highlight Net** (`select_board_net`,
-  `highlight_board_net`): the net of the selection or of what is under the
-  cursor. Select puts its tracks, vias, pads and areas in the selection;
-  Highlight draws its copper bright until it is run again for that net or
-  Esc is pressed. Neither changes the board.
+  `highlight_board_net`): the net `net=<name>` names, else the net of the
+  selection or of what is under the cursor. Select puts its tracks, vias,
+  pads and areas in the selection; Highlight draws its copper bright until
+  it is run again for that net or Esc is pressed. Neither changes the
+  board. A name the board does not have is refused.
 - **Net Inspector**: lists the board's nets (see `MENU_BAR.md`, "Tools ▸ Net
   Inspector").
 

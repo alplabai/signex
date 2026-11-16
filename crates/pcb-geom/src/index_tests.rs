@@ -408,3 +408,45 @@ fn drawn_areas_are_picked_on_their_edges_and_inside() {
         "connectivity holds no areas"
     );
 }
+
+/// #2403: every kind of item is found by its uuid; a pour and an unknown
+/// uuid are not.
+#[test]
+fn an_item_is_found_by_its_uuid() {
+    let fp = footprint(
+        id(1),
+        0.0,
+        0.0,
+        0.0,
+        "TopCopper",
+        vec![pad(id(2), 0.0, 0.0, 1.0, 1.0)],
+    );
+    let mut b = board(
+        vec![fp],
+        vec![segment(id(3), (0.0, 0.0), (1.0, 0.0), 0.2)],
+        vec![via(id(4), 0.0, 0.0, 0.6)],
+    );
+    b.zones = vec![
+        area(id(5), "keepout", &[(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]),
+        area(id(6), "pour", &[(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]),
+    ];
+    assert_eq!(item_by_uuid(&b, id(1)), Some(ItemRef::Footprint(id(1))));
+    assert_eq!(
+        item_by_uuid(&b, id(2)),
+        Some(ItemRef::Pad {
+            footprint: id(1),
+            pad: id(2)
+        })
+    );
+    assert_eq!(item_by_uuid(&b, id(3)), Some(ItemRef::Track(id(3))));
+    assert_eq!(item_by_uuid(&b, id(4)), Some(ItemRef::Via(id(4))));
+    assert_eq!(
+        item_by_uuid(&b, id(5)),
+        Some(ItemRef::Zone {
+            zone: id(5),
+            kind: PickKind::Keepouts
+        })
+    );
+    assert_eq!(item_by_uuid(&b, id(6)), None);
+    assert_eq!(item_by_uuid(&b, id(9)), None);
+}

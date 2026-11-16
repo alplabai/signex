@@ -247,8 +247,8 @@ place_board_fill	place	Place a rectangle of solid copper on the active copper la
 place_board_region	place	Place a polygon of solid copper on the active copper layer	Solid Region	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_polygon_pour	place	Place a polygon pour on the active copper layer, filled clear of other nets	Polygon Pour	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_keepout	place	Draw a keepout that keeps copper off a layer	Keepout	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
-select_board_net	select	Select every track, via and pad of a board net	Select Net	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
-highlight_board_net	select	Highlight a board net	Highlight Net	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+select_board_net	select	Select every track, via and pad of a board net	Select Net	PCB	-	-	RequiresDocument(Pcb)	-	net:text?
+highlight_board_net	select	Highlight a board net	Highlight Net	PCB	-	-	RequiresDocument(Pcb)	-	net:text?
 measure_board	search	Measure on a board	-	PCB	-	-	Always	-	document:document,start:point/mm?,end:point/mm?,ids:text?
 query_board_nets	search	Query board nets	-	PCB	-	-	Always	-	document:document,net:text?
 find_similar_items	search	Find similar items on a board	-	PCB	-	-	Always	-	document:document,id:text,fields:text?

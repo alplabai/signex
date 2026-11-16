@@ -86,6 +86,8 @@ impl Signex {
         let window = self.interaction_state.acting_window;
         let carry = PcbCarry::new(CarryKind::Move, path, window, footprints);
         self.interaction_state.pcb_tool = None;
+        // Measure would take the Move's clicks (#2403).
+        self.interaction_state.pcb_query.measure = None;
         self.interaction_state.pcb_carry = Some(carry);
         // While a Move waits for its clicks, a press never starts a drag.
         self.refresh_pcb_highlight();

@@ -337,6 +337,9 @@ pub const CHECK_DRC: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("baseline", OperandKind::Text),
 ];
+/// Select Net and Highlight Net on a board (#2403): the net by name; without
+/// it, the net of the selection or of what is under the cursor.
+pub const BOARD_NET: &[Operand] = &[optional("net", OperandKind::Text)];
 /// `measure_board` (#2403): point to point from `start` to `end`, or edge to
 /// edge between the two items `ids` names.
 pub const MEASURE_BOARD: &[Operand] = &[

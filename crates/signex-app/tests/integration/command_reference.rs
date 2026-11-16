@@ -132,6 +132,9 @@ fn render() -> String {
          queries: a distance on one board, point to point or edge to edge between\n\
          two items; each net's routed length, members and routed state; and the\n\
          objects that agree with an item on the properties named.\n\
+         `select_board_net` and `highlight_board_net` take an optional\n\
+         `net=<name>` (compared without case); without it they act on the net of\n\
+         the selection or of what is under the cursor.\n\
          \n\
          A point operand (`at`, `start`, `end`) also takes a pin reference\n\
          `<designator>.<pin>` (`R1.2`) or `<sheet name>.<entry name>` (`Charger.SDA`):\n\

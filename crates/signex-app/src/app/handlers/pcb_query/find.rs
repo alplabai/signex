@@ -48,6 +48,12 @@ impl Signex {
         board.is_some_and(|b| self.active_tab_path().as_deref() == Some(b.path.as_path()))
     }
 
+    /// The dialog lists a board that is no longer in view (another tab
+    /// was opened since): its results must not be acted on.
+    pub(crate) fn board_find_is_stale(&self) -> bool {
+        self.ui_state.find_replace.board.is_some() && !self.board_find_in_view()
+    }
+
     /// Go to board result `index`: select what it names and frame it.
     /// `false` when the dialog's results are not a board's.
     pub(crate) fn focus_board_find_result(&mut self, index: usize) -> bool {

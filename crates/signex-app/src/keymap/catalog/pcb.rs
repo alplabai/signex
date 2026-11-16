@@ -291,9 +291,10 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
-    // #2403: the net of the board selection, or of what is under the
-    // cursor: select its tracks, vias and pads, or draw it bright (again:
-    // no longer). View and selection only; no default key.
+    // #2403: the board net `net` names, else that of the selection or of
+    // what is under the cursor: select its tracks, vias and pads, or draw
+    // it bright (again: no longer). `net` comes from a typed command line
+    // (the CLI), so neither is GUI-only. View and selection only; no key.
     CommandMetadata {
         id: "select_board_net",
         category: "select",
@@ -301,7 +302,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_SELECT_BOARD_NET),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_ONLY,
+        flags: CommandFlags::NONE,
+        operands: super::operands::BOARD_NET,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -311,7 +313,8 @@ pub(super) const PCB: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_HIGHLIGHT_BOARD_NET),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_ONLY,
+        flags: CommandFlags::NONE,
+        operands: super::operands::BOARD_NET,
         ..CommandMetadata::DEFAULT
     },
     // #2403: the board queries an agent or the CLI asks; each answers with

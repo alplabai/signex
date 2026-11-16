@@ -11,7 +11,7 @@ use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
 use crate::app::command::queries::tests::answer;
-use crate::app::command::{CommandArgs, is_enabled};
+use crate::app::command::{CommandArgs, CommandOutcome, is_enabled};
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::selection_request::SelectionRequest;
 use crate::app::{ContextAction, ContextMenuMsg, Message, OverlayMsg, Signex, UiMsg};
@@ -422,4 +422,100 @@ fn classic_l_q_and_ctrl_m_act_on_a_board() {
         app.interaction_state.pcb_query.measure.is_some(),
         "Measure armed"
     );
+}
+
+/// #2403: a Move, a paste or a net pick started while Measure is armed
+/// ends Measure, so its clicks reach it: the footprint moves.
+#[test]
+fn a_move_started_after_measure_takes_the_clicks() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), board());
+    app.select_pcb_items(&[ItemRef::Footprint(R1)]);
+    run(&mut app, "measure_distance");
+    assert!(app.interaction_state.pcb_query.measure.is_some(), "armed");
+    run(&mut app, "move_selection");
+    assert!(app.interaction_state.pcb_query.measure.is_none(), "ended");
+    click(&mut app, 10.0, 10.0);
+    click(&mut app, 15.0, 10.0);
+    assert!(app.interaction_state.pcb_carry.is_none(), "dropped");
+    let moved = footprint(&app, &path, R1).position;
+    assert!(close(moved.x, 15.0) && close(moved.y, 10.0), "{moved:?}");
+
+    // A paste on the cursor ends Measure too.
+    run(&mut app, "copy");
+    run(&mut app, "measure_distance");
+    run(&mut app, "paste");
+    assert!(app.interaction_state.pcb_carry.is_some(), "on the cursor");
+    assert!(app.interaction_state.pcb_query.measure.is_none());
+}
+
+/// #2403: Select Net and Highlight Net take the net by name, from a typed
+/// command line or an agent, and refuse a name the board does not have.
+#[test]
+fn select_and_highlight_net_take_a_net_by_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_with(dir.path(), board());
+    let args = |id: &str, net: &str| {
+        let net = format!("net={net}");
+        CommandArgs::parse_operands(&command(id), &[net.as_str()]).expect("operands parse")
+    };
+    // Nothing selected: the name alone picks the net.
+    let _ = app.dispatch_command(
+        &command("select_board_net"),
+        args("select_board_net", "vcc"),
+        None,
+    );
+    assert_eq!(selected(&app).len(), 2, "the two VCC pads");
+
+    let (outcome, _task) = app.run_operands(
+        &command("highlight_board_net"),
+        &args("highlight_board_net", "GND"),
+    );
+    assert_eq!(outcome, CommandOutcome::Ran);
+    let lit = app.interaction_state.pcb_query.net_highlight.clone();
+    assert_eq!(lit.map(|h| (h.net, h.name)), Some((1, "GND".to_string())));
+
+    let (outcome, _task) = app.run_operands(
+        &command("select_board_net"),
+        &args("select_board_net", "NOPE"),
+    );
+    assert_eq!(
+        outcome,
+        CommandOutcome::Disabled {
+            reason: "the board has no net named `NOPE`".into()
+        }
+    );
+    assert_eq!(selected(&app).len(), 2, "the selection is kept");
+}
+
+/// #2403: results left from a board no longer in view are not acted on:
+/// Replace All searches the board now in view instead, and the next one
+/// replaces there.
+#[test]
+fn find_results_of_a_board_out_of_view_are_searched_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, first) = app_with(dir.path(), board());
+    let _ = app.update(Message::Overlay(OverlayMsg::OpenReplace));
+    let find = Message::FindReplaceMsg;
+    let _ = app.update(find(FindReplaceMsg::QueryChanged("10K".into())));
+    let _ = app.update(find(FindReplaceMsg::ReplacementChanged("4k7".into())));
+    let mut other = board();
+    other.uuid = Uuid::from_u128(2);
+    let second = dir.path().join("other.snxpcb");
+    app.open_pcb_tab(second.clone(), "other".into(), other);
+
+    let _ = app.update(find(FindReplaceMsg::ReplaceAll));
+    assert_eq!(footprint(&app, &first, R1).value, "10k", "not in view");
+    assert_eq!(footprint(&app, &second, R1).value, "10k", "not yet shown");
+    let listed = app
+        .ui_state
+        .find_replace
+        .board
+        .as_ref()
+        .map(|b| b.path.clone());
+    assert_eq!(listed, Some(second.clone()), "the board in view's results");
+
+    let _ = app.update(find(FindReplaceMsg::ReplaceAll));
+    assert_eq!(footprint(&app, &second, R1).value, "4k7");
+    assert_eq!(footprint(&app, &first, R1).value, "10k");
 }

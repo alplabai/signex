@@ -82,6 +82,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
     ("view_rotate", view_rotate),
+    ("select_board_net", select_board_net),
+    ("highlight_board_net", highlight_board_net),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -98,6 +100,49 @@ pub(super) fn view_turn_degrees(args: &CommandArgs) -> f32 {
 fn view_rotate(app: &mut Signex, args: &CommandArgs) -> Ran {
     let turn = crate::app::ViewRotationMsg::TurnedBy(view_turn_degrees(args));
     let task = app.update(Message::Pcb(crate::app::PcbMsg::ViewRotation(turn)));
+    (CommandOutcome::Ran, task)
+}
+
+/// The board net `net` names, for Select Net and Highlight Net (#2403).
+pub(super) fn board_net_operand(args: &CommandArgs) -> Option<String> {
+    super::queries::text_operand(args, "net").map(str::to_owned)
+}
+
+/// The board net `net` names, refused when the board in view has no net of
+/// that name; `None` for the net of the selection.
+fn named_board_net(app: &Signex, args: &CommandArgs) -> Result<Option<String>, Ran> {
+    let Some(name) = board_net_operand(args) else {
+        return Ok(None);
+    };
+    match app.active_pcb() {
+        Some(board) if pcb_geom::net_named(board, &name).is_none() => {
+            Err(refused(format!("the board has no net named `{name}`")))
+        }
+        _ => Ok(Some(name)),
+    }
+}
+
+/// `select_board_net net=..` (#2403): what the Net Inspector row's Select
+/// sends.
+fn select_board_net(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let name = match named_board_net(app, args) {
+        Ok(name) => name,
+        Err(refusal) => return refusal,
+    };
+    let net = crate::app::BoardNetMsg::SelectRequested(name);
+    let task = app.update(Message::Pcb(crate::app::PcbMsg::Net(net)));
+    (CommandOutcome::Ran, task)
+}
+
+/// `highlight_board_net net=..` (#2403): what the Net Inspector row's
+/// Highlight sends.
+fn highlight_board_net(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let name = match named_board_net(app, args) {
+        Ok(name) => name,
+        Err(refusal) => return refusal,
+    };
+    let net = crate::app::BoardNetMsg::HighlightRequested(name);
+    let task = app.update(Message::Pcb(crate::app::PcbMsg::Net(net)));
     (CommandOutcome::Ran, task)
 }
 

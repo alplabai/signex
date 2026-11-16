@@ -44,6 +44,9 @@ one board. Rules in [CLI.md](CLI.md), "Checks on demand".
 queries: a distance on one board, point to point or edge to edge between
 two items; each net's routed length, members and routed state; and the
 objects that agree with an item on the properties named.
+`select_board_net` and `highlight_board_net` take an optional
+`net=<name>` (compared without case); without it they act on the net of
+the selection or of what is under the cursor.
 
 A point operand (`at`, `start`, `end`) also takes a pin reference
 `<designator>.<pin>` (`R1.2`) or `<sheet name>.<entry name>` (`Charger.SDA`):

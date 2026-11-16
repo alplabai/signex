@@ -4,7 +4,7 @@
 //! Similar dialog, answers with data and changes nothing. Shapes:
 //! `docs/CLI.md`, "Board queries".
 
-use pcb_geom::{ItemRef, NetReport, PickKind, Span};
+use pcb_geom::{ItemRef, NetReport, Span};
 use serde_json::{Value, json};
 use signex_engine::SimilarProperty;
 use signex_engine::pcb::similar;
@@ -20,40 +20,7 @@ use crate::app::document::DocumentKey;
 fn item_by_id(board: &PcbBoard, text: &str) -> Result<ItemRef, String> {
     let id = uuid::Uuid::parse_str(text.trim())
         .map_err(|_| format!("`{}` is not an id (a hyphenated uuid)", text.trim()))?;
-    let found = board
-        .footprints
-        .iter()
-        .find_map(|fp| {
-            if fp.uuid == id {
-                return Some(ItemRef::Footprint(id));
-            }
-            fp.pads.iter().find(|p| p.uuid == id).map(|_| ItemRef::Pad {
-                footprint: fp.uuid,
-                pad: id,
-            })
-        })
-        .or_else(|| {
-            board
-                .segments
-                .iter()
-                .any(|s| s.uuid == id)
-                .then_some(ItemRef::Track(id))
-        })
-        .or_else(|| {
-            board
-                .vias
-                .iter()
-                .any(|v| v.uuid == id)
-                .then_some(ItemRef::Via(id))
-        })
-        .or_else(|| {
-            let zone = board.zones.iter().find(|z| z.uuid == id)?;
-            Some(ItemRef::Zone {
-                zone: id,
-                kind: PickKind::of_zone(zone)?,
-            })
-        });
-    found.ok_or_else(|| format!("nothing on the board has the id {id}"))
+    pcb_geom::item_by_uuid(board, id).ok_or_else(|| format!("nothing on the board has the id {id}"))
 }
 
 /// The uuid an agent acts on for `item`: a pad's own, not its footprint's.
@@ -148,15 +115,18 @@ impl Signex {
     /// one named, with its routed length, members and routed state.
     pub(super) fn query_board_nets(&self, args: &CommandArgs) -> Answer {
         let (board, name) = self.named_board(args)?;
-        let wanted = text_operand(args, "net").map(|n| n.trim().to_lowercase());
+        let wanted = match text_operand(args, "net").map(str::trim) {
+            Some(net) => Some(
+                pcb_geom::net_named(board, net)
+                    .ok_or_else(|| format!("{name} has no net named {net}"))?,
+            ),
+            None => None,
+        };
         let nets: Vec<Value> = pcb_geom::net_reports(board)
             .iter()
-            .filter(|r| wanted.as_ref().is_none_or(|w| r.name.to_lowercase() == *w))
+            .filter(|r| wanted.is_none_or(|w| r.net == w))
             .map(net_json)
             .collect();
-        if let Some(net) = wanted.filter(|_| nets.is_empty()) {
-            return Err(format!("{name} has no net named {net}"));
-        }
         Ok(json!({ "document": name, "count": nets.len(), "nets": nets }))
     }
 

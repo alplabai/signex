@@ -26,6 +26,9 @@ impl Signex {
     /// Go to result `index`: open its sheet at the placement the hit was read
     /// at, select the item and zoom to it.
     pub(super) fn focus_find_result(&mut self, index: usize) -> Task<Message> {
+        if let Some(task) = self.refresh_stale_board_find() {
+            return task;
+        }
         // A board result selects and frames on the board (#2403).
         if self.focus_board_find_result(index) {
             return Task::none();

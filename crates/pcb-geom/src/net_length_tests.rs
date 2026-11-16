@@ -107,3 +107,63 @@ fn a_via_spans_the_stack_or_the_layers_it_lists() {
         None
     );
 }
+
+fn area(n: u128, fill: &str, net: u32) -> signex_types::pcb::Zone {
+    signex_types::pcb::Zone {
+        uuid: Uuid::from_u128(n),
+        net,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: vec![
+            Point::new(0.0, 0.0),
+            Point::new(1.0, 0.0),
+            Point::new(0.0, 1.0),
+        ],
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: fill.into(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        unknown: Default::default(),
+    }
+}
+
+/// #2403: a drawn area on a net is one of its members and answers its
+/// net; a pour is not selectable, and net 0 has no members.
+#[test]
+fn a_net_has_its_drawn_areas_as_members() {
+    let mut b = board(vec![track(1, (0.0, 0.0), (1.0, 0.0), 4)]);
+    b.zones = vec![area(5, "solid", 4), area(6, "pour", 4), area(7, "solid", 0)];
+    let region = ItemRef::Zone {
+        zone: Uuid::from_u128(5),
+        kind: crate::PickKind::Regions,
+    };
+    assert_eq!(
+        net_members(&b, 4),
+        vec![ItemRef::Track(Uuid::from_u128(1)), region]
+    );
+    assert_eq!(item_net(&b, region), Some(4));
+    let unnetted = ItemRef::Zone {
+        zone: Uuid::from_u128(7),
+        kind: crate::PickKind::Regions,
+    };
+    assert_eq!(item_net(&b, unnetted), None);
+    assert!(net_members(&b, 0).is_empty());
+}
+
+/// #2403: the copper of a net is its tracks, vias and pads, nothing else.
+#[test]
+fn net_copper_is_the_copper_of_the_net() {
+    let mut b = board(vec![
+        track(1, (0.0, 0.0), (1.0, 0.0), 4),
+        track(2, (0.0, 0.0), (1.0, 0.0), 5),
+    ]);
+    b.vias.push(via(ViaType::Through, &[]));
+    b.vias[0].net = 4;
+    assert_eq!(net_copper(&b, 4).len(), 2);
+    assert_eq!(net_copper(&b, 5).len(), 1);
+    assert!(net_copper(&b, 0).is_empty());
+}
