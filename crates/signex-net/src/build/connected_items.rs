@@ -16,6 +16,9 @@ use crate::{BusAnalysis, BusGeometry, analyse_buses};
 /// same-name label joins. Buses are not nets, so a net seed never pulls one in
 /// and a bus seed never reaches a wire (ADR-0002 D5.4).
 pub fn connected_net_items(sheet: &SchematicSheet, seed: SelectedItem) -> Vec<SelectedItem> {
+    if !is_connection_kind(seed.kind) {
+        return vec![seed];
+    }
     let mut out = match seed.kind {
         SelectedKind::Wire => sheet
             .wires
@@ -47,6 +50,15 @@ pub fn connected_net_items(sheet: &SchematicSheet, seed: SelectedItem) -> Vec<Se
         out.push(seed);
     }
     out
+}
+
+/// Whether [`connected_net_items`] expands a seed of `kind` to its net or bus
+/// run: a wire, bus, junction or label. Any other kind comes back alone.
+pub fn is_connection_kind(kind: SelectedKind) -> bool {
+    matches!(
+        kind,
+        SelectedKind::Wire | SelectedKind::Bus | SelectedKind::Junction | SelectedKind::Label
+    )
 }
 
 fn analyse_sheet_buses(sheet: &SchematicSheet) -> BusAnalysis {

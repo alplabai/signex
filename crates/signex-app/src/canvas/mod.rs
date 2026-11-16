@@ -911,6 +911,8 @@ pub enum CanvasEvent {
     FitSelection,
     /// Recentre on the last reported cursor position, keeping the zoom.
     CenterAtCursor,
+    /// Redraw was asked for (`refresh_view`): drop the active canvas's caches.
+    RedrawRequested,
     /// Left-click at world coordinates — triggers hit-testing or tool action.
     Clicked {
         world_x: f64,

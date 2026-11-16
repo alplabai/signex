@@ -37,9 +37,9 @@ pub use build::{
     ConnectedPoints, EndSpec, ExtraItem, ExtraKind, FloodElements, IntentNet, NameChange,
     NetExtent, PlacementIntent, RunEnd, SegmentIndex, SheetConnectivity, SheetPinContacts,
     WireIntent, best_net_name_of, build_netlist, connected_net_items, connected_points,
-    flood_net_elements, has_connection_anchor, is_power_flag, name_carrying_ports, net_extent_at,
-    net_reaches_other_sheets, placement_contacts, placement_intent, point_on_segment, pt_key,
-    wire_intent,
+    flood_net_elements, has_connection_anchor, is_connection_kind, is_power_flag,
+    name_carrying_ports, net_extent_at, net_reaches_other_sheets, placement_contacts,
+    placement_intent, point_on_segment, pt_key, wire_intent,
 };
 pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
 
