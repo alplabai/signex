@@ -121,12 +121,12 @@ annotate_schematic_quietly	design	Annotate schematic quietly	Annotate Schematics
 assign_footprints	design	Assign footprints	Assign Footprints	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 set_selection_filters	select	Set the schematic selection filter	-	Schematic	-	-	Always	-	kinds:text
 apply_selection_filter_preset	select	Apply a selection filter preset	-	Schematic	-	-	Always	-	name:text
-clear_net_highlighting	select	Clear net highlighting	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+clear_net_highlighting	select	Clear net highlighting	Clear Filter	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 draw_graphic_line	place	Draw graphic line	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
 draw_hierarchical_sheet	place	Draw hierarchical sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 force_annotate_all_schematics	design	Force annotate all schematics	Force Annotate All Schematics	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-
 go_to_net_partner	navigation	Go to net partner on another sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
-highlight_net_under_cursor	select	Highlight net under cursor	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+highlight_net_under_cursor	select	Highlight net under cursor	Highlight Net	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 highlight_related_net_objects	select	Highlight/select related net objects across sheets	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 create_sheet_from_sheet_symbol	design	Create a child sheet from the selected sheet symbol	Create Sheet From Sheet Symbol	Schematic	-	-	RequiresSelection	gui_only	-
 leave_sheet	navigation	Leave sheet / go to parent sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
@@ -135,7 +135,7 @@ next_highlighted_net_item	select	Next item on highlighted net	-	Schematic	-	-	Re
 next_sheet	navigation	Next sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 open_child_sheet	navigation	Open the selected sheet symbol's child sheet	Open Child Sheet	Schematic	-	-	RequiresSelection	gui_only	-
 open_components_panel	panels	Open Components panel / place components	Component...	Schematic	-	-	Always	gui_only	-
-open_net_color_palette	view	Open net color palette	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+open_net_color_palette	view	Open net color palette	Net Color...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 place_bus	place	Draw bus	Bus	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_merge:bool?,allow_open:bool?,dry_run:bool?,document:document?
 place_compile_mask	place	Place Compile Mask directive	Compile Mask	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_design_block	place	Place design block	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
@@ -227,7 +227,7 @@ place_graphic	place	Place graphic	Graphic...	Schematic	-	-	RequiresDocument(Sche
 clear_net_color	view	Clear net color	Clear Net Color	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 color_net	view	Color net	Custom Color...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,color:color,document:document
 clear_all_net_colors	view	Clear all net colors	Clear All Net Colors	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document
-assign_net_class	design	Assign net to class	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,net_name:text,class:text?
+assign_net_class	design	Assign net to class	Assign Net Class...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,net_name:text,class:text?
 place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	library:text,part:text,at:point/mm,unit:text?,designator:text?,value:text?,rotation:angle/deg?,mirror:text?,document:document?
 run_drc	pcb	Run the design rule check on the board	Design Rule Check	PCB	-	-	RequiresDocument(Pcb)	runs_headless	-
 reannotate_board	design	Re-annotate the board's designators by position	Re-Annotate Board...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-

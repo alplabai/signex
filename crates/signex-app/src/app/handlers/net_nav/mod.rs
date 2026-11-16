@@ -31,6 +31,7 @@ impl Signex {
             NetNavMsg::SheetBackRequested => self.step_sheet_history(false),
             NetNavMsg::SheetForwardRequested => self.step_sheet_history(true),
             NetNavMsg::NetHighlightRequested => self.highlight_net_under_cursor(),
+            NetNavMsg::NetHighlightAtRequested { at } => self.highlight_net_at(at),
             NetNavMsg::RelatedNetHighlightRequested => self.highlight_related_net_objects(),
             NetNavMsg::HighlightStepRequested { forward } => self.step_net_highlight(forward),
             NetNavMsg::HighlightClearRequested => self.clear_net_highlight(),
@@ -42,11 +43,20 @@ impl Signex {
         Task::batch([task, self.finish_update()])
     }
 
-    /// Run again what was waiting for the index.
-    fn run_pending_net_action(&mut self, action: PendingNetAction) -> Task<Message> {
+    /// Run again what was waiting for the index; `point` is the point the
+    /// request named, parked with it.
+    fn run_pending_net_action(
+        &mut self,
+        action: PendingNetAction,
+        point: Option<(f64, f64)>,
+    ) -> Task<Message> {
         match action {
             PendingNetAction::JumpToPartner => self.jump_to_partner(),
             PendingNetAction::HighlightUnderCursor => self.highlight_net_under_cursor(),
+            PendingNetAction::HighlightAtPoint => match point {
+                Some(at) => self.highlight_net_at(at),
+                None => self.highlight_net_under_cursor(),
+            },
             PendingNetAction::HighlightRelated => self.highlight_related_net_objects(),
             PendingNetAction::StepHighlight { forward } => self.step_net_highlight(forward),
             PendingNetAction::HoverDwell => self.hover_dwell_ticked(),

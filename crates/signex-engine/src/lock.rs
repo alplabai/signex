@@ -406,6 +406,18 @@ impl Engine {
         self.locked_item_refusal(cmd).map(|e| e.to_string())
     }
 
+    /// Whether every one of `items` is a locked object, so a move, turn,
+    /// mirror or delete of them would leave the sheet as it is (#2419).
+    /// False for no items.
+    #[must_use]
+    pub fn all_locked(&self, items: &[SelectedItem]) -> bool {
+        if items.is_empty() {
+            return false;
+        }
+        let locked = self.locked_objects();
+        items.iter().all(|item| locked.contains_key(&item.uuid))
+    }
+
     /// `cmd` with every locked symbol left out, for a caller that would
     /// rather skip locked parts than have the whole command refused: the
     /// command to run (`None` when nothing is left of it) and the

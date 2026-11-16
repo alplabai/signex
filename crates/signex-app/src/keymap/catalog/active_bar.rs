@@ -580,7 +580,7 @@ pub(super) const ACTIVE_BAR: &[CommandMetadata] = &[
         id: "assign_net_class",
         category: "design",
         label: command_ids::CMD_ASSIGN_NET_CLASS,
-        menu_label: None,
+        menu_label: Some(command_ids::CMD_MENU_ASSIGN_NET_CLASS),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::MUTATES,

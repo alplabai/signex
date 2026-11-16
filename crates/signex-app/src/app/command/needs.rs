@@ -89,7 +89,7 @@ impl Needs {
             Self::CopyTarget if ctx.pcb.shown => ctx.pcb.copyable,
             Self::CopyTarget => ctx.has_selection,
             Self::CutTarget if ctx.pcb.shown => ctx.pcb.deletable,
-            Self::CutTarget => ctx.has_selection,
+            Self::CutTarget => editable_selection(ctx),
             Self::PasteTarget if ctx.pcb.shown => ctx.pcb.pasteable,
             Self::PasteTarget => ctx.has_schematic,
             Self::SelectAllTarget => ctx.has_schematic || ctx.pcb.shown,
@@ -114,7 +114,7 @@ impl Needs {
             // the schematic canvas's; with none it is a no-op. A board
             // deletes its own selection, never a locked footprint.
             Self::DeleteTarget if ctx.pcb.shown => ctx.pcb.deletable,
-            Self::DeleteTarget => ctx.has_selection || ctx.has_footprint_editor,
+            Self::DeleteTarget => editable_selection(ctx) || ctx.has_footprint_editor,
             Self::VertexTarget => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
             // These assemble the project's sheets, not only the active tab's.
             Self::Sheets => ctx.has_schematic || ctx.has_sheets,
@@ -134,9 +134,9 @@ impl Needs {
             Self::Turn if ctx.pcb.shown => {
                 ctx.pcb.placeable || ctx.pcb.part_in_hand || ctx.pcb.routing
             }
-            Self::Turn => ctx.has_schematic && (ctx.has_selection || ctx.turn_in_hand),
+            Self::Turn => ctx.has_schematic && (editable_selection(ctx) || ctx.turn_in_hand),
             Self::MoveSelection if ctx.pcb.shown => ctx.pcb.placeable,
-            Self::MoveSelection => ctx.has_schematic && ctx.has_selection,
+            Self::MoveSelection => ctx.has_schematic && editable_selection(ctx),
             Self::MoveObject => ctx.has_schematic || ctx.pcb.shown,
             Self::SimilarSeed => ctx.has_schematic && ctx.has_selection,
             Self::PcbPlacement => ctx.pcb.shown && (ctx.pcb.placeable || ctx.pcb.part_in_hand),
@@ -176,7 +176,7 @@ impl Needs {
             Self::Undo => "Nothing to undo",
             Self::Redo => "Nothing to redo",
             Self::CopyTarget => "Nothing is selected to copy",
-            Self::CutTarget => "Nothing is selected to cut, or a selected footprint is locked",
+            Self::CutTarget => "Nothing is selected to cut, or the selection is locked",
             Self::PasteTarget => {
                 "Nothing to paste here: no schematic is open, or the clipboard holds no board objects"
             }
@@ -185,9 +185,7 @@ impl Needs {
             Self::SelectedObject => "No object is selected",
             Self::Schematic => "No schematic is open",
             Self::ParentSheet => "The active sheet has no parent sheet",
-            Self::DeleteTarget => {
-                "Nothing is selected to delete, or a selected footprint is locked"
-            }
+            Self::DeleteTarget => "Nothing is selected to delete, or the selection is locked",
             Self::VertexTarget => "Nothing is selected and no wire is being drawn",
             Self::Sheets => "No schematic or project is open",
             Self::ActiveSheet => "No sheet is open",
@@ -196,10 +194,8 @@ impl Needs {
             Self::FootprintEditor => "No footprint editor is open",
             Self::Pcb => "No PCB is open",
             Self::TurnedPcbView => "The board view is not rotated",
-            Self::Turn => {
-                "Nothing is selected or in hand to turn, or a selected footprint is locked"
-            }
-            Self::MoveSelection => "Nothing is selected to move, or a selected footprint is locked",
+            Self::Turn => "Nothing is selected or in hand to turn, or the selection is locked",
+            Self::MoveSelection => "Nothing is selected to move, or the selection is locked",
             Self::MoveObject => "No schematic or PCB is open",
             Self::SimilarSeed => "Nothing is selected on a sheet to find similar objects to",
             Self::PcbPlacement => "No unlocked footprint is selected on a PCB",
@@ -214,7 +210,15 @@ impl Needs {
     }
 }
 
-/// The commands that move, turn, flip or delete a board selection (#2240).
+/// A sheet selection an edit can change: something is selected and not all
+/// of it is locked (#2419). The engine skips locked objects, so a selection
+/// that is all locked leaves an edit nothing to do.
+fn editable_selection(ctx: &CommandContext) -> bool {
+    ctx.has_selection && !ctx.selection_all_locked
+}
+
+/// The commands that move, turn, flip or delete a board selection (#2240),
+/// or a sheet selection.
 pub(crate) fn is_placement_command(command: &AppCommandId) -> bool {
     matches!(
         needs(command),
