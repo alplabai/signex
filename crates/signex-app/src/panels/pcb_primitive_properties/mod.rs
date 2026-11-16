@@ -1,6 +1,7 @@
-//! Properties of the tracks, vias, pads or areas selected on a board
-//! (#2355, #2393). One panel per kind (`track`, `via`, `pad`, `zone` for
-//! fills, regions, pours and keepouts) built from shared rows (`rows`)
+//! Properties of the tracks, vias, pads, areas or drawings selected on a
+//! board (#2355, #2393, #2424). One panel per kind (`track`, `via`, `pad`,
+//! `zone` for fills, regions, pours and keepouts, `graphic` for lines, arcs,
+//! circles, rectangles and text frames) built from shared rows (`rows`)
 //! and the shared Net Information section (`net_info`). A pure view over
 //! facts the app copies from the board (`facts`); every edit is a
 //! [`PcbPrimitiveMsg`] the app turns into one board command.
@@ -14,6 +15,7 @@
 //! tool's values instead of the board.
 
 mod facts;
+mod graphic;
 mod net_info;
 mod pad;
 mod rows;
@@ -31,9 +33,9 @@ use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_widgets::{text, text_input};
 
 pub use facts::{
-    AreaLayerChoice, Editability, LayerChoice, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts,
-    PrimitiveCommon, PrimitiveField, PrimitiveTarget, ShapeChoice, TrackFacts, ViaFacts, ZoneFacts,
-    ZoneKind, shared,
+    AreaLayerChoice, Editability, GraphicFacts, LayerChoice, NetChoice, NetInfo, PadFacts,
+    PcbPrimitiveFacts, PrimitiveCommon, PrimitiveField, PrimitiveTarget, ShapeChoice, TrackFacts,
+    ViaFacts, ZoneFacts, ZoneKind, shared,
 };
 
 use super::{PanelContext, PanelMsg};
@@ -110,6 +112,7 @@ pub fn view<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<
         PcbPrimitiveFacts::Via(f) => via::view(ctx, f),
         PcbPrimitiveFacts::Pad(f) => pad::view(ctx, f),
         PcbPrimitiveFacts::Zone(f) => zone::view(ctx, f),
+        PcbPrimitiveFacts::Graphic(f) => graphic::view(ctx, f),
     };
     let common = facts.common();
     let mut notes = column![].spacing(SP.xs);
@@ -168,6 +171,10 @@ fn header<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<'a
                 None => ids::PCB_PRIM_AREA_TITLE,
             },
             t!(i18n, ids::PCB_PRIM_AREA_COUNT, "count" => count),
+        ),
+        PcbPrimitiveFacts::Graphic(f) => (
+            graphic::title(f.kind),
+            t!(i18n, ids::PCB_PRIM_GRAPHIC_COUNT, "count" => count),
         ),
     };
     if facts.common().target.is_placement() {

@@ -42,7 +42,7 @@ impl CopperObject {
             ItemRef::Track(_) => Some(CopperObject::Track),
             ItemRef::Pad { .. } => Some(CopperObject::Pad),
             ItemRef::Via(_) => Some(CopperObject::Via),
-            ItemRef::Footprint(_) | ItemRef::Zone { .. } => None,
+            ItemRef::Footprint(_) | ItemRef::Zone { .. } | ItemRef::Graphic { .. } => None,
         }
     }
 }

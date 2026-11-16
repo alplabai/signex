@@ -139,6 +139,21 @@ fn draw_set(
         if let Ok(Some(placed)) = pcb_geom::board_graphic_placement(graphic) {
             draw_graphic(s, frame, &placed, rgb, ("", 0.0));
         }
+        // A text frame's lines (#2424), placed as the board draws them.
+        let size = pcb_geom::text_frame_size_mm(graphic);
+        for line in pcb_geom::text_frame_lines(graphic).unwrap_or_default() {
+            let at = line.placement.anchor;
+            let at = (nm_to_mm(at.x), nm_to_mm(at.y));
+            label(
+                s,
+                frame,
+                at,
+                line.placement.rotation_deg,
+                &line.text,
+                size,
+                rgb,
+            );
+        }
     }
     for text in board.texts.iter().filter(|t| on_set(set, &t.layer)) {
         if let Ok(placement) = pcb_geom::board_text_placement(text) {

@@ -7,6 +7,7 @@ use std::path::Path;
 use signex_types::pcb::PcbBoard;
 
 use super::facts::{track_facts, via_facts};
+use super::graphic::graphic_facts;
 use super::zone::zone_facts;
 use crate::app::Signex;
 use crate::app::handlers::pcb_tool::has_form;
@@ -44,6 +45,14 @@ impl Signex {
                     self.primitive_common_on(board, target, Editability::Editable, Some(track.net));
                 common.placement_paused = paused;
                 PcbPrimitiveFacts::Track(track_facts(board, common, &[&track], i18n))
+            }
+            // #2424: a drawing has no net.
+            tool if tool.graphic_kind().is_some() => {
+                let graphic = self.next_board_graphic()?;
+                let mut common =
+                    self.primitive_common_on(board, target, Editability::Editable, None);
+                common.placement_paused = paused;
+                PcbPrimitiveFacts::Graphic(graphic_facts(board, common, &[&graphic], i18n))
             }
             tool => {
                 let kind = area_kind(tool)?;

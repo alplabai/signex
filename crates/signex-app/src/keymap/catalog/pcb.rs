@@ -325,6 +325,82 @@ pub(super) const PCB: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2424: the Graphics tools, on the active non-copper layer. Each arms
+    // its tool on the board in view; each drawing is one undo step. No
+    // default keys.
+    CommandMetadata {
+        id: "place_board_line",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_LINE,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_LINE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_graphic_arc",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_GRAPHIC_ARC,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_GRAPHIC_ARC),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_circle",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_CIRCLE,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_CIRCLE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_rectangle",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_RECTANGLE,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_RECTANGLE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_text_frame",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_TEXT_FRAME,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_TEXT_FRAME),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2424: the Graphics tools and the drawing's Properties fields as an
+    // agent or the CLI runs them, on the board `document` names; each is
+    // one undo step and answers with the drawing as JSON.
+    CommandMetadata {
+        id: "add_board_graphic",
+        category: "place",
+        label: command_ids::CMD_ADD_BOARD_GRAPHIC,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::BOARD_GRAPHIC_ADD,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_board_graphic",
+        category: "edit",
+        label: command_ids::CMD_SET_BOARD_GRAPHIC,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::BOARD_GRAPHIC_SET,
+        ..CommandMetadata::DEFAULT
+    },
     // #2394: the layer strip under the board. View state and per-user
     // settings only: no undo step, no dirty mark. The rows with operands run
     // from an agent or the CLI on the board `document` names (the per-user

@@ -199,6 +199,11 @@ fn board_items_extent(board: &PcbBoard, items: &[ItemRef]) -> Option<[f64; 4]> {
                     points.extend(z.outline.iter().copied());
                 }
             }
+            ItemRef::Graphic { graphic, .. } => {
+                for g in board.graphics.iter().filter(|g| g.uuid == graphic) {
+                    points.extend([g.start, g.end, g.center].into_iter().flatten());
+                }
+            }
         }
     }
     let first = points.first()?;

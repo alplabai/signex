@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 
 use signex_types::pcb::{Point, SOLID_FILL, Zone};
+use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::zone_keepout::KEEPOUT_FILL;
 
 use crate::index::ItemRef;
@@ -54,7 +55,16 @@ impl PickKind {
             ItemRef::Pad { .. } => PickKind::Pads,
             ItemRef::Track(_) => PickKind::Tracks,
             ItemRef::Via(_) => PickKind::Vias,
-            ItemRef::Zone { kind, .. } => kind,
+            ItemRef::Zone { kind, .. } | ItemRef::Graphic { kind, .. } => kind,
+        }
+    }
+
+    /// The kind a board drawing is (#2424): a text frame is a text, every
+    /// other drawing is Other.
+    pub fn of_graphic(kind: BoardGraphicKind) -> Self {
+        match kind {
+            BoardGraphicKind::TextFrame => PickKind::Texts,
+            _ => PickKind::Other,
         }
     }
 
@@ -83,6 +93,8 @@ impl PickKind {
                 | PickKind::Keepouts
                 | PickKind::Regions
                 | PickKind::Fills
+                | PickKind::Texts
+                | PickKind::Other
         )
     }
 }

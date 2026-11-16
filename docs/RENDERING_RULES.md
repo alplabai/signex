@@ -401,6 +401,32 @@ only and draws the drawings itself in the same palette (#2348).
 Checks: `pcb_geom::graphic::tests`, `pcb::graphics::tests` (placement, flip,
 eye, single-layer mode, dimming, board text), `pcb_canvas::drag_preview::tests`.
 
+## pcb-text-frame — A board text frame (#2424)
+
+A text frame is a board drawing (`graphic_type = "text_frame"`) with two
+opposite corners (`start`, `end`), a text and a text height (`font_size`,
+else `PCB_DEFAULT_TEXT_SIZE_MM`). `pcb_geom::board_graphic_placement` places
+its box as a closed outline, drawn like a rectangle with the drawing's line
+width. `pcb_geom::text_frame_lines` places its text:
+
+- **Wrap:** at each `\n`, then between words, to the number of glyphs that
+  fit the box less a margin of a quarter of the text height on each side; a
+  glyph is taken as 0.6 of the text height wide, wider than the board's
+  monospace font, so a line always fits. A word longer than a line is cut.
+- **Place:** lines run down from the top of the box (model y grows down), a
+  line pitch of 1.4 text heights, each line centred across the box, upright.
+  Lines past the bottom of the box are not drawn; one line always is.
+- **Side:** on a bottom-side layer each line is mirrored, read from below.
+
+The lines join `PcbSnapshot::texts` and draw as a board text does; the board
+print (#2402) prints the box and the lines in the same places; fabrication
+outputs (#2388) draw the box on a fabrication layer and count the text with
+the board texts the stroke font will draw.
+
+Checks: `pcb_geom::text_frame::tests`, `pcb::graphics::tests::a_text_frame_draws_its_box_and_its_lines`,
+`pdf::board::tests::a_text_frame_prints_its_box_and_lines`,
+`fab::draw::tests::a_text_frames_box_is_drawn_as_its_rectangle`.
+
 ## board-3d — Board 3D view (#2390)
 
 View ▸ 3D View (`view_board_3d`, key `3` on a board) shows the board in view

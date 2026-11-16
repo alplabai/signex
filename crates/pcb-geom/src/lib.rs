@@ -16,6 +16,7 @@ mod body;
 mod copper;
 mod flip;
 mod graphic;
+mod graphic_index;
 mod index;
 mod mst;
 mod net_length;
@@ -31,6 +32,7 @@ mod shape_overlap;
 mod staging;
 mod stats;
 mod text;
+mod text_frame;
 mod track_follow;
 mod transform;
 mod turned_marquee;
@@ -66,6 +68,10 @@ pub use shape_gap::Separation;
 pub use staging::{Staging, footprint_extent, stage, stage_up};
 pub use stats::BoardStats;
 pub use text::{TextPlacement, is_board_text_key, property_text_placement};
+pub use text_frame::{
+    FrameLine, TEXT_FRAME_ADVANCE_EM, TEXT_FRAME_LINE_PITCH_EM, TEXT_FRAME_MARGIN_EM,
+    text_frame_lines, text_frame_size_mm, wrap as wrap_text_frame,
+};
 pub use track_follow::{TrackEnds, tracks_on_pads};
 pub use transform::{Placement, Side, pad_shape, pad_world_center, pad_world_rotation_deg};
 pub use turned_marquee::{turned_marquee_corners, turned_marquee_mode, turned_marquee_select};

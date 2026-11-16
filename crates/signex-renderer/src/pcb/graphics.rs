@@ -1,7 +1,8 @@
 //! Drawings on the board (#2387): a footprint's silkscreen, fab, assembly,
-//! courtyard and 3D body outlines, and the board's own drawings and texts,
-//! placed by `pcb-geom`, in their layer's board palette colour. Rules:
-//! `docs/RENDERING_RULES.md`, "pcb-graphics".
+//! courtyard and 3D body outlines, and the board's own drawings and texts
+//! (a text frame's box and its lines, #2424), placed by `pcb-geom`, in
+//! their layer's board palette colour. Rules: `docs/RENDERING_RULES.md`,
+//! "pcb-graphics".
 //!
 //! CLEAN ROOM DECLARATION
 //! This module was written without reference to GPL-licensed software.
@@ -13,8 +14,8 @@ use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::scene::Scene;
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{
-    BoardText, Footprint, FpGraphic, PCB_DEFAULT_GRAPHIC_WIDTH_MM, PCB_DEFAULT_TEXT_SIZE_MM,
-    PcbBoard,
+    BoardGraphic, BoardText, Footprint, FpGraphic, PCB_DEFAULT_GRAPHIC_WIDTH_MM,
+    PCB_DEFAULT_TEXT_SIZE_MM, PcbBoard,
 };
 use signex_types::pcb_layer::PcbLayer;
 
@@ -118,6 +119,7 @@ pub(super) fn board_drawings(board: &PcbBoard, view: Option<&PcbLayerView>, out:
         if let Ok(Some(placed)) = pcb_geom::board_graphic_placement(graphic) {
             out.graphics.extend(graphic_input(&placed, layer, dimmed));
         }
+        out.texts.extend(frame_lines(graphic, layer));
     }
     for text in &board.texts {
         let Some((layer, _)) = shown_layer(&text.layer, view) else {
@@ -193,6 +195,24 @@ fn text_graphic(
         mirrored: at.mirrored,
         layer,
     })
+}
+
+/// A text frame's lines (#2424), each drawn as a board text is; none for
+/// another drawing or one `pcb-geom` refuses.
+fn frame_lines(graphic: &BoardGraphic, layer: PcbLayer) -> Vec<FootprintTextInput> {
+    let size_mm = pcb_geom::text_frame_size_mm(graphic) as f32;
+    pcb_geom::text_frame_lines(graphic)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|line| FootprintTextInput {
+            content: line.text,
+            position: xy(line.placement.anchor),
+            rotation_deg: line.placement.rotation_deg as f32,
+            size_mm,
+            mirrored: line.placement.mirrored,
+            layer,
+        })
+        .collect()
 }
 
 fn board_text(text: &BoardText, layer: PcbLayer) -> Option<FootprintTextInput> {

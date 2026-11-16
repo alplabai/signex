@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use pcb_geom::ItemRef;
 use signex_types::pcb::PadShape;
+use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 /// The board and the selected items a panel was built for. Every edit
@@ -59,12 +60,21 @@ pub enum PrimitiveField {
     Clearance,
     /// A polygon pour's minimum copper width.
     MinThickness,
+    /// An arc's or circle's centre (#2424).
+    CenterX,
+    CenterY,
+    /// An arc's or circle's radius.
+    Radius,
+    /// A text frame's text, a line break written `\n`.
+    Text,
+    /// A text frame's text height.
+    TextHeight,
 }
 
 impl PrimitiveField {
     /// A field typed as text, not as a number.
     pub fn is_text(self) -> bool {
-        self == Self::Designator
+        matches!(self, Self::Designator | Self::Text)
     }
 }
 
@@ -261,6 +271,27 @@ pub struct ZoneFacts {
     pub min_thickness: Option<f64>,
 }
 
+/// Board drawings (#2424): lines, arcs, circles, rectangles and text
+/// frames. Coordinates are shown from the board origin, Y up. A value the
+/// drawings do not share is `None`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphicFacts {
+    pub common: PrimitiveCommon,
+    /// The kind every selected drawing is; `None` when they differ.
+    pub kind: Option<BoardGraphicKind>,
+    pub layer: Option<AreaLayerChoice>,
+    /// The layers a drawing can move to.
+    pub layers: Vec<AreaLayerChoice>,
+    pub width: Option<f64>,
+    pub start: (Option<f64>, Option<f64>),
+    pub end: (Option<f64>, Option<f64>),
+    pub center: (Option<f64>, Option<f64>),
+    pub radius: Option<f64>,
+    /// A text frame's text as the field shows it (`\n` for a line break).
+    pub text: Option<String>,
+    pub text_height: Option<f64>,
+}
+
 /// The selection the Properties panel shows as a primitive.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PcbPrimitiveFacts {
@@ -268,6 +299,7 @@ pub enum PcbPrimitiveFacts {
     Via(ViaFacts),
     Pad(PadFacts),
     Zone(ZoneFacts),
+    Graphic(GraphicFacts),
 }
 
 impl PcbPrimitiveFacts {
@@ -277,6 +309,7 @@ impl PcbPrimitiveFacts {
             Self::Via(f) => &f.common,
             Self::Pad(f) => &f.common,
             Self::Zone(f) => &f.common,
+            Self::Graphic(f) => &f.common,
         }
     }
 }

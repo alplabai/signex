@@ -29,6 +29,7 @@ pub(in crate::format) mod kind {
     pub const VIA: &str = "via";
     pub const ZONE: &str = "zone";
     pub const BOARD_TEXT: &str = "board text";
+    pub const BOARD_GRAPHIC: &str = "board drawing";
     /// The document's own id (sheet or board), which no object may take.
     pub const SHEET: &str = "sheet";
 }

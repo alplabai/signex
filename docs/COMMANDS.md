@@ -301,6 +301,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
+| `add_board_graphic` | Add a line, arc, circle, rectangle or text frame to a board | place | — | — |
 | `board_report_bom` | Show the board's bill of materials: its components grouped by value and footprint | pcb | — | — |
 | `board_report_components` | Show each component's designator, footprint, position, rotation and side | pcb | — | — |
 | `board_report_net_length` | Show each net's routed length, tracks and vias | pcb | — | — |
@@ -321,11 +322,16 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
 | `open_rules` | Open the design rules of the project | design | — | — |
+| `place_board_circle` | Draw a full circle by its centre and a point on it on the active non-copper layer | place | — | — |
 | `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
+| `place_board_graphic_arc` | Draw an arc by its centre, start and end on the active non-copper layer | place | — | — |
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | — | — |
+| `place_board_line` | Draw lines on the active non-copper layer | place | — | — |
 | `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | — |
+| `place_board_rectangle` | Draw a rectangle by two corners on the active non-copper layer | place | — | — |
 | `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
 | `place_board_route` | Route on the active copper layer around other nets, keeping the rule clearance | place | — | — |
+| `place_board_text_frame` | Place text wrapped in a box on the active non-copper layer | place | — | — |
 | `place_board_track` | Route a track on the active copper layer | place | `P T` | — |
 | `place_board_via` | Place a via on the board | place | `P V` | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
@@ -341,6 +347,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rules_set` | Change a field of a design rule | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
+| `set_board_graphic` | Set one field of a board drawing | edit | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
 | `show_layer_group` | Show every layer of one kind | view | — | — |

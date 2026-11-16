@@ -1,4 +1,5 @@
-//! The track, via, pad and area panels' events (#2355, #2393). A typed field keeps a
+//! The track, via, pad, area and drawing panels' events (#2355, #2393,
+//! #2424). A typed field keeps a
 //! draft until Enter; Enter, a dropdown pick or a net picked on the board
 //! is one board undo step through `execute_board_commands`. The commands
 //! come from `signex_engine::pcb::primitive_edit`; a refusal changes
@@ -7,6 +8,7 @@
 //! `pcb_tool::form`).
 
 mod facts;
+mod graphic;
 mod links;
 mod placement;
 mod tune;
@@ -15,6 +17,7 @@ mod zone;
 #[cfg(test)]
 mod tune_tests;
 
+pub(crate) use graphic::graphic_edit;
 pub(crate) use zone::zone_edit;
 
 use std::collections::BTreeMap;
@@ -79,6 +82,8 @@ pub(crate) enum PrimitiveEdit {
     AreaLayer(PcbLayer),
     Net(u32),
     Shape(PadShape),
+    /// A text frame's text, as the board holds it (#2424).
+    Text(String),
 }
 
 impl Signex {
@@ -159,7 +164,9 @@ impl Signex {
         text: &str,
     ) {
         let what = field_name(field);
-        let edit = if field.is_text() {
+        let edit = if field == PrimitiveField::Text {
+            PrimitiveEdit::Text(signex_types::pcb_graphic::text_from_field(text))
+        } else if field.is_text() {
             PrimitiveEdit::Designator(text.to_string())
         } else {
             match parse_number(text) {
@@ -249,6 +256,10 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::TuneLength => ids::PCB_PRIM_TUNE_LENGTH,
         F::Clearance => ids::PCB_PRIM_CLEARANCE,
         F::MinThickness => ids::PCB_PRIM_MIN_THICKNESS,
+        F::CenterX | F::CenterY => ids::PCB_PRIM_GRAPHIC_CENTER,
+        F::Radius => ids::PCB_PRIM_GRAPHIC_RADIUS,
+        F::Text => ids::PCB_PRIM_GRAPHIC_TEXT,
+        F::TextHeight => ids::PCB_PRIM_GRAPHIC_TEXT_HEIGHT,
     }
 }
 
@@ -258,10 +269,10 @@ fn in_board(board: &PcbBoard, edit: &PrimitiveEdit) -> PrimitiveEdit {
     use PrimitiveField as F;
     let origin = board.options.origin;
     match *edit {
-        PrimitiveEdit::Number(field @ (F::X | F::StartX | F::EndX), v) => {
+        PrimitiveEdit::Number(field @ (F::X | F::StartX | F::EndX | F::CenterX), v) => {
             PrimitiveEdit::Number(field, origin.board_x(v))
         }
-        PrimitiveEdit::Number(field @ (F::Y | F::StartY | F::EndY), v) => {
+        PrimitiveEdit::Number(field @ (F::Y | F::StartY | F::EndY | F::CenterY), v) => {
             PrimitiveEdit::Number(field, origin.board_y(v))
         }
         _ => edit.clone(),
@@ -317,6 +328,7 @@ fn primitive_command(
             }
         }
         Some(ItemRef::Zone { .. }) => zone::zone_command(board, items, edit),
+        Some(ItemRef::Graphic { .. }) => graphic::graphic_command(board, items, edit),
         Some(ItemRef::Footprint(_)) | None => Ok(None),
     }
 }

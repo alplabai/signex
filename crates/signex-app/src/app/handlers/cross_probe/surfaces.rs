@@ -236,8 +236,8 @@ fn cross_selection_of_board_items(board: &PcbBoard, items: &[ItemRef]) -> CrossS
             ItemRef::Via(id) => {
                 nets.extend(board.vias.iter().filter(|v| v.uuid == id).map(|v| v.net));
             }
-            // A drawn area stands for nothing on the schematic.
-            ItemRef::Zone { .. } => {}
+            // A drawn area or a drawing stands for nothing on the schematic.
+            ItemRef::Zone { .. } | ItemRef::Graphic { .. } => {}
         }
     }
     CrossSelection {

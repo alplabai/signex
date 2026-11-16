@@ -43,6 +43,11 @@ pub struct BoardToolDefaults {
     /// A pour's clearance; 0 follows the board's.
     pub pour_clearance_mm: Option<f64>,
     pub pour_min_thickness_mm: Option<f64>,
+    /// The line width of a drawing the Graphics tools place (#2424).
+    pub graphic_width_mm: Option<f64>,
+    /// A text frame's text; `None` reads the catalog's new-frame text.
+    pub frame_text: Option<String>,
+    pub frame_text_height_mm: Option<f64>,
 }
 
 impl BoardToolDefaults {
@@ -103,6 +108,7 @@ pub(crate) fn has_form(tool: BoardPlaceTool) -> bool {
         tool,
         BoardPlaceTool::Via | BoardPlaceTool::Track | BoardPlaceTool::InteractiveRouting
     ) || is_area(tool)
+        || tool.graphic_kind().is_some()
 }
 
 impl Signex {
@@ -227,6 +233,10 @@ impl Signex {
             return;
         };
         let (tool, window) = (session.tool, session.window);
+        if tool.graphic_kind().is_some() {
+            self.edit_graphic_tool_value(edit, what);
+            return;
+        }
         let layer = match edit {
             PrimitiveEdit::Layer(layer) => Some(PcbLayer::Copper(*layer)),
             PrimitiveEdit::AreaLayer(layer) => Some(*layer),

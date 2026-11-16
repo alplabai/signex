@@ -75,7 +75,7 @@ impl BoardClipboard {
                         .ok_or(missing)?
                         .clone(),
                 ),
-                BoardItemId::Zone(_) | BoardItemId::Text(_) => {}
+                BoardItemId::Zone(_) | BoardItemId::Text(_) | BoardItemId::Graphic(_) => {}
             }
         }
         let Some(centre) = copy.anchor_centre() else {

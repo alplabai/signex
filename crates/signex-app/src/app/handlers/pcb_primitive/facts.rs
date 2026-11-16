@@ -110,6 +110,26 @@ impl Signex {
                 let common = self.primitive_common_on(board, target, Editability::Editable, net);
                 PcbPrimitiveFacts::Zone(super::zone::zone_facts(board, common, &zones, i18n))
             }
+            ItemRef::Graphic { .. } => {
+                let graphics: Vec<&signex_types::pcb::BoardGraphic> = target
+                    .items
+                    .iter()
+                    .filter_map(|i| match i {
+                        ItemRef::Graphic { graphic, .. } => {
+                            board.graphics.iter().find(|g| g.uuid == *graphic)
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                if graphics.len() != target.items.len() {
+                    return None;
+                }
+                // A drawing has no net: Net Information stays empty.
+                let common = self.primitive_common_on(board, target, Editability::Editable, None);
+                PcbPrimitiveFacts::Graphic(super::graphic::graphic_facts(
+                    board, common, &graphics, i18n,
+                ))
+            }
             ItemRef::Footprint(_) => return None,
         })
     }
@@ -240,7 +260,7 @@ fn item_on_board(board: &PcbBoard, item: ItemRef) -> bool {
             .footprints
             .iter()
             .any(|f| f.uuid == footprint && f.pads.iter().any(|p| p.uuid == pad)),
-        ItemRef::Footprint(_) | ItemRef::Zone { .. } => false,
+        ItemRef::Footprint(_) | ItemRef::Zone { .. } | ItemRef::Graphic { .. } => false,
     }
 }
 

@@ -96,7 +96,8 @@ pub(crate) fn draw(drawing: &Drawing, pen: &Pen) -> Result<Drawn, GeomError> {
             };
             vec![stroke(a, vec![Step::Line(b)])]
         }
-        "rect" => {
+        // A text frame's box (#2424); its text is counted by the caller.
+        "rect" | "text_frame" => {
             let (Some(a), Some(b)) = (drawing.start, drawing.end) else {
                 return Ok(Drawn::Skipped);
             };
@@ -179,6 +180,7 @@ mod tests {
 
     fn graphic(kind: &str) -> BoardGraphic {
         BoardGraphic {
+            uuid: uuid::Uuid::nil(),
             graphic_type: kind.into(),
             layer: "TopSilkscreen".into(),
             width: 0.2,
@@ -187,7 +189,22 @@ mod tests {
             center: Some(Point::new(2.0, 1.0)),
             radius: 1.0,
             points: Vec::new(),
+            text: String::new(),
+            font_size: 0.0,
         }
+    }
+
+    /// #2424: a text frame's box is a closed outline, like a rectangle; its
+    /// text is left to the stroke font.
+    #[test]
+    fn a_text_frames_box_is_drawn_as_its_rectangle() {
+        let mut frame = graphic("text_frame");
+        frame.end = Some(Point::new(3.0, 2.0));
+        frame.text = "REV A".into();
+        let mut rect = frame.clone();
+        rect.graphic_type = "rect".into();
+        assert_eq!(drawn(&frame), drawn(&rect));
+        assert!(!drawn(&frame).is_empty());
     }
 
     fn drawn(g: &BoardGraphic) -> Vec<Mark> {

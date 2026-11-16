@@ -189,7 +189,8 @@ fn item_id(item: &ItemRef) -> String {
         ItemRef::Track(id)
         | ItemRef::Via(id)
         | ItemRef::Footprint(id)
-        | ItemRef::Zone { zone: id, .. } => id.to_string(),
+        | ItemRef::Zone { zone: id, .. }
+        | ItemRef::Graphic { graphic: id, .. } => id.to_string(),
     }
 }
 
@@ -200,6 +201,7 @@ fn item_label(item: &ItemRef) -> String {
         ItemRef::Via(_) => "via",
         ItemRef::Footprint(_) => "footprint",
         ItemRef::Zone { .. } => "area",
+        ItemRef::Graphic { .. } => "drawing",
     };
     format!("{kind} {}", item_id(item))
 }

@@ -115,7 +115,9 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   of the named board, no undo step; `save_layer_set` also keeps the set in the
   person's preferences), and the Rules manager edits `rules_add`, `rules_set`,
   `rules_remove` and `rules_enable` (#2398; `document` is the project or any
-  document of it). A test pins this set, so a catalog row that joins or
+  document of it), and the board drawing edits `add_board_graphic` and
+  `set_board_graphic` (#2424; one board undo step each, answered with the
+  drawing as JSON). A test pins this set, so a catalog row that joins or
   leaves it is a visible decision. The CSV and PDF writers
   `export_board_report` and `export_board_pdf` take a `path`, so they are CLI
   only.

@@ -86,7 +86,7 @@ pub fn item_net(board: &PcbBoard, item: ItemRef) -> Option<u32> {
                 .as_ref()?
                 .number
         }
-        ItemRef::Footprint(_) | ItemRef::Zone { .. } => return None,
+        ItemRef::Footprint(_) | ItemRef::Zone { .. } | ItemRef::Graphic { .. } => return None,
     };
     (net != 0).then_some(net)
 }

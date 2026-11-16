@@ -105,10 +105,11 @@ fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
     assert_ne!(handle, &ic::icon_dd_rect(tid));
 }
 
-/// #2352, #2373, #2388, #2389, #2392: Selection Filter, Move, Align | Components |
-/// Route | Via/Pad, Copper Areas, Copper Drawing | Dimensions, Text | Board
-/// Sketch, Fabrication Outputs | View. A group with a live row runs it; a
-/// group with none is greyed with a tooltip that says it is not on boards yet.
+/// #2352, #2373, #2388, #2389, #2392, #2424: Selection Filter, Move, Align |
+/// Components | Route | Via/Pad, Copper Areas, Copper Drawing | Dimensions,
+/// Text, Graphics | Board Sketch, Fabrication Outputs | View. A group with a
+/// live row runs it; a group with none is greyed with a tooltip that says it
+/// is not on boards yet.
 #[test]
 fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     let items = pcb_bar_items(
@@ -119,7 +120,7 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
         None,
     );
     let all = buttons(&items);
-    assert_eq!(all.len(), 13);
+    assert_eq!(all.len(), 14);
     let separators = items
         .iter()
         .filter(|item| matches!(item, ActiveBarItem::Separator))
@@ -127,8 +128,12 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     assert_eq!(separators, 6);
     let live = all.iter().filter(|button| button.enabled).count();
     assert_eq!(
-        live, 11,
-        "filter, move, align, components, route, via/pad, areas, drawing, sketch, fabrication outputs, view"
+        live, 12,
+        "filter, move, align, components, route, via/pad, areas, drawing, graphics, sketch, fabrication outputs, view"
+    );
+    assert!(
+        runs(all[10], "place_board_line"),
+        "#2424: Line heads Graphics"
     );
     assert!(runs(all[1], "move_object"), "Move follows the filter");
     assert!(
@@ -141,9 +146,9 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
         "#2216: Polygon Pour heads its group"
     );
     assert!(runs(all[7], "place_board_track"));
-    assert!(runs(all[10], "board_sketch"));
-    assert!(runs(all[11], "fabrication_outputs"));
-    assert!(runs(all[12], "view_rotate"), "View closes the bar");
+    assert!(runs(all[11], "board_sketch"));
+    assert!(runs(all[12], "fabrication_outputs"));
+    assert!(runs(all[13], "view_rotate"), "View closes the bar");
     for button in all.iter().filter(|button| !button.enabled) {
         assert!(button.on_press.is_none() && button.on_right_press.is_none());
         assert!(

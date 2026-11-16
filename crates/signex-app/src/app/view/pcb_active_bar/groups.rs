@@ -155,5 +155,10 @@ fn menu_icon(row: PcbBarRow, tid: ThemeId) -> svg::Handle {
         T::TextString => ic::icon_dd_text_string(tid),
         T::Dimension => ic::icon_pcb_dimension(tid),
         T::Keepout => ic::icon_pcb_keepout(tid),
+        T::Line => ic::icon_dd_line(tid),
+        T::GraphicArc => ic::icon_dd_arc(tid),
+        T::FullCircle => ic::icon_dd_circle(tid),
+        T::Rectangle => ic::icon_dd_rect(tid),
+        T::TextFrame => ic::icon_dd_text_frame(tid),
     }
 }

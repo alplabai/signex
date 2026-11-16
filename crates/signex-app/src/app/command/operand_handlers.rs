@@ -12,6 +12,7 @@
 use iced::Task;
 
 use super::agent_edits as agent;
+use super::board_graphic_operands as graphic;
 use super::document_operands as doc;
 use super::file_operands as file;
 use super::hierarchy_operands as hierarchy;
@@ -104,6 +105,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("board_report_components", output::board_report_components),
     ("export_board_report", output::export_board_report),
     ("export_board_pdf", output::export_board_pdf),
+    ("add_board_graphic", graphic::add_board_graphic),
+    ("set_board_graphic", graphic::set_board_graphic),
     ("set_selection_filters", filter::set_selection_filters),
     (
         "apply_selection_filter_preset",
@@ -208,6 +211,16 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_symbol_parameter" => Some(
             "`set_symbol_parameter` needs the operands `id` and `name` — \
              use the Parameters rows in Properties",
+        ),
+        // #2424: a person draws with the Graphics tools and edits in
+        // Properties.
+        "add_board_graphic" => Some(
+            "`add_board_graphic` needs the operands `document` and `kind` — \
+             use Place ▸ Graphics on a board",
+        ),
+        "set_board_graphic" => Some(
+            "`set_board_graphic` needs the operands `document`, `id`, `field` and `value` — \
+             select the drawing and use Properties",
         ),
         "rules_add" | "rules_set" | "rules_remove" | "rules_enable" => Some(
             "the `rules_*` edits need their operands — \

@@ -2,14 +2,16 @@
 
 use std::collections::HashSet;
 
-use signex_types::pcb::{BoardText, Footprint, Pad, PcbBoard, Point, Segment, Via, Zone};
+use signex_types::pcb::{
+    BoardGraphic, BoardText, Footprint, Pad, PcbBoard, Point, Segment, Via, Zone,
+};
 use uuid::Uuid;
 
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
 use super::error::BoardCommandError;
 
-/// A board item that carries a UUID. Board graphics carry none yet, so they
-/// cannot be named here.
+/// A board item that carries a UUID. A board drawing carries one since
+/// #2424.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum BoardItemId {
     Footprint(Uuid),
@@ -17,6 +19,7 @@ pub enum BoardItemId {
     Via(Uuid),
     Zone(Uuid),
     Text(Uuid),
+    Graphic(Uuid),
 }
 
 /// A removed item, owned so it can be put back.
@@ -27,6 +30,7 @@ pub enum BoardItem {
     Via(Via),
     Zone(Zone),
     Text(BoardText),
+    Graphic(BoardGraphic),
 }
 
 impl BoardItem {
@@ -37,6 +41,7 @@ impl BoardItem {
             Self::Via(v) => BoardItemId::Via(v.uuid),
             Self::Zone(z) => BoardItemId::Zone(z.uuid),
             Self::Text(t) => BoardItemId::Text(t.uuid),
+            Self::Graphic(g) => BoardItemId::Graphic(g.uuid),
         }
     }
 }
@@ -57,6 +62,7 @@ enum ListKind {
     Vias,
     Zones,
     Texts,
+    Graphics,
 }
 
 impl BoardItemId {
@@ -67,6 +73,7 @@ impl BoardItemId {
             Self::Via(u) => (ListKind::Vias, u),
             Self::Zone(u) => (ListKind::Zones, u),
             Self::Text(u) => (ListKind::Texts, u),
+            Self::Graphic(u) => (ListKind::Graphics, u),
         }
     }
 }
@@ -79,6 +86,7 @@ pub(super) fn position(board: &PcbBoard, id: BoardItemId) -> Option<usize> {
         ListKind::Vias => board.vias.iter().position(|x| x.uuid == uuid),
         ListKind::Zones => board.zones.iter().position(|x| x.uuid == uuid),
         ListKind::Texts => board.texts.iter().position(|x| x.uuid == uuid),
+        ListKind::Graphics => board.graphics.iter().position(|x| x.uuid == uuid),
     }
 }
 
@@ -89,6 +97,7 @@ fn list_len(board: &PcbBoard, list: ListKind) -> usize {
         ListKind::Vias => board.vias.len(),
         ListKind::Zones => board.zones.len(),
         ListKind::Texts => board.texts.len(),
+        ListKind::Graphics => board.graphics.len(),
     }
 }
 
@@ -99,6 +108,7 @@ fn take(board: &mut PcbBoard, list: ListKind, index: usize) -> BoardItem {
         ListKind::Vias => BoardItem::Via(board.vias.remove(index)),
         ListKind::Zones => BoardItem::Zone(board.zones.remove(index)),
         ListKind::Texts => BoardItem::Text(board.texts.remove(index)),
+        ListKind::Graphics => BoardItem::Graphic(board.graphics.remove(index)),
     }
 }
 
@@ -109,6 +119,7 @@ fn put(board: &mut PcbBoard, index: usize, item: BoardItem) {
         BoardItem::Via(x) => board.vias.insert(index, x),
         BoardItem::Zone(x) => board.zones.insert(index, x),
         BoardItem::Text(x) => board.texts.insert(index, x),
+        BoardItem::Graphic(x) => board.graphics.insert(index, x),
     }
 }
 
@@ -125,6 +136,9 @@ pub(super) fn swap_at(board: &mut PcbBoard, index: usize, item: BoardItem) -> Bo
         BoardItem::Via(x) => BoardItem::Via(std::mem::replace(&mut board.vias[index], x)),
         BoardItem::Zone(x) => BoardItem::Zone(std::mem::replace(&mut board.zones[index], x)),
         BoardItem::Text(x) => BoardItem::Text(std::mem::replace(&mut board.texts[index], x)),
+        BoardItem::Graphic(x) => {
+            BoardItem::Graphic(std::mem::replace(&mut board.graphics[index], x))
+        }
     }
 }
 
@@ -219,6 +233,7 @@ pub(super) fn check_pad_uuids<'a>(
         .chain(board.vias.iter().map(|v| v.uuid))
         .chain(board.zones.iter().map(|z| z.uuid))
         .chain(board.texts.iter().map(|t| t.uuid))
+        .chain(board.graphics.iter().map(|g| g.uuid))
         .chain(std::iter::once(board.uuid))
         .chain(new_items.iter().copied())
         .collect();
@@ -243,6 +258,7 @@ fn check_item_uuids(board: &PcbBoard, ids: &[BoardItemId]) -> Result<(), BoardCo
         .chain(board.vias.iter().map(|v| v.uuid))
         .chain(board.zones.iter().map(|z| z.uuid))
         .chain(board.texts.iter().map(|t| t.uuid))
+        .chain(board.graphics.iter().map(|g| g.uuid))
         .chain(std::iter::once(board.uuid))
         .collect();
     for &id in ids {
@@ -265,6 +281,12 @@ pub(super) fn check_finite(item: &BoardItem) -> Result<(), BoardCommandError> {
         BoardItem::Via(v) => (finite(v.position), true),
         BoardItem::Zone(z) => (z.outline.iter().all(|p| finite(*p)), true),
         BoardItem::Text(t) => (finite(t.position), t.rotation.is_finite()),
+        BoardItem::Graphic(g) => {
+            let points = [g.start, g.end, g.center].into_iter().flatten();
+            let placed = points.chain(g.points.iter().copied()).all(finite);
+            let sizes = [g.width, g.radius, g.font_size];
+            (placed && sizes.iter().all(|v| v.is_finite()), true)
+        }
     };
     if !position_ok {
         return Err(BoardCommandError::NonFinite { field: "position" });

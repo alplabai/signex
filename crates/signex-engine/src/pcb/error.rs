@@ -84,6 +84,10 @@ pub enum BoardCommandError {
     NotPositive { field: &'static str },
     #[error("{0} is not a copper layer")]
     NotCopperLayer(String),
+    #[error("{field} must not be below zero")]
+    Negative { field: &'static str },
+    #[error("{0} cannot hold a board drawing: drawings go on non-copper layers, not keep-outs")]
+    NotGraphicLayer(String),
     #[error("net {0} is not in the board's net table")]
     UnknownNet(u32),
     #[error("the hole ({hole} mm) must fit inside the copper around it ({diameter} mm)")]

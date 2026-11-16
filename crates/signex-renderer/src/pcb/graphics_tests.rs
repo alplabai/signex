@@ -292,3 +292,40 @@ fn the_carried_footprint_takes_its_drawings_and_the_library_preview_does_not() {
     let carried = snapshot(&footprint_only, &PcbLayerView::default());
     assert_eq!(carried.graphics.len(), drawn.graphics.len() - 1);
 }
+
+/// #2424: a text frame draws its box as an outline and its lines as board
+/// texts, inside the box, on the frame's layer.
+#[test]
+fn a_text_frame_draws_its_box_and_its_lines() {
+    let mut board = board();
+    board.graphics = vec![
+        serde_json::from_str(
+            r#"{ "graphic_type": "text_frame", "layer": "TopSilkscreen", "width": 0.1,
+                 "start": { "x": 0.0, "y": 0.0 }, "end": { "x": 10.0, "y": 4.0 },
+                 "text": "LINE ONE\nLINE TWO", "font_size": 1.0 }"#,
+        )
+        .expect("a drawing"),
+    ];
+    board.texts.clear();
+    let shown = snapshot(&board, &PcbLayerView::default());
+    let boxes: Vec<&GraphicInput> = on(&shown, TOP_OVERLAY)
+        .into_iter()
+        .filter(|g| matches!(&g.shape, GraphicShapeInput::Polygon { points } if points.len() == 4))
+        .collect();
+    assert_eq!(boxes.len(), 1, "the box");
+    assert!(!boxes[0].filled);
+    let lines: Vec<&FootprintTextInput> = shown
+        .texts
+        .iter()
+        .filter(|t| t.content.starts_with("LINE"))
+        .collect();
+    assert_eq!(lines.len(), 2);
+    assert_eq!(lines[0].content, "LINE ONE");
+    assert_eq!(lines[0].layer, TOP_OVERLAY);
+    assert!(lines[0].position[1] < lines[1].position[1], "top down");
+    assert!(
+        lines
+            .iter()
+            .all(|t| t.position[1] < 4.0 && t.position[0] == 5.0)
+    );
+}

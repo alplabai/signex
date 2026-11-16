@@ -24,6 +24,7 @@ mod error;
 mod footprint;
 mod footprint_content;
 pub mod footprint_swap;
+pub mod graphic;
 mod items;
 mod options;
 pub mod part_place;

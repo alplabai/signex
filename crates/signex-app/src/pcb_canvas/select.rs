@@ -248,7 +248,10 @@ impl PcbSelectionState {
         let mut highlight = Highlight::default();
         let is_moving = |item: ItemRef| match item {
             ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => moving.contains(&id),
-            ItemRef::Track(_) | ItemRef::Via(_) | ItemRef::Zone { .. } => false,
+            ItemRef::Track(_)
+            | ItemRef::Via(_)
+            | ItemRef::Zone { .. }
+            | ItemRef::Graphic { .. } => false,
         };
         for indexed in index.items().filter(|i| !is_moving(i.item)) {
             match indexed.item {
@@ -350,7 +353,10 @@ impl PcbSelectionState {
             .filter_map(|i| match i.item {
                 ItemRef::Pad { footprint, .. } => Some((false, i.item, footprint)),
                 ItemRef::Footprint(id) => Some((true, i.item, id)),
-                ItemRef::Track(_) | ItemRef::Via(_) | ItemRef::Zone { .. } => None,
+                ItemRef::Track(_)
+                | ItemRef::Via(_)
+                | ItemRef::Zone { .. }
+                | ItemRef::Graphic { .. } => None,
             })
             .collect();
         if under.iter().any(|(_, _, id)| selected.contains(id)) {
@@ -378,7 +384,10 @@ impl PcbSelectionState {
             .items()
             .filter(|i| match i.item {
                 ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => keep(id),
-                ItemRef::Track(_) | ItemRef::Via(_) | ItemRef::Zone { .. } => false,
+                ItemRef::Track(_)
+                | ItemRef::Via(_)
+                | ItemRef::Zone { .. }
+                | ItemRef::Graphic { .. } => false,
             })
             .map(|i| i.shape)
             .collect()
@@ -471,6 +480,17 @@ fn hidden_items(board: &PcbBoard, view: &PcbLayerView) -> HashSet<ItemRef> {
             });
         }
     }
+    for graphic in &board.graphics {
+        let Some(kind) = graphic.kind() else {
+            continue;
+        };
+        if !view.shows_any(std::slice::from_ref(&graphic.layer)) {
+            hidden.insert(ItemRef::Graphic {
+                graphic: graphic.uuid,
+                kind: pcb_geom::PickKind::of_graphic(kind),
+            });
+        }
+    }
     hidden
 }
 
@@ -506,6 +526,7 @@ fn describe(item: ItemRef) -> String {
         ItemRef::Via(id) => format!("via {id}"),
         ItemRef::Footprint(id) => format!("footprint {id}"),
         ItemRef::Zone { zone, .. } => format!("area {zone}"),
+        ItemRef::Graphic { graphic, .. } => format!("drawing {graphic}"),
     }
 }
 

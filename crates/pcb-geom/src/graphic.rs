@@ -156,7 +156,9 @@ fn place(
                 b: world(end, "graphic.end")?,
             }
         }
-        "rect" => {
+        // A text frame is drawn as its box (#2424); its lines are
+        // `text_frame_lines`.
+        "rect" | "text_frame" => {
             let (Some(s), Some(e)) = (source.start, source.end) else {
                 return Ok(None);
             };

@@ -1,10 +1,12 @@
-//! Replace tracks, vias, zones and texts in place, keeping their uuid and
-//! list index: the edit behind a primitive's Properties fields (#2355).
+//! Replace tracks, vias, zones, texts and drawings in place, keeping their
+//! uuid and list index: the edit behind a primitive's Properties fields
+//! (#2355, #2424).
 
 use std::collections::{BTreeSet, HashSet};
 
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{Pad, PcbBoard, Segment, Via};
+use signex_types::pcb::{BoardGraphic, Pad, PcbBoard, Segment, Via};
+use signex_types::pcb_graphic::takes_board_graphics;
 use uuid::Uuid;
 
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
@@ -49,6 +51,7 @@ pub(super) fn replace(
             match item {
                 BoardItem::Segment(new) => check_segment(board, &board.segments[index], new)?,
                 BoardItem::Via(new) => check_via(board, &board.vias[index], new)?,
+                BoardItem::Graphic(new) => check_graphic(&board.graphics[index], new)?,
                 _ => {}
             }
         }
@@ -96,6 +99,25 @@ fn check_via(board: &PcbBoard, old: &Via, new: &Via) -> Result<(), BoardCommandE
         }
     }
     check_net(board, old.net, new.net)
+}
+
+/// A board drawing's width, radius and text height are not negative; a
+/// changed layer is one a drawing may go on (#2424).
+fn check_graphic(old: &BoardGraphic, new: &BoardGraphic) -> Result<(), BoardCommandError> {
+    for (value, field) in [
+        (new.width, "line width"),
+        (new.radius, "radius"),
+        (new.font_size, "text height"),
+    ] {
+        if value < 0.0 {
+            return Err(BoardCommandError::Negative { field });
+        }
+    }
+    let allowed = parse_pcb_layer(&new.layer).is_some_and(takes_board_graphics);
+    if new.layer != old.layer && !allowed {
+        return Err(BoardCommandError::NotGraphicLayer(new.layer.clone()));
+    }
+    Ok(())
 }
 
 fn check_positive(value: f64, field: &'static str) -> Result<(), BoardCommandError> {

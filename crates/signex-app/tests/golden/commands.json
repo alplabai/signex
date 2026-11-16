@@ -1,5 +1,10 @@
 [
   {
+    "id": "add_board_graphic",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "align_bottom",
     "group": "Schematic",
     "category": "modify"
@@ -765,7 +770,17 @@
     "category": "place"
   },
   {
+    "id": "place_board_circle",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "place_board_fill",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_graphic_arc",
     "group": "Pcb",
     "category": "place"
   },
@@ -775,7 +790,17 @@
     "category": "place"
   },
   {
+    "id": "place_board_line",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "place_board_polygon_pour",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_rectangle",
     "group": "Pcb",
     "category": "place"
   },
@@ -786,6 +811,11 @@
   },
   {
     "id": "place_board_route",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_text_frame",
     "group": "Pcb",
     "category": "place"
   },
@@ -1193,6 +1223,11 @@
     "id": "send_to_back_of",
     "group": "Schematic",
     "category": "modify"
+  },
+  {
+    "id": "set_board_graphic",
+    "group": "Pcb",
+    "category": "edit"
   },
   {
     "id": "set_layer_tab_names",
