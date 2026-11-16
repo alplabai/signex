@@ -108,12 +108,13 @@ open, and no keymap preset binds them.
 The DRC results panel lists the last run's violations grouped by rule, each
 group with its count. A row shows the severity, what broke, the nets, the
 objects involved and the location; a click selects its objects and centres
-the view on it (`show_drc_violation`). The filters (rule, layer, severity,
+the view on it at the zoom in use (`show_drc_violation`). The filters (rule, layer, severity,
 Show waived) are `filter_drc_results`. Waive opens a note field; its Waive
 stores the waiver with the note in the board (`waive_drc_violation`, one
 board undo step), and Unwaive takes it back (`unwaive_drc_violation`). A
 waived violation is hidden until Show waived is on. The results are marked
-stale when the board changes after the run (a waiver alone does not). The
+stale when the board or its project's net classes change after the run (a
+waiver alone, or its Undo or Redo, does not). The
 Rule link of a group stays greyed until boards have a Rules table.
 
 The Net Classes panel is a table of the board's project net classes (the

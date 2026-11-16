@@ -65,6 +65,7 @@ impl Signex {
 
     /// One undo or redo of the board at `path` alone.
     pub(crate) fn step_board_once(&mut self, path: &Path, undo: bool) -> bool {
+        let before = self.drc_waiver_step_start(path);
         let result = if undo {
             self.document_state.undo_board(path)
         } else {
@@ -72,6 +73,7 @@ impl Signex {
         };
         match result {
             Ok(true) => {
+                self.carry_drc_over_waiver_step(path, before);
                 self.drop_pcb_footprint_draft_of(path);
                 self.interaction_state.pcb_primitive.drop_drafts_of(path);
                 self.after_board_change(path);

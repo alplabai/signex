@@ -35,6 +35,7 @@ drc-panel-rule-link-unavailable = Opens this rule in the Rules table, which boar
 drc-panel-waive-undo = Waive DRC Violation
 drc-panel-unwaive-undo = Unwaive DRC Violation
 drc-panel-refused = The waiver was not saved: { $why }
+drc-panel-show-refused = The violation could not be shown: { $why }
 
 board-net-classes-no-board = Open a board to edit its net classes.
 board-net-classes-no-project = This board is in no open project, so it has no net classes. Open its project.

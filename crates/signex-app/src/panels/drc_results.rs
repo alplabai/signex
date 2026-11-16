@@ -243,7 +243,7 @@ fn row_body<'a>(ctx: &'a PanelContext, violation: &DrcRow) -> Element<'a, PanelM
         text(kind).size(TS.body).color(primary),
         text(detail).size(TS.body).color(primary),
     ]
-    .spacing(6)
+    .spacing(SP.s + SP.xs)
     .align_y(iced::Alignment::Center);
     let mut second = row![
         text(t!(i18n, ids::DRC_PANEL_OBJECTS, "count" => violation.objects))
@@ -251,11 +251,11 @@ fn row_body<'a>(ctx: &'a PanelContext, violation: &DrcRow) -> Element<'a, PanelM
             .color(muted),
         text(place).size(TS.caption).color(muted),
     ]
-    .spacing(6);
+    .spacing(SP.s + SP.xs);
     if let Some(layer) = layer_label(i18n, violation.layer) {
         second = second.push(text(layer).size(TS.caption).color(muted));
     }
-    let mut lines = column![first, second].spacing(2);
+    let mut lines = column![first, second].spacing(SP.xs);
     if let Some(waiver) = &violation.waiver {
         let said = if waiver.is_empty() {
             t!(i18n, ids::DRC_PANEL_WAIVED_NO_NOTE)
@@ -266,7 +266,7 @@ fn row_body<'a>(ctx: &'a PanelContext, violation: &DrcRow) -> Element<'a, PanelM
     }
     signex_widgets::button(lines)
         .width(Length::Fill)
-        .padding([SP.xs, 6.0])
+        .padding([SP.xs, SP.s + SP.xs])
         .on_press(drc_msg(DrcPanelMsg::RowPicked(violation.key.clone())))
         .style(crate::styles::menu_item(&ctx.tokens))
         .boxed()
@@ -348,7 +348,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     };
     let col: Rows<'a> = Column::new()
         .spacing(SP.xs)
-        .padding([SP.xs, 12.0])
+        .padding([SP.xs, SP.l])
         .width(Length::Fill);
     let mut col = status(ctx, drc, header(ctx, drc, col));
     if drc.running || !drc.ran {

@@ -293,13 +293,15 @@ fn members<'a>(
     let i18n = &*ctx.i18n;
     let mut chips = Wrap::new().spacing(SP.xs).line_spacing(SP.xs);
     for net in &class.nets {
-        let glyph = svg(icons::icon_close(ctx.theme_id)).width(10).height(10);
+        let glyph = svg(icons::icon_close(ctx.theme_id))
+            .width(TS.caption)
+            .height(TS.caption);
         let chip = button(
             row![text(UserText::new(net.clone())).size(TS.caption), glyph]
                 .spacing(SP.xs)
                 .align_y(iced::Alignment::Center),
         )
-        .padding([2.0, SP.s])
+        .padding([SP.xs, SP.s])
         .on_press(msg(BoardNetClassMsg::NetRemoved {
             class: class.name.clone(),
             net: net.clone(),

@@ -134,6 +134,13 @@ The last three are open to agents by the maintainer's decision (#1924):
   class table changes, and the pick is one step on that sheet's undo timeline
   (#2171), after the person's own steps.
 
+The board net-class commands (`add_net_class`, `rename_net_class`,
+`delete_net_class`, `set_net_class_rules`, `assign_board_net_class`) are
+flagged `mutates_doc,undoable` like `assign_net_class`, but their step is one
+of the project's net-class history, not the board's: Edit ▸ Undo and `revert`
+do not take it back, the board Net Classes panel's Undo and Redo do. An agent
+puts a class back with the inverse command.
+
 Refused with a reason: `undo` and `redo` (`PERSON_ONLY`, the one hand-kept
 constant, checked against the catalog by a test; the agent takes back its own
 step with `revert`), a command with a file path operand (`save_document_as`,

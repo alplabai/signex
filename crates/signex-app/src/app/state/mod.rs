@@ -8,6 +8,7 @@ use super::TabInfo;
 
 mod agent_edits;
 mod board_3d;
+mod board_net_classes;
 mod board_project;
 mod board_sketch;
 mod case_fold;
@@ -61,12 +62,14 @@ mod window_tab;
 
 pub use agent_edits::AgentEdits;
 pub use board_3d::{Board3dSession, BuiltScene};
+pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
 pub use case_fold::CaseFold;
 pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use parameter_table::ParameterTableState;
+pub(crate) use pcb_drc::DrcInput;
 pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey};
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{

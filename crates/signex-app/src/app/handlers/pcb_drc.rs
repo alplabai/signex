@@ -10,6 +10,7 @@ use iced::Task;
 use signex_drc::{DrcRules, ViolationKind, findings};
 use signex_types::project::DrcRuleSet;
 
+use crate::app::state::DrcInput;
 use crate::app::{DrcRunResult, Message, PcbMsg, Signex};
 
 /// Violations written to the Messages log after the summary line; the panel
@@ -53,7 +54,11 @@ impl Signex {
             profile: profile.cloned(),
             project: project_layer.cloned(),
         };
-        let generation = self.interaction_state.pcb_drc.begin(path, revision);
+        let generation = self.interaction_state.pcb_drc.begin(DrcInput {
+            path,
+            revision,
+            net_classes: classes.clone(),
+        });
         self.refresh_panel_ctx();
         Task::perform(
             async move {
@@ -125,7 +130,7 @@ impl Signex {
             .unwrap_or(0);
         let report = &done.report;
         panel.ran = true;
-        panel.stale = done.revision != revision;
+        panel.stale = done.is_stale(revision, self.board_net_classes(&path));
         if report.rules.from_default {
             panel.default_clearance_mm =
                 Some(format!("{:.1}", pcb_geom::nm_to_mm(report.rules.clearance)));

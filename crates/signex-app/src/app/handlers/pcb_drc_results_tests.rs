@@ -379,3 +379,94 @@ fn a_board_edit_after_the_run_marks_the_results_stale() {
     assert!(app.pcb_drc_panel().unwrap().stale);
     assert!(panel_texts(&app).iter().any(|t| t.contains("run it again")));
 }
+
+/// Edit ▸ Undo and Redo of a waiver keep the results current, as the
+/// waiver step itself does; any other board step still makes them stale.
+#[test]
+fn undoing_a_waiver_keeps_the_results_current() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    let clearance = key_of(&app, "builtin::clearance");
+    panel(&mut app, DrcPanelMsg::WaiveStarted(clearance));
+    panel(&mut app, DrcPanelMsg::NoteEdited("on purpose".into()));
+    panel(&mut app, DrcPanelMsg::WaiveConfirmed);
+    assert!(!app.pcb_drc_panel().unwrap().stale);
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(
+        app.document_state
+            .pcb_board(&path)
+            .unwrap()
+            .options
+            .drc_waivers
+            .is_empty()
+    );
+    assert!(!app.pcb_drc_panel().unwrap().stale, "undo of a waiver");
+    let _ = app.update(Message::Edit(EditMsg::Redo));
+    assert!(!app.pcb_drc_panel().unwrap().stale, "redo of a waiver");
+
+    let command = signex_engine::pcb::BoardCommand::DeleteItems {
+        items: vec![signex_engine::pcb::BoardItemId::Segment(AUX_TRACK)],
+    };
+    app.execute_board_commands(&path, vec![command], None)
+        .expect("the track goes");
+    run_drc(&mut app);
+    assert!(!app.pcb_drc_panel().unwrap().stale);
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(app.pcb_drc_panel().unwrap().stale, "undo of a track delete");
+}
+
+/// A refused waiver keeps the note the user typed in the panel.
+#[test]
+fn a_refused_waiver_keeps_its_note() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    panel(
+        &mut app,
+        DrcPanelMsg::WaiveStarted("not-a-violation".into()),
+    );
+    panel(&mut app, DrcPanelMsg::NoteEdited("typed with care".into()));
+    panel(&mut app, DrcPanelMsg::WaiveConfirmed);
+    assert!(
+        app.document_state
+            .pcb_board(&path)
+            .unwrap()
+            .options
+            .drc_waivers
+            .is_empty()
+    );
+    let draft = app.pcb_drc_panel().unwrap().waive_draft;
+    assert_eq!(
+        draft.map(|d| d.note).as_deref(),
+        Some("typed with care"),
+        "the note stays for another try"
+    );
+}
+
+/// A row that cannot be shown says so, not that a waiver was not saved.
+#[test]
+fn a_refused_show_is_logged_as_a_show() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = board_app(&dir);
+    let _ = crate::diagnostics::init_logging();
+    run_drc(&mut app);
+    let key = "no-row-2399-show";
+    panel(&mut app, DrcPanelMsg::RowPicked(key.into()));
+    let said: Vec<String> = crate::diagnostics::recent_entries()
+        .into_iter()
+        .map(|e| e.message)
+        .filter(|m| m.contains(key))
+        .collect();
+    assert!(
+        said.iter().any(|m| m.contains("could not be shown")),
+        "{said:?}"
+    );
+    assert!(
+        !said.iter().any(|m| m.contains("waiver was not saved")),
+        "{said:?}"
+    );
+}

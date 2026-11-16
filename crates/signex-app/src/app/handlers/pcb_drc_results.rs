@@ -12,7 +12,7 @@ use signex_engine::pcb::BoardCommand;
 use signex_i18n::{ids, t};
 use signex_types::format::pcb_layer_token;
 use signex_types::pcb_layer::PcbLayer;
-use signex_types::pcb_options::DrcWaiver;
+use signex_types::pcb_options::{BoardOptions, DrcWaiver};
 
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{Message, Signex};
@@ -25,7 +25,13 @@ impl Signex {
             return Task::none();
         };
         let refused = match msg {
-            DrcPanelMsg::RowPicked(key) => self.show_drc_violation(&path, &key).err(),
+            DrcPanelMsg::RowPicked(key) => {
+                if let Err(why) = self.show_drc_violation(&path, &key) {
+                    let line = t!(self.ui_state.i18n, ids::DRC_PANEL_SHOW_REFUSED, "why" => why);
+                    crate::diagnostics::log_warning(line.into_string());
+                }
+                None
+            }
             DrcPanelMsg::FilterPicked(choice) => {
                 let filter = &mut self.interaction_state.pcb_drc.filter;
                 match choice {
@@ -53,10 +59,17 @@ impl Signex {
                 None
             }
             DrcPanelMsg::WaiveConfirmed => {
-                match self.interaction_state.pcb_drc.waive_draft.take() {
-                    Some(draft) => self
-                        .set_drc_waiver(&path, &draft.key, Some(draft.note))
-                        .err(),
+                match self.interaction_state.pcb_drc.waive_draft.clone() {
+                    // The note stays in the panel until the waiver is stored.
+                    Some(draft) => {
+                        let refused = self
+                            .set_drc_waiver(&path, &draft.key, Some(draft.note))
+                            .err();
+                        if refused.is_none() {
+                            self.interaction_state.pcb_drc.waive_draft = None;
+                        }
+                        refused
+                    }
                     None => None,
                 }
             }
@@ -197,6 +210,50 @@ impl Signex {
             "waived": note.is_some(),
             "note": note,
         }))
+    }
+
+    /// What [`Self::carry_drc_over_waiver_step`] needs from before an undo
+    /// or redo of `board`: its revision and options.
+    pub(crate) fn drc_waiver_step_start(&self, board: &Path) -> Option<(u64, BoardOptions)> {
+        let from = self.document_state.pcb_revisions.get(board).copied()?;
+        let options = self
+            .document_state
+            .board_engine(board)?
+            .board()
+            .options
+            .clone();
+        Some((from, options))
+    }
+
+    /// An undo or redo of `board` that changed its waivers and nothing else
+    /// of its options keeps the DRC results current, as the waiver step
+    /// itself does. A waiver step holds that one options command alone.
+    pub(crate) fn carry_drc_over_waiver_step(
+        &mut self,
+        board: &Path,
+        before: Option<(u64, BoardOptions)>,
+    ) {
+        let Some((from, options)) = before else {
+            return;
+        };
+        let Some(now) = self
+            .document_state
+            .board_engine(board)
+            .map(|e| &e.board().options)
+        else {
+            return;
+        };
+        let waivers_only = now.drc_waivers != options.drc_waivers
+            && BoardOptions {
+                drc_waivers: now.drc_waivers.clone(),
+                ..options
+            } == *now;
+        let to = self.document_state.pcb_revisions.get(board).copied();
+        if let (true, Some(to)) = (waivers_only, to) {
+            self.interaction_state
+                .pcb_drc
+                .carry_revision(board, from, to);
+        }
     }
 
     /// Set what the DRC results show of the board in view and answer with

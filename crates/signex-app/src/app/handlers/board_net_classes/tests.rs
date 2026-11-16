@@ -14,7 +14,7 @@ use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::{Message, Signex};
 use crate::dock::DockMessage;
 use crate::keymap::AppCommandId;
-use crate::panels::{BoardNetClassField, BoardNetClassMsg, PanelMsg};
+use crate::panels::{BoardNetClassField, BoardNetClassMsg, NetClassMsg, PanelMsg};
 
 const BOARD: &str = "board.snxpcb";
 
@@ -272,5 +272,92 @@ fn a_loose_board_has_no_net_classes() {
     assert!(
         matches!(&refused, CommandOutcome::Disabled { reason } if reason.contains("no open project")),
         "{refused:?}"
+    );
+}
+
+fn schematic_panel(app: &mut Signex, msg: NetClassMsg) {
+    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::NetClass(msg))));
+}
+
+/// #2399: a net-class edit marks the DRC results stale, though the board's
+/// revision does not move; an Undo back to the table the run read makes
+/// them current again.
+#[test]
+fn a_net_class_edit_marks_the_drc_results_stale() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = board_app(&dir);
+    let task = app.handle_pcb_drc_requested();
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    assert!(!app.pcb_drc_panel().unwrap().stale);
+    panel(&mut app, BoardNetClassMsg::AddRequested);
+    assert!(app.pcb_drc_panel().unwrap().stale, "a class was added");
+    panel(&mut app, BoardNetClassMsg::UndoRequested);
+    assert!(
+        !app.pcb_drc_panel().unwrap().stale,
+        "back to the run's table"
+    );
+}
+
+/// A board-panel edit keeps the schematic section's selection on the class
+/// it named and reloads its draft, so the draft never lands on another one.
+#[test]
+fn a_board_edit_keeps_the_schematic_draft_on_its_class() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = board_app(&dir);
+    for _ in 0..3 {
+        panel(&mut app, BoardNetClassMsg::AddRequested);
+    }
+    schematic_panel(&mut app, NetClassMsg::Select(1));
+    let section = |app: &Signex| app.document_state.panel_ctx.net_classes.clone();
+    assert_eq!(section(&app).draft.name, "Class 2");
+
+    panel(
+        &mut app,
+        BoardNetClassMsg::DeleteRequested("Class 1".into()),
+    );
+    let shown = section(&app);
+    assert_eq!(shown.selected, 0);
+    assert_eq!(shown.draft.name, "Class 2");
+
+    panel(&mut app, BoardNetClassMsg::UndoRequested);
+    let shown = section(&app);
+    assert_eq!(shown.selected, 1);
+    assert_eq!(shown.draft.name, "Class 2");
+}
+
+/// The typed cell and the refusal notice live in the Model: a panel
+/// refresh with no active project keeps them.
+#[test]
+fn the_board_draft_and_notice_survive_a_refresh_without_an_active_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = board_app(&dir);
+    panel(&mut app, BoardNetClassMsg::AddRequested);
+    type_in(&mut app, "Class 1", BoardNetClassField::Width, "wide");
+    app.document_state.active_project = None;
+    panel(
+        &mut app,
+        BoardNetClassMsg::CellEdited {
+            class: "Class 1".into(),
+            field: BoardNetClassField::Clearance,
+            text: "0.2".into(),
+        },
+    );
+    app.refresh_panel_ctx();
+    let view = app
+        .document_state
+        .panel_ctx
+        .net_classes
+        .board
+        .clone()
+        .expect("the board's view");
+    assert_eq!(view.draft.map(|d| d.text).as_deref(), Some("0.2"));
+    assert!(view.notice.is_some(), "the refusal is still shown");
+    panel(&mut app, BoardNetClassMsg::CellSubmitted);
+    assert_eq!(
+        app.document_state.projects[0].data.net_classes[0].clearance,
+        0.2
     );
 }

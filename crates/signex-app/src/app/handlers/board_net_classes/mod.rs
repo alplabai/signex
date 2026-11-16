@@ -106,6 +106,7 @@ impl Signex {
         let answer = classes_json(&project.data.net_classes);
         if changed {
             document.sync_project_history_dirty(id, false);
+            self.resync_net_class_panel(id, &before);
         }
         self.refresh_panel_ctx();
         Ok(answer)
@@ -124,6 +125,7 @@ impl Signex {
         let Some(history) = document.net_class_history.get_mut(&id) else {
             return false;
         };
+        let before = project.data.net_classes.clone();
         let moved = if redo {
             history.redo(&mut project.data.net_classes)
         } else {
@@ -131,6 +133,7 @@ impl Signex {
         };
         if moved {
             document.sync_project_history_dirty(id, false);
+            self.resync_net_class_panel(id, &before);
         }
         self.refresh_panel_ctx();
         moved
@@ -238,20 +241,15 @@ impl Signex {
                 .edit_board_net_classes(&board, NetClassCommand::Remove { name })
                 .map(drop),
             BoardNetClassMsg::CellEdited { class, field, text } => {
-                if let Some(view) = self.document_state.panel_ctx.net_classes.board.as_mut() {
-                    view.draft = Some(BoardNetClassDraft { class, field, text });
-                }
+                let state = self.interaction_state.board_net_classes.for_board(&board);
+                state.draft = Some(BoardNetClassDraft { class, field, text });
+                // A keystroke updates the shown view alone, no full refresh.
+                self.mirror_board_net_class_state(&board);
                 return;
             }
             BoardNetClassMsg::CellSubmitted => {
-                let draft = self
-                    .document_state
-                    .panel_ctx
-                    .net_classes
-                    .board
-                    .as_mut()
-                    .and_then(|view| view.draft.take());
-                match draft {
+                let state = self.interaction_state.board_net_classes.for_board(&board);
+                match state.draft.take() {
                     Some(draft) => self
                         .cell_command(&board, &draft)
                         .and_then(|command| self.edit_board_net_classes(&board, command))
@@ -280,17 +278,28 @@ impl Signex {
                 Ok(())
             }
         };
+        self.interaction_state
+            .board_net_classes
+            .for_board(&board)
+            .notice = result.err();
+        self.mirror_board_net_class_state(&board);
+    }
+
+    /// Show the panel state of `board` in the view of the board in view.
+    fn mirror_board_net_class_state(&mut self, board: &Path) {
+        let (draft, notice) = self.interaction_state.board_net_classes.of(board);
         if let Some(view) = self.document_state.panel_ctx.net_classes.board.as_mut() {
-            view.notice = result.err();
+            view.draft = draft;
+            view.notice = notice;
         }
     }
 
     /// `panel` with the board Net Classes panel's view of the board in
     /// view: the table, the board's nets and the history flags read now,
-    /// the panel's draft and notice carried over.
+    /// the draft and notice from the Model.
     pub(crate) fn with_board_net_classes(&self, mut panel: NetClassPanel) -> NetClassPanel {
-        let previous = panel.board.take().unwrap_or_default();
         panel.board = self.active_tab_path().and_then(|path| {
+            let (draft, notice) = self.interaction_state.board_net_classes.of(&path);
             let board = self.active_pcb()?;
             let project = self.document_state.board_project(&path, None);
             let history = project.and_then(|p| self.document_state.net_class_history.get(&p.id));
@@ -310,8 +319,8 @@ impl Signex {
                 nets,
                 can_undo: history.is_some_and(|h| h.can_undo()),
                 can_redo: history.is_some_and(|h| h.can_redo()),
-                draft: previous.draft,
-                notice: previous.notice,
+                draft,
+                notice,
             })
         });
         panel
