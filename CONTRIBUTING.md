@@ -124,6 +124,7 @@ bash scripts/check_file_size.sh         # god-file ratchet
 bash scripts/check_discarded_tasks.sh   # no `let _ =` on an iced::Task
 bash scripts/check_lint_lockstep.sh     # workspace lints present in every member
 bash scripts/check_layer_ratchet.sh   # layer-crossing counts vs scripts/layer-ratchet-baseline.txt
+bash scripts/check_engine_ids.sh      # engine id minting only at scripts/engine-ids-allowlist.txt
 bash scripts/changelog_assemble.sh --check   # changelog.d fragments
 ```
 
