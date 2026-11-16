@@ -409,6 +409,10 @@ them, so the rest is on the author.
   state changes, and IO is returned as a `Task`, never run inline (the
   bounded `SaveBarrier` wait in ADR-0003 D2 is the sanctioned exception). No
   process-global app state. Message routers are exhaustive, with no `_` arm.
+  Inside the application core
+  ([ADR-0006](docs/architecture/adr-0006-application-core.md), accepted
+  2026-11-16), IO is an `Effect` that the host
+  behind the calling front end runs; the GUI runs it as a `Task`.
 - **Messages:** contributors do not add `Message` variants. If a change needs
   a new message, open an issue that describes the event and the maintainers
   add it. The message tree is shared by every surface, so its shape is decided
