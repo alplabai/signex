@@ -24,6 +24,8 @@ const TEXT: &str = "rule base  on clearance\n  require clearance >= 0.2mm then e
 
 fn track(n: u128, net: u32, y: f64) -> Segment {
     Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(0x3000 + n),
         start: Point::new(0.0, y),
         end: Point::new(10.0, y),
