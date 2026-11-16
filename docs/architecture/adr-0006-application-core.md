@@ -284,8 +284,7 @@ A rule about document content belongs in the engine or a domain crate, never in 
 The application core and the crates it uses get the treatment ADR-0001 D5 gives the domain crates, using allowlists rather than denylists.
 
 - **Arch guard.** Each crate's edges go in `scripts/arch-edges.txt`, and the crate joins `DOMAIN` in `scripts/check_arch_guard.sh` when it is created. `DOMAIN`, not the edges file, is what fails on a UI/GPU dependency.
-  - `signex-i18n-ids` and `signex-commands` join at slice 1.
-  - `signex-commands` gets the arch guard at slice 1. The scan of its source for `std::fs`, `std::thread`, `std::process` and runtimes comes with the clippy lint after the lift; until then review keeps it free of IO.
+  - `signex-i18n-ids` and `signex-commands` join at slice 1. The scan of the `signex-commands` source for `std::fs`, `std::thread`, `std::process` and runtimes comes with the clippy lint after the lift; until then review keeps it free of IO.
   - `signex-workspace` joins at slice 9.
 - **While the core grows inside `signex-app`.** A guard fails when `app/core/` imports any `crate::` path outside `app/core/`, or names `iced`, `tokio`, `spawn_blocking` / `run_blocking`, `std::fs`, `std::thread` or `std::process`. It lands with slice 1.
 - **After the lift.** Clippy `disallowed-methods` / `disallowed-types` keep the same calls out of the core. They are modelled on the `io_ports` precedent in `clippy.toml`.

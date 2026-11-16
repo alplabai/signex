@@ -47,7 +47,10 @@
 #
 # Known blind spots:
 #   a macro defined outside the core and pulled in by `#[macro_use]` expands unseen;
-#   std IO roots not listed above (std::net, std::env, std::io::stdin, std::os::*::fs) pass.
+#   std IO roots not listed above (std::net, std::env, std::io::stdin, std::os::*::fs) pass;
+#   a path split over lines, or with an empty turbofish (`std::<>::fs`), inside a macro
+#   body that rustfmt leaves alone passes. The text guard stops accidents, not evasion;
+#   the clippy lint after the lift (ADR-0006, Enforcement) closes this class.
 #
 # This is a source scan, unlike the crate-graph check in
 # scripts/check_arch_guard.sh, which reads `cargo metadata`.
