@@ -7,6 +7,7 @@ mod annotation_placements;
 mod clipboard_text;
 mod history;
 mod history_snapshot;
+mod id_collision;
 mod lock;
 mod multi_edit;
 mod net_class_table;
@@ -70,6 +71,8 @@ mod save_point_tests;
 #[cfg(test)]
 mod symbol_drag_local_tests;
 
+#[cfg(test)]
+mod id_source_tests;
 #[cfg(test)]
 mod sheet_identity_tests;
 #[cfg(test)]
@@ -637,7 +640,8 @@ impl Engine {
         };
         self.refuse_if_read_only(incoming)?;
         // A refusal touches nothing, so it moves no revision.
-        if let Some(refusal) = self.locked_item_refusal(&cmd) {
+        let refusal = self.locked_item_refusal(&cmd);
+        if let Some(refusal) = refusal.or_else(|| self.id_in_use_refusal(&cmd)) {
             return Err(refusal);
         }
         let mark = self.revision_mark();
