@@ -71,3 +71,9 @@ pdf-pcb-color-mode = PCB Color Mode
 pdf-color-mode-color = Color
 pdf-color-mode-greyscale = Greyscale
 pdf-color-mode-monochrome = Monochrome
+# The variant choice that prints the design without any variant applied.
+pdf-variant-base = Base
+# The raster resolution of the exported pages; dpi is dots per inch.
+pdf-quality-draft = Draft (72 dpi)
+pdf-quality-medium = Medium (300 dpi)
+pdf-quality-high = High (600 dpi)

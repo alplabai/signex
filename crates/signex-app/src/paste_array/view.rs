@@ -4,6 +4,7 @@ use signex_i18n::{I18n, Localized, ids, t};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{button, raw, text, text_input};
 
+use crate::choice::{Choice, chosen};
 use crate::paste_prefs::PasteDesignators;
 use iced::{Background, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
@@ -84,19 +85,19 @@ pub fn view<'a>(
     ]
     .spacing(SP.m);
 
+    let modes = Choice::named(PasteDesignators::ALL, PasteDesignators::label, i18n);
     let designators = row![
         text(t!(i18n, ids::PASTE_ARRAY_DESIGNATORS))
             .size(TS.body)
             .color(text_primary)
             .width(LABEL_W),
-        // The mode names come from `PasteDesignators`'s Display (#2059).
         pick_list(
-            Some(state.designators),
-            PasteDesignators::ALL,
-            |mode: &PasteDesignators| mode.to_string(),
+            chosen(&modes, &state.designators),
+            modes,
+            |mode: &Choice<PasteDesignators>| mode.label.clone()
         )
         .graphite()
-        .on_select(PasteArrayMsg::DesignatorsChosen),
+        .on_select(|mode: Choice<PasteDesignators>| PasteArrayMsg::DesignatorsChosen(mode.value)),
     ]
     .align_y(iced::Alignment::Center)
     .spacing(SP.m);
