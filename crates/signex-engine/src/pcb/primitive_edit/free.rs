@@ -26,6 +26,13 @@ pub struct ArcSpan {
     pub to_deg: f64,
 }
 
+/// `radians` as degrees in [0, 360). `rem_euclid` of a tiny negative angle
+/// rounds up to 360.0 itself, which is 0.
+fn degrees(radians: f64) -> f64 {
+    let deg = radians.to_degrees().rem_euclid(360.0);
+    if deg >= 360.0 { 0.0 } else { deg }
+}
+
 impl ArcSpan {
     /// The span of `arc`; `None` for one with no circle.
     pub fn of(arc: &TrackArc) -> Option<Self> {
@@ -38,8 +45,8 @@ impl ArcSpan {
         Some(Self {
             center: sweep.center,
             radius: sweep.radius,
-            from_deg: from.to_degrees().rem_euclid(360.0),
-            to_deg: to.to_degrees().rem_euclid(360.0),
+            from_deg: degrees(from),
+            to_deg: degrees(to),
         })
     }
 

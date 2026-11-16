@@ -4,7 +4,9 @@ use signex_types::pcb::ViaType;
 use signex_types::pcb_layer::{CopperLayer, InnerCopper};
 
 use crate::pcb::placement::{self, PlacementRefusal};
-use crate::pcb::primitive_edit::{TrackEdit, ViaEdit, track_edit_command, via_edit_command};
+use crate::pcb::primitive_edit::{
+    PrimitiveEditRefusal, TrackEdit, ViaEdit, track_edit_command, via_edit_command,
+};
 use crate::pcb::tests::{SEG_1, VIA_1, board, id, snapshot};
 use crate::pcb::{BoardCommand, BoardCommandError, BoardItemId, BoardPatchKind};
 
@@ -19,12 +21,20 @@ fn a_locked_track_refuses_an_edit_and_a_delete_until_unlocked() {
     let mut b = board();
     let track = BoardItemId::Segment(id(SEG_1));
     let before = snapshot(&b);
-    let undo = lock(&mut b, vec![(track, true)]);
-    assert!(b.segments[0].locked);
-
+    // Built while the track is free: the engine itself refuses it once
+    // the track is locked.
     let moved = track_edit_command(&b, &[id(SEG_1)], TrackEdit::LocationX(5.0))
         .unwrap()
         .unwrap();
+    let undo = lock(&mut b, vec![(track, true)]);
+    assert!(b.segments[0].locked);
+
+    // The Properties edit of a locked track is refused before a command
+    // is built (#2378).
+    assert_eq!(
+        track_edit_command(&b, &[id(SEG_1)], TrackEdit::LocationX(5.0)),
+        Err(PrimitiveEditRefusal::ItemLocked)
+    );
     assert_eq!(
         moved.apply(&mut b.clone()),
         Err(BoardCommandError::ItemLocked(track))
