@@ -230,6 +230,15 @@ define_ids! {
         CMD_RULES_EFFECTIVE = "cmd-rules-effective";
         CMD_RULES_EXPLAIN = "cmd-rules-explain";
         CMD_RULES_CONFLICTS = "cmd-rules-conflicts";
+        CMD_PROJECT_SETTINGS = "cmd-project-settings";
+        CMD_PROJECT_MOVE_SHEET = "cmd-project-move-sheet";
+        CMD_PROJECT_ADD_VARIANT = "cmd-project-add-variant";
+        CMD_PROJECT_RENAME_VARIANT = "cmd-project-rename-variant";
+        CMD_PROJECT_REMOVE_VARIANT = "cmd-project-remove-variant";
+        CMD_PROJECT_SET_ACTIVE_VARIANT = "cmd-project-set-active-variant";
+        CMD_PROJECT_MOVE_LIBRARY = "cmd-project-move-library";
+        CMD_PROJECT_SET_ANNOTATE_UNDO = "cmd-project-set-annotate-undo";
+        CMD_PROJECT_SET_VERSION_CONTROL = "cmd-project-set-version-control";
         CMD_NUMBER_SCHEMATIC_SHEETS = "cmd-number-schematic-sheets";
         CMD_MENU_NUMBER_SCHEMATIC_SHEETS = "cmd-menu-number-schematic-sheets";
         CMD_RESET_SCHEMATIC_DESIGNATORS = "cmd-reset-schematic-designators";

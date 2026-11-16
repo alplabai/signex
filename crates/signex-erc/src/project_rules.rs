@@ -159,6 +159,28 @@ pub fn resolve(rules: &ErcRules) -> ResolvedRules {
     out
 }
 
+/// How many built-in rules run at each severity under `overrides` (a rule
+/// absent from it runs at its default), in the order Error, Warning, Info,
+/// Off. The Project tab's ERC summary (#1692).
+pub fn severity_counts(overrides: &HashMap<RuleKind, Severity>) -> [(Severity, usize); 4] {
+    let mut counts = [
+        (Severity::Error, 0),
+        (Severity::Warning, 0),
+        (Severity::Info, 0),
+        (Severity::Off, 0),
+    ];
+    for rule in RuleKind::ALL {
+        let severity = overrides
+            .get(&rule)
+            .copied()
+            .unwrap_or_else(|| rule.default_severity());
+        if let Some(slot) = counts.iter_mut().find(|(level, _)| *level == severity) {
+            slot.1 += 1;
+        }
+    }
+    counts
+}
+
 mod edit;
 pub mod profile;
 pub use edit::{cycle_pin_cell, seed_from_overrides, set_severity};

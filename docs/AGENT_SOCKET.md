@@ -102,7 +102,7 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   reads
   ([CLI.md](CLI.md), "Checks on demand"), and the Rules manager reads
   `rules_list`, `rules_get`, `rules_effective`, `rules_explain` and
-  `rules_conflicts` (#2398);
+  `rules_conflicts` (#2398), and the Project tab's `project_settings` (#1689-#1693);
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
@@ -115,6 +115,11 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   of the named board, no undo step; `save_layer_set` also keeps the set in the
   person's preferences), and the Rules manager edits `rules_add`, `rules_set`,
   `rules_remove` and `rules_enable` (#2398; `document` is the project or any
+  document of it), and the Project tab edits `project_move_sheet`,
+  `project_add_variant`, `project_rename_variant`, `project_remove_variant`,
+  `project_set_active_variant`, `project_move_library`,
+  `project_set_annotate_undo` and `project_set_version_control` (#1689-#1693;
+  `document` is the project or any
   document of it). A test pins this set, so a catalog row that joins or
   leaves it is a visible decision. The CSV and PDF writers
   `export_board_report` and `export_board_pdf` take a `path`, so they are CLI

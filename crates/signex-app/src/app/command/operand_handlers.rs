@@ -113,6 +113,39 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("rules_set", crate::app::rules_tab::rules_set),
     ("rules_remove", crate::app::rules_tab::rules_remove),
     ("rules_enable", crate::app::rules_tab::rules_enable),
+    // #1689-#1693: the Project tab's section edits.
+    (
+        "project_move_sheet",
+        crate::app::project_tab::project_move_sheet,
+    ),
+    (
+        "project_add_variant",
+        crate::app::project_tab::project_add_variant,
+    ),
+    (
+        "project_rename_variant",
+        crate::app::project_tab::project_rename_variant,
+    ),
+    (
+        "project_remove_variant",
+        crate::app::project_tab::project_remove_variant,
+    ),
+    (
+        "project_set_active_variant",
+        crate::app::project_tab::project_set_active_variant,
+    ),
+    (
+        "project_move_library",
+        crate::app::project_tab::project_move_library,
+    ),
+    (
+        "project_set_annotate_undo",
+        crate::app::project_tab::project_set_annotate_undo,
+    ),
+    (
+        "project_set_version_control",
+        crate::app::project_tab::project_set_version_control,
+    ),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -212,6 +245,17 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "rules_add" | "rules_set" | "rules_remove" | "rules_enable" => Some(
             "the `rules_*` edits need their operands — \
              use the Rules tab (Design ▸ Rules)",
+        ),
+        "project_move_sheet"
+        | "project_add_variant"
+        | "project_rename_variant"
+        | "project_remove_variant"
+        | "project_set_active_variant"
+        | "project_move_library"
+        | "project_set_annotate_undo"
+        | "project_set_version_control" => Some(
+            "the `project_*` edits need their operands — \
+             use the Project tab (Project Options in the project tree)",
         ),
         _ => None,
     }

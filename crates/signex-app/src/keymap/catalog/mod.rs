@@ -12,6 +12,7 @@ mod categories;
 mod general;
 mod operands;
 mod pcb;
+mod project;
 mod rules;
 mod schematic;
 mod threed;
@@ -320,6 +321,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     pcb::PCB,
     threed::THREE_D,
     rules::RULES,
+    project::PROJECT,
 ];
 
 /// Flattened iterator over every command's metadata, across all groups.
@@ -835,6 +837,7 @@ mod tests {
             ("pcb.rs", include_str!("pcb.rs")),
             ("threed.rs", include_str!("threed.rs")),
             ("rules.rs", include_str!("rules.rs")),
+            ("project.rs", include_str!("project.rs")),
         ];
 
         let mut missing: Vec<String> = Vec::new();

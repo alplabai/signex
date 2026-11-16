@@ -145,7 +145,82 @@ impl Signex {
             }
             // Routed by `dispatch_project_tab_message`, which returns its task.
             ProjectTabMsg::SetupEdited { .. } => {}
+            ProjectTabMsg::SheetMoved {
+                project_id,
+                filename,
+                step,
+            } => self.move_project_sheet(project_id, filename, step),
+            ProjectTabMsg::NewVariantNameEdited { project_id, text } => {
+                self.edit_new_variant_name(project_id, text);
+            }
+            ProjectTabMsg::VariantAdded { project_id } => self.add_typed_variant(project_id),
+            ProjectTabMsg::VariantRenameEdited {
+                project_id,
+                from,
+                text,
+            } => self.edit_variant_rename(project_id, from, text),
+            ProjectTabMsg::VariantRenameSubmitted { project_id } => {
+                self.submit_variant_rename(project_id);
+            }
+            ProjectTabMsg::VariantRemoved { project_id, name } => {
+                self.remove_project_variant(project_id, name);
+            }
+            ProjectTabMsg::ActiveVariantPicked { project_id, name } => {
+                self.pick_active_variant(project_id, name);
+            }
+            ProjectTabMsg::LibraryMoved {
+                project_id,
+                path,
+                step,
+            } => self.move_project_library(project_id, path, step),
+            ProjectTabMsg::AnnotateUndoPicked { project_id, choice } => {
+                self.pick_project_annotate_undo(project_id, choice);
+            }
+            ProjectTabMsg::ErcRulesStoreRequested { project_id } => {
+                self.store_erc_rules_in(project_id);
+            }
+            ProjectTabMsg::VersionControlToggled { project_id, on } => {
+                self.toggle_project_version_control(project_id, on);
+            }
+            ProjectTabMsg::EnableVersionControlRequested { project_id } => {
+                self.open_version_control_from_tab(project_id);
+            }
         }
+    }
+
+    /// Apply one section edit (#1689-#1693) to the project's data as one
+    /// step of its General history and mark the `.snxprj` dirty. `Ok(false)`
+    /// when nothing changed or the project is no longer loaded; a refused
+    /// variant edit changes nothing.
+    pub(crate) fn apply_project_section(
+        &mut self,
+        project_id: ProjectId,
+        command: &signex_engine::ProjectSectionCommand,
+    ) -> Result<bool, signex_types::project::VariantProblem> {
+        let document = &mut self.document_state;
+        document.note_project_clean_state(project_id);
+        let Some(project) = document.projects.iter_mut().find(|p| p.id == project_id) else {
+            crate::diagnostics::log_warning(
+                "Project tab: the project was closed; the edit was dropped",
+            );
+            return Ok(false);
+        };
+        let tab = document.project_tabs.entry(project_id).or_default();
+        if !tab
+            .general_history
+            .apply_section(&mut project.data, command)?
+        {
+            return Ok(false);
+        }
+        tab.rules_step_newest = false;
+        document.sync_project_history_dirty(project_id, true);
+        // The page order is the frame's Sheet N of M: redraw the sheets.
+        let pages_moved = matches!(
+            command,
+            signex_engine::ProjectSectionCommand::MoveSheet { .. }
+        );
+        self.after_project_general_change(pages_moved);
+        Ok(true)
     }
 
     /// End the General history's typing run: the next edit is its own step.
@@ -180,6 +255,8 @@ impl Signex {
             tab.default_drafts.clear();
             tab.setup_draft = None;
             tab.journal_lines_draft = None;
+            tab.variant_rename = None;
+            tab.variant_problem = None;
         }
     }
 
@@ -241,16 +318,21 @@ impl Signex {
             return false;
         };
         let defaults_before = project.data.schematic_defaults.clone();
+        let pages_before = project.data.sheet_order();
         let moved = if undo {
             tab.general_history.undo(&mut project.data)
         } else {
             tab.general_history.redo(&mut project.data)
         };
-        let defaults_moved = project.data.schematic_defaults != defaults_before;
+        // Redraw the sheets when their defaults or page numbers moved.
+        let defaults_moved = project.data.schematic_defaults != defaults_before
+            || project.data.sheet_order() != pages_before;
         // The boxes show the stored values again.
         tab.default_drafts.clear();
         tab.setup_draft = None;
         tab.journal_lines_draft = None;
+        tab.variant_rename = None;
+        tab.variant_problem = None;
         if moved {
             // Dirty unless the step landed back on the saved state.
             document.sync_project_history_dirty(project_id, true);

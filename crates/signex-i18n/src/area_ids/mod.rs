@@ -16,6 +16,7 @@ mod pcb_board;
 mod pcb_component;
 mod pcb_primitive;
 mod preferences;
+mod project;
 mod rules;
 mod update_pcb;
 
@@ -33,6 +34,7 @@ pub use pcb_board::*;
 pub use pcb_component::*;
 pub use pcb_primitive::*;
 pub use preferences::*;
+pub use project::*;
 pub use rules::*;
 pub use update_pcb::*;
 
@@ -54,6 +56,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         pcb_component::PCB_COMPONENT,
         pcb_primitive::PCB_PRIMITIVE,
         preferences::PREFERENCES,
+        project::PROJECT,
         rules::RULES,
         update_pcb::UPDATE_PCB,
     ]

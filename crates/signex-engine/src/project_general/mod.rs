@@ -13,6 +13,12 @@
 //! Text is edited per keystroke. Consecutive edits coalesce into one undo
 //! step (a "run"); the run closes on undo, redo, or
 //! [`ProjectGeneralHistory::close_run`] (a section switch, a save).
+//!
+//! The Sheets, Variants, Libraries, ERC and annotation and Version control
+//! sections (#1689-#1693) edit through the same history; their commands are
+//! in `sections` and each is a step of its own.
+
+mod sections;
 
 use std::collections::BTreeMap;
 
@@ -24,6 +30,9 @@ use signex_types::project::{
     AnnotationState, PcbField, ProjectData, ProjectDefaults, SchematicDefaultField,
     SchematicDefaultOverrides,
 };
+
+pub use sections::ProjectSectionCommand;
+use sections::SectionsSnapshot;
 
 /// How many undo steps are kept unless the `undo_depth` setting says
 /// otherwise.
@@ -102,6 +111,7 @@ struct GeneralSnapshot {
     schematic_defaults: SchematicDefaultOverrides,
     project_defaults: ProjectDefaults,
     agent_journal: AgentJournalSettings,
+    sections: SectionsSnapshot,
 }
 
 impl GeneralSnapshot {
@@ -113,6 +123,7 @@ impl GeneralSnapshot {
             schematic_defaults: data.schematic_defaults.clone(),
             project_defaults: data.project_defaults.clone(),
             agent_journal: data.agent_journal,
+            sections: SectionsSnapshot::of(data),
         }
     }
 
@@ -124,6 +135,7 @@ impl GeneralSnapshot {
         data.schematic_defaults = self.schematic_defaults;
         data.project_defaults = self.project_defaults;
         data.agent_journal = self.agent_journal;
+        self.sections.restore(data);
     }
 }
 
@@ -269,6 +281,26 @@ impl ProjectGeneralHistory {
         true
     }
 
+    /// Apply one section edit (#1689-#1693) as an undo step of its own.
+    /// `Ok(true)` when a field changed, `Ok(false)` when nothing did (a move
+    /// at the end of its list); a refused edit changes nothing and records
+    /// nothing.
+    pub fn apply_section(
+        &mut self,
+        data: &mut ProjectData,
+        command: &ProjectSectionCommand,
+    ) -> Result<bool, signex_types::project::VariantProblem> {
+        let before = GeneralSnapshot::of(data);
+        self.run_open = false;
+        self.run_field = None;
+        command.apply(data)?;
+        if GeneralSnapshot::of(data) == before {
+            return Ok(false);
+        }
+        self.history.record(before);
+        Ok(true)
+    }
+
     /// End the open edit run: the next edit is a new undo step.
     pub fn close_run(&mut self) {
         self.run_open = false;
@@ -305,5 +337,7 @@ impl ProjectGeneralHistory {
     }
 }
 
+#[cfg(test)]
+mod section_tests;
 #[cfg(test)]
 mod tests;

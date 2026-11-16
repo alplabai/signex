@@ -295,22 +295,24 @@ impl Signex {
                         .arg("reason", reason.to_string()),
                 ));
         } else if matches!(scope, crate::app::VersionControlScope::Project) {
-            // Flip `enable_git = true` on the matching project + mark it
-            // dirty so the .snxprj save captures the flag. Match by
+            // Turn `enable_git` on for the matching project as a step of its
+            // Project tab history (#1693), so the .snxprj save captures the
+            // flag and an undo of an older step cannot turn it off. Match by
             // `data.dir`; only when the adapter setup succeeded (v0.23).
-            let mut snxprj_path: Option<std::path::PathBuf> = None;
-            if let Some(loaded) = self
+            let project_id = self
                 .document_state
                 .projects
-                .iter_mut()
+                .iter()
                 .find(|p| std::path::Path::new(&p.data.dir) == project_dir)
-            {
-                loaded.data.enable_git = true;
-                snxprj_path = Some(loaded.path.clone());
-            }
-            match snxprj_path {
-                Some(p) => {
-                    self.document_state.mark_document_dirty(&p);
+                .map(|p| p.id);
+            match project_id {
+                Some(id) => {
+                    let on = signex_engine::ProjectSectionCommand::SetVersionControl { on: true };
+                    if let Err(problem) = self.apply_project_section(id, &on) {
+                        crate::diagnostics::log_warning(format!(
+                            "[git] commit on save was not turned on: {problem}"
+                        ));
+                    }
                 }
                 None => {
                     // The project was closed while the run was in flight: the

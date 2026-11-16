@@ -10,8 +10,10 @@ use uuid::Uuid;
 use crate::agent_journal::AgentJournalSettings;
 use crate::document_id::DocumentId;
 
+mod annotate_undo;
 mod annotation;
 mod erc_waiver;
+mod order;
 mod rule_file;
 mod rule_profile;
 mod rules;
@@ -24,8 +26,13 @@ mod unknown;
 mod user_profile;
 #[cfg(test)]
 mod user_profile_tests;
+mod variants;
+#[cfg(test)]
+mod variants_tests;
+pub use annotate_undo::AnnotateUndo;
 pub use annotation::{AnnotationSettings, AnnotationState};
 pub use erc_waiver::ErcWaiver;
+pub use order::ListMove;
 pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
 pub use rule_profile::{
     RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
@@ -48,6 +55,7 @@ pub use user_profile::{
     USER_PROFILE_ID_PREFIX, UserProfile, check_profile_name, find_user_profile, new_profile_id,
     resolve_profile, save_user_profile, user_profiles_from_value,
 };
+pub use variants::{BASE_VARIANT, MAX_VARIANT_NAME_CHARS, VariantProblem, is_base_variant};
 
 /// Reads a stored `document_id`; a value that is not one reads as absent, so
 /// a hand-edited key never makes the project unopenable.

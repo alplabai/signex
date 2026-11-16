@@ -115,6 +115,7 @@ pub use placement::PlacementPayload;
 pub use power_port::{place_power_port, restyle_power_port};
 pub use project_general::{
     HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectGeneralCommand, ProjectGeneralHistory,
+    ProjectSectionCommand,
 };
 pub use selection::{
     ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,
