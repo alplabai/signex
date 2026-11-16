@@ -1047,6 +1047,8 @@ pub enum PanelMsg {
     CaptureCustomFilterPreset(usize),
     /// Switch the Properties-panel preset editor to the given tab.
     SelectCustomFilterTab(usize),
+    /// The SCH Filter panel's chip grid (#2417).
+    SchFilter(super::SchFilterMsg),
     /// Page Options: choose formatting mode.
     SetPageFormatMode(PageFormatMode),
     /// Page Options: choose paper size (a bare picker token). A named size

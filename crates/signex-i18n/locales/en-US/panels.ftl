@@ -583,3 +583,19 @@ panels-drawing-start-angle = Start Angle
 panels-drawing-end-angle = End Angle
 # Colour tile: the theme's own colour.
 panels-drawing-color-auto = Auto
+
+## Net Classes table (#2417): column titles and cells.
+
+panels-net-classes-column-name = Name
+panels-net-classes-column-color = Colour
+panels-net-classes-column-width = Width
+panels-net-classes-column-members = Members
+# Colour cell of a class with no colour of its own: the theme's wire colour.
+panels-net-classes-theme-color = Theme
+# Width cell of a class with a width; $width is in millimetres.
+panels-net-classes-width-cell = { $width } mm
+# Width cell of a class with no width: each wire keeps its own.
+panels-net-classes-wire-width = Wire's own
+panels-net-classes-no-members = None
+# SCH Filter panel (#2417), over the chip grid.
+panels-sch-filter-hint = Kinds a click, a box and the hover pick can select. Presets are edited in Properties.

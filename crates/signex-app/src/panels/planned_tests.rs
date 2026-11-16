@@ -7,10 +7,8 @@
 const EXPECTED: &[&str] = &[
     "PanelKind::Drc",
     "PanelKind::LayerStack",
-    "PanelKind::NetClasses",
     "PanelKind::Variants",
     "PanelKind::OutputJobs",
-    "PanelKind::SchFilter",
     "PanelKind::SchList",
     "PanelKind::BomStudio",
     "PanelKind::Favorites",

@@ -344,6 +344,11 @@ pub const ASSIGN_NET_CLASS: &[Operand] = &[
     required("net_name", OperandKind::Text),
     optional("class", OperandKind::Text),
 ];
+/// `set_selection_filters` (#2417): the schematic categories to leave on, as
+/// comma-separated tokens (`wires,net_labels`), or `all` or `none`.
+pub const SELECTION_FILTER_KINDS: &[Operand] = &[required("kinds", OperandKind::Text)];
+/// `apply_selection_filter_preset` (#2417): a saved preset, by its name.
+pub const SELECTION_FILTER_PRESET: &[Operand] = &[required("name", OperandKind::Text)];
 
 /// `apply_edits` (#2178): a JSON list of catalog edit commands, applied to the
 /// named document as one undo step if its revision is still `expect_revision`.

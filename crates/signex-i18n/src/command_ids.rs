@@ -340,6 +340,8 @@ define_ids! {
         CMD_CLEAR_ALL_NET_COLORS = "cmd-clear-all-net-colors";
         CMD_MENU_CLEAR_ALL_NET_COLORS = "cmd-menu-clear-all-net-colors";
         CMD_ASSIGN_NET_CLASS = "cmd-assign-net-class";
+        CMD_SET_SELECTION_FILTERS = "cmd-set-selection-filters";
+        CMD_APPLY_SELECTION_FILTER_PRESET = "cmd-apply-selection-filter-preset";
         CMD_PLACE_COMPONENT = "cmd-place-component";
         CMD_MENU_PLACE_COMPONENT = "cmd-menu-place-component";
         CMD_RUN_DRC = "cmd-run-drc";

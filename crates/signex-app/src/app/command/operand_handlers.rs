@@ -17,6 +17,7 @@ use super::file_operands as file;
 use super::hierarchy_operands as hierarchy;
 use super::part_operands as part;
 use super::placement_operands as place;
+use super::selection_filter_operands as filter;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
@@ -82,6 +83,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
     ("view_rotate", view_rotate),
+    ("set_selection_filters", filter::set_selection_filters),
+    (
+        "apply_selection_filter_preset",
+        filter::apply_selection_filter_preset,
+    ),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -132,6 +138,14 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "revert" => Some(
             "`revert` needs the operands `document` and `group` — \
              Undo is the person's way back",
+        ),
+        "set_selection_filters" => Some(
+            "`set_selection_filters` needs the operand `kinds` — \
+             use the SCH Filter panel or the Active Bar's filter",
+        ),
+        "apply_selection_filter_preset" => Some(
+            "`apply_selection_filter_preset` needs the operand `name` — \
+             click the preset in the SCH Filter panel",
         ),
         _ => None,
     }

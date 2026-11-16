@@ -174,167 +174,164 @@ pub fn net_class_choices(classes: &[NetClass]) -> Vec<NetClassChoice> {
 }
 
 pub fn view_net_classes_section<'a>(ctx: &'a PanelContext) -> Column<Element<'a, PanelMsg>> {
-    let panel = &ctx.net_classes;
-    let tokens = &ctx.tokens;
-    let theme_id = ctx.theme_id;
-    let hint_ink = resolve(tokens).ink3;
-    let i18n: &'a I18n = &ctx.i18n;
     ctx.collapsible(
         "prop_net_classes",
         "Net Classes",
         &ctx.collapsed_sections,
-        move || {
-            let muted = hint_ink;
-            let mut c = Column::new().spacing(SP.s).width(Length::Fill);
-            if !panel.available {
-                return c.push(
-                    container(
-                        text(t!(i18n, ids::PANELS_NET_CLASSES_NO_PROJECT))
-                            .size(TS.body)
-                            .color(muted),
-                    )
-                    .padding([SP.s, SP.m])
-                    .boxed(),
-                );
-            }
-            let wrap = |m: NetClassMsg| PanelMsg::NetClass(m);
-
-            c = c.push(
-                container(
-                    row![
-                        add_class_button(theme_id, tokens, i18n),
-                        Space::new().width(Length::Fill),
-                        history_button(
-                            icons::icon_undo(theme_id),
-                            t!(i18n, ids::PANELS_NET_CLASSES_UNDO),
-                            panel.can_undo.then(|| wrap(NetClassMsg::Undo)),
-                            tokens,
-                        ),
-                        history_button(
-                            icons::icon_redo(theme_id),
-                            t!(i18n, ids::PANELS_NET_CLASSES_REDO),
-                            panel.can_redo.then(|| wrap(NetClassMsg::Redo)),
-                            tokens,
-                        ),
-                    ]
-                    .spacing(SP.s)
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([SP.s, SP.m])
-                .boxed(),
-            );
-            if panel.classes.is_empty() {
-                return c.push(
-                    container(
-                        text(t!(i18n, ids::PANELS_NET_CLASSES_EMPTY))
-                            .size(TS.body)
-                            .color(muted),
-                    )
-                    .padding([SP.s, SP.m])
-                    .boxed(),
-                );
-            }
-
-            let selected = panel.selected.min(panel.classes.len() - 1);
-            let mut list = Column::new().spacing(SP.xs);
-            for (idx, class) in panel.classes.iter().enumerate() {
-                let is_selected = idx == selected;
-                let btn = signex_widgets::button(
-                    text(signex_i18n::UserText::new(class.name.clone())).size(TS.body),
-                )
-                .padding([SP.xs, SP.m])
-                .width(Length::Fill)
-                .on_press(wrap(NetClassMsg::Select(idx)))
-                .style(form_look::option_tile(is_selected));
-                list = list.push(btn.boxed());
-            }
-            c = c.push(container(list).padding([SP.xs, SP.m]).boxed());
-            c = c.push(
-                container(
-                    text(t!(i18n, ids::PANELS_NET_CLASSES_ORDER_HINT))
-                        .size(TS.caption)
-                        .color(muted),
-                )
-                .padding([0.0, SP.m])
-                .boxed(),
-            );
-            c = c.push(
-                container(
-                    row![
-                        action_button(
-                            t!(i18n, ids::PANELS_NET_CLASSES_MOVE_UP),
-                            (selected > 0).then(|| wrap(NetClassMsg::MoveUp))
-                        ),
-                        action_button(
-                            t!(i18n, ids::PANELS_NET_CLASSES_MOVE_DOWN),
-                            (selected + 1 < panel.classes.len())
-                                .then(|| wrap(NetClassMsg::MoveDown))
-                        ),
-                        action_button(
-                            t!(i18n, ids::PANELS_NET_CLASSES_DELETE),
-                            Some(wrap(NetClassMsg::RemoveSelected))
-                        ),
-                    ]
-                    .spacing(SP.s),
-                )
-                .padding([SP.s, SP.m])
-                .boxed(),
-            );
-
-            let field = |label_text: &str, hint: MessageId, f: NetClassField, value: &str| {
-                commit_row(label_text, t!(i18n, hint), value, muted, f)
-            };
-            c = c.push(field(
-                "Name",
-                ids::PANELS_NET_CLASSES_NAME_HINT,
-                NetClassField::Name,
-                &panel.draft.name,
-            ));
-            c = c.push(field(
-                "Colour",
-                ids::PANELS_NET_CLASSES_COLOR_HINT,
-                NetClassField::Color,
-                &panel.draft.color,
-            ));
-            c = c.push(field(
-                "Width (mm)",
-                ids::PANELS_NET_CLASSES_WIDTH_HINT,
-                NetClassField::Width,
-                &panel.draft.width,
-            ));
-            c = c.push(form_pick_row(
-                "Line",
-                ClassLine::options(),
-                ClassLine(panel.classes[selected].style.line),
-                |l: ClassLine| PanelMsg::NetClass(NetClassMsg::SetLine(l.0)),
-                muted,
-            ));
-            c = c.push(field(
-                "Nets",
-                ids::PANELS_NET_CLASSES_NETS_HINT,
-                NetClassField::Nets,
-                &panel.draft.nets,
-            ));
-            c = c.push(field(
-                "Patterns",
-                ids::PANELS_NET_CLASSES_PATTERNS_HINT,
-                NetClassField::Patterns,
-                &panel.draft.patterns,
-            ));
-            if let Some(notice) = &panel.notice {
-                c = c.push(
-                    container(
-                        text(raw(notice.clone()))
-                            .size(TS.caption)
-                            .color(theme_ext::warning_color(&ctx.tokens)),
-                    )
-                    .padding([SP.xs, SP.m])
-                    .boxed(),
-                );
-            }
-            c
-        },
+        move || editor(ctx),
     )
+}
+
+/// The Net Classes dock panel (#2417): the Properties section's editor,
+/// without the section frame, so both edit one table the same way.
+pub(super) fn view_panel<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    editor(ctx).boxed()
+}
+
+/// The net-class editor: Add / Undo / Redo, the class table, the order
+/// actions and the selected class's fields.
+fn editor<'a>(ctx: &'a PanelContext) -> Column<Element<'a, PanelMsg>> {
+    let panel = &ctx.net_classes;
+    let tokens = &ctx.tokens;
+    let theme_id = ctx.theme_id;
+    let i18n: &'a I18n = &ctx.i18n;
+    let muted = resolve(tokens).ink3;
+    let mut c = Column::new().spacing(SP.s).width(Length::Fill);
+    if !panel.available {
+        return c.push(
+            container(
+                text(t!(i18n, ids::PANELS_NET_CLASSES_NO_PROJECT))
+                    .size(TS.body)
+                    .color(muted),
+            )
+            .padding([SP.s, SP.m])
+            .boxed(),
+        );
+    }
+    let wrap = |m: NetClassMsg| PanelMsg::NetClass(m);
+
+    c = c.push(
+        container(
+            row![
+                add_class_button(theme_id, tokens, i18n),
+                Space::new().width(Length::Fill),
+                history_button(
+                    icons::icon_undo(theme_id),
+                    t!(i18n, ids::PANELS_NET_CLASSES_UNDO),
+                    panel.can_undo.then(|| wrap(NetClassMsg::Undo)),
+                    tokens,
+                ),
+                history_button(
+                    icons::icon_redo(theme_id),
+                    t!(i18n, ids::PANELS_NET_CLASSES_REDO),
+                    panel.can_redo.then(|| wrap(NetClassMsg::Redo)),
+                    tokens,
+                ),
+            ]
+            .spacing(SP.s)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([SP.s, SP.m])
+        .boxed(),
+    );
+    if panel.classes.is_empty() {
+        return c.push(
+            container(
+                text(t!(i18n, ids::PANELS_NET_CLASSES_EMPTY))
+                    .size(TS.body)
+                    .color(muted),
+            )
+            .padding([SP.s, SP.m])
+            .boxed(),
+        );
+    }
+
+    let selected = panel.selected.min(panel.classes.len() - 1);
+    let table = super::net_class_table::view(&panel.classes, selected, muted, i18n);
+    c = c.push(container(table).padding([SP.xs, SP.m]).boxed());
+    c = c.push(
+        container(
+            text(t!(i18n, ids::PANELS_NET_CLASSES_ORDER_HINT))
+                .size(TS.caption)
+                .color(muted),
+        )
+        .padding([0.0, SP.m])
+        .boxed(),
+    );
+    c = c.push(
+        container(
+            row![
+                action_button(
+                    t!(i18n, ids::PANELS_NET_CLASSES_MOVE_UP),
+                    (selected > 0).then(|| wrap(NetClassMsg::MoveUp))
+                ),
+                action_button(
+                    t!(i18n, ids::PANELS_NET_CLASSES_MOVE_DOWN),
+                    (selected + 1 < panel.classes.len()).then(|| wrap(NetClassMsg::MoveDown))
+                ),
+                action_button(
+                    t!(i18n, ids::PANELS_NET_CLASSES_DELETE),
+                    Some(wrap(NetClassMsg::RemoveSelected))
+                ),
+            ]
+            .spacing(SP.s),
+        )
+        .padding([SP.s, SP.m])
+        .boxed(),
+    );
+
+    let field = |label_text: &str, hint: MessageId, f: NetClassField, value: &str| {
+        commit_row(label_text, t!(i18n, hint), value, muted, f)
+    };
+    c = c.push(field(
+        "Name",
+        ids::PANELS_NET_CLASSES_NAME_HINT,
+        NetClassField::Name,
+        &panel.draft.name,
+    ));
+    c = c.push(field(
+        "Colour",
+        ids::PANELS_NET_CLASSES_COLOR_HINT,
+        NetClassField::Color,
+        &panel.draft.color,
+    ));
+    c = c.push(field(
+        "Width (mm)",
+        ids::PANELS_NET_CLASSES_WIDTH_HINT,
+        NetClassField::Width,
+        &panel.draft.width,
+    ));
+    c = c.push(form_pick_row(
+        "Line",
+        ClassLine::options(),
+        ClassLine(panel.classes[selected].style.line),
+        |l: ClassLine| PanelMsg::NetClass(NetClassMsg::SetLine(l.0)),
+        muted,
+    ));
+    c = c.push(field(
+        "Nets",
+        ids::PANELS_NET_CLASSES_NETS_HINT,
+        NetClassField::Nets,
+        &panel.draft.nets,
+    ));
+    c = c.push(field(
+        "Patterns",
+        ids::PANELS_NET_CLASSES_PATTERNS_HINT,
+        NetClassField::Patterns,
+        &panel.draft.patterns,
+    ));
+    if let Some(notice) = &panel.notice {
+        c = c.push(
+            container(
+                text(raw(notice.clone()))
+                    .size(TS.caption)
+                    .color(theme_ext::warning_color(&ctx.tokens)),
+            )
+            .padding([SP.xs, SP.m])
+            .boxed(),
+        );
+    }
+    c
 }
 
 /// Ghost look; a disabled button loses its hover and mutes its label.

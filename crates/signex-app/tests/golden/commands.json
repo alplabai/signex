@@ -50,6 +50,11 @@
     "category": "edit"
   },
   {
+    "id": "apply_selection_filter_preset",
+    "group": "Schematic",
+    "category": "select"
+  },
+  {
     "id": "assign_footprints",
     "group": "Schematic",
     "category": "design"
@@ -1068,6 +1073,11 @@
     "id": "send_to_back_of",
     "group": "Schematic",
     "category": "modify"
+  },
+  {
+    "id": "set_selection_filters",
+    "group": "Schematic",
+    "category": "select"
   },
   {
     "id": "sheet_navigation_back",
