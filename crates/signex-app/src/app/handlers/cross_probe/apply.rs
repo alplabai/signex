@@ -110,7 +110,7 @@ impl Signex {
     }
 
     /// Frame `items` on the board canvas of `window` showing `path`.
-    pub(super) fn fit_board_items(
+    pub(crate) fn fit_board_items(
         &mut self,
         window: Option<iced::window::Id>,
         path: &Path,

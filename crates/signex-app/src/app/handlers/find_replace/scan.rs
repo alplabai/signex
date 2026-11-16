@@ -24,6 +24,10 @@ impl Signex {
         use crate::find_replace::FindScope;
         // A new search outdates any replace still reading the disk.
         self.cancel_replace_job("the search changed");
+        // A board in view is searched instead of a sheet (#2403).
+        if self.refresh_board_find() {
+            return Task::none();
+        }
         match self.ui_state.find_replace.scope {
             FindScope::Sheet => {
                 // A project scan still in flight must not land on top.
@@ -38,7 +42,9 @@ impl Signex {
 
     /// Sheet-scope refresh, for callers that need the list current right now.
     pub(super) fn refresh_find_matches_now(&mut self) {
-        self.refresh_active_sheet_matches();
+        if !self.refresh_board_find() {
+            self.refresh_active_sheet_matches();
+        }
     }
 
     fn refresh_active_sheet_matches(&mut self) {

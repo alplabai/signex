@@ -26,6 +26,10 @@ impl Signex {
     /// Go to result `index`: open its sheet at the placement the hit was read
     /// at, select the item and zoom to it.
     pub(super) fn focus_find_result(&mut self, index: usize) -> Task<Message> {
+        // A board result selects and frames on the board (#2403).
+        if self.focus_board_find_result(index) {
+            return Task::none();
+        }
         self.ui_state.find_replace.selected_index = Some(index);
         let Some(found) = self.ui_state.find_replace.matches.get(index).cloned() else {
             return Task::none();
@@ -63,6 +67,9 @@ impl Signex {
     /// Find next / previous: step through the results, wrapping at the ends.
     /// Sheet scope re-reads the sheet first, so the list is never behind it.
     pub(super) fn step_find_result(&mut self, forward: bool) -> Task<Message> {
+        if self.step_board_find_result(forward) {
+            return Task::none();
+        }
         if self.ui_state.find_replace.scope == crate::find_replace::FindScope::Sheet {
             self.refresh_find_matches_now();
         }

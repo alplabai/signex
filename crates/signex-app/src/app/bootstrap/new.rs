@@ -713,6 +713,7 @@ impl Signex {
                 pcb_carry: None,
                 pcb_tool: None,
                 pcb_guide_place: None,
+                pcb_query: Default::default(),
                 pcb_ratsnest: Default::default(),
                 pcb_drc: Default::default(),
                 cross_select: Default::default(),

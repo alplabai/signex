@@ -40,6 +40,10 @@ runs ERC on the sheet's project, answers with a check report once the run
 lands and writes nothing to the ERC panel or Messages;
 `check_drc document=<board> [baseline=<run>]` does the same for DRC on
 one board. Rules in [CLI.md](CLI.md), "Checks on demand".
+`measure_board`, `query_board_nets` and `find_similar_items` are board
+queries: a distance on one board, point to point or edge to edge between
+two items; each net's routed length, members and routed state; and the
+objects that agree with an item on the properties named.
 
 A point operand (`at`, `start`, `end`) also takes a pin reference
 `<designator>.<pin>` (`R1.2`) or `<sheet name>.<entry name>` (`Charger.SDA`):
@@ -81,7 +85,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `cycle_selection_mode` | Cycle selection mode | select | — | — |
 | `cycle_snap_grid_backward` | Cycle backward through snap grids | view | `Shift+G` | — |
 | `cycle_snap_grid_forward` | Open the snap grid picker (footprint editor) | view | `G` | — |
-| `cycle_unit` | Cycle display unit | view | `Ctrl+Q` | `Ctrl+Q` |
+| `cycle_unit` | Cycle display unit | view | `Q`, `Ctrl+Q` | `Q`, `Ctrl+Q` |
 | `cycle_wire_bus_graphic_mode` | Cycle the wire/bus corner mode: 90 degrees, 45 degrees start, 45 degrees end, any angle | interactive | — | `Shift+Space` |
 | `cycle_wiring_mode` | Change wiring mode while dragging connected electrical objects | interactive | `Ctrl+Space` | — |
 | `delete_selection` | Delete selection | edit | `Delete` | `Delete` |
@@ -107,7 +111,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_text` | Find text | search | — | — |
 | `import_graphics` | Import graphics | library | — | `Mod+Shift+F` |
 | `list_documents` | List documents | file | — | — |
-| `measure_distance` | Measure distance | view | `Ctrl+M` | — |
+| `measure_distance` | Measure distance | view | `Ctrl+M` | `Ctrl+M` |
 | `mirror_x` | Mirror along X-axis | modify | `X` | `X` |
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
 | `move_object` | Move object | modify | `M M` | — |
@@ -293,26 +297,31 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
-| `board_sketch` | Enter or leave the board sketch | design | — | — |
-| `change_footprint` | Change the footprint of the selected components | modify | — | — |
-| `flip_selection` | Flip selection to the other board side | modify | — | — |
+| `board_sketch` | Enter or leave the board sketch | design | `1` | `1` |
+| `change_footprint` | Change the footprint of the selected components | modify | `F` | `F` |
+| `find_similar_items` | Find similar items on a board | search | — | — |
+| `flip_selection` | Flip selection to the other board side | modify | `L` | `L` |
+| `highlight_board_net` | Highlight a board net | select | — | — |
+| `measure_board` | Measure on a board | search | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
 | `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
-| `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | — | — |
+| `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | `P K` | `K` |
 | `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | — |
 | `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
 | `place_board_track` | Route a track on the active copper layer | place | `P T` | — |
 | `place_board_via` | Place a via on the board | place | `P V` | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
+| `query_board_nets` | Query board nets | search | — | — |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
-| `run_drc` | Run the design rule check on the board | pcb | — | — |
+| `run_drc` | Run the design rule check on the board | pcb | `T D` | `F7` |
+| `select_board_net` | Select every track, via and pad of a board net | select | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
 | `toggle_layer_visibility` | Show or hide the active layer | view | — | — |
 | `toggle_layers_panel` | Show or hide the Layers panel | view | — | — |
 | `toggle_origin_marker` | Show or hide the board origin marker | view | — | — |
-| `toggle_ratsnest` | Show or hide the ratsnest | view | — | — |
+| `toggle_ratsnest` | Show or hide the ratsnest | view | `N` | `C` |
 | `toggle_single_layer_mode` | Draw only the active layer, or every layer again | view | `Shift+S` | `Shift+S` |
 | `view_board_3d` | Show the board in 3D, or flat again | view | `3` | `3` |
 | `view_rotate` | Rotate the board view clockwise | view | — | — |

@@ -29,9 +29,38 @@ pub enum SimilarProperty {
     Name,
     /// The file a sheet symbol points at.
     FileName,
+    /// The board layer a footprint, track or drawn area is on (#2403).
+    Layer,
+    /// A track's width.
+    Width,
+    /// A via's diameter or a pad's width by height.
+    Size,
+    /// A via's or pad's hole diameter.
+    Drill,
+    /// A pad's shape.
+    Shape,
 }
 
 impl SimilarProperty {
+    /// Every property, in declaration order.
+    pub const ALL: [Self; 15] = [
+        Self::Kind,
+        Self::Value,
+        Self::Footprint,
+        Self::LibraryPart,
+        Self::DesignatorPrefix,
+        Self::NetName,
+        Self::LabelType,
+        Self::Text,
+        Self::Name,
+        Self::FileName,
+        Self::Layer,
+        Self::Width,
+        Self::Size,
+        Self::Drill,
+        Self::Shape,
+    ];
+
     /// The name the dialog shows.
     pub fn label(self) -> &'static str {
         match self {
@@ -45,7 +74,38 @@ impl SimilarProperty {
             Self::Text => "Text",
             Self::Name => "Name",
             Self::FileName => "File name",
+            Self::Layer => "Layer",
+            Self::Width => "Width",
+            Self::Size => "Size",
+            Self::Drill => "Drill",
+            Self::Shape => "Shape",
         }
+    }
+
+    /// The snake_case name an agent writes in `find_similar_items fields=`.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Kind => "kind",
+            Self::Value => "value",
+            Self::Footprint => "footprint",
+            Self::LibraryPart => "library_part",
+            Self::DesignatorPrefix => "designator_prefix",
+            Self::NetName => "net_name",
+            Self::LabelType => "label_type",
+            Self::Text => "text",
+            Self::Name => "name",
+            Self::FileName => "file_name",
+            Self::Layer => "layer",
+            Self::Width => "width",
+            Self::Size => "size",
+            Self::Drill => "drill",
+            Self::Shape => "shape",
+        }
+    }
+
+    /// The property [`Self::key`] names; `None` for an unknown name.
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|p| p.key() == key.trim())
     }
 }
 

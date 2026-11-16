@@ -30,6 +30,13 @@ impl Signex {
     }
 
     pub(super) fn replace_current_find_match(&mut self) -> Task<Message> {
+        // A board's results are replaced on the board (#2403).
+        if self.ui_state.find_replace.board.is_some() {
+            if let Some(index) = self.ui_state.find_replace.selected_index {
+                self.replace_on_board(Some(index));
+            }
+            return Task::none();
+        }
         let find = &self.ui_state.find_replace;
         let Some(hit) = find
             .selected_index
@@ -47,6 +54,9 @@ impl Signex {
     }
 
     pub(super) fn replace_all_find_matches(&mut self) -> Task<Message> {
+        if self.replace_on_board(None) {
+            return Task::none();
+        }
         if self.ui_state.find_replace.matches.is_empty() {
             return Task::none();
         }

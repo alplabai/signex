@@ -399,6 +399,11 @@ pub(crate) struct PcbTargets {
     pub part_in_hand: bool,
     /// A track run is being drawn, for Space and Shift+Space (#2373).
     pub routing: bool,
+    /// The board was written by a newer Signex and is shown for reading
+    /// only: no editing command acts on it (#2405).
+    pub read_only: bool,
+    /// How many footprints the selection names, for Align (#2405).
+    pub footprints: usize,
 }
 
 impl Signex {
@@ -441,28 +446,34 @@ impl Signex {
         let selection = state
             .filter(|s| s.document().is_some() && s.document() == path.as_deref())
             .map(|s| s.selection());
-        let pasteable = self.interaction_state.pcb_clipboard.is_some();
+        // A read-only board takes no edit: nothing on it is placeable,
+        // deletable or a paste target (#2405).
+        let read_only = board.unknown.newer_minor_source.is_some();
+        let pasteable = self.interaction_state.pcb_clipboard.is_some() && !read_only;
         let Some(selection) = selection.filter(|s| !s.is_empty()) else {
             return PcbTargets {
                 shown: true,
                 pasteable,
                 part_in_hand,
                 routing,
+                read_only,
                 ..PcbTargets::default()
             };
         };
         let footprints = selection.footprints();
-        let unlocked = placement::editable_footprints(board, &footprints).is_ok();
+        let unlocked = !read_only && placement::editable_footprints(board, &footprints).is_ok();
         let copyable = !deletable_items(selection).is_empty();
         PcbTargets {
             shown: true,
             any: true,
             placeable: unlocked,
-            deletable: (footprints.is_empty() || unlocked) && copyable,
+            deletable: !read_only && (footprints.is_empty() || unlocked) && copyable,
             copyable,
             pasteable,
             part_in_hand,
             routing,
+            read_only,
+            footprints: footprints.len(),
         }
     }
 }

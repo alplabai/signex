@@ -718,6 +718,34 @@ Known limits:
   `sub/../`) can change the keys between an open and a closed check, and a
   baseline made in the other state is then refused.
 
+## Board queries
+
+Three queries read one open board (#2403), through the same domain code as
+Measure Distance, the Net Inspector and Find Similar Objects on a board. Each
+answers with data, changes nothing, and is on the agent channel. A sheet or a
+board that is not loaded is refused with the reason.
+
+```text
+measure_board document=<board> start=x,y end=x,y
+measure_board document=<board> ids=<uuid>,<uuid>
+query_board_nets document=<board> [net=<name>]
+find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
+```
+
+- `measure_board` answers `kind` (`point_to_point`, or `edge_to_edge` for
+  `ids`: the closest approach of the two items' copper, footprint body or
+  area outline), `distance_mm`, `dx_mm`, `dy_mm`, and `from` / `to` in mm.
+- `query_board_nets` answers `count` and `nets`, by name: `net`, `name`,
+  `routed_length_mm` (the tracks' centre lines), `tracks`, `vias`, `pads`,
+  `unrouted` (connections still to route) and `routed`.
+- `find_similar_items` answers the `seed`, the `criteria` (each property
+  and the seed's value) and the matching `ids`. `fields` names the
+  properties that must match, `kind` when left out: `kind`, `value`,
+  `footprint`, `designator_prefix`, `net_name`, `layer`, `width`, `size`,
+  `drill`, `shape`. A property the seed does not have is refused.
+
+Find by text on a board is `find_items` (designator and value).
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > Editing >

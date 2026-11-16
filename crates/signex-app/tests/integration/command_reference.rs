@@ -128,6 +128,10 @@ fn render() -> String {
          lands and writes nothing to the ERC panel or Messages;\n\
          `check_drc document=<board> [baseline=<run>]` does the same for DRC on\n\
          one board. Rules in [CLI.md](CLI.md), \"Checks on demand\".\n\
+         `measure_board`, `query_board_nets` and `find_similar_items` are board\n\
+         queries: a distance on one board, point to point or edge to edge between\n\
+         two items; each net's routed length, members and routed state; and the\n\
+         objects that agree with an item on the properties named.\n\
          \n\
          A point operand (`at`, `start`, `end`) also takes a pin reference\n\
          `<designator>.<pin>` (`R1.2`) or `<sheet name>.<entry name>` (`Charger.SDA`):\n\

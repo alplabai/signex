@@ -396,6 +396,13 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_KEEPOUT = "cmd-menu-place-board-keepout";
         CMD_CHANGE_FOOTPRINT = "cmd-change-footprint";
         CMD_MENU_CHANGE_FOOTPRINT = "cmd-menu-change-footprint";
+        CMD_SELECT_BOARD_NET = "cmd-select-board-net";
+        CMD_MENU_SELECT_BOARD_NET = "cmd-menu-select-board-net";
+        CMD_HIGHLIGHT_BOARD_NET = "cmd-highlight-board-net";
+        CMD_MENU_HIGHLIGHT_BOARD_NET = "cmd-menu-highlight-board-net";
+        CMD_MEASURE_BOARD = "cmd-measure-board";
+        CMD_QUERY_BOARD_NETS = "cmd-query-board-nets";
+        CMD_FIND_SIMILAR_ITEMS = "cmd-find-similar-items";
         CMD_FOOTPRINT_MODE_PADS = "cmd-footprint-mode-pads";
         CMD_FOOTPRINT_MODE_SKETCH = "cmd-footprint-mode-sketch";
         CMD_FOOTPRINT_MODE_VIEW_3D = "cmd-footprint-mode-view-3d";

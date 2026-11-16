@@ -337,6 +337,26 @@ pub const CHECK_DRC: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("baseline", OperandKind::Text),
 ];
+/// `measure_board` (#2403): point to point from `start` to `end`, or edge to
+/// edge between the two items `ids` names.
+pub const MEASURE_BOARD: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("start", OperandKind::Point),
+    optional("end", OperandKind::Point),
+    optional("ids", OperandKind::Text),
+];
+/// `query_board_nets` (#2403): every net of the named board, or one.
+pub const QUERY_BOARD_NETS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("net", OperandKind::Text),
+];
+/// `find_similar_items` (#2403): what agrees with the item `id` on the
+/// properties `fields` lists.
+pub const FIND_SIMILAR_ITEMS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("id", OperandKind::Text),
+    optional("fields", OperandKind::Text),
+];
 /// Put a net, by its name in the project netlist, in a class of the project
 /// the named sheet belongs to; no `class` takes it out of its listed class.
 pub const ASSIGN_NET_CLASS: &[Operand] = &[

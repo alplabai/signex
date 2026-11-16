@@ -303,6 +303,14 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(
             crate::app::FootprintSwapMsg::Requested,
         )),
+        // #2403: the net of the board selection, or of what is under the
+        // cursor.
+        "select_board_net" => {
+            Message::Pcb(PcbMsg::Net(crate::app::BoardNetMsg::SelectRequested(None)))
+        }
+        "highlight_board_net" => Message::Pcb(PcbMsg::Net(
+            crate::app::BoardNetMsg::HighlightRequested(None),
+        )),
         "next_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: true }),
         "prev_layer" => pcb_view(PcbViewMsg::ActiveLayerStepped { forward: false }),
         "next_signal_layer" => pcb_view(PcbViewMsg::SignalLayerStepped { forward: true }),

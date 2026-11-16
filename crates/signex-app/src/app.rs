@@ -80,7 +80,7 @@ pub use assign_footprints::{
 pub use back_annotate::{BackAnnotateMsg, BackAnnotateState};
 pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 pub use contracts::{
-    AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg,
+    AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg,
     BoardSketchMsg, BomPreviewMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg,
     ContextMenuState, ContextSubmenu, CrossProbeMsg, DragTarget, DrcRunResult, EditMsg,
     EnableVersionControlMsg, EnableVersionControlOutcome, EnableVersionControlState, ErcMsg,

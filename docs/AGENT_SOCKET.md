@@ -100,7 +100,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `read_document`, `query_pins`, and the checks `check_erc` and `check_drc`
   (#2199), each answered once its run lands, like an edit waiting for its
   reads
-  ([CLI.md](CLI.md), "Checks on demand");
+  ([CLI.md](CLI.md), "Checks on demand"), and the board queries
+  `measure_board`, `query_board_nets` and `find_similar_items` (#2403);
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,

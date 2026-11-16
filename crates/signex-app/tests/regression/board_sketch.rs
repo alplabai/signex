@@ -216,17 +216,19 @@ fn the_palette_enters() {
     assert!(in_sketch(&f));
 }
 
-/// No profile binds `board_sketch`; a key the user binds to it runs it.
+/// Both profiles bind `1` to `board_sketch` on a board (#2406); a key the
+/// user binds to it runs it too.
 #[test]
 fn a_key_bound_by_the_user_enters() {
     let mut f = open_board();
-    assert!(
+    assert_eq!(
         f.app
             .ui_state
             .active_keymap
             .shortcut_label(&command("board_sketch"))
-            .is_none(),
-        "no default key"
+            .as_deref(),
+        Some("1"),
+        "the default board key"
     );
     let profiles = &mut f.app.ui_state.keymap_profiles;
     let mut mine = profiles

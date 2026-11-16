@@ -405,6 +405,11 @@
     "category": "search"
   },
   {
+    "id": "find_similar_items",
+    "group": "Pcb",
+    "category": "search"
+  },
+  {
     "id": "find_similar_objects",
     "group": "General",
     "category": "select"
@@ -460,6 +465,11 @@
     "category": "navigation"
   },
   {
+    "id": "highlight_board_net",
+    "group": "Pcb",
+    "category": "select"
+  },
+  {
     "id": "highlight_net_under_cursor",
     "group": "Schematic",
     "category": "select"
@@ -488,6 +498,11 @@
     "id": "list_documents",
     "group": "General",
     "category": "file"
+  },
+  {
+    "id": "measure_board",
+    "group": "Pcb",
+    "category": "search"
   },
   {
     "id": "measure_distance",
@@ -910,6 +925,11 @@
     "category": "file"
   },
   {
+    "id": "query_board_nets",
+    "group": "Pcb",
+    "category": "search"
+  },
+  {
     "id": "query_pins",
     "group": "General",
     "category": "file"
@@ -1017,6 +1037,11 @@
   {
     "id": "select_all",
     "group": "General",
+    "category": "select"
+  },
+  {
+    "id": "select_board_net",
+    "group": "Pcb",
     "category": "select"
   },
   {

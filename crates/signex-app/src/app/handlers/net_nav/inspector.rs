@@ -108,6 +108,15 @@ impl Signex {
                 Task::none()
             }
             NetInspectorMsg::MemberClicked { net, anchor } => self.inspect_member(&net, &anchor),
+            // A board's net rows (#2403).
+            NetInspectorMsg::BoardNetSelected(net) => {
+                self.select_board_net(Some(&net));
+                Task::none()
+            }
+            NetInspectorMsg::BoardNetHighlighted(net) => {
+                self.highlight_board_net(Some(&net));
+                Task::none()
+            }
         }
     }
 
@@ -154,6 +163,12 @@ impl Signex {
         self.net_nav_stamp().hash(&mut hasher);
         self.document_state.active_path.hash(&mut hasher);
         self.ui_state.net_inspector.hash(&mut hasher);
+        // A board in view lists its own nets, read again at each edit.
+        let board = self.active_tab_path().filter(|_| self.has_active_pcb());
+        let revision = board
+            .as_ref()
+            .and_then(|path| self.document_state.pcb_revisions.get(path).copied());
+        (board, revision).hash(&mut hasher);
         hasher.finish()
     }
 
@@ -176,6 +191,22 @@ impl Signex {
             return Task::none();
         }
         self.document_state.net_nav.inspector_stamp = Some(stamp);
+        // With a board in view the panel lists the board's nets (#2403).
+        if let Some(board) = self.active_pcb() {
+            let rows = crate::app::handlers::pcb_query::board_net_rows(
+                board,
+                &self.ui_state.net_inspector,
+            );
+            self.document_state.net_nav.inspector_source = None;
+            self.document_state.panel_ctx.net_inspector = NetInspectorView {
+                filter: self.ui_state.net_inspector.filter.clone(),
+                status: NetListStatus::Ready,
+                nets: Vec::new(),
+                total: rows.total,
+                board: Some(rows),
+            };
+            return Task::none();
+        }
         let warm = self.warm_net_index_for_pin_rows();
         let (status, data) = self.net_inspector_source();
         let state = self.ui_state.net_inspector.clone();
@@ -197,6 +228,7 @@ impl Signex {
             status,
             nets,
             total,
+            board: None,
         };
         self.document_state.net_nav.inspector_source = data.map(|data| (data, state));
         warm

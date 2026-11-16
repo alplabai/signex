@@ -21,6 +21,7 @@ pub mod draw;
 pub mod eco;
 mod engine;
 mod error;
+pub mod find;
 mod footprint;
 mod footprint_content;
 pub mod footprint_swap;
@@ -30,6 +31,7 @@ pub mod part_place;
 pub mod placement;
 pub mod primitive_edit;
 mod replace;
+pub mod similar;
 pub mod snap;
 mod snap_points;
 

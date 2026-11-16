@@ -32,6 +32,7 @@ impl Signex {
                 .ui_state
                 .find_similar
                 .as_ref()
+                .filter(|s| !s.board)
                 .and_then(|s| s.origin.clone())
             && self.document_state.active_path.as_ref() != Some(&origin)
             && let Some(window) = self.undocked_canvas_window(&origin)
@@ -80,11 +81,15 @@ impl Signex {
     /// on, so a selection never lands on a different sheet. Run on every tab
     /// switch and on every dialog message.
     pub(crate) fn close_find_similar_if_sheet_changed(&mut self) {
-        let moved = self
-            .ui_state
-            .find_similar
-            .as_ref()
-            .is_some_and(|s| s.origin != self.document_state.active_path);
+        // A board's dialog belongs to the board tab (#2403).
+        let moved = self.ui_state.find_similar.as_ref().is_some_and(|s| {
+            let shown = if s.board {
+                self.active_tab_path()
+            } else {
+                self.document_state.active_path.clone()
+            };
+            s.origin != shown
+        });
         if moved {
             self.close_find_similar();
             crate::diagnostics::log_info("Find Similar closed: the active sheet changed");
@@ -92,6 +97,10 @@ impl Signex {
     }
 
     fn open_find_similar(&mut self, at: Option<(f64, f64)>) {
+        if self.has_active_pcb() {
+            self.open_board_find_similar();
+            return;
+        }
         let Some(engine) = self.document_state.active_engine() else {
             crate::diagnostics::log_info("Find Similar works on schematic sheets");
             return;
@@ -134,6 +143,10 @@ impl Signex {
             return Task::none();
         };
         if state.running {
+            return Task::none();
+        }
+        if state.board {
+            self.select_similar_on_board();
             return Task::none();
         }
         if state.scope == SimilarScope::Project {

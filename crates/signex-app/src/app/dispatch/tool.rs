@@ -343,6 +343,11 @@ impl Signex {
                 }
                 self.finish_update()
             }
+            // Measure on a board is the board's own tool (#2403).
+            ToolMessage::SelectTool(Tool::Measure) if self.has_active_pcb() => {
+                self.arm_board_measure();
+                self.finish_update()
+            }
             ToolMessage::SelectTool(tool) => {
                 // Any tool pick ends a part on the cursor and cancels a
                 // library read still in flight.

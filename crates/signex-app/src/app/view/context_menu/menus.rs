@@ -18,6 +18,7 @@ use super::items::{
     submenu_launcher, text,
 };
 use crate::icons as ic;
+use crate::keymap::AppCommandId;
 use signex_i18n::{I18n, menu_ids};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
@@ -51,6 +52,12 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "cross_probe",
     "board_sketch",
     "change_footprint",
+    // The board menu's own rows (#2405).
+    "undo",
+    "redo",
+    "select_board_net",
+    "highlight_board_net",
+    "toggle_ratsnest",
 ];
 
 /// Keyboard-shortcut hints for the canvas menu, keyed by command id and
@@ -129,13 +136,14 @@ impl Signex {
         let sc = CanvasShortcuts::resolve(|id| self.keymap_shortcut_label(id));
         let tokens = &self.document_state.panel_ctx.tokens;
         let ui_font = &self.document_state.panel_ctx.ui_font_name;
-        let board = self.pcb_targets(Some(window_id));
-        if board.shown {
-            let entries = pcb_canvas_menu_entries(&self.ui_state.i18n, tid, board, &sc);
+        let active_submenu = self.interaction_state.context_submenu;
+        let context = self.command_context(Some(window_id));
+        if context.pcb.shown {
+            let entries =
+                pcb_canvas_menu_entries(&self.ui_state.i18n, tid, &context, active_submenu, &sc);
             return super::placement::menu_card(entries, tokens, ui_font);
         }
         let (selection, project_key) = self.canvas_menu_inputs(window_id);
-        let active_submenu = self.interaction_state.context_submenu;
         let entries = canvas_menu_entries(
             &self.ui_state.i18n,
             tid,
@@ -432,85 +440,92 @@ pub(super) fn canvas_menu_entries(
     v
 }
 
-/// The board canvas menu (#2240): the placement commands, greyed unless
-/// the selection names an unlocked footprint (Delete: anything deletable),
-/// then Cross Probe and Properties, live with anything selected (#1312), then the View
-/// group's Toggle Ratsnest, always live on a board.
-/// Each row runs its catalog command like the keys and the Edit menu do.
+/// The board canvas menu (#2240, #2405): Find Similar and Find; the Place
+/// and Align flyouts; Undo and Redo; the clipboard; move, turn, flip and
+/// mirror; Delete; Board Sketch; the net of the selection; Cross Probe and
+/// Properties; then the View group's Toggle Ratsnest. Each row runs its
+/// catalog command like the keys and the Edit menu do, and is live exactly
+/// when that command is enabled in `ctx`: on a read-only board every editing
+/// row is greyed. Align is offered with a selection, as on a sheet.
 pub(super) fn pcb_canvas_menu_entries(
     i18n: &I18n,
     tid: ThemeId,
-    board: crate::app::handlers::pcb_placement::PcbTargets,
+    ctx: &crate::app::command::CommandContext,
+    active_submenu: Option<ContextSubmenu>,
     sc: &CanvasShortcuts,
 ) -> Vec<DropdownEntry<Message>> {
-    let row = |icon, command_id: &'static str, enabled: bool| {
-        if enabled {
-            dd_command(i18n, Some(icon), command_id, sc.of(command_id), None)
+    let row = |icon: Option<iced::widget::svg::Handle>, command_id: &'static str| {
+        let live =
+            AppCommandId::new(command_id).is_ok_and(|id| crate::app::command::is_enabled(&id, ctx));
+        if live {
+            dd_command(i18n, icon, command_id, sc.of(command_id), None)
         } else {
-            dd_cmd_disabled(i18n, Some(icon), command_id, sc.of(command_id))
+            dd_cmd_disabled(i18n, icon, command_id, sc.of(command_id))
         }
     };
-    let placeable = board.placeable;
-    let duplicate = if board.copyable {
-        dd_command(i18n, None, "duplicate", sc.of("duplicate"), None)
-    } else {
-        dd_cmd_disabled(i18n, None, "duplicate", sc.of("duplicate"))
+    let launcher = |kind: ContextSubmenu, icon: iced::widget::svg::Handle, label: String| {
+        submenu_launcher(Some(icon), &label, kind, active_submenu == Some(kind))
     };
-    // Picks a library footprint for the selected components (#2366).
-    let change_footprint = if placeable {
-        dd_command(
-            i18n,
-            None,
-            "change_footprint",
-            sc.of("change_footprint"),
-            None,
-        )
-    } else {
-        dd_cmd_disabled(i18n, None, "change_footprint", sc.of("change_footprint"))
-    };
-    vec![
-        // The clipboard group (#2361), as on a sheet.
-        row(ic::icon_dd_cut(tid), "cut", board.deletable),
-        row(ic::icon_dd_copy(tid), "copy", board.copyable),
-        row(ic::icon_dd_paste(tid), "paste", board.pasteable),
-        row(ic::icon_dd_smart_paste(tid), "smart_paste", board.pasteable),
-        duplicate,
-        row(ic::icon_dd_select_all(tid), "select_all", true),
+    let mut v = vec![
+        row(Some(ic::icon_dd_find_similar(tid)), "find_similar_objects"),
+        row(Some(ic::icon_chrome_search(tid)), "find"),
         DropdownEntry::Separator,
-        row(ic::icon_dd_move_sel(tid), "move_selection", placeable),
-        DropdownEntry::Separator,
-        row(
-            ic::icon_dd_rotate(tid),
-            "rotate_counterclockwise",
-            placeable,
+        launcher(
+            ContextSubmenu::Place,
+            ic::icon_dd_place_menu(tid),
+            text(i18n, menu_ids::MENU_PLACE),
         ),
-        row(ic::icon_dd_rotate_cw(tid), "rotate_clockwise", placeable),
-        row(ic::icon_dd_flip_x(tid), "flip_selection", placeable),
-        change_footprint,
+    ];
+    if ctx.pcb.any {
+        v.push(launcher(
+            ContextSubmenu::Align,
+            ic::icon_dd_align_menu(tid),
+            text(i18n, menu_ids::CTX_ALIGN),
+        ));
+    }
+    v.extend([
         DropdownEntry::Separator,
-        row(ic::icon_dd_delete(tid), "delete_selection", board.deletable),
+        row(None, "undo"),
+        row(None, "redo"),
+        DropdownEntry::Separator,
+        // The clipboard group (#2361), as on a sheet.
+        row(Some(ic::icon_dd_cut(tid)), "cut"),
+        row(Some(ic::icon_dd_copy(tid)), "copy"),
+        row(Some(ic::icon_dd_paste(tid)), "paste"),
+        row(Some(ic::icon_dd_smart_paste(tid)), "smart_paste"),
+        row(None, "duplicate"),
+        row(Some(ic::icon_dd_select_all(tid)), "select_all"),
+        DropdownEntry::Separator,
+        row(Some(ic::icon_dd_move_sel(tid)), "move_selection"),
+        DropdownEntry::Separator,
+        row(Some(ic::icon_dd_rotate(tid)), "rotate_counterclockwise"),
+        row(Some(ic::icon_dd_rotate_cw(tid)), "rotate_clockwise"),
+        row(Some(ic::icon_dd_flip_x(tid)), "flip_selection"),
+        row(Some(ic::icon_dd_flip_x(tid)), "mirror_x"),
+        row(Some(ic::icon_dd_flip_y(tid)), "mirror_y"),
+        // Picks a library footprint for the selected components (#2366).
+        row(None, "change_footprint"),
+        DropdownEntry::Separator,
+        row(Some(ic::icon_dd_delete(tid)), "delete_selection"),
         DropdownEntry::Separator,
         // Enter or leave the board's sketch mode (#2234).
-        row(ic::icon_dd_rect(tid), "board_sketch", true),
+        row(Some(ic::icon_dd_rect(tid)), "board_sketch"),
         DropdownEntry::Separator,
-        row(ic::icon_dd_cross_probe(tid), "cross_probe", board.any),
+        // The net of the selection or of what is under the cursor (#2403).
+        row(None, "select_board_net"),
+        row(None, "highlight_board_net"),
+        row(Some(ic::icon_dd_cross_probe(tid)), "cross_probe"),
         // Shows the Properties panel, where one selected footprint's
         // designator and value are edited (#1312).
         row(
-            ic::icon_dd_properties(tid),
+            Some(ic::icon_dd_properties(tid)),
             "edit_selected_object_properties",
-            board.any,
         ),
         DropdownEntry::Separator,
         // View group (#2223): the View menu's board-view row.
-        dd_command(
-            i18n,
-            None,
-            "toggle_ratsnest",
-            sc.of("toggle_ratsnest"),
-            None,
-        ),
-    ]
+        row(None, "toggle_ratsnest"),
+    ]);
+    v
 }
 
 /// Pure tab-menu data builder. The per-tab "Close [title]" row carries the

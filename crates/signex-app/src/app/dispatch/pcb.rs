@@ -57,6 +57,10 @@ impl Signex {
                 self.handle_layer_tab_menu(event);
                 Task::none()
             }
+            PcbMsg::Net(event) => {
+                self.handle_board_net(event);
+                Task::none()
+            }
         }
     }
 

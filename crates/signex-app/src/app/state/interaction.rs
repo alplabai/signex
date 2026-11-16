@@ -42,6 +42,8 @@ pub struct InteractionState {
     /// A guide armed by the board panel's Place, waiting for the click on
     /// the main window's board that sets it (#2374): the board and the kind.
     pub pcb_guide_place: Option<(std::path::PathBuf, signex_types::pcb_options::GuideKind)>,
+    /// The board Measure tool and the highlighted board net (#2403).
+    pub pcb_query: super::pcb_query::PcbQueryState,
     /// The active board's ratsnest lines and the nets hidden from them.
     pub pcb_ratsnest: super::pcb_ratsnest::PcbRatsnest,
     /// The board check the Messages panel lists (#2222).

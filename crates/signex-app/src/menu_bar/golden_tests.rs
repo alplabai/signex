@@ -59,6 +59,8 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
                 pasteable: true,
                 part_in_hand: false,
                 routing: false,
+                read_only: false,
+                footprints: 1,
             },
             ..base
         }),
@@ -123,9 +125,13 @@ fn rows() -> Vec<Vec<&'static str>> {
 
 /// Place on a board lists the board's rows (#2360), so the sheet's Place
 /// rows are not in that variant's bar; `menu_bar_place_board.golden.tsv`
-/// pins the board's.
+/// pins the board's. Edit ▸ Arrange orders schematic drawings, so a board
+/// has none (#2405).
 fn omits_row(ctx: &MenuContext, path: &str) -> bool {
-    ctx.commands.pcb.shown && path.starts_with("Place/")
+    ctx.commands.pcb.shown
+        && (path.starts_with("Place/")
+            || path == "Edit/Arrange"
+            || path.starts_with("Edit/Arrange/"))
 }
 
 #[test]

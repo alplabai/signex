@@ -146,6 +146,45 @@ pub(super) fn place_entries(
     ]
 }
 
+/// Place on a board (#2405): the board placement tools in the order of the
+/// menu bar's Place, each running its command and live when the command is
+/// enabled in `ctx` (greyed on a read-only board), or greyed with the reason
+/// the PCB Active Bar gives while the board editor cannot run it; then Board
+/// Sketch.
+pub(super) fn board_place_entries(
+    i18n: &I18n,
+    ctx: &crate::app::command::CommandContext,
+    hint: &dyn Fn(&str) -> String,
+) -> Vec<DropdownEntry<Message>> {
+    use crate::app::pcb_tools::{BoardPlaceTool, ToolState};
+    let command = |id: &'static str| {
+        let live = crate::keymap::AppCommandId::new(id)
+            .is_ok_and(|command| crate::app::command::is_enabled(&command, ctx));
+        if live {
+            dd_command(i18n, None, id, &hint(id), None)
+        } else {
+            dd_cmd_disabled(i18n, None, id, &hint(id))
+        }
+    };
+    let mut v: Vec<DropdownEntry<Message>> = BoardPlaceTool::PLACE_MENU
+        .into_iter()
+        .map(|tool| match tool.state() {
+            ToolState::Live(id) => command(id),
+            ToolState::Unavailable(reason) => {
+                match dd_disabled(None, &text(i18n, tool.name()), None) {
+                    DropdownEntry::Item(item) => {
+                        DropdownEntry::Item(item.tooltip(text(i18n, reason)))
+                    }
+                    other => other,
+                }
+            }
+        })
+        .collect();
+    v.push(DropdownEntry::Separator);
+    v.push(command("board_sketch"));
+    v
+}
+
 /// Altium gating for the Align submenu: pairwise aligns
 /// (Left/Right/Top/Bottom/H/V Centers) need ≥2 items to make sense;
 /// Distribute needs ≥3 (two endpoints + at least one item to space
@@ -347,5 +386,32 @@ impl Signex {
         };
         super::placement::menu_card(entries, tokens, &self.document_state.panel_ctx.ui_font_name)
             .element
+    }
+
+    /// The flyout of the board menu opened in `window_id` (#2405): Place
+    /// lists the board's tools; Align lines up the selected footprints, live
+    /// for an unlocked selection on an editable board.
+    pub(in crate::app::view) fn view_board_context_submenu(
+        &self,
+        kind: ContextSubmenu,
+        window_id: iced::window::Id,
+    ) -> Element<'_, Message> {
+        let i18n = &self.ui_state.i18n;
+        let tid = self.ui_state.effective_theme_id();
+        let context = self.command_context(Some(window_id));
+        let hint = |id: &str| self.keymap_shortcut_label(id);
+        let entries = match kind {
+            ContextSubmenu::Align => {
+                let footprints = if context.pcb.placeable {
+                    context.pcb.footprints
+                } else {
+                    0
+                };
+                align_entries(i18n, tid, footprints, &hint)
+            }
+            _ => board_place_entries(i18n, &context, &hint),
+        };
+        let panel_ctx = &self.document_state.panel_ctx;
+        super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name).element
     }
 }

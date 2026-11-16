@@ -468,6 +468,10 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "find_items",
                     "apply_edits",
                     "revert",
+                    // The board queries (#2403).
+                    "measure_board",
+                    "query_board_nets",
+                    "find_similar_items",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

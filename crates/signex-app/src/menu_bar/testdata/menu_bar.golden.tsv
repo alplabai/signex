@@ -1,5 +1,5 @@
 # path	kind	label	command_id	shortcut	action	enabled[default,full,pcb,symbol,sheets,undocked,footprint,dirty]	gate
-# `-` in an enabled column: the row is not in that variant's bar. Place on a board lists the board's rows instead (menu_bar_place_board.golden.tsv).
+# `-` in an enabled column: the row is not in that variant's bar. Place on a board lists the board's rows instead (menu_bar_place_board.golden.tsv); a board has no Edit > Arrange (#2405).
 File	menu	File	-	-	-	-	-
 File/New Project	item	New Project	new_document	Mod+N	NewProject	11111111	always
 File/New	submenu	New	-	-	-	-	-
@@ -46,10 +46,10 @@ Edit/Move/Mirror X	item	Mirror X	mirror_x	X	MirrorX	01100000	cmd:mirror_x
 Edit/Move/Mirror Y	item	Mirror Y	mirror_y	Y	MirrorY	01100000	cmd:mirror_y
 Edit/Move/Flip Selection	item	Flip Selection	-	-	FlipSelection	00100000	cmd:flip_selection
 Edit/Arrange	submenu	Arrange	-	-	-	-	-
-Edit/Arrange/Bring to Front	item	Bring to Front	-	-	BringDrawingsToFront	00000000	cmd:bring_drawings_to_front
-Edit/Arrange/Send to Back	item	Send to Back	-	-	SendDrawingsToBack	00000000	cmd:send_drawings_to_back
-Edit/Arrange/Bring Forward	item	Bring Forward	-	-	BringDrawingsForward	00000000	cmd:bring_drawings_forward
-Edit/Arrange/Send Backward	item	Send Backward	-	-	SendDrawingsBackward	00000000	cmd:send_drawings_backward
+Edit/Arrange/Bring to Front	item	Bring to Front	-	-	BringDrawingsToFront	00-00000	cmd:bring_drawings_to_front
+Edit/Arrange/Send to Back	item	Send to Back	-	-	SendDrawingsToBack	00-00000	cmd:send_drawings_to_back
+Edit/Arrange/Bring Forward	item	Bring Forward	-	-	BringDrawingsForward	00-00000	cmd:bring_drawings_forward
+Edit/Arrange/Send Backward	item	Send Backward	-	-	SendDrawingsBackward	00-00000	cmd:send_drawings_backward
 Edit/---	separator	-	-	-	-	-	-
 Edit/Select All	item	Select All	select_all	Mod+A	SelectAll	01100000	cmd:select_all
 Edit/---	separator	-	-	-	-	-	-

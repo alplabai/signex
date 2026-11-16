@@ -28,6 +28,9 @@ pub struct FindSimilarState {
     pub running: bool,
     /// The sheet the dialog was opened on; a search answers for it only.
     pub origin: Option<std::path::PathBuf>,
+    /// Opened on a board (#2403): `origin` is the board, and the search
+    /// reaches that board only.
+    pub board: bool,
 }
 
 impl FindSimilarState {
@@ -44,6 +47,15 @@ impl FindSimilarState {
             scope: SimilarScope::Sheet,
             running: false,
             origin,
+            board: false,
+        }
+    }
+
+    /// The dialog opened for a seed on the board at `origin`.
+    pub fn on_board(self) -> Self {
+        Self {
+            board: true,
+            ..self
         }
     }
 

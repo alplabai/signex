@@ -19,6 +19,14 @@ profile_name = "Altium"
 profile_kind = "built_in"
 description = "Altium-style keyboard shortcut defaults for Signex."
 
+# On a board `Q` toggles the unit (#2406). It loads first so the global
+# `Ctrl+Q` below stays the command's menu hint.
+[[keyboard_shortcuts.sections]]
+context = "pcb"
+
+[keyboard_shortcuts.sections.bindings]
+"Q" = "cycle_unit"
+
 [[keyboard_shortcuts.sections]]
 context = "global"
 
@@ -167,7 +175,10 @@ context = "global"
 # `*` to the next signal layer,
 # `-` to the previous layer; Shift+S turns single-layer mode on or off; `3`
 # shows the board in 3D or flat again. A
-# shifted `+` or `*` is its own stroke on a US layout.
+# shifted `+` or `*` is its own stroke on a US layout. #2406: `1` enters or
+# leaves the board sketch, `L` flips the selection or the part on the cursor
+# to the other side, `N` shows or hides the ratsnest, `F` changes the
+# footprint, `P K` draws a keepout and `T D` runs the design rule check.
 [[keyboard_shortcuts.sections]]
 context = "pcb"
 
@@ -177,13 +188,19 @@ context = "pcb"
 "*" = "next_signal_layer"
 "Shift+*" = "next_signal_layer"
 "-" = "prev_layer"
+"1" = "board_sketch"
 "3" = "view_board_3d"
+"F" = "change_footprint"
+"L" = "flip_selection"
+"N" = "toggle_ratsnest"
 "P F" = "place_board_fill"
 "P G" = "place_board_polygon_pour"
+"P K" = "place_board_keepout"
 "P R" = "place_board_region"
 "P T" = "place_board_track"
 "P V" = "place_board_via"
 "Shift+S" = "toggle_single_layer_mode"
+"T D" = "run_drc"
 
 [[keyboard_shortcuts.sections]]
 context = "footprint"

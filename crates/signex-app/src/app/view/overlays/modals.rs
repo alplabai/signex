@@ -89,9 +89,13 @@ impl Signex {
             return None;
         }
         Some(
-            crate::find_replace::view(&ui.find_replace, &self.document_state.panel_ctx.tokens)
-                .map(Message::FindReplaceMsg)
-                .boxed(),
+            crate::find_replace::view(
+                &ui.find_replace,
+                &self.document_state.panel_ctx.tokens,
+                &ui.i18n,
+            )
+            .map(Message::FindReplaceMsg)
+            .boxed(),
         )
     }
 
