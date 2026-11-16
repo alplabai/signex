@@ -100,11 +100,69 @@ pub fn route_bus_leg(
         budget: rules.budget,
     };
     let path = walkaround(&world, a, b, &walk).ok_or(RouteRefusal::Blocked)?;
+    // A centre line that leaves its start sideways runs its members along
+    // each other's start copper: it leaves straight out first, one step.
+    let path = match exit_step(members, a, b, walk.step)
+        .filter(|_| leaves_sideways(&path, a, b, members))
+    {
+        Some(exit) => walkaround(&world, exit, b, &walk)
+            .map(|rest| [vec![a], rest].concat())
+            .unwrap_or(path),
+        None => path,
+    };
     Ok(path
         .into_iter()
         .skip(1)
         .map(|p| if p == b { to } else { p.to_mm() })
         .collect())
+}
+
+/// Across the members' start points: the line from the first to the last.
+fn start_spread(members: &[BusMember]) -> Option<PointNm> {
+    let (first, last) = (members.first()?, members.last()?);
+    let spread = nm(last.anchor).ok()?.minus(nm(first.anchor).ok()?);
+    (spread != PointNm::new(0, 0)).then_some(spread)
+}
+
+/// The way straight out of the members' start points, towards `b`: square
+/// to the line across them.
+fn exit_direction(members: &[BusMember], a: PointNm, b: PointNm) -> Option<PointNm> {
+    let spread = start_spread(members)?;
+    let out = PointNm::new(-spread.y, spread.x);
+    Some(if out.dot(b.minus(a)) < 0 {
+        PointNm::new(-out.x, -out.y)
+    } else {
+        out
+    })
+}
+
+/// Whether the centre line `path` from the bus start `a` turns more than
+/// 45° off the way straight out of the start points on its first leg.
+fn leaves_sideways(path: &[PointNm], a: PointNm, b: PointNm, members: &[BusMember]) -> bool {
+    let Some(out) = exit_direction(members, a, b) else {
+        return false;
+    };
+    let Some(first) = path.iter().find(|&&p| p != a) else {
+        return false;
+    };
+    let leg = first.minus(a);
+    leg.cross(out).abs() > leg.dot(out)
+}
+
+/// One walk `step` straight out of the start points from `a`, when `a` is
+/// where the members' centre line starts.
+fn exit_step(members: &[BusMember], a: PointNm, b: PointNm, step: i64) -> Option<PointNm> {
+    let start = nm(bus_start(members)?).ok()?;
+    if members.len() < 2 || start != a {
+        return None;
+    }
+    let out = exit_direction(members, a, b)?;
+    let length = (out.x as f64).hypot(out.y as f64);
+    let scale = step as f64 / length;
+    Some(a.plus(PointNm::new(
+        (out.x as f64 * scale).round() as i64,
+        (out.y as f64 * scale).round() as i64,
+    )))
 }
 
 /// The members' tracks along `centre`: each member at its offset, joined

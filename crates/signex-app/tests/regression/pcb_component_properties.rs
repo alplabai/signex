@@ -253,7 +253,10 @@ fn the_view_reads_the_selected_component() {
     let shown = facts(&f.app);
     assert_eq!(shown.footprints, [R2]);
     // Y counts up from the board origin (#2384).
-    assert_eq!((shown.x, shown.y), (Shared::Same(10.0), Shared::Same(-10.0)));
+    assert_eq!(
+        (shown.x, shown.y),
+        (Shared::Same(10.0), Shared::Same(-10.0))
+    );
     assert_eq!(shown.side, Shared::Same(BoardSide::Top));
     assert_eq!(shown.locked, Shared::Same(false));
     assert_eq!(shown.designator, Shared::Same("R2".to_string()));
