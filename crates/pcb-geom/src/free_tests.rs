@@ -8,8 +8,8 @@ use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
 use crate::{
-    BoardIndex, ItemRef, PointNm, RectNm, RectSelect, collect_copper, layer_bit, net_at, net_items,
-    net_routed_length_mm,
+    BoardIndex, ItemRef, PointNm, RectNm, RectSelect, arc_shapes, collect_copper, free_pad_shape,
+    layer_bit, net_at, net_copper, net_items, net_members, net_routed_length_mm,
 };
 
 fn board() -> PcbBoard {
@@ -97,6 +97,36 @@ fn a_copper_arc_is_copper_of_its_net_along_its_bend() {
         (length - 5.0 * std::f64::consts::PI).abs() < 1e-3,
         "{length}"
     );
+}
+
+/// #2440: Highlight Net draws every chord of a copper arc and the free pads
+/// of the net; Select Net takes the arc as one item and the free pad.
+#[test]
+fn a_net_highlights_and_selects_its_copper_arcs_and_free_pads() {
+    let mut b = board();
+    b.free.arcs.push(arc("TopCopper", 4));
+    let silk = TrackArc {
+        uuid: Uuid::from_u128(3),
+        ..arc("TopSilkscreen", 4)
+    };
+    b.free.arcs.push(silk);
+    b.free.pads.push(pad(4));
+    b.free.pads.push(Pad {
+        uuid: Uuid::from_u128(4),
+        ..pad(5)
+    });
+    let mut lit = arc_shapes(&b.free.arcs[0]).unwrap();
+    assert!(lit.len() > 1, "the arc is several chords");
+    lit.push(free_pad_shape(&b.free.pads[0]).unwrap());
+    assert_eq!(net_copper(&b, 4), lit, "the silk arc and net 5 stay dark");
+    assert_eq!(
+        net_members(&b, 4),
+        vec![
+            ItemRef::Arc(Uuid::from_u128(1)),
+            ItemRef::FreePad(Uuid::from_u128(2))
+        ]
+    );
+    assert!(net_copper(&b, 0).is_empty());
 }
 
 #[test]

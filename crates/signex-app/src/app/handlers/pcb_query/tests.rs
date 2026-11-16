@@ -276,6 +276,77 @@ fn select_and_highlight_net_act_on_the_net_of_the_selection() {
     );
 }
 
+const GND_ARC: Uuid = Uuid::from_u128(0x60);
+const GND_FREE_PAD: Uuid = Uuid::from_u128(0x61);
+
+/// The board with a copper arc on GND, a half turn of radius 5 about
+/// (15, 20), and a free pad on GND at (40, 10).
+fn board_with_free_copper() -> PcbBoard {
+    let mut b = board();
+    b.free.arcs.push(signex_types::pcb_arc::TrackArc {
+        uuid: GND_ARC,
+        start: Point::new(10.0, 20.0),
+        mid: Point::new(15.0, 25.0),
+        end: Point::new(20.0, 20.0),
+        width: 0.25,
+        layer: "TopCopper".into(),
+        net: 1,
+    });
+    b.free.pads.push(
+        serde_json::from_value(serde_json::json!({
+            "uuid": GND_FREE_PAD, "number": "1", "pad_type": "smd", "shape": "rect",
+            "position": {"x": 40.0, "y": 10.0}, "size": {"x": 1.0, "y": 1.0},
+            "drill": null, "layers": ["TopCopper"], "net": {"number": 1, "name": "GND"}
+        }))
+        .unwrap(),
+    );
+    b
+}
+
+fn net_message(msg: crate::app::BoardNetMsg) -> Message {
+    Message::Pcb(crate::app::PcbMsg::Net(msg))
+}
+
+/// #2440: Select Net takes the net's copper arc as one item and its free
+/// pad, one selection Delete acts on.
+#[test]
+fn select_net_takes_the_copper_arcs_and_free_pads_of_the_net() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), board_with_free_copper());
+    let select = crate::app::BoardNetMsg::SelectRequested(Some("GND".into()));
+    let _ = app.update(net_message(select));
+    let picked = selected(&app);
+    assert_eq!(
+        picked.len(),
+        5,
+        "the track, two pads, the arc, the free pad"
+    );
+    assert!(picked.contains(&ItemRef::Arc(GND_ARC)));
+    assert!(picked.contains(&ItemRef::FreePad(GND_FREE_PAD)));
+
+    let _ = app.update(Message::Edit(crate::app::EditMsg::DeleteSelected));
+    let board = app.document_state.pcb_board(&path).unwrap();
+    assert!(board.free.arcs.is_empty(), "Delete took the arc");
+    assert!(board.free.pads.is_empty(), "Delete took the free pad");
+}
+
+/// #2440: Highlight Net draws every chord of the net's copper arc and its
+/// free pad bright.
+#[test]
+fn highlight_net_draws_the_copper_arcs_and_free_pads_of_the_net() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), board_with_free_copper());
+    let highlight = crate::app::BoardNetMsg::HighlightRequested(Some("GND".into()));
+    let _ = app.update(net_message(highlight));
+    let board = app.document_state.pcb_board(&path).unwrap();
+    let chords = pcb_geom::arc_shapes(&board.free.arcs[0]).unwrap();
+    let pad = pcb_geom::free_pad_shape(&board.free.pads[0]).unwrap();
+    let lit = &app.interaction_state.pcb_canvas.highlight().net;
+    assert_eq!(lit.len(), 3 + chords.len() + 1);
+    assert!(chords.iter().all(|c| lit.contains(c)), "every chord");
+    assert!(lit.contains(&pad));
+}
+
 #[test]
 fn the_net_inspector_lists_the_board_nets_and_selects_one() {
     let dir = tempfile::tempdir().unwrap();

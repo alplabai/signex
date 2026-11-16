@@ -1,8 +1,9 @@
 //! Select Net and Highlight Net on a board (#2403, #2405): the net named
 //! by a Net Inspector row, else the net of the selection, else of what is
-//! under the cursor. Select puts its tracks, vias, pads and drawn areas in
-//! the selection; Highlight draws its copper bright until it is pressed
-//! again for the same net or Esc is pressed. Neither edits the board.
+//! under the cursor. Select puts its tracks, vias, pads, copper arcs, free
+//! pads and drawn areas in the selection; Highlight draws its copper bright
+//! (#2440) until it is pressed again for the same net or Esc is pressed.
+//! Neither edits the board.
 
 use pcb_geom::Shape;
 use signex_i18n::{ids, t};

@@ -116,7 +116,8 @@ pub enum PcbMsg {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BoardNetMsg {
     /// `select_board_net` ran, or a Net Inspector row's Select was pressed:
-    /// every track, via and pad of the net is selected.
+    /// every track, via, pad, copper arc, free pad and drawn area of the net
+    /// is selected.
     SelectRequested(Option<String>),
     /// `highlight_board_net` ran, or a Net Inspector row's Highlight was
     /// pressed: the net is drawn bright, or no longer when it already is.
