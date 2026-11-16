@@ -112,10 +112,6 @@ impl CopperStack {
     pub(crate) fn number(&self, layer: CopperLayer) -> Option<usize> {
         self.layers.iter().position(|l| *l == layer).map(|i| i + 1)
     }
-
-    pub(crate) fn contains(&self, layer: CopperLayer) -> bool {
-        self.layers.contains(&layer)
-    }
 }
 
 /// The X2 `.FileFunction` value of an image.

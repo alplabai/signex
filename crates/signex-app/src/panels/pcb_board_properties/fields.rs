@@ -3,7 +3,7 @@
 //! a selectable table row.
 
 use iced::widget::{button as button_style, container, pick_list};
-use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
+use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::Localized;
 use signex_types::measure::length_field_text;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;

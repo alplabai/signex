@@ -42,6 +42,7 @@ fn board(with_outline: bool) -> PcbBoard {
     let outline = [(0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (0.0, 10.0)];
     PcbBoard {
         sketch: None,
+        stackup: None,
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
