@@ -144,6 +144,7 @@ fn board() -> PcbBoard {
         roundrect_ratio: 0.0,
         rotation: 0.0,
         net_locked: false,
+        layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     };
@@ -166,6 +167,8 @@ fn board() -> PcbBoard {
         unknown_columns: Default::default(),
     };
     let segment = Segment {
+        locked: false,
+        attributes: Default::default(),
         uuid: Uuid::from_u128(0x20),
         start: Point::new(10.0, 10.0),
         end: Point::new(20.0, 10.0),
@@ -176,6 +179,8 @@ fn board() -> PcbBoard {
     };
     PcbBoard {
         sketch: None,
+        stackup: None,
+        free: Default::default(),
         options: Default::default(),
         uuid: Uuid::from_u128(1),
         version: 1,
@@ -231,4 +236,26 @@ fn the_panel_board_holds_every_copy_with_its_own_nets_and_the_marks() {
     assert!(scored.graphics.is_empty());
     let lines = scored.sketch.as_ref().map_or(0, |s| s.v_scores.len());
     assert_eq!(lines, 6, "x 50, 52 and y 0, 40, 42, 82");
+}
+
+/// #2373: a free pad is arrayed with the rest of the board, each copy with
+/// its own net and id, so the panel's outputs hold one per copy.
+#[test]
+fn a_free_pad_is_copied_into_every_copy() {
+    let mut source = board();
+    let mut free = source.footprints[0].pads[0].clone();
+    free.uuid = Uuid::from_u128(0x30);
+    free.position = Point::new(5.0, 5.0);
+    source.free.pads.push(free);
+    let out = panel_board(&source, &BoardPanel::default()).expect("panelised");
+    assert_eq!(out.free.pads.len(), 4);
+    let nets: Vec<u32> = out
+        .free
+        .pads
+        .iter()
+        .filter_map(|p| p.net.as_ref().map(|n| n.number))
+        .collect();
+    assert_eq!(nets, [1, 3, 5, 7]);
+    assert_eq!(out.free.pads[1].position, Point::new(57.0, 5.0));
+    assert_ne!(out.free.pads[1].uuid, out.free.pads[0].uuid);
 }

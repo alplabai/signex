@@ -33,6 +33,7 @@ const FIDUCIAL: u128 = 1;
 const FIDUCIAL_PAD: u128 = 2;
 const HOLE: u128 = 3;
 const V_SCORE: u128 = 4;
+const ROUTE: u128 = 5;
 
 /// `board` arrayed into `panel`.
 pub fn panel_board(board: &PcbBoard, panel: &BoardPanel) -> Result<PcbBoard, PanelError> {
@@ -54,6 +55,7 @@ pub fn panel_board(board: &PcbBoard, panel: &BoardPanel) -> Result<PcbBoard, Pan
     out.zones.clear();
     out.graphics.clear();
     out.texts.clear();
+    out.free = Default::default();
     let mut sketch = BoardSketch::default();
     for (index, offset) in (0u32..).zip(&layout.copies) {
         let copy = PlacedCopy {
@@ -165,6 +167,7 @@ impl PlacedCopy {
         }
         for graphic in &board.graphics {
             let mut graphic = graphic.clone();
+            graphic.uuid = self.uuid(graphic.uuid);
             for point in [&mut graphic.start, &mut graphic.end, &mut graphic.center] {
                 *point = (*point).map(|p| self.at(p));
             }
@@ -176,6 +179,35 @@ impl PlacedCopy {
             text.uuid = self.uuid(text.uuid);
             text.position = self.at(text.position);
             out.texts.push(text);
+        }
+        // #2373: free arcs, pads and dimensions are copied with the rest.
+        for arc in &board.free.arcs {
+            let mut arc = arc.clone();
+            arc.uuid = self.uuid(arc.uuid);
+            arc.start = self.at(arc.start);
+            arc.mid = self.at(arc.mid);
+            arc.end = self.at(arc.end);
+            arc.net = self.net(arc.net);
+            out.free.arcs.push(arc);
+        }
+        for pad in &board.free.pads {
+            let mut pad = pad.clone();
+            pad.uuid = self.uuid(pad.uuid);
+            pad.position = self.at(pad.position);
+            if let Some(net) = pad.net.as_mut()
+                && net.number != 0
+            {
+                net.number = self.net(net.number);
+                net.name = self.net_name(&net.name);
+            }
+            out.free.pads.push(pad);
+        }
+        for dimension in &board.free.dimensions {
+            let mut dimension = dimension.clone();
+            dimension.uuid = self.uuid(dimension.uuid);
+            dimension.start = self.at(dimension.start);
+            dimension.end = self.at(dimension.end);
+            out.free.dimensions.push(dimension);
         }
         if let Some(source) = &board.sketch {
             self.add_sketch(source, sketch);
@@ -256,7 +288,13 @@ fn add_marks(layout: &PanelLayout, out: &mut PcbBoard, sketch: &mut BoardSketch)
             side: Default::default(),
         });
     }
-    out.graphics.extend(layout.routes.iter().map(route));
+    out.graphics.extend(
+        layout
+            .routes
+            .iter()
+            .enumerate()
+            .map(|(index, line)| route(index, line)),
+    );
 }
 
 /// A fixed top-side copper dot that opens the mask over itself; graphical,
@@ -275,6 +313,7 @@ fn fiducial(index: usize, at: Point, diameter: f64) -> Footprint {
         roundrect_ratio: 0.0,
         rotation: 0.0,
         net_locked: false,
+        layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     };
@@ -301,8 +340,9 @@ fn fiducial(index: usize, at: Point, diameter: f64) -> Footprint {
     }
 }
 
-fn route(line: &PanelSegment) -> BoardGraphic {
+fn route(index: usize, line: &PanelSegment) -> BoardGraphic {
     BoardGraphic {
+        uuid: panel_uuid(ROUTE, index),
         graphic_type: "line".to_string(),
         layer: PANEL_ROUTE_LAYER.to_string(),
         width: PCB_DEFAULT_GRAPHIC_WIDTH_MM,
@@ -311,5 +351,7 @@ fn route(line: &PanelSegment) -> BoardGraphic {
         center: None,
         radius: 0.0,
         points: Vec::new(),
+        text: String::new(),
+        font_size: 0.0,
     }
 }
