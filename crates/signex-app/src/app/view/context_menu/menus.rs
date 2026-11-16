@@ -174,7 +174,7 @@ impl Signex {
             self.document_state.tabs.len(),
             // A Project tab stays docked (#1202): an undocked window would
             // take the main window's shortcuts.
-            already_undocked || tab.kind.as_project().is_some(),
+            already_undocked || tab.kind.is_project_page(),
         );
         let panel_ctx = &self.document_state.panel_ctx;
         super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name).element

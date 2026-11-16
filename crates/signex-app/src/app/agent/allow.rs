@@ -85,6 +85,15 @@ mod tests {
                 "read_document",
                 "resolve",
                 "revert",
+                "rules_add",
+                "rules_conflicts",
+                "rules_effective",
+                "rules_enable",
+                "rules_explain",
+                "rules_get",
+                "rules_list",
+                "rules_remove",
+                "rules_set",
                 "save_document",
             ]
         );

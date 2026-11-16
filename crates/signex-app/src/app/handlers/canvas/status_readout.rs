@@ -40,7 +40,7 @@ impl Signex {
         if let Some(tab) = docs.tab_shown_in_window(window_id, &self.ui_state) {
             if tab.kind.as_component_editor().is_some()
                 || tab.kind.as_library_browser().is_some()
-                || tab.kind.as_project().is_some()
+                || tab.kind.is_project_page()
             {
                 return Surface::NoCamera;
             }

@@ -82,6 +82,10 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
     ("view_rotate", view_rotate),
+    ("rules_add", crate::app::rules_tab::rules_add),
+    ("rules_set", crate::app::rules_tab::rules_set),
+    ("rules_remove", crate::app::rules_tab::rules_remove),
+    ("rules_enable", crate::app::rules_tab::rules_enable),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -132,6 +136,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "revert" => Some(
             "`revert` needs the operands `document` and `group` — \
              Undo is the person's way back",
+        ),
+        "rules_add" | "rules_set" | "rules_remove" | "rules_enable" => Some(
+            "the `rules_*` edits need their operands — \
+             use the Rules tab (Design ▸ Rules)",
         ),
         _ => None,
     }

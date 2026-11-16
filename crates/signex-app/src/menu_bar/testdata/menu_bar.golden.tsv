@@ -110,6 +110,7 @@ Design/Update Schematics	item	Update Schematics	-	-	BackAnnotate	01000000	cmd:ba
 Design/Board Sketch	item	Board Sketch	-	-	BoardSketch	01100000	cmd:board_sketch
 Design/---	separator	-	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
+Design/Rules...	item	Rules...	-	-	OpenRules	01001001	cmd:open_rules
 Tools	menu	Tools	-	-	-	-	-
 Tools/Annotation	submenu	Annotation	-	-	-	-	-
 Tools/Annotation/Annotate Schematics...	item	Annotate Schematics...	-	-	Annotate	01000000	sch

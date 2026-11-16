@@ -58,8 +58,8 @@ pub enum Limit {
 }
 
 /// Which limit, without its value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum LimitKind {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum LimitKind {
     MinClearance,
     MinTrackWidth,
     MaxTrackWidth,
@@ -68,7 +68,7 @@ pub(crate) enum LimitKind {
 }
 
 impl Limit {
-    fn split(self) -> (LimitKind, i64) {
+    pub(crate) fn split(self) -> (LimitKind, i64) {
         match self {
             Limit::MinClearance(nm) => (LimitKind::MinClearance, nm),
             Limit::MinTrackWidth(nm) => (LimitKind::MinTrackWidth, nm),
@@ -80,12 +80,40 @@ impl Limit {
 }
 
 impl LimitKind {
+    pub const ALL: [LimitKind; 5] = [
+        LimitKind::MinClearance,
+        LimitKind::MinTrackWidth,
+        LimitKind::MaxTrackWidth,
+        LimitKind::MinViaDiameter,
+        LimitKind::MinViaDrill,
+    ];
+
     /// For a maximum the smaller value is the stricter one.
-    pub(crate) fn stricter(self, a: i64, b: i64) -> bool {
+    pub fn stricter(self, a: i64, b: i64) -> bool {
         match self {
             LimitKind::MaxTrackWidth => a < b,
             _ => a > b,
         }
+    }
+
+    /// Stable name in answers (`min_clearance`, `max_track_width`, ...).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            LimitKind::MinClearance => "min_clearance",
+            LimitKind::MinTrackWidth => "min_track_width",
+            LimitKind::MaxTrackWidth => "max_track_width",
+            LimitKind::MinViaDiameter => "min_via_diameter",
+            LimitKind::MinViaDrill => "min_via_drill",
+        }
+    }
+
+    pub fn from_str_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|k| k.as_str() == id)
+    }
+
+    /// Whether it is a maximum (the item must stay at or under it).
+    pub const fn is_maximum(self) -> bool {
+        matches!(self, LimitKind::MaxTrackWidth)
     }
 }
 
@@ -114,10 +142,19 @@ impl UserRule {
         format!("{USER_RULE_ID_PREFIX}{}", self.name)
     }
 
+    /// The value it sets for `kind`, if it limits that.
+    pub fn limit(&self, kind: LimitKind) -> Option<i64> {
+        self.limits
+            .iter()
+            .map(|l| l.split())
+            .find(|(k, _)| *k == kind)
+            .map(|(_, nm)| nm)
+    }
+
     /// Specificity: the net scope first (net, class, pattern, board-wide:
     /// 3 down to 0), then how many narrowing conditions it adds (a layer,
     /// an object pair). A layer-only rule is `(0, 1)`, above board-wide.
-    fn rank(&self) -> (u8, u8) {
+    pub fn rank(&self) -> (u8, u8) {
         let scope = match self.nets {
             NetScope::Net(_) => 3,
             NetScope::Class(_) => 2,
@@ -163,15 +200,15 @@ impl ScopedRule {
         self.nets.as_ref().is_some_and(BTreeSet::is_empty)
     }
 
-    fn covers_net(&self, net: u32) -> bool {
+    pub(crate) fn covers_net(&self, net: u32) -> bool {
         self.nets.as_ref().is_none_or(|set| set.contains(&net))
     }
 
-    fn covers(&self, net: u32, layers: u32) -> bool {
+    pub(crate) fn covers(&self, net: u32, layers: u32) -> bool {
         self.covers_net(net) && self.rule.layers.is_none_or(|mask| mask & layers != 0)
     }
 
-    fn pairs_with(&self, objects: [Option<CopperObject>; 2]) -> bool {
+    pub(crate) fn pairs_with(&self, objects: [Option<CopperObject>; 2]) -> bool {
         let Some([x, y]) = self.rule.pair else {
             return true;
         };

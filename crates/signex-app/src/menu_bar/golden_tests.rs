@@ -349,6 +349,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("cross_probe", "CrossProbe"),
     ("toggle_cross_select_mode", "ToggleCrossSelectMode"),
     ("open_parameter_manager", "OpenParameterManager"),
+    ("open_rules", "OpenRules"),
     // #2248 / #1269: fixture names only.
     ("assign_footprints", "AssignFootprints"),
     ("open_net_inspector", "OpenNetInspector"),

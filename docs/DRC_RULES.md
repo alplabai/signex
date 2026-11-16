@@ -146,6 +146,86 @@ When two nets ask the same clearance, a finding keeps the more severe of the
 two rules: a `then info` rule for one net never turns another net's error
 into info.
 
+## Turning a rule off
+
+`disabled` before `rule` keeps a rule written but not applied:
+
+```text
+disabled rule hv_spacing on clearance when class == "HV" require clearance >= 0.8mm then error
+```
+
+A disabled rule is still checked for mistakes and keeps its name, so a second
+rule of that name is still the repeated one. It is not counted as "not
+applied" in Messages. The Rules tab's On box writes and removes the keyword.
+
+## Rules manager
+
+Design ▸ Rules (also the command palette, `open_rules`, and the Rules button
+of the DRC section in Messages) opens the project's rules as a document tab
+named **Rules**. One tab per project; Save writes the `.snxprj`.
+
+The table and the rule text are two views of one rule list. Each row is one
+rule of the text. Editing a cell rewrites only that rule's text, on one line;
+every other rule stays exactly as typed. A rule with a condition or limit the
+table has no column for is still a row, marked "Text only", and is edited in
+the text view. Every edit (a cell, On, Add, Remove, Apply in the text view) is
+one undo step on the project's rule history, the same history the ERC dialog
+steps; Ctrl+Z and Ctrl+Y in the tab step it. An edit that would make the rule
+fail to compile is refused and the tab says why; nothing changes.
+
+While the project stores no rules, the tab shows this machine's rules (what
+Run DRC reads) and says so; the first edit stores them in the project, in the
+same undo step.
+
+- **Sub-tabs.** Clearance (clearance rules, object pairs included) and Routing
+  (track width, via diameter and drill), each with the findings of its rules
+  in the last run. Only what Run DRC checks has a column.
+- **Columns.** On, Name, Kind (Routing), Scope, Layer, Objects (Clearance),
+  one column per limit, Severity, Actual, Margin, Violations and Flags. A
+  length is written as typed (`0.2mm`, `8mil`).
+- **Scope cell.** `net == "GND"`, `class == "HV"` or `net matches "USB_*"`;
+  empty for every net. While it is typed in, the board's nets and the
+  project's classes are offered, and a scope that takes in no net is said.
+- **Actual, Margin, Violations.** From the last Run DRC of the project's
+  board: the number of findings of the rule, the worst measured value and how
+  far past the limit it is. A blank cell says why: not checked yet, stale
+  since the last edit (the board or the rule changed after the run), no
+  objects in scope, off, or the board is not open. "Passes" is a checked rule
+  with no finding.
+- **Flags.** A rule that never applies on the board (another rule always
+  wins, "shadowed"), two equally specific rules that ask different values of
+  the same nets ("conflict"), a rule that lowers a net class's clearance, and
+  a scope that matches no net. Found by the check's own resolution over the
+  board's nets, copper layers and object pairs.
+- **Detail.** The selected rule's text, its problems and flags, how many board
+  objects it applies to (Show on board opens the board and selects them), and
+  **Why this value?**: for the first net the rule takes in, the value that
+  governs it, where it comes from (a rule, the net class, the board setup),
+  and how each rule of that limit fared (applies, a more specific rule
+  applies, an equally specific stricter rule applies, other nets, layers or
+  objects).
+- **Text view.** The same rules as text, with what the compiler says about the
+  text as typed; Apply stores it as one undo step.
+- **Search and filter.** By name, scope, layer or message; All, With
+  violations, Flagged, Off.
+
+### Commands
+
+Each takes `document`: the project or any document of it. Edits are one undo
+step each and answer with data; refusals say why.
+
+| Command | Answer |
+|---|---|
+| `rules_list [kind] [enabled]` | `stored_in` (`project` or `machine`), `board`, `syntax_errors`, `rules`: each with `id`, `name`, `enabled`, `applied`, `kind`, `domain`, `scope`, `layer`, `pair`, `limits` (`min_clearance`, `min_width`, `max_width`, `min_diameter`, `min_drill`), `severity`, `message`, `text_only`, `problems` (with line and column) and `text` |
+| `rules_get id` | one rule as above, plus `flags`, `scope_objects` and `result` (`violations`, `measured_mm`, `required_mm`, `margin_mm`, `stale`) when the board is open |
+| `rules_add kind values [scope] [layer] [pair] [severity] [name]` | `id`, `name`; `values` is `min_width=0.1mm, max_width=12mil` or one bare length for the kind's first limit |
+| `rules_set id field [value]` | `rule`; `field` is `name`, `scope`, `layer`, `pair`, `severity`, `message`, `enabled` or a limit; no `value` clears it |
+| `rules_remove id` | `removed` |
+| `rules_enable id on` | `id`, `enabled` |
+| `rules_effective net [kind] [layer]` | `value_mm`, `source`, `without_rules_mm` and the `chain` of candidates with their `verdict` (`kind` is `min_clearance`, `min_track_width`, `max_track_width`, `min_via_diameter`, `min_via_drill`) |
+| `rules_explain violation` | for finding `violation` of the last run: `required_mm`, `rule` and one `sides` entry per net, as `rules_effective` answers |
+| `rules_conflicts` | `flags`: `shadowed` (`by`), `conflict` (`with`), `lowers_class` (`class`, `from_mm`, `to_mm`), `no_nets` |
+
 ## Not in this version
 
 Region-scoped rules, clearance to holes and the board edge, annular ring,

@@ -91,6 +91,9 @@ pub struct ProjectTabState {
     /// The agent journal line cap as typed (#2253), until the next undo, redo
     /// or section switch shows the stored value again.
     pub journal_lines_draft: Option<String>,
+    /// The project's Rules tab (#2398): sub-tab, search, the cell being
+    /// typed in, the text view and the cached flags.
+    pub rules: crate::app::RulesTabState,
 }
 
 /// Messages of a Project tab, namespaced under `ProjectMsg::Tab`. Each

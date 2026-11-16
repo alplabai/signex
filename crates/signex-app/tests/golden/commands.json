@@ -655,6 +655,11 @@
     "category": "file"
   },
   {
+    "id": "open_rules",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "open_schematic_preferences",
     "group": "General",
     "category": "preferences"
@@ -993,6 +998,51 @@
     "id": "rubber_stamp_copy",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "rules_add",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
+    "id": "rules_conflicts",
+    "group": "Pcb",
+    "category": "validation"
+  },
+  {
+    "id": "rules_effective",
+    "group": "Pcb",
+    "category": "validation"
+  },
+  {
+    "id": "rules_enable",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
+    "id": "rules_explain",
+    "group": "Pcb",
+    "category": "validation"
+  },
+  {
+    "id": "rules_get",
+    "group": "Pcb",
+    "category": "validation"
+  },
+  {
+    "id": "rules_list",
+    "group": "Pcb",
+    "category": "validation"
+  },
+  {
+    "id": "rules_remove",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
+    "id": "rules_set",
+    "group": "Pcb",
+    "category": "design"
   },
   {
     "id": "run_drc",

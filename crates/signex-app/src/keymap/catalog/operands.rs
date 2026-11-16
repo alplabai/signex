@@ -114,6 +114,15 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("direction", OperandKind::Text),
     ("apply", OperandKind::Bool),
     ("baseline", OperandKind::Text),
+    ("field", OperandKind::Text),
+    ("on", OperandKind::Bool),
+    ("scope", OperandKind::Text),
+    ("values", OperandKind::Text),
+    ("layer", OperandKind::Text),
+    ("pair", OperandKind::Text),
+    ("severity", OperandKind::Text),
+    ("enabled", OperandKind::Bool),
+    ("violation", OperandKind::Text),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -363,6 +372,57 @@ pub const REVERT: &[Operand] = &[
     required("document", OperandKind::Document),
     required("group", OperandKind::Text),
     optional("documents", OperandKind::Text),
+];
+
+// The `rules_*` commands (#2398): `document` is the project or any of its
+// documents; `id` a rule's name or `user::<name>`.
+
+/// `rules_list`: the rules, narrowed by kind or on / off.
+pub const RULES_LIST: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("kind", OperandKind::Text),
+    optional("enabled", OperandKind::Bool),
+];
+/// `rules_get`, `rules_remove`: one rule.
+pub const RULES_ONE: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("id", OperandKind::Text),
+];
+/// `rules_add`: a rule of `kind` (clearance, track, via) with its limits.
+pub const RULES_ADD: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("kind", OperandKind::Text),
+    required("values", OperandKind::Text),
+    optional("scope", OperandKind::Text),
+    optional("layer", OperandKind::Text),
+    optional("pair", OperandKind::Text),
+    optional("severity", OperandKind::Text),
+    optional("name", OperandKind::Text),
+];
+/// `rules_set`: one field of one rule; no `value` clears it.
+pub const RULES_SET: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("id", OperandKind::Text),
+    required("field", OperandKind::Text),
+    optional("value", OperandKind::Text),
+];
+/// `rules_enable`: one rule on or off.
+pub const RULES_ENABLE: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("id", OperandKind::Text),
+    required("on", OperandKind::Bool),
+];
+/// `rules_effective`: the value that governs a net, and why.
+pub const RULES_EFFECTIVE: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("net", OperandKind::Text),
+    optional("kind", OperandKind::Text),
+    optional("layer", OperandKind::Text),
+];
+/// `rules_explain`: why a finding of the last DRC run asks its value.
+pub const RULES_EXPLAIN: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("violation", OperandKind::Text),
 ];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma

@@ -27,6 +27,16 @@ impl Signex {
             crate::diagnostics::log_info("DRC: the active document is not a PCB");
             return Task::none();
         };
+        self.start_pcb_drc(path, board)
+    }
+
+    /// Check `board`, the board at `path`, whether or not its tab is in
+    /// view (the Rules tab runs its project's board, #2398).
+    pub(crate) fn start_pcb_drc(
+        &mut self,
+        path: std::path::PathBuf,
+        board: signex_types::pcb::PcbBoard,
+    ) -> Task<Message> {
         let revision = self
             .document_state
             .pcb_revisions

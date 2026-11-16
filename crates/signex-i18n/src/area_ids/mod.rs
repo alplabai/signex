@@ -14,6 +14,7 @@ mod pcb_board;
 mod pcb_component;
 mod pcb_primitive;
 mod preferences;
+mod rules;
 mod update_pcb;
 
 pub use dialog::*;
@@ -28,6 +29,7 @@ pub use pcb_board::*;
 pub use pcb_component::*;
 pub use pcb_primitive::*;
 pub use preferences::*;
+pub use rules::*;
 pub use update_pcb::*;
 
 /// Every id of every area list.
@@ -46,6 +48,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         pcb_component::PCB_COMPONENT,
         pcb_primitive::PCB_PRIMITIVE,
         preferences::PREFERENCES,
+        rules::RULES,
         update_pcb::UPDATE_PCB,
     ]
     .concat()

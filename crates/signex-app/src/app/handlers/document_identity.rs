@@ -29,6 +29,8 @@ impl Signex {
             tab.path = new_path.to_path_buf();
             if tab.kind.as_project().is_some() {
                 tab.title = crate::app::project_tab::project_tab_title(new_path);
+            } else if tab.kind.as_rules().is_some() {
+                // A Rules tab keeps its own title (#2398).
             } else if let Some(title) = &new_title {
                 tab.title = title.clone();
             }

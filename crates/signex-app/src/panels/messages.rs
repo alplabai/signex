@@ -617,6 +617,8 @@ pub enum PanelMsg {
     FpLibraryPlaceInternal(usize),
     /// Run the design-rule check of the board in view (#2222).
     RunDrc,
+    /// Open the project's Rules tab from the DRC section (#2398).
+    OpenRules,
     /// A DRC violation row was clicked: select its items.
     DrcViolationPicked(usize),
     /// Clear the current ERC violations list and canvas markers.

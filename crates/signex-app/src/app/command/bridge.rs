@@ -281,6 +281,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
         "open_erc_dialog" => Message::Erc(ErcMsg::OpenDialog),
         "run_drc" => Message::Pcb(PcbMsg::DrcRequested),
+        // Design ▸ Rules (#2398): the active document's project.
+        "open_rules" => {
+            Message::Project(ProjectMsg::Rules(crate::app::RulesTabMsg::OpenRequested {
+                project: None,
+            }))
+        }
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),
         "run_erc" => Message::Erc(ErcMsg::Run),
         "save_document" => Message::File(FileMsg::Save),

@@ -318,6 +318,9 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("board_sketch", "")),
         SEP,
         cmd_item_gated(ctx, cmd("open_parameter_manager", "")),
+        // #2398: the project's design rules as a document tab; greyed with
+        // no project open.
+        cmd_item_gated(ctx, cmd("open_rules", "")),
     ]
 }
 

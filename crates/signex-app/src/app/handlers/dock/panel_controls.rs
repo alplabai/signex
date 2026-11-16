@@ -226,6 +226,11 @@ impl Signex {
             crate::panels::PanelMsg::RunDrc => {
                 follow = self.update(Message::Pcb(PcbMsg::DrcRequested));
             }
+            crate::panels::PanelMsg::OpenRules => {
+                follow = self.update(Message::Project(ProjectMsg::Rules(
+                    crate::app::RulesTabMsg::OpenRequested { project: None },
+                )));
+            }
             crate::panels::PanelMsg::DrcViolationPicked(index) => {
                 follow = self.update(Message::Pcb(PcbMsg::DrcViolationPicked(*index)));
             }
