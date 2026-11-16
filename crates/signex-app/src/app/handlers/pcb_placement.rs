@@ -399,6 +399,26 @@ pub(crate) struct PcbTargets {
     pub part_in_hand: bool,
     /// A track run is being drawn, for Space and Shift+Space (#2373).
     pub routing: bool,
+    /// The selection is two pads of one unlocked footprint: what Swap Pins
+    /// and Swap Gates act on (#2410).
+    pub pad_pair: bool,
+    /// The selection names one unlocked footprint: the anchor a reuse block
+    /// is placed around (#2410).
+    pub one_footprint: bool,
+}
+
+/// The footprint and the two pads of a selection that is exactly two pads
+/// of one footprint (#2410).
+pub(crate) fn selected_pad_pair(selection: &pcb_geom::Selection) -> Option<(Uuid, Uuid, Uuid)> {
+    let mut pads = selection.items().filter_map(|item| match item {
+        ItemRef::Pad { footprint, pad } => Some((footprint, pad)),
+        _ => None,
+    });
+    let (Some((footprint, a)), Some((other, b)), None) = (pads.next(), pads.next(), pads.next())
+    else {
+        return None;
+    };
+    (selection.len() == 2 && footprint == other).then_some((footprint, a, b))
 }
 
 impl Signex {
@@ -463,6 +483,8 @@ impl Signex {
             pasteable,
             part_in_hand,
             routing,
+            pad_pair: unlocked && selected_pad_pair(selection).is_some(),
+            one_footprint: unlocked && footprints.len() == 1,
         }
     }
 }

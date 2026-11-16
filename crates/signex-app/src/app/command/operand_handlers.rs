@@ -22,6 +22,8 @@ use super::placement_operands as place;
 use super::selection_filter_operands as filter;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
+use crate::app::board_reuse as reuse;
+use crate::app::handlers::pcb_component::part_swap_operands as swap;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -113,6 +115,10 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("rules_set", crate::app::rules_tab::rules_set),
     ("rules_remove", crate::app::rules_tab::rules_remove),
     ("rules_enable", crate::app::rules_tab::rules_enable),
+    ("swap_pins", swap::swap_pins),
+    ("swap_gates", swap::swap_gates),
+    ("save_board_reuse_block", reuse::save_board_reuse_block),
+    ("place_board_reuse_block", reuse::place_board_reuse_block),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -212,6 +218,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "rules_add" | "rules_set" | "rules_remove" | "rules_enable" => Some(
             "the `rules_*` edits need their operands — \
              use the Rules tab (Design ▸ Rules)",
+        ),
+        // #2410: a person picks the block on a component's board menu.
+        "place_board_reuse_block" => Some(
+            "`place_board_reuse_block` needs the operands `document`, `name` and `designator` — \
+             right-click a component on the board and pick the block",
         ),
         _ => None,
     }

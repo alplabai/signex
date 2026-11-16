@@ -113,9 +113,13 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   view's layer commands `hide_layer`, `highlight_layer`, `hide_layer_group`,
   `show_layer_group`, `show_layer_set` and `save_layer_set` (#2394; view state
   of the named board, no undo step; `save_layer_set` also keeps the set in the
-  person's preferences), and the Rules manager edits `rules_add`, `rules_set`,
+  person's preferences), the Rules manager edits `rules_add`, `rules_set`,
   `rules_remove` and `rules_enable` (#2398; `document` is the project or any
-  document of it). A test pins this set, so a catalog row that joins or
+  document of it), and the board's `swap_pins`, `swap_gates`,
+  `save_board_reuse_block` and `place_board_reuse_block` (#2410; a swap is one
+  undo step across the board and its sheet, a save writes the block's file in
+  the project's `reuse-blocks` folder, and a place may wait for the project's
+  blocks to be read like an edit waiting for its reads). A test pins this set, so a catalog row that joins or
   leaves it is a visible decision. The CSV and PDF writers
   `export_board_report` and `export_board_pdf` take a `path`, so they are CLI
   only.

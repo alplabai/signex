@@ -59,6 +59,9 @@ pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
     "cross_probe",
     "board_sketch",
     "change_footprint",
+    "swap_pins",
+    "swap_gates",
+    "save_board_reuse_block",
 ];
 
 /// Keyboard-shortcut hints for the canvas menu, keyed by command id and
@@ -142,7 +145,9 @@ impl Signex {
         let ui_font = &self.document_state.panel_ctx.ui_font_name;
         let board = self.pcb_targets(Some(window_id));
         if board.shown {
-            let entries = pcb_canvas_menu_entries(&self.ui_state.i18n, tid, board, &sc);
+            let blocks = self.reuse_block_names_in_view();
+            let entries =
+                pcb_canvas_menu_with_blocks(&self.ui_state.i18n, tid, board, &sc, &blocks);
             return super::placement::menu_card(entries, tokens, ui_font);
         }
         let (selection, project_key) = self.canvas_menu_inputs(window_id);
@@ -427,11 +432,24 @@ fn net_rows(
 /// then Cross Probe and Properties, live with anything selected (#1312), then the View
 /// group's Toggle Ratsnest, always live on a board.
 /// Each row runs its catalog command like the keys and the Edit menu do.
+#[cfg(test)]
 pub(super) fn pcb_canvas_menu_entries(
     i18n: &I18n,
     tid: ThemeId,
     board: crate::app::handlers::pcb_placement::PcbTargets,
     sc: &CanvasShortcuts,
+) -> Vec<DropdownEntry<Message>> {
+    pcb_canvas_menu_with_blocks(i18n, tid, board, sc, &[])
+}
+
+/// [`pcb_canvas_menu_entries`] with the pin swap and reuse block group
+/// (#2410), whose Place rows name the project's `blocks`.
+pub(super) fn pcb_canvas_menu_with_blocks(
+    i18n: &I18n,
+    tid: ThemeId,
+    board: crate::app::handlers::pcb_placement::PcbTargets,
+    sc: &CanvasShortcuts,
+    blocks: &[String],
 ) -> Vec<DropdownEntry<Message>> {
     let row = |icon, command_id: &'static str, enabled: bool| {
         if enabled {
@@ -458,7 +476,7 @@ pub(super) fn pcb_canvas_menu_entries(
     } else {
         dd_cmd_disabled(i18n, None, "change_footprint", sc.of("change_footprint"))
     };
-    vec![
+    let mut rows = vec![
         // The clipboard group (#2361), as on a sheet.
         row(ic::icon_dd_cut(tid), "cut", board.deletable),
         row(ic::icon_dd_copy(tid), "copy", board.copyable),
@@ -477,6 +495,10 @@ pub(super) fn pcb_canvas_menu_entries(
         row(ic::icon_dd_rotate_cw(tid), "rotate_clockwise", placeable),
         row(ic::icon_dd_flip_x(tid), "flip_selection", placeable),
         change_footprint,
+        DropdownEntry::Separator,
+    ];
+    rows.extend(super::board_part_rows::part_rows(i18n, board, sc, blocks));
+    rows.extend([
         DropdownEntry::Separator,
         row(ic::icon_dd_delete(tid), "delete_selection", board.deletable),
         DropdownEntry::Separator,
@@ -500,7 +522,8 @@ pub(super) fn pcb_canvas_menu_entries(
             sc.of("toggle_ratsnest"),
             None,
         ),
-    ]
+    ]);
+    rows
 }
 
 /// Pure tab-menu data builder. The per-tab "Close [title]" row carries the

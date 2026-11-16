@@ -89,6 +89,8 @@ mod tests {
                 "hide_layer_group",
                 "highlight_layer",
                 "list_documents",
+                // #2410: pin and gate swap and design reuse, on the named board.
+                "place_board_reuse_block",
                 "query_pins",
                 "read_document",
                 "resolve",
@@ -102,10 +104,13 @@ mod tests {
                 "rules_list",
                 "rules_remove",
                 "rules_set",
+                "save_board_reuse_block",
                 "save_document",
                 "save_layer_set",
                 "show_layer_group",
                 "show_layer_set",
+                "swap_gates",
+                "swap_pins",
             ]
         );
     }

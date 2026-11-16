@@ -569,6 +569,7 @@ impl Signex {
                 undo_groups: std::collections::HashMap::new(),
                 agent_edits: Default::default(),
                 check_runs: Default::default(),
+                reuse_blocks: Default::default(),
                 window_panel_ctx: std::collections::HashMap::new(),
                 window_panel_ctx_keys: std::collections::HashMap::new(),
                 panel_ctx: crate::panels::PanelContext {

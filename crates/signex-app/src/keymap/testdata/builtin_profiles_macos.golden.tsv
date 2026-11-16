@@ -365,6 +365,10 @@ altium	hint	-	-	board_report_net_length
 altium	hint	-	-	board_report_components
 altium	hint	-	-	export_board_report
 altium	hint	-	-	export_board_pdf
+altium	hint	-	-	swap_pins
+altium	hint	-	-	swap_gates
+altium	hint	-	-	save_board_reuse_block
+altium	hint	-	-	place_board_reuse_block
 altium	hint	-	2	footprint_mode_pads
 altium	hint	-	1	footprint_mode_sketch
 altium	hint	-	3	footprint_mode_view_3d
@@ -746,6 +750,10 @@ classic	hint	-	-	board_report_net_length
 classic	hint	-	-	board_report_components
 classic	hint	-	-	export_board_report
 classic	hint	-	-	export_board_pdf
+classic	hint	-	-	swap_pins
+classic	hint	-	-	swap_gates
+classic	hint	-	-	save_board_reuse_block
+classic	hint	-	-	place_board_reuse_block
 classic	hint	-	2	footprint_mode_pads
 classic	hint	-	1	footprint_mode_sketch
 classic	hint	-	3	footprint_mode_view_3d

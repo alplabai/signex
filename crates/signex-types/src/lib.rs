@@ -16,6 +16,7 @@ pub mod net_class;
 pub mod numeric;
 pub mod object_id;
 pub mod part;
+pub mod part_swap;
 pub mod pcb;
 pub mod pcb_arc;
 pub mod pcb_component;

@@ -511,4 +511,54 @@ pub(super) const PCB: &[CommandMetadata] = &[
         operands: super::operands::BOARD_PDF,
         ..CommandMetadata::DEFAULT
     },
+    // #2410: two equivalent pins (the two selected pads) or gates of one
+    // component trade nets on the board and on its schematic, one undo step
+    // across both. No default key.
+    CommandMetadata {
+        id: "swap_pins",
+        category: "modify",
+        label: command_ids::CMD_SWAP_PINS,
+        menu_label: Some(command_ids::CMD_MENU_SWAP_PINS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SWAP_PINS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "swap_gates",
+        category: "modify",
+        label: command_ids::CMD_SWAP_GATES,
+        menu_label: Some(command_ids::CMD_MENU_SWAP_GATES),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SWAP_GATES,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2410: design reuse. Saving writes the block file of the project and
+    // leaves the board as it is; placing lays a block onto the selected
+    // component's channel as one undo step.
+    CommandMetadata {
+        id: "save_board_reuse_block",
+        category: "design",
+        label: command_ids::CMD_SAVE_BOARD_REUSE_BLOCK,
+        menu_label: Some(command_ids::CMD_MENU_SAVE_BOARD_REUSE_BLOCK),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::SAVE_REUSE_BLOCK,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_reuse_block",
+        category: "design",
+        label: command_ids::CMD_PLACE_BOARD_REUSE_BLOCK,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_REUSE_BLOCK),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::PLACE_REUSE_BLOCK,
+        ..CommandMetadata::DEFAULT
+    },
 ];

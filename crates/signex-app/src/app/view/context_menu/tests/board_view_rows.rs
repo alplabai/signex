@@ -5,8 +5,71 @@ use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 use super::{TID, row_message, shortcuts};
 use crate::app::handlers::pcb_placement::PcbTargets;
-use crate::app::view::context_menu::menus::pcb_canvas_menu_entries;
-use crate::app::{ContextAction, ContextMenuMsg, Message};
+use crate::app::view::context_menu::menus::{pcb_canvas_menu_entries, pcb_canvas_menu_with_blocks};
+use crate::app::{ContextAction, ContextMenuMsg, Message, PcbMsg, ReuseBlockMsg};
+
+fn runs(message: Option<Message>, command: &str) -> bool {
+    matches!(
+        message,
+        Some(Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, project: None })))
+            if id.as_str() == command
+    )
+}
+
+/// #2410: Swap Pins and Swap Gates run their commands with two pads of one
+/// unlocked component selected, Save as Reuse Block with board objects
+/// selected, and each project block gets a Place row live with one unlocked
+/// component selected; all greyed otherwise, and the View group still ends
+/// the menu.
+#[test]
+fn the_board_menu_swaps_pins_and_saves_and_places_reuse_blocks() {
+    let sc = shortcuts();
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let picked = PcbTargets {
+        shown: true,
+        any: true,
+        placeable: true,
+        copyable: true,
+        pad_pair: true,
+        one_footprint: true,
+        ..PcbTargets::default()
+    };
+    let blocks = vec!["amp".to_string()];
+    let rows = pcb_canvas_menu_with_blocks(i18n, TID, picked, &sc, &blocks);
+    assert!(runs(row_message(&rows, "Swap Pins"), "swap_pins"));
+    assert!(runs(row_message(&rows, "Swap Gates"), "swap_gates"));
+    assert!(runs(
+        row_message(&rows, "Save as Reuse Block"),
+        "save_board_reuse_block"
+    ));
+    let place = rows.iter().find_map(|row| match row {
+        DropdownEntry::Item(it) if it.label.contains("amp") => Some(it.on_press.clone()),
+        _ => None,
+    });
+    assert!(
+        matches!(
+            &place,
+            Some(Some(Message::Pcb(PcbMsg::ReuseBlock(ReuseBlockMsg::PlaceRequested { name }))))
+                if name == "amp"
+        ),
+        "{place:?}"
+    );
+    assert!(
+        matches!(&rows[rows.len() - 1], DropdownEntry::Item(it) if it.label == "Toggle Ratsnest")
+    );
+
+    let empty = PcbTargets {
+        shown: true,
+        ..PcbTargets::default()
+    };
+    let rows = pcb_canvas_menu_with_blocks(i18n, TID, empty, &sc, &[]);
+    assert!(row_message(&rows, "Swap Pins").is_none());
+    assert!(row_message(&rows, "Save as Reuse Block").is_none());
+    assert!(
+        row_message(&rows, "Place Reuse Block").is_none(),
+        "greyed with no block"
+    );
+}
 
 fn runs_toggle_ratsnest(message: Option<Message>) -> bool {
     matches!(

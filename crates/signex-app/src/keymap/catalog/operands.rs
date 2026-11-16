@@ -133,6 +133,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("severity", OperandKind::Text),
     ("enabled", OperandKind::Bool),
     ("violation", OperandKind::Text),
+    ("pins", OperandKind::Text),
+    ("units", OperandKind::Text),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -377,6 +379,35 @@ pub const BOARD_PDF: &[Operand] = &[
     optional("outline", OperandKind::Bool),
     optional("drill_marks", OperandKind::Bool),
     optional("title_block", OperandKind::Bool),
+];
+/// `swap_pins` (#2410): two pins of the component `designator` on the board
+/// `document`, as `pins` = `a,b` (pad numbers).
+pub const SWAP_PINS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("designator", OperandKind::Text),
+    required("pins", OperandKind::Text),
+];
+/// `swap_gates` (#2410): two gates of the component `designator`, as
+/// `units` = `a,b` (unit numbers).
+pub const SWAP_GATES: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("designator", OperandKind::Text),
+    required("units", OperandKind::Text),
+];
+/// `save_board_reuse_block` (#2410): the block `name` made of `ids`
+/// (designators, or footprint, track and via ids, comma separated).
+pub const SAVE_REUSE_BLOCK: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("name", OperandKind::Text),
+    required("ids", OperandKind::Text),
+];
+/// `place_board_reuse_block` (#2410): the block `name` around the component
+/// `designator`, turned by `degrees`.
+pub const PLACE_REUSE_BLOCK: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("name", OperandKind::Text),
+    required("designator", OperandKind::Text),
+    optional("degrees", OperandKind::Turn),
 ];
 /// A save dialog's answer for the named document.
 pub const SAVE_DOCUMENT_AS: &[Operand] = &[

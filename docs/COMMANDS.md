@@ -325,6 +325,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | — | — |
 | `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | — |
 | `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
+| `place_board_reuse_block` | Place a reuse block on the channel of the selected component | design | — | — |
 | `place_board_route` | Route on the active copper layer around other nets, keeping the rule clearance | place | — | — |
 | `place_board_track` | Route a track on the active copper layer | place | `P T` | — |
 | `place_board_via` | Place a via on the board | place | `P V` | — |
@@ -340,11 +341,14 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rules_remove` | Remove a design rule | design | — | — |
 | `rules_set` | Change a field of a design rule | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
+| `save_board_reuse_block` | Save the selected placed and routed parts as a reuse block of the project | design | — | — |
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
 | `show_layer_group` | Show every layer of one kind | view | — | — |
 | `show_layer_set` | Show a layer set on the board view | view | — | — |
+| `swap_gates` | Swap two equivalent gates of a component, on the board and on its schematic | modify | — | — |
+| `swap_pins` | Swap the nets of two equivalent pins of a component, on the board and on its schematic | modify | — | — |
 | `toggle_layer_numbers` | Show or hide the numbers on the layer tabs | view | — | — |
 | `toggle_layer_visibility` | Show or hide the active layer | view | — | — |
 | `toggle_layers_panel` | Show or hide the Layers panel | view | — | — |

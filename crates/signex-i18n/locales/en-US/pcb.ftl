@@ -364,3 +364,20 @@ pcb-3d-iso = Angled
 # Messages line when a part's model could not be read; the part is drawn as
 # a plain body. $source names the library footprint.
 pcb-3d-model-unread = The 3D model of { $source } could not be read: { $why }. It is drawn as a plain body.
+
+## Pin and gate swap (#2410). Messages lines; $why is the reason from the
+## board or the schematic, in English.
+pcb-part-swap-refused = { $what } did nothing: { $why }
+pcb-pins-swapped = { $designator }: pins { $a } and { $b } traded nets on the board and on its schematic
+pcb-gates-swapped = { $designator }: gates { $a } and { $b } traded places on the board and on its schematic
+pcb-part-swap-nothing = { $designator }: pins { $a } and { $b } already share their nets; nothing changed
+pcb-gates-swap-nothing = { $designator }: gates { $a } and { $b } already share their nets; nothing changed
+
+## Design reuse blocks (#2410).
+pcb-reuse-block-saved = Reuse block { $name } saved to { $file }: { $footprints } footprints, { $tracks } tracks, { $vias } vias
+pcb-reuse-block-not-written = Reuse block { $name } could not be written to { $file }: { $why }. It can be placed until Signex closes.
+pcb-reuse-block-placed = Reuse block { $name } placed on the channel of { $anchor }: { $footprints } footprints, { $tracks } tracks, { $vias } vias
+pcb-reuse-block-refused = { $what } did nothing: { $why }
+pcb-reuse-blocks-unread = The project's reuse blocks could not be read: { $why }
+# A board menu row: place the block called $name around the selected part.
+pcb-reuse-block-place-row = Place Reuse Block "{ $name }"

@@ -458,6 +458,14 @@ define_ids! {
         CMD_MENU_EXPORT_BOARD_REPORT = "cmd-menu-export-board-report";
         CMD_EXPORT_BOARD_PDF = "cmd-export-board-pdf";
         CMD_MENU_EXPORT_BOARD_PDF = "cmd-menu-export-board-pdf";
+        CMD_SWAP_PINS = "cmd-swap-pins";
+        CMD_MENU_SWAP_PINS = "cmd-menu-swap-pins";
+        CMD_SWAP_GATES = "cmd-swap-gates";
+        CMD_MENU_SWAP_GATES = "cmd-menu-swap-gates";
+        CMD_SAVE_BOARD_REUSE_BLOCK = "cmd-save-board-reuse-block";
+        CMD_MENU_SAVE_BOARD_REUSE_BLOCK = "cmd-menu-save-board-reuse-block";
+        CMD_PLACE_BOARD_REUSE_BLOCK = "cmd-place-board-reuse-block";
+        CMD_MENU_PLACE_BOARD_REUSE_BLOCK = "cmd-menu-place-board-reuse-block";
         CMD_FOOTPRINT_MODE_PADS = "cmd-footprint-mode-pads";
         CMD_FOOTPRINT_MODE_SKETCH = "cmd-footprint-mode-sketch";
         CMD_FOOTPRINT_MODE_VIEW_3D = "cmd-footprint-mode-view-3d";

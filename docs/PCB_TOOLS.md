@@ -404,3 +404,80 @@ Every row is also a catalog command with typed operands: `show_layer_set`,
 channel; `delete_layer_set` and `set_layer_tab_names` change per-user
 settings and name no board; `toggle_layer_numbers` and `flip_board_view` are
 View menu rows. See `docs/COMMANDS.md`.
+
+## Pin and gate swap
+
+Swap Pins and Swap Gates (#2410) trade connections inside one component. On
+the board menu they are live with two pads of one unlocked component
+selected: Swap Pins trades the nets of those two pads, Swap Gates trades the
+gates they belong to. As commands with operands, `swap_pins document=<board>
+designator=<ref> pins=<a>,<b>` and `swap_gates document=<board>
+designator=<ref> units=<a>,<b>` do the same, are on the agent channel, and
+answer with the pads whose nets changed (`pads`: pad, from, to) and the sheet
+that followed.
+
+Which pins and gates may trade is the part's own rule, read from two
+parameters of its placed units: `Pin Swap Groups` lists groups of pin
+numbers and `Gate Swap Groups` groups of unit numbers, groups split by `;`
+and members by `,` (`1,2;5,6,7`: pins 1 and 2 trade, and any two of 5, 6 and
+7). A part without the parameter allows no swap. The component's own Pin
+Swapping (pins) or Part Swapping (gates) switch in its Component view must
+be on as well.
+
+The board and the schematic change as one undo step, the board step and the
+sheet step sharing one undo group, as a footprint swap does (#2366):
+
+- A pin swap trades the nets of every pad of each number
+  (`signex_engine::pcb::pad_swap`) and moves what ends on one pin's tip on the
+  sheet (wire ends, labels, junctions, no-connect marks) to the other pin's
+  tip, and back (`signex_engine::part_swap::rewire_pins`).
+- A gate swap pairs each pin of one gate with the pin of the other drawn at
+  the same place, trades those pad nets, and trades the two placed units'
+  unit numbers, so every wire stays where it is and each net moves to the
+  other gate's pin.
+
+It is refused, with nothing changed and the reason in Messages, for pins or
+gates outside one swap group, a locked component, a pad whose net is locked,
+a part with no schematic link or whose sheet is closed or read-only, a pin
+tip that meets the middle of a wire or another pin, a rewired wire that would
+then cross a pin or a wire end and join nets, gates that do not draw the same
+pins in the same places, and a part whose gates are on more than one sheet.
+Pads that already share their nets change nothing and say so.
+
+## Design reuse blocks
+
+A reuse block (#2410) is a placed and routed group saved once and placed
+again on another channel of the same circuit, with its tracks and vias.
+
+- **Save**: Save as Reuse Block on the board menu (live with board objects
+  selected) saves the selection's footprints, tracks and vias as a block named
+  after its designators (`R1-U1`). `save_board_reuse_block document=<board>
+  name=<name> ids=<list>` names the block and lists designators or footprint,
+  track and via ids. Zones, drawings and texts are not carried, and every
+  footprint must be linked to a schematic part. The block is re-based so its
+  first designator sits at the origin.
+- **Storage**: per project, one file per block,
+  `<project folder>/reuse-blocks/<name>.snxpcb`, a board file holding the block
+  alone, written off the update thread. A name is letters, digits, spaces,
+  `-`, `_` and `.` inside, at most 64 characters. Saving a name again replaces
+  that block. If the file cannot be written the block can still be placed
+  until Signex closes, and Messages says so.
+- **Place**: the board menu lists one Place Reuse Block "<name>" row per
+  block of the project, live with one unlocked component selected: the
+  anchor. The project's blocks are read once, when a board menu first opens.
+  `place_board_reuse_block document=<board> name=<name> designator=<ref>
+  [degrees=<turn>]` does the same; while the project's blocks are not read
+  yet it reads them first and answers when they land. Without operands from
+  the palette or a key it does nothing and says what it needs.
+
+Placing finds each block footprint's counterpart through the schematic: a
+part of a sheet placed more than once keeps its unit ids in every placement,
+so the counterpart is the footprint linked to the same units on the anchor's
+sheet placement. The anchor keeps its place; the other counterparts are moved,
+turned and put on the block's side around it, the whole turned by `degrees`,
+and the block's tracks and vias are added with new ids on the nets their pads
+reach (`signex_engine::pcb::reuse_block`). It is one undo step. It is refused
+for an anchor that is not part of the block's circuit, a block footprint
+with no counterpart on the anchor's channel, a locked counterpart, and a
+block net whose pads reach two different board nets. Updating placed copies
+when a block changes is not built yet.

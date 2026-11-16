@@ -65,6 +65,8 @@ pub enum UndoGroupKind {
     AgentEdit,
     /// A board footprint swap and the linked parts' footprints (#2366).
     FootprintSwap,
+    /// A board pin or gate swap and its schematic rewiring (#2410).
+    PartSwap,
 }
 
 impl UndoGroupSheets {
@@ -78,6 +80,7 @@ impl UndoGroupSheets {
             UndoGroupKind::BackAnnotate => "back annotate",
             UndoGroupKind::AgentEdit => "agent edit",
             UndoGroupKind::FootprintSwap => "footprint change",
+            UndoGroupKind::PartSwap => "pin swap",
         }
     }
 
@@ -100,6 +103,7 @@ impl UndoGroupSheets {
             UndoGroupKind::BackAnnotate => "Back annotate",
             UndoGroupKind::AgentEdit => "Agent edit",
             UndoGroupKind::FootprintSwap => "Change Footprint",
+            UndoGroupKind::PartSwap => "Pin swap",
         }
     }
 
@@ -112,6 +116,7 @@ impl UndoGroupSheets {
             UndoGroupKind::BackAnnotate => "back-annotated designators and values".to_string(),
             UndoGroupKind::AgentEdit => "agent edits".to_string(),
             UndoGroupKind::FootprintSwap => "changed footprints".to_string(),
+            UndoGroupKind::PartSwap => "swapped pin connections".to_string(),
             _ => format!("{} designators", self.participle()),
         }
     }
@@ -126,6 +131,7 @@ impl UndoGroupSheets {
             UndoGroupKind::BackAnnotate => "designators and values",
             UndoGroupKind::AgentEdit => "contents",
             UndoGroupKind::FootprintSwap => "footprints",
+            UndoGroupKind::PartSwap => "pin connections",
             _ => "designators",
         }
     }
@@ -141,6 +147,7 @@ impl UndoGroupSheets {
             UndoGroupKind::BackAnnotate => "back-annotated",
             UndoGroupKind::AgentEdit => "edited",
             UndoGroupKind::FootprintSwap => "changed",
+            UndoGroupKind::PartSwap => "swapped",
         }
     }
 }

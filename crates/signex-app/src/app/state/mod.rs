@@ -520,6 +520,8 @@ pub struct DocumentState {
     pub agent_edits: AgentEdits,
     /// The last runs of `check_erc`, for a later run's baseline (#2199).
     pub(crate) check_runs: check_runs::CheckRuns,
+    /// Each open project's design reuse blocks, read or saved (#2410).
+    pub(crate) reuse_blocks: crate::app::board_reuse::ReuseBlockStore,
     /// The one store of half-typed title-block and paper-edge text (#2027);
     /// every panel context holds a handle to it.
     pub drafts: crate::panels::PanelDrafts,

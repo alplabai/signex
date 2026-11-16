@@ -58,6 +58,13 @@ pub(crate) enum Needs {
     PcbPlacement,
     /// Change Footprint: a board with unlocked footprints selected (#2366).
     SwapFootprints,
+    /// Swap Pins and Swap Gates: two pads of one unlocked footprint selected
+    /// on a board (#2410).
+    PadPair,
+    /// Save as Reuse Block: board objects selected (#2410).
+    ReuseSource,
+    /// Place Reuse Block: one unlocked footprint selected, the anchor.
+    ReuseAnchor,
     /// Cross Probe: something selected on the board or sheet in view (#1312).
     ProbeTarget,
     /// Update PCB: a schematic or a board in view, with a project open
@@ -141,6 +148,9 @@ impl Needs {
             Self::SimilarSeed => ctx.has_schematic && ctx.has_selection,
             Self::PcbPlacement => ctx.pcb.shown && (ctx.pcb.placeable || ctx.pcb.part_in_hand),
             Self::SwapFootprints => ctx.pcb.shown && ctx.pcb.placeable,
+            Self::PadPair => ctx.pcb.shown && ctx.pcb.pad_pair,
+            Self::ReuseSource => ctx.pcb.shown && ctx.pcb.copyable,
+            Self::ReuseAnchor => ctx.pcb.shown && ctx.pcb.one_footprint,
             Self::ProbeTarget if ctx.pcb.shown => ctx.pcb.any,
             Self::ProbeTarget => ctx.has_schematic && ctx.has_selection,
             Self::PcbSync => {
@@ -200,6 +210,11 @@ impl Needs {
             Self::SimilarSeed => "Nothing is selected on a sheet to find similar objects to",
             Self::PcbPlacement => "No unlocked footprint is selected on a PCB",
             Self::SwapFootprints => "No unlocked footprint is selected on a PCB",
+            Self::PadPair => "Select two pads of one unlocked component on a PCB",
+            Self::ReuseSource => "Nothing is selected on a PCB to save as a reuse block",
+            Self::ReuseAnchor => {
+                "Select one unlocked component of the channel to place the block on"
+            }
             Self::ProbeTarget => "Nothing is selected on the sheet or board to cross probe",
             Self::PcbSync => "No schematic or PCB of an open project is in view",
             Self::OpenProject => "No project is open",
@@ -272,6 +287,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "find_similar_objects" => Needs::SimilarSeed,
         "flip_selection" => Needs::PcbPlacement,
         "change_footprint" => Needs::SwapFootprints,
+        "swap_pins" | "swap_gates" => Needs::PadPair,
+        "save_board_reuse_block" => Needs::ReuseSource,
+        "place_board_reuse_block" => Needs::ReuseAnchor,
         "remove_last_vertex" => Needs::VertexTarget,
         "paste_array"
         | "repeat_last_item"

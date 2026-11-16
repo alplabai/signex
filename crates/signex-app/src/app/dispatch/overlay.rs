@@ -294,7 +294,8 @@ impl Signex {
                 window,
             });
         }
-        Task::none()
+        // A board's menu lists its project's reuse blocks: read them once.
+        self.read_reuse_blocks_in_view()
     }
 
     /// Context-menu subsystem handler (canvas / project-tree / tab menus +

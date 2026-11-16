@@ -84,6 +84,19 @@ pub enum PcbMsg {
     LayerStrip(super::LayerStripMsg),
     /// A saved layer set was saved, shown or deleted (#2394).
     LayerSet(super::LayerSetMsg),
+    /// Pin and gate swap within a component (#2410).
+    PartSwap(PartSwapMsg),
+    /// Design reuse blocks of the project (#2410).
+    ReuseBlock(crate::app::board_reuse::ReuseBlockMsg),
+}
+
+/// Pin and gate swap within a component on a board (#2410).
+#[derive(Debug, Clone, PartialEq)]
+pub enum PartSwapMsg {
+    /// `swap_pins` or `swap_gates` ran without operands (the board menu, the
+    /// palette, a key): the two pads selected on the board in view name the
+    /// two pins, or the two gates they belong to.
+    Requested(signex_engine::pcb::pad_swap::SwapKind),
 }
 
 /// Swapping the library footprint of components placed on a board (#2366).
