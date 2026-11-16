@@ -17,12 +17,17 @@ trap 'rm -rf "$TMP"' EXIT
 # The scanner must hold under every POSIX awk at hand: rerun all controls once
 # per implementation (BSD awk, plus mawk and gawk when installed).
 if [[ -z "${CORE_GUARD_AWK:-}" ]]; then
-  status=0
+  status=0 ran=0
   for awk_bin in /usr/bin/awk mawk gawk; do
     command -v "$awk_bin" >/dev/null 2>&1 || continue
     echo "== $awk_bin"
+    ran=$((ran + 1))
     CORE_GUARD_AWK="$awk_bin" bash "$0" || status=1
   done
+  if (( ran == 0 )); then
+    echo "FAIL  no awk found (looked for /usr/bin/awk, mawk, gawk)"
+    exit 1
+  fi
   exit "$status"
 fi
 
@@ -202,12 +207,29 @@ run_case raw_identifier_path fail 'let _ = std::r#fs::read(p);' "breaks 'std_fs'
 run_case char_quote_does_not_hide_code fail "let q = '\"'; let u = \"http://x\"; let _ = std::fs::read(u);" \
   "breaks 'std_fs'"
 run_case lifetimes_are_not_char_literals pass "fn f<'a>(x: &'a str) -> &'a str { x } // std::fs"
+run_case non_ascii_char_does_not_hide_code fail "m! {'é','\"'}
+use std::fs;
+const B: &str = \"x\";" "x.rs:2 breaks 'std_fs'"
+run_case spaced_path_attribute fail 'm! { # [path = "../../view/mod.rs"] mod v; }' \
+  "x.rs:1 breaks 'path_attr'"
 
 # --- the UI stack -------------------------------------------------------------
 
 run_case wgpu_use fail 'use wgpu::Device;' "breaks 'ui_stack'"
 run_case signex_widgets_path fail 'let b = signex_widgets::button(x);' "breaks 'ui_stack'"
 run_case i18n_ids_are_allowed pass 'use signex_i18n_ids::NoticeId;'
+run_case signex_i18n_use fail 'use signex_i18n::I18n;' "breaks 'ui_stack'"
+
+# --- the core declared where the guard does not look ------------------------
+
+run_case inline_core_module_in_app_rs fail 'mod core { use std::fs; }' \
+  "app.rs:1 breaks 'core_decl'" ../../app.rs
+run_case core_module_behind_path_attr fail '#[path = "elsewhere/core.rs"]
+#[allow(dead_code)]
+mod core;' "app.rs:3 breaks 'core_decl'" ../../app.rs
+run_case plain_core_module_in_app_rs pass 'pub mod core;
+#[path = "x.rs"]
+mod other;' '' ../../app.rs
 
 # --- and the real tree passes ----------------------------------------------
 

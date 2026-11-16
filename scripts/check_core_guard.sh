@@ -21,12 +21,17 @@
 #                       `a/mod.rs` 1) plus the inline `mod x {` blocks around it;
 #   iced                names `iced` (or an `iced_*` crate);
 #   ui_stack            names `wgpu`, `winit`, `rfd`, `signex_widgets`,
-#                       `signex_gfx` or `signex_renderer` (`signex_i18n_ids`
-#                       stays allowed: core notices are its keys);
+#                       `signex_gfx`, `signex_renderer` or `signex_i18n`
+#                       (`signex_i18n_ids` stays allowed: core notices are its
+#                       keys);
 #   tokio               names `tokio`;
 #   blocking            names `spawn_blocking` or `run_blocking`;
 #   std_fs / std_thread / std_process
 #                       names `std::fs`, `std::thread` or `std::process`.
+#
+# And the app module root (crates/signex-app/src/app.rs or app/mod.rs) fails
+# on core_decl: a `mod core` with an inline `{` body or behind a `#[path]`
+# attribute, which would put the core where the scan above never looks.
 #
 # Each file is lexed first (scripts/check_core_guard.awk): `//` and `/* */`
 # comments are dropped, string and char literal contents blanked and the `r#`
@@ -55,25 +60,23 @@ SCAN="$(cd "$(dirname "$0")" && pwd)/check_core_guard.awk"
 ROOT="${CORE_GUARD_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 AWK="${CORE_GUARD_AWK:-awk}"
 CORE_REL="crates/signex-app/src/app/core"
-
-if [[ ! -d "$ROOT/$CORE_REL" && ! -f "$ROOT/$CORE_REL.rs" ]]; then
-  echo "Core guard: OK — $CORE_REL does not exist yet."
-  exit 0
-fi
+APP_ROOTS=(crates/signex-app/src/app.rs crates/signex-app/src/app/mod.rs)
+# Read by awk through ENVIRON, which (unlike -v) keeps the backslashes.
+export PATH_ATTR='#!?[[:space:]]*\[[[:space:]]*(cfg_attr\(.*,[[:space:]]*)?path[[:space:]]*='
 
 cd "$ROOT"
 
 RULES=(crate_outside_core crate_alias std_alias path_attr include_source super_escape
-  iced ui_stack tokio blocking std_fs std_thread std_process)
+  iced ui_stack tokio blocking std_fs std_thread std_process core_decl)
 
 pattern() {
   case "$1" in
     crate_alias) printf '%s\n' '\b(use[[:space:]]+crate|crate::self|extern[[:space:]]+crate[[:space:]]+self)[[:space:]]+as\b' ;;
     std_alias) printf '%s\n' '\b(use|extern[[:space:]]+crate)[[:space:]]+(::)?(std|core|alloc)[[:space:]]+as\b|(^|[^:A-Za-z0-9_])(::)?(std|core|alloc)::self[[:space:]]+as\b' ;;
-    path_attr) printf '%s\n' '#!?\[[[:space:]]*(cfg_attr\(.*,[[:space:]]*)?path[[:space:]]*=' ;;
+    path_attr) printf '%s\n' "$PATH_ATTR" ;;
     include_source) printf '%s\n' '\binclude[[:space:]]*!' ;;
     iced) printf '%s\n' '\biced(\b|_)' ;;
-    ui_stack) printf '%s\n' '\b(wgpu|winit|rfd|signex_widgets|signex_gfx|signex_renderer)\b' ;;
+    ui_stack) printf '%s\n' '\b(wgpu|winit|rfd|signex_widgets|signex_gfx|signex_renderer|signex_i18n)\b' ;;
     tokio) printf '%s\n' '\btokio\b' ;;
     blocking) printf '%s\n' '\b(spawn_blocking|run_blocking)\b' ;;
     std_fs) printf '%s\n' '\bstd::(fs\b|\{[^;]*\bfs\b)' ;;
@@ -102,8 +105,23 @@ scan() {
   done < <(core_files)
 }
 
+# A `mod core` in the app module root that is inline or behind `#[path]`
+# (also with other attributes between the two).
+core_decl() {
+  local f
+  for f in "${APP_ROOTS[@]}"; do
+    [[ -f "$f" ]] || continue
+    "$AWK" -v f="$f" -v depth=0 -v mode=lines -f "$SCAN" "$f" | "$AWK" '
+      { t = $0; sub(/^[^:]*:[0-9]+:/, "", t); is_path = t ~ ENVIRON["PATH_ATTR"] }
+      t ~ /(^|[^A-Za-z0-9_])mod[[:space:]]+core([^A-Za-z0-9_]|$)/ &&
+        (t ~ /mod[[:space:]]+core[[:space:]]*\{/ || is_path || after_path) { print }
+      { after_path = is_path ? 1 : (t ~ /^[[:space:]]*#/ ? after_path : 0) }'
+  done
+}
+
 hits() {
   case "$1" in
+    core_decl) core_decl ;;
     super_escape) scan super ;;
     crate_outside_core)
       # Keep a record when it still names `crate::` once its in-core paths are dropped.
@@ -142,4 +160,8 @@ if (( fail )); then
   echo "  signex-app (ADR-0006). Return the effect to the shell instead."
   exit 1
 fi
-echo "Core guard: OK — $CORE_REL names nothing outside the core."
+if [[ ! -d "$CORE_REL" && ! -f "$CORE_REL.rs" ]]; then
+  echo "Core guard: OK — $CORE_REL does not exist yet."
+else
+  echo "Core guard: OK — $CORE_REL names nothing outside the core."
+fi

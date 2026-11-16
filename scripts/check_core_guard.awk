@@ -41,8 +41,6 @@ function raw_at(s, i,   p) {
 
 # The line as code, lexer state (bc: block-comment depth, sq: 1 inside a
 # string, 2 inside a raw string closed by `"` and rh `#`s) carried over lines.
-# shortcut: a non-ASCII char literal such as 'é' reads as a lifetime; lex
-# per character if one ever lands in the core.
 function strip(s,   i, j, n, c, d, out) {
   out = ""; n = length(s)
   for (i = 1; i <= n; i++) {
@@ -76,7 +74,12 @@ function strip(s,   i, j, n, c, d, out) {
         for (j = i + 3; j <= n && substr(s, j, 1) != "'"; j++) ;
         i = j; out = out "''"; continue
       }
-      if (substr(s, i + 2, 1) == "'") { i += 2; out = out "''"; continue }
+      # One ASCII char, or the 2-4 bytes of one non-ASCII char ('é' when awk
+      # counts bytes); a lifetime holds ASCII before any later quote.
+      for (j = i + 2; j <= i + 5 && substr(s, j, 1) != "'"; j++) ;
+      if (j == i + 2 || (j <= i + 5 && substr(s, i + 1, j - i - 1) !~ /[ -~]/)) {
+        i = j; out = out "''"; continue
+      }
     }
     out = out c
   }
@@ -184,7 +187,7 @@ function process(code, ln,   usepos, prefix) {
     if (brackets(attr) <= 0) { process(attr, attr_start); attr = "" }
     next
   }
-  if (acc == "" && code ~ /#!?\[/ && brackets(code) > 0) {
+  if (acc == "" && code ~ /#!?[[:space:]]*\[/ && brackets(code) > 0) {
     attr = code; attr_start = NR
     next
   }
