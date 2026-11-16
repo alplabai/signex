@@ -73,6 +73,10 @@ mod tests {
             [
                 "apply_edits",
                 "assign_net_class",
+                "board_report_bom",
+                "board_report_components",
+                "board_report_net_length",
+                "board_report_netlist",
                 "check_drc",
                 "check_erc",
                 "clear_all_net_colors",

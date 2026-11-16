@@ -440,6 +440,7 @@ impl Signex {
                 sheet_numbering_reads: 0,
                 board_reannotate: None,
                 board_reannotate_options: Default::default(),
+                board_output: Default::default(),
                 back_annotate: None,
                 find_similar: None,
                 find_similar_generation: 0,

@@ -104,9 +104,13 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
-  `clear_all_net_colors`, `assign_net_class`, `save_document` and
-  `close_active_document`. A test pins this set, so a catalog row that joins or
-  leaves it is a visible decision.
+  `clear_all_net_colors`, the read-only board reports `board_report_bom`,
+  `board_report_netlist`, `board_report_net_length` and
+  `board_report_components` (#2404, each answers with its table as JSON),
+  `assign_net_class`, `save_document` and `close_active_document`. A test pins
+  this set, so a catalog row that joins or leaves it is a visible decision.
+  The CSV and PDF writers `export_board_report` and `export_board_pdf` take a
+  `path`, so they are CLI only.
 
 The last three are open to agents by the maintainer's decision (#1924):
 

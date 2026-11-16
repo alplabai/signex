@@ -114,6 +114,14 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("direction", OperandKind::Text),
     ("apply", OperandKind::Bool),
     ("baseline", OperandKind::Text),
+    ("layers", OperandKind::Text),
+    ("pages", OperandKind::Text),
+    ("scale", OperandKind::Text),
+    ("monochrome", OperandKind::Bool),
+    ("mirror_bottom", OperandKind::Bool),
+    ("outline", OperandKind::Bool),
+    ("drill_marks", OperandKind::Bool),
+    ("title_block", OperandKind::Bool),
 ];
 
 const fn required(name: &'static str, kind: OperandKind) -> Operand {
@@ -281,6 +289,29 @@ pub const COLOR_NET: &[Operand] = &[
 /// The document a command acts on, by id or path. A headless or CLI run names
 /// it every time and never falls back to the active one (#2172).
 pub const DOCUMENT: &[Operand] = &[required("document", OperandKind::Document)];
+/// A board report written as CSV (#2404): which board, which report
+/// (`bom`, `netlist`, `net_length`, `components`) and the file.
+pub const BOARD_REPORT_EXPORT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("kind", OperandKind::Text),
+    required("path", OperandKind::Path),
+];
+/// A board printed to PDF (#2402): which board and the file; the rest
+/// defaults as the dialog opens. `layers` lists sets by id (`top`,
+/// `bottom`, `inner`, `mechanical`), `pages` is `per_set` or `composite`,
+/// `scale` is `fit` or `one_to_one`.
+pub const BOARD_PDF: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("layers", OperandKind::Text),
+    optional("pages", OperandKind::Text),
+    optional("scale", OperandKind::Text),
+    optional("monochrome", OperandKind::Bool),
+    optional("mirror_bottom", OperandKind::Bool),
+    optional("outline", OperandKind::Bool),
+    optional("drill_marks", OperandKind::Bool),
+    optional("title_block", OperandKind::Bool),
+];
 /// A save dialog's answer for the named document.
 pub const SAVE_DOCUMENT_AS: &[Operand] = &[
     required("document", OperandKind::Document),

@@ -247,6 +247,12 @@ place_board_fill	place	Place a rectangle of solid copper on the active copper la
 place_board_region	place	Place a polygon of solid copper on the active copper layer	Solid Region	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_polygon_pour	place	Place a polygon pour on the active copper layer, filled clear of other nets	Polygon Pour	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_keepout	place	Draw a keepout that keeps copper off a layer	Keepout	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+board_report_bom	pcb	Show the board's bill of materials: its components grouped by value and footprint	Board Bill of Materials…	PCB	-	-	RequiresDocument(Pcb)	-	document:document
+board_report_netlist	pcb	Show the board's netlist: each net and the pads on it	Board Netlist…	PCB	-	-	RequiresDocument(Pcb)	-	document:document
+board_report_net_length	pcb	Show each net's routed length, tracks and vias	Net Lengths…	PCB	-	-	RequiresDocument(Pcb)	-	document:document
+board_report_components	pcb	Show each component's designator, footprint, position, rotation and side	Component Report…	PCB	-	-	RequiresDocument(Pcb)	-	document:document
+export_board_report	reports	Export a board report as a CSV file	Export Report as CSV…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,kind:text,path:path
+export_board_pdf	reports	Print the board's layers to a PDF file	Board Print / PDF…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,path:path,layers:text?,pages:text?,scale:text?,monochrome:bool?,mirror_bottom:bool?,outline:bool?,drill_marks:bool?,title_block:bool?
 footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-

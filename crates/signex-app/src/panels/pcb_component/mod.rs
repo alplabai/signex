@@ -16,6 +16,7 @@ mod identity;
 mod parameters;
 mod rows;
 mod settings;
+pub(crate) use settings::type_label as component_type_label;
 mod text;
 
 use std::collections::BTreeMap;

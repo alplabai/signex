@@ -62,6 +62,8 @@ pub enum PcbMsg {
     Reannotate(crate::app::BoardReannotateMsg),
     /// Back Annotate and its dialog (#1312).
     BackAnnotate(crate::app::BackAnnotateMsg),
+    /// Board Reports (#2404) and Board Print / PDF (#2402).
+    Output(crate::app::BoardOutputMsg),
     /// The PCB Active Bar's dropdowns (#2352).
     Bar(PcbBarMsg),
     /// A board placement tool was picked (its command ran, #2373): it is

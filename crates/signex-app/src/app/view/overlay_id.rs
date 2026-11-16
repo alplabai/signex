@@ -101,6 +101,8 @@ pub(crate) enum OverlayId {
     SheetNumbering,
     /// Tools ▸ Re-Annotate Board (#1312).
     BoardReannotate,
+    /// Board Reports and Board Print / PDF (#2404, #2402).
+    BoardOutput,
     /// Tools ▸ Annotation ▸ Back Annotate Schematics (#1312).
     BackAnnotate,
     AnnotateDialog,
@@ -144,7 +146,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 67] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 68] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -194,6 +196,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 67] = [
     OverlayId::AssignFootprints,
     OverlayId::SheetNumbering,
     OverlayId::BoardReannotate,
+    OverlayId::BoardOutput,
     OverlayId::BackAnnotate,
     OverlayId::AnnotateDialog,
     OverlayId::AnnotateResetConfirm,
@@ -319,6 +322,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::AssignFootprints
         | OverlayId::SheetNumbering
         | OverlayId::BoardReannotate
+        | OverlayId::BoardOutput
         | OverlayId::BackAnnotate
         | OverlayId::AnnotateDialog
         | OverlayId::AnnotateResetConfirm
@@ -541,6 +545,7 @@ impl Signex {
             OverlayId::AssignFootprints => layers.extend(self.assign_footprints_overlay()),
             OverlayId::SheetNumbering => layers.extend(self.sheet_numbering_overlay()),
             OverlayId::BoardReannotate => layers.extend(self.board_reannotate_overlay()),
+            OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),
             OverlayId::BackAnnotate => layers.extend(self.back_annotate_overlay()),
             OverlayId::AnnotateDialog => layers.extend(self.annotate_dialog_overlay()),
             OverlayId::AnnotateResetConfirm => layers.extend(self.annotate_reset_confirm_overlay()),

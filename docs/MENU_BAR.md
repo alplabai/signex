@@ -69,6 +69,12 @@ Force Annotate All Schematics (Shift+Alt+A), Back Annotate Schematics... (see
 - Netlist (Protel .NET)...
 - ERC Report...
 
+Then, after a separator, the board's reports (#2404), greyed without a board
+in view: Board Bill of Materials..., Board Netlist..., Net Lengths...,
+Component Report... (each opens Board Reports on its table) and Export Report
+as CSV... (the table in view, or the BOM). The Board panel's Reports button
+opens the same dialog. Rules: `BOARD_OUTPUT.md`.
+
 **Design** has Update PCB Document (see
 [Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
 [Back Annotate](#back-annotate)), Board Sketch (see
@@ -259,6 +265,11 @@ Export ▸ PDF open the same print preview / PDF export modal (`print`, Ctrl+P,
 goes through the keymap command bridge in `app/command/bridge.rs`; Export ▸ PDF
 runs as `print` in an undocked window, so both preview that window's document). Only
 File ▸ Print... shows Ctrl+P, so one shortcut appears on one row.
+
+On a board (#2402) both rows are live and open Board Print / PDF instead: the
+layer sets, one page per set or one composite page, the bottom side mirrored,
+1:1 or fitted, colour or black, the outline, drill holes and the title block.
+The palette names it `export_board_pdf`. Rules: `BOARD_OUTPUT.md`.
 
 Ctrl+F4 (Close Document, Altium profile) is a macOS system default ("Move
 focus to active or next window") and may never reach Signex there; the menu

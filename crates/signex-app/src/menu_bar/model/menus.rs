@@ -383,8 +383,9 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
     ]
 }
 
-/// Reports: every output of the open schematic. The BOM row is the one
-/// working BOM dialog (#1251); the old Design > Generate BOM duplicate row is folded in.
+/// Reports: every output of the open schematic, then the board's reports.
+/// The BOM row is the one working BOM dialog (#1251); the old Design >
+/// Generate BOM duplicate row is folded in.
 pub(super) fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
     let has_schematic = ctx.commands.has_schematic;
     vec![
@@ -406,6 +407,13 @@ pub(super) fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::ExportErcReport,
             has_schematic,
         ),
+        SEP,
+        // The board's reports (#2404), greyed without a board in view.
+        cmd_item_gated(ctx, cmd("board_report_bom", "")),
+        cmd_item_gated(ctx, cmd("board_report_netlist", "")),
+        cmd_item_gated(ctx, cmd("board_report_net_length", "")),
+        cmd_item_gated(ctx, cmd("board_report_components", "")),
+        cmd_item_gated(ctx, cmd("export_board_report", "")),
     ]
 }
 

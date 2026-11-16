@@ -108,7 +108,6 @@ pcb-board-info-drc = DRC Violations
 pcb-board-info-drc-not-run = Not run
 pcb-board-info-drc-tip = Show the design rule check results
 pcb-board-reports = Reports
-pcb-board-reports-unavailable = No board report exists yet.
 # A count in the Board Information rows.
 pcb-board-count = { $count }
 # A length or area from Signex's own formatter, unit included.

@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use signex_types::schematic::SchematicSheet;
 use thiserror::Error;
 
+pub mod board_report;
 pub mod bom;
 pub mod erc;
 mod expression;
@@ -21,6 +22,9 @@ pub mod substitution;
 pub mod svg;
 pub mod template;
 
+pub use board_report::{
+    BoardReport, BoardReportKind, ReportCell, ReportColumn, ReportSide, board_report,
+};
 pub use bom::{
     BomColumn, BomError, BomExporter, BomFormat, BomGrouping, BomIssueSeverity, BomMetadata,
     BomOptions, BomOutput, BomRow, BomRule, BomRuleOptions, BomTable, BomValidationIssue,
@@ -31,6 +35,10 @@ pub use erc::{
     ErcReportRow, ErcReportRuleSet, ErcReportSeverity, report as erc_report,
 };
 pub use netlist::{NetlistExporter, NetlistFormat, NetlistOptions, NetlistOutput};
+pub use pdf::board::{
+    BoardLayerSet, BoardPdfError, BoardPdfOutput, BoardPdfPage, BoardPrintOptions, BoardPrintPages,
+    BoardPrintScale, BoardPrintText, board_pdf,
+};
 pub use pdf::{
     ColourMode, MAX_PAGE_EDGE_MM, MAX_SCALE_PERCENT, MIN_CUSTOM_EDGE_MM, MIN_PRINTABLE_MM,
     MarginEdge, MarginUpdate, Margins, PageRange, PageSetupError, PageSize, PageSizeKind,

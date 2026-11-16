@@ -96,7 +96,6 @@ define_ids! {
     PCB_BOARD_INFO_DRC_NOT_RUN = "pcb-board-info-drc-not-run";
     PCB_BOARD_INFO_DRC_TIP = "pcb-board-info-drc-tip";
     PCB_BOARD_REPORTS = "pcb-board-reports";
-    PCB_BOARD_REPORTS_UNAVAILABLE = "pcb-board-reports-unavailable";
     PCB_BOARD_COUNT = "pcb-board-count";
     PCB_BOARD_MEASURE = "pcb-board-measure";
     PCB_BOARD_UNSET = "pcb-board-unset";

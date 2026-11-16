@@ -472,6 +472,9 @@ pub struct UiState {
     pub board_reannotate: Option<crate::app::BoardReannotateState>,
     /// The options Re-Annotate Board was last used with, for its next opening.
     pub board_reannotate_options: signex_engine::pcb::designators::ReannotateOptions,
+    /// Board Reports and Board Print / PDF (#2404, #2402): the open dialog
+    /// and the print options it was last used with.
+    pub board_output: crate::app::BoardOutputState,
     /// Back Annotate (#1312), while open. Execute writes the sheets in
     /// memory as one undo group; nothing is written to disk.
     pub back_annotate: Option<crate::app::BackAnnotateState>,

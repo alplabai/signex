@@ -5952,6 +5952,7 @@ dependencies = [
 name = "signex-output"
 version = "26.11.0-rc.1"
 dependencies = [
+ "pcb-geom",
  "pdf-writer",
  "rust_xlsxwriter",
  "serde",
