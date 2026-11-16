@@ -1,29 +1,46 @@
 //! What new copper must keep clear of (#2408): every pad, track and via of
-//! the board with its net and copper layers, no net included, and the
-//! keepouts that forbid it. Via stitching, teardrops and glossing read
+//! the board and every copper area that is not a pour (Fill, Solid Region,
+//! teardrop), each with its net and copper layers, no net included, and
+//! the keepouts that forbid it. Via stitching, teardrops and glossing read
 //! this one list, so they agree on what "clear" means: the clearance a
-//! caller's rule gives between two nets, measured as the design rule
-//! check measures it (`Shape::separation`).
+//! caller's rule gives between two nets, measured between pads, tracks
+//! and vias as the design rule check measures it (`Shape::separation`).
+//! Unlike the check, two items on no net count as different nets here, so
+//! new copper errs on the safe side. Pours are not obstacles: a pour's
+//! fill is recomputed and clears new copper of other nets. Rules:
+//! `docs/PCB_TOOLS.md`, "Board Tools".
 
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_sketch::PcbKeepout;
 
 use crate::copper::{layer_bit, layer_mask, pad_layers, via_layers};
 use crate::index::{ItemRef, track_shape, via_shape};
+use crate::pick_filter::PickKind;
+use crate::rect::RectNm;
 use crate::region::Polygon;
 use crate::shape::Shape;
 use crate::shape_overlap::{point_in_polygon, polygons_meet};
 use crate::transform::pad_shape;
 use crate::units::PointNm;
+use crate::zone_fill::zone_area;
 
-/// One pad, track or via, with the net it is on (0: none).
+/// The copper an obstacle holds.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Copper {
+    /// A pad, track or via.
+    Shape(Shape),
+    /// A copper zone: its outline less its holes.
+    Area(Polygon),
+}
+
+/// One pad, track, via or copper area, with the net it is on (0: none).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Obstacle {
     pub item: ItemRef,
     pub net: u32,
     /// Copper layers it reaches, as a [`layer_bit`] mask.
     pub layers: u32,
-    pub shape: Shape,
+    pub copper: Copper,
 }
 
 impl Obstacle {
@@ -31,9 +48,83 @@ impl Obstacle {
     pub fn is_landing(&self) -> bool {
         matches!(self.item, ItemRef::Pad { .. } | ItemRef::Via(_))
     }
+
+    fn bounds(&self) -> Option<RectNm> {
+        match &self.copper {
+            Copper::Shape(shape) => Some(shape.aabb()),
+            Copper::Area(area) => area.bounds(),
+        }
+    }
+
+    /// Whether `shape` comes within `gap` of this copper: under `gap` from a
+    /// pad, track or via, as the design rule check measures it; within it
+    /// of an area, touching included.
+    pub fn near(&self, shape: &Shape, gap: i64) -> bool {
+        let gap = gap.max(0);
+        let reach = shape.aabb().inflate(gap);
+        if !self.bounds().is_some_and(|b| b.intersects(&reach)) {
+            return false;
+        }
+        match &self.copper {
+            Copper::Shape(own) => shape.overlaps(own) || shape.separation(own).is_under(gap),
+            Copper::Area(area) => area_meets(area, &shape.inflated(gap)),
+        }
+    }
+
+    /// Whether the polygon `ring` comes within `gap` of this copper,
+    /// touching included. An area's holes are not looked at: safe side.
+    fn near_ring(&self, ring: &[PointNm], gap: i64) -> bool {
+        let gap = gap.max(0);
+        match &self.copper {
+            Copper::Shape(own) => own.inflated(gap).overlaps_polygon(ring),
+            Copper::Area(area) => {
+                area.outer.len() >= 3
+                    && (polygons_meet(ring, &area.outer)
+                        || (0..ring.len()).any(|i| {
+                            Shape::Capsule {
+                                a: ring[i],
+                                b: ring[(i + 1) % ring.len()],
+                                radius: gap,
+                            }
+                            .overlaps_polygon(&area.outer)
+                        }))
+            }
+        }
+    }
 }
 
-/// Every pad, track and via whose geometry converts. A track on no copper
+/// Whether `shape` shares a point with `area`: it meets the outer ring and
+/// does not lie wholly inside one of the holes.
+pub(crate) fn area_meets(area: &Polygon, shape: &Shape) -> bool {
+    if area.outer.len() < 3 || !shape.overlaps_polygon(&area.outer) {
+        return false;
+    }
+    !area
+        .holes
+        .iter()
+        .any(|hole| hole.len() >= 3 && inside_ring(shape, hole))
+}
+
+/// Whether the convex `shape` lies wholly inside `ring`, off its edge: no
+/// edge of the ring meets it and its middle is inside.
+fn inside_ring(shape: &Shape, ring: &[PointNm]) -> bool {
+    let b = shape.aabb();
+    let middle = PointNm::new(
+        b.min.x + (b.max.x - b.min.x) / 2,
+        b.min.y + (b.max.y - b.min.y) / 2,
+    );
+    point_in_polygon(ring, middle)
+        && !(0..ring.len()).any(|i| {
+            shape.overlaps(&Shape::Capsule {
+                a: ring[i],
+                b: ring[(i + 1) % ring.len()],
+                radius: 0,
+            })
+        })
+}
+
+/// Every pad, track and via whose geometry converts, and every copper zone
+/// that is neither a pour nor a rule area. A track or zone on no copper
 /// layer is not copper and is left out.
 pub(crate) fn copper_obstacles(board: &PcbBoard) -> Vec<Obstacle> {
     let mut out = Vec::new();
@@ -47,7 +138,7 @@ pub(crate) fn copper_obstacles(board: &PcbBoard) -> Vec<Obstacle> {
                     },
                     net: pad.net.as_ref().map_or(0, |n| n.number),
                     layers: pad_layers(footprint, pad),
-                    shape,
+                    copper: Copper::Shape(shape),
                 });
             }
         }
@@ -59,7 +150,7 @@ pub(crate) fn copper_obstacles(board: &PcbBoard) -> Vec<Obstacle> {
                 item: ItemRef::Track(segment.uuid),
                 net: segment.net,
                 layers,
-                shape,
+                copper: Copper::Shape(shape),
             });
         }
     }
@@ -69,7 +160,24 @@ pub(crate) fn copper_obstacles(board: &PcbBoard) -> Vec<Obstacle> {
                 item: ItemRef::Via(via.uuid),
                 net: via.net,
                 layers: via_layers(via),
-                shape,
+                copper: Copper::Shape(shape),
+            });
+        }
+    }
+    for zone in &board.zones {
+        let layers = layer_mask(std::iter::once(zone.layer.as_str()));
+        if zone.is_pour() || zone.is_rule_area() || layers == 0 {
+            continue;
+        }
+        if let Some(area) = zone_area(zone).filter(|a| a.outer.len() >= 3) {
+            out.push(Obstacle {
+                item: ItemRef::Zone {
+                    zone: zone.uuid,
+                    kind: PickKind::of_zone(zone).unwrap_or(PickKind::Regions),
+                },
+                net: zone.net,
+                layers,
+                copper: Copper::Area(area),
             });
         }
     }
@@ -98,7 +206,6 @@ pub(crate) fn clashes<F: Fn(u32, u32) -> i64>(
     clearance: &F,
     skip: impl Fn(ItemRef) -> bool,
 ) -> bool {
-    let bounds = shape.aabb();
     obstacles.iter().any(|o| {
         if o.layers & layers == 0 || skip(o.item) {
             return false;
@@ -107,9 +214,7 @@ pub(crate) fn clashes<F: Fn(u32, u32) -> i64>(
         if !other_net && !(new == NewCopper::Via && o.is_landing()) {
             return false;
         }
-        let gap = clearance(net, o.net).max(0);
-        o.shape.aabb().inflate(gap).intersects(&bounds)
-            && (shape.overlaps(&o.shape) || shape.separation(&o.shape).is_under(gap))
+        o.near(shape, clearance(net, o.net))
     })
 }
 
@@ -126,9 +231,7 @@ pub(crate) fn ring_clashes<F: Fn(u32, u32) -> i64>(
     obstacles.iter().any(|o| {
         o.layers & layers != 0
             && (o.net != net || o.net == 0)
-            && o.shape
-                .inflated(clearance(net, o.net).max(0))
-                .overlaps_polygon(ring)
+            && o.near_ring(ring, clearance(net, o.net))
     })
 }
 

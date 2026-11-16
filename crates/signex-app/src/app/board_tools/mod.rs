@@ -55,11 +55,16 @@ struct Picked {
     footprints: BTreeSet<Uuid>,
     /// The nets of everything selected, no net left out.
     nets: BTreeSet<u32>,
+    /// Whether anything at all is selected.
+    is_any: bool,
 }
 
 impl Picked {
     fn of(board: &PcbBoard, items: &[ItemRef]) -> Self {
-        let mut picked = Picked::default();
+        let mut picked = Picked {
+            is_any: !items.is_empty(),
+            ..Picked::default()
+        };
         for item in items {
             match *item {
                 ItemRef::Track(id) => {
@@ -95,17 +100,30 @@ impl Picked {
 }
 
 /// The clearance rule copper tools keep on `board`: the board's clearance
-/// and its project's net classes, as the design rule check reads them.
-pub(crate) fn clearance_rules(app: &Signex, path: &Path, board: &PcbBoard) -> DrcRules {
+/// and its project's net classes, as the design rule check reads them. A
+/// clearance the geometry cannot hold is refused, never replaced by a
+/// default that would drop the net-class rules.
+pub(crate) fn clearance_rules(
+    app: &Signex,
+    path: &Path,
+    board: &PcbBoard,
+) -> Result<DrcRules, ToolRefusal> {
     let classes = app
         .document_state
         .board_project(path, None)
         .map(|project| project.data.net_classes.clone())
         .unwrap_or_default();
-    DrcRules::for_board(board, &classes).unwrap_or_else(|_| {
-        let nm = pcb_geom::mm_to_nm(signex_drc::DEFAULT_CLEARANCE_MM, "clearance");
-        DrcRules::new(nm.unwrap_or(200_000))
-    })
+    DrcRules::for_board(board, &classes).map_err(|error| ToolRefusal::Rules(error.to_string()))
+}
+
+/// Whether the tool lays copper and so needs the clearance rule.
+fn lays_copper(event: BoardToolsMsg) -> bool {
+    matches!(
+        event,
+        BoardToolsMsg::StitchRequested
+            | BoardToolsMsg::TeardropsAddRequested
+            | BoardToolsMsg::GlossRequested
+    )
 }
 
 impl Signex {
@@ -125,8 +143,16 @@ impl Signex {
             return;
         };
         let picked = Picked::of(board, &items);
-        let rules = clearance_rules(self, &path, board);
-        let gap = |a: u32, b: u32| rules.required(a, b);
+        let rules = match clearance_rules(self, &path, board) {
+            Ok(rules) => Some(rules),
+            Err(refusal) if lays_copper(event) => {
+                let ran = self.run_board_tool(&path, Err(refusal));
+                self.say_board_tool(command_of(event), &ran);
+                return;
+            }
+            Err(_) => None,
+        };
+        let gap = |a: u32, b: u32| rules.as_ref().map_or(0, |r| r.required(a, b));
         let nets = (!picked.nets.is_empty()).then_some(&picked.nets);
         let built = match event {
             BoardToolsMsg::StitchRequested => stitch_selection(board, &picked, gap),
@@ -192,13 +218,17 @@ impl Signex {
     }
 }
 
-/// Stitch the selected areas with their nets' vias, or, with none
-/// selected, every pour that has a net: each at the default grid step.
+/// Stitch the selected areas with their nets' vias, or, with nothing
+/// selected, every pour that has a net: each at the default grid step. A
+/// selection with no area in it is refused.
 fn stitch_selection<F: Fn(u32, u32) -> i64 + Copy>(
     board: &PcbBoard,
     picked: &Picked,
     gap: F,
 ) -> Result<ToolEdit, ToolRefusal> {
+    if picked.is_any && picked.zones.is_empty() {
+        return Err(ToolRefusal::NothingSelected);
+    }
     let areas: Vec<Uuid> = if picked.zones.is_empty() {
         board
             .zones

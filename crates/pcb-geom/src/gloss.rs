@@ -3,8 +3,10 @@
 //! layer and width meet at a free corner (no other track end, pad or via
 //! there), the two become one straight track between their far ends, when
 //! that track keeps the clearance to copper of other nets and stays out of
-//! keepouts that forbid routing. Repeated until no corner can go. The ends
-//! of a route never move, so nothing it connects comes loose. Rules:
+//! keepouts that forbid routing, and still touches every copper of its net
+//! that touched either track (a branch ending mid-track, a via, a pad, an
+//! area). Repeated until no corner can go. The ends of a route never move,
+//! so nothing it connects comes loose. Rules:
 //! `docs/PCB_TOOLS.md`, "Gloss".
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -14,7 +16,10 @@ use uuid::Uuid;
 
 use crate::copper::{layer_mask, pad_layers, via_layers};
 use crate::index::{ItemRef, track_shape, via_shape};
-use crate::obstacle::{KeepoutArea, NewCopper, Obstacle, clashes, copper_obstacles, keepout_areas};
+use crate::obstacle::{
+    Copper, KeepoutArea, NewCopper, Obstacle, clashes, copper_obstacles, keepout_areas,
+};
+use crate::shape::Shape;
 use crate::transform::pad_shape;
 use crate::units::PointNm;
 
@@ -106,7 +111,7 @@ impl<F: Fn(u32, u32) -> i64> Work<'_, F> {
                 .iter_mut()
                 .find(|o| o.item == ItemRef::Track(kept)),
         ) {
-            slot.shape = shape;
+            slot.copper = Copper::Shape(shape);
         }
         self.obstacles.retain(|o| o.item != ItemRef::Track(gone));
         self.tracks[cut.keep] = cut.joined;
@@ -148,6 +153,9 @@ impl<F: Fn(u32, u32) -> i64> Work<'_, F> {
         let shape = track_shape(&joined).ok()?;
         let layers = layer_mask(std::iter::once(layer));
         let merged = [ItemRef::Track(a.uuid), ItemRef::Track(b.uuid)];
+        if self.strands_contact(a, b, &shape, layers, &merged) {
+            return None;
+        }
         let blocked = clashes(
             &shape,
             NewCopper::Route,
@@ -161,6 +169,29 @@ impl<F: Fn(u32, u32) -> i64> Work<'_, F> {
             .iter()
             .any(|k| k.bars(NewCopper::Route, layers, &shape));
         (!blocked).then_some(Cut { keep, drop, joined })
+    }
+
+    /// Whether copper of the route's net that touches `a` or `b` (a branch
+    /// ending mid-track, a via or pad on it, an area) would no longer touch
+    /// the `joined` track that replaces them: the cut would leave it loose.
+    fn strands_contact(
+        &self,
+        a: &Segment,
+        b: &Segment,
+        joined: &Shape,
+        layers: u32,
+        merged: &[ItemRef; 2],
+    ) -> bool {
+        let (Ok(shape_a), Ok(shape_b)) = (track_shape(a), track_shape(b)) else {
+            return true;
+        };
+        self.obstacles.iter().any(|o| {
+            o.net == a.net
+                && o.layers & layers != 0
+                && !merged.contains(&o.item)
+                && (o.near(&shape_a, 0) || o.near(&shape_b, 0))
+                && !o.near(joined, 0)
+        })
     }
 
     /// How many track ends of the board, the glossed ones as they are now,

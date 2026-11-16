@@ -230,3 +230,44 @@ fn arranged_parts_land_inside_the_box_without_overlap() {
     let small = arrange_in_box(&board(), &parts, a, Point::new(1.0, 21.0));
     assert_eq!(small, Err(ToolRefusal::DoesNotFit));
 }
+
+#[test]
+fn lines_that_carry_a_net_are_not_turned_into_a_keepout() {
+    let (mut board, lines) = loop_board();
+    board
+        .segments
+        .iter_mut()
+        .filter(|s| s.uuid == id(81))
+        .for_each(|s| s.net = 2);
+    let refused = keepout_from_selection(&board, &BTreeSet::new(), &lines, id(900));
+    assert_eq!(refused, Err(ToolRefusal::LinesOnNet(1)));
+}
+
+#[test]
+fn arranged_origins_follow_an_offset_components_grid() {
+    use signex_types::pcb_options::{BoardGrid, MARK_COLORS};
+    let mut board = board();
+    board.options.grids.push(BoardGrid {
+        uuid: id(990),
+        name: "parts".into(),
+        step_mm: 1.0,
+        origin: Point::new(0.25, 0.25),
+        color: MARK_COLORS[0],
+        components: true,
+        non_components: false,
+    });
+    let parts: BTreeSet<Uuid> = [id(50), id(60)].into();
+    let (a, b) = (Point::new(0.0, 20.0), Point::new(10.0, 30.0));
+    let edit = arrange_in_box(&board, &parts, a, b).expect("fits");
+    let mut engine = BoardEngine::new(board, 1);
+    engine.execute_batch(edit.commands).expect("applies");
+    for fp in engine.board().footprints.iter() {
+        let on_grid = |v: f64| ((v - 0.25) - (v - 0.25).round()).abs() < 1e-9;
+        assert!(
+            on_grid(fp.position.x) && on_grid(fp.position.y),
+            "{:?} off the grid counted from (0.25, 0.25)",
+            fp.position
+        );
+        assert!(fp.position.x > 0.0 && fp.position.y > 20.0);
+    }
+}

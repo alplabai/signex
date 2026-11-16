@@ -73,3 +73,28 @@ fn a_track_as_wide_as_the_via_gets_none() {
     let plan = teardrops(&board, None, clearance);
     assert!(plan.drops.iter().all(|d| d.track != Uuid::from_u128(2)));
 }
+
+#[test]
+fn a_track_entering_off_centre_gets_a_teardrop_along_the_track() {
+    let mut board = empty_board();
+    board.vias.push(via(1, (0.0, 0.0), 1.0, 1));
+    // Along y = 0.2 mm, 0.2 mm off the via's centre.
+    board.segments.push(track(2, (0.0, 0.2), (5.0, 0.2), 1));
+    let plan = teardrops(&board, None, clearance);
+    assert_eq!(plan.drops.len(), 1, "{plan:?}");
+    let outline = &plan.drops[0].outline;
+    let line = 200_000;
+    // Base across the track at x = 0, inside the via.
+    assert_eq!((outline[0].x, outline[3].x), (0, 0));
+    for corner in [outline[0], outline[3]] {
+        assert!(corner.distance_sq(PointNm::ORIGIN) < 500_000i128 * 500_000);
+    }
+    // Tip on the track's edges, centred on its line, not on the via's axis.
+    assert_eq!(outline[1].x, outline[2].x);
+    assert_eq!(
+        (outline[1].y, outline[2].y),
+        (line + 125_000, line - 125_000)
+    );
+    // Base centred on the track's line too.
+    assert_eq!(outline[0].y - line, line - outline[3].y);
+}

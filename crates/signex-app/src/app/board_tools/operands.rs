@@ -89,10 +89,12 @@ fn net(board: &PcbBoard, args: &CommandArgs) -> Result<Option<u32>, ToolRefusal>
 }
 
 /// Build an edit on the named board with `build`, run it as one undo step
-/// and answer with its report.
+/// and answer with its report. A tool that lays copper (`copper`) is
+/// refused when the board's clearance rule cannot be read.
 fn run(
     app: &mut Signex,
     args: &CommandArgs,
+    copper: bool,
     build: impl FnOnce(&PcbBoard, &dyn Fn(u32, u32) -> i64) -> Result<ToolEdit, String>,
 ) -> Ran {
     let path = match named_board(app, args) {
@@ -102,8 +104,12 @@ fn run(
     let Some(board) = app.document_state.pcb_board(&path) else {
         return refused(format!("no board is open at {}", path.display()));
     };
-    let rules = clearance_rules(app, &path, board);
-    let gap = |a: u32, b: u32| rules.required(a, b);
+    let rules = match clearance_rules(app, &path, board) {
+        Ok(rules) => Some(rules),
+        Err(refusal) if copper => return refused(refusal.to_string()),
+        Err(_) => None,
+    };
+    let gap = |a: u32, b: u32| rules.as_ref().map_or(0, |r| r.required(a, b));
     let built = match build(board, &gap) {
         Ok(edit) => Ok(edit),
         Err(reason) => return refused(reason),
@@ -119,7 +125,7 @@ fn run(
 
 /// `stitch_vias document=.. (id=<zone> | start=x,y end=x,y) net=? pitch=?`.
 pub(crate) fn stitch_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
-    run(app, args, |board, gap| {
+    run(app, args, true, |board, gap| {
         let zone = uuids(args, "id")?;
         if zone.len() > 1 {
             return Err("`id` names one zone".into());
@@ -148,7 +154,7 @@ fn nets_of(board: &PcbBoard, args: &CommandArgs) -> Result<Option<BTreeSet<u32>>
 
 /// `add_teardrops document=.. net=?`.
 pub(crate) fn add_teardrops_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
-    run(app, args, |board, gap| {
+    run(app, args, true, |board, gap| {
         let nets = nets_of(board, args)?;
         add_teardrops(board, nets.as_ref(), gap, Uuid::now_v7).map_err(|r| r.to_string())
     })
@@ -156,7 +162,7 @@ pub(crate) fn add_teardrops_by_operands(app: &mut Signex, args: &CommandArgs) ->
 
 /// `remove_teardrops document=.. net=?`.
 pub(crate) fn remove_teardrops_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
-    run(app, args, |board, _| {
+    run(app, args, false, |board, _| {
         let nets = nets_of(board, args)?;
         remove_teardrops(board, nets.as_ref()).map_err(|r| r.to_string())
     })
@@ -164,21 +170,21 @@ pub(crate) fn remove_teardrops_by_operands(app: &mut Signex, args: &CommandArgs)
 
 /// `gloss_selected_routes document=.. ids=<tracks>`.
 pub(crate) fn gloss_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
-    run(app, args, |board, gap| {
+    run(app, args, true, |board, gap| {
         gloss_tracks(board, &uuids(args, "ids")?, gap).map_err(|r| r.to_string())
     })
 }
 
 /// `board_shape_from_selection document=.. ids=<lines>`.
 pub(crate) fn board_shape_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
-    run(app, args, |board, _| {
+    run(app, args, false, |board, _| {
         outline_from_tracks(board, &uuids(args, "ids")?).map_err(|r| r.to_string())
     })
 }
 
 /// `keepout_from_selection document=.. ids=<zones or lines>`.
 pub(crate) fn keepout_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
-    run(app, args, |board, _| {
+    run(app, args, false, |board, _| {
         let ids = uuids(args, "ids")?;
         let zones: BTreeSet<Uuid> = board
             .zones
@@ -192,7 +198,7 @@ pub(crate) fn keepout_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
 
 /// `arrange_in_box document=.. ids=<components> start=x,y end=x,y`.
 pub(crate) fn arrange_in_box_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
-    run(app, args, |board, _| {
+    run(app, args, false, |board, _| {
         let (Some(a), Some(b)) = (point(args, "start")?, point(args, "end")?) else {
             return Err("the box needs `start` and `end`".into());
         };

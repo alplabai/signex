@@ -98,3 +98,72 @@ fn a_pitch_under_the_via_size_or_no_net_places_nothing() {
     let no_net = StitchSpec { net: 0, ..spec() };
     assert!(stitch_points(&board, &area(&board), no_net, clearance).is_empty());
 }
+
+#[test]
+fn a_fill_of_another_net_on_another_layer_keeps_vias_out_but_a_pour_does_not() {
+    let mut board = board();
+    let mut pour = zone(
+        13,
+        3,
+        signex_types::zone_pour::POUR_FILL,
+        (0.0, 0.0, 5.0, 5.0),
+    );
+    pour.layer = "BottomCopper".into();
+    board.zones.push(pour);
+    let with_pour = stitch_points(&board, &area(&board), spec(), clearance);
+    assert_eq!(with_pour.len(), 20, "a pour clears around new vias");
+
+    let mut fill = zone(12, 3, SOLID_FILL, (0.0, 0.0, 5.0, 5.0));
+    fill.layer = "BottomCopper".into();
+    board.zones.push(fill);
+    let points = stitch_points(&board, &area(&board), spec(), clearance);
+    assert!(!points.is_empty());
+    assert!(points.len() < 20);
+    for p in &points {
+        assert!(
+            !(p.x >= -DIAMETER && p.y >= -DIAMETER),
+            "{p:?} through the other net's fill"
+        );
+    }
+}
+
+#[test]
+fn board_sketch_cutouts_and_mounting_holes_keep_vias_out() {
+    use signex_types::pcb::Point;
+    use signex_types::pcb_sketch::{BoardSketch, PcbCutout, PcbHole};
+    let mut board = board();
+    board.sketch = Some(BoardSketch {
+        cutouts: vec![PcbCutout {
+            uuid: uuid::Uuid::from_u128(30),
+            boundary: vec![
+                Point::new(1.0, 1.0),
+                Point::new(5.0, 1.0),
+                Point::new(5.0, 5.0),
+                Point::new(1.0, 5.0),
+            ],
+            edge_radius: 0.0,
+            through: true,
+        }],
+        holes: vec![PcbHole {
+            uuid: uuid::Uuid::from_u128(31),
+            position: Point::new(-4.0, -4.0),
+            drill: 1.0,
+            plated: false,
+            net: None,
+            unknown_columns: Default::default(),
+        }],
+        ..BoardSketch::default()
+    });
+    let points = stitch_points(&board, &area(&board), spec(), clearance);
+    assert!(!points.is_empty());
+    assert!(
+        !points.contains(&PointNm::new(-4 * MM, -4 * MM)),
+        "on the hole"
+    );
+    for p in &points {
+        assert!(
+            !(p.x >= MM - DIAMETER && p.y >= MM - DIAMETER),
+            "{p:?} in or by the cutout"
+        );
+    }
+}

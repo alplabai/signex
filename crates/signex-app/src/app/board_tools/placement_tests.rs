@@ -7,7 +7,7 @@ use signex_types::pcb::Point;
 use signex_types::zone_keepout::KEEPOUT_FILL;
 
 use super::copper_tests::{
-    app_with_board, board_of, drc_findings, id, live, run, run_operands, undo,
+    app_with, app_with_board, board, board_of, drc_findings, id, live, run, run_operands, undo,
 };
 use crate::app::command::CommandOutcome;
 use crate::app::{Message, Signex};
@@ -143,4 +143,45 @@ fn arrange_in_box_packs_the_selected_parts_between_two_clicks() {
         matches!(&small, CommandOutcome::Disabled { reason } if reason.contains("do not fit")),
         "{small:?}"
     );
+}
+
+#[test]
+fn routed_lines_are_not_turned_into_a_keepout() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut board = board();
+    for s in board.segments.iter_mut().filter(|s| s.uuid == id(81)) {
+        s.net = 2;
+    }
+    let (mut app, path) = app_with(dir.path(), board);
+    let before = live(&app, &path);
+    app.select_pcb_items(&loop_lines());
+    run(&mut app, "keepout_from_selection");
+    assert_eq!(live(&app, &path), before, "the routed line stays");
+}
+
+#[test]
+fn arranged_parts_land_on_an_offset_components_grid() {
+    use signex_types::pcb_options::{BoardGrid, MARK_COLORS};
+    let dir = tempfile::tempdir().unwrap();
+    let mut board = board();
+    board.options.grids.push(BoardGrid {
+        uuid: id(990),
+        name: "parts".into(),
+        step_mm: 1.0,
+        origin: Point::new(0.25, 0.25),
+        color: MARK_COLORS[0],
+        components: true,
+        non_components: false,
+    });
+    let (mut app, path) = app_with(dir.path(), board);
+    app.select_pcb_items(&[ItemRef::Footprint(id(50)), ItemRef::Footprint(id(60))]);
+    run(&mut app, "arrange_in_box");
+    click(&mut app, 0.0, 20.0);
+    click(&mut app, 10.0, 30.0);
+    let on_grid = |v: f64| ((v - 0.25) - (v - 0.25).round()).abs() < 1e-9;
+    for fp in &board_of(&app, &path).footprints {
+        let p = fp.position;
+        assert!(on_grid(p.x) && on_grid(p.y), "{p:?} off the offset grid");
+        assert!(p.x > 0.0 && p.y > 20.0, "{p:?} inside the box");
+    }
 }

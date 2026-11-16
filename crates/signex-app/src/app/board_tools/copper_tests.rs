@@ -63,9 +63,14 @@ pub(super) fn board() -> PcbBoard {
 }
 
 pub(super) fn app_with_board(dir: &Path) -> (Signex, PathBuf) {
+    app_with(dir, board())
+}
+
+/// An app with `board` open in a tab.
+pub(super) fn app_with(dir: &Path, board: PcbBoard) -> (Signex, PathBuf) {
     let mut app = app_workspace(&dir.to_string_lossy(), &[]);
     let path = dir.join("tools.snxpcb");
-    app.open_pcb_tab(path.clone(), "tools".into(), board());
+    app.open_pcb_tab(path.clone(), "tools".into(), board);
     (app, path)
 }
 
@@ -238,4 +243,100 @@ fn gloss_cuts_the_selected_routes_corner_in_one_step() {
     let outcome = run_operands(&mut app, &path, "gloss_selected_routes", &[&ids]);
     assert_eq!(answered_uuids(&outcome, "removed"), 1);
     assert_eq!(answered_uuids(&outcome, "changed"), 1);
+}
+
+#[test]
+fn stitching_keeps_vias_out_of_another_nets_fill_on_another_layer() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut board = board();
+    let fill: signex_types::pcb::Zone = serde_json::from_value(json!({
+        "uuid": id(12), "net": 2, "net_name": "SIG", "layer": "BottomCopper",
+        "outline": [{"x": 0.0, "y": 0.0}, {"x": 5.0, "y": 0.0},
+                    {"x": 5.0, "y": 5.0}, {"x": 0.0, "y": 5.0}],
+        "fill_type": "solid"}))
+    .expect("a zone");
+    board.zones.push(fill);
+    let (mut app, path) = app_with(dir.path(), board);
+    select_zone(&mut app, &path, id(10));
+    run(&mut app, "stitch_vias");
+    let new: Vec<_> = board_of(&app, &path)
+        .vias
+        .iter()
+        .filter(|v| v.uuid != id(20))
+        .map(|v| v.position)
+        .collect();
+    assert!(!new.is_empty() && new.len() < 20, "{new:?}");
+    for p in &new {
+        assert!(!(p.x >= -0.6 && p.y >= -0.6), "{p:?} through the SIG fill");
+    }
+}
+
+#[test]
+fn stitching_with_only_tracks_selected_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let before = live(&app, &path);
+    app.select_pcb_items(&[ItemRef::Track(id(11))]);
+    run(&mut app, "stitch_vias");
+    assert_eq!(live(&app, &path), before, "no pour stitched");
+}
+
+#[test]
+fn copper_tools_refuse_a_clearance_rule_they_cannot_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut board = board();
+    board.setup.as_mut().expect("a setup").clearance = 1e30;
+    let (mut app, path) = app_with(dir.path(), board);
+    let before = live(&app, &path);
+    select_zone(&mut app, &path, id(10));
+    run(&mut app, "stitch_vias");
+    app.clear_pcb_selection();
+    run(&mut app, "add_teardrops");
+    assert_eq!(live(&app, &path), before, "no copper on a guessed rule");
+
+    let outcome = run_operands(&mut app, &path, "add_teardrops", &["net=GND"]);
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("clearance rule")),
+        "{outcome:?}"
+    );
+}
+
+#[test]
+fn gloss_keeps_a_branch_that_ends_on_the_route() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut board = board();
+    let branch = serde_json::from_value(track(32, (42.0, 0.0), (42.0, -4.0), 2)).unwrap();
+    board.segments.push(branch);
+    let (mut app, path) = app_with(dir.path(), board);
+    let before = live(&app, &path);
+    app.select_pcb_items(&[ItemRef::Track(id(30)), ItemRef::Track(id(31))]);
+    run(&mut app, "gloss_selected_routes");
+    assert_eq!(live(&app, &path), before, "the cut would strand the branch");
+}
+
+#[test]
+fn a_teardrop_follows_a_track_that_enters_its_via_off_centre() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut board = board();
+    let off = board
+        .segments
+        .iter_mut()
+        .find(|s| s.uuid == id(21))
+        .unwrap();
+    off.start.y = 0.2;
+    off.end.y = 0.2;
+    let (mut app, path) = app_with(dir.path(), board);
+    run(&mut app, "add_teardrops");
+    let drop = board_of(&app, &path)
+        .zones
+        .iter()
+        .find(|z| z.is_teardrop())
+        .expect("a teardrop");
+    let near = |y: f64| {
+        drop.outline
+            .iter()
+            .any(|p| (p.y - y).abs() < 1e-6 && p.x > 20.0)
+    };
+    // The tip sits on the track's two edges, 0.2 mm off the via's axis.
+    assert!(near(0.325) && near(0.075), "{:?}", drop.outline);
 }

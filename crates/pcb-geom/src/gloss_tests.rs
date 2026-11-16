@@ -69,3 +69,21 @@ fn a_three_leg_run_glosses_down_to_one_track() {
     let ends = [kept.start, kept.end];
     assert!(ends.contains(&Point::new(0.0, 0.0)) && ends.contains(&Point::new(10.0, 5.0)));
 }
+
+#[test]
+fn a_cut_that_would_strand_a_branch_or_via_on_the_route_is_not_made() {
+    // A net-1 branch ending in the middle of the first leg.
+    let mut branch = board();
+    branch.segments.push(track(3, (2.0, 0.0), (2.0, -4.0), 1));
+    assert!(gloss(&branch, &both(), clearance).is_empty());
+
+    // A net-1 via sitting on the second leg.
+    let mut on_leg = board();
+    on_leg.vias.push(via(9, (5.0, 3.0), 0.6, 1));
+    assert!(gloss(&on_leg, &both(), clearance).is_empty());
+
+    // A branch at the far end stays joined: the cut is made.
+    let mut far = board();
+    far.segments.push(track(3, (5.0, 5.0), (9.0, 5.0), 1));
+    assert_eq!(gloss(&far, &both(), clearance).removed, [id(2)]);
+}

@@ -67,7 +67,7 @@ pub fn teardrops<F: Fn(u32, u32) -> i64>(
             let Some((center, radius)) = anchor(board, segment, layers, near) else {
                 continue;
             };
-            let Some(outline) = taper(center, radius, far, half) else {
+            let Some(outline) = taper(center, radius, near, far, half) else {
                 continue;
             };
             let blocked = ring_clashes(&outline, segment.net, layers, &obstacles, &clearance)
@@ -119,25 +119,51 @@ fn anchor(board: &PcbBoard, track: &Segment, layers: u32, end: PointNm) -> Optio
     })
 }
 
-/// The teardrop from a pad of `radius` at `center` along the track towards
-/// `far`, whose half width is `half`; `None` when the track is as wide as
-/// the pad or too short to hold it.
-fn taper(center: PointNm, radius: i64, far: PointNm, half: i64) -> Option<Vec<PointNm>> {
-    let (dx, dy) = ((far.x - center.x) as f64, (far.y - center.y) as f64);
+/// The teardrop of the track from `near` (inside a pad of `radius` at
+/// `center`) to `far`, whose half width is `half`. It runs along the track:
+/// its base crosses the track's line at the point nearest the pad centre,
+/// on both sides as far as the pad's nearer edge allows, so a track that
+/// enters off centre or at an angle keeps both sides on it and the base
+/// stays inside the pad. `None` when the track is as wide as that base or
+/// too short to hold the taper.
+fn taper(
+    center: PointNm,
+    radius: i64,
+    near: PointNm,
+    far: PointNm,
+    half: i64,
+) -> Option<Vec<PointNm>> {
+    let (dx, dy) = ((far.x - near.x) as f64, (far.y - near.y) as f64);
     let length = dx.hypot(dy);
-    let (r, h) = (radius as f64, half as f64);
-    let base = r * BASE_SHARE;
-    if length <= r || base <= h * 1.05 {
+    if length == 0.0 {
         return None;
     }
     let (ux, uy) = (dx / length, dy / length);
     let (nx, ny) = (-uy, ux);
+    let (cx, cy) = ((center.x - near.x) as f64, (center.y - near.y) as f64);
+    // The base point on the track's line, and the pad centre's offset off it.
+    let foot = cx * ux + cy * uy;
+    let off = cx * nx + cy * ny;
+    let (r, h) = (radius as f64, half as f64);
+    if off.abs() >= r {
+        return None;
+    }
+    // Where the track's line leaves the pad, counted from the foot.
+    let chord = (r * r - off * off).sqrt();
+    // The base runs across the track through the foot, on a line through
+    // the pad centre, so the pad's nearer edge is `r - |off|` away.
+    let base = (r - off.abs()) * BASE_SHARE;
+    let reach = length - foot;
+    if reach <= chord || base <= h * 1.05 {
+        return None;
+    }
     // The tip lies a pad radius past the pad's edge, or at the far end.
-    let tip = r + r.min(length - r);
+    let tip = chord + r.min(reach - chord);
+    let (px, py) = (near.x as f64 + ux * foot, near.y as f64 + uy * foot);
     let at = |along: f64, across: f64| {
         PointNm::new(
-            (center.x as f64 + ux * along + nx * across).round() as i64,
-            (center.y as f64 + uy * along + ny * across).round() as i64,
+            (px + ux * along + nx * across).round() as i64,
+            (py + uy * along + ny * across).round() as i64,
         )
     };
     Some(vec![at(0.0, base), at(tip, h), at(tip, -h), at(0.0, -base)])

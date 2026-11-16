@@ -49,10 +49,16 @@ pub enum ToolRefusal {
     NoTeardrops,
     #[error("no track of the chosen nets enters a pad or via of its net")]
     NoTeardropPlace,
-    #[error("no corner of the selected routes can be cut without breaking the clearance")]
+    #[error(
+        "no corner of the selected routes can be cut without breaking the clearance or leaving copper of its net loose"
+    )]
     NothingToGloss,
     #[error("{0} is already a keepout")]
     AlreadyKeepout(String),
+    #[error("{0} of the selected lines carry a net: only lines on no net become a keepout")]
+    LinesOnNet(usize),
+    #[error("the clearance rule cannot be read: {0}")]
+    Rules(String),
     #[error("{0} is on no layer a keepout can keep clear")]
     NoKeepoutLayer(String),
     #[error("the components do not fit in the box")]

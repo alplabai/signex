@@ -1,7 +1,8 @@
 //! Arrange in a box (#2409): the selected footprints packed inside a drawn
 //! rectangle without overlap, tallest first (`pcb_geom::arrange_in_box`),
-//! each origin on the components grid. One undo step; a locked footprint
-//! refuses the whole run, as any placement edit does.
+//! each origin on the components grid, counted from that grid's origin.
+//! One undo step; a locked footprint refuses the whole run, as any
+//! placement edit does.
 
 use std::collections::BTreeSet;
 
@@ -47,11 +48,16 @@ pub fn arrange_in_box(
     let step = mm_to_nm(grid.step_mm, "grid").unwrap_or(1).max(1);
     let gap = mm_to_nm(ARRANGE_GAP_MM, "gap").unwrap_or(0);
     let extents: Vec<RectNm> = sized.iter().map(|(_, e)| *e).collect();
+    // The packing snaps to multiples of the step, so it runs with the
+    // grid's origin moved to zero and its origins are moved back.
+    let zero = PointNm::from_mm(grid.origin, "grid.origin").map_err(|_| ToolRefusal::DoesNotFit)?;
+    let shifted = RectNm::new(area.min.minus(zero), area.max.minus(zero));
     let origins =
-        pcb_geom::arrange_in_box(area, &extents, gap, step).ok_or(ToolRefusal::DoesNotFit)?;
+        pcb_geom::arrange_in_box(shifted, &extents, gap, step).ok_or(ToolRefusal::DoesNotFit)?;
     let mut commands = Vec::new();
     let mut changed = Vec::new();
     for ((fp, _), origin) in sized.iter().zip(origins) {
+        let origin = origin.plus(zero);
         let to = Point::new(nm_to_mm(origin.x), nm_to_mm(origin.y));
         if fp.position != to {
             changed.push(fp.uuid);

@@ -1,8 +1,9 @@
 //! Keepout from a selection (#2409): a selected shape becomes a keepout on
 //! its layer, one undo step. A selected copper area (Fill, Solid Region,
 //! pour) turns into a keepout over its outline, keeping its uuid; selected
-//! lines that close one loop on one layer are replaced by a keepout over
-//! that loop. A keepout drawn on a copper layer keeps that copper clear,
+//! lines on no net that close one loop on one layer are replaced by a
+//! keepout over that loop (lines carrying a net are routed copper and are
+//! refused). A keepout drawn on a copper layer keeps that copper clear,
 //! one on a keep-out layer its side's outer copper
 //! (`zone_keepout::keepout_copper`).
 
@@ -43,6 +44,11 @@ pub fn keepout_from_selection(
     let Some(first) = lines.first() else {
         return Err(ToolRefusal::NothingSelected);
     };
+    // Routed copper is not turned into a keepout: its connection would go.
+    let on_net = lines.iter().filter(|s| s.net != 0).count();
+    if on_net > 0 {
+        return Err(ToolRefusal::LinesOnNet(on_net));
+    }
     if lines.iter().any(|s| s.layer != first.layer) {
         return Err(ToolRefusal::Path(
             "the lines are on more than one layer".to_string(),
