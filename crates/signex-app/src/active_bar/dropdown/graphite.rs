@@ -99,7 +99,7 @@ pub(super) fn chip<M: Clone + 'static>(
     label: String,
     on: bool,
     msg: Option<M>,
-    why: Option<String>,
+    why: Option<signex_i18n::Localized>,
 ) -> Element<'static, M> {
     let lit = on && msg.is_some();
     let paint = ChipPaint::of(t, lit, false);
@@ -115,7 +115,7 @@ pub(super) fn chip<M: Clone + 'static>(
     let Some(why) = why else {
         return chip.boxed();
     };
-    let hint = container(text(raw(why)).size(TS.caption).color(styles::ti(t.text)))
+    let hint = container(text(why).size(TS.caption).color(styles::ti(t.text)))
         .padding([SP.xs, SP.m])
         .style(signex_widgets::active_bar_dropdown::tooltip_style(
             tokens::hover_overlay(t),

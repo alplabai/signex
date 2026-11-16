@@ -49,7 +49,7 @@ pub(crate) fn entries(
     filter: &PickFilter,
     presets: &[CustomFilterPreset<PickKind>],
 ) -> Vec<DropdownEntry<Message>> {
-    let why = t!(i18n, ids::PCB_BOARD_FILTER_UNAVAILABLE).into_string();
+    let why = t!(i18n, ids::PCB_BOARD_FILTER_UNAVAILABLE);
     let chips = PickKind::ALL
         .into_iter()
         .map(|kind| {

@@ -277,7 +277,7 @@ fn the_menu_row_on_a_copper_layer_opens_no_dialog() {
     assert!(f.app.pcb_layer_view(&f.board).active().is_copper());
     // The background work a first message starts (the project and agent
     // registry probes) settles before the row is pressed.
-    let first = f.app.update(Message::Noop);
+    let first = f.app.update(Message::noop());
     drive(&mut f.app, first);
     let mark = crate::diagnostics::newest_entry_id();
     let task = f

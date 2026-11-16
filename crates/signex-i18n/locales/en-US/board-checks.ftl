@@ -39,6 +39,8 @@ drc-panel-show-refused = The violation could not be shown: { $why }
 
 board-net-classes-no-board = Open a board to edit its net classes.
 board-net-classes-no-project = This board is in no open project, so it has no net classes. Open its project.
+# A refused net-class edit; $why is the reason, in English.
+board-net-classes-not-changed = The net classes were not changed: { $why }
 board-net-classes-add = Add Class
 board-net-classes-delete = Delete
 board-net-classes-undo = Undo net class edit

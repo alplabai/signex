@@ -314,16 +314,23 @@ mod tests {
     #[test]
     fn footer_buttons_lay_out_as_one_family() {
         let tokens = signex_types::theme::theme_tokens(ThemeId::BUILTINS[0]);
+        let i18n = signex_i18n::I18n::en_us_ref();
+        use signex_i18n::{ids, t};
         let footer: Element<'_, ()> = dialog_footer(vec![
-            dialog_button(raw("Cancel"), DialogButtonKind::Cancel, Some(()), &tokens),
             dialog_button(
-                raw("Discard All"),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+                DialogButtonKind::Cancel,
+                Some(()),
+                &tokens,
+            ),
+            dialog_button(
+                t!(i18n, ids::DIALOG_UNSAVED_DISCARD_ALL),
                 DialogButtonKind::Danger,
                 Some(()),
                 &tokens,
             ),
             dialog_button(
-                raw("Save All"),
+                t!(i18n, ids::DIALOG_BUTTON_SAVE_ALL),
                 DialogButtonKind::Primary,
                 Some(()),
                 &tokens,
@@ -349,7 +356,14 @@ mod tests {
         let buttons: Element<'_, ()> = row(roles
             .iter()
             .enumerate()
-            .map(|(i, kind)| dialog_button(raw(format!("Save {i}")), *kind, Some(()), &tokens))
+            .map(|(i, kind)| {
+                dialog_button(
+                    signex_i18n::UserText::new(format!("Save {i}")),
+                    *kind,
+                    Some(()),
+                    &tokens,
+                )
+            })
             .collect::<Vec<_>>())
         .boxed();
         let texts = crate::layout_probe::lay_out_texts(buttons, iced::Size::new(2000.0, 200.0));

@@ -13,7 +13,7 @@ use iced_aw::Wrap;
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_types::net_class::{NetClass, format_hex_color};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::{PickListPlaceholder as _, button, raw, text, text_input, theme_ext};
+use signex_widgets::{PickListPlaceholder as _, button, text, text_input, theme_ext};
 
 use super::{PanelContext, PanelMsg};
 use crate::icons;
@@ -386,7 +386,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(toolbar(ctx, view));
     if let Some(notice) = &view.notice {
         col = col.push(
-            text(raw(notice.clone()))
+            text(t!(&*ctx.i18n, ids::BOARD_NET_CLASSES_NOT_CHANGED, "why" => notice.as_str()))
                 .size(TS.caption)
                 .color(theme_ext::warning_color(&ctx.tokens))
                 .boxed(),

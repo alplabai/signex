@@ -31,6 +31,7 @@ define_ids! {
     DRC_PANEL_SHOW_REFUSED = "drc-panel-show-refused";
     BOARD_NET_CLASSES_NO_BOARD = "board-net-classes-no-board";
     BOARD_NET_CLASSES_NO_PROJECT = "board-net-classes-no-project";
+    BOARD_NET_CLASSES_NOT_CHANGED = "board-net-classes-not-changed";
     BOARD_NET_CLASSES_ADD = "board-net-classes-add";
     BOARD_NET_CLASSES_DELETE = "board-net-classes-delete";
     BOARD_NET_CLASSES_UNDO = "board-net-classes-undo";

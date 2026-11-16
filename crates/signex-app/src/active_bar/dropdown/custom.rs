@@ -135,7 +135,7 @@ pub(crate) struct FilterChip<M> {
     pub label: String,
     pub on: bool,
     pub msg: Option<M>,
-    pub why: Option<String>,
+    pub why: Option<signex_i18n::Localized>,
 }
 
 /// What a Selection Filter dropdown shows and sends, for any editor: the
