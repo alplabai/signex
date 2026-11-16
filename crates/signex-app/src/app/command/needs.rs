@@ -329,6 +329,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "board_report_components"
         | "export_board_report"
         | "export_board_pdf" => Needs::Pcb,
+        // #2410: panelisation acts on the board in view.
+        "panelize_board" | "remove_board_panel" | "set_board_panel" => Needs::Pcb,
         // #2373: the board placement tools.
         "place_board_via"
         | "place_board_track"

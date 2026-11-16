@@ -288,3 +288,7 @@ rules_enable	design	Turn a design rule on or off	-	PCB	-	-	Always	mutates_doc,un
 rules_effective	validation	Show the rule value that governs a net	-	PCB	-	-	Always	-	document:document,net:text,kind:text?,layer:text?
 rules_explain	validation	Explain the value a DRC finding asks for	-	PCB	-	-	Always	-	document:document,violation:text
 rules_conflicts	validation	List shadowed and conflicting design rules	-	PCB	-	-	Always	-	document:document
+panelize_board	pcb	Array the board into a manufacturing panel	Panelize Board	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
+remove_board_panel	pcb	Remove the board's panel	Remove Panel	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
+set_board_panel	pcb	Change a setting of the board's panel	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,field:text,value:text
+board_panel	pcb	Describe the board's panel	-	PCB	-	-	Always	-	document:document

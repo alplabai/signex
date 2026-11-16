@@ -32,6 +32,9 @@ fab-outputs-nothing-selected = Choose at least one kind of file.
 fab-outputs-bad-name = The file name is empty or holds a character a file name cannot hold.
 fab-outputs-no-outline = The board has no outline. Draw one with Board Sketch first.
 fab-outputs-write-failed = The files were not written: { $why }
+# The whole-panel checkbox (#2410), shown when the board has a panel.
+fab-outputs-panel = Whole panel: { $columns } × { $rows } copies with rails, marks and breakaway edges
+fab-outputs-panel-refused = The panel cannot be laid out: { $why }
 # What the files leave out, said under the result.
 fab-outputs-note-zones = { $count ->
     [one] One copper zone is not filled and is left out of the copper.
@@ -40,10 +43,6 @@ fab-outputs-note-zones = { $count ->
 fab-outputs-note-texts = { $count ->
     [one] One text is not drawn yet.
    *[other] { $count } texts are not drawn yet.
-}
-fab-outputs-note-v-scores = { $count ->
-    [one] One V-score line is not written.
-   *[other] { $count } V-score lines are not written.
 }
 fab-outputs-note-skipped = { $count ->
     [one] One item with a size or position out of range was left out.

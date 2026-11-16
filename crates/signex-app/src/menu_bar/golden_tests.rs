@@ -351,6 +351,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("open_erc_dialog", "OpenErcDialog"),
     ("run_drc", "RunDrc"),
     ("reannotate_board", "ReannotateBoard"),
+    // #2410: fixture names only.
+    ("panelize_board", "PanelizeBoard"),
+    ("remove_board_panel", "RemoveBoardPanel"),
     // #2404: the board reports.
     ("board_report_bom", "BoardReportBom"),
     ("board_report_netlist", "BoardReportNetlist"),

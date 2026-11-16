@@ -2,7 +2,8 @@
 //! `resolve`, `find_items`, `read_document`, `query_pins`, and the checks
 //! `check_erc` and `check_drc` (#2199, answered once their run lands), and
 //! the Rules manager reads `rules_list`, `rules_get`, `rules_effective`,
-//! `rules_explain` and `rules_conflicts` (#2398, `app::rules_tab`). Each
+//! `rules_explain` and `rules_conflicts` (#2398, `app::rules_tab`), and
+//! `board_panel` (#2410, `app::board_panel`). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -48,6 +49,7 @@ const QUERY_IDS: &[&str] = &[
     "rules_effective",
     "rules_explain",
     "rules_conflicts",
+    "board_panel",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -127,6 +129,7 @@ impl Signex {
             "resolve" => self.resolve_id(args),
             "find_items" => self.find(args),
             "query_pins" => self.query_pins(args),
+            "board_panel" => self.board_panel_query(args),
             _ => self.read_document(args),
         };
         // The heads of referenced files that were never read are read now,

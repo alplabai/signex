@@ -20,6 +20,7 @@ mod highlight;
 pub mod layer_style;
 mod marks;
 mod msg;
+mod panel_preview;
 mod part_ghost;
 mod select;
 mod snap_options;
@@ -753,6 +754,9 @@ impl canvas::Program<Message> for PcbCanvas {
                     paint,
                 );
                 marks::draw_grids(frame, &camera, size, region, &self.marks.grids);
+            }
+            if let Some(panel) = &self.marks.panel {
+                panel_preview::draw_panel(frame, &camera, panel, &self.canvas_colors);
             }
             marks::draw_guides(frame, &camera, size, &self.marks.guides);
             if self.origin_marker_visible {

@@ -168,6 +168,18 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "rules_enable",
         "it writes the project's rule set, which no sheet's undo step covers",
     ),
+    (
+        "panelize_board",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "remove_board_panel",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "set_board_panel",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
 ];
 
 /// Why `command` may not be one of the edits, or `None` when it may: it must

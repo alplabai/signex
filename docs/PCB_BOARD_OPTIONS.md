@@ -99,5 +99,7 @@ non_components = false
 
 The origin is `[board_options.origin]` with `x` and `y` in nm, written only when it is not the model's zero.
 
+The panel (#2410) is `[board_options.panel]`, written only when the board has one; the panel edits run its own `SetBoardPanel` command, and the options edits here carry it unchanged. See [PANELISATION.md](PANELISATION.md).
+
 A colour that is not `#rrggbb` or `#rrggbbaa` refuses the load; a length that
 is not finite refuses the save.

@@ -481,6 +481,10 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "rules_effective",
                     "rules_explain",
                     "rules_conflicts",
+                    "panelize_board",
+                    "remove_board_panel",
+                    "set_board_panel",
+                    "board_panel",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

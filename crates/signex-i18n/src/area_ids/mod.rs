@@ -3,6 +3,7 @@
 //! re-exports them, so callers write `ids::NAME` either way.
 
 mod board_output;
+mod board_panel;
 mod dialog;
 mod editors;
 mod fab_outputs;
@@ -20,6 +21,7 @@ mod rules;
 mod update_pcb;
 
 pub use board_output::*;
+pub use board_panel::*;
 pub use dialog::*;
 pub use editors::*;
 pub use fab_outputs::*;
@@ -41,6 +43,7 @@ pub use update_pcb::*;
 pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
         board_output::BOARD_OUTPUT,
+        board_panel::BOARD_PANEL,
         dialog::DIALOG,
         editors::EDITORS,
         fab_outputs::FAB_OUTPUTS,

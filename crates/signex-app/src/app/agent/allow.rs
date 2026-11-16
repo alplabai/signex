@@ -73,6 +73,7 @@ mod tests {
             [
                 "apply_edits",
                 "assign_net_class",
+                "board_panel",
                 "board_report_bom",
                 "board_report_components",
                 "board_report_net_length",
@@ -89,8 +90,10 @@ mod tests {
                 "hide_layer_group",
                 "highlight_layer",
                 "list_documents",
+                "panelize_board",
                 "query_pins",
                 "read_document",
+                "remove_board_panel",
                 "resolve",
                 "revert",
                 "rules_add",
@@ -104,6 +107,7 @@ mod tests {
                 "rules_set",
                 "save_document",
                 "save_layer_set",
+                "set_board_panel",
                 "show_layer_group",
                 "show_layer_set",
             ]

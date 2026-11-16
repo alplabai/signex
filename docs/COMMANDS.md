@@ -301,6 +301,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
+| `board_panel` | Describe the board's panel | pcb | — | — |
 | `board_report_bom` | Show the board's bill of materials: its components grouped by value and footprint | pcb | — | — |
 | `board_report_components` | Show each component's designator, footprint, position, rotation and side | pcb | — | — |
 | `board_report_net_length` | Show each net's routed length, tracks and vias | pcb | — | — |
@@ -321,6 +322,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
 | `open_rules` | Open the design rules of the project | design | — | — |
+| `panelize_board` | Array the board into a manufacturing panel | pcb | — | — |
 | `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | — | — |
 | `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | — |
@@ -330,6 +332,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_via` | Place a via on the board | place | `P V` | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
+| `remove_board_panel` | Remove the board's panel | pcb | — | — |
 | `rules_add` | Add a design rule | design | — | — |
 | `rules_conflicts` | List shadowed and conflicting design rules | validation | — | — |
 | `rules_effective` | Show the rule value that governs a net | validation | — | — |
@@ -341,6 +344,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rules_set` | Change a field of a design rule | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
+| `set_board_panel` | Change a setting of the board's panel | pcb | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
 | `show_layer_group` | Show every layer of one kind | view | — | — |

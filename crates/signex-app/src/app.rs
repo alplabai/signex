@@ -15,6 +15,7 @@ pub(crate) mod agent;
 pub(crate) mod assign_footprints;
 pub(crate) mod back_annotate;
 pub(crate) mod board_output;
+pub(crate) mod board_panel;
 pub(crate) mod board_reannotate;
 mod bootstrap;
 pub(crate) mod command;
@@ -87,6 +88,7 @@ pub use board_output::{
     BoardOutputDialog, BoardOutputMsg, BoardOutputState, BoardPrintFlag, BoardPrintState,
     BoardReportsState,
 };
+pub use board_panel::BoardPanelMsg;
 pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg,

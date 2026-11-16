@@ -379,6 +379,10 @@ altium	hint	-	-	rules_enable
 altium	hint	-	-	rules_effective
 altium	hint	-	-	rules_explain
 altium	hint	-	-	rules_conflicts
+altium	hint	-	-	panelize_board
+altium	hint	-	-	remove_board_panel
+altium	hint	-	-	set_board_panel
+altium	hint	-	-	board_panel
 classic	bind	Global	/	command:switch_segment_posture
 classic	bind	Global	A	command:place_symbol
 classic	bind	Global	⌥1	command:fast_grid_1
@@ -760,3 +764,7 @@ classic	hint	-	-	rules_enable
 classic	hint	-	-	rules_effective
 classic	hint	-	-	rules_explain
 classic	hint	-	-	rules_conflicts
+classic	hint	-	-	panelize_board
+classic	hint	-	-	remove_board_panel
+classic	hint	-	-	set_board_panel
+classic	hint	-	-	board_panel

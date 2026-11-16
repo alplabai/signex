@@ -21,10 +21,12 @@ mod header;
 mod health;
 mod info;
 mod other;
+mod panel;
 mod snap;
 
 // The PCB Active Bar's Selection Filter names the kinds as the chips do.
 pub(crate) use filter::kind_label as pick_kind_label;
+use panel::PanelFacts;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -37,6 +39,7 @@ use signex_i18n::{ids, t};
 use signex_types::coord::Unit;
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_options::{BoardOptions, DesignatorDisplay, GuideKind, PolygonNaming};
+use signex_types::pcb_panel::{PanelField, PanelSeparation};
 use uuid::Uuid;
 
 use super::{PanelContext, PanelMsg};
@@ -99,6 +102,8 @@ pub enum BoardField {
     SheetY,
     SheetWidth,
     SheetHeight,
+    /// A setting of the board's panel (#2410).
+    Panel(PanelField),
 }
 
 /// Which of the board's components a Board Information count selects.
@@ -187,6 +192,12 @@ pub enum PcbBoardMsg {
     FastGridApplied(usize),
     /// Get Size From Sheet Layer.
     SheetFromBoardToggled,
+    /// The Panel section's Panelize Board (#2410): runs `panelize_board`.
+    PanelizeClicked,
+    /// Its Remove Panel: runs `remove_board_panel`.
+    PanelRemoveClicked,
+    /// Its Mouse Bites | V-Score control.
+    PanelSeparationPicked(PanelSeparation),
 }
 
 /// The board facts and editor settings the panel shows.
@@ -215,6 +226,9 @@ pub struct PcbBoardSummary {
     pub grid_mm: Option<f64>,
     /// The board's guides, extra grids, sheet and naming options (#2374).
     pub options: BoardOptions,
+    /// What the board's panel comes to (#2410); `None` without a panel,
+    /// the reason when it does not lay out.
+    pub panel: Option<Result<PanelFacts, String>>,
     /// The board opened read-only (a newer format).
     pub read_only: bool,
     pub filter: PickFilter,
@@ -263,6 +277,7 @@ impl PcbBoardSummary {
                 .as_ref()
                 .map(|_| signex_engine::pcb::placement::grid_step_mm(board)),
             options: board.options.clone(),
+            panel: PanelFacts::of(board),
             read_only: board.unknown.newer_minor_source.is_some(),
             selected,
             ..Self::default()
@@ -330,6 +345,7 @@ pub fn view<'a>(ctx: &'a PanelContext, board: &'a PcbBoardSummary) -> Element<'a
         info::section(&form, board),
         grids::grid_section(&form, board),
         guides::section(&form, board),
+        panel::section(&form, board),
         other::section(&form, board),
     ];
     let mut shown = 0;

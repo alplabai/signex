@@ -230,6 +230,12 @@ define_ids! {
         CMD_RULES_EFFECTIVE = "cmd-rules-effective";
         CMD_RULES_EXPLAIN = "cmd-rules-explain";
         CMD_RULES_CONFLICTS = "cmd-rules-conflicts";
+        CMD_PANELIZE_BOARD = "cmd-panelize-board";
+        CMD_MENU_PANELIZE_BOARD = "cmd-menu-panelize-board";
+        CMD_REMOVE_BOARD_PANEL = "cmd-remove-board-panel";
+        CMD_MENU_REMOVE_BOARD_PANEL = "cmd-menu-remove-board-panel";
+        CMD_SET_BOARD_PANEL = "cmd-set-board-panel";
+        CMD_BOARD_PANEL = "cmd-board-panel";
         CMD_NUMBER_SCHEMATIC_SHEETS = "cmd-number-schematic-sheets";
         CMD_MENU_NUMBER_SCHEMATIC_SHEETS = "cmd-menu-number-schematic-sheets";
         CMD_RESET_SCHEMATIC_DESIGNATORS = "cmd-reset-schematic-designators";

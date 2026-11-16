@@ -62,6 +62,8 @@ pub enum PcbMsg {
     Reannotate(crate::app::BoardReannotateMsg),
     /// File ▸ Fabrication Outputs and its dialog (#2388).
     FabOutputs(crate::app::FabOutputsMsg),
+    /// Tools ▸ Panelize Board and Remove Panel (#2410).
+    Panel(crate::app::BoardPanelMsg),
     /// Back Annotate and its dialog (#1312).
     BackAnnotate(crate::app::BackAnnotateMsg),
     /// Board Reports (#2404) and Board Print / PDF (#2402).

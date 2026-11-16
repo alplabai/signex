@@ -75,6 +75,11 @@
     "category": "pcb_sync"
   },
   {
+    "id": "board_panel",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "board_report_bom",
     "group": "Pcb",
     "category": "pcb"
@@ -745,6 +750,11 @@
     "category": "select"
   },
   {
+    "id": "panelize_board",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "paste",
     "group": "General",
     "category": "edit"
@@ -1025,6 +1035,11 @@
     "category": "view"
   },
   {
+    "id": "remove_board_panel",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "remove_last_vertex",
     "group": "General",
     "category": "interactive"
@@ -1193,6 +1208,11 @@
     "id": "send_to_back_of",
     "group": "Schematic",
     "category": "modify"
+  },
+  {
+    "id": "set_board_panel",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "set_layer_tab_names",
