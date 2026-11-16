@@ -26,6 +26,7 @@ mod footprint_content;
 pub mod footprint_swap;
 mod items;
 mod options;
+mod panel;
 pub mod part_place;
 pub mod placement;
 pub mod primitive_edit;

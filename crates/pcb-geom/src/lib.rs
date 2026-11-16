@@ -19,6 +19,7 @@ mod graphic;
 mod index;
 mod mst;
 mod net_length;
+pub mod panel;
 mod pick_filter;
 mod ratsnest;
 mod rect;

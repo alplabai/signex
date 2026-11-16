@@ -33,6 +33,7 @@ use crate::pcb::{PcbBoard, Zone};
 use crate::schematic::SchematicSheet;
 
 mod board_options;
+mod board_panel;
 mod board_sketch;
 mod extras;
 mod finite_toml;

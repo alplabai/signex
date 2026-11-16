@@ -100,6 +100,9 @@ pub enum BoardCommandError {
     NoSetup,
     #[error("the board outline belongs to the board sketch; edit the sketch instead")]
     OutlineOwnedBySketch,
+    /// A panel that breaks a rule or cannot be laid out on the board (#2410).
+    #[error("the panel cannot be set: {0}")]
+    Panel(signex_types::pcb_panel::PanelError),
     #[error(
         "the board changed since revision {expected} (it is at {current}); read it again and retry"
     )]

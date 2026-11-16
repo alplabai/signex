@@ -2,7 +2,7 @@
 //! polygon naming scheme and the designator display. Document data, saved
 //! in the `.snxpcb` `[board_options]` section and changed only through the
 //! board engine's `SetBoardOptions` command. The board's origin (#2384) is
-//! kept here too. See `docs/PCB_BOARD_OPTIONS.md`.
+//! kept here too, and the panel (#2410). See `docs/PCB_BOARD_OPTIONS.md`.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -52,6 +52,11 @@ pub struct BoardOptions {
     /// counts from the model's zero.
     #[serde(default)]
     pub origin: BoardOrigin,
+    /// The panel the board is arrayed into for manufacture (#2410); `None`
+    /// for a board made on its own. Changed only through the board engine's
+    /// `SetBoardPanel` command.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panel: Option<crate::pcb_panel::BoardPanel>,
 }
 
 impl BoardOptions {

@@ -1,6 +1,7 @@
 use signex_net::board::BoardNetEdit;
 use signex_types::pcb::{ComponentAttributes, Footprint, PcbBoard, Point, SymbolLink};
 use signex_types::pcb_options::BoardOptions;
+use signex_types::pcb_panel::BoardPanel;
 use signex_types::pcb_sketch::BoardSketch;
 use signex_types::property::PcbProperty;
 use uuid::Uuid;
@@ -12,6 +13,7 @@ use super::footprint::{self, FootprintFace};
 use super::footprint_content::{self, FootprintText};
 use super::items::{self, BoardItem, BoardItemId, RemovedItem};
 use super::options;
+use super::panel;
 use super::replace::{self, FootprintPad, Values};
 
 /// One edit of a board. Targets are absolute so the inverse is exact.
@@ -169,6 +171,11 @@ pub enum BoardCommand {
     /// grid uuid named twice. The inverse is another one holding the old
     /// options.
     SetBoardOptions { options: Box<BoardOptions> },
+    /// Set the board's panel (#2410), `None` to make the board on its own.
+    /// Refused for a panel that breaks a rule of `BoardPanel::check`, or
+    /// that cannot be laid out on the board's outline (tabs that do not fit
+    /// an edge). The inverse is another one holding the old panel.
+    SetBoardPanel { panel: Option<Box<BoardPanel>> },
 }
 
 /// What a command changed, for a consumer that redraws or re-derives only
@@ -211,6 +218,8 @@ pub enum BoardPatchKind {
     GridChanged,
     /// The board options. Names no items.
     OptionsChanged,
+    /// The panel (#2410). Names no items.
+    PanelChanged,
 }
 
 /// The result of applying a command: the command that undoes it and the
@@ -291,6 +300,7 @@ impl BoardCommand {
             Self::SetNets(edit) => batch::set_nets(board, edit),
             Self::SetGridSize { grid_mm } => set_grid_size(board, grid_mm),
             Self::SetBoardOptions { options: new } => options::set(board, *new),
+            Self::SetBoardPanel { panel: new } => panel::set(board, new.map(|p| *p)),
         }
     }
 }

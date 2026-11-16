@@ -9,6 +9,7 @@ use crate::pcb_options::{
     BoardGrid, BoardGuide, BoardOptions, BoardOrigin, BoardSheet, DesignatorDisplay, GuideKind,
     MARK_COLORS, PolygonNaming,
 };
+use crate::pcb_panel::{BoardPanel, PanelSeparation};
 
 const OLD_BOARD: &str = include_str!("../../tests/corpus/pcb/board-outline-only.snxpcb");
 
@@ -47,7 +48,25 @@ fn options() -> BoardOptions {
         polygon_naming: PolygonNaming::LayerNetPour,
         designator_display: DesignatorDisplay::Logical,
         origin: BoardOrigin::new(Point::new(-12.5, 80.0)),
+        panel: Some(panel()),
     }
+}
+
+/// A three by one V-score panel with every length set (#2410).
+fn panel() -> BoardPanel {
+    let mut panel = BoardPanel {
+        columns: 3,
+        rows: 1,
+        spacing_x: 0.0,
+        spacing_y: 1.5,
+        separation: PanelSeparation::VScore,
+        ..BoardPanel::default()
+    };
+    panel.rails.left = 2.5;
+    panel.rails.right = 3.25;
+    panel.bites.tabs_per_edge = 3;
+    panel.bites.pitch = 0.75;
+    panel
 }
 
 #[test]
@@ -110,4 +129,22 @@ fn the_saved_origin_reloads_unchanged() {
     let back = SnxPcb::parse(&text).expect("reads back").board;
     assert_eq!(back.options.origin, board.options.origin);
     assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);
+}
+
+/// #2410: the panel reloads as saved, under its own table, and a panel that
+/// breaks a rule (no columns) is refused on load.
+#[test]
+fn the_panel_round_trips_and_a_broken_one_is_refused() {
+    let mut board = empty_board();
+    board.options.panel = Some(panel());
+    let text = SnxPcb::new(board.clone()).write_string().expect("writes");
+    assert!(text.contains("[board_options.panel]"), "{text}");
+    assert!(text.contains("separation = \"v_score\""), "{text}");
+    let back = SnxPcb::parse(&text).expect("reads back").board;
+    assert_eq!(back.options.panel, board.options.panel);
+    let broken = text.replacen("columns = 3", "columns = 0", 1);
+    assert!(matches!(
+        SnxPcb::parse(&broken),
+        Err(FormatError::TsvFieldParse { .. })
+    ));
 }

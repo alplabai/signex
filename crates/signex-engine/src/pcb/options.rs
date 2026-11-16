@@ -69,6 +69,10 @@ fn check(options: &BoardOptions) -> Result<(), BoardCommandError> {
             field: "sheet height",
         });
     }
+    // The panel rides along whole; it keeps its own rules (#2410).
+    if let Some(panel) = &options.panel {
+        panel.check().map_err(BoardCommandError::Panel)?;
+    }
     Ok(())
 }
 
