@@ -7,7 +7,6 @@
 mod backup;
 mod binding;
 mod catalog;
-mod command;
 mod display;
 mod editor;
 mod mod_migration;
@@ -43,7 +42,6 @@ pub use catalog::{
     category_title, command_menu_message, command_menu_text, fallback_label, metadata_for,
     metadata_for_str, offered_in,
 };
-pub use command::AppCommandId;
 pub use editor::{
     BindingSlot, KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource,
 };
@@ -59,7 +57,7 @@ pub use profile::{
     load_profile_set, load_profile_set_at, read_backup_profiles_at, save_profile_set,
     save_profile_set_at,
 };
-pub use signex_commands::Platform;
+pub use signex_commands::{AppCommandId, Platform};
 
 #[cfg(test)]
 mod binding_tests;
