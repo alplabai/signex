@@ -13,7 +13,7 @@
 
 use serde::{Deserialize, Serialize};
 use signex_history::{DEFAULT_UNDO_DEPTH, History};
-use signex_types::net_class::{NetClass, NetClassStyle};
+use signex_types::net_class::{NetClass, NetClassBoardRules, NetClassStyle};
 
 /// How many undo steps are kept unless the `undo_depth` setting says
 /// otherwise.
@@ -61,6 +61,16 @@ pub enum NetClassCommand {
         name: String,
         to_index: usize,
     },
+    /// Replace the class's board rules (clearance, track width, via, diff
+    /// pair; mm, `0.0` unset) as one step (#2400).
+    SetBoardRules {
+        name: String,
+        rules: NetClassBoardRules,
+    },
+    /// Several edits as one step, in order; one refusal refuses them all.
+    Batch {
+        commands: Vec<NetClassCommand>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -75,6 +85,8 @@ pub enum NetClassError {
     Unknown(String),
     #[error("wire width must be a positive, finite number of millimetres")]
     InvalidWidth,
+    #[error("{0} must be a finite number of millimetres, zero or more (zero: not set)")]
+    InvalidBoardRule(&'static str),
 }
 
 /// Apply `command` to `classes`. On error `classes` is unchanged.
@@ -141,8 +153,31 @@ pub fn apply_net_class_command(
             let class = classes.remove(at);
             classes.insert(to_index.min(classes.len()), class);
         }
+        NetClassCommand::SetBoardRules { name, rules } => {
+            check_board_rules(&rules)?;
+            let at = index_of(classes, &name)?;
+            classes[at].set_board_rules(rules);
+        }
+        NetClassCommand::Batch { commands } => {
+            let mut next = classes.clone();
+            for command in commands {
+                apply_net_class_command(&mut next, command)?;
+            }
+            *classes = next;
+        }
     }
     Ok(())
+}
+
+fn check_board_rules(rules: &NetClassBoardRules) -> Result<(), NetClassError> {
+    match rules
+        .fields()
+        .into_iter()
+        .find(|(_, mm)| !(mm.is_finite() && *mm >= 0.0))
+    {
+        Some((field, _)) => Err(NetClassError::InvalidBoardRule(field)),
+        None => Ok(()),
+    }
 }
 
 fn index_of(classes: &[NetClass], name: &str) -> Result<usize, NetClassError> {

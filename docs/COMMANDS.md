@@ -293,12 +293,18 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
+| `add_net_class` | Add a net class | design | — | — |
+| `assign_board_net_class` | Put a board net in a net class | design | — | — |
 | `board_sketch` | Enter or leave the board sketch | design | — | — |
 | `change_footprint` | Change the footprint of the selected components | modify | — | — |
+| `delete_net_class` | Delete a net class | design | — | — |
+| `filter_drc_results` | Filter the DRC results by rule, layer and severity | pcb | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
 | `next_layer` | Make the next layer of the board active | view | `+`, `Shift++` | `+`, `Shift++` |
 | `next_signal_layer` | Make the next signal layer active | view | `*`, `Shift+*` | `*`, `Shift+*` |
+| `open_drc_panel` | Open the DRC results panel | pcb | — | — |
+| `open_net_classes_panel` | Open the board Net Classes panel | design | — | — |
 | `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | — | — |
 | `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | — |
@@ -307,18 +313,23 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_via` | Place a via on the board | place | `P V` | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
+| `rename_net_class` | Rename a net class | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | — | — |
+| `set_net_class_rules` | Set the colour and board rules of a net class | design | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
+| `show_drc_violation` | Select a DRC violation and centre the view on it | pcb | — | — |
 | `toggle_layer_visibility` | Show or hide the active layer | view | — | — |
 | `toggle_layers_panel` | Show or hide the Layers panel | view | — | — |
 | `toggle_origin_marker` | Show or hide the board origin marker | view | — | — |
 | `toggle_ratsnest` | Show or hide the ratsnest | view | — | — |
 | `toggle_single_layer_mode` | Draw only the active layer, or every layer again | view | `Shift+S` | `Shift+S` |
+| `unwaive_drc_violation` | Take back the waiver of a DRC violation | pcb | — | — |
 | `view_board_3d` | Show the board in 3D, or flat again | view | `3` | `3` |
 | `view_rotate` | Rotate the board view clockwise | view | — | — |
 | `view_rotate_180` | Rotate the board view 180° | view | — | — |
 | `view_rotate_ccw` | Rotate the board view 90° counter-clockwise | view | — | — |
 | `view_rotate_reset` | Reset the board view rotation to 0° | view | — | — |
+| `waive_drc_violation` | Waive a DRC violation with a note | pcb | — | — |
 
 ## 3D
 

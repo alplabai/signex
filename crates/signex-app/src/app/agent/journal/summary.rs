@@ -24,7 +24,14 @@ const TEXT_CHARS: usize = 120;
 const HEADER: &str = "Agent edits since the previous commit:";
 
 /// Commands whose change lands in the project file, whatever sheet they name.
-const PROJECT_WIDE: [&str; 1] = ["assign_net_class"];
+const PROJECT_WIDE: [&str; 6] = [
+    "assign_net_class",
+    "add_net_class",
+    "rename_net_class",
+    "delete_net_class",
+    "set_net_class_rules",
+    "assign_board_net_class",
+];
 
 /// How long a commit worker waits for the journal lines still queued.
 const JOURNAL_WAIT: Duration = Duration::from_secs(5);

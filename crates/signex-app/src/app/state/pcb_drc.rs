@@ -27,6 +27,11 @@ pub struct PcbDrc {
     target: Option<(PathBuf, u64)>,
     running: bool,
     done: Option<DrcDone>,
+    /// What the DRC results panel shows of the report (#2399): view state,
+    /// never board data.
+    pub filter: crate::panels::DrcFilter,
+    /// The waiver note being written in the panel.
+    pub waive_draft: Option<crate::panels::DrcWaiveDraft>,
 }
 
 impl PcbDrc {
@@ -83,6 +88,18 @@ impl PcbDrc {
     pub fn done_for(&self, path: &Path) -> Option<&DrcDone> {
         self.done.as_ref().filter(|d| d.path == path)
     }
+
+    /// The board at `path` went from revision `from` to `to` by an edit DRC
+    /// does not read (a waiver): a report of revision `from` stays current.
+    pub fn carry_revision(&mut self, path: &Path, from: u64, to: u64) {
+        if let Some(done) = self
+            .done
+            .as_mut()
+            .filter(|d| d.path == path && d.revision == from)
+        {
+            done.revision = to;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -126,6 +143,21 @@ mod tests {
         assert!(run(&mut drc, "a.snxpcb"));
         assert!(drc.done_for(Path::new("a.snxpcb")).is_some());
         assert!(drc.done_for(Path::new("b.snxpcb")).is_none());
+    }
+
+    /// #2399: a waiver moves the board's revision; the report of the
+    /// revision before it stays current, any other is left stale.
+    #[test]
+    fn a_waiver_keeps_the_report_current() {
+        let mut drc = PcbDrc::default();
+        assert!(run(&mut drc, "a.snxpcb"));
+        let a = Path::new("a.snxpcb");
+        drc.carry_revision(a, 1, 2);
+        assert_eq!(drc.done_for(a).map(|d| d.revision), Some(2));
+        drc.carry_revision(a, 5, 6);
+        assert_eq!(drc.done_for(a).map(|d| d.revision), Some(2));
+        drc.carry_revision(Path::new("b.snxpcb"), 2, 3);
+        assert_eq!(drc.done_for(a).map(|d| d.revision), Some(2));
     }
 
     #[test]

@@ -6,6 +6,7 @@
 use signex_drc::ViolationKind;
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::pcb_layer::CopperLayer;
+use signex_types::violation::Severity;
 
 use super::*;
 use crate::styles::{Spacing, TypeScale};
@@ -33,6 +34,18 @@ pub struct DrcRow {
     pub y_mm: String,
     /// The first copper layer the two items share.
     pub layer: Option<CopperLayer>,
+    /// Every copper layer it is on, for the layer filter (#2399).
+    pub layers: Vec<CopperLayer>,
+    /// Its waiver key: what a click, a waiver and the commands name it by.
+    pub key: String,
+    /// The rule id it is filed under (`builtin::clearance`, `user::<name>`).
+    pub rule: String,
+    /// Its rule's severity; `None` when the rule is switched off.
+    pub severity: Option<Severity>,
+    /// How many objects it involves.
+    pub objects: usize,
+    /// The note of its waiver, when the board waives it.
+    pub waiver: Option<String>,
 }
 
 /// What the panel shows of the active board's last check.
@@ -65,9 +78,13 @@ pub struct DrcPanel {
     pub rows: Vec<DrcRow>,
     /// Violations past [`MAX_ROWS`].
     pub hidden: usize,
+    /// What the DRC results panel shows of `rows` (#2399).
+    pub filter: super::DrcFilter,
+    /// The waiver note being written there.
+    pub waive_draft: Option<super::DrcWaiveDraft>,
 }
 
-fn layer_label(i18n: &I18n, layer: Option<CopperLayer>) -> Option<Localized> {
+pub(super) fn layer_label(i18n: &I18n, layer: Option<CopperLayer>) -> Option<Localized> {
     Some(match layer? {
         CopperLayer::Top => t!(i18n, ids::PCB_LAYER_TOP_COPPER),
         CopperLayer::Bottom => t!(i18n, ids::PCB_LAYER_BOTTOM_COPPER),
@@ -77,7 +94,7 @@ fn layer_label(i18n: &I18n, layer: Option<CopperLayer>) -> Option<Localized> {
     })
 }
 
-fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
+pub(super) fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
     let kind = match row.kind {
         ViolationKind::Clearance => t!(i18n, ids::DRC_KIND_CLEARANCE),
         ViolationKind::Short => t!(i18n, ids::DRC_KIND_SHORT),
@@ -116,15 +133,15 @@ fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
     (kind, detail, place)
 }
 
-type Rows<'a> = Column<Element<'a, PanelMsg>>;
+pub(super) type Rows<'a> = Column<Element<'a, PanelMsg>>;
 
-fn note<'a>(message: Localized, color: Color) -> Element<'a, PanelMsg> {
+pub(super) fn note<'a>(message: Localized, color: Color) -> Element<'a, PanelMsg> {
     text(message).size(TS.caption).color(color).boxed()
 }
 
 /// The section header: its title and a Graphite Run DRC button, disabled
 /// while a check runs.
-fn header<'a>(ctx: &'a PanelContext, drc: &DrcPanel, col: Rows<'a>) -> Rows<'a> {
+pub(super) fn header<'a>(ctx: &'a PanelContext, drc: &DrcPanel, col: Rows<'a>) -> Rows<'a> {
     let i18n = &*ctx.i18n;
     let primary = theme_ext::text_primary(&ctx.tokens);
     let run = (!drc.running).then_some(PanelMsg::RunDrc);
@@ -169,7 +186,7 @@ fn rule<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
 
 /// The state line(s) above the rows: running, idle, or what the last run
 /// found. The default-clearance notice comes first among them.
-fn status<'a>(ctx: &'a PanelContext, drc: &DrcPanel, mut col: Rows<'a>) -> Rows<'a> {
+pub(super) fn status<'a>(ctx: &'a PanelContext, drc: &DrcPanel, mut col: Rows<'a>) -> Rows<'a> {
     let i18n = &*ctx.i18n;
     let muted = theme_ext::text_secondary(&ctx.tokens);
     let warn = theme_ext::warning_color(&ctx.tokens);
@@ -376,6 +393,12 @@ mod tests {
             x_mm: "0".into(),
             y_mm: "0".into(),
             layer: None,
+            layers: Vec::new(),
+            key: String::new(),
+            rule: String::new(),
+            severity: None,
+            objects: 0,
+            waiver: None,
         };
         let text = |kind, over| {
             let (kind, detail, _) = row_text(&i18n, &row(kind, over));
@@ -424,6 +447,12 @@ mod tests {
                 x_mm: "0".into(),
                 y_mm: "0".into(),
                 layer: None,
+                layers: Vec::new(),
+                key: String::new(),
+                rule: String::new(),
+                severity: None,
+                objects: 0,
+                waiver: None,
             }],
             ..DrcPanel::default()
         });

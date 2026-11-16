@@ -281,6 +281,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
         "open_erc_dialog" => Message::Erc(ErcMsg::OpenDialog),
         "run_drc" => Message::Pcb(PcbMsg::DrcRequested),
+        // #2399, #2400: the board's DRC results and Net Classes panels.
+        "open_drc_panel" => Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::Drc)),
+        "open_net_classes_panel" => {
+            Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::NetClasses))
+        }
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),
         "run_erc" => Message::Erc(ErcMsg::Run),
         "save_document" => Message::File(FileMsg::Save),

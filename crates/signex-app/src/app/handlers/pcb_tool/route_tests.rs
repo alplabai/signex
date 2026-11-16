@@ -142,3 +142,49 @@ fn track_needs_a_copper_layer_active() {
     click(&mut app, 5.0, 0.0);
     assert_eq!(board_of(&app, &path).segments.len(), 1, "nothing is routed");
 }
+
+/// #2400: a class made in the board Net Classes panel, with a track width
+/// typed in and GND picked into it, sizes the Track tool's run on GND.
+#[test]
+fn a_track_run_takes_the_width_of_its_net_class() {
+    use crate::dock::DockMessage;
+    use crate::panels::{BoardNetClassField, BoardNetClassMsg, PanelMsg};
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    app.document_state.projects[0].data.pcb_file = Some("board.snxpcb".into());
+    let panel = |app: &mut crate::app::Signex, msg| {
+        let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::BoardNetClass(
+            msg,
+        ))));
+    };
+    panel(&mut app, BoardNetClassMsg::AddRequested);
+    panel(
+        &mut app,
+        BoardNetClassMsg::CellEdited {
+            class: "Class 1".into(),
+            field: BoardNetClassField::Width,
+            text: "0.6".into(),
+        },
+    );
+    panel(&mut app, BoardNetClassMsg::CellSubmitted);
+    panel(
+        &mut app,
+        BoardNetClassMsg::NetPicked {
+            class: "Class 1".into(),
+            net: "GND".into(),
+        },
+    );
+    let classes = app.board_net_classes(&path).to_vec();
+    assert_eq!(classes.len(), 1, "{classes:?}");
+    assert_eq!(
+        (classes[0].trace_width, classes[0].nets.clone()),
+        (0.6, vec!["GND".to_string()])
+    );
+
+    run(&mut app, "place_board_track");
+    click(&mut app, 2.1, 0.2);
+    click(&mut app, 5.2, 4.1);
+    let added = &board_of(&app, &path).segments[1];
+    assert_eq!((added.net, added.width), (3, 0.6), "the class width");
+}

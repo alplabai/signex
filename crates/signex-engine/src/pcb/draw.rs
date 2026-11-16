@@ -5,6 +5,7 @@
 use pcb_geom::{PointNm, layer_bit, net_at};
 use signex_types::corner::CornerRule;
 use signex_types::format::pcb_layer_token;
+use signex_types::net_class::{NetClass, first_matching_class};
 use signex_types::pcb::{
     PCB_DEFAULT_TRACE_WIDTH_MM, PCB_DEFAULT_VIA_DIAMETER_MM, PCB_DEFAULT_VIA_DRILL_MM, PcbBoard,
     PcbSetup, Point, Segment, Via, ViaType, Zone,
@@ -80,6 +81,29 @@ impl TrackStyle {
             net: net_under(board, at, 1 << layer_bit(layer)),
         }
     }
+
+    /// The style with the track width of its net's class (#2400), when the
+    /// class sets one; unchanged for no net or a class without a width.
+    #[must_use]
+    pub fn with_class_width(mut self, board: &PcbBoard, classes: &[NetClass]) -> Self {
+        if let Some(width) = class_track_width(board, self.net, classes) {
+            self.width_mm = width;
+        }
+        self
+    }
+}
+
+/// The track width the net class of net `net` sets: the first class of
+/// `classes` (table order) that holds the net's name, when its width is set
+/// (finite and above zero). `None` for net 0 or a net the board does not name.
+pub fn class_track_width(board: &PcbBoard, net: u32, classes: &[NetClass]) -> Option<f64> {
+    if net == 0 {
+        return None;
+    }
+    let name = &board.nets.iter().find(|n| n.number == net)?.name;
+    first_matching_class(classes, name)
+        .map(|class| class.trace_width)
+        .filter(|w| w.is_finite() && *w > 0.0)
 }
 
 /// The tracks of a run from `from` to `to`, bent by `rule` into one or two

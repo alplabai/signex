@@ -105,8 +105,12 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
   `clear_all_net_colors`, `assign_net_class`, `save_document` and
-  `close_active_document`. A test pins this set, so a catalog row that joins or
-  leaves it is a visible decision.
+  `close_active_document`, and the board's DRC results and net classes
+  (#2399, #2400): `show_drc_violation`, `filter_drc_results`,
+  `waive_drc_violation`, `unwaive_drc_violation`, `add_net_class`,
+  `rename_net_class`, `delete_net_class`, `set_net_class_rules` and
+  `assign_board_net_class`, each answering with what it did. A test pins
+  this set, so a catalog row that joins or leaves it is a visible decision.
 
 The last three are open to agents by the maintainer's decision (#1924):
 

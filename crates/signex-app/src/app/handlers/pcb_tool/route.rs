@@ -7,6 +7,7 @@
 //! on there. A click on the run's end, Esc or a right-click ends the run.
 
 use signex_engine::pcb::draw::{self, TrackStyle};
+use signex_types::net_class::NetClass;
 use signex_types::pcb::{PcbBoard, Point, Via};
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
@@ -49,8 +50,9 @@ impl Signex {
         let Some(session) = self.own_board_tool() else {
             return;
         };
+        let classes = self.track_tool_net_classes();
         let Some(anchor) = session.points.last().copied() else {
-            let style = TrackStyle::starting_at(board, at, layer);
+            let style = TrackStyle::starting_at(board, at, layer).with_class_width(board, classes);
             self.set_route(vec![at], Some(style));
             return;
         };
@@ -59,7 +61,7 @@ impl Signex {
             self.set_route(Vec::new(), None);
             return;
         }
-        let (style, via) = next_leg_style(board, session, anchor, at, layer);
+        let (style, via) = next_leg_style(board, session, anchor, at, layer, classes);
         let rule = self.interaction_state.corner_rule;
         let tracks = draw::track_run(anchor, at, rule, style, Uuid::now_v7);
         if let Some(command) = draw::place_route(tracks, via) {
@@ -71,6 +73,15 @@ impl Signex {
             .unwrap_or_default();
         points.push(at);
         self.set_route(points, Some(style));
+    }
+
+    /// The net classes the Track tool sizes a run by: the table of the
+    /// project of the board in view (none for a loose board).
+    fn track_tool_net_classes(&self) -> &[NetClass] {
+        match self.active_tab_path() {
+            Some(path) => self.board_net_classes(&path),
+            None => &[],
+        }
     }
 
     fn set_route(&mut self, points: Vec<Point>, style: Option<TrackStyle>) {
@@ -94,7 +105,8 @@ impl Signex {
         else {
             return;
         };
-        let (style, via) = next_leg_style(board, session, anchor, cursor, layer);
+        let classes = self.track_tool_net_classes();
+        let (style, via) = next_leg_style(board, session, anchor, cursor, layer, classes);
         let rule = self.interaction_state.corner_rule;
         preview
             .segments
@@ -105,19 +117,22 @@ impl Signex {
 
 /// The style of the legs from `anchor` to `to` on `layer`, and the via at
 /// `anchor` when `layer` is not the run's. A run with no net yet takes the
-/// net of the copper under `to`.
+/// net of the copper under `to`, and the track width of its net class
+/// (#2400).
 fn next_leg_style(
     board: &PcbBoard,
     session: &BoardToolSession,
     anchor: Point,
     to: Point,
     layer: CopperLayer,
+    classes: &[NetClass],
 ) -> (TrackStyle, Option<Via>) {
-    let mut style = session
-        .route
-        .unwrap_or_else(|| TrackStyle::starting_at(board, anchor, layer));
+    let mut style = session.route.unwrap_or_else(|| {
+        TrackStyle::starting_at(board, anchor, layer).with_class_width(board, classes)
+    });
     if style.net == 0 {
         style.net = draw::net_under(board, to, 1 << pcb_geom::layer_bit(layer));
+        style = style.with_class_width(board, classes);
     }
     let via = (style.layer != layer).then(|| Via {
         net: style.net,

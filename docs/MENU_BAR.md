@@ -98,6 +98,33 @@ Tools ▸ Design Rule Check runs `run_drc` (#2222) on the PCB in view and is
 greyed while no PCB is open. The command is also in the command palette and
 as the Run DRC button of the Messages panel; no keymap preset binds it.
 
+## Tools ▸ DRC Results and Tools ▸ Net Classes {#tools-drc-results}
+
+Right after Design Rule Check, Tools ▸ DRC Results (`open_drc_panel`, #2399)
+and Tools ▸ Net Classes (`open_net_classes_panel`, #2400) open the board's
+DRC results panel and Net Classes panel. Both are greyed while no PCB is
+open, and no keymap preset binds them.
+
+The DRC results panel lists the last run's violations grouped by rule, each
+group with its count. A row shows the severity, what broke, the nets, the
+objects involved and the location; a click selects its objects and centres
+the view on it (`show_drc_violation`). The filters (rule, layer, severity,
+Show waived) are `filter_drc_results`. Waive opens a note field; its Waive
+stores the waiver with the note in the board (`waive_drc_violation`, one
+board undo step), and Unwaive takes it back (`unwaive_drc_violation`). A
+waived violation is hidden until Show waived is on. The results are marked
+stale when the board changes after the run (a waiver alone does not). The
+Rule link of a group stays greyed until boards have a Rules table.
+
+The Net Classes panel is a table of the board's project net classes (the
+same table the schematic's net classes and DRC read): name, colour, track
+width, clearance, via diameter and drill, diff-pair gap and width, and the
+member nets as chips. Add Class, Delete, a typed cell (Enter) and a net
+picked into or removed from a class are each one step of the project's
+net-class history, with the panel's Undo and Redo. The commands are
+`add_net_class`, `rename_net_class`, `delete_net_class`,
+`set_net_class_rules` and `assign_board_net_class`.
+
 ## Tools ▸ Re-Annotate Board {#tools-reannotate-board}
 
 Tools ▸ Re-Annotate Board... runs `reannotate_board` (#1312), right after

@@ -146,10 +146,64 @@ impl NetClass {
         }
     }
 
+    /// The class's board rules (mm, `0.0` unset).
+    pub fn board_rules(&self) -> NetClassBoardRules {
+        NetClassBoardRules {
+            clearance: self.clearance,
+            trace_width: self.trace_width,
+            via_diameter: self.via_diameter,
+            via_drill: self.via_drill,
+            diff_pair_gap: self.diff_pair_gap,
+            diff_pair_width: self.diff_pair_width,
+        }
+    }
+
+    /// Set the class's board rules from `rules`.
+    pub fn set_board_rules(&mut self, rules: NetClassBoardRules) {
+        self.clearance = rules.clearance;
+        self.trace_width = rules.trace_width;
+        self.via_diameter = rules.via_diameter;
+        self.via_drill = rules.via_drill;
+        self.diff_pair_gap = rules.diff_pair_gap;
+        self.diff_pair_width = rules.diff_pair_width;
+    }
+
     /// Whether `net_name` is a member, by exact name or by pattern.
     pub fn contains_net(&self, net_name: &str) -> bool {
         self.nets.iter().any(|n| n == net_name)
             || self.patterns.iter().any(|p| glob_matches(p, net_name))
+    }
+}
+
+/// The board rule block of a class, in mm; `0.0` is unset (the board's own
+/// value applies). Edited as one value so one table edit is one undo step.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct NetClassBoardRules {
+    #[serde(default)]
+    pub clearance: f64,
+    #[serde(default)]
+    pub trace_width: f64,
+    #[serde(default)]
+    pub via_diameter: f64,
+    #[serde(default)]
+    pub via_drill: f64,
+    #[serde(default)]
+    pub diff_pair_gap: f64,
+    #[serde(default)]
+    pub diff_pair_width: f64,
+}
+
+impl NetClassBoardRules {
+    /// Each field with its name, in table order.
+    pub fn fields(&self) -> [(&'static str, f64); 6] {
+        [
+            ("clearance", self.clearance),
+            ("trace_width", self.trace_width),
+            ("via_diameter", self.via_diameter),
+            ("via_drill", self.via_drill),
+            ("diff_pair_gap", self.diff_pair_gap),
+            ("diff_pair_width", self.diff_pair_width),
+        ]
     }
 }
 

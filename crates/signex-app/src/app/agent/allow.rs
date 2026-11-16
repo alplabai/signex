@@ -71,21 +71,30 @@ mod tests {
         assert_eq!(
             allowed(),
             [
+                "add_net_class",
                 "apply_edits",
+                "assign_board_net_class",
                 "assign_net_class",
                 "check_drc",
                 "check_erc",
                 "clear_all_net_colors",
                 "close_active_document",
                 "color_net",
+                "delete_net_class",
                 "document_info",
+                "filter_drc_results",
                 "find_items",
                 "list_documents",
                 "query_pins",
                 "read_document",
+                "rename_net_class",
                 "resolve",
                 "revert",
                 "save_document",
+                "set_net_class_rules",
+                "show_drc_violation",
+                "unwaive_drc_violation",
+                "waive_drc_violation",
             ]
         );
     }

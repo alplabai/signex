@@ -102,14 +102,16 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 
-    /// What the Messages panel shows of the active board's check; `None`
-    /// with no PCB in view.
+    /// What the Messages panel and the DRC results panel (#2399) show of the
+    /// active board's check; `None` with no PCB in view.
     pub(crate) fn pcb_drc_panel(&self) -> Option<crate::panels::DrcPanel> {
         let path = self.active_tab_path()?;
-        self.active_pcb()?;
+        let waivers = &self.active_pcb()?.options.drc_waivers;
         let drc = &self.interaction_state.pcb_drc;
         let mut panel = crate::panels::DrcPanel {
             running: drc.is_running_for(&path),
+            filter: drc.filter.clone(),
+            waive_draft: drc.waive_draft.clone(),
             ..Default::default()
         };
         let Some(done) = drc.done_for(&path) else {
@@ -153,17 +155,27 @@ impl Signex {
             .iter()
             .enumerate()
             .take(crate::panels::DRC_MAX_ROWS)
-            .map(|(index, v)| crate::panels::DrcRow {
-                index,
-                kind: v.kind,
-                a: name(v.nets.0),
-                b: name(v.nets.1),
-                measured_mm: mm(v.measured_nm),
-                required_mm: mm(v.required_nm),
-                over_maximum: v.kind == ViolationKind::TrackWidth && v.measured_nm > v.required_nm,
-                x_mm: mm(v.at.x),
-                y_mm: mm(v.at.y),
-                layer: pcb_geom::copper_layers(v.layers).first().copied(),
+            .map(|(index, v)| {
+                let layers = pcb_geom::copper_layers(v.layers);
+                crate::panels::DrcRow {
+                    index,
+                    kind: v.kind,
+                    a: name(v.nets.0),
+                    b: name(v.nets.1),
+                    measured_mm: mm(v.measured_nm),
+                    required_mm: mm(v.required_nm),
+                    over_maximum: v.kind == ViolationKind::TrackWidth
+                        && v.measured_nm > v.required_nm,
+                    x_mm: mm(v.at.x),
+                    y_mm: mm(v.at.y),
+                    layer: layers.first().copied(),
+                    layers,
+                    key: signex_drc::waiver_key(v),
+                    rule: signex_drc::rule_id(v).to_string(),
+                    severity: report.severity_of(v),
+                    objects: v.items.len(),
+                    waiver: signex_drc::waiver_of(waivers, v).map(|w| w.note.clone()),
+                }
             })
             .collect();
         Some(panel)

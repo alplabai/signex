@@ -240,3 +240,38 @@ fn a_board_string_lands_on_an_overlay_layer_only() {
         assert!(new_text(id, at, layer, "J1".into()).is_none(), "{layer:?}");
     }
 }
+
+/// #2400: a run on a net whose class sets a track width is drawn that wide;
+/// a net in no class, or a class without a width, keeps the board's.
+#[test]
+fn a_track_takes_the_width_of_its_net_class() {
+    use signex_types::net_class::NetClass;
+    use signex_types::pcb_layer::CopperLayer;
+
+    let board = board();
+    let start = Point::new(2.0, 0.0);
+    let style = |classes: &[NetClass]| {
+        TrackStyle::starting_at(&board, start, CopperLayer::Top).with_class_width(&board, classes)
+    };
+    let power = NetClass {
+        nets: vec!["GND".into()],
+        trace_width: 0.6,
+        ..NetClass::named("Power")
+    };
+    assert_eq!(style(std::slice::from_ref(&power)).width_mm, 0.6);
+    assert_eq!(
+        class_track_width(&board, 3, std::slice::from_ref(&power)),
+        Some(0.6)
+    );
+    let unset = NetClass {
+        trace_width: 0.0,
+        ..power.clone()
+    };
+    assert_eq!(style(&[unset]).width_mm, 0.3, "no width: the board's");
+    let other = NetClass {
+        nets: vec!["VCC".into()],
+        ..power.clone()
+    };
+    assert_eq!(style(&[other]).width_mm, 0.3, "GND is in no class");
+    assert_eq!(class_track_width(&board, 0, &[power]), None, "no net");
+}

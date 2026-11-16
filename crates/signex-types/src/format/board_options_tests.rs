@@ -6,8 +6,8 @@ use super::tests::empty_board;
 use super::*;
 use crate::pcb::Point;
 use crate::pcb_options::{
-    BoardGrid, BoardGuide, BoardOptions, BoardOrigin, BoardSheet, DesignatorDisplay, GuideKind,
-    MARK_COLORS, PolygonNaming,
+    BoardGrid, BoardGuide, BoardOptions, BoardOrigin, BoardSheet, DesignatorDisplay, DrcWaiver,
+    GuideKind, MARK_COLORS, PolygonNaming,
 };
 
 const OLD_BOARD: &str = include_str!("../../tests/corpus/pcb/board-outline-only.snxpcb");
@@ -47,7 +47,29 @@ fn options() -> BoardOptions {
         polygon_naming: PolygonNaming::LayerNetPour,
         designator_display: DesignatorDisplay::Logical,
         origin: BoardOrigin::new(Point::new(-12.5, 80.0)),
+        drc_waivers: vec![DrcWaiver {
+            key: "0123456789abcdef0123456789abcdef".into(),
+            rule: "builtin::clearance".into(),
+            note: "Checked by hand: \"tested\" on rev A\nsecond line".into(),
+        }],
     }
+}
+
+/// #2399: a board whose only option is a waived finding writes the section
+/// and reads the waiver, note and all, back unchanged.
+#[test]
+fn a_waived_finding_round_trips_with_its_note() {
+    let mut board = empty_board();
+    board.options.drc_waivers = vec![DrcWaiver {
+        key: "k1".into(),
+        rule: "user::hv".into(),
+        note: String::new(),
+    }];
+    let text = SnxPcb::new(board.clone()).write_string().expect("writes");
+    assert!(text.contains("drc_waivers"), "{text}");
+    let back = SnxPcb::parse(&text).expect("reads back").board;
+    assert_eq!(back.options.drc_waivers, board.options.drc_waivers);
+    assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);
 }
 
 #[test]

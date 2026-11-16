@@ -106,6 +106,9 @@ pub struct NetClassPanel {
     pub notice: Option<String>,
     /// The net class picker of the selected net label, when its net is known.
     pub label: Option<LabelClassPick>,
+    /// The board Net Classes panel (#2400): the table of the board in view's
+    /// project; `None` with no board in view.
+    pub board: Option<super::BoardNetClassView>,
 }
 
 /// What a selected net label's Net Class picker needs: the project its sheet

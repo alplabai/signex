@@ -152,6 +152,36 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "update_pcb_from_schematic",
         "it edits the project's board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2400: the board Net Classes panel's edits of the project table.
+    (
+        "add_net_class",
+        "it writes the project's net classes, which no sheet's undo step covers",
+    ),
+    (
+        "rename_net_class",
+        "it writes the project's net classes, which no sheet's undo step covers",
+    ),
+    (
+        "delete_net_class",
+        "it writes the project's net classes, which no sheet's undo step covers",
+    ),
+    (
+        "set_net_class_rules",
+        "it writes the project's net classes, which no sheet's undo step covers",
+    ),
+    (
+        "assign_board_net_class",
+        "it writes the project's net classes, which no sheet's undo step covers",
+    ),
+    // #2399: a waiver is board data; no sheet's undo step covers it.
+    (
+        "waive_drc_violation",
+        "it edits the board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "unwaive_drc_violation",
+        "it edits the board, which no sheet's undo step covers; run it as its own command",
+    ),
 ];
 
 /// Why `command` may not be one of the edits, or `None` when it may: it must

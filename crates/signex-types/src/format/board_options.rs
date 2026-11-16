@@ -14,8 +14,8 @@ use super::FormatError;
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use crate::pcb::{PcbBoard, Point};
 use crate::pcb_options::{
-    BoardGrid, BoardGuide, BoardOptions, BoardOrigin, BoardSheet, DesignatorDisplay, GuideKind,
-    PolygonNaming,
+    BoardGrid, BoardGuide, BoardOptions, BoardOrigin, BoardSheet, DesignatorDisplay, DrcWaiver,
+    GuideKind, PolygonNaming,
 };
 use crate::theme::Color;
 
@@ -39,6 +39,9 @@ pub(in crate::format) struct BoardOptionsRaw {
     grids: Vec<GridRaw>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     origin: Option<OriginRaw>,
+    /// Waived design-rule findings (#2399): no geometry, stored as held.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    drc_waivers: Vec<DrcWaiver>,
 }
 
 /// The board origin (#2384), nm.
@@ -134,6 +137,7 @@ pub(in crate::format) fn read(raw: Option<BoardOptionsRaw>) -> Result<BoardOptio
             .origin
             .map(|o| BoardOrigin::new(point(o.x, o.y)))
             .unwrap_or_default(),
+        drc_waivers: raw.drc_waivers,
     })
 }
 
@@ -225,6 +229,7 @@ pub(in crate::format) fn write(out: &mut String, board: &PcbBoard) -> Result<(),
             guides,
             grids,
             origin,
+            drc_waivers: options.drc_waivers.clone(),
         },
     };
     out.push('\n');

@@ -286,7 +286,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // Lists the parts of the active schematic's project.
         | "assign_footprints" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
-        "run_drc" | "reannotate_board" => Needs::Pcb,
+        "run_drc" | "reannotate_board" | "open_drc_panel" | "open_net_classes_panel" => Needs::Pcb,
         // #2373: the board placement tools.
         "place_board_via"
         | "place_board_track"
