@@ -351,7 +351,7 @@ mod tests {
             .enumerate()
             .map(|(i, kind)| dialog_button(raw(format!("Save {i}")), *kind, Some(()), &tokens))
             .collect::<Vec<_>>())
-        .into();
+        .boxed();
         let texts = crate::layout_probe::lay_out_texts(buttons, iced::Size::new(2000.0, 200.0));
         let widths: Vec<f32> = (0..roles.len())
             .map(|i| {

@@ -5,7 +5,7 @@
 use iced::widget::text::Wrapping;
 use iced::widget::tooltip::Position;
 use iced::widget::{Column, Row, container, row};
-use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
+use iced::{Alignment, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, button, checkbox, text, text_input, tooltip};
@@ -334,53 +334,6 @@ impl<'a> Form<'a> {
             .boxed()
     }
 
-    /// One line of a Graphite table: equal cells on a hairline.
-    pub fn table_row(
-        &self,
-        cells: Vec<Element<'a, PanelMsg>>,
-        header: bool,
-    ) -> Element<'a, PanelMsg> {
-        let even = vec![1; cells.len()];
-        self.table_row_in(cells, &even, header)
-    }
-
-    /// [`Self::table_row`] with each cell taking its `portions` share of the
-    /// width; a cell clips what does not fit, so nothing wraps (#2386).
-    pub fn table_row_in(
-        &self,
-        cells: Vec<Element<'a, PanelMsg>>,
-        portions: &[u16],
-        header: bool,
-    ) -> Element<'a, PanelMsg> {
-        let mut line: Row<Element<'a, PanelMsg>> = Row::new()
-            .spacing(SP.s)
-            .align_y(Alignment::Center)
-            .width(Length::Fill);
-        for (cell, portion) in cells
-            .into_iter()
-            .zip(portions.iter().copied().chain(std::iter::repeat(1)))
-        {
-            let cell = container(cell)
-                .width(Length::FillPortion(portion))
-                .clip(true);
-            line = line.push(cell.boxed());
-        }
-        let edge = resolve(self.tokens()).line_soft;
-        container(line)
-            .padding([SP.s, SP.l])
-            .width(Length::Fill)
-            .style(move |_: &Theme| container::Style {
-                background: header.then_some(Background::Color(Color { a: 0.04, ..edge })),
-                border: Border {
-                    width: HAIRLINE,
-                    color: edge,
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            })
-            .boxed()
-    }
-
     /// A small Graphite card around `body`: a hairline frame inset in the
     /// section (#2386). Board Information, the Grid and Guide Managers and the
     /// Sheet use it.
@@ -401,15 +354,6 @@ impl<'a> Form<'a> {
         container(framed)
             .padding([SP.xs, SP.l])
             .width(Length::Fill)
-            .boxed()
-    }
-
-    /// A table heading cell.
-    pub fn heading(&self, id: MessageId) -> Element<'a, PanelMsg> {
-        text(self.t(id))
-            .size(TS.caption)
-            .color(resolve(self.tokens()).ink4)
-            .wrapping(Wrapping::None)
             .boxed()
     }
 }

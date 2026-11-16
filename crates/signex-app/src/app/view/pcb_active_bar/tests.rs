@@ -457,7 +457,8 @@ fn a_saved_preset_is_a_chip_of_the_filter_dropdown() {
 #[test]
 fn the_routing_button_arms_interactive_routing() {
     let mut app = board_app();
-    let button = button_for(&bar_of(&app), "place_board_route");
+    let items = bar_of(&app);
+    let button = button_for(&items, "place_board_route");
     assert!(button.enabled);
     assert!(
         button.tooltip.starts_with("Interactive Routing ("),

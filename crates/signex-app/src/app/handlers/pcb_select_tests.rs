@@ -9,7 +9,7 @@ use iced::keyboard::{Event as KeyEvent, Modifiers};
 use iced::widget::canvas::Program;
 use iced::{Event, Rectangle, mouse};
 use pcb_geom::ItemRef;
-use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb::PcbBoard;
 use uuid::Uuid;
 
 use crate::app::handlers::menu::export::tests::app_workspace;

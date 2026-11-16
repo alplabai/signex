@@ -5,6 +5,7 @@ use signex_app::active_bar::{ActiveBarAction, ActiveBarMsg, PLANNED_TOOLS};
 use signex_app::app::{Message, Signex, TabInfo, TabKind, Tool};
 use signex_app::canvas::CanvasEvent;
 use signex_app::diagnostics;
+use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use std::path::PathBuf;
 
@@ -128,7 +129,10 @@ fn generate_bom_opens_the_bom_dialog() {
 fn place_menu_rows_arm_their_tools() {
     for (message, tool) in [
         (MenuMessage::PlaceText, Tool::Text),
-        (MenuMessage::PlaceNoConnect, Tool::NoConnect),
+        (
+            MenuMessage::Command(AppCommandId::new("place_no_connect").expect("a catalog id")),
+            Tool::NoConnect,
+        ),
     ] {
         let mut app = app_with_empty_sheet();
         let _ = app.update(Message::Menu(message.clone()));

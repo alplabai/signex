@@ -103,25 +103,6 @@ pub(super) fn dropdown<'a, T: Clone + PartialEq + 'a>(
         .boxed()
 }
 
-/// A table row that selects its object when clicked; `selected` tints it.
-pub(super) fn selectable<'a>(
-    form: &Form<'a>,
-    row: Element<'a, PanelMsg>,
-    selected: bool,
-    on_press: PcbBoardMsg,
-) -> Element<'a, PanelMsg> {
-    let tint = resolve(form.tokens()).accent_text;
-    button(row)
-        .padding(0)
-        .width(Length::Fill)
-        .on_press(msg(on_press))
-        .style(move |_: &Theme, _| button_style::Style {
-            background: selected.then_some(Background::Color(Color { a: 0.12, ..tint })),
-            ..button_style::Style::default()
-        })
-        .boxed()
-}
-
 /// `mm` in the panel's unit, as a read-only value shows it.
 pub(super) fn measure(form: &Form<'_>, mm: f64) -> Localized {
     signex_i18n::t!(

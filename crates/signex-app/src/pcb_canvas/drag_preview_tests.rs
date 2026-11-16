@@ -38,15 +38,15 @@ fn the_carried_footprints_drawings_move_with_the_drag_preview() {
     let mut canvas = PcbCanvas::new();
     canvas.set_renderer_snapshot(Some(PcbSnapshot::from_board_with_view(&board, &view)));
 
-    let base = PcbSnapshot::from_board_with_view(&board_without(&board, &carried), &view);
+    let base = PcbSnapshot::from_board_with_view(&board_without(&board, &carried, &[]), &view);
     assert!(
         base.graphics.is_empty(),
         "the board leaves the carried silk out"
     );
-    canvas.begin_drag_preview(carried.clone(), base);
+    canvas.begin_drag_preview(carried.clone(), Vec::new(), base);
     let delta = Point::new(3.0, 0.0);
     canvas.move_drag_preview(delta, || {
-        PcbSnapshot::from_board_with_view(&carried_board(&board, &carried, delta), &view)
+        PcbSnapshot::from_board_with_view(&carried_board(&board, &carried, &[], delta), &view)
     });
     let scene = canvas.drag_preview_scene().expect("a moving scene");
     assert!(
